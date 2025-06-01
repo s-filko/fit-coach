@@ -16,6 +16,7 @@ bot.on('message', async (msg) => {
     if (!userText) return;
 
     try {
+        await bot.sendChatAction(chatId, 'typing');
         const res = await axios.post(`${process.env.SERVER_URL}/api/message`, {
             userId: msg.from?.id,
             text: userText,

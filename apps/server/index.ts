@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { config } from 'dotenv';
 import { OpenAI } from 'openai';
+import { orchestrate } from "./orchestrator";
 
 config();
 const app = express();
@@ -20,15 +21,8 @@ app.post('/api/message', async (req, res) => {
         return;
     }
 
-    const reply = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-            { role: 'system', content: 'You are a kind, smart fitness coach who guides the user step by step.' },
-            { role: 'user', content: text },
-        ],
-    });
-
-    res.json({ reply: reply.choices[0].message.content || '' });
+    const replyText = await orchestrate(userId, text);
+    res.json({ reply: replyText });
 });
 
 app.listen(process.env.PORT || 3000, () => {
