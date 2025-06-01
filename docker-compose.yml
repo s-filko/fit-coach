@@ -1,0 +1,14 @@
+services:
+  db:
+    image: ankane/pgvector
+    container_name: fitcoach-db
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fitcoach
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:

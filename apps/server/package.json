@@ -4,6 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "drizzle:push": "drizzle-kit push",
+    "drizzle:generate": "drizzle-kit generate",
+    "drizzle:studio": "drizzle-kit studio",
+    "drizzle:up": "drizzle-kit up",
+    "drizzle:drop": "drizzle-kit drop",
+    "drizzle:introspect": "drizzle-kit introspect",
+    "drizzle:reset": "drizzle-kit drop && drizzle-kit push",
     "run-server": "npx tsx index.ts"
   },
   "keywords": [],
@@ -13,14 +20,18 @@
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
+    "drizzle-orm": "^0.44.1",
     "express": "^5.1.0",
     "langchain": "^0.3.27",
-    "openai": "^5.0.1"
+    "openai": "^5.0.1",
+    "pg": "^8.16.0",
+    "pgvector": "^0.2.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.18",
     "@types/express": "^5.0.2",
     "@types/node": "^22.15.29",
+    "drizzle-kit": "^0.31.1",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }
