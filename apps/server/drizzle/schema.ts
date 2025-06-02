@@ -104,3 +104,15 @@ export const userMemories = pgTable('user_memories', {
     embedding: vector('embedding', { dimensions: 1536 }), // Adjust to match your embedding model
     createdAt: timestamp('created_at').defaultNow(),
 });
+
+// User Telegram Accounts
+export const userTelegramAccounts = pgTable('user_telegram_accounts', {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id').references(() => users.id).notNull(),
+    telegramUserId: text('telegram_user_id').notNull(), // Telegram user ID (as string)
+    telegramUsername: text('telegram_username'), // Optional, from @username
+    firstName: text('first_name'),
+    lastName: text('last_name'),
+    languageCode: text('language_code'),
+    createdAt: timestamp('created_at').defaultNow(),
+});
