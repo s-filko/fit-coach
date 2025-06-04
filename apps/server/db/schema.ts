@@ -1,5 +1,5 @@
-// drizzle/schema.ts
-import { pgTable, text, integer, real, boolean, timestamp, uuid, vector } from 'drizzle-orm/pg-core';
+// db/schema.ts
+import { pgTable, text, integer, real, boolean, timestamp, uuid, vector, unique } from 'drizzle-orm/pg-core';
 
 // Users table
 export const users = pgTable('users', {
@@ -14,7 +14,11 @@ export const users = pgTable('users', {
     fitnessGoal: text('fitness_goal'),
     tone: text('tone'),
     reminderEnabled: boolean('reminder_enabled').default(false),
+    firstName: text('first_name'),
+    lastName: text('last_name'),
+    languageCode: text('language_code'),
     createdAt: timestamp('created_at').defaultNow(),
+    username: text('username'),
 });
 
 // User profile extensions (changing over time)
@@ -27,8 +31,6 @@ export const userMetrics = pgTable('user_metrics', {
     hips: real('hips'),
     biceps: real('biceps'),
     thigh: real('thigh'),
-    experienceLevel: text('experience_level'),
-    activityLevel: text('activity_level'),
     createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -51,6 +53,7 @@ export const workouts = pgTable('workouts', {
     name: text('name'),
     notes: text('notes'),
     createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow()
 });
 
 // Workout Exercises (many-to-many)
@@ -105,14 +108,16 @@ export const userMemories = pgTable('user_memories', {
     createdAt: timestamp('created_at').defaultNow(),
 });
 
-// User Telegram Accounts
-export const userTelegramAccounts = pgTable('user_telegram_accounts', {
+// User Accounts with composite unique constraint
+export const userAccounts = pgTable('user_accounts', {
     id: uuid('id').defaultRandom().primaryKey(),
     userId: uuid('user_id').references(() => users.id).notNull(),
-    telegramUserId: text('telegram_user_id').notNull(), // Telegram user ID (as string)
-    telegramUsername: text('telegram_username'), // Optional, from @username
-    firstName: text('first_name'),
-    lastName: text('last_name'),
-    languageCode: text('language_code'),
+    provider: text('provider').notNull(),
+    providerUserId: text('provider_user_id').notNull(),
     createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => {
+    return {
+        uniqueProviderAccount: unique().on(table.provider, table.providerUserId),
+    };
 });

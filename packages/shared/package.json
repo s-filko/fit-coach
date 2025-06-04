@@ -1,0 +1,13 @@
+{
+  "name": "@fit-coach/shared",
+  "version": "1.0.0",
+  "main": "dist/types.js",
+  "types": "dist/types.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+} 
