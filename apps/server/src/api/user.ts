@@ -1,26 +1,26 @@
 // apps/server/src/api/user.ts
 
-import { Router } from 'express';
-import { UserService } from '@/services/user.service';
-import { CreateUserDto } from "@/models/user.types";
-import { AppError } from '@middleware/error';
+import { Router, RequestHandler } from 'express';
+import { Container } from '@services/di/injectable';
+import { UserService } from '@services/user.service';
 
 const router = Router();
-const userService = new UserService();
+const container = Container.getInstance();
+const userService = container.resolve(UserService) as UserService;
 
-router.post('/', async (req, res, next) => {
+const getUserHandler: RequestHandler = async (req, res, next) => {
   try {
-    const data: CreateUserDto = req.body;
-    
-    if (!data.provider || !data.providerUserId) {
-      throw new AppError(400, 'Provider and providerUserId are required');
+    const user = await userService.getUser(req.params.id);
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
     }
-
-    const result = await userService.upsertUser(data);
-    res.json({ user: result });
+    res.json(user);
   } catch (error) {
     next(error);
   }
-});
+};
 
-export const userRouter = router;
+router.get('/:id', getUserHandler);
+
+export { router as userRouter };

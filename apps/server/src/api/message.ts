@@ -1,19 +1,19 @@
 import { Router } from 'express';
-import { AIService, MessageDto } from '@/services/ai/chat.service';
+import { AIContextService } from '@services/ai/ai-context.service';
 import { AppError } from '@middleware/error';
 
 const router = Router();
-const aiService = new AIService();
+const aiContextService = new AIContextService();
 
 router.post('/', async (req, res, next) => {
   try {
-    const data: MessageDto = req.body;
+    const { userId, message } = req.body;
     
-    if (!data.provider || !data.providerUserId || !data.content) {
-      throw new AppError(400, 'Provider, providerUserId and content are required');
+    if (!userId || !message) {
+      throw new AppError(400, 'userId and message are required');
     }
 
-    const response = await aiService.processMessage(data);
+    const response = await aiContextService.processMessage(userId, message);
     res.json({ response });
   } catch (error) {
     next(error);

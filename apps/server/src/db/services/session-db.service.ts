@@ -1,27 +1,24 @@
+import { BaseDbService } from './base-db.service';
 import { db } from '@db/db';
 import { aiSessions } from '@db/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { AppError } from '@middleware/error';
-import { Session } from '@/models/ai.types';
+import { Session } from '@models/ai.types';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
-export interface ISessionService {
-  createSession(userId: string, type: Session['type']): Promise<Session>;
-  updateSession(sessionId: string, summary: string): Promise<void>;
-  getSession(sessionId: string): Promise<Session | null>;
-  getUserSessions(userId: string, limit?: number): Promise<Session[]>;
-  getOpenSession(userId: string): Promise<Session | null>;
-  closeSession(sessionId: string): Promise<void>;
-}
+export class SessionDbService extends BaseDbService {
+  constructor() {
+    super(db);
+  }
 
-export class SessionService implements ISessionService {
   async createSession(userId: string, type: Session['type']): Promise<Session> {
     try {
-      const [session] = await db.insert(aiSessions).values({
+      const [session] = await this.db.insert(aiSessions).values({
         userId,
         sessionType: type,
         summary: '',
         startedAt: new Date(),
-        endedAt: null // Сессия создается открытой
+        endedAt: null
       }).returning();
 
       if (!session) throw new AppError(500, 'Failed to create session');
@@ -42,8 +39,8 @@ export class SessionService implements ISessionService {
 
   async updateSession(sessionId: string, summary: string): Promise<void> {
     try {
-      await db.update(aiSessions)
-        .set({ summary }) // Обновляем только summary, не закрываем сессию
+      await this.db.update(aiSessions)
+        .set({ summary })
         .where(eq(aiSessions.id, sessionId));
     } catch (error) {
       console.error('Error updating session:', error);
@@ -53,12 +50,12 @@ export class SessionService implements ISessionService {
 
   async getOpenSession(userId: string): Promise<Session | null> {
     try {
-      const session = await db.query.aiSessions.findFirst({
+      const session = await this.db.query.aiSessions.findFirst({
         where: and(
           eq(aiSessions.userId, userId),
           isNull(aiSessions.endedAt)
         ),
-        orderBy: (sessions, { desc }) => [desc(sessions.startedAt)]
+        orderBy: [desc(aiSessions.startedAt)]
       });
 
       if (!session) return null;
@@ -79,7 +76,7 @@ export class SessionService implements ISessionService {
 
   async closeSession(sessionId: string): Promise<void> {
     try {
-      await db.update(aiSessions)
+      await this.db.update(aiSessions)
         .set({ endedAt: new Date() })
         .where(eq(aiSessions.id, sessionId));
     } catch (error) {
@@ -90,7 +87,7 @@ export class SessionService implements ISessionService {
 
   async getSession(sessionId: string): Promise<Session | null> {
     try {
-      const session = await db.query.aiSessions.findFirst({
+      const session = await this.db.query.aiSessions.findFirst({
         where: eq(aiSessions.id, sessionId)
       });
 
@@ -112,13 +109,13 @@ export class SessionService implements ISessionService {
 
   async getUserSessions(userId: string, limit: number = 10): Promise<Session[]> {
     try {
-      const sessions = await db.query.aiSessions.findMany({
+      const sessions = await this.db.query.aiSessions.findMany({
         where: eq(aiSessions.userId, userId),
-        orderBy: (sessions, { desc }) => [desc(sessions.startedAt)],
+        orderBy: [desc(aiSessions.startedAt)],
         limit
       });
 
-      return sessions.map(session => ({
+      return sessions.map((session: typeof aiSessions.$inferSelect) => ({
         id: session.id,
         userId: session.userId!,
         type: session.sessionType as Session['type'],

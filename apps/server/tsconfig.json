@@ -9,19 +9,19 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist",
-    "rootDir": ".",
     "baseUrl": ".",
-    "types": ["node"],
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "paths": {
-      "@/*": ["src/*"],
+      "@db/*": ["src/db/*"],
       "@api/*": ["src/api/*"],
-      "@services/*": ["src/services/*"],
-      "@middleware/*": ["src/middleware/*"],
       "@models/*": ["src/models/*"],
-      "@db/*": ["db/*"],
-      "@ai/*": ["src/ai/*"]
+      "@middleware/*": ["src/middleware/*"],
+      "@services/*": ["src/services/*"],
+      "@ai/*": ["src/services/ai/*"],
+      "@app": ["src/app"]
     }
   },
-  "include": ["src/**/*", "db/**/*"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }

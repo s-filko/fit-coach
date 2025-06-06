@@ -1,95 +1,32 @@
-import { db } from '@db/db';
-import { users, userAccounts } from '@db/schema';
-import { eq } from 'drizzle-orm';
+import { UserDbService } from '@db/services/user-db.service';
+import { CreateUserDto, UserResponseDto } from '@models/user.types';
 import { AppError } from '@middleware/error';
-import { User, UserAccount, CreateUserDto, UserResponseDto } from '@/models/user.types';
-import { createUserAccount, getUserAccount, updateUserAccount } from './userAccount.service';
+import { Injectable, Inject } from '@services/di/injectable';
 
+@Injectable()
 export class UserService {
+  constructor(
+    @Inject('UserDbService') private readonly userDb: UserDbService
+  ) {}
+
   async upsertUser(data: CreateUserDto): Promise<UserResponseDto> {
     try {
       // Check if user account already exists
-      const existingAccount = await getUserAccount(data.provider, data.providerUserId);
+      const existingAccount = await this.userDb.findByProvider(data.provider, data.providerUserId);
       
       if (existingAccount) {
-        try {
-          // Update existing user
-          const [user] = await db.update(users)
-            .set({
-              firstName: data.firstName || null,
-              lastName: data.lastName || null,
-              languageCode: data.languageCode || null,
-              username: data.username || null,
-            })
-            .where(eq(users.id, existingAccount.userId))
-            .returning();
-
-          if (!user) {
-            console.error('Failed to update user:', { userId: existingAccount.userId, data });
-            throw new AppError(500, 'Failed to update user');
-          }
-
-          return {
-            id: user.id,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            languageCode: user.languageCode,
-            username: user.username,
-            accounts: [{
-              provider: existingAccount.provider,
-              providerUserId: existingAccount.providerUserId,
-              username: user.username
-            }]
-          };
-        } catch (error) {
-          console.error('Error updating user:', error);
-          throw new AppError(500, 'Failed to update user');
-        }
+        // Update existing user
+        const user = await this.userDb.updateUser(existingAccount.userId, data);
+        const userWithAccounts = await this.userDb.getUserWithAccounts(user.id);
+        if (!userWithAccounts) throw new AppError(404, 'User not found');
+        return userWithAccounts;
       }
 
-      try {
-        // Create new user
-        const [user] = await db.insert(users).values({
-          firstName: data.firstName || null,
-          lastName: data.lastName || null,
-          languageCode: data.languageCode || null,
-          username: data.username || null,
-        }).returning();
-
-        if (!user) {
-          console.error('Failed to create user:', { data });
-          throw new AppError(500, 'Failed to create user');
-        }
-
-        // Create user account
-        const account = await createUserAccount(
-          user.id,
-          data.providerUserId,
-          data.provider,
-          {}
-        );
-
-        if (!account) {
-          console.error('Failed to create user account:', { userId: user.id, data });
-          throw new AppError(500, 'Failed to create user account');
-        }
-
-        return {
-          id: user.id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          languageCode: user.languageCode,
-          username: user.username,
-          accounts: [{
-            provider: account.provider,
-            providerUserId: account.providerUserId,
-            username: user.username
-          }]
-        };
-      } catch (error) {
-        console.error('Error creating new user:', error);
-        throw new AppError(500, 'Failed to create new user');
-      }
+      // Create new user
+      const user = await this.userDb.createUser(data);
+      const userWithAccounts = await this.userDb.getUserWithAccounts(user.id);
+      if (!userWithAccounts) throw new AppError(404, 'User not found');
+      return userWithAccounts;
     } catch (error) {
       console.error('Error upserting user:', error);
       if (error instanceof AppError) throw error;
@@ -99,31 +36,16 @@ export class UserService {
 
   async getUser(userId: string): Promise<UserResponseDto | null> {
     try {
-      const user = await db.query.users.findFirst({
-        where: eq(users.id, userId)
-      });
-
-      if (!user) return null;
-
-      const accounts = await db.query.userAccounts.findMany({
-        where: eq(userAccounts.userId, userId)
-      });
-
-      return {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        languageCode: user.languageCode,
-        username: user.username,
-        accounts: accounts.map(account => ({
-          provider: account.provider,
-          providerUserId: account.providerUserId,
-          username: user.username
-        }))
-      };
+      // Check if userId is a valid UUID
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+        throw new AppError(404, 'User not found');
+      }
+      return await this.userDb.getUserWithAccounts(userId);
     } catch (error) {
       console.error('Error getting user:', error);
+      if (error instanceof AppError) throw error;
       throw new AppError(500, 'Failed to get user');
     }
   }
 } 
+ 

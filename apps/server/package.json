@@ -12,7 +12,9 @@
     "drizzle:drop": "drizzle-kit drop",
     "drizzle:introspect": "drizzle-kit introspect",
     "drizzle:reset": "drizzle-kit drop && drizzle-kit push",
-    "run-server": "npx tsx src/index.ts"
+    "run-server": "npx tsx src/index.ts",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "keywords": [],
   "author": "",
@@ -26,15 +28,21 @@
     "langchain": "^0.3.27",
     "openai": "^5.0.1",
     "pg": "^8.16.0",
-    "pgvector": "^0.2.1"
+    "pgvector": "^0.2.1",
+    "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.18",
     "@types/express": "^5.0.2",
+    "@types/jest": "^29.5.14",
     "@types/node": "^22.15.29",
     "@types/node-telegram-bot-api": "^0.64.8",
     "@types/pg": "^8.15.4",
+    "@types/supertest": "^6.0.3",
     "drizzle-kit": "^0.31.1",
+    "jest": "^29.7.0",
+    "supertest": "^7.1.1",
+    "ts-jest": "^29.3.4",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }

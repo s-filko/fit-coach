@@ -1,6 +1,6 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import * as schema from './schema';
+import * as schema from '@db/schema';
 import * as dotenv from 'dotenv';
 
 // Load environment variables from .env file
@@ -37,3 +37,4 @@ pool.connect()
     });
 
 export const db = drizzle(pool, { schema });
+export { pool };

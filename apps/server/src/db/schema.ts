@@ -1,5 +1,5 @@
 // db/schema.ts
-import { pgTable, text, integer, real, boolean, timestamp, uuid, vector, unique } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, real, boolean, timestamp, uuid, vector, unique, jsonb } from 'drizzle-orm/pg-core';
 
 // Users table
 export const users = pgTable('users', {
@@ -120,4 +120,23 @@ export const userAccounts = pgTable('user_accounts', {
     return {
         uniqueProviderAccount: unique().on(table.provider, table.providerUserId),
     };
+});
+
+// Training Context table
+export const trainingContext = pgTable('training_context', {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id').references(() => users.id),
+    primaryGoal: text('primary_goal'),
+    targetAreas: jsonb('target_areas'),
+    timelineMonths: integer('timeline_months'),
+    strengthLevel: text('strength_level'),
+    recoveryStatus: text('recovery_status'),
+    recentProgress: jsonb('recent_progress'),
+    trainingSchedule: jsonb('training_schedule'),
+    intensityPreference: text('intensity_preference'),
+    equipmentAvailable: text('equipment_available').array(),
+    physicalLimitations: text('physical_limitations').array(),
+    timeLimitations: jsonb('time_limitations'),
+    lastUpdated: timestamp('last_updated').defaultNow(),
+    notes: text('notes'),
 });

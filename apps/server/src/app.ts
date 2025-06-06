@@ -1,17 +1,15 @@
-import 'reflect-metadata';
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
+import { registerServices } from '@services/di/register';
+
+// Register services before importing routers
+registerServices();
+
 import { userRouter } from '@api/user';
 import { messageRouter } from '@api/message';
 import { errorHandler } from '@middleware/error';
-import { registerServices } from '@services/di/register';
-
-dotenv.config();
-registerServices();
 
 const app = express();
-const port = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
@@ -26,6 +24,4 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   errorHandler(err, req, res, next);
 });
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-});
+export { app }; 
