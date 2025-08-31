@@ -1,25 +1,33 @@
 import type TelegramBot from 'node-telegram-bot-api';
 import axios from 'axios';
 
+const api = axios.create({
+    baseURL: process.env.SERVER_URL,
+    headers: {
+        'X-Api-Key': process.env.BOT_API_KEY || ''
+    }
+});
+
 async function registerOrGetUser(msg: TelegramBot.Message) {
     if (!msg.from) {
         throw new Error('Cannot determine user information');
     }
 
-    const userResponse = await axios.post(`${process.env.SERVER_URL}/api/user`, {
+    const userResponse = await api.post('/api/user', {
         provider: 'telegram',
         providerUserId: String(msg.from.id),
-        username: msg.from.username || null,
-        firstName: msg.from.first_name || null,
-        lastName: msg.from.last_name || null,
-        languageCode: msg.from.language_code || null,
+        username: msg.from.username || undefined,
+        firstName: msg.from.first_name || undefined,
+        lastName: msg.from.last_name || undefined,
+        languageCode: msg.from.language_code || undefined,
     });
 
-    if (!userResponse.data?.user?.id) {
-        throw new Error('Invalid response from server');
+    const userId = userResponse.data?.data?.id;
+    if (!userId) {
+        throw new Error('Invalid response from server: missing data.id');
     }
 
-    return userResponse.data.user;
+    return { id: userId, firstName: msg.from.first_name, username: msg.from.username };
 }
 
 export function registerBotHandlers(bot: TelegramBot) {
@@ -69,19 +77,22 @@ export function registerBotHandlers(bot: TelegramBot) {
         try {
             await bot.sendChatAction(chatId, 'typing');
 
-            // Send message to AI
-            const messageResponse = await axios.post(`${process.env.SERVER_URL}/api/message`, {
-                provider: 'telegram',
-                providerUserId: String(msg.from.id),
-                content: userText,
+            // Ensure user exists to get userId
+            const user = await registerOrGetUser(msg);
+
+            // Send message to API (stub echo)
+            const messageResponse = await api.post('/api/message', {
+                userId: user.id,
+                message: userText,
             });
 
-            if (!messageResponse.data || !messageResponse.data.response) {
-                console.error('Invalid AI response:', messageResponse.data);
-                throw new Error('Invalid response from AI service');
+            const echo = messageResponse.data?.data?.echo;
+            if (typeof echo !== 'string') {
+                console.error('Invalid API response:', messageResponse.data);
+                throw new Error('Invalid response from API service');
             }
 
-            await bot.sendMessage(chatId, messageResponse.data.response);
+            await bot.sendMessage(chatId, echo);
         } catch (error) {
             console.error('Bot error:', error);
             if (axios.isAxiosError(error)) {
