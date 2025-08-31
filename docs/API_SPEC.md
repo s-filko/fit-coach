@@ -4,6 +4,28 @@ This spec is the canonical definition of the MVP API. Code must match this docum
 
 Base URL: `/`
 
+## Security
+- Protected routes: all under `/api/*` require header `X-Api-Key: <secret>`.
+- Public routes: `/health`, `/docs`, `/docs/*`.
+- Error codes:
+  - 401 Unauthorized — header `X-Api-Key` отсутствует
+  - 403 Forbidden — ключ передан, но неверный
+
+Swagger (OpenAPI) additions:
+```yaml
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+```
+Protected endpoints should declare:
+```yaml
+security:
+  - ApiKeyAuth: []
+```
+
 ## 1. Health
 - GET `/health`
 - Response 200: `{ "status": "ok" }`
@@ -26,12 +48,16 @@ Base URL: `/`
 - Responses:
   - 200 `{ data: { id: string } }`
   - 400 `{ error: { message: string } }`
+  - 401 `{ error: { message: string } }`
+  - 403 `{ error: { message: string } }`
 
 ### 2.2 Get User by Id
 - GET `/api/user/{id}`
 - Path params: `{ id: string }`
 - Responses:
   - 200 `{ data: { id: string } }`
+  - 401 `{ error: { message: string } }`
+  - 403 `{ error: { message: string } }`
   - 404 `{ error: { message: "User not found" } }`
 
 ## 3. Message (Stub)
@@ -47,6 +73,8 @@ Base URL: `/`
 ```
 - Responses:
   - 200 `{ data: { echo: string } }`
+  - 401 `{ error: { message: string } }`
+  - 403 `{ error: { message: string } }`
 
 ## Notes
 - All responses are JSON.
