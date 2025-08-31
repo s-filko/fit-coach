@@ -30,6 +30,15 @@ export function buildServer() {
   app.register(swagger, {
     openapi: {
       info: { title: 'Fit Coach API', version: '1.0.0' },
+      components: {
+        securitySchemes: {
+          ApiKeyAuth: {
+            type: 'apiKey',
+            in: 'header',
+            name: 'X-Api-Key',
+          },
+        },
+      },
     },
   });
   app.register(swaggerUi, { routePrefix: '/docs' });
@@ -46,7 +55,6 @@ export function buildServer() {
   app.register(async (instance) => {
     // Ensure DI defaults for tests/local usage without bootstrap
     const c = Container.getInstance();
-    if (!c.has(TOKENS.USER_REPO)) c.register(TOKENS.USER_REPO, new InMemoryUserRepository());
     if (!c.has(TOKENS.USER_SERVICE)) c.registerFactory(TOKENS.USER_SERVICE, (c) => new UserService(c.get(TOKENS.USER_REPO)));
 
     await registerUserRoutes(instance);
