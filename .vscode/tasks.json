@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "docker: up db",
+      "type": "shell",
+      "command": "docker compose -f ${workspaceFolder}/docker-compose.yml up -d db",
+      "problemMatcher": []
+    },
+    {
+      "label": "docker: stop db",
+      "type": "shell",
+      "command": "docker compose -f ${workspaceFolder}/docker-compose.yml stop db",
+      "problemMatcher": []
+    }
+  ]
+}
+
+
