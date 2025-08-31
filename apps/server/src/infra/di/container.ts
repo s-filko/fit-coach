@@ -26,6 +26,10 @@ export class Container {
     this.services.set(token, instance);
     return instance;
   }
+
+  has(token: string): boolean {
+    return this.services.has(token) || this.factories.has(token);
+  }
 }
 
 

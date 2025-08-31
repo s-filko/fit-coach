@@ -7,6 +7,10 @@ import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-
 import { registerErrorHandler } from './middlewares/error';
 import { registerUserRoutes } from './routes/user.routes';
 import { registerMessageRoutes } from './routes/message.routes';
+import { Container } from '@infra/di/container';
+import { TOKENS } from '@infra/di/tokens';
+import { InMemoryUserRepository } from '@infra/db/repositories/user.repository';
+import { UserService } from '@domain/user/services/user.service';
 
 export function buildServer() {
   const app = Fastify({
@@ -36,6 +40,11 @@ export function buildServer() {
 
   // routes
   app.register(async (instance) => {
+    // Ensure DI defaults for tests/local usage without bootstrap
+    const c = Container.getInstance();
+    if (!c.has(TOKENS.USER_REPO)) c.register(TOKENS.USER_REPO, new InMemoryUserRepository());
+    if (!c.has(TOKENS.USER_SERVICE)) c.registerFactory(TOKENS.USER_SERVICE, (c) => new UserService(c.get(TOKENS.USER_REPO)));
+
     await registerUserRoutes(instance);
     await registerMessageRoutes(instance);
   });
