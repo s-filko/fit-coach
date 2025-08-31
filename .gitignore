@@ -1,2 +1,4 @@
 /.idea/
 .git_/
+node_modules/
+**/node_modules/
