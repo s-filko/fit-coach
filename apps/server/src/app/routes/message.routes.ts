@@ -11,6 +11,7 @@ export async function registerMessageRoutes(app: FastifyInstance) {
     schema: {
       summary: 'Process user message (stub)',
       body: messageBody,
+      security: [{ ApiKeyAuth: [] } as any],
       response: { 200: z.object({ data: z.object({ echo: z.string() }) }) },
     },
   }, async (req, reply) => {

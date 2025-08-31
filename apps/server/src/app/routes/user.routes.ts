@@ -18,6 +18,7 @@ export async function registerUserRoutes(app: FastifyInstance) {
     schema: {
       summary: 'Create or get user by provider',
       body: createUserBody,
+      security: [{ ApiKeyAuth: [] } as any],
       response: {
         200: z.object({ data: z.object({ id: z.string().uuid().or(z.string()) }) }),
       },
@@ -33,6 +34,7 @@ export async function registerUserRoutes(app: FastifyInstance) {
     schema: {
       summary: 'Get user by id',
       params: z.object({ id: z.string() }),
+      security: [{ ApiKeyAuth: [] } as any],
       response: {
         200: z.object({ data: z.object({ id: z.string() }) }),
         404: z.object({ error: z.object({ message: z.string() }) }),

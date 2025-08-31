@@ -5,6 +5,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
 import { registerErrorHandler } from './middlewares/error';
+import { apiKeyPreHandler } from './middlewares/api-key';
 import { registerUserRoutes } from './routes/user.routes';
 import { registerMessageRoutes } from './routes/message.routes';
 import { Container } from '@infra/di/container';
@@ -35,6 +36,9 @@ export function buildServer() {
 
   // health
   app.get('/health', async () => ({ status: 'ok' }));
+
+  // security guard on protected routes
+  app.addHook('preHandler', apiKeyPreHandler);
 
   registerErrorHandler(app);
 
