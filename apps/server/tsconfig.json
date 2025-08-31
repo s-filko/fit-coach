@@ -10,18 +10,15 @@
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist",
     "baseUrl": ".",
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
     "paths": {
-      "@db/*": ["src/db/*"],
-      "@api/*": ["src/api/*"],
-      "@models/*": ["src/models/*"],
-      "@middleware/*": ["src/middleware/*"],
-      "@services/*": ["src/services/*"],
-      "@ai/*": ["src/services/ai/*"],
-      "@app": ["src/app"]
+      "@app/*": ["src/app/*"],
+      "@domain/*": ["src/domain/*"],
+      "@infra/*": ["src/infra/*"],
+      "@shared/*": ["src/shared/*"]
     }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }
+
+

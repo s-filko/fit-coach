@@ -1,0 +1,11 @@
+export const TOKENS = {
+  USER_REPO: 'USER_REPO',
+  TRAINING_CONTEXT_REPO: 'TRAINING_CONTEXT_REPO',
+  USER_SERVICE: 'USER_SERVICE',
+  AI_CONTEXT: 'AI_CONTEXT',
+  LLM: 'LLM',
+} as const;
+
+export type Token = (typeof TOKENS)[keyof typeof TOKENS];
+
+
