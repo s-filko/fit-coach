@@ -5,6 +5,8 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
 import { registerErrorHandler } from './middlewares/error';
+import { registerUserRoutes } from './routes/user.routes';
+import { registerMessageRoutes } from './routes/message.routes';
 
 export function buildServer() {
   const app = Fastify({
@@ -31,6 +33,12 @@ export function buildServer() {
   app.get('/health', async () => ({ status: 'ok' }));
 
   registerErrorHandler(app);
+
+  // routes
+  app.register(async (instance) => {
+    await registerUserRoutes(instance);
+    await registerMessageRoutes(instance);
+  });
 
   return app;
 }

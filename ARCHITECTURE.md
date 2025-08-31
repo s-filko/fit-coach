@@ -163,6 +163,18 @@ These rules are for any AI assistant working in this repo:
 - Create `docs/adr/` and add numbered ADRs for major decisions.
 - Example: `docs/adr/0001-fastify-as-web-framework.md` with context, decision, consequences.
 
+## Docs-first Workflow (mandatory)
+All changes go through docs before code:
+
+1) Update `docs/API_SPEC.md` (routes, request/response schemas) and, if needed, `ARCHITECTURE.md` or an ADR.
+2) Share a short summary in commit message referencing the doc change.
+3) Only after docs are merged/approved, implement code to match the spec.
+4) If implementation reveals a mismatch, update docs first, then code.
+
+Change control:
+- No new routes, models, or modules without a corresponding API_SPEC or ADR update.
+- Keep docs minimal but precise (Zod-like schema snippets or OpenAPI examples).
+
 ## How to Add a Feature (checklist)
 1) Define the route(s) and Zod schemas (request/response).
 2) Write a controller using DI-resolved domain services.
