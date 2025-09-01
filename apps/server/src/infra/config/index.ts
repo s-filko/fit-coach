@@ -6,6 +6,7 @@ const EnvSchema = z.object({
   HOST: z.string().default('0.0.0.0').optional(),
   // DB vars are optional for MVP (in-memory); will be required when DB is enabled
   DB_HOST: z.string().optional(),
+  DB_PORT: z.string().optional(),
   DB_USER: z.string().optional(),
   DB_PASSWORD: z.string().optional(),
   DB_NAME: z.string().optional(),

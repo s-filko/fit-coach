@@ -1,4 +1,4 @@
-import { pool } from './drizzle';
+import { pool } from '@infra/db/drizzle';
 import { readFile } from 'fs/promises';
 import path from 'path';
 

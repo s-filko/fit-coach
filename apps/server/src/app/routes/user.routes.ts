@@ -5,6 +5,7 @@ import { TOKENS } from '@infra/di/tokens';
 import { UserService } from '@domain/user/services/user.service';
 
 const createUserBody = z.object({
+
   provider: z.string().min(1).describe('Auth provider, e.g. "telegram"'),
   providerUserId: z.string().min(1).describe('User ID from the provider'),
   username: z.string().optional().describe('Public username/handle from provider'),

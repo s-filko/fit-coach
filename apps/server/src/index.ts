@@ -1,4 +1,4 @@
-import { bootstrap } from './app/bootstrap';
+import { bootstrap } from '@app/bootstrap';
 
 bootstrap();
 

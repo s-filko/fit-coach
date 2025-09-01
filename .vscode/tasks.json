@@ -12,6 +12,13 @@
       "type": "shell",
       "command": "docker compose -f ${workspaceFolder}/docker-compose.yml stop db",
       "problemMatcher": []
+    },
+    {
+      "label": "server: build",
+      "type": "shell",
+      "command": "npm run build",
+      "options": { "cwd": "${workspaceFolder}/apps/server" },
+      "problemMatcher": []
     }
   ]
 }

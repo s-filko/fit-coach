@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
-import { buildServer } from './server';
+import { buildServer } from '@app/server';
 import { loadConfig } from '@infra/config';
 import { Container } from '@infra/di/container';
 import { TOKENS } from '@infra/di/tokens';
