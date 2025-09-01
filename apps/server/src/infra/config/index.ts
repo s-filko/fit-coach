@@ -1,16 +1,15 @@
 import { z } from 'zod';
 
 const EnvSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.string().transform((v) => Number(v)).optional(),
-  HOST: z.string().default('0.0.0.0').optional(),
-  // DB vars are optional for MVP (in-memory); will be required when DB is enabled
-  DB_HOST: z.string().optional(),
-  DB_PORT: z.string().optional(),
-  DB_USER: z.string().optional(),
-  DB_PASSWORD: z.string().optional(),
-  DB_NAME: z.string().optional(),
-  BOT_API_KEY: z.string().min(1).optional(),
+  NODE_ENV: z.enum(['development', 'test', 'production']),
+  PORT: z.string().transform((v) => Number(v)),
+  HOST: z.string(),
+  DB_HOST: z.string(),
+  DB_PORT: z.string(),
+  DB_USER: z.string(),
+  DB_PASSWORD: z.string(),
+  DB_NAME: z.string(),
+  BOT_API_KEY: z.string().min(1),
 });
 
 export type Env = z.infer<typeof EnvSchema> & { PORT: number };
@@ -22,7 +21,7 @@ export function loadConfig(): Env {
     throw new Error(`Invalid environment configuration: ${issues}`);
   }
   const data = parsed.data as Env;
-  return { ...data, PORT: Number(process.env.PORT || 3000) } as Env;
+  return { ...data, PORT: data.PORT } as Env;
 }
 
 

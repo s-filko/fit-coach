@@ -6,7 +6,7 @@
   "scripts": {
      "test": "NODE_ENV=test jest",
      "run-server": "node dist/index.js",
-     "dev": "tsx watch src/index.ts",
+     "dev": "tsx watch --env-file=.env src/index.ts",
     "db:reset:dev": "docker exec fitcoach-db psql -U postgres -c \"DROP DATABASE IF EXISTS fitcoach_dev WITH (FORCE);\" && docker exec fitcoach-db psql -U postgres -c \"CREATE DATABASE fitcoach_dev;\"",
     "db:reset:prod": "docker exec fitcoach-db psql -U postgres -c \"DROP DATABASE IF EXISTS fitcoach_prod WITH (FORCE);\" && docker exec fitcoach-db psql -U postgres -c \"CREATE DATABASE fitcoach_prod;\"",
     "drizzle:push": "NODE_ENV=test drizzle-kit push",
@@ -16,7 +16,7 @@
     "db:clean": "NODE_ENV=test tsx src/db/clean.ts",
     "db:check": "NODE_ENV=test tsx src/db/check.ts",
     "build": "rimraf dist && tsup src/index.ts --format esm --dts --sourcemap --out-dir dist --clean",
-    "start": "node dist/index.js"
+    "start": "node --env-file=.env.production dist/index.js"
   },
   "keywords": [],
   "author": "",
