@@ -5,9 +5,10 @@
 
 # VS Code workspace: keep only shared configs
 !.vscode/settings.json
-!.vscode/launch.json
 !.vscode/tasks.json
 !.vscode/extensions.json
+# .vscode/launch.json - commented out to avoid committing secrets
+# !.vscode/launch.json
 
 ### Dependencies
 node_modules/
