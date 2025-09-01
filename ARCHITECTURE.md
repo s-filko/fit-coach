@@ -87,7 +87,7 @@ Notes:
 - Request-scoped dependencies: avoid unless truly needed; prefer stateless services.
 
 ## Configuration
-- Load `.env` based on `NODE_ENV` (e.g., `.env`, `.env.test`).
+- Load `.env` based on `NODE_ENV` (e.g., `.env`, `.env.production`).
 - Validate required env vars with Zod in `infra/config/index.ts`.
 - Export a typed `config` object. Do not read `process.env` outside config.
 
@@ -124,7 +124,7 @@ Notes:
 ## Testing Strategy
 - Unit: domain services with repository stubs.
 - Integration: Fastify app via `fastify.inject()` or supertest; seed DB for scenarios.
-- E2E (optional): run server against a test DB (`.env.test`).
+- E2E (optional): run server against a test DB (`.env`).
 
 ## Migration Plan (Express → Fastify)
 Phase 0 (now):

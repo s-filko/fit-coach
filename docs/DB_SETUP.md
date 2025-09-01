@@ -27,7 +27,7 @@ DB_NAME=fitcoach
 Keep `BOT_API_KEY` in the same file.
 
 ## Test database
-Create `apps/server/.env.test` with the same credentials but a different port or DB name, e.g.:
+Create `apps/server/.env` with the same credentials but a different port or DB name, e.g.:
 
 ```
 DB_HOST=localhost

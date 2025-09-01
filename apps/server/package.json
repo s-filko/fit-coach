@@ -8,7 +8,7 @@
      "run-server": "node dist/index.js",
      "dev": "tsx watch --env-file=.env src/index.ts",
     "db:reset:dev": "docker exec fitcoach-db psql -U postgres -c \"DROP DATABASE IF EXISTS fitcoach_dev WITH (FORCE);\" && docker exec fitcoach-db psql -U postgres -c \"CREATE DATABASE fitcoach_dev;\"",
-    "db:reset:prod": "docker exec fitcoach-db psql -U postgres -c \"DROP DATABASE IF EXISTS fitcoach_prod WITH (FORCE);\" && docker exec fitcoach-db psql -U postgres -c \"CREATE DATABASE fitcoach_prod;\"",
+    "db:reset:prod": "docker exec аfitcoach-db psql -U postgres -c \"DROP DATABASE IF EXISTS fitcoach_prod WITH (FORCE);\" && docker exec fitcoach-db psql -U postgres -c \"CREATE DATABASE fitcoach_prod;\"",
     "drizzle:push": "NODE_ENV=test drizzle-kit push",
     "drizzle:generate": "NODE_ENV=test drizzle-kit generate",
     "drizzle:studio": "drizzle-kit studio",
