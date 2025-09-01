@@ -16,7 +16,7 @@ export function buildServer() {
   const app = Fastify({
     logger: {
       level: 'info',
-      transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
+      transport: process.env.NODE_ENV === 'development' ? { target: 'pino-pretty' } : undefined,
     },
     requestTimeout: 30000,
   }).withTypeProvider<ZodTypeProvider>();
