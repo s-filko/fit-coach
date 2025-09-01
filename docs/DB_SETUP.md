@@ -8,7 +8,7 @@ docker compose up -d db
 
 Compose provides:
 - host: localhost
-- port: 5432
+- port: 5433
 - user: postgres
 - password: postgres
 - db: fitcoach
@@ -18,7 +18,7 @@ Create/update `apps/server/.env` (used by Fastify app):
 
 ```
 DB_HOST=localhost
-DB_PORT=5432
+DB_PORT=5433
 DB_USER=postgres
 DB_PASSWORD=postgres
 DB_NAME=fitcoach
@@ -37,7 +37,7 @@ DB_PASSWORD=postgres
 DB_NAME=fitcoach_test
 ```
 
-Run a separate DB for tests by changing docker-compose to map 5433:5432 (or use a different local instance), and run tests with `NODE_ENV=test`.
+Run a separate DB for tests by keeping docker-compose mapping 5433:5432 (container:5432 -> host:5433), and run tests with `NODE_ENV=test`.
 
 ## Migrations (later)
 We will add drizzle-kit config and migrations after initial wiring. For now, schema comes from legacy and will be ported to new `infra/db/schema.ts` with proper migrations next.
