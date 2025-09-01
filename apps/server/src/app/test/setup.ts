@@ -14,6 +14,15 @@ export async function setupTestDI() {
   process.env.DB_NAME = process.env.DB_NAME || 'fit_coach_test';
   process.env.BOT_API_KEY = process.env.BOT_API_KEY || 'test-key';
 
+  // Reset schema and apply migrations
+  const { pool } = await import('@infra/db/drizzle');
+  const client = await pool.connect();
+  try {
+    await client.query('drop schema if exists public cascade; create schema public;');
+  } finally {
+    client.release();
+  }
+
   const { ensureSchema } = await import('@infra/db/init');
   await ensureSchema();
 

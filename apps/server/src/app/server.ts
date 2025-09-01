@@ -3,7 +3,7 @@ import cors from '@fastify/cors';
 import sensible from '@fastify/sensible';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
-import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
+import { serializerCompiler, validatorCompiler, ZodTypeProvider, jsonSchemaTransform } from 'fastify-type-provider-zod';
 import { registerErrorHandler } from './middlewares/error';
 import { apiKeyPreHandler } from './middlewares/api-key';
 import { registerUserRoutes } from './routes/user.routes';
@@ -27,7 +27,9 @@ export function buildServer() {
   app.register(cors, { origin: true });
   app.register(sensible);
   app.register(swagger, {
+    mode: 'dynamic',
     openapi: {
+      openapi: '3.0.3',
       info: { title: 'Fit Coach API', version: '1.0.0' },
       components: {
         securitySchemes: {
@@ -39,6 +41,7 @@ export function buildServer() {
         },
       },
     },
+    transform: jsonSchemaTransform,
   });
   app.register(swaggerUi, { routePrefix: '/docs' });
 
