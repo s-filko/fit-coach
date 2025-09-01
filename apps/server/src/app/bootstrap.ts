@@ -4,7 +4,7 @@ import { buildServer } from './server';
 import { loadConfig } from '@infra/config';
 import { Container } from '@infra/di/container';
 import { TOKENS } from '@infra/di/tokens';
-import { InMemoryUserRepository, DrizzleUserRepository } from '@infra/db/repositories/user.repository';
+import { DrizzleUserRepository } from '@infra/db/repositories/user.repository';
 import { ensureSchema } from '@infra/db/init';
 import { UserService } from '@domain/user/services/user.service';
 

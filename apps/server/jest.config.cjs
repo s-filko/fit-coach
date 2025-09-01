@@ -6,6 +6,7 @@ module.exports = {
   testMatch: ['**/*.test.ts'],
   setupFilesAfterEnv: ['<rootDir>/src/app/test/setup.ts'],
   globalTeardown: '<rootDir>/src/app/test/teardown.ts',
+  maxWorkers: 1,
   moduleNameMapper: {
     '^@app/(.*)$': '<rootDir>/src/app/$1',
     '^@domain/(.*)$': '<rootDir>/src/domain/$1',

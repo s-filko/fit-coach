@@ -10,7 +10,6 @@ import { registerUserRoutes } from './routes/user.routes';
 import { registerMessageRoutes } from './routes/message.routes';
 import { Container } from '@infra/di/container';
 import { TOKENS } from '@infra/di/tokens';
-import { InMemoryUserRepository } from '@infra/db/repositories/user.repository';
 import { UserService } from '@domain/user/services/user.service';
 
 export function buildServer() {
