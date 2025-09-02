@@ -60,10 +60,10 @@ security:
   - 403 `{ error: { message: string } }`
   - 404 `{ error: { message: "User not found" } }`
 
-## 3. Message (Stub)
+## 3. AI Chat
 
-### 3.1 Process Message
-- POST `/api/message`
+### 3.1 Send Chat Message
+- POST `/api/chat`
 - Request body (Zod):
 ```ts
 {
@@ -72,9 +72,15 @@ security:
 }
 ```
 - Responses:
-  - 200 `{ data: { echo: string } }`
+  - 200 `{ data: { content: string, timestamp: string } }`
   - 401 `{ error: { message: string } }`
   - 403 `{ error: { message: string } }`
+  - 500 `{ error: { message: "AI processing failed" } }`
+
+### Notes
+- AI responses are generated in Russian language
+- Response time may vary based on AI model load (typically < 3 seconds)
+- All conversations are stateless (no context preservation between messages)
 
 ## Notes
 - All responses are JSON.
