@@ -80,19 +80,19 @@ export function registerBotHandlers(bot: TelegramBot) {
             // Ensure user exists to get userId
             const user = await registerOrGetUser(msg);
 
-            // Send message to API (stub echo)
-            const messageResponse = await api.post('/api/message', {
+            // Send message to LLM chat API
+            const chatResponse = await api.post('/api/chat', {
                 userId: user.id,
                 message: userText,
             });
 
-            const echo = messageResponse.data?.data?.echo;
-            if (typeof echo !== 'string') {
-                console.error('Invalid API response:', messageResponse.data);
-                throw new Error('Invalid response from API service');
+            const aiResponse = chatResponse.data?.data?.content;
+            if (typeof aiResponse !== 'string') {
+                console.error('Invalid AI response:', chatResponse.data);
+                throw new Error('Invalid response from AI service');
             }
 
-            await bot.sendMessage(chatId, echo);
+            await bot.sendMessage(chatId, aiResponse);
         } catch (error) {
             console.error('Bot error:', error);
             if (axios.isAxiosError(error)) {

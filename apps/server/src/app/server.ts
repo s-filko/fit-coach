@@ -7,10 +7,11 @@ import { serializerCompiler, validatorCompiler, ZodTypeProvider, jsonSchemaTrans
 import { registerErrorHandler } from '@app/middlewares/error';
 import { apiKeyPreHandler } from '@app/middlewares/api-key';
 import { registerUserRoutes } from '@app/routes/user.routes';
-import { registerMessageRoutes } from '@app/routes/message.routes';
+import { registerChatRoutes } from '@app/routes/chat.routes';
 import { Container } from '@infra/di/container';
 import { TOKENS } from '@infra/di/tokens';
 import { UserService } from '@domain/user/services/user.service';
+import { LLMService } from '@infra/ai/llm.service';
 
 export function buildServer() {
   const app = Fastify({
@@ -58,9 +59,10 @@ export function buildServer() {
     // Ensure DI defaults for tests/local usage without bootstrap
     const c = Container.getInstance();
     if (!c.has(TOKENS.USER_SERVICE)) c.registerFactory(TOKENS.USER_SERVICE, (c) => new UserService(c.get(TOKENS.USER_REPO)));
+    if (!c.has(TOKENS.LLM)) c.register(TOKENS.LLM, new LLMService());
 
     await registerUserRoutes(instance);
-    await registerMessageRoutes(instance);
+    await registerChatRoutes(instance);
   });
 
   return app;

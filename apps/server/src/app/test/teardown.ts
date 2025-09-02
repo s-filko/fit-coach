@@ -1,12 +1,41 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-export default async function globalTeardown() {
-  // Load env file for teardown
-  dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+/**
+ * Load environment variables for the specified NODE_ENV
+ * @throws Error if NODE_ENV is not set or env file doesn't exist
+ */
+async function loadTestEnv(): Promise<void> {
+  // Require NODE_ENV to be set
+  if (!process.env.NODE_ENV) {
+    throw new Error('NODE_ENV is not specified. Please set NODE_ENV=test for running tests.');
+  }
 
-  const { pool } = await import('../../infra/db/drizzle');
-  await pool.end();
+  const envFile = `.env.${process.env.NODE_ENV}`;
+  const envPath = path.resolve(process.cwd(), envFile);
+
+  // Check if env file exists
+  const fs = await import('fs');
+  if (!fs.existsSync(envPath)) {
+    throw new Error(`Environment file not found: ${envFile}. Please create ${envFile} file or set correct NODE_ENV.`);
+  }
+
+  dotenv.config({ path: envPath });
+}
+
+export default async function globalTeardown() {
+  await loadTestEnv();
+
+  // Close database connection
+  try {
+    const { pool } = await import('../../infra/db/drizzle');
+    if (pool) {
+      await pool.end();
+    }
+  } catch (error) {
+    // Ignore errors if pool is not available
+    console.warn('Could not close database pool in teardown:', error);
+  }
 }
 
 

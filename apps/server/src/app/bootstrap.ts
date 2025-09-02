@@ -7,6 +7,7 @@ import { TOKENS } from '@infra/di/tokens';
 import { DrizzleUserRepository } from '@infra/db/repositories/user.repository';
 import { ensureSchema } from '@infra/db/init';
 import { UserService } from '@domain/user/services/user.service';
+import { LLMService } from '@infra/ai/llm.service';
 
 export async function bootstrap() {
   const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env';
@@ -26,6 +27,7 @@ export async function bootstrap() {
   await ensureSchema();
   c.register(TOKENS.USER_REPO, new DrizzleUserRepository());
   c.registerFactory(TOKENS.USER_SERVICE, (c) => new UserService(c.get(TOKENS.USER_REPO)));
+  c.register(TOKENS.LLM, new LLMService());
 
   const port = config.PORT;
   const host = process.env.HOST;

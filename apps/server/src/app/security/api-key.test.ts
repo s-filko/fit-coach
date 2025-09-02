@@ -2,10 +2,10 @@ import { buildServer } from '@app/server';
 
 describe('X-Api-Key security', () => {
   const app = buildServer();
-  const validKey = 'test-key';
+  let validKey: string;
 
   beforeAll(() => {
-    process.env.BOT_API_KEY = validKey;
+    validKey = process.env.BOT_API_KEY!;
   });
 
   afterAll(async () => {
