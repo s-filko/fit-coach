@@ -9,7 +9,9 @@
 - [ ] File path matches test type.
 - [ ] File name matches required pattern.
 - [ ] No hardcoded secrets, ports, paths, or credentials.
-- [ ] No duplicate test cases or logic.
+- [ ] **No duplicate test cases or logic** (check existing tests first).
+- [ ] **Middleware logic tested in dedicated middleware tests only**.
+- [ ] **Same operation not tested in both unit and integration**.
 - [ ] Test is isolated, data is unique, state is cleaned.
 - [ ] Assertions cover status/headers (for API) and body.
 - [ ] Time/randomness stabilized if it affects results.
@@ -227,12 +229,156 @@ it('should return unified error format', async () => {
 ---
 
 ## 15) Anti-Patterns (FORBIDDEN)
-- Mixing unit and integration in one file.  
-- Placing integration/E2E next to source code.  
-- Duplicate test cases at same level.  
-- Hardcoding secrets, URLs, ports, creds.  
-- Testing private methods.  
+- Mixing unit and integration in one file.
+- Placing integration/E2E next to source code.
+- Duplicate test cases at same level.
+- **Testing middleware logic in every API endpoint** (create dedicated middleware tests).
+- **Testing repository operations in both unit and integration** without clear purpose separation.
+- **Copy-pasting test code across multiple files**.
+- Hardcoding secrets, URLs, ports, creds.
+- Testing private methods.
 - Leaving DB state after test.  
+
+---
+
+## 15.1) Test Level Responsibilities (CRITICAL)
+
+### Unit Tests (MUST test):
+- **Pure business logic** (no external dependencies)
+- **Algorithm correctness**
+- **Data transformation**
+- **Validation rules**
+- **Error handling** (with mocked dependencies)
+
+### Unit Tests (MUST NOT test):
+- **Middleware logic** (create dedicated middleware tests)
+- **Database operations** (only with mocks)
+- **HTTP responses** (except error codes from business logic)
+- **External service integrations**
+
+### Integration Tests (MUST test):
+- **API endpoints** with real server (Fastify routes)
+- **Database operations** with real DB (transactions)
+- **Service interactions** with real dependencies
+- **Middleware behavior** (dedicated middleware tests)
+- **End-to-end flows** within application
+
+### Integration Tests (MUST NOT test):
+- **Pure business logic** (belongs to unit tests)
+- **External API calls** (use mocks/stubs)
+- **Complex algorithms** (unit test with mocks)
+
+---
+
+## 15.2) Common Duplication Patterns to Avoid
+
+### ❌ WRONG: Testing middleware in every API endpoint
+```ts
+// AVOID: This pattern creates 10+ duplicate tests
+describe('POST /api/users', () => {
+  it('should return 401 when x-api-key missing', ...)  // DUPLICATE
+  it('should return 403 when x-api-key invalid', ...)  // DUPLICATE
+  it('should create user when valid', ...)
+})
+
+describe('POST /api/chat', () => {
+  it('should return 401 when x-api-key missing', ...)  // DUPLICATE
+  it('should return 403 when x-api-key invalid', ...)  // DUPLICATE
+  it('should process message when valid', ...)
+})
+```
+
+### ✅ CORRECT: Dedicated middleware tests + endpoint tests
+```ts
+// Dedicated middleware test
+describe('API Key Middleware – integration', () => {
+  it('should return 401 when x-api-key missing', ...)
+  it('should return 403 when x-api-key invalid', ...)
+  it('should allow request when x-api-key valid', ...)
+})
+
+// API endpoint tests (only business logic)
+describe('POST /api/users – integration', () => {
+  it('should create user with valid data', ...)
+  it('should handle duplicate user creation', ...)
+})
+
+describe('POST /api/chat – integration', () => {
+  it('should process message with valid user', ...)
+  it('should handle invalid message format', ...)
+})
+```
+
+### ❌ WRONG: Testing same operation in unit + integration
+```ts
+// Unit test
+describe('UserService.updateProfileData – unit', () => {
+  it('should handle empty profile data', ...)  // DUPLICATE LOGIC
+})
+
+// Integration test
+describe('UserService.updateProfileData – integration', () => {
+  it('should handle empty profile data', ...)  // DUPLICATE LOGIC
+})
+```
+
+### ✅ CORRECT: Different purposes, different tests
+```ts
+// Unit test: Pure logic with mocks
+describe('UserService.updateProfileData – unit', () => {
+  it('should validate input data format', ...)
+  it('should handle null/undefined values', ...)
+  it('should call repository with correct parameters', ...)
+})
+
+// Integration test: Real database behavior
+describe('UserService.updateProfileData – integration', () => {
+  it('should persist data to database', ...)
+  it('should handle database connection errors', ...)
+  it('should rollback on transaction failure', ...)
+})
+```
+
+---
+
+## 15.3) Test Organization Strategy
+
+### By Responsibility (Recommended):
+```
+tests/
+├── unit/                          # Pure logic, no external deps
+│   ├── business-logic/           # Domain rules, algorithms
+│   ├── data-validation/          # Input/output validation
+│   └── utilities/                # Helper functions
+├── integration/                   # Real components, isolated
+│   ├── api/                      # HTTP endpoints
+│   ├── middleware/               # Cross-cutting concerns
+│   ├── services/                 # Service interactions
+│   └── database/                 # Data persistence
+└── e2e/                          # Full application flows
+    ├── user-journeys/           # Complete user scenarios
+    └── admin-journeys/          # Administrative workflows
+```
+
+### By Component Type:
+```
+tests/
+├── middleware/                   # Shared middleware logic
+│   ├── auth.integration.test.ts
+│   ├── cors.integration.test.ts
+│   └── validation.integration.test.ts
+├── api/                         # API endpoints (no middleware dups)
+│   ├── users.integration.test.ts
+│   ├── chat.integration.test.ts
+│   └── admin.integration.test.ts
+├── services/                    # Service layer
+│   ├── user.service.unit.test.ts
+│   ├── user.service.integration.test.ts
+│   └── registration.service.integration.test.ts
+└── repositories/                # Data layer
+    ├── user.repository.unit.test.ts
+    └── user.repository.integration.test.ts
+```
 
 ---
 
@@ -471,6 +617,87 @@ let tx: any;
 beforeEach(async () => { tx = await db.begin(); });
 afterEach(async () => { await tx.rollback(); });
 ```
+
+---
+
+## 18) Lessons Learned - Duplication Analysis (CURRENT PROJECT)
+
+### 🎯 **Mistakes Made During Recent Refactoring:**
+
+#### 1. **Middleware Logic Duplication**
+**Problem:** API key authentication tested in every endpoint (4 duplicates)
+```ts
+// FOUND: 4 identical tests across different API endpoints
+it('should return 401 when x-api-key header is missing', ...)
+```
+
+**Root Cause:** Documentation didn't specify "middleware logic belongs to dedicated tests"
+**Impact:** 6+ duplicate tests, maintenance overhead
+
+#### 2. **Repository Operation Duplication**
+**Problem:** Same operations tested in unit + integration
+```ts
+// FOUND: Same logic tested twice
+describe('UserService.updateProfileData – unit', () => {
+  it('should handle empty profile data', ...)  // DUPLICATE
+})
+describe('UserService.updateProfileData – integration', () => {
+  it('should handle empty profile data', ...)  // DUPLICATE
+})
+```
+
+**Root Cause:** Unclear separation of concerns between unit/integration
+**Impact:** Redundant test coverage, confusion about test purposes
+
+#### 3. **User Creation Duplication**
+**Problem:** User creation tested in multiple contexts
+```ts
+// FOUND: 5 variations of user creation tests
+it('should create user with minimal required data', ...)
+it('should create user with different providers independently', ...)
+it('should create user inside transaction', ...)
+```
+
+**Root Cause:** No guidelines on test granularity vs duplication
+**Impact:** Overlapping coverage, inconsistent test naming
+
+### 📋 **Immediate Action Plan:**
+
+#### Phase 1: Middleware Consolidation (High Priority)
+```bash
+# Create dedicated middleware tests
+tests/integration/middleware/
+├── auth.integration.test.ts      # API key logic
+├── cors.integration.test.ts      # CORS handling
+└── validation.integration.test.ts # Input validation
+```
+
+#### Phase 2: Repository Test Cleanup (Medium Priority)
+```bash
+# Unit tests: Pure logic with mocks
+src/**/__tests__/*.unit.test.ts
+
+# Integration tests: Real DB operations
+tests/integration/database/*.integration.test.ts
+```
+
+#### Phase 3: API Endpoint Refactoring (Low Priority)
+```bash
+# Remove auth tests from endpoints
+tests/integration/api/*.integration.test.ts  # Only business logic
+```
+
+### 🔧 **New Rules Added to Prevent Future Issues:**
+
+1. **Middleware Logic Rule:** "Middleware logic tested in dedicated middleware tests only"
+2. **Cross-Level Rule:** "Same operation not tested in both unit and integration"
+3. **Purpose Separation:** Clear distinction between testing WHAT vs testing HOW
+
+### 📊 **Expected Results After Cleanup:**
+- **Before:** 126 tests with significant duplication
+- **After:** ~80-90 tests with clear separation of concerns
+- **Coverage:** Maintained or improved
+- **Maintenance:** Significantly reduced
 
 ---
 
