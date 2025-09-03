@@ -14,6 +14,15 @@ export const generateUniqueId = (prefix: string = 'test'): string => {
 };
 
 /**
+ * Generates unique user ID for test data
+ */
+export const generateTestUserId = (): string => {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substr(2, 9);
+  return `user_${timestamp}_${random}`;
+};
+
+/**
  * Generates unique user data for testing
  */
 export const createTestUserData = (overrides: Partial<{
@@ -208,3 +217,47 @@ export const createTestDate = (offsetDays: number = 0): string => {
   date.setDate(date.getDate() + offsetDays);
   return date.toISOString();
 };
+
+/**
+ * Generates test User object (for business logic tests)
+ */
+export const createTestUser = (overrides: Partial<{
+  id: string;
+  username?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  languageCode?: string | null;
+  profileStatus?: string | null;
+  fitnessLevel?: string | null;
+  age?: number | null;
+  gender?: 'male' | 'female' | null;
+  height?: number | null;
+  weight?: number | null;
+  fitnessGoal?: string | null;
+}> = {}): {
+  id: string;
+  username?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  languageCode?: string | null;
+  profileStatus?: string | null;
+  fitnessLevel?: string | null;
+  age?: number | null;
+  gender?: 'male' | 'female' | null;
+  height?: number | null;
+  weight?: number | null;
+  fitnessGoal?: string | null;
+} => ({
+  id: overrides.id || generateTestUserId(),
+  username: overrides.username !== undefined ? overrides.username : `testuser_${generateUniqueId()}`,
+  firstName: overrides.firstName !== undefined ? overrides.firstName : 'Test',
+  lastName: overrides.lastName !== undefined ? overrides.lastName : 'User',
+  languageCode: overrides.languageCode !== undefined ? overrides.languageCode : 'en',
+  profileStatus: overrides.profileStatus !== undefined ? overrides.profileStatus : 'incomplete',
+  fitnessLevel: overrides.fitnessLevel !== undefined ? overrides.fitnessLevel : null,
+  age: overrides.age !== undefined ? overrides.age : null,
+  gender: overrides.gender !== undefined ? overrides.gender : null,
+  height: overrides.height !== undefined ? overrides.height : null,
+  weight: overrides.weight !== undefined ? overrides.weight : null,
+  fitnessGoal: overrides.fitnessGoal !== undefined ? overrides.fitnessGoal : null,
+});
