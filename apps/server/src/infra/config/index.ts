@@ -28,6 +28,9 @@ const EnvSchema = z.object({
   BOT_API_KEY: z.string().min(1),
   OPENAI_API_KEY: z.string().min(1),
   OPENAI_MODEL: z.string().optional(), // Optional, has defaults based on NODE_ENV
+  
+  // LLM Debug Configuration
+  LLM_DEBUG: z.string().optional().transform(v => v === 'true')
 });
 
 export type Env = z.infer<typeof EnvSchema> & { PORT: number };

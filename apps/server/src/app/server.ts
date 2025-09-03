@@ -3,6 +3,9 @@ import cors from '@fastify/cors';
 import sensible from '@fastify/sensible';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import fastifyStatic from '@fastify/static';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider, jsonSchemaTransform } from 'fastify-type-provider-zod';
 import { registerErrorHandler } from '@app/middlewares/error';
 import { apiKeyPreHandler } from '@app/middlewares/api-key';
@@ -47,6 +50,19 @@ export function buildServer() {
     transform: jsonSchemaTransform,
   });
   app.register(swaggerUi, { routePrefix: '/docs' });
+
+  // Static files
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  app.register(fastifyStatic, {
+    root: path.join(__dirname, '../../public'),
+    prefix: '/public/',
+  });
+
+  // LLM Debug Monitor route
+  app.get('/debug', async (request, reply) => {
+    return reply.redirect('/public/llm-debug.html');
+  });
 
   // health
   app.get('/health', async () => ({ status: 'ok' }));

@@ -5,6 +5,7 @@ import { TOKENS } from '@infra/di/tokens';
 import { ILLMService } from '@infra/ai/llm.service';
 import { UserService } from '@domain/user/services/user.service';
 import { IRegistrationService } from '@domain/user/services/registration.service';
+import { loadConfig } from '@infra/config';
 
 const chatMessageBody = z.object({
   userId: z.string().min(1).describe('User ID'),
@@ -90,4 +91,79 @@ export async function registerChatRoutes(app: FastifyInstance) {
       });
     }
   });
+
+  // Debug route for LLM service (only in development)
+  if (loadConfig().NODE_ENV === 'development') {
+    app.get('/api/debug/llm', {
+      schema: {
+        summary: 'Get LLM debug information',
+        security: [{ ApiKeyAuth: [] } as any],
+        response: {
+          200: z.object({
+            debugInfo: z.any(),
+            timestamp: z.string(),
+          }),
+          401: z.object({ error: z.object({ message: z.string() }) }),
+          500: z.object({ error: z.object({ message: z.string() }) }),
+        },
+      },
+    }, async (req, reply) => {
+      try {
+        const container = Container.getInstance();
+        const llmService = container.get<ILLMService>(TOKENS.LLM);
+
+        if (typeof (llmService as any).getDebugInfo !== 'function') {
+          return reply.code(500).send({
+            error: { message: 'Debug info not available' }
+          });
+        }
+
+        const debugInfo = (llmService as any).getDebugInfo();
+
+        return reply.send({
+          debugInfo,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error('Debug error:', error);
+        return reply.code(500).send({
+          error: { message: 'Failed to get debug info' }
+        });
+      }
+    });
+
+    app.post('/api/debug/llm/clear', {
+      schema: {
+        summary: 'Clear LLM debug history',
+        security: [{ ApiKeyAuth: [] } as any],
+        response: {
+          200: z.object({
+            message: z.string(),
+            timestamp: z.string(),
+          }),
+          401: z.object({ error: z.object({ message: z.string() }) }),
+          500: z.object({ error: z.object({ message: z.string() }) }),
+        },
+      },
+    }, async (req, reply) => {
+      try {
+        const container = Container.getInstance();
+        const llmService = container.get<ILLMService>(TOKENS.LLM);
+
+        if (typeof (llmService as any).clearHistory === 'function') {
+          (llmService as any).clearHistory();
+        }
+
+        return reply.send({
+          message: 'Debug history cleared',
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error('Clear debug error:', error);
+        return reply.code(500).send({
+          error: { message: 'Failed to clear debug history' }
+        });
+      }
+    });
+  }
 }

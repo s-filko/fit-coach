@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Debug Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 8px;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 12px 15px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 1.8em;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .header p {
+            font-size: 0.9em;
+            margin: 0;
+            opacity: 0.9;
+        }
+
+        /* Combined stats and controls in one row */
+        .stats-controls-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .stats-compact {
+            display: flex;
+            gap: 15px;
+            flex: 1;
+        }
+
+        .stat-compact {
+            text-align: center;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .stat-compact .stat-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .stat-compact .stat-label {
+            color: #6c757d;
+            font-size: 0.75em;
+            margin-top: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .controls-compact {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .controls-compact .auto-refresh {
+            margin: 0;
+        }
+
+        .controls-compact label {
+            font-size: 0.8em;
+            margin: 0;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .controls-compact input[type="checkbox"] {
+            margin-right: 3px;
+            cursor: pointer;
+        }
+
+
+
+
+
+        .refresh-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: background 0.3s;
+            min-width: 28px;
+        }
+
+        .refresh-btn:hover {
+            background: #218838;
+        }
+
+
+
+        .table-container {
+            overflow-x: auto;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+            vertical-align: top;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        tr:hover {
+            background: #e3f2fd;
+        }
+
+        /* Message content styles */
+        .request-col, .response-col {
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            line-height: 1.4;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .message-content {
+            background: rgba(0,0,0,0.05);
+            padding: 8px 12px;
+            border-radius: 6px;
+            border-left: 3px solid #007bff;
+            margin: 4px 0;
+            line-height: 1.3;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            hyphens: auto;
+            font-family: 'Ubuntu', 'Roboto', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 0.9em;
+        }
+
+        .message-content.request {
+            border-left-color: #28a745;
+            background: rgba(40, 167, 69, 0.1);
+        }
+
+        .message-content.response {
+            border-left-color: #007bff;
+            background: rgba(0, 123, 255, 0.1);
+        }
+
+        .expand-btn {
+            margin-top: 12px;
+            padding: 6px 12px;
+            background: rgba(0, 123, 255, 0.2);
+            border: 1px solid #007bff;
+            border-radius: 4px;
+            color: #007bff;
+            cursor: pointer;
+            font-size: 0.85em;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .expand-btn:hover {
+            background: rgba(0, 123, 255, 0.3);
+            color: #0056b3;
+        }
+
+        .technical-info {
+            background: #f8f9fa;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            color: #6c757d;
+            margin-bottom: 6px;
+            border: 1px solid #e9ecef;
+            font-family: 'Ubuntu', 'Roboto', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        .technical-info .tech-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3px;
+            line-height: 1.2;
+        }
+
+        .technical-info .tech-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .technical-info .tech-label {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .technical-info .tech-value {
+            font-family: 'Ubuntu', 'Roboto', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: white;
+            padding: 1px 4px;
+            border-radius: 2px;
+            border: 1px solid #dee2e6;
+            font-size: 0.9em;
+        }
+
+        .content-separator {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #e9ecef, transparent);
+            margin: 4px 0;
+        }
+
+        .message-content:hover {
+            cursor: pointer;
+            opacity: 0.8;
+        }
+
+        .full-text-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .full-text-modal.flex {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            max-width: 700px;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            position: relative;
+            font-family: 'Ubuntu', 'Roboto', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #6c757d;
+            font-family: 'Ubuntu', 'Roboto', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-weight: 500;
+        }
+
+        .modal-close:hover {
+            color: #495057;
+        }
+
+        .modal-text {
+            white-space: pre-wrap;
+            line-height: 1.4;
+            font-family: 'Ubuntu', 'Roboto Mono', 'Courier New', monospace;
+            font-size: 13px;
+            margin-top: 20px;
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+            max-height: 70vh;
+            overflow-y: auto;
+            color: #212529;
+        }
+
+        #modal-title {
+            font-family: 'Ubuntu', 'Roboto', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 18px;
+            font-weight: 500;
+            color: #495057;
+            margin-bottom: 0;
+            text-align: center;
+        }
+
+
+
+        /* New log structure */
+        .logs-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .log-item {
+            background: white;
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .log-separator {
+            border-bottom: 1px solid #e9ecef;
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+        }
+
+        .content-row {
+            display: flex;
+            min-height: 150px;
+        }
+
+        .content-row .request-col,
+        .content-row .response-col {
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .content-row .request-col {
+            background: rgba(40, 167, 69, 0.05);
+            border-right: 2px solid #28a745;
+        }
+
+        .content-row .response-col {
+            background: rgba(0, 123, 255, 0.05);
+            border-left: 2px solid #007bff;
+        }
+
+        .empty-message {
+            color: #6c757d;
+            font-style: italic;
+            text-align: center;
+            padding: 20px 15px;
+        }
+
+        /* New messages indicator */
+        .new-messages-indicator {
+            display: none;
+            position: sticky;
+            top: 0;
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            padding: 4px 8px;
+            text-align: center;
+            font-weight: 500;
+            font-size: 0.8em;
+            cursor: pointer;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+            border-radius: 0 0 4px 4px;
+            transition: all 0.3s ease;
+        }
+
+        .new-messages-indicator:hover {
+            background: linear-gradient(135deg, #218838, #1aa085);
+            transform: translateY(2px);
+        }
+
+        .indicator-text {
+            margin-right: 8px;
+        }
+
+        .indicator-count {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: bold;
+            min-width: 24px;
+            display: inline-block;
+        }
+
+        .new-row {
+            animation: slideInFromTop 0.6s ease-out;
+            border-left: 3px solid #28a745;
+        }
+
+        .new-row.highlight {
+            animation: highlightPulse 3s ease-in-out;
+            background: linear-gradient(90deg, rgba(40, 167, 69, 0.1), rgba(40, 167, 69, 0.05), rgba(40, 167, 69, 0.1)) !important;
+            border-left: 4px solid #28a745 !important;
+            box-shadow: 0 0 20px rgba(40, 167, 69, 0.2);
+        }
+
+        @keyframes slideInFromTop {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+                border-left-color: transparent;
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+                border-left-color: #28a745;
+            }
+        }
+
+        @keyframes highlightPulse {
+            0% {
+                background: linear-gradient(90deg, rgba(40, 167, 69, 0.1), rgba(40, 167, 69, 0.05), rgba(40, 167, 69, 0.1));
+                box-shadow: 0 0 20px rgba(40, 167, 69, 0.2);
+            }
+            50% {
+                background: linear-gradient(90deg, rgba(40, 167, 69, 0.25), rgba(40, 167, 69, 0.15), rgba(40, 167, 69, 0.25));
+                box-shadow: 0 0 30px rgba(40, 167, 69, 0.4);
+            }
+            100% {
+                background: linear-gradient(90deg, rgba(40, 167, 69, 0.1), rgba(40, 167, 69, 0.05), rgba(40, 167, 69, 0.1));
+                box-shadow: 0 0 20px rgba(40, 167, 69, 0.2);
+            }
+        }
+
+        /* Fixed widths for service columns */
+        .time-col {
+            width: 120px;
+            min-width: 120px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        .type-col {
+            width: 100px;
+            min-width: 100px;
+        }
+
+        .model-col {
+            width: 140px;
+            min-width: 140px;
+        }
+
+        .processing-col {
+            width: 100px;
+            min-width: 100px;
+            text-align: center;
+        }
+
+        /* Absolute widths for content - 70% and 30% of screen */
+        .request-col {
+            width: 70vw;
+            min-width: 400px;
+            max-width: calc(70vw - 20px);
+        }
+
+        .response-col {
+            width: 30vw;
+            min-width: 200px;
+            max-width: calc(30vw - 20px);
+        }
+
+        /* Technical information on top */
+        .tech-info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8f9fa;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #e9ecef;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .tech-info-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+        }
+
+        .tech-info-item strong {
+            color: #495057;
+            min-width: 60px;
+        }
+
+        .tech-info-value {
+            background: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+            font-family: monospace;
+        }
+
+        .processing-time {
+            font-weight: bold;
+            color: #28a745;
+        }
+
+        .status {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 500;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            margin: 20px;
+            border-radius: 6px;
+            border: 1px solid #f5c6cb;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #495057;
+        }
+
+        @media (max-width: 768px) {
+            .stats {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .controls {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            /* Adapt columns for mobile devices */
+            .content-row {
+                flex-direction: column;
+                min-height: auto;
+            }
+
+            .content-row .request-col,
+            .content-row .response-col {
+                width: 100% !important;
+                max-width: none !important;
+                min-width: auto !important;
+            }
+
+            .tech-info-row {
+                flex-direction: column;
+                gap: 8px;
+                align-items: flex-start;
+            }
+
+            .tech-info-item {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .tech-info-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+            }
+
+            .tech-info-item strong {
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 LLM Debug Monitor</h1>
+            <p>Monitoring AI system requests and responses</p>
+        </div>
+
+        <!-- Combined stats and controls in one row -->
+        <div class="stats-controls-row">
+            <div class="stats-compact">
+                <div class="stat-compact">
+                    <div class="stat-value" id="total-requests">0</div>
+                    <div class="stat-label">Requests</div>
+                </div>
+                <div class="stat-compact">
+                    <div class="stat-value" id="total-responses">0</div>
+                    <div class="stat-label">Responses</div>
+                </div>
+                <div class="stat-compact">
+                    <div class="stat-value" id="avg-time">0ms</div>
+                    <div class="stat-label">Avg Time</div>
+                </div>
+                <div class="stat-compact">
+                    <div class="stat-value" id="last-update">--:--:--</div>
+                    <div class="stat-label">Last Update</div>
+                </div>
+            </div>
+
+            <div class="controls-compact">
+                <div class="auto-refresh">
+                    <label>
+                        <input type="checkbox" id="auto-refresh" checked>
+                        Auto (5s)
+                    </label>
+                </div>
+                <button class="refresh-btn" onclick="loadDebugData()">🔄</button>
+            </div>
+        </div>
+
+        <!-- New messages indicator -->
+        <div id="new-messages-indicator" class="new-messages-indicator">
+            <span class="indicator-text">⬆️ New messages</span>
+            <span class="indicator-count" id="new-messages-count">0</span>
+        </div>
+
+        <div id="content">
+            <div class="loading" style="padding: 20px 15px;">
+                <div>⏳ Loading data...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal window for full text -->
+    <div id="full-text-modal" class="full-text-modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal()">&times;</span>
+            <h3 id="modal-title">Full Text</h3>
+            <div id="modal-text" class="modal-text"></div>
+        </div>
+    </div>
+
+    <script>
+        let autoRefreshInterval;
+        let lastRequestCount = 0;
+        let lastResponseCount = 0;
+        let isInitialLoad = true;
+
+        // Data loading on startup
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDebugData();
+            startAutoRefresh();
+
+            // Scroll handler to hide new messages indicator
+            const logsContainer = document.querySelector('.logs-container');
+            logsContainer.addEventListener('scroll', function() {
+                const indicator = document.getElementById('new-messages-indicator');
+                if (indicator && indicator.style.display === 'block' && logsContainer.scrollTop === 0) {
+                    indicator.style.display = 'none';
+                }
+            });
+        });
+
+        // Auto-refresh
+        function startAutoRefresh() {
+            const checkbox = document.getElementById('auto-refresh');
+            if (checkbox.checked) {
+                autoRefreshInterval = setInterval(loadDebugData, 5000);
+            }
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        }
+
+        // Toggle auto-refresh
+        document.getElementById('auto-refresh').addEventListener('change', function(e) {
+            if (e.target.checked) {
+                startAutoRefresh();
+            } else {
+                stopAutoRefresh();
+            }
+        });
+
+        // Data loading from API
+        async function loadDebugData() {
+            try {
+                const response = await fetch('/api/debug/llm', {
+                    headers: {
+                        'X-API-Key': 'dev-key'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                if (isInitialLoad) {
+                    renderData(data.debugInfo);
+                    isInitialLoad = false;
+                } else {
+                    updateData(data.debugInfo);
+                }
+
+                // Update last update time
+                const now = new Date();
+                document.getElementById('last-update').textContent =
+                    now.toLocaleTimeString();
+
+            } catch (error) {
+                const contentDiv = document.getElementById('content');
+                contentDiv.innerHTML = `
+                    <div class="error" style="padding: 15px;">
+                        ❌ Data loading error: ${error.message}<br>
+                        Please check that the server is running and accessible at http://localhost:3000
+                    </div>
+                `;
+            }
+        }
+
+        // Data rendering to table (initial load)
+        function renderData(debugInfo) {
+            if (!debugInfo || (!debugInfo.requestHistory || debugInfo.requestHistory.length === 0)) {
+                document.getElementById('content').innerHTML = `
+                    <div class="empty-state">
+                        <h3>📭 No data to display</h3>
+                        <p>Send a request to /api/chat API to see logs here</p>
+                    </div>
+                `;
+                updateStats(0, 0, 0);
+                return;
+            }
+
+            const requests = debugInfo.requestHistory || [];
+            const responses = debugInfo.responseHistory || [];
+
+            // Remember current count
+            lastRequestCount = requests.length;
+            lastResponseCount = responses.length;
+
+            // Update statistics
+            updateStats(requests.length, responses.length, calculateAvgTime(responses));
+
+            // Create new structure with technical info on top
+            let html = `
+                <div class="logs-container" id="log-rows">
+            `;
+
+            // Create request-response pairs (newest first)
+            const maxLength = Math.max(requests.length, responses.length);
+
+            for (let i = maxLength - 1; i >= 0; i--) {
+                const request = requests[i];
+                const response = responses[i];
+
+                const time = request ? formatTime(new Date(request.timestamp)) :
+                              response ? formatTime(new Date(response.timestamp)) : '';
+
+                const type = request ? (request.isRegistration ? 'Registration' : 'Chat') : 'Chat';
+                const model = request ? request.model : (response ? response.model : '');
+                const message = request ? formatMessage(request.message, 'request') : '';
+                const answer = response ? formatMessage(response.content, 'response') : '';
+                const processingTime = response ? `${response.processingTime}ms` : '';
+
+                // Create technical information
+                const techInfo = createTechInfoRow(time, type, model, processingTime);
+
+                // Create container for request and response
+                const contentRow = `
+                    <div class="content-row">
+                        <div class="request-col">${message || '<div class="empty-message">No request</div>'}</div>
+                        <div class="response-col">${answer || '<div class="empty-message">No response</div>'}</div>
+                    </div>
+                `;
+
+                html += `
+                    <div class="log-item ${i === 0 ? '' : 'log-separator'}">
+                        ${techInfo}
+                        ${contentRow}
+                    </div>
+                `;
+            }
+
+            html += `
+                </div>
+            `;
+
+            document.getElementById('content').innerHTML = html;
+        }
+
+        // Data update (adding new elements)
+        function updateData(debugInfo) {
+            if (!debugInfo) return;
+
+            const requests = debugInfo.requestHistory || [];
+            const responses = debugInfo.responseHistory || [];
+
+            // Check if there are new data
+            const newRequests = requests.length - lastRequestCount;
+            const newResponses = responses.length - lastResponseCount;
+
+            if (newRequests === 0 && newResponses === 0) return;
+
+            // Update statistics
+            updateStats(requests.length, responses.length, calculateAvgTime(responses));
+
+            // Save scroll position
+            const logsContainer = document.querySelector('.logs-container');
+            const wasAtTop = logsContainer.scrollTop === 0;
+            const currentScrollTop = logsContainer.scrollTop;
+
+            const maxLength = Math.max(requests.length, responses.length);
+            const startIndex = Math.max(lastRequestCount, lastResponseCount);
+
+            // Add new elements in reverse order to maintain correct sequence at top
+            for (let i = maxLength - 1; i >= startIndex; i--) {
+                const request = requests[i];
+                const response = responses[i];
+
+                const time = request ? formatTime(new Date(request.timestamp)) :
+                              response ? formatTime(new Date(response.timestamp)) : '';
+
+                const type = request ? (request.isRegistration ? 'Registration' : 'Chat') : 'Chat';
+                const model = request ? request.model : (response ? response.model : '');
+                const message = request ? formatMessage(request.message, 'request') : '';
+                const answer = response ? formatMessage(response.content, 'response') : '';
+                const processingTime = response ? `${response.processingTime}ms` : '';
+
+                // Create technical information
+                const techInfo = createTechInfoRow(time, type, model, processingTime);
+
+                // Create container for request and response
+                const contentRow = `
+                    <div class="content-row">
+                        <div class="request-col">${message || '<div class="empty-message">No request</div>'}</div>
+                        <div class="response-col">${answer || '<div class="empty-message">No response</div>'}</div>
+                    </div>
+                `;
+
+                const itemHtml = `
+                    <div class="log-item new-row">
+                        ${techInfo}
+                        ${contentRow}
+                    </div>
+                `;
+
+                // Add to beginning to show newest at top
+                logsContainer.insertAdjacentHTML('afterbegin', itemHtml);
+            }
+
+            // Update counters
+            lastRequestCount = requests.length;
+            lastResponseCount = responses.length;
+
+            // Restore scroll position
+            setTimeout(() => {
+                // If user was at top, stay at top (to see new logs)
+                if (wasAtTop) {
+                    logsContainer.scrollTop = 0;
+                } else {
+                    // If user was in middle, adjust position considering new elements at top
+                    const newItemsHeight = document.querySelectorAll('.new-row').length *
+                                          document.querySelector('.log-item')?.offsetHeight || 0;
+                    logsContainer.scrollTop = currentScrollTop + newItemsHeight;
+
+                    // Show new messages indicator only if user is not at top
+                    if (!wasAtTop && (newRequests > 0 || newResponses > 0)) {
+                        showNewMessagesIndicator(newRequests + newResponses);
+                    }
+                }
+            }, 100);
+
+            // Highlight new elements (all new ones at top)
+            setTimeout(() => {
+                const newItems = document.querySelectorAll('.new-row');
+
+                newItems.forEach((item, index) => {
+                    // Add delay for cascade animation
+                    setTimeout(() => {
+                        item.classList.add('highlight');
+                        // Remove highlight after 3 seconds
+                        setTimeout(() => item.classList.remove('highlight'), 3000);
+                    }, index * 100); // Delay 100ms between elements
+                });
+
+                // Remove new-row class after some time
+                setTimeout(() => {
+                    newItems.forEach(item => item.classList.remove('new-row'));
+                }, 1000);
+            }, 300);
+        }
+
+        // Statistics update
+        function updateStats(requests, responses, avgTime) {
+            document.getElementById('total-requests').textContent = requests;
+            document.getElementById('total-responses').textContent = responses;
+            document.getElementById('avg-time').textContent = `${Math.round(avgTime)}ms`;
+        }
+
+        // Show new messages indicator
+        function showNewMessagesIndicator(count) {
+            const indicator = document.getElementById('new-messages-indicator');
+            const countElement = document.getElementById('new-messages-count');
+
+            if (indicator && countElement) {
+                countElement.textContent = count;
+                indicator.style.display = 'block';
+
+                // Auto-hide after 10 seconds
+                setTimeout(() => {
+                    indicator.style.display = 'none';
+                }, 10000);
+
+                // Add click handler for scrolling to top
+                indicator.onclick = function() {
+                    const logsContainer = document.querySelector('.logs-container');
+                    logsContainer.scrollTo({ top: 0, behavior: 'smooth' });
+                    indicator.style.display = 'none';
+                };
+            }
+        }
+
+        // Average processing time calculation
+        function calculateAvgTime(responses) {
+            if (!responses || responses.length === 0) return 0;
+
+            const total = responses.reduce((sum, resp) => sum + (resp.processingTime || 0), 0);
+            return total / responses.length;
+        }
+
+        // Time formatting
+        function formatTime(date) {
+            return date.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        // Global variables for modal window
+        let currentFullText = '';
+        let currentTextType = '';
+
+        // Create technical information
+        function createTechnicalInfo(request, response, type) {
+            let html = '<div class="technical-info">';
+
+            if (request) {
+                html += `
+                    <div class="tech-row">
+                        <span class="tech-label">🤖 Model:</span>
+                        <span class="tech-value">${request.model || 'unknown'}</span>
+                    </div>
+                    <div class="tech-row">
+                        <span class="tech-label">🌡️ Temperature:</span>
+                        <span class="tech-value">${request.temperature || 'default'}</span>
+                    </div>
+                `;
+            }
+
+            if (response) {
+                html += `
+                    <div class="tech-row">
+                        <span class="tech-label">⚡ Processing time:</span>
+                        <span class="tech-value">${response.processingTime}ms</span>
+                    </div>
+                `;
+            }
+
+            html += `
+                <div class="tech-row">
+                    <span class="tech-label">📝 Type:</span>
+                    <span class="tech-value">${type === 'request' ? 'request' : 'response'}</span>
+                </div>
+            `;
+
+            html += '</div>';
+            return html;
+        }
+
+        // Create technical information row
+        function createTechInfoRow(time, type, model, processingTime) {
+            return `
+                <div class="tech-info-row">
+                    <div class="tech-info-item">
+                        <strong>⏰ Time:</strong>
+                        <span class="tech-info-value">${time}</span>
+                    </div>
+                    <div class="tech-info-item">
+                        <strong>👤 Type:</strong>
+                        <span class="tech-info-value">${type}</span>
+                    </div>
+                    <div class="tech-info-item">
+                        <strong>🤖 Model:</strong>
+                        <span class="tech-info-value">${model || 'unknown'}</span>
+                    </div>
+                    <div class="tech-info-item">
+                        <strong>⚡ Time:</strong>
+                        <span class="tech-info-value">${processingTime || 'N/A'}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Message formatting
+        function formatMessage(text, type) {
+            if (!text) return '';
+
+            // Escape HTML
+            const div = document.createElement('div');
+            div.textContent = text;
+            let escaped = div.innerHTML;
+
+            // Add line breaks for better readability
+            escaped = escaped.replace(/([.!?])\s+/g, '$1<br>');
+            escaped = escaped.replace(/(\w{50,})\s+/g, '$1<br>');
+
+            // For very long texts add button "Show in separate window"
+            const isVeryLong = text.length > 500;
+            const expandButton = isVeryLong ? `<div class="expand-btn" data-text="${text.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" data-type="${type}" onclick="showFullText(this)">🔍 Show in separate window</div>` : '';
+
+            return `<div class="message-content ${type}">${escaped}${expandButton}</div>`;
+        }
+
+        // Show full message in modal window
+        function showFullText(element) {
+            const text = element.getAttribute('data-text');
+            const type = element.getAttribute('data-type');
+
+            currentFullText = text;
+            currentTextType = type;
+
+            const modal = document.getElementById('full-text-modal');
+            const title = document.getElementById('modal-title');
+            const textDiv = document.getElementById('modal-text');
+
+            if (modal && title && textDiv) {
+                title.textContent = type === 'request' ? '📨 Full request text' : '🤖 Full response text';
+                textDiv.textContent = text;
+
+                modal.classList.add('flex');
+                modal.style.display = 'flex';
+            }
+        }
+
+        // Close modal window
+        function closeModal() {
+            const modal = document.getElementById('full-text-modal');
+            modal.classList.remove('flex');
+            modal.style.display = 'none';
+        }
+
+        // Close on click outside modal window
+        document.getElementById('full-text-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+
+        // Close on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && document.getElementById('full-text-modal').classList.contains('flex')) {
+                closeModal();
+            }
+        });
+
+        // HTML escaping
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Error handling
+        window.addEventListener('error', function(e) {
+            console.error('JavaScript error:', e.error);
+            document.getElementById('content').innerHTML = `
+                <div class="error" style="padding: 15px;">
+                    ❌ JavaScript error: ${e.error.message}<br>
+                    Check browser console for details
+                </div>
+            `;
+        });
+    </script>
+</body>
+</html>
