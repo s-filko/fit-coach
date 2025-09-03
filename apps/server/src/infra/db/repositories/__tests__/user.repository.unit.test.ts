@@ -24,7 +24,10 @@ jest.mock('@infra/db/schema', () => ({
   userAccounts: 'user_accounts_table_mock'
 }));
 
-describe('DrizzleUserRepository - Unit Tests', () => {
+describe('DrizzleUserRepository – repository unit', () => {
+  // NOTE: This test uses jest.mock which makes it more of an integration test.
+  // However, due to the complexity of mocking Drizzle ORM, this is an acceptable compromise.
+  // For pure unit testing of repository logic, consider testing individual methods with dependency injection.
   let repository: DrizzleUserRepository;
 
   beforeEach(() => {

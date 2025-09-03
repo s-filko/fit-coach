@@ -1,20 +1,19 @@
 import { ProfileParserService } from '../profile-parser.service';
 
-// Mock LLM service to return controlled responses
-const mockLLMService = {
-  generateResponse: jest.fn()
-};
-
-jest.mock('@infra/ai/llm.service');
-
-describe('ProfileParserService - JSON Validation Unit Tests', () => {
+/**
+ * ProfileParserService JSON Validation Unit Tests
+ * Tests pure validation logic without external dependencies
+ */
+describe('ProfileParserService – JSON validation unit', () => {
   let parserService: ProfileParserService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    // Create service instance for testing pure logic
+    // Note: In real unit tests, we'd test static methods or pure functions
+    // This is a compromise for testing private methods
     parserService = new ProfileParserService(
       { buildProfileParsingPrompt: jest.fn() } as any,
-      mockLLMService as any
+      { generateResponse: jest.fn() } as any
     );
   });
 
@@ -96,10 +95,19 @@ describe('ProfileParserService - JSON Validation Unit Tests', () => {
 
     testCases.forEach(({ name, jsonResponse, expected }) => {
       it(`should validate ${name}`, async () => {
-        mockLLMService.generateResponse.mockResolvedValue(jsonResponse);
+        // Arrange
+        const mockLLMService = {
+          generateResponse: jest.fn().mockResolvedValue(jsonResponse)
+        };
+        const testService = new ProfileParserService(
+          { buildProfileParsingPrompt: jest.fn() } as any,
+          mockLLMService as any
+        );
 
-        const result = await parserService.parseProfileData('test message');
+        // Act
+        const result = await testService.parseProfileData('test message');
 
+        // Assert
         expect(result).toEqual(expected);
       });
     });
@@ -107,10 +115,19 @@ describe('ProfileParserService - JSON Validation Unit Tests', () => {
 
   describe('Error Handling', () => {
     it('should handle malformed JSON', async () => {
-      mockLLMService.generateResponse.mockResolvedValue('{invalid json');
+      // Arrange
+      const mockLLMService = {
+        generateResponse: jest.fn().mockResolvedValue('{invalid json')
+      };
+      const testService = new ProfileParserService(
+        { buildProfileParsingPrompt: jest.fn() } as any,
+        mockLLMService as any
+      );
 
-      const result = await parserService.parseProfileData('test message');
+      // Act
+      const result = await testService.parseProfileData('test message');
 
+      // Assert
       expect(result).toEqual({
         age: undefined,
         gender: undefined,
@@ -122,10 +139,19 @@ describe('ProfileParserService - JSON Validation Unit Tests', () => {
     });
 
     it('should handle LLM service errors', async () => {
-      mockLLMService.generateResponse.mockRejectedValue(new Error('LLM service failed'));
+      // Arrange
+      const mockLLMService = {
+        generateResponse: jest.fn().mockRejectedValue(new Error('LLM service failed'))
+      };
+      const testService = new ProfileParserService(
+        { buildProfileParsingPrompt: jest.fn() } as any,
+        mockLLMService as any
+      );
 
-      const result = await parserService.parseProfileData('test message');
+      // Act
+      const result = await testService.parseProfileData('test message');
 
+      // Assert
       expect(result).toEqual({
         age: undefined,
         gender: undefined,
@@ -137,10 +163,19 @@ describe('ProfileParserService - JSON Validation Unit Tests', () => {
     });
 
     it('should handle empty response', async () => {
-      mockLLMService.generateResponse.mockResolvedValue('');
+      // Arrange
+      const mockLLMService = {
+        generateResponse: jest.fn().mockResolvedValue('')
+      };
+      const testService = new ProfileParserService(
+        { buildProfileParsingPrompt: jest.fn() } as any,
+        mockLLMService as any
+      );
 
-      const result = await parserService.parseProfileData('test message');
+      // Act
+      const result = await testService.parseProfileData('test message');
 
+      // Assert
       expect(result).toEqual({
         age: undefined,
         gender: undefined,
@@ -178,10 +213,19 @@ describe('ProfileParserService - JSON Validation Unit Tests', () => {
 
     validationTestCases.forEach(({ name, json, expectedAge, expectedGender, expectedFitnessLevel, expectedFitnessGoal }) => {
       it(`should validate ${name}`, async () => {
-        mockLLMService.generateResponse.mockResolvedValue(json);
+        // Arrange
+        const mockLLMService = {
+          generateResponse: jest.fn().mockResolvedValue(json)
+        };
+        const testService = new ProfileParserService(
+          { buildProfileParsingPrompt: jest.fn() } as any,
+          mockLLMService as any
+        );
 
-        const result = await parserService.parseProfileData('test message');
+        // Act
+        const result = await testService.parseProfileData('test message');
 
+        // Assert
         if (expectedAge !== undefined) expect(result.age).toBe(expectedAge);
         if (expectedGender !== undefined) expect(result.gender).toBe(expectedGender);
         if (expectedFitnessLevel !== undefined) expect(result.fitnessLevel).toBe(expectedFitnessLevel);
