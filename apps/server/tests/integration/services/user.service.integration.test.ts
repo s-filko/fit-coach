@@ -62,12 +62,20 @@ describe('UserService – integration', () => {
     });
 
     it('should handle empty profile data updates', async () => {
-      // Arrange: Create real user
+      // Arrange: Create real user with initial profile data
       const userData = createTestUserData({
         username: 'empty_update_test'
       });
 
       const createdUser = await repository.create(userData);
+
+      // Set initial profile data
+      await userService.updateProfileData(createdUser.id, {
+        age: 25,
+        gender: 'male',
+        height: 170,
+        weight: 70
+      });
 
       // Act: Update with empty data (should not change anything)
       const result = await userService.updateProfileData(createdUser.id, {});
@@ -76,6 +84,9 @@ describe('UserService – integration', () => {
       expect(result).toBeTruthy();
       expect(result!.id).toBe(createdUser.id);
       expect(result!.age).toBe(25); // Original age should remain
+      expect(result!.gender).toBe('male'); // Original gender should remain
+      expect(result!.height).toBe(170); // Original height should remain
+      expect(result!.weight).toBe(70); // Original weight should remain
     });
 
     it('should handle partial profile updates correctly', async () => {
@@ -85,6 +96,14 @@ describe('UserService – integration', () => {
       });
 
       const createdUser = await repository.create(userData);
+
+      // Set initial profile data
+      await userService.updateProfileData(createdUser.id, {
+        age: 25,
+        gender: 'male',
+        height: 170,
+        weight: 70
+      });
 
       // Act: Update only height
       const partialUpdate = { height: 175 };
@@ -104,11 +123,17 @@ describe('UserService – integration', () => {
       const userData = createTestUserData({
         username: 'get_user_test',
         firstName: 'John',
-        lastName: 'Doe',
-        age: 28
+        lastName: 'Doe'
       });
 
       const createdUser = await repository.create(userData);
+
+      // Set initial profile data
+      await userService.updateProfileData(createdUser.id, {
+        age: 28,
+        gender: 'male',
+        height: 175
+      });
 
       // Act
       const retrievedUser = await userService.getUser(createdUser.id);
@@ -120,6 +145,8 @@ describe('UserService – integration', () => {
       expect(retrievedUser!.firstName).toBe('John');
       expect(retrievedUser!.lastName).toBe('Doe');
       expect(retrievedUser!.age).toBe(28);
+      expect(retrievedUser!.gender).toBe('male');
+      expect(retrievedUser!.height).toBe(175);
     });
 
     it('should return null when user does not exist', async () => {
@@ -221,7 +248,7 @@ describe('UserService – integration', () => {
       });
 
       const createdUser = await repository.create(userData);
-      expect(createdUser.profileStatus).toBe('collecting_basic');
+      expect(createdUser.profileStatus).toBe('incomplete');
 
       // Act: Update profile through service
       const updatedUser = await userService.updateProfileData(createdUser.id, {
