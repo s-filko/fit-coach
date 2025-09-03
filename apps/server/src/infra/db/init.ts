@@ -1,14 +1,38 @@
 import { pool } from '@infra/db/drizzle';
-import { readFile } from 'fs/promises';
-import path from 'path';
 
 export async function ensureSchema(): Promise<void> {
-  // Temporary shim: run the initial SQL migration file
+  // Check if tables exist, if not - apply migrations
   const client = await pool.connect();
   try {
-    const sqlPath = path.resolve(process.cwd(), 'drizzle/0000_initial.sql');
-    const sql = await readFile(sqlPath, 'utf8');
-    await client.query(sql);
+    // Check if user_accounts table exists
+    const result = await client.query(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_name = 'user_accounts'
+      );
+    `);
+
+    const tablesExist = result.rows[0].exists;
+
+    if (!tablesExist) {
+      // Tables don't exist, apply migrations
+      console.log('Applying database migrations...');
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+
+      try {
+        await execAsync('npx drizzle-kit migrate');
+        console.log('Migrations applied successfully');
+      } catch (error) {
+        console.error('Migration failed:', error);
+        throw error;
+      }
+    } else {
+      console.log('Database tables already exist, skipping migrations');
+    }
   } finally {
     client.release();
   }

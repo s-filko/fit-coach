@@ -7,6 +7,9 @@ import { TOKENS } from '@infra/di/tokens';
 import { DrizzleUserRepository } from '@infra/db/repositories/user.repository';
 import { ensureSchema } from '@infra/db/init';
 import { UserService } from '@domain/user/services/user.service';
+import { ProfileParserService } from '@domain/user/services/profile-parser.service';
+import { PromptService } from '@domain/user/services/prompt.service';
+import { RegistrationService } from '@domain/user/services/registration.service';
 import { LLMService } from '@infra/ai/llm.service';
 
 export async function bootstrap() {
@@ -19,15 +22,25 @@ export async function bootstrap() {
   // DI registration (MVP, in-memory)
   const c = Container.getInstance();
 
-  // Require all database environment variables
-  if (!(process.env.DB_HOST && process.env.DB_USER && process.env.DB_PASSWORD && process.env.DB_NAME)) {
-    throw new Error('Database environment variables are required: DB_HOST, DB_USER, DB_PASSWORD, DB_NAME');
-  }
-
   await ensureSchema();
   c.register(TOKENS.USER_REPO, new DrizzleUserRepository());
   c.registerFactory(TOKENS.USER_SERVICE, (c) => new UserService(c.get(TOKENS.USER_REPO)));
-  c.register(TOKENS.LLM, new LLMService());
+  c.register(TOKENS.PROMPT_SERVICE, new PromptService());
+  c.registerFactory(TOKENS.PROFILE_PARSER, (c) =>
+    new ProfileParserService(c.get(TOKENS.PROMPT_SERVICE), c.get(TOKENS.LLM))
+  );
+  c.registerFactory(TOKENS.REGISTRATION_SERVICE, (c) =>
+    new RegistrationService(
+      c.get(TOKENS.PROFILE_PARSER),
+      c.get(TOKENS.USER_SERVICE),
+      c.get(TOKENS.PROMPT_SERVICE)
+    )
+  );
+  c.registerFactory(TOKENS.LLM, (c) => {
+    const llmService = new LLMService();
+    llmService.setPromptService(c.get(TOKENS.PROMPT_SERVICE));
+    return llmService;
+  });
 
   const port = config.PORT;
   const host = process.env.HOST;

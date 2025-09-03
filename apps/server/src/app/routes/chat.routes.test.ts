@@ -8,6 +8,10 @@ class MockLLMService implements ILLMService {
   async generateResponse(message: string): Promise<string> {
     return `Mock AI response to: ${message}`;
   }
+
+  async generateRegistrationResponse(message: string, context?: string): Promise<string> {
+    return `Mock registration response to: ${message}`;
+  }
 }
 
 describe('chat routes', () => {
@@ -17,9 +21,24 @@ describe('chat routes', () => {
 
   beforeAll(async () => {
     validKey = process.env.BOT_API_KEY!;
-    // Override LLM service with mock for tests
+    // Override services with mocks for tests
     const container = Container.getInstance();
     container.register(TOKENS.LLM, new MockLLMService());
+    container.register(TOKENS.USER_SERVICE, {
+      getUser: jest.fn().mockResolvedValue({
+        id: 'test-user',
+        profileStatus: 'complete'
+      }),
+      isRegistrationComplete: jest.fn().mockReturnValue(true),
+      updateProfileData: jest.fn()
+    });
+    container.register(TOKENS.REGISTRATION_SERVICE, {
+      processUserMessage: jest.fn().mockResolvedValue({
+        updatedUser: { id: 'test-user' },
+        response: 'Mock response',
+        isComplete: true
+      })
+    });
   });
 
   afterAll(async () => {

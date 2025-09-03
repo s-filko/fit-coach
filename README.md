@@ -89,6 +89,12 @@ package.json
    •	All code comments must be in English only
    •	Each endpoint must follow the responsibility principle (e.g., user, message, etc.)
 
+   **Database Changes Rule:**
+   •	All database schema changes must be performed strictly through Drizzle migrations only
+   •	Never apply database changes manually through SQL commands
+   •	Always use `drizzle-kit generate` to create migrations and `drizzle-kit migrate` to apply them
+   •	This ensures version control, consistency, and prevents accidental data loss
+
 ⸻
 
 7. Key Scenarios

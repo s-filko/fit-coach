@@ -1,9 +1,28 @@
 export interface User {
   id: string;
-  username?: string;
-  firstName?: string;
-  lastName?: string;
-  languageCode?: string;
+  username?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  languageCode?: string | null;
+  profileStatus?: string | null;
+  fitnessLevel?: string | null;
+  // Profile data fields - allow null for clearing data
+  age?: number | null;
+  gender?: 'male' | 'female' | null;
+  height?: number | null;
+  weight?: number | null;
+  fitnessGoal?: string | null;
+}
+
+export interface ParsedProfileData {
+  age?: number;
+  gender?: 'male' | 'female';
+  height?: number;
+  weight?: number;
+  fitnessLevel?: 'beginner' | 'intermediate' | 'advanced';
+  fitnessGoal?: string;
+  limitations?: string[];
+  equipment?: string[];
 }
 
 export interface CreateUserInput {
@@ -15,10 +34,21 @@ export interface CreateUserInput {
   languageCode?: string;
 }
 
+export interface UpdateProfileData {
+  age?: number | null;
+  gender?: 'male' | 'female' | null;
+  height?: number | null;
+  weight?: number | null;
+  fitnessLevel?: 'beginner' | 'intermediate' | 'advanced' | null;
+  fitnessGoal?: string | null;
+  profileStatus?: string | null;
+}
+
 export interface UserRepository {
   findByProvider(provider: string, providerUserId: string): Promise<User | null>;
   create(data: CreateUserInput): Promise<User>;
   getById(id: string): Promise<User | null>;
+  updateProfileData(id: string, data: Partial<User>): Promise<User | null>;
 }
 
 export class UserService {
@@ -32,5 +62,36 @@ export class UserService {
 
   async getUser(userId: string): Promise<User | null> {
     return this.repo.getById(userId);
+  }
+
+  async updateProfileData(userId: string, data: Partial<User>): Promise<User | null> {
+    return this.repo.updateProfileData(userId, data);
+  }
+
+  // Check if registration is complete
+  isRegistrationComplete(user: User): boolean {
+    return user.profileStatus === 'complete';
+  }
+
+  // Check if user needs registration
+  needsRegistration(user: User): boolean {
+    return user.profileStatus !== 'complete';
+  }
+
+  // Get current registration step
+  getCurrentRegistrationStep(user: User): string {
+    return user.profileStatus || 'incomplete';
+  }
+
+  // Get next registration step
+  getNextRegistrationStep(user: User): string {
+    const currentStep = user.profileStatus || 'incomplete';
+    const stepOrder = ['incomplete', 'collecting_basic', 'collecting_level', 'collecting_goals', 'confirmation', 'complete'];
+
+    const currentIndex = stepOrder.indexOf(currentStep);
+    if (currentIndex === -1 || currentIndex >= stepOrder.length - 1) {
+      return 'complete';
+    }
+    return stepOrder[currentIndex + 1];
   }
 }

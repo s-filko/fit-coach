@@ -8,8 +8,10 @@ export const users = pgTable('users', {
   gender: text('gender'),
   height: integer('height'),
   heightUnit: text('height_unit'),
+  weight: integer('weight'),
   weightUnit: text('weight_unit'),
   birthYear: integer('birth_year'),
+  age: integer('age'),
   fitnessGoal: text('fitness_goal'),
   tone: text('tone'),
   reminderEnabled: boolean('reminder_enabled').default(false),
@@ -19,6 +21,9 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
   username: text('username'),
+  // Registration-related fields
+  profileStatus: text('profile_status').default('incomplete'), // 'incomplete', 'collecting_basic', 'collecting_level', 'collecting_goals', 'confirmation', 'complete'
+  fitnessLevel: text('fitness_level'), // 'beginner', 'intermediate', 'advanced'
 });
 
 export const userAccounts = pgTable('user_accounts', {
