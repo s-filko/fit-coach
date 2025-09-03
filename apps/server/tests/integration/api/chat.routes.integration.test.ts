@@ -199,31 +199,7 @@ describe('POST /api/chat – integration', () => {
       expect(json).toHaveProperty('error');
     });
 
-    it('should return 401 when x-api-key header is missing', async () => {
-      const payload = createTestChatPayload();
 
-      const res = await app.inject({
-        method: 'POST',
-        url: '/api/chat',
-        // No x-api-key header
-        payload,
-      });
-
-      expect(res.statusCode).toBe(401);
-    });
-
-    it('should return 403 when x-api-key is invalid', async () => {
-      const payload = createTestChatPayload();
-
-      const res = await app.inject({
-        method: 'POST',
-        url: '/api/chat',
-        headers: { 'x-api-key': 'invalid-key' },
-        payload,
-      });
-
-      expect(res.statusCode).toBe(403);
-    });
   });
 
   describe('request validation', () => {

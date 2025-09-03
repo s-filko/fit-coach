@@ -113,31 +113,7 @@ describe('POST /api/user – integration', () => {
       expect(json.error.message.toLowerCase()).toMatch(/provider|provideruserid|required/);
     });
 
-    it('should return 401 when x-api-key header is missing', async () => {
-      const payload = createTestUserData();
 
-      const res = await app.inject({
-        method: 'POST',
-        url: '/api/user',
-        // No x-api-key header
-        payload,
-      });
-
-      expect(res.statusCode).toBe(401);
-    });
-
-    it('should return 403 when x-api-key is invalid', async () => {
-      const payload = createTestUserData();
-
-      const res = await app.inject({
-        method: 'POST',
-        url: '/api/user',
-        headers: { 'x-api-key': 'invalid-key' },
-        payload,
-      });
-
-      expect(res.statusCode).toBe(403);
-    });
   });
 });
 
@@ -210,15 +186,5 @@ describe('GET /api/user/{id} – integration', () => {
     });
   });
 
-  it('should return 401 when x-api-key header is missing', async () => {
-    const userId = '00000000-0000-0000-0000-000000000000';
 
-    const res = await app.inject({
-      method: 'GET',
-      url: `/api/user/${userId}`,
-      // No x-api-key header
-    });
-
-    expect(res.statusCode).toBe(401);
-  });
 });

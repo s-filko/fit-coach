@@ -1,194 +1,269 @@
-import { UserService, User } from '../../../src/domain/user/services/user.service';
-
-// Repository interface for mocking
-interface UserRepository {
-  updateProfileData: (id: string, data: Partial<User>) => Promise<User | null>;
-  getById: (id: string) => Promise<User | null>;
-  create: (input: any) => Promise<User>;
-  findByProvider: (provider: string, providerUserId: string) => Promise<User | null>;
-}
-
-// Mock the repository with proper typing
-const mockRepository: jest.Mocked<UserRepository> = {
-  updateProfileData: jest.fn(),
-  getById: jest.fn(),
-  create: jest.fn(),
-  findByProvider: jest.fn(),
-};
-
-// Test data factory to reduce duplication
-const createTestUser = (overrides: Partial<User> = {}): User => ({
-  id: 'test-user-123',
-  profileStatus: 'incomplete' as const,
-  ...overrides
-});
+import { UserService } from '../../../src/domain/user/services/user.service';
+import { DrizzleUserRepository } from '../../../src/infra/db/repositories/user.repository';
+import { createTestUserData, createTestUser } from '../../shared/test-factories';
 
 /**
- * UserService Test Suite
+ * UserService Integration Tests
+ * Tests UserService with real DrizzleUserRepository and unique test data
  *
- * Contains both unit and integration tests for UserService:
- * - Business Logic Tests: Pure unit tests without external dependencies
- * - Repository Interaction Tests: Tests with mocked repository interactions
+ * According to TESTING.md:
+ * - Integration tests use real components (not mocks)
+ * - Database operations use unique data for isolation
+ * - Tests real service-repository interaction
  */
-
-// Dummy repository for pure business logic tests (never called)
-const dummyRepository: jest.Mocked<UserRepository> = {
-  updateProfileData: jest.fn(),
-  getById: jest.fn(),
-  create: jest.fn(),
-  findByProvider: jest.fn(),
-};
-describe('UserService', () => {
+describe('UserService – integration', () => {
   let userService: UserService;
+  let repository: DrizzleUserRepository;
 
-  describe('Repository Interaction Tests', () => {
-    beforeEach(() => {
-      jest.clearAllMocks();
-      userService = new UserService(mockRepository);
-    });
-    describe('updateProfileData', () => {
-      it('should call repository with correct parameters and return result', async () => {
-        const userId = 'test-user-123';
-        const profileData = { age: 28, gender: 'male' as const };
-        const expectedUser = createTestUser(profileData);
+  beforeAll(async () => {
+    repository = new DrizzleUserRepository();
+    userService = new UserService(repository);
+  });
 
-        mockRepository.updateProfileData.mockResolvedValue(expectedUser);
-
-        const result = await userService.updateProfileData(userId, profileData);
-
-        expect(mockRepository.updateProfileData).toHaveBeenCalledWith(userId, profileData);
-        expect(result).toEqual(expectedUser);
+  describe('updateProfileData - real database operations', () => {
+    it('should update user profile data in real database', async () => {
+      // Arrange: Create a real user in database
+      const userData = createTestUserData({
+        username: 'profile_update_test'
       });
 
-      it('should return null when user not found', async () => {
-        mockRepository.updateProfileData.mockResolvedValue(null);
+      const createdUser = await repository.create(userData);
 
-        const result = await userService.updateProfileData('non-existent', { age: 25 });
+      // Act: Update profile through service (real operation)
+      const updateData = {
+        age: 30,
+        height: 180,
+        fitnessLevel: 'intermediate' as const
+      };
 
-        expect(result).toBeNull();
-      });
+      const updatedUser = await userService.updateProfileData(createdUser.id, updateData);
 
-      it('should handle empty profile data', async () => {
-        const userId = 'test-user-123';
-        const expectedUser = createTestUser();
+      // Assert: Check actual database state
+      expect(updatedUser).toBeTruthy();
+      expect(updatedUser!.age).toBe(30);
+      expect(updatedUser!.height).toBe(180);
+      expect(updatedUser!.fitnessLevel).toBe('intermediate');
 
-        mockRepository.updateProfileData.mockResolvedValue(expectedUser);
-
-        const result = await userService.updateProfileData(userId, {});
-
-        expect(mockRepository.updateProfileData).toHaveBeenCalledWith(userId, {});
-        expect(result).toEqual(expectedUser);
-      });
-
-      it('should handle partial updates correctly', async () => {
-        const userId = 'test-user-123';
-        const partialData = { age: 30 };
-        const expectedUser = createTestUser({ age: 30 });
-
-        mockRepository.updateProfileData.mockResolvedValue(expectedUser);
-
-        const result = await userService.updateProfileData(userId, partialData);
-
-        expect(mockRepository.updateProfileData).toHaveBeenCalledWith(userId, partialData);
-        expect(result!.age).toBe(30);
-      });
+      // Verify data persistence by fetching again
+      const fetchedUser = await userService.getUser(createdUser.id);
+      expect(fetchedUser!.age).toBe(30);
+      expect(fetchedUser!.height).toBe(180);
     });
 
-    describe('getUser', () => {
-      it('should call repository getById with correct id', async () => {
-        const userId = 'test-user-123';
-        const expectedUser = createTestUser();
+    it('should return null when updating non-existent user', async () => {
+      // Arrange: Use non-existent user ID
+      const nonExistentId = '00000000-0000-0000-0000-000000000000';
 
-        mockRepository.getById.mockResolvedValue(expectedUser);
+      // Act
+      const result = await userService.updateProfileData(nonExistentId, { age: 25 });
 
-        const result = await userService.getUser(userId);
-
-        expect(mockRepository.getById).toHaveBeenCalledWith(userId);
-        expect(result).toEqual(expectedUser);
-      });
-
-      it('should return null when user not found', async () => {
-        mockRepository.getById.mockResolvedValue(null);
-
-        const result = await userService.getUser('non-existent');
-
-        expect(result).toBeNull();
-      });
+      // Assert
+      expect(result).toBeNull();
     });
 
-    describe('Error handling', () => {
-      it('should handle repository errors in updateProfileData', async () => {
-        mockRepository.updateProfileData.mockRejectedValue(new Error('Database error'));
-
-        await expect(userService.updateProfileData('user-123', { age: 25 }))
-          .rejects
-          .toThrow('Database error');
+    it('should handle empty profile data updates', async () => {
+      // Arrange: Create real user
+      const userData = createTestUserData({
+        username: 'empty_update_test'
       });
 
-      it('should handle repository errors in getUser', async () => {
-        mockRepository.getById.mockRejectedValue(new Error('User not found'));
+      const createdUser = await repository.create(userData);
 
-        await expect(userService.getUser('non-existent'))
-          .rejects
-          .toThrow('User not found');
-      });
+      // Act: Update with empty data (should not change anything)
+      const result = await userService.updateProfileData(createdUser.id, {});
 
-      it('should handle repository errors in upsertUser', async () => {
-        mockRepository.findByProvider.mockRejectedValue(new Error('DB connection failed'));
-
-        const input = { provider: 'telegram', providerUserId: '123' };
-
-        await expect(userService.upsertUser(input))
-          .rejects
-          .toThrow('DB connection failed');
-      });
+      // Assert: User should still exist and be unchanged
+      expect(result).toBeTruthy();
+      expect(result!.id).toBe(createdUser.id);
+      expect(result!.age).toBe(25); // Original age should remain
     });
 
-    describe('upsertUser', () => {
-      it('should return existing user if found', async () => {
-        const input = {
-          provider: 'telegram',
-          providerUserId: '12345'
-        };
-        const existingUser = createTestUser();
-
-        mockRepository.findByProvider.mockResolvedValue(existingUser);
-
-        const result = await userService.upsertUser(input);
-
-        expect(mockRepository.findByProvider).toHaveBeenCalledWith(input.provider, input.providerUserId);
-        expect(result).toEqual(existingUser);
-        expect(mockRepository.create).not.toHaveBeenCalled();
+    it('should handle partial profile updates correctly', async () => {
+      // Arrange: Create user with basic data
+      const userData = createTestUserData({
+        username: 'partial_update_test'
       });
 
-      it('should create new user if not found', async () => {
-        const input = {
-          provider: 'telegram',
-          providerUserId: '12345'
-        };
-        const newUser = createTestUser();
+      const createdUser = await repository.create(userData);
 
-        mockRepository.findByProvider.mockResolvedValue(null);
-        mockRepository.create.mockResolvedValue(newUser);
+      // Act: Update only height
+      const partialUpdate = { height: 175 };
+      const updatedUser = await userService.updateProfileData(createdUser.id, partialUpdate);
 
-        const result = await userService.upsertUser(input);
+      // Assert: Only height changed, other fields remain
+      expect(updatedUser!.height).toBe(175);
+      expect(updatedUser!.age).toBe(25); // Unchanged
+      expect(updatedUser!.gender).toBe('male'); // Unchanged
+      expect(updatedUser!.weight).toBe(70); // Unchanged
+    });
+  });
 
-        expect(mockRepository.findByProvider).toHaveBeenCalledWith(input.provider, input.providerUserId);
-        expect(mockRepository.create).toHaveBeenCalledWith(input);
-        expect(result).toEqual(newUser);
+  describe('getUser - real database operations', () => {
+    it('should retrieve user from real database', async () => {
+      // Arrange: Create real user
+      const userData = createTestUserData({
+        username: 'get_user_test',
+        firstName: 'John',
+        lastName: 'Doe',
+        age: 28
       });
 
-      it('should handle create failure after find', async () => {
-        const input = { provider: 'telegram', providerUserId: '123' };
-        const expectedUser = createTestUser();
+      const createdUser = await repository.create(userData);
 
-        mockRepository.findByProvider.mockResolvedValue(null);
-        mockRepository.create.mockRejectedValue(new Error('Create failed'));
+      // Act
+      const retrievedUser = await userService.getUser(createdUser.id);
 
-        await expect(userService.upsertUser(input))
-          .rejects
-          .toThrow('Create failed');
+      // Assert
+      expect(retrievedUser).toBeTruthy();
+      expect(retrievedUser!.id).toBe(createdUser.id);
+      expect(retrievedUser!.username).toBe('get_user_test');
+      expect(retrievedUser!.firstName).toBe('John');
+      expect(retrievedUser!.lastName).toBe('Doe');
+      expect(retrievedUser!.age).toBe(28);
+    });
+
+    it('should return null when user does not exist', async () => {
+      // Arrange: Use non-existent ID
+      const nonExistentId = '99999999-9999-9999-9999-999999999999';
+
+      // Act
+      const result = await userService.getUser(nonExistentId);
+
+      // Assert
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('upsertUser - real database operations', () => {
+    it('should return existing user if found by provider', async () => {
+      // Arrange: Create user first
+      const userData = createTestUserData({
+        provider: 'telegram',
+        providerUserId: 'upsert_existing_123',
+        username: 'upsert_existing_test'
       });
+
+      await repository.create(userData);
+
+      // Act: Try to upsert same provider/providerUserId
+      const upsertData = {
+        provider: 'telegram' as const,
+        providerUserId: 'upsert_existing_123'
+      };
+
+      const result = await userService.upsertUser(upsertData);
+
+      // Assert: Should return existing user, not create new
+      expect(result).toBeTruthy();
+      expect(result!.username).toBe('upsert_existing_test');
+    });
+
+    it('should create new user if not found by provider', async () => {
+      // Arrange: Use unique provider data
+      const upsertData = {
+        provider: 'telegram' as const,
+        providerUserId: `upsert_new_${Date.now()}_${Math.random()}`,
+        username: `new_upsert_test_${Date.now()}`
+      };
+
+      // Act
+      const result = await userService.upsertUser(upsertData);
+
+      // Assert: Should create and return new user
+      expect(result).toBeTruthy();
+      expect(result!.username).toBe(upsertData.username);
+
+      // Verify it was actually saved to database
+      const fetchedUser = await userService.getUser(result!.id);
+      expect(fetchedUser).toBeTruthy();
+      expect(fetchedUser!.username).toBe(upsertData.username);
+    });
+
+    it('should handle multiple providers correctly', async () => {
+      // Arrange: Create users with different providers
+      const telegramUser = createTestUserData({
+        provider: 'telegram',
+        providerUserId: `telegram_${Date.now()}`,
+        username: 'telegram_provider_test'
+      });
+
+      const discordUser = createTestUserData({
+        provider: 'discord',
+        providerUserId: `discord_${Date.now()}`,
+        username: 'discord_provider_test'
+      });
+
+      await repository.create(telegramUser);
+      await repository.create(discordUser);
+
+      // Act: Upsert should find correct user by provider
+      const telegramResult = await userService.upsertUser({
+        provider: 'telegram' as const,
+        providerUserId: telegramUser.providerUserId
+      });
+
+      const discordResult = await userService.upsertUser({
+        provider: 'discord' as const,
+        providerUserId: discordUser.providerUserId
+      });
+
+      // Assert: Should return correct users for each provider
+      expect(telegramResult!.username).toBe('telegram_provider_test');
+      expect(discordResult!.username).toBe('discord_provider_test');
+    });
+  });
+
+  describe('service-repository integration', () => {
+    it('should handle complex workflow: create -> update -> retrieve', async () => {
+      // Arrange: Create user
+      const userData = createTestUserData({
+        username: 'workflow_test'
+      });
+
+      const createdUser = await repository.create(userData);
+      expect(createdUser.profileStatus).toBe('collecting_basic');
+
+      // Act: Update profile through service
+      const updatedUser = await userService.updateProfileData(createdUser.id, {
+        age: 30,
+        gender: 'female' as const,
+        profileStatus: 'complete' as const
+      });
+
+      // Assert: Changes persisted
+      expect(updatedUser!.age).toBe(30);
+      expect(updatedUser!.gender).toBe('female');
+      expect(updatedUser!.profileStatus).toBe('complete');
+
+      // Verify by fetching fresh data
+      const freshUser = await userService.getUser(createdUser.id);
+      expect(freshUser!.age).toBe(30);
+      expect(freshUser!.gender).toBe('female');
+      expect(freshUser!.profileStatus).toBe('complete');
+    });
+
+    it('should handle concurrent operations correctly', async () => {
+      // Arrange: Create user
+      const userData = createTestUserData({
+        username: 'concurrent_test'
+      });
+
+      const createdUser = await repository.create(userData);
+
+      // Act: Perform multiple updates (simulating concurrent access)
+      const update1 = userService.updateProfileData(createdUser.id, { age: 26 });
+      const update2 = userService.updateProfileData(createdUser.id, { height: 170 });
+
+      const [result1, result2] = await Promise.all([update1, update2]);
+
+      // Assert: Both operations should succeed
+      expect(result1).toBeTruthy();
+      expect(result2).toBeTruthy();
+
+      // Final state should reflect both updates
+      const finalUser = await userService.getUser(createdUser.id);
+      expect(finalUser!.age).toBe(26);
+      expect(finalUser!.height).toBe(170);
     });
   });
 });

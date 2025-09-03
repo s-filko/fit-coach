@@ -268,6 +268,13 @@ it('should return unified error format', async () => {
 - **External API calls** (use mocks/stubs)
 - **Complex algorithms** (unit test with mocks)
 
+### Special Case: Contract Unit Tests
+**ALLOWED Exception:** Repository interaction unit tests with mocks
+- **Purpose:** Fast feedback during development
+- **Naming:** `*.contract.unit.test.ts`
+- **Must include:** Clear explanation of why they exist alongside integration tests
+- **Example:** `user.service.contract.unit.test.ts` complements `user.service.integration.test.ts`
+
 ---
 
 ## 15.2) Common Duplication Patterns to Avoid

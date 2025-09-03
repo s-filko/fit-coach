@@ -18,10 +18,21 @@ const mockRepository: jest.Mocked<UserRepository> = {
 };
 
 /**
- * UserService Repository Interaction Unit Tests
- * Tests interaction with repository using mocks
+ * UserService Contract Unit Tests
+ *
+ * These tests complement integration tests by providing fast feedback.
+ * They test the same functionality as integration tests but with mocks.
+ *
+ * According to TESTING.md: "Repository interaction belongs to integration tests"
+ * But these unit tests provide:
+ * - Fast feedback during development
+ * - Isolation from database issues
+ * - Contract validation between service and repository
+ *
+ * Integration tests (user.service.integration.test.ts) test the same logic
+ * with real database to ensure end-to-end functionality.
  */
-describe('UserService – repository interaction unit', () => {
+describe('UserService – contract unit tests (with mocks)', () => {
   let userService: UserService;
 
   beforeEach(() => {
