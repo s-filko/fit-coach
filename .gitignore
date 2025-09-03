@@ -38,4 +38,5 @@ coverage/
 .DS_Store
 
 ### Lockfiles (root only; use app-level locks)
-/package-lock.json
+/package-lock.jsonapps/server/package-lock.json
+apps/server/node_modules/.package-lock.json
