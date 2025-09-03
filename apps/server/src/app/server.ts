@@ -222,8 +222,23 @@ export function buildServer() {
     }
   });
 
-  // security guard on protected routes
-  app.addHook('preHandler', apiKeyPreHandler);
+  // security guard on protected routes (exclude OPTIONS and public routes)
+  app.addHook('preHandler', async (request, reply) => {
+    // Skip API key check for OPTIONS requests (CORS preflight)
+    if (request.method === 'OPTIONS') {
+      return;
+    }
+
+    // Skip API key check for public routes
+    if (request.url === '/health' ||
+        request.url.startsWith('/docs') ||
+        request.url.startsWith('/test')) {
+      return;
+    }
+
+    // Apply API key check for protected routes
+    await apiKeyPreHandler(request, reply);
+  });
 
   registerErrorHandler(app);
 
