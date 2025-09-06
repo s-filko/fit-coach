@@ -7,14 +7,14 @@ import { buildServer } from '@app/server';
 
 import { loadConfig } from '@config/index';
 
-import { globalContainer, registerInfraServices } from './register-infra-services';
+import { getGlobalContainer, registerInfraServices } from './register-infra-services';
 
 export async function bootstrap(): Promise<void> {
   const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env';
   dotenv.config({ path: path.resolve(process.cwd(), envFile) });
   const config = loadConfig();
 
-  const app: FastifyInstance = buildServer(globalContainer);
+  const app: FastifyInstance = buildServer(getGlobalContainer());
 
   // DI registration (MVP, in-memory)
   // Register all infrastructure services with error handling

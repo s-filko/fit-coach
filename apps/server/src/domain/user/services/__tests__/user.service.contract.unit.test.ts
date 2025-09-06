@@ -1,3 +1,5 @@
+import { IUserService } from '@domain/user/ports';
+
 import { User, UserService } from '../user.service';
 
 // Repository interface for mocking
@@ -17,7 +19,7 @@ const mockRepository: jest.Mocked<UserRepository> = {
 };
 
 /**
- * UserService Contract Unit Tests
+ * IUserService Contract Unit Tests
  *
  * These tests complement integration tests by providing fast feedback.
  * They test the same functionality as integration tests but with mocks.
@@ -31,8 +33,8 @@ const mockRepository: jest.Mocked<UserRepository> = {
  * Integration tests (user.service.integration.test.ts) test the same logic
  * with real database to ensure end-to-end functionality.
  */
-describe('UserService – contract unit tests (with mocks)', () => {
-  let userService: UserService;
+describe('IUserService – contract unit tests (with mocks)', () => {
+  let userService: IUserService;
 
   beforeEach(() => {
     jest.clearAllMocks();

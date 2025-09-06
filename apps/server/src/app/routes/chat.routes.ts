@@ -5,9 +5,9 @@ import { LLM_SERVICE_TOKEN, LLMService } from '@domain/ai/ports';
 import { IContainer } from '@domain/ports/container.ports';
 import { 
   IRegistrationService,
+  IUserService,
   REGISTRATION_SERVICE_TOKEN,
   USER_SERVICE_TOKEN,
-  UserService,
 } from '@domain/user/ports';
 
 import { loadConfig } from '@config/index';
@@ -40,7 +40,7 @@ export async function registerChatRoutes(app: FastifyInstance, container: IConta
     },
   }, async(req, reply) => {
     try {
-      const userService = container.get<UserService>(USER_SERVICE_TOKEN);
+      const userService = container.get<IUserService>(USER_SERVICE_TOKEN);
       const registrationService = container.get<IRegistrationService>(REGISTRATION_SERVICE_TOKEN);
       const llmService = container.get<LLMService>(LLM_SERVICE_TOKEN);
 

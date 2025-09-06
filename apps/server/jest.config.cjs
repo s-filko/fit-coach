@@ -21,6 +21,7 @@ module.exports = {
     '^@infra/(.*)$': '<rootDir>/src/infra/$1',
     '^@shared/(.*)$': '<rootDir>/src/shared/$1',
     '^@config/(.*)$': '<rootDir>/src/config/$1',
+    '^@main/(.*)$': '<rootDir>/src/main/$1',
   },
   transform: {
     '^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json' }],
@@ -77,5 +78,4 @@ module.exports = {
   // Module directories
   moduleDirectories: ['node_modules', 'src'],
 };
-
 

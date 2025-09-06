@@ -107,12 +107,13 @@ Notes:
 - See `apps/server/eslint.config.js:1` for rules. Violations fail lint.
 
 ## Dependency Injection
-- DI tokens and port interfaces live in `domain/*/ports/` with modular organization (or a neutral `shared/core` if a port is shared across domains).
-- Tokens are declared as `unique symbol` for type safety. Keep the token and port definition in the same file.
-- Port implementations live under `infra/*` and are registered as singletons in `infra/di/container.ts`.
-- Controllers and services depend only on ports and tokens, not on concrete implementations.
-- Use request-scoped dependencies only when transactions are required; default to stateless singletons.
-- **Import Strategy**: Use `domain/*/ports/index.ts` for convenient imports, or import directly from specific files for new code.
+- DI tokens and port interfaces live in `domain/*/ports/` with modular organization (or a neutral `shared/core` if порт общий по доменам).
+- Tokens объявляются как `unique symbol` рядом с интерфейсом порта.
+- Реализации портов располагаются в `infra/*` и регистрируются в composition root.
+- App / контроллеры и маршруты зависят только от портов и токенов, а НЕ от реализаций.
+- Request‑scoped зависимости используем только при необходимости транзакций; по умолчанию singletons.
+- **Composition Root = `src/main/**`**: сборка зависимостей (регистрация реализаций, контейнер, конфиг и запуск сервера) выполняется в `src/main/**`. App‑слой контейнер не импортирует и не резолвит реализации.
+- **Import Strategy**: для доменных контрактов используйте `domain/*/ports/index.ts` или конкретные файлы портов.
 
 ## Configuration
 - Config layer lives under `apps/server/src/config/**`.

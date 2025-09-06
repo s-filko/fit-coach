@@ -3,6 +3,7 @@ import { LLM_SERVICE_TOKEN, LLMService } from '../../../src/domain/ai/ports';
 import { ChatMsg, REGISTRATION_SERVICE_TOKEN, USER_SERVICE_TOKEN } from '../../../src/domain/user/ports';
 import { db } from '../../../src/infra/db/drizzle';
 import { Container } from '../../../src/infra/di/container';
+import { getGlobalContainer } from '../../../src/main/register-infra-services';
 
 /**
  * Stub LLM Service for Integration Tests
@@ -53,12 +54,12 @@ describe('POST /api/chat – integration', () => {
   let tx: any;
 
   beforeAll(async() => {
-    app = buildServer();
+    app = buildServer(getGlobalContainer());
     await app.ready();
 
     // Register stub services for integration testing
     // NOTE: In production, consider testing with real services in isolated environment
-    const container = Container.getInstance();
+    const container = getGlobalContainer();
     container.register(LLM_SERVICE_TOKEN, new StubLLMService());
     container.register(USER_SERVICE_TOKEN, {
       getUser: jest.fn().mockResolvedValue({

@@ -1,5 +1,6 @@
 import { buildServer } from '../../../src/app/server';
 import { createTestApiKey, createTestUserData } from '../../shared/test-factories';
+import { getGlobalContainer } from '../../../src/main/register-infra-services';
 
 /**
  * Server Integration Tests
@@ -9,7 +10,7 @@ describe('Server Basic Functionality – integration', () => {
   let app: ReturnType<typeof buildServer>;
 
   beforeAll(async() => {
-    app = buildServer();
+    app = buildServer(getGlobalContainer());
     await app.ready();
   });
 

@@ -7,7 +7,7 @@ export const REGISTRATION_SERVICE_TOKEN = Symbol('RegistrationService');
 export const PROFILE_PARSER_SERVICE_TOKEN = Symbol('ProfileParserService');
 
 // Service interfaces - business logic contracts
-export interface UserService {
+export interface IUserService {
   findByProvider(provider: string, providerUserId: string): Promise<User | null>;
   createUser(data: CreateUserInput): Promise<User>;
   getUserById(id: string): Promise<User | null>;

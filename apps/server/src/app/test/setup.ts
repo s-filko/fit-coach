@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 
 import { LLM_SERVICE_TOKEN } from '@domain/ai/ports';
 import { USER_REPOSITORY_TOKEN, USER_SERVICE_TOKEN } from '@domain/user/ports';
-import { UserService } from '@domain/user/services/user.service';
+import { ParsedProfileData, User, UserService } from '@domain/user/services/user.service';
 
 import { LLMService } from '@infra/ai/llm.service';
 import { DrizzleUserRepository } from '@infra/db/repositories/user.repository';

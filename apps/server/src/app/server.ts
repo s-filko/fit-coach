@@ -88,6 +88,17 @@ export function buildServer(container?: IContainer): FastifyInstance {
     if (container) {
       await registerUserRoutes(instance, container);
       await registerChatRoutes(instance, container);
+    } else {
+      // For testing without DI, create a mock container
+      const mockContainer = {
+        get: () => {
+          throw new Error('Mock container - no services registered');
+        },
+        set: () => {},
+        has: () => false,
+      };
+      await registerUserRoutes(instance, mockContainer);
+      await registerChatRoutes(instance, mockContainer);
     }
   });
 

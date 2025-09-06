@@ -31,7 +31,7 @@ export interface CreateUserInput {
   languageCode?: string;
 }
 
-import { UserService as IUserService, UserRepository } from '@domain/user/ports';
+import { IUserService, UserRepository } from '@domain/user/ports';
 
 export class UserService implements IUserService {
   constructor(private readonly repo: UserRepository) {}

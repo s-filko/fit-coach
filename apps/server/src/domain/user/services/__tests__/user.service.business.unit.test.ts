@@ -1,12 +1,14 @@
+import { IUserService } from '@domain/user/ports';
+
 import { createTestUser } from '../../../../../tests/shared/test-factories';
 import { UserService } from '../user.service';
 
 /**
- * UserService Business Logic Unit Tests
+ * IUserService Business Logic Unit Tests
  * Tests pure business logic without external dependencies
  */
-describe('UserService – business logic unit', () => {
-  let userService: UserService;
+describe('IUserService – business logic unit', () => {
+  let userService: IUserService;
 
   // Create a dummy service for pure business logic tests
   // This service never calls external dependencies

@@ -1,4 +1,5 @@
 import { buildServer } from '../../../src/app/server';
+import { getGlobalContainer, registerInfraServices } from '../../../src/main/register-infra-services';
 import { createTestApiKey } from '../../shared/test-factories';
 
 /**
@@ -14,7 +15,11 @@ describe('API Key Authentication Middleware – integration', () => {
   let app: ReturnType<typeof buildServer>;
 
   beforeAll(async() => {
-    app = buildServer();
+    // Initialize container and register services
+    const container = getGlobalContainer();
+    await registerInfraServices(container);
+    
+    app = buildServer(container);
     await app.ready();
   });
 

@@ -5,11 +5,12 @@ import { IContainer } from '@domain/ports/container.ports';
 import { 
   IProfileParserService,
   IRegistrationService,
+  IUserService,
   PROFILE_PARSER_SERVICE_TOKEN,
   REGISTRATION_SERVICE_TOKEN,
   USER_SERVICE_TOKEN,
 } from '@domain/user/ports';
-import { ParsedProfileData, User, UserService } from '@domain/user/services/user.service';
+import { ParsedProfileData, User } from '@domain/user/services/user.service';
 
 /**
  * Test endpoints plugin
@@ -44,13 +45,13 @@ export async function testPlugin(fastify: FastifyInstance, options: TestPluginOp
 
   // Test DI endpoint
   fastify.get('/test-di', async() => {
-    const userService = container.get<UserService>(USER_SERVICE_TOKEN);
-    return { message: 'DI is working', hasUserService: !!userService };
+    const userService = container.get<IUserService>(USER_SERVICE_TOKEN);
+    return { message: 'DI is working', hasIUserService: !!userService };
   });
 
   // Test user creation without DB
   fastify.get('/test-user', async() => {
-    container.get<UserService>(USER_SERVICE_TOKEN);
+    container.get<IUserService>(USER_SERVICE_TOKEN);
     
     const testUser = {
       id: 'test-user-123',
@@ -83,7 +84,7 @@ export async function testPlugin(fastify: FastifyInstance, options: TestPluginOp
   // Test full registration flow
   fastify.post('/test-registration-flow', async(request) => {
     const registrationService = container.get<IRegistrationService>(REGISTRATION_SERVICE_TOKEN);
-    const userService = container.get<UserService>(USER_SERVICE_TOKEN);
+    const userService = container.get<IUserService>(USER_SERVICE_TOKEN);
     const { userId, message } = request.body as { userId: string; message: string };
 
     try {
@@ -133,7 +134,7 @@ export async function testPlugin(fastify: FastifyInstance, options: TestPluginOp
 
   // Test data save with mock parsed data
   fastify.post('/test-save-mock', async(request) => {
-    const userService = container.get<UserService>(USER_SERVICE_TOKEN);
+    const userService = container.get<IUserService>(USER_SERVICE_TOKEN);
     const registrationService = container.get<IRegistrationService>(REGISTRATION_SERVICE_TOKEN);
     const { userId } = request.body as { userId: string };
 
@@ -160,7 +161,7 @@ export async function testPlugin(fastify: FastifyInstance, options: TestPluginOp
 
   // Test direct profile data save
   fastify.post('/test-profile-save', async(request) => {
-    const userService = container.get<UserService>(USER_SERVICE_TOKEN);
+    const userService = container.get<IUserService>(USER_SERVICE_TOKEN);
     const { userId, profileData } = request.body as { userId: string; profileData: Partial<User> };
 
     try {

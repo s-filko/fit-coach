@@ -2,8 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { IContainer } from '@domain/ports/container.ports';
-import { USER_SERVICE_TOKEN } from '@domain/user/ports';
-import { UserService } from '@domain/user/services/user.service';
+import { IUserService, USER_SERVICE_TOKEN } from '@domain/user/ports';
 
 const createUserBody = z.object({
 
@@ -28,7 +27,7 @@ export async function registerUserRoutes(app: FastifyInstance, container: IConta
       },
     },
   }, async(req, reply) => {
-    const service = container.get<UserService>(USER_SERVICE_TOKEN);
+    const service = container.get<IUserService>(USER_SERVICE_TOKEN);
     const user = await service.upsertUser(req.body as {
       provider: string;
       providerUserId: string;
@@ -53,7 +52,7 @@ export async function registerUserRoutes(app: FastifyInstance, container: IConta
       },
     },
   }, async(req, reply) => {
-    const service = container.get<UserService>(USER_SERVICE_TOKEN);
+    const service = container.get<IUserService>(USER_SERVICE_TOKEN);
     const { id } = req.params as { id: string };
     const user = await service.getUser(id);
     if (!user) {return reply.code(404).send({ error: { message: 'User not found' } });}

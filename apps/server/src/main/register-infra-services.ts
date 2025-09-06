@@ -1,29 +1,35 @@
-import { LLM_SERVICE_TOKEN } from '@domain/ai/ports';
-import { 
-  PROFILE_PARSER_SERVICE_TOKEN,
-  PROMPT_SERVICE_TOKEN,
-  REGISTRATION_SERVICE_TOKEN,
-  USER_REPOSITORY_TOKEN,
-  USER_SERVICE_TOKEN,
-} from '@domain/user/ports';
-import { ProfileParserService } from '@domain/user/services/profile-parser.service';
-import { PromptService } from '@domain/user/services/prompt.service';
-import { RegistrationService } from '@domain/user/services/registration.service';
-import { UserService } from '@domain/user/services/user.service';
-
-import { LLMService } from '@infra/ai/llm.service';
-import { ensureSchema } from '@infra/db/init';
-import { DrizzleUserRepository } from '@infra/db/repositories/user.repository';
 import { Container } from '@infra/di/container';
 
 // Global container instance
-export const globalContainer = new Container();
+let _globalContainer: Container | null = null;
+
+export function getGlobalContainer(): Container {
+  _globalContainer ??= new Container();
+  return _globalContainer;
+}
 
 /**
  * Registers all infrastructure service implementations in the DI container
  * This function should be called from the bootstrap process
  */
-export async function registerInfraServices(container: Container = globalContainer): Promise<void> {
+export async function registerInfraServices(container: Container = getGlobalContainer()): Promise<void> {
+  // Lazy load all dependencies to avoid circular imports and config loading issues
+  const { ensureSchema } = await import('@infra/db/init');
+  const { DrizzleUserRepository } = await import('@infra/db/repositories/user.repository');
+  const { LLMService } = await import('@infra/ai/llm.service');
+  const { ProfileParserService } = await import('@domain/user/services/profile-parser.service');
+  const { PromptService } = await import('@domain/user/services/prompt.service');
+  const { RegistrationService } = await import('@domain/user/services/registration.service');
+  const { UserService } = await import('@domain/user/services/user.service');
+  const { LLM_SERVICE_TOKEN } = await import('@domain/ai/ports');
+  const { 
+    PROFILE_PARSER_SERVICE_TOKEN,
+    PROMPT_SERVICE_TOKEN,
+    REGISTRATION_SERVICE_TOKEN,
+    USER_REPOSITORY_TOKEN,
+    USER_SERVICE_TOKEN,
+  } = await import('@domain/user/ports');
+
   // Register database schema with error handling
   try {
     await ensureSchema();

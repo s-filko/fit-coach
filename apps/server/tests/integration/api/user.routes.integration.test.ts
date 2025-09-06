@@ -1,13 +1,16 @@
 import { buildServer } from '../../../src/app/server';
 import { db } from '../../../src/infra/db/drizzle';
 import { createTestApiKey, createTestUserData } from '../../shared/test-factories';
+import { getGlobalContainer, registerInfraServices } from '../../../src/main/register-infra-services';
 
 describe('POST /api/user – integration', () => {
   let app: ReturnType<typeof buildServer>;
   let tx: any; // Transaction context
 
   beforeAll(async() => {
-    app = buildServer();
+    const container = getGlobalContainer();
+    await registerInfraServices(container);
+    app = buildServer(container);
     await app.ready();
   });
 
@@ -121,7 +124,9 @@ describe('GET /api/user/{id} – integration', () => {
   let tx: any;
 
   beforeAll(async() => {
-    app = buildServer();
+    const container = getGlobalContainer();
+    await registerInfraServices(container);
+    app = buildServer(container);
     await app.ready();
   });
 
