@@ -1,5 +1,6 @@
-import { FastifyRequest, FastifyReply } from 'fastify';
-import { loadConfig } from '@infra/config';
+import { FastifyReply, FastifyRequest } from 'fastify';
+
+import { loadConfig } from '@config/index';
 
 export async function apiKeyPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   if (!req.url.startsWith('/api/')) {return;}
@@ -12,4 +13,3 @@ export async function apiKeyPreHandler(req: FastifyRequest, reply: FastifyReply)
     return reply.code(403).send({ error: { message: 'Invalid API key' } });
   }
 }
-

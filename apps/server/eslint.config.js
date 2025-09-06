@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import boundaries from 'eslint-plugin-boundaries';
+import pluginImport from 'eslint-plugin-import';
 
 export default tseslint.config(
   js.configs.recommended,
@@ -21,15 +22,32 @@ export default tseslint.config(
         __filename: 'readonly',
       },
     },
-    plugins: { boundaries },
+    plugins: { boundaries, import: pluginImport },
     settings: {
       // Define architectural layers by file location
       'boundaries/elements': [
         { type: 'app', pattern: 'src/app/**' },
         { type: 'domain', pattern: 'src/domain/**' },
+        // Dedicated DI layer inside infra (matches first)
+        { type: 'infra-di', pattern: 'src/infra/di/**' },
+        // Generic infra (implementations)
         { type: 'infra', pattern: 'src/infra/**' },
+        // Configuration (global, importable by all; config itself imports nothing)
+        { type: 'config', pattern: 'src/config/**' },
+        // Shared utilities available to all layers
+        { type: 'shared', pattern: 'src/shared/**' },
+        // Main/composition root (manages DI and lifecycle)
+        { type: 'main', pattern: 'src/main/**' },
         { type: 'test', pattern: '**/{__tests__,tests}/**' },
       ],
+      // Import resolver settings
+      'import/resolver': {
+        typescript: { 
+          project: './tsconfig.json',
+          alwaysTryTypes: true
+        },
+        node: { extensions: ['.ts', '.js'] }
+      },
     },
     rules: {
       '@typescript-eslint/no-unused-vars': [
@@ -120,23 +138,96 @@ export default tseslint.config(
         default: 'disallow',
         message: 'Import boundary violation: {from} → {to} is not allowed',
         rules: [
-          // app → domain only
-          { from: 'app', allow: ['domain'] },
-          // infra → domain only
-          { from: 'infra', allow: ['domain'] },
-          // domain → nothing
-          { from: 'domain', allow: [] },
+          // app → domain, shared, config (no infra direct imports)
+          { from: 'app', allow: ['domain', 'shared', 'config'] },
+          // main → all layers (composition root)
+          { from: 'main', allow: ['domain', 'infra', 'infra-di', 'app', 'shared', 'config'] },
+          // infra → domain, shared, config
+          { from: 'infra', allow: ['domain', 'shared', 'config'] },
+          // domain → shared, config only
+          { from: 'domain', allow: ['shared', 'config'] },
+          // config → nothing
+          { from: 'config', allow: [] },
         ],
+      }],
+
+      // Enforce alias usage instead of parent relative imports
+      // 'import/no-relative-parent-imports': 'error', // Too strict - blocks aliases
+      // Fallback ban using glob patterns (works regardless of resolver quirks)
+        'no-restricted-imports': ['error', {
+          patterns: [
+            { group: ['../**'], message: 'Use aliases instead of parent relative imports' },
+            { group: ['@main/**'], message: 'Do not import main from other layers' }
+          ]
+        }],
+      
+      // Import organization and sorting
+      'import/order': ['error', {
+        'groups': [
+          'builtin',           // Node.js built-in modules
+          'external',          // npm packages
+          'internal',          // Internal modules (aliases)
+          'parent',            // Parent directory imports
+          'sibling',           // Same directory imports
+          'index'              // Index file imports
+        ],
+        'pathGroups': [
+          {
+            'pattern': '@app/**',
+            'group': 'internal',
+            'position': 'before'
+          },
+          {
+            'pattern': '@domain/**',
+            'group': 'internal',
+            'position': 'before'
+          },
+          {
+            'pattern': '@infra/**',
+            'group': 'internal',
+            'position': 'before'
+          },
+          {
+            'pattern': '@config/**',
+            'group': 'internal',
+            'position': 'before'
+          },
+          {
+            'pattern': '@shared/**',
+            'group': 'internal',
+            'position': 'before'
+          }
+        ],
+        'pathGroupsExcludedImportTypes': ['builtin'],
+        'newlines-between': 'always',
+        'alphabetize': {
+          'order': 'asc',
+          'caseInsensitive': true
+        }
+      }],
+      
+      // Ensure imports are sorted within groups
+      'sort-imports': ['error', {
+        'ignoreCase': true,
+        'ignoreDeclarationSort': true, // Let import/order handle this
+        'ignoreMemberSort': false,
+        'memberSyntaxSortOrder': ['none', 'all', 'multiple', 'single']
       }],
     },
   },
   // Relaxed rules for test files
   {
-    files: ['**/__tests__/**/*.ts', '**/*.test.ts', '**/*.spec.ts', '**/tests/**/*.ts'],
+    files: ['**/__tests__/**/*.ts', '**/*.test.ts', '**/*.spec.ts', '**/tests/**/*.ts', '**/test/**/*.ts'],
     rules: {
       // Boundaries relaxed in tests
       'boundaries/no-unknown': 'warn',
       'boundaries/element-types': 'warn',
+      // Allow relative imports in tests for pragmatic testing
+      'import/no-relative-parent-imports': 'off',
+      'no-restricted-imports': 'off',
+      // Relax import ordering in tests
+      'import/order': 'warn',
+      'sort-imports': 'warn',
       '@typescript-eslint/no-explicit-any': 'warn', // Allow any in tests but warn
       '@typescript-eslint/no-unused-vars': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'warn', // More lenient for tests
@@ -150,6 +241,22 @@ export default tseslint.config(
       'complexity': 'off',
       'no-magic-numbers': 'off',
       'no-console': 'off', // Allow console.log in tests
+    },
+  },
+  // Composition root: allow wiring infra in main (not in app)
+  {
+    files: ['src/main/**'],
+    rules: {
+      'boundaries/no-unknown': 'off',
+      'boundaries/element-types': 'off',
+      'no-restricted-imports': 'off', // Allow main to import from anywhere
+    },
+  },
+  // Entry point: allow importing from main
+  {
+    files: ['src/index.ts'],
+    rules: {
+      'no-restricted-imports': 'off', // Allow entry point to import from main
     },
   },
   {

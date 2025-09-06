@@ -1,8 +1,8 @@
 import { buildServer } from '../../../src/app/server';
-import { Container } from '../../../src/infra/di/container';
 import { LLM_SERVICE_TOKEN, LLMService } from '../../../src/domain/ai/ports';
-import { USER_SERVICE_TOKEN, REGISTRATION_SERVICE_TOKEN, ChatMsg } from '../../../src/domain/user/ports';
+import { ChatMsg, REGISTRATION_SERVICE_TOKEN, USER_SERVICE_TOKEN } from '../../../src/domain/user/ports';
 import { db } from '../../../src/infra/db/drizzle';
+import { Container } from '../../../src/infra/di/container';
 
 /**
  * Stub LLM Service for Integration Tests

@@ -1,5 +1,5 @@
-import { UserService } from '../user.service';
 import { createTestUser } from '../../../../../tests/shared/test-factories';
+import { UserService } from '../user.service';
 
 /**
  * UserService Business Logic Unit Tests

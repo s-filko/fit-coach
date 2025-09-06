@@ -1,6 +1,6 @@
 import { buildServer } from '../../../src/app/server';
 import { db } from '../../../src/infra/db/drizzle';
-import { createTestUserData, createTestApiKey } from '../../shared/test-factories';
+import { createTestApiKey, createTestUserData } from '../../shared/test-factories';
 
 describe('POST /api/user – integration', () => {
   let app: ReturnType<typeof buildServer>;

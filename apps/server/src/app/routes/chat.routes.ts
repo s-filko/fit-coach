@@ -1,21 +1,23 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { Container } from '@infra/di/container';
-import { 
-  USER_SERVICE_TOKEN,
-  REGISTRATION_SERVICE_TOKEN,
-  UserService,
-  IRegistrationService,
-} from '@domain/user/ports';
+
 import { LLM_SERVICE_TOKEN, LLMService } from '@domain/ai/ports';
-import { loadConfig } from '@infra/config';
+import { IContainer } from '@domain/ports/container.ports';
+import { 
+  IRegistrationService,
+  REGISTRATION_SERVICE_TOKEN,
+  USER_SERVICE_TOKEN,
+  UserService,
+} from '@domain/user/ports';
+
+import { loadConfig } from '@config/index';
 
 const chatMessageBody = z.object({
   userId: z.string().min(1).describe('User ID'),
   message: z.string().min(1).describe('User message'),
 }).describe('Chat message payload');
 
-export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
+export async function registerChatRoutes(app: FastifyInstance, container: IContainer): Promise<void> {
   app.post('/api/chat', {
     schema: {
       summary: 'Send chat message to AI',
@@ -38,7 +40,6 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     },
   }, async(req, reply) => {
     try {
-      const container = Container.getInstance();
       const userService = container.get<UserService>(USER_SERVICE_TOKEN);
       const registrationService = container.get<IRegistrationService>(REGISTRATION_SERVICE_TOKEN);
       const llmService = container.get<LLMService>(LLM_SERVICE_TOKEN);
@@ -109,7 +110,6 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       },
     }, async(req, reply) => {
       try {
-        const container = Container.getInstance();
         const llmService = container.get<LLMService>(LLM_SERVICE_TOKEN);
 
         const debugInfo = llmService.getDebugInfo();
@@ -141,7 +141,6 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       },
     }, async(req, reply) => {
       try {
-        const container = Container.getInstance();
         const llmService = container.get<LLMService>(LLM_SERVICE_TOKEN);
 
         llmService.clearHistory();

@@ -1,6 +1,6 @@
-import { USER_MESSAGES } from './messages';
-import { ParsedProfileData } from './user.service';
-import { IPromptService, ChatMsg, UniversalParseRequest, FieldDefinition, DataFieldsConfig, EnhancedDataParsingConfig } from '../ports';
+import { ChatMsg, DataFieldsConfig, EnhancedDataParsingConfig, FieldDefinition, IPromptService, UniversalParseRequest } from '@domain/user/ports';
+import { USER_MESSAGES } from '@domain/user/services/messages';
+import { ParsedProfileData } from '@domain/user/services/user.service';
 
 // Data parsing response interface
 export interface DataParsingResponse {

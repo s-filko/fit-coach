@@ -2,6 +2,7 @@ import pino from 'pino';
 
 const logger = pino({ level: 'error' });
 import dotenv from 'dotenv';
+
 import path from 'path';
 
 /**

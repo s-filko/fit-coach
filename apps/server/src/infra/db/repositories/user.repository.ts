@@ -1,6 +1,8 @@
-import { CreateUserInput, User } from '@domain/user/services/user.service';
+import { and, eq } from 'drizzle-orm';
+
 import { UserRepository } from '@domain/user/ports';
-import { eq, and } from 'drizzle-orm';
+import { CreateUserInput, User } from '@domain/user/services/user.service';
+
 import type { users } from '@infra/db/schema';
 
 type UserRow = typeof users.$inferSelect;

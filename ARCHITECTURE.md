@@ -115,7 +115,11 @@ Notes:
 - **Import Strategy**: Use `domain/*/ports/index.ts` for convenient imports, or import directly from specific files for new code.
 
 ## Configuration
+- Config layer lives under `apps/server/src/config/**`.
 - Load `.env` based on `NODE_ENV` (e.g., `.env`, `.env.production`).
+- `loadConfig()` validates env via Zod and exposes a typed `Env`.
+- Allowed imports: app, domain, infra may import from `@config/*`.
+- Config itself must not import from other layers.
 - Validate required env vars with Zod in `infra/config/index.ts`.
 - Export a typed `config` object. Do not read `process.env` outside config.
 

@@ -1,8 +1,10 @@
-import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { ChatMsg, IPromptService } from '@domain/user/ports';
-import { loadConfig } from '@infra/config';
+import { ChatOpenAI } from '@langchain/openai';
+
 import { LLMService as ILLMService } from '@domain/ai/ports';
+import { ChatMsg, IPromptService } from '@domain/user/ports';
+
+import { loadConfig } from '@config/index';
 
 // Debug types
 export interface LLMRequest {

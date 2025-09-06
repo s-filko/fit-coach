@@ -1,11 +1,14 @@
-import { Container } from '@infra/di/container';
-import { USER_REPOSITORY_TOKEN, USER_SERVICE_TOKEN } from '@domain/user/ports';
-import { LLM_SERVICE_TOKEN } from '@domain/ai/ports';
-import { DrizzleUserRepository } from '@infra/db/repositories/user.repository';
-import { UserService } from '@domain/user/services/user.service';
-import { LLMService } from '@infra/ai/llm.service';
-import dotenv from 'dotenv';
 import path from 'path';
+
+import dotenv from 'dotenv';
+
+import { LLM_SERVICE_TOKEN } from '@domain/ai/ports';
+import { USER_REPOSITORY_TOKEN, USER_SERVICE_TOKEN } from '@domain/user/ports';
+import { UserService } from '@domain/user/services/user.service';
+
+import { LLMService } from '@infra/ai/llm.service';
+import { DrizzleUserRepository } from '@infra/db/repositories/user.repository';
+import { Container } from '@infra/di/container';
 
 /**
  * Load environment variables for the specified NODE_ENV

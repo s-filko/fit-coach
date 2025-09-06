@@ -1,0 +1,29 @@
+---
+description: Minimal docs router for Cursor. Do not duplicate content; point to canonical project docs.
+globs:
+  - 'apps/server/**'
+alwaysApply: true
+---
+
+# Project Docs – Canonical Sources
+
+- Architecture: `ARCHITECTURE.md`
+- ADRs: `docs/adr/**` (e.g., `docs/adr/0002-interface-organization-principles.md`)
+- API Spec: `docs/API_SPEC.md`
+- AI Guidelines: `docs/CONTRIBUTING_AI.md`
+- Testing: `apps/server/TESTING.md`
+- ESLint Boundaries: `apps/server/eslint.config.js`
+- Config (env schema): `apps/server/src/infra/config/index.ts`
+- Server Bootstrap: `apps/server/src/app/bootstrap.ts`
+- Routes & Plugins: `apps/server/src/app/**`
+
+Notes
+- This file must remain a pointer-only index; keep all authoritative content in the docs above.
+- If guidance conflicts, prioritize `ARCHITECTURE.md` and relevant ADRs.
+
+## Assistant Behavior (Required)
+
+- Always follow the rules and patterns defined in the referenced documents. Treat them as the single source of truth.
+- If a request or existing code conflicts with the docs (architecture, boundaries, DI, testing, security), immediately highlight the conflict and discuss before proceeding.
+- Make decisions strictly based on the documented rules. Do not introduce new patterns that contradict the docs without explicit agreement.
+- When something is ambiguous or underspecified, ask clarifying questions and reference the relevant doc sections.

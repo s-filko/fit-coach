@@ -1,6 +1,8 @@
-import { UserService } from '../../../src/domain/user/services/user.service';
-import { DrizzleUserRepository } from '../../../src/infra/db/repositories/user.repository';
-import { createTestUserData, createTestUser } from '../../shared/test-factories';
+import { UserService } from '@domain/user/services/user.service';
+
+import { DrizzleUserRepository } from '@infra/db/repositories/user.repository';
+
+import { createTestUserData } from '../../shared/test-factories';
 
 /**
  * UserService Integration Tests

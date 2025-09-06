@@ -1,7 +1,9 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
+
+import { loadConfig } from '@config/index';
+
 import * as schema from './schema';
-import { loadConfig } from '../config/index';
 
 const cfg = loadConfig();
 export const pool = new Pool({

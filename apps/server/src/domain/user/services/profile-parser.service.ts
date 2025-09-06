@@ -1,13 +1,8 @@
-import { ParsedProfileData, User } from './user.service';
-import {
-  UniversalParseRequest,
-  UniversalParseResult,
-  FieldDefinition,
-  IProfileParserService,
-  IPromptService,
-} from '../ports';
 import { z } from 'zod';
+
 import { LLMService } from '@domain/ai/ports';
+import { FieldDefinition, IProfileParserService, IPromptService, UniversalParseRequest, UniversalParseResult } from '@domain/user/ports';
+import { ParsedProfileData, User } from '@domain/user/services/user.service';
 
 // Helper function for Zod validation with fallback to undefined
 function validateWithFallback<T>(schema: z.ZodType<T>, value: unknown): T | undefined {

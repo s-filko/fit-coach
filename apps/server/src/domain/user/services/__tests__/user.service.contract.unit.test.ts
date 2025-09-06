@@ -1,4 +1,4 @@
-import { UserService, User } from '../user.service';
+import { User, UserService } from '../user.service';
 
 // Repository interface for mocking
 interface UserRepository {

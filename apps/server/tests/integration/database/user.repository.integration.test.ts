@@ -1,5 +1,5 @@
-import { DrizzleUserRepository } from '../../../src/infra/db/repositories/user.repository';
 import { db } from '../../../src/infra/db/drizzle';
+import { DrizzleUserRepository } from '../../../src/infra/db/repositories/user.repository';
 import { createTestUserData } from '../../shared/test-factories';
 
 /**

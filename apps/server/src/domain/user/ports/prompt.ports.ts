@@ -1,4 +1,4 @@
-import { ParsedProfileData } from '../services/user.service';
+import { ParsedProfileData } from '@domain/user/services/user.service';
 
 // Chat message interface for LLM interactions
 export interface ChatMsg {

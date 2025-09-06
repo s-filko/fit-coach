@@ -1,6 +1,7 @@
-import { defineConfig } from 'drizzle-kit';
-import dotenv from 'dotenv';
 import path from 'path';
+
+import dotenv from 'dotenv';
+import { defineConfig } from 'drizzle-kit';
 
 // Load appropriate .env file based on NODE_ENV
 const envFile = process.env.NODE_ENV === 'test' ? '.env.test' : '.env';

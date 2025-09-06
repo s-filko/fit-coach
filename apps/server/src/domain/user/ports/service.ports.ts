@@ -1,5 +1,5 @@
-import { User, CreateUserInput, ParsedProfileData } from '../services/user.service';
-import { UniversalParseRequest, UniversalParseResult } from './prompt.ports';
+import { UniversalParseRequest, UniversalParseResult } from '@domain/user/ports';
+import { CreateUserInput, ParsedProfileData, User } from '@domain/user/services/user.service';
 
 // DI Tokens for services
 export const USER_SERVICE_TOKEN = Symbol('UserService');

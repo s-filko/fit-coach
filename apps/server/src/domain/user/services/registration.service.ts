@@ -1,15 +1,16 @@
-import { User, ParsedProfileData } from './user.service';
-import { 
-  IRegistrationService, 
-  IProfileParserService, 
-  IPromptService,
-  FieldDefinition, 
-  UniversalParseRequest, 
-  UniversalParseResult, 
-  ChatMsg,
-} from '../ports';
 import { LLMService } from '@domain/ai/ports';
+import { 
+  ChatMsg, 
+  FieldDefinition, 
+  IProfileParserService,
+  IPromptService, 
+  IRegistrationService, 
+  UniversalParseRequest, 
+  UniversalParseResult,
+} from '@domain/user/ports';
+
 import { USER_MESSAGES } from './messages';
+import { ParsedProfileData, User } from './user.service';
 
 export class RegistrationService implements IRegistrationService {
   constructor(

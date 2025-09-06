@@ -14,11 +14,11 @@
       "@app/*": ["app/*"],
       "@domain/*": ["domain/*"],
       "@infra/*": ["infra/*"],
-      "@shared/*": ["shared/*"]
+      "@shared/*": ["shared/*"],
+      "@main/*": ["main/*"],
+      "@config/*": ["config/*"]
     }
   },
   "include": ["src/**/*", "tests/**/*", "drizzle.config.ts"],
   "exclude": ["node_modules", "dist"]
 }
-
-

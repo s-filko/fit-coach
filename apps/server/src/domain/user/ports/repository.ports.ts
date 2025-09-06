@@ -1,4 +1,4 @@
-import { User, CreateUserInput } from '../services/user.service';
+import { CreateUserInput, User } from '@domain/user/services/user.service';
 
 // DI Tokens for repositories
 export const USER_REPOSITORY_TOKEN = Symbol('UserRepository');

@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+
 import { AppError } from '@shared/errors';
 
 export function registerErrorHandler(app: FastifyInstance): void {

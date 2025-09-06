@@ -1,6 +1,7 @@
+import type { LLMService } from '@infra/ai/llm.service';
+
 import { ProfileParserService } from '../profile-parser.service';
 import type { PromptService } from '../prompt.service';
-import type { LLMService } from '@infra/ai/llm.service';
 
 /**
  * ProfileParserService JSON Validation Unit Tests

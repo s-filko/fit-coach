@@ -1,4 +1,3 @@
-import { bootstrap } from '@app/bootstrap';
+import { bootstrap } from '@main/bootstrap';
 
 bootstrap();
-

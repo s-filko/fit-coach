@@ -1,5 +1,5 @@
 // Database schema definitions
-import { pgTable, text, integer, boolean, timestamp, uuid, unique } from 'drizzle-orm/pg-core';
+import { boolean, integer, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),

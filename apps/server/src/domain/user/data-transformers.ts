@@ -1,4 +1,4 @@
-import { User, ParsedProfileData } from './services/user.service';
+import { ParsedProfileData, User } from './services/user.service';
 
 // Type for database row structure
 type UserDbRow = {

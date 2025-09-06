@@ -3,10 +3,10 @@
  * This test identifies where the data saving fails
  */
 
-import { UserService } from '../../../src/domain/user/services/user.service';
-import { DrizzleUserRepository } from '../../../src/infra/db/repositories/user.repository';
 import { ProfileParserService } from '../../../src/domain/user/services/profile-parser.service';
 import { RegistrationService } from '../../../src/domain/user/services/registration.service';
+import { UserService } from '../../../src/domain/user/services/user.service';
+import { DrizzleUserRepository } from '../../../src/infra/db/repositories/user.repository';
 
 // Mock LLM to return consistent test data
 const mockLLMService = {

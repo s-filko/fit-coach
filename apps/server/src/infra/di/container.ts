@@ -15,6 +15,10 @@ export class Container {
     this.services.set(token, instance);
   }
 
+  set<T>(token: Token, value: T): void {
+    this.services.set(token, value);
+  }
+
   registerFactory<T>(token: Token, factory: Factory<T>) {
     this.factories.set(token, factory);
   }
