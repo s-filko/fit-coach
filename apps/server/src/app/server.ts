@@ -5,7 +5,6 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import fastifyStatic from '@fastify/static';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider, jsonSchemaTransform } from 'fastify-type-provider-zod';
 import { registerErrorHandler } from '@app/middlewares/error';
 import { apiKeyPreHandler } from '@app/middlewares/api-key';
@@ -13,10 +12,10 @@ import { registerUserRoutes } from '@app/routes/user.routes';
 import { registerChatRoutes } from '@app/routes/chat.routes';
 import { Container } from '@infra/di/container';
 import { TOKENS } from '@infra/di/tokens';
-import { UserService } from '@domain/user/services/user.service';
+import { UserService, User } from '@domain/user/services/user.service';
 import { IProfileParserService } from '@domain/user/services/profile-parser.service';
 import { IRegistrationService } from '@domain/user/services/registration.service';
-import { ILLMService, LLMService } from '@infra/ai/llm.service';
+import { ILLMService } from '@infra/ai/llm.service';
 
 export function buildServer() {
   const app = Fastify({
@@ -76,7 +75,7 @@ export function buildServer() {
     return {
       botApiKey: config.BOT_API_KEY,
       nodeEnv: config.NODE_ENV,
-      port: config.PORT
+      port: config.PORT,
     };
   });
 
@@ -98,7 +97,7 @@ export function buildServer() {
         username: 'testuser',
         firstName: 'Test',
         lastName: 'User',
-        languageCode: 'en'
+        languageCode: 'en',
       });
       return { success: true, user: { id: user.id, username: user.username } };
     } catch (error) {
@@ -107,13 +106,13 @@ export function buildServer() {
   });
 
   // test parser
-  app.post('/test-parser', async (req) => {
+  app.post('/test-parser', async req => {
     const container = Container.getInstance();
     const parserService = container.get<IProfileParserService>(TOKENS.PROFILE_PARSER);
     const { message } = req.body as { message: string };
 
     try {
-      const result = await parserService.parseProfileData({ id: 'test' } as any, message);
+      const result = await parserService.parseProfileData({ id: 'test' } as User, message);
       return { success: true, parsed: result };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -121,7 +120,7 @@ export function buildServer() {
   });
 
   // test full registration flow
-  app.post('/test-registration-flow', async (req) => {
+  app.post('/test-registration-flow', async req => {
     const container = Container.getInstance();
     const registrationService = container.get<IRegistrationService>(TOKENS.REGISTRATION_SERVICE);
     const userService = container.get<UserService>(TOKENS.USER_SERVICE);
@@ -129,7 +128,9 @@ export function buildServer() {
 
     try {
       const user = await userService.getUser(userId);
-      if (!user) return { success: false, error: 'User not found' };
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
 
       const result = await registrationService.processUserMessage(user, message);
 
@@ -147,8 +148,8 @@ export function buildServer() {
           weight: updatedUser?.weight,
           fitnessLevel: updatedUser?.fitnessLevel,
           fitnessGoal: updatedUser?.fitnessGoal,
-          profileStatus: updatedUser?.profileStatus
-        }
+          profileStatus: updatedUser?.profileStatus,
+        },
       };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -156,7 +157,7 @@ export function buildServer() {
   });
 
   // test LLM
-  app.post('/test-llm', async (req) => {
+  app.post('/test-llm', async req => {
     const container = Container.getInstance();
     const llmService = container.get<ILLMService>(TOKENS.LLM);
     const { message } = req.body as { message: string };
@@ -170,15 +171,17 @@ export function buildServer() {
   });
 
   // test data save with mock parsed data
-  app.post('/test-save-mock', async (req) => {
+  app.post('/test-save-mock', async req => {
     const container = Container.getInstance();
     const userService = container.get<UserService>(TOKENS.USER_SERVICE);
     const registrationService = container.get<IRegistrationService>(TOKENS.REGISTRATION_SERVICE);
-    const { userId, mockParsedData } = req.body as any;
+    const { userId } = req.body as { userId: string };
 
     try {
       const user = await userService.getUser(userId);
-      if (!user) return { success: false, error: 'User not found' };
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
 
       // Simulate the registration service logic with mock data
       const result = await registrationService.processUserMessage(user, 'test message');
@@ -187,7 +190,7 @@ export function buildServer() {
         success: true,
         user: result.updatedUser,
         response: result.response,
-        isComplete: result.isComplete
+        isComplete: result.isComplete,
       };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -195,14 +198,16 @@ export function buildServer() {
   });
 
   // test direct profile data save
-  app.post('/test-profile-save', async (req) => {
+  app.post('/test-profile-save', async req => {
     const container = Container.getInstance();
     const userService = container.get<UserService>(TOKENS.USER_SERVICE);
-    const { userId, profileData } = req.body as any;
+    const { userId, profileData } = req.body as { userId: string; profileData: Partial<User> };
 
     try {
       const user = await userService.getUser(userId);
-      if (!user) return { success: false, error: 'User not found' };
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
 
       // Save profile data directly
       const updatedUser = await userService.updateProfileData(userId, profileData);
@@ -214,8 +219,8 @@ export function buildServer() {
   });
 
   // test parser with mock JSON
-  app.post('/test-parser-mock', async (req) => {
-    const { mockJson } = req.body as any;
+  app.post('/test-parser-mock', async req => {
+    const { mockJson } = req.body as { mockJson: string };
 
     try {
       // Simulate parsing JSON response from LLM
@@ -228,7 +233,7 @@ export function buildServer() {
         height: parsedResult.height,
         weight: parsedResult.weight,
         fitnessLevel: parsedResult.fitnessLevel,
-        fitnessGoal: parsedResult.fitnessGoal
+        fitnessGoal: parsedResult.fitnessGoal,
       };
 
       return { success: true, parsed: result };
@@ -245,9 +250,7 @@ export function buildServer() {
     }
 
     // Skip API key check for public routes
-    if (request.url === '/health' ||
-        request.url.startsWith('/docs') ||
-        request.url.startsWith('/test')) {
+    if (request.url === '/health' || request.url.startsWith('/docs') || request.url.startsWith('/test')) {
       return;
     }
 
@@ -258,12 +261,10 @@ export function buildServer() {
   registerErrorHandler(app);
 
   // routes
-  app.register(async (instance) => {
+  app.register(async instance => {
     await registerUserRoutes(instance);
     await registerChatRoutes(instance);
   });
 
   return app;
 }
-
-

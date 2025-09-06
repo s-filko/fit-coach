@@ -24,20 +24,23 @@ export async function bootstrap() {
 
   await ensureSchema();
   c.register(TOKENS.USER_REPO, new DrizzleUserRepository());
-  c.registerFactory(TOKENS.USER_SERVICE, (c) => new UserService(c.get(TOKENS.USER_REPO)));
+  c.registerFactory(TOKENS.USER_SERVICE, c => new UserService(c.get(TOKENS.USER_REPO)));
   c.register(TOKENS.PROMPT_SERVICE, new PromptService());
-  c.registerFactory(TOKENS.PROFILE_PARSER, (c) =>
-    new ProfileParserService(c.get(TOKENS.PROMPT_SERVICE), c.get(TOKENS.LLM))
+  c.registerFactory(
+    TOKENS.PROFILE_PARSER,
+    c => new ProfileParserService(c.get(TOKENS.PROMPT_SERVICE), c.get(TOKENS.LLM)),
   );
-  c.registerFactory(TOKENS.REGISTRATION_SERVICE, (c) =>
-    new RegistrationService(
-      c.get(TOKENS.PROFILE_PARSER),
-      c.get(TOKENS.USER_SERVICE),
-      c.get(TOKENS.PROMPT_SERVICE),
-      c.get(TOKENS.LLM)
-    )
+  c.registerFactory(
+    TOKENS.REGISTRATION_SERVICE,
+    c =>
+      new RegistrationService(
+        c.get(TOKENS.PROFILE_PARSER),
+        c.get(TOKENS.USER_SERVICE),
+        c.get(TOKENS.PROMPT_SERVICE),
+        c.get(TOKENS.LLM),
+      ),
   );
-  c.registerFactory(TOKENS.LLM, (c) => {
+  c.registerFactory(TOKENS.LLM, c => {
     const llmService = new LLMService();
     llmService.setPromptService(c.get(TOKENS.PROMPT_SERVICE));
     return llmService;
@@ -55,5 +58,3 @@ export async function bootstrap() {
     process.exit(1);
   }
 }
-
-
