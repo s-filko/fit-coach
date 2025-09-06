@@ -2,6 +2,7 @@ import { buildServer } from '../../../src/app/server';
 import { Container } from '../../../src/infra/di/container';
 import { TOKENS } from '../../../src/infra/di/tokens';
 import { ILLMService } from '../../../src/infra/ai/llm.service';
+import { ChatMsg } from '../../../src/domain/user/services/prompt.service';
 import { db } from '../../../src/infra/db/drizzle';
 
 /**
@@ -10,13 +11,29 @@ import { db } from '../../../src/infra/db/drizzle';
  * NOTE: In production integration tests, consider using real services in isolated environment
  */
 class StubLLMService implements ILLMService {
-  async generateResponse(message: string): Promise<string> {
-    return `Stub AI response to: ${message}`;
+  async generateResponse(message: ChatMsg[] | string, isRegistration?: boolean): Promise<string> {
+    if (typeof message === 'string') {
+      return `Stub AI response to: ${message}`;
+    }
+    const text = message.map(m => m.content).join(' ');
+    return `Stub AI response to: ${text}`;
   }
 
-  async generateRegistrationResponse(message: string, context?: string): Promise<string> {
-    return `Stub registration response to: ${message}`;
+  async generateRegistrationResponse(message: ChatMsg[] | string, context?: string): Promise<string> {
+    if (typeof message === 'string') {
+      return `Stub registration response to: ${message}`;
+    }
+    const text = message.map(m => m.content).join(' ');
+    return `Stub registration response to: ${text}`;
   }
+
+  getDebugInfo(): any {
+    return {};
+  }
+
+  enableDebugMode(): void {}
+  disableDebugMode(): void {}
+  clearHistory(): void {}
 }
 
 /**

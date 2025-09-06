@@ -33,7 +33,8 @@ export async function bootstrap() {
     new RegistrationService(
       c.get(TOKENS.PROFILE_PARSER),
       c.get(TOKENS.USER_SERVICE),
-      c.get(TOKENS.PROMPT_SERVICE)
+      c.get(TOKENS.PROMPT_SERVICE),
+      c.get(TOKENS.LLM)
     )
   );
   c.registerFactory(TOKENS.LLM, (c) => {

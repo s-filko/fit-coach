@@ -1,6 +1,7 @@
 import { User, ParsedProfileData } from './user.service';
 import { IProfileParserService } from './profile-parser.service';
-import { IPromptService, FieldDefinition, UniversalParseRequest } from './prompt.service';
+import { IPromptService, FieldDefinition, UniversalParseRequest, ChatMsg } from './prompt.service';
+import { ILLMService } from '@infra/ai/llm.service';
 import { USER_MESSAGES } from './messages';
 
 export interface IRegistrationService {
@@ -8,6 +9,7 @@ export interface IRegistrationService {
     updatedUser: User;
     response: string;
     isComplete: boolean;
+    parsedData?: ParsedProfileData;
   }>;
   getRegistrationPrompt(user: User): string;
   checkProfileCompleteness(user: User): boolean;
@@ -17,16 +19,25 @@ export class RegistrationService implements IRegistrationService {
   constructor(
     private readonly profileParser: IProfileParserService,
     private readonly userService: any, // Will be injected via DI
-    private readonly promptService: IPromptService
+    private readonly promptService: IPromptService,
+    private readonly llmService: ILLMService
   ) {}
 
   async processUserMessage(user: User, message: string): Promise<{
     updatedUser: User;
     response: string;
     isComplete: boolean;
+    parsedData?: ParsedProfileData;
   }> {
+    console.log('Registration service: Starting processUserMessage');
+    console.log('Registration service: User status:', user);
+    console.log('Registration service: Message:', message);
+
     const currentStep = user.profileStatus || 'incomplete';
-    const parsedData = await this.profileParser.parseProfileData(message);
+    console.log('Registration service: Current step:', currentStep);
+
+    const parsedData = await this.profileParser.parseProfileData(user, message);
+    console.log('Registration service: Parsed data:', parsedData, currentStep);
 
     // Process based on current step
     switch (currentStep) {
@@ -37,6 +48,11 @@ export class RegistrationService implements IRegistrationService {
         return await this.handleBasicInfo(user, message, parsedData);
 
       case 'collecting_level':
+        // If user is providing basic info (gender, age, etc.) during fitness level collection,
+        // update the basic info first
+        if (parsedData.gender || parsedData.age || parsedData.height || parsedData.weight) {
+          return await this.handleBasicInfo(user, message, parsedData);
+        }
         return await this.handleFitnessLevel(user, message, parsedData);
 
       case 'collecting_goals':
@@ -61,6 +77,7 @@ export class RegistrationService implements IRegistrationService {
     updatedUser: User;
     response: string;
     isComplete: boolean;
+    parsedData?: ParsedProfileData;
   }> {
     // Greeting and transition to basic info collection
     const newStatus = 'collecting_basic';
@@ -71,12 +88,15 @@ export class RegistrationService implements IRegistrationService {
       profileStatus: newStatus
     };
 
-    const response = this.promptService.buildWelcomeMessage();
+    // Generate AI response based on current state
+    const chatMessage: ChatMsg[] = [{ role: 'user', content: message }];
+    const response = await this.llmService.generateResponse(chatMessage, true);
 
     return {
       updatedUser,
       response,
-      isComplete: false
+      isComplete: false,
+      parsedData
     };
   }
 
@@ -84,6 +104,7 @@ export class RegistrationService implements IRegistrationService {
     updatedUser: User;
     response: string;
     isComplete: boolean;
+    parsedData?: ParsedProfileData;
   }> {
     // Collect basic information (age, gender, height, weight)
 
@@ -96,9 +117,27 @@ export class RegistrationService implements IRegistrationService {
       weight: parsedData.weight || user.weight
     };
 
+    console.log('Registration handleBasicInfo: Original user:', {
+      id: user.id,
+      gender: user.gender,
+      age: user.age,
+      profileStatus: user.profileStatus
+    });
+    console.log('Registration handleBasicInfo: Parsed data:', parsedData);
+    console.log('Registration handleBasicInfo: Updated user:', {
+      id: updatedUser.id,
+      gender: updatedUser.gender,
+      age: updatedUser.age,
+      profileStatus: updatedUser.profileStatus
+    });
+
     // Check if we have enough data to proceed to next step
     const hasAnyData = parsedData.age || parsedData.gender || parsedData.height || parsedData.weight;
     const hasAllData = updatedUser.age && updatedUser.gender && updatedUser.height && updatedUser.weight;
+
+    // Use the AI response from profile parser (which already contains the proper AI-generated response)
+    // The profile parser's LLM response includes both data extraction and a helpful reply
+    let response: string;
 
     if (hasAllData) {
       // All data collected, proceed to fitness level determination
@@ -108,7 +147,7 @@ export class RegistrationService implements IRegistrationService {
         profileStatus: newStatus
       };
 
-      const response = this.promptService.buildBasicInfoSuccessMessage(
+      response = this.promptService.buildBasicInfoSuccessMessage(
         updatedUser.age!,
         updatedUser.gender!,
         updatedUser.height!,
@@ -118,7 +157,8 @@ export class RegistrationService implements IRegistrationService {
       return {
         updatedUser: finalUser,
         response,
-        isComplete: false
+        isComplete: false,
+        parsedData
       };
     } else if (hasAnyData) {
       // Some data collected, acknowledge and ask for missing data
@@ -128,7 +168,7 @@ export class RegistrationService implements IRegistrationService {
       if (!updatedUser.height) missing.push('height');
       if (!updatedUser.weight) missing.push('weight');
 
-      const response = `Thanks for the information I've collected so far. I still need: ${missing.join(', ')}.
+      response = `Thanks for the information I've collected so far. I still need: ${missing.join(', ')}.
 
 Please provide the missing information:
 • Age (if not provided): How old are you?
@@ -139,16 +179,18 @@ Please provide the missing information:
       return {
         updatedUser,
         response,
-        isComplete: false
+        isComplete: false,
+        parsedData
       };
     } else {
       // No data found, ask again
-      const response = this.promptService.buildWelcomeMessage();
+      response = this.promptService.buildWelcomeMessage();
 
       return {
         updatedUser: user,
         response,
-        isComplete: false
+        isComplete: false,
+        parsedData
       };
     }
   }
@@ -157,8 +199,13 @@ Please provide the missing information:
     updatedUser: User;
     response: string;
     isComplete: boolean;
+    parsedData?: ParsedProfileData;
   }> {
     // Determine fitness level
+
+    // Generate AI response based on current state
+    const chatMessage: ChatMsg[] = [{ role: 'user', content: message }];
+    const response = await this.llmService.generateResponse(chatMessage, true);
 
     if (parsedData.fitnessLevel) {
       const newStatus = 'collecting_goals';
@@ -168,20 +215,18 @@ Please provide the missing information:
         fitnessLevel: parsedData.fitnessLevel
       };
 
-      const response = this.promptService.buildFitnessLevelSuccessMessage(parsedData.fitnessLevel!);
-
       return {
         updatedUser,
         response,
-        isComplete: false
+        isComplete: false,
+        parsedData
       };
     } else {
-      const response = this.promptService.buildFitnessLevelQuestion();
-
       return {
         updatedUser: user,
         response,
-        isComplete: false
+        isComplete: false,
+        parsedData
       };
     }
   }
@@ -190,8 +235,13 @@ Please provide the missing information:
     updatedUser: User;
     response: string;
     isComplete: boolean;
+    parsedData?: ParsedProfileData;
   }> {
     // Collect fitness goals
+
+    // Generate AI response based on current state
+    const chatMessage: ChatMsg[] = [{ role: 'user', content: message }];
+    const response = await this.llmService.generateResponse(chatMessage, true);
 
     // Update user with any available goal data
     const updatedUser = {
@@ -207,27 +257,18 @@ Please provide the missing information:
         profileStatus: newStatus
       };
 
-      const response = this.promptService.buildGoalsSuccessMessage(parsedData.fitnessGoal!, {
-        age: user.age,
-        gender: user.gender,
-        height: user.height,
-        weight: user.weight,
-        fitnessLevel: user.fitnessLevel,
-        fitnessGoal: parsedData.fitnessGoal
-      });
-
       return {
         updatedUser: finalUser,
         response,
-        isComplete: false
+        isComplete: false,
+        parsedData
       };
     } else {
-      const response = this.promptService.buildGoalQuestion();
-
       return {
         updatedUser: user,
         response,
-        isComplete: false
+        isComplete: false,
+        parsedData
       };
     }
   }
@@ -236,25 +277,18 @@ Please provide the missing information:
     updatedUser: User;
     response: string;
     isComplete: boolean;
+    parsedData?: ParsedProfileData;
   }> {
     const normalizedMessage = message.toLowerCase().trim();
+
+    // Generate AI response based on current state
+    const chatMessage: ChatMsg[] = [{ role: 'user', content: message }];
+    const response = await this.llmService.generateResponse(chatMessage, true);
 
     // Check if profile is complete before allowing confirmation
     const hasAllRequiredData = user.age && user.gender && user.height && user.weight && user.fitnessLevel && user.fitnessGoal;
 
     if (!hasAllRequiredData) {
-      const missing = [];
-      if (!user.age) missing.push('age');
-      if (!user.gender) missing.push('gender');
-      if (!user.height) missing.push('height');
-      if (!user.weight) missing.push('weight');
-      if (!user.fitnessLevel) missing.push('fitness level');
-      if (!user.fitnessGoal) missing.push('fitness goal');
-
-      const response = `I still need the following information before we can complete your registration: ${missing.join(', ')}.
-
-Please go back and provide the missing information. Reply with "edit [field]" to change a specific field, or provide the missing information now.`;
-
       return {
         updatedUser: user,
         response,
@@ -271,8 +305,6 @@ Please go back and provide the missing information. Reply with "edit [field]" to
         ...user,
         profileStatus: newStatus
       };
-
-      const response = this.promptService.buildRegistrationCompleteMessage();
 
       return {
         updatedUser,

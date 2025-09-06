@@ -9,7 +9,7 @@ describe('ProfileParserService – parsing logic unit', () => {
 
   beforeEach(() => {
     // Create fresh service instance for each test
-    const mockPromptService = { buildProfileParsingPrompt: jest.fn() };
+    const mockPromptService = { buildDataParsingPromptWithAnswers: jest.fn() };
     const mockLLMService = { generateResponse: jest.fn() };
 
     parserService = new ProfileParserService(
@@ -30,14 +30,26 @@ describe('ProfileParserService – parsing logic unit', () => {
         fitnessGoal: 'lose weight'
       });
 
-      const mockPromptService = { buildProfileParsingPrompt: jest.fn() };
+      const mockPromptMessages = [
+        { role: 'system', content: 'System prompt' },
+        { role: 'user', content: 'User message' }
+      ];
+
+      const mockPromptService = {
+        buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue(mockPromptMessages)
+      };
       const mockLLMService = { generateResponse: jest.fn().mockResolvedValue(mockLLMResponse) };
       const testService = new ProfileParserService(mockPromptService as any, mockLLMService as any);
 
       // Act
-      const result = await testService.parseProfileData('I am 28 years old, male, 175cm tall, weigh 75kg');
+      const result = await testService.parseProfileData({ id: 'test-user-1' } as any, 'I am 28 years old, male, 175cm tall, weigh 75kg');
 
       // Assert
+      expect(mockPromptService.buildDataParsingPromptWithAnswers).toHaveBeenCalledWith(
+        'I am 28 years old, male, 175cm tall, weigh 75kg',
+        expect.any(Object),
+        'User profile data parsing'
+      );
       expect(result).toEqual({
         age: 28,
         gender: 'male',
@@ -59,12 +71,19 @@ describe('ProfileParserService – parsing logic unit', () => {
         fitnessGoal: 'build muscle'
       });
 
-      const mockPromptService = { buildProfileParsingPrompt: jest.fn() };
+      const mockPromptMessages = [
+        { role: 'system', content: 'System prompt' },
+        { role: 'user', content: 'User message' }
+      ];
+
+      const mockPromptService = {
+        buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue(mockPromptMessages)
+      };
       const mockLLMService = { generateResponse: jest.fn().mockResolvedValue(mockLLMResponse) };
       const testService = new ProfileParserService(mockPromptService as any, mockLLMService as any);
 
       // Act
-      const result = await testService.parseProfileData('I am 25 years old female, want to build muscle');
+      const result = await testService.parseProfileData({ id: 'test-user' } as any, 'I am 25 years old female, want to build muscle');
 
       // Assert
       expect(result).toEqual({
@@ -79,12 +98,19 @@ describe('ProfileParserService – parsing logic unit', () => {
 
     it('should handle invalid JSON response', async () => {
       // Arrange
-      const mockPromptService = { buildProfileParsingPrompt: jest.fn() };
+      const mockPromptMessages = [
+        { role: 'system', content: 'System prompt' },
+        { role: 'user', content: 'User message' }
+      ];
+
+      const mockPromptService = {
+        buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue(mockPromptMessages)
+      };
       const mockLLMService = { generateResponse: jest.fn().mockResolvedValue('Invalid JSON response') };
       const testService = new ProfileParserService(mockPromptService as any, mockLLMService as any);
 
       // Act
-      const result = await testService.parseProfileData('Some message');
+      const result = await testService.parseProfileData({ id: 'test-user' } as any, 'Some message');
 
       // Assert
       expect(result).toEqual({
@@ -99,12 +125,19 @@ describe('ProfileParserService – parsing logic unit', () => {
 
     it('should handle LLM service errors', async () => {
       // Arrange
-      const mockPromptService = { buildProfileParsingPrompt: jest.fn() };
+      const mockPromptMessages = [
+        { role: 'system', content: 'System prompt' },
+        { role: 'user', content: 'User message' }
+      ];
+
+      const mockPromptService = {
+        buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue(mockPromptMessages)
+      };
       const mockLLMService = { generateResponse: jest.fn().mockRejectedValue(new Error('LLM service error')) };
       const testService = new ProfileParserService(mockPromptService as any, mockLLMService as any);
 
       // Act
-      const result = await testService.parseProfileData('Some message');
+      const result = await testService.parseProfileData({ id: 'test-user' } as any, 'Some message');
 
       // Assert
       expect(result).toEqual({
@@ -161,12 +194,19 @@ describe('ProfileParserService – parsing logic unit', () => {
     testCases.forEach(({ name, json, expected }) => {
       it(`should handle ${name}`, async () => {
         // Arrange
-        const mockPromptService = { buildProfileParsingPrompt: jest.fn() };
+        const mockPromptMessages = [
+          { role: 'system', content: 'System prompt' },
+          { role: 'user', content: 'User message' }
+        ];
+
+        const mockPromptService = {
+          buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue(mockPromptMessages)
+        };
         const mockLLMService = { generateResponse: jest.fn().mockResolvedValue(json) };
         const testService = new ProfileParserService(mockPromptService as any, mockLLMService as any);
 
         // Act
-        const result = await testService.parseProfileData('test message');
+        const result = await testService.parseProfileData({ id: 'test-user' } as any, 'test message');
 
         // Assert
         expect(result).toEqual(expected);

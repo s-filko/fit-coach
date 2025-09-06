@@ -10,11 +10,29 @@ import { RegistrationService } from '../../../src/domain/user/services/registrat
 
 // Mock LLM to return consistent test data
 const mockLLMService = {
-  generateResponse: jest.fn()
+  generateResponse: jest.fn().mockResolvedValue(JSON.stringify({
+    age: 28,
+    gender: 'male',
+    height: 175,
+    weight: 75,
+    fitnessLevel: 'intermediate',
+    fitnessGoal: 'lose weight'
+  }))
+};
+
+const mockPromptService = {
+  buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([
+    { role: 'system', content: 'Parse user profile data from the following message. Return only valid JSON.' },
+    { role: 'user', content: 'I am 28 years old male 175cm 75kg' }
+  ])
 };
 
 jest.mock('../../../src/infra/ai/llm.service', () => ({
   LLMService: jest.fn().mockImplementation(() => mockLLMService)
+}));
+
+jest.mock('../../../src/domain/user/services/prompt.service', () => ({
+  PromptService: jest.fn().mockImplementation(() => mockPromptService)
 }));
 
 describe('Data Saving Integration Test', () => {
@@ -41,7 +59,7 @@ describe('Data Saving Integration Test', () => {
     const repository = new DrizzleUserRepository();
     userService = new UserService(repository);
     parserService = new ProfileParserService(
-      { buildProfileParsingPrompt: jest.fn() } as any,
+      mockPromptService as any,
       mockLLMService as any
     );
     registrationService = new RegistrationService(
@@ -50,7 +68,8 @@ describe('Data Saving Integration Test', () => {
       {
         buildWelcomeMessage: jest.fn(),
         buildBasicInfoSuccessMessage: jest.fn((age, gender, height, weight) => `Success: ${age}, ${gender}, ${height}, ${weight}`)
-      } as any
+      } as any,
+      mockLLMService as any
     );
   });
 
@@ -58,7 +77,8 @@ describe('Data Saving Integration Test', () => {
     it('should identify where data saving fails', async () => {
       // Step 1: Test parser separately
       console.log('\n=== STEP 1: Testing Parser ===');
-      const parsedData = await parserService.parseProfileData('I am 28 years old male 175cm 75kg');
+      const testUser = { id: 'test-user-integration', profileStatus: 'incomplete' } as any;
+      const parsedData = await parserService.parseProfileData(testUser, 'I am 28 years old male 175cm 75kg');
 
       console.log('Parser result:', parsedData);
       expect(parsedData.age).toBe(28);
@@ -68,7 +88,7 @@ describe('Data Saving Integration Test', () => {
 
       // Step 2: Create a test user
       console.log('\n=== STEP 2: Creating Test User ===');
-      const testUser = await userService.upsertUser({
+      const dbUser = await userService.upsertUser({
         provider: 'telegram',
         providerUserId: 'integration_test_' + Date.now(),
         username: 'integration_test',
@@ -77,13 +97,13 @@ describe('Data Saving Integration Test', () => {
         languageCode: 'en'
       });
 
-      console.log('Created user:', testUser.id);
-      expect(testUser).toBeDefined();
-      expect(testUser.id).toBeDefined();
+      console.log('Created user:', dbUser.id);
+      expect(dbUser).toBeDefined();
+      expect(dbUser.id).toBeDefined();
 
       // Step 3: Test direct database update
       console.log('\n=== STEP 3: Testing Direct Database Update ===');
-      const directUpdateResult = await userService.updateProfileData(testUser.id, {
+      const directUpdateResult = await userService.updateProfileData(dbUser.id, {
         age: 28,
         gender: 'male' as const,
         height: 175,
@@ -108,7 +128,7 @@ describe('Data Saving Integration Test', () => {
       console.log('\n=== STEP 4: Testing Registration Service ===');
       const registrationResult = await registrationService.processUserMessage(
         {
-          ...testUser,
+          ...dbUser,
           profileStatus: 'collecting_basic'
         },
         'I am 28 years old male 175cm 75kg'
@@ -127,7 +147,7 @@ describe('Data Saving Integration Test', () => {
 
       // Step 5: Verify data persistence
       console.log('\n=== STEP 5: Verifying Data Persistence ===');
-      const retrievedUser = await userService.getUser(testUser.id);
+      const retrievedUser = await userService.getUser(dbUser.id);
 
       console.log('Retrieved user from DB:', retrievedUser);
 
@@ -148,7 +168,7 @@ describe('Data Saving Integration Test', () => {
   describe('Partial Updates', () => {
     it('should update single field in complete profile', async () => {
       // Create and populate user profile
-      const testUser = await userService.upsertUser({
+      const dbUser = await userService.upsertUser({
         provider: 'telegram',
         providerUserId: 'partial_update_' + Date.now(),
         username: 'partial_test',
@@ -157,7 +177,7 @@ describe('Data Saving Integration Test', () => {
       });
 
       // First, populate the profile completely
-      await userService.updateProfileData(testUser.id, {
+      await userService.updateProfileData(dbUser.id, {
         age: 25,
         gender: 'female' as const,
         height: 170,
@@ -167,13 +187,13 @@ describe('Data Saving Integration Test', () => {
       });
 
       // Verify profile is complete
-      const populatedUser = await userService.getUser(testUser.id);
+      const populatedUser = await userService.getUser(dbUser.id);
       expect(populatedUser?.age).toBe(25);
       expect(populatedUser?.gender).toBe('female');
       expect(populatedUser?.height).toBe(170);
 
       // Now update only ONE field
-      const partialUpdateResult = await userService.updateProfileData(testUser.id, {
+      const partialUpdateResult = await userService.updateProfileData(dbUser.id, {
         age: 26  // Change only age from 25 to 26
       });
 
@@ -190,7 +210,7 @@ describe('Data Saving Integration Test', () => {
     });
 
     it('should handle multiple selective field updates', async () => {
-      const testUser = await userService.upsertUser({
+      const dbUser = await userService.upsertUser({
         provider: 'telegram',
         providerUserId: 'selective_update_' + Date.now(),
         username: 'selective_test',
@@ -199,7 +219,7 @@ describe('Data Saving Integration Test', () => {
       });
 
       // Populate profile
-      await userService.updateProfileData(testUser.id, {
+      await userService.updateProfileData(dbUser.id, {
         age: 30,
         gender: 'male' as const,
         height: 180,
@@ -209,7 +229,7 @@ describe('Data Saving Integration Test', () => {
       });
 
       // Update multiple fields selectively
-      const selectiveUpdateResult = await userService.updateProfileData(testUser.id, {
+      const selectiveUpdateResult = await userService.updateProfileData(dbUser.id, {
         age: 31,
         fitnessGoal: 'maintain fitness'
         // gender, height, weight, fitnessLevel are NOT included
@@ -242,7 +262,7 @@ describe('Data Saving Integration Test', () => {
         })
       );
 
-      const testUser = await userService.upsertUser({
+      const dbUser = await userService.upsertUser({
         provider: 'telegram',
         providerUserId: 'error_test_' + Date.now(),
         username: 'error_test',
@@ -251,7 +271,7 @@ describe('Data Saving Integration Test', () => {
       });
 
       const registrationResult = await registrationService.processUserMessage(
-        { ...testUser, profileStatus: 'collecting_basic' },
+        { ...dbUser, profileStatus: 'collecting_basic' },
         'some invalid message'
       );
 
@@ -261,7 +281,7 @@ describe('Data Saving Integration Test', () => {
     });
 
     it('should handle database update failures', async () => {
-      const testUser = await userService.upsertUser({
+      const dbUser = await userService.upsertUser({
         provider: 'telegram',
         providerUserId: 'failure_test_' + Date.now(),
         username: 'failure_test',
@@ -270,9 +290,9 @@ describe('Data Saving Integration Test', () => {
       });
 
       // This should succeed even if previous operations failed
-      const result = await userService.getUser(testUser.id);
+      const result = await userService.getUser(dbUser.id);
       expect(result).toBeDefined();
-      expect(result!.id).toBe(testUser.id);
+      expect(result!.id).toBe(dbUser.id);
     });
   });
 });

@@ -1,6 +1,13 @@
-import { ParsedProfileData } from './user.service';
-import { IPromptService, UniversalParseRequest, UniversalParseResult } from './prompt.service';
+import { ParsedProfileData, User } from './user.service';
+import {
+  DataFieldsConfig,
+  IPromptService,
+  PromptService,
+  UniversalParseRequest,
+  UniversalParseResult
+} from './prompt.service';
 import { z } from 'zod';
+import { ILLMService, LLMService } from "@infra/ai/llm.service";
 
 // Helper function for Zod validation with fallback to undefined
 function validateWithFallback<T>(schema: z.ZodType<T>, value: any): T | undefined {
@@ -35,20 +42,50 @@ const fieldValidators = {
 
 
 export interface IProfileParserService {
-  parseProfileData(text: string): Promise<ParsedProfileData>;
+  parseProfileData(user: User, text: string): Promise<ParsedProfileData>;
   parseUniversal(request: UniversalParseRequest): Promise<UniversalParseResult>;
 }
 
 export class ProfileParserService implements IProfileParserService {
   constructor(
-    private readonly promptService: IPromptService,
-    private readonly llmService: any // Will be injected
+    private readonly promptService: PromptService,
+    private readonly llmService: LLMService
   ) {}
 
-  async parseProfileData(text: string): Promise<ParsedProfileData> {
+  async parseProfileData(user: User, text: string): Promise<ParsedProfileData> {
+    // Input validation
+    if (!user || !user.id) {
+      throw new Error('Invalid user: user and user.id are required');
+    }
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      throw new Error('Invalid text: text must be a non-empty string');
+    }
+
+    const basePromptDataConfig: DataFieldsConfig = {
+      age: 'User\'s age in years (10-100)',
+      gender: 'User\'s gender (male or female)',
+      height: 'User\'s height in centimeters (convert from feet/inches if needed)',
+      weight: 'User\'s weight in kilograms (convert from pounds if needed)',
+      fitnessLevel: 'User\'s fitness experience (beginner, intermediate, advanced)',
+      fitnessGoal: 'User\'s fitness goal (lose weight, build muscle, maintain fitness, etc.)'
+    }
+
+    // Filter out already collected data
+    const promptDataConfig: DataFieldsConfig = Object.fromEntries(
+      Object.entries(basePromptDataConfig).filter(([key]) => {
+        const userValue = (user as any)[key];
+        // Check if field is empty (undefined, null, or empty string)
+        return userValue === undefined || userValue === null || userValue === '';
+      })
+    );
+
     try {
       // Build the parsing prompt
-      const prompt = this.promptService.buildProfileParsingPrompt(text);
+      const prompt = this.promptService.buildDataParsingPromptWithAnswers(
+        text,
+        promptDataConfig,
+        'User profile data parsing'
+      );
 
       // Get LLM response
       const llmResponse = await this.llmService.generateResponse(prompt, false);
@@ -56,21 +93,57 @@ export class ProfileParserService implements IProfileParserService {
       // Parse the JSON response
       const parsedResult = JSON.parse(llmResponse);
 
+      // Extract data from the nested format returned by LLM
+      let extractedData: any = {};
+      if (parsedResult.hasData && parsedResult.data && parsedResult.data.fields) {
+        extractedData = parsedResult.data.fields;
+      } else {
+        // Fallback to direct format if LLM returns data directly
+        extractedData = parsedResult;
+      }
+
       // Validate with Zod - ultimate simplicity!
       // Before: 60+ lines of try-catch blocks
       // After: 1 line using generic validation function
-      return validateObjectFields<ParsedProfileData>(parsedResult, fieldValidators);
+      const validatedResult = validateObjectFields<ParsedProfileData>(extractedData, fieldValidators);
+
+      // Log successful parsing
+      const extractedFields = Object.entries(validatedResult)
+        .filter(([_, value]) => value !== undefined)
+        .map(([key]) => key);
+
+      console.log('Profile data parsed successfully:', {
+        userId: user.id,
+        extractedFields,
+        totalFields: Object.keys(validatedResult).length
+      });
+
+      return validatedResult;
     } catch (error) {
-      console.error('Profile parsing error:', error);
+      console.error('Profile parsing error:', {
+        error: error instanceof Error ? error.message : String(error),
+        userId: user.id,
+        inputText: text,
+        filteredFields: Object.keys(promptDataConfig)
+      });
       // Return empty object on error
       return {};
     }
   }
 
   async parseUniversal(request: UniversalParseRequest): Promise<UniversalParseResult> {
+    // Input validation
+    if (!request || !request.text || !request.fields || !Array.isArray(request.fields)) {
+      throw new Error('Invalid request: text and fields array are required');
+    }
+    if (request.fields.length === 0) {
+      throw new Error('Invalid request: at least one field must be specified');
+    }
+
     try {
-      // Build the universal parsing prompt
-      const prompt = this.promptService.buildUniversalParsingPrompt(request);
+      // Build the universal parsing prompt as ChatMsg array
+      const promptText = this.promptService.buildUniversalParsingPrompt(request);
+      const prompt = [{ role: 'user' as const, content: promptText }];
 
       // Get LLM response
       const llmResponse = await this.llmService.generateResponse(prompt, false);
@@ -78,7 +151,7 @@ export class ProfileParserService implements IProfileParserService {
       // Parse the JSON response
       const parsedResult = JSON.parse(llmResponse);
 
-      // Simple validation for each field
+      // Validate each field according to its type and constraints
       const result: UniversalParseResult = {};
       for (const field of request.fields) {
         const value = parsedResult[field.key];
@@ -87,7 +160,12 @@ export class ProfileParserService implements IProfileParserService {
 
       return result;
     } catch (error) {
-      console.error('Universal parsing error:', error);
+      console.error('Universal parsing error:', {
+        error: error instanceof Error ? error.message : String(error),
+        fieldCount: request.fields.length,
+        text: request.text.substring(0, 100) + '...'
+      });
+
       // Return object with null values for all fields
       const result: UniversalParseResult = {};
       for (const field of request.fields) {

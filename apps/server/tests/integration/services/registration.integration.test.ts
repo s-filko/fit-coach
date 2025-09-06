@@ -53,7 +53,8 @@ describe('RegistrationService Integration', () => {
     registrationService = new RegistrationService(
       mockParser as any,
       mockUserService as any,
-      mockPromptService as any
+      mockPromptService as any,
+      { generateResponse: jest.fn().mockResolvedValue('Mock AI response') } as any
     );
   });
 
@@ -90,7 +91,7 @@ describe('RegistrationService Integration', () => {
       expect(result.updatedUser.gender).toBeUndefined();
       expect(result.updatedUser.height).toBeUndefined();
       expect(result.updatedUser.weight).toBeUndefined();
-      expect(mockParser.parseProfileData).toHaveBeenCalledWith('I am 28 years old male 175cm 75kg');
+      expect(mockParser.parseProfileData).toHaveBeenCalledWith(testUser, 'I am 28 years old male 175cm 75kg');
       expect(result.isComplete).toBe(false);
     });
 
@@ -218,7 +219,7 @@ describe('RegistrationService Integration', () => {
 
       expect(result.updatedUser.profileStatus).toBe('confirmation'); // Should not change
       expect(result.isComplete).toBe(false);
-      expect(result.response).toContain('still need');
+      expect(result.response).toBe('Mock AI response'); // AI response for confirmation with missing data
     });
   });
 

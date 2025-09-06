@@ -53,6 +53,10 @@ export async function registerChatRoutes(app: FastifyInstance) {
       let response: string;
       let updatedUser = user;
 
+      console.log('Chat route: User found:', user.id, 'Status:', user.profileStatus);
+      console.log('Chat route: Message:', message);
+      console.log('Chat route: Is registration complete:', userService.isRegistrationComplete(user));
+
       // Check registration status
       if (userService.isRegistrationComplete(user)) {
         // Registration complete - normal chat mode
@@ -64,17 +68,26 @@ export async function registerChatRoutes(app: FastifyInstance) {
         updatedUser = result.updatedUser;
 
         // Save user profile changes
-        if (result.updatedUser !== user) {
-          await userService.updateProfileData(userId, {
-            profileStatus: updatedUser.profileStatus,
-            age: updatedUser.age,
-            gender: updatedUser.gender,
-            height: updatedUser.height,
-            weight: updatedUser.weight,
-            fitnessLevel: updatedUser.fitnessLevel,
-            fitnessGoal: updatedUser.fitnessGoal
-          });
-        }
+        console.log('Chat route: Checking if user needs update');
+        console.log('Chat route: User status:', user.profileStatus);
+        console.log('Chat route: Updated user status:', updatedUser.profileStatus);
+        console.log('Chat route: User gender:', user.gender);
+        console.log('Chat route: Updated user gender:', updatedUser.gender);
+
+        console.log('Chat route: About to save user data');
+        console.log('Chat route: Updated user object:', JSON.stringify(updatedUser, null, 2));
+
+        const updateResult = await userService.updateProfileData(userId, {
+          profileStatus: updatedUser.profileStatus,
+          age: updatedUser.age,
+          gender: updatedUser.gender,
+          height: updatedUser.height,
+          weight: updatedUser.weight,
+          fitnessLevel: updatedUser.fitnessLevel,
+          fitnessGoal: updatedUser.fitnessGoal
+        });
+
+        console.log('Chat route: Update result:', updateResult);
       }
 
       return reply.send({
@@ -86,8 +99,9 @@ export async function registerChatRoutes(app: FastifyInstance) {
       });
     } catch (error) {
       console.error('Chat error:', error);
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
       return reply.code(500).send({
-        error: { message: 'Processing failed' }
+        error: { message: 'Processing failed', details: error instanceof Error ? error.message : String(error) }
       });
     }
   });

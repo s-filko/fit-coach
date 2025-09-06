@@ -14,16 +14,13 @@ export interface User {
   fitnessGoal?: string | null;
 }
 
-export interface ParsedProfileData {
-  age?: number;
-  gender?: 'male' | 'female';
-  height?: number;
-  weight?: number;
-  fitnessLevel?: 'beginner' | 'intermediate' | 'advanced';
-  fitnessGoal?: string;
-  limitations?: string[];
-  equipment?: string[];
-}
+export type ParsedProfileData = Pick<User, 'age' | 'gender' | 'height' | 'weight' | 'fitnessLevel' | 'fitnessGoal' >
+export type ProfileDataKeys = keyof ParsedProfileData;
+
+// export interface ParsedProfileData {
+//   limitations?: string[];
+//   equipment?: string[];
+// }
 
 export interface CreateUserInput {
   provider: string;
@@ -32,16 +29,6 @@ export interface CreateUserInput {
   firstName?: string;
   lastName?: string;
   languageCode?: string;
-}
-
-export interface UpdateProfileData {
-  age?: number | null;
-  gender?: 'male' | 'female' | null;
-  height?: number | null;
-  weight?: number | null;
-  fitnessLevel?: 'beginner' | 'intermediate' | 'advanced' | null;
-  fitnessGoal?: string | null;
-  profileStatus?: string | null;
 }
 
 export interface UserRepository {

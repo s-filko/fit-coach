@@ -52,10 +52,9 @@ export function buildServer() {
   app.register(swaggerUi, { routePrefix: '/docs' });
 
   // Static files
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
+  const __dirname = path.resolve();
   app.register(fastifyStatic, {
-    root: path.join(__dirname, '../../public'),
+    root: path.join(__dirname, 'public'),
     prefix: '/public/',
   });
 
@@ -114,7 +113,7 @@ export function buildServer() {
     const { message } = req.body as { message: string };
 
     try {
-      const result = await parserService.parseProfileData(message);
+      const result = await parserService.parseProfileData({ id: 'test' } as any, message);
       return { success: true, parsed: result };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -163,7 +162,7 @@ export function buildServer() {
     const { message } = req.body as { message: string };
 
     try {
-      const result = await llmService.generateResponse(message, false);
+      const result = await llmService.generateResponse([{ role: 'user', content: message }], false);
       return { success: true, response: result };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };

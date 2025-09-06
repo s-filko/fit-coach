@@ -11,8 +11,13 @@ describe('ProfileParserService – JSON validation unit', () => {
     // Create service instance for testing pure logic
     // Note: In real unit tests, we'd test static methods or pure functions
     // This is a compromise for testing private methods
+    const mockPromptMessages = [
+      { role: 'system', content: 'System prompt' },
+      { role: 'user', content: 'User message' }
+    ];
+
     parserService = new ProfileParserService(
-      { buildProfileParsingPrompt: jest.fn() } as any,
+      { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue(mockPromptMessages) } as any,
       { generateResponse: jest.fn() } as any
     );
   });
@@ -100,12 +105,12 @@ describe('ProfileParserService – JSON validation unit', () => {
           generateResponse: jest.fn().mockResolvedValue(jsonResponse)
         };
         const testService = new ProfileParserService(
-          { buildProfileParsingPrompt: jest.fn() } as any,
+          { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
           mockLLMService as any
         );
 
         // Act
-        const result = await testService.parseProfileData('test message');
+        const result = await testService.parseProfileData({ id: 'test-user' } as any, 'test message');
 
         // Assert
         expect(result).toEqual(expected);
@@ -120,12 +125,12 @@ describe('ProfileParserService – JSON validation unit', () => {
         generateResponse: jest.fn().mockResolvedValue('{invalid json')
       };
       const testService = new ProfileParserService(
-        { buildProfileParsingPrompt: jest.fn() } as any,
+        { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
         mockLLMService as any
       );
 
       // Act
-      const result = await testService.parseProfileData('test message');
+      const result = await testService.parseProfileData({ id: 'test-user' } as any, 'test message');
 
       // Assert
       expect(result).toEqual({
@@ -144,12 +149,12 @@ describe('ProfileParserService – JSON validation unit', () => {
         generateResponse: jest.fn().mockRejectedValue(new Error('LLM service failed'))
       };
       const testService = new ProfileParserService(
-        { buildProfileParsingPrompt: jest.fn() } as any,
+        { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
         mockLLMService as any
       );
 
       // Act
-      const result = await testService.parseProfileData('test message');
+      const result = await testService.parseProfileData({ id: 'test-user' } as any, 'test message');
 
       // Assert
       expect(result).toEqual({
@@ -168,12 +173,12 @@ describe('ProfileParserService – JSON validation unit', () => {
         generateResponse: jest.fn().mockResolvedValue('')
       };
       const testService = new ProfileParserService(
-        { buildProfileParsingPrompt: jest.fn() } as any,
+        { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
         mockLLMService as any
       );
 
       // Act
-      const result = await testService.parseProfileData('test message');
+      const result = await testService.parseProfileData({ id: 'test-user' } as any, 'test message');
 
       // Assert
       expect(result).toEqual({
@@ -218,12 +223,12 @@ describe('ProfileParserService – JSON validation unit', () => {
           generateResponse: jest.fn().mockResolvedValue(json)
         };
         const testService = new ProfileParserService(
-          { buildProfileParsingPrompt: jest.fn() } as any,
+          { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
           mockLLMService as any
         );
 
         // Act
-        const result = await testService.parseProfileData('test message');
+        const result = await testService.parseProfileData({ id: 'test-user' } as any, 'test message');
 
         // Assert
         if (expectedAge !== undefined) expect(result.age).toBe(expectedAge);

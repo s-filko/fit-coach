@@ -1,6 +1,6 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { IPromptService } from '@domain/user/services/prompt.service';
+import { ChatMsg, IPromptService } from '@domain/user/services/prompt.service';
 import { loadConfig } from '@infra/config';
 
 // Debug types
@@ -30,8 +30,8 @@ export interface LLMResponse {
 }
 
 export interface ILLMService {
-  generateResponse(message: string, isRegistration?: boolean): Promise<string>;
-  generateRegistrationResponse(message: string, context?: string): Promise<string>;
+  generateResponse(message: ChatMsg[], isRegistration?: boolean): Promise<string>;
+  generateRegistrationResponse(message: ChatMsg[], context?: string): Promise<string>;
 
   // Debug methods
   getDebugInfo(): {
@@ -86,7 +86,7 @@ export class LLMService implements ILLMService {
     this.promptService = promptService;
   }
 
-  async generateResponse(message: string, isRegistration: boolean = false): Promise<string> {
+  async generateResponse(message: ChatMsg[], isRegistration: boolean = false): Promise<string> {
     if (isRegistration) {
       return this.generateRegistrationResponse(message);
     }
@@ -101,14 +101,24 @@ export class LLMService implements ILLMService {
 
       const systemPromptText = this.promptService.buildChatSystemPrompt();
       const systemPrompt = new SystemMessage(systemPromptText);
-      const humanMessage = new HumanMessage(message);
+
+      // Convert ChatMsg[] to LangChain messages
+      const messages = message.map(chatMsg => {
+        if (chatMsg.role === 'system') {
+          return new SystemMessage(chatMsg.content);
+        } else if (chatMsg.role === 'user') {
+          return new HumanMessage(chatMsg.content);
+        } else {
+          return new HumanMessage(chatMsg.content); // assistant messages as human for simplicity
+        }
+      });
 
       // Log request if debug mode
       if (this.isDebugMode) {
         const request: LLMRequest = {
           id: requestId,
           timestamp: startTime,
-          message,
+          message: message.map(m => `${m.role}: ${m.content}`).join('\n'),
           isRegistration: false,
           systemPrompt: systemPromptText,
           model: this.model.model,
@@ -118,7 +128,7 @@ export class LLMService implements ILLMService {
         this.logDebug('LLM Request', request);
       }
 
-      const response = await this.model.invoke([systemPrompt, humanMessage]);
+      const response = await this.model.invoke([systemPrompt, ...messages]);
       const endTime = new Date();
       const processingTime = endTime.getTime() - startTime.getTime();
 
@@ -165,7 +175,7 @@ export class LLMService implements ILLMService {
     }
   }
 
-  async generateRegistrationResponse(message: string, context?: string): Promise<string> {
+  async generateRegistrationResponse(message: ChatMsg[], context?: string): Promise<string> {
     const requestId = this.generateId();
     const startTime = new Date();
 
@@ -176,14 +186,24 @@ export class LLMService implements ILLMService {
 
       const systemPromptText = this.promptService.buildRegistrationSystemPrompt(context);
       const systemMessage = new SystemMessage(systemPromptText);
-      const humanMessage = new HumanMessage(message);
+
+      // Convert ChatMsg[] to LangChain messages
+      const messages = message.map(chatMsg => {
+        if (chatMsg.role === 'system') {
+          return new SystemMessage(chatMsg.content);
+        } else if (chatMsg.role === 'user') {
+          return new HumanMessage(chatMsg.content);
+        } else {
+          return new HumanMessage(chatMsg.content); // assistant messages as human for simplicity
+        }
+      });
 
       // Log request if debug mode
       if (this.isDebugMode) {
         const request: LLMRequest = {
           id: requestId,
           timestamp: startTime,
-          message,
+          message: message.map(m => `${m.role}: ${m.content}`).join('\n'),
           isRegistration: true,
           context,
           systemPrompt: systemPromptText,
@@ -194,7 +214,7 @@ export class LLMService implements ILLMService {
         this.logDebug('LLM Registration Request', request);
       }
 
-      const response = await this.model.invoke([systemMessage, humanMessage]);
+      const response = await this.model.invoke([systemMessage, ...messages]);
       const endTime = new Date();
       const processingTime = endTime.getTime() - startTime.getTime();
 
