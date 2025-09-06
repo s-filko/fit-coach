@@ -142,7 +142,6 @@ Phase 2:
 - Keep `domain/*/services/*` pure (no DB imports directly).
 
 Phase 3:
-- Clean up legacy Express code (`src/index.ts`, old middlewares) once parity is reached.
 - Replace ad-hoc logs with Pino.
 
 ## AI Collaboration Guardrails (read carefully)

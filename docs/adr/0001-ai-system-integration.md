@@ -2,11 +2,11 @@
 
 ## Context
 
-The Fit Coach project requires basic AI chat functionality for MVP. The legacy system (server_legacy) already contains AI logic using LangChain, but we need a minimal integration into the new Fastify/Drizzle architecture.
+The Fit Coach project requires basic AI chat functionality for MVP. We need to implement AI logic using LangChain with minimal integration into the Fastify/Drizzle architecture.
 
 ### Current State
-- Legacy system has AI services: LLMService, AIContextService
 - New architecture follows strict layering: app → domain → infra
+- AI services: LLMService, AIContextService implemented in domain layer
 - Dependency injection with string tokens is established
 - LangChain is the required framework for AI integration
 

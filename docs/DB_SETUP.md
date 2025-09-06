@@ -40,4 +40,4 @@ DB_NAME=fitcoach_test
 Run a separate DB for tests by keeping docker-compose mapping 5432:5432 (container:5432 -> host:5432), and run tests with `NODE_ENV=test`.
 
 ## Migrations (later)
-We will add drizzle-kit config and migrations after initial wiring. For now, schema comes from legacy and will be ported to new `infra/db/schema.ts` with proper migrations next.
+We will add drizzle-kit config and migrations after initial wiring. Schema is defined in `infra/db/schema.ts` with proper migrations.
