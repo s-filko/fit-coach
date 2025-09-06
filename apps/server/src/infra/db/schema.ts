@@ -1,4 +1,4 @@
-// Temporary placeholder: we will migrate schema from legacy progressively.
+// Database schema definitions
 import { pgTable, text, integer, boolean, timestamp, uuid, unique } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
