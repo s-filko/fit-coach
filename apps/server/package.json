@@ -24,7 +24,6 @@
     "drizzle:studio": "drizzle-kit studio",
     "drizzle:reset": "NODE_ENV=test drizzle-kit drop && NODE_ENV=test drizzle-kit push",
     "db:clean": "NODE_ENV=test tsx src/db/clean.ts",
-    "db:check": "NODE_ENV=test tsx src/db/check.ts",
     "build": "rimraf dist && tsup src/index.ts --format esm --dts --sourcemap --out-dir dist --clean",
     "start": "node --env-file=.env.production dist/index.js",
     "lint": "eslint src/**/*.ts",
