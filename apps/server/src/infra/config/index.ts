@@ -30,7 +30,7 @@ const EnvSchema = z.object({
   OPENAI_MODEL: z.string().optional(), // Optional, has defaults based on NODE_ENV
   
   // LLM Debug Configuration
-  LLM_DEBUG: z.string().optional().transform(v => v === 'true')
+  LLM_DEBUG: z.string().optional().transform(v => v === 'true'),
 });
 
 export type Env = z.infer<typeof EnvSchema> & { PORT: number };
@@ -40,10 +40,12 @@ export function loadConfig(): Env {
   const parsed = EnvSchema.safeParse(process.env);
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
-    throw new Error(`Invalid environment configuration: ${issues}\n\nPlease ensure all required environment variables are set in your .env file.`);
+    throw new Error(
+      `Invalid environment configuration: ${issues}\n\n` +
+      'Please ensure all required environment variables are set in your .env file.',
+    );
   }
   const data = parsed.data as Env;
   return { ...data, PORT: data.PORT } as Env;
 }
-
 

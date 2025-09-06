@@ -6,7 +6,7 @@ export class Container {
   private factories = new Map<string, Factory<any>>();
 
   static getInstance() {
-    if (!Container.instance) Container.instance = new Container();
+    if (!Container.instance) {Container.instance = new Container();}
     return Container.instance;
   }
 
@@ -19,9 +19,9 @@ export class Container {
   }
 
   get<T>(token: string): T {
-    if (this.services.has(token)) return this.services.get(token);
+    if (this.services.has(token)) {return this.services.get(token);}
     const factory = this.factories.get(token);
-    if (!factory) throw new Error(`Service not found: ${token}`);
+    if (!factory) {throw new Error(`Service not found: ${token}`);}
     const instance = factory(this);
     this.services.set(token, instance);
     return instance;
@@ -31,5 +31,4 @@ export class Container {
     return this.services.has(token) || this.factories.has(token);
   }
 }
-
 

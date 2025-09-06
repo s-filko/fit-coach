@@ -58,18 +58,18 @@ export function buildServer() {
   });
 
   // LLM Debug Monitor route
-  app.get('/debug', async (request, reply) => {
+  app.get('/debug', async(request, reply) => {
     return reply.redirect('/public/llm-debug.html');
   });
 
   // health
-  app.get('/health', async () => ({ status: 'ok' }));
+  app.get('/health', async() => ({ status: 'ok' }));
 
   // test route
-  app.get('/test', async () => ({ message: 'Server is working' }));
+  app.get('/test', async() => ({ message: 'Server is working' }));
 
   // test config route
-  app.get('/test-config', async () => {
+  app.get('/test-config', async() => {
     const { loadConfig } = await import('@infra/config');
     const config = loadConfig();
     return {
@@ -80,14 +80,14 @@ export function buildServer() {
   });
 
   // test DI route
-  app.get('/test-di', async () => {
+  app.get('/test-di', async() => {
     const container = Container.getInstance();
     const userService = container.get<UserService>(TOKENS.USER_SERVICE);
     return { message: 'DI is working', hasUserService: !!userService };
   });
 
   // test user creation without DB
-  app.get('/test-user', async () => {
+  app.get('/test-user', async() => {
     const container = Container.getInstance();
     const userService = container.get<UserService>(TOKENS.USER_SERVICE);
     try {
@@ -243,7 +243,7 @@ export function buildServer() {
   });
 
   // security guard on protected routes (exclude OPTIONS and public routes)
-  app.addHook('preHandler', async (request, reply) => {
+  app.addHook('preHandler', async(request, reply) => {
     // Skip API key check for OPTIONS requests (CORS preflight)
     if (request.method === 'OPTIONS') {
       return;

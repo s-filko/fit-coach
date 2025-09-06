@@ -1,5 +1,4 @@
-import { User } from './services/user.service';
-import { ParsedProfileData } from './services/user.service';
+import { User, ParsedProfileData } from './services/user.service';
 
 /**
  * Data transformation utilities for User domain

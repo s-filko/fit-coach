@@ -33,12 +33,12 @@ export const createTestUserData = (overrides: Partial<{
   lastName?: string;
   languageCode?: string;
 }> = {}) => ({
-  provider: overrides.provider || 'telegram',
-  providerUserId: overrides.providerUserId || generateUniqueId('user'),
-  username: overrides.username || generateUniqueId('username'),
+  provider: overrides.provider ?? 'telegram',
+  providerUserId: overrides.providerUserId ?? generateUniqueId('user'),
+  username: overrides.username ?? generateUniqueId('username'),
   firstName: overrides.firstName,
   lastName: overrides.lastName,
-  languageCode: overrides.languageCode || 'en',
+  languageCode: overrides.languageCode ?? 'en',
 });
 
 /**
@@ -48,8 +48,8 @@ export const createTestChatPayload = (overrides: Partial<{
   userId: string;
   message: string;
 }> = {}) => ({
-  userId: overrides.userId || generateUniqueId('user'),
-  message: overrides.message || `Test message ${generateUniqueId()}`,
+  userId: overrides.userId ?? generateUniqueId('user'),
+  message: overrides.message ?? `Test message ${generateUniqueId()}`,
 });
 
 /**
@@ -63,12 +63,12 @@ export const createTestUserProfile = (overrides: Partial<{
   fitnessLevel?: 'beginner' | 'intermediate' | 'advanced';
   fitnessGoal?: string;
 }> = {}) => ({
-  age: overrides.age || 25,
-  gender: overrides.gender || 'male',
-  height: overrides.height || 175,
-  weight: overrides.weight || 75,
-  fitnessLevel: overrides.fitnessLevel || 'intermediate',
-  fitnessGoal: overrides.fitnessGoal || 'lose weight',
+  age: overrides.age ?? 25,
+  gender: overrides.gender ?? 'male',
+  height: overrides.height ?? 175,
+  weight: overrides.weight ?? 75,
+  fitnessLevel: overrides.fitnessLevel ?? 'intermediate',
+  fitnessGoal: overrides.fitnessGoal ?? 'lose weight',
 });
 
 /**
@@ -79,8 +79,8 @@ export const createTestWorkoutData = (overrides: Partial<{
   name?: string;
   notes?: string;
 }> = {}) => ({
-  userId: overrides.userId || generateUniqueId('user'),
-  name: overrides.name || `Test Workout ${generateUniqueId()}`,
+  userId: overrides.userId ?? generateUniqueId('user'),
+  name: overrides.name ?? `Test Workout ${generateUniqueId()}`,
   notes: overrides.notes,
 });
 
@@ -94,9 +94,9 @@ export const createTestExerciseData = (overrides: Partial<{
   isGlobal?: boolean;
   createdBy?: string;
 }> = {}) => ({
-  name: overrides.name || `Test Exercise ${generateUniqueId()}`,
-  category: overrides.category || 'strength',
-  description: overrides.description || 'Test exercise description',
+  name: overrides.name ?? `Test Exercise ${generateUniqueId()}`,
+  category: overrides.category ?? 'strength',
+  description: overrides.description ?? 'Test exercise description',
   isGlobal: overrides.isGlobal ?? true,
   createdBy: overrides.createdBy,
 });
@@ -112,11 +112,11 @@ export const createTestExerciseLogData = (overrides: Partial<{
   weight?: number;
   comment?: string;
 }> = {}) => ({
-  userId: overrides.userId || generateUniqueId('user'),
-  exerciseId: overrides.exerciseId || generateUniqueId('exercise'),
-  sets: overrides.sets || 3,
-  reps: overrides.reps || 10,
-  weight: overrides.weight || 50,
+  userId: overrides.userId ?? generateUniqueId('user'),
+  exerciseId: overrides.exerciseId ?? generateUniqueId('exercise'),
+  sets: overrides.sets ?? 3,
+  reps: overrides.reps ?? 10,
+  weight: overrides.weight ?? 50,
   comment: overrides.comment,
 });
 
@@ -128,9 +128,9 @@ export const createTestAiSessionData = (overrides: Partial<{
   sessionType?: string;
   summary?: string;
 }> = {}) => ({
-  userId: overrides.userId || generateUniqueId('user'),
-  sessionType: overrides.sessionType || 'chat',
-  summary: overrides.summary || `Test session summary ${generateUniqueId()}`,
+  userId: overrides.userId ?? generateUniqueId('user'),
+  sessionType: overrides.sessionType ?? 'chat',
+  summary: overrides.summary ?? `Test session summary ${generateUniqueId()}`,
 });
 
 /**
@@ -145,13 +145,13 @@ export const createTestUserMetricsData = (overrides: Partial<{
   biceps?: number;
   thigh?: number;
 }> = {}) => ({
-  userId: overrides.userId || generateUniqueId('user'),
-  weight: overrides.weight || 75.5,
-  chest: overrides.chest || 95,
-  waist: overrides.waist || 80,
-  hips: overrides.hips || 90,
-  biceps: overrides.biceps || 30,
-  thigh: overrides.thigh || 55,
+  userId: overrides.userId ?? generateUniqueId('user'),
+  weight: overrides.weight ?? 75.5,
+  chest: overrides.chest ?? 95,
+  waist: overrides.waist ?? 80,
+  hips: overrides.hips ?? 90,
+  biceps: overrides.biceps ?? 30,
+  thigh: overrides.thigh ?? 55,
 });
 
 /**
@@ -182,9 +182,9 @@ export const createTestRequest = (overrides: Partial<{
   headers?: Record<string, string>;
   payload?: any;
 }> = {}) => ({
-  method: overrides.method || 'GET',
-  url: overrides.url || '/',
-  headers: overrides.headers || createTestHeaders(),
+  method: overrides.method ?? 'GET',
+  url: overrides.url ?? '/',
+  headers: overrides.headers ?? createTestHeaders(),
   payload: overrides.payload,
 });
 
@@ -194,10 +194,10 @@ export const createTestRequest = (overrides: Partial<{
 export const createMultipleTestItems = <T>(
   factory: (overrides?: Partial<T>) => T,
   count: number,
-  overrides: Partial<T>[] = []
+  overrides: Partial<T>[] = [],
 ): T[] => {
   return Array.from({ length: count }, (_, index) => {
-    const itemOverrides = overrides[index] || {};
+    const itemOverrides = overrides[index] ?? {};
     return factory(itemOverrides);
   });
 };
@@ -248,7 +248,7 @@ export const createTestUser = (overrides: Partial<{
   weight?: number | null;
   fitnessGoal?: string | null;
 } => ({
-  id: overrides.id || generateTestUserId(),
+  id: overrides.id ?? generateTestUserId(),
   username: overrides.username !== undefined ? overrides.username : `testuser_${generateUniqueId()}`,
   firstName: overrides.firstName !== undefined ? overrides.firstName : 'Test',
   lastName: overrides.lastName !== undefined ? overrides.lastName : 'User',

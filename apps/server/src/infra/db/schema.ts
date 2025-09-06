@@ -1,5 +1,5 @@
 // Temporary placeholder: we will migrate schema from legacy progressively.
-import { pgTable, text, integer, real, boolean, timestamp, uuid, vector, unique, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, boolean, timestamp, uuid, unique } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -38,5 +38,4 @@ export const userAccounts = pgTable('user_accounts', {
     uniqueProviderAccount: unique().on(table.provider, table.providerUserId),
   };
 });
-
 

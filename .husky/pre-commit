@@ -1,0 +1,2 @@
+#!/usr/bin/env sh
+cd apps/server && npx eslint "**/*.ts" --max-warnings 0

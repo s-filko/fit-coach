@@ -54,7 +54,7 @@ describe('RegistrationService Integration', () => {
       mockParser as any,
       mockUserService as any,
       mockPromptService as any,
-      { generateResponse: jest.fn().mockResolvedValue('Mock AI response') } as any
+      { generateResponse: jest.fn().mockResolvedValue('Mock AI response') } as any,
     );
   });
 
@@ -67,10 +67,10 @@ describe('RegistrationService Integration', () => {
       height: undefined,
       weight: undefined,
       fitnessLevel: undefined,
-      fitnessGoal: undefined
+      fitnessGoal: undefined,
     };
 
-    it('should handle basic info collection', async () => {
+    it('should handle basic info collection', async() => {
       // Mock parsed data
       const parsedData = {
         age: 28,
@@ -78,7 +78,7 @@ describe('RegistrationService Integration', () => {
         height: 175,
         weight: 75,
         fitnessLevel: undefined,
-        fitnessGoal: undefined
+        fitnessGoal: undefined,
       };
 
       mockParser.parseProfileData.mockResolvedValue(parsedData);
@@ -95,14 +95,14 @@ describe('RegistrationService Integration', () => {
       expect(result.isComplete).toBe(false);
     });
 
-    it('should handle fitness level collection', async () => {
+    it('should handle fitness level collection', async() => {
       const userWithBasicInfo = {
         ...testUser,
         profileStatus: 'collecting_level',
         age: 28,
         gender: 'male' as const,
         height: 175,
-        weight: 75
+        weight: 75,
       };
 
       const parsedData = {
@@ -111,14 +111,14 @@ describe('RegistrationService Integration', () => {
         height: undefined,
         weight: undefined,
         fitnessLevel: 'intermediate' as const,
-        fitnessGoal: undefined
+        fitnessGoal: undefined,
       };
 
       mockParser.parseProfileData.mockResolvedValue(parsedData);
       mockUserService.updateProfileData.mockResolvedValue({
         ...userWithBasicInfo,
         profileStatus: 'collecting_goals',
-        fitnessLevel: 'intermediate'
+        fitnessLevel: 'intermediate',
       });
 
       const result = await registrationService.processUserMessage(userWithBasicInfo, 'intermediate level');
@@ -128,7 +128,7 @@ describe('RegistrationService Integration', () => {
       expect(result.isComplete).toBe(false);
     });
 
-    it('should handle fitness goals collection', async () => {
+    it('should handle fitness goals collection', async() => {
       const userWithLevel = {
         ...testUser,
         profileStatus: 'collecting_goals',
@@ -136,7 +136,7 @@ describe('RegistrationService Integration', () => {
         gender: 'male' as const,
         height: 175,
         weight: 75,
-        fitnessLevel: 'intermediate' as const
+        fitnessLevel: 'intermediate' as const,
       };
 
       const parsedData = {
@@ -145,14 +145,14 @@ describe('RegistrationService Integration', () => {
         height: undefined,
         weight: undefined,
         fitnessLevel: undefined,
-        fitnessGoal: 'lose weight'
+        fitnessGoal: 'lose weight',
       };
 
       mockParser.parseProfileData.mockResolvedValue(parsedData);
       mockUserService.updateProfileData.mockResolvedValue({
         ...userWithLevel,
         profileStatus: 'confirmation',
-        fitnessGoal: 'lose weight'
+        fitnessGoal: 'lose weight',
       });
 
       const result = await registrationService.processUserMessage(userWithLevel, 'I want to lose weight');
@@ -162,7 +162,7 @@ describe('RegistrationService Integration', () => {
       expect(result.isComplete).toBe(false);
     });
 
-    it('should complete registration when all data is available', async () => {
+    it('should complete registration when all data is available', async() => {
       const userWithAllData = {
         ...testUser,
         profileStatus: 'confirmation',
@@ -171,7 +171,7 @@ describe('RegistrationService Integration', () => {
         height: 175,
         weight: 75,
         fitnessLevel: 'intermediate' as const,
-        fitnessGoal: 'lose weight'
+        fitnessGoal: 'lose weight',
       };
 
       mockParser.parseProfileData.mockResolvedValue({
@@ -180,12 +180,12 @@ describe('RegistrationService Integration', () => {
         height: undefined,
         weight: undefined,
         fitnessLevel: undefined,
-        fitnessGoal: undefined
+        fitnessGoal: undefined,
       });
 
       mockUserService.updateProfileData.mockResolvedValue({
         ...userWithAllData,
-        profileStatus: 'complete'
+        profileStatus: 'complete',
       });
 
       const result = await registrationService.processUserMessage(userWithAllData, 'yes');
@@ -194,7 +194,7 @@ describe('RegistrationService Integration', () => {
       expect(result.isComplete).toBe(true);
     });
 
-    it('should prevent completion when data is missing', async () => {
+    it('should prevent completion when data is missing', async() => {
       const userWithMissingData = {
         ...testUser,
         profileStatus: 'confirmation',
@@ -203,7 +203,7 @@ describe('RegistrationService Integration', () => {
         height: 175,
         weight: 75,
         fitnessLevel: 'intermediate' as const,
-        fitnessGoal: undefined // Missing goal
+        fitnessGoal: undefined, // Missing goal
       };
 
       mockParser.parseProfileData.mockResolvedValue({
@@ -212,7 +212,7 @@ describe('RegistrationService Integration', () => {
         height: undefined,
         weight: undefined,
         fitnessLevel: undefined,
-        fitnessGoal: undefined
+        fitnessGoal: undefined,
       });
 
       const result = await registrationService.processUserMessage(userWithMissingData, 'yes');
@@ -232,10 +232,10 @@ describe('RegistrationService Integration', () => {
       height: undefined,
       weight: undefined,
       fitnessLevel: undefined,
-      fitnessGoal: undefined
+      fitnessGoal: undefined,
     };
 
-    it('should handle parser errors gracefully', async () => {
+    it('should handle parser errors gracefully', async() => {
       // Simulate parser returning undefined values (error case)
       mockParser.parseProfileData.mockResolvedValue({
         age: undefined,
@@ -243,7 +243,7 @@ describe('RegistrationService Integration', () => {
         height: undefined,
         weight: undefined,
         fitnessLevel: undefined,
-        fitnessGoal: undefined
+        fitnessGoal: undefined,
       });
 
       const result = await registrationService.processUserMessage(testUser, 'some message');
@@ -255,11 +255,11 @@ describe('RegistrationService Integration', () => {
       expect(result.isComplete).toBe(false);
     });
 
-    it('should handle user service errors gracefully', async () => {
+    it('should handle user service errors gracefully', async() => {
       // Use user with 'collecting_basic' status to test handleBasicInfo
       const userWithBasicStatus = {
         ...testUser,
-        profileStatus: 'collecting_basic' as const
+        profileStatus: 'collecting_basic' as const,
       };
 
       mockParser.parseProfileData.mockResolvedValue({
@@ -268,7 +268,7 @@ describe('RegistrationService Integration', () => {
         height: undefined,
         weight: undefined,
         fitnessLevel: undefined,
-        fitnessGoal: undefined
+        fitnessGoal: undefined,
       });
 
       const result = await registrationService.processUserMessage(userWithBasicStatus, 'I am 25 female');

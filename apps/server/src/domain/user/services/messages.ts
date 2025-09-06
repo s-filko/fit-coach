@@ -24,7 +24,8 @@ Let's start with your basic information. Please tell me:
 You can answer all questions at once or one at a time.`,
 
   // Success messages
-  BASIC_INFO_SUCCESS: (age: number, gender: string, height: number, weight: number) => `Great! I've recorded your information:
+  BASIC_INFO_SUCCESS: (age: number, gender: string, height: number, weight: number) => 
+    `Great! I've recorded your information:
 • Age: ${age} years
 • Gender: ${gender === 'male' ? 'male' : 'female'}
 • Height: ${height} cm
@@ -64,10 +65,10 @@ Final step - your goals. What do you want to achieve?
 Let's review all the information:
 
 👤 Profile:
-• Age: ${profileData.age || 'not specified'} years
+• Age: ${profileData.age ?? 'not specified'} years
 • Gender: ${profileData.gender === 'male' ? 'male' : 'female'}
-• Height: ${profileData.height || 'not specified'} cm
-• Weight: ${profileData.weight || 'not specified'} kg
+• Height: ${profileData.height ?? 'not specified'} cm
+• Weight: ${profileData.weight ?? 'not specified'} kg
 • Level: ${getFitnessLevelNameEn(profileData.fitnessLevel)}
 • Goal: ${getGoalNameEn(profileData.fitnessGoal)}
 
@@ -88,7 +89,7 @@ How can I help you today?`,
       'height': 'height',
       'weight': 'weight',
       'fitnessLevel': 'fitness level',
-      'fitnessGoal': 'training goals'
+      'fitnessGoal': 'training goals',
     };
 
     const readableFields = missingFields.map(field => fieldNamesEn[field] || field).join(', ');
@@ -98,7 +99,7 @@ Please specify ${readableFields} more clearly.
 
 Examples:
 • Age: "I am 28 years old" or "28"
-• Height: "175 cm" or "5'9\""
+• Height: "175 cm" or "5'9""
 • Weight: "75 kg" or "165 lbs"`;
   },
 
@@ -137,7 +138,7 @@ Please tell me again:
   AI_PROMPT_COLLECTING_LEVEL: 'Determine user fitness level: beginner, intermediate, or advanced.',
   AI_PROMPT_COLLECTING_GOALS: 'Find out training goals: lose weight, build muscle, maintain fitness, etc.',
   AI_PROMPT_CONFIRMATION: 'Confirm all collected data and complete registration.',
-  AI_PROMPT_COMPLETE: 'Registration completed, user is ready for training.'
+  AI_PROMPT_COMPLETE: 'Registration completed, user is ready for training.',
 } as const;
 
 // Helper functions for translations
@@ -156,7 +157,7 @@ function getGoalNameEn(goal?: string): string {
     'muscle_gain': 'Build muscle',
     'maintain': 'Maintain fitness',
     'strength': 'Increase strength',
-    'general_fitness': 'Improve health'
+    'general_fitness': 'Improve health',
   };
-  return goalNames[goal || ''] || 'Not determined';
+  return goalNames[goal ?? ''] ?? 'Not determined';
 }

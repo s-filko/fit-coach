@@ -57,16 +57,17 @@ export async function setupTestDI() {
 
   // Register services
   const c = Container.getInstance();
-  if (!c.has(TOKENS.USER_REPO)) c.register(TOKENS.USER_REPO, new DrizzleUserRepository());
-  if (!c.has(TOKENS.USER_SERVICE)) c.registerFactory(TOKENS.USER_SERVICE, (c) => new UserService(c.get(TOKENS.USER_REPO)));
-  if (!c.has(TOKENS.LLM)) c.register(TOKENS.LLM, new LLMService());
+  if (!c.has(TOKENS.USER_REPO)) {c.register(TOKENS.USER_REPO, new DrizzleUserRepository());}
+  if (!c.has(TOKENS.USER_SERVICE)) {
+    c.registerFactory(TOKENS.USER_SERVICE, (c) => new UserService(c.get(TOKENS.USER_REPO)));
+  }
+  if (!c.has(TOKENS.LLM)) {c.register(TOKENS.LLM, new LLMService());}
 
   // Close the pool to avoid connection leaks
   await pool.end();
 }
 
-beforeAll(async () => {
+beforeAll(async() => {
   await setupTestDI();
 });
-
 

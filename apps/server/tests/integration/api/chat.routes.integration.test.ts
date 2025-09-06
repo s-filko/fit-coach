@@ -43,8 +43,8 @@ const createTestChatPayload = (overrides: Partial<{
   userId: string;
   message: string;
 }> = {}) => ({
-  userId: overrides.userId || `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-  message: overrides.message || `Test message ${Date.now()}`,
+  userId: overrides.userId ?? `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+  message: overrides.message ?? `Test message ${Date.now()}`,
 });
 
 const createTestApiKey = () => process.env.BOT_API_KEY!;
@@ -53,7 +53,7 @@ describe('POST /api/chat – integration', () => {
   let app: ReturnType<typeof buildServer>;
   let tx: any;
 
-  beforeAll(async () => {
+  beforeAll(async() => {
     app = buildServer();
     await app.ready();
 
@@ -64,21 +64,21 @@ describe('POST /api/chat – integration', () => {
     container.register(TOKENS.USER_SERVICE, {
       getUser: jest.fn().mockResolvedValue({
         id: 'test-user',
-        profileStatus: 'complete'
+        profileStatus: 'complete',
       }),
       isRegistrationComplete: jest.fn().mockReturnValue(true),
-      updateProfileData: jest.fn()
+      updateProfileData: jest.fn(),
     });
     container.register(TOKENS.REGISTRATION_SERVICE, {
       processUserMessage: jest.fn().mockResolvedValue({
         updatedUser: { id: 'test-user' },
         response: 'Stub response',
-        isComplete: true
-      })
+        isComplete: true,
+      }),
     });
   });
 
-  afterAll(async () => {
+  afterAll(async() => {
     await app.close();
   });
 
@@ -86,7 +86,7 @@ describe('POST /api/chat – integration', () => {
   // Data cleanup is handled by the test data factories with unique IDs
 
   describe('successful message processing', () => {
-    it('should accept POST requests and return AI response', async () => {
+    it('should accept POST requests and return AI response', async() => {
       const payload = createTestChatPayload();
       const validKey = createTestApiKey();
 
@@ -108,12 +108,12 @@ describe('POST /api/chat – integration', () => {
       expect(typeof json.data.timestamp).toBe('string');
     });
 
-    it('should process messages with different content', async () => {
+    it('should process messages with different content', async() => {
       const testMessages = [
         'Hello AI!',
         'How are you?',
         'What exercises should I do?',
-        'I completed my workout today'
+        'I completed my workout today',
       ];
 
       const validKey = createTestApiKey();
@@ -133,14 +133,14 @@ describe('POST /api/chat – integration', () => {
       }
     });
 
-    it('should handle different user IDs', async () => {
+    it('should handle different user IDs', async() => {
       const validKey = createTestApiKey();
 
       // Test with different user IDs
       const userIds = [
         `user_${Date.now()}_1`,
         `user_${Date.now()}_2`,
-        `user_${Date.now()}_3`
+        `user_${Date.now()}_3`,
       ];
 
       for (const userId of userIds) {
@@ -161,7 +161,7 @@ describe('POST /api/chat – integration', () => {
   });
 
   describe('error handling', () => {
-    it('should handle missing required fields', async () => {
+    it('should handle missing required fields', async() => {
       const validKey = createTestApiKey();
 
       const res = await app.inject({
@@ -180,7 +180,7 @@ describe('POST /api/chat – integration', () => {
       expect(json.error).toHaveProperty('message');
     });
 
-    it('should handle missing userId', async () => {
+    it('should handle missing userId', async() => {
       const validKey = createTestApiKey();
 
       const res = await app.inject({
@@ -188,7 +188,7 @@ describe('POST /api/chat – integration', () => {
         url: '/api/chat',
         headers: { 'x-api-key': validKey },
         payload: {
-          message: 'Hello AI!'
+          message: 'Hello AI!',
           // Missing userId
         },
       });
@@ -198,7 +198,7 @@ describe('POST /api/chat – integration', () => {
       expect(json).toHaveProperty('error');
     });
 
-    it('should handle missing message', async () => {
+    it('should handle missing message', async() => {
       const validKey = createTestApiKey();
 
       const res = await app.inject({
@@ -206,7 +206,7 @@ describe('POST /api/chat – integration', () => {
         url: '/api/chat',
         headers: { 'x-api-key': validKey },
         payload: {
-          userId: 'test-user'
+          userId: 'test-user',
           // Missing message
         },
       });
@@ -216,11 +216,10 @@ describe('POST /api/chat – integration', () => {
       expect(json).toHaveProperty('error');
     });
 
-
   });
 
   describe('request validation', () => {
-    it('should handle empty message strings', async () => {
+    it('should handle empty message strings', async() => {
       const validKey = createTestApiKey();
 
       const res = await app.inject({
@@ -229,7 +228,7 @@ describe('POST /api/chat – integration', () => {
         headers: { 'x-api-key': validKey },
         payload: {
           userId: 'test-user',
-          message: ''
+          message: '',
         },
       });
 
@@ -237,7 +236,7 @@ describe('POST /api/chat – integration', () => {
       expect([200, 400, 500]).toContain(res.statusCode);
     });
 
-    it('should handle very long messages', async () => {
+    it('should handle very long messages', async() => {
       const validKey = createTestApiKey();
       const longMessage = 'A'.repeat(10000); // Very long message
 
@@ -247,7 +246,7 @@ describe('POST /api/chat – integration', () => {
         headers: { 'x-api-key': validKey },
         payload: {
           userId: 'test-user',
-          message: longMessage
+          message: longMessage,
         },
       });
 

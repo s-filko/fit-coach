@@ -1,13 +1,12 @@
 import { ParsedProfileData, User } from './user.service';
 import {
   DataFieldsConfig,
-  IPromptService,
   PromptService,
   UniversalParseRequest,
-  UniversalParseResult
+  UniversalParseResult,
 } from './prompt.service';
 import { z } from 'zod';
-import { ILLMService, LLMService } from "@infra/ai/llm.service";
+import { LLMService } from '@infra/ai/llm.service';
 
 // Helper function for Zod validation with fallback to undefined
 function validateWithFallback<T>(schema: z.ZodType<T>, value: any): T | undefined {
@@ -18,7 +17,7 @@ function validateWithFallback<T>(schema: z.ZodType<T>, value: any): T | undefine
 // Generic function to validate object fields using configuration
 function validateObjectFields<T extends Record<string, any>>(
   data: any,
-  validators: Record<keyof T, z.ZodType<any>>
+  validators: Record<keyof T, z.ZodType<any>>,
 ): T {
   const result = {} as T;
   for (const [key, validator] of Object.entries(validators)) {
@@ -29,17 +28,15 @@ function validateObjectFields<T extends Record<string, any>>(
 
 // Declarative field validation configuration
 const fieldValidators = {
-  age: z.union([z.number().int().min(10).max(100), z.null()]).transform(val => val === null ? undefined : val),
-  gender: z.union([z.enum(['male', 'female']), z.null()]).transform(val => val === null ? undefined : val),
-  height: z.union([z.number().int().min(120).max(220), z.null()]).transform(val => val === null ? undefined : val),
-  weight: z.union([z.number().int().min(30).max(200), z.null()]).transform(val => val === null ? undefined : val),
-  fitnessLevel: z.union([z.enum(['beginner', 'intermediate', 'advanced']), z.null()]).transform(val => val === null ? undefined : val),
-  fitnessGoal: z.union([z.string().min(1).max(100), z.null()]).transform(val => val === null ? undefined : val),
+  age: z.union([z.number().int().min(10).max(100), z.null()]).transform(val => val ?? undefined),
+  gender: z.union([z.enum(['male', 'female']), z.null()]).transform(val => val ?? undefined),
+  height: z.union([z.number().int().min(120).max(220), z.null()]).transform(val => val ?? undefined),
+  weight: z.union([z.number().int().min(30).max(200), z.null()]).transform(val => val ?? undefined),
+  fitnessLevel: z.union([z.enum(['beginner', 'intermediate', 'advanced']), z.null()]).transform(val => val ?? undefined),
+  fitnessGoal: z.union([z.string().min(1).max(100), z.null()]).transform(val => val ?? undefined),
   limitations: z.array(z.string()).optional(),
   equipment: z.array(z.string()).optional(),
 } as const;
-
-
 
 export interface IProfileParserService {
   parseProfileData(user: User, text: string): Promise<ParsedProfileData>;
@@ -49,12 +46,12 @@ export interface IProfileParserService {
 export class ProfileParserService implements IProfileParserService {
   constructor(
     private readonly promptService: PromptService,
-    private readonly llmService: LLMService
+    private readonly llmService: LLMService,
   ) {}
 
   async parseProfileData(user: User, text: string): Promise<ParsedProfileData> {
     // Input validation
-    if (!user || !user.id) {
+    if (!user?.id) {
       throw new Error('Invalid user: user and user.id are required');
     }
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
@@ -67,8 +64,8 @@ export class ProfileParserService implements IProfileParserService {
       height: 'User\'s height in centimeters (convert from feet/inches if needed)',
       weight: 'User\'s weight in kilograms (convert from pounds if needed)',
       fitnessLevel: 'User\'s fitness experience (beginner, intermediate, advanced)',
-      fitnessGoal: 'User\'s fitness goal (lose weight, build muscle, maintain fitness, etc.)'
-    }
+      fitnessGoal: 'User\'s fitness goal (lose weight, build muscle, maintain fitness, etc.)',
+    };
 
     // Filter out already collected data
     const promptDataConfig: DataFieldsConfig = Object.fromEntries(
@@ -76,7 +73,7 @@ export class ProfileParserService implements IProfileParserService {
         const userValue = (user as any)[key];
         // Check if field is empty (undefined, null, or empty string)
         return userValue === undefined || userValue === null || userValue === '';
-      })
+      }),
     );
 
     try {
@@ -84,7 +81,7 @@ export class ProfileParserService implements IProfileParserService {
       const prompt = this.promptService.buildDataParsingPromptWithAnswers(
         text,
         promptDataConfig,
-        'User profile data parsing'
+        'User profile data parsing',
       );
 
       // Get LLM response
@@ -95,7 +92,7 @@ export class ProfileParserService implements IProfileParserService {
 
       // Extract data from the nested format returned by LLM
       let extractedData: any = {};
-      if (parsedResult.hasData && parsedResult.data && parsedResult.data.fields) {
+      if (parsedResult.hasData && parsedResult.data?.fields) {
         extractedData = parsedResult.data.fields;
       } else {
         // Fallback to direct format if LLM returns data directly
@@ -115,7 +112,7 @@ export class ProfileParserService implements IProfileParserService {
       console.log('Profile data parsed successfully:', {
         userId: user.id,
         extractedFields,
-        totalFields: Object.keys(validatedResult).length
+        totalFields: Object.keys(validatedResult).length,
       });
 
       return validatedResult;
@@ -124,7 +121,7 @@ export class ProfileParserService implements IProfileParserService {
         error: error instanceof Error ? error.message : String(error),
         userId: user.id,
         inputText: text,
-        filteredFields: Object.keys(promptDataConfig)
+        filteredFields: Object.keys(promptDataConfig),
       });
       // Return empty object on error
       return {};
@@ -133,7 +130,7 @@ export class ProfileParserService implements IProfileParserService {
 
   async parseUniversal(request: UniversalParseRequest): Promise<UniversalParseResult> {
     // Input validation
-    if (!request || !request.text || !request.fields || !Array.isArray(request.fields)) {
+    if (!request?.text || !request.fields || !Array.isArray(request.fields)) {
       throw new Error('Invalid request: text and fields array are required');
     }
     if (request.fields.length === 0) {
@@ -163,7 +160,7 @@ export class ProfileParserService implements IProfileParserService {
       console.error('Universal parsing error:', {
         error: error instanceof Error ? error.message : String(error),
         fieldCount: request.fields.length,
-        text: request.text.substring(0, 100) + '...'
+        text: request.text.substring(0, 100) + '...',
       });
 
       // Return object with null values for all fields
@@ -176,15 +173,15 @@ export class ProfileParserService implements IProfileParserService {
   }
 
   private validateUniversalField(value: any, field: any): any {
-    if (value === null || value === undefined) return null;
+    if (value === null || value === undefined) {return null;}
 
     switch (field.type) {
       case 'number':
         if (typeof value === 'number') {
           // Apply validation rules if specified
           if (field.validation) {
-            if (field.validation.min !== undefined && value < field.validation.min) return null;
-            if (field.validation.max !== undefined && value > field.validation.max) return null;
+            if (field.validation.min !== undefined && value < field.validation.min) {return null;}
+            if (field.validation.max !== undefined && value > field.validation.max) {return null;}
           }
           return Math.round(value);
         }
@@ -194,7 +191,7 @@ export class ProfileParserService implements IProfileParserService {
         return typeof value === 'boolean' ? value : null;
 
       case 'enum':
-        if (field.enumValues && field.enumValues.includes(value)) {
+        if (field.enumValues?.includes(value)) {
           return value;
         }
         return null;
@@ -205,7 +202,7 @@ export class ProfileParserService implements IProfileParserService {
           // Apply pattern validation if specified
           if (field.validation?.pattern) {
             const regex = new RegExp(field.validation.pattern);
-            if (!regex.test(value)) return null;
+            if (!regex.test(value)) {return null;}
           }
           return value.trim();
         }

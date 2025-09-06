@@ -43,7 +43,7 @@ export class UserService {
 
   async upsertUser(input: CreateUserInput): Promise<User> {
     const existing = await this.repo.findByProvider(input.provider, input.providerUserId);
-    if (existing) return existing; // minimal behavior
+    if (existing) {return existing;} // minimal behavior
     return this.repo.create(input);
   }
 
@@ -67,12 +67,12 @@ export class UserService {
 
   // Get current registration step
   getCurrentRegistrationStep(user: User): string {
-    return user.profileStatus || 'incomplete';
+    return user.profileStatus ?? 'incomplete';
   }
 
   // Get next registration step
   getNextRegistrationStep(user: User): string {
-    const currentStep = user.profileStatus || 'incomplete';
+    const currentStep = user.profileStatus ?? 'incomplete';
     const stepOrder = ['incomplete', 'collecting_basic', 'collecting_level', 'collecting_goals', 'confirmation', 'complete'];
 
     const currentIndex = stepOrder.indexOf(currentStep);

@@ -16,23 +16,23 @@ const mockLLMService = {
     height: 175,
     weight: 75,
     fitnessLevel: 'intermediate',
-    fitnessGoal: 'lose weight'
-  }))
+    fitnessGoal: 'lose weight',
+  })),
 };
 
 const mockPromptService = {
   buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([
     { role: 'system', content: 'Parse user profile data from the following message. Return only valid JSON.' },
-    { role: 'user', content: 'I am 28 years old male 175cm 75kg' }
-  ])
+    { role: 'user', content: 'I am 28 years old male 175cm 75kg' },
+  ]),
 };
 
 jest.mock('../../../src/infra/ai/llm.service', () => ({
-  LLMService: jest.fn().mockImplementation(() => mockLLMService)
+  LLMService: jest.fn().mockImplementation(() => mockLLMService),
 }));
 
 jest.mock('../../../src/domain/user/services/prompt.service', () => ({
-  PromptService: jest.fn().mockImplementation(() => mockPromptService)
+  PromptService: jest.fn().mockImplementation(() => mockPromptService),
 }));
 
 describe('Data Saving Integration Test', () => {
@@ -51,8 +51,8 @@ describe('Data Saving Integration Test', () => {
         height: 175,
         weight: 75,
         fitnessLevel: 'intermediate',
-        fitnessGoal: 'lose weight'
-      })
+        fitnessGoal: 'lose weight',
+      }),
     );
 
     // Initialize services
@@ -60,21 +60,23 @@ describe('Data Saving Integration Test', () => {
     userService = new UserService(repository);
     parserService = new ProfileParserService(
       mockPromptService as any,
-      mockLLMService as any
+      mockLLMService as any,
     );
     registrationService = new RegistrationService(
       parserService,
       userService as any,
       {
         buildWelcomeMessage: jest.fn(),
-        buildBasicInfoSuccessMessage: jest.fn((age, gender, height, weight) => `Success: ${age}, ${gender}, ${height}, ${weight}`)
+        buildBasicInfoSuccessMessage: jest.fn(
+          (age, gender, height, weight) => `Success: ${age}, ${gender}, ${height}, ${weight}`,
+        ),
       } as any,
-      mockLLMService as any
+      mockLLMService as any,
     );
   });
 
   describe('Data Flow: Parser -> Registration -> Database', () => {
-    it('should identify where data saving fails', async () => {
+    it('should identify where data saving fails', async() => {
       // Step 1: Test parser separately
       console.log('\n=== STEP 1: Testing Parser ===');
       const testUser = { id: 'test-user-integration', profileStatus: 'incomplete' } as any;
@@ -94,7 +96,7 @@ describe('Data Saving Integration Test', () => {
         username: 'integration_test',
         firstName: 'Integration',
         lastName: 'Test',
-        languageCode: 'en'
+        languageCode: 'en',
       });
 
       console.log('Created user:', dbUser.id);
@@ -109,7 +111,7 @@ describe('Data Saving Integration Test', () => {
         height: 175,
         weight: 75,
         fitnessLevel: 'intermediate' as const,
-        fitnessGoal: 'lose weight'
+        fitnessGoal: 'lose weight',
       });
 
       console.log('Direct update result:', directUpdateResult);
@@ -129,15 +131,15 @@ describe('Data Saving Integration Test', () => {
       const registrationResult = await registrationService.processUserMessage(
         {
           ...dbUser,
-          profileStatus: 'collecting_basic'
+          profileStatus: 'collecting_basic',
         },
-        'I am 28 years old male 175cm 75kg'
+        'I am 28 years old male 175cm 75kg',
       );
 
       console.log('Registration result:', {
         updatedUser: registrationResult.updatedUser,
         response: registrationResult.response,
-        isComplete: registrationResult.isComplete
+        isComplete: registrationResult.isComplete,
       });
 
       expect(registrationResult.updatedUser.age).toBe(28);
@@ -166,14 +168,14 @@ describe('Data Saving Integration Test', () => {
   });
 
   describe('Partial Updates', () => {
-    it('should update single field in complete profile', async () => {
+    it('should update single field in complete profile', async() => {
       // Create and populate user profile
       const dbUser = await userService.upsertUser({
         provider: 'telegram',
         providerUserId: 'partial_update_' + Date.now(),
         username: 'partial_test',
         firstName: 'Partial',
-        lastName: 'Update'
+        lastName: 'Update',
       });
 
       // First, populate the profile completely
@@ -183,7 +185,7 @@ describe('Data Saving Integration Test', () => {
         height: 170,
         weight: 65,
         fitnessLevel: 'intermediate' as const,
-        fitnessGoal: 'lose weight'
+        fitnessGoal: 'lose weight',
       });
 
       // Verify profile is complete
@@ -194,7 +196,7 @@ describe('Data Saving Integration Test', () => {
 
       // Now update only ONE field
       const partialUpdateResult = await userService.updateProfileData(dbUser.id, {
-        age: 26  // Change only age from 25 to 26
+        age: 26,  // Change only age from 25 to 26
       });
 
       expect(partialUpdateResult).toBeDefined();
@@ -209,13 +211,13 @@ describe('Data Saving Integration Test', () => {
       console.log('✅ Partial update successful - only age changed from 25 to 26');
     });
 
-    it('should handle multiple selective field updates', async () => {
+    it('should handle multiple selective field updates', async() => {
       const dbUser = await userService.upsertUser({
         provider: 'telegram',
         providerUserId: 'selective_update_' + Date.now(),
         username: 'selective_test',
         firstName: 'Selective',
-        lastName: 'Update'
+        lastName: 'Update',
       });
 
       // Populate profile
@@ -225,13 +227,13 @@ describe('Data Saving Integration Test', () => {
         height: 180,
         weight: 80,
         fitnessLevel: 'advanced' as const,
-        fitnessGoal: 'build muscle'
+        fitnessGoal: 'build muscle',
       });
 
       // Update multiple fields selectively
       const selectiveUpdateResult = await userService.updateProfileData(dbUser.id, {
         age: 31,
-        fitnessGoal: 'maintain fitness'
+        fitnessGoal: 'maintain fitness',
         // gender, height, weight, fitnessLevel are NOT included
       });
 
@@ -249,7 +251,7 @@ describe('Data Saving Integration Test', () => {
   });
 
   describe('Error Scenarios', () => {
-    it('should handle parser returning undefined values', async () => {
+    it('should handle parser returning undefined values', async() => {
       // Mock parser to return undefined values
       mockLLMService.generateResponse.mockResolvedValueOnce(
         JSON.stringify({
@@ -258,8 +260,8 @@ describe('Data Saving Integration Test', () => {
           height: undefined,
           weight: undefined,
           fitnessLevel: undefined,
-          fitnessGoal: undefined
-        })
+          fitnessGoal: undefined,
+        }),
       );
 
       const dbUser = await userService.upsertUser({
@@ -267,12 +269,12 @@ describe('Data Saving Integration Test', () => {
         providerUserId: 'error_test_' + Date.now(),
         username: 'error_test',
         firstName: 'Error',
-        lastName: 'Test'
+        lastName: 'Test',
       });
 
       const registrationResult = await registrationService.processUserMessage(
         { ...dbUser, profileStatus: 'collecting_basic' },
-        'some invalid message'
+        'some invalid message',
       );
 
       // Should handle gracefully without crashing
@@ -280,13 +282,13 @@ describe('Data Saving Integration Test', () => {
       expect(registrationResult.updatedUser).toBeDefined();
     });
 
-    it('should handle database update failures', async () => {
+    it('should handle database update failures', async() => {
       const dbUser = await userService.upsertUser({
         provider: 'telegram',
         providerUserId: 'failure_test_' + Date.now(),
         username: 'failure_test',
         firstName: 'Failure',
-        lastName: 'Test'
+        lastName: 'Test',
       });
 
       // This should succeed even if previous operations failed

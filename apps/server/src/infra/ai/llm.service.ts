@@ -66,7 +66,7 @@ export class LLMService implements ILLMService {
   constructor() {
     // Use OPENAI_MODEL env var for flexible model selection
     // Falls back to gpt-4o-mini (cheapest) if not specified
-    const modelName = this.config.OPENAI_MODEL || 'gpt-4o-mini';
+    const modelName = this.config.OPENAI_MODEL ?? 'gpt-4o-mini';
     const temperature = 0.7;
 
     this.model = new ChatOpenAI({
@@ -122,7 +122,7 @@ export class LLMService implements ILLMService {
           isRegistration: false,
           systemPrompt: systemPromptText,
           model: this.model.model,
-          temperature: this.model.temperature || 0.7,
+          temperature: this.model.temperature ?? 0.7,
         };
         this.addToHistory(this.requestHistory, request);
         this.logDebug('LLM Request', request);
@@ -208,7 +208,7 @@ export class LLMService implements ILLMService {
           context,
           systemPrompt: systemPromptText,
           model: this.model.model,
-          temperature: this.model.temperature || 0.7,
+          temperature: this.model.temperature ?? 0.7,
         };
         this.addToHistory(this.requestHistory, request);
         this.logDebug('LLM Registration Request', request);
@@ -273,7 +273,7 @@ export class LLMService implements ILLMService {
 
     return {
       model: this.model.model,
-      temperature: this.model.temperature || 0.7,
+      temperature: this.model.temperature ?? 0.7,
       isDebugMode: this.isDebugMode,
       requestHistory: this.requestHistory.slice(-50), // Last 50 requests
       responseHistory: this.responseHistory.slice(-50), // Last 50 responses
@@ -283,7 +283,7 @@ export class LLMService implements ILLMService {
         totalTokens: this.metrics.totalTokens,
         averageResponseTime: Math.round(avgResponseTime),
         errorRate: Math.round(errorRate * 100) / 100,
-      }
+      },
     };
   }
 

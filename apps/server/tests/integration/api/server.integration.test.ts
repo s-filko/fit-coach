@@ -8,20 +8,20 @@ import { createTestApiKey, createTestUserData } from '../../shared/test-factorie
 describe('Server Basic Functionality – integration', () => {
   let app: ReturnType<typeof buildServer>;
 
-  beforeAll(async () => {
+  beforeAll(async() => {
     app = buildServer();
     await app.ready();
   });
 
-  afterAll(async () => {
+  afterAll(async() => {
     await app.close();
   });
 
   describe('Health Check Endpoint', () => {
-    it('should return 200 OK with correct response format', async () => {
+    it('should return 200 OK with correct response format', async() => {
       const res = await app.inject({
         method: 'GET',
-        url: '/health'
+        url: '/health',
       });
 
       expect(res.statusCode).toBe(200);
@@ -29,16 +29,16 @@ describe('Server Basic Functionality – integration', () => {
 
       const json = res.json();
       expect(json).toEqual({
-        status: 'ok'
+        status: 'ok',
       });
     });
 
-    it('should respond quickly to health checks', async () => {
+    it('should respond quickly to health checks', async() => {
       const startTime = Date.now();
 
       const res = await app.inject({
         method: 'GET',
-        url: '/health'
+        url: '/health',
       });
 
       const endTime = Date.now();
@@ -50,10 +50,10 @@ describe('Server Basic Functionality – integration', () => {
   });
 
   describe('API Documentation', () => {
-    it('should expose OpenAPI documentation at /docs/json', async () => {
+    it('should expose OpenAPI documentation at /docs/json', async() => {
       const res = await app.inject({
         method: 'GET',
-        url: '/docs/json'
+        url: '/docs/json',
       });
 
       expect(res.statusCode).toBe(200);
@@ -66,27 +66,27 @@ describe('Server Basic Functionality – integration', () => {
       expect(typeof json.paths).toBe('object');
     });
 
-    it('should include all main API endpoints in documentation', async () => {
+    it('should include all main API endpoints in documentation', async() => {
       const res = await app.inject({
         method: 'GET',
-        url: '/docs/json'
+        url: '/docs/json',
       });
 
       const json = res.json();
-      const paths = Object.keys(json.paths || {});
+      const paths = Object.keys(json.paths ?? {});
 
       // Check that main endpoints are documented
       expect(paths).toEqual(expect.arrayContaining([
         '/api/user',
         '/api/user/{id}',
-        '/api/chat'
+        '/api/chat',
       ]));
     });
 
-    it('should have correct POST /api/user schema', async () => {
+    it('should have correct POST /api/user schema', async() => {
       const res = await app.inject({
         method: 'GET',
-        url: '/docs/json'
+        url: '/docs/json',
       });
 
       const json = res.json();
@@ -97,17 +97,17 @@ describe('Server Basic Functionality – integration', () => {
       expect(userPost.requestBody).toHaveProperty('content');
       expect(userPost.requestBody.content).toHaveProperty('application/json');
 
-      const schema = userPost.requestBody.content['application/json'].schema;
+      const { schema } = userPost.requestBody.content['application/json'];
       expect(schema).toHaveProperty('properties');
 
       const props = Object.keys(schema.properties);
       expect(props).toEqual(expect.arrayContaining(['provider', 'providerUserId']));
     });
 
-    it('should have correct GET /api/user/{id} schema with path parameter', async () => {
+    it('should have correct GET /api/user/{id} schema with path parameter', async() => {
       const res = await app.inject({
         method: 'GET',
-        url: '/docs/json'
+        url: '/docs/json',
       });
 
       const json = res.json();
@@ -116,7 +116,7 @@ describe('Server Basic Functionality – integration', () => {
       expect(userGet).toBeTruthy();
       expect(userGet).toHaveProperty('parameters');
 
-      const params = userGet.parameters || [];
+      const params = userGet.parameters ?? [];
       const paramNames = params.map((p: any) => p.name);
       expect(paramNames).toEqual(expect.arrayContaining(['id']));
 
@@ -127,10 +127,10 @@ describe('Server Basic Functionality – integration', () => {
       expect(idParam.required).toBe(true);
     });
 
-    it('should have correct POST /api/chat schema', async () => {
+    it('should have correct POST /api/chat schema', async() => {
       const res = await app.inject({
         method: 'GET',
-        url: '/docs/json'
+        url: '/docs/json',
       });
 
       const json = res.json();
@@ -141,7 +141,7 @@ describe('Server Basic Functionality – integration', () => {
       expect(chatPost.requestBody).toHaveProperty('content');
       expect(chatPost.requestBody.content).toHaveProperty('application/json');
 
-      const schema = chatPost.requestBody.content['application/json'].schema;
+      const { schema } = chatPost.requestBody.content['application/json'];
       expect(schema).toHaveProperty('properties');
 
       const props = Object.keys(schema.properties);
@@ -150,10 +150,10 @@ describe('Server Basic Functionality – integration', () => {
   });
 
   describe('Server Configuration', () => {
-    it('should handle CORS preflight requests properly', async () => {
+    it('should handle CORS preflight requests properly', async() => {
       const res = await app.inject({
         method: 'OPTIONS',
-        url: '/api/user'
+        url: '/api/user',
       });
 
       // OPTIONS requests should either:
@@ -170,16 +170,16 @@ describe('Server Basic Functionality – integration', () => {
       }
     });
 
-    it('should return 404 for unknown routes', async () => {
+    it('should return 404 for unknown routes', async() => {
       const res = await app.inject({
         method: 'GET',
-        url: '/unknown-route'
+        url: '/unknown-route',
       });
 
       expect(res.statusCode).toBe(404);
     });
 
-    it('should handle different HTTP methods on health endpoint', async () => {
+    it('should handle different HTTP methods on health endpoint', async() => {
       // Test various HTTP methods on health endpoint
       const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
 
@@ -198,7 +198,7 @@ describe('Server Basic Functionality – integration', () => {
   });
 
   describe('Error Handling', () => {
-    it('should handle malformed JSON payload', async () => {
+    it('should handle malformed JSON payload', async() => {
       const payload = createTestUserData();
       const validKey = createTestApiKey();
 
@@ -207,16 +207,16 @@ describe('Server Basic Functionality – integration', () => {
         url: '/api/user',
         headers: {
           'content-type': 'application/json',
-          'x-api-key': validKey
+          'x-api-key': validKey,
         },
-        payload: '{invalid json}'
+        payload: '{invalid json}',
       });
 
       // Should handle malformed JSON (may return 400 or 500 depending on Fastify config)
       expect([400, 500]).toContain(res.statusCode);
     });
 
-    it('should handle payload size limits', async () => {
+    it('should handle payload size limits', async() => {
       const largePayload = 'x'.repeat(1024 * 1024); // 1MB payload
       const validKey = createTestApiKey();
 
@@ -225,12 +225,13 @@ describe('Server Basic Functionality – integration', () => {
         url: '/api/user',
         headers: {
           'content-type': 'application/json',
-          'x-api-key': validKey
+          'x-api-key': validKey,
         },
-        payload: { data: largePayload }
+        payload: { data: largePayload },
       });
 
-      // Should handle based on server limits (may return 413 for too large, 500 for other errors, or process successfully)
+      // Should handle based on server limits (may return 413 for too large, 500 for other errors,
+      // or process successfully)
       expect([200, 413, 500]).toContain(res.statusCode);
     });
   });

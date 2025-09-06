@@ -13,25 +13,25 @@ import { createTestApiKey } from '../../shared/test-factories';
 describe('API Key Authentication Middleware – integration', () => {
   let app: ReturnType<typeof buildServer>;
 
-  beforeAll(async () => {
+  beforeAll(async() => {
     app = buildServer();
     await app.ready();
   });
 
-  afterAll(async () => {
+  afterAll(async() => {
     await app.close();
   });
 
   describe('X-API-Key header validation', () => {
-    it('should return 401 when x-api-key header is missing', async () => {
+    it('should return 401 when x-api-key header is missing', async() => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
         payload: {
           provider: 'telegram',
           providerUserId: 'test_123',
-          username: 'testuser'
-        }
+          username: 'testuser',
+        },
         // Intentionally omitting x-api-key header
       });
 
@@ -43,18 +43,18 @@ describe('API Key Authentication Middleware – integration', () => {
       expect(json.error).toHaveProperty('message');
     });
 
-    it('should return 403 when x-api-key is invalid', async () => {
+    it('should return 403 when x-api-key is invalid', async() => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
         headers: {
-          'x-api-key': 'invalid-api-key'
+          'x-api-key': 'invalid-api-key',
         },
         payload: {
           provider: 'telegram',
           providerUserId: 'test_123',
-          username: 'testuser'
-        }
+          username: 'testuser',
+        },
       });
 
       expect(res.statusCode).toBe(403);
@@ -65,18 +65,18 @@ describe('API Key Authentication Middleware – integration', () => {
       expect(json.error).toHaveProperty('message');
     });
 
-    it('should return 401 when x-api-key is empty', async () => {
+    it('should return 401 when x-api-key is empty', async() => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
         headers: {
-          'x-api-key': ''
+          'x-api-key': '',
         },
         payload: {
           provider: 'telegram',
           providerUserId: 'test_123',
-          username: 'testuser'
-        }
+          username: 'testuser',
+        },
       });
 
       expect(res.statusCode).toBe(401); // Empty key is treated as missing
@@ -84,20 +84,20 @@ describe('API Key Authentication Middleware – integration', () => {
       expect(json).toHaveProperty('error');
     });
 
-    it('should allow request when x-api-key is valid', async () => {
+    it('should allow request when x-api-key is valid', async() => {
       const validKey = createTestApiKey();
 
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
         headers: {
-          'x-api-key': validKey
+          'x-api-key': validKey,
         },
         payload: {
           provider: 'telegram',
           providerUserId: `test_${Date.now()}_${Math.random()}`,
-          username: `testuser_${Date.now()}_${Math.random()}`
-        }
+          username: `testuser_${Date.now()}_${Math.random()}`,
+        },
       });
 
       // Should not return 401 or 403 (auth errors)
@@ -109,20 +109,20 @@ describe('API Key Authentication Middleware – integration', () => {
   });
 
   describe('Case sensitivity', () => {
-    it('should accept x-api-key in lowercase', async () => {
+    it('should accept x-api-key in lowercase', async() => {
       const validKey = createTestApiKey();
 
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
         headers: {
-          'x-api-key': validKey
+          'x-api-key': validKey,
         },
         payload: {
           provider: 'telegram',
           providerUserId: `test_${Date.now()}_${Math.random()}`,
-          username: `testuser_${Date.now()}_${Math.random()}`
-        }
+          username: `testuser_${Date.now()}_${Math.random()}`,
+        },
       });
 
       expect([200, 400]).toContain(res.statusCode);
@@ -130,20 +130,20 @@ describe('API Key Authentication Middleware – integration', () => {
       expect(res.statusCode).not.toBe(403);
     });
 
-    it('should accept X-Api-Key in title case', async () => {
+    it('should accept X-Api-Key in title case', async() => {
       const validKey = createTestApiKey();
 
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
         headers: {
-          'X-Api-Key': validKey
+          'X-Api-Key': validKey,
         },
         payload: {
           provider: 'telegram',
           providerUserId: `test_${Date.now()}_${Math.random()}`,
-          username: `testuser_${Date.now()}_${Math.random()}`
-        }
+          username: `testuser_${Date.now()}_${Math.random()}`,
+        },
       });
 
       expect([200, 400]).toContain(res.statusCode);
@@ -151,20 +151,20 @@ describe('API Key Authentication Middleware – integration', () => {
       expect(res.statusCode).not.toBe(403);
     });
 
-    it('should accept X-API-KEY in uppercase', async () => {
+    it('should accept X-API-KEY in uppercase', async() => {
       const validKey = createTestApiKey();
 
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
         headers: {
-          'X-API-KEY': validKey
+          'X-API-KEY': validKey,
         },
         payload: {
           provider: 'telegram',
           providerUserId: `test_${Date.now()}_${Math.random()}`,
-          username: `testuser_${Date.now()}_${Math.random()}`
-        }
+          username: `testuser_${Date.now()}_${Math.random()}`,
+        },
       });
 
       expect([200, 400]).toContain(res.statusCode);
@@ -181,7 +181,7 @@ describe('API Key Authentication Middleware – integration', () => {
     ];
 
     endpoints.forEach(({ method, url }) => {
-      it(`should protect ${method} ${url} endpoint`, async () => {
+      it(`should protect ${method} ${url} endpoint`, async() => {
         const res = await app.inject({
           method,
           url,
@@ -189,8 +189,8 @@ describe('API Key Authentication Middleware – integration', () => {
             provider: 'telegram',
             providerUserId: `test_${Date.now()}_${Math.random()}`,
             userId: 'test-user',
-            message: 'test message'
-          } : undefined
+            message: 'test message',
+          } : undefined,
         });
 
         // Should require authentication
@@ -216,15 +216,15 @@ describe('API Key Authentication Middleware – integration', () => {
     ];
 
     publicEndpoints.forEach(({ method, url }) => {
-      it(`should allow ${method} ${url} without api key`, async () => {
+      it(`should allow ${method} ${url} without api key`, async() => {
         const res = await app.inject({
           method,
           url,
           payload: method === 'POST' ? {
             message: 'test',
             userId: 'test-user',
-            mockParsedData: {}
-          } : undefined
+            mockParsedData: {},
+          } : undefined,
         });
 
         // Should not return auth errors
@@ -235,10 +235,10 @@ describe('API Key Authentication Middleware – integration', () => {
   });
 
   describe('OPTIONS requests (CORS preflight)', () => {
-    it('should allow OPTIONS requests without api key', async () => {
+    it('should allow OPTIONS requests without api key', async() => {
       const res = await app.inject({
         method: 'OPTIONS',
-        url: '/api/user'
+        url: '/api/user',
       });
 
       // OPTIONS should not require auth
@@ -246,13 +246,13 @@ describe('API Key Authentication Middleware – integration', () => {
       expect(res.statusCode).not.toBe(403);
     });
 
-    it('should handle OPTIONS for all API endpoints', async () => {
+    it('should handle OPTIONS for all API endpoints', async() => {
       const endpoints = ['/api/user', '/api/chat'];
 
       for (const url of endpoints) {
         const res = await app.inject({
           method: 'OPTIONS',
-          url
+          url,
         });
 
         expect(res.statusCode).not.toBe(401);

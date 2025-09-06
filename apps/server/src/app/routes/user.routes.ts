@@ -26,7 +26,7 @@ export async function registerUserRoutes(app: FastifyInstance) {
         403: z.object({ error: z.object({ message: z.string() }) }),
       },
     },
-  }, async (req, reply) => {
+  }, async(req, reply) => {
     const container = Container.getInstance();
     const service = container.get<UserService>(TOKENS.USER_SERVICE);
     const user = await service.upsertUser(req.body as any);
@@ -45,14 +45,13 @@ export async function registerUserRoutes(app: FastifyInstance) {
         404: z.object({ error: z.object({ message: z.string() }) }),
       },
     },
-  }, async (req, reply) => {
+  }, async(req, reply) => {
     const container = Container.getInstance();
     const service = container.get<UserService>(TOKENS.USER_SERVICE);
     const { id } = (req.params as any);
     const user = await service.getUser(id);
-    if (!user) return reply.code(404).send({ error: { message: 'User not found' } });
+    if (!user) {return reply.code(404).send({ error: { message: 'User not found' } });}
     return reply.send({ data: { id: user.id } });
   });
 }
-
 

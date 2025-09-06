@@ -8,7 +8,7 @@ type UserRow = typeof users.$inferSelect;
  * Helper function to safely convert gender to the expected type
  */
 function safeGenderCast(gender: string | null): 'male' | 'female' | null {
-  if (!gender) return null;
+  if (!gender) {return null;}
   return gender === 'male' || gender === 'female' ? gender : null;
 }
 
@@ -28,7 +28,7 @@ function mapRowToUser(row: UserRow): User {
     gender: safeGenderCast(row.gender),
     height: row.height ?? null,
     weight: row.weight ?? null,
-    fitnessGoal: row.fitnessGoal ?? null
+    fitnessGoal: row.fitnessGoal ?? null,
   };
 }
 
@@ -63,10 +63,10 @@ function createUserData(input: CreateUserInput) {
     profileStatus: 'incomplete',
     fitnessLevel: null,
     // Set provided values
-    username: input.username || null,
-    firstName: input.firstName || null,
-    lastName: input.lastName || null,
-    languageCode: input.languageCode || null,
+    username: input.username ?? null,
+    firstName: input.firstName ?? null,
+    lastName: input.lastName ?? null,
+    languageCode: input.languageCode ?? null,
   };
 }
 
@@ -81,7 +81,7 @@ function createUpdateData(updates: Partial<User>): Record<string, any> {
 
   const updateableFields: (keyof User)[] = [
     'profileStatus', 'fitnessLevel', 'age', 'gender',
-    'height', 'weight', 'fitnessGoal'
+    'height', 'weight', 'fitnessGoal',
   ];
 
   updateableFields.forEach(field => {
@@ -103,11 +103,11 @@ export class DrizzleUserRepository implements UserRepository {
       .from(userAccounts)
       .where(and(
         eq(userAccounts.provider, provider),
-        eq(userAccounts.providerUserId, providerUserId)
+        eq(userAccounts.providerUserId, providerUserId),
       ))
       .limit(1);
 
-    if (!accountRows[0]) return null;
+    if (!accountRows[0]) {return null;}
 
     const userRows = await db
       .select()
@@ -115,7 +115,7 @@ export class DrizzleUserRepository implements UserRepository {
       .where(eq(users.id, accountRows[0].userId))
       .limit(1);
 
-    if (!userRows[0]) return null;
+    if (!userRows[0]) {return null;}
 
     return mapRowToUser(userRows[0]);
   }
@@ -135,22 +135,22 @@ export class DrizzleUserRepository implements UserRepository {
       .values({
         userId: insertedUser.id,
         provider: data.provider,
-        providerUserId: data.providerUserId
+        providerUserId: data.providerUserId,
       });
 
     return {
       id: insertedUser.id,
-      username: data.username || null,
-      firstName: data.firstName || null,
-      lastName: data.lastName || null,
-      languageCode: data.languageCode || null,
+      username: data.username ?? null,
+      firstName: data.firstName ?? null,
+      lastName: data.lastName ?? null,
+      languageCode: data.languageCode ?? null,
       profileStatus: 'incomplete',
       fitnessLevel: null,
       age: null,
       gender: null,
       height: null,
       weight: null,
-      fitnessGoal: null
+      fitnessGoal: null,
     };
   }
 
@@ -163,7 +163,7 @@ export class DrizzleUserRepository implements UserRepository {
       .where(eq(users.id, id))
       .limit(1);
 
-    if (!rows[0]) return null;
+    if (!rows[0]) {return null;}
 
     return mapRowToUser(rows[0]);
   }
@@ -186,10 +186,9 @@ export class DrizzleUserRepository implements UserRepository {
       .where(eq(users.id, id))
       .returning();
 
-    if (result.length === 0) return null;
+    if (result.length === 0) {return null;}
 
     return mapRowToUser(result[0]);
   }
 }
-
 

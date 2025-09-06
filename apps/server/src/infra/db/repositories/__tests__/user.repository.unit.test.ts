@@ -15,13 +15,13 @@ const mockDb = {
 
 // Mock the drizzle module
 jest.mock('@infra/db/drizzle', () => ({
-  db: mockDb
+  db: mockDb,
 }));
 
 // Mock the schema
 jest.mock('@infra/db/schema', () => ({
   users: 'users_table_mock',
-  userAccounts: 'user_accounts_table_mock'
+  userAccounts: 'user_accounts_table_mock',
 }));
 
 describe('DrizzleUserRepository – repository unit', () => {
@@ -38,11 +38,11 @@ describe('DrizzleUserRepository – repository unit', () => {
     mockDb.insert
       .mockReturnValueOnce({
         values: jest.fn().mockReturnValue({
-          returning: jest.fn().mockResolvedValue([{ id: 'test-user-uuid' }])
-        })
+          returning: jest.fn().mockResolvedValue([{ id: 'test-user-uuid' }]),
+        }),
       })
       .mockReturnValueOnce({
-        values: jest.fn().mockResolvedValue(undefined)
+        values: jest.fn().mockResolvedValue(undefined),
       });
 
     mockDb.update.mockReturnValue({
@@ -61,10 +61,10 @@ describe('DrizzleUserRepository – repository unit', () => {
             lastName: null,
             username: null,
             languageCode: null,
-            updatedAt: new Date()
-          }])
-        })
-      })
+            updatedAt: new Date(),
+          }]),
+        }),
+      }),
     });
 
     mockDb.select.mockReturnValue({
@@ -82,15 +82,15 @@ describe('DrizzleUserRepository – repository unit', () => {
             firstName: null,
             lastName: null,
             username: null,
-            languageCode: null
-          }])
-        })
-      })
+            languageCode: null,
+          }]),
+        }),
+      }),
     });
   });
 
   describe('updateProfileData - Unit Test', () => {
-    it('should call database update with correct parameters', async () => {
+    it('should call database update with correct parameters', async() => {
       const userId = 'test-user-123';
       const profileData = {
         age: 30,
@@ -99,7 +99,7 @@ describe('DrizzleUserRepository – repository unit', () => {
         weight: 80,
         fitnessLevel: 'advanced' as const,
         fitnessGoal: 'build muscle',
-        profileStatus: 'complete'
+        profileStatus: 'complete',
       };
 
       const result = await repository.updateProfileData(userId, profileData);
@@ -117,18 +117,18 @@ describe('DrizzleUserRepository – repository unit', () => {
         gender: 'male',
         height: 180,
         weight: 80,
-        fitnessGoal: 'build muscle'
+        fitnessGoal: 'build muscle',
       });
 
       expect(result).toBeDefined();
       expect(result!.age).toBe(25); // From mock data
     });
 
-    it('should handle partial updates correctly', async () => {
+    it('should handle partial updates correctly', async() => {
       const userId = 'test-user-123';
       const partialData = {
         age: 35,
-        fitnessGoal: 'maintain fitness'
+        fitnessGoal: 'maintain fitness',
       };
 
       const result = await repository.updateProfileData(userId, partialData);
@@ -137,21 +137,21 @@ describe('DrizzleUserRepository – repository unit', () => {
       expect(updateCall.set).toHaveBeenCalledWith({
         updatedAt: expect.any(Date),
         age: 35,
-        fitnessGoal: 'maintain fitness'
+        fitnessGoal: 'maintain fitness',
         // Other fields should not be included
       });
 
       expect(result).toBeDefined();
     });
 
-    it('should return null when database returns empty result', async () => {
+    it('should return null when database returns empty result', async() => {
       // Mock empty result
       mockDb.update.mockReturnValue({
         set: jest.fn().mockReturnValue({
           where: jest.fn().mockReturnValue({
-            returning: jest.fn().mockResolvedValue([])
-          })
-        })
+            returning: jest.fn().mockResolvedValue([]),
+          }),
+        }),
       });
 
       const result = await repository.updateProfileData('non-existent', { age: 25 });
@@ -159,24 +159,24 @@ describe('DrizzleUserRepository – repository unit', () => {
       expect(result).toBeNull();
     });
 
-    it('should include updatedAt in all updates', async () => {
+    it('should include updatedAt in all updates', async() => {
       const userId = 'test-user-123';
       const profileData = { fitnessLevel: 'beginner' as const };
 
       await repository.updateProfileData(userId, profileData);
 
       const updateCall = mockDb.update.mock.results[0].value;
-      const setCall = updateCall.set.mock.calls[0][0];
+      const [[setCall]] = updateCall.set.mock.calls;
 
       expect(setCall.updatedAt).toBeInstanceOf(Date);
     });
 
-    it('should handle null values for clearing fields', async () => {
+    it('should handle null values for clearing fields', async() => {
       const userId = 'test-user-123';
       const clearData = {
         age: null,  // Clear age
         gender: null,  // Clear gender
-        height: 175  // Update height
+        height: 175,  // Update height
       };
 
       const result = await repository.updateProfileData(userId, clearData);
@@ -186,11 +186,11 @@ describe('DrizzleUserRepository – repository unit', () => {
         updatedAt: expect.any(Date),
         age: null,
         gender: null,
-        height: 175
+        height: 175,
       });
     });
 
-    it('should skip update when no profile fields provided', async () => {
+    it('should skip update when no profile fields provided', async() => {
       const userId = 'test-user-123';
       const emptyData = {}; // No fields to update
 
@@ -202,10 +202,10 @@ describe('DrizzleUserRepository – repository unit', () => {
       expect(result!.id).toBe('test-user-uuid');
     });
 
-    it('should update single field in complete profile', async () => {
+    it('should update single field in complete profile', async() => {
       const userId = 'test-user-123';
       const singleFieldUpdate = {
-        age: 30  // Update only age, leave other fields unchanged
+        age: 30,  // Update only age, leave other fields unchanged
       };
 
       const result = await repository.updateProfileData(userId, singleFieldUpdate);
@@ -213,7 +213,7 @@ describe('DrizzleUserRepository – repository unit', () => {
       const updateCall = mockDb.update.mock.results[0].value;
       expect(updateCall.set).toHaveBeenCalledWith({
         updatedAt: expect.any(Date),
-        age: 30
+        age: 30,
         // Only age should be updated, other fields remain unchanged
       });
 
@@ -223,7 +223,7 @@ describe('DrizzleUserRepository – repository unit', () => {
       expect(result!.height).toBe(165); // Unchanged
     });
 
-    it('should update multiple fields selectively', async () => {
+    it('should update multiple fields selectively', async() => {
       const userId = 'test-user-123';
       const selectiveUpdate = {
         age: 40,
@@ -237,7 +237,7 @@ describe('DrizzleUserRepository – repository unit', () => {
       expect(updateCall.set).toHaveBeenCalledWith({
         updatedAt: expect.any(Date),
         age: 40,
-        fitnessGoal: 'build muscle'
+        fitnessGoal: 'build muscle',
         // Only specified fields are updated
       });
 
@@ -246,13 +246,13 @@ describe('DrizzleUserRepository – repository unit', () => {
   });
 
   describe('create - Unit Test', () => {
-    it('should create user with minimal required data', async () => {
+    it('should create user with minimal required data', async() => {
       const userData = {
         provider: 'telegram',
         providerUserId: 'tg123',
         username: 'testuser',
         firstName: 'Test',
-        lastName: 'User'
+        lastName: 'User',
       };
 
       const result = await repository.create(userData);
@@ -280,16 +280,16 @@ describe('DrizzleUserRepository – repository unit', () => {
         lastName: 'User',
         languageCode: null,
         profileStatus: 'incomplete',
-        fitnessLevel: null
+        fitnessLevel: null,
       });
 
       expect(result.id).toBe('test-user-uuid');
     });
 
-    it('should handle undefined optional fields', async () => {
+    it('should handle undefined optional fields', async() => {
       const userData = {
         provider: 'telegram',
-        providerUserId: 'tg123'
+        providerUserId: 'tg123',
         // No optional fields
       };
 
@@ -314,13 +314,13 @@ describe('DrizzleUserRepository – repository unit', () => {
         lastName: null,
         languageCode: null,
         profileStatus: 'incomplete',
-        fitnessLevel: null
+        fitnessLevel: null,
       });
     });
   });
 
   describe('getById - Unit Test', () => {
-    it('should return user data correctly formatted', async () => {
+    it('should return user data correctly formatted', async() => {
       const userId = 'test-user-123';
 
       const result = await repository.getById(userId);
@@ -338,17 +338,17 @@ describe('DrizzleUserRepository – repository unit', () => {
         firstName: null,
         lastName: null,
         username: null,
-        languageCode: null
+        languageCode: null,
       });
     });
 
-    it('should return null when user not found', async () => {
+    it('should return null when user not found', async() => {
       mockDb.select.mockReturnValue({
         from: jest.fn().mockReturnValue({
           where: jest.fn().mockReturnValue({
-            limit: jest.fn().mockResolvedValue([])
-          })
-        })
+            limit: jest.fn().mockResolvedValue([]),
+          }),
+        }),
       });
 
       const result = await repository.getById('non-existent');

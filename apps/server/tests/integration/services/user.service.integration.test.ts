@@ -15,16 +15,16 @@ describe('UserService – integration', () => {
   let userService: UserService;
   let repository: DrizzleUserRepository;
 
-  beforeAll(async () => {
+  beforeAll(async() => {
     repository = new DrizzleUserRepository();
     userService = new UserService(repository);
   });
 
   describe('updateProfileData - real database operations', () => {
-    it('should update user profile data in real database', async () => {
+    it('should update user profile data in real database', async() => {
       // Arrange: Create a real user in database
       const userData = createTestUserData({
-        username: 'profile_update_test'
+        username: 'profile_update_test',
       });
 
       const createdUser = await repository.create(userData);
@@ -33,7 +33,7 @@ describe('UserService – integration', () => {
       const updateData = {
         age: 30,
         height: 180,
-        fitnessLevel: 'intermediate' as const
+        fitnessLevel: 'intermediate' as const,
       };
 
       const updatedUser = await userService.updateProfileData(createdUser.id, updateData);
@@ -50,7 +50,7 @@ describe('UserService – integration', () => {
       expect(fetchedUser!.height).toBe(180);
     });
 
-    it('should return null when updating non-existent user', async () => {
+    it('should return null when updating non-existent user', async() => {
       // Arrange: Use non-existent user ID
       const nonExistentId = '00000000-0000-0000-0000-000000000000';
 
@@ -61,10 +61,10 @@ describe('UserService – integration', () => {
       expect(result).toBeNull();
     });
 
-    it('should handle empty profile data updates', async () => {
+    it('should handle empty profile data updates', async() => {
       // Arrange: Create real user with initial profile data
       const userData = createTestUserData({
-        username: 'empty_update_test'
+        username: 'empty_update_test',
       });
 
       const createdUser = await repository.create(userData);
@@ -74,7 +74,7 @@ describe('UserService – integration', () => {
         age: 25,
         gender: 'male',
         height: 170,
-        weight: 70
+        weight: 70,
       });
 
       // Act: Update with empty data (should not change anything)
@@ -89,10 +89,10 @@ describe('UserService – integration', () => {
       expect(result!.weight).toBe(70); // Original weight should remain
     });
 
-    it('should handle partial profile updates correctly', async () => {
+    it('should handle partial profile updates correctly', async() => {
       // Arrange: Create user with basic data
       const userData = createTestUserData({
-        username: 'partial_update_test'
+        username: 'partial_update_test',
       });
 
       const createdUser = await repository.create(userData);
@@ -102,7 +102,7 @@ describe('UserService – integration', () => {
         age: 25,
         gender: 'male',
         height: 170,
-        weight: 70
+        weight: 70,
       });
 
       // Act: Update only height
@@ -118,12 +118,12 @@ describe('UserService – integration', () => {
   });
 
   describe('getUser - real database operations', () => {
-    it('should retrieve user from real database', async () => {
+    it('should retrieve user from real database', async() => {
       // Arrange: Create real user
       const userData = createTestUserData({
         username: 'get_user_test',
         firstName: 'John',
-        lastName: 'Doe'
+        lastName: 'Doe',
       });
 
       const createdUser = await repository.create(userData);
@@ -132,7 +132,7 @@ describe('UserService – integration', () => {
       await userService.updateProfileData(createdUser.id, {
         age: 28,
         gender: 'male',
-        height: 175
+        height: 175,
       });
 
       // Act
@@ -149,7 +149,7 @@ describe('UserService – integration', () => {
       expect(retrievedUser!.height).toBe(175);
     });
 
-    it('should return null when user does not exist', async () => {
+    it('should return null when user does not exist', async() => {
       // Arrange: Use non-existent ID
       const nonExistentId = '99999999-9999-9999-9999-999999999999';
 
@@ -162,12 +162,12 @@ describe('UserService – integration', () => {
   });
 
   describe('upsertUser - real database operations', () => {
-    it('should return existing user if found by provider', async () => {
+    it('should return existing user if found by provider', async() => {
       // Arrange: Create user first
       const userData = createTestUserData({
         provider: 'telegram',
         providerUserId: 'upsert_existing_123',
-        username: 'upsert_existing_test'
+        username: 'upsert_existing_test',
       });
 
       await repository.create(userData);
@@ -175,22 +175,22 @@ describe('UserService – integration', () => {
       // Act: Try to upsert same provider/providerUserId
       const upsertData = {
         provider: 'telegram' as const,
-        providerUserId: 'upsert_existing_123'
+        providerUserId: 'upsert_existing_123',
       };
 
       const result = await userService.upsertUser(upsertData);
 
       // Assert: Should return existing user, not create new
       expect(result).toBeTruthy();
-      expect(result!.username).toBe('upsert_existing_test');
+      expect(result.username).toBe('upsert_existing_test');
     });
 
-    it('should create new user if not found by provider', async () => {
+    it('should create new user if not found by provider', async() => {
       // Arrange: Use unique provider data
       const upsertData = {
         provider: 'telegram' as const,
         providerUserId: `upsert_new_${Date.now()}_${Math.random()}`,
-        username: `new_upsert_test_${Date.now()}`
+        username: `new_upsert_test_${Date.now()}`,
       };
 
       // Act
@@ -198,26 +198,26 @@ describe('UserService – integration', () => {
 
       // Assert: Should create and return new user
       expect(result).toBeTruthy();
-      expect(result!.username).toBe(upsertData.username);
+      expect(result.username).toBe(upsertData.username);
 
       // Verify it was actually saved to database
-      const fetchedUser = await userService.getUser(result!.id);
+      const fetchedUser = await userService.getUser(result.id);
       expect(fetchedUser).toBeTruthy();
       expect(fetchedUser!.username).toBe(upsertData.username);
     });
 
-    it('should handle multiple providers correctly', async () => {
+    it('should handle multiple providers correctly', async() => {
       // Arrange: Create users with different providers
       const telegramUser = createTestUserData({
         provider: 'telegram',
         providerUserId: `telegram_${Date.now()}`,
-        username: 'telegram_provider_test'
+        username: 'telegram_provider_test',
       });
 
       const discordUser = createTestUserData({
         provider: 'discord',
         providerUserId: `discord_${Date.now()}`,
-        username: 'discord_provider_test'
+        username: 'discord_provider_test',
       });
 
       await repository.create(telegramUser);
@@ -226,25 +226,25 @@ describe('UserService – integration', () => {
       // Act: Upsert should find correct user by provider
       const telegramResult = await userService.upsertUser({
         provider: 'telegram' as const,
-        providerUserId: telegramUser.providerUserId
+        providerUserId: telegramUser.providerUserId,
       });
 
       const discordResult = await userService.upsertUser({
         provider: 'discord' as const,
-        providerUserId: discordUser.providerUserId
+        providerUserId: discordUser.providerUserId,
       });
 
       // Assert: Should return correct users for each provider
-      expect(telegramResult!.username).toBe('telegram_provider_test');
-      expect(discordResult!.username).toBe('discord_provider_test');
+      expect(telegramResult.username).toBe('telegram_provider_test');
+      expect(discordResult.username).toBe('discord_provider_test');
     });
   });
 
   describe('service-repository integration', () => {
-    it('should handle complex workflow: create -> update -> retrieve', async () => {
+    it('should handle complex workflow: create -> update -> retrieve', async() => {
       // Arrange: Create user
       const userData = createTestUserData({
-        username: 'workflow_test'
+        username: 'workflow_test',
       });
 
       const createdUser = await repository.create(userData);
@@ -254,7 +254,7 @@ describe('UserService – integration', () => {
       const updatedUser = await userService.updateProfileData(createdUser.id, {
         age: 30,
         gender: 'female' as const,
-        profileStatus: 'complete' as const
+        profileStatus: 'complete' as const,
       });
 
       // Assert: Changes persisted
@@ -269,10 +269,10 @@ describe('UserService – integration', () => {
       expect(freshUser!.profileStatus).toBe('complete');
     });
 
-    it('should handle concurrent operations correctly', async () => {
+    it('should handle concurrent operations correctly', async() => {
       // Arrange: Create user
       const userData = createTestUserData({
-        username: 'concurrent_test'
+        username: 'concurrent_test',
       });
 
       const createdUser = await repository.create(userData);

@@ -5,7 +5,7 @@ import { ProfileParserService } from '../profile-parser.service';
  * Tests pure validation logic without external dependencies
  */
 describe('ProfileParserService – JSON validation unit', () => {
-  let parserService: ProfileParserService;
+  let _parserService: ProfileParserService;
 
   beforeEach(() => {
     // Create service instance for testing pure logic
@@ -13,12 +13,12 @@ describe('ProfileParserService – JSON validation unit', () => {
     // This is a compromise for testing private methods
     const mockPromptMessages = [
       { role: 'system', content: 'System prompt' },
-      { role: 'user', content: 'User message' }
+      { role: 'user', content: 'User message' },
     ];
 
-    parserService = new ProfileParserService(
-      { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue(mockPromptMessages) } as any,
-      { generateResponse: jest.fn() } as any
+    _parserService = new ProfileParserService(
+      { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue(mockPromptMessages) } as unknown,
+      { generateResponse: jest.fn() } as unknown,
     );
   });
 
@@ -33,8 +33,8 @@ describe('ProfileParserService – JSON validation unit', () => {
           height: 175,
           weight: 75,
           fitnessLevel: 'intermediate',
-          fitnessGoal: 'lose weight'
-        }
+          fitnessGoal: 'lose weight',
+        },
       },
       {
         name: 'JSON with null values',
@@ -45,8 +45,8 @@ describe('ProfileParserService – JSON validation unit', () => {
           height: undefined,
           weight: 65,
           fitnessLevel: 'beginner',
-          fitnessGoal: undefined
-        }
+          fitnessGoal: undefined,
+        },
       },
       {
         name: 'JSON with invalid data types',
@@ -57,8 +57,8 @@ describe('ProfileParserService – JSON validation unit', () => {
           height: 170,
           weight: 70,
           fitnessLevel: 'intermediate',
-          fitnessGoal: 'run'
-        }
+          fitnessGoal: 'run',
+        },
       },
       {
         name: 'JSON with out of range values',
@@ -69,8 +69,8 @@ describe('ProfileParserService – JSON validation unit', () => {
           height: undefined, // Height < 120 should be undefined
           weight: undefined, // Weight > 200 should be undefined
           fitnessLevel: undefined, // Invalid fitness level
-          fitnessGoal: 'fly' // Valid string
-        }
+          fitnessGoal: 'fly', // Valid string
+        },
       },
       {
         name: 'Empty JSON response',
@@ -81,8 +81,8 @@ describe('ProfileParserService – JSON validation unit', () => {
           height: undefined,
           weight: undefined,
           fitnessLevel: undefined,
-          fitnessGoal: undefined
-        }
+          fitnessGoal: undefined,
+        },
       },
       {
         name: 'Partial valid data',
@@ -93,20 +93,20 @@ describe('ProfileParserService – JSON validation unit', () => {
           height: 165,
           weight: undefined,
           fitnessLevel: undefined,
-          fitnessGoal: 'maintain health'
-        }
-      }
+          fitnessGoal: 'maintain health',
+        },
+      },
     ];
 
     testCases.forEach(({ name, jsonResponse, expected }) => {
-      it(`should validate ${name}`, async () => {
+      it(`should validate ${name}`, async() => {
         // Arrange
         const mockLLMService = {
-          generateResponse: jest.fn().mockResolvedValue(jsonResponse)
+          generateResponse: jest.fn().mockResolvedValue(jsonResponse),
         };
         const testService = new ProfileParserService(
           { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
-          mockLLMService as any
+          mockLLMService as any,
         );
 
         // Act
@@ -119,14 +119,14 @@ describe('ProfileParserService – JSON validation unit', () => {
   });
 
   describe('Error Handling', () => {
-    it('should handle malformed JSON', async () => {
+    it('should handle malformed JSON', async() => {
       // Arrange
       const mockLLMService = {
-        generateResponse: jest.fn().mockResolvedValue('{invalid json')
+        generateResponse: jest.fn().mockResolvedValue('{invalid json'),
       };
       const testService = new ProfileParserService(
         { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
-        mockLLMService as any
+        mockLLMService as any,
       );
 
       // Act
@@ -139,18 +139,18 @@ describe('ProfileParserService – JSON validation unit', () => {
         height: undefined,
         weight: undefined,
         fitnessLevel: undefined,
-        fitnessGoal: undefined
+        fitnessGoal: undefined,
       });
     });
 
-    it('should handle LLM service errors', async () => {
+    it('should handle LLM service errors', async() => {
       // Arrange
       const mockLLMService = {
-        generateResponse: jest.fn().mockRejectedValue(new Error('LLM service failed'))
+        generateResponse: jest.fn().mockRejectedValue(new Error('LLM service failed')),
       };
       const testService = new ProfileParserService(
         { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
-        mockLLMService as any
+        mockLLMService as any,
       );
 
       // Act
@@ -163,18 +163,18 @@ describe('ProfileParserService – JSON validation unit', () => {
         height: undefined,
         weight: undefined,
         fitnessLevel: undefined,
-        fitnessGoal: undefined
+        fitnessGoal: undefined,
       });
     });
 
-    it('should handle empty response', async () => {
+    it('should handle empty response', async() => {
       // Arrange
       const mockLLMService = {
-        generateResponse: jest.fn().mockResolvedValue('')
+        generateResponse: jest.fn().mockResolvedValue(''),
       };
       const testService = new ProfileParserService(
         { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
-        mockLLMService as any
+        mockLLMService as any,
       );
 
       // Act
@@ -187,7 +187,7 @@ describe('ProfileParserService – JSON validation unit', () => {
         height: undefined,
         weight: undefined,
         fitnessLevel: undefined,
-        fitnessGoal: undefined
+        fitnessGoal: undefined,
       });
     });
   });
@@ -197,44 +197,46 @@ describe('ProfileParserService – JSON validation unit', () => {
       {
         name: 'Valid integer age',
         json: '{"age": 25, "gender": null, "height": null, "weight": null, "fitnessLevel": null, "fitnessGoal": null}',
-        expectedAge: 25
+        expectedAge: 25,
       },
       {
         name: 'Valid string gender',
         json: '{"age": null, "gender": "female", "height": null, "weight": null, "fitnessLevel": null, "fitnessGoal": null}',
-        expectedGender: 'female'
+        expectedGender: 'female',
       },
       {
         name: 'Valid fitness level enum',
         json: '{"age": null, "gender": null, "height": null, "weight": null, "fitnessLevel": "advanced", "fitnessGoal": null}',
-        expectedFitnessLevel: 'advanced'
+        expectedFitnessLevel: 'advanced',
       },
       {
         name: 'Valid string fitness goal',
         json: '{"age": null, "gender": null, "height": null, "weight": null, "fitnessLevel": null, "fitnessGoal": "build muscle"}',
-        expectedFitnessGoal: 'build muscle'
-      }
+        expectedFitnessGoal: 'build muscle',
+      },
     ];
 
-    validationTestCases.forEach(({ name, json, expectedAge, expectedGender, expectedFitnessLevel, expectedFitnessGoal }) => {
-      it(`should validate ${name}`, async () => {
+    validationTestCases.forEach(({ 
+      name, json, expectedAge, expectedGender, expectedFitnessLevel, expectedFitnessGoal, 
+    }) => {
+      it(`should validate ${name}`, async() => {
         // Arrange
         const mockLLMService = {
-          generateResponse: jest.fn().mockResolvedValue(json)
+          generateResponse: jest.fn().mockResolvedValue(json),
         };
         const testService = new ProfileParserService(
           { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
-          mockLLMService as any
+          mockLLMService as any,
         );
 
         // Act
         const result = await testService.parseProfileData({ id: 'test-user' } as any, 'test message');
 
         // Assert
-        if (expectedAge !== undefined) expect(result.age).toBe(expectedAge);
-        if (expectedGender !== undefined) expect(result.gender).toBe(expectedGender);
-        if (expectedFitnessLevel !== undefined) expect(result.fitnessLevel).toBe(expectedFitnessLevel);
-        if (expectedFitnessGoal !== undefined) expect(result.fitnessGoal).toBe(expectedFitnessGoal);
+        if (expectedAge !== undefined) {expect(result.age).toBe(expectedAge);}
+        if (expectedGender !== undefined) {expect(result.gender).toBe(expectedGender);}
+        if (expectedFitnessLevel !== undefined) {expect(result.fitnessLevel).toBe(expectedFitnessLevel);}
+        if (expectedFitnessGoal !== undefined) {expect(result.fitnessGoal).toBe(expectedFitnessGoal);}
       });
     });
   });

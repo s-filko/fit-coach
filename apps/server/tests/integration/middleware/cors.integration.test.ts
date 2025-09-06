@@ -9,20 +9,20 @@ import { buildServer } from '../../../src/app/server';
 describe('CORS Middleware – integration', () => {
   let app: ReturnType<typeof buildServer>;
 
-  beforeAll(async () => {
+  beforeAll(async() => {
     app = buildServer();
     await app.ready();
   });
 
-  afterAll(async () => {
+  afterAll(async() => {
     await app.close();
   });
 
   describe('CORS headers', () => {
-    it('should handle requests without CORS headers when not configured', async () => {
+    it('should handle requests without CORS headers when not configured', async() => {
       const res = await app.inject({
         method: 'GET',
-        url: '/health'
+        url: '/health',
       });
 
       // CORS may not be configured - this is acceptable for internal API
@@ -30,10 +30,10 @@ describe('CORS Middleware – integration', () => {
       // Headers may or may not include CORS - depends on configuration
     });
 
-    it('should allow requests from any origin when CORS is configured', async () => {
+    it('should allow requests from any origin when CORS is configured', async() => {
       const res = await app.inject({
         method: 'GET',
-        url: '/health'
+        url: '/health',
       });
 
       // If CORS headers are present, they should allow all origins
@@ -44,13 +44,13 @@ describe('CORS Middleware – integration', () => {
   });
 
   describe('OPTIONS preflight requests', () => {
-    it('should handle OPTIONS requests appropriately', async () => {
+    it('should handle OPTIONS requests appropriately', async() => {
       const endpoints = ['/api/user', '/api/chat'];
 
       for (const url of endpoints) {
         const res = await app.inject({
           method: 'OPTIONS',
-          url
+          url,
         });
 
         // OPTIONS should be handled - may return various status codes
@@ -58,10 +58,10 @@ describe('CORS Middleware – integration', () => {
       }
     });
 
-    it('should include CORS headers in OPTIONS responses when configured', async () => {
+    it('should include CORS headers in OPTIONS responses when configured', async() => {
       const res = await app.inject({
         method: 'OPTIONS',
-        url: '/api/user'
+        url: '/api/user',
       });
 
       // CORS headers may or may not be present depending on configuration
@@ -71,10 +71,10 @@ describe('CORS Middleware – integration', () => {
       }
     });
 
-    it('should allow common HTTP methods when CORS is configured', async () => {
+    it('should allow common HTTP methods when CORS is configured', async() => {
       const res = await app.inject({
         method: 'OPTIONS',
-        url: '/api/user'
+        url: '/api/user',
       });
 
       const allowedMethods = res.headers['access-control-allow-methods'];
@@ -86,10 +86,10 @@ describe('CORS Middleware – integration', () => {
       }
     });
 
-    it('should allow common headers when CORS is configured', async () => {
+    it('should allow common headers when CORS is configured', async() => {
       const res = await app.inject({
         method: 'OPTIONS',
-        url: '/api/user'
+        url: '/api/user',
       });
 
       const allowedHeaders = res.headers['access-control-allow-headers'];
@@ -103,34 +103,34 @@ describe('CORS Middleware – integration', () => {
   });
 
   describe('CORS for different response types', () => {
-    it('should handle successful responses appropriately', async () => {
+    it('should handle successful responses appropriately', async() => {
       const res = await app.inject({
         method: 'GET',
-        url: '/health'
+        url: '/health',
       });
 
       expect(res.statusCode).toBe(200);
       // CORS headers may or may not be present
     });
 
-    it('should handle error responses appropriately', async () => {
+    it('should handle error responses appropriately', async() => {
       const res = await app.inject({
         method: 'GET',
-        url: '/nonexistent-endpoint'
+        url: '/nonexistent-endpoint',
       });
 
       expect(res.statusCode).toBe(404);
       // CORS headers may or may not be present
     });
 
-    it('should handle validation error responses appropriately', async () => {
+    it('should handle validation error responses appropriately', async() => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
         headers: {
-          'x-api-key': 'test-api-key-for-validation'
+          'x-api-key': 'test-api-key-for-validation',
         },
-        payload: {} // Invalid payload
+        payload: {}, // Invalid payload
       });
 
       expect(res.statusCode).toBe(400);
@@ -139,12 +139,12 @@ describe('CORS Middleware – integration', () => {
   });
 
   describe('CORS configuration consistency', () => {
-    it('should have consistent behavior across all endpoints', async () => {
+    it('should have consistent behavior across all endpoints', async() => {
       const endpoints = [
         '/health',
         '/docs/json',
         '/api/user',
-        '/api/chat'
+        '/api/chat',
       ];
 
       const responses: any[] = [];
@@ -152,13 +152,13 @@ describe('CORS Middleware – integration', () => {
       for (const url of endpoints) {
         const res = await app.inject({
           method: 'OPTIONS',
-          url
+          url,
         });
 
         responses.push({
           url,
           status: res.statusCode,
-          hasCors: !!res.headers['access-control-allow-origin']
+          hasCors: !!res.headers['access-control-allow-origin'],
         });
       }
 

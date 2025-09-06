@@ -23,8 +23,8 @@ export async function registerChatRoutes(app: FastifyInstance) {
           data: z.object({
             content: z.string(),
             timestamp: z.string(),
-            registrationComplete: z.boolean().optional()
-          })
+            registrationComplete: z.boolean().optional(),
+          }),
         }),
         400: z.object({ error: z.object({ message: z.string() }) }),
         401: z.object({ error: z.object({ message: z.string() }) }),
@@ -33,7 +33,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
         500: z.object({ error: z.object({ message: z.string() }) }),
       },
     },
-  }, async (req, reply) => {
+  }, async(req, reply) => {
     try {
       const container = Container.getInstance();
       const userService = container.get<UserService>(TOKENS.USER_SERVICE);
@@ -46,7 +46,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
       const user = await userService.getUser(userId);
       if (!user) {
         return reply.code(404).send({
-          error: { message: 'User not found' }
+          error: { message: 'User not found' },
         });
       }
 
@@ -64,8 +64,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
       } else {
         // Registration incomplete - profile data collection mode
         const result = await registrationService.processUserMessage(user, message);
-        response = result.response;
-        updatedUser = result.updatedUser;
+        ({ response, updatedUser } = result);
 
         // Save user profile changes
         console.log('Chat route: Checking if user needs update');
@@ -84,7 +83,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
           height: updatedUser.height,
           weight: updatedUser.weight,
           fitnessLevel: updatedUser.fitnessLevel,
-          fitnessGoal: updatedUser.fitnessGoal
+          fitnessGoal: updatedUser.fitnessGoal,
         });
 
         console.log('Chat route: Update result:', updateResult);
@@ -94,14 +93,14 @@ export async function registerChatRoutes(app: FastifyInstance) {
         data: {
           content: response,
           timestamp: new Date().toISOString(),
-          registrationComplete: userService.isRegistrationComplete(updatedUser)
-        }
+          registrationComplete: userService.isRegistrationComplete(updatedUser),
+        },
       });
     } catch (error) {
       console.error('Chat error:', error);
       console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
       return reply.code(500).send({
-        error: { message: 'Processing failed', details: error instanceof Error ? error.message : String(error) }
+        error: { message: 'Processing failed', details: error instanceof Error ? error.message : String(error) },
       });
     }
   });
@@ -121,14 +120,14 @@ export async function registerChatRoutes(app: FastifyInstance) {
           500: z.object({ error: z.object({ message: z.string() }) }),
         },
       },
-    }, async (req, reply) => {
+    }, async(req, reply) => {
       try {
         const container = Container.getInstance();
         const llmService = container.get<ILLMService>(TOKENS.LLM);
 
         if (typeof (llmService as any).getDebugInfo !== 'function') {
           return reply.code(500).send({
-            error: { message: 'Debug info not available' }
+            error: { message: 'Debug info not available' },
           });
         }
 
@@ -141,7 +140,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
       } catch (error) {
         console.error('Debug error:', error);
         return reply.code(500).send({
-          error: { message: 'Failed to get debug info' }
+          error: { message: 'Failed to get debug info' },
         });
       }
     });
@@ -159,7 +158,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
           500: z.object({ error: z.object({ message: z.string() }) }),
         },
       },
-    }, async (req, reply) => {
+    }, async(req, reply) => {
       try {
         const container = Container.getInstance();
         const llmService = container.get<ILLMService>(TOKENS.LLM);
@@ -175,7 +174,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
       } catch (error) {
         console.error('Clear debug error:', error);
         return reply.code(500).send({
-          error: { message: 'Failed to clear debug history' }
+          error: { message: 'Failed to clear debug history' },
         });
       }
     });

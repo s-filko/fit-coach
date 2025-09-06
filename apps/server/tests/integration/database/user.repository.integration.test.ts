@@ -10,7 +10,7 @@ describe('DrizzleUserRepository – integration', () => {
   let repository: DrizzleUserRepository;
   let tx: any; // Transaction context for test isolation
 
-  beforeAll(async () => {
+  beforeAll(async() => {
     repository = new DrizzleUserRepository();
   });
 
@@ -18,13 +18,13 @@ describe('DrizzleUserRepository – integration', () => {
   // to avoid complex transaction setup with Drizzle ORM in tests
 
   describe('create', () => {
-    it('should create user with correct data structure and return valid user object', async () => {
+    it('should create user with correct data structure and return valid user object', async() => {
       // Arrange
       const userData = createTestUserData({
         username: 'testuser_create',
         firstName: 'Test',
         lastName: 'User',
-        languageCode: 'en'
+        languageCode: 'en',
       });
 
       // Act
@@ -42,15 +42,15 @@ describe('DrizzleUserRepository – integration', () => {
       expect(result).toHaveProperty('id');
     });
 
-    it('should create users with different providers independently', async () => {
+    it('should create users with different providers independently', async() => {
       // Arrange
       const userData1 = createTestUserData({
         provider: 'telegram',
-        username: 'telegram_user'
+        username: 'telegram_user',
       });
       const userData2 = createTestUserData({
         provider: 'discord',
-        username: 'discord_user'
+        username: 'discord_user',
       });
 
       // Act
@@ -65,12 +65,12 @@ describe('DrizzleUserRepository – integration', () => {
   });
 
   describe('updateProfileData', () => {
-    it('should update user profile data and return updated user object', async () => {
+    it('should update user profile data and return updated user object', async() => {
       // Arrange
       const createData = createTestUserData({
         username: 'testuser_update',
         firstName: 'Test',
-        lastName: 'User'
+        lastName: 'User',
       });
       const user = await repository.create(createData);
 
@@ -80,7 +80,7 @@ describe('DrizzleUserRepository – integration', () => {
         height: 175,
         weight: 75,
         fitnessLevel: 'intermediate' as const,
-        fitnessGoal: 'lose weight'
+        fitnessGoal: 'lose weight',
       };
 
       // Act
@@ -98,7 +98,7 @@ describe('DrizzleUserRepository – integration', () => {
       expect(result!.profileStatus).toBe('incomplete'); // Profile data updated but not complete yet
     });
 
-    it('should return null when updating non-existent user', async () => {
+    it('should return null when updating non-existent user', async() => {
       // Arrange
       const nonExistentId = '00000000-0000-0000-0000-000000000000';
       const profileData = {
@@ -107,7 +107,7 @@ describe('DrizzleUserRepository – integration', () => {
         height: 160,
         weight: 55,
         fitnessLevel: 'beginner' as const,
-        fitnessGoal: 'gain muscle'
+        fitnessGoal: 'gain muscle',
       };
 
       // Act
@@ -117,17 +117,17 @@ describe('DrizzleUserRepository – integration', () => {
       expect(result).toBeNull();
     });
 
-    it('should handle partial profile updates', async () => {
+    it('should handle partial profile updates', async() => {
       // Arrange
       const createData = createTestUserData({
-        username: 'testuser_partial'
+        username: 'testuser_partial',
       });
       const user = await repository.create(createData);
 
       // Only update some fields
       const partialProfileData = {
         age: 30,
-        height: 180
+        height: 180,
       };
 
       // Act
@@ -144,10 +144,10 @@ describe('DrizzleUserRepository – integration', () => {
   });
 
   describe('getById', () => {
-    it('should retrieve user by ID when user exists', async () => {
+    it('should retrieve user by ID when user exists', async() => {
       // Arrange
       const createData = createTestUserData({
-        username: 'testuser_getbyid'
+        username: 'testuser_getbyid',
       });
       const createdUser = await repository.create(createData);
 
@@ -160,7 +160,7 @@ describe('DrizzleUserRepository – integration', () => {
       expect(result!.username).toBe('testuser_getbyid');
     });
 
-    it('should return null when user does not exist', async () => {
+    it('should return null when user does not exist', async() => {
       // Arrange
       const nonExistentId = '00000000-0000-0000-0000-000000000000';
 
@@ -173,11 +173,11 @@ describe('DrizzleUserRepository – integration', () => {
   });
 
   describe('findByProvider', () => {
-    it('should find user by provider and providerUserId', async () => {
+    it('should find user by provider and providerUserId', async() => {
       // Arrange
       const createData = createTestUserData({
         provider: 'telegram',
-        username: 'testuser_findbyprovider'
+        username: 'testuser_findbyprovider',
       });
       const createdUser = await repository.create(createData);
 
@@ -190,7 +190,7 @@ describe('DrizzleUserRepository – integration', () => {
       expect(result!.username).toBe('testuser_findbyprovider');
     });
 
-    it('should return null when provider account does not exist', async () => {
+    it('should return null when provider account does not exist', async() => {
       // Act
       const result = await repository.findByProvider('telegram', 'nonexistent_user_id');
 
@@ -198,15 +198,15 @@ describe('DrizzleUserRepository – integration', () => {
       expect(result).toBeNull();
     });
 
-    it('should handle different providers correctly', async () => {
+    it('should handle different providers correctly', async() => {
       // Arrange
       const telegramData = createTestUserData({
         provider: 'telegram',
-        username: 'telegram_find'
+        username: 'telegram_find',
       });
       const discordData = createTestUserData({
         provider: 'discord',
-        username: 'discord_find'
+        username: 'discord_find',
       });
 
       const telegramUser = await repository.create(telegramData);

@@ -20,7 +20,7 @@ export class RegistrationService implements IRegistrationService {
     private readonly profileParser: IProfileParserService,
     private readonly userService: any, // Will be injected via DI
     private readonly promptService: IPromptService,
-    private readonly llmService: ILLMService
+    private readonly llmService: ILLMService,
   ) {}
 
   async processUserMessage(user: User, message: string): Promise<{
@@ -33,7 +33,7 @@ export class RegistrationService implements IRegistrationService {
     console.log('Registration service: User status:', user);
     console.log('Registration service: Message:', message);
 
-    const currentStep = user.profileStatus || 'incomplete';
+    const currentStep = user.profileStatus ?? 'incomplete';
     console.log('Registration service: Current step:', currentStep);
 
     const parsedData = await this.profileParser.parseProfileData(user, message);
@@ -65,7 +65,7 @@ export class RegistrationService implements IRegistrationService {
         return {
           updatedUser: user,
           response: USER_MESSAGES.PROFILE_COMPLETE,
-          isComplete: true
+          isComplete: true,
         };
 
       default:
@@ -85,7 +85,7 @@ export class RegistrationService implements IRegistrationService {
     // Update user status
     const updatedUser = {
       ...user,
-      profileStatus: newStatus
+      profileStatus: newStatus,
     };
 
     // Generate AI response based on current state
@@ -96,7 +96,7 @@ export class RegistrationService implements IRegistrationService {
       updatedUser,
       response,
       isComplete: false,
-      parsedData
+      parsedData,
     };
   }
 
@@ -111,28 +111,28 @@ export class RegistrationService implements IRegistrationService {
     // Update user with any available data
     const updatedUser = {
       ...user,
-      age: parsedData.age || user.age,
-      gender: parsedData.gender || user.gender,
-      height: parsedData.height || user.height,
-      weight: parsedData.weight || user.weight
+      age: parsedData.age ?? user.age,
+      gender: parsedData.gender ?? user.gender,
+      height: parsedData.height ?? user.height,
+      weight: parsedData.weight ?? user.weight,
     };
 
     console.log('Registration handleBasicInfo: Original user:', {
       id: user.id,
       gender: user.gender,
       age: user.age,
-      profileStatus: user.profileStatus
+      profileStatus: user.profileStatus,
     });
     console.log('Registration handleBasicInfo: Parsed data:', parsedData);
     console.log('Registration handleBasicInfo: Updated user:', {
       id: updatedUser.id,
       gender: updatedUser.gender,
       age: updatedUser.age,
-      profileStatus: updatedUser.profileStatus
+      profileStatus: updatedUser.profileStatus,
     });
 
     // Check if we have enough data to proceed to next step
-    const hasAnyData = parsedData.age || parsedData.gender || parsedData.height || parsedData.weight;
+    const hasAnyData = parsedData.age ?? parsedData.gender ?? parsedData.height ?? parsedData.weight;
     const hasAllData = updatedUser.age && updatedUser.gender && updatedUser.height && updatedUser.weight;
 
     // Use the AI response from profile parser (which already contains the proper AI-generated response)
@@ -144,29 +144,29 @@ export class RegistrationService implements IRegistrationService {
       const newStatus = 'collecting_level';
       const finalUser = {
         ...updatedUser,
-        profileStatus: newStatus
+        profileStatus: newStatus,
       };
 
       response = this.promptService.buildBasicInfoSuccessMessage(
         updatedUser.age!,
         updatedUser.gender!,
         updatedUser.height!,
-        updatedUser.weight!
+        updatedUser.weight!,
       );
 
       return {
         updatedUser: finalUser,
         response,
         isComplete: false,
-        parsedData
+        parsedData,
       };
     } else if (hasAnyData) {
       // Some data collected, acknowledge and ask for missing data
       const missing = [];
-      if (!updatedUser.age) missing.push('age');
-      if (!updatedUser.gender) missing.push('gender');
-      if (!updatedUser.height) missing.push('height');
-      if (!updatedUser.weight) missing.push('weight');
+      if (!updatedUser.age) {missing.push('age');}
+      if (!updatedUser.gender) {missing.push('gender');}
+      if (!updatedUser.height) {missing.push('height');}
+      if (!updatedUser.weight) {missing.push('weight');}
 
       response = `Thanks for the information I've collected so far. I still need: ${missing.join(', ')}.
 
@@ -180,7 +180,7 @@ Please provide the missing information:
         updatedUser,
         response,
         isComplete: false,
-        parsedData
+        parsedData,
       };
     } else {
       // No data found, ask again
@@ -190,7 +190,7 @@ Please provide the missing information:
         updatedUser: user,
         response,
         isComplete: false,
-        parsedData
+        parsedData,
       };
     }
   }
@@ -212,21 +212,21 @@ Please provide the missing information:
       const updatedUser = {
         ...user,
         profileStatus: newStatus,
-        fitnessLevel: parsedData.fitnessLevel
+        fitnessLevel: parsedData.fitnessLevel,
       };
 
       return {
         updatedUser,
         response,
         isComplete: false,
-        parsedData
+        parsedData,
       };
     } else {
       return {
         updatedUser: user,
         response,
         isComplete: false,
-        parsedData
+        parsedData,
       };
     }
   }
@@ -246,7 +246,7 @@ Please provide the missing information:
     // Update user with any available goal data
     const updatedUser = {
       ...user,
-      fitnessGoal: parsedData.fitnessGoal || user.fitnessGoal
+      fitnessGoal: parsedData.fitnessGoal ?? user.fitnessGoal,
     };
 
     if (parsedData.fitnessGoal) {
@@ -254,21 +254,21 @@ Please provide the missing information:
       const newStatus = 'confirmation';
       const finalUser = {
         ...updatedUser,
-        profileStatus: newStatus
+        profileStatus: newStatus,
       };
 
       return {
         updatedUser: finalUser,
         response,
         isComplete: false,
-        parsedData
+        parsedData,
       };
     } else {
       return {
         updatedUser: user,
         response,
         isComplete: false,
-        parsedData
+        parsedData,
       };
     }
   }
@@ -286,13 +286,14 @@ Please provide the missing information:
     const response = await this.llmService.generateResponse(chatMessage, true);
 
     // Check if profile is complete before allowing confirmation
-    const hasAllRequiredData = user.age && user.gender && user.height && user.weight && user.fitnessLevel && user.fitnessGoal;
+    const hasAllRequiredData = user.age && user.gender && user.height && 
+      user.weight && user.fitnessLevel && user.fitnessGoal;
 
     if (!hasAllRequiredData) {
       return {
         updatedUser: user,
         response,
-        isComplete: false
+        isComplete: false,
       };
     }
 
@@ -303,13 +304,13 @@ Please provide the missing information:
       const newStatus = 'complete';
       const updatedUser = {
         ...user,
-        profileStatus: newStatus
+        profileStatus: newStatus,
       };
 
       return {
         updatedUser,
         response,
-        isComplete: true
+        isComplete: true,
       };
     } else if (normalizedMessage.includes('edit') || normalizedMessage.includes('change') ||
                normalizedMessage.includes('исправить') || normalizedMessage.includes('изменить')) {
@@ -317,7 +318,7 @@ Please provide the missing information:
       const newStatus = 'collecting_basic';
       const updatedUser = {
         ...user,
-        profileStatus: newStatus
+        profileStatus: newStatus,
       };
 
       const response = this.promptService.buildProfileResetMessage();
@@ -325,7 +326,7 @@ Please provide the missing information:
       return {
         updatedUser,
         response,
-        isComplete: false
+        isComplete: false,
       };
     } else {
       const response = this.promptService.buildConfirmationNeededMessage();
@@ -333,13 +334,13 @@ Please provide the missing information:
       return {
         updatedUser: user,
         response,
-        isComplete: false
+        isComplete: false,
       };
     }
   }
 
   getRegistrationPrompt(user: User): string {
-    const currentStep = user.profileStatus || 'incomplete';
+    const currentStep = user.profileStatus ?? 'incomplete';
 
     switch (currentStep) {
       case 'incomplete':
@@ -378,8 +379,6 @@ Please provide the missing information:
     );
   }
 
-
-
   /**
    * Example of using universal parser for flexible data extraction
    */
@@ -390,55 +389,55 @@ Please provide the missing information:
         key: 'age',
         description: 'User age in years',
         type: 'number',
-        validation: { min: 10, max: 100 }
+        validation: { min: 10, max: 100 },
       },
       {
         key: 'gender',
         description: 'User gender',
         type: 'enum',
-        enumValues: ['male', 'female']
+        enumValues: ['male', 'female'],
       },
       {
         key: 'height',
         description: 'Height in centimeters',
         type: 'number',
-        validation: { min: 120, max: 220 }
+        validation: { min: 120, max: 220 },
       },
       {
         key: 'weight',
         description: 'Weight in kilograms',
         type: 'number',
-        validation: { min: 30, max: 200 }
+        validation: { min: 30, max: 200 },
       },
       {
         key: 'fitnessLevel',
         description: 'Fitness experience level',
         type: 'enum',
-        enumValues: ['beginner', 'intermediate', 'advanced']
+        enumValues: ['beginner', 'intermediate', 'advanced'],
       },
       {
         key: 'preferredTime',
         description: 'Preferred workout time of day',
         type: 'enum',
-        enumValues: ['morning', 'afternoon', 'evening']
+        enumValues: ['morning', 'afternoon', 'evening'],
       },
       {
         key: 'hasEquipment',
         description: 'Whether user has access to gym equipment',
-        type: 'boolean'
+        type: 'boolean',
       },
       {
         key: 'experience',
         description: 'Years of training experience',
         type: 'number',
-        validation: { min: 0, max: 50 }
-      }
+        validation: { min: 0, max: 50 },
+      },
     ];
 
     // Create universal parsing request
     const request: UniversalParseRequest = {
       text,
-      fields
+      fields,
     };
 
     // Parse using universal method
