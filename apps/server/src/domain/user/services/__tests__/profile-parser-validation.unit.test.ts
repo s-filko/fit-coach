@@ -1,4 +1,6 @@
 import { ProfileParserService } from '../profile-parser.service';
+import type { PromptService } from '../prompt.service';
+import type { LLMService } from '@infra/ai/llm.service';
 
 /**
  * ProfileParserService JSON Validation Unit Tests
@@ -17,8 +19,8 @@ describe('ProfileParserService – JSON validation unit', () => {
     ];
 
     _parserService = new ProfileParserService(
-      { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue(mockPromptMessages) } as unknown,
-      { generateResponse: jest.fn() } as unknown,
+      { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue(mockPromptMessages) } as unknown as PromptService,
+      { generateResponse: jest.fn() } as unknown as LLMService,
     );
   });
 
