@@ -52,7 +52,6 @@ describe('RegistrationService Integration', () => {
 
     registrationService = new RegistrationService(
       mockParser as any,
-      mockUserService as any,
       mockPromptService as any,
       { generateResponse: jest.fn().mockResolvedValue('Mock AI response') } as any,
     );

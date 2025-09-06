@@ -64,7 +64,6 @@ describe('Data Saving Integration Test', () => {
     );
     registrationService = new RegistrationService(
       parserService,
-      userService as any,
       {
         buildWelcomeMessage: jest.fn(),
         buildBasicInfoSuccessMessage: jest.fn(

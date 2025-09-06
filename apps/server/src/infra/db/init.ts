@@ -18,20 +18,11 @@ export async function ensureSchema(): Promise<void> {
 
     if (!tablesExist) {
       // Tables don't exist, apply migrations
-      console.log('Applying database migrations...');
       const { exec } = await import('child_process');
       const { promisify } = await import('util');
       const execAsync = promisify(exec);
 
-      try {
-        await execAsync('npx drizzle-kit migrate');
-        console.log('Migrations applied successfully');
-      } catch (error) {
-        console.error('Migration failed:', error);
-        throw error;
-      }
-    } else {
-      console.log('Database tables already exist, skipping migrations');
+      await execAsync('npx drizzle-kit migrate');
     }
   } finally {
     client.release();

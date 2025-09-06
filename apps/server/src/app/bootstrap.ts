@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import { FastifyInstance } from 'fastify';
 import { buildServer } from '@app/server';
 import { loadConfig } from '@infra/config';
 import { Container } from '@infra/di/container';
@@ -12,12 +13,12 @@ import { PromptService } from '@domain/user/services/prompt.service';
 import { RegistrationService } from '@domain/user/services/registration.service';
 import { LLMService } from '@infra/ai/llm.service';
 
-export async function bootstrap() {
+export async function bootstrap(): Promise<void> {
   const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env';
   dotenv.config({ path: path.resolve(process.cwd(), envFile) });
   const config = loadConfig();
 
-  const app = buildServer();
+  const app: FastifyInstance = buildServer();
 
   // DI registration (MVP, in-memory)
   const c = Container.getInstance();
@@ -35,7 +36,6 @@ export async function bootstrap() {
     c =>
       new RegistrationService(
         c.get(TOKENS.PROFILE_PARSER),
-        c.get(TOKENS.USER_SERVICE),
         c.get(TOKENS.PROMPT_SERVICE),
         c.get(TOKENS.LLM),
       ),

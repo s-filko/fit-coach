@@ -12,7 +12,7 @@ const chatMessageBody = z.object({
   message: z.string().min(1).describe('User message'),
 }).describe('Chat message payload');
 
-export async function registerChatRoutes(app: FastifyInstance) {
+export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/chat', {
     schema: {
       summary: 'Send chat message to AI',
@@ -52,11 +52,6 @@ export async function registerChatRoutes(app: FastifyInstance) {
 
       let response: string;
       let updatedUser = user;
-
-      console.log('Chat route: User found:', user.id, 'Status:', user.profileStatus);
-      console.log('Chat route: Message:', message);
-      console.log('Chat route: Is registration complete:', userService.isRegistrationComplete(user));
-
       // Check registration status
       if (userService.isRegistrationComplete(user)) {
         // Registration complete - normal chat mode
@@ -67,16 +62,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
         ({ response, updatedUser } = result);
 
         // Save user profile changes
-        console.log('Chat route: Checking if user needs update');
-        console.log('Chat route: User status:', user.profileStatus);
-        console.log('Chat route: Updated user status:', updatedUser.profileStatus);
-        console.log('Chat route: User gender:', user.gender);
-        console.log('Chat route: Updated user gender:', updatedUser.gender);
-
-        console.log('Chat route: About to save user data');
-        console.log('Chat route: Updated user object:', JSON.stringify(updatedUser, null, 2));
-
-        const updateResult = await userService.updateProfileData(userId, {
+        await userService.updateProfileData(userId, {
           profileStatus: updatedUser.profileStatus,
           age: updatedUser.age,
           gender: updatedUser.gender,
@@ -86,7 +72,6 @@ export async function registerChatRoutes(app: FastifyInstance) {
           fitnessGoal: updatedUser.fitnessGoal,
         });
 
-        console.log('Chat route: Update result:', updateResult);
       }
 
       return reply.send({
@@ -97,8 +82,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
         },
       });
     } catch (error) {
-      console.error('Chat error:', error);
-      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
+      req.log.error({ err: error }, 'Chat processing failed');
       return reply.code(500).send({
         error: { message: 'Processing failed', details: error instanceof Error ? error.message : String(error) },
       });
@@ -132,7 +116,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
           timestamp: new Date().toISOString(),
         });
       } catch (error) {
-        console.error('Debug error:', error);
+        req.log.error({ err: error }, 'Failed to get debug info');
         return reply.code(500).send({
           error: { message: 'Failed to get debug info' },
         });
@@ -164,7 +148,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
           timestamp: new Date().toISOString(),
         });
       } catch (error) {
-        console.error('Clear debug error:', error);
+        req.log.error({ err: error }, 'Failed to clear debug history');
         return reply.code(500).send({
           error: { message: 'Failed to clear debug history' },
         });

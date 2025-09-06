@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { AppError } from '@shared/errors';
 
-export function registerErrorHandler(app: FastifyInstance) {
+export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((err, _req, reply) => {
     // Handle Fastify validation errors
     if (err.statusCode === 400 || err.code === 'FST_ERR_VALIDATION') {

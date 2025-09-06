@@ -77,7 +77,7 @@ export function mergeProfileData(user: User, profileData: ParsedProfileData): Us
 }
 
 // Clean user data for API response (remove sensitive fields)
-export function userToApiResponse(user: User) {
+export function userToApiResponse(user: User): User {
   const { ...safeUser } = user;
   // Add any field filtering logic here if needed
   return safeUser;

@@ -79,7 +79,6 @@ export class LLMService implements ILLMService {
     this.isDebugMode = this.config.LLM_DEBUG ?? false;
 
     // Initialize logging
-    console.log(`LLM Service initialized: model=${modelName}, temperature=${temperature}, debug=${this.isDebugMode}`);
   }
 
   setPromptService(promptService: IPromptService): void {
@@ -165,7 +164,6 @@ export class LLMService implements ILLMService {
       return content;
     } catch (error) {
       this.metrics.totalErrors++;
-      console.error('Error generating AI response:', error);
 
       // Log error if debug mode
       if (this.isDebugMode) {
@@ -256,7 +254,6 @@ export class LLMService implements ILLMService {
       return content;
     } catch (error) {
       this.metrics.totalErrors++;
-      console.error('Error generating registration response:', error);
 
       // Log error if debug mode
       if (this.isDebugMode) {
@@ -299,21 +296,15 @@ export class LLMService implements ILLMService {
 
   enableDebugMode(): void {
     this.isDebugMode = true;
-    console.log('LLM debug mode enabled');
   }
 
   disableDebugMode(): void {
     this.isDebugMode = false;
-    console.log('LLM debug mode disabled');
   }
 
   clearHistory(): void {
-    const clearedRequests = this.requestHistory.length;
-    const clearedResponses = this.responseHistory.length;
     this.requestHistory = [];
     this.responseHistory = [];
-    
-    // Reset metrics
     this.metrics = {
       totalRequests: 0,
       totalErrors: 0,
@@ -321,7 +312,6 @@ export class LLMService implements ILLMService {
       totalProcessingTime: 0,
     };
 
-    console.log(`LLM debug history cleared: ${clearedRequests} requests, ${clearedResponses} responses`);
   }
 
   // Helper methods
@@ -346,26 +336,9 @@ export class LLMService implements ILLMService {
     }
   }
 
-  private logRequest(request: unknown): void {
-    const req = request as Record<string, unknown>;
-    const type = req.isRegistration ? 'registration' : 'chat';
-    const messagePreview = (req.message as string).length > 100 ? 
-      (req.message as string).substring(0, 100) + '...' : 
-      String(req.message);
-    console.log(`LLM request [${String(req.id)}] ${type}: "${messagePreview}"`);
-  }
+  private logRequest(request: unknown): void { void request; }
 
-  private logResponse(response: unknown): void {
-    const resp = response as Record<string, unknown>;
-    const contentPreview = (resp.content as string).length > 100 ? 
-      (resp.content as string).substring(0, 100) + '...' : 
-      String(resp.content);
-    const tokens = resp.tokenUsage ? ` (${(resp.tokenUsage as { totalTokens?: number }).totalTokens} tokens)` : '';
-    console.log(`LLM response [${String(resp.id)}] ${String(resp.processingTime)}ms${tokens}: "${contentPreview}"`);
-  }
+  private logResponse(response: unknown): void { void response; }
 
-  private logError(error: unknown): void {
-    const err = error as Record<string, unknown>;
-    console.log(`LLM error [${String(err.requestId)}]: ${String(err.error)}`);
-  }
+  private logError(error: unknown): void { void error; }
 }

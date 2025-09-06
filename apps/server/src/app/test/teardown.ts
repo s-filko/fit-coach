@@ -1,3 +1,6 @@
+import pino from 'pino';
+
+const logger = pino({ level: 'error' });
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -23,7 +26,7 @@ async function loadTestEnv(): Promise<void> {
   dotenv.config({ path: envPath });
 }
 
-export default async function globalTeardown() {
+export default async function globalTeardown(): Promise<void> {
   await loadTestEnv();
 
   // Close database connection
@@ -33,8 +36,7 @@ export default async function globalTeardown() {
       await pool.end();
     }
   } catch (error) {
-    // Ignore errors if pool is not available
-    console.warn('Could not close database pool in teardown:', error);
+    logger.error({ err: error }, 'Test teardown: failed to close DB pool');
   }
 }
 

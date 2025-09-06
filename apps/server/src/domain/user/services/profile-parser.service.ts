@@ -106,25 +106,9 @@ export class ProfileParserService implements IProfileParserService {
       // After: 1 line using generic validation function
       const validatedResult = validateObjectFields<ParsedProfileData>(extractedData, fieldValidators);
 
-      // Log successful parsing
-      const extractedFields = Object.entries(validatedResult)
-        .filter(([_, value]) => value !== undefined)
-        .map(([key]) => key);
-
-      console.log('Profile data parsed successfully:', {
-        userId: user.id,
-        extractedFields,
-        totalFields: Object.keys(validatedResult).length,
-      });
-
+      // validatedResult is already filtered/validated above; no extra debug bookkeeping
       return validatedResult;
-    } catch (error) {
-      console.error('Profile parsing error:', {
-        error: error instanceof Error ? error.message : String(error),
-        userId: user.id,
-        inputText: text,
-        filteredFields: Object.keys(promptDataConfig),
-      });
+    } catch {
       // Return empty object on error
       return {};
     }
@@ -158,12 +142,7 @@ export class ProfileParserService implements IProfileParserService {
       }
 
       return result;
-    } catch (error) {
-      console.error('Universal parsing error:', {
-        error: error instanceof Error ? error.message : String(error),
-        fieldCount: request.fields.length,
-        text: request.text.substring(0, 100) + '...',
-      });
+    } catch {
 
       // Return object with null values for all fields
       const result: UniversalParseResult = {};

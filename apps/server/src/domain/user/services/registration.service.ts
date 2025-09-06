@@ -1,4 +1,4 @@
-import { User, ParsedProfileData, UserService } from './user.service';
+import { User, ParsedProfileData } from './user.service';
 import { IProfileParserService } from './profile-parser.service';
 import { IPromptService, FieldDefinition, UniversalParseRequest, UniversalParseResult, ChatMsg } from './prompt.service';
 import { ILLMService } from '@infra/ai/llm.service';
@@ -18,7 +18,6 @@ export interface IRegistrationService {
 export class RegistrationService implements IRegistrationService {
   constructor(
     private readonly profileParser: IProfileParserService,
-    private readonly userService: UserService, // Will be injected via DI
     private readonly promptService: IPromptService,
     private readonly llmService: ILLMService,
   ) {}
@@ -29,15 +28,10 @@ export class RegistrationService implements IRegistrationService {
     isComplete: boolean;
     parsedData?: ParsedProfileData;
   }> {
-    console.log('Registration service: Starting processUserMessage');
-    console.log('Registration service: User status:', user);
-    console.log('Registration service: Message:', message);
 
     const currentStep = user.profileStatus ?? 'incomplete';
-    console.log('Registration service: Current step:', currentStep);
 
     const parsedData = await this.profileParser.parseProfileData(user, message);
-    console.log('Registration service: Parsed data:', parsedData, currentStep);
 
     // Process based on current step
     switch (currentStep) {
@@ -116,20 +110,6 @@ export class RegistrationService implements IRegistrationService {
       height: parsedData.height ?? user.height,
       weight: parsedData.weight ?? user.weight,
     };
-
-    console.log('Registration handleBasicInfo: Original user:', {
-      id: user.id,
-      gender: user.gender,
-      age: user.age,
-      profileStatus: user.profileStatus,
-    });
-    console.log('Registration handleBasicInfo: Parsed data:', parsedData);
-    console.log('Registration handleBasicInfo: Updated user:', {
-      id: updatedUser.id,
-      gender: updatedUser.gender,
-      age: updatedUser.age,
-      profileStatus: updatedUser.profileStatus,
-    });
 
     // Check if we have enough data to proceed to next step
     const hasAnyData = parsedData.age ?? parsedData.gender ?? parsedData.height ?? parsedData.weight;

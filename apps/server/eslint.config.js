@@ -24,20 +24,22 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
-          argsIgnorePattern: '^_',
-          varsIgnorePattern: '^_',
-          caughtErrorsIgnorePattern: '^_',
+          // Forbid underscore escape hatch in production code
+          argsIgnorePattern: '(^$)',
+          varsIgnorePattern: '(^$)',
+          caughtErrorsIgnorePattern: '(^$)',
           ignoreRestSiblings: true,
         },
       ],
       '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/explicit-function-return-type': 'off',
-      '@typescript-eslint/explicit-module-boundary-types': 'off',
+      '@typescript-eslint/explicit-function-return-type': 'warn',
+      '@typescript-eslint/explicit-module-boundary-types': 'warn',
       '@typescript-eslint/no-empty-function': 'off',
       
       // General code quality rules
-      'no-console': 'off', // Allow console.log for debugging
+      'no-console': 'error', // Disallow console.log in production code
       'no-debugger': 'error',
+      'no-empty': ['error', { allowEmptyCatch: false }],
       'prefer-const': 'error',
       'no-var': 'error',
       'object-shorthand': 'error',
@@ -118,6 +120,7 @@ export default tseslint.config(
       'max-lines-per-function': 'off',
       'complexity': 'off',
       'no-magic-numbers': 'off',
+      'no-console': 'off', // Allow console.log in tests
     },
   },
   {

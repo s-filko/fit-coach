@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import sensible from '@fastify/sensible';
 import swagger from '@fastify/swagger';
@@ -17,7 +17,7 @@ import { IProfileParserService } from '@domain/user/services/profile-parser.serv
 import { IRegistrationService } from '@domain/user/services/registration.service';
 import { ILLMService } from '@infra/ai/llm.service';
 
-export function buildServer() {
+export function buildServer(): FastifyInstance {
   const app = Fastify({
     logger: {
       level: 'info',
@@ -101,6 +101,7 @@ export function buildServer() {
       });
       return { success: true, user: { id: user.id, username: user.username } };
     } catch (error) {
+      app.log.error({ err: error }, 'User upsert failed');
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
@@ -115,6 +116,7 @@ export function buildServer() {
       const result = await parserService.parseProfileData({ id: 'test' } as User, message);
       return { success: true, parsed: result };
     } catch (error) {
+      req.log.error({ err: error }, 'Registration flow failed');
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
@@ -152,6 +154,7 @@ export function buildServer() {
         },
       };
     } catch (error) {
+      req.log.error({ err: error }, 'LLM response failed');
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
@@ -166,6 +169,7 @@ export function buildServer() {
       const result = await llmService.generateResponse([{ role: 'user', content: message }], false);
       return { success: true, response: result };
     } catch (error) {
+      req.log.error({ err: error }, 'Mock save failed');
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
@@ -193,6 +197,7 @@ export function buildServer() {
         isComplete: result.isComplete,
       };
     } catch (error) {
+      req.log.error({ err: error }, 'Direct profile save failed');
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
@@ -214,6 +219,7 @@ export function buildServer() {
 
       return { success: true, user: updatedUser };
     } catch (error) {
+      req.log.error({ err: error }, 'Mock parser JSON failed');
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });

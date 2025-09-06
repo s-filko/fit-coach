@@ -14,7 +14,7 @@ const createUserBody = z.object({
   languageCode: z.string().optional().describe('IETF language code, e.g. "en"'),
 }).describe('Create or upsert user payload');
 
-export async function registerUserRoutes(app: FastifyInstance) {
+export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/user', {
     schema: {
       summary: 'Create or get user by provider',

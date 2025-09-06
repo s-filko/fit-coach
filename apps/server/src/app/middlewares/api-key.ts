@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { loadConfig } from '@infra/config';
 
-export async function apiKeyPreHandler(req: FastifyRequest, reply: FastifyReply) {
+export async function apiKeyPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   if (!req.url.startsWith('/api/')) {return;}
   const provided = req.headers['x-api-key'];
   if (!provided || typeof provided !== 'string') {

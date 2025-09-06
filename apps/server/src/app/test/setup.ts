@@ -28,7 +28,7 @@ async function loadTestEnv(): Promise<void> {
   dotenv.config({ path: envPath });
 }
 
-export async function setupTestDI() {
+export async function setupTestDI(): Promise<void> {
   await loadTestEnv();
 
   // Create pool after env is loaded
