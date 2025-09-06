@@ -12,14 +12,14 @@ import { createTestApiKey } from '../../shared/test-factories';
  * - Clear separation of authentication concerns
  */
 describe('API Key Authentication Middleware – integration', () => {
-  let app: ReturnType<typeof buildServer>;
+  let app: Awaited<ReturnType<typeof buildServer>>;
 
   beforeAll(async() => {
     // Initialize container and register services
     const container = getGlobalContainer();
     await registerInfraServices(container);
     
-    app = buildServer(container);
+    app = await buildServer(container);
     await app.ready();
   });
 
@@ -181,7 +181,7 @@ describe('API Key Authentication Middleware – integration', () => {
   describe('Multiple endpoints protection', () => {
     const endpoints = [
       { method: 'POST' as const, url: '/api/user' },
-      { method: 'GET' as const, url: '/api/user/123' },
+      { method: 'GET' as const, url: '/api/user/550e8400-e29b-41d4-a716-446655440000' },
       { method: 'POST' as const, url: '/api/chat' },
     ];
 
@@ -193,7 +193,7 @@ describe('API Key Authentication Middleware – integration', () => {
           payload: method === 'POST' ? {
             provider: 'telegram',
             providerUserId: `test_${Date.now()}_${Math.random()}`,
-            userId: 'test-user',
+            userId: '550e8400-e29b-41d4-a716-446655440000',
             message: 'test message',
           } : undefined,
         });

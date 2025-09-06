@@ -7,11 +7,11 @@ import { buildServer } from '../../../src/app/server';
  * API endpoint tests. Consolidates validation error handling.
  */
 describe('Input Validation Middleware – integration', () => {
-  let app: ReturnType<typeof buildServer>;
+  let app: Awaited<ReturnType<typeof buildServer>>;
   const validApiKey = 'test-api-key-for-validation';
 
   beforeAll(async() => {
-    app = buildServer();
+    app = await buildServer();
     await app.ready();
   });
 

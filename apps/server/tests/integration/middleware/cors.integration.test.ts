@@ -7,10 +7,10 @@ import { buildServer } from '../../../src/app/server';
  * Consolidates all CORS-related test cases into a single, dedicated file.
  */
 describe('CORS Middleware – integration', () => {
-  let app: ReturnType<typeof buildServer>;
+  let app: Awaited<ReturnType<typeof buildServer>>;
 
   beforeAll(async() => {
-    app = buildServer();
+    app = await buildServer();
     await app.ready();
   });
 

@@ -32,12 +32,18 @@ export default async function globalTeardown(): Promise<void> {
 
   // Close database connection
   try {
-    const { pool } = await import('../../infra/db/drizzle');
-    if (pool) {
-      await pool.end();
+    if (process.env.RUN_DB_TESTS === '1') {
+      const { pool } = await import('@infra/db/drizzle');
+      if (pool) {
+        await pool.end();
+      }
     }
   } catch (error) {
     logger.error({ err: error }, 'Test teardown: failed to close DB pool');
   }
-}
 
+  // Force close any remaining handles
+  setTimeout(() => {
+    process.exit(0);
+  }, 1000);
+}

@@ -34,44 +34,50 @@ async function loadTestEnv(): Promise<void> {
 
 export async function setupTestDI(): Promise<void> {
   await loadTestEnv();
+  // Skip DB setup unless explicitly requested (integration/e2e)
+  if (process.env.RUN_DB_TESTS === '1') {
+    // Create pool after env is loaded
+    const { Pool } = await import('pg');
+    const pool = new Pool({
+      host: process.env.DB_HOST!,
+      user: process.env.DB_USER!,
+      password: process.env.DB_PASSWORD!,
+      database: process.env.DB_NAME!,
+      port: Number(process.env.DB_PORT),
+    });
 
-  // Create pool after env is loaded
-  const { Pool } = await import('pg');
-  const pool = new Pool({
-    host: process.env.DB_HOST!,
-    user: process.env.DB_USER!,
-    password: process.env.DB_PASSWORD!,
-    database: process.env.DB_NAME!,
-    port: Number(process.env.DB_PORT),
-  });
+    const client = await pool.connect();
+    try {
+      await client.query('drop schema if exists public cascade; create schema public;');
+    } finally {
+      client.release();
+    }
 
-  const client = await pool.connect();
-  try {
-    await client.query('drop schema if exists public cascade; create schema public;');
-  } finally {
-    client.release();
+    // Apply migrations (bootstrap schema)
+    const { readFile } = await import('fs/promises');
+    const path = await import('path');
+    const sqlPath = path.resolve(process.cwd(), 'drizzle/0000_familiar_stark_industries.sql');
+    const sql = await readFile(sqlPath, 'utf8');
+    const client2 = await pool.connect();
+    try {
+      await client2.query(sql);
+    } finally {
+      client2.release();
+    }
+
+    // Register services in test container
+    const c = Container.getInstance();
+    if (!c.has(USER_REPOSITORY_TOKEN)) {c.register(USER_REPOSITORY_TOKEN, new DrizzleUserRepository());}
+    if (!c.has(USER_SERVICE_TOKEN)) {
+      c.registerFactory(USER_SERVICE_TOKEN, (c) => new UserService(c.get(USER_REPOSITORY_TOKEN)));
+    }
+    if (!c.has(LLM_SERVICE_TOKEN)) {c.register(LLM_SERVICE_TOKEN, new LLMService());}
+
+    // Close the pool to avoid connection leaks
+    await pool.end();
   }
-
-  // Apply migrations
-  const { readFile } = await import('fs/promises');
-  const path = await import('path');
-  const sqlPath = path.resolve(process.cwd(), 'drizzle/0000_familiar_stark_industries.sql');
-  const sql = await readFile(sqlPath, 'utf8');
-  await client.query(sql);
-
-  // Register services
-  const c = Container.getInstance();
-  if (!c.has(USER_REPOSITORY_TOKEN)) {c.register(USER_REPOSITORY_TOKEN, new DrizzleUserRepository());}
-  if (!c.has(USER_SERVICE_TOKEN)) {
-    c.registerFactory(USER_SERVICE_TOKEN, (c) => new UserService(c.get(USER_REPOSITORY_TOKEN)));
-  }
-  if (!c.has(LLM_SERVICE_TOKEN)) {c.register(LLM_SERVICE_TOKEN, new LLMService());}
-
-  // Close the pool to avoid connection leaks
-  await pool.end();
 }
 
 beforeAll(async() => {
   await setupTestDI();
 });
-

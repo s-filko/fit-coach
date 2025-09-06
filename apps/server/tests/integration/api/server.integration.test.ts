@@ -7,10 +7,10 @@ import { getGlobalContainer } from '../../../src/main/register-infra-services';
  * Tests basic server functionality and API documentation
  */
 describe('Server Basic Functionality – integration', () => {
-  let app: ReturnType<typeof buildServer>;
+  let app: Awaited<ReturnType<typeof buildServer>>;
 
   beforeAll(async() => {
-    app = buildServer(getGlobalContainer());
+    app = await buildServer(getGlobalContainer());
     await app.ready();
   });
 

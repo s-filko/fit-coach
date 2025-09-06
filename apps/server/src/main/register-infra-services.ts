@@ -1,18 +1,22 @@
 import { Container } from '@infra/di/container';
 
 // Global container instance
-let _globalContainer: Container | null = null;
+let globalContainer: Container | null = null;
 
 export function getGlobalContainer(): Container {
-  _globalContainer ??= new Container();
-  return _globalContainer;
+  globalContainer ??= new Container();
+  return globalContainer;
 }
 
 /**
  * Registers all infrastructure service implementations in the DI container
  * This function should be called from the bootstrap process
  */
-export async function registerInfraServices(container: Container = getGlobalContainer()): Promise<void> {
+// eslint-disable-next-line max-lines-per-function
+export async function registerInfraServices(
+  container: Container = getGlobalContainer(),
+  opts?: { ensureDb?: boolean },
+): Promise<Container> {
   // Lazy load all dependencies to avoid circular imports and config loading issues
   const { ensureSchema } = await import('@infra/db/init');
   const { DrizzleUserRepository } = await import('@infra/db/repositories/user.repository');
@@ -30,11 +34,13 @@ export async function registerInfraServices(container: Container = getGlobalCont
     USER_SERVICE_TOKEN,
   } = await import('@domain/user/ports');
 
-  // Register database schema with error handling
-  try {
-    await ensureSchema();
-  } catch (err) {
-    throw new Error(`Failed to ensure database schema: ${err instanceof Error ? err.message : String(err)}`);
+  // Optionally ensure database schema with error handling (integration/dev only)
+  if (opts?.ensureDb) {
+    try {
+      await ensureSchema();
+    } catch (err) {
+      throw new Error(`Failed to ensure database schema: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   // Register infrastructure implementations
@@ -59,4 +65,6 @@ export async function registerInfraServices(container: Container = getGlobalCont
     llmService.setPromptService(c.get(PROMPT_SERVICE_TOKEN));
     return llmService;
   });
+
+  return container;
 }

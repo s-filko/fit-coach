@@ -95,7 +95,7 @@ export async function registerChatRoutes(app: FastifyInstance, container: IConta
 
   // Debug route for LLM service (only in development)
   if (loadConfig().NODE_ENV === 'development') {
-    app.get('/api/debug/llm', {
+    app.get('/debug/llm', {
       schema: {
         summary: 'Get LLM debug information',
         security: [{ ApiKeyAuth: [] }],
@@ -126,7 +126,7 @@ export async function registerChatRoutes(app: FastifyInstance, container: IConta
       }
     });
 
-    app.post('/api/debug/llm/clear', {
+    app.post('/debug/llm/clear', {
       schema: {
         summary: 'Clear LLM debug history',
         security: [{ ApiKeyAuth: [] }],

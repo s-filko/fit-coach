@@ -28,7 +28,8 @@ module.exports = {
   },
 
   // Coverage configuration
-  collectCoverage: true,
+  // Collect coverage only in explicit coverage runs
+  collectCoverage: false,
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
     '!src/**/*.d.ts',
@@ -64,6 +65,10 @@ module.exports = {
   // Test timeouts
   testTimeout: 30000, // 30 seconds for all tests
 
+  // Force Jest to exit after tests complete
+  forceExit: true,
+  detectOpenHandles: true,
+
   // Error handling
   bail: false, // Don't stop on first failure
   verbose: true,
@@ -78,4 +83,3 @@ module.exports = {
   // Module directories
   moduleDirectories: ['node_modules', 'src'],
 };
-

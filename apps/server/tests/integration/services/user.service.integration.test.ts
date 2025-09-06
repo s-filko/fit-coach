@@ -165,14 +165,14 @@ describe('UserService – integration', () => {
 
   describe('upsertUser - real database operations', () => {
     it('should return existing user if found by provider', async() => {
-      // Arrange: Create user first
-      const userData = createTestUserData({
-        provider: 'telegram',
+      // Arrange: Create user first using upsertUser
+      const userData = {
+        provider: 'telegram' as const,
         providerUserId: 'upsert_existing_123',
         username: 'upsert_existing_test',
-      });
+      };
 
-      await repository.create(userData);
+      const createdUser = await userService.upsertUser(userData);
 
       // Act: Try to upsert same provider/providerUserId
       const upsertData = {
@@ -184,6 +184,7 @@ describe('UserService – integration', () => {
 
       // Assert: Should return existing user, not create new
       expect(result).toBeTruthy();
+      expect(result.id).toBe(createdUser.id); // Same user ID
       expect(result.username).toBe('upsert_existing_test');
     });
 

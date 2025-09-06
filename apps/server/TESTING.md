@@ -65,11 +65,13 @@ describe('UserService', () => {
 ---
 
 ## 3) Environment and Configs
-- Only allowed env files: `.env.test.unit`, `.env.test.integration`, `.env.test.e2e`.  
+- Only allowed env files: `.env.test`, `.env.test.integration`, `.env.test.e2e`.  
 - NEVER use dev/prod env in tests.  
 - Unit: server MUST NOT be started.  
 - Integration: start via `buildServer()` and `fastify.inject`.  
 - E2E: run full app, preferably via `inject`.  
+- Aliases in Jest supported: `@app/*`, `@domain/*`, `@infra/*`, `@shared/*`, `@config/*`, `@main/*` (see `apps/server/jest.config.cjs`).  
+- Coverage в unit по умолчанию отключён; используйте `test:coverage*` скрипты для отчётов.  
 
 ---
 
@@ -197,12 +199,19 @@ it('should return unified error format', async () => {
   "scripts": {
     "test": "jest",
     "test:unit": "jest src --testMatch=\"**/__tests__/**/*.unit.test.ts\"",
-    "test:integration": "RUN_DB_TESTS=1 jest tests/integration",
+    "test:integration": "RUN_DB_TESTS=1 jest --testMatch=\"**/tests/integration/**/*.integration.test.ts\"",
     "test:e2e": "RUN_E2E=1 jest tests/e2e",
     "test:coverage": "jest --coverage"
   }
 }
 ```
+
+### Integration DB Setup
+- Для интеграционных тестов требуется поднятая БД (Postgres):
+  - `docker compose up -d db`
+  - `RUN_DB_TESTS=1 npm run test:integration`
+- Общий тестовый setup выполняет инициализацию схемы БД только при `RUN_DB_TESTS=1` (см. `src/app/test/setup.ts`).  
+- Teardown закрывает пул к БД только при `RUN_DB_TESTS=1` (см. `src/app/test/teardown.ts`).
 
 ---
 

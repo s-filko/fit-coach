@@ -1,23 +1,20 @@
-import path from 'path';
-
 import cors from '@fastify/cors';
 import sensible from '@fastify/sensible';
-import fastifyStatic from '@fastify/static';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import Fastify, { FastifyInstance } from 'fastify';
 import { jsonSchemaTransform, serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
 
-import { apiKeyPreHandler } from '@app/middlewares/api-key';
 import { registerErrorHandler } from '@app/middlewares/error';
+import chatRoutesPlugin from '@app/plugins/chat-routes.plugin';
 import { healthPlugin } from '@app/plugins/health.plugin';
+import securityPlugin from '@app/plugins/security.plugin';
 import { testPlugin } from '@app/plugins/test.plugin';
-import { registerChatRoutes } from '@app/routes/chat.routes';
-import { registerUserRoutes } from '@app/routes/user.routes';
+import userRoutesPlugin from '@app/plugins/user-routes.plugin';
 
 import { IContainer } from '@domain/ports/container.ports';
 
-export function buildServer(container?: IContainer): FastifyInstance {
+export async function buildServer(container?: IContainer): Promise<FastifyInstance> {
   const app = Fastify({
     logger: {
       level: 'info',
@@ -31,47 +28,7 @@ export function buildServer(container?: IContainer): FastifyInstance {
 
   app.register(cors, { origin: true });
   app.register(sensible);
-  app.register(swagger, {
-    mode: 'dynamic',
-    openapi: {
-      openapi: '3.0.3',
-      info: { title: 'Fit Coach API', version: '1.0.0' },
-      components: {
-        securitySchemes: {
-          ApiKeyAuth: {
-            type: 'apiKey',
-            in: 'header',
-            name: 'X-Api-Key',
-          },
-        },
-      },
-    },
-    transform: jsonSchemaTransform,
-  });
-  app.register(swaggerUi, { routePrefix: '/docs' });
-
-  // Static files
-  const __dirname = path.resolve();
-  app.register(fastifyStatic, {
-    root: path.join(__dirname, 'public'),
-    prefix: '/public/',
-  });
-
-  // security guard on protected routes (exclude OPTIONS and public routes)
-  app.addHook('preHandler', async(request, reply) => {
-    // Skip API key check for OPTIONS requests (CORS preflight)
-    if (request.method === 'OPTIONS') {
-      return;
-    }
-
-    // Skip API key check for public routes
-    if (request.url === '/health' || request.url.startsWith('/docs') || request.url.startsWith('/test')) {
-      return;
-    }
-
-    // Apply API key check for protected routes
-    await apiKeyPreHandler(request, reply);
-  });
+  app.register(securityPlugin);
 
   registerErrorHandler(app);
 
@@ -83,24 +40,42 @@ export function buildServer(container?: IContainer): FastifyInstance {
     app.register(testPlugin, { container });
   }
 
-  // routes
-  app.register(async instance => {
-    if (container) {
-      await registerUserRoutes(instance, container);
-      await registerChatRoutes(instance, container);
-    } else {
-      // For testing without DI, create a mock container
-      const mockContainer = {
-        get: () => {
-          throw new Error('Mock container - no services registered');
+  // Swagger/OpenAPI - register first so routes can use it
+  await app.register(swagger, {
+    mode: 'dynamic',
+    openapi: {
+      openapi: '3.0.3',
+      info: { title: 'Fit Coach API', version: '1.0.0' },
+      components: {
+        securitySchemes: {
+          ApiKeyAuth: { type: 'apiKey', in: 'header', name: 'X-Api-Key' },
         },
-        set: () => {},
-        has: () => false,
-      };
-      await registerUserRoutes(instance, mockContainer);
-      await registerChatRoutes(instance, mockContainer);
-    }
+      },
+    },
+    transform: jsonSchemaTransform,
   });
+
+  await app.register(swaggerUi, { routePrefix: '/docs' });
+
+  // routes - register as plugins now that swagger is available
+  if (container) {
+    await app.register(userRoutesPlugin, { container });
+    await app.register(chatRoutesPlugin, { container });
+  } else {
+    // For testing without DI, create a mock container
+    const mockContainer = {
+      get: () => {
+        throw new Error('Mock container - no services registered');
+      },
+      set: () => {},
+      has: () => false,
+    };
+    await app.register(userRoutesPlugin, { container: mockContainer });
+    await app.register(chatRoutesPlugin, { container: mockContainer });
+  }
+
+  // Force OpenAPI schema regeneration after routes are registered
+  await app.ready();
 
   return app;
 }

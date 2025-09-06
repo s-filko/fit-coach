@@ -50,11 +50,11 @@ const createTestChatPayload = (overrides: Partial<{
 const createTestApiKey = () => process.env.BOT_API_KEY!;
 
 describe('POST /api/chat – integration', () => {
-  let app: ReturnType<typeof buildServer>;
+  let app: Awaited<ReturnType<typeof buildServer>>;
   let tx: any;
 
   beforeAll(async() => {
-    app = buildServer(getGlobalContainer());
+    app = await buildServer(getGlobalContainer());
     await app.ready();
 
     // Register stub services for integration testing

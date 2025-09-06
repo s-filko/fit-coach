@@ -4,13 +4,13 @@ import { createTestApiKey, createTestUserData } from '../../shared/test-factorie
 import { getGlobalContainer, registerInfraServices } from '../../../src/main/register-infra-services';
 
 describe('POST /api/user – integration', () => {
-  let app: ReturnType<typeof buildServer>;
+  let app: Awaited<ReturnType<typeof buildServer>>;
   let tx: any; // Transaction context
 
   beforeAll(async() => {
     const container = getGlobalContainer();
     await registerInfraServices(container);
-    app = buildServer(container);
+    app = await buildServer(container);
     await app.ready();
   });
 
@@ -120,13 +120,13 @@ describe('POST /api/user – integration', () => {
 });
 
 describe('GET /api/user/{id} – integration', () => {
-  let app: ReturnType<typeof buildServer>;
+  let app: Awaited<ReturnType<typeof buildServer>>;
   let tx: any;
 
   beforeAll(async() => {
     const container = getGlobalContainer();
     await registerInfraServices(container);
-    app = buildServer(container);
+    app = await buildServer(container);
     await app.ready();
   });
 
