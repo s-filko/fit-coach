@@ -1,7 +1,7 @@
 import { buildServer } from '../../../src/app/server';
 import { Container } from '../../../src/infra/di/container';
-import { TOKENS } from '../../../src/infra/di/tokens';
-import { ILLMService } from '../../../src/infra/ai/llm.service';
+import { LLM_SERVICE_TOKEN, LLMService } from '../../../src/domain/ai/ports';
+import { USER_SERVICE_TOKEN, REGISTRATION_SERVICE_TOKEN } from '../../../src/domain/user/ports';
 import { ChatMsg } from '../../../src/domain/user/services/prompt.service';
 import { db } from '../../../src/infra/db/drizzle';
 
@@ -10,7 +10,7 @@ import { db } from '../../../src/infra/db/drizzle';
  * Uses predictable responses for testing without external dependencies
  * NOTE: In production integration tests, consider using real services in isolated environment
  */
-class StubLLMService implements ILLMService {
+class StubLLMService implements LLMService {
   async generateResponse(message: ChatMsg[] | string, isRegistration?: boolean): Promise<string> {
     if (typeof message === 'string') {
       return `Stub AI response to: ${message}`;
@@ -60,8 +60,8 @@ describe('POST /api/chat – integration', () => {
     // Register stub services for integration testing
     // NOTE: In production, consider testing with real services in isolated environment
     const container = Container.getInstance();
-    container.register(TOKENS.LLM, new StubLLMService());
-    container.register(TOKENS.USER_SERVICE, {
+    container.register(LLM_SERVICE_TOKEN, new StubLLMService());
+    container.register(USER_SERVICE_TOKEN, {
       getUser: jest.fn().mockResolvedValue({
         id: 'test-user',
         profileStatus: 'complete',
@@ -69,7 +69,7 @@ describe('POST /api/chat – integration', () => {
       isRegistrationComplete: jest.fn().mockReturnValue(true),
       updateProfileData: jest.fn(),
     });
-    container.register(TOKENS.REGISTRATION_SERVICE, {
+    container.register(REGISTRATION_SERVICE_TOKEN, {
       processUserMessage: jest.fn().mockResolvedValue({
         updatedUser: { id: 'test-user' },
         response: 'Stub response',

@@ -11,11 +11,15 @@ import { apiKeyPreHandler } from '@app/middlewares/api-key';
 import { registerUserRoutes } from '@app/routes/user.routes';
 import { registerChatRoutes } from '@app/routes/chat.routes';
 import { Container } from '@infra/di/container';
-import { TOKENS } from '@infra/di/tokens';
+import { 
+  USER_SERVICE_TOKEN,
+  PROFILE_PARSER_SERVICE_TOKEN,
+  REGISTRATION_SERVICE_TOKEN,
+} from '@domain/user/ports';
+import { LLM_SERVICE_TOKEN, LLMService } from '@domain/ai/ports';
 import { UserService, User, ParsedProfileData } from '@domain/user/services/user.service';
 import { IProfileParserService } from '@domain/user/services/profile-parser.service';
 import { IRegistrationService } from '@domain/user/services/registration.service';
-import { ILLMService } from '@infra/ai/llm.service';
 
 export function buildServer(): FastifyInstance {
   const app = Fastify({
@@ -82,14 +86,14 @@ export function buildServer(): FastifyInstance {
   // test DI route
   app.get('/test-di', async() => {
     const container = Container.getInstance();
-    const userService = container.get<UserService>(TOKENS.USER_SERVICE);
+    const userService = container.get<UserService>(USER_SERVICE_TOKEN);
     return { message: 'DI is working', hasUserService: !!userService };
   });
 
   // test user creation without DB
   app.get('/test-user', async() => {
     const container = Container.getInstance();
-    const userService = container.get<UserService>(TOKENS.USER_SERVICE);
+    const userService = container.get<UserService>(USER_SERVICE_TOKEN);
     try {
       const user = await userService.upsertUser({
         provider: 'telegram',
@@ -109,7 +113,7 @@ export function buildServer(): FastifyInstance {
   // test parser
   app.post('/test-parser', async req => {
     const container = Container.getInstance();
-    const parserService = container.get<IProfileParserService>(TOKENS.PROFILE_PARSER);
+    const parserService = container.get<IProfileParserService>(PROFILE_PARSER_SERVICE_TOKEN);
     const { message } = req.body as { message: string };
 
     try {
@@ -124,8 +128,8 @@ export function buildServer(): FastifyInstance {
   // test full registration flow
   app.post('/test-registration-flow', async req => {
     const container = Container.getInstance();
-    const registrationService = container.get<IRegistrationService>(TOKENS.REGISTRATION_SERVICE);
-    const userService = container.get<UserService>(TOKENS.USER_SERVICE);
+    const registrationService = container.get<IRegistrationService>(REGISTRATION_SERVICE_TOKEN);
+    const userService = container.get<UserService>(USER_SERVICE_TOKEN);
     const { userId, message } = req.body as { userId: string; message: string };
 
     try {
@@ -162,7 +166,7 @@ export function buildServer(): FastifyInstance {
   // test LLM
   app.post('/test-llm', async req => {
     const container = Container.getInstance();
-    const llmService = container.get<ILLMService>(TOKENS.LLM);
+    const llmService = container.get<LLMService>(LLM_SERVICE_TOKEN);
     const { message } = req.body as { message: string };
 
     try {
@@ -177,8 +181,8 @@ export function buildServer(): FastifyInstance {
   // test data save with mock parsed data
   app.post('/test-save-mock', async req => {
     const container = Container.getInstance();
-    const userService = container.get<UserService>(TOKENS.USER_SERVICE);
-    const registrationService = container.get<IRegistrationService>(TOKENS.REGISTRATION_SERVICE);
+    const userService = container.get<UserService>(USER_SERVICE_TOKEN);
+    const registrationService = container.get<IRegistrationService>(REGISTRATION_SERVICE_TOKEN);
     const { userId } = req.body as { userId: string };
 
     try {
@@ -205,7 +209,7 @@ export function buildServer(): FastifyInstance {
   // test direct profile data save
   app.post('/test-profile-save', async req => {
     const container = Container.getInstance();
-    const userService = container.get<UserService>(TOKENS.USER_SERVICE);
+    const userService = container.get<UserService>(USER_SERVICE_TOKEN);
     const { userId, profileData } = req.body as { userId: string; profileData: Partial<User> };
 
     try {

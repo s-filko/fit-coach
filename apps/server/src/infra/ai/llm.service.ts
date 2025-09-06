@@ -2,6 +2,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { ChatMsg, IPromptService } from '@domain/user/services/prompt.service';
 import { loadConfig } from '@infra/config';
+import { LLMService as ILLMService } from '@domain/ai/ports';
 
 // Debug types
 export interface LLMRequest {
@@ -27,23 +28,6 @@ export interface LLMResponse {
   };
   model: string;
   processingTime: number;
-}
-
-export interface ILLMService {
-  generateResponse(message: ChatMsg[], isRegistration?: boolean): Promise<string>;
-  generateRegistrationResponse(message: ChatMsg[], context?: string): Promise<string>;
-
-  // Debug methods
-  getDebugInfo(): {
-    model: string;
-    temperature: number;
-    isDebugMode: boolean;
-    requestHistory: LLMRequest[];
-    responseHistory: LLMResponse[];
-  };
-  enableDebugMode(): void;
-  disableDebugMode(): void;
-  clearHistory(): void;
 }
 
 export class LLMService implements ILLMService {

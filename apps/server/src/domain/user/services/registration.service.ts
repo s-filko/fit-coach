@@ -1,7 +1,7 @@
 import { User, ParsedProfileData } from './user.service';
 import { IProfileParserService } from './profile-parser.service';
 import { IPromptService, FieldDefinition, UniversalParseRequest, UniversalParseResult, ChatMsg } from './prompt.service';
-import { ILLMService } from '@infra/ai/llm.service';
+import { LLMService } from '@domain/ai/ports';
 import { USER_MESSAGES } from './messages';
 
 export interface IRegistrationService {
@@ -19,7 +19,7 @@ export class RegistrationService implements IRegistrationService {
   constructor(
     private readonly profileParser: IProfileParserService,
     private readonly promptService: IPromptService,
-    private readonly llmService: ILLMService,
+    private readonly llmService: LLMService,
   ) {}
 
   async processUserMessage(user: User, message: string): Promise<{

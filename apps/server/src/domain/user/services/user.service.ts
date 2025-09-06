@@ -31,14 +31,9 @@ export interface CreateUserInput {
   languageCode?: string;
 }
 
-export interface UserRepository {
-  findByProvider(provider: string, providerUserId: string): Promise<User | null>;
-  create(data: CreateUserInput): Promise<User>;
-  getById(id: string): Promise<User | null>;
-  updateProfileData(id: string, data: Partial<User>): Promise<User | null>;
-}
+import { UserRepository, UserService as IUserService } from '../ports';
 
-export class UserService {
+export class UserService implements IUserService {
   constructor(private readonly repo: UserRepository) {}
 
   async upsertUser(input: CreateUserInput): Promise<User> {
@@ -53,6 +48,23 @@ export class UserService {
 
   async updateProfileData(userId: string, data: Partial<User>): Promise<User | null> {
     return this.repo.updateProfileData(userId, data);
+  }
+
+  // Port interface methods
+  async findByProvider(provider: string, providerUserId: string): Promise<User | null> {
+    return this.repo.findByProvider(provider, providerUserId);
+  }
+
+  async createUser(data: CreateUserInput): Promise<User> {
+    return this.repo.create(data);
+  }
+
+  async getUserById(id: string): Promise<User | null> {
+    return this.repo.getById(id);
+  }
+
+  async updateUserProfile(id: string, data: Partial<User>): Promise<User | null> {
+    return this.repo.updateProfileData(id, data);
   }
 
   // Check if registration is complete

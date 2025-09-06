@@ -1,4 +1,5 @@
-import { CreateUserInput, User, UserRepository } from '@domain/user/services/user.service';
+import { CreateUserInput, User } from '@domain/user/services/user.service';
+import { UserRepository } from '@domain/user/ports';
 import { eq, and } from 'drizzle-orm';
 import type { users } from '@infra/db/schema';
 

@@ -1,8 +1,11 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { Container } from '@infra/di/container';
-import { TOKENS } from '@infra/di/tokens';
-import { ILLMService } from '@infra/ai/llm.service';
+import { 
+  USER_SERVICE_TOKEN,
+  REGISTRATION_SERVICE_TOKEN,
+} from '@domain/user/ports';
+import { LLM_SERVICE_TOKEN, LLMService } from '@domain/ai/ports';
 import { UserService } from '@domain/user/services/user.service';
 import { IRegistrationService } from '@domain/user/services/registration.service';
 import { loadConfig } from '@infra/config';
@@ -36,9 +39,9 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   }, async(req, reply) => {
     try {
       const container = Container.getInstance();
-      const userService = container.get<UserService>(TOKENS.USER_SERVICE);
-      const registrationService = container.get<IRegistrationService>(TOKENS.REGISTRATION_SERVICE);
-      const llmService = container.get<ILLMService>(TOKENS.LLM);
+      const userService = container.get<UserService>(USER_SERVICE_TOKEN);
+      const registrationService = container.get<IRegistrationService>(REGISTRATION_SERVICE_TOKEN);
+      const llmService = container.get<LLMService>(LLM_SERVICE_TOKEN);
 
       const { userId, message } = req.body as { userId: string; message: string };
 
@@ -107,7 +110,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     }, async(req, reply) => {
       try {
         const container = Container.getInstance();
-        const llmService = container.get<ILLMService>(TOKENS.LLM);
+        const llmService = container.get<LLMService>(LLM_SERVICE_TOKEN);
 
         const debugInfo = llmService.getDebugInfo();
 
@@ -139,7 +142,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     }, async(req, reply) => {
       try {
         const container = Container.getInstance();
-        const llmService = container.get<ILLMService>(TOKENS.LLM);
+        const llmService = container.get<LLMService>(LLM_SERVICE_TOKEN);
 
         llmService.clearHistory();
 

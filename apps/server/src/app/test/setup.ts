@@ -1,5 +1,6 @@
 import { Container } from '@infra/di/container';
-import { TOKENS } from '@infra/di/tokens';
+import { USER_REPOSITORY_TOKEN, USER_SERVICE_TOKEN } from '@domain/user/ports';
+import { LLM_SERVICE_TOKEN } from '@domain/ai/ports';
 import { DrizzleUserRepository } from '@infra/db/repositories/user.repository';
 import { UserService } from '@domain/user/services/user.service';
 import { LLMService } from '@infra/ai/llm.service';
@@ -57,11 +58,11 @@ export async function setupTestDI(): Promise<void> {
 
   // Register services
   const c = Container.getInstance();
-  if (!c.has(TOKENS.USER_REPO)) {c.register(TOKENS.USER_REPO, new DrizzleUserRepository());}
-  if (!c.has(TOKENS.USER_SERVICE)) {
-    c.registerFactory(TOKENS.USER_SERVICE, (c) => new UserService(c.get(TOKENS.USER_REPO)));
+  if (!c.has(USER_REPOSITORY_TOKEN)) {c.register(USER_REPOSITORY_TOKEN, new DrizzleUserRepository());}
+  if (!c.has(USER_SERVICE_TOKEN)) {
+    c.registerFactory(USER_SERVICE_TOKEN, (c) => new UserService(c.get(USER_REPOSITORY_TOKEN)));
   }
-  if (!c.has(TOKENS.LLM)) {c.register(TOKENS.LLM, new LLMService());}
+  if (!c.has(LLM_SERVICE_TOKEN)) {c.register(LLM_SERVICE_TOKEN, new LLMService());}
 
   // Close the pool to avoid connection leaks
   await pool.end();

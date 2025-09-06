@@ -4,7 +4,14 @@ import { FastifyInstance } from 'fastify';
 import { buildServer } from '@app/server';
 import { loadConfig } from '@infra/config';
 import { Container } from '@infra/di/container';
-import { TOKENS } from '@infra/di/tokens';
+import { 
+  USER_REPOSITORY_TOKEN,
+  USER_SERVICE_TOKEN,
+  REGISTRATION_SERVICE_TOKEN,
+  PROFILE_PARSER_SERVICE_TOKEN,
+  PROMPT_SERVICE_TOKEN,
+} from '@domain/user/ports';
+import { LLM_SERVICE_TOKEN } from '@domain/ai/ports';
 import { DrizzleUserRepository } from '@infra/db/repositories/user.repository';
 import { ensureSchema } from '@infra/db/init';
 import { UserService } from '@domain/user/services/user.service';
@@ -24,25 +31,25 @@ export async function bootstrap(): Promise<void> {
   const c = Container.getInstance();
 
   await ensureSchema();
-  c.register(TOKENS.USER_REPO, new DrizzleUserRepository());
-  c.registerFactory(TOKENS.USER_SERVICE, c => new UserService(c.get(TOKENS.USER_REPO)));
-  c.register(TOKENS.PROMPT_SERVICE, new PromptService());
+  c.register(USER_REPOSITORY_TOKEN, new DrizzleUserRepository());
+  c.registerFactory(USER_SERVICE_TOKEN, c => new UserService(c.get(USER_REPOSITORY_TOKEN)));
+  c.register(PROMPT_SERVICE_TOKEN, new PromptService());
   c.registerFactory(
-    TOKENS.PROFILE_PARSER,
-    c => new ProfileParserService(c.get(TOKENS.PROMPT_SERVICE), c.get(TOKENS.LLM)),
+    PROFILE_PARSER_SERVICE_TOKEN,
+    c => new ProfileParserService(c.get(PROMPT_SERVICE_TOKEN), c.get(LLM_SERVICE_TOKEN)),
   );
   c.registerFactory(
-    TOKENS.REGISTRATION_SERVICE,
+    REGISTRATION_SERVICE_TOKEN,
     c =>
       new RegistrationService(
-        c.get(TOKENS.PROFILE_PARSER),
-        c.get(TOKENS.PROMPT_SERVICE),
-        c.get(TOKENS.LLM),
+        c.get(PROFILE_PARSER_SERVICE_TOKEN),
+        c.get(PROMPT_SERVICE_TOKEN),
+        c.get(LLM_SERVICE_TOKEN),
       ),
   );
-  c.registerFactory(TOKENS.LLM, c => {
+  c.registerFactory(LLM_SERVICE_TOKEN, c => {
     const llmService = new LLMService();
-    llmService.setPromptService(c.get(TOKENS.PROMPT_SERVICE));
+    llmService.setPromptService(c.get(PROMPT_SERVICE_TOKEN));
     return llmService;
   });
 

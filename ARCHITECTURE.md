@@ -72,19 +72,19 @@ Notes:
 - Controllers are transport-specific (Fastify); domain services must not import Fastify/Express.
 - Repositories must remain thin (CRUD, simple joins). Business rules live in domain services.
 
-## Layering Rules (non-negotiable)
-1) app → domain → infra (domain can depend on infra contracts but not on app).
-2) Controllers call domain services via DI; never instantiate services with `new` inside controllers.
-3) Repositories are injected into domain services via DI tokens.
-4) Never import from `app/` into `domain/` or `infra/`.
-5) DTOs for transport live in `app/` (schemas), domain types live in `domain/`, DB models in `infra/db/schema`.
+## Layering Rules
+1) **app → domain; infra depends on domain.** Domain ports (repository/adapter interfaces) are declared in `domain/*/ports.ts`. Port implementations live in `infra/*`. The domain does **not** import from `infra/*`.
+2) Controllers call domain services via DI; do not use `new` inside controllers.
+3) Repositories are injected into domain services via DI by ports (interfaces), not by concrete implementations.
+4) Imports from `app/*` into `domain/*` and `infra/*` are forbidden. Imports from `infra/*` into `app/*` are allowed only at the composition level (bootstrap/registration). Controllers interact exclusively through ports.
+5) Transport DTOs live in `app/*` (schemas), domain types in `domain/*`, and DB models in `infra/db/schema`.
 
 ## Dependency Injection
-- Use a simple container with string tokens. Example tokens (define in `infra/di/tokens.ts`):
-  - `USER_REPO`, `TRAINING_CONTEXT_REPO`, `LLM`, `AI_CONTEXT`, `USER_SERVICE`
-- Register singletons in `infra/di/container.ts`.
-- Controllers resolve dependencies from the container; do not construct them manually.
-- Request-scoped dependencies: avoid unless truly needed; prefer stateless services.
+- DI tokens and port interfaces live in `domain/*/ports.ts` (or a neutral `shared/core` if a port is shared across domains).
+- Tokens are declared as `unique symbol` for type safety. Keep the token and port definition next to the port.
+- Port implementations live under `infra/*` and are registered as singletons in `infra/di/container.ts`.
+- Controllers and services depend only on ports and tokens, not on concrete implementations.
+- Use request-scoped dependencies only when transactions are required; default to stateless singletons.
 
 ## Configuration
 - Load `.env` based on `NODE_ENV` (e.g., `.env`, `.env.production`).
