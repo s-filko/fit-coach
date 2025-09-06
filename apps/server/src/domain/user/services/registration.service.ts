@@ -1,6 +1,6 @@
-import { User, ParsedProfileData } from './user.service';
+import { User, ParsedProfileData, UserService } from './user.service';
 import { IProfileParserService } from './profile-parser.service';
-import { IPromptService, FieldDefinition, UniversalParseRequest, ChatMsg } from './prompt.service';
+import { IPromptService, FieldDefinition, UniversalParseRequest, UniversalParseResult, ChatMsg } from './prompt.service';
 import { ILLMService } from '@infra/ai/llm.service';
 import { USER_MESSAGES } from './messages';
 
@@ -18,7 +18,7 @@ export interface IRegistrationService {
 export class RegistrationService implements IRegistrationService {
   constructor(
     private readonly profileParser: IProfileParserService,
-    private readonly userService: any, // Will be injected via DI
+    private readonly userService: UserService, // Will be injected via DI
     private readonly promptService: IPromptService,
     private readonly llmService: ILLMService,
   ) {}
@@ -382,7 +382,7 @@ Please provide the missing information:
   /**
    * Example of using universal parser for flexible data extraction
    */
-  async parseWithUniversalParser(text: string): Promise<any> {
+  async parseWithUniversalParser(text: string): Promise<UniversalParseResult> {
     // Define fields to extract
     const fields: FieldDefinition[] = [
       {

@@ -1,3 +1,5 @@
+import { ParsedProfileData } from './user.service';
+
 /**
  * User-facing messages and texts (English)
  * These are the actual texts shown to users, not code comments
@@ -55,7 +57,7 @@ Final step - your goals. What do you want to achieve?
 • Improve overall health
 • Increase strength and endurance`,
 
-  GOALS_SUCCESS: (goal: string, profileData: any) => `Great! Your goal: ${getGoalNameEn(goal)}
+  GOALS_SUCCESS: (goal: string, profileData: ParsedProfileData) => `Great! Your goal: ${getGoalNameEn(goal)}
 
 📋 Progress:
 ✅ Basic Information
@@ -69,8 +71,8 @@ Let's review all the information:
 • Gender: ${profileData.gender === 'male' ? 'male' : 'female'}
 • Height: ${profileData.height ?? 'not specified'} cm
 • Weight: ${profileData.weight ?? 'not specified'} kg
-• Level: ${getFitnessLevelNameEn(profileData.fitnessLevel)}
-• Goal: ${getGoalNameEn(profileData.fitnessGoal)}
+• Level: ${getFitnessLevelNameEn(profileData.fitnessLevel ?? '')}
+• Goal: ${getGoalNameEn(profileData.fitnessGoal ?? '')}
 
 Is everything correct? Reply with:
 • "yes" - to confirm and complete registration

@@ -15,7 +15,7 @@ export interface DataFieldsConfig {
 // Enhanced data parsing configuration with context
 export interface EnhancedDataParsingConfig {
   fieldsConfig: DataFieldsConfig;
-  alreadyCollected?: { [key: string]: any }; // fields already collected
+  alreadyCollected?: { [key: string]: unknown }; // fields already collected
   requiredFields?: string[]; // fields that are required
   optionalFields?: string[]; // fields that are optional
 }
@@ -26,7 +26,7 @@ export interface DataParsingResponse {
   data: {
     date?: string;
     intent?: string;
-    fields?: { [key: string]: any };
+    fields?: { [key: string]: unknown };
   } | null;
   reply: string;
 }
@@ -50,7 +50,7 @@ export interface UniversalParseRequest {
 }
 
 export interface UniversalParseResult {
-  [key: string]: any | null;
+  [key: string]: unknown | null;
 }
 
 export interface IPromptService {
@@ -64,8 +64,8 @@ export interface IPromptService {
   buildFitnessLevelQuestion(): string;
   buildFitnessLevelSuccessMessage(level: string): string;
   buildGoalQuestion(): string;
-  buildGoalsSuccessMessage(goal: string, profileData: any): string;
-  buildConfirmationPrompt(profileData: any): string;
+  buildGoalsSuccessMessage(goal: string, profileData: ParsedProfileData): string;
+  buildConfirmationPrompt(profileData: ParsedProfileData): string;
   buildRegistrationCompleteMessage(): string;
   buildProfileResetMessage(): string;
   buildConfirmationNeededMessage(): string;
@@ -460,7 +460,7 @@ export class PromptService implements IPromptService {
   /**
    * Confirmation prompt with collected data
    */
-  buildConfirmationPrompt(profileData: any): string {
+  buildConfirmationPrompt(profileData: ParsedProfileData): string {
     const dataSummary = [
       profileData.age ? `Age: ${profileData.age} years` : 'Age: not specified',
       profileData.gender ? `Gender: ${profileData.gender === 'male' ? 'male' : 'female'}` : 'Gender: not specified',
@@ -528,7 +528,7 @@ export class PromptService implements IPromptService {
    * Goals success message
    * Uses predefined user message with dynamic content
    */
-  buildGoalsSuccessMessage(goal: string, profileData: any): string {
+  buildGoalsSuccessMessage(goal: string, profileData: ParsedProfileData): string {
     return USER_MESSAGES.GOALS_SUCCESS(goal, profileData);
   }
 

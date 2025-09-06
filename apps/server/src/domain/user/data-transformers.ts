@@ -1,5 +1,22 @@
 import { User, ParsedProfileData } from './services/user.service';
 
+// Type for database row structure
+type UserDbRow = {
+  id: string;
+  username?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  language_code?: string | null;
+  profile_status?: string | null;
+  fitness_level?: string | null;
+  age?: number | null;
+  gender?: string | null;
+  height?: number | null;
+  weight?: number | null;
+  fitness_goal?: string | null;
+  updated_at?: Date;
+};
+
 /**
  * Data transformation utilities for User domain
  *
@@ -10,7 +27,7 @@ import { User, ParsedProfileData } from './services/user.service';
  */
 
 // Convert database row to domain User object
-export function dbRowToUser(dbRow: any): User {
+export function dbRowToUser(dbRow: UserDbRow): User {
   return {
     id: dbRow.id,
     username: dbRow.username,
@@ -20,7 +37,7 @@ export function dbRowToUser(dbRow: any): User {
     profileStatus: dbRow.profile_status,
     fitnessLevel: dbRow.fitness_level,
     age: dbRow.age,
-    gender: dbRow.gender,
+    gender: dbRow.gender as 'male' | 'female' | null | undefined,
     height: dbRow.height,
     weight: dbRow.weight,
     fitnessGoal: dbRow.fitness_goal,
@@ -28,7 +45,7 @@ export function dbRowToUser(dbRow: any): User {
 }
 
 // Convert domain User object to database format
-export function userToDbRow(user: Partial<User>): any {
+export function userToDbRow(user: Partial<User>): Partial<UserDbRow> {
   return {
     id: user.id,
     username: user.username,

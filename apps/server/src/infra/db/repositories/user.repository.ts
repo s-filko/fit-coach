@@ -74,8 +74,8 @@ function createUserData(input: CreateUserInput) {
  * Helper function to create update data object
  * IMPORTANT: null values are treated as explicit "clear field" requests
  */
-function createUpdateData(updates: Partial<User>): Record<string, any> {
-  const updateData: Record<string, any> = {
+function createUpdateData(updates: Partial<User>): Record<string, unknown> {
+  const updateData: Record<string, unknown> = {
     updatedAt: new Date(),
   };
 

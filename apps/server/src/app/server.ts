@@ -12,7 +12,7 @@ import { registerUserRoutes } from '@app/routes/user.routes';
 import { registerChatRoutes } from '@app/routes/chat.routes';
 import { Container } from '@infra/di/container';
 import { TOKENS } from '@infra/di/tokens';
-import { UserService, User } from '@domain/user/services/user.service';
+import { UserService, User, ParsedProfileData } from '@domain/user/services/user.service';
 import { IProfileParserService } from '@domain/user/services/profile-parser.service';
 import { IRegistrationService } from '@domain/user/services/registration.service';
 import { ILLMService } from '@infra/ai/llm.service';
@@ -224,16 +224,16 @@ export function buildServer() {
 
     try {
       // Simulate parsing JSON response from LLM
-      const parsedResult = JSON.parse(mockJson);
+      const parsedResult = JSON.parse(mockJson) as unknown;
 
       // Validate the result structure (same logic as in parser)
-      const result = {
-        age: parsedResult.age,
-        gender: parsedResult.gender,
-        height: parsedResult.height,
-        weight: parsedResult.weight,
-        fitnessLevel: parsedResult.fitnessLevel,
-        fitnessGoal: parsedResult.fitnessGoal,
+      const result: ParsedProfileData = {
+        age: (parsedResult as Record<string, unknown>).age as number | null | undefined,
+        gender: (parsedResult as Record<string, unknown>).gender as 'male' | 'female' | null | undefined,
+        height: (parsedResult as Record<string, unknown>).height as number | null | undefined,
+        weight: (parsedResult as Record<string, unknown>).weight as number | null | undefined,
+        fitnessLevel: (parsedResult as Record<string, unknown>).fitnessLevel as string | null | undefined,
+        fitnessGoal: (parsedResult as Record<string, unknown>).fitnessGoal as string | null | undefined,
       };
 
       return { success: true, parsed: result };

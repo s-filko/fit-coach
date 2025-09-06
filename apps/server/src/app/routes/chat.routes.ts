@@ -17,7 +17,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
     schema: {
       summary: 'Send chat message to AI',
       body: chatMessageBody,
-      security: [{ ApiKeyAuth: [] } as any],
+      security: [{ ApiKeyAuth: [] }],
       response: {
         200: z.object({
           data: z.object({
@@ -40,7 +40,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
       const registrationService = container.get<IRegistrationService>(TOKENS.REGISTRATION_SERVICE);
       const llmService = container.get<ILLMService>(TOKENS.LLM);
 
-      const { userId, message } = req.body as any;
+      const { userId, message } = req.body as { userId: string; message: string };
 
       // Get user data
       const user = await userService.getUser(userId);
@@ -60,7 +60,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
       // Check registration status
       if (userService.isRegistrationComplete(user)) {
         // Registration complete - normal chat mode
-        response = await llmService.generateResponse(message, false);
+        response = await llmService.generateResponse([{ role: 'user', content: message }], false);
       } else {
         // Registration incomplete - profile data collection mode
         const result = await registrationService.processUserMessage(user, message);
@@ -110,10 +110,10 @@ export async function registerChatRoutes(app: FastifyInstance) {
     app.get('/api/debug/llm', {
       schema: {
         summary: 'Get LLM debug information',
-        security: [{ ApiKeyAuth: [] } as any],
+        security: [{ ApiKeyAuth: [] }],
         response: {
           200: z.object({
-            debugInfo: z.any(),
+            debugInfo: z.record(z.string(), z.unknown()),
             timestamp: z.string(),
           }),
           401: z.object({ error: z.object({ message: z.string() }) }),
@@ -125,13 +125,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
         const container = Container.getInstance();
         const llmService = container.get<ILLMService>(TOKENS.LLM);
 
-        if (typeof (llmService as any).getDebugInfo !== 'function') {
-          return reply.code(500).send({
-            error: { message: 'Debug info not available' },
-          });
-        }
-
-        const debugInfo = (llmService as any).getDebugInfo();
+        const debugInfo = llmService.getDebugInfo();
 
         return reply.send({
           debugInfo,
@@ -148,7 +142,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
     app.post('/api/debug/llm/clear', {
       schema: {
         summary: 'Clear LLM debug history',
-        security: [{ ApiKeyAuth: [] } as any],
+        security: [{ ApiKeyAuth: [] }],
         response: {
           200: z.object({
             message: z.string(),
@@ -163,9 +157,7 @@ export async function registerChatRoutes(app: FastifyInstance) {
         const container = Container.getInstance();
         const llmService = container.get<ILLMService>(TOKENS.LLM);
 
-        if (typeof (llmService as any).clearHistory === 'function') {
-          (llmService as any).clearHistory();
-        }
+        llmService.clearHistory();
 
         return reply.send({
           message: 'Debug history cleared',

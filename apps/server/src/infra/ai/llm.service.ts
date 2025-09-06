@@ -133,7 +133,8 @@ export class LLMService implements ILLMService {
       const processingTime = endTime.getTime() - startTime.getTime();
 
       const content = response.content as string;
-      const tokenUsage = response.response_metadata?.tokenUsage;
+      const tokenUsage = (response.response_metadata as Record<string, unknown>)?.tokenUsage as 
+        { totalTokens?: number } | undefined;
 
       // Update metrics
       this.metrics.totalRequests++;
@@ -149,7 +150,11 @@ export class LLMService implements ILLMService {
           timestamp: endTime,
           requestId,
           content,
-          tokenUsage,
+          tokenUsage: tokenUsage ? {
+            promptTokens: 0, // We don't have this info from the API
+            completionTokens: 0, // We don't have this info from the API
+            totalTokens: tokenUsage.totalTokens ?? 0,
+          } : undefined,
           model: this.model.model,
           processingTime,
         };
@@ -219,7 +224,8 @@ export class LLMService implements ILLMService {
       const processingTime = endTime.getTime() - startTime.getTime();
 
       const content = response.content as string;
-      const tokenUsage = response.response_metadata?.tokenUsage;
+      const tokenUsage = (response.response_metadata as Record<string, unknown>)?.tokenUsage as 
+        { totalTokens?: number } | undefined;
 
       // Update metrics
       this.metrics.totalRequests++;
@@ -235,7 +241,11 @@ export class LLMService implements ILLMService {
           timestamp: endTime,
           requestId,
           content,
-          tokenUsage,
+          tokenUsage: tokenUsage ? {
+            promptTokens: 0, // We don't have this info from the API
+            completionTokens: 0, // We don't have this info from the API
+            totalTokens: tokenUsage.totalTokens ?? 0,
+          } : undefined,
           model: this.model.model,
           processingTime,
         };
@@ -326,7 +336,7 @@ export class LLMService implements ILLMService {
     }
   }
 
-  private logDebug(label: string, data: any): void {
+  private logDebug(label: string, data: unknown): void {
     if (label.includes('Request')) {
       this.logRequest(data);
     } else if (label.includes('Response')) {
@@ -336,23 +346,26 @@ export class LLMService implements ILLMService {
     }
   }
 
-  private logRequest(request: any): void {
-    const type = request.isRegistration ? 'registration' : 'chat';
-    const messagePreview = request.message.length > 100 ? 
-      request.message.substring(0, 100) + '...' : 
-      request.message;
-    console.log(`LLM request [${request.id}] ${type}: "${messagePreview}"`);
+  private logRequest(request: unknown): void {
+    const req = request as Record<string, unknown>;
+    const type = req.isRegistration ? 'registration' : 'chat';
+    const messagePreview = (req.message as string).length > 100 ? 
+      (req.message as string).substring(0, 100) + '...' : 
+      String(req.message);
+    console.log(`LLM request [${String(req.id)}] ${type}: "${messagePreview}"`);
   }
 
-  private logResponse(response: any): void {
-    const contentPreview = response.content.length > 100 ? 
-      response.content.substring(0, 100) + '...' : 
-      response.content;
-    const tokens = response.tokenUsage ? ` (${response.tokenUsage.totalTokens} tokens)` : '';
-    console.log(`LLM response [${response.id}] ${response.processingTime}ms${tokens}: "${contentPreview}"`);
+  private logResponse(response: unknown): void {
+    const resp = response as Record<string, unknown>;
+    const contentPreview = (resp.content as string).length > 100 ? 
+      (resp.content as string).substring(0, 100) + '...' : 
+      String(resp.content);
+    const tokens = resp.tokenUsage ? ` (${(resp.tokenUsage as { totalTokens?: number }).totalTokens} tokens)` : '';
+    console.log(`LLM response [${String(resp.id)}] ${String(resp.processingTime)}ms${tokens}: "${contentPreview}"`);
   }
 
-  private logError(error: any): void {
-    console.log(`LLM error [${error.requestId}]: ${error.error}`);
+  private logError(error: unknown): void {
+    const err = error as Record<string, unknown>;
+    console.log(`LLM error [${String(err.requestId)}]: ${String(err.error)}`);
   }
 }

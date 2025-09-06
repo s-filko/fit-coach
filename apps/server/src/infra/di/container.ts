@@ -2,8 +2,8 @@ type Factory<T> = (c: Container) => T;
 
 export class Container {
   private static instance: Container;
-  private services = new Map<string, any>();
-  private factories = new Map<string, Factory<any>>();
+  private services = new Map<string, unknown>();
+  private factories = new Map<string, Factory<unknown>>();
 
   static getInstance() {
     if (!Container.instance) {Container.instance = new Container();}
@@ -19,10 +19,10 @@ export class Container {
   }
 
   get<T>(token: string): T {
-    if (this.services.has(token)) {return this.services.get(token);}
+    if (this.services.has(token)) {return this.services.get(token) as T;}
     const factory = this.factories.get(token);
     if (!factory) {throw new Error(`Service not found: ${token}`);}
-    const instance = factory(this);
+    const instance = factory(this) as T;
     this.services.set(token, instance);
     return instance;
   }

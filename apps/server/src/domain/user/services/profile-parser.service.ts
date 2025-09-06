@@ -4,24 +4,25 @@ import {
   PromptService,
   UniversalParseRequest,
   UniversalParseResult,
+  FieldDefinition,
 } from './prompt.service';
 import { z } from 'zod';
 import { LLMService } from '@infra/ai/llm.service';
 
 // Helper function for Zod validation with fallback to undefined
-function validateWithFallback<T>(schema: z.ZodType<T>, value: any): T | undefined {
+function validateWithFallback<T>(schema: z.ZodType<T>, value: unknown): T | undefined {
   const result = schema.safeParse(value);
   return result.success ? result.data : undefined;
 }
 
 // Generic function to validate object fields using configuration
-function validateObjectFields<T extends Record<string, any>>(
-  data: any,
-  validators: Record<keyof T, z.ZodType<any>>,
+function validateObjectFields<T extends Record<string, unknown>>(
+  data: Record<string, unknown>,
+  validators: Record<keyof T, z.ZodType<unknown>>,
 ): T {
   const result = {} as T;
   for (const [key, validator] of Object.entries(validators)) {
-    (result as any)[key] = validateWithFallback(validator, data[key]);
+    (result as Record<string, unknown>)[key] = validateWithFallback(validator, data[key]);
   }
   return result;
 }
@@ -70,7 +71,7 @@ export class ProfileParserService implements IProfileParserService {
     // Filter out already collected data
     const promptDataConfig: DataFieldsConfig = Object.fromEntries(
       Object.entries(basePromptDataConfig).filter(([key]) => {
-        const userValue = (user as any)[key];
+        const userValue = (user as unknown as Record<string, unknown>)[key];
         // Check if field is empty (undefined, null, or empty string)
         return userValue === undefined || userValue === null || userValue === '';
       }),
@@ -88,15 +89,16 @@ export class ProfileParserService implements IProfileParserService {
       const llmResponse = await this.llmService.generateResponse(prompt, false);
 
       // Parse the JSON response
-      const parsedResult = JSON.parse(llmResponse);
+      const parsedResult = JSON.parse(llmResponse) as unknown;
 
       // Extract data from the nested format returned by LLM
-      let extractedData: any = {};
-      if (parsedResult.hasData && parsedResult.data?.fields) {
-        extractedData = parsedResult.data.fields;
+      let extractedData: Record<string, unknown> = {};
+      const parsedResultObj = parsedResult as Record<string, unknown>;
+      if (parsedResultObj.hasData && (parsedResultObj.data as Record<string, unknown>)?.fields) {
+        extractedData = (parsedResultObj.data as Record<string, unknown>).fields as Record<string, unknown>;
       } else {
         // Fallback to direct format if LLM returns data directly
-        extractedData = parsedResult;
+        extractedData = parsedResultObj;
       }
 
       // Validate with Zod - ultimate simplicity!
@@ -146,7 +148,7 @@ export class ProfileParserService implements IProfileParserService {
       const llmResponse = await this.llmService.generateResponse(prompt, false);
 
       // Parse the JSON response
-      const parsedResult = JSON.parse(llmResponse);
+      const parsedResult = JSON.parse(llmResponse) as Record<string, unknown>;
 
       // Validate each field according to its type and constraints
       const result: UniversalParseResult = {};
@@ -172,7 +174,7 @@ export class ProfileParserService implements IProfileParserService {
     }
   }
 
-  private validateUniversalField(value: any, field: any): any {
+  private validateUniversalField(value: unknown, field: FieldDefinition): unknown {
     if (value === null || value === undefined) {return null;}
 
     switch (field.type) {
@@ -191,7 +193,7 @@ export class ProfileParserService implements IProfileParserService {
         return typeof value === 'boolean' ? value : null;
 
       case 'enum':
-        if (field.enumValues?.includes(value)) {
+        if (field.enumValues?.includes(value as string)) {
           return value;
         }
         return null;

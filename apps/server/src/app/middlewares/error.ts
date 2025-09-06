@@ -6,9 +6,10 @@ export function registerErrorHandler(app: FastifyInstance) {
     // Handle Fastify validation errors
     if (err.statusCode === 400 || err.code === 'FST_ERR_VALIDATION') {
       const validationErrors = err.validation ?? [];
-      const errorMessages = validationErrors.map((v: any) => {
-        const path = v.instancePath ?? '';
-        const message = v.message ?? 'Validation error';
+      const errorMessages = validationErrors.map((v: unknown) => {
+        const validationError = v as Record<string, unknown>;
+        const path = (validationError.instancePath as string) ?? '';
+        const message = (validationError.message as string) ?? 'Validation error';
         return path ? `${path}: ${message}` : message;
       });
 

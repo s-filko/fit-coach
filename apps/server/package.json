@@ -29,6 +29,7 @@
     "start": "node --env-file=.env.production dist/index.js",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
+    "lint:file": "eslint",
     "format": "prettier --write src/**/*.{ts,js,json}",
     "format:check": "prettier --check src/**/*.{ts,js,json}",
     "type-check": "tsc --noEmit",

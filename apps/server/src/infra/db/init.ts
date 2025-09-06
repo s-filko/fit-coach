@@ -14,7 +14,7 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    const tablesExist = result.rows[0].exists;
+    const tablesExist = (result.rows[0] as { exists: boolean }).exists;
 
     if (!tablesExist) {
       // Tables don't exist, apply migrations

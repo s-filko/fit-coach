@@ -19,7 +19,7 @@ export async function registerUserRoutes(app: FastifyInstance) {
     schema: {
       summary: 'Create or get user by provider',
       body: createUserBody,
-      security: [{ ApiKeyAuth: [] } as any],
+      security: [{ ApiKeyAuth: [] }],
       response: {
         200: z.object({ data: z.object({ id: z.string().uuid().or(z.string()) }) }),
         401: z.object({ error: z.object({ message: z.string() }) }),
@@ -29,7 +29,14 @@ export async function registerUserRoutes(app: FastifyInstance) {
   }, async(req, reply) => {
     const container = Container.getInstance();
     const service = container.get<UserService>(TOKENS.USER_SERVICE);
-    const user = await service.upsertUser(req.body as any);
+    const user = await service.upsertUser(req.body as {
+      provider: string;
+      providerUserId: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      languageCode?: string;
+    });
     return reply.send({ data: { id: user.id } });
   });
 
@@ -37,7 +44,7 @@ export async function registerUserRoutes(app: FastifyInstance) {
     schema: {
       summary: 'Get user by id',
       params: z.object({ id: z.string() }),
-      security: [{ ApiKeyAuth: [] } as any],
+      security: [{ ApiKeyAuth: [] }],
       response: {
         200: z.object({ data: z.object({ id: z.string() }) }),
         401: z.object({ error: z.object({ message: z.string() }) }),
@@ -48,7 +55,7 @@ export async function registerUserRoutes(app: FastifyInstance) {
   }, async(req, reply) => {
     const container = Container.getInstance();
     const service = container.get<UserService>(TOKENS.USER_SERVICE);
-    const { id } = (req.params as any);
+    const { id } = req.params as { id: string };
     const user = await service.getUser(id);
     if (!user) {return reply.code(404).send({ error: { message: 'User not found' } });}
     return reply.send({ data: { id: user.id } });
