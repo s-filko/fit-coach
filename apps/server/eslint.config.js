@@ -1,5 +1,6 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import boundaries from 'eslint-plugin-boundaries';
 
 export default tseslint.config(
   js.configs.recommended,
@@ -19,6 +20,16 @@ export default tseslint.config(
         __dirname: 'readonly',
         __filename: 'readonly',
       },
+    },
+    plugins: { boundaries },
+    settings: {
+      // Define architectural layers by file location
+      'boundaries/elements': [
+        { type: 'app', pattern: 'src/app/**' },
+        { type: 'domain', pattern: 'src/domain/**' },
+        { type: 'infra', pattern: 'src/infra/**' },
+        { type: 'test', pattern: '**/{__tests__,tests}/**' },
+      ],
     },
     rules: {
       '@typescript-eslint/no-unused-vars': [
@@ -102,12 +113,30 @@ export default tseslint.config(
       'max-depth': ['warn', 4],
       'max-params': ['warn', 5],
       'max-statements': ['warn', 20],
+
+      // Architectural boundaries (strict by default)
+      'boundaries/no-unknown': 'error',
+      'boundaries/element-types': ['error', {
+        default: 'disallow',
+        message: 'Import boundary violation: {from} → {to} is not allowed',
+        rules: [
+          // app → domain only
+          { from: 'app', allow: ['domain'] },
+          // infra → domain only
+          { from: 'infra', allow: ['domain'] },
+          // domain → nothing
+          { from: 'domain', allow: [] },
+        ],
+      }],
     },
   },
   // Relaxed rules for test files
   {
     files: ['**/__tests__/**/*.ts', '**/*.test.ts', '**/*.spec.ts', '**/tests/**/*.ts'],
     rules: {
+      // Boundaries relaxed in tests
+      'boundaries/no-unknown': 'warn',
+      'boundaries/element-types': 'warn',
       '@typescript-eslint/no-explicit-any': 'warn', // Allow any in tests but warn
       '@typescript-eslint/no-unused-vars': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'warn', // More lenient for tests

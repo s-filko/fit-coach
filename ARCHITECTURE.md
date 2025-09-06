@@ -72,12 +72,24 @@ Notes:
 - Controllers are transport-specific (Fastify); domain services must not import Fastify/Express.
 - Repositories must remain thin (CRUD, simple joins). Business rules live in domain services.
 
+## Clients
+- Bots and any other clients are external applications that consume this API via HTTP only.
+- No shared code or types between server and clients. Treat clients as out-of-repo.
+- Protected endpoints require `X-Api-Key` per `docs/API_SPEC.md:1`.
+- README is an overview; this document is authoritative for architecture decisions.
+
 ## Layering Rules
 1) **app → domain; infra depends on domain.** Domain ports (repository/adapter interfaces) are declared in `domain/*/ports.ts`. Port implementations live in `infra/*`. The domain does **not** import from `infra/*`.
 2) Controllers call domain services via DI; do not use `new` inside controllers.
 3) Repositories are injected into domain services via DI by ports (interfaces), not by concrete implementations.
-4) Imports from `app/*` into `domain/*` and `infra/*` are forbidden. Imports from `infra/*` into `app/*` are allowed only at the composition level (bootstrap/registration). Controllers interact exclusively through ports.
+4) Imports from `app/*` into `domain/*` and `infra/*` are forbidden. App must not import infra implementations (db/ai/repositories). Importing the DI container (`@infra/di/container`) for resolution is allowed; prefer resolving in composition/bootstrapping, but thin routes may resolve via container when necessary. Controllers interact exclusively through ports.
 5) Transport DTOs live in `app/*` (schemas), domain types in `domain/*`, and DB models in `infra/db/schema`.
+
+### Enforced by ESLint (import boundaries)
+- Domain (`src/domain/**`): cannot import `@app/*`, `**/app/**`, `@infra/*`, `**/infra/**`.
+- App (`src/app/**`): cannot import infra implementations: `@infra/db/**`, `@infra/ai/**` (DI container access allowed).
+- Infra (`src/infra/**`): cannot import `@app/*`, `**/app/**`.
+- See `apps/server/eslint.config.js:1` for rules. Violations fail lint.
 
 ## Dependency Injection
 - DI tokens and port interfaces live in `domain/*/ports.ts` (or a neutral `shared/core` if a port is shared across domains).
@@ -194,5 +206,3 @@ Change control:
 
 ---
 This document defines architectural contract for the backend. Changes to this contract must be explicit, reviewed, and documented via ADR.
-
-

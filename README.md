@@ -8,16 +8,23 @@ Fit Coach is a fitness app with an AI coach. The user keeps a journal, receives 
 
 ⸻
 
+Docs and Contracts
+
+• Architecture (authoritative): ARCHITECTURE.md:1
+• API Spec (authoritative): docs/API_SPEC.md:1
+• AI Contribution Rules: docs/CONTRIBUTING_AI.md:1
+
+⸻
+
 2. Core Stack and Architecture
-   •	Backend: Node.js, Express, TypeScript
+   •	Backend: Node.js, Fastify, TypeScript
    •	ORM: Drizzle ORM + drizzle-kit (migrations)
    •	Database: PostgreSQL (with pgvector extension for embeddings)
-   •	AI Orchestrator: Built on LangChain (langchain npm package). All chains, memory handling, embeddings, prompting, and LLM integration are implemented through it.
+   •	AI integration: Infra LLM service (LangChain/OpenAI where applicable)
    •	AI Layer:
-   •	server/ai/orchestrator.ts — LangChain-based orchestrator logic (memory, tool calling, embeddings, etc.)
-   •	server/ai/llm.service.ts — LLM provider integration (OpenAI, others)
-   •	Monorepo: Not used
-   •	Bot and Server: Completely independent; each has its own package.json, node_modules, launch process, and no shared dependencies
+   •	apps/server/src/infra/ai/llm.service.ts — LLM provider integration (OpenAI, others)
+   •	Monorepo: Used (apps/server, packages/shared)
+   •	Bot: external client; not part of this repo
    •	Bot: node-telegram-bot-api, a separate application with no access to the database or server code
    •	Communication: Only via REST API
    •	API only: No UI; only a Telegram bot (other messengers/clients will use the same API in the future)
@@ -43,7 +50,7 @@ src/
 api/
 message.ts            // /api/message routing
 user.ts               // /api/user routing
-index.ts                // Express entry-point
+index.ts                // Server entry-point (Fastify bootstrap)
 package.json
 
 Bot structure:
@@ -74,7 +81,7 @@ package.json
    •	The bot only sends and receives data via HTTP API. It has no logic, database, or shared types with the server.
    •	The server implements:
    •	User registration/update (POST /api/user, via userAccountService)
-   •	Message processing and AI logic invocation (POST /api/message, via ai.service + orchestrator)
+   •	AI chat handling (POST /api/chat) — stateless message → response
    •	Other services follow single responsibility (e.g., user.service for profile, userAccount.service for external accounts)
    •	All AI context and memory handled via LangChain (orchestrator.ts)
 
@@ -230,7 +237,7 @@ package.json
 
 ⸻
 
-11. API Endpoints Specification
+11. API Endpoints Specification (authoritative: docs/API_SPEC.md)
 
 11.1 Message Endpoint (/api/message)
    POST /api/message
