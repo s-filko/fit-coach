@@ -1,4 +1,4 @@
-import { ChatMsg } from '@domain/user/services/prompt.service';
+import { ChatMsg } from '@domain/user/ports';
 
 export interface LLMRequest {
   id: string;

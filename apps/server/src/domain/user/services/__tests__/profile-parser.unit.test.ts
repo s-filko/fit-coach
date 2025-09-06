@@ -9,7 +9,7 @@ describe('ProfileParserService – parsing logic unit', () => {
 
   beforeEach(() => {
     // Create fresh service instance for each test
-    const mockPromptService = { buildDataParsingPromptWithAnswers: jest.fn() };
+    const mockPromptService = { buildProfileParsingPrompt: jest.fn() };
     const mockLLMService = { generateResponse: jest.fn() };
 
     parserService = new ProfileParserService(
@@ -36,7 +36,7 @@ describe('ProfileParserService – parsing logic unit', () => {
       ];
 
       const mockPromptService = {
-        buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue(mockPromptMessages),
+        buildProfileParsingPrompt: jest.fn().mockReturnValue(mockPromptMessages),
       };
       const mockLLMService = { generateResponse: jest.fn().mockResolvedValue(mockLLMResponse) };
       const testService = new ProfileParserService(mockPromptService as any, mockLLMService as any);
@@ -45,10 +45,9 @@ describe('ProfileParserService – parsing logic unit', () => {
       const result = await testService.parseProfileData({ id: 'test-user-1' } as any, 'I am 28 years old, male, 175cm tall, weigh 75kg');
 
       // Assert
-      expect(mockPromptService.buildDataParsingPromptWithAnswers).toHaveBeenCalledWith(
+      expect(mockPromptService.buildProfileParsingPrompt).toHaveBeenCalledWith(
         'I am 28 years old, male, 175cm tall, weigh 75kg',
-        expect.any(Object),
-        'User profile data parsing',
+        { id: 'test-user-1' },
       );
       expect(result).toEqual({
         age: 28,
@@ -77,7 +76,7 @@ describe('ProfileParserService – parsing logic unit', () => {
       ];
 
       const mockPromptService = {
-        buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue(mockPromptMessages),
+        buildProfileParsingPrompt: jest.fn().mockReturnValue(mockPromptMessages),
       };
       const mockLLMService = { generateResponse: jest.fn().mockResolvedValue(mockLLMResponse) };
       const testService = new ProfileParserService(mockPromptService as any, mockLLMService as any);
@@ -104,7 +103,7 @@ describe('ProfileParserService – parsing logic unit', () => {
       ];
 
       const mockPromptService = {
-        buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue(mockPromptMessages),
+        buildProfileParsingPrompt: jest.fn().mockReturnValue(mockPromptMessages),
       };
       const mockLLMService = { generateResponse: jest.fn().mockResolvedValue('Invalid JSON response') };
       const testService = new ProfileParserService(mockPromptService as any, mockLLMService as any);
@@ -131,7 +130,7 @@ describe('ProfileParserService – parsing logic unit', () => {
       ];
 
       const mockPromptService = {
-        buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue(mockPromptMessages),
+        buildProfileParsingPrompt: jest.fn().mockReturnValue(mockPromptMessages),
       };
       const mockLLMService = { generateResponse: jest.fn().mockRejectedValue(new Error('LLM service error')) };
       const testService = new ProfileParserService(mockPromptService as any, mockLLMService as any);
@@ -200,7 +199,7 @@ describe('ProfileParserService – parsing logic unit', () => {
         ];
 
         const mockPromptService = {
-          buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue(mockPromptMessages),
+          buildProfileParsingPrompt: jest.fn().mockReturnValue(mockPromptMessages),
         };
         const mockLLMService = { generateResponse: jest.fn().mockResolvedValue(json) };
         const testService = new ProfileParserService(mockPromptService as any, mockLLMService as any);

@@ -33,15 +33,19 @@ apps/server/src/
 
   domain/                       # Business logic (framework-agnostic)
     user/
-      types.ts
+      ports/                    # Modular interface organization
+        index.ts               # Re-exports for convenience
+        repository.ports.ts    # Data access contracts
+        service.ports.ts       # Business logic contracts
+        prompt.ports.ts        # Specialized utility contracts
       services/
         user.service.ts
     ai/
-      types.ts
+      ports.ts                 # AI domain interfaces
       services/
         ai-context.service.ts
     training/
-      types.ts
+      ports.ts                 # Training domain interfaces
       services/
         training-context.service.ts
 
@@ -79,11 +83,22 @@ Notes:
 - README is an overview; this document is authoritative for architecture decisions.
 
 ## Layering Rules
-1) **app → domain; infra depends on domain.** Domain ports (repository/adapter interfaces) are declared in `domain/*/ports.ts`. Port implementations live in `infra/*`. The domain does **not** import from `infra/*`.
+1) **app → domain; infra depends on domain.** Domain ports (repository/adapter interfaces) are declared in `domain/*/ports/` with modular organization. Port implementations live in `infra/*`. The domain does **not** import from `infra/*`.
 2) Controllers call domain services via DI; do not use `new` inside controllers.
 3) Repositories are injected into domain services via DI by ports (interfaces), not by concrete implementations.
 4) Imports from `app/*` into `domain/*` and `infra/*` are forbidden. App must not import infra implementations (db/ai/repositories). Importing the DI container (`@infra/di/container`) for resolution is allowed; prefer resolving in composition/bootstrapping, but thin routes may resolve via container when necessary. Controllers interact exclusively through ports.
 5) Transport DTOs live in `app/*` (schemas), domain types in `domain/*`, and DB models in `infra/db/schema`.
+
+### Interface Organization Principles
+- **Separation by Functional Areas**: Organize interfaces by responsibility, not by type
+- **Modular Structure**: Use `domain/*/ports/` directory with specialized files:
+  - `repository.ports.ts` - Data access contracts
+  - `service.ports.ts` - Business logic contracts  
+  - `prompt.ports.ts` - Specialized utility contracts
+  - `index.ts` - Re-exports for convenience
+- **File Size Limits**: Keep interface files under 50 lines for readability
+- **Single Responsibility**: Each file handles one functional area
+- **Backward Compatibility**: Main `ports.ts` re-exports from modular structure
 
 ### Enforced by ESLint (import boundaries)
 - Domain (`src/domain/**`): cannot import `@app/*`, `**/app/**`, `@infra/*`, `**/infra/**`.
@@ -92,11 +107,12 @@ Notes:
 - See `apps/server/eslint.config.js:1` for rules. Violations fail lint.
 
 ## Dependency Injection
-- DI tokens and port interfaces live in `domain/*/ports.ts` (or a neutral `shared/core` if a port is shared across domains).
-- Tokens are declared as `unique symbol` for type safety. Keep the token and port definition next to the port.
+- DI tokens and port interfaces live in `domain/*/ports/` with modular organization (or a neutral `shared/core` if a port is shared across domains).
+- Tokens are declared as `unique symbol` for type safety. Keep the token and port definition in the same file.
 - Port implementations live under `infra/*` and are registered as singletons in `infra/di/container.ts`.
 - Controllers and services depend only on ports and tokens, not on concrete implementations.
 - Use request-scoped dependencies only when transactions are required; default to stateless singletons.
+- **Import Strategy**: Use `domain/*/ports/index.ts` for convenient imports, or import directly from specific files for new code.
 
 ## Configuration
 - Load `.env` based on `NODE_ENV` (e.g., `.env`, `.env.production`).

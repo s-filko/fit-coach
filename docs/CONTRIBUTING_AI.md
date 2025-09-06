@@ -16,6 +16,7 @@ If any instruction here conflicts with the above docs, update this file to match
 - DB access only via repositories in infra; domain and app never import Drizzle directly.
 - Docs‑first: update `docs/API_SPEC.md` and, if needed, `ARCHITECTURE.md`/ADR before writing code.
 - Do not restructure folders beyond the migration plan in `ARCHITECTURE.md`.
+- **Interface Organization**: Organize interfaces by functional areas in `domain/*/ports/` with modular files (repository.ports.ts, service.ports.ts, etc.). Keep files under 50 lines.
 
 ## Docs‑First Workflow (Checklist)
 1) Update `docs/API_SPEC.md` (routes, Zod‑like schemas, responses, security). If architecture changes, add/edit ADR under `docs/adr/*` and/or `ARCHITECTURE.md`.
@@ -48,8 +49,10 @@ If any instruction here conflicts with the above docs, update this file to match
 2) Data layer:
    - Update `apps/server/src/infra/db/schema.ts:1` and generate Drizzle migrations (see project scripts).
    - Update user repository `apps/server/src/infra/db/repositories/user.repository.ts:1`.
+   - Update repository interface in `apps/server/src/domain/user/ports/repository.ports.ts` if needed.
 3) Domain & App:
    - Update types and service logic: `apps/server/src/domain/user/services/user.service.ts:1`.
+   - Update service interfaces in `apps/server/src/domain/user/ports/service.ports.ts` if needed.
    - Update registration/profile parsing logic: `apps/server/src/domain/user/services/registration.service.ts:1`, `apps/server/src/domain/user/services/profile-parser.service.ts:1`.
    - Adjust Zod schemas in routes that expose these fields.
 4) Tests:
@@ -61,9 +64,11 @@ If any instruction here conflicts with the above docs, update this file to match
 2) Update prompt building and messages:
    - `apps/server/src/domain/user/services/prompt.service.ts:1`
    - `apps/server/src/domain/user/services/messages.ts:1`
+   - Update prompt interface in `apps/server/src/domain/user/ports/prompt.ports.ts` if needed.
 3) Update profile parser and registration orchestrator:
    - `apps/server/src/domain/user/services/profile-parser.service.ts:1`
    - `apps/server/src/domain/user/services/registration.service.ts:1`
+   - Update service interfaces in `apps/server/src/domain/user/ports/service.ports.ts` if needed.
 4) Keep error format and logging consistent; add/adjust tests accordingly.
 
 ## DI & Ports Quick Reference
@@ -78,9 +83,20 @@ If any instruction here conflicts with the above docs, update this file to match
 ### Tokens and Ports (examples)
 - AI:
   - LLM service token and port: `apps/server/src/domain/ai/ports.ts:1`
-- User domain tokens: `apps/server/src/domain/user/ports.ts:1`
+- User domain tokens: `apps/server/src/domain/user/ports/` (modular structure)
+  - Repository ports: `apps/server/src/domain/user/ports/repository.ports.ts`
+  - Service ports: `apps/server/src/domain/user/ports/service.ports.ts`
+  - Prompt ports: `apps/server/src/domain/user/ports/prompt.ports.ts`
+  - Convenience imports: `apps/server/src/domain/user/ports/index.ts`
 
-When adding new ports, define `unique symbol` tokens and interfaces under `domain/*/ports.ts`. Implement in `infra/*` and register in `bootstrap.ts` via `register`/`registerFactory`.
+When adding new ports, define `unique symbol` tokens and interfaces under `domain/*/ports/` with modular organization. Implement in `infra/*` and register in `bootstrap.ts` via `register`/`registerFactory`.
+
+#### Interface Organization Rules
+- **Repository interfaces**: Data access contracts in `repository.ports.ts`
+- **Service interfaces**: Business logic contracts in `service.ports.ts`
+- **Specialized interfaces**: Domain-specific utilities in separate files
+- **File size**: Keep under 50 lines for readability
+- **Import strategy**: Use `index.ts` for convenience or import directly from specific files
 
 ## API Quality Rules
 - Zod for request and response. Attach schemas to routes using `fastify-type-provider-zod`.

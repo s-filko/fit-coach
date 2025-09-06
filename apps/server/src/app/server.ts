@@ -15,11 +15,12 @@ import {
   USER_SERVICE_TOKEN,
   PROFILE_PARSER_SERVICE_TOKEN,
   REGISTRATION_SERVICE_TOKEN,
+  UserService,
+  IProfileParserService,
+  IRegistrationService,
 } from '@domain/user/ports';
 import { LLM_SERVICE_TOKEN, LLMService } from '@domain/ai/ports';
-import { UserService, User, ParsedProfileData } from '@domain/user/services/user.service';
-import { IProfileParserService } from '@domain/user/services/profile-parser.service';
-import { IRegistrationService } from '@domain/user/services/registration.service';
+import { User, ParsedProfileData } from '@domain/user/services/user.service';
 
 export function buildServer(): FastifyInstance {
   const app = Fastify({

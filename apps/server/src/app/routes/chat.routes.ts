@@ -4,10 +4,10 @@ import { Container } from '@infra/di/container';
 import { 
   USER_SERVICE_TOKEN,
   REGISTRATION_SERVICE_TOKEN,
+  UserService,
+  IRegistrationService,
 } from '@domain/user/ports';
 import { LLM_SERVICE_TOKEN, LLMService } from '@domain/ai/ports';
-import { UserService } from '@domain/user/services/user.service';
-import { IRegistrationService } from '@domain/user/services/registration.service';
 import { loadConfig } from '@infra/config';
 
 const chatMessageBody = z.object({

@@ -19,7 +19,7 @@ describe('ProfileParserService – JSON validation unit', () => {
     ];
 
     _parserService = new ProfileParserService(
-      { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue(mockPromptMessages) } as unknown as PromptService,
+      { buildProfileParsingPrompt: jest.fn().mockReturnValue(mockPromptMessages) } as unknown as PromptService,
       { generateResponse: jest.fn() } as unknown as LLMService,
     );
   });
@@ -107,7 +107,7 @@ describe('ProfileParserService – JSON validation unit', () => {
           generateResponse: jest.fn().mockResolvedValue(jsonResponse),
         };
         const testService = new ProfileParserService(
-          { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
+          { buildProfileParsingPrompt: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
           mockLLMService as any,
         );
 
@@ -127,7 +127,7 @@ describe('ProfileParserService – JSON validation unit', () => {
         generateResponse: jest.fn().mockResolvedValue('{invalid json'),
       };
       const testService = new ProfileParserService(
-        { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
+        { buildProfileParsingPrompt: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
         mockLLMService as any,
       );
 
@@ -151,7 +151,7 @@ describe('ProfileParserService – JSON validation unit', () => {
         generateResponse: jest.fn().mockRejectedValue(new Error('LLM service failed')),
       };
       const testService = new ProfileParserService(
-        { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
+        { buildProfileParsingPrompt: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
         mockLLMService as any,
       );
 
@@ -175,7 +175,7 @@ describe('ProfileParserService – JSON validation unit', () => {
         generateResponse: jest.fn().mockResolvedValue(''),
       };
       const testService = new ProfileParserService(
-        { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
+        { buildProfileParsingPrompt: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
         mockLLMService as any,
       );
 
@@ -227,7 +227,7 @@ describe('ProfileParserService – JSON validation unit', () => {
           generateResponse: jest.fn().mockResolvedValue(json),
         };
         const testService = new ProfileParserService(
-          { buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
+          { buildProfileParsingPrompt: jest.fn().mockReturnValue([{ role: 'system', content: 'System prompt' }, { role: 'user', content: 'User message' }]) } as any,
           mockLLMService as any,
         );
 

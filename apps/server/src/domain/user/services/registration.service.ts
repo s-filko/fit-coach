@@ -1,19 +1,15 @@
 import { User, ParsedProfileData } from './user.service';
-import { IProfileParserService } from './profile-parser.service';
-import { IPromptService, FieldDefinition, UniversalParseRequest, UniversalParseResult, ChatMsg } from './prompt.service';
+import { 
+  IRegistrationService, 
+  IProfileParserService, 
+  IPromptService,
+  FieldDefinition, 
+  UniversalParseRequest, 
+  UniversalParseResult, 
+  ChatMsg,
+} from '../ports';
 import { LLMService } from '@domain/ai/ports';
 import { USER_MESSAGES } from './messages';
-
-export interface IRegistrationService {
-  processUserMessage(user: User, message: string): Promise<{
-    updatedUser: User;
-    response: string;
-    isComplete: boolean;
-    parsedData?: ParsedProfileData;
-  }>;
-  getRegistrationPrompt(user: User): string;
-  checkProfileCompleteness(user: User): boolean;
-}
 
 export class RegistrationService implements IRegistrationService {
   constructor(
@@ -148,13 +144,7 @@ export class RegistrationService implements IRegistrationService {
       if (!updatedUser.height) {missing.push('height');}
       if (!updatedUser.weight) {missing.push('weight');}
 
-      response = `Thanks for the information I've collected so far. I still need: ${missing.join(', ')}.
-
-Please provide the missing information:
-• Age (if not provided): How old are you?
-• Gender (if not provided): Are you male or female?
-• Height (if not provided): What's your height in cm?
-• Weight (if not provided): What's your weight in kg?`;
+      response = USER_MESSAGES.PARTIAL_INFO_CLARIFICATION(missing);
 
       return {
         updatedUser,

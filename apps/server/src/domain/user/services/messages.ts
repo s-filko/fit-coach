@@ -84,6 +84,25 @@ I now know enough about you to create a personalized training program.
 How can I help you today?`,
 
   // Error and clarification messages
+  PARTIAL_INFO_CLARIFICATION: (missingFields: string[]) => {
+    const fieldNamesEn: Record<string, string> = {
+      'age': 'age',
+      'gender': 'gender', 
+      'height': 'height',
+      'weight': 'weight',
+    };
+
+    const readableFields = missingFields.map(field => fieldNamesEn[field] || field).join(', ');
+
+    return `Thanks for the information I've collected so far. I still need: ${readableFields}.
+
+Please provide the missing information:
+• Age (if not provided): How old are you?
+• Gender (if not provided): Are you male or female?
+• Height (if not provided): What's your height in cm?
+• Weight (if not provided): What's your weight in kg?`;
+  },
+
   CLARIFICATION: (missingFields: string[]) => {
     const fieldNamesEn: Record<string, string> = {
       'age': 'age',

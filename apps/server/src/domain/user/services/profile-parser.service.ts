@@ -1,13 +1,13 @@
 import { ParsedProfileData, User } from './user.service';
 import {
-  DataFieldsConfig,
-  PromptService,
   UniversalParseRequest,
   UniversalParseResult,
   FieldDefinition,
-} from './prompt.service';
+  IProfileParserService,
+  IPromptService,
+} from '../ports';
 import { z } from 'zod';
-import { LLMService } from '@infra/ai/llm.service';
+import { LLMService } from '@domain/ai/ports';
 
 // Helper function for Zod validation with fallback to undefined
 function validateWithFallback<T>(schema: z.ZodType<T>, value: unknown): T | undefined {
@@ -39,14 +39,9 @@ const fieldValidators = {
   equipment: z.array(z.string()).optional(),
 } as const;
 
-export interface IProfileParserService {
-  parseProfileData(user: User, text: string): Promise<ParsedProfileData>;
-  parseUniversal(request: UniversalParseRequest): Promise<UniversalParseResult>;
-}
-
 export class ProfileParserService implements IProfileParserService {
   constructor(
-    private readonly promptService: PromptService,
+    private readonly promptService: IPromptService,
     private readonly llmService: LLMService,
   ) {}
 
@@ -59,31 +54,17 @@ export class ProfileParserService implements IProfileParserService {
       throw new Error('Invalid text: text must be a non-empty string');
     }
 
-    const basePromptDataConfig: DataFieldsConfig = {
-      age: 'User\'s age in years (10-100)',
-      gender: 'User\'s gender (male or female)',
-      height: 'User\'s height in centimeters (convert from feet/inches if needed)',
-      weight: 'User\'s weight in kilograms (convert from pounds if needed)',
-      fitnessLevel: 'User\'s fitness experience (beginner, intermediate, advanced)',
-      fitnessGoal: 'User\'s fitness goal (lose weight, build muscle, maintain fitness, etc.)',
-    };
-
     // Filter out already collected data
-    const promptDataConfig: DataFieldsConfig = Object.fromEntries(
-      Object.entries(basePromptDataConfig).filter(([key]) => {
-        const userValue = (user as unknown as Record<string, unknown>)[key];
-        // Check if field is empty (undefined, null, or empty string)
-        return userValue === undefined || userValue === null || userValue === '';
+    const alreadyCollected: Partial<ParsedProfileData> = Object.fromEntries(
+      Object.entries(user).filter(([, value]) => {
+        // Check if field has meaningful data (not empty, null, or undefined)
+        return value !== undefined && value !== null && value !== '';
       }),
     );
 
     try {
       // Build the parsing prompt
-      const prompt = this.promptService.buildDataParsingPromptWithAnswers(
-        text,
-        promptDataConfig,
-        'User profile data parsing',
-      );
+      const prompt = this.promptService.buildProfileParsingPrompt(text, alreadyCollected);
 
       // Get LLM response
       const llmResponse = await this.llmService.generateResponse(prompt, false);

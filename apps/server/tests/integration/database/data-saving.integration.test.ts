@@ -21,7 +21,7 @@ const mockLLMService = {
 };
 
 const mockPromptService = {
-  buildDataParsingPromptWithAnswers: jest.fn().mockReturnValue([
+  buildProfileParsingPrompt: jest.fn().mockReturnValue([
     { role: 'system', content: 'Parse user profile data from the following message. Return only valid JSON.' },
     { role: 'user', content: 'I am 28 years old male 175cm 75kg' },
   ]),

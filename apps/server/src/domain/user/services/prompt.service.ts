@@ -1,24 +1,6 @@
 import { USER_MESSAGES } from './messages';
 import { ParsedProfileData } from './user.service';
-
-// Chat message interface for LLM interactions
-export interface ChatMsg {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
-
-// Data parsing configuration interface
-export interface DataFieldsConfig {
-  [key: string]: string; // key: field name, value: description for LLM
-}
-
-// Enhanced data parsing configuration with context
-export interface EnhancedDataParsingConfig {
-  fieldsConfig: DataFieldsConfig;
-  alreadyCollected?: { [key: string]: unknown }; // fields already collected
-  requiredFields?: string[]; // fields that are required
-  optionalFields?: string[]; // fields that are optional
-}
+import { IPromptService, ChatMsg, UniversalParseRequest, FieldDefinition, DataFieldsConfig, EnhancedDataParsingConfig } from '../ports';
 
 // Data parsing response interface
 export interface DataParsingResponse {
@@ -29,48 +11,6 @@ export interface DataParsingResponse {
     fields?: { [key: string]: unknown };
   } | null;
   reply: string;
-}
-
-// Universal parsing interfaces
-export interface FieldDefinition {
-  key: string;
-  description: string;
-  type: 'number' | 'string' | 'boolean' | 'enum';
-  enumValues?: string[];
-  validation?: {
-    min?: number;
-    max?: number;
-    pattern?: string;
-  };
-}
-
-export interface UniversalParseRequest {
-  text: string;
-  fields: FieldDefinition[];
-}
-
-export interface UniversalParseResult {
-  [key: string]: unknown | null;
-}
-
-export interface IPromptService {
-  buildRegistrationSystemPrompt(context?: string): string;
-  buildChatSystemPrompt(): string;
-  buildProfileParsingPrompt(text: string): ChatMsg[];
-  buildUniversalParsingPrompt(request: UniversalParseRequest): string;
-  buildWelcomeMessage(): string;
-  buildBasicInfoSuccessMessage(age: number, gender: string, height: number, weight: number): string;
-  buildClarificationMessage(missingFields: string[]): string;
-  buildFitnessLevelQuestion(): string;
-  buildFitnessLevelSuccessMessage(level: string): string;
-  buildGoalQuestion(): string;
-  buildGoalsSuccessMessage(goal: string, profileData: ParsedProfileData): string;
-  buildConfirmationPrompt(profileData: ParsedProfileData): string;
-  buildRegistrationCompleteMessage(): string;
-  buildProfileResetMessage(): string;
-  buildConfirmationNeededMessage(): string;
-  buildClarificationPrompt(missingFields: string[]): string;
-  buildProgressChecklist(completedFields: string[]): string;
 }
 
 export class PromptService implements IPromptService {
