@@ -230,6 +230,7 @@ export default tseslint.config(
       'sort-imports': 'warn',
       '@typescript-eslint/no-explicit-any': 'warn', // Allow any in tests but warn
       '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'off', // Allow type assertions in tests
       '@typescript-eslint/no-unsafe-assignment': 'warn', // More lenient for tests
       '@typescript-eslint/no-unsafe-call': 'warn',
       '@typescript-eslint/no-unsafe-member-access': 'warn',

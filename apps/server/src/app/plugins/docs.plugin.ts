@@ -4,9 +4,10 @@ import fastifyStatic from '@fastify/static';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { FastifyInstance } from 'fastify';
+import fp from 'fastify-plugin';
 import { jsonSchemaTransform } from 'fastify-type-provider-zod';
 
-export async function docsPlugin(app: FastifyInstance): Promise<void> {
+export default fp(async (app: FastifyInstance): Promise<void> => {
   // Swagger/OpenAPI
   await app.register(swagger, {
     mode: 'dynamic',
@@ -30,5 +31,8 @@ export async function docsPlugin(app: FastifyInstance): Promise<void> {
     root: path.join(rootDir, 'public'),
     prefix: '/public/',
   });
-}
+}, {
+  name: 'docs',
+  encapsulate: false, // Disable encapsulation so swagger can see routes from other contexts
+});
 

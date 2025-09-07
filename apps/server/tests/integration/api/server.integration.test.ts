@@ -1,6 +1,6 @@
 import { buildServer } from '../../../src/app/server';
+import { getGlobalContainer, registerInfraServices } from '../../../src/main/register-infra-services';
 import { createTestApiKey, createTestUserData } from '../../shared/test-factories';
-import { getGlobalContainer } from '../../../src/main/register-infra-services';
 
 /**
  * Server Integration Tests
@@ -9,8 +9,25 @@ import { getGlobalContainer } from '../../../src/main/register-infra-services';
 describe('Server Basic Functionality – integration', () => {
   let app: Awaited<ReturnType<typeof buildServer>>;
 
-  beforeAll(async() => {
-    app = await buildServer(getGlobalContainer());
+         beforeAll(async() => {
+           const container = getGlobalContainer();
+           await registerInfraServices(container, { ensureDb: false });
+
+           app = buildServer();
+    
+    // Decorate app with services for tests
+    const { 
+      USER_SERVICE_TOKEN,
+      REGISTRATION_SERVICE_TOKEN,
+    } = await import('../../../src/domain/user/ports');
+    const { LLM_SERVICE_TOKEN } = await import('../../../src/domain/ai/ports');
+    
+    app.decorate('services', {
+      userService: container.get(USER_SERVICE_TOKEN) as any,
+      registrationService: container.get(REGISTRATION_SERVICE_TOKEN) as any,
+      llmService: container.get(LLM_SERVICE_TOKEN) as any,
+    });
+    
     await app.ready();
   });
 

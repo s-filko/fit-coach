@@ -1,15 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { LLM_SERVICE_TOKEN, LLMService } from '@domain/ai/ports';
-import { IContainer } from '@domain/ports/container.ports';
-import { 
-  IRegistrationService,
-  IUserService,
-  REGISTRATION_SERVICE_TOKEN,
-  USER_SERVICE_TOKEN,
-} from '@domain/user/ports';
-
 import { loadConfig } from '@config/index';
 
 const chatMessageBody = z.object({
@@ -17,8 +8,8 @@ const chatMessageBody = z.object({
   message: z.string().min(1).describe('User message'),
 }).describe('Chat message payload');
 
-export async function registerChatRoutes(app: FastifyInstance, container: IContainer): Promise<void> {
-  app.post('/api/chat', {
+export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
+  app.post('/chat', {
     schema: {
       summary: 'Send chat message to AI',
       body: chatMessageBody,
@@ -40,14 +31,10 @@ export async function registerChatRoutes(app: FastifyInstance, container: IConta
     },
   }, async(req, reply) => {
     try {
-      const userService = container.get<IUserService>(USER_SERVICE_TOKEN);
-      const registrationService = container.get<IRegistrationService>(REGISTRATION_SERVICE_TOKEN);
-      const llmService = container.get<LLMService>(LLM_SERVICE_TOKEN);
-
       const { userId, message } = req.body as { userId: string; message: string };
 
       // Get user data
-      const user = await userService.getUser(userId);
+      const user = await app.services.userService.getUser(userId);
       if (!user) {
         return reply.code(404).send({
           error: { message: 'User not found' },
@@ -57,16 +44,16 @@ export async function registerChatRoutes(app: FastifyInstance, container: IConta
       let response: string;
       let updatedUser = user;
       // Check registration status
-      if (userService.isRegistrationComplete(user)) {
+      if (app.services.userService.isRegistrationComplete(user)) {
         // Registration complete - normal chat mode
-        response = await llmService.generateResponse([{ role: 'user', content: message }], false);
+        response = await app.services.llmService.generateResponse([{ role: 'user', content: message }], false);
       } else {
         // Registration incomplete - profile data collection mode
-        const result = await registrationService.processUserMessage(user, message);
+        const result = await app.services.registrationService.processUserMessage(user, message);
         ({ response, updatedUser } = result);
 
         // Save user profile changes
-        await userService.updateProfileData(userId, {
+        await app.services.userService.updateProfileData(userId, {
           profileStatus: updatedUser.profileStatus,
           age: updatedUser.age,
           gender: updatedUser.gender,
@@ -82,7 +69,7 @@ export async function registerChatRoutes(app: FastifyInstance, container: IConta
         data: {
           content: response,
           timestamp: new Date().toISOString(),
-          registrationComplete: userService.isRegistrationComplete(updatedUser),
+          registrationComplete: app.services.userService.isRegistrationComplete(updatedUser),
         },
       });
     } catch (error) {
@@ -110,9 +97,7 @@ export async function registerChatRoutes(app: FastifyInstance, container: IConta
       },
     }, async(req, reply) => {
       try {
-        const llmService = container.get<LLMService>(LLM_SERVICE_TOKEN);
-
-        const debugInfo = llmService.getDebugInfo();
+        const debugInfo = app.services.llmService.getDebugInfo();
 
         return reply.send({
           debugInfo,
@@ -141,9 +126,7 @@ export async function registerChatRoutes(app: FastifyInstance, container: IConta
       },
     }, async(req, reply) => {
       try {
-        const llmService = container.get<LLMService>(LLM_SERVICE_TOKEN);
-
-        llmService.clearHistory();
+        app.services.llmService.clearHistory();
 
         return reply.send({
           message: 'Debug history cleared',

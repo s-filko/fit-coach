@@ -1,7 +1,7 @@
 import { buildServer } from '../../../src/app/server';
 import { db } from '../../../src/infra/db/drizzle';
-import { createTestApiKey, createTestUserData } from '../../shared/test-factories';
 import { getGlobalContainer, registerInfraServices } from '../../../src/main/register-infra-services';
+import { createTestApiKey, createTestUserData } from '../../shared/test-factories';
 
 describe('POST /api/user – integration', () => {
   let app: Awaited<ReturnType<typeof buildServer>>;
@@ -10,7 +10,21 @@ describe('POST /api/user – integration', () => {
   beforeAll(async() => {
     const container = getGlobalContainer();
     await registerInfraServices(container);
-    app = await buildServer(container);
+           app = buildServer();
+    
+    // Decorate app with services for tests
+    const { 
+      USER_SERVICE_TOKEN,
+      REGISTRATION_SERVICE_TOKEN,
+    } = await import('../../../src/domain/user/ports');
+    const { LLM_SERVICE_TOKEN } = await import('../../../src/domain/ai/ports');
+    
+    app.decorate('services', {
+      userService: container.get(USER_SERVICE_TOKEN) as any,
+      registrationService: container.get(REGISTRATION_SERVICE_TOKEN) as any,
+      llmService: container.get(LLM_SERVICE_TOKEN) as any,
+    });
+    
     await app.ready();
   });
 
@@ -126,7 +140,21 @@ describe('GET /api/user/{id} – integration', () => {
   beforeAll(async() => {
     const container = getGlobalContainer();
     await registerInfraServices(container);
-    app = await buildServer(container);
+           app = buildServer();
+    
+    // Decorate app with services for tests
+    const { 
+      USER_SERVICE_TOKEN,
+      REGISTRATION_SERVICE_TOKEN,
+    } = await import('../../../src/domain/user/ports');
+    const { LLM_SERVICE_TOKEN } = await import('../../../src/domain/ai/ports');
+    
+    app.decorate('services', {
+      userService: container.get(USER_SERVICE_TOKEN) as any,
+      registrationService: container.get(REGISTRATION_SERVICE_TOKEN) as any,
+      llmService: container.get(LLM_SERVICE_TOKEN) as any,
+    });
+    
     await app.ready();
   });
 

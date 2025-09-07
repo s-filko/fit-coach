@@ -1,4 +1,4 @@
-import type { LLMService } from '@infra/ai/llm.service';
+import type { LLMService } from '@domain/ai/ports';
 
 import { ProfileParserService } from '../profile-parser.service';
 import type { PromptService } from '../prompt.service';

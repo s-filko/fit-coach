@@ -14,12 +14,26 @@ import { createTestApiKey } from '../../shared/test-factories';
 describe('API Key Authentication Middleware – integration', () => {
   let app: Awaited<ReturnType<typeof buildServer>>;
 
-  beforeAll(async() => {
-    // Initialize container and register services
-    const container = getGlobalContainer();
-    await registerInfraServices(container);
+         beforeAll(async() => {
+           // Initialize container and register services
+           const container = getGlobalContainer();
+           await registerInfraServices(container);
+
+           app = buildServer();
     
-    app = await buildServer(container);
+    // Decorate app with services for tests
+    const { 
+      USER_SERVICE_TOKEN,
+      REGISTRATION_SERVICE_TOKEN,
+    } = await import('../../../src/domain/user/ports');
+    const { LLM_SERVICE_TOKEN } = await import('../../../src/domain/ai/ports');
+    
+    app.decorate('services', {
+      userService: container.get(USER_SERVICE_TOKEN) as any,
+      registrationService: container.get(REGISTRATION_SERVICE_TOKEN) as any,
+      llmService: container.get(LLM_SERVICE_TOKEN) as any,
+    });
+    
     await app.ready();
   });
 

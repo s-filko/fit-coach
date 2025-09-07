@@ -1,9 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { IContainer } from '@domain/ports/container.ports';
-import { IUserService, USER_SERVICE_TOKEN } from '@domain/user/ports';
-
 const createUserBody = z.object({
 
   provider: z.string().min(1).describe('Auth provider, e.g. "telegram"'),
@@ -14,8 +11,8 @@ const createUserBody = z.object({
   languageCode: z.string().optional().describe('IETF language code, e.g. "en"'),
 }).describe('Create or upsert user payload');
 
-export async function registerUserRoutes(app: FastifyInstance, container: IContainer): Promise<void> {
-  app.post('/api/user', {
+export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
+  app.post('/user', {
     schema: {
       summary: 'Create or get user by provider',
       body: createUserBody,
@@ -27,8 +24,7 @@ export async function registerUserRoutes(app: FastifyInstance, container: IConta
       },
     },
   }, async(req, reply) => {
-    const service = container.get<IUserService>(USER_SERVICE_TOKEN);
-    const user = await service.upsertUser(req.body as {
+    const user = await app.services.userService.upsertUser(req.body as {
       provider: string;
       providerUserId: string;
       username?: string;
@@ -39,7 +35,7 @@ export async function registerUserRoutes(app: FastifyInstance, container: IConta
     return reply.send({ data: { id: user.id } });
   });
 
-  app.get('/api/user/:id', {
+  app.get('/user/:id', {
     schema: {
       summary: 'Get user by id',
       params: z.object({ id: z.string() }),
@@ -52,9 +48,8 @@ export async function registerUserRoutes(app: FastifyInstance, container: IConta
       },
     },
   }, async(req, reply) => {
-    const service = container.get<IUserService>(USER_SERVICE_TOKEN);
     const { id } = req.params as { id: string };
-    const user = await service.getUser(id);
+    const user = await app.services.userService.getUser(id);
     if (!user) {return reply.code(404).send({ error: { message: 'User not found' } });}
     return reply.send({ data: { id: user.id } });
   });

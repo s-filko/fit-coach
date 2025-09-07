@@ -1,22 +1,24 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 
 import { apiKeyPreHandler } from '@app/middlewares/api-key';
 
-// Security plugin: applies API key guard to /api routes only.
-// Uses fastify-plugin to disable encapsulation so hooks work across contexts.
-export default fp(async (app: FastifyInstance): Promise<void> => {
-  app.addHook('preHandler', async (request, reply) => {
-    // Only apply to /api routes, skip OPTIONS requests
-    if (request.method === 'OPTIONS') {
-      return;
-    }
-    if (!request.url.startsWith('/api')) {
+/**
+ * Security plugin: applies API key guard to all routes in this context.
+ * Since this plugin is registered under /api prefix, it only affects /api routes.
+ */
+
+function shouldSkipSecurityCheck(request: FastifyRequest): boolean {
+  return request.method === 'OPTIONS';
+}
+
+export default fp(async(app: FastifyInstance): Promise<void> => {
+  app.addHook('preHandler', async(request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    if (shouldSkipSecurityCheck(request)) {
       return;
     }
     await apiKeyPreHandler(request, reply);
   });
 }, {
   name: 'security',
-  encapsulate: false, // Disable encapsulation so hooks work across contexts
 });
