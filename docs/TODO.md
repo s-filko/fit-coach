@@ -1,121 +1,20 @@
-# Fit Coach – Roadmap
+# TODOs (Docs-First / Testing / CI)
 
-## ✅ Delivered (MVP)
+## Immediate
+- Docs: Sync test env naming in `docs/DB_SETUP.md:1` to `.env.test` (and optionally `.env.test.integration`, `.env.test.e2e`) to match `apps/server/drizzle.config.ts:1` and `apps/server/src/app/test/setup.ts:1`.
+- Root README: Replace outdated root `README.md:1` with a short index that links to authoritative docs (`docs/README.md:1`, `docs/ARCHITECTURE.md:1`, `docs/API_SPEC.md:1`, `docs/CONTRIBUTING_AI.md:1`).
 
-### AI Integration
-- [x] LLM service via OpenAI/LangChain
-- [x] Chat API endpoint `/api/chat`
-- [x] Telegram bot integration
-- [x] Baseline fitness coach prompt
+## Testing Discipline
+- IDs in tests: Update `apps/server/TESTING.md:1` to mandate referencing doc IDs in test names (`S-####`, `AC-####`, `BR-<DOMAIN>-###`). Add examples for `describe/it`.
+- Migration note: Gradually update existing tests to include IDs in `describe/it` names (starting with integration suites under `apps/server/tests/integration/**`).
 
-### Architecture
-- [x] Clean architecture (app → domain → infra)
-- [x] DI container
-- [x] TypeScript typing
-- [x] Zod API validation
-- [x] Fastify framework
+## CI / Automation
+- Add check: Each endpoint in `docs/API_SPEC.md:1` must include `x-feature: FEAT-####`.
+- Add check: Each `FEAT-####` referenced in `docs/API_SPEC.md:1` appears in at least one test (filename or test title).
+- Add check: Warn when test titles lack any of `S-`, `AC-`, or `BR-` IDs (soft rule initially).
 
-### Testing
-- [x] Full test coverage (sample)
-- [x] Mock services for AI
-- [x] Environment-based config
-- [x] Jest + TypeScript
+## Quality Guards
+- Add an integration test to snapshot generated OpenAPI JSON (large structure) to detect API drift (allowed per `apps/server/TESTING.md:1`).
 
-### Docs
-- [x] API spec
-- [x] ADRs for AI integration
-- [x] README files
-
-## 🔄 Next Steps
-
-### High Priority
-- [ ] Advanced AI capabilities
-  - Improved prompts/personality
-  - Conversation memory
-  - Multilingual support
-  - Specializations (strength, cardio, yoga)
-
-- [ ] Data & Storage
-  - Conversation history
-  - User profiles
-  - Training stats
-  - Progress tracking
-
-- [ ] Expanded Features
-  - Workout planner
-  - Program generation
-  - Nutrition recommendations
-  - Progress analytics
-
-### Medium Priority
-- [ ] UI/UX
-  - Web admin interface
-  - Telegram inline keyboards
-  - Rich content (images, video)
-  - Interactive elements
-
-- [ ] Integrations
-  - Fitness trackers (Strava, Fitbit)
-  - Social networks
-  - Calendars (Google Calendar)
-  - Notifications
-
-### Low Priority
-- [ ] Scalability
-  - Redis caching
-  - Message queues
-  - Load balancing
-  - Docker optimization
-
-- [ ] Analytics
-  - Usage metrics
-  - A/B testing
-  - User insights
-  - ML personalization models
-
-## 🎯 Current MVP Metrics
-
-- Users: 0 (test mode)
-- Messages/day: 0 (local testing)
-- Response time: < 3s
-- Uptime: 100% (local)
-- Test coverage: 100%
-
-## 📋 Testing
-
-### Functional
-- [x] User registration
-- [x] AI chat responses
-- [x] API security
-- [x] Error handling
-
-### Integration
-- [x] Telegram bot + API
-- [x] Database operations
-- [x] Environment configuration
-- [x] Docker deployment
-
-### Performance
-- [x] Response time < 3s
-- [x] Memory < 100MB
-- [x] CPU < 10%
-- [x] Concurrent users: 10+
-
-## 🚀 Plan
-
-1. Weeks 1–2: Improve prompts/personality
-2. Weeks 3–4: Add conversation history
-3. Weeks 5–6: Workout planner
-4. Weeks 7–8: Web interface MVP
-5. Month 2: Production rollout
-
-## 📊 KPIs (Next Phase)
-
-- MAU: 100+
-- Messages/day: 500+
-- Avg response time: < 2s
-- User satisfaction: > 4.5/5
-- Week‑1 retention: > 70%
-
----
-*Last update: $(date)*
+Notes
+- Keep changes minimal and aligned with `docs/ARCHITECTURE.md:1` and `apps/server/jest.config.cjs:1`.

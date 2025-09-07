@@ -8,7 +8,7 @@ Invariants
 
 Business Rules
 	• BR-AI-001: AI responses are generated from request messages without persisting conversation state
-	• BR-AI-002: If user.profileStatus !== 'complete', chat uses registration flow; otherwise normal chat. Response schema is unchanged (content + timestamp only).
+	• BR-AI-002: If user.profileStatus !== 'active', chat uses registration/onboarding flow; otherwise normal chat. Response schema is unchanged (content + timestamp only).
 
 Additional
 	• BR-AI-003: Parsing should accept input in any language; response language is determined by user.languageCode

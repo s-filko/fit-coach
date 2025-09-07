@@ -10,7 +10,8 @@ This repository follows a strict docs‑first workflow. Start here to navigate d
 - Templates: `docs/templates/`
 - Contribution for AI: `docs/CONTRIBUTING_AI.md`
 - Documentation Guide: `docs/DOCUMENTATION_GUIDE.md`
+ - Testing Rules: `docs/TESTING.md` (→ `apps/server/TESTING.md`)
+ - TODOs: `docs/TODO.md`
 
 AI reading order:
 1) Feature Spec → 2) Domain Spec → 3) API_SPEC.md → 4) ARCHITECTURE.md → 5) ADRs
-
