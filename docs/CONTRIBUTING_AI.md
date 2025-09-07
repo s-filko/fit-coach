@@ -28,11 +28,49 @@ If any instruction here conflicts with the above docs, update this file to match
 3) Tests (follow `apps/server/TESTING.md`): unit for domain logic, integration for routes/repositories.
 4) Logging and unified error handling respected; Swagger updated by schemas.
 
+## Documentation System (Rules)
+- English only. One concept = one term (no synonyms).
+- Docs‑first is mandatory. Every PR includes updated docs.
+- Feature change = add/update Feature Spec under `docs/features/`.
+- Business rule change = update Domain Spec under `docs/domain/`.
+- API change = update `docs/API_SPEC.md` and keep Fastify schemas in sync.
+- Architecture change = add ADR under `docs/adr/`.
+- All rules, invariants, scenarios, and acceptance criteria must have unique IDs.
+- No duplication — reference by ID.
+
+### ID Conventions
+- Invariants: `INV-<DOMAIN>-###`
+- Business Rules: `BR-<DOMAIN>-###`
+- Scenarios: `S-####`
+- Acceptance Criteria: `AC-####`
+- IDs must appear in docs, code comments (JSDoc near ports/services), and tests.
+
+### Spec Locations
+- Domain Specs: `docs/domain/<domain>.spec.md` (≤ 50 lines; must match `apps/server/src/domain/*/ports/*.ts`).
+- Feature Specs: `docs/features/FEAT-####-*.md` (User Story, Scenarios, Acceptance Criteria, API Mapping, Domain Rules Reference).
+- API Spec: `docs/API_SPEC.md` (each endpoint: path, method, request/response schema; include `x-feature: FEAT-####`).
+- ADRs: `docs/adr/000X-*.md` (fundamental/breaking changes only).
+
+### AI Reading Order
+1) Feature Spec
+2) Domain Spec
+3) API_SPEC.md
+4) ARCHITECTURE.md
+5) ADRs
+
+## PR Checklist (Docs)
+- Feature PR includes a Feature Spec with IDs (S/AC) and BR references.
+- Domain rule change updates Domain Spec (INV/BR/Ports) and references IDs in code/tests.
+- API change updates API_SPEC with `x-feature` and keeps route schemas in sync.
+- Architecture change adds an ADR.
+- No duplication; IDs are unique and referenced consistently.
+
 ## Playbooks
 
 ### Add API Endpoint
 1) Spec:
    - Edit `docs/API_SPEC.md:1` with request/response schemas and security (X‑Api‑Key where required).
+   - Add `x-feature: FEAT-####` and create/update matching Feature Spec under `docs/features/`.
 2) App layer:
    - Create/update route under `apps/server/src/app/routes/*.ts` with Zod body/params/query/reply schemas.
    - Register within `apps/server/src/app/server.ts:1` (via route register function).
@@ -46,6 +84,7 @@ If any instruction here conflicts with the above docs, update this file to match
 ### Extend User Profile / Registration
 1) Spec & ADR:
    - Update `docs/API_SPEC.md:1` (new/changed fields) and add ADR if this is a significant model change.
+   - Update the relevant Feature Spec scenarios/AC and link BR IDs.
 2) Data layer:
    - Update `apps/server/src/infra/db/schema.ts:1` and generate Drizzle migrations (see project scripts).
    - Update user repository `apps/server/src/infra/db/repositories/user.repository.ts:1`.
@@ -61,6 +100,7 @@ If any instruction here conflicts with the above docs, update this file to match
 
 ### Adjust Registration Flow / Prompts
 1) Spec the interaction in `docs/API_SPEC.md:1` (if API changes), or ADR for behavioral changes.
+   - Update Feature Spec (scenarios and AC) with BR references.
 2) Update prompt building and messages:
    - `apps/server/src/domain/user/services/prompt.service.ts:1`
    - `apps/server/src/domain/user/services/messages.ts:1`
@@ -71,9 +111,14 @@ If any instruction here conflicts with the above docs, update this file to match
    - Update service interfaces in `apps/server/src/domain/user/ports/service.ports.ts` if needed.
 4) Keep error format and logging consistent; add/adjust tests accordingly.
 
+## Templates
+- Domain Spec: `docs/templates/domain.spec.template.md`
+- Feature Spec: `docs/templates/feature.spec.template.md`
+- ADR: `docs/templates/adr.template.md`
+
 ## DI & Ports Quick Reference
 - Container (singleton): `apps/server/src/infra/di/container.ts:1`
-- DI registration (composition root): `apps/server/src/app/bootstrap.ts:1`
+- DI registration (composition root): `apps/server/src/main/bootstrap.ts:1`
 - How to resolve in routes:
   ```ts
   const c = Container.getInstance();
@@ -127,4 +172,3 @@ When adding new ports, define `unique symbol` tokens and interfaces under `domai
 
 ---
 This guide is optimized for AI contributors to deliver consistent, reversible changes with minimal architectural drift. If a change requires deviating from these rules, write an ADR first.
-

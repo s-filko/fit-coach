@@ -8,8 +8,8 @@ Base URL: `/`
 - Protected routes: all under `/api/*` require header `X-Api-Key: <secret>`.
 - Public routes: `/health`, `/docs`, `/docs/*`.
 - Error codes:
-  - 401 Unauthorized — header `X-Api-Key` отсутствует
-  - 403 Forbidden — ключ передан, но неверный
+  - 401 Unauthorized — header `X-Api-Key` is missing
+  - 403 Forbidden — invalid `X-Api-Key`
 
 Swagger (OpenAPI) additions:
 ```yaml
@@ -33,6 +33,7 @@ security:
 ## 2. Users
 
 ### 2.1 Create/Upsert User
+- x-feature: FEAT-0001
 - POST `/api/user`
 - Request body (Zod):
 ```ts
@@ -52,6 +53,7 @@ security:
   - 403 `{ error: { message: string } }`
 
 ### 2.2 Get User by Id
+- x-feature: FEAT-0002
 - GET `/api/user/{id}`
 - Path params: `{ id: string }`
 - Responses:
@@ -63,6 +65,7 @@ security:
 ## 3. AI Chat
 
 ### 3.1 Send Chat Message
+- x-feature: FEAT-0003
 - POST `/api/chat`
 - Request body (Zod):
 ```ts
@@ -75,10 +78,13 @@ security:
   - 200 `{ data: { content: string, timestamp: string } }`
   - 401 `{ error: { message: string } }`
   - 403 `{ error: { message: string } }`
-  - 500 `{ error: { message: "AI processing failed" } }`
+  - 404 `{ error: { message: "User not found" } }`
+  - 500 `{ error: { message: "Processing failed" } }`
+
+  Notes:
+  - Profile completion status is internal to the server. Clients receive only user-facing `content` and a `timestamp`.
 
 ### Notes
-- AI responses are generated in Russian language
 - Response time may vary based on AI model load (typically < 3 seconds)
 - All conversations are stateless (no context preservation between messages)
 

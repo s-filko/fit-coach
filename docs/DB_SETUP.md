@@ -19,8 +19,8 @@ Create/update `apps/server/.env` (used by Fastify app):
 ```
 DB_HOST=localhost
 DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=postgres
+DB_USER=user_name
+DB_PASSWORD=secret
 DB_NAME=fitcoach
 ```
 
@@ -32,9 +32,9 @@ Create `apps/server/.env` with the same credentials but a different port or DB n
 ```
 DB_HOST=localhost
 DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_NAME=fitcoach_test
+DB_USER=user_name
+DB_PASSWORD=secret
+DB_NAME=fitcoach_dev
 ```
 
 Run a separate DB for tests by keeping docker-compose mapping 5432:5432 (container:5432 -> host:5432), and run tests with `NODE_ENV=test`.
