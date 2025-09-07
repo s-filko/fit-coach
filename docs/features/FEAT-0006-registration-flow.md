@@ -6,44 +6,44 @@ Principle: steps are UX segmentation only; backend continuously extracts missing
 ```mermaid
 flowchart TD
   %% Entry
-  A[Incoming message\nPOST /api/chat] --> B{Valid API key?}
+  A[Incoming message] --> B{Valid API key?}
   B -- No --> B1[401/403]
   B -- Yes --> C{User exists?}
   C -- No --> C1[404 User not found]
   C -- Yes --> L{Explicit language change?}
 
-  L -- Yes --> L1[Update user.languageCode\n(BR-USER-006)] --> R
+  L -- Yes --> L1[Update user.languageCode] --> R
   L -- No --> M{Detected language ≠ languageCode?}
-  M -- Yes --> M1[Ask switch confirmation\n("Switch to <lang>?"\nBR-UX-001)] --> R
+  M -- Yes --> M1[Ask switch confirmation 'Switch to lang?'] --> R
   M -- No --> R[Proceed]
 
   R --> S{profileStatus === 'active'?}
-  S -- Yes --> N[Normal chat\nLLMService.generateResponse]
-  S -- No --> P[Parse message\n(LLM, ProfileParser)\nBR-AI-003]
+  S -- Yes --> N[Normal chat LLMService generateResponse]
+  S -- No --> P[Parse message LLM ProfileParser]
 
   P --> Q{Ambiguous/unknown units?}
-  Q -- Yes --> Q1[Ask short clarification\nBR-USER-009, BR-AI-005] --> P
-  Q -- No --> U[Persist captured fields\n(Stage 1: goal, sex, dateOfBirth,\n height, weight, fitnessLevel,\n healthRestrictions, trainingLocation,\n equipmentPresent, availability)\nBR-USER-018, BR-USER-008, BR-USER-012]
+  Q -- Yes --> Q1[Ask short clarification] --> P
+  Q -- No --> U[Persist captured fields Stage 1: goal, sex, dateOfBirth, height, weight, fitnessLevel, healthRestrictions, trainingLocation, equipmentPresent, availability]
 
-  U --> T{All Stage 1 fields present?\n(see FEAT-0007)}
-  T -- No --> T1[Ask only missing fields\nDo not re-ask captured\nBR-USER-008]\n --> Z[Helpful response]
-  T -- Yes --> V[Show full profile summary\nAsk for confirmation\nBR-USER-011] --> W{Confirm?}
-  W -- Yes --> W1[Set profileStatus='onboarding'] --> O[Onboarding: optional extended questions]\n  --> Y{Completed or skip?}
+  U --> T{All Stage 1 fields present?}
+  T -- No --> T1[Ask only missing fields] --> Z[Helpful response]
+  T -- Yes --> V[Show full profile summary Ask for confirmation] --> W{Confirm?}
+  W -- Yes --> W1[Set profileStatus='onboarding'] --> O[Onboarding optional extended questions] --> Y{Completed or skip?}
   Y -- Yes --> A1[Set profileStatus='active']
   Y -- No  --> O
-  W -- Edit --> W2[Go back to collect/clarify\n(updated fields override\nBR-USER-012)] --> P
+  W -- Edit --> W2[Go back to collect/clarify] --> P
   W -- No/unclear --> V
 
   %% Post-completion edit
   N --> E{Intent: Edit profile?}
-  E -- Yes --> E1[Show current profile\nPropose updates\nBR-USER-013] --> E2{Confirm changes?}
+  E -- Yes --> E1[Show current profile Propose updates] --> E2{Confirm changes?}
   E2 -- Yes --> E3[Persist changes] --> N
   E2 -- No --> N
   E -- No --> N
 
   %% Durability
   classDef note fill:#f7f7f7,stroke:#bbb,color:#333;
-  D[(Persistence note:\nData is saved incrementally;\nresumes after restart\nBR-USER-010)]:::note
+  D[(Persistence note: Data is saved incrementally resumes after restart)]:::note
   D -.-> U
 ```
 
@@ -51,15 +51,15 @@ Edit Flow (Active)
 
 ```mermaid
 flowchart TD
-  X[Edit intent\nUser: change profile field(s)] --> Y{profileStatus === 'active'?}
+  X[Edit intent User: change profile fields] --> Y{profileStatus === 'active'?}
   Y -- No --> Y1[Defer to registration/onboarding flow]
-  Y -- Yes --> Z[Parse update(s)\n(LLM, ProfileParser)]
+  Y -- Yes --> Z[Parse updates LLM, ProfileParser]
   Z --> A{Ambiguous?}
-  A -- Yes --> A1[Ask short clarification\nBR-USER-009] --> Z
-  A -- No --> B[Build preview summary\n(updated fields)]
+  A -- Yes --> A1[Ask short clarification BR-USER-009] --> Z
+  A -- No --> B[Build preview summary updated fields]
   B --> C{Confirm?}
-  C -- Yes --> D[Persist changes\nno status change\nBR-USER-015] --> E[Return to normal chat]
-  C -- No/Cancel --> F[Discard changes\nno status change] --> E
+  C -- Yes --> D[Persist changes no status change BR-USER-015] --> E[Return to normal chat]
+  C -- No/Cancel --> F[Discard changes no status change] --> E
 ```
 
 Legend
