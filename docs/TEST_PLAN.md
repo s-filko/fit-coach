@@ -16,8 +16,9 @@ This plan enumerates tests to run before each commit. We add tests first, then i
   - existing → 200, id matches
   - non-existing → 404
 
-## Message (stub)
-- POST /api/message with valid key → 200, echo field equals message
+## Chat (stub)
+- S-0008: POST /api/chat with valid key → 200, returns `{ data: { content: string, timestamp: string } }`.
+- S-0011: POST /api/chat for unknown user → 404 with `{ error: { message: 'User not found' } }`.
 
 ## Notes
 - Server should not be started externally; tests use Fastify inject.

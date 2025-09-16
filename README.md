@@ -483,7 +483,7 @@ package.json
 
 12.8.1 Pipeline Stages and Data Flow
 
-Stage 1: Message Reception and Validation
+Phase 1: Message Reception and Validation
    Input:
    {
      "provider": "telegram",
@@ -523,7 +523,7 @@ Stage 1: Message Reception and Validation
      }
    }
 
-Stage 2: Context Building
+Phase 2: Context Building
    Input:
    {
      "traceId": "trace_789",
@@ -626,7 +626,7 @@ Stage 4: AI Processing
        "timestamp": "2024-03-20T10:00:00Z"
      },
      "userContext": {
-       // Stage 2 output
+       // Phase 2 output
      },
      "analysis": {
        // Stage 3 output

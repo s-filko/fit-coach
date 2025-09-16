@@ -13,12 +13,12 @@ Scenarios
 	• S-0041: Given profileStatus='registration', When the user provides availability (e.g., "3 days, 45 minutes"), Then availability={ daysPerWeek:3, sessionDurationMinutes:45 } is saved [BR-USER-021]
 	• S-0042: Given profileStatus='registration', When the user provides dateOfBirth, Then the derived age is validated within [6..100] and DOB is stored [INV-USER-004]
 	• S-0043: Given ambiguous numeric input (e.g., "180, 80"), When processed, Then the system asks a single clarification before persisting height/weight [BR-USER-009]
-	• S-0044: Given all Stage 1 fields present, When the system shows a full summary and the user confirms, Then profileStatus becomes 'onboarding' [BR-USER-011]
+	• S-0044: Given all registration fields present, When the system shows a full summary and the user confirms, Then profileStatus becomes 'onboarding' [BR-USER-011]
 
 Acceptance Criteria
 
-	• AC-0031: Stage 1 completion requires: goal, sex, dateOfBirth, height, weight, fitnessLevel, healthRestrictions, trainingLocation, equipmentPresent (can be 'none'), availability
-	• AC-0032: A full summary including all Stage 1 fields is shown before switching to 'onboarding'; explicit confirmation is required [BR-USER-011]
+	• AC-0031: Registration completion requires: goal, sex, dateOfBirth, height, weight, fitnessLevel, healthRestrictions, trainingLocation, equipmentPresent (can be 'none'), availability
+	• AC-0032: A full summary including all registration fields is shown before switching to 'onboarding'; explicit confirmation is required [BR-USER-011]
 	• AC-0033: The system does not re-ask already captured fields within registration [BR-USER-008]
 	• AC-0034: Values are normalized to English enums and metric units (years, cm, kg) [BR-USER-016, BR-USER-019..021]
 	• AC-0035: 'none' is accepted for healthRestrictions; equipmentPresent may be 'none'; equipmentUnavailable is optional [BR-USER-020, BR-USER-022]
@@ -26,7 +26,7 @@ Acceptance Criteria
 
 API Mapping
 
-	• POST /api/chat → RegistrationService.processUserMessage (Stage 1 extraction, normalization, summary, confirmation)
+	• POST /api/chat → RegistrationService.processUserMessage (registration extraction, normalization, summary, confirmation)
 
 Domain Rules Reference
 
@@ -35,5 +35,5 @@ Domain Rules Reference
 	• BR-USER-018, BR-USER-019, BR-USER-020, BR-USER-021, BR-USER-022, BR-USER-023
 
 Notes
-- Stage 1 is required to transition from 'registration' to 'onboarding'.
-- Optional extended onboarding questions follow; upon completion or explicit skip, the system transitions to 'active'.
+- Completing registration fields is required to transition from 'registration' to 'onboarding'.
+- Onboarding captures optional context; the system transitions to profileStatus='planning' after completion or explicit skip (plan feature will then drive activation).

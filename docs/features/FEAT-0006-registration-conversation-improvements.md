@@ -8,6 +8,11 @@ As a user, I want the registration chat to avoid repeated questions, respect my 
 
 Principles
 - Conversational and context-aware: the bot maintains helpful context and guides naturally.
+
+Greeting
+- First message introduces the Fit Coach assistant, explains the registration flow at a high level (say "I'll guide you through a few quick questions to set up your training profile") and asks if the user is ready to begin.
+- If the user confirms, proceed with the first registration question; otherwise reassure briefly and retry.
+
 - Steps are UX-only: backend continuously extracts missing profile fields only while profileStatus='registration' or an explicit edit session is active.
 - Complete profile: in normal chat (profile active) no data collection occurs unless the user asks to edit; in edit mode, once all required data is gathered, the bot immediately presents a summary for confirmation and exits edit mode after confirmation.
 - Next question is adaptive: chosen based on what is already captured and what is still missing; avoid re-asking captured fields.
@@ -16,18 +21,39 @@ Principles
 - Off-topic handling: answer in one short sentence (if needed) and immediately redirect to the active prompt (missing fields or confirmation) without derailing the flow.
 - Confirmation phrasing: prefer a friendly invitation to continue (e.g., “If everything looks good, we can continue.”) rather than imperative “say yes/no”; treat positive intents as confirmation.
 - Optional bilingual first prompt: on first detected language mismatch, the initial greeting may include a short bilingual line to propose switching; lock to the confirmed language afterwards.
-- Languages: default is English, but users may interact in any language; explicit language change requests are honored immediately, otherwise the system proposes switching on first detected mismatch.
+- Languages: default is English, but users may interact in any language; explicit language change requests are honored immediately. Switch automatically only when the entire user message is clearly in another single language; otherwise keep the current language.
 
 Status Taxonomy (Proposed)
 - Registration model:
   - registration — any state before final confirmation (covers all intermediate steps)
-  - onboarding — optional extended questions after Stage 1 confirmation
-  - active — confirmed profile (ready for normal chat)
+  - onboarding — optional extended questions after registration confirmation (handoff to planning)
+  - planning — plan creation stage handled by a separate feature (leads to 'active')
 - Current step-like values map to registration (except active) for backward compatibility.
 
 Diagram
-- See: `docs/features/FEAT-0006-registration-flow.md`
- - See also: Edit Flow (Active) diagram in `docs/features/FEAT-0006-registration-flow.md`
+- See: `docs/features/FEAT-0006-registration-flow.md` (diagram + canonical flow).
+  - Edit flow (active users) lives in the same diagram file.
+
+Data Model Reference
+- See ADR-0004: `docs/adr/0004-user-profile-and-context-storage.md:1` (users thin; registration data in user_profile 1:1; onboarding/preferences in user_context 1:1 jsonb; metrics 1:N optional; embeddings optional).
+
+Ongoing Enrichment
+- Even after switching to `planning` or `active`, any conversation that surfaces missing onboarding data should update stored profile/context silently and inform downstream services.
+- Plan adjustments requested while `active` return the user to `planning` and restart the plan approval loop.
+
+Phased Delivery
+- Detailed implementation phases: `docs/features/FEAT-0006-registration-implementation.md:1`.
+
+Phased Delivery (MVP Extension)
+- Phase 1: Status model and confirmation — adopt `registration|onboarding|active`, implement derived confirmation and summary.
+- Phase 2: Storage extension — introduce `user_profile` (registration) and `user_context` (JSONB) without API changes.
+- Phase 3: Conversational improvements — adaptive missing-only prompts, ambiguity clarifications, language switch/proposal.
+- Phase 4: Optional onboarding sets — enrich context progressively; activation unaffected (can skip).
+- Phase 5 (optional): Measurements history (`user_metrics`) and ANN embeddings for preferences.
+
+Onboarding Question Priority
+- Ask pending onboarding fields in this order: schedule/availability, coachSettings, preferences, equipmentExtra, notes.
+- Skipped answers are fine; revisit opportunistically during planning or active phases when the context brings them up.
 
 Scenarios
 	• S-0025: Given a field is already captured (e.g., age), When user mentions age again, Then bot acknowledges but does not re-ask age [BR-USER-005]
@@ -37,7 +63,7 @@ Scenarios
     • S-0029: Given not all required fields are present, When at confirmation step, Then bot asks for missing data and does not set profileStatus='onboarding' [INV-USER-003]
     • S-0030: Given user sends an explicit confirmation (e.g., "yes", "confirm"), When all required fields present, Then profileStatus='onboarding' and onboarding questions may start
     • S-0045: Given profileStatus='onboarding', When user answers optional questions, Then store answers and continue until done
-    • S-0046: Given profileStatus='onboarding', When user says "skip" or no more optional questions remain, Then profileStatus='active'
+    • S-0046: Given profileStatus='onboarding', When user says "skip" or no more optional questions remain, Then profileStatus='planning'
 	• S-0031: Given user explicitly asks to change language in free form (e.g., "let's speak English", "switch to Spanish"), When detected, Then bot switches language immediately and persists the change (no extra confirmation) [BR-USER-006][BR-UX-001]
 	• S-0032: Given user declines or gives no clear confirmation, When asked to switch, Then language remains unchanged and bot continues in stored languageCode [BR-UX-001]
 	• S-0033: Given user writes in any language, When parsing, Then system extracts profile data regardless of message language [BR-AI-003]
@@ -56,7 +82,7 @@ Acceptance Criteria
 	• AC-0023: Continuous extraction across phases — any missing field provided at any time is captured once and not re-asked
 	• AC-0024: Ambiguous inputs trigger a single concise clarification; value is persisted only after clarity (e.g., units)
 	• AC-0025: Registration progress is durable; after restart, previously captured fields remain and conversation resumes correctly
-	• AC-0026: Before switching to onboarding, bot shows a minimal readable summary of Stage 1 fields and asks for confirmation; onboarding starts only after positive confirmation. Activation occurs after onboarding completion or explicit skip.
+	• AC-0026: Before switching to onboarding, bot shows a minimal readable summary of registration fields and asks for confirmation; onboarding starts only after positive confirmation. After onboarding completion or explicit skip, set profileStatus='planning' for downstream plan generation.
 	• AC-0027: While profileStatus='active', edits do not change profileStatus; bot shows a preview of updated data and persists only after explicit confirmation; on cancel/unclear — no changes are saved.
 	• AC-0033: Inputs in any language/units are accepted; stored values are normalized to English enums and metric units with integer rounding (years, cm, kg)
 	• AC-0034: Language switch: explicit request switches immediately; proposal on first mismatch requires consent; if user does not continue in the chosen language, propose switching back in that language
@@ -90,7 +116,7 @@ Implementation Notes (Code Alignment)
 - Status model:
   - Replace with `'registration' | 'onboarding' | 'active'` across domain/infra/tests.
   - Set default status to `'registration'` on user creation.
-  - Treat confirmation as a derived phase: when all Stage 1 fields are present and status is `'registration'`, show summary and wait for explicit confirmation; only then set `'onboarding'`.
+  - Treat confirmation as a derived phase: when all registration fields are present and status is `'registration'`, show summary and wait for explicit confirmation; only then set `'onboarding'`.
 - Chat response schema:
   - Remove `registrationComplete` from route schemas; success reply is `{ data: { content: string, timestamp: string } }`.
 - Normalization & storage:
@@ -98,7 +124,7 @@ Implementation Notes (Code Alignment)
 - Tests update checklist:
   - Update response expectations for `/api/chat` (no `registrationComplete`).
   - Update status transitions and initial state assertions to `'registration'`.
-  - Adjust any tests relying on step-like statuses to use the new model (`registration` → Stage 1, `onboarding` optional, `active` after onboarding/skip).
+  - Adjust any tests relying on step-like statuses to use the new model (`registration` → registration phase, `onboarding` optional, `planning` after onboarding/skip; plan feature later sets `active`).
 
 Notes
 - This feature refines conversational logic; requires updates in parser/prompt/registration services.

@@ -83,6 +83,7 @@ security:
 
   Notes:
   - Profile completion status is internal to the server. Clients receive only user-facing `content` and a `timestamp`.
+  - All conversational phases (registration, onboarding, planning, etc.) interact exclusively through this `/api/chat` endpoint.
 
 ### Notes
 - Response time may vary based on AI model load (typically < 3 seconds)

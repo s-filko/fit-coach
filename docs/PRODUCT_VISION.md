@@ -5,7 +5,7 @@ Fit Coach is an AI-powered fitness coach that helps users train effectively, exp
 
 ---
 
-## Stage 1: Quick Setup (Required Minimum)
+## Registration: Quick Setup (Required Minimum)
 At the first interaction, the user completes a quick setup to provide the absolute must-have data for personalized training:
 
 - **Goals**: primary fitness goal such as weight loss, muscle gain, body toning, endurance, or general health.  
@@ -24,10 +24,10 @@ At the first interaction, the user completes a quick setup to provide the absolu
 
 ---
 
-## Stage 2: Extended Onboarding (Optional, Gradual)
-After the quick setup, users can optionally provide more detailed information over time to enhance personalization:
+## Onboarding: Extended (Required for Plan, Gradual)
+After the quick setup, users provide additional context so the coach can build a safe and relevant training plan. Users may lean on curated defaults, but every plan-critical input must be confirmed.
 
-Onboarding begins immediately after Stage 1 confirmation; upon completion or explicit skip, the user becomes active.
+Onboarding begins immediately after registration confirmation; once plan prerequisites are satisfied (answers or confirmed defaults), the system hands off to planning (profileStatus='planning').
 
 ### Anthropometry
 - Body measurements (waist, hips, chest, arms, legs)  
@@ -88,7 +88,7 @@ Onboarding begins immediately after Stage 1 confirmation; upon completion or exp
 
 ---
 
-## Stage 3: Ongoing Data Collection
+## Ongoing Data Collection
 More detailed data can be gathered progressively during workouts and user interactions. The system continually enriches the user profile through:
 
 - Feedback on perceived difficulty, discomfort, and actual performance  
@@ -100,22 +100,29 @@ This ongoing data collection ensures the AI adapts dynamically and personalizes 
 
 ---
 
-## Workout Plan Generation
-Based on Stage 1 minimum data and progressively enriched information, the AI generates a personalized workout plan:
+## Workout Plan Generation (Separate Feature)
+After onboarding confirms plan readiness, a dedicated plan-creation feature (post-onboarding) prepares and iterates on personalized workout plans. Registration/Onboarding ends once the user confirms the onboarding summary; plan approval happens in that follow-up feature. High-level flow (for reference):
 
-- Detailed exercises with sets, reps, and technical recommendations  
-- Adapted to the user’s goals, available equipment, and health conditions  
-- Safety layer that warns about risks, suggests lowering intensity when needed, and advises consulting a physician if concerning symptoms appear  
+1. Generate draft plan — exercises with sets, reps, safety notes, and rationale aligned with confirmed data.
+2. Present summary — highlight structure (split, frequency, focus areas) and key considerations.
+3. Capture feedback — the user may comment, suggest tweaks, or flag concerns (e.g., equipment, volume, preferences).
+4. Iterate — the assistant asks follow-up questions or applies defaults to adjust the draft, then proposes an updated version.
+5. Approve — once the user confirms the plan, training sessions become available and subsequent coaching features take over.
+
+Plan approval is outside the scope of FEAT-0006/0007 and will be implemented in a dedicated feature.
 
 ---
 
 ## Training Sessions
+- The UI always reflects one of two states:
+  - Active session in progress (exactly one per user)
+  - No active session → offer to start the next workout
 - The AI acknowledges that users may skip sessions or train more or less frequently than planned  
 - Users can ask at any time: *“What should I do today?”* → the AI builds a session considering:  
   - Previous workouts and targeted muscle groups  
   - User feedback (pain, ease/difficulty, actual reps performed)  
   - Time since the last session  
-- These ongoing interactions help enrich the user profile (Stage 3) and ensure balance between training and recovery  
+- These ongoing interactions help enrich the user profile (ongoing data collection) and ensure balance between training and recovery  
 
 ---
 
