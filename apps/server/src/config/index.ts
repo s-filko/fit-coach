@@ -19,9 +19,17 @@ const EnvSchema = z.object({
   DB_PASSWORD: z.string(),
   DB_NAME: z.string(),
   BOT_API_KEY: z.string().min(1),
-  OPENAI_API_KEY: z.string().min(1),
-  OPENAI_MODEL: z.string().optional(),
-  // LLM Debug Configuration
+  // LLM Configuration — any OpenAI-compatible API (OpenAI, OpenRouter, Groq, Together, Azure, etc.)
+  LLM_API_KEY: z.string().min(1),
+  LLM_API_URL: z.string().optional().transform(s => (s == null || s.trim() === '') ? undefined : s).pipe(z.string().url().min(1).optional()),
+  LLM_MODEL: z.string().min(1),
+  LLM_TEMPERATURE: z.string().transform(v => {
+    const n = Number(v);
+    if (Number.isNaN(n)) {
+      throw new Error('LLM_TEMPERATURE must be a number');
+    }
+    return n;
+  }).pipe(z.number().min(0).max(2)),
   LLM_DEBUG: z.string().optional().transform(v => v === 'true'),
 });
 

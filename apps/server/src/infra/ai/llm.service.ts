@@ -24,13 +24,19 @@ export class LLMService implements ILLMService {
   };
 
   constructor() {
-    const modelName = this.config.OPENAI_MODEL ?? 'gpt-4o-mini';
-    const temperature = 0.7;
+    const modelName = this.config.LLM_MODEL;
+    const baseURL = this.config.LLM_API_URL?.trim();
 
+    // Any OpenAI-compatible API: set LLM_API_URL (e.g. https://api.openrouter.ai/v1), LLM_API_KEY, LLM_MODEL
     this.model = new ChatOpenAI({
       model: modelName,
-      temperature,
-      apiKey: this.config.OPENAI_API_KEY,
+      temperature: this.config.LLM_TEMPERATURE,
+      apiKey: this.config.LLM_API_KEY,
+      ...(baseURL && {
+        configuration: {
+          baseURL: baseURL.endsWith('/') ? baseURL.slice(0, -1) : baseURL,
+        },
+      }),
     });
 
     this.isDebugMode = this.config.LLM_DEBUG ?? false;

@@ -1,41 +1,41 @@
 # Database Setup (PostgreSQL + pgvector)
 
-## 1. Запустить Docker
+## 1. Start Docker
 
-Серверу нужен работающий **Docker** (контейнер с PostgreSQL).
+The server requires a running **Docker** (container with PostgreSQL).
 
-- **macOS:** открой приложение **Docker Desktop** и дождись, пока в строке меню не будет «Docker Desktop is running».
-- Если Docker не установлен: https://docs.docker.com/get-docker/
+- **macOS:** open **Docker Desktop** and wait until the menu bar shows “Docker Desktop is running”.
+- If Docker is not installed: https://docs.docker.com/get-docker/
 
-Проверка в терминале:
+Verify in the terminal:
 ```bash
 docker info
 ```
-Без ошибки `Cannot connect to the Docker daemon` — можно дальше.
+If you do not see `Cannot connect to the Docker daemon`, you can proceed.
 
-## 2. Запустить БД
+## 2. Start the database
 
-Из корня проекта:
+From the project root:
 
 ```bash
 docker compose up -d db
 ```
 
-Compose поднимает:
+Compose brings up:
 - host: localhost  
 - port: 5432  
 - user: postgres  
 - password: postgres  
 - db: fitcoach  
 
-При первом запуске создай отдельную БД для dev (если в `.env` указан `fitcoach_dev`):
+On first run, create a separate database for dev (if your `.env` uses `fitcoach_dev`):
 ```bash
 docker exec fitcoach-db psql -U postgres -c "CREATE DATABASE fitcoach_dev;"
 ```
 
-## 3. Переменные окружения сервера
+## 3. Server environment variables
 
-Файл `apps/server/.env` (все поля обязательны):
+File `apps/server/.env` (all fields required):
 
 ```
 NODE_ENV=development
@@ -46,13 +46,22 @@ DB_PORT=5432
 DB_USER=postgres
 DB_PASSWORD=postgres
 DB_NAME=fitcoach_dev
-BOT_API_KEY=твой_секретный_ключ
-OPENAI_API_KEY=sk-...
+BOT_API_KEY=your_secret_key
+LLM_API_KEY=sk-...
+LLM_API_URL=https://api.openai.com/v1   # optional: for a custom/new API set base URL (e.g. https://api.openrouter.ai/v1)
+LLM_MODEL=gpt-4o-mini
+LLM_TEMPERATURE=0.7                     # 0–2, required
 ```
 
-## 4. Применить схему и запустить сервер
+To use a different LLM API (OpenRouter, Groq, Together, Azure, etc.), set in `.env`:
+- `LLM_API_URL` — provider base URL (e.g. `https://api.openrouter.ai/v1`), no trailing slash
+- `LLM_API_KEY` — API key from that provider
+- `LLM_MODEL` — model name at the provider (e.g. `openai/gpt-4o-mini`)
+- `LLM_TEMPERATURE` — number between 0 and 2 (required)
 
-Из каталога `apps/server`:
+## 4. Apply schema and start the server
+
+From the `apps/server` directory:
 
 ```bash
 cd apps/server
@@ -60,10 +69,10 @@ npm run drizzle:push
 npm run dev
 ```
 
-Сервер будет на http://localhost:3000. Проверка: `curl http://localhost:3000/health` → `{"status":"ok"}`.
+The server will be at http://localhost:3000. Verify: `curl http://localhost:3000/health` → `{"status":"ok"}`.
 
 ---
 
 ## Test database
 
-Для интеграционных тестов создай `apps/server/.env.test` с теми же переменными и, при необходимости, другим именем БД (например `fitcoach_test`). Запуск тестов с БД: `RUN_DB_TESTS=1 npm run test:integration`.
+For integration tests, create `apps/server/.env.test` with the same variables and, if needed, a different database name (e.g. `fitcoach_test`). Run tests against the DB: `RUN_DB_TESTS=1 npm run test:integration`.
