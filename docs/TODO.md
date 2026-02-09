@@ -31,7 +31,7 @@
 - Add integration test to snapshot OpenAPI JSON (detect API drift).
 
 ## Planning (FEAT-0008 — post-onboarding)
-- Define workout plan generation flow (draft/feedback/approval).
-- Update domain/user spec with plan states once feature is drafted.
-- Add ports/services for plan creation + status updates (enqueue, replan, approval).
-- Ensure activation (`active`) happens only after plan approval; replan should reset status to `planning`.
+- Implement workout plan lifecycle via `approvedAt`/`archivedAt` per `docs/features/FEAT-0008-training-plan-generation.md`.
+- Persist WorkoutPlanCycle hierarchy (macro|meso|micro) with state tracking (upcoming/active/completed/skipped) and planned/actual timestamps.
+- Link workout sessions/logs to planId; exercise history must remain tied to archived plans.
+- Ensure activation (`active`) happens only after plan approval; replan archives the previous plan and creates a new plan with `approvedAt=null` (profileStatus='planning').

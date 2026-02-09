@@ -7,6 +7,7 @@ This repository follows a strict docs‑first workflow. Start here to navigate d
 - ADRs: `docs/adr/`
 - Domain Specs: `docs/domain/`
 - Feature Specs: `docs/features/`
+- Product Vision: `docs/PRODUCT_VISION.md` (product narrative only — no schema/status/field names)
 - Templates: `docs/templates/`
 - Contribution for AI: `docs/CONTRIBUTING_AI.md`
 - Documentation Guide: `docs/DOCUMENTATION_GUIDE.md`

@@ -8,6 +8,7 @@ Invariants
 	• INV-USER-005: height is an integer centimeters value in range [80..250]
 	• INV-USER-006: weight is an integer kilograms value in range [20..250]
 	• INV-USER-008: While profileStatus='active', user-initiated edits do not change profileStatus; updates persist only after explicit confirmation
+	• INV-USER-009: profileStatus='planning' requires an unarchived WorkoutPlan with approvedAt=null; profileStatus='active' requires an unarchived WorkoutPlan with approvedAt≠null [INV-TRAINING-001][INV-TRAINING-002]
 Business Rules
 	• BR-USER-001: Upsert must return existing user if already registered [INV-USER-001]
 	• BR-USER-002: Public read returns 404 for unknown id
@@ -34,6 +35,8 @@ Business Rules
 		• BR-USER-024: After registration confirmation, set profileStatus='onboarding'; begin optional extended questions
 		• BR-USER-025: Onboarding questions are optional; user may answer or say 'skip'
 		• BR-USER-026: Transition to 'planning' occurs when onboarding is completed or explicitly skipped; optional data must not block handoff
+		• BR-USER-027: Plan approval sets profileStatus='active', records planApprovedAt, and surfaces next workout [BR-TRAINING-003]
+		• BR-USER-028: Replan requests from an active user reset profileStatus='planning', archive the previous plan, and create a new WorkoutPlan with approvedAt=null [BR-TRAINING-001][BR-TRAINING-004][BR-TRAINING-005]
 Ports
 	• IUserService (USER_SERVICE_TOKEN)
 	• upsertUser(input): { id: string } [BR-USER-001]
