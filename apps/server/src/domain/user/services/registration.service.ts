@@ -1,12 +1,9 @@
 import { LLMService } from '@domain/ai/ports';
-import { 
-  ChatMsg, 
-  FieldDefinition, 
+import {
+  ChatMsg,
   IProfileParserService,
-  IPromptService, 
-  IRegistrationService, 
-  UniversalParseRequest, 
-  UniversalParseResult,
+  IPromptService,
+  IRegistrationService,
 } from '@domain/user/ports';
 
 import { USER_MESSAGES } from './messages';
@@ -350,70 +347,4 @@ export class RegistrationService implements IRegistrationService {
     );
   }
 
-  /**
-   * Example of using universal parser for flexible data extraction
-   */
-  async parseWithUniversalParser(text: string): Promise<UniversalParseResult> {
-    // Define fields to extract
-    const fields: FieldDefinition[] = [
-      {
-        key: 'age',
-        description: 'User age in years',
-        type: 'number',
-        validation: { min: 10, max: 100 },
-      },
-      {
-        key: 'gender',
-        description: 'User gender',
-        type: 'enum',
-        enumValues: ['male', 'female'],
-      },
-      {
-        key: 'height',
-        description: 'Height in centimeters',
-        type: 'number',
-        validation: { min: 120, max: 220 },
-      },
-      {
-        key: 'weight',
-        description: 'Weight in kilograms',
-        type: 'number',
-        validation: { min: 30, max: 200 },
-      },
-      {
-        key: 'fitnessLevel',
-        description: 'Fitness experience level',
-        type: 'enum',
-        enumValues: ['beginner', 'intermediate', 'advanced'],
-      },
-      {
-        key: 'preferredTime',
-        description: 'Preferred workout time of day',
-        type: 'enum',
-        enumValues: ['morning', 'afternoon', 'evening'],
-      },
-      {
-        key: 'hasEquipment',
-        description: 'Whether user has access to gym equipment',
-        type: 'boolean',
-      },
-      {
-        key: 'experience',
-        description: 'Years of training experience',
-        type: 'number',
-        validation: { min: 0, max: 50 },
-      },
-    ];
-
-    // Create universal parsing request
-    const request: UniversalParseRequest = {
-      text,
-      fields,
-    };
-
-    // Parse using universal method
-    const result = await this.profileParser.parseUniversal(request);
-
-    return result;
-  }
 }

@@ -263,24 +263,17 @@ describe('DrizzleUserRepository – repository unit', () => {
       expect(mockDb.insert).toHaveBeenCalledWith('users_table_mock');
       const usersInsertMock = mockDb.insert.mock.results[0].value;
       expect(usersInsertMock.values).toHaveBeenCalledWith({
-        name: null,
-        email: null,
         gender: null,
-        height: null,
-        heightUnit: null,
-        weight: null,
-        weightUnit: null,
-        birthYear: null,
         age: null,
+        height: null,
+        weight: null,
         fitnessGoal: null,
-        tone: null,
-        reminderEnabled: false,
+        profileStatus: 'incomplete',
+        fitnessLevel: null,
         username: 'testuser',
         firstName: 'Test',
         lastName: 'User',
         languageCode: null,
-        profileStatus: 'incomplete',
-        fitnessLevel: null,
       });
 
       expect(result.id).toBe('test-user-uuid');
@@ -297,24 +290,17 @@ describe('DrizzleUserRepository – repository unit', () => {
 
       const usersInsertMock = mockDb.insert.mock.results[0].value;
       expect(usersInsertMock.values).toHaveBeenCalledWith({
-        name: null,
-        email: null,
         gender: null,
-        height: null,
-        heightUnit: null,
-        weight: null,
-        weightUnit: null,
-        birthYear: null,
         age: null,
+        height: null,
+        weight: null,
         fitnessGoal: null,
-        tone: null,
-        reminderEnabled: false,
+        profileStatus: 'incomplete',
+        fitnessLevel: null,
         username: null,
         firstName: null,
         lastName: null,
         languageCode: null,
-        profileStatus: 'incomplete',
-        fitnessLevel: null,
       });
     });
   });

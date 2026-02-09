@@ -26,7 +26,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         401: z.object({ error: z.object({ message: z.string() }) }),
         403: z.object({ error: z.object({ message: z.string() }) }),
         404: z.object({ error: z.object({ message: z.string() }) }),
-        500: z.object({ error: z.object({ message: z.string() }) }),
+        500: z.object({ error: z.object({ message: z.string(), details: z.string().optional() }) }),
       },
     },
   }, async(req, reply) => {

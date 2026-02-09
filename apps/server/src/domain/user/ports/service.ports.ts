@@ -8,10 +8,6 @@ export const PROFILE_PARSER_SERVICE_TOKEN = Symbol('ProfileParserService');
 
 // Service interfaces - business logic contracts
 export interface IUserService {
-  findByProvider(provider: string, providerUserId: string): Promise<User | null>;
-  createUser(data: CreateUserInput): Promise<User>;
-  getUserById(id: string): Promise<User | null>;
-  updateUserProfile(id: string, data: Partial<User>): Promise<User | null>;
   upsertUser(data: CreateUserInput): Promise<User>;
   getUser(id: string): Promise<User | null>;
   updateProfileData(id: string, data: Partial<User>): Promise<User | null>;

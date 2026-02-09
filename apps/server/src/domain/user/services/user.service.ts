@@ -50,23 +50,6 @@ export class UserService implements IUserService {
     return this.repo.updateProfileData(userId, data);
   }
 
-  // Port interface methods
-  async findByProvider(provider: string, providerUserId: string): Promise<User | null> {
-    return this.repo.findByProvider(provider, providerUserId);
-  }
-
-  async createUser(data: CreateUserInput): Promise<User> {
-    return this.repo.create(data);
-  }
-
-  async getUserById(id: string): Promise<User | null> {
-    return this.repo.getById(id);
-  }
-
-  async updateUserProfile(id: string, data: Partial<User>): Promise<User | null> {
-    return this.repo.updateProfileData(id, data);
-  }
-
   // Check if registration is complete
   isRegistrationComplete(user: User): boolean {
     return user.profileStatus === 'complete';

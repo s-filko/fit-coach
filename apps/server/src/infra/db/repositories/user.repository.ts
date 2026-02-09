@@ -50,19 +50,12 @@ async function getDbAndSchema() {
 function createUserData(input: CreateUserInput) {
   return {
     // Explicitly set nullable fields to null
-    name: null,
-    email: null,
     gender: null,
-    height: null,
-    heightUnit: null,
-    weight: null,
-    weightUnit: null,
-    birthYear: null,
     age: null,
+    height: null,
+    weight: null,
     fitnessGoal: null,
-    tone: null,
     // Set default values
-    reminderEnabled: false,
     profileStatus: 'incomplete',
     fitnessLevel: null,
     // Set provided values

@@ -1,29 +1,23 @@
 // Database schema definitions
-import { boolean, integer, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { integer, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name'),
-  email: text('email').unique(),
-  gender: text('gender'),
-  height: integer('height'),
-  heightUnit: text('height_unit'),
-  weight: integer('weight'),
-  weightUnit: text('weight_unit'),
-  birthYear: integer('birth_year'),
-  age: integer('age'),
-  fitnessGoal: text('fitness_goal'),
-  tone: text('tone'),
-  reminderEnabled: boolean('reminder_enabled').default(false),
+  username: text('username'),
   firstName: text('first_name'),
   lastName: text('last_name'),
   languageCode: text('language_code'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-  username: text('username'),
+  // Profile data
+  gender: text('gender'),
+  age: integer('age'),
+  height: integer('height'),
+  weight: integer('weight'),
+  fitnessGoal: text('fitness_goal'),
+  fitnessLevel: text('fitness_level'), // 'beginner', 'intermediate', 'advanced'
   // Registration-related fields
   profileStatus: text('profile_status').default('incomplete'), // 'incomplete', 'collecting_basic', 'collecting_level', 'collecting_goals', 'confirmation', 'complete'
-  fitnessLevel: text('fitness_level'), // 'beginner', 'intermediate', 'advanced'
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 export const userAccounts = pgTable('user_accounts', {
