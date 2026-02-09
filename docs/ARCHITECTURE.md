@@ -44,6 +44,10 @@ apps/server/src/
       ports.ts                 # AI domain interfaces
       services/
         ai-context.service.ts
+    conversation/
+      ports/
+        conversation-context.ports.ts  # IConversationContextService + types
+        index.ts               # Re-exports
     training/
       ports.ts                 # Training domain interfaces
       services/
@@ -58,6 +62,9 @@ apps/server/src/
         training-context.repository.ts
     ai/
       llm.service.ts            # LLM/LangChain integration
+    conversation/
+      conversation-context.service.ts   # IConversationContextService impl
+      conversation-context.repository.ts # Storage (in-memory → DB)
     di/
       container.ts              # Container + registration
     config/
@@ -199,6 +206,18 @@ These rules are for any AI assistant working in this repo:
 8) Update this document if an architectural change is truly required; include rationale and impact.
 9) For non-trivial changes, add an ADR entry under `docs/adr/` (see below).
 10) Preserve `tsconfig.json` path aliases and update imports accordingly if files move.
+
+## Conversation Context (Session) [FEAT-0009]
+*(Target design; domain/infra modules are added when FEAT-0009 is implemented.)*
+- A **conversation context** holds the dialogue (user + assistant turns) for a given (userId, phase) pair [INV-CONV-001]. It is the single place for "session" dialogue across all flows.
+- Context is **universal**: any flow (registration, chat, training) loads context, calls `getMessagesForPrompt(ctx)` to build the prompt, then appends the new turn after the LLM responds [BR-CONV-001][BR-CONV-002].
+- **Sliding window** (default 20 turns) limits token usage [BR-CONV-003]. Optional summarization prepends a summary before recent turns [BR-CONV-004].
+- **Phase transitions** reset or start a new phase with a system note [BR-CONV-005]. Time-based policies (idle threshold) may summarize or reset with a recap [BR-CONV-006].
+- Domain port: `IConversationContextService` (`CONVERSATION_CONTEXT_SERVICE_TOKEN`) — see `docs/domain/conversation.spec.md`. Implementations live in infra (in-memory for MVP, DB-backed later). Domain stays free of LangChain; LLM service only receives `ChatMsg[]`.
+- Module layout: `domain/conversation/ports/conversation-context.ports.ts` (types + interface); `infra/conversation/` (service + repository).
+- **ADR-0005**: patterns, model, and how context plugs into prompts.
+- **docs/CONVERSATION_CONTEXT_ARCHITECTURE.md**: stack-specific implementation guide (LangChain, Fastify, Drizzle) and checklist.
+- No breaking change to API: `POST /api/chat` contract remains unchanged [AC-0110]; context is used internally.
 
 ## ADRs (Architecture Decision Records)
 - Create `docs/adr/` and add numbered ADRs for major decisions.

@@ -124,6 +124,12 @@ Examples:
 • Weight: "75 kg" or "165 lbs"`;
   },
 
+  /** When field value is out of range or invalid — ask to correct with hint. */
+  INVALID_FIELDS: (invalidFields: string[], hints: Record<string, string>) => {
+    const lines = invalidFields.map(f => `• ${f}: ${hints[f] ?? 'please check the value'}`).join('\n');
+    return `Some values don't look right. Please correct:\n${lines}\n\nYou can reply with the correct values.`;
+  },
+
   CONFIRMATION_NEEDED: `Please confirm the information by replying with:
 • "yes" - to confirm and complete registration
 • "edit [field]" - to change a specific field (e.g., "edit age")`,
@@ -152,14 +158,6 @@ Please tell me again:
 
   // Status messages
   PROFILE_COMPLETE: 'Your profile is already complete! How can I help you?',
-
-  // AI prompts for different registration steps
-  AI_PROMPT_INCOMPLETE: 'User is starting registration. Greet them and begin collecting basic information.',
-  AI_PROMPT_COLLECTING_BASIC: 'Collect basic information: age, gender, height, weight. Be patient and clear.',
-  AI_PROMPT_COLLECTING_LEVEL: 'Determine user fitness level: beginner, intermediate, or advanced.',
-  AI_PROMPT_COLLECTING_GOALS: 'Find out training goals: lose weight, build muscle, maintain fitness, etc.',
-  AI_PROMPT_CONFIRMATION: 'Confirm all collected data and complete registration.',
-  AI_PROMPT_COMPLETE: 'Registration completed, user is ready for training.',
 } as const;
 
 // Helper functions for translations

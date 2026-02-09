@@ -69,8 +69,13 @@ describe('Data Saving Integration Test', () => {
         buildBasicInfoSuccessMessage: jest.fn(
           (age, gender, height, weight) => `Success: ${age}, ${gender}, ${height}, ${weight}`,
         ),
+        buildRegistrationContext: jest.fn(() => 'Already collected: age, gender, height, weight.'),
+        buildReaskBasicInfoMessage: jest.fn(() => 'I still need: gender, height, weight.'),
       } as any,
-      mockLLMService as any,
+      {
+        ...mockLLMService,
+        generateRegistrationResponse: mockLLMService.generateResponse ?? jest.fn().mockResolvedValue('OK'),
+      } as any,
     );
   });
 

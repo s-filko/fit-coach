@@ -30,13 +30,21 @@ class MockPromptService {
   buildGoalsSuccessMessage = jest.fn(() => 'Goals success');
   buildRegistrationCompleteMessage = jest.fn(() => 'Registration complete');
   buildClarificationMessage = jest.fn(() => 'Clarification message');
-  buildFitnessLevelQuestion = jest.fn(() => 'Fitness level question');
-  buildGoalQuestion = jest.fn(() => 'Goal question');
-  buildConfirmationPrompt = jest.fn(() => 'Confirmation prompt');
   buildProfileResetMessage = jest.fn(() => 'Profile reset message');
   buildConfirmationNeededMessage = jest.fn(() => 'Confirmation needed');
   buildClarificationPrompt = jest.fn(() => 'Clarification prompt');
-  buildProgressChecklist = jest.fn(() => 'Progress checklist');
+  buildInvalidFieldsMessage = jest.fn((fields: string[]) => `Please correct: ${fields.join(', ')}`);
+  buildRegistrationContext = jest.fn((u: {
+    age?: number; gender?: string; height?: number; weight?: number;
+    fitnessLevel?: string; fitnessGoal?: string; profileStatus?: string;
+  }) => {
+    const parts = [u.age != null && `age=${u.age}`, u.gender && `gender=${u.gender}`,
+      u.height != null && `height=${u.height}`, u.weight != null && `weight=${u.weight}`];
+    return `Already: ${parts.filter(Boolean).join(', ')}.`;
+  });
+  buildReaskBasicInfoMessage = jest.fn((u: { age?: number; gender?: string; height?: number; weight?: number }) =>
+    `I already have: ${[u.age != null && `Age ${u.age}`, u.gender && `Gender ${u.gender}`, u.height != null && `Height ${u.height}`, u.weight != null && `Weight ${u.weight}`].filter(Boolean).join(', ')}. What is your gender?`,
+  );
 }
 
 describe('RegistrationService Integration', () => {
@@ -53,7 +61,10 @@ describe('RegistrationService Integration', () => {
     registrationService = new RegistrationService(
       mockParser as any,
       mockPromptService as any,
-      { generateResponse: jest.fn().mockResolvedValue('Mock AI response') } as any,
+      {
+        generateResponse: jest.fn().mockResolvedValue('Mock AI response'),
+        generateRegistrationResponse: jest.fn().mockResolvedValue('Mock AI response'),
+      } as any,
     );
   });
 
@@ -277,6 +288,44 @@ describe('RegistrationService Integration', () => {
       expect(result.updatedUser.gender).toBe('female');
       expect(result.updatedUser.profileStatus).toBe('collecting_basic'); // Status stays the same
       expect(result.isComplete).toBe(false);
+    });
+
+    it('happy path: user provides all basic info in one message → profile updated, success message, next step', async() => {
+      const userWithBasicStatus = {
+        ...testUser,
+        profileStatus: 'collecting_basic' as const,
+      };
+
+      mockParser.parseProfileData.mockResolvedValue({
+        age: 30,
+        gender: 'male' as const,
+        height: 178,
+        weight: 74,
+        fitnessLevel: undefined,
+        fitnessGoal: undefined,
+      });
+
+      mockPromptService.buildBasicInfoSuccessMessage.mockReturnValue('Great! Now, what is your fitness level?');
+
+      const russianMessage = 'мне 30 лет, я мужчина, рост 178, вес 74';
+      const result = await registrationService.processUserMessage(userWithBasicStatus, russianMessage);
+
+      // Parser was called with user and message
+      expect(mockParser.parseProfileData).toHaveBeenCalledWith(userWithBasicStatus, russianMessage);
+
+      // User profile updated with all basic fields
+      expect(result.updatedUser.age).toBe(30);
+      expect(result.updatedUser.gender).toBe('male');
+      expect(result.updatedUser.height).toBe(178);
+      expect(result.updatedUser.weight).toBe(74);
+
+      // Moved to next step (fitness level), registration not complete yet
+      expect(result.updatedUser.profileStatus).toBe('collecting_level');
+      expect(result.isComplete).toBe(false);
+
+      // Success message built with extracted data and returned to user
+      expect(mockPromptService.buildBasicInfoSuccessMessage).toHaveBeenCalledWith(30, 'male', 178, 74);
+      expect(result.response).toBe('Great! Now, what is your fitness level?');
     });
   });
 });

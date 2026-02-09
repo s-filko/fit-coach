@@ -1,4 +1,4 @@
-import { ParsedProfileData } from '@domain/user/services/user.service';
+import { ParsedProfileData, User } from '@domain/user/services/user.service';
 
 // Chat message interface for LLM interactions
 export interface ChatMsg {
@@ -55,14 +55,17 @@ export interface IPromptService {
   buildWelcomeMessage(): string;
   buildBasicInfoSuccessMessage(age: number, gender: string, height: number, weight: number): string;
   buildClarificationMessage(missingFields: string[]): string;
-  buildFitnessLevelQuestion(): string;
   buildFitnessLevelSuccessMessage(level: string): string;
-  buildGoalQuestion(): string;
   buildGoalsSuccessMessage(goal: string, profileData: ParsedProfileData): string;
-  buildConfirmationPrompt(profileData: ParsedProfileData): string;
   buildRegistrationCompleteMessage(): string;
   buildProfileResetMessage(): string;
   buildConfirmationNeededMessage(): string;
   buildClarificationPrompt(missingFields: string[]): string;
+  /** Ask user to correct invalid field values. */
+  buildInvalidFieldsMessage(invalidFields: string[]): string;
   buildProgressChecklist(completedFields: string[]): string;
+  /** Build context string for LLM: what is already collected and what is still needed. */
+  buildRegistrationContext(user: User): string;
+  /** When no new data parsed but user has partial data: show already collected and ask for next missing field only. */
+  buildReaskBasicInfoMessage(user: User): string;
 }

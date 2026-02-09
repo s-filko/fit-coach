@@ -7,6 +7,8 @@ import {
 } from '@domain/user/ports';
 
 import { USER_MESSAGES } from './messages';
+import { getStepConfig } from './registration.config';
+import { validateStepData } from './registration.validation';
 import { ParsedProfileData, User } from './user.service';
 
 export class RegistrationService implements IRegistrationService {
@@ -22,13 +24,20 @@ export class RegistrationService implements IRegistrationService {
     isComplete: boolean;
     parsedData?: ParsedProfileData;
   }> {
-
-    const currentStep = user.profileStatus ?? 'incomplete';
-
+    const currentStep = (user.profileStatus ?? 'incomplete');
     const parsedData = await this.profileParser.parseProfileData(user, message);
 
-    // Process based on current step
-    switch (currentStep) {
+    const stepConfig = getStepConfig(currentStep);
+
+    if (currentStep === 'complete' || !stepConfig) {
+      return {
+        updatedUser: user,
+        response: USER_MESSAGES.PROFILE_COMPLETE,
+        isComplete: true,
+      };
+    }
+
+    switch (stepConfig.id) {
       case 'incomplete':
         return await this.handleGreeting(user, message, parsedData);
 
@@ -36,8 +45,6 @@ export class RegistrationService implements IRegistrationService {
         return await this.handleBasicInfo(user, message, parsedData);
 
       case 'collecting_level':
-        // If user is providing basic info (gender, age, etc.) during fitness level collection,
-        // update the basic info first
         if (parsedData.gender || parsedData.age || parsedData.height || parsedData.weight) {
           return await this.handleBasicInfo(user, message, parsedData);
         }
@@ -48,13 +55,6 @@ export class RegistrationService implements IRegistrationService {
 
       case 'confirmation':
         return await this.handleConfirmation(user, message);
-
-      case 'complete':
-        return {
-          updatedUser: user,
-          response: USER_MESSAGES.PROFILE_COMPLETE,
-          isComplete: true,
-        };
 
       default:
         return await this.handleGreeting(user, message, parsedData);
@@ -67,25 +67,15 @@ export class RegistrationService implements IRegistrationService {
     isComplete: boolean;
     parsedData?: ParsedProfileData;
   }> {
-    // Greeting and transition to basic info collection
-    const newStatus = 'collecting_basic';
+    const stepConfig = getStepConfig('incomplete');
+    const newStatus = stepConfig?.nextStep ?? 'collecting_basic';
+    const updatedUser = { ...user, profileStatus: newStatus };
 
-    // Update user status
-    const updatedUser = {
-      ...user,
-      profileStatus: newStatus,
-    };
-
-    // Generate AI response based on current state
+    const context = this.promptService.buildRegistrationContext(user);
     const chatMessage: ChatMsg[] = [{ role: 'user', content: message }];
-    const response = await this.llmService.generateResponse(chatMessage, true);
+    const response = await this.llmService.generateRegistrationResponse(chatMessage, context);
 
-    return {
-      updatedUser,
-      response,
-      isComplete: false,
-      parsedData,
-    };
+    return { updatedUser, response, isComplete: false, parsedData };
   }
 
   private async handleBasicInfo(user: User, message: string, parsedData: ParsedProfileData): Promise<{
@@ -94,73 +84,52 @@ export class RegistrationService implements IRegistrationService {
     isComplete: boolean;
     parsedData?: ParsedProfileData;
   }> {
-    // Collect basic information (age, gender, height, weight)
-
-    // Update user with any available data
-    const updatedUser = {
+    const merged = {
       ...user,
       age: parsedData.age ?? user.age,
       gender: parsedData.gender ?? user.gender,
       height: parsedData.height ?? user.height,
       weight: parsedData.weight ?? user.weight,
     };
+    const { validData, invalidFields, missingFields, isComplete } = validateStepData('collecting_basic', merged);
+    const updatedUser = { ...user, ...validData } as User;
 
-    // Check if we have enough data to proceed to next step
-    const hasAnyData = parsedData.age ?? parsedData.gender ?? parsedData.height ?? parsedData.weight;
-    const hasAllData = updatedUser.age && updatedUser.gender && updatedUser.height && updatedUser.weight;
-
-    // Use the AI response from profile parser (which already contains the proper AI-generated response)
-    // The profile parser's LLM response includes both data extraction and a helpful reply
-    let response: string;
-
-    if (hasAllData) {
-      // All data collected, proceed to fitness level determination
-      const newStatus = 'collecting_level';
-      const finalUser = {
-        ...updatedUser,
-        profileStatus: newStatus,
+    if (invalidFields.length > 0) {
+      return {
+        updatedUser,
+        response: this.promptService.buildInvalidFieldsMessage(invalidFields),
+        isComplete: false,
+        parsedData,
       };
+    }
 
-      response = this.promptService.buildBasicInfoSuccessMessage(
+    if (isComplete) {
+      const stepConfig = getStepConfig('collecting_basic');
+      const newStatus = stepConfig?.nextStep ?? 'collecting_level';
+      const finalUser = { ...updatedUser, profileStatus: newStatus };
+      const response = this.promptService.buildBasicInfoSuccessMessage(
         updatedUser.age!,
         updatedUser.gender!,
         updatedUser.height!,
         updatedUser.weight!,
       );
-
-      return {
-        updatedUser: finalUser,
-        response,
-        isComplete: false,
-        parsedData,
-      };
-    } else if (hasAnyData) {
-      // Some data collected, acknowledge and ask for missing data
-      const missing = [];
-      if (!updatedUser.age) {missing.push('age');}
-      if (!updatedUser.gender) {missing.push('gender');}
-      if (!updatedUser.height) {missing.push('height');}
-      if (!updatedUser.weight) {missing.push('weight');}
-
-      response = USER_MESSAGES.PARTIAL_INFO_CLARIFICATION(missing);
-
-      return {
-        updatedUser,
-        response,
-        isComplete: false,
-        parsedData,
-      };
-    } else {
-      // No data found, ask again
-      response = this.promptService.buildWelcomeMessage();
-
-      return {
-        updatedUser: user,
-        response,
-        isComplete: false,
-        parsedData,
-      };
+      return { updatedUser: finalUser, response, isComplete: false, parsedData };
     }
+
+    if (missingFields.length > 0) {
+      const hasAnyNewData = parsedData.age ?? parsedData.gender ?? parsedData.height ?? parsedData.weight;
+      const response = hasAnyNewData
+        ? USER_MESSAGES.PARTIAL_INFO_CLARIFICATION(missingFields)
+        : this.promptService.buildReaskBasicInfoMessage(updatedUser);
+      return { updatedUser, response, isComplete: false, parsedData };
+    }
+
+    return {
+      updatedUser,
+      response: this.promptService.buildReaskBasicInfoMessage(updatedUser),
+      isComplete: false,
+      parsedData,
+    };
   }
 
   private async handleFitnessLevel(user: User, message: string, parsedData: ParsedProfileData): Promise<{
@@ -169,34 +138,38 @@ export class RegistrationService implements IRegistrationService {
     isComplete: boolean;
     parsedData?: ParsedProfileData;
   }> {
-    // Determine fitness level
-
-    // Generate AI response based on current state
+    const context = this.promptService.buildRegistrationContext(user);
     const chatMessage: ChatMsg[] = [{ role: 'user', content: message }];
-    const response = await this.llmService.generateResponse(chatMessage, true);
+    const llmResponse = await this.llmService.generateRegistrationResponse(chatMessage, context);
 
-    if (parsedData.fitnessLevel) {
-      const newStatus = 'collecting_goals';
-      const updatedUser = {
-        ...user,
-        profileStatus: newStatus,
-        fitnessLevel: parsedData.fitnessLevel,
-      };
+    const merged = { ...user, fitnessLevel: parsedData.fitnessLevel ?? user.fitnessLevel };
+    const { validData, invalidFields, missingFields, isComplete } = validateStepData('collecting_level', merged);
+    const updatedUser = { ...user, ...validData } as User;
 
+    if (invalidFields.length > 0) {
       return {
         updatedUser,
-        response,
-        isComplete: false,
-        parsedData,
-      };
-    } else {
-      return {
-        updatedUser: user,
-        response,
+        response: this.promptService.buildInvalidFieldsMessage(invalidFields),
         isComplete: false,
         parsedData,
       };
     }
+    if (isComplete && validData.fitnessLevel) {
+      const stepConfig = getStepConfig('collecting_level');
+      const newStatus = stepConfig?.nextStep ?? 'collecting_goals';
+      return {
+        updatedUser: { ...updatedUser, profileStatus: newStatus },
+        response: llmResponse,
+        isComplete: false,
+        parsedData,
+      };
+    }
+    return {
+      updatedUser: missingFields.length > 0 ? user : updatedUser,
+      response: llmResponse,
+      isComplete: false,
+      parsedData,
+    };
   }
 
   private async handleGoals(user: User, message: string, parsedData: ParsedProfileData): Promise<{
@@ -205,40 +178,38 @@ export class RegistrationService implements IRegistrationService {
     isComplete: boolean;
     parsedData?: ParsedProfileData;
   }> {
-    // Collect fitness goals
-
-    // Generate AI response based on current state
+    const context = this.promptService.buildRegistrationContext(user);
     const chatMessage: ChatMsg[] = [{ role: 'user', content: message }];
-    const response = await this.llmService.generateResponse(chatMessage, true);
+    const llmResponse = await this.llmService.generateRegistrationResponse(chatMessage, context);
 
-    // Update user with any available goal data
-    const updatedUser = {
-      ...user,
-      fitnessGoal: parsedData.fitnessGoal ?? user.fitnessGoal,
-    };
+    const merged = { ...user, fitnessGoal: parsedData.fitnessGoal ?? user.fitnessGoal };
+    const { validData, invalidFields, isComplete } = validateStepData('collecting_goals', merged);
+    const updatedUser = { ...user, ...validData } as User;
 
-    if (parsedData.fitnessGoal) {
-      // Goal collected, proceed to confirmation
-      const newStatus = 'confirmation';
-      const finalUser = {
-        ...updatedUser,
-        profileStatus: newStatus,
-      };
-
+    if (invalidFields.length > 0) {
       return {
-        updatedUser: finalUser,
-        response,
-        isComplete: false,
-        parsedData,
-      };
-    } else {
-      return {
-        updatedUser: user,
-        response,
+        updatedUser,
+        response: this.promptService.buildInvalidFieldsMessage(invalidFields),
         isComplete: false,
         parsedData,
       };
     }
+    if (isComplete && validData.fitnessGoal) {
+      const stepConfig = getStepConfig('collecting_goals');
+      const newStatus = stepConfig?.nextStep ?? 'confirmation';
+      return {
+        updatedUser: { ...updatedUser, profileStatus: newStatus },
+        response: llmResponse,
+        isComplete: false,
+        parsedData,
+      };
+    }
+    return {
+      updatedUser,
+      response: llmResponse,
+      isComplete: false,
+      parsedData,
+    };
   }
 
   private async handleConfirmation(user: User, message: string): Promise<{
@@ -249,9 +220,9 @@ export class RegistrationService implements IRegistrationService {
   }> {
     const normalizedMessage = message.toLowerCase().trim();
 
-    // Generate AI response based on current state
+    const context = this.promptService.buildRegistrationContext(user);
     const chatMessage: ChatMsg[] = [{ role: 'user', content: message }];
-    const response = await this.llmService.generateResponse(chatMessage, true);
+    const response = await this.llmService.generateRegistrationResponse(chatMessage, context);
 
     // Check if profile is complete before allowing confirmation
     const hasAllRequiredData = user.age && user.gender && user.height && 
@@ -268,11 +239,9 @@ export class RegistrationService implements IRegistrationService {
     if (normalizedMessage === 'yes' || normalizedMessage === 'да' || normalizedMessage === 'confirm' ||
         normalizedMessage.includes('yes') || normalizedMessage.includes('correct') ||
         normalizedMessage.includes('верно') || normalizedMessage.includes('подтвердить')) {
-      // Confirmation - complete registration
-      const newStatus = 'complete';
       const updatedUser = {
         ...user,
-        profileStatus: newStatus,
+        profileStatus: 'complete',
       };
 
       return {
@@ -282,11 +251,9 @@ export class RegistrationService implements IRegistrationService {
       };
     } else if (normalizedMessage.includes('edit') || normalizedMessage.includes('change') ||
                normalizedMessage.includes('исправить') || normalizedMessage.includes('изменить')) {
-      // Return to previous step
-      const newStatus = 'collecting_basic';
       const updatedUser = {
         ...user,
-        profileStatus: newStatus,
+        profileStatus: 'collecting_basic',
       };
 
       const response = this.promptService.buildProfileResetMessage();
@@ -304,33 +271,6 @@ export class RegistrationService implements IRegistrationService {
         response,
         isComplete: false,
       };
-    }
-  }
-
-  getRegistrationPrompt(user: User): string {
-    const currentStep = user.profileStatus ?? 'incomplete';
-
-    switch (currentStep) {
-      case 'incomplete':
-        return USER_MESSAGES.AI_PROMPT_INCOMPLETE;
-
-      case 'collecting_basic':
-        return USER_MESSAGES.AI_PROMPT_COLLECTING_BASIC;
-
-      case 'collecting_level':
-        return USER_MESSAGES.AI_PROMPT_COLLECTING_LEVEL;
-
-      case 'collecting_goals':
-        return USER_MESSAGES.AI_PROMPT_COLLECTING_GOALS;
-
-      case 'confirmation':
-        return USER_MESSAGES.AI_PROMPT_CONFIRMATION;
-
-      case 'complete':
-        return USER_MESSAGES.AI_PROMPT_COMPLETE;
-
-      default:
-        return USER_MESSAGES.AI_PROMPT_COMPLETE;
     }
   }
 

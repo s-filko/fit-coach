@@ -30,7 +30,7 @@ Domain Contracts — Changes
     - extract registration fields across conversation; write to user_profile; produce adaptive prompts
     - when registration fields complete: show full summary; on explicit confirm → set users.profile_status='onboarding'
     - onboarding: store optional data in user_context; on "skip" or completion → set 'active'
-  - getRegistrationPrompt(user): must reflect missing-only logic.
+  - Registration flow is driven by centralized config (REGISTRATION_STEPS); LLM context uses buildRegistrationContext(user) for missing-only logic.
 - IProfileParserService
   - parseProfileData: extend to normalize registration fields into metric units and English enums
   - parseUniversal: unchanged; must support multilingual extraction and ambiguity flags.

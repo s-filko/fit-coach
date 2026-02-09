@@ -148,6 +148,26 @@ describe('ProfileParserService – parsing logic unit', () => {
         fitnessGoal: undefined,
       });
     });
+
+    it('should parse JSON when LLM wraps response in markdown code block', async() => {
+      const wrappedJson = '```json\n{"hasData":true,"data":{"fields":{"age":30,"gender":"male","height":178,"weight":74}},"reply":"Thanks!"}\n```';
+      const mockPromptMessages = [
+        { role: 'system', content: 'System prompt' },
+        { role: 'user', content: 'User message' },
+      ];
+      const mockPromptService = {
+        buildProfileParsingPrompt: jest.fn().mockReturnValue(mockPromptMessages),
+      };
+      const mockLLMService = { generateResponse: jest.fn().mockResolvedValue(wrappedJson) };
+      const testService = new ProfileParserService(mockPromptService as any, mockLLMService as any);
+
+      const result = await testService.parseProfileData({ id: 'test-user' } as any, 'мне 30 лет, я мужчина, рост 178, вес 74');
+
+      expect(result.age).toBe(30);
+      expect(result.gender).toBe('male');
+      expect(result.height).toBe(178);
+      expect(result.weight).toBe(74);
+    });
   });
 
   describe('JSON parsing validation', () => {

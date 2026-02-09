@@ -86,8 +86,9 @@ security:
   - All conversational phases (registration, onboarding, planning, etc.) interact exclusively through this `/api/chat` endpoint.
 
 ### Notes
+- x-feature: FEAT-0009
 - Response time may vary based on AI model load (typically < 3 seconds)
-- All conversations are stateless (no context preservation between messages)
+- **(Target, FEAT-0009)** Server maintains conversation context per (userId, phase) internally [BR-CONV-001]; context is not exposed in the API contract. Sliding window (default 20 turns) [BR-CONV-003]; phase transitions reset context [BR-CONV-005]. Until implemented, conversations are stateless.
 
 ## Notes
 - All responses are JSON.

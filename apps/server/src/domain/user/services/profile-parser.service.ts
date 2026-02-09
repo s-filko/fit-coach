@@ -1,38 +1,14 @@
-import { z } from 'zod';
-
 import { LLMService } from '@domain/ai/ports';
 import { FieldDefinition, IProfileParserService, IPromptService, UniversalParseRequest, UniversalParseResult } from '@domain/user/ports';
+import { validateProfileFields } from '@domain/user/services/registration.validation';
 import { ParsedProfileData, User } from '@domain/user/services/user.service';
 
-// Helper function for Zod validation with fallback to undefined
-function validateWithFallback<T>(schema: z.ZodType<T>, value: unknown): T | undefined {
-  const result = schema.safeParse(value);
-  return result.success ? result.data : undefined;
+// Strip markdown code block wrapper if present (e.g. ```json ... ```)
+function stripJsonFromMarkdown(raw: string): string {
+  const trimmed = raw.trim();
+  const codeBlockMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)```$/m);
+  return codeBlockMatch ? codeBlockMatch[1].trim() : trimmed;
 }
-
-// Generic function to validate object fields using configuration
-function validateObjectFields<T extends Record<string, unknown>>(
-  data: Record<string, unknown>,
-  validators: Record<keyof T, z.ZodType<unknown>>,
-): T {
-  const result = {} as T;
-  for (const [key, validator] of Object.entries(validators)) {
-    (result as Record<string, unknown>)[key] = validateWithFallback(validator, data[key]);
-  }
-  return result;
-}
-
-// Declarative field validation configuration
-const fieldValidators = {
-  age: z.union([z.number().int().min(10).max(100), z.null()]).transform(val => val ?? undefined),
-  gender: z.union([z.enum(['male', 'female']), z.null()]).transform(val => val ?? undefined),
-  height: z.union([z.number().int().min(120).max(220), z.null()]).transform(val => val ?? undefined),
-  weight: z.union([z.number().int().min(30).max(200), z.null()]).transform(val => val ?? undefined),
-  fitnessLevel: z.union([z.enum(['beginner', 'intermediate', 'advanced']), z.null()]).transform(val => val ?? undefined),
-  fitnessGoal: z.union([z.string().min(1).max(100), z.null()]).transform(val => val ?? undefined),
-  limitations: z.array(z.string()).optional(),
-  equipment: z.array(z.string()).optional(),
-} as const;
 
 export class ProfileParserService implements IProfileParserService {
   constructor(
@@ -62,7 +38,8 @@ export class ProfileParserService implements IProfileParserService {
       const prompt = this.promptService.buildProfileParsingPrompt(text, alreadyCollected);
 
       // Get LLM response
-      const llmResponse = await this.llmService.generateResponse(prompt, false);
+      const rawResponse = await this.llmService.generateResponse(prompt, false);
+      const llmResponse = stripJsonFromMarkdown(rawResponse);
 
       // Parse the JSON response
       const parsedResult = JSON.parse(llmResponse) as unknown;
@@ -77,12 +54,7 @@ export class ProfileParserService implements IProfileParserService {
         extractedData = parsedResultObj;
       }
 
-      // Validate with Zod - ultimate simplicity!
-      // Before: 60+ lines of try-catch blocks
-      // After: 1 line using generic validation function
-      const validatedResult = validateObjectFields<ParsedProfileData>(extractedData, fieldValidators);
-
-      // validatedResult is already filtered/validated above; no extra debug bookkeeping
+      const validatedResult = validateProfileFields(extractedData);
       return validatedResult;
     } catch {
       // Return empty object on error

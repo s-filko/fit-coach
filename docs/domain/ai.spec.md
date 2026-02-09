@@ -4,15 +4,13 @@ Terms
 	• ChatMsg: structured user message with role/content
 
 Invariants
-	• INV-AI-001: Chat processing is stateless per request (no memory)
+	• INV-AI-001: LLM service receives a ready-made ChatMsg[] and system prompt; it does not manage conversation storage or history [BR-CONV-001]
 
 Business Rules
-	• BR-AI-001: AI responses are generated from request messages without persisting conversation state
+	• BR-AI-001: AI responses are generated from conversation context (prior turns + current message) loaded by the orchestrator [BR-CONV-001][BR-CONV-003]
 	• BR-AI-002: If user.profileStatus !== 'active', chat uses registration/onboarding flow; otherwise normal chat. Response schema is unchanged (content + timestamp only).
-
-Additional
 	• BR-AI-003: Parsing should accept input in any language; response language is determined by user.languageCode
-	• BR-AI-004: Conversation maintains helpful context while progressing registration (do not drop prior answers)
+	• BR-AI-004: Conversation context preserves prior answers across turns within a phase; sliding window ensures token budget [BR-CONV-003]
 	• BR-AI-005: When field/units confidence is low, ask a short clarifying question before persisting
 
 Ports

@@ -1,23 +1,21 @@
 import { ChatMsg, DataFieldsConfig, EnhancedDataParsingConfig, FieldDefinition, IPromptService, UniversalParseRequest } from '@domain/user/ports';
 import { USER_MESSAGES } from '@domain/user/services/messages';
-import { ParsedProfileData } from '@domain/user/services/user.service';
+import { getStepConfig } from '@domain/user/services/registration.config';
+import { FIELD_HINTS } from '@domain/user/services/registration.validation';
+import { ParsedProfileData, User } from '@domain/user/services/user.service';
 
 export class PromptService implements IPromptService {
   /**
    * System prompt for registration mode
    */
   buildRegistrationSystemPrompt(context?: string): string {
-    const basePrompt = 'You are a friendly AI fitness coach helping users complete their profile registration. ' +
-      'Your task is to: ' +
-      '1. Be patient and encouraging during profile collection ' +
-      '2. Ask clear, simple questions one at a time ' +
-      '3. Confirm information you\'ve collected ' +
-      '4. Guide users through the registration process step by step ' +
-      '5. Keep responses brief and friendly ' +
-      `Current context: ${context ?? 'Starting profile registration'} ` +
-      'Always respond in English.';
-
-    return basePrompt;
+    const ctx = context ?? 'Starting profile registration. No data collected yet.';
+    return 'You are a friendly AI fitness coach helping users complete their profile registration. ' +
+      'CRITICAL: Use ONLY the context below. Do NOT ask for any field that is already collected. ' +
+      'Show the user what we already have, then ask ONLY for the next missing field (one at a time). ' +
+      'If everything for the current step is collected, move on or confirm. ' +
+      'Keep responses brief and friendly. Always respond in English. ' +
+      `\n\nCurrent registration context:\n${ctx}`;
   }
 
   /**
@@ -143,14 +141,16 @@ export class PromptService implements IPromptService {
 
     const enhancedRules = [
       'Return ONLY valid JSON matching the schema. No prose or explanation.',
+      'CRITICAL: The user may write in ANY language (e.g. Russian, English). Extract age, gender, height (cm), weight (kg) from the message. Russian examples: "мне X лет" = age X, "мужчина"/"я мужчина" = male, "женщина" = female, "рост X" = height X cm, "вес X" = weight X kg.',
       'CRITICAL: Extract NEW data only when you can CLEARLY identify what each value represents.',
       'ACCEPT approximate language: "around 70kg", "about 25 years", "roughly 175cm" - these are valid data.',
       'ACCEPT informal language: jokes, slang, indirect mentions - if meaning is clear.',
       'REJECT ambiguous assignments: "70 and 88" without context, unclear which number is which field.',
       'REJECT when you cannot determine what specific values refer to which fields.',
       'Examples of GOOD NEW data to extract:',
+      '  - "мне 30 лет, я мужчина, рост 178, вес 74" → age: 30, gender: "male", height: 178, weight: 74',
       '  - "around 70kg" → weight: 70',
-      '  - "maybe 25 years old" → age: 25', 
+      '  - "maybe 25 years old" → age: 25',
       '  - "I\'m like 175 or something" → height: 175',
       'Examples of BAD NEW data to NOT extract:',
       '  - "70 and 88" → unclear which is age/weight/height',
@@ -242,51 +242,6 @@ export class PromptService implements IPromptService {
   }
 
   /**
-   * Question for fitness level determination
-   */
-  buildFitnessLevelQuestion(): string {
-    return 'Now let\'s determine your fitness level. Which option best describes you: ' +
-      '• Beginner - I have little or no regular exercise experience ' +
-      '• Intermediate - I\'ve been exercising regularly for 1-2 years ' +
-      '• Advanced - I\'ve been exercising regularly for more than 2 years ' +
-      'Please reply with just one word: beginner, intermediate, or advanced.';
-  }
-
-  /**
-   * Question for fitness goals
-   */
-  buildGoalQuestion(): string {
-    return 'What is your main fitness goal? ' +
-      '• Weight loss - lose weight and burn fat ' +
-      '• Muscle gain - build muscle mass ' +
-      '• Maintain - keep current fitness level ' +
-      '• General fitness - improve overall health ' +
-      '• Strength - increase strength and power ' +
-      'Please reply with one of these options or describe your own goal.';
-  }
-
-  /**
-   * Confirmation prompt with collected data
-   */
-  buildConfirmationPrompt(profileData: ParsedProfileData): string {
-    const dataSummary = [
-      profileData.age ? `Age: ${profileData.age} years` : 'Age: not specified',
-      profileData.gender ? `Gender: ${profileData.gender === 'male' ? 'male' : 'female'}` : 'Gender: not specified',
-      profileData.height ? `Height: ${profileData.height} cm` : 'Height: not specified',
-      profileData.weight ? `Weight: ${profileData.weight} kg` : 'Weight: not specified',
-      profileData.fitnessLevel ? `Level: ${profileData.fitnessLevel}` : 'Level: not specified',
-      profileData.fitnessGoal ? `Goal: ${profileData.fitnessGoal}` : 'Goal: not specified',
-    ].join('\n');
-
-    return 'Let\'s review the information I\'ve collected: ' +
-      `${dataSummary} ` +
-      'Is this information correct? Reply with: ' +
-      '• "yes" - to confirm and complete registration ' +
-      '• "no" - to make corrections ' +
-      '• "edit [field]" - to change a specific field (for example: "edit age")';
-  }
-
-  /**
    * Prompt for clarification when information is missing or unclear
    */
   buildClarificationPrompt(missingFields: string[]): string {
@@ -372,6 +327,11 @@ export class PromptService implements IPromptService {
     return USER_MESSAGES.PROFILE_RESET;
   }
 
+  /** Ask user to correct invalid field values (with hints). */
+  buildInvalidFieldsMessage(invalidFields: string[]): string {
+    return USER_MESSAGES.INVALID_FIELDS(invalidFields, FIELD_HINTS as Record<string, string>);
+  }
+
   /**
    * Progress checklist display
    */
@@ -393,5 +353,78 @@ export class PromptService implements IPromptService {
     }).join('\n');
 
     return `📋 Registration Progress:\n${checklist}`;
+  }
+
+  buildRegistrationContext(user: User): string {
+    const parts: string[] = [];
+    if (user.age != null) { parts.push(`age=${user.age}`); }
+    if (user.gender) { parts.push(`gender=${user.gender}`); }
+    if (user.height != null) { parts.push(`height=${user.height}`); }
+    if (user.weight != null) { parts.push(`weight=${user.weight}`); }
+    if (user.fitnessLevel) { parts.push(`fitnessLevel=${user.fitnessLevel}`); }
+    if (user.fitnessGoal) { parts.push(`fitnessGoal=${user.fitnessGoal}`); }
+
+    const already = parts.length > 0 ? `Already collected: ${parts.join(', ')}.` : 'No data collected yet.';
+    const stepConfig = getStepConfig(user.profileStatus);
+
+    if (!stepConfig) {
+      return already;
+    }
+
+    if (stepConfig.id === 'incomplete' || stepConfig.id === 'collecting_basic') {
+      const need: string[] = [];
+      if (user.age == null) {need.push('age');}
+      if (!user.gender) {need.push('gender');}
+      if (user.height == null) {need.push('height');}
+      if (user.weight == null) {need.push('weight');}
+      const still = need.length > 0 ? ` Still need: ${need.join(', ')}. Ask only for the next missing field.` : ' Basic info complete.';
+      return `${already}${still}`;
+    }
+    if (stepConfig.id === 'collecting_level') {
+      return `${already} Current step: fitness level. Still need: fitness level ` +
+        '(beginner/intermediate/advanced). Ask only for fitness level.';
+    }
+    if (stepConfig.id === 'collecting_goals') {
+      return `${already} Current step: goals. Still need: fitness goal. Ask only for goal.`;
+    }
+    if (stepConfig.id === 'confirmation') {
+      return `${already} All data collected. Ask user to confirm (yes/edit).`;
+    }
+    return already;
+  }
+
+  buildReaskBasicInfoMessage(user: User): string {
+    const have: string[] = [];
+    if (user.age != null) {have.push(`Age: ${user.age}`);}
+    if (user.gender) {have.push(`Gender: ${user.gender}`);}
+    if (user.height != null) {have.push(`Height: ${user.height} cm`);}
+    if (user.weight != null) {have.push(`Weight: ${user.weight} kg`);}
+
+    const missing: string[] = [];
+    if (user.age == null) {missing.push('age');}
+    if (!user.gender) {missing.push('gender');}
+    if (user.height == null) {missing.push('height');}
+    if (user.weight == null) {missing.push('weight');}
+
+    if (missing.length === 0) {
+      return USER_MESSAGES.BASIC_INFO_SUCCESS(
+        user.age!,
+        user.gender!,
+        user.height!,
+        user.weight!,
+      );
+    }
+
+    const alreadyLine = have.length > 0
+      ? `I already have: ${have.join(', ')}.\n\n`
+      : '';
+    const nextOnly: Record<string, string> = {
+      age: 'How old are you?',
+      gender: 'What is your gender (male/female)?',
+      height: 'What is your height in cm?',
+      weight: 'What is your weight in kg?',
+    };
+    const [next] = missing;
+    return `${alreadyLine}I still need: ${missing.join(', ')}.\n\n${nextOnly[next] ?? `Please provide: ${next}.`}`;
   }
 }

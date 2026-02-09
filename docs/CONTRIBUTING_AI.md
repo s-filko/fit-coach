@@ -111,6 +111,25 @@ If any instruction here conflicts with the above docs, update this file to match
    - Update service interfaces in `apps/server/src/domain/user/ports/service.ports.ts` if needed.
 4) Keep error format and logging consistent; add/adjust tests accordingly.
 
+### Integrate Conversation Context into a Flow
+1) Spec:
+   - Verify FEAT-0009 scenarios and domain rules in `docs/features/FEAT-0009-conversation-context.md` and `docs/domain/conversation.spec.md`.
+   - Reference BR-CONV-001..BR-CONV-007 in code and tests.
+2) Domain:
+   - Import `IConversationContextService` and `CONVERSATION_CONTEXT_SERVICE_TOKEN` from `domain/conversation/ports/`.
+   - Use `ChatMsg` type (shared with AI domain) for message arrays.
+3) Orchestration (route or orchestrator service):
+   - Determine phase from user state (e.g. profileStatus -> 'registration' or 'chat').
+   - Load: `ctx = await conversationContextService.getContext(userId, phase)` [BR-CONV-001].
+   - Build: `history = conversationContextService.getMessagesForPrompt(ctx, {maxTurns: 20})` [BR-CONV-003].
+   - Call LLM: `llmService.generateResponse([...history, {role:'user', content: message}])`.
+   - Persist: `await conversationContextService.appendTurn(userId, phase, message, response)` [BR-CONV-002].
+   - On phase change: `await conversationContextService.startNewPhase(userId, oldPhase, newPhase, systemNote)` [BR-CONV-005].
+4) Tests:
+   - Unit: mock IConversationContextService; verify orchestrator calls getContext, getMessagesForPrompt, appendTurn in order.
+   - Integration: verify sliding window truncation [S-0059], phase reset [S-0060], full flow [S-0063].
+5) DI: resolve via `CONVERSATION_CONTEXT_SERVICE_TOKEN`; register in `main/bootstrap.ts`.
+
 ## Templates
 - Domain Spec: `docs/templates/domain.spec.template.md`
 - Feature Spec: `docs/templates/feature.spec.template.md`
@@ -133,6 +152,9 @@ If any instruction here conflicts with the above docs, update this file to match
   - Service ports: `apps/server/src/domain/user/ports/service.ports.ts`
   - Prompt ports: `apps/server/src/domain/user/ports/prompt.ports.ts`
   - Convenience imports: `apps/server/src/domain/user/ports/index.ts`
+- Conversation context:
+  - Token and port: `apps/server/src/domain/conversation/ports/conversation-context.ports.ts`
+  - `CONVERSATION_CONTEXT_SERVICE_TOKEN` -> `IConversationContextService`
 
 When adding new ports, define `unique symbol` tokens and interfaces under `domain/*/ports/` with modular organization. Implement in `infra/*` and register in `bootstrap.ts` via `register`/`registerFactory`.
 

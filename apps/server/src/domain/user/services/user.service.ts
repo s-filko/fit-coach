@@ -33,6 +33,8 @@ export interface CreateUserInput {
 
 import { IUserService, UserRepository } from '@domain/user/ports';
 
+import { getNextStep } from './registration.config';
+
 export class UserService implements IUserService {
   constructor(private readonly repo: UserRepository) {}
 
@@ -65,15 +67,8 @@ export class UserService implements IUserService {
     return user.profileStatus ?? 'incomplete';
   }
 
-  // Get next registration step
+  // Get next registration step (from centralized config)
   getNextRegistrationStep(user: User): string {
-    const currentStep = user.profileStatus ?? 'incomplete';
-    const stepOrder = ['incomplete', 'collecting_basic', 'collecting_level', 'collecting_goals', 'confirmation', 'complete'];
-
-    const currentIndex = stepOrder.indexOf(currentStep);
-    if (currentIndex === -1 || currentIndex >= stepOrder.length - 1) {
-      return 'complete';
-    }
-    return stepOrder[currentIndex + 1];
+    return getNextStep(user.profileStatus) ?? 'complete';
   }
 }

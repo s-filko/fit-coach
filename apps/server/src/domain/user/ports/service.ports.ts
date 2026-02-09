@@ -21,7 +21,6 @@ export interface IRegistrationService {
     isComplete: boolean;
     parsedData?: ParsedProfileData;
   }>;
-  getRegistrationPrompt(user: User): string;
   checkProfileCompleteness(user: User): boolean;
 }
 
