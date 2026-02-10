@@ -27,11 +27,16 @@ describe('API Key Authentication Middleware – integration', () => {
       REGISTRATION_SERVICE_TOKEN,
     } = await import('../../../src/domain/user/ports');
     const { LLM_SERVICE_TOKEN } = await import('../../../src/domain/ai/ports');
-    
+    const { CONVERSATION_CONTEXT_SERVICE_TOKEN } = await import('../../../src/domain/conversation/ports');
+    const { InMemoryConversationContextService } = await import('../../../src/infra/conversation/conversation-context.service');
+    container.register(CONVERSATION_CONTEXT_SERVICE_TOKEN, new InMemoryConversationContextService());
+
     app.decorate('services', {
       userService: container.get(USER_SERVICE_TOKEN) as any,
       registrationService: container.get(REGISTRATION_SERVICE_TOKEN) as any,
       llmService: container.get(LLM_SERVICE_TOKEN) as any,
+      chatService: { processMessage: jest.fn().mockResolvedValue('Stub chat response') } as any,
+      conversationContextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN) as any,
     });
     
     await app.ready();

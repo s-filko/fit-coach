@@ -1,7 +1,11 @@
 import { z } from 'zod';
 
-import { getStepConfig, type ProfileDataKey } from './registration.config';
-import type { ParsedProfileData, User } from './user.service';
+import type { ParsedProfileData } from './user.service';
+
+/**
+ * Profile field keys — single source of truth.
+ */
+export type ProfileDataKey = keyof ParsedProfileData;
 
 /**
  * Centralized field validators for registration.
@@ -35,70 +39,10 @@ function validateWithFallback<T>(schema: z.ZodType<T>, value: unknown): T | unde
 /**
  * Validate a single field value. Returns validated value or undefined if invalid.
  */
-export function validateField<K extends ProfileDataKey>(key: K, value: unknown): ParsedProfileData[K] | undefined {
-  const validator = fieldValidators[key] as z.ZodType<ParsedProfileData[K]> | undefined;
+export function validateField(key: ProfileDataKey, value: unknown): unknown {
+  const validator = fieldValidators[key] as z.ZodType<unknown> | undefined;
   if (!validator) {return undefined;}
   return validateWithFallback(validator, value);
-}
-
-/**
- * Validate and normalize extracted data into ParsedProfileData (invalid → undefined).
- * Used by profile parser.
- */
-export function validateProfileFields(data: Record<string, unknown>): ParsedProfileData {
-  const result: Record<string, unknown> = {};
-  for (const [key, validator] of Object.entries(fieldValidators)) {
-    result[key] = validateWithFallback(validator as z.ZodType<unknown>, data[key]);
-  }
-  return result as ParsedProfileData;
-}
-
-export interface StepValidationResult {
-  /** Only validated values for this step's fields (use to update user). */
-  validData: Partial<User>;
-  /** Fields that have a value but it failed validation — ask user to correct. */
-  invalidFields: ProfileDataKey[];
-  /** Required fields for this step with no valid value — ask user to provide. */
-  missingFields: ProfileDataKey[];
-  /** True when step can be completed (all required fields valid). */
-  isComplete: boolean;
-}
-
-/**
- * Validate data for a registration step: identify valid values, invalid (need correction), and missing (need input).
- * Collector uses this to decide: advance step, ask to correct invalid, or ask for missing.
- */
-export function validateStepData(stepId: string, data: Partial<User>): StepValidationResult {
-  const stepConfig = getStepConfig(stepId);
-  const validData: Partial<User> = {};
-  const invalidFields: ProfileDataKey[] = [];
-  const missingFields: ProfileDataKey[] = [];
-
-  if (!stepConfig || stepConfig.fieldsToCollect.length === 0) {
-    return { validData: {}, invalidFields: [], missingFields: [], isComplete: true };
-  }
-
-  for (const key of stepConfig.fieldsToCollect) {
-    const value = data[key as keyof User];
-    const hasValue = value !== undefined && value !== null && value !== '';
-    const validated = validateField(key, value);
-
-    if (validated !== undefined && validated !== null && validated !== '') {
-      (validData as Record<string, unknown>)[key] = validated;
-    } else if (hasValue) {
-      invalidFields.push(key);
-      missingFields.push(key);
-    } else {
-      missingFields.push(key);
-    }
-  }
-
-  const isComplete = stepConfig.fieldsToCollect.every((k) => {
-    const v = validData[k as keyof User];
-    return v !== undefined && v !== null && v !== '';
-  });
-
-  return { validData, invalidFields, missingFields, isComplete };
 }
 
 /** Human-readable field names for messages. */
@@ -120,3 +64,36 @@ export const FIELD_HINTS: Record<ProfileDataKey, string> = {
   fitnessLevel: 'beginner, intermediate, or advanced',
   fitnessGoal: 'e.g. lose weight, build muscle, maintain fitness',
 };
+
+// --- Unified registration LLM response schema ---
+
+/** Shape of the JSON response expected from LLM during registration */
+export const registrationLLMResponseSchema = z.object({
+  extracted_data: z.object({
+    age: z.union([z.number(), z.null()]).optional(),
+    gender: z.union([z.string(), z.null()]).optional(),
+    height: z.union([z.number(), z.null()]).optional(),
+    weight: z.union([z.number(), z.null()]).optional(),
+    fitnessLevel: z.union([z.string(), z.null()]).optional(),
+    fitnessGoal: z.union([z.string(), z.null()]).optional(),
+  }),
+  response: z.string().min(1),
+  is_confirmed: z.boolean(),
+});
+
+export type RegistrationLLMResponse = z.infer<typeof registrationLLMResponseSchema>;
+
+/**
+ * Validate extracted fields from LLM using the strict field validators.
+ * Only returns fields that pass validation (invalid values → undefined).
+ */
+export function validateExtractedFields(data: Record<string, unknown>): ParsedProfileData {
+  const result: Record<string, unknown> = {};
+  for (const key of Object.keys(fieldValidators)) {
+    const value = data[key];
+    if (value !== null && value !== undefined) {
+      result[key] = validateWithFallback(fieldValidators[key as ProfileDataKey] as z.ZodType<unknown>, value);
+    }
+  }
+  return result as ParsedProfileData;
+}

@@ -99,7 +99,7 @@ export async function testPlugin(fastify: FastifyInstance): Promise<void> {
     const { message } = request.body as { message: string };
 
     try {
-      const result = await fastify.services.llmService.generateResponse([{ role: 'user', content: message }], false);
+      const result = await fastify.services.llmService.generateWithSystemPrompt([{ role: 'user', content: message }], 'You are a helpful assistant.');
       return { success: true, response: result };
     } catch (error) {
       request.log.error({ err: error }, 'Mock save failed');

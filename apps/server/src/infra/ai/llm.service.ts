@@ -1,14 +1,13 @@
-import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 
 import { LLMService as ILLMService, type LLMRequest, type LLMResponse } from '@domain/ai/ports';
-import { ChatMsg, IPromptService } from '@domain/user/ports';
+import { ChatMsg } from '@domain/user/ports';
 
 import { loadConfig } from '@config/index';
 
 export class LLMService implements ILLMService {
   private model: ChatOpenAI;
-  private promptService?: IPromptService;
   private config = loadConfig();
   private isDebugMode = false;
   private requestHistory: LLMRequest[] = [];
@@ -40,32 +39,6 @@ export class LLMService implements ILLMService {
     });
 
     this.isDebugMode = this.config.LLM_DEBUG ?? false;
-  }
-
-  setPromptService(promptService: IPromptService): void {
-    this.promptService = promptService;
-  }
-
-  async generateResponse(message: ChatMsg[], isRegistration: boolean = false): Promise<string> {
-    if (isRegistration) {
-      return this.generateRegistrationResponse(message);
-    }
-
-    if (!this.promptService) {
-      throw new Error('PromptService not initialized. Call setPromptService() before using chat responses.');
-    }
-
-    const systemPromptText = this.promptService.buildChatSystemPrompt();
-    return this.invokeModel(message, systemPromptText, 'chat');
-  }
-
-  async generateRegistrationResponse(message: ChatMsg[], context?: string): Promise<string> {
-    if (!this.promptService) {
-      throw new Error('PromptService not initialized. Call setPromptService() before using registration responses.');
-    }
-
-    const systemPromptText = this.promptService.buildRegistrationSystemPrompt(context);
-    return this.invokeModel(message, systemPromptText, 'registration', context);
   }
 
   // Debug methods
@@ -113,16 +86,19 @@ export class LLMService implements ILLMService {
     };
   }
 
-  // Core invocation logic — shared between chat and registration
+  async generateWithSystemPrompt(
+    messages: ChatMsg[], systemPrompt: string, opts?: { jsonMode?: boolean },
+  ): Promise<string> {
+    return this.invokeModel(messages, systemPrompt, opts?.jsonMode);
+  }
+
   private async invokeModel(
     message: ChatMsg[],
     systemPromptText: string,
-    label: 'chat' | 'registration',
-    context?: string,
+    jsonMode?: boolean,
   ): Promise<string> {
     const requestId = this.generateId();
     const startTime = new Date();
-    const isRegistration = label === 'registration';
 
     try {
       const systemPrompt = new SystemMessage(systemPromptText);
@@ -130,6 +106,9 @@ export class LLMService implements ILLMService {
       const messages = message.map(chatMsg => {
         if (chatMsg.role === 'system') {
           return new SystemMessage(chatMsg.content);
+        }
+        if (chatMsg.role === 'assistant') {
+          return new AIMessage(chatMsg.content);
         }
         return new HumanMessage(chatMsg.content);
       });
@@ -139,8 +118,7 @@ export class LLMService implements ILLMService {
           id: requestId,
           timestamp: startTime,
           message: message.map(m => `${m.role}: ${m.content}`).join('\n'),
-          isRegistration,
-          context,
+          isRegistration: false,
           systemPrompt: systemPromptText,
           model: this.model.model,
           temperature: this.model.temperature ?? 0.7,
@@ -148,7 +126,10 @@ export class LLMService implements ILLMService {
         this.addToHistory(this.requestHistory, request);
       }
 
-      const response = await this.model.invoke([systemPrompt, ...messages]);
+      const model = jsonMode
+        ? this.model.bind({ response_format: { type: 'json_object' } })
+        : this.model;
+      const response = await model.invoke([systemPrompt, ...messages]);
       const endTime = new Date();
       const processingTime = endTime.getTime() - startTime.getTime();
 
@@ -183,8 +164,7 @@ export class LLMService implements ILLMService {
     } catch (error) {
       this.metrics.totalErrors++;
       const originalMessage = error instanceof Error ? error.message : String(error);
-      const errorLabel = isRegistration ? 'registration response' : 'AI response';
-      throw new Error(`Failed to generate ${errorLabel}: ${originalMessage}`);
+      throw new Error(`Failed to generate LLM response: ${originalMessage}`);
     }
   }
 

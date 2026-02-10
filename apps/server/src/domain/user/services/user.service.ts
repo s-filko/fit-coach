@@ -15,12 +15,6 @@ export interface User {
 }
 
 export type ParsedProfileData = Pick<User, 'age' | 'gender' | 'height' | 'weight' | 'fitnessLevel' | 'fitnessGoal' >
-export type ProfileDataKeys = keyof ParsedProfileData;
-
-// export interface ParsedProfileData {
-//   limitations?: string[];
-//   equipment?: string[];
-// }
 
 export interface CreateUserInput {
   provider: string;
@@ -32,8 +26,6 @@ export interface CreateUserInput {
 }
 
 import { IUserService, UserRepository } from '@domain/user/ports';
-
-import { getNextStep } from './registration.config';
 
 export class UserService implements IUserService {
   constructor(private readonly repo: UserRepository) {}
@@ -52,23 +44,11 @@ export class UserService implements IUserService {
     return this.repo.updateProfileData(userId, data);
   }
 
-  // Check if registration is complete
   isRegistrationComplete(user: User): boolean {
     return user.profileStatus === 'complete';
   }
 
-  // Check if user needs registration
   needsRegistration(user: User): boolean {
     return user.profileStatus !== 'complete';
-  }
-
-  // Get current registration step
-  getCurrentRegistrationStep(user: User): string {
-    return user.profileStatus ?? 'incomplete';
-  }
-
-  // Get next registration step (from centralized config)
-  getNextRegistrationStep(user: User): string {
-    return getNextStep(user.profileStatus) ?? 'complete';
   }
 }

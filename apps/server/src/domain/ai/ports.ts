@@ -31,9 +31,8 @@ export const AI_CONTEXT_SERVICE_TOKEN = Symbol('AIContextService');
 
 // Port interfaces - domain contracts
 export interface LLMService {
-  generateResponse(message: ChatMsg[], isRegistration?: boolean): Promise<string>;
-  generateRegistrationResponse(message: ChatMsg[], context?: string): Promise<string>;
-  
+  generateWithSystemPrompt(messages: ChatMsg[], systemPrompt: string, opts?: { jsonMode?: boolean }): Promise<string>;
+
   // Debug methods
   getDebugInfo(): {
     model: string;

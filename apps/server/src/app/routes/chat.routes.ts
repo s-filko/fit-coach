@@ -32,8 +32,9 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   }, async(req, reply) => {
     try {
       const { userId, message } = req.body as { userId: string; message: string };
+      const { conversationContextService } = app.services;
 
-      // Get user data
+      // 1. Get user data
       const user = await app.services.userService.getUser(userId);
       if (!user) {
         return reply.code(404).send({
@@ -41,18 +42,28 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
+      // 2. Derive conversation phase
+      const isComplete = app.services.userService.isRegistrationComplete(user);
+      const phase = isComplete ? 'chat' as const : 'registration' as const;
+
+      // 3-4. Load conversation context and build history [BR-CONV-001, BR-CONV-003]
+      const ctx = await conversationContextService.getContext(userId, phase);
+      const historyMessages = ctx
+        ? conversationContextService.getMessagesForPrompt(ctx)
+        : [];
+
       let response: string;
       let updatedUser = user;
-      // Check registration status
-      if (app.services.userService.isRegistrationComplete(user)) {
-        // Registration complete - normal chat mode
-        response = await app.services.llmService.generateResponse([{ role: 'user', content: message }], false);
+
+      if (isComplete) {
+        // 5a. Chat mode — delegate to ChatService (builds prompt + calls LLM)
+        response = await app.services.chatService.processMessage(user, message, historyMessages);
       } else {
-        // Registration incomplete - profile data collection mode
-        const result = await app.services.registrationService.processUserMessage(user, message);
+        // 5b. Registration mode — pass history to registration service
+        const result = await app.services.registrationService.processUserMessage(user, message, historyMessages);
         ({ response, updatedUser } = result);
 
-        // Save user profile changes
+        // 6. Save user profile changes
         await app.services.userService.updateProfileData(userId, {
           profileStatus: updatedUser.profileStatus,
           age: updatedUser.age,
@@ -62,14 +73,33 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
           fitnessLevel: updatedUser.fitnessLevel,
           fitnessGoal: updatedUser.fitnessGoal,
         });
-
       }
 
+      // 7. Persist conversation turn [BR-CONV-002, BR-CONV-007]
+      try {
+        await conversationContextService.appendTurn(userId, phase, message, response);
+      } catch (err) {
+        req.log.warn({ err }, 'Failed to append conversation turn — response not affected');
+      }
+
+      // 8. Phase transition: registration → chat [BR-CONV-005]
+      const nowComplete = app.services.userService.isRegistrationComplete(updatedUser);
+      if (!isComplete && nowComplete) {
+        try {
+          await conversationContextService.startNewPhase(
+            userId, 'registration', 'chat', 'Registration complete.',
+          );
+        } catch (err) {
+          req.log.warn({ err }, 'Failed to transition conversation phase');
+        }
+      }
+
+      // 9. Return response [AC-0110]
       return reply.send({
         data: {
           content: response,
           timestamp: new Date().toISOString(),
-          registrationComplete: app.services.userService.isRegistrationComplete(updatedUser),
+          registrationComplete: nowComplete,
         },
       });
     } catch (error) {

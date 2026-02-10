@@ -1,12 +1,15 @@
 import { LLMService } from '@domain/ai/ports';
-import { IRegistrationService, IUserService } from '@domain/user/ports';
+import { IConversationContextService } from '@domain/conversation/ports';
+import { IChatService, IRegistrationService, IUserService } from '@domain/user/ports';
 
 declare module 'fastify' {
   interface FastifyInstance {
     services: {
       userService: IUserService;
       registrationService: IRegistrationService;
+      chatService: IChatService;
       llmService: LLMService;
+      conversationContextService: IConversationContextService;
     };
   }
 }

@@ -1,10 +1,10 @@
-import { UniversalParseRequest, UniversalParseResult } from '@domain/user/ports';
+import { ChatMsg } from '@domain/user/ports';
 import { CreateUserInput, ParsedProfileData, User } from '@domain/user/services/user.service';
 
 // DI Tokens for services
 export const USER_SERVICE_TOKEN = Symbol('UserService');
 export const REGISTRATION_SERVICE_TOKEN = Symbol('RegistrationService');
-export const PROFILE_PARSER_SERVICE_TOKEN = Symbol('ProfileParserService');
+export const CHAT_SERVICE_TOKEN = Symbol('ChatService');
 
 // Service interfaces - business logic contracts
 export interface IUserService {
@@ -15,7 +15,7 @@ export interface IUserService {
 }
 
 export interface IRegistrationService {
-  processUserMessage(user: User, message: string): Promise<{
+  processUserMessage(user: User, message: string, historyMessages?: ChatMsg[]): Promise<{
     updatedUser: User;
     response: string;
     isComplete: boolean;
@@ -24,7 +24,6 @@ export interface IRegistrationService {
   checkProfileCompleteness(user: User): boolean;
 }
 
-export interface IProfileParserService {
-  parseProfileData(user: User, text: string): Promise<ParsedProfileData>;
-  parseUniversal(request: UniversalParseRequest): Promise<UniversalParseResult>;
+export interface IChatService {
+  processMessage(user: User, message: string, historyMessages?: ChatMsg[]): Promise<string>;
 }

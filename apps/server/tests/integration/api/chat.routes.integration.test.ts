@@ -1,5 +1,7 @@
 import { buildServer } from '../../../src/app/server';
 import { LLM_SERVICE_TOKEN, LLMService } from '../../../src/domain/ai/ports';
+import { CONVERSATION_CONTEXT_SERVICE_TOKEN } from '../../../src/domain/conversation/ports';
+import { InMemoryConversationContextService } from '../../../src/infra/conversation/conversation-context.service';
 import { ChatMsg, REGISTRATION_SERVICE_TOKEN, USER_SERVICE_TOKEN } from '../../../src/domain/user/ports';
 import { db } from '../../../src/infra/db/drizzle';
 import { Container } from '../../../src/infra/di/container';
@@ -11,20 +13,9 @@ import { getGlobalContainer, registerInfraServices } from '../../../src/main/reg
  * NOTE: In production integration tests, consider using real services in isolated environment
  */
 class StubLLMService implements LLMService {
-  async generateResponse(message: ChatMsg[] | string, isRegistration?: boolean): Promise<string> {
-    if (typeof message === 'string') {
-      return `Stub AI response to: ${message}`;
-    }
-    const text = message.map(m => m.content).join(' ');
+  async generateWithSystemPrompt(messages: ChatMsg[], systemPrompt: string): Promise<string> {
+    const text = messages.map(m => m.content).join(' ');
     return `Stub AI response to: ${text}`;
-  }
-
-  async generateRegistrationResponse(message: ChatMsg[] | string, context?: string): Promise<string> {
-    if (typeof message === 'string') {
-      return `Stub registration response to: ${message}`;
-    }
-    const text = message.map(m => m.content).join(' ');
-    return `Stub registration response to: ${text}`;
   }
 
   getDebugInfo(): any {
@@ -60,6 +51,7 @@ describe('POST /api/chat – integration', () => {
     
     // Register stub services for integration testing
     // NOTE: In production, consider testing with real services in isolated environment
+    container.register(CONVERSATION_CONTEXT_SERVICE_TOKEN, new InMemoryConversationContextService());
     container.register(LLM_SERVICE_TOKEN, new StubLLMService());
     container.register(USER_SERVICE_TOKEN, {
       getUser: jest.fn().mockResolvedValue({
@@ -82,6 +74,8 @@ describe('POST /api/chat – integration', () => {
       userService: container.get(USER_SERVICE_TOKEN) as any,
       registrationService: container.get(REGISTRATION_SERVICE_TOKEN) as any,
       llmService: container.get(LLM_SERVICE_TOKEN) as any,
+      chatService: { processMessage: jest.fn().mockResolvedValue('Stub chat response') } as any,
+      conversationContextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN) as any,
     });
     
     await app.ready();
@@ -138,7 +132,7 @@ describe('POST /api/chat – integration', () => {
 
         expect(res.statusCode).toBe(200);
         const json = res.json();
-        expect(json.data.content).toContain('Stub AI response to:');
+        expect(json.data.content).toContain('Stub');
       }
     });
 

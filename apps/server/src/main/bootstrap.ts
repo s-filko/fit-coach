@@ -6,7 +6,8 @@ import { FastifyInstance } from 'fastify';
 import { buildServer } from '@app/server';
 
 import { LLMService } from '@domain/ai/ports';
-import { IRegistrationService, IUserService } from '@domain/user/ports';
+import { IConversationContextService } from '@domain/conversation/ports';
+import { IChatService, IRegistrationService, IUserService } from '@domain/user/ports';
 
 import { Container } from '@infra/di/container';
 
@@ -38,16 +39,20 @@ async function startServer(app: FastifyInstance, port: number, host: string): Pr
 }
 
 async function decorateAppWithServices(app: FastifyInstance, container: Container): Promise<void> {
-  const { 
+  const {
     USER_SERVICE_TOKEN,
     REGISTRATION_SERVICE_TOKEN,
+    CHAT_SERVICE_TOKEN,
   } = await import('@domain/user/ports');
   const { LLM_SERVICE_TOKEN } = await import('@domain/ai/ports');
-  
+  const { CONVERSATION_CONTEXT_SERVICE_TOKEN } = await import('@domain/conversation/ports');
+
   app.decorate('services', {
     userService: container.get<IUserService>(USER_SERVICE_TOKEN),
     registrationService: container.get<IRegistrationService>(REGISTRATION_SERVICE_TOKEN),
+    chatService: container.get<IChatService>(CHAT_SERVICE_TOKEN),
     llmService: container.get<LLMService>(LLM_SERVICE_TOKEN),
+    conversationContextService: container.get<IConversationContextService>(CONVERSATION_CONTEXT_SERVICE_TOKEN),
   });
 }
 
