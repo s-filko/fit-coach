@@ -1,26 +1,49 @@
 # TODOs (Concise)
 
-## Immediate
-- Sync test env naming in `docs/DB_SETUP.md` to `.env.test` (match server configs).
-- Replace root `README.md` with an index linking to canonical docs.
+## Done (Recent Sessions)
+- ~~Unified Registration (FEAT-0006/0007)~~ — single LLM call, JSON mode, unified prompt
+- ~~Conversation Context (FEAT-0009)~~ — domain ports, Drizzle impl, DI, sliding window, phase transitions
+- ~~ChatService~~ — post-registration conversation mode with FitCoach identity
+- ~~ProfileParserService, messages.ts, registration.config.ts~~ — deleted (dead code)
+- ~~LLM switch~~ — Gemini → GPT-4 Turbo via OpenAI/OpenRouter, JSON mode (`response_format`)
+- ~~DB migrations~~ — conversation_turns, user_accounts tables
+- ~~All integration tests updated~~ — 158+ passing tests
+- ~~Fastify migration~~ — Express fully removed, plugin architecture implemented
+- ~~Documentation updates~~ — ARCHITECTURE.md, API_SPEC.md, FEAT-0003, FEAT-0006, DB_SETUP.md updated
+- ~~LLM debug endpoints~~ — `/api/debug/llm` for development monitoring
+- ~~OpenAI-compatible API abstraction~~ — Support for OpenAI, OpenRouter, Groq, Together, Azure
 
-## Registration (FEAT-0006/0007) — MVP Extension
-- Adopt status model `registration|onboarding|planning|active` (planning feature to be delivered later) (code, tests, DB default).
-- Rename to `sex` and `goal` across domain + DB (update data).
-- Derived confirmation: summary → explicit confirm → `onboarding`; after onboarding or skip → `planning` (plan feature drives transition to `active`).
-- Language flows per BR-USER-006/BR-UX-001.
-- Parser: registration extraction + normalization; single clarification on ambiguity.
-- Adopt ADR-0004 storage extension (user_profile 1:1, user_context 1:1 jsonb; later: user_metrics 1:N, embeddings optional).
+## Immediate
+- ~~Sync test env naming in `docs/DB_SETUP.md` to `.env.test`~~ ✅ Done
+- ~~Update feature specs to reflect current architecture~~ ✅ Done (FEAT-0003, FEAT-0006)
+- Replace root `README.md` with index linking to canonical docs
+- Update FEAT-0007 to align with unified registration approach
+- Update TESTING.md with examples for conversation context and unified registration
+
+## Registration — Remaining
+- Adopt status model `registration|onboarding|planning|active` (planning feature later).
+- Fallback response should be in Russian, not English ("Could you please try again?" → Russian).
+- Handle edge cases: user sends image/sticker/voice (bot currently ignores non-text).
+
+## Chat Mode — Improvements
+- Post-MVP: summarization of older turns via LLM when threshold exceeded [BR-CONV-006].
+- Post-MVP: idle threshold policy — reset with recap after long inactivity [BR-CONV-006].
 
 ## Tests
 - Add integration scenarios S-0025..S-0038, S-0045..S-0048.
 - Enforce IDs in test titles (`S-####`, `AC-####`, `BR-*-###`).
-- Assert `/api/chat` response shape `{ data: { content, timestamp } }`.
 
 ## Docs
-- Replace `/api/message` → `/api/chat` everywhere (incl. root README examples).
-- FEAT-0006 flow is canonical; cross-link from FEAT-0006 improvements and FEAT-0007.
-- Add ADR-0004 reference in related specs (FEAT-0006/0007, domain user.spec).
+- ~~FEAT-0006 updated~~ ✅ Complete rewrite with unified JSON mode approach
+- ~~FEAT-0003 updated~~ ✅ Added conversation context and phase-based routing
+- ~~ARCHITECTURE.md updated~~ ✅ Added LLM Integration, ConversationContext, DI details
+- ~~API_SPEC.md updated~~ ✅ Added debug endpoints and registrationComplete field
+- ~~DB_SETUP.md updated~~ ✅ Added database schema section with conversation_turns
+- ~~docs/README.md index updated~~ ✅ Added new sections and recent updates
+- ~~Clean up old FEAT-0006 variant files (3 different files exist)~~ ✅ Done - removed 4 outdated files
+- ~~ADR-0004 updated~~ ✅ Documented MVP schema + future evolution plans
+- Update FEAT-0007 to align with new registration architecture
+- Update TESTING.md with examples for new components
 
 ## CI / Automation
 - Lint: every endpoint in `docs/API_SPEC.md` has `x-feature`.
@@ -29,18 +52,6 @@
 
 ## Quality
 - Add integration test to snapshot OpenAPI JSON (detect API drift).
-
-## Conversation Context (FEAT-0009)
-- Create domain port: `domain/conversation/ports/conversation-context.ports.ts` (types + IConversationContextService).
-- Implement in-memory IConversationContextService in `infra/conversation/` for MVP.
-- Integrate into chat orchestrator: load context -> getMessagesForPrompt -> call LLM -> appendTurn [BR-CONV-001][BR-CONV-002].
-- Handle phase transitions (registration -> chat): startNewPhase with system note [BR-CONV-005].
-- Register CONVERSATION_CONTEXT_SERVICE_TOKEN in DI container (bootstrap.ts).
-- Add unit tests for sliding window (maxTurns=20) [S-0059], phase reset [S-0060], chronological order [S-0064].
-- Add integration test for full orchestration flow [S-0063].
-- (Post-MVP) DB-backed implementation: conversation_turns table, migration.
-- (Post-MVP) Summarization: summarize older turns via LLM when threshold exceeded [BR-CONV-006].
-- (Post-MVP) Idle threshold policy: reset with recap after long inactivity [BR-CONV-006].
 
 ## Planning (FEAT-0008 — post-onboarding)
 - Implement workout plan lifecycle via `approvedAt`/`archivedAt` per `docs/features/FEAT-0008-training-plan-generation.md`.

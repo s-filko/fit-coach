@@ -75,20 +75,88 @@ security:
 }
 ```
 - Responses:
-  - 200 `{ data: { content: string, timestamp: string } }`
+  - 200 `{ data: { content: string, timestamp: string, registrationComplete?: boolean } }`
   - 401 `{ error: { message: string } }`
   - 403 `{ error: { message: string } }`
   - 404 `{ error: { message: "User not found" } }`
   - 500 `{ error: { message: "Processing failed" } }`
 
+  Response fields:
+  - `content` (string): AI-generated response message
+  - `timestamp` (string): ISO 8601 timestamp of the response
+  - `registrationComplete` (boolean, optional): Present only during registration phase. `true` when user completes registration and transitions to chat phase.
+
   Notes:
-  - Profile completion status is internal to the server. Clients receive only user-facing `content` and a `timestamp`.
-  - All conversational phases (registration, onboarding, planning, etc.) interact exclusively through this `/api/chat` endpoint.
+  - All conversational phases (registration, chat, training, planning) interact exclusively through this `/api/chat` endpoint.
+  - Server automatically determines the phase based on user's `profileStatus` field.
+  - **Phase routing**:
+    - `profileStatus === 'registration'` → RegistrationService (collects profile data via JSON mode LLM)
+    - `profileStatus === 'complete'` → ChatService (general fitness coaching conversation)
+  - **Phase transitions**: When registration is completed, server updates `profileStatus` to `'complete'`, persists the conversation turn with a system note, and returns `registrationComplete: true`. Subsequent requests use ChatService.
 
 ### Notes
-- x-feature: FEAT-0009
+- x-feature: FEAT-0009 ✅ IMPLEMENTED
 - Response time may vary based on AI model load (typically < 3 seconds)
-- **(Target, FEAT-0009)** Server maintains conversation context per (userId, phase) internally [BR-CONV-001]; context is not exposed in the API contract. Sliding window (default 20 turns) [BR-CONV-003]; phase transitions reset context [BR-CONV-005]. Until implemented, conversations are stateless.
+- Server maintains conversation context per (userId, phase) internally [BR-CONV-001]; context is persisted in `conversation_turns` table.
+- **Sliding window** (default 20 turns) limits token usage [BR-CONV-003].
+- **Phase transitions** create system notes and reset context [BR-CONV-005].
+- Conversation history is loaded before each LLM call and appended after response generation [BR-CONV-001][BR-CONV-002].
+
+## 4. Debug Endpoints (Development Only)
+
+### 4.1 Get LLM Debug Info
+- GET `/api/debug/llm`
+- **Availability**: Only in development mode (`NODE_ENV=development`)
+- **Security**: Requires `X-Api-Key` authentication
+- Response 200:
+```ts
+{
+  data: {
+    debugInfo: {
+      isDebugMode: boolean,
+      metrics: {
+        totalRequests: number,
+        totalErrors: number,
+        totalTokens: number,
+        averageResponseTime: number,
+        errorRate: number
+      },
+      requestHistory: Array<{
+        timestamp: string,
+        messages: ChatMsg[],
+        model: string,
+        temperature: number
+      }>,  // Last 50 requests
+      responseHistory: Array<{
+        timestamp: string,
+        content: string,
+        tokenUsage?: { promptTokens, completionTokens, totalTokens },
+        processingTime: number
+      }>  // Last 50 responses
+    },
+    timestamp: string
+  }
+}
+```
+
+### 4.2 Clear LLM Debug History
+- POST `/api/debug/llm/clear`
+- **Availability**: Only in development mode (`NODE_ENV=development`)
+- **Security**: Requires `X-Api-Key` authentication
+- Response 200:
+```ts
+{
+  data: {
+    message: "Debug history cleared",
+    timestamp: string
+  }
+}
+```
+
+Notes:
+- Debug endpoints return 404 in production environment.
+- Debug mode can be toggled at runtime via `LLM_DEBUG=true` environment variable.
+- History is stored in memory and cleared on server restart.
 
 ## Notes
 - All responses are JSON.

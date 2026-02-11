@@ -39,34 +39,33 @@ apps/server/src/
         service.ports.ts       # Business logic contracts
         prompt.ports.ts        # Specialized utility contracts
       services/
-        user.service.ts
+        user.service.ts        # User CRUD operations
+        registration.service.ts # Unified registration with JSON mode LLM
+        chat.service.ts        # Post-registration chat
+        prompt.service.ts      # Dynamic system prompt generation
+      validation/
+        registration.validation.ts # Zod validators for registration fields
     ai/
-      ports.ts                 # AI domain interfaces
-      services/
-        ai-context.service.ts
+      ports.ts                 # ILLMService interface + types (ChatMsg, LLMRequest, LLMResponse)
     conversation/
       ports/
         conversation-context.ports.ts  # IConversationContextService + types
         index.ts               # Re-exports
     training/
-      ports.ts                 # Training domain interfaces
-      services/
-        training-context.service.ts
+      ports.ts                 # Training domain interfaces (planned for FEAT-0008)
 
   infra/                        # Integrations + drivers
     db/
-      schema.ts                 # Drizzle schema
+      schema.ts                 # Drizzle schema (users, user_accounts, conversation_turns, etc.)
       drizzle.ts                # Pool + drizzle init + health
       repositories/             # Thin data access
         user.repository.ts
-        training-context.repository.ts
     ai/
-      llm.service.ts            # LLM/LangChain integration
+      llm.service.ts            # OpenAI-compatible LLM service with JSON mode & debug support
     conversation/
-      conversation-context.service.ts   # IConversationContextService impl
-      conversation-context.repository.ts # Storage (in-memory → DB)
+      drizzle-conversation-context.service.ts   # IConversationContextService impl (DB-backed)
     di/
-      container.ts              # Container + registration
+      container.ts              # DI container with factory support + lazy initialization
     config/
       index.ts                  # Env loading + Zod validation
 
@@ -119,6 +118,20 @@ Notes:
 - Request‑scoped dependencies are used only when transactions are needed; singletons by default.
 - **Composition Root = `src/main/**`**: dependency assembly (implementation registration, container, config, and server startup) is performed in `src/main/**`. App layer does not import or resolve implementations from the container.
 - **Import Strategy**: for domain contracts, use `domain/*/ports/index.ts` or specific port files.
+
+### DI Container Implementation
+- Container (`src/infra/di/container.ts`) supports both direct instance registration and factory-based lazy initialization.
+- **Factory pattern**: `container.registerFactory(token, (container) => new Service(...))` allows lazy instantiation and access to other dependencies via the container parameter.
+- **Lazy initialization**: Services registered with factories are instantiated only on first `container.get(token)` call, preventing circular dependencies and improving startup time.
+- **Service registration order** (`src/main/register-infra-services.ts`):
+  1. ConversationContextService (Drizzle-backed)
+  2. UserRepository (Drizzle-backed)
+  3. UserService (depends on UserRepository)
+  4. PromptService
+  5. LLMService
+  6. RegistrationService (depends on PromptService, LLMService)
+  7. ChatService (depends on PromptService, LLMService)
+- **Fastify decoration**: Services are decorated on Fastify app instance (`app.services.*`) for easy access in routes without manual DI resolution.
 
 ## Configuration
 - Config layer lives under `apps/server/src/config/**` with alias `@config/*`.
@@ -207,21 +220,73 @@ These rules are for any AI assistant working in this repo:
 9) For non-trivial changes, add an ADR entry under `docs/adr/` (see below).
 10) Preserve `tsconfig.json` path aliases and update imports accordingly if files move.
 
-## Conversation Context (Session) [FEAT-0009]
-*(Target design; domain/infra modules are added when FEAT-0009 is implemented.)*
+## Conversation Context (Session) [FEAT-0009] ✅ IMPLEMENTED
 - A **conversation context** holds the dialogue (user + assistant turns) for a given (userId, phase) pair [INV-CONV-001]. It is the single place for "session" dialogue across all flows.
 - Context is **universal**: any flow (registration, chat, training) loads context, calls `getMessagesForPrompt(ctx)` to build the prompt, then appends the new turn after the LLM responds [BR-CONV-001][BR-CONV-002].
 - **Sliding window** (default 20 turns) limits token usage [BR-CONV-003]. Optional summarization prepends a summary before recent turns [BR-CONV-004].
 - **Phase transitions** reset or start a new phase with a system note [BR-CONV-005]. Time-based policies (idle threshold) may summarize or reset with a recap [BR-CONV-006].
-- Domain port: `IConversationContextService` (`CONVERSATION_CONTEXT_SERVICE_TOKEN`) — see `docs/domain/conversation.spec.md`. Implementations live in infra (in-memory for MVP, DB-backed later). Domain stays free of LangChain; LLM service only receives `ChatMsg[]`.
-- Module layout: `domain/conversation/ports/conversation-context.ports.ts` (types + interface); `infra/conversation/` (service + repository).
+- Domain port: `IConversationContextService` (`CONVERSATION_CONTEXT_SERVICE_TOKEN`) — see `docs/domain/conversation.spec.md`. Implementations live in infra (DB-backed with Drizzle). Domain stays free of LangChain; LLM service only receives `ChatMsg[]`.
+- Module layout: `domain/conversation/ports/conversation-context.ports.ts` (types + interface); `infra/conversation/drizzle-conversation-context.service.ts` (implementation).
 - **ADR-0005**: patterns, model, and how context plugs into prompts.
 - **docs/CONVERSATION_CONTEXT_ARCHITECTURE.md**: stack-specific implementation guide (LangChain, Fastify, Drizzle) and checklist.
 - No breaking change to API: `POST /api/chat` contract remains unchanged [AC-0110]; context is used internally.
+- **Database storage**: `conversation_turns` table with (userId, phase, role, content, createdAt) indexed for efficient queries.
+
+## LLM Integration
+**Implementation**: `src/infra/ai/llm.service.ts`
+
+### OpenAI-Compatible API Abstraction
+- Supports any OpenAI-compatible API provider: OpenAI, OpenRouter, Groq, Together, Azure OpenAI, etc.
+- Single unified interface via LangChain's `ChatOpenAI` client.
+- Configuration-driven: no hardcoded provider logic.
+
+### Environment Configuration
+Required environment variables for LLM integration:
+```bash
+LLM_API_KEY=<your-api-key>           # Required: API key for the provider
+LLM_MODEL=<model-name>                # Required: e.g., "gpt-4-turbo", "openrouter/meta-llama/llama-2-70b"
+LLM_API_URL=<custom-base-url>         # Optional: custom endpoint (defaults to OpenAI)
+LLM_TEMPERATURE=<0-2>                 # Required: temperature for generation
+LLM_DEBUG=<true|false>                # Optional: enable debug mode with request/response tracking
+```
+
+### Features
+- **JSON Mode**: Supports structured outputs via `response_format: {type: 'json_object'}` when `jsonMode: true` is passed to `generateWithSystemPrompt()`.
+- **Debug Mode**: When enabled, tracks:
+  - Last 50 requests with timestamps, messages, model, temperature
+  - Last 50 responses with content, token usage, processing time
+  - Metrics: totalRequests, totalErrors, totalTokens, averageResponseTime, errorRate
+- **Debug Endpoints** (development only):
+  - `GET /api/debug/llm` - Returns debug info and metrics
+  - `POST /api/debug/llm/clear` - Clears request/response history
+
+### Usage Pattern
+```typescript
+const llmService = container.get(LLM_SERVICE_TOKEN);
+const response = await llmService.generateWithSystemPrompt(
+  messages,        // ChatMsg[] with user/assistant history
+  systemPrompt,    // System prompt string
+  { jsonMode: true }  // Optional: enable JSON mode for structured responses
+);
+```
+
+### Registration Flow with JSON Mode
+The registration flow uses JSON mode to extract profile data and generate responses in a single LLM call:
+- **Input**: User message + conversation history + dynamic system prompt (generated by PromptService)
+- **Output**: Structured JSON with `{extracted_data, response, is_confirmed}`
+- **Validation**: Zod schemas validate extracted fields (`registration.validation.ts`)
+- **Removed legacy services**: ProfileParserService, data-transformers, messages.ts, registration.config.ts
 
 ## ADRs (Architecture Decision Records)
 - Create `docs/adr/` and add numbered ADRs for major decisions.
 - Example: `docs/adr/0001-fastify-as-web-framework.md` with context, decision, consequences.
+
+### Current ADRs
+- **ADR-0001**: AI system integration via LangChain
+- **ADR-0002**: Interface organization by functional areas (modular ports)
+- **ADR-0003**: Config layer with Zod validation
+- **ADR-0004**: User profile and context storage model
+- **ADR-0005**: Conversation context with sliding window and phase transitions
 
 ## Docs-first Workflow (mandatory)
 All changes go through docs before code:
