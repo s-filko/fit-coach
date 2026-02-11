@@ -16,8 +16,9 @@
 ## Immediate
 - ~~Sync test env naming in `docs/DB_SETUP.md` to `.env.test`~~ ✅ Done
 - ~~Update feature specs to reflect current architecture~~ ✅ Done (FEAT-0003, FEAT-0006)
-- Replace root `README.md` with index linking to canonical docs
-- Update FEAT-0007 to align with unified registration approach
+- ~~Replace root `README.md` with index linking to canonical docs~~ ✅ Done
+- ~~Update FEAT-0007 to align with unified registration approach~~ ✅ Done (marked as Future v2.0)
+- ~~Add comments to schema.ts about status models~~ ✅ Done (MVP vs Future)
 - Update TESTING.md with examples for conversation context and unified registration
 
 ## Registration — Remaining

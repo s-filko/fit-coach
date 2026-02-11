@@ -2,6 +2,8 @@
 import { index, integer, pgEnum, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 
 // Enums for conversation_turns
+// MVP phases: 'registration' | 'chat'
+// Future phases: 'training' (see conversation.spec.md, FEAT-0008)
 export const conversationPhaseEnum = pgEnum('conversation_phase', ['registration', 'chat', 'training']);
 export const conversationRoleEnum = pgEnum('conversation_role', ['user', 'assistant', 'system', 'summary']);
 
@@ -19,6 +21,8 @@ export const users = pgTable('users', {
   fitnessGoal: text('fitness_goal'),
   fitnessLevel: text('fitness_level'), // 'beginner', 'intermediate', 'advanced'
   // Registration-related fields
+  // MVP uses simplified status model: 'incomplete' | 'complete'
+  // Future: 'registration' | 'onboarding' | 'planning' | 'active' (see ADR-0004, user.spec.md)
   profileStatus: text('profile_status').default('registration'), // 'registration' | 'complete'
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

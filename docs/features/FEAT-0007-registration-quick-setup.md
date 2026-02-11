@@ -1,6 +1,20 @@
 FEAT-0007 Registration Quick Setup
 
-x-status: Proposed
+x-status: Future v2.0
+
+> **Note:** This feature extends the basic registration (FEAT-0006) with additional fields.
+> Current MVP implementation (FEAT-0006) requires only 6 core fields for registration completion.
+> This spec describes the extended onboarding flow planned for v2.0.
+
+## MVP vs Extended Registration
+
+**MVP (FEAT-0006) — 6 required fields:**
+- age, gender, height, weight, fitnessLevel, fitnessGoal
+
+**Extended (FEAT-0007) — 10 required fields:**
+- MVP fields + healthRestrictions, trainingLocation, equipmentPresent, availability
+
+---
 
 User Story
 
