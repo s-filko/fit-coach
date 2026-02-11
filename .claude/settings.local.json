@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(npx -p typescript tsc:*)",
+      "Bash(npm test:*)",
+      "Bash(npx jest:*)",
+      "Bash(git status:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx -w apps/server tsc:*)",
+      "Bash(curl:*)",
+      "Bash(npx tsx:*)",
+      "Bash(source:*)",
+      "Bash(echo:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill -9 echo \"Killed\")",
+      "Bash(pgrep:*)",
+      "Bash(xargs kill:*)"
+    ]
+  }
+}
