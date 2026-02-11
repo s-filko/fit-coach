@@ -101,6 +101,7 @@ describe('RegistrationService Integration', () => {
           { role: 'user', content: 'I am 30 years old' },
         ],
         'mock system prompt',
+        { jsonMode: true },
       );
     });
 

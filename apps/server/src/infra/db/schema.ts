@@ -1,5 +1,21 @@
 // Database schema definitions
-import { index, integer, pgEnum, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  jsonb,
+  numeric,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  serial,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 // Enums for conversation_turns
 // MVP phases: 'registration' | 'chat'
@@ -55,4 +71,214 @@ export const conversationTurns = pgTable('conversation_turns', {
       .on(table.userId, table.phase, table.createdAt),
   };
 });
+
+// --- Training domain enums (see plan: training_session_management_mvp) ---
+
+export const exerciseTypeEnum = pgEnum('exercise_type', [
+  'strength',
+  'cardio_distance',
+  'cardio_duration',
+  'functional_reps',
+  'isometric',
+  'interval',
+]);
+
+export const muscleGroupEnum = pgEnum('muscle_group', [
+  'chest',
+  'back_lats',
+  'back_traps',
+  'shoulders_front',
+  'shoulders_side',
+  'shoulders_rear',
+  'quads',
+  'hamstrings',
+  'glutes',
+  'calves',
+  'biceps',
+  'triceps',
+  'forearms',
+  'abs',
+  'lower_back',
+  'core',
+  'cardio_system',
+  'full_body',
+  'lower_body_endurance',
+  'core_stability',
+]);
+
+export const workoutPlanStatusEnum = pgEnum('workout_plan_status', ['draft', 'active', 'archived']);
+
+export const sessionStatusEnum = pgEnum('session_status', [
+  'planned',
+  'in_progress',
+  'completed',
+  'skipped',
+]);
+
+export const sessionExerciseStatusEnum = pgEnum('session_exercise_status', [
+  'pending',
+  'in_progress',
+  'completed',
+  'skipped',
+]);
+
+// --- Training domain tables ---
+
+export const workoutPlans = pgTable(
+  'workout_plans',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    name: text('name').notNull(),
+    planJson: jsonb('plan_json').notNull(),
+    status: workoutPlanStatusEnum('status').notNull().default('active'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    userStatusIdx: index('idx_workout_plans_user_status').on(
+      table.userId,
+      table.status,
+    ),
+  }),
+);
+
+export const exercises = pgTable(
+  'exercises',
+  {
+    id: serial('id').primaryKey(),
+    name: text('name').notNull().unique(),
+    category: text('category').notNull(),
+    equipment: text('equipment').notNull(),
+    exerciseType: exerciseTypeEnum('exercise_type').notNull(),
+    description: text('description'),
+    energyCost: text('energy_cost').notNull(),
+    complexity: text('complexity').notNull(),
+    typicalDurationMinutes: integer('typical_duration_minutes').notNull(),
+    requiresSpotter: boolean('requires_spotter').default(false),
+    imageUrl: text('image_url'),
+    videoUrl: text('video_url'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    categoryIdx: index('idx_exercises_category').on(table.category),
+    energyCostIdx: index('idx_exercises_energy_cost').on(table.energyCost),
+    typeIdx: index('idx_exercises_type').on(table.exerciseType),
+  }),
+);
+
+export const exerciseMuscleGroups = pgTable(
+  'exercise_muscle_groups',
+  {
+    exerciseId: integer('exercise_id')
+      .references(() => exercises.id, { onDelete: 'cascade' })
+      .notNull(),
+    muscleGroup: muscleGroupEnum('muscle_group').notNull(),
+    involvement: text('involvement').notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.exerciseId, table.muscleGroup] }),
+    muscleIdx: index('idx_exercise_muscle_groups_muscle').on(table.muscleGroup),
+  }),
+);
+
+export const workoutSessions = pgTable(
+  'workout_sessions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    planId: uuid('plan_id').references(() => workoutPlans.id, {
+      onDelete: 'set null',
+    }),
+    sessionKey: text('session_key'),
+    status: sessionStatusEnum('status').notNull().default('planned'),
+    startedAt: timestamp('started_at'),
+    completedAt: timestamp('completed_at'),
+    durationMinutes: integer('duration_minutes'),
+    userContextJson: jsonb('user_context_json'),
+    lastActivityAt: timestamp('last_activity_at')
+      .defaultNow()
+      .notNull(),
+    autoCloseReason: text('auto_close_reason'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    userCompletedIdx: index('idx_workout_sessions_user_completed').on(
+      table.userId,
+      table.completedAt,
+    ),
+    userStatusIdx: index('idx_workout_sessions_user_status').on(
+      table.userId,
+      table.status,
+    ),
+    activityIdx: index('idx_workout_sessions_activity').on(
+      table.userId,
+      table.status,
+      table.lastActivityAt,
+    ),
+    abandonedIdx: index('idx_workout_sessions_abandoned').on(
+      table.status,
+      table.lastActivityAt,
+    ),
+  }),
+);
+
+export const sessionExercises = pgTable(
+  'session_exercises',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    sessionId: uuid('session_id')
+      .references(() => workoutSessions.id, { onDelete: 'cascade' })
+      .notNull(),
+    exerciseId: integer('exercise_id')
+      .references(() => exercises.id)
+      .notNull(),
+    orderIndex: integer('order_index').notNull(),
+    status: sessionExerciseStatusEnum('status').notNull().default('pending'),
+    targetSets: integer('target_sets'),
+    targetReps: text('target_reps'),
+    targetWeight: numeric('target_weight', { precision: 6, scale: 2 }),
+    actualRepsRange: text('actual_reps_range'),
+    userFeedback: text('user_feedback'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    sessionOrderIdx: index('idx_session_exercises_session').on(
+      table.sessionId,
+      table.orderIndex,
+    ),
+  }),
+);
+
+export const sessionSets = pgTable(
+  'session_sets',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    sessionExerciseId: uuid('session_exercise_id')
+      .references(() => sessionExercises.id, { onDelete: 'cascade' })
+      .notNull(),
+    setNumber: integer('set_number').notNull(),
+    rpe: integer('rpe'),
+    userFeedback: text('user_feedback'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    completedAt: timestamp('completed_at'),
+    setData: jsonb('set_data').notNull(),
+  },
+  (table) => ({
+    exerciseSetIdx: index('idx_session_sets_exercise').on(
+      table.sessionExerciseId,
+      table.setNumber,
+    ),
+    // GIN index on set_data for jsonb queries - add manually in migration if needed
+    validSetDataCheck: check(
+      'valid_set_data',
+      sql`jsonb_typeof(${table.setData}) = 'object' AND ${table.setData} ? 'type'`,
+    ),
+  }),
+);
 
