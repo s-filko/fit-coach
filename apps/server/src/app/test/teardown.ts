@@ -2,8 +2,23 @@ import pino from 'pino';
 
 const logger = pino({ level: 'error' });
 import dotenv from 'dotenv';
-
 import path from 'path';
+
+// Register tsconfig-paths to resolve path aliases
+import { register } from 'tsconfig-paths';
+
+const baseUrl = path.resolve(__dirname, '../../..');
+register({
+  baseUrl,
+  paths: {
+    '@app/*': ['src/app/*'],
+    '@domain/*': ['src/domain/*'],
+    '@infra/*': ['src/infra/*'],
+    '@shared/*': ['src/shared/*'],
+    '@config/*': ['src/config/*'],
+    '@main/*': ['src/main/*'],
+  },
+});
 
 /**
  * Load environment variables for the specified NODE_ENV
@@ -36,14 +51,10 @@ export default async function globalTeardown(): Promise<void> {
       const { pool } = await import('@infra/db/drizzle');
       if (pool) {
         await pool.end();
+        logger.info('DB pool closed successfully');
       }
     }
   } catch (error) {
     logger.error({ err: error }, 'Test teardown: failed to close DB pool');
   }
-
-  // Force close any remaining handles
-  setTimeout(() => {
-    process.exit(0);
-  }, 1000);
 }

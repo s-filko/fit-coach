@@ -78,18 +78,30 @@ export async function setupTestDI(): Promise<void> {
     try {
       // Insert test exercises
       await client3.query(`
-        INSERT INTO exercises (name, category, equipment, exercise_type, description, energy_cost, complexity, typical_duration_minutes, requires_spotter)
+        INSERT INTO exercises (
+          name, category, equipment, exercise_type, description, 
+          energy_cost, complexity, typical_duration_minutes, requires_spotter
+        )
         VALUES 
-          ('Barbell Bench Press', 'compound', 'barbell', 'strength', 'Chest compound movement', 'high', 'intermediate', 12, true),
-          ('Barbell Back Squat', 'compound', 'barbell', 'strength', 'Leg compound movement', 'very_high', 'advanced', 15, true),
-          ('Pull-ups', 'compound', 'bodyweight', 'strength', 'Back compound movement', 'high', 'intermediate', 10, false),
-          ('Running', 'cardio', 'none', 'cardio_distance', 'Cardio exercise', 'medium', 'beginner', 30, false)
+          ('Barbell Bench Press', 'compound', 'barbell', 'strength', 
+           'Chest compound movement', 'high', 'intermediate', 12, true),
+          ('Barbell Back Squat', 'compound', 'barbell', 'strength', 
+           'Leg compound movement', 'very_high', 'advanced', 15, true),
+          ('Pull-ups', 'compound', 'bodyweight', 'strength', 
+           'Back compound movement', 'high', 'intermediate', 10, false),
+          ('Running', 'cardio', 'none', 'cardio_distance', 
+           'Cardio exercise', 'medium', 'beginner', 30, false)
         ON CONFLICT (name) DO NOTHING
         RETURNING id;
       `);
       
       // Get exercise IDs
-      const result = await client3.query(`SELECT id, name FROM exercises WHERE name IN ('Barbell Bench Press', 'Barbell Back Squat', 'Pull-ups', 'Running')`);
+      const result = await client3.query(`
+        SELECT id, name FROM exercises 
+        WHERE name IN (
+          'Barbell Bench Press', 'Barbell Back Squat', 'Pull-ups', 'Running'
+        )
+      `);
       
       // Insert muscle group mappings
       for (const row of result.rows) {
