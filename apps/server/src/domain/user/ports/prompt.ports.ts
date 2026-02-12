@@ -1,9 +1,30 @@
+import type {
+  SessionRecommendation,
+  WorkoutPlan,
+  WorkoutSessionWithDetails,
+} from '@domain/training/types';
 import { User } from '@domain/user/services/user.service';
 
 // Chat message interface for LLM interactions
 export interface ChatMsg {
   role: 'system' | 'user' | 'assistant';
   content: string;
+}
+
+// Context for session planning prompt
+export interface SessionPlanningPromptContext {
+  user: User;
+  activePlan: WorkoutPlan | null;
+  recentSessions: WorkoutSessionWithDetails[];
+  currentPlan: SessionRecommendation | null;
+  totalExercisesAvailable: number;
+  daysSinceLastWorkout: number | null;
+}
+
+// Context for training prompt
+export interface TrainingPromptContext {
+  user: User;
+  activeSession: WorkoutSessionWithDetails;
 }
 
 // DI Token for prompt service
@@ -15,4 +36,8 @@ export interface IPromptService {
   buildUnifiedRegistrationPrompt(user: User): string;
   /** System prompt for general chat mode (post-registration) */
   buildChatSystemPrompt(user: User): string;
+  /** System prompt for session planning phase */
+  buildSessionPlanningPrompt(context: SessionPlanningPromptContext): string;
+  /** System prompt for training phase */
+  buildTrainingPrompt(context: TrainingPromptContext): string;
 }

@@ -1,7 +1,14 @@
 /* eslint-disable max-len */
-import { IPromptService } from '@domain/user/ports';
+import {
+  IPromptService,
+  type SessionPlanningPromptContext,
+  type TrainingPromptContext,
+} from '@domain/user/ports';
 import { FIELD_HINTS, FIELD_LABELS, type ProfileDataKey } from '@domain/user/services/registration.validation';
 import { User } from '@domain/user/services/user.service';
+
+import { buildSessionPlanningPrompt } from './prompts/session-planning.prompt';
+import { buildTrainingPrompt } from './prompts/training.prompt';
 
 const PROFILE_FIELDS: ProfileDataKey[] = ['age', 'gender', 'height', 'weight', 'fitnessLevel', 'fitnessGoal'];
 
@@ -103,5 +110,21 @@ RULES:
 3. PERSONALIZATION: Always consider the client's profile when giving advice. Reference their goal, level, and stats when relevant.
 4. STYLE: Keep responses brief (1-3 sentences), motivating, and conversational. Respond in the same language the user writes in.
 5. PROACTIVE: When the user says just "hi" or "hello", greet them by name (FitCoach greeting) and proactively suggest something related to their goal — a workout tip, a question about their progress, or motivation.`;
+  }
+
+  /**
+   * System prompt for session planning phase
+   * Includes training history, active plan, and recovery data
+   */
+  buildSessionPlanningPrompt(context: SessionPlanningPromptContext): string {
+    return buildSessionPlanningPrompt(context);
+  }
+
+  /**
+   * System prompt for training phase
+   * Includes current session state, exercise details, and progress
+   */
+  buildTrainingPrompt(context: TrainingPromptContext): string {
+    return buildTrainingPrompt(context);
   }
 }
