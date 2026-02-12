@@ -3,9 +3,10 @@ Domain: Conversation (keyed by userId + phase)
 Terms
 	- ConversationTurn: a single exchange { role: 'user' | 'assistant' | 'system' | 'summary', content: string, timestamp }
 	- ConversationContext: ordered list of turns for a (userId, phase) pair, with optional summarySoFar, lastActivityAt, and phase-specific context
-	- Phase: logical scope of a conversation ('registration' | 'chat' | 'training'); determines routing and context structure
+	- Phase: logical scope of a conversation ('registration' | 'chat' | 'session_planning' | 'training'); determines routing and context structure
 	- SlidingWindow: policy that keeps only the last maxTurns turns when building the prompt
-	- PhaseTransition: explicit reset or startNewPhase when app state changes (e.g. registration complete, training start/end)
+	- PhaseTransition: explicit reset or startNewPhase when app state changes (e.g. registration complete, session planning start, training start/end)
+	- SessionPlanningContext: additional context for 'session_planning' phase { recommendedSessionId?: string }
 	- TrainingContext: additional context for 'training' phase { activeSessionId: string }
 
 Invariants
@@ -22,8 +23,10 @@ Business Rules
 	- BR-CONV-005: On phase transition, previous phase context is reset; a system note is injected into the new phase [INV-CONV-001]
 	- BR-CONV-006: After idle exceeding a configured threshold, context may be summarized or reset with a recap (post-MVP)
 	- BR-CONV-007: If appendTurn fails after a successful LLM call, the system accepts the missing turn as best-effort for MVP
-	- BR-CONV-008: Phase 'training' includes trainingContext { activeSessionId } stored alongside turns
-	- BR-CONV-009: Phase transitions 'chat' ↔ 'training' occur on session start/complete; trainingContext is set/cleared accordingly
+	- BR-CONV-008: Phase 'session_planning' includes sessionPlanningContext { recommendedSessionId? } for storing draft recommendations
+	- BR-CONV-009: Phase 'training' includes trainingContext { activeSessionId } stored alongside turns
+	- BR-CONV-010: Phase transitions follow the flow: chat → session_planning (on recommendation request) → training (on session start) → chat (on session complete)
+	- BR-CONV-011: Phase-specific context is set on phase entry and cleared on phase exit
 
 Ports
 	- IConversationContextService (CONVERSATION_CONTEXT_SERVICE_TOKEN)

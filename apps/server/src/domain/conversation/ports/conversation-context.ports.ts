@@ -2,7 +2,7 @@ import { ChatMsg } from '@domain/user/ports';
 
 // --- Types ---
 
-export type ConversationPhase = 'registration' | 'chat' | 'training';
+export type ConversationPhase = 'registration' | 'chat' | 'session_planning' | 'training';
 
 export interface ConversationTurn {
   role: 'user' | 'assistant' | 'system' | 'summary';
@@ -10,13 +10,31 @@ export interface ConversationTurn {
   timestamp: Date;
 }
 
-export interface ConversationContext {
+// Phase-specific context data
+export interface SessionPlanningContext {
+  // Stores the recommended session while user reviews/modifies it
+  recommendedSessionId?: string; // Optional: if we pre-create a draft session
+}
+
+export interface TrainingContext {
+  // Active workout session ID
+  activeSessionId: string;
+}
+
+// Base context structure
+interface BaseConversationContext {
   userId: string;
-  phase: ConversationPhase;
   turns: ConversationTurn[];
   summarySoFar?: string;
   lastActivityAt?: Date;
 }
+
+// Phase-specific context variants
+export type ConversationContext =
+  | (BaseConversationContext & { phase: 'registration' })
+  | (BaseConversationContext & { phase: 'chat' })
+  | (BaseConversationContext & { phase: 'session_planning'; sessionPlanningContext?: SessionPlanningContext })
+  | (BaseConversationContext & { phase: 'training'; trainingContext: TrainingContext });
 
 export interface GetMessagesOptions {
   maxTurns?: number;
@@ -28,6 +46,9 @@ export interface ResetOptions {
 
 export interface StartNewPhaseOptions {
   preserveSummary?: boolean;
+  // Phase-specific context to initialize
+  sessionPlanningContext?: SessionPlanningContext;
+  trainingContext?: TrainingContext;
 }
 
 // --- DI Token ---

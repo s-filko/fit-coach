@@ -20,7 +20,7 @@ import {
 // Enums for conversation_turns
 // MVP phases: 'registration' | 'chat'
 // Future phases: 'training' (see conversation.spec.md, FEAT-0008)
-export const conversationPhaseEnum = pgEnum('conversation_phase', ['registration', 'chat', 'training']);
+export const conversationPhaseEnum = pgEnum('conversation_phase', ['registration', 'chat', 'session_planning', 'training']);
 export const conversationRoleEnum = pgEnum('conversation_role', ['user', 'assistant', 'system', 'summary']);
 
 export const users = pgTable('users', {

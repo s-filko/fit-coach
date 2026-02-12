@@ -33,7 +33,8 @@ export class InMemoryConversationContextService implements IConversationContextS
 
     let ctx = this.store.get(k);
     if (!ctx) {
-      ctx = { userId, phase, turns: [], lastActivityAt: now };
+      // Create phase-appropriate context
+      ctx = this.createEmptyContext(userId, phase, now);
       this.store.set(k, ctx);
     }
 
@@ -42,6 +43,25 @@ export class InMemoryConversationContextService implements IConversationContextS
       { role: 'assistant', content: assistantContent, timestamp: now },
     );
     ctx.lastActivityAt = now;
+  }
+
+  private createEmptyContext(userId: string, phase: ConversationPhase, now: Date): ConversationContext {
+    const base = { userId, turns: [], lastActivityAt: now };
+    
+    switch (phase) {
+      case 'registration':
+        return { ...base, phase: 'registration' };
+      case 'chat':
+        return { ...base, phase: 'chat' };
+      case 'session_planning':
+        return { ...base, phase: 'session_planning' };
+      case 'training':
+        // Training phase requires activeSessionId, but we can't create it here
+        // This should be handled by startNewPhase with proper context
+        throw new Error('Training phase context must be created via startNewPhase with trainingContext');
+      default:
+        throw new Error(`Unknown phase: ${phase as string}`);
+    }
   }
 
   /** [BR-CONV-003][BR-CONV-004][INV-CONV-003] */
@@ -80,22 +100,52 @@ export class InMemoryConversationContextService implements IConversationContextS
     // Post-MVP: summarize older turns via LLM
   }
 
-  /** [BR-CONV-005] */
+  /** [BR-CONV-005][BR-CONV-010][BR-CONV-011] */
   async startNewPhase(
     userId: string, fromPhase: ConversationPhase, toPhase: ConversationPhase,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     systemNote: string, options?: StartNewPhaseOptions,
   ): Promise<void> {
     // Reset old phase
     this.store.delete(this.key(userId, fromPhase));
 
-    // Create new phase with system note
+    // Create new phase with system note and phase-specific context
     const now = new Date();
-    this.store.set(this.key(userId, toPhase), {
-      userId,
-      phase: toPhase,
-      turns: [{ role: 'system', content: systemNote, timestamp: now }],
-      lastActivityAt: now,
-    });
+    const baseTurns = [{ role: 'system' as const, content: systemNote, timestamp: now }];
+    
+    let newContext: ConversationContext;
+    
+    switch (toPhase) {
+      case 'registration':
+        newContext = { userId, phase: 'registration', turns: baseTurns, lastActivityAt: now };
+        break;
+      case 'chat':
+        newContext = { userId, phase: 'chat', turns: baseTurns, lastActivityAt: now };
+        break;
+      case 'session_planning':
+        newContext = {
+          userId,
+          phase: 'session_planning',
+          turns: baseTurns,
+          lastActivityAt: now,
+          sessionPlanningContext: options?.sessionPlanningContext,
+        };
+        break;
+      case 'training':
+        if (!options?.trainingContext?.activeSessionId) {
+          throw new Error('trainingContext with activeSessionId is required for training phase');
+        }
+        newContext = {
+          userId,
+          phase: 'training',
+          turns: baseTurns,
+          lastActivityAt: now,
+          trainingContext: options.trainingContext,
+        };
+        break;
+      default:
+        throw new Error(`Unknown phase: ${toPhase as string}`);
+    }
+    
+    this.store.set(this.key(userId, toPhase), newContext);
   }
 }

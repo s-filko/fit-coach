@@ -34,6 +34,12 @@ function mapRowToTurn(row: TurnRow): ConversationTurn {
 
 /** Drizzle-backed implementation of IConversationContextService (ADR-0005) */
 export class DrizzleConversationContextService implements IConversationContextService {
+  // In-memory store for phase-specific context (MVP: not persisted to DB)
+  private readonly phaseContextStore = new Map<string, any>();
+
+  private contextKey(userId: string, phase: ConversationPhase): string {
+    return `${userId}:${phase}`;
+  }
 
   /** [BR-CONV-001] Load all turns for (userId, phase) from DB */
   async getContext(userId: string, phase: ConversationPhase): Promise<ConversationContext | null> {
@@ -61,7 +67,32 @@ export class DrizzleConversationContextService implements IConversationContextSe
     // lastActivityAt: created_at of the very last row
     const lastActivityAt = rows[rows.length - 1].createdAt;
 
-    return { userId, phase, turns, summarySoFar, lastActivityAt };
+    // Build phase-appropriate context
+    const baseContext = { userId, turns, summarySoFar, lastActivityAt };
+    const key = this.contextKey(userId, phase);
+    
+    switch (phase) {
+      case 'registration':
+        return { ...baseContext, phase: 'registration' };
+      case 'chat':
+        return { ...baseContext, phase: 'chat' };
+      case 'session_planning':
+        return {
+          ...baseContext,
+          phase: 'session_planning',
+          sessionPlanningContext: this.phaseContextStore.get(key),
+        };
+      case 'training': {
+        const trainingContext = this.phaseContextStore.get(key);
+        if (!trainingContext?.activeSessionId) {
+          // Training phase without activeSessionId is invalid
+          return null;
+        }
+        return { ...baseContext, phase: 'training', trainingContext };
+      }
+      default:
+        return null;
+    }
   }
 
   /** [BR-CONV-002] INSERT 2 rows (user + assistant) */
@@ -112,6 +143,9 @@ export class DrizzleConversationContextService implements IConversationContextSe
         eq(conversationTurns.userId, userId),
         eq(conversationTurns.phase, phase),
       ));
+    
+    // Clear phase-specific context
+    this.phaseContextStore.delete(this.contextKey(userId, phase));
   }
 
   /** No-op stub for post-MVP [BR-CONV-006] */
@@ -120,10 +154,9 @@ export class DrizzleConversationContextService implements IConversationContextSe
     // Post-MVP: summarize older turns via LLM, insert a 'summary' row
   }
 
-  /** [BR-CONV-005] Delete fromPhase rows, insert system note into toPhase */
+  /** [BR-CONV-005][BR-CONV-010][BR-CONV-011] Delete fromPhase rows, insert system note into toPhase */
   async startNewPhase(
     userId: string, fromPhase: ConversationPhase, toPhase: ConversationPhase,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     systemNote: string, options?: StartNewPhaseOptions,
   ): Promise<void> {
     const { db, conversationTurns } = await getDbAndSchema();
@@ -135,10 +168,24 @@ export class DrizzleConversationContextService implements IConversationContextSe
         eq(conversationTurns.userId, userId),
         eq(conversationTurns.phase, fromPhase),
       ));
+    
+    // Clear old phase-specific context
+    this.phaseContextStore.delete(this.contextKey(userId, fromPhase));
 
     // Create new phase with system note
     await db.insert(conversationTurns).values({
       userId, phase: toPhase, role: 'system', content: systemNote,
     });
+    
+    // Store phase-specific context
+    const toKey = this.contextKey(userId, toPhase);
+    if (toPhase === 'session_planning' && options?.sessionPlanningContext) {
+      this.phaseContextStore.set(toKey, options.sessionPlanningContext);
+    } else if (toPhase === 'training') {
+      if (!options?.trainingContext?.activeSessionId) {
+        throw new Error('trainingContext with activeSessionId is required for training phase');
+      }
+      this.phaseContextStore.set(toKey, options.trainingContext);
+    }
   }
 }
