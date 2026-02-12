@@ -20,7 +20,7 @@ import type {
 } from '@domain/training/types';
 import type { ChatMsg, UserRepository } from '@domain/user/ports';
 
-import { buildSessionRecommendationPrompt } from './prompts/session-recommendation.prompt.js';
+import { buildSessionRecommendationPrompt } from './prompts/session-recommendation.prompt';
 
 const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
 

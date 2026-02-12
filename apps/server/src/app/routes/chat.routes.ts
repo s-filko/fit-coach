@@ -42,28 +42,24 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
-      // 2. Derive conversation phase
+      // 2. Determine current conversation phase
       const isComplete = app.services.userService.isRegistrationComplete(user);
-      const phase = isComplete ? 'chat' as const : 'registration' as const;
+      
+      // If registration not complete, use registration phase
+      if (!isComplete) {
+        const phase = 'registration' as const;
+        
+        // Load conversation context and build history
+        const ctx = await conversationContextService.getContext(userId, phase);
+        const historyMessages = ctx
+          ? conversationContextService.getMessagesForPrompt(ctx)
+          : [];
 
-      // 3-4. Load conversation context and build history [BR-CONV-001, BR-CONV-003]
-      const ctx = await conversationContextService.getContext(userId, phase);
-      const historyMessages = ctx
-        ? conversationContextService.getMessagesForPrompt(ctx)
-        : [];
-
-      let response: string;
-      let updatedUser = user;
-
-      if (isComplete) {
-        // 5a. Chat mode — delegate to ChatService (builds prompt + calls LLM)
-        response = await app.services.chatService.processMessage(user, message, historyMessages);
-      } else {
-        // 5b. Registration mode — pass history to registration service
+        // Process registration
         const result = await app.services.registrationService.processUserMessage(user, message, historyMessages);
-        ({ response, updatedUser } = result);
+        const { response, updatedUser } = result;
 
-        // 6. Save user profile changes
+        // Save user profile changes
         await app.services.userService.updateProfileData(userId, {
           profileStatus: updatedUser.profileStatus,
           age: updatedUser.age,
@@ -73,33 +69,70 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
           fitnessLevel: updatedUser.fitnessLevel,
           fitnessGoal: updatedUser.fitnessGoal,
         });
+
+        // Persist conversation turn
+        try {
+          await conversationContextService.appendTurn(userId, phase, message, response);
+        } catch (err) {
+          req.log.warn({ err }, 'Failed to append conversation turn — response not affected');
+        }
+
+        // Phase transition: registration → chat if now complete
+        const nowComplete = app.services.userService.isRegistrationComplete(updatedUser);
+        if (nowComplete) {
+          try {
+            await conversationContextService.startNewPhase(
+              userId, 'registration', 'chat', 'Registration complete.',
+            );
+          } catch (err) {
+            req.log.warn({ err }, 'Failed to transition conversation phase');
+          }
+        }
+
+        return reply.send({
+          data: {
+            content: response,
+            timestamp: new Date().toISOString(),
+            registrationComplete: nowComplete,
+          },
+        });
       }
 
-      // 7. Persist conversation turn [BR-CONV-002, BR-CONV-007]
+      // Registration complete - determine phase from existing contexts
+      // Priority: training > session_planning > chat
+      let phase: 'chat' | 'session_planning' | 'training' = 'chat';
+      
+      const trainingCtx = await conversationContextService.getContext(userId, 'training');
+      const planningCtx = await conversationContextService.getContext(userId, 'session_planning');
+      
+      if (trainingCtx) {
+        phase = 'training';
+      } else if (planningCtx) {
+        phase = 'session_planning';
+      }
+
+      // Load conversation context and build history [BR-CONV-001, BR-CONV-003]
+      const ctx = await conversationContextService.getContext(userId, phase);
+      const historyMessages = ctx
+        ? conversationContextService.getMessagesForPrompt(ctx)
+        : [];
+
+      // Process message via ChatService (handles all phases: chat, session_planning, training)
+      const response = await app.services.chatService.processMessage(user, message, phase, historyMessages);
+
+      // Persist conversation turn [BR-CONV-002, BR-CONV-007]
       try {
         await conversationContextService.appendTurn(userId, phase, message, response);
       } catch (err) {
         req.log.warn({ err }, 'Failed to append conversation turn — response not affected');
       }
 
-      // 8. Phase transition: registration → chat [BR-CONV-005]
-      const nowComplete = app.services.userService.isRegistrationComplete(updatedUser);
-      if (!isComplete && nowComplete) {
-        try {
-          await conversationContextService.startNewPhase(
-            userId, 'registration', 'chat', 'Registration complete.',
-          );
-        } catch (err) {
-          req.log.warn({ err }, 'Failed to transition conversation phase');
-        }
-      }
-
-      // 9. Return response [AC-0110]
+      // Return response [AC-0110]
       return reply.send({
         data: {
           content: response,
           timestamp: new Date().toISOString(),
-          registrationComplete: nowComplete,
+          registrationComplete: true, // Always true here (registration complete)
         },
       });
     } catch (error) {

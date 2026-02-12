@@ -37,6 +37,7 @@ describe('API Key Authentication Middleware – integration', () => {
       llmService: container.get(LLM_SERVICE_TOKEN) as any,
       chatService: { processMessage: jest.fn().mockResolvedValue('Stub chat response') } as any,
       conversationContextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN) as any,
+      trainingService: {} as any, // Stub for auth tests
     });
     
     await app.ready();

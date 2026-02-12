@@ -72,7 +72,11 @@ export async function registerInfraServices(
   );
   container.registerFactory(
     CHAT_SERVICE_TOKEN,
-    c => new ChatService(c.get(PROMPT_SERVICE_TOKEN), c.get(LLM_SERVICE_TOKEN)),
+    c => new ChatService(
+      c.get(PROMPT_SERVICE_TOKEN),
+      c.get(LLM_SERVICE_TOKEN),
+      c.get(CONVERSATION_CONTEXT_SERVICE_TOKEN),
+    ),
   );
 
   // Training repositories

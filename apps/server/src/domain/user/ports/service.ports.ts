@@ -1,3 +1,4 @@
+import { ConversationPhase } from '@domain/conversation/ports/conversation-context.ports';
 import { ChatMsg } from '@domain/user/ports';
 import { CreateUserInput, ParsedProfileData, User } from '@domain/user/services/user.service';
 
@@ -25,5 +26,19 @@ export interface IRegistrationService {
 }
 
 export interface IChatService {
-  processMessage(user: User, message: string, historyMessages?: ChatMsg[]): Promise<string>;
+  /**
+   * Process user message in any conversation phase
+   * 
+   * @param user - Current user
+   * @param message - User message
+   * @param phase - Current conversation phase (chat, session_planning, training)
+   * @param historyMessages - Conversation history for LLM prompt
+   * @returns Assistant response
+   */
+  processMessage(
+    user: User,
+    message: string,
+    phase: ConversationPhase,
+    historyMessages?: ChatMsg[],
+  ): Promise<string>;
 }
