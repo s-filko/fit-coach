@@ -1,33 +1,49 @@
 Domain: Training
 
 Terms
-	• WorkoutPlan: structured template of future workouts linked to a user
-	• WorkoutPlanCycle: hierarchical element of a plan (macro|meso|micro)
+	• WorkoutPlan: flexible training plan with recovery guidelines (JSONB structure)
+	• WorkoutSession: actual workout session with status tracking (planned|in_progress|completed|skipped)
+	• SessionExercise: exercise performed in a session with target and actual data
+	• SessionSet: individual set logged during training with flexible JSONB data
+	• Exercise: exercise from library with muscle groups, energy cost, complexity
+	• SessionRecommendation: AI-generated workout recommendation based on history and recovery
 
 Invariants
-	• INV-TRAINING-001: A user can have at most one WorkoutPlan with archivedAt=null
-	• INV-TRAINING-002: approvedAt is null until the plan is confirmed and, once set, remains immutable
-	• INV-TRAINING-003: archivedAt is immutable once set and implies approvedAt is non-null
-	• INV-TRAINING-004: Each WorkoutPlanCycle belongs to exactly one WorkoutPlan and, if parentCycleId is present, the parent belongs to the same plan
-	• INV-TRAINING-005: At most one WorkoutPlanCycle per (plan,cycleType) may be in state='active'
-	• INV-TRAINING-006: plannedStartAt ≤ plannedEndAt for every WorkoutPlanCycle
+	• INV-TRAINING-001: A user can have at most one WorkoutPlan with status='active'
+	• INV-TRAINING-002: A user can have at most one WorkoutSession with status='in_progress'
+	• INV-TRAINING-003: session_sets.set_data JSONB must have 'type' field (discriminated union)
+	• INV-TRAINING-004: workout_sessions.last_activity_at is updated on every training action
+	• INV-TRAINING-005: Sessions with last_activity_at > 2 hours and status='in_progress' are auto-closed
 
 Business Rules
-	• BR-TRAINING-001: Creating a WorkoutPlan archives any previous unarchived plan for the user [INV-TRAINING-001]
-	• BR-TRAINING-002: Plans remain editable only while approvedAt is null; approval freezes the payload
-	• BR-TRAINING-003: Approving a plan sets approvedAt and makes the plan referenceable from workouts
-	• BR-TRAINING-004: Archiving a plan (setting archivedAt) detaches it from future workouts but keeps historical associations intact [INV-TRAINING-003]
-	• BR-TRAINING-005: WorkoutPlan payload captures goal snapshot, constraints, schedule, phased structure (macro→meso→micro cycles), and exercise templates prior to approval
-	• BR-TRAINING-006: WorkoutPlanCycle.state transitions: upcoming → active → completed|skipped; activatedAt/completedAt record factual timestamps
-	• BR-TRAINING-007: Cycle ordering (orderIndex) is contiguous per (plan,cycleType,parentCycleId) and determines progression
+	• BR-TRAINING-001: All training interactions happen through /api/chat; no separate REST endpoints
+	• BR-TRAINING-002: Database is single source of truth; AI loads session details from DB on each message
+	• BR-TRAINING-003: Session recommendations analyze last 5 sessions, recovery guidelines, and current date
+	• BR-TRAINING-004: Starting a session creates workout_session (status='in_progress'), stores sessionId in conversation context
+	• BR-TRAINING-005: Only one active session per user; starting new session auto-closes previous [INV-TRAINING-002]
+	• BR-TRAINING-006: Set logging updates workout_sessions.last_activity_at to prevent timeout [INV-TRAINING-004]
+	• BR-TRAINING-007: Sessions auto-close after 2 hours inactivity (lazy on interaction + daily cron) [INV-TRAINING-005]
+	• BR-TRAINING-008: Completing session updates status='completed', sets completed_at, clears context
+	• BR-TRAINING-009: User context (mood, sleep, energy) extracted from conversation, stored in user_context_json
+	• BR-TRAINING-010: Retrospective logging creates sessions with past timestamps, status='completed'
 
-Ports
-	• WorkoutPlanService (TRAINING_CONTEXT_SERVICE_TOKEN)
-	• getContext(userId): WorkoutPlan | null [BR-TRAINING-001]
-	• createContext(userId, data): WorkoutPlan [BR-TRAINING-001][BR-TRAINING-005]
-	• updateContext(id, data): WorkoutPlan | null [BR-TRAINING-002]
-	• deleteContext(id): boolean (archives plan) [BR-TRAINING-004]
+Ports (apps/server/src/domain/training/ports/)
+	• ITrainingService (TRAINING_SERVICE_TOKEN)
+		• getNextSessionRecommendation(userId): SessionRecommendation [BR-TRAINING-003]
+		• startSession(userId, dto): WorkoutSession [BR-TRAINING-004][BR-TRAINING-005]
+		• addExerciseToSession(sessionId, dto): SessionExercise
+		• logSet(exerciseId, dto): SessionSet [BR-TRAINING-006]
+		• completeSession(sessionId, duration?): WorkoutSession [BR-TRAINING-008]
+		• getTrainingHistory(userId, limit?): WorkoutSessionWithDetails[]
+		• getSessionDetails(sessionId): WorkoutSessionWithDetails | null [BR-TRAINING-002]
+	• IWorkoutPlanRepository, IExerciseRepository, IWorkoutSessionRepository, ISessionExerciseRepository, ISessionSetRepository
+
+Conversation Integration
+	• Phase 'training': active when user has session with status='in_progress'
+	• Context stores: { activeSessionId: string }
+	• Phase transitions: chat ↔ training (on session start/complete)
+	• AI loads session details from DB before processing each training message [BR-TRAINING-002]
 
 Rules:
 - One file per domain (≤ 50 lines).
-- Matches apps/server/src/domain/training/ports.ts.
+- Matches apps/server/src/domain/training/ports/.

@@ -2,10 +2,11 @@ Domain: Conversation (keyed by userId + phase)
 
 Terms
 	- ConversationTurn: a single exchange { role: 'user' | 'assistant' | 'system' | 'summary', content: string, timestamp }
-	- ConversationContext: ordered list of turns for a (userId, phase) pair, with optional summarySoFar and lastActivityAt
-	- Phase: logical scope of a conversation (e.g. 'registration', 'chat', 'training'); aligns with profileStatus or app-defined state
+	- ConversationContext: ordered list of turns for a (userId, phase) pair, with optional summarySoFar, lastActivityAt, and phase-specific context
+	- Phase: logical scope of a conversation ('registration' | 'chat' | 'training'); determines routing and context structure
 	- SlidingWindow: policy that keeps only the last maxTurns turns when building the prompt
-	- PhaseTransition: explicit reset or startNewPhase when app state changes (e.g. registration complete)
+	- PhaseTransition: explicit reset or startNewPhase when app state changes (e.g. registration complete, training start/end)
+	- TrainingContext: additional context for 'training' phase { activeSessionId: string }
 
 Invariants
 	- INV-CONV-001: Context identity is (userId, phase); each pair has at most one active context
@@ -21,6 +22,8 @@ Business Rules
 	- BR-CONV-005: On phase transition, previous phase context is reset; a system note is injected into the new phase [INV-CONV-001]
 	- BR-CONV-006: After idle exceeding a configured threshold, context may be summarized or reset with a recap (post-MVP)
 	- BR-CONV-007: If appendTurn fails after a successful LLM call, the system accepts the missing turn as best-effort for MVP
+	- BR-CONV-008: Phase 'training' includes trainingContext { activeSessionId } stored alongside turns
+	- BR-CONV-009: Phase transitions 'chat' ↔ 'training' occur on session start/complete; trainingContext is set/cleared accordingly
 
 Ports
 	- IConversationContextService (CONVERSATION_CONTEXT_SERVICE_TOKEN)

@@ -87,12 +87,22 @@ security:
   - `registrationComplete` (boolean, optional): Present only during registration phase. `true` when user completes registration and transitions to chat phase.
 
   Notes:
-  - All conversational phases (registration, chat, training, planning) interact exclusively through this `/api/chat` endpoint.
-  - Server automatically determines the phase based on user's `profileStatus` field.
+  - **All conversational phases (registration, chat, training) interact exclusively through this `/api/chat` endpoint.**
+  - **No separate REST endpoints for training operations** - all training interactions (session recommendations, logging sets, completing workouts) happen through conversational AI via `/api/chat`.
+  - Server automatically determines the phase based on user's `profileStatus` and conversation context.
   - **Phase routing**:
     - `profileStatus === 'registration'` → RegistrationService (collects profile data via JSON mode LLM)
-    - `profileStatus === 'complete'` → ChatService (general fitness coaching conversation)
-  - **Phase transitions**: When registration is completed, server updates `profileStatus` to `'complete'`, persists the conversation turn with a system note, and returns `registrationComplete: true`. Subsequent requests use ChatService.
+    - `profileStatus === 'complete'` + no active training session → ChatService (general fitness coaching conversation)
+    - `profileStatus === 'complete'` + active training session → ChatService with TrainingService integration (workout guidance)
+  - **Phase transitions**: 
+    - Registration complete: server updates `profileStatus` to `'complete'`, persists conversation turn with system note, returns `registrationComplete: true`
+    - Training start: conversation phase switches to `'training'`, active session ID stored in conversation context
+    - Training complete: conversation phase switches back to `'chat'`, active session cleared from context
+  - **Training flow** (all via `/api/chat`):
+    1. User: "What should I do today?" → AI calls `TrainingService.getNextSessionRecommendation()` → returns personalized workout
+    2. User: "Let's start" → AI calls `TrainingService.startSession()` → creates session in DB, stores sessionId in context
+    3. User: "Did 10 reps with 50kg" → AI parses message, calls `TrainingService.logSet()` → saves to DB
+    4. User: "Finished" → AI calls `TrainingService.completeSession()` → updates session status, clears context
 
 ### Notes
 - x-feature: FEAT-0009 ✅ IMPLEMENTED
