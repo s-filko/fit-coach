@@ -13,7 +13,7 @@ import { exerciseMuscleGroups, exercises } from '@infra/db/schema';
 export class ExerciseRepository implements IExerciseRepository {
   async findById(id: number): Promise<Exercise | null> {
     const [exercise] = await db.select().from(exercises).where(eq(exercises.id, id));
-    return exercise ?? null;
+    return exercise as Exercise ?? null;
   }
 
   async findByIdWithMuscles(id: number): Promise<ExerciseWithMuscles | null> {
@@ -30,17 +30,17 @@ export class ExerciseRepository implements IExerciseRepository {
     return {
       ...exercise,
       muscleGroups: muscles.map((m) => ({
-        muscleGroup: m.muscleGroup,
-        involvement: m.involvement,
+        muscleGroup: m.muscleGroup as MuscleGroup,
+        involvement: m.involvement as 'primary' | 'secondary',
       })),
-    };
+    } as ExerciseWithMuscles;
   }
 
   async findByIds(ids: number[]): Promise<Exercise[]> {
     if (ids.length === 0) {
       return [];
     }
-    return db.select().from(exercises).where(inArray(exercises.id, ids));
+    return db.select().from(exercises).where(inArray(exercises.id, ids)) as Promise<Exercise[]>;
   }
 
   async findByIdsWithMuscles(ids: number[]): Promise<ExerciseWithMuscles[]> {
@@ -59,10 +59,10 @@ export class ExerciseRepository implements IExerciseRepository {
       muscleGroups: muscles
         .filter((m) => m.exerciseId === exercise.id)
         .map((m) => ({
-          muscleGroup: m.muscleGroup,
-          involvement: m.involvement,
+          muscleGroup: m.muscleGroup as MuscleGroup,
+          involvement: m.involvement as 'primary' | 'secondary',
         })),
-    }));
+    })) as ExerciseWithMuscles[];
   }
 
   async findByMuscleGroup(
@@ -88,7 +88,7 @@ export class ExerciseRepository implements IExerciseRepository {
       .select()
       .from(exercises)
       .where(ilike(exercises.name, `%${query}%`))
-      .limit(limit);
+      .limit(limit) as Promise<Exercise[]>;
   }
 
   async findAll(filters?: {
@@ -98,7 +98,7 @@ export class ExerciseRepository implements IExerciseRepository {
     complexity?: string;
   }): Promise<Exercise[]> {
     if (!filters) {
-      return db.select().from(exercises);
+      return db.select().from(exercises) as Promise<Exercise[]>;
     }
 
     const conditions = [];
@@ -116,12 +116,12 @@ export class ExerciseRepository implements IExerciseRepository {
     }
 
     if (conditions.length === 0) {
-      return db.select().from(exercises);
+      return db.select().from(exercises) as Promise<Exercise[]>;
     }
 
     return db
       .select()
       .from(exercises)
-      .where(sql`${sql.join(conditions, sql` AND `)}`);
+      .where(sql`${sql.join(conditions, sql` AND `)}`) as Promise<Exercise[]>;
   }
 }

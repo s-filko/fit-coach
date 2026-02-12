@@ -12,6 +12,7 @@ module.exports = {
     // E2E tests
     '**/tests/e2e/**/*.e2e.test.ts',
   ],
+  setupFiles: ['<rootDir>/src/app/test/setup-env.ts'],
   setupFilesAfterEnv: ['<rootDir>/src/app/test/setup.ts'],
   globalTeardown: '<rootDir>/src/app/test/teardown.ts',
   maxWorkers: 1,

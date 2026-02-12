@@ -32,7 +32,8 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     return {
       ...created,
       userContextJson: created.userContextJson as WorkoutSession['userContextJson'],
-    };
+      autoCloseReason: created.autoCloseReason as WorkoutSession['autoCloseReason'],
+    } as WorkoutSession;
   }
 
   async findById(sessionId: string): Promise<WorkoutSession | null> {
@@ -48,7 +49,8 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     return {
       ...session,
       userContextJson: session.userContextJson as WorkoutSession['userContextJson'],
-    };
+      autoCloseReason: session.autoCloseReason as WorkoutSession['autoCloseReason'],
+    } as WorkoutSession;
   }
 
   async findByIdWithDetails(sessionId: string): Promise<WorkoutSessionWithDetails | null> {
@@ -99,18 +101,18 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
           muscleGroups: muscleGroupsList
             .filter((mg) => mg.exerciseId === se.exercises!.id)
             .map((mg) => ({
-              muscleGroup: mg.muscleGroup,
-              involvement: mg.involvement,
+              muscleGroup: mg.muscleGroup as any,
+              involvement: mg.involvement as 'primary' | 'secondary',
             })),
-        },
+        } as any,
         sets: sets
           .filter((s) => s.sessionExerciseId === se.session_exercises.id)
           .map((s) => ({
             ...s,
-            setData: s.setData as WorkoutSession['userContextJson'],
+            setData: s.setData as any,
           })),
-      })),
-    };
+      })) as any,
+    } as WorkoutSessionWithDetails;
   }
 
   async findRecentByUserId(userId: string, limit: number): Promise<WorkoutSession[]> {
@@ -124,7 +126,8 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     return sessions.map((s) => ({
       ...s,
       userContextJson: s.userContextJson as WorkoutSession['userContextJson'],
-    }));
+      autoCloseReason: s.autoCloseReason as WorkoutSession['autoCloseReason'],
+    })) as WorkoutSession[];
   }
 
   async findRecentByUserIdWithDetails(
@@ -152,7 +155,8 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     return {
       ...session,
       userContextJson: session.userContextJson as WorkoutSession['userContextJson'],
-    };
+      autoCloseReason: session.autoCloseReason as WorkoutSession['autoCloseReason'],
+    } as WorkoutSession;
   }
 
   async update(sessionId: string, updates: Partial<WorkoutSession>): Promise<WorkoutSession> {
@@ -168,7 +172,8 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     return {
       ...updated,
       userContextJson: updated.userContextJson as WorkoutSession['userContextJson'],
-    };
+      autoCloseReason: updated.autoCloseReason as WorkoutSession['autoCloseReason'],
+    } as WorkoutSession;
   }
 
   async complete(
@@ -204,7 +209,8 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     return sessions.map((s) => ({
       ...s,
       userContextJson: s.userContextJson as WorkoutSession['userContextJson'],
-    }));
+      autoCloseReason: s.autoCloseReason as WorkoutSession['autoCloseReason'],
+    })) as WorkoutSession[];
   }
 
   async autoCloseTimedOut(userId: string, cutoffTime: Date): Promise<number> {

@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 
 import type { IWorkoutPlanRepository } from '@domain/training/ports';
-import type { CreateWorkoutPlanDto, WorkoutPlan } from '@domain/training/types';
+import type { CreateWorkoutPlanDto, WorkoutPlan, WorkoutPlanStatus } from '@domain/training/types';
 
 import { db } from '@infra/db/drizzle';
 import { workoutPlans } from '@infra/db/schema';
@@ -54,10 +54,10 @@ export class WorkoutPlanRepository implements IWorkoutPlanRepository {
     };
   }
 
-  async findByUserId(userId: string, status?: string): Promise<WorkoutPlan[]> {
+  async findByUserId(userId: string, status?: WorkoutPlanStatus): Promise<WorkoutPlan[]> {
     const conditions = [eq(workoutPlans.userId, userId)];
     if (status) {
-      conditions.push(eq(workoutPlans.status, status));
+      conditions.push(eq(workoutPlans.status, status as 'active' | 'draft' | 'archived'));
     }
 
     const plans = await db

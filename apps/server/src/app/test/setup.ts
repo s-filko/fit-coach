@@ -53,16 +53,35 @@ export async function setupTestDI(): Promise<void> {
       client.release();
     }
 
-    // Apply migrations (bootstrap schema)
-    const { readFile } = await import('fs/promises');
+    // Apply all migrations in order
+    const { readFile, readdir } = await import('fs/promises');
     const path = await import('path');
-    const sqlPath = path.resolve(process.cwd(), 'drizzle/0000_familiar_stark_industries.sql');
-    const sql = await readFile(sqlPath, 'utf8');
-    const client2 = await pool.connect();
+    const migrationsDir = path.resolve(process.cwd(), 'drizzle');
+    const files = await readdir(migrationsDir);
+    const sqlFiles = files
+      .filter(f => f.endsWith('.sql'))
+      .sort(); // Sort to apply in order
+
+    for (const file of sqlFiles) {
+      const sqlPath = path.join(migrationsDir, file);
+      const sql = await readFile(sqlPath, 'utf8');
+      const client2 = await pool.connect();
+      try {
+        await client2.query(sql);
+      } finally {
+        client2.release();
+      }
+    }
+
+    // Seed exercises data using npm script
+    const { execSync } = await import('child_process');
     try {
-      await client2.query(sql);
-    } finally {
-      client2.release();
+      execSync('npm run db:seed:exercises', {
+        cwd: process.cwd(),
+        stdio: 'ignore',
+      });
+    } catch (err) {
+      // Ignore if already seeded (duplicate key error)
     }
 
     // Register services in test container
