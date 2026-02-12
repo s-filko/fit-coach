@@ -1,0 +1,213 @@
+import { and, desc, eq, inArray, lt } from 'drizzle-orm';
+
+import type { IWorkoutSessionRepository } from '@domain/training/ports';
+import type {
+  CreateSessionDto,
+  WorkoutSession,
+  WorkoutSessionWithDetails,
+} from '@domain/training/types';
+
+import { db } from '@infra/db/drizzle';
+import { exercises, sessionExercises, sessionSets, workoutSessions } from '@infra/db/schema';
+
+export class WorkoutSessionRepository implements IWorkoutSessionRepository {
+  async create(userId: string, session: CreateSessionDto): Promise<WorkoutSession> {
+    const [created] = await db
+      .insert(workoutSessions)
+      .values({
+        userId,
+        planId: session.planId ?? null,
+        sessionKey: session.sessionKey ?? null,
+        userContextJson: session.userContext ?? null,
+        status: 'planned',
+      })
+      .returning();
+
+    return {
+      ...created,
+      userContextJson: created.userContextJson as WorkoutSession['userContextJson'],
+    };
+  }
+
+  async findById(sessionId: string): Promise<WorkoutSession | null> {
+    const [session] = await db
+      .select()
+      .from(workoutSessions)
+      .where(eq(workoutSessions.id, sessionId));
+
+    if (!session) {
+      return null;
+    }
+
+    return {
+      ...session,
+      userContextJson: session.userContextJson as WorkoutSession['userContextJson'],
+    };
+  }
+
+  async findByIdWithDetails(sessionId: string): Promise<WorkoutSessionWithDetails | null> {
+    const session = await this.findById(sessionId);
+    if (!session) {
+      return null;
+    }
+
+    // Get session exercises with exercise details
+    const sessionExercisesList = await db
+      .select()
+      .from(sessionExercises)
+      .leftJoin(exercises, eq(sessionExercises.exerciseId, exercises.id))
+      .where(eq(sessionExercises.sessionId, sessionId))
+      .orderBy(sessionExercises.orderIndex);
+
+    // Get all sets for these exercises
+    const exerciseIds = sessionExercisesList.map((se) => se.session_exercises.id);
+    const sets =
+      exerciseIds.length > 0
+        ? await db
+            .select()
+            .from(sessionSets)
+            .where(inArray(sessionSets.sessionExerciseId, exerciseIds))
+            .orderBy(sessionSets.setNumber)
+        : [];
+
+    return {
+      ...session,
+      exercises: sessionExercisesList.map((se) => ({
+        ...se.session_exercises,
+        exercise: se.exercises!,
+        sets: sets
+          .filter((s) => s.sessionExerciseId === se.session_exercises.id)
+          .map((s) => ({
+            ...s,
+            setData: s.setData as WorkoutSession['userContextJson'],
+          })),
+      })),
+    };
+  }
+
+  async findRecentByUserId(userId: string, limit: number): Promise<WorkoutSession[]> {
+    const sessions = await db
+      .select()
+      .from(workoutSessions)
+      .where(eq(workoutSessions.userId, userId))
+      .orderBy(desc(workoutSessions.createdAt))
+      .limit(limit);
+
+    return sessions.map((s) => ({
+      ...s,
+      userContextJson: s.userContextJson as WorkoutSession['userContextJson'],
+    }));
+  }
+
+  async findRecentByUserIdWithDetails(
+    userId: string,
+    limit: number,
+  ): Promise<WorkoutSessionWithDetails[]> {
+    const sessions = await this.findRecentByUserId(userId, limit);
+    const detailed = await Promise.all(
+      sessions.map((s) => this.findByIdWithDetails(s.id)),
+    );
+    return detailed.filter((s): s is WorkoutSessionWithDetails => s !== null);
+  }
+
+  async findActiveByUserId(userId: string): Promise<WorkoutSession | null> {
+    const [session] = await db
+      .select()
+      .from(workoutSessions)
+      .where(and(eq(workoutSessions.userId, userId), eq(workoutSessions.status, 'in_progress')))
+      .limit(1);
+
+    if (!session) {
+      return null;
+    }
+
+    return {
+      ...session,
+      userContextJson: session.userContextJson as WorkoutSession['userContextJson'],
+    };
+  }
+
+  async update(sessionId: string, updates: Partial<WorkoutSession>): Promise<WorkoutSession> {
+    const [updated] = await db
+      .update(workoutSessions)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(workoutSessions.id, sessionId))
+      .returning();
+
+    return {
+      ...updated,
+      userContextJson: updated.userContextJson as WorkoutSession['userContextJson'],
+    };
+  }
+
+  async complete(
+    sessionId: string,
+    completedAt: Date,
+    durationMinutes: number,
+  ): Promise<WorkoutSession> {
+    return this.update(sessionId, {
+      status: 'completed',
+      completedAt,
+      durationMinutes,
+    });
+  }
+
+  async updateActivity(sessionId: string): Promise<void> {
+    await db
+      .update(workoutSessions)
+      .set({ lastActivityAt: new Date() })
+      .where(eq(workoutSessions.id, sessionId));
+  }
+
+  async findTimedOut(cutoffTime: Date): Promise<WorkoutSession[]> {
+    const sessions = await db
+      .select()
+      .from(workoutSessions)
+      .where(
+        and(
+          eq(workoutSessions.status, 'in_progress'),
+          lt(workoutSessions.lastActivityAt, cutoffTime),
+        ),
+      );
+
+    return sessions.map((s) => ({
+      ...s,
+      userContextJson: s.userContextJson as WorkoutSession['userContextJson'],
+    }));
+  }
+
+  async autoCloseTimedOut(userId: string, cutoffTime: Date): Promise<number> {
+    const timedOutSessions = await db
+      .select()
+      .from(workoutSessions)
+      .where(
+        and(
+          eq(workoutSessions.userId, userId),
+          eq(workoutSessions.status, 'in_progress'),
+          lt(workoutSessions.lastActivityAt, cutoffTime),
+        ),
+      );
+
+    for (const session of timedOutSessions) {
+      const duration = session.startedAt
+        ? Math.floor((session.lastActivityAt.getTime() - session.startedAt.getTime()) / 60000)
+        : null;
+
+      await db
+        .update(workoutSessions)
+        .set({
+          status: 'completed',
+          completedAt: session.lastActivityAt,
+          durationMinutes: duration,
+          autoCloseReason: 'timeout',
+          updatedAt: new Date(),
+        })
+        .where(eq(workoutSessions.id, session.id));
+    }
+
+    return timedOutSessions.length;
+  }
+}
