@@ -113,11 +113,15 @@ export class ChatService implements IChatService {
   /**
    * Execute phase transition requested by LLM
    * 
+   * Validates the transition before executing it to ensure data consistency.
+   * LLM decides when to transition, but code validates the decision.
+   * 
    * @param userId - User ID
    * @param fromPhase - Current phase
    * @param toPhase - Target phase
    * @param reason - Optional reason for transition (for logging)
    * @param sessionId - Optional session ID (for training phase)
+   * @throws {Error} if transition is invalid or data is inconsistent
    */
   private async executePhaseTransition(
     userId: string,
@@ -126,6 +130,9 @@ export class ChatService implements IChatService {
     reason?: string,
     sessionId?: string,
   ): Promise<void> {
+    // Validate transition before executing
+    await this.validatePhaseTransition(userId, fromPhase, toPhase, sessionId);
+
     // Build system note for the new phase
     const systemNote = this.buildPhaseTransitionNote(fromPhase, toPhase, reason);
 
@@ -144,6 +151,67 @@ export class ChatService implements IChatService {
       systemNote,
       options,
     );
+  }
+
+  /**
+   * Validate phase transition
+   * 
+   * LLM can request a transition, but code must validate it to ensure:
+   * - Required data exists (e.g., workout plan, session)
+   * - No conflicting state (e.g., already active session)
+   * - Logical flow (e.g., can't go from training to planning without completing)
+   * 
+   * @throws {Error} if transition is invalid
+   */
+  private async validatePhaseTransition(
+    userId: string,
+    fromPhase: ConversationPhase,
+    toPhase: ConversationPhase,
+    sessionId?: string,
+  ): Promise<void> {
+    // chat → session_planning: always allowed
+    if (fromPhase === 'chat' && toPhase === 'session_planning') {
+      return;
+    }
+
+    // session_planning → training: validate session exists and user has plan
+    if (fromPhase === 'session_planning' && toPhase === 'training') {
+      if (!sessionId) {
+        throw new Error('Cannot start training: sessionId is required');
+      }
+
+      // TODO: Validate session exists and belongs to user
+      // TODO: Validate user has active workout plan
+      // TODO: Validate no other active session exists
+      // Will be implemented when TrainingService is integrated
+      return;
+    }
+
+    // training → chat: always allowed (auto-complete session)
+    if (fromPhase === 'training' && toPhase === 'chat') {
+      // TODO: Auto-complete the active session if not already completed
+      // Will be implemented in Step 7
+      return;
+    }
+
+    // session_planning → chat: always allowed (cancel planning)
+    if (fromPhase === 'session_planning' && toPhase === 'chat') {
+      // TODO: Clean up draft recommendation if exists
+      return;
+    }
+
+    // training → session_planning: block this transition
+    if (fromPhase === 'training' && toPhase === 'session_planning') {
+      throw new Error('Cannot return to planning from active training. Complete or cancel training first.');
+    }
+
+    // Any other transition to/from registration: block
+    if (fromPhase === 'registration' || toPhase === 'registration') {
+      throw new Error('Registration phase transitions are handled separately');
+    }
+
+    // Unknown transition
+    throw new Error(`Invalid phase transition: ${fromPhase} → ${toPhase}`);
   }
 
   /**

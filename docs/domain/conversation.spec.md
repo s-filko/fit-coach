@@ -32,6 +32,10 @@ Business Rules
 	- BR-CONV-012: LLM responses must be structured JSON with { message, phaseTransition? } format when jsonMode is enabled
 	- BR-CONV-013: LLM controls phase transitions via phaseTransition flag in response; ChatService executes the transition
 	- BR-CONV-014: Phase transition reason is logged for debugging and analytics but not shown to user
+	- BR-CONV-015: Phase transitions must be validated before execution to ensure data consistency
+	- BR-CONV-016: Transition session_planning → training requires valid sessionId and active workout plan
+	- BR-CONV-017: Transition training → session_planning is blocked; user must complete or cancel training first
+	- BR-CONV-018: Transition training → chat auto-completes the active session if not already completed
 
 Ports
 	- IConversationContextService (CONVERSATION_CONTEXT_SERVICE_TOKEN)
