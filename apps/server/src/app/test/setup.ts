@@ -73,15 +73,54 @@ export async function setupTestDI(): Promise<void> {
       }
     }
 
-    // Seed exercises data using npm script
-    const { execSync } = await import('child_process');
+    // Seed minimal test exercises data
+    const client3 = await pool.connect();
     try {
-      execSync('npm run db:seed:exercises', {
-        cwd: process.cwd(),
-        stdio: 'ignore',
-      });
-    } catch (err) {
-      // Ignore if already seeded (duplicate key error)
+      // Insert test exercises
+      await client3.query(`
+        INSERT INTO exercises (name, category, equipment, exercise_type, description, energy_cost, complexity, typical_duration_minutes, requires_spotter)
+        VALUES 
+          ('Barbell Bench Press', 'compound', 'barbell', 'strength', 'Chest compound movement', 'high', 'intermediate', 12, true),
+          ('Barbell Back Squat', 'compound', 'barbell', 'strength', 'Leg compound movement', 'very_high', 'advanced', 15, true),
+          ('Pull-ups', 'compound', 'bodyweight', 'strength', 'Back compound movement', 'high', 'intermediate', 10, false),
+          ('Running', 'cardio', 'none', 'cardio_distance', 'Cardio exercise', 'medium', 'beginner', 30, false)
+        ON CONFLICT (name) DO NOTHING
+        RETURNING id;
+      `);
+      
+      // Get exercise IDs
+      const result = await client3.query(`SELECT id, name FROM exercises WHERE name IN ('Barbell Bench Press', 'Barbell Back Squat', 'Pull-ups', 'Running')`);
+      
+      // Insert muscle group mappings
+      for (const row of result.rows) {
+        if (row.name === 'Barbell Bench Press') {
+          await client3.query(`
+            INSERT INTO exercise_muscle_groups (exercise_id, muscle_group, involvement)
+            VALUES ($1, 'chest', 'primary'), ($1, 'shoulders_front', 'secondary'), ($1, 'triceps', 'secondary')
+            ON CONFLICT DO NOTHING
+          `, [row.id]);
+        } else if (row.name === 'Barbell Back Squat') {
+          await client3.query(`
+            INSERT INTO exercise_muscle_groups (exercise_id, muscle_group, involvement)
+            VALUES ($1, 'quads', 'primary'), ($1, 'glutes', 'primary'), ($1, 'hamstrings', 'secondary')
+            ON CONFLICT DO NOTHING
+          `, [row.id]);
+        } else if (row.name === 'Pull-ups') {
+          await client3.query(`
+            INSERT INTO exercise_muscle_groups (exercise_id, muscle_group, involvement)
+            VALUES ($1, 'back_lats', 'primary'), ($1, 'biceps', 'secondary')
+            ON CONFLICT DO NOTHING
+          `, [row.id]);
+        } else if (row.name === 'Running') {
+          await client3.query(`
+            INSERT INTO exercise_muscle_groups (exercise_id, muscle_group, involvement)
+            VALUES ($1, 'cardio_system', 'primary'), ($1, 'lower_body_endurance', 'secondary')
+            ON CONFLICT DO NOTHING
+          `, [row.id]);
+        }
+      }
+    } finally {
+      client3.release();
     }
 
     // Register services in test container

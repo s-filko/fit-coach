@@ -3,6 +3,8 @@ import { and, desc, eq, inArray, lt } from 'drizzle-orm';
 import type { IWorkoutSessionRepository } from '@domain/training/ports';
 import type {
   CreateSessionDto,
+  Involvement,
+  MuscleGroup,
   WorkoutSession,
   WorkoutSessionWithDetails,
 } from '@domain/training/types';
@@ -101,17 +103,14 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
           muscleGroups: muscleGroupsList
             .filter((mg) => mg.exerciseId === se.exercises!.id)
             .map((mg) => ({
-              muscleGroup: mg.muscleGroup as any,
-              involvement: mg.involvement as 'primary' | 'secondary',
+              muscleGroup: mg.muscleGroup as MuscleGroup,
+              involvement: mg.involvement as Involvement,
             })),
-        } as any,
+        },
         sets: sets
           .filter((s) => s.sessionExerciseId === se.session_exercises.id)
-          .map((s) => ({
-            ...s,
-            setData: s.setData as any,
-          })),
-      })) as any,
+          .map((s) => s),
+      })),
     } as WorkoutSessionWithDetails;
   }
 

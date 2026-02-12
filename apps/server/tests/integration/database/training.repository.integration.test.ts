@@ -20,11 +20,7 @@ describe('Training Repositories – integration', () => {
   let testUserId: string;
 
   beforeAll(async () => {
-    // Ensure database schema is initialized
-    const { ensureSchema } = await import('../../../src/infra/db/init');
-    await ensureSchema();
-
-    // Initialize repositories
+    // Initialize repositories (schema and seed are handled by global setup)
     exerciseRepo = new ExerciseRepository();
     planRepo = new WorkoutPlanRepository();
     sessionRepo = new WorkoutSessionRepository();
