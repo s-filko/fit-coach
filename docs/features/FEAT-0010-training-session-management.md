@@ -114,6 +114,28 @@ Training session management enables users to:
 
 ## Conversation Context Extension
 
+### Session Planning Phase Context
+
+When conversation phase is 'session_planning', the context includes:
+
+```typescript
+{
+  userId: string,
+  phase: 'session_planning',
+  turns: ConversationTurn[],
+  sessionPlanningContext: {
+    recommendedSessionId: string,  // UUID of workout_session with status='planning'
+  }
+}
+```
+
+**Data Storage During Planning:**
+- Session created with status='planning'
+- LLM-generated plan stored in `workout_sessions.session_plan_json` (SessionRecommendation)
+- UserContext (mood, sleep, energy, availableTime, intensity) stored in `user_context_json`
+- Plan can be modified during planning phase
+- session_exercises NOT created yet (created dynamically during training)
+
 ### Training Phase Context
 
 When conversation phase is 'training', the context includes:
@@ -129,28 +151,63 @@ When conversation phase is 'training', the context includes:
 }
 ```
 
+**Data Storage During Training:**
+- Session status updated to 'in_progress'
+- session_exercises created as user performs them
+- session_sets logged for each completed set
+- session_plan_json remains read-only (reference for LLM)
+
 ### Phase Transitions
 
-1. **chat → training**: When user starts a session
-   - Create workout_session (status='in_progress')
-   - Store sessionId in trainingContext.activeSessionId
+1. **chat → session_planning**: When user asks "What should I do today?"
+   - Create workout_session (status='planning')
+   - Collect UserContext (mood, availableTime, intensity)
+   - LLM generates plan, stored in session_plan_json
+   - Store sessionId in sessionPlanningContext.recommendedSessionId
+   - Add system note: "Session planning started"
+
+2. **session_planning → training**: When user confirms plan and starts training
+   - Validate: sessionId exists, session_plan_json is not null
+   - Update workout_session (status='in_progress', started_at=now)
+   - Move sessionId to trainingContext.activeSessionId
+   - Clear sessionPlanningContext
    - Add system note: "Training session started"
 
-2. **training → chat**: When user completes or session auto-closes
-   - Update workout_session (status='completed')
+3. **training → chat**: When user completes or session auto-closes
+   - Update workout_session (status='completed', completed_at, duration_minutes)
    - Clear trainingContext.activeSessionId
    - Add system note: "Training session completed"
 
+4. **session_planning → chat**: When user cancels planning
+   - Update workout_session (status='skipped')
+   - Clear sessionPlanningContext.recommendedSessionId
+   - Add system note: "Session planning cancelled"
+
+**LLM-Driven Transitions:**
+- LLM requests transitions via `phaseTransition` flags in response
+- Code validates transition before executing (e.g., planning → training requires valid plan)
+- All prompts include detailed timestamps for context awareness
+
 ## Database Schema Reference
 
-See migration `0003_wandering_colleen_wing.sql` for complete schema.
+See migrations:
+- `0003_wandering_colleen_wing.sql` - Initial training schema
+- `0004_add_session_planning_phase.sql` - Added session_planning phase
+- `0005_add_session_plan_json.sql` - Added session_plan_json field
 
 Key tables:
 - `workout_plans` - User's training plans with recovery guidelines (JSONB)
 - `exercises` - Exercise library with muscle groups, energy cost, complexity
-- `workout_sessions` - Actual workout sessions with status tracking
-- `session_exercises` - Exercises performed in a session
+- `workout_sessions` - Actual workout sessions with status tracking (planning|in_progress|completed|skipped)
+  - `session_plan_json` - LLM-generated plan (SessionRecommendation) stored during planning phase
+  - `user_context_json` - User's state (mood, sleep, energy, availableTime, intensity) at planning start
+- `session_exercises` - Exercises performed in a session (created dynamically during training)
 - `session_sets` - Individual sets with flexible JSONB data (discriminated by exercise type)
+
+**Session Lifecycle:**
+1. **Planning**: status='planning', session_plan_json filled, session_exercises empty
+2. **Training**: status='in_progress', session_exercises created as user performs them
+3. **Completed**: status='completed', all data finalized
 
 ## Domain Rules Reference
 
