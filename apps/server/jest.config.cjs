@@ -7,6 +7,7 @@ module.exports = {
     // Unit tests
     '**/__tests__/**/*.unit.test.ts',
     '**/src/**/*.unit.test.ts',
+    '**/tests/unit/**/*.unit.test.ts',
     // Integration tests
     '**/tests/integration/**/*.integration.test.ts',
     // E2E tests

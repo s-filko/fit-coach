@@ -7,7 +7,9 @@ import {
   GetMessagesOptions,
   IConversationContextService,
   ResetOptions,
+  SessionPlanningContext,
   StartNewPhaseOptions,
+  TrainingContext,
 } from '@domain/conversation/ports';
 import { ChatMsg } from '@domain/user/ports';
 
@@ -35,7 +37,7 @@ function mapRowToTurn(row: TurnRow): ConversationTurn {
 /** Drizzle-backed implementation of IConversationContextService (ADR-0005) */
 export class DrizzleConversationContextService implements IConversationContextService {
   // In-memory store for phase-specific context (MVP: not persisted to DB)
-  private readonly phaseContextStore = new Map<string, any>();
+  private readonly phaseContextStore = new Map<string, SessionPlanningContext | TrainingContext>();
 
   private contextKey(userId: string, phase: ConversationPhase): string {
     return `${userId}:${phase}`;
@@ -76,14 +78,16 @@ export class DrizzleConversationContextService implements IConversationContextSe
         return { ...baseContext, phase: 'registration' };
       case 'chat':
         return { ...baseContext, phase: 'chat' };
-      case 'session_planning':
+      case 'session_planning': {
+        const planningContext = this.phaseContextStore.get(key) as SessionPlanningContext | undefined;
         return {
           ...baseContext,
           phase: 'session_planning',
-          sessionPlanningContext: this.phaseContextStore.get(key),
+          sessionPlanningContext: planningContext,
         };
+      }
       case 'training': {
-        const trainingContext = this.phaseContextStore.get(key);
+        const trainingContext = this.phaseContextStore.get(key) as TrainingContext | undefined;
         if (!trainingContext?.activeSessionId) {
           // Training phase without activeSessionId is invalid
           return null;

@@ -1,0 +1,90 @@
+import { z } from 'zod';
+
+import { ConversationPhase } from './ports/conversation-context.ports';
+
+/**
+ * Phase transition instruction from LLM
+ * LLM decides when to transition between phases based on user intent
+ */
+export const PhaseTransitionSchema = z.object({
+  toPhase: z.enum(['chat', 'session_planning', 'training'] satisfies ConversationPhase[]),
+  reason: z.string().optional(),
+  // Session ID for training phase or recommended session for planning
+  sessionId: z.string().uuid().optional(),
+});
+
+export type PhaseTransition = z.infer<typeof PhaseTransitionSchema>;
+
+/**
+ * Structured LLM response with optional phase transition
+ * Used in all conversation phases to allow LLM to control flow
+ */
+export const LLMConversationResponseSchema = z.object({
+  // Message to show to user
+  message: z.string(),
+  // Optional phase transition instruction
+  phaseTransition: PhaseTransitionSchema.optional(),
+});
+
+export type LLMConversationResponse = z.infer<typeof LLMConversationResponseSchema>;
+
+/**
+ * Parse LLM JSON response into structured format
+ * @throws {Error} if response is not valid JSON or doesn't match schema
+ */
+export function parseLLMResponse(jsonString: string): LLMConversationResponse {
+  try {
+    const parsed = JSON.parse(jsonString) as unknown;
+    return LLMConversationResponseSchema.parse(parsed);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new Error(`Invalid LLM response format: ${error.message}`);
+    }
+    throw new Error(`Failed to parse LLM response: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * Examples of valid LLM responses:
+ *
+ * 1. Simple chat message (no phase transition):
+ * {
+ *   "message": "Привет! Как дела?"
+ * }
+ *
+ * 2. Start planning session:
+ * {
+ *   "message": "Отлично! Давай подберем тренировку.",
+ *   "phaseTransition": {
+ *     "toPhase": "session_planning",
+ *     "reason": "user_requested_workout"
+ *   }
+ * }
+ *
+ * 3. Cancel planning, return to chat:
+ * {
+ *   "message": "Хорошо, давай потренируемся позже!",
+ *   "phaseTransition": {
+ *     "toPhase": "chat",
+ *     "reason": "user_cancelled"
+ *   }
+ * }
+ *
+ * 4. Start training with recommended session:
+ * {
+ *   "message": "Отлично! Начинаем тренировку по плану 'Push Day'.",
+ *   "phaseTransition": {
+ *     "toPhase": "training",
+ *     "sessionId": "550e8400-e29b-41d4-a716-446655440000"
+ *   }
+ * }
+ *
+ * 5. Finish training, return to chat:
+ * {
+ *   "message": "Отличная работа! Тренировка завершена.",
+ *   "phaseTransition": {
+ *     "toPhase": "chat",
+ *     "reason": "training_completed"
+ *   }
+ * }
+ */

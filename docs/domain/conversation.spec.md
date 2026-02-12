@@ -8,6 +8,8 @@ Terms
 	- PhaseTransition: explicit reset or startNewPhase when app state changes (e.g. registration complete, session planning start, training start/end)
 	- SessionPlanningContext: additional context for 'session_planning' phase { recommendedSessionId?: string }
 	- TrainingContext: additional context for 'training' phase { activeSessionId: string }
+	- LLMConversationResponse: structured LLM output { message: string, phaseTransition?: { toPhase, reason?, sessionId? } }
+	- PhaseTransitionFlag: instruction from LLM to change conversation phase based on user intent
 
 Invariants
 	- INV-CONV-001: Context identity is (userId, phase); each pair has at most one active context
@@ -27,6 +29,9 @@ Business Rules
 	- BR-CONV-009: Phase 'training' includes trainingContext { activeSessionId } stored alongside turns
 	- BR-CONV-010: Phase transitions follow the flow: chat → session_planning (on recommendation request) → training (on session start) → chat (on session complete)
 	- BR-CONV-011: Phase-specific context is set on phase entry and cleared on phase exit
+	- BR-CONV-012: LLM responses must be structured JSON with { message, phaseTransition? } format when jsonMode is enabled
+	- BR-CONV-013: LLM controls phase transitions via phaseTransition flag in response; ChatService executes the transition
+	- BR-CONV-014: Phase transition reason is logged for debugging and analytics but not shown to user
 
 Ports
 	- IConversationContextService (CONVERSATION_CONTEXT_SERVICE_TOKEN)
