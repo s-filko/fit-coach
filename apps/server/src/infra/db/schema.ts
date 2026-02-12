@@ -109,10 +109,10 @@ export const muscleGroupEnum = pgEnum('muscle_group', [
 export const workoutPlanStatusEnum = pgEnum('workout_plan_status', ['draft', 'active', 'archived']);
 
 export const sessionStatusEnum = pgEnum('session_status', [
-  'planned',
-  'in_progress',
-  'completed',
-  'skipped',
+  'planning',    // Session created, LLM is generating/user is modifying plan
+  'in_progress', // Training started
+  'completed',   // Training finished
+  'skipped',     // User cancelled/skipped
 ]);
 
 export const sessionExerciseStatusEnum = pgEnum('session_exercise_status', [
@@ -195,11 +195,15 @@ export const workoutSessions = pgTable(
       onDelete: 'set null',
     }),
     sessionKey: text('session_key'),
-    status: sessionStatusEnum('status').notNull().default('planned'),
+    status: sessionStatusEnum('status').notNull().default('planning'),
     startedAt: timestamp('started_at'),
     completedAt: timestamp('completed_at'),
     durationMinutes: integer('duration_minutes'),
     userContextJson: jsonb('user_context_json'),
+    // Session plan (LLM recommendation) stored as structured JSON
+    // Contains: exercises list, reasoning, estimated duration, warnings
+    // Updated during session_planning phase, read-only during training
+    sessionPlanJson: jsonb('session_plan_json'),
     lastActivityAt: timestamp('last_activity_at')
       .defaultNow()
       .notNull(),

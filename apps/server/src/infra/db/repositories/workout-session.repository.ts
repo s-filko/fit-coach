@@ -27,7 +27,7 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
         planId: session.planId ?? null,
         sessionKey: session.sessionKey ?? null,
         userContextJson: session.userContext ?? null,
-        status: 'planned',
+        status: 'planning',
       })
       .returning();
 

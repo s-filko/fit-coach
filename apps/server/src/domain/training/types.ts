@@ -45,7 +45,7 @@ export type MuscleGroup =
   | 'core_stability';
 
 export type WorkoutPlanStatus = 'draft' | 'active' | 'archived';
-export type SessionStatus = 'planned' | 'in_progress' | 'completed' | 'skipped';
+export type SessionStatus = 'planning' | 'in_progress' | 'completed' | 'skipped';
 export type SessionExerciseStatus = 'pending' | 'in_progress' | 'completed' | 'skipped';
 
 export type EnergyCost = 'very_low' | 'low' | 'medium' | 'high' | 'very_high';
@@ -137,10 +137,12 @@ export interface WorkoutPlan {
 // --- Workout Session ---
 
 export interface UserContext {
-  mood?: 'good' | 'tired' | 'energetic';
+  mood?: 'good' | 'tired' | 'energetic' | 'stressed' | 'motivated';
   sleep?: 'poor' | 'normal' | 'excellent';
   energy?: number; // 1-10
-  notes?: string;
+  availableTime?: number; // minutes
+  intensity?: 'low' | 'moderate' | 'high';
+  notes?: string; // Free-form user input
 }
 
 export interface WorkoutSession {
@@ -153,6 +155,10 @@ export interface WorkoutSession {
   completedAt: Date | null;
   durationMinutes: number | null;
   userContextJson: UserContext | null;
+  // Session plan (LLM recommendation) - stored during session_planning phase
+  // Contains: exercises list, reasoning, estimated duration, warnings
+  // Can be modified by user before training starts
+  sessionPlanJson: SessionRecommendation | null;
   lastActivityAt: Date;
   autoCloseReason: 'timeout' | 'new_session_started' | 'manual' | null;
   createdAt: Date;
@@ -264,7 +270,8 @@ export interface SessionRecommendation {
   sessionName: string;
   reasoning: string;
   exercises: RecommendedExercise[];
-  estimatedDuration: number;
+  estimatedDuration: number; // minutes - actual plan duration
+  timeLimit?: number; // minutes - user's available time (hard constraint)
   warnings?: string[];
   modifications?: string[];
 }
