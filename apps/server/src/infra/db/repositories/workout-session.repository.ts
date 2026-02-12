@@ -8,7 +8,13 @@ import type {
 } from '@domain/training/types';
 
 import { db } from '@infra/db/drizzle';
-import { exercises, sessionExercises, sessionSets, workoutSessions } from '@infra/db/schema';
+import {
+  exerciseMuscleGroups,
+  exercises,
+  sessionExercises,
+  sessionSets,
+  workoutSessions,
+} from '@infra/db/schema';
 
 export class WorkoutSessionRepository implements IWorkoutSessionRepository {
   async create(userId: string, session: CreateSessionDto): Promise<WorkoutSession> {
@@ -59,14 +65,28 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
       .where(eq(sessionExercises.sessionId, sessionId))
       .orderBy(sessionExercises.orderIndex);
 
+    // Get exercise IDs to fetch muscle groups
+    const exerciseIdsForMuscles = sessionExercisesList
+      .map((se) => se.exercises?.id)
+      .filter((id): id is number => id !== undefined);
+
+    // Get muscle groups for all exercises
+    const muscleGroupsList =
+      exerciseIdsForMuscles.length > 0
+        ? await db
+            .select()
+            .from(exerciseMuscleGroups)
+            .where(inArray(exerciseMuscleGroups.exerciseId, exerciseIdsForMuscles))
+        : [];
+
     // Get all sets for these exercises
-    const exerciseIds = sessionExercisesList.map((se) => se.session_exercises.id);
+    const sessionExerciseIds = sessionExercisesList.map((se) => se.session_exercises.id);
     const sets =
-      exerciseIds.length > 0
+      sessionExerciseIds.length > 0
         ? await db
             .select()
             .from(sessionSets)
-            .where(inArray(sessionSets.sessionExerciseId, exerciseIds))
+            .where(inArray(sessionSets.sessionExerciseId, sessionExerciseIds))
             .orderBy(sessionSets.setNumber)
         : [];
 
@@ -74,7 +94,15 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
       ...session,
       exercises: sessionExercisesList.map((se) => ({
         ...se.session_exercises,
-        exercise: se.exercises!,
+        exercise: {
+          ...se.exercises!,
+          muscleGroups: muscleGroupsList
+            .filter((mg) => mg.exerciseId === se.exercises!.id)
+            .map((mg) => ({
+              muscleGroup: mg.muscleGroup,
+              involvement: mg.involvement,
+            })),
+        },
         sets: sets
           .filter((s) => s.sessionExerciseId === se.session_exercises.id)
           .map((s) => ({

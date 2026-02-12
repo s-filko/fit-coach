@@ -1,5 +1,19 @@
 // Training domain types
 
+// --- User Profile (subset for training context) ---
+
+export interface UserProfile {
+  id: string;
+  gender: string | null;
+  age: number | null;
+  height: number | null;
+  weight: number | null;
+  fitnessGoal: string | null;
+  fitnessLevel: string | null;
+}
+
+// --- Exercise Types ---
+
 export type ExerciseType =
   | 'strength'
   | 'cardio_distance'
@@ -162,7 +176,7 @@ export interface SessionExercise {
 }
 
 export interface SessionExerciseWithDetails extends SessionExercise {
-  exercise: Exercise;
+  exercise: ExerciseWithMuscles;
   sets: SessionSet[];
 }
 
