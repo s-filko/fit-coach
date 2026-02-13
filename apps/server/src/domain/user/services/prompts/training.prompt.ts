@@ -51,7 +51,7 @@ ${session.sessionPlanJson.exercises.map((ex, idx) => `  ${idx + 1}. ${ex.exercis
               const timeAgo = minutesAgo > 0 ? `${minutesAgo}min ago` : 'just now';
               
               if (set.setData.type === 'strength') {
-                return `    Set ${setIdx + 1} (${setTime}, ${timeAgo}): ${set.setData.reps} reps @ ${set.setData.weight ?? 'BW'}${set.setData.weightUnit ?? 'kg'}${set.rpe ? ` RPE ${set.rpe}` : ''}${set.notes ? ` - ${set.notes}` : ''}`;
+                return `    Set ${setIdx + 1} (${setTime}, ${timeAgo}): ${set.setData.reps} reps @ ${set.setData.weight ?? 'BW'}${set.setData.weightUnit ?? 'kg'}${set.rpe ? ` RPE ${set.rpe}` : ''}${set.userFeedback ? ` - ${set.userFeedback}` : ''}`;
               }
               return `    Set ${setIdx + 1} (${setTime}, ${timeAgo}): ${JSON.stringify(set.setData)}`;
             })
@@ -71,8 +71,7 @@ ${setsInfo}`;
     ? `
 **Current Exercise**: ${currentExercise.exercise.name}
 Target: ${currentExercise.targetSets ?? 'N/A'}x${currentExercise.targetReps ?? 'N/A'}${currentExercise.targetWeight ? ` @ ${currentExercise.targetWeight}kg` : ''}
-Completed Sets: ${currentExercise.sets.length}
-${currentExercise.notes ? `Notes: ${currentExercise.notes}` : ''}`
+Completed Sets: ${currentExercise.sets.length}`
     : 'No exercise currently in progress. Guide user to start next exercise.';
 
   return `# SYSTEM ROLE

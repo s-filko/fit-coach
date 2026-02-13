@@ -37,6 +37,7 @@ export async function registerInfraServices(
 
   // Training domain
   const { TrainingService } = await import('@domain/training/services/training.service');
+  const { SessionPlanningContextBuilder } = await import('@domain/training/services/session-planning-context.builder');
   const { ExerciseRepository } = await import('@infra/db/repositories/exercise.repository');
   const { WorkoutPlanRepository } = await import('@infra/db/repositories/workout-plan.repository');
   const { WorkoutSessionRepository } = await import('@infra/db/repositories/workout-session.repository');
@@ -70,15 +71,6 @@ export async function registerInfraServices(
     REGISTRATION_SERVICE_TOKEN,
     c => new RegistrationService(c.get(PROMPT_SERVICE_TOKEN), c.get(LLM_SERVICE_TOKEN)),
   );
-  container.registerFactory(
-    CHAT_SERVICE_TOKEN,
-    c => new ChatService(
-      c.get(PROMPT_SERVICE_TOKEN),
-      c.get(LLM_SERVICE_TOKEN),
-      c.get(CONVERSATION_CONTEXT_SERVICE_TOKEN),
-    ),
-  );
-
   // Training repositories
   container.register(EXERCISE_REPOSITORY_TOKEN, new ExerciseRepository());
   container.register(WORKOUT_PLAN_REPOSITORY_TOKEN, new WorkoutPlanRepository());
@@ -99,6 +91,25 @@ export async function registerInfraServices(
         c.get(USER_REPOSITORY_TOKEN),
         c.get(LLM_SERVICE_TOKEN),
       ),
+  );
+
+  // Session planning context builder
+  const sessionPlanningContextBuilder = new SessionPlanningContextBuilder(
+    container.get(WORKOUT_PLAN_REPOSITORY_TOKEN),
+    container.get(WORKOUT_SESSION_REPOSITORY_TOKEN),
+    container.get(EXERCISE_REPOSITORY_TOKEN),
+  );
+
+  // Chat service (depends on training service and context builder)
+  container.registerFactory(
+    CHAT_SERVICE_TOKEN,
+    c => new ChatService(
+      c.get(PROMPT_SERVICE_TOKEN),
+      c.get(LLM_SERVICE_TOKEN),
+      c.get(CONVERSATION_CONTEXT_SERVICE_TOKEN),
+      c.get(TRAINING_SERVICE_TOKEN),
+      sessionPlanningContextBuilder,
+    ),
   );
 
   return container;

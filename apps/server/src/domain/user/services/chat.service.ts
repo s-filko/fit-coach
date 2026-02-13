@@ -1,7 +1,16 @@
 import { LLMService } from '@domain/ai/ports';
 import { parseLLMResponse } from '@domain/conversation/llm-response.types';
 import { ConversationPhase, type IConversationContextService } from '@domain/conversation/ports/conversation-context.ports';
-import { ChatMsg, IChatService, IPromptService } from '@domain/user/ports';
+import type { ITrainingService } from '@domain/training/ports';
+import { SessionPlanningContextBuilder } from '@domain/training/services/session-planning-context.builder';
+import type { SessionRecommendation } from '@domain/training/types';
+import {
+  ChatMsg,
+  IChatService,
+  IPromptService,
+  type SessionPlanningPromptContext,
+  type TrainingPromptContext,
+} from '@domain/user/ports';
 
 import { User } from './user.service';
 
@@ -25,6 +34,8 @@ export class ChatService implements IChatService {
     private readonly promptService: IPromptService,
     private readonly llmService: LLMService,
     private readonly conversationContextService: IConversationContextService,
+    private readonly trainingService: ITrainingService,
+    private readonly sessionPlanningContextBuilder: SessionPlanningContextBuilder,
   ) {}
 
   /**
@@ -88,15 +99,15 @@ export class ChatService implements IChatService {
       case 'chat':
         return this.promptService.buildChatSystemPrompt(user);
       
-      case 'session_planning':
-        // TODO: Build session planning prompt with context
-        // Will be implemented in Step 6
-        return this.promptService.buildChatSystemPrompt(user);
+      case 'session_planning': {
+        const context = await this.loadSessionPlanningContext(user);
+        return this.promptService.buildSessionPlanningPrompt(context);
+      }
       
-      case 'training':
-        // TODO: Build training prompt with active session context
-        // Will be implemented in Step 6
-        return this.promptService.buildChatSystemPrompt(user);
+      case 'training': {
+        const context = await this.loadTrainingContext(user);
+        return this.promptService.buildTrainingPrompt(context);
+      }
       
       case 'registration':
         // Registration is handled by RegistrationService
@@ -108,6 +119,62 @@ export class ChatService implements IChatService {
         throw new Error(`Unknown phase: ${String(_exhaustive)}`);
       }
     }
+  }
+
+  /**
+   * Load context data for session planning prompt
+   * Includes training history, active plan, and recovery timeline
+   */
+  private async loadSessionPlanningContext(user: User): Promise<SessionPlanningPromptContext> {
+    // Use SessionPlanningContextBuilder to load all required data
+    const contextData = await this.sessionPlanningContextBuilder.buildContext(user.id);
+
+    // Get current plan from conversation context if exists
+    const conversationCtx = await this.conversationContextService.getContext(user.id, 'session_planning');
+    let currentPlan: SessionRecommendation | null = null;
+
+    if (conversationCtx?.phase === 'session_planning' && conversationCtx.sessionPlanningContext?.recommendedSessionId) {
+      const session = await this.trainingService.getSessionDetails(
+        conversationCtx.sessionPlanningContext.recommendedSessionId,
+      );
+      currentPlan = session?.sessionPlanJson ?? null;
+    }
+
+    return {
+      user,
+      activePlan: contextData.activePlan,
+      recentSessions: contextData.recentSessions,
+      currentPlan,
+      totalExercisesAvailable: contextData.totalExercisesAvailable,
+      daysSinceLastWorkout: contextData.daysSinceLastWorkout,
+    };
+  }
+
+  /**
+   * Load context data for training prompt
+   * Includes active session with all exercises and sets
+   */
+  private async loadTrainingContext(user: User): Promise<TrainingPromptContext> {
+    // Get active session ID from conversation context
+    const conversationCtx = await this.conversationContextService.getContext(user.id, 'training');
+
+    if (conversationCtx?.phase !== 'training' || !conversationCtx.trainingContext?.activeSessionId) {
+      throw new Error('No active training session found in conversation context');
+    }
+
+    // Load full session details from DB
+    const activeSession = await this.trainingService.getSessionDetails(
+      conversationCtx.trainingContext.activeSessionId,
+    );
+
+    if (!activeSession) {
+      throw new Error(`Active session ${conversationCtx.trainingContext.activeSessionId} not found in database`);
+    }
+
+    return {
+      user,
+      activeSession,
+    };
   }
 
   /**
