@@ -239,7 +239,7 @@ describe('RegistrationService Integration', () => {
         response: 'Perfect! All data saved.',
         is_confirmed: true,
         phaseTransition: {
-          toPhase: 'session_planning',
+          toPhase: 'plan_creation',
           reason: 'user_ready_to_train',
         },
       }));
@@ -258,7 +258,7 @@ describe('RegistrationService Integration', () => {
       expect(result.updatedUser.profileStatus).toBe('complete');
       expect(result.isComplete).toBe(true);
       expect(result.phaseTransition).toEqual({
-        toPhase: 'session_planning',
+        toPhase: 'plan_creation',
         reason: 'user_ready_to_train',
       });
     });
@@ -282,7 +282,7 @@ describe('RegistrationService Integration', () => {
         response: 'Great! Let\'s plan your first workout.',
         is_confirmed: true,
         phaseTransition: {
-          toPhase: 'session_planning',
+          toPhase: 'plan_creation',
           reason: 'user_wants_to_start_immediately',
         },
       }));
@@ -294,7 +294,7 @@ describe('RegistrationService Integration', () => {
 
       expect(result.isComplete).toBe(true);
       expect(result.phaseTransition).toEqual({
-        toPhase: 'session_planning',
+        toPhase: 'plan_creation',
         reason: 'user_wants_to_start_immediately',
       });
     });
@@ -348,7 +348,7 @@ describe('RegistrationService Integration', () => {
         response: 'All set!',
         is_confirmed: true,
         phaseTransition: {
-          toPhase: 'session_planning',
+          toPhase: 'plan_creation',
         },
       }));
 
@@ -375,7 +375,7 @@ describe('RegistrationService Integration', () => {
         response: 'Perfect!',
         is_confirmed: true,
         phaseTransition: {
-          toPhase: 'session_planning',
+          toPhase: 'plan_creation',
         },
       }));
 
@@ -404,7 +404,7 @@ describe('RegistrationService Integration', () => {
         response: 'Great!',
         is_confirmed: true,
         phaseTransition: {
-          toPhase: 'session_planning',
+          toPhase: 'plan_creation',
         },
       }));
 
@@ -529,7 +529,7 @@ describe('RegistrationService Integration', () => {
         response: 'All set!',
         is_confirmed: true,
         phaseTransition: {
-          toPhase: 'session_planning',
+          toPhase: 'plan_creation',
         },
       }));
 
@@ -554,7 +554,7 @@ describe('RegistrationService Integration', () => {
         response: 'Impressive!',
         is_confirmed: true,
         phaseTransition: {
-          toPhase: 'session_planning',
+          toPhase: 'plan_creation',
         },
       }));
 
