@@ -27,13 +27,15 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
         planId: session.planId ?? null,
         sessionKey: session.sessionKey ?? null,
         userContextJson: session.userContext ?? null,
-        status: 'planning',
+        sessionPlanJson: session.sessionPlanJson ?? null,
+        status: session.status ?? 'planning',
       })
       .returning();
 
     return {
       ...created,
       userContextJson: created.userContextJson as WorkoutSession['userContextJson'],
+      sessionPlanJson: created.sessionPlanJson as WorkoutSession['sessionPlanJson'],
       autoCloseReason: created.autoCloseReason as WorkoutSession['autoCloseReason'],
     } as WorkoutSession;
   }

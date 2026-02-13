@@ -23,6 +23,7 @@ export interface ITrainingService {
   addExerciseToSession(sessionId: string, dto: CreateSessionExerciseDto): Promise<SessionExercise>;
   logSet(exerciseId: string, dto: CreateSessionSetDto): Promise<SessionSet>;
   completeSession(sessionId: string, durationMinutes?: number): Promise<WorkoutSession>;
+  skipSession(sessionId: string): Promise<WorkoutSession>;
   getTrainingHistory(userId: string, limit?: number): Promise<WorkoutSessionWithDetails[]>;
   getSessionDetails(sessionId: string): Promise<WorkoutSessionWithDetails | null>;
   

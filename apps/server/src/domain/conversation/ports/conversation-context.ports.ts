@@ -2,7 +2,7 @@ import { ChatMsg } from '@domain/user/ports';
 
 // --- Types ---
 
-export type ConversationPhase = 'registration' | 'chat' | 'session_planning' | 'training';
+export type ConversationPhase = 'registration' | 'chat' | 'plan_creation' | 'session_planning' | 'training';
 
 export interface ConversationTurn {
   role: 'user' | 'assistant' | 'system' | 'summary';
@@ -11,6 +11,11 @@ export interface ConversationTurn {
 }
 
 // Phase-specific context data
+export interface PlanCreationContext {
+  // Stores the draft plan while user reviews/modifies it
+  draftPlanId?: string; // Optional: if we pre-create a draft plan
+}
+
 export interface SessionPlanningContext {
   // Stores the recommended session while user reviews/modifies it
   recommendedSessionId?: string; // Optional: if we pre-create a draft session
@@ -33,6 +38,7 @@ interface BaseConversationContext {
 export type ConversationContext =
   | (BaseConversationContext & { phase: 'registration' })
   | (BaseConversationContext & { phase: 'chat' })
+  | (BaseConversationContext & { phase: 'plan_creation'; planCreationContext?: PlanCreationContext })
   | (BaseConversationContext & { phase: 'session_planning'; sessionPlanningContext?: SessionPlanningContext })
   | (BaseConversationContext & { phase: 'training'; trainingContext: TrainingContext });
 
@@ -47,6 +53,7 @@ export interface ResetOptions {
 export interface StartNewPhaseOptions {
   preserveSummary?: boolean;
   // Phase-specific context to initialize
+  planCreationContext?: PlanCreationContext;
   sessionPlanningContext?: SessionPlanningContext;
   trainingContext?: TrainingContext;
 }

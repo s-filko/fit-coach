@@ -223,7 +223,8 @@ Help the user plan today's workout session through conversation.
 - Ask questions to collect user context if not provided
 - timeLimit should ONLY be set if user explicitly provides available time
 - Don't rush the planning process - ensure user is satisfied
-- If user wants to cancel, set phaseTransition.toPhase to "chat"
+- If user wants to postpone/cancel, CONFIRM their intent first, then transition to chat
+- Stay in session_planning until user confirms start OR explicitly confirms postpone
 - Consider recovery: if trained yesterday with high intensity, recommend rest or light session
 - If no recent training (>7 days), recommend easier session to ease back in
 - Be conversational and supportive, not robotic
@@ -241,13 +242,35 @@ Ready to start:
 }
 \`\`\`
 
-User wants to cancel:
+User wants to postpone (first mention):
 \`\`\`json
 {
-  "message": "No problem! Let me know when you're ready to train.",
+  "message": "Понял, ты хочешь отложить тренировку? Подтверди, и я сохраню план на потом."
+}
+\`\`\`
+
+User confirms postponement:
+\`\`\`json
+{
+  "message": "Хорошо! Дай знать, когда будешь готов начать.",
   "phaseTransition": {
     "toPhase": "chat",
-    "reason": "User cancelled session planning"
+    "reason": "User confirmed postponement of workout planning"
+  }
+}
+\`\`\`
+
+Note: Plan is NOT saved to database when user cancels. It's only kept in conversation history.
+
+User asks questions about the plan (stay in planning):
+\`\`\`json
+{
+  "message": "Конечно! Вот план на сегодня: Upper A...",
+  "sessionPlan": {
+    "sessionKey": "upper_a",
+    "sessionName": "Upper A - Chest/Back",
+    "reasoning": "...",
+    "exercises": [...]
   }
 }
 \`\`\`

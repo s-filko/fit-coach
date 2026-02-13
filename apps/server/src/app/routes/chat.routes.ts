@@ -77,13 +77,13 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
           req.log.warn({ err }, 'Failed to append conversation turn — response not affected');
         }
 
-        // Phase transition: registration → chat/session_planning based on LLM decision
+        // Phase transition: registration → chat/plan_creation based on LLM decision
         const nowComplete = app.services.userService.isRegistrationComplete(updatedUser);
         if (nowComplete && phaseTransition) {
           try {
-            const targetPhase = phaseTransition.toPhase;
-            const transitionNote = targetPhase === 'session_planning'
-              ? 'Registration complete. Let\'s plan your first workout!'
+            const targetPhase: 'chat' | 'plan_creation' = phaseTransition.toPhase;
+            const transitionNote = targetPhase === 'plan_creation'
+              ? 'Registration complete. Let\'s create your workout plan!'
               : 'Registration complete. Ready to chat!';
             
             await conversationContextService.startNewPhase(
@@ -104,16 +104,19 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       }
 
       // Registration complete - determine phase from existing contexts
-      // Priority: training > session_planning > chat
-      let phase: 'chat' | 'session_planning' | 'training' = 'chat';
+      // Priority: training > session_planning > plan_creation > chat
+      let phase: 'chat' | 'plan_creation' | 'session_planning' | 'training' = 'chat';
       
       const trainingCtx = await conversationContextService.getContext(userId, 'training');
       const planningCtx = await conversationContextService.getContext(userId, 'session_planning');
+      const planCreationCtx = await conversationContextService.getContext(userId, 'plan_creation');
       
       if (trainingCtx) {
         phase = 'training';
       } else if (planningCtx) {
         phase = 'session_planning';
+      } else if (planCreationCtx) {
+        phase = 'plan_creation';
       }
 
       // Load conversation context and build history [BR-CONV-001, BR-CONV-003]
@@ -122,7 +125,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         ? conversationContextService.getMessagesForPrompt(ctx)
         : [];
 
-      // Process message via ChatService (handles all phases: chat, session_planning, training)
+      // Process message via ChatService (handles all phases: chat, plan_creation, session_planning, training)
       const response = await app.services.chatService.processMessage(user, message, phase, historyMessages);
 
       // Persist conversation turn [BR-CONV-002, BR-CONV-007]

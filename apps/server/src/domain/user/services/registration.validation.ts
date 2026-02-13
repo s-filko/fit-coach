@@ -108,7 +108,7 @@ export const registrationLLMResponseSchema = z.object({
   is_confirmed: z.boolean(),
   // Optional phase transition after registration complete
   phaseTransition: z.object({
-    toPhase: z.enum(['chat', 'session_planning']),
+    toPhase: z.enum(['chat', 'plan_creation']),
     reason: z.string().optional(),
   }).optional(),
 });

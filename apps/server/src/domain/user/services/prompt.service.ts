@@ -1,12 +1,14 @@
 /* eslint-disable max-len */
 import {
   IPromptService,
+  type PlanCreationPromptContext,
   type SessionPlanningPromptContext,
   type TrainingPromptContext,
 } from '@domain/user/ports';
 import { FIELD_HINTS, FIELD_LABELS, type ProfileDataKey } from '@domain/user/services/registration.validation';
 import { User } from '@domain/user/services/user.service';
 
+import { buildPlanCreationPrompt } from './prompts/plan-creation.prompt';
 import { buildSessionPlanningPrompt } from './prompts/session-planning.prompt';
 import { buildTrainingPrompt } from './prompts/training.prompt';
 
@@ -71,14 +73,14 @@ BEHAVIOR RULES:
 
 PHASE TRANSITION AFTER REGISTRATION:
 - When registration is complete (is_confirmed = true), you can suggest next steps:
-  - If user wants to start training immediately → set phaseTransition.toPhase = "session_planning"
+  - If user wants to start training immediately → set phaseTransition.toPhase = "plan_creation"
   - If user wants to chat first, ask questions, or is not ready → set phaseTransition.toPhase = "chat"
 - Read user's intent from their confirmation message. Examples:
-  - "да, давай начнем тренировку" → session_planning
-  - "да, все верно, когда начнем?" → session_planning
+  - "да, давай начнем тренировку" → plan_creation
+  - "да, все верно, когда начнем?" → plan_creation
   - "подтверждаю, хочу узнать больше о программе" → chat
   - "верно, но сначала хочу задать вопросы" → chat
-- If unclear, default to "session_planning" (most users want to start right away)
+- If unclear, default to "plan_creation" (most users want to start right away)
 
 You MUST respond with ONLY a valid JSON object. No markdown, no code blocks, no explanation outside JSON:
 {
@@ -93,7 +95,7 @@ You MUST respond with ONLY a valid JSON object. No markdown, no code blocks, no 
   "response": "<your friendly message to the user>",
   "is_confirmed": <true or false>,
   "phaseTransition": {
-    "toPhase": <"session_planning" or "chat">,
+    "toPhase": <"plan_creation" or "chat">,
     "reason": "<optional: why this transition>"
   } // ONLY include when is_confirmed = true
 }
@@ -105,7 +107,7 @@ Only include non-null values in extracted_data when the user provided NEW inform
    * System prompt for general chat mode (post-registration).
    * Receives user profile to personalize responses.
    */
-  buildChatSystemPrompt(user: User): string {
+  buildChatSystemPrompt(user: User, hasActivePlan: boolean): string {
     const profile = [
       user.age && `Age: ${user.age}`,
       user.gender && `Gender: ${user.gender}`,
@@ -115,16 +117,22 @@ Only include non-null values in extracted_data when the user provided NEW inform
       user.fitnessGoal && `Goal: ${user.fitnessGoal}`,
     ].filter(Boolean).join(', ');
 
+    const planStatus = hasActivePlan 
+      ? 'User HAS an active workout plan. They can start planning workout sessions.'
+      : 'User DOES NOT have a workout plan yet. Suggest creating one when appropriate.';
+
     return `Your name is FitCoach. You are a professional fitness coach and personal trainer. You are NOT a language model, NOT an AI assistant, NOT made by Google or any tech company. You are a real fitness coach named FitCoach. Always stay in character.
 
 CLIENT PROFILE: ${profile || 'Not available'}
+WORKOUT PLAN STATUS: ${planStatus}
 
 RULES:
 1. IDENTITY: Your name is FitCoach. If anyone asks who you are, say "Я FitCoach, твой персональный фитнес-тренер!" Never mention AI, language models, Google, OpenAI, or technology companies.
 2. SCOPE: You ONLY discuss fitness, training, nutrition, health, and wellness. If asked about anything else (politics, math, coding, etc.), say "Я специализируюсь только на фитнесе и здоровье. Давай лучше обсудим твои тренировки!"
 3. PERSONALIZATION: Always consider the client's profile when giving advice. Reference their goal, level, and stats when relevant.
 4. STYLE: Keep responses brief (1-3 sentences), motivating, and conversational. Respond in the same language the user writes in.
-5. PROACTIVE: When the user says just "hi" or "hello", greet them by name (FitCoach greeting) and proactively suggest something related to their goal — a workout tip, a question about their progress, or motivation.`;
+5. PROACTIVE: When the user says just "hi" or "hello", greet them by name (FitCoach greeting) and proactively suggest something related to their goal — a workout tip, a question about their progress, or motivation.
+6. WORKOUT PLAN: ${hasActivePlan ? 'User can start planning sessions. If they ask about training, guide them to plan a session.' : 'If user wants to train, suggest creating a workout plan first. Explain it will help personalize their training.'}`; 
   }
 
   /**
@@ -133,6 +141,33 @@ RULES:
    */
   buildSessionPlanningPrompt(context: SessionPlanningPromptContext): string {
     return buildSessionPlanningPrompt(context);
+  }
+
+  /**
+   * System prompt for plan creation phase
+   * Helps user design their long-term workout plan
+   */
+  buildPlanCreationPrompt(context: PlanCreationPromptContext): string {
+    return buildPlanCreationPrompt({
+      userProfile: {
+        name: context.user.firstName ?? context.user.username ?? 'User',
+        age: context.user.age ?? 0,
+        gender: context.user.gender ?? 'male',
+        height: context.user.height ? Number(context.user.height) : 0,
+        weight: context.user.weight ? Number(context.user.weight) : 0,
+        fitnessLevel: context.user.fitnessLevel ?? 'beginner',
+        fitnessGoal: context.user.fitnessGoal ?? 'general_fitness',
+      },
+      availableExercises: context.availableExercises.map((ex) => ({
+        id: ex.id,
+        name: ex.name,
+        category: ex.category,
+        equipment: ex.equipment,
+        primaryMuscles: [], // TODO: load from exercise_muscle_groups
+        secondaryMuscles: [], // TODO: load from exercise_muscle_groups
+      })),
+      totalExercisesAvailable: context.totalExercisesAvailable,
+    });
   }
 
   /**

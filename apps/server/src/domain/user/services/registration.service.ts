@@ -39,7 +39,7 @@ export class RegistrationService implements IRegistrationService {
     response: string;
     isComplete: boolean;
     parsedData?: ParsedProfileData;
-    phaseTransition?: { toPhase: 'chat' | 'session_planning'; reason?: string };
+    phaseTransition?: { toPhase: 'chat' | 'plan_creation'; reason?: string };
   }> {
     // 1. Build system prompt with current profile state
     const systemPrompt = this.promptService.buildUnifiedRegistrationPrompt(user);

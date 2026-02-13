@@ -85,16 +85,22 @@ export class TrainingService implements ITrainingService {
     // 1. Auto-close timed-out sessions
     await this.autoCloseTimedOutSessions(userId);
 
-    // 2. Check for active session
-    const activeSession = await this.sessionRepo.findActiveByUserId(userId);
-    if (activeSession) {
-      throw new Error('You already have an active session. Please complete or skip it first.');
+    // 2. Check for active session (only if starting a training session, not planning)
+    if (dto.status !== 'planning') {
+      const activeSession = await this.sessionRepo.findActiveByUserId(userId);
+      if (activeSession) {
+        throw new Error('You already have an active session. Please complete or skip it first.');
+      }
     }
 
     // 3. Create new session
     const session = await this.sessionRepo.create(userId, dto);
 
-    // 4. Start it immediately
+    // 4. If status is 'planning', keep it in planning. Otherwise, start immediately.
+    if (dto.status === 'planning') {
+      return session;
+    }
+
     return this.sessionRepo.update(session.id, {
       status: 'in_progress',
       startedAt: new Date(),
@@ -147,6 +153,15 @@ export class TrainingService implements ITrainingService {
         : null);
 
     return this.sessionRepo.complete(sessionId, completedAt, duration ?? 0);
+  }
+
+  async skipSession(sessionId: string): Promise<WorkoutSession> {
+    const session = await this.sessionRepo.findById(sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    return this.sessionRepo.update(sessionId, { status: 'skipped' });
   }
 
   async getTrainingHistory(userId: string, limit = 10): Promise<WorkoutSessionWithDetails[]> {

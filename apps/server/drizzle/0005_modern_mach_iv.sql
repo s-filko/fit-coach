@@ -1,0 +1,1 @@
+ALTER TYPE "public"."conversation_phase" ADD VALUE 'plan_creation' BEFORE 'session_planning';

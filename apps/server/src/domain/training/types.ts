@@ -288,6 +288,8 @@ export interface CreateSessionDto {
   planId?: string;
   sessionKey?: string;
   userContext?: UserContext;
+  status?: SessionStatus;
+  sessionPlanJson?: SessionRecommendation;
 }
 
 export interface CreateSessionExerciseDto {

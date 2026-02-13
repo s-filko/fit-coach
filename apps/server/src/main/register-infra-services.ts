@@ -100,7 +100,7 @@ export async function registerInfraServices(
     container.get(EXERCISE_REPOSITORY_TOKEN),
   );
 
-  // Chat service (depends on training service and context builder)
+  // Chat service (depends on training service, plan repo, exercise repo, and context builder)
   container.registerFactory(
     CHAT_SERVICE_TOKEN,
     c => new ChatService(
@@ -108,6 +108,8 @@ export async function registerInfraServices(
       c.get(LLM_SERVICE_TOKEN),
       c.get(CONVERSATION_CONTEXT_SERVICE_TOKEN),
       c.get(TRAINING_SERVICE_TOKEN),
+      c.get(WORKOUT_PLAN_REPOSITORY_TOKEN),
+      c.get(EXERCISE_REPOSITORY_TOKEN),
       sessionPlanningContextBuilder,
     ),
   );

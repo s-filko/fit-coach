@@ -1,4 +1,5 @@
 import type {
+  Exercise,
   SessionRecommendation,
   WorkoutPlan,
   WorkoutSessionWithDetails,
@@ -9,6 +10,13 @@ import { User } from '@domain/user/services/user.service';
 export interface ChatMsg {
   role: 'system' | 'user' | 'assistant';
   content: string;
+}
+
+// Context for plan creation prompt
+export interface PlanCreationPromptContext {
+  user: User;
+  availableExercises: Exercise[];
+  totalExercisesAvailable: number;
 }
 
 // Context for session planning prompt
@@ -35,7 +43,9 @@ export interface IPromptService {
   /** System prompt for unified registration: extract data + generate response in one LLM call */
   buildUnifiedRegistrationPrompt(user: User): string;
   /** System prompt for general chat mode (post-registration) */
-  buildChatSystemPrompt(user: User): string;
+  buildChatSystemPrompt(user: User, hasActivePlan: boolean): string;
+  /** System prompt for plan creation phase */
+  buildPlanCreationPrompt(context: PlanCreationPromptContext): string;
   /** System prompt for session planning phase */
   buildSessionPlanningPrompt(context: SessionPlanningPromptContext): string;
   /** System prompt for training phase */

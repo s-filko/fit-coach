@@ -1,8 +1,8 @@
 # Training Session Management - Implementation Plan
 
 **Feature**: FEAT-0010 Training Session Management  
-**Status**: ✅ **MVP READY FOR TESTING**  
-**Last Updated**: 2026-02-11
+**Status**: ✅ **MVP READY FOR TESTING** + ✅ **PLAN CREATION PHASE ADDED**  
+**Last Updated**: 2026-02-13
 
 ## Overview
 
@@ -20,10 +20,12 @@ This document tracks the implementation progress of the Training Session Managem
 ## Implementation Steps
 
 ### ✅ Step 1: Conversation Phases & Context Types
-**Status**: COMPLETED  
-**Commits**: `eb75cc2`, `9d8ec37`
+**Status**: COMPLETED + EXTENDED  
+**Commits**: `eb75cc2`, `9d8ec37`, `2026-02-13 plan_creation`
 
 - [x] Add `session_planning` to `ConversationPhase` enum
+- [x] Add `plan_creation` to `ConversationPhase` enum (2026-02-13)
+- [x] Define `PlanCreationContext` type (draftPlanId) (2026-02-13)
 - [x] Define `SessionPlanningContext` type (recommendedSessionId)
 - [x] Define `TrainingContext` type (activeSessionId)
 - [x] Update `ConversationContext` discriminated union
@@ -32,6 +34,7 @@ This document tracks the implementation progress of the Training Session Managem
 **Files Changed**:
 - `apps/server/src/domain/conversation/ports/conversation-context.ports.ts`
 - `apps/server/drizzle/0004_add_session_planning_phase.sql`
+- `apps/server/drizzle/0005_add_plan_creation_phase.sql` (2026-02-13)
 
 ---
 
@@ -485,10 +488,140 @@ GROUP BY se.id, e.name, se.status;
 
 ---
 
+## ✅ Step 11: Plan Creation Phase (2026-02-13)
+**Status**: COMPLETED  
+**Date**: 2026-02-13
+
+### Overview
+Added `plan_creation` phase to enable users to create long-term workout plans with LLM assistance before starting session planning.
+
+### Implementation Details
+
+- [x] Add `plan_creation` to `ConversationPhase` enum
+- [x] Define `PlanCreationContext` type
+- [x] Create `WorkoutPlanDraft` Zod schema
+- [x] Create `PlanCreationLLMResponse` schema with phase transitions
+- [x] Implement `parsePlanCreationResponse()` parser
+- [x] Create `plan-creation.prompt.ts` with detailed instructions
+- [x] Add `buildPlanCreationPrompt()` to `IPromptService`
+- [x] Implement `loadPlanCreationContext()` in ChatService
+- [x] Implement `saveWorkoutPlan()` in ChatService
+- [x] Update phase transition validation
+- [x] Update registration to transition to `plan_creation`
+- [x] Update chat prompt to check for active plan
+- [x] Add database migration for `plan_creation` enum
+- [x] Update route handler to detect `plan_creation` phase
+- [x] Fix type errors in DI container
+- [ ] **TEST**: Unit tests for plan creation flow
+- [ ] **TEST**: Integration tests with LLM
+- [ ] **TEST**: E2E test for complete flow
+
+**Files Changed**:
+- `apps/server/src/domain/conversation/ports/conversation-context.ports.ts`
+- `apps/server/src/domain/training/plan-creation.types.ts` (NEW)
+- `apps/server/src/domain/user/services/prompts/plan-creation.prompt.ts` (NEW)
+- `apps/server/src/domain/user/ports/prompt.ports.ts`
+- `apps/server/src/domain/user/services/prompt.service.ts`
+- `apps/server/src/domain/user/services/chat.service.ts`
+- `apps/server/src/domain/user/services/registration.service.ts`
+- `apps/server/src/domain/user/ports/service.ports.ts`
+- `apps/server/src/domain/user/services/registration.validation.ts`
+- `apps/server/src/app/routes/chat.routes.ts`
+- `apps/server/src/infra/db/schema.ts`
+- `apps/server/src/infra/db/seeds/exercises.seed.ts`
+- `apps/server/src/main/register-infra-services.ts`
+- `apps/server/drizzle/0005_add_plan_creation_phase.sql` (NEW)
+
+**Documentation**:
+- `docs/PLAN_CREATION_PHASE.md` (NEW) - Comprehensive documentation
+
+### Key Design Decisions
+
+1. **Plan Saved Only on Approval**
+   - Draft plans kept in conversation history only
+   - Saved to DB only when user approves and transitions to `session_planning`
+   - Prevents database pollution with incomplete plans
+
+2. **Mandatory Plan Before Session Planning**
+   - `session_planning` phase requires active `WorkoutPlan`
+   - Transition validation enforces this requirement
+   - Ensures consistent session recommendations
+
+3. **Exercise Catalog in Prompt**
+   - All available exercises loaded and included in prompt
+   - LLM must reference exercises by `exerciseId`
+   - Prevents hallucinated exercises
+
+4. **Structured Plan Schema**
+   - Zod schemas validate all plan components
+   - Session templates define exact structure
+   - Recovery guidelines are machine-readable
+
+5. **Chat Phase Awareness**
+   - Chat prompt includes `hasActivePlan` flag
+   - LLM suggests plan creation when needed
+   - Smooth user experience
+
+### Conversation Flow
+
+```
+registration → plan_creation → session_planning → training → chat
+                    ↓
+                  chat (if user cancels)
+```
+
+### Phase Transitions
+
+- `registration` → `plan_creation`: User ready to start training
+- `registration` → `chat`: User wants to chat first
+- `chat` → `plan_creation`: User wants to create plan
+- `plan_creation` → `session_planning`: Plan approved and saved
+- `plan_creation` → `chat`: User cancels plan creation
+- `chat` → `session_planning`: Blocked if no active plan
+
+### LLM Response Format
+
+```json
+{
+  "message": "Response in Russian",
+  "workoutPlan": {
+    "name": "Upper/Lower 4-Day Split",
+    "goal": "Muscle gain with balanced development",
+    "trainingStyle": "Progressive overload, compound movements",
+    "targetMuscleGroups": ["chest", "back_lats", "quads", ...],
+    "recoveryGuidelines": {
+      "majorMuscleGroups": { "minRestDays": 2, "maxRestDays": 4 },
+      "smallMuscleGroups": { "minRestDays": 1, "maxRestDays": 3 },
+      "highIntensity": { "minRestDays": 3 },
+      "customRules": ["If RPE > 8, add +1 rest day"]
+    },
+    "sessionTemplates": [
+      {
+        "key": "upper_a",
+        "name": "Upper A - Chest/Back",
+        "focus": "Horizontal push/pull",
+        "energyCost": "high",
+        "estimatedDuration": 60,
+        "exercises": [...]
+      }
+    ],
+    "progressionRules": [...]
+  },
+  "phaseTransition": {
+    "toPhase": "session_planning",
+    "reason": "User approved workout plan"
+  }
+}
+```
+
+---
+
 ## Related Documentation
 
+- **Plan Creation**: `docs/PLAN_CREATION_PHASE.md` (NEW)
 - Feature Spec: `docs/features/FEAT-0010-training-session-management.md`
 - Domain Spec: `docs/domain/training.spec.md`
 - ADR: `docs/adr/0006-session-plan-storage.md`
 - Architecture: `docs/ARCHITECTURE.md`
 - API Spec: `docs/API_SPEC.md`
+- MVP Plan: `docs/MVP_TRAINING_SESSION_MANAGEMENT.md`

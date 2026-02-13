@@ -1,17 +1,20 @@
 import { LLMService } from '@domain/ai/ports';
 import { parseLLMResponse } from '@domain/conversation/llm-response.types';
-import { ConversationPhase, type IConversationContextService } from '@domain/conversation/ports/conversation-context.ports';
-import type { ITrainingService } from '@domain/training/ports';
-import { SessionPlanningContextBuilder } from '@domain/training/services/session-planning-context.builder';
 import {
-  parseTrainingResponse,
-  type TrainingIntent,
-} from '@domain/training/training-intent.types';
-import type { SessionRecommendation } from '@domain/training/types';
+  ConversationPhase,
+  type IConversationContextService,
+} from '@domain/conversation/ports/conversation-context.ports';
+import { parsePlanCreationResponse, type WorkoutPlanDraft } from '@domain/training/plan-creation.types';
+import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
+import { SessionPlanningContextBuilder } from '@domain/training/services/session-planning-context.builder';
+import { parseSessionPlanningResponse } from '@domain/training/session-planning.types';
+import { parseTrainingResponse, type TrainingIntent } from '@domain/training/training-intent.types';
+import type { SessionRecommendation, WorkoutSession } from '@domain/training/types';
 import {
   ChatMsg,
   IChatService,
   IPromptService,
+  type PlanCreationPromptContext,
   type SessionPlanningPromptContext,
   type TrainingPromptContext,
 } from '@domain/user/ports';
@@ -28,8 +31,9 @@ import { User } from './user.service';
  * - Executes phase transitions via ConversationContextService
  * 
  * Phase flow:
- * - chat → session_planning (user wants to plan workout)
- * - session_planning → training (plan accepted, training starts)
+ * - chat → plan_creation (user wants to create workout plan)
+ * - plan_creation → session_planning (plan created, ready to plan sessions)
+ * - session_planning → training (session planned, training starts)
  * - training → chat (training completed)
  * - any phase → chat (user changes mind)
  */
@@ -39,6 +43,8 @@ export class ChatService implements IChatService {
     private readonly llmService: LLMService,
     private readonly conversationContextService: IConversationContextService,
     private readonly trainingService: ITrainingService,
+    private readonly workoutPlanRepo: IWorkoutPlanRepository,
+    private readonly exerciseRepo: IExerciseRepository,
     private readonly sessionPlanningContextBuilder: SessionPlanningContextBuilder,
   ) {}
 
@@ -76,6 +82,8 @@ export class ChatService implements IChatService {
     // 4. Parse LLM response based on phase
     let parsedMessage: string;
     let phaseTransition: { toPhase: ConversationPhase; reason?: string; sessionId?: string } | undefined;
+    let sessionPlan: SessionRecommendation | undefined;
+    let workoutPlan: WorkoutPlanDraft | undefined;
 
     if (phase === 'training') {
       // Training phase: parse training response with intent
@@ -94,8 +102,38 @@ export class ChatService implements IChatService {
           reason: trainingResponse.phaseTransition.reason,
         };
       }
+    } else if (phase === 'plan_creation') {
+      // Plan creation phase: parse plan creation response with optional workout plan
+      const planCreationResponse = parsePlanCreationResponse(llmResponse);
+      const { message: msg, workoutPlan: plan, phaseTransition: transition } = planCreationResponse;
+      parsedMessage = msg;
+      workoutPlan = plan;
+      phaseTransition = transition;
+
+      // Save workout plan ONLY if transitioning to session_planning (user approved)
+      // Plan is kept in conversation history until user approves
+      // If user cancels, no plan is created - draft is just lost with conversation context
+      if (workoutPlan && phaseTransition?.toPhase === 'session_planning') {
+        await this.saveWorkoutPlan(user.id, workoutPlan);
+      }
+    } else if (phase === 'session_planning') {
+      // Session planning phase: parse session planning response with optional plan
+      const planningResponse = parseSessionPlanningResponse(llmResponse);
+      const { message: msg, sessionPlan: plan, phaseTransition: transition } = planningResponse;
+      parsedMessage = msg;
+      sessionPlan = plan;
+      phaseTransition = transition;
+
+      // Save session plan ONLY if transitioning to training (user confirmed)
+      // Plans are kept in conversation history until user confirms
+      // If user cancels, no session is created - plan is just lost with conversation context
+      if (sessionPlan && phaseTransition?.toPhase === 'training') {
+        const session = await this.saveSessionPlan(user.id, sessionPlan);
+        // Update phase transition with session ID for training phase
+        phaseTransition.sessionId = session.id;
+      }
     } else {
-      // Other phases: use standard LLM response parser
+      // Other phases (chat, registration): use standard LLM response parser
       const { message, phaseTransition: transition } = parseLLMResponse(llmResponse);
       parsedMessage = message;
       phaseTransition = transition;
@@ -119,14 +157,22 @@ export class ChatService implements IChatService {
   /**
    * Build system prompt based on current phase
    * 
+   * For plan_creation: includes user profile and available exercises
    * For session_planning: includes training history, active plan, recovery data
    * For training: includes current session state, exercise details, progress
    * For chat: standard chat prompt
    */
   private async buildSystemPrompt(user: User, phase: ConversationPhase): Promise<string> {
     switch (phase) {
-      case 'chat':
-        return this.promptService.buildChatSystemPrompt(user);
+      case 'chat': {
+        const activePlan = await this.workoutPlanRepo.findActiveByUserId(user.id);
+        return this.promptService.buildChatSystemPrompt(user, !!activePlan);
+      }
+      
+      case 'plan_creation': {
+        const context = await this.loadPlanCreationContext(user);
+        return this.promptService.buildPlanCreationPrompt(context);
+      }
       
       case 'session_planning': {
         const context = await this.loadSessionPlanningContext(user);
@@ -153,6 +199,24 @@ export class ChatService implements IChatService {
   /**
    * Load context data for session planning prompt
    * Includes training history, active plan, and recovery timeline
+   */
+  /**
+   * Load context for plan_creation phase
+   * Includes user profile and available exercises
+   */
+  private async loadPlanCreationContext(user: User): Promise<PlanCreationPromptContext> {
+    const exercises = await this.exerciseRepo.findAll();
+
+    return {
+      user,
+      availableExercises: exercises,
+      totalExercisesAvailable: exercises.length,
+    };
+  }
+
+  /**
+   * Load context for session_planning phase
+   * Includes training history, active plan, and recovery data
    */
   private async loadSessionPlanningContext(user: User): Promise<SessionPlanningPromptContext> {
     // Use SessionPlanningContextBuilder to load all required data
@@ -282,6 +346,50 @@ export class ChatService implements IChatService {
   }
 
   /**
+   * Save session plan to database
+   * Creates a session ready to start training
+   * Called ONLY when user confirms they want to start training
+   * 
+   * @param userId - User ID
+   * @param plan - Session recommendation from LLM
+   * @returns Created workout session
+   */
+  /**
+   * Save workout plan to database
+   * Called when user approves the plan during plan_creation phase
+   */
+  private async saveWorkoutPlan(userId: string, plan: WorkoutPlanDraft): Promise<void> {
+    await this.workoutPlanRepo.create(userId, {
+      name: plan.name,
+      planJson: {
+        goal: plan.goal,
+        trainingStyle: plan.trainingStyle,
+        targetMuscleGroups: plan.targetMuscleGroups,
+        recoveryGuidelines: plan.recoveryGuidelines,
+        sessionTemplates: plan.sessionTemplates,
+        progressionRules: plan.progressionRules,
+      },
+      status: 'active',
+    });
+  }
+
+  /**
+   * Save session plan to database
+   * Called when user confirms they want to start training
+   */
+  private async saveSessionPlan(userId: string, plan: SessionRecommendation): Promise<WorkoutSession> {
+    // Create session that's ready to start
+    // Status will be set to 'in_progress' by startSession (default behavior)
+    const session = await this.trainingService.startSession(userId, {
+      sessionKey: plan.sessionKey,
+      sessionPlanJson: plan,
+      // Don't set status: 'planning' - let it start immediately
+    });
+
+    return session;
+  }
+
+  /**
    * Execute phase transition requested by LLM
    * 
    * Validates the transition before executing it to ensure data consistency.
@@ -340,8 +448,8 @@ export class ChatService implements IChatService {
     toPhase: ConversationPhase,
     sessionId?: string,
   ): Promise<void> {
-    // registration → session_planning: always allowed (happens after registration complete)
-    if (fromPhase === 'registration' && toPhase === 'session_planning') {
+    // registration → plan_creation: always allowed (user needs to create workout plan)
+    if (fromPhase === 'registration' && toPhase === 'plan_creation') {
       return;
     }
 
@@ -350,8 +458,32 @@ export class ChatService implements IChatService {
       return;
     }
 
-    // chat → session_planning: always allowed
+    // chat → plan_creation: always allowed (user wants to create workout plan)
+    if (fromPhase === 'chat' && toPhase === 'plan_creation') {
+      return;
+    }
+
+    // plan_creation → session_planning: validate user has active plan
+    if (fromPhase === 'plan_creation' && toPhase === 'session_planning') {
+      // Plan should have been created by saveWorkoutPlan before this transition
+      const activePlan = await this.workoutPlanRepo.findActiveByUserId(userId);
+      if (!activePlan) {
+        throw new Error('Cannot proceed to session planning: no active workout plan found');
+      }
+      return;
+    }
+
+    // plan_creation → chat: user cancelled plan creation
+    if (fromPhase === 'plan_creation' && toPhase === 'chat') {
+      return;
+    }
+
+    // chat → session_planning: validate user has active plan
     if (fromPhase === 'chat' && toPhase === 'session_planning') {
+      const activePlan = await this.workoutPlanRepo.findActiveByUserId(userId);
+      if (!activePlan) {
+        throw new Error('Cannot plan session: no active workout plan. Create a plan first.');
+      }
       return;
     }
 
@@ -406,20 +538,9 @@ export class ChatService implements IChatService {
       return;
     }
 
-    // session_planning → chat: clean up draft recommendation if exists
+    // session_planning → chat: user cancelled planning
+    // No cleanup needed - session is only created when user confirms training start
     if (fromPhase === 'session_planning' && toPhase === 'chat') {
-      // Get planning context
-      const conversationCtx = await this.conversationContextService.getContext(userId, 'session_planning');
-      if (conversationCtx?.phase === 'session_planning' && conversationCtx.sessionPlanningContext?.recommendedSessionId) {
-        const session = await this.trainingService.getSessionDetails(
-          conversationCtx.sessionPlanningContext.recommendedSessionId,
-        );
-        
-        // If session is still in planning status (not started), mark it as skipped
-        if (session && session.status === 'planning') {
-          await this.trainingService.completeSession(session.id);
-        }
-      }
       return;
     }
 
@@ -446,6 +567,10 @@ export class ChatService implements IChatService {
     reason?: string,
   ): string {
     const transitions: Record<string, string> = {
+      'registration->plan_creation': 'Starting workout plan creation',
+      'chat->plan_creation': 'Starting workout plan creation',
+      'plan_creation->session_planning': 'Workout plan created, ready for session planning',
+      'plan_creation->chat': 'Plan creation cancelled',
       'chat->session_planning': 'Starting workout planning session',
       'session_planning->training': 'Starting training session',
       'training->chat': 'Training session completed',

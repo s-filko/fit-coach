@@ -1,3 +1,5 @@
+import type { MuscleGroup } from '@domain/training/types';
+
 import { db } from '@infra/db/drizzle';
 import { exerciseMuscleGroups, exercises } from '@infra/db/schema';
 
@@ -12,7 +14,7 @@ interface ExerciseSeed {
   typicalDurationMinutes: number;
   requiresSpotter: boolean;
   muscleGroups: Array<{
-    muscle: string;
+    muscle: MuscleGroup;
     involvement: 'primary' | 'secondary';
   }>;
 }

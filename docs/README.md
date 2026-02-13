@@ -38,6 +38,9 @@ This repository follows a strict docs‑first workflow. Start here to navigate d
 ## Implementation Guides
 
 - **Conversation Context**: `docs/CONVERSATION_CONTEXT_ARCHITECTURE.md` - Implementation details
+- **Plan Creation Phase**: `docs/PLAN_CREATION_PHASE.md` - Workout plan creation flow ✨ NEW
+- **MVP Training Session**: `docs/MVP_TRAINING_SESSION_MANAGEMENT.md` - Original MVP plan
+- **Implementation Plan**: `docs/IMPLEMENTATION_PLAN.md` - Step-by-step progress tracking
 - **Testing Rules**: `docs/TESTING.md` (→ `apps/server/TESTING.md`)
 - **Contribution Guide for AI**: `docs/CONTRIBUTING_AI.md`
 - **Documentation Guide**: `docs/DOCUMENTATION_GUIDE.md`
@@ -55,8 +58,16 @@ For AI assistants working on this codebase:
 4. **Architecture** (`docs/ARCHITECTURE.md`) - System design and structure
 5. **ADRs** (`docs/adr/*.md`) - Design decisions and rationale
 
-## Recent Updates (2025-01)
+## Recent Updates
 
+### 2026-02-13
+- ✅ **Plan Creation Phase**: New conversation phase for creating long-term workout plans
+- ✅ **Workout Plan Schema**: Structured plan with templates, recovery rules, and progression
+- ✅ **Exercise Catalog Integration**: LLM uses real exercises from database
+- ✅ **Phase Transition Validation**: Enforces plan existence before session planning
+- ✅ **Registration Flow Update**: Now transitions to plan_creation instead of session_planning
+
+### 2025-01
 - ✅ **Unified Registration**: Single LLM call with JSON mode (FEAT-0006)
 - ✅ **Conversation Context**: Persistent dialogue history with sliding window (FEAT-0009)
 - ✅ **Phase-based Routing**: Automatic service selection in chat endpoint (FEAT-0003)
