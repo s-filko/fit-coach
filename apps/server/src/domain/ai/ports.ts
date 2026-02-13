@@ -26,6 +26,7 @@ export interface LLMResponse {
   model: string;
   processingTime: number;
   error?: string; // Error message if request failed
+  providerError?: string; // Specific error message from LLM provider (OpenAI/OpenRouter)
   httpResponse?: unknown; // Full HTTP response metadata for debugging
 }
 

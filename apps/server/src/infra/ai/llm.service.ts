@@ -101,6 +101,26 @@ export class LLMService implements ILLMService {
     const startTime = new Date();
 
     try {
+      // CRITICAL: Validate JSON mode configuration before API call
+      // OpenAI/OpenRouter requires system prompt to mention "json" when using json_object format
+      if (jsonMode) {
+        const promptLower = systemPromptText.toLowerCase();
+        if (!promptLower.includes('json')) {
+          const error = new Error(
+            'CONFIGURATION ERROR: JSON mode is enabled but system prompt does not mention "json". ' +
+            'This will cause OpenAI/OpenRouter API error: "Response input messages must contain ' +
+            'the word \'json\' in some form to use \'text.format\' of type \'json_object\'."',
+          );
+          // eslint-disable-next-line no-console
+          console.error('\n=== JSON MODE VALIDATION ERROR ===');
+          // eslint-disable-next-line no-console
+          console.error('System prompt does not contain "json" but jsonMode=true');
+          // eslint-disable-next-line no-console
+          console.error('System prompt preview:', systemPromptText.slice(0, 200) + '...');
+          throw error;
+        }
+      }
+
       const systemPrompt = new SystemMessage(systemPromptText);
 
       const messages = message.map(chatMsg => {
@@ -211,6 +231,28 @@ export class LLMService implements ILLMService {
       this.metrics.totalErrors++;
       const originalMessage = error instanceof Error ? error.message : String(error);
       
+      // Extract provider error details if available
+      let providerError = '';
+      if (error && typeof error === 'object' && 'error' in error) {
+        const errObj = error as { error?: { message?: string; metadata?: { raw?: string } } };
+        if (errObj.error?.message) {
+          providerError = errObj.error.message;
+        }
+        if (errObj.error?.metadata?.raw) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            const rawError = JSON.parse(errObj.error.metadata.raw);
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            if (rawError.error?.message) {
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+              providerError = String(rawError.error.message);
+            }
+          } catch {
+            // Ignore JSON parse errors
+          }
+        }
+      }
+      
       if (this.isDebugMode) {
         const errorResponse: LLMResponse = {
           id: this.generateId(),
@@ -220,6 +262,7 @@ export class LLMService implements ILLMService {
           error: originalMessage,
           model: this.model.model,
           processingTime: new Date().getTime() - startTime.getTime(),
+          providerError,
         };
         this.addToHistory(this.responseHistory, errorResponse);
         
@@ -230,6 +273,10 @@ export class LLMService implements ILLMService {
         console.error('Request ID:', requestId);
         // eslint-disable-next-line no-console
         console.error('Error:', originalMessage);
+        if (providerError) {
+          // eslint-disable-next-line no-console
+          console.error('Provider Error:', providerError);
+        }
         // eslint-disable-next-line no-console
         console.error('Full Error:', error);
         if (error && typeof error === 'object') {
@@ -240,7 +287,18 @@ export class LLMService implements ILLMService {
         console.error('=================\n');
       }
       
-      throw new Error(`Failed to generate LLM response: ${originalMessage}`);
+      // Always log provider errors even when debug mode is off
+      if (providerError && !this.isDebugMode) {
+        // eslint-disable-next-line no-console
+        console.error(`LLM Provider Error: ${providerError}`);
+      }
+      
+      // Include provider error in thrown message for better error reporting
+      const errorMessage = providerError 
+        ? `Failed to generate LLM response: ${originalMessage} (Provider: ${providerError})`
+        : `Failed to generate LLM response: ${originalMessage}`;
+      
+      throw new Error(errorMessage);
     }
   }
 
