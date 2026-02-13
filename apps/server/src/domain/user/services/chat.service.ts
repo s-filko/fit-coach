@@ -73,10 +73,12 @@ export class ChatService implements IChatService {
     ];
 
     // 3. Call LLM with JSON mode for structured response
+    // Only use JSON mode for phases that require structured output
+    const needsJsonMode = phase !== 'chat';
     const llmResponse = await this.llmService.generateWithSystemPrompt(
       messages,
       systemPrompt,
-      { jsonMode: true },
+      { jsonMode: needsJsonMode },
     );
 
     // 4. Parse LLM response based on phase

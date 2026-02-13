@@ -113,6 +113,17 @@ export class LLMService implements ILLMService {
         return new HumanMessage(chatMsg.content);
       });
 
+      // Build the actual HTTP payload that will be sent to OpenRouter
+      const httpPayload = {
+        model: this.model.model,
+        messages: [
+          { role: 'system', content: systemPromptText },
+          ...message.map(m => ({ role: m.role, content: m.content })),
+        ],
+        temperature: this.model.temperature ?? 0.7,
+        ...(jsonMode && { response_format: { type: 'json_object' } }),
+      };
+
       if (this.isDebugMode) {
         const request: LLMRequest = {
           id: requestId,
@@ -122,8 +133,24 @@ export class LLMService implements ILLMService {
           systemPrompt: systemPromptText,
           model: this.model.model,
           temperature: this.model.temperature ?? 0.7,
+          jsonMode,
+          httpPayload, // Store full HTTP payload for debugging
         };
         this.addToHistory(this.requestHistory, request);
+        
+        // Log to console for immediate debugging
+        // eslint-disable-next-line no-console
+        console.log('\n=== LLM REQUEST ===');
+        // eslint-disable-next-line no-console
+        console.log('Request ID:', requestId);
+        // eslint-disable-next-line no-console
+        console.log('Model:', this.model.model);
+        // eslint-disable-next-line no-console
+        console.log('JSON Mode:', jsonMode);
+        // eslint-disable-next-line no-console
+        console.log('HTTP Payload:', JSON.stringify(httpPayload, null, 2));
+        // eslint-disable-next-line no-console
+        console.log('==================\n');
       }
 
       const model = jsonMode
@@ -156,14 +183,63 @@ export class LLMService implements ILLMService {
           } : undefined,
           model: this.model.model,
           processingTime,
+          httpResponse: response.response_metadata, // Store full HTTP response metadata
         };
         this.addToHistory(this.responseHistory, llmResponse);
+        
+        // Log to console for immediate debugging
+        // eslint-disable-next-line no-console
+        console.log('\n=== LLM RESPONSE ===');
+        // eslint-disable-next-line no-console
+        console.log('Request ID:', requestId);
+        // eslint-disable-next-line no-console
+        console.log('Processing Time:', processingTime, 'ms');
+        // eslint-disable-next-line no-console
+        console.log('Token Usage:', tokenUsage);
+        // eslint-disable-next-line no-console
+        console.log('Content Length:', content.length);
+        // eslint-disable-next-line no-console
+        console.log('Content Preview:', content.substring(0, 200));
+        // eslint-disable-next-line no-console
+        console.log('Full Response Metadata:', JSON.stringify(response.response_metadata, null, 2));
+        // eslint-disable-next-line no-console
+        console.log('====================\n');
       }
 
       return content;
     } catch (error) {
       this.metrics.totalErrors++;
       const originalMessage = error instanceof Error ? error.message : String(error);
+      
+      if (this.isDebugMode) {
+        const errorResponse: LLMResponse = {
+          id: this.generateId(),
+          timestamp: new Date(),
+          requestId,
+          content: '',
+          error: originalMessage,
+          model: this.model.model,
+          processingTime: new Date().getTime() - startTime.getTime(),
+        };
+        this.addToHistory(this.responseHistory, errorResponse);
+        
+        // Log error details to console
+        // eslint-disable-next-line no-console
+        console.error('\n=== LLM ERROR ===');
+        // eslint-disable-next-line no-console
+        console.error('Request ID:', requestId);
+        // eslint-disable-next-line no-console
+        console.error('Error:', originalMessage);
+        // eslint-disable-next-line no-console
+        console.error('Full Error:', error);
+        if (error && typeof error === 'object') {
+          // eslint-disable-next-line no-console
+          console.error('Error Details:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+        }
+        // eslint-disable-next-line no-console
+        console.error('=================\n');
+      }
+      
       throw new Error(`Failed to generate LLM response: ${originalMessage}`);
     }
   }

@@ -9,6 +9,8 @@ export interface LLMRequest {
   systemPrompt?: string;
   model: string;
   temperature: number;
+  jsonMode?: boolean;
+  httpPayload?: unknown; // Full HTTP request payload for debugging
 }
 
 export interface LLMResponse {
@@ -23,6 +25,8 @@ export interface LLMResponse {
   };
   model: string;
   processingTime: number;
+  error?: string; // Error message if request failed
+  httpResponse?: unknown; // Full HTTP response metadata for debugging
 }
 
 // DI Tokens - using unique symbols for type safety
