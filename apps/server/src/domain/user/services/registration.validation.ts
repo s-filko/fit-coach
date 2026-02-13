@@ -14,7 +14,7 @@ export type ProfileDataKey = keyof ParsedProfileData;
 const ageSchema = z.union([z.number().int().min(10).max(100), z.null()]).transform((v) => v ?? undefined);
 const genderSchema = z.union([z.enum(['male', 'female']), z.null()]).transform((v) => v ?? undefined);
 const heightSchema = z.union([z.number().int().min(120).max(220), z.null()]).transform((v) => v ?? undefined);
-const weightSchema = z.union([z.number().int().min(30).max(200), z.null()]).transform((v) => v ?? undefined);
+const weightSchema = z.union([z.number().min(30).max(200), z.null()]).transform((v) => v ?? undefined);
 const fitnessLevelSchema = z
   .union([z.enum(['beginner', 'intermediate', 'advanced']), z.null()])
   .transform((v) => v ?? undefined);

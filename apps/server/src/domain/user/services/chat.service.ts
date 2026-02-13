@@ -340,6 +340,11 @@ export class ChatService implements IChatService {
     toPhase: ConversationPhase,
     sessionId?: string,
   ): Promise<void> {
+    // registration → session_planning: always allowed (happens after registration complete)
+    if (fromPhase === 'registration' && toPhase === 'session_planning') {
+      return;
+    }
+
     // chat → session_planning: always allowed
     if (fromPhase === 'chat' && toPhase === 'session_planning') {
       return;

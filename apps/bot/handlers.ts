@@ -46,17 +46,26 @@ export function registerBotHandlers(bot: TelegramBot) {
 
         if (userText === '/start') {
             try {
-                const user = await registerOrGetUser(msg);
-                const displayName = user.firstName || user.username || 'there';
+                await bot.sendChatAction(chatId, 'typing');
 
-                await bot.sendMessage(
-                    chatId,
-                    `👋 Hi ${displayName}! I'm your personal fitness coach.\n\n` +
-                    `I'll help you achieve your fitness goals. Just tell me about yourself and your goals! 💪`,
-                    { parse_mode: 'Markdown' }
-                );
+                // Register user and get LLM greeting
+                const user = await registerOrGetUser(msg);
+
+                // Send initial message to get personalized greeting from LLM
+                const chatResponse = await api.post('/api/chat', {
+                    userId: user.id,
+                    message: 'hi',
+                });
+
+                const aiResponse = chatResponse.data?.data?.content;
+                if (typeof aiResponse !== 'string') {
+                    console.error('Invalid AI response:', chatResponse.data);
+                    throw new Error('Invalid response from AI service');
+                }
+
+                await bot.sendMessage(chatId, aiResponse);
             } catch (error) {
-                console.error('Error registering user:', error);
+                console.error('Error during /start:', error);
                 if (axios.isAxiosError(error)) {
                     console.error('Axios error details:', {
                         status: error.response?.status,
@@ -66,7 +75,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                 }
                 await bot.sendMessage(
                     chatId,
-                    'Sorry, there was an error during registration. Please try again in a minute.'
+                    'Sorry, there was an error. Please try again in a minute.'
                 );
             }
             return;

@@ -77,12 +77,12 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
           req.log.warn({ err }, 'Failed to append conversation turn — response not affected');
         }
 
-        // Phase transition: registration → chat if now complete
+        // Phase transition: registration → session_planning if now complete
         const nowComplete = app.services.userService.isRegistrationComplete(updatedUser);
         if (nowComplete) {
           try {
             await conversationContextService.startNewPhase(
-              userId, 'registration', 'chat', 'Registration complete.',
+              userId, 'registration', 'session_planning', 'Registration complete. Let\'s plan your first workout!',
             );
           } catch (err) {
             req.log.warn({ err }, 'Failed to transition conversation phase');

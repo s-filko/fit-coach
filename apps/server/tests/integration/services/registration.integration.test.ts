@@ -225,6 +225,35 @@ describe('RegistrationService Integration', () => {
       expect(result.updatedUser.profileStatus).toBe('complete');
       expect(result.isComplete).toBe(true);
     });
+
+    it('should accept decimal weight values (e.g., 72.5 kg)', async () => {
+      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
+        extracted_data: {
+          age: 30,
+          gender: 'male',
+          height: 180,
+          weight: 72.5,
+          fitnessLevel: 'intermediate',
+          fitnessGoal: 'build muscle',
+        },
+        response: 'Perfect! All data saved.',
+        is_confirmed: true,
+      }));
+
+      const result = await registrationService.processUserMessage(
+        baseUser as any,
+        'I am 30 male 180cm 72.5kg intermediate, want to build muscle',
+      );
+
+      expect(result.updatedUser.weight).toBe(72.5);
+      expect(result.updatedUser.age).toBe(30);
+      expect(result.updatedUser.gender).toBe('male');
+      expect(result.updatedUser.height).toBe(180);
+      expect(result.updatedUser.fitnessLevel).toBe('intermediate');
+      expect(result.updatedUser.fitnessGoal).toBe('build muscle');
+      expect(result.updatedUser.profileStatus).toBe('complete');
+      expect(result.isComplete).toBe(true);
+    });
   });
 
   describe('error handling', () => {
