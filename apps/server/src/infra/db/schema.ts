@@ -31,9 +31,9 @@ export const users = pgTable('users', {
   languageCode: text('language_code'),
   // Profile data
   gender: text('gender'),
-  age: integer('age'),
-  height: integer('height'),
-  weight: integer('weight'),
+  age: integer('age'), // Stored as integer, rounded from user input
+  height: numeric('height', { precision: 5, scale: 1 }), // e.g., 180.5 cm
+  weight: numeric('weight', { precision: 5, scale: 1 }), // e.g., 72.5 kg
   fitnessGoal: text('fitness_goal'),
   fitnessLevel: text('fitness_level'), // 'beginner', 'intermediate', 'advanced'
   // Registration-related fields

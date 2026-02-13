@@ -334,6 +334,88 @@ describe('RegistrationService Integration', () => {
         reason: 'user_wants_to_chat_first',
       });
     });
+
+    it('should accept decimal height values and keep precision', async () => {
+      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
+        extracted_data: {
+          age: 25,
+          gender: 'female',
+          height: 165.5,
+          weight: 58.3,
+          fitnessLevel: 'beginner',
+          fitnessGoal: 'get fit',
+        },
+        response: 'All set!',
+        is_confirmed: true,
+        phaseTransition: {
+          toPhase: 'session_planning',
+        },
+      }));
+
+      const result = await registrationService.processUserMessage(
+        baseUser as any,
+        'I am 25 female 165.5cm 58.3kg beginner',
+      );
+
+      expect(result.updatedUser.height).toBe(165.5);
+      expect(result.updatedUser.weight).toBe(58.3);
+      expect(result.isComplete).toBe(true);
+    });
+
+    it('should round decimal age to nearest integer', async () => {
+      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
+        extracted_data: {
+          age: 29.7,
+          gender: 'male',
+          height: 178.2,
+          weight: 82.5,
+          fitnessLevel: 'intermediate',
+          fitnessGoal: 'build muscle',
+        },
+        response: 'Perfect!',
+        is_confirmed: true,
+        phaseTransition: {
+          toPhase: 'session_planning',
+        },
+      }));
+
+      const result = await registrationService.processUserMessage(
+        baseUser as any,
+        'I am 29.7 years old male 178.2cm 82.5kg',
+      );
+
+      // Age should be rounded: 29.7 → 30
+      expect(result.updatedUser.age).toBe(30);
+      // Height and weight should keep precision
+      expect(result.updatedUser.height).toBe(178.2);
+      expect(result.updatedUser.weight).toBe(82.5);
+    });
+
+    it('should round age 24.4 down to 24', async () => {
+      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
+        extracted_data: {
+          age: 24.4,
+          gender: 'female',
+          height: 160,
+          weight: 55,
+          fitnessLevel: 'beginner',
+          fitnessGoal: 'lose weight',
+        },
+        response: 'Great!',
+        is_confirmed: true,
+        phaseTransition: {
+          toPhase: 'session_planning',
+        },
+      }));
+
+      const result = await registrationService.processUserMessage(
+        baseUser as any,
+        'I am 24.4 years old',
+      );
+
+      // Age should be rounded down: 24.4 → 24
+      expect(result.updatedUser.age).toBe(24);
+    });
   });
 
   describe('error handling', () => {
@@ -387,8 +469,8 @@ describe('RegistrationService Integration', () => {
         extracted_data: {
           age: 5, // Too low (min 10)
           gender: 'unknown', // Not male/female
-          height: 300, // Too high (max 220)
-          weight: 10, // Too low (min 30)
+          height: 300, // Too high (max 250)
+          weight: 10, // Too low (min 20)
           fitnessLevel: 'pro', // Not a valid level
           fitnessGoal: 'get fit',
         },
@@ -406,6 +488,82 @@ describe('RegistrationService Integration', () => {
       expect(result.updatedUser.fitnessLevel).toBeUndefined();
       expect(result.updatedUser.fitnessGoal).toBe('get fit');
       expect(result.isComplete).toBe(false);
+    });
+
+    it('should reject extreme invalid values', async () => {
+      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
+        extracted_data: {
+          age: 1000, // Way too old
+          gender: 'male',
+          height: 500, // Impossible height
+          weight: 500, // Impossible weight
+          fitnessLevel: 'beginner',
+          fitnessGoal: 'get fit',
+        },
+        response: 'Those values seem incorrect...',
+        is_confirmed: false,
+      }));
+
+      const result = await registrationService.processUserMessage(testUser as any, 'I am 1000 years old');
+
+      // Invalid numeric fields should be rejected
+      expect(result.updatedUser.age).toBeUndefined();
+      expect(result.updatedUser.height).toBeUndefined();
+      expect(result.updatedUser.weight).toBeUndefined();
+      // Valid fields should pass
+      expect(result.updatedUser.gender).toBe('male');
+      expect(result.updatedUser.fitnessLevel).toBe('beginner');
+      expect(result.updatedUser.fitnessGoal).toBe('get fit');
+    });
+
+    it('should accept edge case minimum values', async () => {
+      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
+        extracted_data: {
+          age: 10,      // Min age
+          gender: 'female',
+          height: 100.5,  // Min height + decimal
+          weight: 20.5,   // Min weight + decimal
+          fitnessLevel: 'beginner',
+          fitnessGoal: 'get fit',
+        },
+        response: 'All set!',
+        is_confirmed: true,
+        phaseTransition: {
+          toPhase: 'session_planning',
+        },
+      }));
+
+      const result = await registrationService.processUserMessage(testUser as any, 'I am 10 years old');
+
+      expect(result.updatedUser.age).toBe(10);
+      expect(result.updatedUser.height).toBe(100.5);
+      expect(result.updatedUser.weight).toBe(20.5);
+      expect(result.isComplete).toBe(true);
+    });
+
+    it('should accept edge case maximum values', async () => {
+      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
+        extracted_data: {
+          age: 120,     // Max age
+          gender: 'male',
+          height: 250,  // Max height
+          weight: 300,  // Max weight
+          fitnessLevel: 'beginner',
+          fitnessGoal: 'stay healthy',
+        },
+        response: 'Impressive!',
+        is_confirmed: true,
+        phaseTransition: {
+          toPhase: 'session_planning',
+        },
+      }));
+
+      const result = await registrationService.processUserMessage(testUser as any, 'I am very tall');
+
+      expect(result.updatedUser.age).toBe(120);
+      expect(result.updatedUser.height).toBe(250);
+      expect(result.updatedUser.weight).toBe(300);
+      expect(result.isComplete).toBe(true);
     });
   });
 

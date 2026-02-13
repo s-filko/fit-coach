@@ -10,11 +10,38 @@ export type ProfileDataKey = keyof ParsedProfileData;
 /**
  * Centralized field validators for registration.
  * Single source of truth: parsing and registration use the same rules.
+ * 
+ * Note: All numeric fields accept decimal values from user input.
+ * Age is rounded to nearest integer for storage.
+ * 
+ * Validation ranges (reasonable human limits):
+ * - Age: 10-120 years (children to very elderly)
+ * - Height: 100-250 cm (dwarfism to very tall)
+ * - Weight: 20-300 kg (underweight children to very heavy adults)
  */
-const ageSchema = z.union([z.number().int().min(10).max(100), z.null()]).transform((v) => v ?? undefined);
+const ageSchema = z.union([
+  z.number()
+    .min(10, 'Age must be at least 10 years')
+    .max(120, 'Age must be at most 120 years')
+    .transform((v) => Math.round(v)), // Accept decimal, round to int
+  z.null(),
+]).transform((v) => v ?? undefined);
+
 const genderSchema = z.union([z.enum(['male', 'female']), z.null()]).transform((v) => v ?? undefined);
-const heightSchema = z.union([z.number().int().min(120).max(220), z.null()]).transform((v) => v ?? undefined);
-const weightSchema = z.union([z.number().min(30).max(200), z.null()]).transform((v) => v ?? undefined);
+
+const heightSchema = z.union([
+  z.number()
+    .min(100, 'Height must be at least 100 cm')
+    .max(250, 'Height must be at most 250 cm'),
+  z.null(),
+]).transform((v) => v ?? undefined);
+
+const weightSchema = z.union([
+  z.number()
+    .min(20, 'Weight must be at least 20 kg')
+    .max(300, 'Weight must be at most 300 kg'),
+  z.null(),
+]).transform((v) => v ?? undefined);
 const fitnessLevelSchema = z
   .union([z.enum(['beginner', 'intermediate', 'advanced']), z.null()])
   .transform((v) => v ?? undefined);
@@ -55,12 +82,12 @@ export const FIELD_LABELS: Record<ProfileDataKey, string> = {
   fitnessGoal: 'training goal',
 };
 
-/** Short validation hints for invalid fields (e.g. "age: 10–100 years"). */
+/** Short validation hints for invalid fields (e.g. "age: 10–120 years"). */
 export const FIELD_HINTS: Record<ProfileDataKey, string> = {
-  age: '10–100 years',
+  age: '10–120 years',
   gender: 'male or female',
-  height: '120–220 cm',
-  weight: '30–200 kg',
+  height: '100–250 cm',
+  weight: '20–300 kg',
   fitnessLevel: 'beginner, intermediate, or advanced',
   fitnessGoal: 'e.g. lose weight, build muscle, maintain fitness',
 };

@@ -16,6 +16,17 @@ function safeGenderCast(gender: string | null): 'male' | 'female' | null {
 }
 
 /**
+ * Helper function to convert Drizzle numeric (string) to number
+ * Drizzle returns numeric columns as strings to preserve precision
+ */
+function parseNumeric(value: string | number | null): number | null {
+  if (value === null || value === undefined) {return null;}
+  if (typeof value === 'number') {return value;}
+  const parsed = parseFloat(value);
+  return isNaN(parsed) ? null : parsed;
+}
+
+/**
  * Helper function to map database row to User domain object
  */
 function mapRowToUser(row: UserRow): User {
@@ -29,8 +40,8 @@ function mapRowToUser(row: UserRow): User {
     fitnessLevel: row.fitnessLevel ?? null,
     age: row.age ?? null,
     gender: safeGenderCast(row.gender),
-    height: row.height ?? null,
-    weight: row.weight ?? null,
+    height: parseNumeric(row.height),
+    weight: parseNumeric(row.weight),
     fitnessGoal: row.fitnessGoal ?? null,
   };
 }
