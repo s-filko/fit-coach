@@ -164,9 +164,40 @@ When user provides invalid values, the LLM will:
 2. Politely ask for correction with hints
 3. Example: "Вес 500 кг кажется неправильным. Обычно вес от 20 до 300 кг. Уточни, пожалуйста?"
 
+### Fitness Goal: Free Text
+
+**Current Implementation**: Stored in user's original language (Russian, English, etc.)
+
+**Rationale**:
+- Preserves exact user intent and nuances
+- User sees their own words in profile
+- Simpler for MVP
+- LLM can understand multiple languages
+
+**Example values**:
+- "похудеть и подкачаться"
+- "lose weight and build muscle"
+- "maintain fitness"
+- "prepare for marathon"
+
+**Future Enhancement** (post-MVP):
+When analytics are needed, add normalized field:
+```typescript
+{
+  fitnessGoal: "похудеть и подкачаться", // Original for display
+  fitnessGoalNormalized: "lose_weight,build_muscle" // For analytics
+}
+```
+
+This allows:
+- User segmentation by goals
+- ML/analytics on structured data
+- Preserving original user language
+
 ### Future Considerations
 
 - Add unit conversion (lbs → kg, inches → cm)
 - Add more specific validation messages
 - Consider different ranges for children vs adults
 - Add warnings for extreme but valid values (e.g., BMI concerns)
+- Add normalized fitness goal field for analytics (post-MVP)
