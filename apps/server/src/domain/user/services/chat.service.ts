@@ -3,6 +3,10 @@ import { parseLLMResponse } from '@domain/conversation/llm-response.types';
 import { ConversationPhase, type IConversationContextService } from '@domain/conversation/ports/conversation-context.ports';
 import type { ITrainingService } from '@domain/training/ports';
 import { SessionPlanningContextBuilder } from '@domain/training/services/session-planning-context.builder';
+import {
+  parseTrainingResponse,
+  type TrainingIntent,
+} from '@domain/training/training-intent.types';
 import type { SessionRecommendation } from '@domain/training/types';
 import {
   ChatMsg,
@@ -69,22 +73,47 @@ export class ChatService implements IChatService {
       { jsonMode: true },
     );
 
-    // 4. Parse LLM response (includes phaseTransition flag)
-    const parsed = parseLLMResponse(llmResponse);
+    // 4. Parse LLM response based on phase
+    let parsedMessage: string;
+    let phaseTransition: { toPhase: ConversationPhase; reason?: string; sessionId?: string } | undefined;
+
+    if (phase === 'training') {
+      // Training phase: parse training response with intent
+      const trainingResponse = parseTrainingResponse(llmResponse);
+      parsedMessage = trainingResponse.message;
+      
+      // Execute training intent if present
+      if (trainingResponse.intent) {
+        await this.executeTrainingIntent(user.id, trainingResponse.intent);
+      }
+
+      // Map phase transition if present
+      if (trainingResponse.phaseTransition) {
+        phaseTransition = {
+          toPhase: trainingResponse.phaseTransition.toPhase,
+          reason: trainingResponse.phaseTransition.reason,
+        };
+      }
+    } else {
+      // Other phases: use standard LLM response parser
+      const parsed = parseLLMResponse(llmResponse);
+      parsedMessage = parsed.message;
+      phaseTransition = parsed.phaseTransition;
+    }
 
     // 5. Execute phase transition if requested by LLM
-    if (parsed.phaseTransition) {
+    if (phaseTransition) {
       await this.executePhaseTransition(
         user.id,
         phase,
-        parsed.phaseTransition.toPhase,
-        parsed.phaseTransition.reason,
-        parsed.phaseTransition.sessionId,
+        phaseTransition.toPhase,
+        phaseTransition.reason,
+        phaseTransition.sessionId,
       );
     }
 
     // 6. Return message to user
-    return parsed.message;
+    return parsedMessage;
   }
 
   /**
@@ -175,6 +204,81 @@ export class ChatService implements IChatService {
       user,
       activeSession,
     };
+  }
+
+  /**
+   * Execute training intent extracted from LLM response
+   * Routes to appropriate TrainingService methods based on intent type
+   */
+  private async executeTrainingIntent(userId: string, intent: TrainingIntent): Promise<void> {
+    // Get active session ID from conversation context
+    const conversationCtx = await this.conversationContextService.getContext(userId, 'training');
+    if (conversationCtx?.phase !== 'training' || !conversationCtx.trainingContext?.activeSessionId) {
+      throw new Error('No active training session found');
+    }
+
+    const sessionId = conversationCtx.trainingContext.activeSessionId;
+
+    // Route based on intent type
+    switch (intent.type) {
+      case 'log_set': {
+        // Find current in_progress exercise
+        const session = await this.trainingService.getSessionDetails(sessionId);
+        if (!session) {
+          throw new Error('Session not found');
+        }
+
+        const currentExercise = session.exercises.find((ex) => ex.status === 'in_progress');
+        if (!currentExercise) {
+          throw new Error('No exercise currently in progress');
+        }
+
+        // Calculate next set number
+        const nextSetNumber = currentExercise.sets.length + 1;
+
+        // Log the set
+        await this.trainingService.logSet(currentExercise.id, {
+          setNumber: nextSetNumber,
+          setData: intent.setData,
+          rpe: intent.rpe,
+          userFeedback: intent.feedback,
+        });
+        break;
+      }
+
+      case 'next_exercise': {
+        // Complete current exercise and start next
+        await this.trainingService.completeCurrentExercise(sessionId);
+        await this.trainingService.startNextExercise(sessionId);
+        break;
+      }
+
+      case 'skip_exercise': {
+        // Skip current exercise
+        await this.trainingService.skipCurrentExercise(sessionId, intent.reason);
+        break;
+      }
+
+      case 'finish_training': {
+        // Complete the session
+        await this.trainingService.completeSession(sessionId);
+        break;
+      }
+
+      case 'request_advice':
+      case 'modify_session':
+      case 'just_chat': {
+        // These intents don't require database actions
+        // LLM handles them conversationally
+        break;
+      }
+
+      default: {
+        // Exhaustive check
+        const _exhaustive: never = intent;
+        throw new Error(`Unknown training intent type: ${JSON.stringify(_exhaustive)}`);
+      }
+    }
   }
 
   /**

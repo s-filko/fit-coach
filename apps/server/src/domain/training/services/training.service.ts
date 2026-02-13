@@ -157,6 +157,85 @@ export class TrainingService implements ITrainingService {
     return this.sessionRepo.findByIdWithDetails(sessionId);
   }
 
+  /**
+   * Start next pending exercise in the session
+   * Marks the first pending exercise as in_progress
+   * @returns The started exercise or null if no pending exercises
+   */
+  async startNextExercise(sessionId: string): Promise<SessionExercise | null> {
+    // Get session with exercises
+    const session = await this.sessionRepo.findByIdWithDetails(sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    // Find first pending exercise
+    const nextExercise = session.exercises.find((ex) => ex.status === 'pending');
+    if (!nextExercise) {
+      return null; // No more pending exercises
+    }
+
+    // Mark as in_progress
+    await this.sessionExerciseRepo.update(nextExercise.id, { status: 'in_progress' });
+
+    // Update session activity
+    await this.sessionRepo.updateActivity(sessionId);
+
+    return { ...nextExercise, status: 'in_progress' };
+  }
+
+  /**
+   * Skip the current in_progress exercise
+   * Marks it as skipped and moves to next
+   */
+  async skipCurrentExercise(sessionId: string, reason?: string): Promise<void> {
+    // Get session with exercises
+    const session = await this.sessionRepo.findByIdWithDetails(sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    // Find current in_progress exercise
+    const currentExercise = session.exercises.find((ex) => ex.status === 'in_progress');
+    if (!currentExercise) {
+      throw new Error('No exercise currently in progress');
+    }
+
+    // Mark as skipped
+    await this.sessionExerciseRepo.update(currentExercise.id, { 
+      status: 'skipped',
+    });
+
+    // Update session activity
+    await this.sessionRepo.updateActivity(sessionId);
+  }
+
+  /**
+   * Complete the current in_progress exercise
+   * Marks it as completed
+   */
+  async completeCurrentExercise(sessionId: string): Promise<void> {
+    // Get session with exercises
+    const session = await this.sessionRepo.findByIdWithDetails(sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    // Find current in_progress exercise
+    const currentExercise = session.exercises.find((ex) => ex.status === 'in_progress');
+    if (!currentExercise) {
+      throw new Error('No exercise currently in progress');
+    }
+
+    // Mark as completed
+    await this.sessionExerciseRepo.update(currentExercise.id, { 
+      status: 'completed',
+    });
+
+    // Update session activity
+    await this.sessionRepo.updateActivity(sessionId);
+  }
+
   // --- Private helpers ---
 
   private async autoCloseTimedOutSessions(userId: string): Promise<void> {
