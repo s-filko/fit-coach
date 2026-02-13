@@ -79,6 +79,11 @@ export const registrationLLMResponseSchema = z.object({
   }),
   response: z.string().min(1),
   is_confirmed: z.boolean(),
+  // Optional phase transition after registration complete
+  phaseTransition: z.object({
+    toPhase: z.enum(['chat', 'session_planning']),
+    reason: z.string().optional(),
+  }).optional(),
 });
 
 export type RegistrationLLMResponse = z.infer<typeof registrationLLMResponseSchema>;

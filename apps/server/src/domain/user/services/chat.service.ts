@@ -345,6 +345,11 @@ export class ChatService implements IChatService {
       return;
     }
 
+    // registration → chat: always allowed (user wants to chat first)
+    if (fromPhase === 'registration' && toPhase === 'chat') {
+      return;
+    }
+
     // chat → session_planning: always allowed
     if (fromPhase === 'chat' && toPhase === 'session_planning') {
       return;

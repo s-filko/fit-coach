@@ -21,6 +21,7 @@ export interface IRegistrationService {
     response: string;
     isComplete: boolean;
     parsedData?: ParsedProfileData;
+    phaseTransition?: { toPhase: 'chat' | 'session_planning'; reason?: string };
   }>;
   checkProfileCompleteness(user: User): boolean;
 }

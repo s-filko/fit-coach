@@ -57,7 +57,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
         // Process registration
         const result = await app.services.registrationService.processUserMessage(user, message, historyMessages);
-        const { response, updatedUser } = result;
+        const { response, updatedUser, phaseTransition } = result;
 
         // Save user profile changes
         await app.services.userService.updateProfileData(userId, {
@@ -77,12 +77,17 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
           req.log.warn({ err }, 'Failed to append conversation turn — response not affected');
         }
 
-        // Phase transition: registration → session_planning if now complete
+        // Phase transition: registration → chat/session_planning based on LLM decision
         const nowComplete = app.services.userService.isRegistrationComplete(updatedUser);
-        if (nowComplete) {
+        if (nowComplete && phaseTransition) {
           try {
+            const targetPhase = phaseTransition.toPhase;
+            const transitionNote = targetPhase === 'session_planning'
+              ? 'Registration complete. Let\'s plan your first workout!'
+              : 'Registration complete. Ready to chat!';
+            
             await conversationContextService.startNewPhase(
-              userId, 'registration', 'session_planning', 'Registration complete. Let\'s plan your first workout!',
+              userId, 'registration', targetPhase, transitionNote,
             );
           } catch (err) {
             req.log.warn({ err }, 'Failed to transition conversation phase');

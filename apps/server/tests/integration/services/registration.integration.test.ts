@@ -238,6 +238,10 @@ describe('RegistrationService Integration', () => {
         },
         response: 'Perfect! All data saved.',
         is_confirmed: true,
+        phaseTransition: {
+          toPhase: 'session_planning',
+          reason: 'user_ready_to_train',
+        },
       }));
 
       const result = await registrationService.processUserMessage(
@@ -253,6 +257,82 @@ describe('RegistrationService Integration', () => {
       expect(result.updatedUser.fitnessGoal).toBe('build muscle');
       expect(result.updatedUser.profileStatus).toBe('complete');
       expect(result.isComplete).toBe(true);
+      expect(result.phaseTransition).toEqual({
+        toPhase: 'session_planning',
+        reason: 'user_ready_to_train',
+      });
+    });
+
+    it('should transition to session_planning when user wants to start training', async () => {
+      const userWithAllData = {
+        ...baseUser,
+        age: 28,
+        gender: 'male',
+        height: 175,
+        weight: 75,
+        fitnessLevel: 'intermediate',
+        fitnessGoal: 'lose weight',
+      };
+
+      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
+        extracted_data: {
+          age: null, gender: null, height: null, weight: null,
+          fitnessLevel: null, fitnessGoal: null,
+        },
+        response: 'Great! Let\'s plan your first workout.',
+        is_confirmed: true,
+        phaseTransition: {
+          toPhase: 'session_planning',
+          reason: 'user_wants_to_start_immediately',
+        },
+      }));
+
+      const result = await registrationService.processUserMessage(
+        userWithAllData as any,
+        'yes, let\'s start training now!',
+      );
+
+      expect(result.isComplete).toBe(true);
+      expect(result.phaseTransition).toEqual({
+        toPhase: 'session_planning',
+        reason: 'user_wants_to_start_immediately',
+      });
+    });
+
+    it('should transition to chat when user wants to chat first', async () => {
+      const userWithAllData = {
+        ...baseUser,
+        age: 28,
+        gender: 'male',
+        height: 175,
+        weight: 75,
+        fitnessLevel: 'intermediate',
+        fitnessGoal: 'lose weight',
+      };
+
+      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
+        extracted_data: {
+          age: null, gender: null, height: null, weight: null,
+          fitnessLevel: null, fitnessGoal: null,
+        },
+        response: 'Sure! What would you like to know?',
+        is_confirmed: true,
+        phaseTransition: {
+          toPhase: 'chat',
+          reason: 'user_wants_to_chat_first',
+        },
+      }));
+
+      const result = await registrationService.processUserMessage(
+        userWithAllData as any,
+        'yes, but I have some questions first',
+      );
+
+      expect(result.isComplete).toBe(true);
+      expect(result.phaseTransition).toEqual({
+        toPhase: 'chat',
+        reason: 'user_wants_to_chat_first',
+      });
     });
   });
 
