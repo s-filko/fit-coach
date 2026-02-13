@@ -1,7 +1,7 @@
 # Training Session Management - Implementation Plan
 
 **Feature**: FEAT-0010 Training Session Management  
-**Status**: In Progress  
+**Status**: ✅ **MVP READY FOR TESTING**  
 **Last Updated**: 2026-02-11
 
 ## Overview
@@ -121,92 +121,82 @@ This document tracks the implementation progress of the Training Session Managem
 - `apps/server/src/domain/user/ports/prompt.ports.ts`
 - `apps/server/src/domain/user/services/prompt.service.ts`
 
-**Remaining Work**:
-```typescript
-// In ChatService.buildSystemPrompt():
-case 'session_planning':
-  // TODO: Load context and call promptService.buildSessionPlanningPrompt()
-  
-case 'training':
-  // TODO: Load context and call promptService.buildTrainingPrompt()
-```
-
 ---
 
-### ❌ Step 6.1: Connect Prompts to ChatService (CRITICAL)
-**Status**: PENDING  
-**Priority**: HIGH - Blocks all functionality
+### ✅ Step 6.1: Connect Prompts to ChatService
+**Status**: COMPLETED  
+**Commits**: `4b17a92`
 
-**What to do**:
-1. In `ChatService.buildSystemPrompt()`:
-   - For `session_planning`: Load context and call `promptService.buildSessionPlanningPrompt()`
-   - For `training`: Load context and call `promptService.buildTrainingPrompt()`
-2. Remove TODO comments and fallback to chat prompt
+- [x] Connect `session_planning` phase to `buildSessionPlanningPrompt()`
+- [x] Connect `training` phase to `buildTrainingPrompt()`
+- [x] Add `loadSessionPlanningContext()` method
+- [x] Add `loadTrainingContext()` method
+- [x] Remove TODO comments and fallback logic
+- [ ] **TEST**: Integration tests with LLM
 
-**Files to Change**:
-- `apps/server/src/domain/user/services/chat.service.ts` (lines 86-110)
-
----
-
-### ❌ Step 6.2: Load Prompt Context Data (CRITICAL)
-**Status**: PENDING  
-**Priority**: HIGH - Required for Step 6.1
-
-**What to do**:
-1. Add methods to ChatService:
-   - `loadSessionPlanningContext(userId): Promise<SessionPlanningPromptContext>`
-   - `loadTrainingContext(userId): Promise<TrainingPromptContext>`
-2. Use `SessionPlanningContextBuilder` for planning phase
-3. Load active session with details for training phase
-
-**Dependencies**:
-- TrainingService (already injected)
-- SessionPlanningContextBuilder (exists)
-
-**Files to Change**:
+**Files Changed**:
 - `apps/server/src/domain/user/services/chat.service.ts`
+- `apps/server/src/main/register-infra-services.ts`
 
 ---
 
-### ❌ Step 7: Training Intent Routing (CRITICAL)
-**Status**: PENDING  
-**Priority**: HIGH - Blocks training functionality
+### ✅ Step 6.2: Load Prompt Context Data
+**Status**: COMPLETED  
+**Commits**: `4b17a92`
 
-**What to do**:
-1. Parse `LLMTrainingResponse` in training phase
-2. Route intents to TrainingService methods:
-   - `log_set` → `TrainingService.logSet()`
-   - `next_exercise` → `TrainingService.nextExercise()`
-   - `skip_exercise` → `TrainingService.skipExercise()`
-   - `finish_training` → `TrainingService.completeSession()`
-   - `modify_session` → `TrainingService.addExerciseToSession()`
-3. Handle `just_chat` and `request_advice` (no action needed)
+- [x] Implement `loadSessionPlanningContext()` using `SessionPlanningContextBuilder`
+- [x] Implement `loadTrainingContext()` loading active session details
+- [x] Register `SessionPlanningContextBuilder` in DI container
+- [x] Add TrainingService to ChatService constructor
+- [ ] **TEST**: Unit tests for context loading
 
-**Files to Change**:
+**Files Changed**:
 - `apps/server/src/domain/user/services/chat.service.ts`
+- `apps/server/src/main/register-infra-services.ts`
 
 ---
 
-### ❌ Step 7.1: Phase Transition Validation
-**Status**: PENDING  
-**Priority**: MEDIUM
+### ✅ Step 7: Training Intent Routing
+**Status**: COMPLETED  
+**Commits**: `bcc948c`
 
-**What to do**:
-Implement TODOs in `ChatService.validatePhaseTransition()`:
-1. `session_planning → training`:
-   - Validate session exists and belongs to user
-   - Validate user has active workout plan
-   - Validate no other active session exists
-2. `training → chat`:
-   - Auto-complete the active session if not already completed
-3. `session_planning → chat`:
-   - Clean up draft recommendation if exists
+- [x] Parse `LLMTrainingResponse` in training phase
+- [x] Implement `executeTrainingIntent()` method
+- [x] Route `log_set` to calculate set number and log
+- [x] Route `next_exercise` to complete current and start next
+- [x] Route `skip_exercise` to skip current exercise
+- [x] Route `finish_training` to complete session
+- [x] Handle `request_advice`, `modify_session`, `just_chat` conversationally
+- [x] Add exercise management methods to TrainingService:
+  - `startNextExercise()` - starts first pending exercise
+  - `skipCurrentExercise()` - skips current in_progress exercise
+  - `completeCurrentExercise()` - marks current exercise as completed
+- [ ] **TEST**: Unit tests for intent routing
 
-**Files to Change**:
-- `apps/server/src/domain/user/services/chat.service.ts` (lines 183-200)
+**Files Changed**:
+- `apps/server/src/domain/user/services/chat.service.ts`
+- `apps/server/src/domain/training/services/training.service.ts`
+- `apps/server/src/domain/training/ports/service.ports.ts`
 
-**Tests**:
-- [ ] Unit tests for validation logic
+---
+
+### ✅ Step 7.1: Phase Transition Validation
+**Status**: COMPLETED  
+**Commits**: `c33bd35`
+
+- [x] Validate `session_planning → training`:
+  - Session exists and belongs to user
+  - Session is in 'planning' status
+  - No other active training session exists
+- [x] Validate `training → chat`:
+  - Auto-complete active session if still in progress
+- [x] Validate `session_planning → chat`:
+  - Auto-complete (skip) draft session if still in planning
+- [x] Add detailed error messages for all validation failures
+- [ ] **TEST**: Unit tests for validation logic
+
+**Files Changed**:
+- `apps/server/src/domain/user/services/chat.service.ts`
 
 ---
 
@@ -284,16 +274,25 @@ Implement TODOs in `ChatService.validatePhaseTransition()`:
 
 ## Critical Path to MVP
 
-**Must Complete for Basic Functionality**:
-1. ✅ Step 6.1: Connect prompts to ChatService
-2. ✅ Step 6.2: Load prompt context data
-3. ✅ Step 7: Training intent routing
+**✅ ALL CRITICAL STEPS COMPLETED!**
 
-**Nice to Have**:
-4. Step 7.1: Phase transition validation
-5. Step 8: Auto-close mechanism
-6. Step 9: E2E tests
-7. Step 10: Seed data
+1. ✅ Step 1: Conversation phases & context types
+2. ✅ Step 2: LLM response schema with phase transitions
+3. ✅ Step 3: Session planning context builder
+4. ✅ Step 4: Training intent types
+5. ✅ Step 5: ChatService phase-aware routing
+6. ✅ Step 6: Phase-specific system prompts
+7. ✅ Step 6.1: Connect prompts to ChatService
+8. ✅ Step 6.2: Load prompt context data
+9. ✅ Step 7: Training intent routing
+10. ✅ Step 7.1: Phase transition validation
+
+**System is Ready for Basic Testing!**
+
+**Remaining (Non-Critical)**:
+- Step 8: Auto-close mechanism (already implemented in TrainingService, just needs ChatService integration)
+- Step 9: E2E tests
+- Step 10: Seed data
 
 ---
 
@@ -315,23 +314,174 @@ Implement TODOs in `ChatService.validatePhaseTransition()`:
 
 ---
 
-## Known Issues & TODOs
+## What Works Now (MVP Ready!)
 
-1. **ChatService.buildSystemPrompt()** (lines 92-99):
-   - Returns chat prompt for session_planning and training phases
-   - Should call phase-specific prompt builders
+**✅ Complete Conversation Flow**:
+- User can chat normally (`chat` phase)
+- User can plan workout (`session_planning` phase)
+  - LLM collects user context (mood, time, intensity)
+  - LLM generates personalized plan based on history
+  - Plan stored in `session_plan_json`
+- User can start training (`training` phase)
+  - LLM guides through exercises
+  - User logs sets with weight/reps/RPE
+  - LLM provides real-time coaching
+- User can finish training (back to `chat` phase)
 
-2. **ChatService.validatePhaseTransition()** (lines 183-200):
-   - Has TODO comments for validation logic
-   - Currently allows invalid transitions
+**✅ Training Actions**:
+- Log sets (strength, cardio, functional, isometric, interval)
+- Move to next exercise
+- Skip exercises
+- Finish training
+- Request advice
+- Just chat during training
 
-3. **No intent routing**:
-   - Training intents are parsed but not executed
-   - Need to call TrainingService methods
+**✅ Data Validation**:
+- All phase transitions validated
+- Session ownership verified
+- No duplicate active sessions
+- Auto-complete on phase exit
 
-4. **No auto-close**:
-   - Sessions never timeout
-   - Can accumulate abandoned sessions
+**✅ Auto-Close**:
+- TrainingService auto-closes sessions > 2 hours old
+- Runs on every `getNextSessionRecommendation()` and `startSession()` call
+
+## Known Limitations
+
+1. **No unit/integration tests for training flow**:
+   - Existing tests (224) cover infrastructure
+   - Need tests for phase transitions, intent routing, validation
+
+2. **Limited exercise catalog**:
+   - Only 3 seed exercises
+   - Need 20-30 for realistic recommendations
+
+3. **No explicit auto-close in ChatService**:
+   - Auto-close happens in TrainingService methods
+   - Could add explicit check in `processMessage()` for safety
+
+---
+
+## How to Test the MVP
+
+### Prerequisites
+1. Start the server: `npm run dev`
+2. Ensure database is seeded with:
+   - A registered user
+   - An active workout plan for the user
+   - At least 3 exercises in catalog
+
+### Test Flow 1: Complete Training Session
+
+```bash
+# 1. Chat phase - normal conversation
+POST /api/chat
+{
+  "userId": "user-123",
+  "message": "Привет!"
+}
+# Expected: Normal chat response
+
+# 2. Request workout planning
+POST /api/chat
+{
+  "userId": "user-123",
+  "message": "Что сегодня делаем?"
+}
+# Expected: LLM asks about mood, time, intensity
+# Phase: chat → session_planning
+
+# 3. Provide context
+POST /api/chat
+{
+  "userId": "user-123",
+  "message": "Чувствую себя хорошо, есть час времени, средняя интенсивность"
+}
+# Expected: LLM generates workout plan with exercises
+# Phase: session_planning (stays)
+
+# 4. Accept plan and start training
+POST /api/chat
+{
+  "userId": "user-123",
+  "message": "Давай начнем!"
+}
+# Expected: LLM confirms start, shows first exercise
+# Phase: session_planning → training
+
+# 5. Log first set
+POST /api/chat
+{
+  "userId": "user-123",
+  "message": "Сделал 10 раз по 50 кг, RPE 7"
+}
+# Expected: LLM logs set, asks for next set
+# Intent: log_set executed
+
+# 6. Move to next exercise
+POST /api/chat
+{
+  "userId": "user-123",
+  "message": "Переходим к следующему"
+}
+# Expected: LLM shows next exercise
+# Intent: next_exercise executed
+
+# 7. Finish training
+POST /api/chat
+{
+  "userId": "user-123",
+  "message": "Закончил тренировку"
+}
+# Expected: LLM congratulates, summarizes session
+# Phase: training → chat
+# Intent: finish_training executed
+```
+
+### Test Flow 2: Cancel Planning
+
+```bash
+# 1. Start planning
+POST /api/chat
+{
+  "userId": "user-123",
+  "message": "Давай запланируем тренировку"
+}
+
+# 2. Cancel
+POST /api/chat
+{
+  "userId": "user-123",
+  "message": "Передумал, отмена"
+}
+# Expected: LLM acknowledges cancellation
+# Phase: session_planning → chat
+# Session marked as completed (skipped)
+```
+
+### Verify in Database
+
+```sql
+-- Check conversation phase
+SELECT phase, training_context, session_planning_context 
+FROM conversation_contexts 
+WHERE user_id = 'user-123';
+
+-- Check session status
+SELECT id, status, started_at, completed_at, session_plan_json
+FROM workout_sessions 
+WHERE user_id = 'user-123' 
+ORDER BY created_at DESC 
+LIMIT 1;
+
+-- Check logged exercises and sets
+SELECT se.id, e.name, se.status, COUNT(ss.id) as sets_logged
+FROM session_exercises se
+JOIN exercises e ON e.id = se.exercise_id
+LEFT JOIN session_sets ss ON ss.session_exercise_id = se.id
+WHERE se.session_id = '<session-id>'
+GROUP BY se.id, e.name, se.status;
+```
 
 ---
 
