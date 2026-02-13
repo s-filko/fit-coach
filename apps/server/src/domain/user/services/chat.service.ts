@@ -96,9 +96,9 @@ export class ChatService implements IChatService {
       }
     } else {
       // Other phases: use standard LLM response parser
-      const parsed = parseLLMResponse(llmResponse);
-      parsedMessage = parsed.message;
-      phaseTransition = parsed.phaseTransition;
+      const { message, phaseTransition: transition } = parseLLMResponse(llmResponse);
+      parsedMessage = message;
+      phaseTransition = transition;
     }
 
     // 5. Execute phase transition if requested by LLM
@@ -255,7 +255,7 @@ export class ChatService implements IChatService {
 
       case 'skip_exercise': {
         // Skip current exercise
-        await this.trainingService.skipCurrentExercise(sessionId, intent.reason);
+        await this.trainingService.skipCurrentExercise(sessionId);
         break;
       }
 
@@ -351,23 +351,65 @@ export class ChatService implements IChatService {
         throw new Error('Cannot start training: sessionId is required');
       }
 
-      // TODO: Validate session exists and belongs to user
-      // TODO: Validate user has active workout plan
-      // TODO: Validate no other active session exists
-      // Will be implemented when TrainingService is integrated
+      // Validate session exists and belongs to user
+      const session = await this.trainingService.getSessionDetails(sessionId);
+      if (!session) {
+        throw new Error(`Session ${sessionId} not found`);
+      }
+      if (session.userId !== userId) {
+        throw new Error(`Session ${sessionId} does not belong to user ${userId}`);
+      }
+
+      // Validate session is in planning status (not already started/completed)
+      if (session.status !== 'planning') {
+        throw new Error(`Cannot start training: session is already ${session.status}`);
+      }
+
+      // Validate no other active session exists
+      const activeSession = await this.conversationContextService.getContext(userId, 'training');
+      if (activeSession?.phase === 'training' && activeSession.trainingContext?.activeSessionId) {
+        const existingSession = await this.trainingService.getSessionDetails(
+          activeSession.trainingContext.activeSessionId,
+        );
+        if (existingSession && existingSession.status === 'in_progress') {
+          throw new Error('Cannot start new training: another session is already in progress');
+        }
+      }
+
       return;
     }
 
-    // training → chat: always allowed (auto-complete session)
+    // training → chat: auto-complete the active session if not already completed
     if (fromPhase === 'training' && toPhase === 'chat') {
-      // TODO: Auto-complete the active session if not already completed
-      // Will be implemented in Step 7
+      // Get active session from conversation context
+      const conversationCtx = await this.conversationContextService.getContext(userId, 'training');
+      if (conversationCtx?.phase === 'training' && conversationCtx.trainingContext?.activeSessionId) {
+        const session = await this.trainingService.getSessionDetails(
+          conversationCtx.trainingContext.activeSessionId,
+        );
+        
+        // Auto-complete if still in progress
+        if (session && session.status === 'in_progress') {
+          await this.trainingService.completeSession(session.id);
+        }
+      }
       return;
     }
 
-    // session_planning → chat: always allowed (cancel planning)
+    // session_planning → chat: clean up draft recommendation if exists
     if (fromPhase === 'session_planning' && toPhase === 'chat') {
-      // TODO: Clean up draft recommendation if exists
+      // Get planning context
+      const conversationCtx = await this.conversationContextService.getContext(userId, 'session_planning');
+      if (conversationCtx?.phase === 'session_planning' && conversationCtx.sessionPlanningContext?.recommendedSessionId) {
+        const session = await this.trainingService.getSessionDetails(
+          conversationCtx.sessionPlanningContext.recommendedSessionId,
+        );
+        
+        // If session is still in planning status (not started), mark it as skipped
+        if (session && session.status === 'planning') {
+          await this.trainingService.completeSession(session.id);
+        }
+      }
       return;
     }
 

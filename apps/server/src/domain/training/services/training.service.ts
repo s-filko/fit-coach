@@ -188,7 +188,7 @@ export class TrainingService implements ITrainingService {
    * Skip the current in_progress exercise
    * Marks it as skipped and moves to next
    */
-  async skipCurrentExercise(sessionId: string, reason?: string): Promise<void> {
+  async skipCurrentExercise(sessionId: string): Promise<void> {
     // Get session with exercises
     const session = await this.sessionRepo.findByIdWithDetails(sessionId);
     if (!session) {
