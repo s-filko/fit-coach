@@ -1,6 +1,7 @@
 # FEAT-0010 Training Session Management
 
-**x-status**: In Progress
+**x-status**: In Progress  
+**Implementation Plan**: See `docs/IMPLEMENTATION_PLAN.md` for detailed progress tracking
 
 ## User Story
 
