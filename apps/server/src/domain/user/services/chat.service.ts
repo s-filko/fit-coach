@@ -14,6 +14,7 @@ import {
   ChatMsg,
   IChatService,
   IPromptService,
+  IUserService,
   type PlanCreationPromptContext,
   type SessionPlanningPromptContext,
   type TrainingPromptContext,
@@ -46,6 +47,7 @@ export class ChatService implements IChatService {
     private readonly workoutPlanRepo: IWorkoutPlanRepository,
     private readonly exerciseRepo: IExerciseRepository,
     private readonly sessionPlanningContextBuilder: SessionPlanningContextBuilder,
+    private readonly userService: IUserService,
   ) {}
 
   /**
@@ -73,12 +75,11 @@ export class ChatService implements IChatService {
     ];
 
     // 3. Call LLM with JSON mode for structured response
-    // Only use JSON mode for phases that require structured output
-    const needsJsonMode = phase !== 'chat';
+    // All phases use JSON mode for consistent structured output
     const llmResponse = await this.llmService.generateWithSystemPrompt(
       messages,
       systemPrompt,
-      { jsonMode: needsJsonMode },
+      { jsonMode: true },
     );
 
     // 4. Parse LLM response based on phase
@@ -136,9 +137,14 @@ export class ChatService implements IChatService {
       }
     } else {
       // Other phases (chat, registration): use standard LLM response parser
-      const { message, phaseTransition: transition } = parseLLMResponse(llmResponse);
+      const { message, phaseTransition: transition, profileUpdate } = parseLLMResponse(llmResponse);
       parsedMessage = message;
       phaseTransition = transition;
+
+      // Handle profile update if present (chat phase only)
+      if (profileUpdate && phase === 'chat') {
+        await this.handleProfileUpdate(user.id, profileUpdate);
+      }
     }
 
     // 5. Execute phase transition if requested by LLM
@@ -558,6 +564,25 @@ export class ChatService implements IChatService {
 
     // Unknown transition
     throw new Error(`Invalid phase transition: ${fromPhase} → ${toPhase}`);
+  }
+
+  /**
+   * Handle profile update from chat phase
+   * Allows user to update profile fields without phase transition
+   */
+  private async handleProfileUpdate(userId: string, profileUpdate: Record<string, unknown>): Promise<void> {
+    // Filter out null/undefined values
+    const updates: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(profileUpdate)) {
+      if (value !== null && value !== undefined) {
+        updates[key] = value;
+      }
+    }
+
+    // Update user profile if there are any changes
+    if (Object.keys(updates).length > 0) {
+      await this.userService.updateProfileData(userId, updates);
+    }
   }
 
   /**

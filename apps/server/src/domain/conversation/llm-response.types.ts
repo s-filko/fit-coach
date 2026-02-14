@@ -16,7 +16,22 @@ export const PhaseTransitionSchema = z.object({
 export type PhaseTransition = z.infer<typeof PhaseTransitionSchema>;
 
 /**
- * Structured LLM response with optional phase transition
+ * Profile update data from chat phase
+ * Allows user to update their profile without leaving chat
+ */
+export const ProfileUpdateSchema = z.object({
+  age: z.number().int().positive().optional(),
+  gender: z.enum(['male', 'female']).optional(),
+  height: z.number().positive().optional(),
+  weight: z.number().positive().optional(),
+  fitnessLevel: z.enum(['beginner', 'intermediate', 'advanced']).optional(),
+  fitnessGoal: z.string().optional(),
+});
+
+export type ProfileUpdate = z.infer<typeof ProfileUpdateSchema>;
+
+/**
+ * Structured LLM response with optional phase transition and profile update
  * Used in all conversation phases to allow LLM to control flow
  */
 export const LLMConversationResponseSchema = z.object({
@@ -24,6 +39,8 @@ export const LLMConversationResponseSchema = z.object({
   message: z.string(),
   // Optional phase transition instruction
   phaseTransition: PhaseTransitionSchema.optional(),
+  // Optional profile update (chat phase only)
+  profileUpdate: ProfileUpdateSchema.optional(),
 });
 
 export type LLMConversationResponse = z.infer<typeof LLMConversationResponseSchema>;

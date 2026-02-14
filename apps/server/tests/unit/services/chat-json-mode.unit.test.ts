@@ -85,27 +85,23 @@ describe('JSON Mode Validation', () => {
     });
   });
 
-  describe('Prompts that do NOT use JSON mode should NOT require "json" mention', () => {
-    it('chat prompt does not need to mention "json"', () => {
+  describe('Chat phase now uses JSON mode', () => {
+    it('chat prompt should mention "json" or "JSON"', () => {
       const prompt = promptService.buildChatSystemPrompt(testUser, false);
       
-      // Chat prompt may or may not mention JSON - it's free-form
-      // The important thing is that jsonMode is disabled for chat phase
-      expect(prompt).toBeTruthy();
-      expect(prompt.length).toBeGreaterThan(0);
+      // Chat phase now uses JSON mode for structured responses (message + phaseTransition + profileUpdate)
+      expect(prompt.toLowerCase()).toMatch(/json/);
     });
   });
 
   describe('JSON mode configuration in ChatService', () => {
-    it('should document that chat phase uses jsonMode: false', () => {
+    it('should document that ALL phases now use jsonMode: true', () => {
       // This test serves as documentation
-      // ChatService.processMessage sets: const needsJsonMode = phase !== 'chat';
+      // ChatService.processMessage now sets: jsonMode: true for all phases
       
-      const phasesWithJsonMode = ['registration', 'plan_creation', 'session_planning', 'training'];
-      const phasesWithoutJsonMode = ['chat'];
+      const phasesWithJsonMode = ['registration', 'chat', 'plan_creation', 'session_planning', 'training'];
       
-      expect(phasesWithJsonMode).toHaveLength(4);
-      expect(phasesWithoutJsonMode).toHaveLength(1);
+      expect(phasesWithJsonMode).toHaveLength(5);
     });
   });
 

@@ -147,6 +147,10 @@ describe('Plan Creation Integration', () => {
       mockExerciseRepo as any,
     );
 
+    const mockUserService = {
+      updateProfileData: jest.fn(),
+    };
+
     chatService = new ChatService(
       mockPromptService as any,
       mockLLM as any,
@@ -155,6 +159,7 @@ describe('Plan Creation Integration', () => {
       mockWorkoutPlanRepo as any as IWorkoutPlanRepository,
       mockExerciseRepo as any as IExerciseRepository,
       mockSessionPlanningContextBuilder,
+      mockUserService as any,
     );
 
     // Default: return exercises for plan creation
