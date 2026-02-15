@@ -12,11 +12,16 @@ The current conversation phase management in `ChatService` has architectural lim
 
 1. **JSON parsing bug**: `chat` phase sets `jsonMode: false` (line 77 of `chat.service.ts`), but `parseLLMResponse()` on line 139 tries to parse the LLM's plain-text response as JSON. This crashes with `"Unexpected token 'О', "Отлично, с"... is not valid JSON"`.
 
-2. **No inline actions**: A user cannot update their profile (e.g., fix gender) from the `chat` phase without a full phase transition to `registration`. This is a UX problem.
+2. **Training intent naming mismatch** (discovered 2026-02-15): The training system prompt (`training.prompt.ts`) instructs the LLM to use **camelCase** intent types (`logSet`, `nextExercise`, `finishTraining`, etc.), but the Zod schema (`training-intent.types.ts`) expects **snake_case** (`log_set`, `next_exercise`, `finish_training`, etc.). This causes two failure modes:
+   - When LLM **includes** intent: `TrainingIntentSchema` (discriminated union on `type`) rejects the camelCase value → `parseTrainingResponse()` throws `"Invalid training response format"` → **500 error to user**.
+   - When LLM **omits** intent (field is `.optional()`): validation passes silently → `executeTrainingIntent()` is never called → **data not saved to DB, but user sees "Recorded!"** (silent data loss).
+   - Combined effect: training phase cannot save any data regardless of LLM behavior.
 
-3. **Manual orchestration**: Phase routing, transition validation, side effects (DB writes), and LLM response parsing are all manually wired in one 589-line `ChatService`. Adding new phases or actions means editing this monolith.
+3. **No inline actions**: A user cannot update their profile (e.g., fix gender) from the `chat` phase without a full phase transition to `registration`. This is a UX problem.
 
-4. **Phase resolution split across layers**: Phase is determined in `chat.routes.ts` (HTTP layer, lines 106-120) by querying DB contexts, then passed to `ChatService`. This creates a leaky abstraction.
+4. **Manual orchestration**: Phase routing, transition validation, side effects (DB writes), and LLM response parsing are all manually wired in one 589-line `ChatService`. Adding new phases or actions means editing this monolith.
+
+5. **Phase resolution split across layers**: Phase is determined in `chat.routes.ts` (HTTP layer, lines 106-120) by querying DB contexts, then passed to `ChatService`. This creates a leaky abstraction.
 
 ### Why LangGraph
 
@@ -155,7 +160,7 @@ This solves the "change gender from chat phase" problem without phase transition
 
 ### Prerequisites (before any LangGraph code)
 
-**Step 0: Fix the current bug** (~30 min)
+**Step 0a: Fix chat-phase JSON bug** (~30 min)
 
 File: `apps/server/src/domain/user/services/chat.service.ts`
 
@@ -170,6 +175,27 @@ const needsJsonMode = true; // All phases use JSON mode for structured responses
 ```
 
 This is a prerequisite because it fixes the production bug and validates that all phases work with JSON mode before migration begins.
+
+**Step 0b: Fix training-phase intent naming mismatch + make intent required** (~30 min)
+
+Three files must be changed together:
+
+1. **`training.prompt.ts`** — Fix all intent type examples from camelCase to snake_case (`logSet` → `log_set`, `nextExercise` → `next_exercise`, etc.) to match the Zod schema.
+
+2. **`training-intent.types.ts`** — Make `intent` field **required** in `LLMTrainingResponseSchema`:
+   ```typescript
+   // BEFORE:
+   intent: TrainingIntentSchema.optional(),
+   // AFTER:
+   intent: TrainingIntentSchema,
+   ```
+   The `just_chat` type already exists as a catch-all for non-action messages.
+
+3. **`training.prompt.ts`** — Add explicit instruction: *"You MUST ALWAYS include the intent field. Use type just_chat when user message is not a training action."*
+
+This is a **blocking prerequisite**. Without this fix, the training phase cannot save any data to the database. The naming mismatch causes 100% failure rate for intent parsing. See detailed fix plan in `docs/proposals/TRAINING_INTENT_HOTFIX.md`.
+
+**Relationship to Phase 5:** Step 0b is an interim fix. Phase 5 (training tools migration) will eliminate the intent JSON pattern entirely, replacing it with LangChain tool calling. Step 0b ensures training works correctly in the current architecture until Phase 5 is reached.
 
 ### Phase 1: Infrastructure Setup (~2-3 hours)
 
@@ -279,12 +305,37 @@ This is the most complex migration step.
 - Tool execution replaces `executeTrainingIntent()` switch statement
 - Phase transition (training → chat) triggered by `finish_training` tool
 
+**Tool result loop (standard LangChain pattern):**
+
+Tool calling requires a multi-step loop, not a single LLM call:
+
+1. LLM receives messages + tool descriptions → returns `AIMessage` with `tool_calls`
+2. Code executes each tool → produces `ToolMessage` with result per tool call
+3. `ToolMessage` results are appended to messages and sent back to LLM
+4. LLM produces final `AIMessage` with user-facing text (informed by tool results)
+
+This is critical: the LLM must see tool results to produce contextual responses (e.g., "Logged set 3 of 4 for bench press" requires knowing the actual DB state after `log_set` executed). LangGraph provides `ToolNode` that handles steps 2-3 automatically.
+
+**Simplified graph structure for training node:**
+```
+[trainingNode] → LLM call with tools
+       ↓
+[should_continue] → if tool_calls present → [toolNode] → back to [trainingNode]
+       ↓                                        (executes tools, returns ToolMessages)
+  if no tool_calls → END (final response)
+```
+
 **What this eliminates:**
 - `parseTrainingResponse()` — replaced by tool calls
 - `executeTrainingIntent()` — replaced by tool implementations
 - `TrainingIntentSchema` — replaced by tool schemas (Zod schemas reused)
+- The intent naming mismatch problem (Step 0b fix) — no longer relevant since tools replace JSON intents
 
 **What stays:** `TrainingService` methods (`logSet`, `completeCurrentExercise`, etc.) are called from inside tool implementations.
+
+**Error handling in tools:** If a tool execution fails (e.g., DB error), the tool returns an error message string as its result. The LLM sees this error in the next iteration and communicates the failure to the user naturally. No special error handling needed at the graph level.
+
+**OpenRouter compatibility prerequisite:** Before implementing this phase, verify that the configured model supports tool/function calling through the current API provider. Check OpenRouter docs for the specific `LLM_MODEL` value. If tool calling is not supported, this phase is blocked until the model/provider is updated.
 
 ### Phase 6: Add Profile Update Tool (~0.5 day)
 
@@ -372,11 +423,13 @@ graph.addConditionalEdges('checkTransition', async (state) => {
 
 | File | Phase | Change |
 |------|-------|--------|
-| `domain/user/services/chat.service.ts` | 0,2-5,9 | Fix bug (Phase 0), then gradually remove methods as phases migrate, delete in Phase 9 |
-| `infra/ai/llm.service.ts` | 0 | No changes needed (reused as-is) |
+| `domain/user/services/chat.service.ts` | 0a,2-5,9 | Fix chat JSON bug (Step 0a), then gradually remove methods as phases migrate, delete in Phase 9 |
+| `domain/user/services/prompts/training.prompt.ts` | 0b | Fix intent type naming camelCase→snake_case, add required intent instruction, fix schema field mismatches |
+| `domain/training/training-intent.types.ts` | 0b,5 | Make `intent` required (Step 0b). Replace with tools in Phase 5 |
+| `infra/ai/llm.service.ts` | - | No changes needed (reused as-is) |
 | `app/routes/chat.routes.ts` | 2-8 | Gradually simplify: add graph call path, remove old path, simplify phase resolution |
 | `domain/user/services/registration.service.ts` | 7,9 | Delete after Phase 7 (absorbed into graph) |
-| `domain/user/services/prompt.service.ts` | 0 | Fix chat prompt to include "json" (Phase 0). Otherwise reused as-is |
+| `domain/user/services/prompt.service.ts` | 0a | Fix chat prompt to include "json" (Step 0a). Otherwise reused as-is |
 | `main/register-infra-services.ts` | 1 | Register graph alongside existing services |
 
 ### New Files
@@ -433,7 +486,11 @@ graph.addConditionalEdges('checkTransition', async (state) => {
 
 9. **DO NOT change DI patterns.** Graph is registered via the same DI container. Nodes access services via closure injection, not new DI mechanisms.
 
-10. **DO NOT skip Phase 0 (bug fix).** The chat-phase JSON bug must be fixed before any LangGraph work. It validates that all phases work with JSON mode.
+10. **DO NOT skip Phase 0 (bug fixes).** Both Step 0a (chat JSON bug) and Step 0b (training intent naming mismatch) must be fixed before any LangGraph work. They validate that all phases produce correct structured responses.
+
+11. **DO NOT add tool-related methods to the `LLMService` port.** Tool binding (`model.bindTools()`) and tool invocation happen inside LangGraph graph nodes, not through `LLMService`. The `LLMService` interface stays as-is: `generateWithSystemPrompt()` and `generateStructured()` only. Adding `generateWithTools()` to the port would couple the domain interface to tool-calling semantics that belong in the graph layer.
+
+12. **DO NOT implement tool calling outside of LangGraph.** Standalone tool calling (e.g., adding tools support directly in `ChatService` or `LLMService`) creates a parallel architecture that must be immediately refactored when LangGraph migration reaches Phase 5. All tool-related work waits for the graph infrastructure (Phases 1-4).
 
 ---
 
@@ -463,7 +520,8 @@ graph.addConditionalEdges('checkTransition', async (state) => {
 
 | Phase | Effort | Risk | Can Deploy After? |
 |-------|--------|------|-------------------|
-| 0: Fix bug | 30 min | Low | Yes |
+| 0a: Fix chat JSON bug | 30 min | Low | Yes |
+| 0b: Fix training intent naming + required | 30 min | Low | Yes (CRITICAL — unblocks training) |
 | 1: Infrastructure | 2-3 hours | Low | Yes (no behavior change) |
 | 2: Chat phase | 1 day | Low | Yes |
 | 3: Plan creation | 1 day | Medium | Yes |
@@ -520,7 +578,8 @@ For quick orientation when starting a new session:
 ## Consequences
 
 ### Positive
-- Eliminates the chat-phase JSON bug
+- Eliminates the chat-phase JSON bug (Step 0a)
+- Eliminates the training intent naming mismatch and silent data loss (Step 0b)
 - Enables inline actions (profile update) from any phase
 - Training intents become proper tools (cleaner, more reliable)
 - Phase management follows a proven framework pattern
@@ -538,11 +597,13 @@ For quick orientation when starting a new session:
 - LangGraph JS API is relatively new; may have breaking changes
 - Zod v4 compatibility issues with LangGraph's state annotations
 - Performance overhead of graph invocation vs. direct service calls (likely negligible)
-- Migration stalls at phase 5 (training tools) due to complexity — mitigation: can stay hybrid
+- Migration stalls at phase 5 (training tools) due to complexity — mitigation: can stay hybrid (Step 0b ensures training works with JSON intents as fallback)
+- OpenRouter may not support tool/function calling for all models — must verify before Phase 5
 
 ---
 
 *Author: AI Assistant*
 *Decision Date: 2026-02-11*
+*Updated: 2026-02-15 — Added Step 0b (training intent naming mismatch fix), Phase 5 tool result loop details, guardrails #11-#12*
 *Supersedes: Custom FSM discussion (not implemented)*
 *Related: ADR-0001 (AI integration), ADR-0005 (Conversation context)*
