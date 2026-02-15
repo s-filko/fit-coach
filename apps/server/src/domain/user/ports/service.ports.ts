@@ -41,5 +41,17 @@ export interface IChatService {
     message: string,
     phase: ConversationPhase,
     historyMessages?: ChatMsg[],
-  ): Promise<string>;
+  ): Promise<ProcessMessageResult>;
+}
+
+export interface ProcessMessageResult {
+  message: string;
+  /** Phase after processing. Same as input phase if no transition occurred. */
+  effectivePhase: ConversationPhase;
+  /** Present only when LLM requested a phase transition */
+  phaseTransition?: {
+    toPhase: ConversationPhase;
+    reason?: string;
+    sessionId?: string;
+  };
 }

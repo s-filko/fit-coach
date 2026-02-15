@@ -16,6 +16,7 @@ import {
   IPromptService,
   IUserService,
   type PlanCreationPromptContext,
+  type ProcessMessageResult,
   type SessionPlanningPromptContext,
   type TrainingPromptContext,
 } from '@domain/user/ports';
@@ -64,7 +65,7 @@ export class ChatService implements IChatService {
     message: string,
     phase: ConversationPhase,
     historyMessages: ChatMsg[] = [],
-  ): Promise<string> {
+  ): Promise<ProcessMessageResult> {
     // 1. Build phase-specific system prompt
     const systemPrompt = await this.buildSystemPrompt(user, phase);
 
@@ -147,19 +148,16 @@ export class ChatService implements IChatService {
       }
     }
 
-    // 5. Execute phase transition if requested by LLM
-    if (phaseTransition) {
-      await this.executePhaseTransition(
-        user.id,
-        phase,
-        phaseTransition.toPhase,
-        phaseTransition.reason,
-        phaseTransition.sessionId,
-      );
-    }
+    // 5. Phase transition is the caller's responsibility (ADR-0005 line 28):
+    //    "call LLM -> appendTurn -> on phase change call startNewPhase"
+    //    We only return transition info; caller executes it AFTER appendTurn.
 
-    // 6. Return message to user
-    return parsedMessage;
+    // 6. Return message + transition info
+    return {
+      message: parsedMessage,
+      effectivePhase: phaseTransition ? phaseTransition.toPhase : phase,
+      phaseTransition: phaseTransition ?? undefined,
+    };
   }
 
   /**

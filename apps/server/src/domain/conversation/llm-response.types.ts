@@ -7,7 +7,7 @@ import { ConversationPhase } from './ports/conversation-context.ports';
  * LLM decides when to transition between phases based on user intent
  */
 export const PhaseTransitionSchema = z.object({
-  toPhase: z.enum(['chat', 'session_planning', 'training'] satisfies ConversationPhase[]),
+  toPhase: z.enum(['chat', 'plan_creation', 'session_planning', 'training'] satisfies ConversationPhase[]),
   reason: z.string().optional(),
   // Session ID for training phase or recommended session for planning
   sessionId: z.string().uuid().optional(),

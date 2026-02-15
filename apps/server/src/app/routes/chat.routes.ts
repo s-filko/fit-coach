@@ -77,11 +77,12 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
           req.log.warn({ err }, 'Failed to append conversation turn — response not affected');
         }
 
-        // Phase transition: registration → chat/plan_creation based on LLM decision
+        // Phase transition: registration → chat/plan_creation
         const nowComplete = app.services.userService.isRegistrationComplete(updatedUser);
-        if (nowComplete && phaseTransition) {
+        if (nowComplete) {
           try {
-            const targetPhase: 'chat' | 'plan_creation' = phaseTransition.toPhase;
+            // Use LLM's decision if provided, otherwise default to plan_creation
+            const targetPhase: 'chat' | 'plan_creation' = phaseTransition?.toPhase ?? 'plan_creation';
             const transitionNote = targetPhase === 'plan_creation'
               ? 'Registration complete. Let\'s create your workout plan!'
               : 'Registration complete. Ready to chat!';
@@ -89,8 +90,12 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
             await conversationContextService.startNewPhase(
               userId, 'registration', targetPhase, transitionNote,
             );
+            
+            req.log.info({ userId, targetPhase }, 'Phase transition after registration complete');
           } catch (err) {
-            req.log.warn({ err }, 'Failed to transition conversation phase');
+            req.log.error({ err, userId }, 'Failed to transition conversation phase after registration');
+            // This is critical - if transition fails, user will be stuck
+            throw new Error('Failed to complete registration phase transition');
           }
         }
 
@@ -119,20 +124,71 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         phase = 'plan_creation';
       }
 
+      req.log.info({ 
+        userId, 
+        phase, 
+        hasTrainingCtx: !!trainingCtx, 
+        hasPlanningCtx: !!planningCtx, 
+        hasPlanCreationCtx: !!planCreationCtx,
+      }, 'Determined conversation phase');
+
       // Load conversation context and build history [BR-CONV-001, BR-CONV-003]
       const ctx = await conversationContextService.getContext(userId, phase);
       const historyMessages = ctx
         ? conversationContextService.getMessagesForPrompt(ctx)
         : [];
 
-      // Process message via ChatService (handles all phases: chat, plan_creation, session_planning, training)
-      const response = await app.services.chatService.processMessage(user, message, phase, historyMessages);
+      // Process message via ChatService (returns message + optional phase transition)
+      const result = await app.services.chatService.processMessage(user, message, phase, historyMessages);
+      const { message: response, phaseTransition } = result;
 
-      // Persist conversation turn [BR-CONV-002, BR-CONV-007]
+      // ADR-0005 flow: "call LLM -> appendTurn -> on phase change call startNewPhase"
+      // CRITICAL: If phase transition occurs, startNewPhase DELETES old phase turns.
+      // So we must save the turn in the NEW phase, not the old one.
+      
+      // 1. Validate phase transition BEFORE saving turn
+      let effectivePhase: typeof phase = phase;
+      if (phaseTransition) {
+        const { toPhase } = phaseTransition;
+        
+        // Validation: Ignore transition to the same phase (LLM error)
+        if (toPhase === phase) {
+          req.log.warn({ userId, phase, toPhase }, 'Ignoring invalid phase transition to same phase (LLM error)');
+          // Don't transition, stay in current phase
+        } else {
+          // Valid transition - will execute after appendTurn
+          effectivePhase = toPhase as typeof phase;
+        }
+      }
+      
+      // 2. Save the turn in the effective phase
       try {
-        await conversationContextService.appendTurn(userId, phase, message, response);
+        await conversationContextService.appendTurn(userId, effectivePhase, message, response);
       } catch (err) {
         req.log.warn({ err }, 'Failed to append conversation turn — response not affected');
+      }
+
+      // 3. Execute validated phase transition AFTER turn is saved
+      if (phaseTransition && effectivePhase !== phase) {
+        const { toPhase } = phaseTransition;
+        try {
+          // Prepare options for training phase
+          const options: Parameters<typeof conversationContextService.startNewPhase>[4] = {};
+          if (toPhase === 'training' && phaseTransition.sessionId) {
+            options.trainingContext = { activeSessionId: phaseTransition.sessionId };
+          }
+
+          // Execute transition
+          await conversationContextService.startNewPhase(
+            userId, phase, toPhase,
+            `Phase transition: ${phase} → ${toPhase}${phaseTransition.reason ? ` (${phaseTransition.reason})` : ''}`,
+            options,
+          );
+          req.log.info({ userId, from: phase, to: toPhase, reason: phaseTransition.reason }, 'Phase transition executed');
+        } catch (err) {
+          req.log.error({ err, userId, from: phase, to: toPhase }, 'Phase transition failed validation or execution');
+          // Transition failed but user already got response - this is acceptable per ADR-0005 [BR-CONV-007]
+        }
       }
 
       // Return response [AC-0110]

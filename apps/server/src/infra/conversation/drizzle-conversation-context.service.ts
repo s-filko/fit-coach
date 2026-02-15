@@ -78,6 +78,8 @@ export class DrizzleConversationContextService implements IConversationContextSe
         return { ...baseContext, phase: 'registration' };
       case 'chat':
         return { ...baseContext, phase: 'chat' };
+      case 'plan_creation':
+        return { ...baseContext, phase: 'plan_creation' };
       case 'session_planning': {
         const planningContext = this.phaseContextStore.get(key) as SessionPlanningContext | undefined;
         return {

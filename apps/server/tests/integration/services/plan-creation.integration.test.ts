@@ -270,7 +270,8 @@ describe('Plan Creation Integration', () => {
       });
 
       // Should return LLM message
-      expect(result).toBe('Отлично! План сохранен.');
+      expect(result.message).toBe('Отлично! План сохранен.');
+      expect(result.effectivePhase).toBe('session_planning');
     });
 
     it('should NOT save plan when user cancels', async () => {
@@ -293,7 +294,8 @@ describe('Plan Creation Integration', () => {
       expect(mockWorkoutPlanRepo.create).not.toHaveBeenCalled();
 
       // Should return LLM message
-      expect(result).toBe('Хорошо, вернемся к планированию позже.');
+      expect(result.message).toBe('Хорошо, вернемся к планированию позже.');
+      expect(result.effectivePhase).toBe('chat');
     });
 
     it('should NOT save plan if no transition provided', async () => {
@@ -473,7 +475,7 @@ describe('Plan Creation Integration', () => {
         [],
       );
 
-      expect(result).toContain('план');
+      expect(result.message).toContain('план');
       expect(mockWorkoutPlanRepo.create).toHaveBeenCalled();
     });
   });
