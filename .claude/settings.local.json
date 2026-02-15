@@ -15,9 +15,7 @@
       "Bash(source:*)",
       "Bash(echo:*)",
       "Bash(lsof:*)",
-      "Bash(xargs kill -9 echo \"Killed\")",
-      "Bash(pgrep:*)",
-      "Bash(xargs kill:*)"
+      "Bash(pgrep:*)"
     ]
   }
 }
