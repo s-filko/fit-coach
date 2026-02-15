@@ -1,18 +1,69 @@
 import { z } from 'zod';
 
-import type { SetData } from './types';
-
 /**
  * Training intent types - actions user can perform during training phase
  * LLM extracts these intents from user messages during active training session
  */
 
+// --- SetData Schemas ---
+
+const StrengthSetDataSchema = z.object({
+  type: z.literal('strength'),
+  reps: z.number().int().min(1),
+  weight: z.number().min(0).optional(),
+  weightUnit: z.enum(['kg', 'lbs']).optional(),
+  restSeconds: z.number().int().min(0).optional(),
+});
+
+const CardioDistanceSetDataSchema = z.object({
+  type: z.literal('cardio_distance'),
+  distance: z.number().min(0),
+  distanceUnit: z.enum(['km', 'miles', 'meters']),
+  duration: z.number().int().min(0),
+  pace: z.number().min(0).optional(),
+  restSeconds: z.number().int().min(0).optional(),
+});
+
+const CardioDurationSetDataSchema = z.object({
+  type: z.literal('cardio_duration'),
+  duration: z.number().int().min(0),
+  intensity: z.enum(['low', 'moderate', 'high']).optional(),
+  restSeconds: z.number().int().min(0).optional(),
+});
+
+const FunctionalRepsSetDataSchema = z.object({
+  type: z.literal('functional_reps'),
+  reps: z.number().int().min(1),
+  restSeconds: z.number().int().min(0).optional(),
+});
+
+const IsometricSetDataSchema = z.object({
+  type: z.literal('isometric'),
+  duration: z.number().int().min(0),
+  restSeconds: z.number().int().min(0).optional(),
+});
+
+const IntervalSetDataSchema = z.object({
+  type: z.literal('interval'),
+  workDuration: z.number().int().min(0),
+  restDuration: z.number().int().min(0),
+  rounds: z.number().int().min(1).optional(),
+});
+
+const SetDataSchema = z.discriminatedUnion('type', [
+  StrengthSetDataSchema,
+  CardioDistanceSetDataSchema,
+  CardioDurationSetDataSchema,
+  FunctionalRepsSetDataSchema,
+  IsometricSetDataSchema,
+  IntervalSetDataSchema,
+]);
+
 // --- Log Set Intent ---
 
 export const LogSetIntentSchema = z.object({
   type: z.literal('log_set'),
-  // Set data based on exercise type
-  setData: z.custom<SetData>(),
+  setData: SetDataSchema,
   // Optional RPE (Rate of Perceived Exertion) 1-10
   rpe: z.number().min(1).max(10).optional(),
   // Optional user feedback about the set
