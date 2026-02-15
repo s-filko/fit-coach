@@ -1,8 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { loadConfig } from '@config/index';
-
 const chatMessageBody = z.object({
   userId: z.string().min(1).describe('User ID'),
   message: z.string().min(1).describe('User message'),
@@ -55,8 +53,13 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
           ? conversationContextService.getMessagesForPrompt(ctx)
           : [];
 
+        // Create enriched logger with userId
+        const log = req.log.child({ userId, phase });
+
         // Process registration
-        const result = await app.services.registrationService.processUserMessage(user, message, historyMessages);
+        const result = await app.services.registrationService.processUserMessage(
+          user, message, historyMessages, { log },
+        );
         const { response, updatedUser, phaseTransition } = result;
 
         // Save user profile changes
@@ -138,8 +141,13 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         ? conversationContextService.getMessagesForPrompt(ctx)
         : [];
 
+      // Create enriched logger with userId and phase
+      const log = req.log.child({ userId, phase });
+
       // Process message via ChatService (returns message + optional phase transition)
-      const result = await app.services.chatService.processMessage(user, message, phase, historyMessages);
+      const result = await app.services.chatService.processMessage(
+        user, message, phase, historyMessages, { log },
+      );
       const { message: response, phaseTransition } = result;
 
       // ADR-0005 flow: "call LLM -> appendTurn -> on phase change call startNewPhase"
@@ -206,65 +214,4 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       });
     }
   });
-
-  // Debug route for LLM service (only in development)
-  if (loadConfig().NODE_ENV === 'development') {
-    app.get('/debug/llm', {
-      schema: {
-        summary: 'Get LLM debug information',
-        security: [{ ApiKeyAuth: [] }],
-        response: {
-          200: z.object({
-            debugInfo: z.record(z.string(), z.unknown()),
-            timestamp: z.string(),
-          }),
-          401: z.object({ error: z.object({ message: z.string() }) }),
-          500: z.object({ error: z.object({ message: z.string() }) }),
-        },
-      },
-    }, async(req, reply) => {
-      try {
-        const debugInfo = app.services.llmService.getDebugInfo();
-
-        return reply.send({
-          debugInfo,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        req.log.error({ err: error }, 'Failed to get debug info');
-        return reply.code(500).send({
-          error: { message: 'Failed to get debug info' },
-        });
-      }
-    });
-
-    app.post('/debug/llm/clear', {
-      schema: {
-        summary: 'Clear LLM debug history',
-        security: [{ ApiKeyAuth: [] }],
-        response: {
-          200: z.object({
-            message: z.string(),
-            timestamp: z.string(),
-          }),
-          401: z.object({ error: z.object({ message: z.string() }) }),
-          500: z.object({ error: z.object({ message: z.string() }) }),
-        },
-      },
-    }, async(req, reply) => {
-      try {
-        app.services.llmService.clearHistory();
-
-        return reply.send({
-          message: 'Debug history cleared',
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        req.log.error({ err: error }, 'Failed to clear debug history');
-        return reply.code(500).send({
-          error: { message: 'Failed to clear debug history' },
-        });
-      }
-    });
-  }
 }

@@ -41,8 +41,20 @@ export function buildServer(): FastifyInstance {
   
   const app = Fastify({
     logger: {
-      level: 'info',
+      level: config.LOG_LEVEL ?? 'info',
       transport: config.NODE_ENV === 'development' ? { target: 'pino-pretty' } : undefined,
+      redact: {
+        paths: [
+          'req.headers.authorization',
+          'req.headers.cookie',
+          'req.headers["x-api-key"]',
+          '*.password',
+          '*.apiKey',
+          '*.token',
+          '*.secret',
+        ],
+        censor: '[REDACTED]',
+      },
     },
     requestTimeout: 30000,
   }).withTypeProvider<ZodTypeProvider>();

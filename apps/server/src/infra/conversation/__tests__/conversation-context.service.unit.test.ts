@@ -12,12 +12,12 @@ describe('InMemoryConversationContextService', () => {
   // --- getContext ---
 
   describe('getContext', () => {
-    it('returns null for unknown userId+phase', async () => {
+    it('returns null for unknown userId+phase', async() => {
       const result = await service.getContext('unknown-user', 'chat');
       expect(result).toBeNull();
     });
 
-    it('returns existing context after appendTurn', async () => {
+    it('returns existing context after appendTurn', async() => {
       await service.appendTurn('u1', 'registration', 'hello', 'hi there');
 
       const ctx = await service.getContext('u1', 'registration');
@@ -31,7 +31,7 @@ describe('InMemoryConversationContextService', () => {
   // --- appendTurn ---
 
   describe('appendTurn', () => {
-    it('creates context on first call [BR-CONV-002]', async () => {
+    it('creates context on first call [BR-CONV-002]', async() => {
       await service.appendTurn('u1', 'chat', 'msg1', 'resp1');
 
       const ctx = await service.getContext('u1', 'chat');
@@ -41,7 +41,7 @@ describe('InMemoryConversationContextService', () => {
       expect(ctx!.turns[1]).toMatchObject({ role: 'assistant', content: 'resp1' });
     });
 
-    it('appends to existing context', async () => {
+    it('appends to existing context', async() => {
       await service.appendTurn('u1', 'chat', 'msg1', 'resp1');
       await service.appendTurn('u1', 'chat', 'msg2', 'resp2');
 
@@ -49,7 +49,7 @@ describe('InMemoryConversationContextService', () => {
       expect(ctx!.turns).toHaveLength(4);
     });
 
-    it('preserves chronological order [INV-CONV-002]', async () => {
+    it('preserves chronological order [INV-CONV-002]', async() => {
       await service.appendTurn('u1', 'chat', 'first', 'resp-first');
       await service.appendTurn('u1', 'chat', 'second', 'resp-second');
 
@@ -60,7 +60,7 @@ describe('InMemoryConversationContextService', () => {
       expect(ctx!.turns[3].content).toBe('resp-second');
     });
 
-    it('keeps independent (userId,phase) pairs [INV-CONV-001, AC-0112]', async () => {
+    it('keeps independent (userId,phase) pairs [INV-CONV-001, AC-0112]', async() => {
       await service.appendTurn('u1', 'registration', 'reg-msg', 'reg-resp');
       await service.appendTurn('u1', 'chat', 'chat-msg', 'chat-resp');
       await service.appendTurn('u2', 'chat', 'u2-msg', 'u2-resp');
@@ -78,7 +78,7 @@ describe('InMemoryConversationContextService', () => {
       expect(u2Chat!.turns[0].content).toBe('u2-msg');
     });
 
-    it('updates lastActivityAt on each call', async () => {
+    it('updates lastActivityAt on each call', async() => {
       await service.appendTurn('u1', 'chat', 'msg1', 'resp1');
       const ctx1 = await service.getContext('u1', 'chat');
       const ts1 = ctx1!.lastActivityAt;
@@ -95,7 +95,7 @@ describe('InMemoryConversationContextService', () => {
   // --- getMessagesForPrompt ---
 
   describe('getMessagesForPrompt', () => {
-    it('returns all turns when under limit [S-0058]', async () => {
+    it('returns all turns when under limit [S-0058]', async() => {
       await service.appendTurn('u1', 'chat', 'msg1', 'resp1');
       await service.appendTurn('u1', 'chat', 'msg2', 'resp2');
 
@@ -109,7 +109,7 @@ describe('InMemoryConversationContextService', () => {
       expect(messages[3]).toEqual({ role: 'assistant', content: 'resp2' });
     });
 
-    it('applies sliding window of 20 by default [S-0059, AC-0111]', async () => {
+    it('applies sliding window of 20 by default [S-0059, AC-0111]', async() => {
       // Create 15 turns = 30 messages, window is 20
       for (let i = 0; i < 15; i++) {
         await service.appendTurn('u1', 'chat', `msg-${i}`, `resp-${i}`);
@@ -124,7 +124,7 @@ describe('InMemoryConversationContextService', () => {
       expect(messages[19]).toEqual({ role: 'assistant', content: 'resp-14' });
     });
 
-    it('respects custom maxTurns [AC-0111]', async () => {
+    it('respects custom maxTurns [AC-0111]', async() => {
       for (let i = 0; i < 5; i++) {
         await service.appendTurn('u1', 'chat', `msg-${i}`, `resp-${i}`);
       }
@@ -138,7 +138,7 @@ describe('InMemoryConversationContextService', () => {
       expect(messages[3]).toEqual({ role: 'assistant', content: 'resp-4' });
     });
 
-    it('prepends summarySoFar as system message [BR-CONV-004]', async () => {
+    it('prepends summarySoFar as system message [BR-CONV-004]', async() => {
       await service.appendTurn('u1', 'chat', 'msg1', 'resp1');
 
       const ctx = await service.getContext('u1', 'chat');
@@ -152,7 +152,7 @@ describe('InMemoryConversationContextService', () => {
       expect(messages[2]).toEqual({ role: 'assistant', content: 'resp1' });
     });
 
-    it('preserves chronological order [S-0064]', async () => {
+    it('preserves chronological order [S-0064]', async() => {
       await service.appendTurn('u1', 'chat', 'first', 'resp-first');
       await service.appendTurn('u1', 'chat', 'second', 'resp-second');
 
@@ -163,7 +163,7 @@ describe('InMemoryConversationContextService', () => {
       expect(contents).toEqual(['first', 'resp-first', 'second', 'resp-second']);
     });
 
-    it('includes system turns from context', async () => {
+    it('includes system turns from context', async() => {
       // startNewPhase creates a system turn
       await service.startNewPhase('u1', 'registration', 'chat', 'Registration complete.');
       await service.appendTurn('u1', 'chat', 'hello', 'hi');
@@ -181,7 +181,7 @@ describe('InMemoryConversationContextService', () => {
   // --- reset ---
 
   describe('reset', () => {
-    it('clears target context [BR-CONV-005]', async () => {
+    it('clears target context [BR-CONV-005]', async() => {
       await service.appendTurn('u1', 'chat', 'msg', 'resp');
       await service.reset('u1', 'chat');
 
@@ -189,7 +189,7 @@ describe('InMemoryConversationContextService', () => {
       expect(ctx).toBeNull();
     });
 
-    it('does not affect other (userId,phase) pairs', async () => {
+    it('does not affect other (userId,phase) pairs', async() => {
       await service.appendTurn('u1', 'chat', 'msg', 'resp');
       await service.appendTurn('u1', 'registration', 'reg', 'reg-resp');
 
@@ -199,7 +199,7 @@ describe('InMemoryConversationContextService', () => {
       expect(await service.getContext('u1', 'registration')).not.toBeNull();
     });
 
-    it('is safe to call on non-existent context', async () => {
+    it('is safe to call on non-existent context', async() => {
       await expect(service.reset('u1', 'chat')).resolves.toBeUndefined();
     });
   });
@@ -207,7 +207,7 @@ describe('InMemoryConversationContextService', () => {
   // --- startNewPhase ---
 
   describe('startNewPhase', () => {
-    it('resets old phase and creates new with system note [S-0060, BR-CONV-005]', async () => {
+    it('resets old phase and creates new with system note [S-0060, BR-CONV-005]', async() => {
       await service.appendTurn('u1', 'registration', 'reg-msg', 'reg-resp');
 
       await service.startNewPhase('u1', 'registration', 'chat', 'Registration complete.');
@@ -223,7 +223,7 @@ describe('InMemoryConversationContextService', () => {
       expect(ctx!.turns[0]).toMatchObject({ role: 'system', content: 'Registration complete.' });
     });
 
-    it('sets lastActivityAt on new phase', async () => {
+    it('sets lastActivityAt on new phase', async() => {
       await service.startNewPhase('u1', 'registration', 'chat', 'note');
 
       const ctx = await service.getContext('u1', 'chat');
@@ -234,7 +234,7 @@ describe('InMemoryConversationContextService', () => {
   // --- summarize ---
 
   describe('summarize', () => {
-    it('is a no-op stub for post-MVP [BR-CONV-006]', async () => {
+    it('is a no-op stub for post-MVP [BR-CONV-006]', async() => {
       await service.appendTurn('u1', 'chat', 'msg', 'resp');
 
       // Should not throw and not modify context

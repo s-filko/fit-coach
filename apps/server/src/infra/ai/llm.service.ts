@@ -1,26 +1,17 @@
 import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 
-import { LLMService as ILLMService, type LLMRequest, type LLMResponse } from '@domain/ai/ports';
+import { LLMService as ILLMService } from '@domain/ai/ports';
 import { ChatMsg } from '@domain/user/ports';
 
 import { loadConfig } from '@config/index';
 
+import { createLogger, type Logger } from '@shared/logger';
+
 export class LLMService implements ILLMService {
   private model: ChatOpenAI;
   private config = loadConfig();
-  private isDebugMode = false;
-  private requestHistory: LLMRequest[] = [];
-  private responseHistory: LLMResponse[] = [];
-
-  // Performance and memory optimization
-  private readonly MAX_HISTORY_SIZE = 100;
-  private metrics = {
-    totalRequests: 0,
-    totalErrors: 0,
-    totalTokens: 0,
-    totalProcessingTime: 0,
-  };
+  private log = createLogger('llm');
 
   constructor() {
     const modelName = this.config.LLM_MODEL;
@@ -37,66 +28,23 @@ export class LLMService implements ILLMService {
         },
       }),
     });
-
-    this.isDebugMode = this.config.LLM_DEBUG ?? false;
-  }
-
-  // Debug methods
-  getDebugInfo() {
-    const avgResponseTime = this.metrics.totalRequests > 0
-      ? this.metrics.totalProcessingTime / this.metrics.totalRequests
-      : 0;
-
-    const errorRate = this.metrics.totalRequests > 0
-      ? (this.metrics.totalErrors / this.metrics.totalRequests) * 100
-      : 0;
-
-    return {
-      model: this.model.model,
-      temperature: this.model.temperature ?? 0.7,
-      isDebugMode: this.isDebugMode,
-      requestHistory: this.requestHistory.slice(-50),
-      responseHistory: this.responseHistory.slice(-50),
-      metrics: {
-        totalRequests: this.metrics.totalRequests,
-        totalErrors: this.metrics.totalErrors,
-        totalTokens: this.metrics.totalTokens,
-        averageResponseTime: Math.round(avgResponseTime),
-        errorRate: Math.round(errorRate * 100) / 100,
-      },
-    };
-  }
-
-  enableDebugMode(): void {
-    this.isDebugMode = true;
-  }
-
-  disableDebugMode(): void {
-    this.isDebugMode = false;
-  }
-
-  clearHistory(): void {
-    this.requestHistory = [];
-    this.responseHistory = [];
-    this.metrics = {
-      totalRequests: 0,
-      totalErrors: 0,
-      totalTokens: 0,
-      totalProcessingTime: 0,
-    };
   }
 
   async generateWithSystemPrompt(
-    messages: ChatMsg[], systemPrompt: string, opts?: { jsonMode?: boolean },
+    messages: ChatMsg[], 
+    systemPrompt: string, 
+    opts?: { jsonMode?: boolean; log?: Logger },
   ): Promise<string> {
-    return this.invokeModel(messages, systemPrompt, opts?.jsonMode);
+    return this.invokeModel(messages, systemPrompt, opts?.jsonMode, opts?.log);
   }
 
   async generateStructured<T>(
     messages: ChatMsg[],
     systemPrompt: string,
     schema: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+    opts?: { log?: Logger },
   ): Promise<T> {
+    const log = opts?.log ?? this.log;
     const requestId = this.generateId();
     const startTime = new Date();
 
@@ -132,34 +80,39 @@ export class LLMService implements ILLMService {
       const endTime = new Date();
       const processingTime = endTime.getTime() - startTime.getTime();
 
-      if (this.isDebugMode) {
-        const response: LLMResponse = {
-          id: this.generateId(),
-          timestamp: endTime,
-          requestId,
-          content: JSON.stringify(validated),
-          model: this.model.model,
-          processingTime,
-        };
-        this.addToHistory(this.responseHistory, response);
-        this.metrics.totalRequests++;
-        this.metrics.totalProcessingTime += processingTime;
-      }
+      log.info({
+        requestId,
+        model: this.model.model,
+        processingTime,
+        jsonMode: true,
+        structured: true,
+      }, 'LLM structured call completed');
 
       return validated;
     } catch (error) {
-      this.metrics.totalErrors++;
+      const processingTime = new Date().getTime() - startTime.getTime();
+      log.error({
+        err: error,
+        requestId,
+        model: this.model.model,
+        processingTime,
+        jsonMode: true,
+        structured: true,
+      }, 'LLM structured call failed');
       throw error;
     }
   }
 
   private async invokeModel(
-    message: ChatMsg[],
+    messages: ChatMsg[],
     systemPromptText: string,
     jsonMode?: boolean,
+    log?: Logger,
   ): Promise<string> {
+    const effectiveLog = log ?? this.log;
     const requestId = this.generateId();
     const startTime = new Date();
+    const isDevelopment = this.config.NODE_ENV === 'development';
 
     try {
       // CRITICAL: Validate JSON mode configuration before API call
@@ -172,19 +125,17 @@ export class LLMService implements ILLMService {
             'This will cause OpenAI/OpenRouter API error: "Response input messages must contain ' +
             'the word \'json\' in some form to use \'text.format\' of type \'json_object\'."',
           );
-          // eslint-disable-next-line no-console
-          console.error('\n=== JSON MODE VALIDATION ERROR ===');
-          // eslint-disable-next-line no-console
-          console.error('System prompt does not contain "json" but jsonMode=true');
-          // eslint-disable-next-line no-console
-          console.error('System prompt preview:', systemPromptText.slice(0, 200) + '...');
+          effectiveLog.error({
+            requestId,
+            systemPromptPreview: systemPromptText.slice(0, 200),
+          }, 'JSON mode enabled but system prompt missing "json" keyword');
           throw error;
         }
       }
 
       const systemPrompt = new SystemMessage(systemPromptText);
 
-      const messages = message.map(chatMsg => {
+      const chatMessages = messages.map(chatMsg => {
         if (chatMsg.role === 'system') {
           return new SystemMessage(chatMsg.content);
         }
@@ -199,97 +150,70 @@ export class LLMService implements ILLMService {
         model: this.model.model,
         messages: [
           { role: 'system', content: systemPromptText },
-          ...message.map(m => ({ role: m.role, content: m.content })),
+          ...messages.map(m => ({ role: m.role, content: m.content })),
         ],
         temperature: this.model.temperature ?? 0.7,
         ...(jsonMode && { response_format: { type: 'json_object' } }),
       };
 
-      if (this.isDebugMode) {
-        const request: LLMRequest = {
-          id: requestId,
-          timestamp: startTime,
-          message: message.map(m => `${m.role}: ${m.content}`).join('\n'),
-          isRegistration: false,
-          systemPrompt: systemPromptText,
+      // Log request (full content in dev, metadata only in prod)
+      if (isDevelopment) {
+        effectiveLog.debug({
+          requestId,
           model: this.model.model,
-          temperature: this.model.temperature ?? 0.7,
           jsonMode,
-          httpPayload, // Store full HTTP payload for debugging
-        };
-        this.addToHistory(this.requestHistory, request);
-        
-        // Log to console for immediate debugging
-        // eslint-disable-next-line no-console
-        console.log('\n=== LLM REQUEST ===');
-        // eslint-disable-next-line no-console
-        console.log('Request ID:', requestId);
-        // eslint-disable-next-line no-console
-        console.log('Model:', this.model.model);
-        // eslint-disable-next-line no-console
-        console.log('JSON Mode:', jsonMode);
-        // eslint-disable-next-line no-console
-        console.log('HTTP Payload:', JSON.stringify(httpPayload, null, 2));
-        // eslint-disable-next-line no-console
-        console.log('==================\n');
+          messageCount: messages.length,
+          systemPrompt: systemPromptText,
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          httpPayload,
+        }, 'LLM request prepared');
+      } else {
+        effectiveLog.debug({
+          requestId,
+          model: this.model.model,
+          jsonMode,
+          messageCount: messages.length,
+          systemPromptLength: systemPromptText.length,
+          messagesLengths: messages.map(m => ({ role: m.role, length: m.content.length })),
+        }, 'LLM request prepared');
       }
 
       const model = jsonMode
         ? this.model.bind({ response_format: { type: 'json_object' } })
         : this.model;
-      const response = await model.invoke([systemPrompt, ...messages]);
+      const response = await model.invoke([systemPrompt, ...chatMessages]);
       const endTime = new Date();
       const processingTime = endTime.getTime() - startTime.getTime();
 
       const content = response.content as string;
       const tokenUsage = (response.response_metadata as Record<string, unknown>)?.tokenUsage as
-        { totalTokens?: number } | undefined;
+        { totalTokens?: number; promptTokens?: number; completionTokens?: number } | undefined;
 
-      this.metrics.totalRequests++;
-      this.metrics.totalProcessingTime += processingTime;
-      if (tokenUsage?.totalTokens) {
-        this.metrics.totalTokens += tokenUsage.totalTokens;
-      }
-
-      if (this.isDebugMode) {
-        const llmResponse: LLMResponse = {
-          id: this.generateId(),
-          timestamp: endTime,
+      // Log response (full content in dev, metadata only in prod)
+      if (isDevelopment) {
+        effectiveLog.info({
           requestId,
-          content,
-          tokenUsage: tokenUsage ? {
-            promptTokens: 0,
-            completionTokens: 0,
-            totalTokens: tokenUsage.totalTokens ?? 0,
-          } : undefined,
-          model: this.model.model,
           processingTime,
-          httpResponse: response.response_metadata, // Store full HTTP response metadata
-        };
-        this.addToHistory(this.responseHistory, llmResponse);
-        
-        // Log to console for immediate debugging
-        // eslint-disable-next-line no-console
-        console.log('\n=== LLM RESPONSE ===');
-        // eslint-disable-next-line no-console
-        console.log('Request ID:', requestId);
-        // eslint-disable-next-line no-console
-        console.log('Processing Time:', processingTime, 'ms');
-        // eslint-disable-next-line no-console
-        console.log('Token Usage:', tokenUsage);
-        // eslint-disable-next-line no-console
-        console.log('Content Length:', content.length);
-        // eslint-disable-next-line no-console
-        console.log('Content Preview:', content.substring(0, 200));
-        // eslint-disable-next-line no-console
-        console.log('Full Response Metadata:', JSON.stringify(response.response_metadata, null, 2));
-        // eslint-disable-next-line no-console
-        console.log('====================\n');
+          totalTokens: tokenUsage?.totalTokens,
+          promptTokens: tokenUsage?.promptTokens,
+          completionTokens: tokenUsage?.completionTokens,
+          contentLength: content.length,
+          content,
+          responseMetadata: response.response_metadata,
+        }, 'LLM call completed');
+      } else {
+        effectiveLog.info({
+          requestId,
+          processingTime,
+          totalTokens: tokenUsage?.totalTokens,
+          promptTokens: tokenUsage?.promptTokens,
+          completionTokens: tokenUsage?.completionTokens,
+          contentLength: content.length,
+        }, 'LLM call completed');
       }
 
       return content;
     } catch (error) {
-      this.metrics.totalErrors++;
       const originalMessage = error instanceof Error ? error.message : String(error);
       
       // Extract provider error details if available
@@ -314,45 +238,15 @@ export class LLMService implements ILLMService {
         }
       }
       
-      if (this.isDebugMode) {
-        const errorResponse: LLMResponse = {
-          id: this.generateId(),
-          timestamp: new Date(),
-          requestId,
-          content: '',
-          error: originalMessage,
-          model: this.model.model,
-          processingTime: new Date().getTime() - startTime.getTime(),
-          providerError,
-        };
-        this.addToHistory(this.responseHistory, errorResponse);
-        
-        // Log error details to console
-        // eslint-disable-next-line no-console
-        console.error('\n=== LLM ERROR ===');
-        // eslint-disable-next-line no-console
-        console.error('Request ID:', requestId);
-        // eslint-disable-next-line no-console
-        console.error('Error:', originalMessage);
-        if (providerError) {
-          // eslint-disable-next-line no-console
-          console.error('Provider Error:', providerError);
-        }
-        // eslint-disable-next-line no-console
-        console.error('Full Error:', error);
-        if (error && typeof error === 'object') {
-          // eslint-disable-next-line no-console
-          console.error('Error Details:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-        }
-        // eslint-disable-next-line no-console
-        console.error('=================\n');
-      }
+      const processingTime = new Date().getTime() - startTime.getTime();
       
-      // Always log provider errors even when debug mode is off
-      if (providerError && !this.isDebugMode) {
-        // eslint-disable-next-line no-console
-        console.error(`LLM Provider Error: ${providerError}`);
-      }
+      effectiveLog.error({
+        err: error,
+        requestId,
+        model: this.model.model,
+        processingTime,
+        providerError: providerError || undefined,
+      }, 'LLM call failed');
       
       // Include provider error in thrown message for better error reporting
       const errorMessage = providerError 
@@ -365,12 +259,5 @@ export class LLMService implements ILLMService {
 
   private generateId(): string {
     return `llm_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  private addToHistory<T>(array: T[], item: T): void {
-    array.push(item);
-    if (array.length > this.MAX_HISTORY_SIZE) {
-      array.splice(0, array.length - this.MAX_HISTORY_SIZE);
-    }
   }
 }

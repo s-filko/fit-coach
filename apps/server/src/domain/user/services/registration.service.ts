@@ -1,6 +1,8 @@
 import { LLMService } from '@domain/ai/ports';
 import { ChatMsg, IPromptService, IRegistrationService } from '@domain/user/ports';
 
+import type { Logger } from '@shared/logger';
+
 import { type ProfileDataKey, registrationLLMResponseSchema, validateExtractedFields } from './registration.validation';
 import { ParsedProfileData, User } from './user.service';
 
@@ -34,6 +36,7 @@ export class RegistrationService implements IRegistrationService {
     user: User,
     message: string,
     historyMessages: ChatMsg[] = [],
+    opts?: { log?: Logger },
   ): Promise<{
     updatedUser: User;
     response: string;
@@ -41,6 +44,8 @@ export class RegistrationService implements IRegistrationService {
     parsedData?: ParsedProfileData;
     phaseTransition?: { toPhase: 'chat' | 'plan_creation'; reason?: string };
   }> {
+    const log = opts?.log;
+
     // 1. Build system prompt with current profile state
     const systemPrompt = this.promptService.buildUnifiedRegistrationPrompt(user);
 
@@ -54,7 +59,7 @@ export class RegistrationService implements IRegistrationService {
     let rawResponse: string;
     try {
       rawResponse = await this.llmService.generateWithSystemPrompt(
-        messages, systemPrompt, { jsonMode: true },
+        messages, systemPrompt, { jsonMode: true, log },
       );
     } catch {
       return { updatedUser: user, response: FALLBACK_RESPONSE, isComplete: false };

@@ -11,6 +11,7 @@ import { z } from 'zod';
  */
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']),
+  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
   PORT: z.string().transform(v => Number(v)),
   HOST: z.string(),
   DB_HOST: z.string(),
@@ -30,7 +31,6 @@ const EnvSchema = z.object({
     }
     return n;
   }).pipe(z.number().min(0).max(2)),
-  LLM_DEBUG: z.string().optional().transform(v => v === 'true'),
 });
 
 export type Env = z.infer<typeof EnvSchema> & { PORT: number };

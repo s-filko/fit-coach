@@ -27,6 +27,8 @@ import {
   type TrainingPromptContext,
 } from '@domain/user/ports';
 
+import type { Logger } from '@shared/logger';
+
 import { User } from './user.service';
 
 /**
@@ -64,6 +66,7 @@ export class ChatService implements IChatService {
    * @param message - User message
    * @param phase - Current conversation phase
    * @param historyMessages - Conversation history for prompt
+   * @param opts - Optional logger for request context
    * @returns Assistant response
    */
   async processMessage(
@@ -71,7 +74,10 @@ export class ChatService implements IChatService {
     message: string,
     phase: ConversationPhase,
     historyMessages: ChatMsg[] = [],
+    opts?: { log?: Logger },
   ): Promise<ProcessMessageResult> {
+    const log = opts?.log;
+
     // 1. Build phase-specific system prompt
     const systemPrompt = await this.buildSystemPrompt(user, phase);
 
@@ -91,7 +97,7 @@ export class ChatService implements IChatService {
       // Plan creation: use structured output to enforce schema
       const planCreationResponse = await this.llmService.generateStructured<
         z.infer<typeof PlanCreationLLMResponseSchema>
-      >(messages, systemPrompt, PlanCreationLLMResponseSchema);
+      >(messages, systemPrompt, PlanCreationLLMResponseSchema, { log });
 
       const { message: msg, workoutPlan: plan, phaseTransition: transition } = planCreationResponse;
       parsedMessage = msg;
@@ -107,7 +113,7 @@ export class ChatService implements IChatService {
       const llmResponse = await this.llmService.generateWithSystemPrompt(
         messages,
         systemPrompt,
-        { jsonMode: true },
+        { jsonMode: true, log },
       );
 
       // 4. Parse LLM response based on phase

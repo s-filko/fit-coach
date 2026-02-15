@@ -3,6 +3,10 @@ import type { MuscleGroup } from '@domain/training/types';
 import { db } from '@infra/db/drizzle';
 import { exerciseMuscleGroups, exercises } from '@infra/db/schema';
 
+import { createLogger } from '@shared/logger';
+
+const log = createLogger('seed');
+
 interface ExerciseSeed {
   name: string;
   category: 'compound' | 'isolation' | 'cardio' | 'functional' | 'mobility';
@@ -348,8 +352,7 @@ const exerciseSeeds: ExerciseSeed[] = [
 ];
 
 export async function seedExercises() {
-  // eslint-disable-next-line no-console
-  console.log('🌱 Seeding exercises...');
+  log.info({ count: exerciseSeeds.length }, 'seeding exercises');
 
   for (const seed of exerciseSeeds) {
     // Insert exercise
@@ -377,12 +380,10 @@ export async function seedExercises() {
       });
     }
 
-    // eslint-disable-next-line no-console
-    console.log(`  ✓ ${seed.name}`);
+    log.debug({ name: seed.name, category: seed.category }, 'exercise seeded');
   }
 
-  // eslint-disable-next-line no-console
-  console.log(`✅ Seeded ${exerciseSeeds.length} exercises`);
+  log.info({ count: exerciseSeeds.length }, 'exercises seeded successfully');
 }
 
 // Run if called directly

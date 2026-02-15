@@ -1,5 +1,6 @@
 import type TelegramBot from 'node-telegram-bot-api';
 import axios from 'axios';
+import { log } from './logger';
 
 const api = axios.create({
     baseURL: process.env.SERVER_URL,
@@ -34,7 +35,12 @@ export function registerBotHandlers(bot: TelegramBot) {
     bot.on('message', async (msg) => {
         const chatId = msg.chat.id;
         const userText = msg.text;
-        console.log('Message', msg.from?.username, userText);
+        log.info({ 
+            username: msg.from?.username, 
+            chatId, 
+            textLength: userText?.length,
+            command: userText?.startsWith('/') ? userText.split(' ')[0] : undefined,
+        }, 'incoming message');
 
         if (!msg.from) {
             await bot.sendMessage(
@@ -59,20 +65,20 @@ export function registerBotHandlers(bot: TelegramBot) {
 
                 const aiResponse = chatResponse.data?.data?.content;
                 if (typeof aiResponse !== 'string') {
-                    console.error('Invalid AI response:', chatResponse.data);
+                    log.error({ responseData: chatResponse.data }, 'invalid AI response on /start');
                     throw new Error('Invalid response from AI service');
                 }
 
                 await bot.sendMessage(chatId, aiResponse);
             } catch (error) {
-                console.error('Error during /start:', error);
-                if (axios.isAxiosError(error)) {
-                    console.error('Axios error details:', {
+                log.error({ 
+                    err: error,
+                    username: msg.from?.username,
+                    ...(axios.isAxiosError(error) && {
                         status: error.response?.status,
-                        data: error.response?.data,
-                        headers: error.response?.headers
-                    });
-                }
+                        responseData: error.response?.data,
+                    }),
+                }, '/start command failed');
                 await bot.sendMessage(
                     chatId,
                     'Sorry, there was an error. Please try again in a minute.'
@@ -97,20 +103,20 @@ export function registerBotHandlers(bot: TelegramBot) {
 
             const aiResponse = chatResponse.data?.data?.content;
             if (typeof aiResponse !== 'string') {
-                console.error('Invalid AI response:', chatResponse.data);
+                log.error({ responseData: chatResponse.data }, 'invalid AI response');
                 throw new Error('Invalid response from AI service');
             }
 
             await bot.sendMessage(chatId, aiResponse);
         } catch (error) {
-            console.error('Bot error:', error);
-            if (axios.isAxiosError(error)) {
-                console.error('Axios error details:', {
+            log.error({ 
+                err: error,
+                username: msg.from?.username,
+                ...(axios.isAxiosError(error) && {
                     status: error.response?.status,
-                    data: error.response?.data,
-                    headers: error.response?.headers
-                });
-            }
+                    responseData: error.response?.data,
+                }),
+            }, 'message processing failed');
             await bot.sendMessage(
                 chatId,
                 'Sorry, there was an error while communicating with the coach. Please try again in a minute.'

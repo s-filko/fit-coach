@@ -2,6 +2,8 @@ import { ConversationPhase } from '@domain/conversation/ports/conversation-conte
 import { ChatMsg } from '@domain/user/ports';
 import { CreateUserInput, ParsedProfileData, User } from '@domain/user/services/user.service';
 
+import type { Logger } from '@shared/logger';
+
 // DI Tokens for services
 export const USER_SERVICE_TOKEN = Symbol('UserService');
 export const REGISTRATION_SERVICE_TOKEN = Symbol('RegistrationService');
@@ -16,7 +18,12 @@ export interface IUserService {
 }
 
 export interface IRegistrationService {
-  processUserMessage(user: User, message: string, historyMessages?: ChatMsg[]): Promise<{
+  processUserMessage(
+    user: User, 
+    message: string, 
+    historyMessages?: ChatMsg[], 
+    opts?: { log?: Logger },
+  ): Promise<{
     updatedUser: User;
     response: string;
     isComplete: boolean;
@@ -34,6 +41,7 @@ export interface IChatService {
    * @param message - User message
    * @param phase - Current conversation phase (chat, session_planning, training)
    * @param historyMessages - Conversation history for LLM prompt
+   * @param opts - Optional logger for request context (reqId, userId)
    * @returns Assistant response
    */
   processMessage(
@@ -41,6 +49,7 @@ export interface IChatService {
     message: string,
     phase: ConversationPhase,
     historyMessages?: ChatMsg[],
+    opts?: { log?: Logger },
   ): Promise<ProcessMessageResult>;
 }
 

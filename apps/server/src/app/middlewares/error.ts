@@ -3,7 +3,7 @@ import { FastifyInstance } from 'fastify';
 import { AppError } from '@shared/errors';
 
 export function registerErrorHandler(app: FastifyInstance): void {
-  app.setErrorHandler((err, _req, reply) => {
+  app.setErrorHandler((err, req, reply) => {
     // Handle Fastify validation errors
     if (err.statusCode === 400 || err.code === 'FST_ERR_VALIDATION') {
       const validationErrors = err.validation ?? [];
@@ -13,6 +13,9 @@ export function registerErrorHandler(app: FastifyInstance): void {
         const message = (validationError.message as string) ?? 'Validation error';
         return path ? `${path}: ${message}` : message;
       });
+
+      // Log validation errors at warn level
+      req.log.warn({ err, statusCode: 400, code: 'VALIDATION_ERROR' }, 'validation error');
 
       // Check for common validation error patterns
       if (err.message?.includes('Invalid input')) {
@@ -34,6 +37,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
 
     // Handle other Fastify errors
     if (err.statusCode) {
+      req.log.warn({ err, statusCode: err.statusCode, code: err.code }, 'request error');
       return reply.status(err.statusCode).send({
         error: {
           message: err.message || 'Request error',
@@ -44,6 +48,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
 
     // Handle custom AppError
     if (err instanceof AppError) {
+      req.log.warn({ err, statusCode: err.statusCode, code: err.code }, 'app error');
       return reply.status(err.statusCode || 500).send({
         error: {
           message: err.message,
@@ -53,7 +58,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
     }
 
     // Handle unknown errors
-    app.log.error(err);
+    req.log.error({ err }, 'unhandled error');
     return reply.status(500).send({
       error: {
         message: 'Internal server error',

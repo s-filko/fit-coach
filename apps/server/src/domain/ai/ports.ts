@@ -1,34 +1,6 @@
 import { ChatMsg } from '@domain/user/ports';
 
-export interface LLMRequest {
-  id: string;
-  timestamp: Date;
-  message: string;
-  isRegistration: boolean;
-  context?: string;
-  systemPrompt?: string;
-  model: string;
-  temperature: number;
-  jsonMode?: boolean;
-  httpPayload?: unknown; // Full HTTP request payload for debugging
-}
-
-export interface LLMResponse {
-  id: string;
-  timestamp: Date;
-  requestId: string;
-  content: string;
-  tokenUsage?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  };
-  model: string;
-  processingTime: number;
-  error?: string; // Error message if request failed
-  providerError?: string; // Specific error message from LLM provider (OpenAI/OpenRouter)
-  httpResponse?: unknown; // Full HTTP response metadata for debugging
-}
+import type { Logger } from '@shared/logger';
 
 // DI Tokens - using unique symbols for type safety
 export const LLM_SERVICE_TOKEN = Symbol('LLMService');
@@ -36,28 +8,26 @@ export const AI_CONTEXT_SERVICE_TOKEN = Symbol('AIContextService');
 
 // Port interfaces - domain contracts
 export interface LLMService {
-  generateWithSystemPrompt(messages: ChatMsg[], systemPrompt: string, opts?: { jsonMode?: boolean }): Promise<string>;
+  generateWithSystemPrompt(
+    messages: ChatMsg[], 
+    systemPrompt: string, 
+    opts?: { jsonMode?: boolean; log?: Logger },
+  ): Promise<string>;
   
   /**
    * Generate response with structured output enforced by JSON Schema
    * @param messages - Chat messages
    * @param systemPrompt - System prompt
    * @param schema - Zod schema for structured output
+   * @param opts - Optional logger for request context
    * @returns Parsed object matching the schema
    */
-  generateStructured<T>(messages: ChatMsg[], systemPrompt: string, schema: unknown): Promise<T>;
-
-  // Debug methods
-  getDebugInfo(): {
-    model: string;
-    temperature: number;
-    isDebugMode: boolean;
-    requestHistory: LLMRequest[];
-    responseHistory: LLMResponse[];
-  };
-  enableDebugMode(): void;
-  disableDebugMode(): void;
-  clearHistory(): void;
+  generateStructured<T>(
+    messages: ChatMsg[], 
+    systemPrompt: string, 
+    schema: unknown, 
+    opts?: { log?: Logger },
+  ): Promise<T>;
 }
 
 export interface AIContextService {
