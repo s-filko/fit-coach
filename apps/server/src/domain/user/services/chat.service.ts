@@ -1,10 +1,12 @@
+import { z } from 'zod';
+
 import { LLMService } from '@domain/ai/ports';
 import { parseLLMResponse } from '@domain/conversation/llm-response.types';
 import {
   ConversationPhase,
   type IConversationContextService,
 } from '@domain/conversation/ports/conversation-context.ports';
-import { parsePlanCreationResponse, type WorkoutPlanDraft } from '@domain/training/plan-creation.types';
+import { PlanCreationLLMResponseSchema, type WorkoutPlanDraft } from '@domain/training/plan-creation.types';
 import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
 import { SessionPlanningContextBuilder } from '@domain/training/services/session-planning-context.builder';
 import { parseSessionPlanningResponse } from '@domain/training/session-planning.types';
@@ -75,76 +77,79 @@ export class ChatService implements IChatService {
       { role: 'user', content: message },
     ];
 
-    // 3. Call LLM with JSON mode for structured response
-    // All phases use JSON mode for consistent structured output
-    const llmResponse = await this.llmService.generateWithSystemPrompt(
-      messages,
-      systemPrompt,
-      { jsonMode: true },
-    );
-
-    // 4. Parse LLM response based on phase
+    // 3. Call LLM (with structured output for plan_creation, JSON mode for others)
     let parsedMessage: string;
     let phaseTransition: { toPhase: ConversationPhase; reason?: string; sessionId?: string } | undefined;
     let sessionPlan: SessionRecommendation | undefined;
     let workoutPlan: WorkoutPlanDraft | undefined;
 
-    if (phase === 'training') {
-      // Training phase: parse training response with intent
-      const trainingResponse = parseTrainingResponse(llmResponse);
-      parsedMessage = trainingResponse.message;
-      
-      // Execute training intent if present
-      if (trainingResponse.intent) {
-        await this.executeTrainingIntent(user.id, trainingResponse.intent);
-      }
+    if (phase === 'plan_creation') {
+      // Plan creation: use structured output to enforce schema
+      const planCreationResponse = await this.llmService.generateStructured<
+        z.infer<typeof PlanCreationLLMResponseSchema>
+      >(messages, systemPrompt, PlanCreationLLMResponseSchema);
 
-      // Map phase transition if present
-      if (trainingResponse.phaseTransition) {
-        phaseTransition = {
-          toPhase: trainingResponse.phaseTransition.toPhase,
-          reason: trainingResponse.phaseTransition.reason,
-        };
-      }
-    } else if (phase === 'plan_creation') {
-      // Plan creation phase: parse plan creation response with optional workout plan
-      const planCreationResponse = parsePlanCreationResponse(llmResponse);
       const { message: msg, workoutPlan: plan, phaseTransition: transition } = planCreationResponse;
       parsedMessage = msg;
       workoutPlan = plan;
       phaseTransition = transition;
 
       // Save workout plan ONLY if transitioning to session_planning (user approved)
-      // Plan is kept in conversation history until user approves
-      // If user cancels, no plan is created - draft is just lost with conversation context
       if (workoutPlan && phaseTransition?.toPhase === 'session_planning') {
         await this.saveWorkoutPlan(user.id, workoutPlan);
       }
-    } else if (phase === 'session_planning') {
-      // Session planning phase: parse session planning response with optional plan
-      const planningResponse = parseSessionPlanningResponse(llmResponse);
-      const { message: msg, sessionPlan: plan, phaseTransition: transition } = planningResponse;
-      parsedMessage = msg;
-      sessionPlan = plan;
-      phaseTransition = transition;
-
-      // Save session plan ONLY if transitioning to training (user confirmed)
-      // Plans are kept in conversation history until user confirms
-      // If user cancels, no session is created - plan is just lost with conversation context
-      if (sessionPlan && phaseTransition?.toPhase === 'training') {
-        const session = await this.saveSessionPlan(user.id, sessionPlan);
-        // Update phase transition with session ID for training phase
-        phaseTransition.sessionId = session.id;
-      }
     } else {
-      // Other phases (chat, registration): use standard LLM response parser
-      const { message, phaseTransition: transition, profileUpdate } = parseLLMResponse(llmResponse);
-      parsedMessage = message;
-      phaseTransition = transition;
+      // All other phases: use JSON mode
+      const llmResponse = await this.llmService.generateWithSystemPrompt(
+        messages,
+        systemPrompt,
+        { jsonMode: true },
+      );
 
-      // Handle profile update if present (chat phase only)
-      if (profileUpdate && phase === 'chat') {
-        await this.handleProfileUpdate(user.id, profileUpdate);
+      // 4. Parse LLM response based on phase
+      if (phase === 'training') {
+        // Training phase: parse training response with intent
+        const trainingResponse = parseTrainingResponse(llmResponse);
+        parsedMessage = trainingResponse.message;
+        
+        // Execute training intent if present
+        if (trainingResponse.intent) {
+          await this.executeTrainingIntent(user.id, trainingResponse.intent);
+        }
+
+        // Map phase transition if present
+        if (trainingResponse.phaseTransition) {
+          phaseTransition = {
+            toPhase: trainingResponse.phaseTransition.toPhase,
+            reason: trainingResponse.phaseTransition.reason,
+          };
+        }
+      } else if (phase === 'session_planning') {
+        // Session planning phase: parse session planning response with optional plan
+        const planningResponse = parseSessionPlanningResponse(llmResponse);
+        const { message: msg, sessionPlan: plan, phaseTransition: transition } = planningResponse;
+        parsedMessage = msg;
+        sessionPlan = plan;
+        phaseTransition = transition;
+
+        // Save session plan ONLY if transitioning to training (user confirmed)
+        // Plans are kept in conversation history until user confirms
+        // If user cancels, no session is created - plan is just lost with conversation context
+        if (sessionPlan && phaseTransition?.toPhase === 'training') {
+          const session = await this.saveSessionPlan(user.id, sessionPlan);
+          // Update phase transition with session ID for training phase
+          phaseTransition.sessionId = session.id;
+        }
+      } else {
+        // Other phases (chat, registration): use standard LLM response parser
+        const { message, phaseTransition: transition, profileUpdate } = parseLLMResponse(llmResponse);
+        parsedMessage = message;
+        phaseTransition = transition;
+
+        // Handle profile update if present (chat phase only)
+        if (profileUpdate && phase === 'chat') {
+          await this.handleProfileUpdate(user.id, profileUpdate);
+        }
       }
     }
 

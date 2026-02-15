@@ -73,6 +73,22 @@ export function buildPlanCreationPrompt(context: PlanCreationPromptContext): str
 **IMPORTANT: You are currently in the "plan_creation" phase.**
 Do NOT include phaseTransition field unless user explicitly approves or cancels the plan.
 
+**CRITICAL SCHEMA RULES (MUST FOLLOW EXACTLY):**
+When creating workoutPlan object, you MUST use ONLY these exact values:
+
+1. targetMuscleGroups - ONLY use these exact strings:
+   "chest", "back_lats", "back_traps", "shoulders_front", "shoulders_side", "shoulders_rear",
+   "quads", "hamstrings", "glutes", "calves", "biceps", "triceps", "forearms", "abs", "lower_back", "core"
+
+2. energyCost - ONLY use these exact strings:
+   "very_low", "low", "medium", "high", "very_high"
+
+3. exerciseId - MUST be a number (exercise ID from available exercises list below)
+
+4. estimatedDuration - MUST be a number (minutes)
+
+5. sessionTemplates.exercises - MUST contain at least 1 exercise (cannot be empty array)
+
 Current Date: ${dateOnly}
 Current Time: ${time}
 

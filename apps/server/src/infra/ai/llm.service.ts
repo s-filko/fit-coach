@@ -92,6 +92,67 @@ export class LLMService implements ILLMService {
     return this.invokeModel(messages, systemPrompt, opts?.jsonMode);
   }
 
+  async generateStructured<T>(
+    messages: ChatMsg[],
+    systemPrompt: string,
+    schema: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  ): Promise<T> {
+    const requestId = this.generateId();
+    const startTime = new Date();
+
+    try {
+      const systemMsg = new SystemMessage(systemPrompt);
+      const chatMessages = messages.map(chatMsg => {
+        if (chatMsg.role === 'system') {
+          return new SystemMessage(chatMsg.content);
+        }
+        if (chatMsg.role === 'assistant') {
+          return new AIMessage(chatMsg.content);
+        }
+        return new HumanMessage(chatMsg.content);
+      });
+
+      // Use response_format with json_object (compatible with OpenRouter)
+      // Note: OpenRouter doesn't support json_schema, only json_object
+      // The schema validation happens client-side after parsing
+      const modelWithJsonMode = this.model.bind({
+        response_format: {
+          type: 'json_object',
+        },
+      });
+
+      const result = await modelWithJsonMode.invoke([systemMsg, ...chatMessages]);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const parsed = JSON.parse(result.content as string);
+
+      // Validate against schema
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      const validated = schema.parse(parsed) as T;
+
+      const endTime = new Date();
+      const processingTime = endTime.getTime() - startTime.getTime();
+
+      if (this.isDebugMode) {
+        const response: LLMResponse = {
+          id: this.generateId(),
+          timestamp: endTime,
+          requestId,
+          content: JSON.stringify(validated),
+          model: this.model.model,
+          processingTime,
+        };
+        this.addToHistory(this.responseHistory, response);
+        this.metrics.totalRequests++;
+        this.metrics.totalProcessingTime += processingTime;
+      }
+
+      return validated;
+    } catch (error) {
+      this.metrics.totalErrors++;
+      throw error;
+    }
+  }
+
   private async invokeModel(
     message: ChatMsg[],
     systemPromptText: string,

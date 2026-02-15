@@ -5,6 +5,7 @@ class MockLLMService {
   generateResponse = jest.fn().mockResolvedValue('Mock AI response');
   generateRegistrationResponse = jest.fn().mockResolvedValue('Mock AI response');
   generateWithSystemPrompt = jest.fn();
+  generateStructured = jest.fn();
   getDebugInfo = jest.fn().mockReturnValue({});
   enableDebugMode = jest.fn();
   disableDebugMode = jest.fn();

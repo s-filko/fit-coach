@@ -18,6 +18,10 @@ class StubLLMService implements LLMService {
     return `Stub AI response to: ${text}`;
   }
 
+  async generateStructured<T>(messages: ChatMsg[], systemPrompt: string, schema: unknown): Promise<T> {
+    return {} as T;
+  }
+
   getDebugInfo(): any {
     return {};
   }

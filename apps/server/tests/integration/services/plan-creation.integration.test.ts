@@ -16,6 +16,7 @@ class MockLLMService {
   generateResponse = jest.fn<() => Promise<string>>().mockResolvedValue('Mock AI response');
   generateRegistrationResponse = jest.fn<() => Promise<string>>().mockResolvedValue('Mock AI response');
   generateWithSystemPrompt = jest.fn<() => Promise<string>>();
+  generateStructured = jest.fn<() => Promise<any>>();
   getDebugInfo = jest.fn().mockReturnValue({});
   enableDebugMode = jest.fn();
   disableDebugMode = jest.fn();
@@ -169,9 +170,9 @@ describe('Plan Creation Integration', () => {
 
   describe('plan_creation phase', () => {
     it('should load exercises and build plan creation prompt', async () => {
-      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
+      mockLLM.generateStructured.mockResolvedValue({
         message: 'Давайте создадим ваш план тренировок!',
-      }));
+      });
 
       await chatService.processMessage(
         baseUser,
@@ -191,7 +192,7 @@ describe('Plan Creation Integration', () => {
       });
 
       // Should call LLM with plan creation prompt
-      expect(mockLLM.generateWithSystemPrompt).toHaveBeenCalled();
+      expect(mockLLM.generateStructured).toHaveBeenCalled();
       expect(mockPromptService.buildPlanCreationPrompt).toHaveBeenCalled();
     });
 
@@ -230,14 +231,14 @@ describe('Plan Creation Integration', () => {
         progressionRules: ['Increase weight by 2.5kg when all sets completed'],
       };
 
-      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
+      mockLLM.generateStructured.mockResolvedValue({
         message: 'Отлично! План сохранен.',
         workoutPlan: mockPlan,
         phaseTransition: {
           toPhase: 'session_planning',
           reason: 'User approved plan',
         },
-      }));
+      });
 
       const createdPlan = {
         id: 'plan-123',
@@ -275,13 +276,13 @@ describe('Plan Creation Integration', () => {
     });
 
     it('should NOT save plan when user cancels', async () => {
-      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
+      mockLLM.generateStructured.mockResolvedValue({
         message: 'Хорошо, вернемся к планированию позже.',
         phaseTransition: {
           toPhase: 'chat',
           reason: 'User wants to postpone',
         },
-      }));
+      });
 
       const result = await chatService.processMessage(
         baseUser,
@@ -333,11 +334,11 @@ describe('Plan Creation Integration', () => {
         progressionRules: ['Increase weight when ready'],
       };
 
-      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
+      mockLLM.generateStructured.mockResolvedValue({
         message: 'Вот предварительный план. Что думаете?',
         workoutPlan: mockPlan,
         // No phaseTransition - still discussing
-      }));
+      });
 
       await chatService.processMessage(
         baseUser,
@@ -351,9 +352,9 @@ describe('Plan Creation Integration', () => {
     });
 
     it('should handle conversation history during plan creation', async () => {
-      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
+      mockLLM.generateStructured.mockResolvedValue({
         message: 'Понял, 4 дня в неделю. Какие группы мышц приоритетны?',
-      }));
+      });
 
       const historyMessages = [
         { role: 'user' as const, content: 'Хочу создать план' },
@@ -368,7 +369,7 @@ describe('Plan Creation Integration', () => {
       );
 
       // Should pass history to LLM
-      expect(mockLLM.generateWithSystemPrompt).toHaveBeenCalled();
+      expect(mockLLM.generateStructured).toHaveBeenCalled();
       expect(mockPromptService.buildPlanCreationPrompt).toHaveBeenCalled();
     });
   });
@@ -450,14 +451,14 @@ describe('Plan Creation Integration', () => {
         ],
       };
 
-      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
+      mockLLM.generateStructured.mockResolvedValue({
         message: 'Вот ваш персональный план тренировок!',
         workoutPlan: completePlan,
         phaseTransition: {
           toPhase: 'session_planning',
           reason: 'User approved the workout plan',
         },
-      }));
+      });
 
       const createdPlan = {
         id: 'plan-123',
@@ -482,7 +483,7 @@ describe('Plan Creation Integration', () => {
 
   describe('error handling', () => {
     it('should throw error on invalid LLM response format', async () => {
-      mockLLM.generateWithSystemPrompt.mockResolvedValue('{ invalid json }');
+      mockLLM.generateStructured.mockRejectedValue(new Error('JSON parsing failed'));
 
       await expect(
         chatService.processMessage(
@@ -491,16 +492,11 @@ describe('Plan Creation Integration', () => {
           'plan_creation',
           [],
         ),
-      ).rejects.toThrow('Failed to parse plan creation response');
+      ).rejects.toThrow();
     });
 
     it('should throw error on missing required fields', async () => {
-      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
-        // Missing 'message' field
-        workoutPlan: {
-          name: 'Test',
-        },
-      }));
+      mockLLM.generateStructured.mockRejectedValue(new Error('Schema validation failed'));
 
       await expect(
         chatService.processMessage(
@@ -509,11 +505,11 @@ describe('Plan Creation Integration', () => {
           'plan_creation',
           [],
         ),
-      ).rejects.toThrow('Invalid plan creation response');
+      ).rejects.toThrow();
     });
 
     it('should handle repository errors gracefully', async () => {
-      mockLLM.generateWithSystemPrompt.mockResolvedValue(JSON.stringify({
+      mockLLM.generateStructured.mockResolvedValue({
         message: 'План готов!',
         workoutPlan: {
           name: 'Test Plan',
@@ -551,7 +547,7 @@ describe('Plan Creation Integration', () => {
         phaseTransition: {
           toPhase: 'session_planning',
         },
-      }));
+      });
 
       mockWorkoutPlanRepo.create.mockRejectedValue(new Error('Database error'));
 
