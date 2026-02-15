@@ -134,6 +134,23 @@ describe('Training Intent Types', () => {
       const result = TrainingIntentSchema.safeParse(data);
       expect(result.success).toBe(false);
     });
+
+    it('should reject camelCase intent types (regression test for naming mismatch bug)', () => {
+      const camelCaseIntents = [
+        { type: 'logSet', setData: { type: 'strength', reps: 10 } },
+        { type: 'nextExercise' },
+        { type: 'skipExercise', reason: 'test' },
+        { type: 'finishTraining' },
+        { type: 'requestAdvice' },
+        { type: 'modifySession', modification: 'test' },
+        { type: 'justChat' },
+      ];
+
+      camelCaseIntents.forEach((data) => {
+        const result = TrainingIntentSchema.safeParse(data);
+        expect(result.success).toBe(false);
+      });
+    });
   });
 
   describe('LLMTrainingResponseSchema', () => {
@@ -156,13 +173,16 @@ describe('Training Intent Types', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should validate response without intent', () => {
+    it('should reject response without intent (intent is now required)', () => {
       const data = {
         message: 'Продолжай в том же духе!',
       };
 
       const result = LLMTrainingResponseSchema.safeParse(data);
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.path).toContain('intent');
+      }
     });
 
     it('should validate response with phase transition', () => {
@@ -213,14 +233,12 @@ describe('Training Intent Types', () => {
       expect(result.intent?.type).toBe('log_set');
     });
 
-    it('should parse valid JSON without intent', () => {
+    it('should reject JSON without intent (intent is now required)', () => {
       const json = JSON.stringify({
         message: 'Продолжай!',
       });
 
-      const result = parseTrainingResponse(json);
-      expect(result.message).toBe('Продолжай!');
-      expect(result.intent).toBeUndefined();
+      expect(() => parseTrainingResponse(json)).toThrow('Invalid training response format');
     });
 
     it('should throw on invalid JSON', () => {

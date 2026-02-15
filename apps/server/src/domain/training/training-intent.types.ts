@@ -5,6 +5,32 @@ import { z } from 'zod';
  * LLM extracts these intents from user messages during active training session
  */
 
+// --- Intent Type Constants (Single Source of Truth) ---
+
+/**
+ * CRITICAL: These constants are the SINGLE SOURCE OF TRUTH for intent type names.
+ * They are used in:
+ * 1. Zod schemas (type validation)
+ * 2. System prompts (LLM instructions)
+ * 3. Switch statements (intent execution)
+ * 
+ * DO NOT use string literals elsewhere. Always import and use these constants.
+ */
+export const trainingIntentTypes = {
+  logSet: 'log_set',
+  nextExercise: 'next_exercise',
+  skipExercise: 'skip_exercise',
+  finishTraining: 'finish_training',
+  requestAdvice: 'request_advice',
+  modifySession: 'modify_session',
+  justChat: 'just_chat',
+} as const;
+
+/**
+ * Type-safe union of all intent type values
+ */
+export type TrainingIntentType = (typeof trainingIntentTypes)[keyof typeof trainingIntentTypes];
+
 // --- SetData Schemas ---
 
 const StrengthSetDataSchema = z.object({
@@ -62,7 +88,7 @@ const SetDataSchema = z.discriminatedUnion('type', [
 // --- Log Set Intent ---
 
 export const LogSetIntentSchema = z.object({
-  type: z.literal('log_set'),
+  type: z.literal(trainingIntentTypes.logSet),
   setData: SetDataSchema,
   // Optional RPE (Rate of Perceived Exertion) 1-10
   rpe: z.number().min(1).max(10).optional(),
@@ -75,7 +101,7 @@ export type LogSetIntent = z.infer<typeof LogSetIntentSchema>;
 // --- Next Exercise Intent ---
 
 export const NextExerciseIntentSchema = z.object({
-  type: z.literal('next_exercise'),
+  type: z.literal(trainingIntentTypes.nextExercise),
   // Optional reason for moving to next exercise
   reason: z.string().optional(),
 });
@@ -85,7 +111,7 @@ export type NextExerciseIntent = z.infer<typeof NextExerciseIntentSchema>;
 // --- Skip Exercise Intent ---
 
 export const SkipExerciseIntentSchema = z.object({
-  type: z.literal('skip_exercise'),
+  type: z.literal(trainingIntentTypes.skipExercise),
   // Reason for skipping
   reason: z.string().optional(),
 });
@@ -95,7 +121,7 @@ export type SkipExerciseIntent = z.infer<typeof SkipExerciseIntentSchema>;
 // --- Finish Training Intent ---
 
 export const FinishTrainingIntentSchema = z.object({
-  type: z.literal('finish_training'),
+  type: z.literal(trainingIntentTypes.finishTraining),
   // Optional user feedback about the session
   feedback: z.string().optional(),
 });
@@ -105,7 +131,7 @@ export type FinishTrainingIntent = z.infer<typeof FinishTrainingIntentSchema>;
 // --- Request Advice Intent ---
 
 export const RequestAdviceIntentSchema = z.object({
-  type: z.literal('request_advice'),
+  type: z.literal(trainingIntentTypes.requestAdvice),
   // What user needs advice about
   topic: z.string().optional(),
 });
@@ -115,7 +141,7 @@ export type RequestAdviceIntent = z.infer<typeof RequestAdviceIntentSchema>;
 // --- Modify Session Intent ---
 
 export const ModifySessionIntentSchema = z.object({
-  type: z.literal('modify_session'),
+  type: z.literal(trainingIntentTypes.modifySession),
   // What user wants to change
   modification: z.string(),
 });
@@ -125,7 +151,7 @@ export type ModifySessionIntent = z.infer<typeof ModifySessionIntentSchema>;
 // --- Just Chat Intent ---
 
 export const JustChatIntentSchema = z.object({
-  type: z.literal('just_chat'),
+  type: z.literal(trainingIntentTypes.justChat),
   // User just wants to chat, no training action
 });
 
@@ -147,11 +173,14 @@ export type TrainingIntent = z.infer<typeof TrainingIntentSchema>;
 
 /**
  * LLM response during training phase
- * Includes message to user and optional training intent
+ * Includes message to user and required training intent
+ * 
+ * CRITICAL: intent field is REQUIRED. LLM must always specify an intent type.
+ * Use "just_chat" for casual conversation that doesn't involve training actions.
  */
 export const LLMTrainingResponseSchema = z.object({
   message: z.string(),
-  intent: TrainingIntentSchema.optional(),
+  intent: TrainingIntentSchema,
   // Phase transition (e.g., finish training -> return to chat)
   phaseTransition: z.object({
     toPhase: z.enum(['chat', 'session_planning']),

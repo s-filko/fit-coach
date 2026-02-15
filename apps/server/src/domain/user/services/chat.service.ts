@@ -10,7 +10,11 @@ import { PlanCreationLLMResponseSchema, type WorkoutPlanDraft } from '@domain/tr
 import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
 import { SessionPlanningContextBuilder } from '@domain/training/services/session-planning-context.builder';
 import { parseSessionPlanningResponse } from '@domain/training/session-planning.types';
-import { parseTrainingResponse, type TrainingIntent } from '@domain/training/training-intent.types';
+import {
+  parseTrainingResponse,
+  type TrainingIntent,
+  trainingIntentTypes,
+} from '@domain/training/training-intent.types';
 import type { SessionRecommendation, WorkoutSession } from '@domain/training/types';
 import {
   ChatMsg,
@@ -112,10 +116,8 @@ export class ChatService implements IChatService {
         const trainingResponse = parseTrainingResponse(llmResponse);
         parsedMessage = trainingResponse.message;
         
-        // Execute training intent if present
-        if (trainingResponse.intent) {
-          await this.executeTrainingIntent(user.id, trainingResponse.intent);
-        }
+        // Execute training intent (always present — field is required)
+        await this.executeTrainingIntent(user.id, trainingResponse.intent);
 
         // Map phase transition if present
         if (trainingResponse.phaseTransition) {
@@ -296,7 +298,7 @@ export class ChatService implements IChatService {
 
     // Route based on intent type
     switch (intent.type) {
-      case 'log_set': {
+      case trainingIntentTypes.logSet: {
         // Find current in_progress exercise
         const session = await this.trainingService.getSessionDetails(sessionId);
         if (!session) {
@@ -321,28 +323,28 @@ export class ChatService implements IChatService {
         break;
       }
 
-      case 'next_exercise': {
+      case trainingIntentTypes.nextExercise: {
         // Complete current exercise and start next
         await this.trainingService.completeCurrentExercise(sessionId);
         await this.trainingService.startNextExercise(sessionId);
         break;
       }
 
-      case 'skip_exercise': {
+      case trainingIntentTypes.skipExercise: {
         // Skip current exercise
         await this.trainingService.skipCurrentExercise(sessionId);
         break;
       }
 
-      case 'finish_training': {
+      case trainingIntentTypes.finishTraining: {
         // Complete the session
         await this.trainingService.completeSession(sessionId);
         break;
       }
 
-      case 'request_advice':
-      case 'modify_session':
-      case 'just_chat': {
+      case trainingIntentTypes.requestAdvice:
+      case trainingIntentTypes.modifySession:
+      case trainingIntentTypes.justChat: {
         // These intents don't require database actions
         // LLM handles them conversationally
         break;

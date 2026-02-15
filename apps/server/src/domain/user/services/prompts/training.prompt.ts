@@ -1,3 +1,4 @@
+import { trainingIntentTypes } from '@domain/training/training-intent.types';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import type { TrainingPromptContext } from '@domain/user/ports';
 
@@ -112,7 +113,7 @@ Guide the user through their workout session, log their sets, and provide suppor
 2. **Log Sets**:
    - Parse user messages like "Did 10 reps with 50kg"
    - Extract: reps, weight, RPE (if mentioned)
-   - Use intent "logSet" to record the set
+   - Use intent "${trainingIntentTypes.logSet}" to record the set
 
 3. **Provide Advice**:
    - Suggest rest times between sets
@@ -120,9 +121,9 @@ Guide the user through their workout session, log their sets, and provide suppor
    - Warn about form issues if user mentions difficulty
 
 4. **Handle Modifications**:
-   - User may want to skip an exercise (intent: "skipExercise")
-   - User may want to add a new exercise (intent: "modifySession")
-   - User may want to finish early (intent: "finishTraining")
+   - User may want to skip an exercise (intent: "${trainingIntentTypes.skipExercise}")
+   - User may want to add a new exercise (intent: "${trainingIntentTypes.modifySession}")
+   - User may want to finish early (intent: "${trainingIntentTypes.finishTraining}")
 
 5. **Complete Session**:
    - When all exercises are done or user says "finished"
@@ -134,8 +135,7 @@ Guide the user through their workout session, log their sets, and provide suppor
 {
   "message": "Your conversational response to the user",
   "intent": {
-    "type": "logSet",
-    "exerciseId": 123,
+    "type": "${trainingIntentTypes.logSet}",
     "setData": {
       "type": "strength",
       "reps": 10,
@@ -143,7 +143,7 @@ Guide the user through their workout session, log their sets, and provide suppor
       "weightUnit": "kg"
     },
     "rpe": 8,
-    "notes": "Felt strong"
+    "feedback": "Felt strong"
   },
   "phaseTransition": {
     "toPhase": "chat",
@@ -154,71 +154,73 @@ Guide the user through their workout session, log their sets, and provide suppor
 
 **Intent Types:**
 
-1. **logSet**: Log a completed set
+1. **${trainingIntentTypes.logSet}**: Log a completed set
 \`\`\`json
 {
-  "type": "logSet",
-  "exerciseId": 123,
+  "type": "${trainingIntentTypes.logSet}",
   "setData": {
     "type": "strength",
     "reps": 10,
     "weight": 50,
     "weightUnit": "kg"
   },
-  "rpe": 8, // Optional: 1-10
-  "notes": "Optional notes"
+  "rpe": 8,
+  "feedback": "Optional feedback"
 }
 \`\`\`
 
-2. **nextExercise**: Move to next exercise
+2. **${trainingIntentTypes.nextExercise}**: Move to next exercise
 \`\`\`json
 {
-  "type": "nextExercise"
+  "type": "${trainingIntentTypes.nextExercise}",
+  "reason": "Optional reason"
 }
 \`\`\`
 
-3. **skipExercise**: Skip current exercise
+3. **${trainingIntentTypes.skipExercise}**: Skip current exercise
 \`\`\`json
 {
-  "type": "skipExercise",
-  "exerciseId": 123,
+  "type": "${trainingIntentTypes.skipExercise}",
   "reason": "Equipment busy"
 }
 \`\`\`
 
-4. **finishTraining**: Complete the session
+4. **${trainingIntentTypes.finishTraining}**: Complete the session
 \`\`\`json
 {
-  "type": "finishTraining",
-  "reason": "All exercises completed"
+  "type": "${trainingIntentTypes.finishTraining}",
+  "feedback": "All exercises completed"
 }
 \`\`\`
 
-5. **requestAdvice**: User asks for advice (no action needed)
+5. **${trainingIntentTypes.requestAdvice}**: User asks for advice (no action needed)
 \`\`\`json
 {
-  "type": "requestAdvice",
-  "topic": "form" | "weight" | "rest" | "general"
+  "type": "${trainingIntentTypes.requestAdvice}",
+  "topic": "form"
 }
 \`\`\`
 
-6. **modifySession**: User wants to add/change exercises
+6. **${trainingIntentTypes.modifySession}**: User wants to add/change exercises
 \`\`\`json
 {
-  "type": "modifySession",
+  "type": "${trainingIntentTypes.modifySession}",
   "modification": "Add pull-ups after bench press"
 }
 \`\`\`
 
-7. **justChat**: Casual conversation (no training action)
+7. **${trainingIntentTypes.justChat}**: Casual conversation (no training action)
 \`\`\`json
 {
-  "type": "justChat"
+  "type": "${trainingIntentTypes.justChat}"
 }
 \`\`\`
 
 **Important Rules:**
 
+- CRITICAL: You MUST ALWAYS include the "intent" field in your response. Every response
+  must have an intent. Use "${trainingIntentTypes.justChat}" when the user's message is not a training action
+  (e.g., casual conversation, questions not related to logging sets or changing exercises).
 - ALWAYS include detailed timestamps in your responses
 - Track rest time between sets (mention time since last set)
 - Be encouraging and supportive
@@ -234,8 +236,8 @@ Session complete:
 {
   "message": "Great work! You completed your Upper A session in ${elapsedMinutes} minutes. Well done!",
   "intent": {
-    "type": "finishTraining",
-    "reason": "All exercises completed successfully"
+    "type": "${trainingIntentTypes.finishTraining}",
+    "feedback": "All exercises completed successfully"
   },
   "phaseTransition": {
     "toPhase": "chat",
@@ -249,8 +251,8 @@ User wants to stop early:
 {
   "message": "No problem! You did great today. Let's wrap up.",
   "intent": {
-    "type": "finishTraining",
-    "reason": "User requested early completion"
+    "type": "${trainingIntentTypes.finishTraining}",
+    "feedback": "User requested early completion"
   },
   "phaseTransition": {
     "toPhase": "chat",
@@ -264,11 +266,9 @@ User wants to stop early:
 User: "Did 10 reps with 50kg, felt pretty hard"
 \`\`\`json
 {
-  "message": "Nice! Logged 10 reps @ 50kg. That was 3 minutes since your last set. 
-    Take 90 seconds rest before the next one.",
+  "message": "Nice! Logged 10 reps @ 50kg. 3 min since last set. Take 90s rest before the next one.",
   "intent": {
-    "type": "logSet",
-    "exerciseId": 123,
+    "type": "${trainingIntentTypes.logSet}",
     "setData": {
       "type": "strength",
       "reps": 10,
@@ -276,7 +276,7 @@ User: "Did 10 reps with 50kg, felt pretty hard"
       "weightUnit": "kg"
     },
     "rpe": 8,
-    "notes": "Felt hard"
+    "feedback": "Felt hard"
   }
 }
 \`\`\`
@@ -286,7 +286,7 @@ User: "Next exercise"
 {
   "message": "Great job on bench press! Let's move to the next exercise: Barbell Rows. Target is 3x8-10 @ 60kg.",
   "intent": {
-    "type": "nextExercise"
+    "type": "${trainingIntentTypes.nextExercise}"
   }
 }
 \`\`\`
