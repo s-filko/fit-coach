@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "serve-bot": "npx tsx index.ts"
+    "serve-bot": "npx tsx index.ts 2>&1 | tee ../../logs/bot.log",
+    "dev": "npx tsx index.ts 2>&1 | tee ../../logs/bot.log"
   },
   "keywords": [],
   "author": "",
