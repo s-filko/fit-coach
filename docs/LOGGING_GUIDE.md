@@ -445,3 +445,63 @@ sum by (module) (rate({service="fitcoach-server", level="error"}[5m]))
 # Export JSON for LLM analysis
 {service="fitcoach-server", level="error"} | json | line_format "{{.msg}} {{.err}}"
 ```
+
+---
+
+## Infrastructure Setup
+
+### Loki Stack Location
+
+Docker Compose stack (Loki + Alloy + Grafana) is in `/Users/filko/Docker/loki_stack`:
+
+```bash
+cd /Users/filko/Docker/loki_stack
+docker-compose up -d
+```
+
+**Grafana UI**: http://localhost:3030 (anonymous admin access enabled)
+
+### Connecting FitCoach Containers
+
+Add to project's `docker-compose.yml`:
+
+```yaml
+services:
+  server:
+    # ... existing config ...
+    labels:
+      service: "fitcoach-server"
+    networks:
+      - default
+      - loki
+
+  bot:
+    # ... existing config ...
+    labels:
+      service: "fitcoach-bot"
+    networks:
+      - default
+      - loki
+
+networks:
+  loki:
+    external: true
+    name: loki_loki-net
+```
+
+Alloy automatically discovers labeled containers and ships their stdout JSON logs to Loki.
+
+### Verifying Integration
+
+```bash
+# Check Alloy discovered containers
+docker logs fitcoach-alloy 2>&1 | grep discovered
+
+# Verify Loki receives logs
+curl http://localhost:3100/ready
+```
+
+In Grafana Explore, run:
+```logql
+{service=~"fitcoach.*"}
+```
