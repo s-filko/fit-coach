@@ -219,6 +219,9 @@ Help the user plan today's workout session through conversation.
 
 **Important Rules:**
 
+- CRITICAL: When setting phaseTransition.toPhase to "training", you MUST ALWAYS include the
+  sessionPlan in the same response. The system needs the plan to create the training session.
+  Even if you showed the plan in a previous message, include it again when transitioning.
 - ALWAYS include detailed timestamps in your reasoning
 - Ask questions to collect user context if not provided
 - timeLimit should ONLY be set if user explicitly provides available time
@@ -235,6 +238,22 @@ Ready to start:
 \`\`\`json
 {
   "message": "Great! Let's begin your Upper A workout. We'll start with bench press.",
+  "sessionPlan": {
+    "sessionKey": "upper_a",
+    "sessionName": "Upper A - Chest/Back",
+    "reasoning": "Last trained upper body 3 days ago, good recovery time",
+    "exercises": [
+      {
+        "exerciseId": 1,
+        "exerciseName": "Barbell Bench Press",
+        "targetSets": 3,
+        "targetReps": "8-10",
+        "targetWeight": 70,
+        "restSeconds": 90
+      }
+    ],
+    "estimatedDuration": 60
+  },
   "phaseTransition": {
     "toPhase": "training",
     "reason": "User confirmed plan and ready to start training"

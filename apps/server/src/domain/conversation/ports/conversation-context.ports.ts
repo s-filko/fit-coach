@@ -19,6 +19,10 @@ export interface PlanCreationContext {
 export interface SessionPlanningContext {
   // Stores the recommended session while user reviews/modifies it
   recommendedSessionId?: string; // Optional: if we pre-create a draft session
+  // Cached session plan from LLM response (for reliability when transitioning to training)
+  // Runtime type: SessionRecommendation (from session-planning.types.ts)
+  // Stored as Record to avoid circular import (session-planning.types → this file)
+  lastSessionPlan?: Record<string, unknown>;
 }
 
 export interface TrainingContext {
@@ -73,5 +77,11 @@ export interface IConversationContextService {
   startNewPhase(
     userId: string, fromPhase: ConversationPhase, toPhase: ConversationPhase,
     systemNote: string, options?: StartNewPhaseOptions,
+  ): Promise<void>;
+  /** Update phase-specific context (e.g., cache session plan) */
+  updatePhaseContext(
+    userId: string,
+    phase: ConversationPhase,
+    context: SessionPlanningContext | TrainingContext,
   ): Promise<void>;
 }

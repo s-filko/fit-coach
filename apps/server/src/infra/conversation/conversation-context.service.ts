@@ -4,7 +4,9 @@ import {
   GetMessagesOptions,
   IConversationContextService,
   ResetOptions,
+  SessionPlanningContext,
   StartNewPhaseOptions,
+  TrainingContext,
 } from '@domain/conversation/ports';
 import { ChatMsg } from '@domain/user/ports';
 
@@ -53,6 +55,8 @@ export class InMemoryConversationContextService implements IConversationContextS
         return { ...base, phase: 'registration' };
       case 'chat':
         return { ...base, phase: 'chat' };
+      case 'plan_creation':
+        return { ...base, phase: 'plan_creation' };
       case 'session_planning':
         return { ...base, phase: 'session_planning' };
       case 'training':
@@ -121,6 +125,15 @@ export class InMemoryConversationContextService implements IConversationContextS
       case 'chat':
         newContext = { userId, phase: 'chat', turns: baseTurns, lastActivityAt: now };
         break;
+      case 'plan_creation':
+        newContext = {
+          userId,
+          phase: 'plan_creation',
+          turns: baseTurns,
+          lastActivityAt: now,
+          planCreationContext: options?.planCreationContext,
+        };
+        break;
       case 'session_planning':
         newContext = {
           userId,
@@ -147,5 +160,31 @@ export class InMemoryConversationContextService implements IConversationContextS
     }
     
     this.store.set(this.key(userId, toPhase), newContext);
+  }
+
+  /** Update phase-specific context (e.g., cache session plan) */
+  async updatePhaseContext(
+    userId: string,
+    phase: ConversationPhase,
+    context: SessionPlanningContext | TrainingContext,
+  ): Promise<void> {
+    if (phase !== 'session_planning' && phase !== 'training') {
+      throw new Error(`updatePhaseContext is only supported for session_planning and training, got: ${phase}`);
+    }
+
+    const k = this.key(userId, phase);
+    const existing = this.store.get(k);
+
+    if (phase === 'session_planning') {
+      if (existing && existing.phase === 'session_planning') {
+        existing.sessionPlanningContext = context as SessionPlanningContext;
+      }
+      // If no context exists yet (first message in phase), store it separately
+      // so getContext() can attach it later
+    } else if (phase === 'training') {
+      if (existing && existing.phase === 'training') {
+        existing.trainingContext = context as TrainingContext;
+      }
+    }
   }
 }

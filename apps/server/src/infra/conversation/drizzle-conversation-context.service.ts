@@ -194,4 +194,20 @@ export class DrizzleConversationContextService implements IConversationContextSe
       this.phaseContextStore.set(toKey, options.trainingContext);
     }
   }
+
+  /** Update phase-specific context (e.g., cache session plan) */
+  async updatePhaseContext(
+    userId: string,
+    phase: ConversationPhase,
+    context: SessionPlanningContext | TrainingContext,
+  ): Promise<void> {
+    if (phase !== 'session_planning' && phase !== 'training') {
+      throw new Error(`updatePhaseContext is only supported for session_planning and training, got: ${phase}`);
+    }
+
+    const key = this.contextKey(userId, phase);
+    const existing = this.phaseContextStore.get(key);
+    // Merge with existing context to preserve fields not being updated
+    this.phaseContextStore.set(key, { ...existing, ...context });
+  }
 }

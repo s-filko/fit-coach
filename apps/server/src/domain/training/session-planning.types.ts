@@ -100,9 +100,25 @@ export function parseSessionPlanningResponse(jsonString: string): SessionPlannin
  *   }
  * }
  *
- * 3. User ready to start training:
+ * 3. User ready to start training (MUST include sessionPlan):
  * {
  *   "message": "Отлично! Начинаем тренировку. Первое упражнение: жим лежа.",
+ *   "sessionPlan": {
+ *     "sessionKey": "upper_a",
+ *     "sessionName": "Upper A - Chest/Back",
+ *     "reasoning": "Good recovery, ready for upper body",
+ *     "exercises": [
+ *       {
+ *         "exerciseId": 1,
+ *         "exerciseName": "Barbell Bench Press",
+ *         "targetSets": 3,
+ *         "targetReps": "8-10",
+ *         "targetWeight": 70,
+ *         "restSeconds": 90
+ *       }
+ *     ],
+ *     "estimatedDuration": 60
+ *   },
  *   "phaseTransition": {
  *     "toPhase": "training",
  *     "reason": "User confirmed plan and ready to start"

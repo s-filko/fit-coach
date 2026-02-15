@@ -134,6 +134,23 @@ export class ChatService implements IChatService {
         sessionPlan = plan;
         phaseTransition = transition;
 
+        // Cache session plan when LLM generates it (for reliability when transitioning to training)
+        // This handles the case where LLM generates plan in message N, user confirms in message N+1
+        // and LLM doesn't repeat the plan (conversational optimization)
+        if (sessionPlan) {
+          await this.conversationContextService.updatePhaseContext(user.id, 'session_planning', {
+            lastSessionPlan: sessionPlan as unknown as Record<string, unknown>,
+          });
+        }
+
+        // Retrieve cached plan if LLM didn't include it in transition message
+        if (!sessionPlan && phaseTransition?.toPhase === 'training') {
+          const ctx = await this.conversationContextService.getContext(user.id, 'session_planning');
+          if (ctx?.phase === 'session_planning' && ctx.sessionPlanningContext?.lastSessionPlan) {
+            sessionPlan = ctx.sessionPlanningContext.lastSessionPlan as unknown as SessionRecommendation;
+          }
+        }
+
         // Save session plan ONLY if transitioning to training (user confirmed)
         // Plans are kept in conversation history until user confirms
         // If user cancels, no session is created - plan is just lost with conversation context
@@ -141,6 +158,12 @@ export class ChatService implements IChatService {
           const session = await this.saveSessionPlan(user.id, sessionPlan);
           // Update phase transition with session ID for training phase
           phaseTransition.sessionId = session.id;
+        } else if (!sessionPlan && phaseTransition?.toPhase === 'training') {
+          // No plan available - cannot create session
+          throw new Error(
+            'Cannot start training: no session plan available. ' +
+            'LLM must include sessionPlan when transitioning to training phase, or plan must be cached.',
+          );
         }
       } else {
         // Other phases (chat, registration): use standard LLM response parser
