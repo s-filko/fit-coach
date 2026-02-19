@@ -105,7 +105,7 @@ Focus: ${template.focus}
 Energy Cost: ${template.energyCost}
 Estimated Duration: ${template.estimatedDuration} min
 Exercises:
-${template.exercises.map((ex) => `  - ${ex.exerciseName}: ${ex.targetSets}x${ex.targetReps}${ex.targetWeight ? ` @ ${ex.targetWeight}kg` : ''}`).join('\n')}`,
+${template.exercises.map((ex) => `  - [ID:${ex.exerciseId}] ${ex.exerciseName}: ${ex.targetSets}x${ex.targetReps}${ex.targetWeight ? ` @ ${ex.targetWeight}kg` : ''} (rest: ${ex.restSeconds}s)`).join('\n')}`,
   )
   .join('\n\n')}`
     : 'No active workout plan. User needs to create a plan first.';
@@ -155,6 +155,10 @@ ${draftSection}
 
 Days since last workout: ${context.daysSinceLastWorkout ?? 'N/A'}
 Total exercises available: ${context.totalExercisesAvailable}
+
+# ALL AVAILABLE EXERCISES (use these IDs)
+
+${context.availableExercises.map((ex) => `[ID:${ex.id}] ${ex.name} (${ex.category})`).join('\n')}
 
 # YOUR TASK
 
@@ -220,6 +224,13 @@ Help the user plan today's workout session through conversation.
 
 **Important Rules:**
 
+- CRITICAL: \`sessionPlan.exercises\` MUST be a FLAT array of exercise objects.
+  Each element MUST have: exerciseId (number), exerciseName (string), targetSets (number), targetReps (string), restSeconds (number).
+  Do NOT nest exercises inside day objects. Do NOT return all 4 day templates — pick ONE session for today.
+- CRITICAL: \`exerciseId\` MUST be the EXACT numeric ID from the available exercises list above.
+  NEVER omit exerciseId. NEVER invent IDs. Copy the ID shown as [ID:N] in the exercises list.
+- NEVER mention exercise IDs in your \`message\` text. IDs are internal data for the JSON structure only.
+  The user should only see exercise names, sets, reps, and weights in your conversational response.
 - CRITICAL: When setting phaseTransition.toPhase to "training", you MUST ALWAYS include the
   sessionPlan in the same response. The system needs the plan to create the training session.
   Even if you showed the plan in a previous message, include it again when transitioning.
@@ -233,7 +244,9 @@ Help the user plan today's workout session through conversation.
 - If user wants to postpone/cancel, CONFIRM their intent first, then transition to chat
 - Consider recovery: if trained yesterday with high intensity, recommend rest or light session
 - If no recent training (>7 days), recommend easier session to ease back in
+- ALWAYS respond in the same language the user writes in. If the user speaks a non-English language, translate exercise names and add the English name in parentheses for clarity. If the user speaks English, just use the English name. JSON fields (exerciseName, sessionKey, etc.) MUST stay in English.
 - Be conversational and supportive, not robotic
+- Use Telegram HTML formatting in your message text: <b>bold</b> for exercise names and key details, <i>italic</i> for tips or secondary info. Do NOT use Markdown (no **asterisks**, no __underscores__). Do NOT overuse emoji — use sparingly if at all.
 
 **Phase Transition Examples:**
 

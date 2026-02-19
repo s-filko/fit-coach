@@ -281,6 +281,8 @@ export class ChatService implements IChatService {
       currentPlan = session?.sessionPlanJson ?? null;
     }
 
+    const allExercises = await this.exerciseRepo.findAll();
+
     return {
       user,
       activePlan: contextData.activePlan,
@@ -288,6 +290,7 @@ export class ChatService implements IChatService {
       currentPlan,
       totalExercisesAvailable: contextData.totalExercisesAvailable,
       daysSinceLastWorkout: contextData.daysSinceLastWorkout,
+      availableExercises: allExercises.map((ex) => ({ id: ex.id, name: ex.name, category: ex.category })),
     };
   }
 
@@ -367,7 +370,13 @@ export class ChatService implements IChatService {
 
       case trainingIntentTypes.nextExercise: {
         // Complete current exercise — next one is created lazily on first log_set
-        await this.trainingService.completeCurrentExercise(sessionId);
+        // If no exercise is in_progress (e.g. start of session), silently ignore
+        await this.trainingService.completeCurrentExercise(sessionId).catch((err: unknown) => {
+          if (err instanceof Error && err.message === 'No exercise currently in progress') {
+            return; // Normal at session start or when LLM sends next_exercise redundantly
+          }
+          throw err;
+        });
         break;
       }
 

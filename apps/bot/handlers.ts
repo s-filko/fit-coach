@@ -2,6 +2,16 @@ import type TelegramBot from 'node-telegram-bot-api';
 import axios from 'axios';
 import { log } from './logger';
 
+async function sendHtml(bot: TelegramBot, chatId: number, text: string): Promise<void> {
+    try {
+        await bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
+    } catch {
+        // If HTML parsing fails (e.g. malformed tags), fall back to plain text
+        log.warn({ chatId, textSnippet: text.slice(0, 100) }, 'HTML parse failed, sending as plain text');
+        await bot.sendMessage(chatId, text);
+    }
+}
+
 const api = axios.create({
     baseURL: process.env.SERVER_URL,
     headers: {
@@ -69,7 +79,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                     throw new Error('Invalid response from AI service');
                 }
 
-                await bot.sendMessage(chatId, aiResponse);
+                await sendHtml(bot, chatId, aiResponse);
             } catch (error) {
                 log.error({ 
                     err: error,
@@ -79,10 +89,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                         responseData: error.response?.data,
                     }),
                 }, '/start command failed');
-                await bot.sendMessage(
-                    chatId,
-                    'Sorry, there was an error. Please try again in a minute.'
-                );
+                await bot.sendMessage(chatId, 'Sorry, there was an error. Please try again in a minute.');
             }
             return;
         }
@@ -107,7 +114,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                 throw new Error('Invalid response from AI service');
             }
 
-            await bot.sendMessage(chatId, aiResponse);
+            await sendHtml(bot, chatId, aiResponse);
         } catch (error) {
             log.error({ 
                 err: error,
@@ -117,10 +124,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                     responseData: error.response?.data,
                 }),
             }, 'message processing failed');
-            await bot.sendMessage(
-                chatId,
-                'Sorry, there was an error while communicating with the coach. Please try again in a minute.'
-            );
+            await bot.sendMessage(chatId, 'Sorry, there was an error while communicating with the coach. Please try again in a minute.');
         }
     });
 }

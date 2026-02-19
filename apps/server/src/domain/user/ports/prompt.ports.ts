@@ -27,6 +27,7 @@ export interface SessionPlanningPromptContext {
   currentPlan: SessionRecommendation | null;
   totalExercisesAvailable: number;
   daysSinceLastWorkout: number | null;
+  availableExercises: Array<{ id: number; name: string; category: string }>;
 }
 
 // Context for training prompt
