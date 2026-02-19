@@ -84,12 +84,12 @@ export function parseSessionPlanningResponse(jsonString: string): SessionPlannin
  *
  * 1. Collecting user context (no plan yet):
  * {
- *   "message": "Как ты себя чувствуешь сегодня? Сколько времени у тебя есть на тренировку?"
+ *   "message": "How are you feeling today? How much time do you have for the workout?"
  * }
  *
  * 2. Presenting workout plan:
  * {
- *   "message": "Отлично! Вот план на сегодня: Upper A - акцент на грудь и спину.",
+ *   "message": "Great! Here's today's plan: Upper A — chest and back focus.",
  *   "sessionPlan": {
  *     "sessionKey": "upper_a",
  *     "sessionName": "Upper A - Chest/Back",
@@ -113,7 +113,7 @@ export function parseSessionPlanningResponse(jsonString: string): SessionPlannin
  *
  * 3. User ready to start training (MUST include sessionPlan):
  * {
- *   "message": "Отлично! Начинаем тренировку. Первое упражнение: жим лежа.",
+ *   "message": "Let's go! Starting the workout. First exercise: Barbell Bench Press.",
  *   "sessionPlan": {
  *     "sessionKey": "upper_a",
  *     "sessionName": "Upper A - Chest/Back",
@@ -138,7 +138,7 @@ export function parseSessionPlanningResponse(jsonString: string): SessionPlannin
  *
  * 4. User cancels planning:
  * {
- *   "message": "Хорошо, давай потренируемся позже!",
+ *   "message": "No problem, let's train later!",
  *   "phaseTransition": {
  *     "toPhase": "chat",
  *     "reason": "User explicitly cancelled session planning"

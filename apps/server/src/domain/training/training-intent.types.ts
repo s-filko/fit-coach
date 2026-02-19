@@ -221,7 +221,7 @@ export function parseTrainingResponse(jsonString: string): LLMTrainingResponse {
  *
  * 1. Log a strength set:
  * {
- *   "message": "Отлично! Записал подход.",
+ *   "message": "Got it! Set logged.",
  *   "intent": {
  *     "type": "log_set",
  *     "setData": { "type": "strength", "reps": 10, "weight": 100, "weightUnit": "kg" },
@@ -231,7 +231,7 @@ export function parseTrainingResponse(jsonString: string): LLMTrainingResponse {
  *
  * 2. Move to next exercise:
  * {
- *   "message": "Хорошо, переходим к следующему упражнению!",
+ *   "message": "Moving to the next exercise!",
  *   "intent": {
  *     "type": "next_exercise"
  *   }
@@ -239,7 +239,7 @@ export function parseTrainingResponse(jsonString: string): LLMTrainingResponse {
  *
  * 3. Finish training:
  * {
- *   "message": "Отличная тренировка! Все записал.",
+ *   "message": "Great workout! Everything logged.",
  *   "intent": {
  *     "type": "finish_training",
  *     "feedback": "Great workout"
@@ -252,7 +252,7 @@ export function parseTrainingResponse(jsonString: string): LLMTrainingResponse {
  *
  * 4. Just chat during training:
  * {
- *   "message": "Да, сегодня отличная погода!",
+ *   "message": "Yeah, great weather today!",
  *   "intent": {
  *     "type": "just_chat"
  *   }

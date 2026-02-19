@@ -4,7 +4,7 @@ import { loadConfig } from '@config/index';
 
 /**
  * Validates X-Api-Key header for protected routes.
- * Route selection (only /api/*) выполняется в security plugin; здесь только проверка ключа.
+ * Route selection (only /api/*) is handled in the security plugin; this middleware only validates the key.
  */
 
 const API_KEY_HEADER = 'x-api-key' as const;

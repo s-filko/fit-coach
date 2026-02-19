@@ -66,12 +66,12 @@ export function parseLLMResponse(jsonString: string): LLMConversationResponse {
  *
  * 1. Simple chat message (no phase transition):
  * {
- *   "message": "Привет! Как дела?"
+ *   "message": "Hey! How are you?"
  * }
  *
  * 2. Start planning session:
  * {
- *   "message": "Отлично! Давай подберем тренировку.",
+ *   "message": "Great! Let's plan a workout.",
  *   "phaseTransition": {
  *     "toPhase": "session_planning",
  *     "reason": "user_requested_workout"
@@ -80,7 +80,7 @@ export function parseLLMResponse(jsonString: string): LLMConversationResponse {
  *
  * 3. Cancel planning, return to chat:
  * {
- *   "message": "Хорошо, давай потренируемся позже!",
+ *   "message": "No problem, let's train later!",
  *   "phaseTransition": {
  *     "toPhase": "chat",
  *     "reason": "user_cancelled"
@@ -89,7 +89,7 @@ export function parseLLMResponse(jsonString: string): LLMConversationResponse {
  *
  * 4. Start training with recommended session:
  * {
- *   "message": "Отлично! Начинаем тренировку по плану 'Push Day'.",
+ *   "message": "Great! Starting workout: Push Day.",
  *   "phaseTransition": {
  *     "toPhase": "training",
  *     "sessionId": "550e8400-e29b-41d4-a716-446655440000"
@@ -98,7 +98,7 @@ export function parseLLMResponse(jsonString: string): LLMConversationResponse {
  *
  * 5. Finish training, return to chat:
  * {
- *   "message": "Отличная работа! Тренировка завершена.",
+ *   "message": "Excellent work! Workout complete.",
  *   "phaseTransition": {
  *     "toPhase": "chat",
  *     "reason": "training_completed"
