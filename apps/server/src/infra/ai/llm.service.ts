@@ -181,11 +181,23 @@ export class LLMService implements ILLMService {
       const model = jsonMode
         ? this.model.bind({ response_format: { type: 'json_object' } })
         : this.model;
-      const response = await model.invoke([systemPrompt, ...chatMessages]);
+
+      // Retry up to 2 times if the model returns an empty or trivially short response
+      let response = await model.invoke([systemPrompt, ...chatMessages]);
+      let content = response.content as string;
+      if (jsonMode && content.trim().length <= 2) {
+        effectiveLog.warn({ requestId, content }, 'LLM returned empty JSON, retrying (attempt 2)');
+        response = await model.invoke([systemPrompt, ...chatMessages]);
+        content = response.content as string;
+        if (content.trim().length <= 2) {
+          effectiveLog.warn({ requestId, content }, 'LLM returned empty JSON again, retrying (attempt 3)');
+          response = await model.invoke([systemPrompt, ...chatMessages]);
+          content = response.content as string;
+        }
+      }
+
       const endTime = new Date();
       const processingTime = endTime.getTime() - startTime.getTime();
-
-      const content = response.content as string;
       const tokenUsage = (response.response_metadata as Record<string, unknown>)?.tokenUsage as
         { totalTokens?: number; promptTokens?: number; completionTokens?: number } | undefined;
 
