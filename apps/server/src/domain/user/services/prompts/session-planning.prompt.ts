@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 import type { SessionPlanningPromptContext } from '@domain/user/ports';
 
 /**
@@ -225,9 +226,11 @@ Help the user plan today's workout session through conversation.
 - ALWAYS include detailed timestamps in your reasoning
 - Ask questions to collect user context if not provided
 - timeLimit should ONLY be set if user explicitly provides available time
-- Don't rush the planning process - ensure user is satisfied
+- NEVER rush into training phase — ALWAYS follow this strict 2-step sequence:
+  STEP 1: Present the session plan and ask "Ready to start? (confirm with 'Yes, let's go!' or 'Start')"
+  STEP 2: Only AFTER user explicitly confirms (e.g. "да", "начинаем", "поехали", "да, готов", "yes", "start") — THEN set phaseTransition to training
+- NEVER set phaseTransition to "training" on the first message or when user just asks to "plan a session". First always SHOW the plan and WAIT for explicit confirmation.
 - If user wants to postpone/cancel, CONFIRM their intent first, then transition to chat
-- Stay in session_planning until user confirms start OR explicitly confirms postpone
 - Consider recovery: if trained yesterday with high intensity, recommend rest or light session
 - If no recent training (>7 days), recommend easier session to ease back in
 - Be conversational and supportive, not robotic

@@ -87,14 +87,23 @@ const SetDataSchema = z.discriminatedUnion('type', [
 
 // --- Log Set Intent ---
 
-export const LogSetIntentSchema = z.object({
-  type: z.literal(trainingIntentTypes.logSet),
-  setData: SetDataSchema,
-  // Optional RPE (Rate of Perceived Exertion) 1-10
-  rpe: z.number().min(1).max(10).optional(),
-  // Optional user feedback about the set
-  feedback: z.string().optional(),
-});
+export const LogSetIntentSchema = z
+  .object({
+    type: z.literal(trainingIntentTypes.logSet),
+    // REQUIRED: ID of the exercise being logged (from session plan).
+    // Must be provided whenever the exercise can be matched to the plan.
+    exerciseId: z.number().int().positive().optional(),
+    // Exercise name — required only for truly off-plan exercises with no matching ID.
+    exerciseName: z.string().optional(),
+    setData: SetDataSchema,
+    // Optional RPE (Rate of Perceived Exertion) 1-10
+    rpe: z.number().min(1).max(10).optional(),
+    // Optional user feedback about the set
+    feedback: z.string().optional(),
+  })
+  .refine((data) => data.exerciseId !== undefined || data.exerciseName !== undefined, {
+    message: 'Either exerciseId or exerciseName must be provided in log_set intent',
+  });
 
 export type LogSetIntent = z.infer<typeof LogSetIntentSchema>;
 
@@ -173,19 +182,20 @@ export type TrainingIntent = z.infer<typeof TrainingIntentSchema>;
 
 /**
  * LLM response during training phase
- * Includes message to user and required training intent
- * 
- * CRITICAL: intent field is REQUIRED. LLM must always specify an intent type.
+ * Includes message to user and list of training intents.
+ *
+ * CRITICAL: intents array is REQUIRED and must have at least one element.
  * Use "just_chat" for casual conversation that doesn't involve training actions.
+ * Multiple log_set intents are allowed when user reports several sets at once.
  */
 export const LLMTrainingResponseSchema = z.object({
   message: z.string(),
-  intent: TrainingIntentSchema,
+  intents: z.array(TrainingIntentSchema).min(1),
   // Phase transition (e.g., finish training -> return to chat)
   phaseTransition: z.object({
     toPhase: z.enum(['chat', 'session_planning']),
     reason: z.string().optional(),
-  }).optional(),
+  }).nullable().optional().transform((v) => v ?? undefined),
 });
 
 export type LLMTrainingResponse = z.infer<typeof LLMTrainingResponseSchema>;

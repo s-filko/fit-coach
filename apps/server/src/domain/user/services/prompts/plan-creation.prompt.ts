@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 export interface UserProfile {
   name: string;
   age: number;
@@ -83,7 +84,8 @@ When creating workoutPlan object, you MUST use ONLY these exact values:
 2. energyCost - ONLY use these exact strings:
    "very_low", "low", "medium", "high", "very_high"
 
-3. exerciseId - MUST be a number (exercise ID from available exercises list below)
+3. exerciseId - MUST be the EXACT numeric ID from the available exercises list below.
+   NEVER invent or guess IDs. Copy the ID exactly as shown next to the exercise name.
 
 4. estimatedDuration - MUST be a number (minutes)
 
@@ -185,7 +187,7 @@ When user explicitly approves:
 
 === IMPORTANT RULES ===
 
-- ONLY use exercises from the available list (by ID)
+- ONLY use exercises from the available list. The exerciseId MUST match exactly — copy the ID shown in the list. NEVER use a different number.
 - Match exercises to user's fitness level:
   * Beginner: focus on machines and basic movements
   * Intermediate: mix of free weights and machines

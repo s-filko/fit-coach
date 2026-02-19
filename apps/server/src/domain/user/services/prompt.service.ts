@@ -1,4 +1,5 @@
 /* eslint-disable max-len */
+import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import {
   IPromptService,
   type PlanCreationPromptContext,
@@ -107,7 +108,7 @@ Only include non-null values in extracted_data when the user provided NEW inform
    * System prompt for general chat mode (post-registration).
    * Receives user profile to personalize responses.
    */
-  buildChatSystemPrompt(user: User, hasActivePlan: boolean): string {
+  buildChatSystemPrompt(user: User, hasActivePlan: boolean, recentSessions: WorkoutSessionWithDetails[] = []): string {
     const profile = [
       user.age && `Age: ${user.age}`,
       user.gender && `Gender: ${user.gender}`,
@@ -121,10 +122,29 @@ Only include non-null values in extracted_data when the user provided NEW inform
       ? 'User HAS an active workout plan. They can start planning workout sessions.'
       : 'User DOES NOT have a workout plan yet. Suggest creating one when appropriate.';
 
+    const now = new Date();
+    const recentSessionsSection = recentSessions.length > 0
+      ? recentSessions.map((s) => {
+          const date = s.completedAt ?? s.startedAt ?? s.createdAt;
+          const daysAgo = Math.floor((now.getTime() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
+          let when: string;
+          if (daysAgo === 0) { when = 'today'; }
+          else if (daysAgo === 1) { when = 'yesterday'; }
+          else { when = `${daysAgo} days ago`; }
+          const exercises = s.exercises.map((ex) => {
+            const sets = ex.sets.length;
+            return `${ex.exercise.name} (${sets} sets)`;
+          }).join(', ');
+          return `- ${s.sessionKey ?? 'session'} — ${when}, ${s.durationMinutes ?? '?'} min: ${exercises || 'no exercises logged'}`;
+        }).join('\n')
+      : 'No recent sessions.';
+
     return `Your name is FitCoach. You are a professional fitness coach and personal trainer. You are NOT a language model, NOT an AI assistant, NOT made by Google or any tech company. You are a real fitness coach named FitCoach. Always stay in character.
 
 CLIENT PROFILE: ${profile || 'Not available'}
 WORKOUT PLAN STATUS: ${planStatus}
+RECENT TRAINING HISTORY (last 5 sessions):
+${recentSessionsSection}
 
 RULES:
 1. IDENTITY: Your name is FitCoach. If anyone asks who you are, say "Я FitCoach, твой персональный фитнес-тренер!" Never mention AI, language models, Google, OpenAI, or technology companies.

@@ -27,7 +27,7 @@ import {
   type TrainingPromptContext,
 } from '@domain/user/ports';
 
-import type { Logger } from '@shared/logger';
+import { createLogger, type Logger } from '@shared/logger';
 
 import { User } from './user.service';
 
@@ -48,6 +48,8 @@ import { User } from './user.service';
  * - any phase → chat (user changes mind)
  */
 export class ChatService implements IChatService {
+  private readonly log = createLogger('chat');
+
   constructor(
     private readonly promptService: IPromptService,
     private readonly llmService: LLMService,
@@ -122,8 +124,11 @@ export class ChatService implements IChatService {
         const trainingResponse = parseTrainingResponse(llmResponse);
         parsedMessage = trainingResponse.message;
         
-        // Execute training intent (always present — field is required)
-        await this.executeTrainingIntent(user.id, trainingResponse.intent);
+        // Execute all training intents sequentially
+        log.debug({ intents: trainingResponse.intents }, 'Executing training intents');
+        for (const intent of trainingResponse.intents) {
+          await this.executeTrainingIntent(user.id, intent);
+        }
 
         // Map phase transition if present
         if (trainingResponse.phaseTransition) {
@@ -208,7 +213,8 @@ export class ChatService implements IChatService {
     switch (phase) {
       case 'chat': {
         const activePlan = await this.workoutPlanRepo.findActiveByUserId(user.id);
-        return this.promptService.buildChatSystemPrompt(user, !!activePlan);
+        const recentSessions = await this.trainingService.getTrainingHistory(user.id, 5);
+        return this.promptService.buildChatSystemPrompt(user, !!activePlan, recentSessions);
       }
       
       case 'plan_creation': {
@@ -306,9 +312,17 @@ export class ChatService implements IChatService {
       throw new Error(`Active session ${conversationCtx.trainingContext.activeSessionId} not found in database`);
     }
 
+    const allExercises = await this.exerciseRepo.findAll();
+    const availableExercises = allExercises.map((ex) => ({
+      id: ex.id,
+      name: ex.name,
+      category: ex.category,
+    }));
+
     return {
       user,
       activeSession,
+      availableExercises,
     };
   }
 
@@ -328,21 +342,20 @@ export class ChatService implements IChatService {
     // Route based on intent type
     switch (intent.type) {
       case trainingIntentTypes.logSet: {
-        // Find current in_progress exercise
+        // Always log the actual exercise the user performed.
+        // ensureCurrentExercise handles all cases:
+        // - exerciseId provided → find/create that specific exercise
+        // - no exerciseId → use current in_progress or next from plan
+        const currentExercise = await this.trainingService.ensureCurrentExercise(sessionId, {
+          exerciseId: intent.exerciseId,
+          exerciseName: intent.exerciseName,
+        });
+
+        // Calculate next set number based on already-logged sets
         const session = await this.trainingService.getSessionDetails(sessionId);
-        if (!session) {
-          throw new Error('Session not found');
-        }
+        const exerciseDetails = session?.exercises.find((ex) => ex.id === currentExercise.id);
+        const nextSetNumber = (exerciseDetails?.sets.length ?? 0) + 1;
 
-        const currentExercise = session.exercises.find((ex) => ex.status === 'in_progress');
-        if (!currentExercise) {
-          throw new Error('No exercise currently in progress');
-        }
-
-        // Calculate next set number
-        const nextSetNumber = currentExercise.sets.length + 1;
-
-        // Log the set
         await this.trainingService.logSet(currentExercise.id, {
           setNumber: nextSetNumber,
           setData: intent.setData,
@@ -353,9 +366,8 @@ export class ChatService implements IChatService {
       }
 
       case trainingIntentTypes.nextExercise: {
-        // Complete current exercise and start next
+        // Complete current exercise — next one is created lazily on first log_set
         await this.trainingService.completeCurrentExercise(sessionId);
-        await this.trainingService.startNextExercise(sessionId);
         break;
       }
 
@@ -401,6 +413,43 @@ export class ChatService implements IChatService {
    * Called when user approves the plan during plan_creation phase
    */
   private async saveWorkoutPlan(userId: string, plan: WorkoutPlanDraft): Promise<void> {
+    // Fill exerciseName from DB and validate IDs
+    const exercises = await this.exerciseRepo.findAll();
+    const exerciseMapById = new Map(exercises.map((ex) => [ex.id, ex.name]));
+    const exerciseMapByName = new Map(exercises.map((ex) => [ex.name.toLowerCase(), ex.id]));
+
+    const sessionTemplates = plan.sessionTemplates.map((template) => ({
+      ...template,
+      exercises: template.exercises.map((ex) => {
+        let resolvedId = ex.exerciseId;
+        let resolvedName = ex.exerciseName ?? exerciseMapById.get(ex.exerciseId);
+
+        // If exerciseId doesn't exist in DB, try to resolve by name
+        if (!exerciseMapById.has(ex.exerciseId) && ex.exerciseName) {
+          const foundId = exerciseMapByName.get(ex.exerciseName.toLowerCase());
+          if (foundId !== undefined) {
+            this.log.warn(
+              { llmId: ex.exerciseId, name: ex.exerciseName, resolvedId: foundId },
+              'Plan exercise ID mismatch — resolved by name',
+            );
+            resolvedId = foundId;
+            resolvedName = ex.exerciseName;
+          } else {
+            this.log.warn(
+              { id: ex.exerciseId, name: ex.exerciseName },
+              'Plan exercise not found in DB — keeping as-is',
+            );
+          }
+        }
+
+        return {
+          ...ex,
+          exerciseId: resolvedId,
+          exerciseName: resolvedName ?? `Exercise #${ex.exerciseId}`,
+        };
+      }),
+    }));
+
     await this.workoutPlanRepo.create(userId, {
       name: plan.name,
       planJson: {
@@ -408,7 +457,7 @@ export class ChatService implements IChatService {
         trainingStyle: plan.trainingStyle,
         targetMuscleGroups: plan.targetMuscleGroups,
         recoveryGuidelines: plan.recoveryGuidelines,
-        sessionTemplates: plan.sessionTemplates,
+        sessionTemplates,
         progressionRules: plan.progressionRules,
       },
       status: 'active',

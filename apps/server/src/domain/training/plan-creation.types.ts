@@ -60,7 +60,7 @@ export const RecoveryGuidelinesSchema = z.object({
 // Exercise in session template
 export const SessionTemplateExerciseSchema = z.object({
   exerciseId: z.number().int().positive(),
-  exerciseName: z.string().min(1),
+  exerciseName: z.string().min(1).optional(),
   energyCost: EnergyCostSchema,
   targetSets: z.number().int().min(1).max(10),
   targetReps: z.string().min(1), // e.g., '8-10', '12-15', '20-30'

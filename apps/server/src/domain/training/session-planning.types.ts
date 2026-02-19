@@ -7,10 +7,21 @@ import { ConversationPhase } from '@domain/conversation/ports/conversation-conte
  */
 export const RecommendedExerciseSchema = z.object({
   exerciseId: z.number().int().positive(),
-  exerciseName: z.string().min(1),
+  exerciseName: z.string().min(1).optional(),
   targetSets: z.number().int().positive(),
   targetReps: z.string().min(1), // e.g., '8-10', '12-15'
-  targetWeight: z.number().optional(),
+  // LLM may send null, "BW", or a number — normalize to number | undefined
+  targetWeight: z
+    .union([z.number(), z.string(), z.null()])
+    .optional()
+    .transform((v) => {
+      if (v === null || v === undefined) { return undefined; }
+      if (typeof v === 'string') {
+        const n = parseFloat(v);
+        return isNaN(n) ? undefined : n;
+      }
+      return v;
+    }),
   restSeconds: z.number().int().positive(),
   notes: z.string().optional(),
   imageUrl: z.string().url().optional(),

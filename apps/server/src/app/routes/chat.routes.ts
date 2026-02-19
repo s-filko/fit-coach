@@ -204,7 +204,6 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         data: {
           content: response,
           timestamp: new Date().toISOString(),
-          registrationComplete: true, // Always true here (registration complete)
         },
       });
     } catch (error) {

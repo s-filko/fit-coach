@@ -33,6 +33,7 @@ export interface SessionPlanningPromptContext {
 export interface TrainingPromptContext {
   user: User;
   activeSession: WorkoutSessionWithDetails;
+  availableExercises: Array<{ id: number; name: string; category: string }>;
 }
 
 // DI Token for prompt service
@@ -43,7 +44,7 @@ export interface IPromptService {
   /** System prompt for unified registration: extract data + generate response in one LLM call */
   buildUnifiedRegistrationPrompt(user: User): string;
   /** System prompt for general chat mode (post-registration) */
-  buildChatSystemPrompt(user: User, hasActivePlan: boolean): string;
+  buildChatSystemPrompt(user: User, hasActivePlan: boolean, recentSessions?: WorkoutSessionWithDetails[]): string;
   /** System prompt for plan creation phase */
   buildPlanCreationPrompt(context: PlanCreationPromptContext): string;
   /** System prompt for session planning phase */

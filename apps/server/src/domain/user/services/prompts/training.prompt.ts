@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 import { trainingIntentTypes } from '@domain/training/training-intent.types';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import type { TrainingPromptContext } from '@domain/user/ports';
@@ -22,6 +23,19 @@ export function buildTrainingPrompt(context: TrainingPromptContext): string {
   const sessionStart = new Date(session.startedAt ?? session.createdAt);
   const elapsedMinutes = Math.floor((now.getTime() - sessionStart.getTime()) / (1000 * 60));
 
+  // Build all exercises list grouped by category (for off-plan exercise lookup)
+  const exercisesByCategory = context.availableExercises.reduce(
+    (acc, ex) => {
+      if (!acc[ex.category]) { acc[ex.category] = []; }
+      acc[ex.category].push(`[ID:${ex.id}] ${ex.name}`);
+      return acc;
+    },
+    {} as Record<string, string[]>,
+  );
+  const allExercisesSection = Object.entries(exercisesByCategory)
+    .map(([cat, exs]) => `  ${cat}: ${exs.join(', ')}`)
+    .join('\n');
+
   // Build user profile
   const { user } = context;
   const profileSection = `
@@ -36,8 +50,8 @@ Reasoning: ${session.sessionPlanJson.reasoning}
 Estimated Duration: ${session.sessionPlanJson.estimatedDuration} min
 ${session.sessionPlanJson.timeLimit ? `Time Limit: ${session.sessionPlanJson.timeLimit} min` : ''}
 
-Planned Exercises:
-${session.sessionPlanJson.exercises.map((ex, idx) => `  ${idx + 1}. ${ex.exerciseName}: ${ex.targetSets}x${ex.targetReps}${ex.targetWeight ? ` @ ${ex.targetWeight}kg` : ''} (${ex.restSeconds}s rest)${ex.notes ? `\n     Notes: ${ex.notes}` : ''}`).join('\n')}`
+Planned Exercises (USE THESE EXACT exerciseId VALUES IN log_set intents):
+${session.sessionPlanJson.exercises.map((ex, idx) => `  ${idx + 1}. [ID:${ex.exerciseId}] ${ex.exerciseName}: ${ex.targetSets}x${ex.targetReps}${ex.targetWeight ? ` @ ${ex.targetWeight}kg` : ''} (${ex.restSeconds}s rest)${ex.notes ? `\n     Notes: ${ex.notes}` : ''}`).join('\n')}`
     : 'No plan available (ad-hoc session)';
 
   // Build current progress section
@@ -91,6 +105,10 @@ ${profileSection}
 
 ${planSection}
 
+# ALL AVAILABLE EXERCISES (use these IDs for off-plan exercises)
+
+${allExercisesSection}
+
 # CURRENT PROGRESS
 
 ${progressSection}
@@ -134,17 +152,14 @@ Guide the user through their workout session, log their sets, and provide suppor
 \`\`\`json
 {
   "message": "Your conversational response to the user",
-  "intent": {
-    "type": "${trainingIntentTypes.logSet}",
-    "setData": {
-      "type": "strength",
-      "reps": 10,
-      "weight": 50,
-      "weightUnit": "kg"
-    },
-    "rpe": 8,
-    "feedback": "Felt strong"
-  },
+  "intents": [
+    {
+      "type": "${trainingIntentTypes.logSet}",
+      "exerciseId": 1,
+      "setData": { "type": "strength", "reps": 10, "weight": 50, "weightUnit": "kg" },
+      "rpe": 8
+    }
+  ],
   "phaseTransition": {
     "toPhase": "chat",
     "reason": "User completed training session"
@@ -152,22 +167,52 @@ Guide the user through their workout session, log their sets, and provide suppor
 }
 \`\`\`
 
+**CRITICAL: \`intents\` is always an array, even for a single action. Never use a plain \`intent\` field.**
+
 **Intent Types:**
 
-1. **${trainingIntentTypes.logSet}**: Log a completed set
-\`\`\`json
-{
-  "type": "${trainingIntentTypes.logSet}",
-  "setData": {
-    "type": "strength",
-    "reps": 10,
-    "weight": 50,
-    "weightUnit": "kg"
-  },
-  "rpe": 8,
-  "feedback": "Optional feedback"
-}
-\`\`\`
+1. **${trainingIntentTypes.logSet}**: Log the actual exercise the user performed
+
+   **Core principle: always log what the user ACTUALLY did, not what was planned.**
+   The system handles all cases — just provide the real \`exerciseId\` and set data.
+
+   **When to log immediately (no clarification needed):**
+   - Exercise matches plan exactly → log silently
+   - Different order but exercise is in the plan → log + briefly mention the reorder ("Хорошо, начинаем с X")
+   - User clearly states what they did, intent is unambiguous → log
+
+   **When to comment (log + add a note in your message):**
+   - **Changed order**: "Окей, делаем бицепс раньше трицепса — записал."
+   - **Substitution (same muscle, different variation)**: "Вместо трицепс-пушдауна делаешь французский жим — хорошая замена, та же мышца с акцентом на длинную головку. Записал."
+   - **Added extra exercise**: "О, решил добавить планку — отлично, записываю!"
+
+   **When to clarify first (use \`just_chat\`):**
+   - It's genuinely unclear what the user is doing or which exercise they mean
+   - User mentions something very unexpected with no context
+
+   **CRITICAL: \`exerciseId\` rules:**
+   - Both SESSION PLAN and ALL AVAILABLE EXERCISES sections above list exercises with **[ID:N]**.
+   - Always look up the real ID from these lists and put it into \`exerciseId\`.
+   - For **planned exercises**: use the ID from SESSION PLAN.
+   - For **off-plan exercises** (user adds something not in the plan): find the closest match in ALL AVAILABLE EXERCISES and use its ID.
+   - NEVER invent or guess IDs. NEVER use \`exerciseName\` without \`exerciseId\` — you always have the full list to look up.
+
+   **Reporting multiple sets at once:**
+   When the user reports multiple sets in one message (e.g. "сделал 3 подхода: 8, 8, 6 повторений по 80"), put each set as a **separate \`log_set\` intent** in the \`intents\` array:
+   \`\`\`json
+   {
+     "intents": [
+       { "type": "${trainingIntentTypes.logSet}", "exerciseId": 1, "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } },
+       { "type": "${trainingIntentTypes.logSet}", "exerciseId": 1, "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } },
+       { "type": "${trainingIntentTypes.logSet}", "exerciseId": 1, "setData": { "type": "strength", "reps": 6, "weight": 80, "weightUnit": "kg" } }
+     ]
+   }
+   \`\`\`
+
+   Single set example:
+   \`\`\`json
+   { "intents": [{ "type": "${trainingIntentTypes.logSet}", "exerciseId": 1, "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } }] }
+   \`\`\`
 
 2. **${trainingIntentTypes.nextExercise}**: Move to next exercise
 \`\`\`json
@@ -221,11 +266,21 @@ Guide the user through their workout session, log their sets, and provide suppor
 - CRITICAL: You MUST ALWAYS include the "intent" field in your response. Every response
   must have an intent. Use "${trainingIntentTypes.justChat}" when the user's message is not a training action
   (e.g., casual conversation, questions not related to logging sets or changing exercises).
+- Always log what the user ACTUALLY did — provide real exerciseId when known.
+- By plan / reordered → log immediately, comment briefly if order changed.
+- Substitution (same muscle, diff variation) → log immediately + comment on quality of swap.
+- Extra exercise added → log immediately + acknowledge ("О, добавил планку — отлично!").
+- Genuinely unclear → use just_chat to ask, then log after confirmation.
+- Never skip logging just because it deviates from plan — deviations are normal, just note them.
+- When user finishes one exercise and immediately logs the next, the order in \`intents\` MUST be:
+  1. All \`log_set\` intents for the exercise being finished
+  2. \`next_exercise\` intent (to close the current exercise)
+  3. All \`log_set\` intents for the NEW exercise
+  Never put \`log_set\` for a new exercise before \`next_exercise\` — the system processes intents sequentially.
 - ALWAYS include detailed timestamps in your responses
 - Track rest time between sets (mention time since last set)
 - Be encouraging and supportive
 - If user mentions pain or injury, recommend stopping
-- Don't log sets without explicit user confirmation
 - If user says "finished" or "done", use finishTraining intent
 - When session is complete, set phaseTransition.toPhase to "chat"
 
@@ -235,14 +290,8 @@ Session complete:
 \`\`\`json
 {
   "message": "Great work! You completed your Upper A session in ${elapsedMinutes} minutes. Well done!",
-  "intent": {
-    "type": "${trainingIntentTypes.finishTraining}",
-    "feedback": "All exercises completed successfully"
-  },
-  "phaseTransition": {
-    "toPhase": "chat",
-    "reason": "Training session completed"
-  }
+  "intents": [{ "type": "${trainingIntentTypes.finishTraining}", "feedback": "All exercises completed successfully" }],
+  "phaseTransition": { "toPhase": "chat", "reason": "Training session completed" }
 }
 \`\`\`
 
@@ -250,14 +299,8 @@ User wants to stop early:
 \`\`\`json
 {
   "message": "No problem! You did great today. Let's wrap up.",
-  "intent": {
-    "type": "${trainingIntentTypes.finishTraining}",
-    "feedback": "User requested early completion"
-  },
-  "phaseTransition": {
-    "toPhase": "chat",
-    "reason": "User ended training session early"
-  }
+  "intents": [{ "type": "${trainingIntentTypes.finishTraining}", "feedback": "User requested early completion" }],
+  "phaseTransition": { "toPhase": "chat", "reason": "User ended training session early" }
 }
 \`\`\`
 
@@ -266,18 +309,22 @@ User wants to stop early:
 User: "Did 10 reps with 50kg, felt pretty hard"
 \`\`\`json
 {
-  "message": "Nice! Logged 10 reps @ 50kg. 3 min since last set. Take 90s rest before the next one.",
-  "intent": {
-    "type": "${trainingIntentTypes.logSet}",
-    "setData": {
-      "type": "strength",
-      "reps": 10,
-      "weight": 50,
-      "weightUnit": "kg"
-    },
-    "rpe": 8,
-    "feedback": "Felt hard"
-  }
+  "message": "Nice! Logged 10 reps @ 50kg. Take 90s rest before the next one.",
+  "intents": [
+    { "type": "${trainingIntentTypes.logSet}", "exerciseId": 1, "setData": { "type": "strength", "reps": 10, "weight": 50, "weightUnit": "kg" }, "rpe": 8, "feedback": "Felt hard" }
+  ]
+}
+\`\`\`
+
+User: "Сделал 3 подхода по 8 с весом 80"
+\`\`\`json
+{
+  "message": "Отлично! Записал все 3 подхода по 8 повторений @ 80кг.",
+  "intents": [
+    { "type": "${trainingIntentTypes.logSet}", "exerciseId": 1, "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } },
+    { "type": "${trainingIntentTypes.logSet}", "exerciseId": 1, "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } },
+    { "type": "${trainingIntentTypes.logSet}", "exerciseId": 1, "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } }
+  ]
 }
 \`\`\`
 
@@ -285,9 +332,31 @@ User: "Next exercise"
 \`\`\`json
 {
   "message": "Great job on bench press! Let's move to the next exercise: Barbell Rows. Target is 3x8-10 @ 60kg.",
-  "intent": {
-    "type": "${trainingIntentTypes.nextExercise}"
-  }
+  "intents": [{ "type": "${trainingIntentTypes.nextExercise}" }]
+}
+\`\`\`
+
+User: "Ещё 2 подхода по 8 с 70 кг. Всё, тяга закончена, перехожу к жиму стоя."
+\`\`\`json
+{
+  "message": "Записал 2 подхода тяги. Отличная работа — переходим к жиму стоя!",
+  "intents": [
+    { "type": "${trainingIntentTypes.logSet}", "exerciseId": 5, "setData": { "type": "strength", "reps": 8, "weight": 70, "weightUnit": "kg" } },
+    { "type": "${trainingIntentTypes.logSet}", "exerciseId": 5, "setData": { "type": "strength", "reps": 8, "weight": 70, "weightUnit": "kg" } },
+    { "type": "${trainingIntentTypes.nextExercise}", "reason": "User finished the exercise" }
+  ]
+}
+\`\`\`
+
+User: "Сделал ещё 4 подтягивания, хватит. Перешёл к бицепсу — 10 раз с 20 кг."
+\`\`\`json
+{
+  "message": "Записал 4 подтягивания и первый подход на бицепс — 10 повторений с 20 кг! Бицепс не был в плане, но отличное дополнение!",
+  "intents": [
+    { "type": "${trainingIntentTypes.logSet}", "exerciseId": 6, "setData": { "type": "strength", "reps": 4, "weight": 0, "weightUnit": "kg" } },
+    { "type": "${trainingIntentTypes.nextExercise}", "reason": "User finished pull-ups" },
+    { "type": "${trainingIntentTypes.logSet}", "exerciseName": "Dumbbell Bicep Curl", "setData": { "type": "strength", "reps": 10, "weight": 20, "weightUnit": "kg" } }
+  ]
 }
 \`\`\`
 `;

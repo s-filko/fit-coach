@@ -40,3 +40,4 @@ coverage/
 ### Lockfiles (root only; use app-level locks)
 /package-lock.jsonapps/server/package-lock.json
 apps/server/node_modules/.package-lock.json
+logs/

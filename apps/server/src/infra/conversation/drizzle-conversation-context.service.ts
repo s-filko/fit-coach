@@ -89,11 +89,28 @@ export class DrizzleConversationContextService implements IConversationContextSe
         };
       }
       case 'training': {
-        const trainingContext = this.phaseContextStore.get(key) as TrainingContext | undefined;
+        let trainingContext = this.phaseContextStore.get(key) as TrainingContext | undefined;
+        
+        // Restore from DB if lost after server restart (phaseContextStore is in-memory)
         if (!trainingContext?.activeSessionId) {
-          // Training phase without activeSessionId is invalid
-          return null;
+          const { workoutSessions } = await import('@infra/db/schema');
+          const [activeSession] = await db
+            .select({ id: workoutSessions.id })
+            .from(workoutSessions)
+            .where(and(
+              eq(workoutSessions.userId, userId),
+              eq(workoutSessions.status, 'in_progress'),
+            ))
+            .limit(1);
+          
+          if (activeSession) {
+            trainingContext = { activeSessionId: activeSession.id };
+            this.phaseContextStore.set(key, trainingContext);
+          } else {
+            return null;
+          }
         }
+        
         return { ...baseContext, phase: 'training', trainingContext };
       }
       default:

@@ -31,4 +31,10 @@ export interface ITrainingService {
   startNextExercise(sessionId: string): Promise<SessionExercise | null>;
   skipCurrentExercise(sessionId: string, reason?: string): Promise<void>;
   completeCurrentExercise(sessionId: string): Promise<void>;
+
+  // Lazily ensure an in_progress exercise exists (creates from plan or ad-hoc if needed)
+  ensureCurrentExercise(
+    sessionId: string,
+    opts?: { exerciseId?: number; exerciseName?: string },
+  ): Promise<SessionExercise>;
 }

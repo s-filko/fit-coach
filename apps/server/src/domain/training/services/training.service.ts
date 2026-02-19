@@ -139,6 +139,77 @@ export class TrainingService implements ITrainingService {
     return set;
   }
 
+  /**
+   * Ensure there is an in_progress exercise in the session.
+   *
+   * Scenarios:
+   * 1. exerciseId provided + matches plan → find/create that exercise, mark in_progress
+   * 2. exerciseId provided + NOT in plan → create ad-hoc exercise with given name, mark in_progress
+   * 3. No exerciseId → use current in_progress; if none, lazily create next from plan
+   */
+  async ensureCurrentExercise(
+    sessionId: string,
+    opts?: { exerciseId?: number; exerciseName?: string },
+  ): Promise<SessionExercise> {
+    const session = await this.sessionRepo.findByIdWithDetails(sessionId);
+    if (!session) { throw new Error('Session not found'); }
+
+    const { exerciseId } = opts ?? {};
+
+    if (exerciseId) {
+      // Check if this exercise already exists in the session
+      const existing = session.exercises.find((ex) => ex.exerciseId === exerciseId);
+      if (existing) {
+        if (existing.status !== 'in_progress') {
+          await this.sessionExerciseRepo.update(existing.id, { status: 'in_progress' });
+        }
+        return { ...existing, status: 'in_progress' };
+      }
+
+      // Not yet in session — create it (from plan or ad-hoc)
+      const planEx = session.sessionPlanJson?.exercises.find((ex) => ex.exerciseId === exerciseId);
+      const created = await this.sessionExerciseRepo.create(sessionId, {
+        exerciseId,
+        orderIndex: session.exercises.length,
+        targetSets: planEx?.targetSets,
+        targetReps: planEx?.targetReps,
+        targetWeight: planEx?.targetWeight ?? undefined,
+      });
+      await this.sessionExerciseRepo.update(created.id, { status: 'in_progress' });
+      await this.sessionRepo.updateActivity(sessionId);
+      return { ...created, status: 'in_progress' };
+    }
+
+    // No exerciseId — only acceptable if exerciseName provided (off-plan exercise)
+    // We cannot guess which exercise the user is doing
+    if (!opts?.exerciseName) {
+      throw new Error(
+        'exerciseId is required to log a set. AI must identify the exercise being performed.',
+      );
+    }
+
+    // Off-plan exercise by name only — find by name in DB first
+    const allExercises = await this.exerciseRepo.findAll();
+    const matchByName = allExercises.find(
+      (ex) => ex.name.toLowerCase() === (opts.exerciseName ?? '').toLowerCase(),
+    );
+
+    const resolvedExerciseId = matchByName?.id;
+    if (!resolvedExerciseId) {
+      throw new Error(
+        `Exercise "${opts.exerciseName}" not found in DB. Cannot log set for unknown exercise.`,
+      );
+    }
+
+    const created = await this.sessionExerciseRepo.create(sessionId, {
+      exerciseId: resolvedExerciseId,
+      orderIndex: session.exercises.length,
+    });
+    await this.sessionExerciseRepo.update(created.id, { status: 'in_progress' });
+    await this.sessionRepo.updateActivity(sessionId);
+    return { ...created, status: 'in_progress' };
+  }
+
   async completeSession(sessionId: string, durationMinutes?: number): Promise<WorkoutSession> {
     const session = await this.sessionRepo.findById(sessionId);
     if (!session) {
