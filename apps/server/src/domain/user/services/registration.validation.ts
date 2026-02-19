@@ -97,6 +97,7 @@ export const FIELD_HINTS: Record<ProfileDataKey, string> = {
 /** Shape of the JSON response expected from LLM during registration */
 export const registrationLLMResponseSchema = z.object({
   extracted_data: z.object({
+    name: z.union([z.string(), z.null()]).optional(),
     age: z.union([z.number(), z.null()]).optional(),
     gender: z.union([z.string(), z.null()]).optional(),
     height: z.union([z.number(), z.null()]).optional(),

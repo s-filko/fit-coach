@@ -88,6 +88,11 @@ export class RegistrationService implements IRegistrationService {
         (updatedUser as Record<string, unknown>)[key] = newValue;
       }
     }
+    // Save name if LLM extracted it
+    const extractedName = (parsed.extracted_data as Record<string, unknown>).name;
+    if (typeof extractedName === 'string' && extractedName.trim()) {
+      updatedUser.firstName = extractedName.trim();
+    }
 
     // 7. Check completeness: all 6 fields present AND user confirmed
     const allFieldsPresent = REQUIRED_FIELDS.every((k) => {

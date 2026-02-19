@@ -65,6 +65,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         // Save user profile changes
         await app.services.userService.updateProfileData(userId, {
           profileStatus: updatedUser.profileStatus,
+          firstName: updatedUser.firstName,
           age: updatedUser.age,
           gender: updatedUser.gender,
           height: updatedUser.height,
