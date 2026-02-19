@@ -70,11 +70,12 @@ const exerciseSeeds: ExerciseSeed[] = [
     typicalDurationMinutes: 12,
     requiresSpotter: false,
     muscleGroups: [
-      { muscle: 'back_lats', involvement: 'primary' },
-      { muscle: 'back_traps', involvement: 'primary' },
       { muscle: 'glutes', involvement: 'primary' },
       { muscle: 'hamstrings', involvement: 'primary' },
       { muscle: 'lower_back', involvement: 'primary' },
+      { muscle: 'back_lats', involvement: 'secondary' },
+      { muscle: 'back_traps', involvement: 'secondary' },
+      { muscle: 'quads', involvement: 'secondary' },
       { muscle: 'forearms', involvement: 'secondary' },
       { muscle: 'core', involvement: 'secondary' },
     ],
@@ -93,6 +94,7 @@ const exerciseSeeds: ExerciseSeed[] = [
       { muscle: 'shoulders_front', involvement: 'primary' },
       { muscle: 'shoulders_side', involvement: 'secondary' },
       { muscle: 'triceps', involvement: 'secondary' },
+      { muscle: 'chest', involvement: 'secondary' },
       { muscle: 'core', involvement: 'secondary' },
     ],
   },
@@ -110,6 +112,7 @@ const exerciseSeeds: ExerciseSeed[] = [
       { muscle: 'back_lats', involvement: 'primary' },
       { muscle: 'back_traps', involvement: 'primary' },
       { muscle: 'biceps', involvement: 'secondary' },
+      { muscle: 'shoulders_rear', involvement: 'secondary' },
       { muscle: 'lower_back', involvement: 'secondary' },
       { muscle: 'core', involvement: 'secondary' },
     ],
@@ -126,6 +129,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     requiresSpotter: false,
     muscleGroups: [
       { muscle: 'back_lats', involvement: 'primary' },
+      { muscle: 'back_traps', involvement: 'secondary' },
       { muscle: 'biceps', involvement: 'secondary' },
       { muscle: 'forearms', involvement: 'secondary' },
       { muscle: 'core', involvement: 'secondary' },
@@ -137,7 +141,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     equipment: 'bodyweight',
     exerciseType: 'strength',
     description: 'Bodyweight chest and triceps compound',
-    energyCost: 'medium',
+    energyCost: 'high',
     complexity: 'intermediate',
     typicalDurationMinutes: 8,
     requiresSpotter: false,
@@ -218,6 +222,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     requiresSpotter: false,
     muscleGroups: [
       { muscle: 'shoulders_side', involvement: 'primary' },
+      { muscle: 'back_traps', involvement: 'secondary' },
     ],
   },
   {
@@ -232,6 +237,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     requiresSpotter: false,
     muscleGroups: [
       { muscle: 'chest', involvement: 'primary' },
+      { muscle: 'shoulders_front', involvement: 'secondary' },
     ],
   },
 
@@ -250,6 +256,7 @@ const exerciseSeeds: ExerciseSeed[] = [
       { muscle: 'back_lats', involvement: 'primary' },
       { muscle: 'back_traps', involvement: 'secondary' },
       { muscle: 'biceps', involvement: 'secondary' },
+      { muscle: 'shoulders_rear', involvement: 'secondary' },
     ],
   },
   {
@@ -283,6 +290,7 @@ const exerciseSeeds: ExerciseSeed[] = [
       { muscle: 'back_lats', involvement: 'primary' },
       { muscle: 'back_traps', involvement: 'secondary' },
       { muscle: 'biceps', involvement: 'secondary' },
+      { muscle: 'shoulders_rear', involvement: 'secondary' },
       { muscle: 'lower_back', involvement: 'secondary' },
     ],
   },
@@ -301,6 +309,7 @@ const exerciseSeeds: ExerciseSeed[] = [
       { muscle: 'back_lats', involvement: 'secondary' },
       { muscle: 'shoulders_rear', involvement: 'secondary' },
       { muscle: 'biceps', involvement: 'secondary' },
+      { muscle: 'lower_back', involvement: 'secondary' },
     ],
   },
   {
@@ -317,6 +326,7 @@ const exerciseSeeds: ExerciseSeed[] = [
       { muscle: 'back_lats', involvement: 'primary' },
       { muscle: 'back_traps', involvement: 'secondary' },
       { muscle: 'biceps', involvement: 'secondary' },
+      { muscle: 'forearms', involvement: 'secondary' },
     ],
   },
   {
@@ -347,8 +357,10 @@ const exerciseSeeds: ExerciseSeed[] = [
     requiresSpotter: false,
     muscleGroups: [
       { muscle: 'back_lats', involvement: 'primary' },
+      { muscle: 'back_traps', involvement: 'secondary' },
       { muscle: 'biceps', involvement: 'secondary' },
       { muscle: 'forearms', involvement: 'secondary' },
+      { muscle: 'core', involvement: 'secondary' },
     ],
   },
 
@@ -381,6 +393,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     requiresSpotter: false,
     muscleGroups: [
       { muscle: 'shoulders_side', involvement: 'primary' },
+      { muscle: 'back_traps', involvement: 'secondary' },
     ],
   },
   {
@@ -568,7 +581,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     requiresSpotter: false,
     muscleGroups: [
       { muscle: 'biceps', involvement: 'primary' },
-      { muscle: 'forearms', involvement: 'primary' },
+      { muscle: 'forearms', involvement: 'secondary' },
     ],
   },
 
@@ -604,6 +617,7 @@ const exerciseSeeds: ExerciseSeed[] = [
       { muscle: 'quads', involvement: 'primary' },
       { muscle: 'glutes', involvement: 'primary' },
       { muscle: 'hamstrings', involvement: 'secondary' },
+      { muscle: 'calves', involvement: 'secondary' },
     ],
   },
   {
@@ -766,6 +780,8 @@ const exerciseSeeds: ExerciseSeed[] = [
       { muscle: 'core_stability', involvement: 'primary' },
       { muscle: 'abs', involvement: 'primary' },
       { muscle: 'lower_back', involvement: 'secondary' },
+      { muscle: 'shoulders_front', involvement: 'secondary' },
+      { muscle: 'glutes', involvement: 'secondary' },
     ],
   },
   {
