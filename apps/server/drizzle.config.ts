@@ -4,7 +4,12 @@ import dotenv from 'dotenv';
 import { defineConfig } from 'drizzle-kit';
 
 // Load appropriate .env file based on NODE_ENV
-const envFile = process.env.NODE_ENV === 'test' ? '.env.test' : '.env';
+let envFile = '.env';
+if (process.env.NODE_ENV === 'test') {
+  envFile = '.env.test';
+} else if (process.env.NODE_ENV === 'production') {
+  envFile = '.env.production';
+}
 dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
 export default defineConfig({
