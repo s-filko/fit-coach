@@ -1,5 +1,5 @@
 /* eslint-disable max-len */
-import { trainingIntentTypes } from '@domain/training/training-intent.types';
+import { setDataTypeValues, trainingIntentTypes } from '@domain/training/training-intent.types';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import type { TrainingPromptContext } from '@domain/user/ports';
 
@@ -168,6 +168,8 @@ Guide the user through their workout session, log their sets, and provide suppor
 \`\`\`
 
 **CRITICAL: \`intents\` is always an array, even for a single action. Never use a plain \`intent\` field.**
+
+**CRITICAL: \`setData.type\` MUST be one of: ${setDataTypeValues.join(', ')}. NEVER invent new types (e.g. "warmup", "dropset", "burnout"). Warmup sets use type "${setDataTypeValues[0]}" with the actual warmup weight.**
 
 **Intent Types:**
 

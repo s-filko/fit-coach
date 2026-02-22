@@ -31,10 +31,30 @@ export const trainingIntentTypes = {
  */
 export type TrainingIntentType = (typeof trainingIntentTypes)[keyof typeof trainingIntentTypes];
 
+// --- Set Data Type Constants (Single Source of Truth) ---
+
+/**
+ * CRITICAL: These constants are the SINGLE SOURCE OF TRUTH for setData.type values.
+ * Used in: Zod schemas, system prompts (via setDataTypeValues), switch statements.
+ * DO NOT use string literals elsewhere. Always import and use these constants.
+ */
+export const setDataTypes = {
+  strength: 'strength',
+  cardioDistance: 'cardio_distance',
+  cardioDuration: 'cardio_duration',
+  functionalReps: 'functional_reps',
+  isometric: 'isometric',
+  interval: 'interval',
+} as const;
+
+export type SetDataType = (typeof setDataTypes)[keyof typeof setDataTypes];
+
+export const setDataTypeValues: SetDataType[] = Object.values(setDataTypes);
+
 // --- SetData Schemas ---
 
 const StrengthSetDataSchema = z.object({
-  type: z.literal('strength'),
+  type: z.literal(setDataTypes.strength),
   reps: z.number().int().min(1),
   weight: z.number().min(0).optional(),
   weightUnit: z.enum(['kg', 'lbs']).optional(),
@@ -42,7 +62,7 @@ const StrengthSetDataSchema = z.object({
 });
 
 const CardioDistanceSetDataSchema = z.object({
-  type: z.literal('cardio_distance'),
+  type: z.literal(setDataTypes.cardioDistance),
   distance: z.number().min(0),
   distanceUnit: z.enum(['km', 'miles', 'meters']),
   duration: z.number().int().min(0),
@@ -51,26 +71,26 @@ const CardioDistanceSetDataSchema = z.object({
 });
 
 const CardioDurationSetDataSchema = z.object({
-  type: z.literal('cardio_duration'),
+  type: z.literal(setDataTypes.cardioDuration),
   duration: z.number().int().min(0),
   intensity: z.enum(['low', 'moderate', 'high']).optional(),
   restSeconds: z.number().int().min(0).optional(),
 });
 
 const FunctionalRepsSetDataSchema = z.object({
-  type: z.literal('functional_reps'),
+  type: z.literal(setDataTypes.functionalReps),
   reps: z.number().int().min(1),
   restSeconds: z.number().int().min(0).optional(),
 });
 
 const IsometricSetDataSchema = z.object({
-  type: z.literal('isometric'),
+  type: z.literal(setDataTypes.isometric),
   duration: z.number().int().min(0),
   restSeconds: z.number().int().min(0).optional(),
 });
 
 const IntervalSetDataSchema = z.object({
-  type: z.literal('interval'),
+  type: z.literal(setDataTypes.interval),
   workDuration: z.number().int().min(0),
   restDuration: z.number().int().min(0),
   rounds: z.number().int().min(1).optional(),
@@ -201,13 +221,63 @@ export const LLMTrainingResponseSchema = z.object({
 export type LLMTrainingResponse = z.infer<typeof LLMTrainingResponseSchema>;
 
 /**
+ * Normalize unknown setData.type values to the closest valid type.
+ * LLMs may invent types like "warmup", "dropset", "burnout" — this maps them
+ * to valid types based on the fields present in setData.
+ */
+function normalizeSetData(setData: Record<string, unknown>): Record<string, unknown> {
+  const { type } = setData;
+  if (typeof type === 'string' && (setDataTypeValues as string[]).includes(type)) {
+    return setData;
+  }
+
+  if ('reps' in setData && ('weight' in setData || 'weightUnit' in setData)) {
+    return { ...setData, type: setDataTypes.strength };
+  }
+  if ('reps' in setData) {
+    return { ...setData, type: setDataTypes.functionalReps };
+  }
+  if ('distance' in setData && 'distanceUnit' in setData) {
+    return { ...setData, type: setDataTypes.cardioDistance };
+  }
+  if ('workDuration' in setData && 'restDuration' in setData) {
+    return { ...setData, type: setDataTypes.interval };
+  }
+  if ('duration' in setData) {
+    return { ...setData, type: setDataTypes.cardioDuration };
+  }
+
+  return { ...setData, type: setDataTypes.strength };
+}
+
+/**
+ * Walk parsed JSON and normalize setData.type in every intent before Zod validation.
+ */
+function normalizeTrainingResponse(parsed: unknown): unknown {
+  if (typeof parsed !== 'object' || parsed === null) { return parsed; }
+  const obj = parsed as Record<string, unknown>;
+
+  if (Array.isArray(obj.intents)) {
+    obj.intents = (obj.intents as Record<string, unknown>[]).map((intent) => {
+      if (intent.setData && typeof intent.setData === 'object') {
+        return { ...intent, setData: normalizeSetData(intent.setData as Record<string, unknown>) };
+      }
+      return intent;
+    });
+  }
+
+  return obj;
+}
+
+/**
  * Parse LLM training response
  * @throws {Error} if response is not valid JSON or doesn't match schema
  */
 export function parseTrainingResponse(jsonString: string): LLMTrainingResponse {
   try {
     const parsed = JSON.parse(jsonString) as unknown;
-    return LLMTrainingResponseSchema.parse(parsed);
+    const normalized = normalizeTrainingResponse(parsed);
+    return LLMTrainingResponseSchema.parse(normalized);
   } catch (error) {
     if (error instanceof z.ZodError) {
       throw new Error(`Invalid training response format: ${error.message}`);

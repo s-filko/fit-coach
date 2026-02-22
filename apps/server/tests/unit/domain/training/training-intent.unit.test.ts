@@ -261,6 +261,167 @@ describe('Training Intent Types', () => {
     });
   });
 
+  describe('parseTrainingResponse — setData.type normalization', () => {
+    it('should normalize "warmup" to "strength" when reps+weight present', () => {
+      const json = JSON.stringify({
+        message: 'Warmup logged.',
+        intents: [{
+          type: 'log_set',
+          exerciseId: 1,
+          setData: { type: 'warmup', reps: 10, weight: 20, weightUnit: 'kg' },
+        }],
+      });
+
+      const result = parseTrainingResponse(json);
+      const [intent] = result.intents;
+      expect(intent.type).toBe('log_set');
+      if (intent.type === 'log_set') {
+        expect(intent.setData.type).toBe('strength');
+      }
+    });
+
+    it('should normalize "dropset" to "strength" when reps+weight present', () => {
+      const json = JSON.stringify({
+        message: 'Drop set logged.',
+        intents: [{
+          type: 'log_set',
+          exerciseId: 1,
+          setData: { type: 'dropset', reps: 12, weight: 40, weightUnit: 'kg' },
+        }],
+      });
+
+      const result = parseTrainingResponse(json);
+      if (result.intents[0].type === 'log_set') {
+        expect(result.intents[0].setData.type).toBe('strength');
+      }
+    });
+
+    it('should normalize unknown type to "functional_reps" when only reps present', () => {
+      const json = JSON.stringify({
+        message: 'Logged.',
+        intents: [{
+          type: 'log_set',
+          exerciseId: 1,
+          setData: { type: 'bodyweight', reps: 15 },
+        }],
+      });
+
+      const result = parseTrainingResponse(json);
+      if (result.intents[0].type === 'log_set') {
+        expect(result.intents[0].setData.type).toBe('functional_reps');
+      }
+    });
+
+    it('should normalize unknown type to "cardio_duration" when duration present', () => {
+      const json = JSON.stringify({
+        message: 'Logged.',
+        intents: [{
+          type: 'log_set',
+          exerciseId: 1,
+          setData: { type: 'timed_hold', duration: 60 },
+        }],
+      });
+
+      const result = parseTrainingResponse(json);
+      if (result.intents[0].type === 'log_set') {
+        expect(result.intents[0].setData.type).toBe('cardio_duration');
+      }
+    });
+
+    it('should normalize unknown type to "cardio_distance" when distance+distanceUnit present', () => {
+      const json = JSON.stringify({
+        message: 'Logged.',
+        intents: [{
+          type: 'log_set',
+          exerciseId: 1,
+          setData: { type: 'run', distance: 5, distanceUnit: 'km', duration: 1800 },
+        }],
+      });
+
+      const result = parseTrainingResponse(json);
+      if (result.intents[0].type === 'log_set') {
+        expect(result.intents[0].setData.type).toBe('cardio_distance');
+      }
+    });
+
+    it('should normalize unknown type to "interval" when workDuration+restDuration present', () => {
+      const json = JSON.stringify({
+        message: 'Logged.',
+        intents: [{
+          type: 'log_set',
+          exerciseId: 1,
+          setData: { type: 'hiit', workDuration: 30, restDuration: 15, rounds: 8 },
+        }],
+      });
+
+      const result = parseTrainingResponse(json);
+      if (result.intents[0].type === 'log_set') {
+        expect(result.intents[0].setData.type).toBe('interval');
+      }
+    });
+
+    it('should fall back to "strength" when unknown type has no recognizable fields', () => {
+      const json = JSON.stringify({
+        message: 'Logged.',
+        intents: [{
+          type: 'log_set',
+          exerciseId: 1,
+          setData: { type: 'unknown_thing', reps: 5, weight: 100 },
+        }],
+      });
+
+      const result = parseTrainingResponse(json);
+      if (result.intents[0].type === 'log_set') {
+        expect(result.intents[0].setData.type).toBe('strength');
+      }
+    });
+
+    it('should not modify already valid setData.type', () => {
+      const json = JSON.stringify({
+        message: 'Logged.',
+        intents: [{
+          type: 'log_set',
+          exerciseId: 1,
+          setData: { type: 'strength', reps: 10, weight: 50 },
+        }],
+      });
+
+      const result = parseTrainingResponse(json);
+      if (result.intents[0].type === 'log_set') {
+        expect(result.intents[0].setData.type).toBe('strength');
+      }
+    });
+
+    it('should normalize setData.type across multiple intents', () => {
+      const json = JSON.stringify({
+        message: 'Logged all sets.',
+        intents: [
+          { type: 'log_set', exerciseId: 1, setData: { type: 'warmup', reps: 10, weight: 20, weightUnit: 'kg' } },
+          { type: 'log_set', exerciseId: 1, setData: { type: 'strength', reps: 8, weight: 50, weightUnit: 'kg' } },
+          { type: 'log_set', exerciseId: 1, setData: { type: 'burnout', reps: 15, weight: 30, weightUnit: 'kg' } },
+        ],
+      });
+
+      const result = parseTrainingResponse(json);
+      expect(result.intents).toHaveLength(3);
+      for (const intent of result.intents) {
+        if (intent.type === 'log_set') {
+          expect(intent.setData.type).toBe('strength');
+        }
+      }
+    });
+
+    it('should not touch intents without setData', () => {
+      const json = JSON.stringify({
+        message: 'Moving on.',
+        intents: [{ type: 'next_exercise', reason: 'done' }],
+      });
+
+      const result = parseTrainingResponse(json);
+      expect(result.intents[0].type).toBe('next_exercise');
+    });
+  });
+
   describe('Real-world training scenarios', () => {
     it('should handle logging strength set', () => {
       const json = JSON.stringify({

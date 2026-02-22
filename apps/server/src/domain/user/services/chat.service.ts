@@ -120,8 +120,36 @@ export class ChatService implements IChatService {
 
       // 4. Parse LLM response based on phase
       if (phase === 'training') {
-        // Training phase: parse training response with intent
-        const trainingResponse = parseTrainingResponse(llmResponse);
+        // Training phase: parse training response with intent.
+        // On parse failure, retry once with the validation error fed back to LLM so it can self-correct.
+        let rawForTraining = llmResponse;
+        let trainingParseError: Error | null = null;
+        try {
+          parseTrainingResponse(rawForTraining);
+        } catch (err) {
+          trainingParseError = err instanceof Error ? err : new Error(String(err));
+        }
+
+        if (trainingParseError) {
+          log?.warn({ parseError: trainingParseError.message }, 'training parse failed — retrying with self-correction');
+          const correctionMessages: typeof messages = [
+            ...messages,
+            { role: 'assistant', content: rawForTraining },
+            {
+              role: 'user',
+              content:
+                'Your previous response was invalid JSON structure. Fix it and return a valid response.\n\n'
+                + `Validation error:\n${trainingParseError.message}`,
+            },
+          ];
+          rawForTraining = await this.llmService.generateWithSystemPrompt(
+            correctionMessages,
+            systemPrompt,
+            { jsonMode: true, log },
+          );
+        }
+
+        const trainingResponse = parseTrainingResponse(rawForTraining);
         parsedMessage = trainingResponse.message;
         
         // Execute all training intents sequentially
