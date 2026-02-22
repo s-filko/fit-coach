@@ -28,6 +28,7 @@
     "drizzle:reset": "NODE_ENV=test drizzle-kit drop && NODE_ENV=test drizzle-kit push",
     "db:clean": "NODE_ENV=test tsx src/db/clean.ts",
     "db:seed:exercises": "tsx --env-file=.env src/infra/db/seeds/exercises.seed.ts",
+    "db:seed:workouts": "tsx --env-file=.env src/infra/db/seeds/workouts.seed.ts",
     "build": "rimraf dist && tsup src/index.ts --format esm --dts --sourcemap --out-dir dist --clean",
     "start": "node --env-file=.env.production dist/index.js",
     "lint": "eslint src/**/*.ts",

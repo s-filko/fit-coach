@@ -43,7 +43,8 @@ export const SessionRecommendationSchema = z.object({
 });
 
 /**
- * Phase transition for session planning
+ * Phase transition for session planning.
+ * Only "training" (user confirmed plan) and "chat" (user cancelled) are valid transitions.
  */
 export const SessionPlanningPhaseTransitionSchema = z.object({
   toPhase: z.enum(['training', 'chat'] satisfies ConversationPhase[]),
@@ -56,27 +57,49 @@ export const SessionPlanningPhaseTransitionSchema = z.object({
  */
 export const SessionPlanningLLMResponseSchema = z.object({
   message: z.string().min(1),
-  sessionPlan: SessionRecommendationSchema.optional(),
-  phaseTransition: SessionPlanningPhaseTransitionSchema.optional(),
+  sessionPlan: SessionRecommendationSchema.nullable().optional().transform((v) => v ?? undefined),
+  phaseTransition: SessionPlanningPhaseTransitionSchema.nullable().optional().transform((v) => v ?? undefined),
 });
 
 export type SessionPlanningLLMResponse = z.infer<typeof SessionPlanningLLMResponseSchema>;
 
 /**
- * Parse LLM JSON response for session_planning phase
- * @throws {Error} if response is not valid JSON or doesn't match schema
+ * Parse LLM JSON response for session_planning phase.
+ *
+ * phaseTransition is optional — its absence means "stay in session_planning".
+ * If LLM sends an invalid phaseTransition (e.g. toPhase: "planning"), we strip it
+ * and return the rest of the response, since losing the user-facing message
+ * over a bad optional field is worse than ignoring the invalid transition.
+ *
+ * @returns parsed response with `droppedPhaseTransition` flag when transition was stripped
+ * @throws {Error} if message or other required fields are invalid
  */
-export function parseSessionPlanningResponse(jsonString: string): SessionPlanningLLMResponse {
-  try {
-    const parsed = JSON.parse(jsonString) as unknown;
-    return SessionPlanningLLMResponseSchema.parse(parsed);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      throw new Error(`Invalid session planning response format: ${error.message}`);
-    }
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to parse session planning response: ${message}`);
+export function parseSessionPlanningResponse(
+  jsonString: string,
+): SessionPlanningLLMResponse & { droppedPhaseTransition?: boolean } {
+  const raw = JSON.parse(jsonString) as Record<string, unknown>;
+
+  const result = SessionPlanningLLMResponseSchema.safeParse(raw);
+  if (result.success) {
+    return result.data;
   }
+
+  // Check if the ONLY errors are in phaseTransition
+  const allErrorsInPhaseTransition = result.error.issues.every(
+    (issue) => issue.path[0] === 'phaseTransition',
+  );
+
+  if (allErrorsInPhaseTransition && raw['phaseTransition'] !== undefined) {
+    // Strip the invalid phaseTransition and re-parse
+    const { phaseTransition: _dropped, ...rest } = raw;
+    const retryResult = SessionPlanningLLMResponseSchema.safeParse(rest);
+    if (retryResult.success) {
+      return { ...retryResult.data, droppedPhaseTransition: true };
+    }
+  }
+
+  // Non-phaseTransition errors — throw as before
+  throw new Error(`Invalid session planning response format: ${result.error.message}`);
 }
 
 /**

@@ -138,8 +138,39 @@ export class ChatService implements IChatService {
           };
         }
       } else if (phase === 'session_planning') {
-        // Session planning phase: parse session planning response with optional plan
-        const planningResponse = parseSessionPlanningResponse(llmResponse);
+        // Session planning phase: parse session planning response with optional plan.
+        // On parse failure, retry once with the validation error fed back to LLM so it can self-correct.
+        let rawForParsing = llmResponse;
+        let parseError: Error | null = null;
+        try {
+          parseSessionPlanningResponse(rawForParsing);
+        } catch (err) {
+          parseError = err instanceof Error ? err : new Error(String(err));
+        }
+
+        if (parseError) {
+          log.warn({ parseError: parseError.message }, 'session_planning parse failed — retrying with self-correction');
+          const correctionMessages: typeof messages = [
+            ...messages,
+            { role: 'assistant', content: rawForParsing },
+            {
+              role: 'user',
+              content:
+                'Your previous response was invalid JSON structure. Fix it and return a valid response.\n\n'
+                + `Validation error:\n${parseError.message}`,
+            },
+          ];
+          rawForParsing = await this.llmService.generateWithSystemPrompt(
+            correctionMessages,
+            systemPrompt,
+            { jsonMode: true, log },
+          );
+        }
+
+        const planningResponse = parseSessionPlanningResponse(rawForParsing);
+        if (planningResponse.droppedPhaseTransition) {
+          log.warn('LLM returned invalid phaseTransition in session_planning — stripped');
+        }
         const { message: msg, sessionPlan: plan, phaseTransition: transition } = planningResponse;
         parsedMessage = msg;
         sessionPlan = plan;
