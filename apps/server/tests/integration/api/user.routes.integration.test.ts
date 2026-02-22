@@ -29,6 +29,7 @@ describe('POST /api/user – integration', () => {
       chatService: { processMessage: jest.fn().mockResolvedValue({ message: 'Stub chat response', effectivePhase: 'chat' }) } as any,
       conversationContextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN) as any,
       trainingService: {} as any, // Stub for user routes tests
+      conversationGraph: {} as any,
     });
     
     await app.ready();
@@ -165,6 +166,7 @@ describe('GET /api/user/{id} – integration', () => {
       chatService: { processMessage: jest.fn().mockResolvedValue({ message: 'Stub chat response', effectivePhase: 'chat' }) } as any,
       conversationContextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN) as any,
       trainingService: {} as any, // Stub for user routes tests
+      conversationGraph: {} as any,
     });
     
     await app.ready();

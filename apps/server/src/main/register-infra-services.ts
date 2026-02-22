@@ -115,5 +115,8 @@ export async function registerInfraServices(
     ),
   );
 
+  const { buildConversationGraph, CONVERSATION_GRAPH_TOKEN } = await import('@infra/ai/graph/conversation.graph');
+  container.register(CONVERSATION_GRAPH_TOKEN, buildConversationGraph());
+
   return container;
 }

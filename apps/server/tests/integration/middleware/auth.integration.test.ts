@@ -38,6 +38,7 @@ describe('API Key Authentication Middleware – integration', () => {
       chatService: { processMessage: jest.fn().mockResolvedValue({ message: 'Stub chat response', effectivePhase: 'chat' }) } as any,
       conversationContextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN) as any,
       trainingService: {} as any, // Stub for auth tests
+      conversationGraph: {} as any,
     });
     
     await app.ready();

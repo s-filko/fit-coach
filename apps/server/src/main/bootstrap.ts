@@ -6,6 +6,7 @@ import { FastifyInstance } from 'fastify';
 import { buildServer } from '@app/server';
 
 import { LLMService } from '@domain/ai/ports';
+import type { ICompiledConversationGraph } from '@domain/conversation/graph/conversation.graph.ports';
 import { IConversationContextService } from '@domain/conversation/ports';
 import { ITrainingService } from '@domain/training/ports';
 import { IChatService, IRegistrationService, IUserService } from '@domain/user/ports';
@@ -48,6 +49,7 @@ async function decorateAppWithServices(app: FastifyInstance, container: Containe
   const { LLM_SERVICE_TOKEN } = await import('@domain/ai/ports');
   const { CONVERSATION_CONTEXT_SERVICE_TOKEN } = await import('@domain/conversation/ports');
   const { TRAINING_SERVICE_TOKEN } = await import('@domain/training/ports');
+  const { CONVERSATION_GRAPH_TOKEN } = await import('@infra/ai/graph/conversation.graph');
 
   app.decorate('services', {
     userService: container.get<IUserService>(USER_SERVICE_TOKEN),
@@ -56,6 +58,7 @@ async function decorateAppWithServices(app: FastifyInstance, container: Containe
     llmService: container.get<LLMService>(LLM_SERVICE_TOKEN),
     conversationContextService: container.get<IConversationContextService>(CONVERSATION_CONTEXT_SERVICE_TOKEN),
     trainingService: container.get<ITrainingService>(TRAINING_SERVICE_TOKEN),
+    conversationGraph: container.get<ICompiledConversationGraph>(CONVERSATION_GRAPH_TOKEN),
   });
 }
 
