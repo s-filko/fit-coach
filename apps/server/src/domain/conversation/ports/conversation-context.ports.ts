@@ -62,6 +62,10 @@ export interface StartNewPhaseOptions {
   trainingContext?: TrainingContext;
 }
 
+// --- Constants ---
+
+export const PHASE_ENDED_PREFIX = '[PHASE_ENDED]';
+
 // --- DI Token ---
 
 export const CONVERSATION_CONTEXT_SERVICE_TOKEN = Symbol('ConversationContextService');

@@ -152,51 +152,35 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       const { message: response, phaseTransition } = result;
 
       // ADR-0005 flow: "call LLM -> appendTurn -> on phase change call startNewPhase"
-      // CRITICAL: If phase transition occurs, startNewPhase DELETES old phase turns.
-      // So we must save the turn in the NEW phase, not the old one.
-      
-      // 1. Validate phase transition BEFORE saving turn
-      let effectivePhase: typeof phase = phase;
-      if (phaseTransition) {
-        const { toPhase } = phaseTransition;
-        
-        // Validation: Ignore transition to the same phase (LLM error)
-        if (toPhase === phase) {
-          req.log.warn({ userId, phase, toPhase }, 'Ignoring invalid phase transition to same phase (LLM error)');
-          // Don't transition, stay in current phase
-        } else {
-          // Valid transition - will execute after appendTurn
-          effectivePhase = toPhase as typeof phase;
-        }
-      }
-      
-      // 2. Save the turn in the effective phase
+      // History is preserved (never deleted), so turn is always saved in the current phase.
       try {
-        await conversationContextService.appendTurn(userId, effectivePhase, message, response);
+        await conversationContextService.appendTurn(userId, phase, message, response);
       } catch (err) {
         req.log.warn({ err }, 'Failed to append conversation turn — response not affected');
       }
 
-      // 3. Execute validated phase transition AFTER turn is saved
-      if (phaseTransition && effectivePhase !== phase) {
+      // Execute phase transition if requested by LLM
+      if (phaseTransition) {
         const { toPhase } = phaseTransition;
-        try {
-          // Prepare options for training phase
-          const options: Parameters<typeof conversationContextService.startNewPhase>[4] = {};
-          if (toPhase === 'training' && phaseTransition.sessionId) {
-            options.trainingContext = { activeSessionId: phaseTransition.sessionId };
-          }
 
-          // Execute transition
-          await conversationContextService.startNewPhase(
-            userId, phase, toPhase,
-            `Phase transition: ${phase} → ${toPhase}${phaseTransition.reason ? ` (${phaseTransition.reason})` : ''}`,
-            options,
-          );
-          req.log.info({ userId, from: phase, to: toPhase, reason: phaseTransition.reason }, 'Phase transition executed');
-        } catch (err) {
-          req.log.error({ err, userId, from: phase, to: toPhase }, 'Phase transition failed validation or execution');
-          // Transition failed but user already got response - this is acceptable per ADR-0005 [BR-CONV-007]
+        if (toPhase === phase) {
+          req.log.warn({ userId, phase, toPhase }, 'Ignoring invalid phase transition to same phase (LLM error)');
+        } else {
+          try {
+            const options: Parameters<typeof conversationContextService.startNewPhase>[4] = {};
+            if (toPhase === 'training' && phaseTransition.sessionId) {
+              options.trainingContext = { activeSessionId: phaseTransition.sessionId };
+            }
+
+            await conversationContextService.startNewPhase(
+              userId, phase, toPhase,
+              `Phase transition: ${phase} → ${toPhase}${phaseTransition.reason ? ` (${phaseTransition.reason})` : ''}`,
+              options,
+            );
+            req.log.info({ userId, from: phase, to: toPhase, reason: phaseTransition.reason }, 'Phase transition executed');
+          } catch (err) {
+            req.log.error({ err, userId, from: phase, to: toPhase }, 'Phase transition failed validation or execution');
+          }
         }
       }
 

@@ -22,7 +22,7 @@ Business Rules
 	- BR-CONV-002: After each successful LLM response, both user message and assistant response are appended as a turn [INV-CONV-002]
 	- BR-CONV-003: getMessagesForPrompt applies a sliding window (last maxTurns); returns ChatMsg[] in chronological order [INV-CONV-003]
 	- BR-CONV-004: If summarySoFar is present, it is prepended before the sliding window messages
-	- BR-CONV-005: On phase transition, previous phase context is reset; a system note is injected into the new phase [INV-CONV-001]
+	- BR-CONV-005: On phase transition, a [PHASE_ENDED] marker is appended to the old phase (history preserved, never deleted); a system note is injected into the new phase. getContext returns null for ended phases. [INV-CONV-001]
 	- BR-CONV-006: After idle exceeding a configured threshold, context may be summarized or reset with a recap (post-MVP)
 	- BR-CONV-007: If appendTurn fails after a successful LLM call, the system accepts the missing turn as best-effort for MVP
 	- BR-CONV-008: Phase 'session_planning' includes sessionPlanningContext { recommendedSessionId? } for storing draft recommendations

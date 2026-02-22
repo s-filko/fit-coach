@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, sql } from 'drizzle-orm';
 
 import {
   ConversationContext,
@@ -6,6 +6,7 @@ import {
   ConversationTurn,
   GetMessagesOptions,
   IConversationContextService,
+  PHASE_ENDED_PREFIX,
   ResetOptions,
   SessionPlanningContext,
   StartNewPhaseOptions,
@@ -43,17 +44,57 @@ export class DrizzleConversationContextService implements IConversationContextSe
     return `${userId}:${phase}`;
   }
 
-  /** [BR-CONV-001] Load all turns for (userId, phase) from DB */
+  /** [BR-CONV-001] Load current-cycle turns for (userId, phase) from DB */
   async getContext(userId: string, phase: ConversationPhase): Promise<ConversationContext | null> {
     const { db, conversationTurns } = await getDbAndSchema();
 
-    const rows = await db
-      .select()
+    // Lightweight check: is the phase closed? (avoids loading all turns for inactive phases)
+    const [lastRow] = await db
+      .select({ role: conversationTurns.role, content: conversationTurns.content })
       .from(conversationTurns)
       .where(and(
         eq(conversationTurns.userId, userId),
         eq(conversationTurns.phase, phase),
       ))
+      .orderBy(desc(conversationTurns.createdAt))
+      .limit(1);
+
+    if (!lastRow) {
+      return null;
+    }
+    if (lastRow.role === 'system' && lastRow.content.startsWith(PHASE_ENDED_PREFIX)) {
+      return null;
+    }
+
+    // Find the start of the current cycle (last non-PHASE_ENDED system note)
+    const [cycleStartRow] = await db
+      .select({ createdAt: conversationTurns.createdAt })
+      .from(conversationTurns)
+      .where(and(
+        eq(conversationTurns.userId, userId),
+        eq(conversationTurns.phase, phase),
+        eq(conversationTurns.role, 'system'),
+        sql`${conversationTurns.content} NOT LIKE ${PHASE_ENDED_PREFIX + '%'}`,
+      ))
+      .orderBy(desc(conversationTurns.createdAt))
+      .limit(1);
+
+    // Load current cycle turns only (from cycle start, or all if no system note exists)
+    const whereClause = cycleStartRow
+      ? and(
+        eq(conversationTurns.userId, userId),
+        eq(conversationTurns.phase, phase),
+        gte(conversationTurns.createdAt, cycleStartRow.createdAt),
+      )
+      : and(
+        eq(conversationTurns.userId, userId),
+        eq(conversationTurns.phase, phase),
+      );
+
+    const rows = await db
+      .select()
+      .from(conversationTurns)
+      .where(whereClause)
       .orderBy(asc(conversationTurns.createdAt));
 
     if (rows.length === 0) {
@@ -62,14 +103,10 @@ export class DrizzleConversationContextService implements IConversationContextSe
 
     const turns = rows.map(mapRowToTurn);
 
-    // Extract summarySoFar: content of the last 'summary' row (if any)
     const summaryRow = rows.filter(r => r.role === 'summary').pop();
     const summarySoFar = summaryRow?.content;
-
-    // lastActivityAt: created_at of the very last row
     const lastActivityAt = rows[rows.length - 1].createdAt;
 
-    // Build phase-appropriate context
     const baseContext = { userId, turns, summarySoFar, lastActivityAt };
     const key = this.contextKey(userId, phase);
     
@@ -91,7 +128,6 @@ export class DrizzleConversationContextService implements IConversationContextSe
       case 'training': {
         let trainingContext = this.phaseContextStore.get(key) as TrainingContext | undefined;
         
-        // Restore from DB if lost after server restart (phaseContextStore is in-memory)
         if (!trainingContext?.activeSessionId) {
           const { workoutSessions } = await import('@infra/db/schema');
           const [activeSession] = await db
@@ -133,13 +169,14 @@ export class DrizzleConversationContextService implements IConversationContextSe
 
   /**
    * [BR-CONV-003][BR-CONV-004][INV-CONV-003]
-   * Pure computation — identical logic to InMemoryConversationContextService.
+   * getContext already scopes turns to the current cycle; this applies the sliding window.
    */
   getMessagesForPrompt(ctx: ConversationContext, options?: GetMessagesOptions): ChatMsg[] {
     const maxTurns = options?.maxTurns ?? DEFAULT_MAX_TURNS;
 
     const relevant = ctx.turns.filter(
-      t => t.role === 'user' || t.role === 'assistant' || t.role === 'system',
+      t => (t.role === 'user' || t.role === 'assistant' || t.role === 'system')
+        && !t.content.startsWith(PHASE_ENDED_PREFIX),
     );
     const windowed = relevant.slice(-maxTurns);
 
@@ -155,19 +192,9 @@ export class DrizzleConversationContextService implements IConversationContextSe
     return messages;
   }
 
-  /** [BR-CONV-005] DELETE all rows for (userId, phase) */
+  /** [BR-CONV-005] No-op: history is preserved. Only clears in-memory phase context. */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async reset(userId: string, phase: ConversationPhase, options?: ResetOptions): Promise<void> {
-    const { db, conversationTurns } = await getDbAndSchema();
-
-    await db
-      .delete(conversationTurns)
-      .where(and(
-        eq(conversationTurns.userId, userId),
-        eq(conversationTurns.phase, phase),
-      ));
-    
-    // Clear phase-specific context
     this.phaseContextStore.delete(this.contextKey(userId, phase));
   }
 
@@ -177,22 +204,19 @@ export class DrizzleConversationContextService implements IConversationContextSe
     // Post-MVP: summarize older turns via LLM, insert a 'summary' row
   }
 
-  /** [BR-CONV-005][BR-CONV-010][BR-CONV-011] Delete fromPhase rows, insert system note into toPhase */
+  /** [BR-CONV-005][BR-CONV-010][BR-CONV-011] Mark fromPhase as ended, insert system note into toPhase */
   async startNewPhase(
     userId: string, fromPhase: ConversationPhase, toPhase: ConversationPhase,
     systemNote: string, options?: StartNewPhaseOptions,
   ): Promise<void> {
     const { db, conversationTurns } = await getDbAndSchema();
 
-    // Delete old phase
-    await db
-      .delete(conversationTurns)
-      .where(and(
-        eq(conversationTurns.userId, userId),
-        eq(conversationTurns.phase, fromPhase),
-      ));
+    // Mark old phase as ended (history preserved, not deleted)
+    await db.insert(conversationTurns).values({
+      userId, phase: fromPhase, role: 'system',
+      content: `${PHASE_ENDED_PREFIX} ${systemNote}`,
+    });
     
-    // Clear old phase-specific context
     this.phaseContextStore.delete(this.contextKey(userId, fromPhase));
 
     // Create new phase with system note
@@ -200,7 +224,6 @@ export class DrizzleConversationContextService implements IConversationContextSe
       userId, phase: toPhase, role: 'system', content: systemNote,
     });
     
-    // Store phase-specific context
     const toKey = this.contextKey(userId, toPhase);
     if (toPhase === 'session_planning' && options?.sessionPlanningContext) {
       this.phaseContextStore.set(toKey, options.sessionPlanningContext);
