@@ -106,7 +106,7 @@ Test pure domain logic, schemas, parsers — not affected by graph migration:
 ## Implementation Steps
 
 ### Step 0: Library Upgrade
-**Status**: PENDING
+**Status**: DONE
 
 **What:** Upgrade LangChain ecosystem + add LangGraph + bump Zod.
 

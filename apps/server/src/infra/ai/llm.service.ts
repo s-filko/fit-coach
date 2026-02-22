@@ -63,13 +63,9 @@ export class LLMService implements ILLMService {
       // Use response_format with json_object (compatible with OpenRouter)
       // Note: OpenRouter doesn't support json_schema, only json_object
       // The schema validation happens client-side after parsing
-      const modelWithJsonMode = this.model.bind({
-        response_format: {
-          type: 'json_object',
-        },
+      const result = await this.model.invoke([systemMsg, ...chatMessages], {
+        response_format: { type: 'json_object' },
       });
-
-      const result = await modelWithJsonMode.invoke([systemMsg, ...chatMessages]);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const parsed = JSON.parse(result.content as string);
 
@@ -178,20 +174,18 @@ export class LLMService implements ILLMService {
         }, 'LLM request prepared');
       }
 
-      const model = jsonMode
-        ? this.model.bind({ response_format: { type: 'json_object' } })
-        : this.model;
+      const callOptions = jsonMode ? { response_format: { type: 'json_object' as const } } : undefined;
 
       // Retry up to 2 times if the model returns an empty or trivially short response
-      let response = await model.invoke([systemPrompt, ...chatMessages]);
+      let response = await this.model.invoke([systemPrompt, ...chatMessages], callOptions);
       let content = response.content as string;
       if (jsonMode && content.trim().length <= 2) {
         effectiveLog.warn({ requestId, content }, 'LLM returned empty JSON, retrying (attempt 2)');
-        response = await model.invoke([systemPrompt, ...chatMessages]);
+        response = await this.model.invoke([systemPrompt, ...chatMessages], callOptions);
         content = response.content as string;
         if (content.trim().length <= 2) {
           effectiveLog.warn({ requestId, content }, 'LLM returned empty JSON again, retrying (attempt 3)');
-          response = await model.invoke([systemPrompt, ...chatMessages]);
+          response = await this.model.invoke([systemPrompt, ...chatMessages], callOptions);
           content = response.content as string;
         }
       }

@@ -498,23 +498,19 @@ graph.addConditionalEdges('checkTransition', async (state) => {
 
 ## Dependencies
 
-### Current (already installed)
+### Installed (Step 0 completed 2026-02-22)
 ```json
-"@langchain/core": "^0.3.72",
-"@langchain/openai": "^0.6.9",
-"zod": "^4.1.5"
+"@langchain/core": "^1.1.27",
+"@langchain/openai": "^1.2.9",
+"@langchain/langgraph": "^1.1.5",
+"zod": "^4.3.6"
 ```
 
-### To Add
-```json
-"@langchain/langgraph": "latest"  // ~v0.2.x or v1.x (check compatibility with @langchain/core ^0.3.72)
-```
-
-### Compatibility Notes
-- LangGraph v1.1.x requires `@langchain/core` ^1.1.16 — this may require upgrading `@langchain/core` and `@langchain/openai`
-- If upgrading LangChain core, test that `LLMService` still works (message types, ChatOpenAI API)
-- Zod v4 compatibility: LangGraph uses `zod/v4` import — verify with project's `zod` ^4.1.5
-- **CHECK FIRST**: Run `npm install @langchain/langgraph` and see if peer dependency warnings appear. Resolve before proceeding.
+### Upgrade Notes (Step 0 outcome)
+- `@langchain/langgraph` 1.1.5 required upgrading `@langchain/core` from ^0.3.72 → ^1.1.27 and `@langchain/openai` from ^0.6.9 → ^1.2.9
+- Breaking change in `@langchain/openai` v1: `.bind({ response_format })` removed — replaced with passing options directly to `.invoke(input, options)`
+- `zod` bumped to ^4.3.6 (LangGraph requires ≥4.2.0)
+- OpenRouter tool calling verified: `google/gemini-3-flash-preview` supports tool calling with 5+ tools simultaneously (verified 2026-02-22)
 
 ---
 
