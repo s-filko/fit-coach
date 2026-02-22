@@ -54,6 +54,7 @@ describe('JSON Mode Validation', () => {
         currentPlan: null,
         totalExercisesAvailable: 0,
         daysSinceLastWorkout: null,
+        availableExercises: [],
       });
       
       expect(prompt.toLowerCase()).toMatch(/json/);
@@ -79,6 +80,7 @@ describe('JSON Mode Validation', () => {
           updatedAt: new Date(),
           exercises: [],
         },
+        availableExercises: [],
       });
       
       expect(prompt.toLowerCase()).toMatch(/json/);

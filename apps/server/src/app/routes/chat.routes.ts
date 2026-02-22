@@ -1,6 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import type { Logger } from '@shared/logger';
+
 const chatMessageBody = z.object({
   userId: z.string().min(1).describe('User ID'),
   message: z.string().min(1).describe('User message'),
@@ -53,8 +55,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
           ? conversationContextService.getMessagesForPrompt(ctx)
           : [];
 
-        // Create enriched logger with userId
-        const log = req.log.child({ userId, phase });
+        const log = req.log.child({ userId, phase }) as Logger;
 
         // Process registration
         const result = await app.services.registrationService.processUserMessage(
@@ -142,8 +143,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         ? conversationContextService.getMessagesForPrompt(ctx)
         : [];
 
-      // Create enriched logger with userId and phase
-      const log = req.log.child({ userId, phase });
+      const log = req.log.child({ userId, phase }) as Logger;
 
       // Process message via ChatService (returns message + optional phase transition)
       const result = await app.services.chatService.processMessage(

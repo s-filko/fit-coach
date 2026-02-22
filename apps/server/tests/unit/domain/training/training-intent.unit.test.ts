@@ -15,6 +15,7 @@ describe('Training Intent Types', () => {
     it('should validate strength set intent', () => {
       const data = {
         type: 'log_set',
+        exerciseId: 1,
         setData: {
           type: 'strength',
           reps: 10,
@@ -31,6 +32,7 @@ describe('Training Intent Types', () => {
     it('should validate cardio distance set intent', () => {
       const data = {
         type: 'log_set',
+        exerciseId: 2,
         setData: {
           type: 'cardio_distance',
           distance: 5,
@@ -106,6 +108,7 @@ describe('Training Intent Types', () => {
     it('should validate discriminated union with log_set', () => {
       const data = {
         type: 'log_set',
+        exerciseId: 1,
         setData: {
           type: 'strength',
           reps: 8,
@@ -156,9 +159,10 @@ describe('Training Intent Types', () => {
   describe('LLMTrainingResponseSchema', () => {
     it('should validate response with log_set intent', () => {
       const data = {
-        message: 'Отлично! Записал подход.',
-        intent: {
+        message: 'Logged set.',
+        intents: [{
           type: 'log_set',
+          exerciseId: 1,
           setData: {
             type: 'strength',
             reps: 10,
@@ -166,31 +170,31 @@ describe('Training Intent Types', () => {
             weightUnit: 'kg',
           },
           rpe: 8,
-        },
+        }],
       };
 
       const result = LLMTrainingResponseSchema.safeParse(data);
       expect(result.success).toBe(true);
     });
 
-    it('should reject response without intent (intent is now required)', () => {
+    it('should reject response without intents (intents is required)', () => {
       const data = {
-        message: 'Продолжай в том же духе!',
+        message: 'Keep going!',
       };
 
       const result = LLMTrainingResponseSchema.safeParse(data);
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.issues[0]?.path).toContain('intent');
+        expect(result.error.issues[0]?.path).toContain('intents');
       }
     });
 
     it('should validate response with phase transition', () => {
       const data = {
-        message: 'Отличная тренировка!',
-        intent: {
+        message: 'Great workout!',
+        intents: [{
           type: 'finish_training',
-        },
+        }],
         phaseTransition: {
           toPhase: 'chat',
           reason: 'training_completed',
@@ -203,9 +207,9 @@ describe('Training Intent Types', () => {
 
     it('should reject missing message', () => {
       const data = {
-        intent: {
+        intents: [{
           type: 'next_exercise',
-        },
+        }],
       };
 
       const result = LLMTrainingResponseSchema.safeParse(data);
@@ -216,26 +220,27 @@ describe('Training Intent Types', () => {
   describe('parseTrainingResponse', () => {
     it('should parse valid JSON with intent', () => {
       const json = JSON.stringify({
-        message: 'Записал!',
-        intent: {
+        message: 'Logged!',
+        intents: [{
           type: 'log_set',
+          exerciseId: 1,
           setData: {
             type: 'strength',
             reps: 10,
             weight: 100,
           },
           rpe: 8,
-        },
+        }],
       });
 
       const result = parseTrainingResponse(json);
-      expect(result.message).toBe('Записал!');
-      expect(result.intent?.type).toBe('log_set');
+      expect(result.message).toBe('Logged!');
+      expect(result.intents?.[0]?.type).toBe('log_set');
     });
 
-    it('should reject JSON without intent (intent is now required)', () => {
+    it('should reject JSON without intents (intents is now required)', () => {
       const json = JSON.stringify({
-        message: 'Продолжай!',
+        message: 'Keep going!',
       });
 
       expect(() => parseTrainingResponse(json)).toThrow('Invalid training response format');
@@ -249,10 +254,7 @@ describe('Training Intent Types', () => {
 
     it('should throw on invalid schema', () => {
       const json = JSON.stringify({
-        // missing required 'message' field
-        intent: {
-          type: 'next_exercise',
-        },
+        intents: [{ type: 'next_exercise' }],
       });
 
       expect(() => parseTrainingResponse(json)).toThrow('Invalid training response format');
@@ -262,9 +264,10 @@ describe('Training Intent Types', () => {
   describe('Real-world training scenarios', () => {
     it('should handle logging strength set', () => {
       const json = JSON.stringify({
-        message: 'Отлично! Записал подход: 10 повторов с 100 кг.',
-        intent: {
+        message: 'Logged set: 10 reps @ 100 kg.',
+        intents: [{
           type: 'log_set',
+          exerciseId: 1,
           setData: {
             type: 'strength',
             reps: 10,
@@ -273,53 +276,54 @@ describe('Training Intent Types', () => {
           },
           rpe: 8,
           feedback: 'Felt strong',
-        },
+        }],
       });
 
       const result = parseTrainingResponse(json);
-      expect(result.message).toContain('Записал');
-      expect(result.intent?.type).toBe('log_set');
-      if (result.intent?.type === 'log_set') {
-        expect(result.intent.rpe).toBe(8);
-        expect(result.intent.feedback).toBe('Felt strong');
+      expect(result.message).toContain('Logged');
+      expect(result.intents?.[0]?.type).toBe('log_set');
+      const [intent] = result.intents!;
+      if (intent.type === 'log_set') {
+        expect(intent.rpe).toBe(8);
+        expect(intent.feedback).toBe('Felt strong');
       }
     });
 
     it('should handle moving to next exercise', () => {
       const json = JSON.stringify({
-        message: 'Отлично! Переходим к следующему упражнению.',
-        intent: {
+        message: 'Moving to the next exercise.',
+        intents: [{
           type: 'next_exercise',
           reason: 'completed_all_sets',
-        },
+        }],
       });
 
       const result = parseTrainingResponse(json);
-      expect(result.message).toContain('следующему');
-      expect(result.intent?.type).toBe('next_exercise');
+      expect(result.message).toContain('next');
+      expect(result.intents?.[0]?.type).toBe('next_exercise');
     });
 
     it('should handle skipping exercise', () => {
       const json = JSON.stringify({
-        message: 'Понял, пропускаем это упражнение.',
-        intent: {
+        message: 'Got it, skipping this exercise.',
+        intents: [{
           type: 'skip_exercise',
           reason: 'equipment_unavailable',
-        },
+        }],
       });
 
       const result = parseTrainingResponse(json);
-      expect(result.message).toContain('пропускаем');
-      expect(result.intent?.type).toBe('skip_exercise');
+      expect(result.message).toContain('skipping');
+      expect(result.intents?.[0]?.type).toBe('skip_exercise');
     });
 
     it('should handle finishing training', () => {
       const json = JSON.stringify({
-        message: 'Отличная работа! Тренировка завершена.',
-        intent: {
+        message: 'Great work! Training complete.',
+        intents: [{
           type: 'finish_training',
           feedback: 'Great session',
-        },
+        }],
         phaseTransition: {
           toPhase: 'chat',
           reason: 'training_completed',
@@ -327,50 +331,50 @@ describe('Training Intent Types', () => {
       });
 
       const result = parseTrainingResponse(json);
-      expect(result.message).toContain('завершена');
-      expect(result.intent?.type).toBe('finish_training');
+      expect(result.message).toContain('complete');
+      expect(result.intents?.[0]?.type).toBe('finish_training');
       expect(result.phaseTransition?.toPhase).toBe('chat');
     });
 
     it('should handle advice request', () => {
       const json = JSON.stringify({
-        message: 'Для жима лежа важно держать лопатки сведенными...',
-        intent: {
+        message: 'For bench press, keep your shoulder blades retracted...',
+        intents: [{
           type: 'request_advice',
           topic: 'bench_press_form',
-        },
+        }],
       });
 
       const result = parseTrainingResponse(json);
-      expect(result.message).toContain('лопатки');
-      expect(result.intent?.type).toBe('request_advice');
+      expect(result.message).toContain('bench press');
+      expect(result.intents?.[0]?.type).toBe('request_advice');
     });
 
     it('should handle just chatting during training', () => {
       const json = JSON.stringify({
-        message: 'Да, сегодня отличная погода!',
-        intent: {
+        message: 'Yeah, great weather today!',
+        intents: [{
           type: 'just_chat',
-        },
+        }],
       });
 
       const result = parseTrainingResponse(json);
-      expect(result.message).toContain('погода');
-      expect(result.intent?.type).toBe('just_chat');
+      expect(result.message).toContain('weather');
+      expect(result.intents?.[0]?.type).toBe('just_chat');
     });
 
     it('should handle session modification', () => {
       const json = JSON.stringify({
-        message: 'Хорошо, заменю приседания на жим ногами.',
-        intent: {
+        message: 'Sure, replacing squats with leg press.',
+        intents: [{
           type: 'modify_session',
           modification: 'replace squat with leg press',
-        },
+        }],
       });
 
       const result = parseTrainingResponse(json);
-      expect(result.message).toContain('заменю');
-      expect(result.intent?.type).toBe('modify_session');
+      expect(result.message).toContain('replacing');
+      expect(result.intents?.[0]?.type).toBe('modify_session');
     });
   });
 });

@@ -125,7 +125,7 @@ export class ChatService implements IChatService {
         parsedMessage = trainingResponse.message;
         
         // Execute all training intents sequentially
-        log.debug({ intents: trainingResponse.intents }, 'Executing training intents');
+        log?.debug({ intents: trainingResponse.intents }, 'Executing training intents');
         for (const intent of trainingResponse.intents) {
           await this.executeTrainingIntent(user.id, intent);
         }
@@ -149,7 +149,7 @@ export class ChatService implements IChatService {
         }
 
         if (parseError) {
-          log.warn({ parseError: parseError.message }, 'session_planning parse failed — retrying with self-correction');
+          log?.warn({ parseError: parseError.message }, 'session_planning parse failed — retrying with self-correction');
           const correctionMessages: typeof messages = [
             ...messages,
             { role: 'assistant', content: rawForParsing },
@@ -169,7 +169,7 @@ export class ChatService implements IChatService {
 
         const planningResponse = parseSessionPlanningResponse(rawForParsing);
         if (planningResponse.droppedPhaseTransition) {
-          log.warn('LLM returned invalid phaseTransition in session_planning — stripped');
+          log?.warn('LLM returned invalid phaseTransition in session_planning — stripped');
         }
         const { message: msg, sessionPlan: plan, phaseTransition: transition } = planningResponse;
         parsedMessage = msg;

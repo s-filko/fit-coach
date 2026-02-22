@@ -255,7 +255,7 @@ export interface SessionSet {
 
 export interface RecommendedExercise {
   exerciseId: number;
-  exerciseName: string;
+  exerciseName?: string;
   targetSets: number;
   targetReps: string;
   targetWeight?: number;
