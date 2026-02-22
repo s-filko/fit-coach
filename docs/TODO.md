@@ -1,61 +1,32 @@
-# TODOs (Concise)
+# TODOs
 
-## Done (Recent Sessions)
-- ~~Unified Registration (FEAT-0006/0007)~~ — single LLM call, JSON mode, unified prompt
-- ~~Conversation Context (FEAT-0009)~~ — domain ports, Drizzle impl, DI, sliding window, phase transitions
-- ~~ChatService~~ — post-registration conversation mode with FitCoach identity
-- ~~ProfileParserService, messages.ts, registration.config.ts~~ — deleted (dead code)
-- ~~LLM switch~~ — Gemini → GPT-4 Turbo via OpenAI/OpenRouter, JSON mode (`response_format`)
-- ~~DB migrations~~ — conversation_turns, user_accounts tables
-- ~~All integration tests updated~~ — 158+ passing tests
-- ~~Fastify migration~~ — Express fully removed, plugin architecture implemented
-- ~~Documentation updates~~ — ARCHITECTURE.md, API_SPEC.md, FEAT-0003, FEAT-0006, DB_SETUP.md updated
-- ~~LLM debug endpoints~~ — `/api/debug/llm` for development monitoring
-- ~~OpenAI-compatible API abstraction~~ — Support for OpenAI, OpenRouter, Groq, Together, Azure
+## Conversation History — Bug Fix (critical)
+Problem: `startNewPhase` deletes all conversation history on phase transition → entire training session chat is lost.
+Solution: keep everything in a single `conversation_turns` table, never delete, scope the LLM prompt window to the current phase cycle (turns after the last system note).
 
-## Immediate
-- ~~Sync test env naming in `docs/DB_SETUP.md` to `.env.test`~~ ✅ Done
-- ~~Update feature specs to reflect current architecture~~ ✅ Done (FEAT-0003, FEAT-0006)
-- ~~Replace root `README.md` with index linking to canonical docs~~ ✅ Done
-- ~~Update FEAT-0007 to align with unified registration approach~~ ✅ Done (marked as Future v2.0)
-- ~~Add comments to schema.ts about status models~~ ✅ Done (MVP vs Future)
-- Update TESTING.md with examples for conversation context and unified registration
+- `startNewPhase`: remove `DELETE` of old phase rows — history is never deleted
+- `getContext`: slice turns from the last `system` note (current phase cycle) for the sliding window prompt
+- `reset`: remove `DELETE`, make it a no-op (history is preserved)
+- Update `conversation-context` tests to reflect new no-delete behaviour
 
-## Registration — Remaining
-- Adopt status model `registration|onboarding|planning|active` (planning feature later).
-- Fallback response should be in Russian, not English ("Could you please try again?" → Russian).
-- Handle edge cases: user sends image/sticker/voice (bot currently ignores non-text).
+## Training Phase — Set Correction (critical)
+Problem: user logged a set under the wrong exercise (Bulgarian Split Squat instead of Hip Thrust). LLM had no ability to delete or correct it — it just acknowledged and added another entry. The wrong record had to be removed manually from DB.
 
-## Chat Mode — Improvements
-- Post-MVP: summarization of older turns via LLM when threshold exceeded [BR-CONV-006].
-- Post-MVP: idle threshold policy — reset with recap after long inactivity [BR-CONV-006].
+- Add `delete_set` and `edit_set` training intents so LLM can correct mistakes mid-session
+- Add corresponding `TrainingService` methods: `deleteSet(setId)`, `editSet(setId, newData)`
+- When user says "that was wrong", "delete that", "that was a different exercise" — LLM must use `delete_set` intent instead of ignoring it
 
-## Tests
-- Add integration scenarios S-0025..S-0038, S-0045..S-0048.
-- Enforce IDs in test titles (`S-####`, `AC-####`, `BR-*-###`).
+## Training Phase — Real-time Set Analytics in Prompt
+Problem: LLM blindly accepted a set logged at 27.5 kg when previous 3 sets were 10 kg — a clear anomaly it should have caught.
 
-## Docs
-- ~~FEAT-0006 updated~~ ✅ Complete rewrite with unified JSON mode approach
-- ~~FEAT-0003 updated~~ ✅ Added conversation context and phase-based routing
-- ~~ARCHITECTURE.md updated~~ ✅ Added LLM Integration, ConversationContext, DI details
-- ~~API_SPEC.md updated~~ ✅ Added debug endpoints and registrationComplete field
-- ~~DB_SETUP.md updated~~ ✅ Added database schema section with conversation_turns
-- ~~docs/README.md index updated~~ ✅ Added new sections and recent updates
-- ~~Clean up old FEAT-0006 variant files (3 different files exist)~~ ✅ Done - removed 4 outdated files
-- ~~ADR-0004 updated~~ ✅ Documented MVP schema + future evolution plans
-- Update FEAT-0007 to align with new registration architecture
-- Update TESTING.md with examples for new components
+- Add per-set analytics section to the training system prompt: previous sets for current exercise, weight jumps, rep drop-offs
+- LLM must flag suspicious entries before confirming: large weight jump (>50%), sudden rep drop (>40%), sets logged under wrong exercise
+- If anomaly detected, LLM should ask the user to confirm before saving ("Did you mean Hip Thrust? That's a big jump from 10 kg")
 
-## CI / Automation
-- Lint: every endpoint in `docs/API_SPEC.md` has `x-feature`.
-- Lint: every `FEAT-####` appears in at least one test.
-- Warn when test titles lack IDs.
+## Training Phase — Coach Tone
+Problem: LLM praises technique, form, and execution ("great form!", "perfect technique!") which it cannot evaluate without visual feedback — sounds unprofessional and annoying.
 
-## Quality
-- Add integration test to snapshot OpenAPI JSON (detect API drift).
-
-## Planning (FEAT-0008 — post-onboarding)
-- Implement workout plan lifecycle via `approvedAt`/`archivedAt` per `docs/features/FEAT-0008-training-plan-generation.md`.
-- Persist WorkoutPlanCycle hierarchy (macro|meso|micro) with state tracking (upcoming/active/completed/skipped) and planned/actual timestamps.
-- Link workout sessions/logs to planId; exercise history must remain tied to archived plans.
-- Ensure activation (`active`) happens only after plan approval; replan archives the previous plan and creates a new plan with `approvedAt=null` (profileStatus='planning').
+- Add explicit rule to training system prompt: never praise technique, form, or execution quality — these cannot be assessed without visual observation
+- Praise is allowed only for measurable facts: completing a set, hitting a rep PR, finishing the session
+- Keep responses concise and factual during training — less hype, more signal
+- Praise must be conservative and earned — only for real achievements (PR, session completion, meaningful progress). No filler compliments. Rare praise = valuable praise
