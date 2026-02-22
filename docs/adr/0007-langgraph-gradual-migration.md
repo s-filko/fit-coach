@@ -1,6 +1,8 @@
 # ADR-0007: Gradual Migration to LangGraph for Conversation Phase Management
 
-## Status: ACCEPTED (Pending Implementation)
+## Status: ACCEPTED (Implementation Started)
+
+## Implementation Plan: `docs/ADR-0007-IMPLEMENTATION-PLAN.md`
 
 ## Date: 2026-02-11
 
@@ -605,5 +607,7 @@ For quick orientation when starting a new session:
 *Author: AI Assistant*
 *Decision Date: 2026-02-11*
 *Updated: 2026-02-15 — Added Step 0b (training intent naming mismatch fix), Phase 5 tool result loop details, guardrails #11-#12*
+*Updated: 2026-02-22 — Status changed to Implementation Started, linked implementation plan*
 *Supersedes: Custom FSM discussion (not implemented)*
 *Related: ADR-0001 (AI integration), ADR-0005 (Conversation context)*
+*Implementation Plan: `docs/ADR-0007-IMPLEMENTATION-PLAN.md`*
