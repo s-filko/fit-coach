@@ -20,35 +20,49 @@
 - ADR-0007 is updated incrementally — only improvements and safety clarifications
 - No time estimates — done when done, each step is a commit
 
-### Migration = Transfer, Not Rewrite
+### Migration = Refactor and Improve, Not Copy-Paste
 
-Each graph node is created by **moving existing logic from ChatService / RegistrationService**, not by writing new code from scratch. The process for each step:
+Each graph node is built **based on existing logic**, but with active improvement. The process for each step:
 
-1. Open the source code (the specific `if/else` branch in `ChatService.processMessage` or `RegistrationService.processUserMessage`)
-2. Transfer logic line-by-line into the new node, preserving all edge cases: retry on parse failure, conditional saves, fallback responses, error handling
-3. Adapt to graph state interface (read from `state.X`, write to `state.responseMessage`) instead of direct returns
-4. Reference the original code with comments like `// Ported from ChatService.processMessage, plan_creation branch`
+1. Study the source code (the specific branch in `ChatService.processMessage` or `RegistrationService.processUserMessage`) — understand **what** it does and **why**
+2. Identify what to **keep** (business rules, invariants), what to **simplify** (unnecessary abstractions, workarounds), and what to **drop** (dead code, vestigial patterns)
+3. Build the new node with clean code that leverages LangGraph patterns — not a line-by-line port
+4. If something doesn't fit the new architecture naturally or is questionable — **raise for discussion immediately** before proceeding
 5. Mark the old code `// TODO: remove — migrated to nodes/<node-file>.ts`
-6. Both paths coexist; route selects which one to use
+6. Both paths coexist during migration; route selects which one to use
 
-Key existing logic that must NOT be lost during transfer:
-- `loadPlanCreationContext` / `loadSessionPlanningContext` / `loadTrainingContext` — phase-specific data loading
-- Retry-on-parse-failure in training and session_planning branches
-- `saveWorkoutPlan` only when `phaseTransition?.toPhase === 'session_planning'` [BR from FEAT-0010 Step 11]
-- `saveSessionPlan` only when transitioning to training + returning `sessionId`
-- `handleProfileUpdate` filtering in chat phase
-- Registration fallback response on LLM/parse error
-- `stripJsonFromMarkdown` preprocessing in registration
+**What to improve during transfer:**
+- Flatten nested if/else chains into clear graph node logic
+- Replace manual retry loops with proper error handling
+- Remove intermediate parsing layers where LangGraph/tools handle it natively (especially training intents)
+- Simplify context loading — if a method does 5 DB calls, question whether all are needed
+- Drop "just in case" code that handles impossible states
+
+**What to keep (business invariants):**
+- `saveWorkoutPlan` only on transition to `session_planning` [FEAT-0010 Step 11]
+- `saveSessionPlan` only on transition to `training` + return `sessionId`
+- Registration completeness: all 6 fields + `is_confirmed`
+- Phase priority: training > session_planning > plan_creation > chat
+
+**When to stop and discuss:**
+- Logic that seems wrong or overly complex in the original
+- Cases where the old behavior might be a bug, not a feature
+- Patterns that don't map cleanly to LangGraph
 
 ### What Stays Unchanged
 
 These components are reused as-is (not migrated, not rewritten):
 - `LLMService` (`infra/ai/llm.service.ts`) — all LLM calls go through it
-- `ConversationContextService` (`infra/conversation/`) — source of truth for conversation history
-- `TrainingService` (`domain/training/services/training.service.ts`) — called from tool implementations
+- `ConversationContextService` (`infra/conversation/`) — source of truth for conversation history; graph state does NOT duplicate phase-specific context — nodes read it via `getContext()`
+- `TrainingService` (`domain/training/services/training.service.ts`) — called from tool implementations (new method `logSetWithContext` added in Step 6)
 - `PromptService` (`domain/user/services/prompt.service.ts`) — prompt building for each phase
 - All Zod schemas and parsers (except `TrainingIntentSchema` which is replaced by tools in Step 6)
 - API contract: `POST /api/chat` request/response format identical
+
+### What Changes Beyond Graph Migration
+
+- **Training prompt** (`prompts/training.prompt.ts`) — rewritten in Step 6: removes JSON intent format instructions (~150 lines), tools describe themselves via Zod schemas. Prompt keeps: coaching role, session context, progress display, exercise catalog.
+- **`profileStatus` normalization** — fixed in Step 8: `incomplete` (legacy default from `user.repository.ts`) unified to `registration`. Only two valid values: `registration` and `complete`.
 
 ---
 
@@ -248,13 +262,23 @@ Test pure domain logic, schemas, parsers — not affected by graph migration:
 
 | Current intent (`executeTrainingIntent`) | LangChain tool | TrainingService method |
 |---|---|---|
-| `log_set` | `log_set` | `trainingService.logSet()` |
+| `log_set` | `log_set` | `trainingService.logSetWithContext()` (NEW — see below) |
 | `next_exercise` | `next_exercise` | `completeCurrentExercise()` + `startNextExercise()` |
 | `skip_exercise` | `skip_exercise` | `skipCurrentExercise()` |
 | `finish_training` | `finish_training` | `completeSession()` |
 | `request_advice` | `request_advice` | no DB action |
 | `modify_session` | `modify_session` | no DB action |
 | `just_chat` | `just_chat` | no DB action |
+
+**`log_set` is non-trivial.** Current `executeTrainingIntent` for `log_set` does 4 operations:
+1. `ensureCurrentExercise(sessionId, { exerciseId?, exerciseName? })` — resolve by ID or name, create if needed
+2. `getSessionDetails(sessionId)` — load session to find exercise
+3. Calculate `nextSetNumber = existingSets.length + 1`
+4. `trainingService.logSet(exerciseId, { setNumber, setData, rpe, userFeedback })`
+
+**Decision:** Create a new method `TrainingService.logSetWithContext(sessionId, { exerciseId?, exerciseName?, setData, rpe, userFeedback })` that encapsulates all 4 steps. The `log_set` tool calls this single method — tool stays thin, domain logic stays in domain service.
+
+**Training prompt rewrite.** The current `training.prompt.ts` instructs LLM to return JSON with `intents` array (~150 lines of format description). With tool calling, this is replaced: tools describe themselves via Zod schemas. Prompt keeps coaching role, session context, progress display, exercise catalog — but drops all JSON format instructions and intent type documentation.
 
 **New files:**
 - `infra/ai/graph/nodes/training.node.ts` — training graph node with tool loop
@@ -267,9 +291,10 @@ Test pure domain logic, schemas, parsers — not affected by graph migration:
 **OpenRouter compatibility:** Verified 2026-02-22 — `google/gemini-3-flash-preview` supports tool calling with 5+ tools simultaneously through OpenRouter. Full tool loop (call → result → final response) confirmed working.
 
 **How to test:**
-- [ ] Unit test per tool: mock TrainingService, verify correct method called
+- [ ] Unit test for `TrainingService.logSetWithContext()` — mock repos, verify all 4 sub-steps
+- [ ] Unit test per tool: mock TrainingService, verify correct method called with correct args
 - [ ] Unit test: verify tool loop terminates
-- [ ] Unit test: verify tool error handling
+- [ ] Unit test: verify tool error handling (DB failure → error message → LLM handles gracefully)
 - [ ] Manual curl: log a set during training, verify data in DB
 - [ ] `training-intent.unit.test.ts` replaced by new tool tests
 - [ ] Mark `parseTrainingResponse`, `executeTrainingIntent`, `TrainingIntentSchema` with `// TODO: remove`
@@ -291,43 +316,85 @@ Test pure domain logic, schemas, parsers — not affected by graph migration:
 
 ---
 
-### Step 8: Router Node + Route Simplification
+### Step 8: Router Node + Route Simplification + profileStatus Fix
 **Status**: PENDING
 
-**What:** Move phase determination from `chat.routes.ts` into a router node at graph entry.
+**What:** Move phase determination from `chat.routes.ts` into a router node at graph entry. Also fix `profileStatus` inconsistency.
 
 **Source code to transfer from:** `chat.routes.ts` lines 44-136 — registration check + context-based phase priority (training > session_planning > plan_creation > chat)
 
 **New file:** `infra/ai/graph/nodes/router.node.ts`
 
+**Router logic:**
+- Check `userService.isRegistrationComplete(user)` (checks `profileStatus === 'complete'`)
+- If not complete → phase = `registration`
+- If complete → check contexts by priority: training > session_planning > plan_creation > chat
+
+**profileStatus normalization:** Currently three values exist due to inconsistency:
+- `'incomplete'` — default in `user.repository.ts` on upsert (line 69-70)
+- `'registration'` — default in DB schema (line 42)
+- `'complete'` — set when registration finishes
+
+Only two are meaningful: `registration` and `complete`. Fix: change `user.repository.ts` upsert default from `'incomplete'` to `'registration'` to match DB schema. Router uses `isRegistrationComplete()` which checks `=== 'complete'`, so both non-complete values already route to registration correctly.
+
 **Route simplification:** `chat.routes.ts` becomes: get user → invoke graph → return response. All phase logic inside the graph.
 
 **How to test:**
-- [ ] Unit test: verify router returns correct phase for each scenario
+- [ ] Unit test: verify router returns `registration` for profileStatus `registration`
+- [ ] Unit test: verify router returns `registration` for profileStatus `incomplete` (backward compat until cleanup)
+- [ ] Unit test: verify router returns correct phase for each context scenario
 - [ ] Integration: full flow from registration through chat works via single graph invoke
 - [ ] Update `chat.routes.integration.test.ts`
+- [ ] Update `user.repository.unit.test.ts` for new default
 
 ---
 
-### Step 9: Edge Guards (Transition Validation)
+### Step 9: Edge Guards (Transition Validation) + Cleanup Node
 **Status**: PENDING
 
-**What:** Move transition validation rules into LangGraph conditional edges.
+**What:** Move transition validation rules into LangGraph conditional edges. Side effects (auto-complete, auto-skip) happen in a separate cleanup node — guards only validate.
 
 **Source code to transfer from:** `ChatService.validatePhaseTransition()` — currently unused but contains correct business rules.
 
-**Rules to implement as guards:**
-- `plan_creation → session_planning`: requires active workout plan
-- `session_planning → training`: requires valid session + `sessionId`
-- `training → chat`: auto-complete session
-- `session_planning → chat`: auto-skip draft session
-- `training → session_planning`: blocked
+**Architecture decision:** Guards are pure validators (return allow/block). Side effects go into a `transitionCleanupNode` that runs AFTER guard passes but BEFORE `startNewPhase`. This keeps guards clean and testable.
 
-**Changes in** `infra/ai/graph/conversation.graph.ts` — `addConditionalEdges` with guard functions.
+```
+[phase node] → [transition guard] → [cleanup node] → [startNewPhase] → END
+                     ↓ (blocked)
+                    END (return response without transition)
+```
+
+**Complete transition rules (12 rules from `validatePhaseTransition`):**
+
+Allowed without conditions (5):
+- `registration → plan_creation` — always allowed
+- `registration → chat` — always allowed
+- `chat → plan_creation` — always allowed
+- `plan_creation → chat` — always allowed (user cancels)
+- `session_planning → chat` — always allowed (user cancels, no session created yet)
+
+Allowed with conditions (4):
+- `plan_creation → session_planning` — requires active workout plan in DB
+- `chat → session_planning` — requires active workout plan in DB
+- `session_planning → training` — requires `sessionId` + session exists + belongs to user + status='planning' + no other active session
+- `training → chat` — allowed, with side effect: auto-complete active session (cleanup node)
+
+Blocked (3):
+- `training → session_planning` — blocked ("Complete or cancel training first")
+- `* → registration` — blocked (registration transitions handled by router, not by LLM)
+- `registration → *` (except chat/plan_creation) — blocked
+
+**New files:**
+- `infra/ai/graph/guards/transition.guard.ts` — pure validation functions
+- `infra/ai/graph/nodes/transition-cleanup.node.ts` — side effects (auto-complete session)
 
 **How to test:**
-- [ ] Unit test: attempt invalid transition, verify blocked
-- [ ] Unit test: attempt valid transition, verify proceeds
+- [ ] Unit test per allowed transition: verify guard returns allow
+- [ ] Unit test per blocked transition: verify guard returns block with error message
+- [ ] Unit test: `plan_creation → session_planning` without active plan → blocked
+- [ ] Unit test: `session_planning → training` without sessionId → blocked
+- [ ] Unit test: `training → chat` → cleanup node calls `trainingService.completeSession()`
+- [ ] Unit test: cleanup node failure does not crash graph (logs error, transition still happens)
 
 ---
 
@@ -375,5 +442,7 @@ POST /api/chat → chat.routes.ts → ConversationGraph.invoke({ userId, userMes
 |------|------------|
 | Step 0 | Update Dependencies section with actual versions |
 | Step 1 | Add error recovery strategy clarification |
-| Step 6 | Add OpenRouter tool calling verification note |
+| Step 6 | Add OpenRouter tool calling verification note; document `logSetWithContext` method |
+| Step 8 | Document `profileStatus` normalization (2→2 states) |
+| Step 9 | Document full transition rule set (12 rules) and cleanup node pattern |
 | Step 10 | Mark status IMPLEMENTED, add final diagram |
