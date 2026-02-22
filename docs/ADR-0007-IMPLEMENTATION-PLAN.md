@@ -131,7 +131,7 @@ Test pure domain logic, schemas, parsers — not affected by graph migration:
 ---
 
 ### Step 1: Graph State + Skeleton Graph
-**Status**: PENDING
+**Status**: DONE
 
 **What:** Create the LangGraph state definition and an empty graph skeleton.
 
@@ -163,27 +163,36 @@ Test pure domain logic, schemas, parsers — not affected by graph migration:
 
 ---
 
-### Step 2: Chat Phase Node + Hybrid Routing
+### Step 2: Chat Phase Node (no hybrid)
 **Status**: PENDING
 
-**What:** Transfer the `chat` branch from `ChatService.processMessage()` into a graph node. Simplest phase — no DB side effects, just LLM call + response + optional profileUpdate.
+**Decision:** No hybrid routing. Graph takes all phases immediately. `chat.routes.ts` calls only the graph for registered users. Unmigrated phases (`plan_creation`, `session_planning`, `training`) are stub nodes that throw a clear error. Each subsequent step replaces one stub with real logic.
 
-**Source code to transfer from:** `ChatService.processMessage`, chat branch:
-- `buildSystemPrompt('chat')` — load user, build prompt via `PromptService.buildChatSystemPrompt()`
-- `generateWithSystemPrompt(messages, prompt, { jsonMode: true })` — same call
-- `parseLLMResponse()` — reuse existing parser as-is
-- `handleProfileUpdate()` — transfer profile update logic for chat phase
+**What:** Transfer `chat` branch from `ChatService.processMessage()` into a graph node. Graph is wired with `state.phase` routing via `addConditionalEdges`.
+
+**Source logic (from `ChatService`):**
+- `buildSystemPrompt('chat')`: `workoutPlanRepo.findActiveByUserId` + `trainingService.getTrainingHistory(userId, 5)` + `promptService.buildChatSystemPrompt(user, hasActivePlan, recentSessions)`
+- `generateWithSystemPrompt(messages, systemPrompt, { jsonMode: true })`
+- `parseLLMResponse()` → `{ message, phaseTransition, profileUpdate }`
+- `if (profileUpdate) userService.updateProfileData(userId, profileUpdate)`
+
+**Improvements vs ChatService:**
+- No `sessionPlan`/`workoutPlan` variables — only what chat needs
+- `handleProfileUpdate` inlined — no separate private method
 
 **New file:** `infra/ai/graph/nodes/chat.node.ts`
 
-**Route change in** `app/routes/chat.routes.ts`:
-- Add hybrid routing: if `phase === 'chat'` → invoke graph, else → old `ChatService.processMessage()`
-- Graph returns `{ responseMessage, requestedTransition }`, route handles `appendTurn` and `startNewPhase` same as before
+**Updated files:**
+- `infra/ai/graph/conversation.graph.ts` — accepts `deps`, registers `chatNode` + stubs for other phases, routes by `state.phase`
+- `main/register-infra-services.ts` — passes deps to `buildConversationGraph`
+- `app/routes/chat.routes.ts` — calls `conversationGraph.invoke` instead of `chatService.processMessage`; `ChatService` marked `// TODO: remove`
 
 **How to test:**
-- [ ] Unit test: mock LLMService + PromptService, invoke chatNode, verify output shape matches `ProcessMessageResult`
-- [ ] Manual curl: send message as registered user in chat phase, verify response identical to old path
-- [ ] `npm run test:unit` — existing tests still pass
+- [ ] Unit test: mock deps, invoke `chatNode`, verify `responseMessage` set
+- [ ] Unit test: `profileUpdate` in LLM response → `userService.updateProfileData` called
+- [ ] Unit test: `phaseTransition` → `requestedTransition` in returned state
+- [ ] `npm run test:unit` — 53+ tests pass
+- [ ] `npx tsc --noEmit` — clean
 
 ---
 
