@@ -1,8 +1,8 @@
 # ADR-0007 LangGraph Migration — Implementation Plan
 
 **ADR**: `docs/adr/0007-langgraph-gradual-migration.md`  
-**Status**: IN PROGRESS  
-**Last Updated**: 2026-02-22
+**Status**: IN PROGRESS (Architecture Rework)  
+**Last Updated**: 2026-02-23
 
 ## Related
 
@@ -13,93 +13,127 @@
 - FEAT-0009: Conversation Context (`docs/features/FEAT-0009-conversation-context.md`)
 - Previous implementation plan: `docs/IMPLEMENTATION_PLAN.md` (FEAT-0010 steps — completed, this plan supersedes the architecture)
 
+---
+
+## Architecture Rework — Why
+
+Steps 0-2 were implemented under the assumption that existing MVP infrastructure (ConversationContextService, JSON mode + manual parsing, LLMService wrapper) would be reused as-is. Live testing exposed a fundamental problem: **conversation phase (state) was determined by parsing `[PHASE_ENDED]` markers from conversation history** — an anti-pattern equivalent to parsing HTML tags to find cursor position.
+
+This triggered a full architectural review. The conclusion: MVP patterns must not be carried into the new architecture. Everything that LangGraph can handle natively must live in LangGraph. This is a 2026 production application — not a prototype.
+
+### MVP Anti-Patterns Being Replaced
+
+**1. State stored in conversation history (CRITICAL)**
+- `ConversationContextService.getContext()` determines active phase by scanning `conversation_turns` for `[PHASE_ENDED]` markers
+- 3 parallel DB queries per incoming message to guess the current phase
+- Hanging "open" system notes block users (observed in production 2026-02-23)
+- `phaseContextStore` — in-memory `Map` for `activeSessionId` and `lastSessionPlan` — lost on server restart
+
+**Replaced by:** LangGraph PostgreSQL Checkpointer — atomic state persistence, one query by `thread_id`
+
+**2. JSON mode + manual parsing in all phases (MEDIUM)**
+- Every phase forces LLM to respond in JSON, then manually parses with Zod
+- 5 separate parsers: `parseLLMResponse`, `parseTrainingResponse`, `parseSessionPlanningResponse`, `parsePlanCreationResponse`, `registrationLLMResponseSchema`
+- Each parser has its own retry logic for malformed JSON
+- Prompts spend ~150 lines per phase describing JSON format to the LLM
+
+**Replaced by:** LangGraph tool calling — `model.bindTools()` + `ToolNode`. LLM calls typed tools for side effects, responds with natural text. Zod schemas on tool inputs provide validation natively.
+
+**3. LLMService wrapper (MEDIUM)**
+- Wraps `ChatOpenAI` returning `string` — incompatible with tool calling (needs `AIMessage` with `tool_calls`)
+- Logging and retry baked into wrapper instead of using LangChain's callback system
+
+**Replaced by:** `ChatOpenAI` directly in graph nodes via shared model factory. Logging via LangChain `CallbackHandler`.
+
+**4. Phase determination in HTTP route (LOW)**
+- `chat.routes.ts` (180 lines) contains business logic: registration check, phase priority, context loading, phase transitions, error handling
+- Route should be a thin proxy
+
+**Replaced by:** Router Node inside the graph. Route becomes ~20 lines.
+
+**5. `ConversationContextService` scope creep (LOW)**
+- Originally: conversation history storage (ADR-0005)
+- Grew into: phase state management, phase transition orchestration, in-memory context cache
+- Mixed responsibilities: history for prompts + state for routing
+
+**Replaced by:** Clear separation — checkpointer owns state, `ConversationContextService` owns only conversation history (appendTurn + getMessagesForPrompt)
+
+---
+
 ## Principles
 
 - Each step produces a **testable result**: unit tests pass, or a manual curl confirms behavior
 - Old code stays alive until the new path is proven; dead code gets `// TODO: remove — migrated to <file>` comments
-- ADR-0007 is updated incrementally — only improvements and safety clarifications
 - No time estimates — done when done, each step is a commit
+- **All state lives in LangGraph checkpointer** — no custom state management
+- **All LLM side effects go through tool calling** — no JSON mode + manual parsing
+- **Use library features, not custom code** — `ToolNode`, `toolsCondition`, `PostgresSaver`, `CallbackHandler`
 
 ### Migration = Refactor and Improve, Not Copy-Paste
 
-Each graph node is built **based on existing logic**, but with active improvement. The process for each step:
+Each graph node is built **based on existing logic**, but with active improvement:
 
-1. Study the source code (the specific branch in `ChatService.processMessage` or `RegistrationService.processUserMessage`) — understand **what** it does and **why**
-2. Identify what to **keep** (business rules, invariants), what to **simplify** (unnecessary abstractions, workarounds), and what to **drop** (dead code, vestigial patterns)
-3. Build the new node with clean code that leverages LangGraph patterns — not a line-by-line port
-4. If something doesn't fit the new architecture naturally or is questionable — **raise for discussion immediately** before proceeding
-5. Mark the old code `// TODO: remove — migrated to nodes/<node-file>.ts`
-6. Both paths coexist during migration; route selects which one to use
+1. Study the source code — understand **what** it does and **why**
+2. Identify what to **keep** (business rules, invariants), what to **simplify**, and what to **drop**
+3. Build with LangGraph-native patterns — tool calling, checkpointer state, ToolNode loops
+4. If something doesn't fit — **raise for discussion immediately**
+5. Mark old code `// TODO: remove — migrated to nodes/<node-file>.ts`
 
-**What to improve during transfer:**
-- Flatten nested if/else chains into clear graph node logic
-- Replace manual retry loops with proper error handling
-- Remove intermediate parsing layers where LangGraph/tools handle it natively (especially training intents)
-- Simplify context loading — if a method does 5 DB calls, question whether all are needed
-- Drop "just in case" code that handles impossible states
+**Business invariants (keep):**
+- `saveWorkoutPlan` only when LLM calls `save_workout_plan` tool with user approval [FEAT-0010]
+- `saveSessionPlan` only when LLM calls `start_training_session` tool + return `sessionId`
+- Registration completeness: all 6 fields + explicit user confirmation
+- Phase priority for migration: training > session_planning > plan_creation > chat
 
-**What to keep (business invariants):**
-- `saveWorkoutPlan` only on transition to `session_planning` [FEAT-0010 Step 11]
-- `saveSessionPlan` only on transition to `training` + return `sessionId`
-- Registration completeness: all 6 fields + `is_confirmed`
-- Phase priority: training > session_planning > plan_creation > chat
+### What Stays
 
-**When to stop and discuss:**
-- Logic that seems wrong or overly complex in the original
-- Cases where the old behavior might be a bug, not a feature
-- Patterns that don't map cleanly to LangGraph
+- `TrainingService` (`domain/training/`) — domain logic, called from tools
+- `PromptService` (`domain/user/services/prompt.service.ts`) — prompt building, but prompts simplified (no JSON format instructions)
+- `conversation_turns` table — conversation history for prompts and analytics (NOT for state)
+- DB schema — unchanged (checkpointer creates its own tables)
+- API contract — `POST /api/chat` request/response format identical
 
-### What Stays Unchanged
+### What Gets Replaced
 
-These components are reused as-is (not migrated, not rewritten):
-- `LLMService` (`infra/ai/llm.service.ts`) — all LLM calls go through it
-- `ConversationContextService` (`infra/conversation/`) — source of truth for conversation history; graph state does NOT duplicate phase-specific context — nodes read it via `getContext()`
-- `TrainingService` (`domain/training/services/training.service.ts`) — called from tool implementations (new method `logSetWithContext` added in Step 6)
-- `PromptService` (`domain/user/services/prompt.service.ts`) — prompt building for each phase
-- All Zod schemas and parsers (except `TrainingIntentSchema` which is replaced by tools in Step 6)
-- API contract: `POST /api/chat` request/response format identical
-
-### What Changes Beyond Graph Migration
-
-- **Training prompt** (`prompts/training.prompt.ts`) — rewritten in Step 6: removes JSON intent format instructions (~150 lines), tools describe themselves via Zod schemas. Prompt keeps: coaching role, session context, progress display, exercise catalog.
-- **`profileStatus` normalization** — fixed in Step 8: `incomplete` (legacy default from `user.repository.ts`) unified to `registration`. Only two valid values: `registration` and `complete`.
+- `LLMService` → `ChatOpenAI` directly via model factory + LangChain callbacks for logging
+- `ChatService` → graph nodes (chat, plan_creation, session_planning, training)
+- `RegistrationService` → registration graph node
+- `ConversationContextService.getContext()` for phase detection → checkpointer
+- `ConversationContextService.startNewPhase()` + `[PHASE_ENDED]` markers → checkpointer state update
+- `phaseContextStore` in-memory Map → checkpointer persisted state
+- `parseLLMResponse`, `parseTrainingResponse`, `parseSessionPlanningResponse` → tool calling
+- `TrainingIntentSchema` + `executeTrainingIntent` switch → individual tools
+- Phase determination in `chat.routes.ts` → Router Node
 
 ---
 
 ## Test Strategy
 
-**22 existing test files.** Handled as follows during migration:
-
 ### Tests that stay untouched
-
-Test pure domain logic, schemas, parsers — not affected by graph migration:
-- `llm-response.unit.test.ts` — LLM response Zod schemas
-- `plan-creation.unit.test.ts` — plan creation Zod schemas
 - `session-planning-context.builder.unit.test.ts` — context builder
-- `llm-json-validation.unit.test.ts` — LLM JSON mode validation
 - `user.service.*.unit.test.ts` — user service logic
 - `user.repository.unit.test.ts` — repository
-- `conversation-context.service.unit.test.ts` — context service
 - All middleware/cors/validation integration tests
 - All database integration tests
 
-### Tests updated when their step is done
-
-- `plan-creation.integration.test.ts` — update to test graph node (Step 4)
-- `registration.integration.test.ts` — update to test graph node (Step 3)
-- `chat.routes.integration.test.ts` — update when route is simplified (Step 8)
-- `chat-json-mode.unit.test.ts` — update if prompt structure changes
+### Tests updated during migration
+- `conversation-context.service.unit.test.ts` — update when service is simplified (Step 9)
+- `chat.routes.integration.test.ts` — update when route is simplified (Step 2.5)
+- `plan-creation.integration.test.ts` — update to test graph node (Step 5)
+- `registration.integration.test.ts` — update to test graph node (Step 4)
 
 ### Tests replaced
+- `training-intent.unit.test.ts` → new tool tests (Step 7)
+- `llm-response.unit.test.ts` → becomes irrelevant when JSON parsers removed (Step 10)
+- `llm-json-validation.unit.test.ts` → becomes irrelevant (Step 10)
+- `chat-json-mode.unit.test.ts` → replaced by tool calling tests
 
-- `training-intent.unit.test.ts` — training intent Zod schemas become irrelevant when tools replace JSON intents (Step 6); new tests for tool definitions replace them
-
-### New tests added per step
-
-- Each graph node gets a unit test (mock LLMService, verify input/output)
-- Each tool gets a unit test (mock TrainingService, verify DB calls)
-- Router node gets a unit test (mock contexts, verify phase selection)
-- Edge guards get unit tests (verify valid/invalid transitions)
+### New tests per step
+- Each tool: unit test (mock service, verify correct method + args)
+- Each node: unit test (mock model + tools, verify state output)
+- Router node: unit test (verify phase from checkpointer + migration scenarios)
+- Transition guards: unit test per rule (12 rules)
+- Integration: graph.invoke with thread_id, verify state persisted across calls
 
 ---
 
@@ -108,302 +142,295 @@ Test pure domain logic, schemas, parsers — not affected by graph migration:
 ### Step 0: Library Upgrade
 **Status**: DONE
 
-**What:** Upgrade LangChain ecosystem + add LangGraph + bump Zod.
+Upgraded LangChain ecosystem + added LangGraph + bumped Zod.
 
-**Changes in** `apps/server/package.json`:
 - `@langchain/core`: ^0.3.72 → ^1.1.27
 - `@langchain/openai`: ^0.6.9 → ^1.2.9
 - `@langchain/langgraph`: NEW → ^1.1.5
 - `zod`: ^4.1.5 → ^4.3.6
-
-**Rationale**: LangGraph 1.1.5 requires `@langchain/core` >= 1.1.16 and `zod` >= 4.2.0. Current `@langchain/openai` 0.6.9 requires `@langchain/core` < 0.4.0 which conflicts, so it must also be upgraded to 1.2.9.
-
-**Risk assessment**: Only 2 import lines from LangChain in the entire project (`llm.service.ts`). `AIMessage`, `HumanMessage`, `SystemMessage`, `ChatOpenAI` — all remain the same in v1. No code changes expected.
-
-**How to test:**
-- [ ] `npm install` — no peer dep conflicts
-- [ ] `npx tsc --noEmit` — no type errors
-- [ ] `npm run test:unit` — all existing tests pass
-- [ ] Smoke test: `ChatOpenAI.invoke()` + `model.bindTools()` work with OpenRouter
-
-**ADR-0007 update**: Update Dependencies section with actual installed versions.
 
 ---
 
 ### Step 1: Graph State + Skeleton Graph
 **Status**: DONE
 
-**What:** Create the LangGraph state definition and an empty graph skeleton.
-
-**New files:**
-- `domain/conversation/graph/conversation.state.ts` — state type using LangGraph `Annotation.Root`
-- `infra/ai/graph/conversation.graph.ts` — `StateGraph` builder, initially with a single passthrough node
-
-**State shape:**
-```typescript
-{
-  userId: string,
-  phase: ConversationPhase,
-  messages: ChatMsg[],              // history loaded from ConversationContextService
-  userMessage: string,              // current user input
-  responseMessage: string,          // LLM output to return
-  requestedTransition: {
-    toPhase: ConversationPhase,
-    reason?: string,
-    sessionId?: string
-  } | null,
-}
-```
-
-**DI registration** in `main/register-infra-services.ts` — alongside existing services.
-
-**How to test:**
-- [ ] Unit test: create graph, invoke with dummy state, verify it returns state unchanged
-- [ ] `npx tsc --noEmit` — types compile
+Created LangGraph state definition and skeleton graph with passthrough node. DI registration in `register-infra-services.ts`.
 
 ---
 
-### Step 2: Chat Phase Node (no hybrid)
-**Status**: DONE
+### Step 2: Chat Phase Node (initial, JSON mode)
+**Status**: DONE → NEEDS REWORK (Step 3 replaces with tool calling)
 
-**Decision:** No hybrid routing. Graph takes all phases immediately. `chat.routes.ts` calls only the graph for registered users. Unmigrated phases (`plan_creation`, `session_planning`, `training`) are stub nodes that throw a clear error. Each subsequent step replaces one stub with real logic.
+Transferred chat branch from `ChatService.processMessage()` into graph node with JSON mode + `parseLLMResponse`. This works but uses the old pattern (JSON mode + manual parsing). Step 3 replaces it with tool calling.
 
-**What:** Transfer `chat` branch from `ChatService.processMessage()` into a graph node. Graph is wired with `state.phase` routing via `addConditionalEdges`.
+**Files created (will be rewritten):**
+- `infra/ai/graph/nodes/chat.node.ts`
+- `infra/ai/graph/nodes/__tests__/chat.node.unit.test.ts`
 
-**Source logic (from `ChatService`):**
-- `buildSystemPrompt('chat')`: `workoutPlanRepo.findActiveByUserId` + `trainingService.getTrainingHistory(userId, 5)` + `promptService.buildChatSystemPrompt(user, hasActivePlan, recentSessions)`
-- `generateWithSystemPrompt(messages, systemPrompt, { jsonMode: true })`
-- `parseLLMResponse()` → `{ message, phaseTransition, profileUpdate }`
-- `if (profileUpdate) userService.updateProfileData(userId, profileUpdate)`
+---
 
-**Improvements vs ChatService:**
-- No `sessionPlan`/`workoutPlan` variables — only what chat needs
-- `handleProfileUpdate` inlined — no separate private method
+### Step 2.5: PostgreSQL Checkpointer + Model Factory + State Redesign
+**Status**: PENDING
 
-**New file:** `infra/ai/graph/nodes/chat.node.ts`
+**What:** Foundation of the new architecture. State persistence, model access, route simplification.
+
+**New dependency:** `@langchain/langgraph-checkpoint-postgres` ^1.0.1
+
+**New files:**
+- `infra/ai/model.factory.ts` — shared `ChatOpenAI` factory with config from env, LangChain `CallbackHandler` for logging (replaces `LLMService` wrapper)
+- `infra/ai/graph/nodes/router.node.ts` — loads user from DB, determines initial phase (for new users and migration from old system)
+- `infra/ai/graph/nodes/persist.node.ts` — writes user+assistant turn to `conversation_turns` after each invocation
 
 **Updated files:**
-- `infra/ai/graph/conversation.graph.ts` — accepts `deps`, registers `chatNode` + stubs for other phases, routes by `state.phase`
-- `main/register-infra-services.ts` — passes deps to `buildConversationGraph`
-- `app/routes/chat.routes.ts` — calls `conversationGraph.invoke` instead of `chatService.processMessage`; `ChatService` marked `// TODO: remove`
+- `domain/conversation/graph/conversation.state.ts` — redesigned state:
+  ```
+  phase: ConversationPhase          — persisted by checkpointer, default 'registration'
+  userId: string                    — set on input
+  userMessage: string               — set on input
+  responseMessage: string           — set by phase node
+  user: User | null                 — loaded by router node
+  activeSessionId: string | null    — persisted, replaces in-memory Map
+  requestedTransition: {...} | null — set by request_transition tool
+  ```
+- `infra/ai/graph/conversation.graph.ts` — `compile({ checkpointer })`, add router node, persist node
+- `app/routes/chat.routes.ts` — thin proxy: `graph.invoke({ userMessage }, { configurable: { thread_id: userId } })` → response
+- `main/register-infra-services.ts` — init checkpointer with DB connection string, call `setup()`
+- `app/types/fastify.d.ts` — update services type
+
+**Route before (180 lines):**
+- Get user, check registration, 3x getContext for phase, load history, invoke graph, appendTurn, startNewPhase, error handling
+
+**Route after (~25 lines):**
+- Get user (for 404 check only), invoke graph with thread_id, return response
 
 **How to test:**
-- [ ] Unit test: mock deps, invoke `chatNode`, verify `responseMessage` set
-- [ ] Unit test: `profileUpdate` in LLM response → `userService.updateProfileData` called
-- [ ] Unit test: `phaseTransition` → `requestedTransition` in returned state
-- [ ] `npm run test:unit` — 53+ tests pass
+- [ ] Unit test: invoke graph twice with same thread_id, verify state.phase persists
+- [ ] Unit test: invoke graph with new thread_id, verify default phase = 'registration'
+- [ ] Unit test: router node loads user and sets state.user
 - [ ] `npx tsc --noEmit` — clean
+- [ ] `npm run test:unit` — all tests pass
 
 ---
 
-### Step 3: Registration Phase Node
+### Step 3: Chat Node → Tool Calling
 **Status**: PENDING
 
-**What:** Transfer `RegistrationService.processUserMessage()` (126 lines) into a graph node.
-
-**Source code to transfer from:** `RegistrationService.processUserMessage` (lines 34-126):
-- Prompt build → LLM call → JSON parse with error fallback → field validation → user merge → completeness check
-
-**Must preserve:**
-- Fallback response on LLM error
-- `stripJsonFromMarkdown` preprocessing
-- `validateExtractedFields` filtering
-- Completeness check: all 6 fields + `is_confirmed` → `isComplete`
-- `profileStatus` update
-
-**New file:** `infra/ai/graph/nodes/registration.node.ts`
-
-**How to test:**
-- [ ] Unit test: mock deps, send registration message, verify profile fields extracted and merged
-- [ ] Unit test: verify fallback response when LLM call fails
-- [ ] Update `registration.integration.test.ts` to test through graph node
-- [ ] Manual curl: start fresh user, complete registration flow through graph
-
----
-
-### Step 4: Plan Creation Phase Node
-**Status**: PENDING
-
-**What:** Transfer `plan_creation` branch from `ChatService.processMessage()`.
-
-**Source code to transfer from:** ChatService plan_creation branch + `loadPlanCreationContext()` + `saveWorkoutPlan()`
-
-**Critical invariant [FEAT-0010 Step 11]:** `saveWorkoutPlan()` called **only** when `phaseTransition?.toPhase === 'session_planning'`.
-
-**New file:** `infra/ai/graph/nodes/plan-creation.node.ts`
-
-**How to test:**
-- [ ] Unit test: LLM returns plan WITH transition → verify `saveWorkoutPlan` called
-- [ ] Unit test: LLM returns plan WITHOUT transition → verify `saveWorkoutPlan` NOT called
-- [ ] Update `plan-creation.integration.test.ts` to test through graph node
-
----
-
-### Step 5: Session Planning Phase Node
-**Status**: PENDING
-
-**What:** Transfer `session_planning` branch from `ChatService.processMessage()`.
-
-**Source code to transfer from:** ChatService session_planning branch + `loadSessionPlanningContext()` + `saveSessionPlan()`
-
-**Must preserve:**
-- Parse retry on failure
-- `lastSessionPlan` caching in conversation context
-- `saveSessionPlan()` only on transition to training + returning `sessionId`
-
-**New file:** `infra/ai/graph/nodes/session-planning.node.ts`
-
-**How to test:**
-- [ ] Unit test: verify session plan cached in context
-- [ ] Unit test: verify session created only on transition to training, `sessionId` returned
-- [ ] Unit test: verify parse retry works on malformed LLM response
-
----
-
-### Step 6: Training Phase Node + LangChain Tools
-**Status**: PENDING
-
-**What:** Replace JSON intent parsing with LangChain tool calling. The existing `TrainingService` methods become tool implementations.
-
-**Source code to transfer from:** ChatService training branch + `loadTrainingContext()` + `executeTrainingIntent()` switch statement
-
-**Mapping from current intents to tools:**
-
-| Current intent (`executeTrainingIntent`) | LangChain tool | TrainingService method |
-|---|---|---|
-| `log_set` | `log_set` | `trainingService.logSetWithContext()` (NEW — see below) |
-| `next_exercise` | `next_exercise` | `completeCurrentExercise()` + `startNextExercise()` |
-| `skip_exercise` | `skip_exercise` | `skipCurrentExercise()` |
-| `finish_training` | `finish_training` | `completeSession()` |
-| `request_advice` | `request_advice` | no DB action |
-| `modify_session` | `modify_session` | no DB action |
-| `just_chat` | `just_chat` | no DB action |
-
-**`log_set` is non-trivial.** Current `executeTrainingIntent` for `log_set` does 4 operations:
-1. `ensureCurrentExercise(sessionId, { exerciseId?, exerciseName? })` — resolve by ID or name, create if needed
-2. `getSessionDetails(sessionId)` — load session to find exercise
-3. Calculate `nextSetNumber = existingSets.length + 1`
-4. `trainingService.logSet(exerciseId, { setNumber, setData, rpe, userFeedback })`
-
-**Decision:** Create a new method `TrainingService.logSetWithContext(sessionId, { exerciseId?, exerciseName?, setData, rpe, userFeedback })` that encapsulates all 4 steps. The `log_set` tool calls this single method — tool stays thin, domain logic stays in domain service.
-
-**Training prompt rewrite.** The current `training.prompt.ts` instructs LLM to return JSON with `intents` array (~150 lines of format description). With tool calling, this is replaced: tools describe themselves via Zod schemas. Prompt keeps coaching role, session context, progress display, exercise catalog — but drops all JSON format instructions and intent type documentation.
+**What:** Rewrite chat node from JSON mode to tool calling. First node using the new pattern — establishes template for all other nodes.
 
 **New files:**
-- `infra/ai/graph/nodes/training.node.ts` — training graph node with tool loop
-- `infra/ai/graph/tools/training.tools.ts` — 7 `tool()` definitions
+- `infra/ai/graph/tools/chat.tools.ts`:
+  - `update_profile` — calls `userService.updateProfileData()`, Zod schema: `{ age?, gender?, height?, weight?, fitnessLevel?, fitnessGoal? }`
+  - `request_transition` — sets `state.requestedTransition`, Zod schema: `{ toPhase, reason? }`
 
-**Key architecture change:** Uses `model.bindTools()` instead of JSON mode. Tool loop:
-1. LLM returns `tool_calls` → execute tools → feed `ToolMessage` back → LLM returns final text
-2. Error handling: if DB fails, tool returns error string, LLM communicates failure naturally
+**Updated files:**
+- `infra/ai/graph/nodes/chat.node.ts` — rewritten:
+  - Load history from `ConversationContextService.getMessagesForPrompt()`
+  - Build system prompt via `PromptService.buildChatSystemPrompt()` (simplified, no JSON format)
+  - `model.bindTools(chatTools).invoke(messages)` → `ToolNode` loop → final text response
+  - Return `{ responseMessage, requestedTransition }`
+- `domain/user/services/prompt.service.ts` — `buildChatSystemPrompt`: remove JSON response format section (~40 lines)
 
-**OpenRouter compatibility:** Verified 2026-02-22 — `google/gemini-3-flash-preview` supports tool calling with 5+ tools simultaneously through OpenRouter. Full tool loop (call → result → final response) confirmed working.
+**Architecture pattern (reused by all subsequent nodes):**
+```
+[phase_node] → calls model.bindTools(tools).invoke(messages)
+     ↓ (has tool_calls?)
+[tool_node] → executes tools, returns ToolMessage
+     ↓ (loop back)
+[phase_node] → model sees tool results, generates final text
+     ↓ (no more tool_calls)
+→ return { responseMessage }
+```
+
+**How to test:**
+- [ ] Unit test: LLM returns text only → responseMessage set, no tools called
+- [ ] Unit test: LLM calls `update_profile` → `userService.updateProfileData` called with correct args
+- [ ] Unit test: LLM calls `request_transition` → `requestedTransition` set in state
+- [ ] Manual: send "change my weight to 85kg" → verify DB updated, natural text response
+- [ ] `npm run test:unit` — all tests pass
+
+---
+
+### Step 4: Registration Node + Tools
+**Status**: PENDING
+
+**What:** Registration flow via tool calling. LLM extracts profile fields and calls tools.
+
+**New files:**
+- `infra/ai/graph/tools/registration.tools.ts`:
+  - `save_profile_fields` — Zod schema: `{ name?, age?, gender?, height?, weight?, fitnessLevel?, fitnessGoal? }`. Calls `userService.updateProfileData()`. Returns confirmation of what was saved.
+  - `complete_registration` — checks all 6 fields present, sets `profileStatus = 'complete'`, sets `state.phase` to `'chat'` or `'plan_creation'`
+- `infra/ai/graph/nodes/registration.node.ts`
+
+**Source logic preserved (as tool behavior):**
+- `validateExtractedFields` — validation moves into tool's Zod schema
+- Completeness check: tool refuses to complete if fields are missing
+- `profileStatus` update: tool handles atomically
+- Fallback on LLM error: node catches and returns friendly message
+
+**What gets dropped:**
+- `stripJsonFromMarkdown` — no JSON in LLM response
+- `registrationLLMResponseSchema` — replaced by tool schemas
+- `RegistrationService` class — marked `// TODO: remove`
+- JSON format in registration prompt (~30 lines)
+
+**How to test:**
+- [ ] Unit test: LLM calls `save_profile_fields` with extracted data → DB updated
+- [ ] Unit test: LLM calls `complete_registration` with all fields present → phase changes
+- [ ] Unit test: LLM calls `complete_registration` with missing fields → error returned, no transition
+- [ ] Manual: fresh user, complete registration through Telegram bot
+
+---
+
+### Step 5: Plan Creation Node + Tools
+**Status**: PENDING
+
+**What:** Workout plan creation via tool calling.
+
+**New files:**
+- `infra/ai/graph/tools/plan-creation.tools.ts`:
+  - `save_workout_plan` — Zod schema = `WorkoutPlanDraftSchema`. Saves plan to DB, sets `requestedTransition` to `session_planning`. LLM calls this when user approves the plan.
+- `infra/ai/graph/nodes/plan-creation.node.ts`
+
+**Critical invariant [FEAT-0010]:** Plan is saved ONLY when LLM calls `save_workout_plan` tool — this means user explicitly approved. No implicit saves.
+
+**What gets dropped:**
+- `generateStructured` usage — tool schema replaces it
+- `PlanCreationLLMResponseSchema` manual parsing
+- Plan creation branch in `ChatService`
+
+**How to test:**
+- [ ] Unit test: LLM calls `save_workout_plan` → plan saved to DB, transition set
+- [ ] Unit test: LLM responds without calling tool → no plan saved (conversation continues)
+- [ ] Unit test: tool validates plan against Zod schema, rejects invalid plans
+
+---
+
+### Step 6: Session Planning Node + Tools
+**Status**: PENDING
+
+**What:** Session planning via tool calling.
+
+**New files:**
+- `infra/ai/graph/tools/session-planning.tools.ts`:
+  - `start_training_session` — creates workout session from plan, sets `state.activeSessionId`, sets `requestedTransition` to `training`. Zod schema includes `SessionRecommendationSchema`.
+  - `cancel_planning` — sets `requestedTransition` to `chat`
+- `infra/ai/graph/nodes/session-planning.node.ts`
+
+**What changes vs MVP:**
+- `lastSessionPlan` cached in checkpointer state (not in-memory Map) — survives server restart
+- Parse retry eliminated — tool schema validates input, LLM retries naturally via tool loop
+- Session created only when LLM calls `start_training_session` (explicit user confirmation)
+
+**How to test:**
+- [ ] Unit test: LLM calls `start_training_session` → session created, activeSessionId set
+- [ ] Unit test: LLM calls `cancel_planning` → transition to chat
+- [ ] Unit test: tool validates session plan schema
+
+---
+
+### Step 7: Training Node + Tools
+**Status**: PENDING
+
+**What:** Training session management via tool calling. Largest tool set.
+
+**New files:**
+- `infra/ai/graph/tools/training.tools.ts` — 6 tools:
+  - `log_set` — calls `TrainingService.logSetWithContext(sessionId, { exerciseId?, exerciseName?, setData, rpe?, feedback? })`
+  - `next_exercise` — calls `completeCurrentExercise(sessionId)`
+  - `skip_exercise` — calls `skipCurrentExercise(sessionId)`
+  - `finish_training` — calls `completeSession(sessionId)`, sets `requestedTransition` to `chat`
+  - `request_advice` — no DB action, returns acknowledgment
+  - `modify_session` — no DB action, returns acknowledgment
+- `infra/ai/graph/nodes/training.node.ts`
+
+**New domain method:** `TrainingService.logSetWithContext(sessionId, opts)` — encapsulates:
+1. `ensureCurrentExercise(sessionId, { exerciseId?, exerciseName? })`
+2. `getSessionDetails(sessionId)` → find exercise
+3. Calculate `nextSetNumber`
+4. `logSet(exerciseId, { setNumber, setData, rpe, userFeedback })`
+
+**Training prompt rewrite:** Remove ~150 lines of JSON intent format documentation from `prompts/training.prompt.ts`. Tools describe themselves via Zod `.describe()`. Prompt keeps: coaching role, session context, progress display, exercise catalog.
+
+**`just_chat` intent eliminated** — when user just chats, LLM simply responds with text (no tool call needed). This is the natural behavior of tool calling — tools are optional.
+
+**OpenRouter compatibility:** Verified 2026-02-22 — `google/gemini-3-flash-preview` supports tool calling with 5+ tools through OpenRouter.
 
 **How to test:**
 - [ ] Unit test for `TrainingService.logSetWithContext()` — mock repos, verify all 4 sub-steps
-- [ ] Unit test per tool: mock TrainingService, verify correct method called with correct args
-- [ ] Unit test: verify tool loop terminates
-- [ ] Unit test: verify tool error handling (DB failure → error message → LLM handles gracefully)
-- [ ] Manual curl: log a set during training, verify data in DB
-- [ ] `training-intent.unit.test.ts` replaced by new tool tests
-- [ ] Mark `parseTrainingResponse`, `executeTrainingIntent`, `TrainingIntentSchema` with `// TODO: remove`
+- [ ] Unit test per tool: mock TrainingService, verify correct method + args
+- [ ] Unit test: LLM responds without tools → just text response (replaces `just_chat`)
+- [ ] Manual: log sets during training via Telegram, verify data in DB
 
 ---
 
-### Step 7: Profile Update Tool (cross-phase)
+### Step 8: Transition Guards + Cleanup Node
 **Status**: PENDING
 
-**What:** Add `update_profile` tool available in all phase nodes.
+**What:** Phase transition validation as LangGraph conditional edges.
 
-**New file:** `infra/ai/graph/tools/profile.tools.ts`
-- `update_profile` tool calls `userService.updateProfileData()`
-- Bound to model in every node that uses tools
+**New files:**
+- `infra/ai/graph/guards/transition.guard.ts` — pure validation functions
+- `infra/ai/graph/nodes/transition-cleanup.node.ts` — side effects
 
-**How to test:**
-- [ ] Unit test: verify profile update from chat phase
-- [ ] Manual curl: say "change my weight to 85kg" from chat phase, verify DB updated
-
----
-
-### Step 8: Router Node + Route Simplification + profileStatus Fix
-**Status**: PENDING
-
-**What:** Move phase determination from `chat.routes.ts` into a router node at graph entry. Also fix `profileStatus` inconsistency.
-
-**Source code to transfer from:** `chat.routes.ts` lines 44-136 — registration check + context-based phase priority (training > session_planning > plan_creation > chat)
-
-**New file:** `infra/ai/graph/nodes/router.node.ts`
-
-**Router logic:**
-- Check `userService.isRegistrationComplete(user)` (checks `profileStatus === 'complete'`)
-- If not complete → phase = `registration`
-- If complete → check contexts by priority: training > session_planning > plan_creation > chat
-
-**profileStatus normalization:** Currently three values exist due to inconsistency:
-- `'incomplete'` — default in `user.repository.ts` on upsert (line 69-70)
-- `'registration'` — default in DB schema (line 42)
-- `'complete'` — set when registration finishes
-
-Only two are meaningful: `registration` and `complete`. Fix: change `user.repository.ts` upsert default from `'incomplete'` to `'registration'` to match DB schema. Router uses `isRegistrationComplete()` which checks `=== 'complete'`, so both non-complete values already route to registration correctly.
-
-**Route simplification:** `chat.routes.ts` becomes: get user → invoke graph → return response. All phase logic inside the graph.
-
-**How to test:**
-- [ ] Unit test: verify router returns `registration` for profileStatus `registration`
-- [ ] Unit test: verify router returns `registration` for profileStatus `incomplete` (backward compat until cleanup)
-- [ ] Unit test: verify router returns correct phase for each context scenario
-- [ ] Integration: full flow from registration through chat works via single graph invoke
-- [ ] Update `chat.routes.integration.test.ts`
-- [ ] Update `user.repository.unit.test.ts` for new default
-
----
-
-### Step 9: Edge Guards (Transition Validation) + Cleanup Node
-**Status**: PENDING
-
-**What:** Move transition validation rules into LangGraph conditional edges. Side effects (auto-complete, auto-skip) happen in a separate cleanup node — guards only validate.
-
-**Source code to transfer from:** `ChatService.validatePhaseTransition()` — currently unused but contains correct business rules.
-
-**Architecture decision:** Guards are pure validators (return allow/block). Side effects go into a `transitionCleanupNode` that runs AFTER guard passes but BEFORE `startNewPhase`. This keeps guards clean and testable.
+**Guards are pure validators.** Side effects (auto-complete session) in cleanup node.
 
 ```
-[phase node] → [transition guard] → [cleanup node] → [startNewPhase] → END
+[phase node] → [transition guard] → [cleanup node] → update state.phase → END
                      ↓ (blocked)
                     END (return response without transition)
 ```
 
-**Complete transition rules (12 rules from `validatePhaseTransition`):**
+**12 transition rules (from `ChatService.validatePhaseTransition`):**
 
 Allowed without conditions (5):
-- `registration → plan_creation` — always allowed
-- `registration → chat` — always allowed
-- `chat → plan_creation` — always allowed
-- `plan_creation → chat` — always allowed (user cancels)
-- `session_planning → chat` — always allowed (user cancels, no session created yet)
+- `registration → plan_creation`
+- `registration → chat`
+- `chat → plan_creation`
+- `plan_creation → chat` (user cancels)
+- `session_planning → chat` (user cancels)
 
 Allowed with conditions (4):
-- `plan_creation → session_planning` — requires active workout plan in DB
-- `chat → session_planning` — requires active workout plan in DB
-- `session_planning → training` — requires `sessionId` + session exists + belongs to user + status='planning' + no other active session
-- `training → chat` — allowed, with side effect: auto-complete active session (cleanup node)
+- `plan_creation → session_planning` — requires active workout plan
+- `chat → session_planning` — requires active workout plan
+- `session_planning → training` — requires sessionId + session exists + belongs to user + status='planning'
+- `training → chat` — side effect: auto-complete active session
 
 Blocked (3):
-- `training → session_planning` — blocked ("Complete or cancel training first")
-- `* → registration` — blocked (registration transitions handled by router, not by LLM)
-- `registration → *` (except chat/plan_creation) — blocked
+- `training → session_planning` — must complete training first
+- `* → registration` — handled by router, not by LLM
+- `registration → *` (except chat/plan_creation)
 
-**New files:**
-- `infra/ai/graph/guards/transition.guard.ts` — pure validation functions
-- `infra/ai/graph/nodes/transition-cleanup.node.ts` — side effects (auto-complete session)
+**profileStatus normalization:** `'incomplete'` (legacy) → `'registration'`. Only two valid values: `registration` and `complete`.
 
 **How to test:**
-- [ ] Unit test per allowed transition: verify guard returns allow
-- [ ] Unit test per blocked transition: verify guard returns block with error message
-- [ ] Unit test: `plan_creation → session_planning` without active plan → blocked
-- [ ] Unit test: `session_planning → training` without sessionId → blocked
-- [ ] Unit test: `training → chat` → cleanup node calls `trainingService.completeSession()`
-- [ ] Unit test: cleanup node failure does not crash graph (logs error, transition still happens)
+- [ ] Unit test per transition rule
+- [ ] Unit test: cleanup node auto-completes session on `training → chat`
+
+---
+
+### Step 9: ConversationContextService Simplification
+**Status**: PENDING
+
+**What:** Remove state management responsibilities from ConversationContextService.
+
+**Remove:**
+- `getContext()` phase detection logic (`[PHASE_ENDED]` marker scanning)
+- `startNewPhase()` (writes `[PHASE_ENDED]` + opens new phase)
+- `phaseContextStore` in-memory Map
+- `PHASE_ENDED_PREFIX` constant
+- `updatePhaseContext()` method
+- `reset()` method (was no-op anyway)
+- `summarize()` method (was no-op stub)
+
+**Keep:**
+- `appendTurn(userId, phase, userMessage, assistantResponse)` — write to conversation_turns
+- `getMessagesForPrompt(ctx, options)` — sliding window for prompt history
+
+**Simplify interface:** `IConversationContextService` reduces to 2 methods.
+
+**How to test:**
+- [ ] Update `conversation-context.service.unit.test.ts`
+- [ ] Verify no code references removed methods
 
 ---
 
@@ -412,12 +439,15 @@ Blocked (3):
 
 **What:** Remove all dead code marked with `// TODO: remove`.
 
-**Files to delete/gut:**
-- `ChatService` class → replaced by graph nodes
-- `RegistrationService` class → replaced by registration node
-- `executeTrainingIntent()`, `parseTrainingResponse()`, `TrainingIntentSchema` → replaced by tools
+**Delete/gut:**
+- `ChatService` class + `CHAT_SERVICE_TOKEN`
+- `RegistrationService` class + `REGISTRATION_SERVICE_TOKEN`
+- `LLMService` class + `LLM_SERVICE_TOKEN`
+- `parseLLMResponse()`, `parseTrainingResponse()`, `parseSessionPlanningResponse()`
+- `TrainingIntentSchema`, `LLMConversationResponseSchema`, `registrationLLMResponseSchema`
+- `LLMTrainingResponseSchema`, `SessionPlanningLLMResponseSchema`
 - Old phase resolution in `chat.routes.ts`
-- Unused DI tokens (`CHAT_SERVICE_TOKEN`, `REGISTRATION_SERVICE_TOKEN`)
+- JSON format sections from all prompts
 
 **How to test:**
 - [ ] `npx tsc --noEmit` — compiles
@@ -432,16 +462,46 @@ Blocked (3):
 ## Architecture (Target)
 
 ```
-POST /api/chat → chat.routes.ts → ConversationGraph.invoke({ userId, userMessage })
-                                     ├── [Router Node]       → determines phase from DB state
-                                     ├── [Registration Node] → registration flow
-                                     ├── [Chat Node]         → general chat + profile update tool
-                                     ├── [Plan Creation Node] → workout plan generation
-                                     ├── [Session Planning Node] → session recommendation
-                                     ├── [Training Node]     → workout tracking with LangChain tools
-                                     ├── [Transition Check]  → edge guards validate transitions
-                                     └── response returned via state.responseMessage
+POST /api/chat
+  → chat.routes.ts (thin proxy: ~25 lines)
+  → graph.invoke({ userMessage }, { thread_id: userId })
+  → ConversationGraph (compiled with PostgresSaver checkpointer)
+      │
+      ├── [Router Node]
+      │     Loads user from DB
+      │     For new users: sets phase from profileStatus
+      │     For existing: phase comes from checkpointer
+      │
+      ├── [Phase Node] (one of 5, routed by state.phase)
+      │     Loads conversation history from conversation_turns
+      │     Builds system prompt via PromptService
+      │     Calls model.bindTools(phaseTools).invoke(messages)
+      │     ┌─ [ToolNode] executes tool calls
+      │     └─ Loop back to model until no more tool_calls
+      │     Returns: responseMessage, requestedTransition
+      │
+      ├── [Transition Guard] (conditional edge)
+      │     Validates requestedTransition against 12 rules
+      │     If blocked → skip transition
+      │
+      ├── [Cleanup Node] (if transition allowed)
+      │     Side effects: auto-complete session, etc.
+      │     Updates state.phase
+      │
+      ├── [Persist Node]
+      │     Writes user+assistant turn to conversation_turns
+      │
+      └── State saved to PostgreSQL checkpointer
+          (phase, activeSessionId, user, requestedTransition)
 ```
+
+### Tool Calling per Phase
+
+- **Chat**: `update_profile`, `request_transition`
+- **Registration**: `save_profile_fields`, `complete_registration`
+- **Plan Creation**: `save_workout_plan`
+- **Session Planning**: `start_training_session`, `cancel_planning`
+- **Training**: `log_set`, `next_exercise`, `skip_exercise`, `finish_training`, `request_advice`, `modify_session`
 
 ---
 
@@ -451,7 +511,9 @@ POST /api/chat → chat.routes.ts → ConversationGraph.invoke({ userId, userMes
 |------|------------|
 | Step 0 | Update Dependencies section with actual versions |
 | Step 1 | Add error recovery strategy clarification |
-| Step 6 | Add OpenRouter tool calling verification note; document `logSetWithContext` method |
-| Step 8 | Document `profileStatus` normalization (2→2 states) |
-| Step 9 | Document full transition rule set (12 rules) and cleanup node pattern |
+| Step 2.5 | Document checkpointer as state management strategy; deprecate `[PHASE_ENDED]` pattern |
+| Step 3 | Document tool calling as standard LLM interaction pattern |
+| Step 7 | Document `logSetWithContext` method; OpenRouter tool calling verification |
+| Step 8 | Document full transition rule set (12 rules); `profileStatus` normalization |
+| Step 9 | Document ConversationContextService scope reduction |
 | Step 10 | Mark status IMPLEMENTED, add final diagram |
