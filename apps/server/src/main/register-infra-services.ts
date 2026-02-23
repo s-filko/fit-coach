@@ -116,7 +116,13 @@ export async function registerInfraServices(
   );
 
   const { buildConversationGraph, CONVERSATION_GRAPH_TOKEN } = await import('@infra/ai/graph/conversation.graph');
-  container.register(CONVERSATION_GRAPH_TOKEN, buildConversationGraph());
+  container.register(CONVERSATION_GRAPH_TOKEN, buildConversationGraph({
+    promptService: container.get(PROMPT_SERVICE_TOKEN),
+    llmService: container.get(LLM_SERVICE_TOKEN),
+    trainingService: container.get(TRAINING_SERVICE_TOKEN),
+    workoutPlanRepo: container.get(WORKOUT_PLAN_REPOSITORY_TOKEN),
+    userService: container.get(USER_SERVICE_TOKEN),
+  }));
 
   return container;
 }

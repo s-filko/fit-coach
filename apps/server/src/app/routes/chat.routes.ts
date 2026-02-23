@@ -34,36 +34,28 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       const { userId, message } = req.body as { userId: string; message: string };
       const { conversationContextService } = app.services;
 
-      // 1. Get user data
       const user = await app.services.userService.getUser(userId);
       if (!user) {
-        return reply.code(404).send({
-          error: { message: 'User not found' },
-        });
+        return reply.code(404).send({ error: { message: 'User not found' } });
       }
 
-      // 2. Determine current conversation phase
       const isComplete = app.services.userService.isRegistrationComplete(user);
-      
-      // If registration not complete, use registration phase
+
+      // Registration not complete — handled by RegistrationService (Step 3 will migrate this to graph)
+      // TODO: remove when Step 3 is done (registration node migrated)
       if (!isComplete) {
         const phase = 'registration' as const;
-        
-        // Load conversation context and build history
+
         const ctx = await conversationContextService.getContext(userId, phase);
-        const historyMessages = ctx
-          ? conversationContextService.getMessagesForPrompt(ctx)
-          : [];
+        const historyMessages = ctx ? conversationContextService.getMessagesForPrompt(ctx) : [];
 
         const log = req.log.child({ userId, phase }) as Logger;
 
-        // Process registration
         const result = await app.services.registrationService.processUserMessage(
           user, message, historyMessages, { log },
         );
         const { response, updatedUser, phaseTransition } = result;
 
-        // Save user profile changes
         await app.services.userService.updateProfileData(userId, {
           profileStatus: updatedUser.profileStatus,
           firstName: updatedUser.firstName,
@@ -75,31 +67,27 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
           fitnessGoal: updatedUser.fitnessGoal,
         });
 
-        // Persist conversation turn
         try {
           await conversationContextService.appendTurn(userId, phase, message, response);
         } catch (err) {
           req.log.warn({ err }, 'Failed to append conversation turn — response not affected');
         }
 
-        // Phase transition: registration → chat/plan_creation
         const nowComplete = app.services.userService.isRegistrationComplete(updatedUser);
         if (nowComplete) {
           try {
-            // Use LLM's decision if provided, otherwise default to plan_creation
             const targetPhase: 'chat' | 'plan_creation' = phaseTransition?.toPhase ?? 'plan_creation';
             const transitionNote = targetPhase === 'plan_creation'
               ? 'Registration complete. Let\'s create your workout plan!'
               : 'Registration complete. Ready to chat!';
-            
+
             await conversationContextService.startNewPhase(
               userId, 'registration', targetPhase, transitionNote,
             );
-            
+
             req.log.info({ userId, targetPhase }, 'Phase transition after registration complete');
           } catch (err) {
             req.log.error({ err, userId }, 'Failed to transition conversation phase after registration');
-            // This is critical - if transition fails, user will be stuck
             throw new Error('Failed to complete registration phase transition');
           }
         }
@@ -113,14 +101,16 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
-      // Registration complete - determine phase from existing contexts
+      // Registration complete — determine active phase from conversation contexts
       // Priority: training > session_planning > plan_creation > chat
       let phase: 'chat' | 'plan_creation' | 'session_planning' | 'training' = 'chat';
-      
-      const trainingCtx = await conversationContextService.getContext(userId, 'training');
-      const planningCtx = await conversationContextService.getContext(userId, 'session_planning');
-      const planCreationCtx = await conversationContextService.getContext(userId, 'plan_creation');
-      
+
+      const [trainingCtx, planningCtx, planCreationCtx] = await Promise.all([
+        conversationContextService.getContext(userId, 'training'),
+        conversationContextService.getContext(userId, 'session_planning'),
+        conversationContextService.getContext(userId, 'plan_creation'),
+      ]);
+
       if (trainingCtx) {
         phase = 'training';
       } else if (planningCtx) {
@@ -129,62 +119,50 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         phase = 'plan_creation';
       }
 
-      req.log.info({ 
-        userId, 
-        phase, 
-        hasTrainingCtx: !!trainingCtx, 
-        hasPlanningCtx: !!planningCtx, 
-        hasPlanCreationCtx: !!planCreationCtx,
-      }, 'Determined conversation phase');
+      req.log.info({ userId, phase }, 'Routing to graph node');
 
-      // Load conversation context and build history [BR-CONV-001, BR-CONV-003]
       const ctx = await conversationContextService.getContext(userId, phase);
-      const historyMessages = ctx
-        ? conversationContextService.getMessagesForPrompt(ctx)
-        : [];
+      const historyMessages = ctx ? conversationContextService.getMessagesForPrompt(ctx) : [];
 
-      const log = req.log.child({ userId, phase }) as Logger;
+      // Invoke graph — graph owns LLM call, parse, side-effects (profileUpdate)
+      const graphResult = await app.services.conversationGraph.invoke({
+        userId,
+        phase,
+        messages: historyMessages,
+        userMessage: message,
+        responseMessage: '',
+        requestedTransition: null,
+      });
 
-      // Process message via ChatService (returns message + optional phase transition)
-      const result = await app.services.chatService.processMessage(
-        user, message, phase, historyMessages, { log },
-      );
-      const { message: response, phaseTransition } = result;
+      const response = graphResult.responseMessage;
+      const phaseTransition = graphResult.requestedTransition;
 
-      // ADR-0005 flow: "call LLM -> appendTurn -> on phase change call startNewPhase"
-      // History is preserved (never deleted), so turn is always saved in the current phase.
       try {
         await conversationContextService.appendTurn(userId, phase, message, response);
       } catch (err) {
         req.log.warn({ err }, 'Failed to append conversation turn — response not affected');
       }
 
-      // Execute phase transition if requested by LLM
-      if (phaseTransition) {
-        const { toPhase } = phaseTransition;
-
-        if (toPhase === phase) {
-          req.log.warn({ userId, phase, toPhase }, 'Ignoring invalid phase transition to same phase (LLM error)');
-        } else {
-          try {
-            const options: Parameters<typeof conversationContextService.startNewPhase>[4] = {};
-            if (toPhase === 'training' && phaseTransition.sessionId) {
-              options.trainingContext = { activeSessionId: phaseTransition.sessionId };
-            }
-
-            await conversationContextService.startNewPhase(
-              userId, phase, toPhase,
-              `Phase transition: ${phase} → ${toPhase}${phaseTransition.reason ? ` (${phaseTransition.reason})` : ''}`,
-              options,
-            );
-            req.log.info({ userId, from: phase, to: toPhase, reason: phaseTransition.reason }, 'Phase transition executed');
-          } catch (err) {
-            req.log.error({ err, userId, from: phase, to: toPhase }, 'Phase transition failed validation or execution');
+      if (phaseTransition && phaseTransition.toPhase !== phase) {
+        try {
+          const options: Parameters<typeof conversationContextService.startNewPhase>[4] = {};
+          if (phaseTransition.toPhase === 'training' && phaseTransition.sessionId) {
+            options.trainingContext = { activeSessionId: phaseTransition.sessionId };
           }
+
+          await conversationContextService.startNewPhase(
+            userId, phase, phaseTransition.toPhase,
+            `Phase transition: ${phase} → ${phaseTransition.toPhase}${phaseTransition.reason ? ` (${phaseTransition.reason})` : ''}`,
+            options,
+          );
+          req.log.info({ userId, from: phase, to: phaseTransition.toPhase, reason: phaseTransition.reason }, 'Phase transition executed');
+        } catch (err) {
+          req.log.error({ err, userId, from: phase, to: phaseTransition.toPhase }, 'Phase transition failed');
         }
+      } else if (phaseTransition && phaseTransition.toPhase === phase) {
+        req.log.warn({ userId, phase }, 'Ignoring invalid phase transition to same phase (LLM error)');
       }
 
-      // Return response [AC-0110]
       return reply.send({
         data: {
           content: response,

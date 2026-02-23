@@ -164,7 +164,7 @@ Test pure domain logic, schemas, parsers — not affected by graph migration:
 ---
 
 ### Step 2: Chat Phase Node (no hybrid)
-**Status**: PENDING
+**Status**: DONE
 
 **Decision:** No hybrid routing. Graph takes all phases immediately. `chat.routes.ts` calls only the graph for registered users. Unmigrated phases (`plan_creation`, `session_planning`, `training`) are stub nodes that throw a clear error. Each subsequent step replaces one stub with real logic.
 
