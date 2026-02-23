@@ -251,7 +251,7 @@ describe('UserService – integration', () => {
       });
 
       const createdUser = await repository.create(userData);
-      expect(createdUser.profileStatus).toBe('incomplete');
+      expect(createdUser.profileStatus).toBe('registration');
 
       // Act: Update profile through service
       const updatedUser = await userService.updateProfileData(createdUser.id, {

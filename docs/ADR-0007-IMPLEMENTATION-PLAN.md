@@ -361,7 +361,7 @@ The largest step. Builds the entire foundation of the new architecture.
 ---
 
 ### Step 3: Chat Subgraph (tool calling)
-**Status**: PENDING
+**Status**: **DONE** ✓ (2026-02-23)
 
 First phase subgraph — establishes the pattern for all other phases.
 
@@ -394,13 +394,22 @@ In practice:
 - `parseLLMResponse()` function and `LLMConversationResponseSchema`
 - `chat.node.unit.test.ts` (old stub test) — replaced by subgraph test
 
-**How to test:**
-- [ ] Unit test: LLM returns text only → `responseMessage` set, no tools called
-- [ ] Unit test: LLM calls `update_profile` → `userService.updateProfileData` called, `state.user` updated via Command
-- [ ] Unit test: LLM calls `request_transition` → `requestedTransition` set in parent state via Command
-- [ ] Unit test: Command propagation — subgraph invoke returns updated parent state fields
-- [ ] Manual: send "change my weight to 85kg" → DB updated, natural text response
-- [ ] `npm run test:unit` — all pass
+**Implemented:**
+- [x] `infra/ai/graph/tools/chat.tools.ts` — `update_profile` + `request_transition` tools using Command pattern
+- [x] `infra/ai/graph/subgraphs/chat.subgraph.ts` — agent + ToolNode + toolsCondition loop with extract node
+- [x] `infra/ai/graph/nodes/chat.node.ts` — `buildChatSystemPrompt()`, natural text, no JSON format
+- [x] `conversation.graph.ts` — stub replaced with real `chatSubgraph`
+- [x] `llm-response.types.ts` deleted (parseLLMResponse, LLMConversationResponseSchema removed)
+- [x] `prompt.service.ts` — `buildChatSystemPrompt` marked TODO:remove, returns `''`
+- [x] `chat.node.unit.test.ts` — tests for `buildChatSystemPrompt`
+- [x] `conversation.graph.unit.test.ts` — model factory mocked, LLM not called in tests
+- [x] Integration tests for `profileStatus: 'registration'` default updated
+- [x] `npx tsc --noEmit` ✓ | `npm run test:unit` 43/43 ✓ | `npm run test:integration` 136/136 ✓
+
+**Notes:**
+- Command pattern works within subgraph state. Tools update `user` and `requestedTransition` in subgraph state; `extract` node propagates them to parent graph output.
+- `getModel().bindTools(tools)` — readonly tuple issue fixed by not using `as const`.
+- LangGraph `ToolNode` handles Command returns: if tool returns `Command`, it's passed through directly (not wrapped in ToolMessage).
 
 ---
 

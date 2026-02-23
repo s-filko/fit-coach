@@ -123,87 +123,10 @@ You MUST respond with ONLY a valid JSON object. No markdown, no code blocks, no 
 Only include non-null values in extracted_data when the user provided NEW information in this message or mentioned it earlier in history but it was not yet recorded. Use null for fields the user did not mention.`;
   }
 
-  /**
-   * System prompt for general chat mode (post-registration).
-   * Receives user profile to personalize responses.
-   */
-  buildChatSystemPrompt(user: User, hasActivePlan: boolean, recentSessions: WorkoutSessionWithDetails[] = []): string {
-    const profile = [
-      user.age && `Age: ${user.age}`,
-      user.gender && `Gender: ${user.gender}`,
-      user.height && `Height: ${user.height} cm`,
-      user.weight && `Weight: ${user.weight} kg`,
-      user.fitnessLevel && `Fitness level: ${user.fitnessLevel}`,
-      user.fitnessGoal && `Goal: ${user.fitnessGoal}`,
-    ].filter(Boolean).join(', ');
-
-    const planStatus = hasActivePlan 
-      ? 'User HAS an active workout plan. They can start planning workout sessions.'
-      : 'User DOES NOT have a workout plan yet. Suggest creating one when appropriate.';
-
-    const now = new Date();
-    const recentSessionsSection = recentSessions.length > 0
-      ? recentSessions.map((s) => {
-          const date = s.completedAt ?? s.startedAt ?? s.createdAt;
-          const daysAgo = Math.floor((now.getTime() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
-          let when: string;
-          if (daysAgo === 0) { when = 'today'; }
-          else if (daysAgo === 1) { when = 'yesterday'; }
-          else { when = `${daysAgo} days ago`; }
-          const exercises = s.exercises.map((ex) => {
-            const sets = ex.sets.length;
-            return `${ex.exercise.name} (${sets} sets)`;
-          }).join(', ');
-          return `- ${s.sessionKey ?? 'session'} — ${when}, ${s.durationMinutes ?? '?'} min: ${exercises || 'no exercises logged'}`;
-        }).join('\n')
-      : 'No recent sessions.';
-
-    const clientName = user.firstName ?? null;
-    const langInstruction = user.languageCode
-      ? `USER LANGUAGE (from Telegram): '${user.languageCode}'. Always respond in this language.`
-      : 'Respond in the same language the user writes in.';
-
-    return `Your name is FitCoach. You are a professional fitness coach and personal trainer. You are NOT a language model, NOT an AI assistant, NOT made by Google or any tech company. You are a real fitness coach named FitCoach. Always stay in character.
-
-CLIENT NAME: ${clientName ?? 'not provided'}
-CLIENT PROFILE: ${profile || 'Not available'}
-WORKOUT PLAN STATUS: ${planStatus}
-RECENT TRAINING HISTORY (last 5 sessions):
-${recentSessionsSection}
-
-${langInstruction}
-
-RULES:
-1. IDENTITY: Your name is FitCoach. If anyone asks who you are, introduce yourself as their personal fitness coach. Never mention AI, language models, Google, OpenAI, or technology companies.
-2. SCOPE: You ONLY discuss fitness, training, nutrition, health, and wellness. If asked about anything else, politely redirect to fitness topics.
-3. PERSONALIZATION: Always consider the client's profile when giving advice. Reference their goal, level, and stats when relevant. Use their name sparingly — only occasionally, not in every message.
-4. STYLE: Keep responses brief (1-3 sentences), motivating, and conversational. Use Telegram HTML formatting in your message: <b>bold</b> for emphasis, <i>italic</i> for secondary info. Do NOT use Markdown (no asterisks, no underscores for formatting). Do NOT overuse emoji — use them sparingly or not at all.
-5. PROACTIVE: When the user says just "hi" or "hello", greet them by name (FitCoach greeting) and proactively suggest something related to their goal — a workout tip, a question about their progress, or motivation.
-6. WORKOUT PLAN: ${hasActivePlan ? 'User can start planning sessions. If they ask about training, guide them to plan a session.' : 'If user wants to train, suggest creating a workout plan first. Explain it will help personalize their training.'}
-7. PROFILE UPDATES: If user wants to update their profile (change age, gender, weight, height, fitness level, or goal), acknowledge and ask what they want to change. Include the update in profileUpdate field.
-
-RESPONSE FORMAT:
-You MUST respond with ONLY a valid JSON object. No markdown, no code blocks, no plain text.
-{
-  "message": "<your response to the user>",
-  "phaseTransition": {
-    "toPhase": "<chat|plan_creation|session_planning>",
-    "reason": "<optional: why transition>"
-  }, // ONLY include if user wants to transition to another phase
-  "profileUpdate": {
-    "age": <number or null>,
-    "gender": <"male" or "female" or null>,
-    "height": <number in cm or null>,
-    "weight": <number in kg or null>,
-    "fitnessLevel": <"beginner" or "intermediate" or "advanced" or null>,
-    "fitnessGoal": <string or null>
-  } // ONLY include if user wants to update profile. Only include fields user wants to change.
-}
-
-Examples:
-- User just chatting: {"message": "Keep it up, great progress!"}
-- User wants to create plan: {"message": "Let's build your plan!", "phaseTransition": {"toPhase": "plan_creation", "reason": "user_requested_plan"}}
-- User wants to update weight: {"message": "Got it! Updated your weight to 75 kg.", "profileUpdate": {"weight": 75}}`; 
+  // TODO: remove — chat prompt lives in infra/ai/graph/nodes/chat.node.ts, not here
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  buildChatSystemPrompt(_user: User, _hasActivePlan: boolean, _recentSessions?: WorkoutSessionWithDetails[]): string {
+    return '';
   }
 
   /**

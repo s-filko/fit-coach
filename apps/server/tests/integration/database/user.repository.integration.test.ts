@@ -41,7 +41,7 @@ describe('DrizzleUserRepository – integration', () => {
       expect(result.firstName).toBe('Test');
       expect(result.lastName).toBe('User');
       expect(result.languageCode).toBe('en');
-      expect(result.profileStatus).toBe('incomplete');
+      expect(result.profileStatus).toBe('registration');
       expect(result).toHaveProperty('id');
     });
 
@@ -98,7 +98,7 @@ describe('DrizzleUserRepository – integration', () => {
       expect(result!.weight).toBe(75);
       expect(result!.fitnessLevel).toBe('intermediate');
       expect(result!.fitnessGoal).toBe('lose weight');
-      expect(result!.profileStatus).toBe('incomplete'); // Profile data updated but not complete yet
+      expect(result!.profileStatus).toBe('registration'); // Profile data updated but not complete yet
     });
 
     it('should return null when updating non-existent user', async() => {
@@ -142,7 +142,7 @@ describe('DrizzleUserRepository – integration', () => {
       expect(result!.height).toBe(180);
       // Other fields should remain unchanged
       expect(result!.username).toBe('testuser_partial');
-      expect(result!.profileStatus).toBe('incomplete');
+      expect(result!.profileStatus).toBe('registration');
     });
   });
 

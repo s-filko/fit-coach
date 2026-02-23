@@ -8,6 +8,7 @@ import type { IPromptService, IUserService } from '@domain/user/ports';
 
 import { buildPersistNode } from './nodes/persist.node';
 import { buildRouterNode } from './nodes/router.node';
+import { buildChatSubgraph } from './subgraphs/chat.subgraph';
 
 export const CONVERSATION_GRAPH_TOKEN = Symbol('ConversationGraph');
 
@@ -27,7 +28,7 @@ function stubPhaseNode(phase: string) {
 }
 
 function routeToPhase(state: ConversationStateType): string {
-  // If router returned an early response (e.g. timeout), go straight to persist
+  // Router returned early response (e.g. session timeout) — skip phase, go to persist
   if (state.responseMessage && !state.userMessage) {
     return 'persist';
   }
@@ -35,8 +36,7 @@ function routeToPhase(state: ConversationStateType): string {
 }
 
 function routeAfterPersist(state: ConversationStateType): string {
-  const transition = state.requestedTransition;
-  if (transition) {
+  if (state.requestedTransition) {
     return 'transition_guard';
   }
   return END;
@@ -44,24 +44,24 @@ function routeAfterPersist(state: ConversationStateType): string {
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function buildGraph(deps: ConversationGraphDeps) {
-  const { userService, trainingService, contextService, checkpointer } = deps;
+  const { userService, trainingService, contextService, workoutPlanRepo, checkpointer } = deps;
 
   const routerNode = buildRouterNode({ userService, trainingService });
   const persistNode = buildPersistNode(contextService);
+  const chatSubgraph = buildChatSubgraph({ userService, workoutPlanRepo, contextService });
 
-  const transitionGuardNode = async (state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
-    const { requestedTransition, phase, activeSessionId } = state;
+  const transitionGuardNode = async(state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
+    const { requestedTransition, phase } = state;
     if (!requestedTransition) {
       return {};
     }
 
     const { toPhase } = requestedTransition;
 
-    // Transition rules (ported from ChatService.validatePhaseTransition — was dead code)
     const allowed: Record<string, string[]> = {
-      registration: ['chat'],
-      chat: ['plan_creation', 'session_planning', 'training'],
-      plan_creation: ['chat'],
+      registration: ['chat', 'plan_creation'],
+      chat: ['plan_creation', 'session_planning'],
+      plan_creation: ['chat', 'session_planning'],
       session_planning: ['training', 'chat'],
       training: ['chat'],
     };
@@ -71,28 +71,16 @@ function buildGraph(deps: ConversationGraphDeps) {
       return { requestedTransition: null };
     }
 
-    // training → chat requires active session to be completed (cleanup handles it)
-    if (phase === 'training' && toPhase === 'chat' && activeSessionId) {
-      return { phase: toPhase, requestedTransition: null };
-    }
-
     return { phase: toPhase, requestedTransition: null };
   };
 
-  const cleanupNode = async (state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
+  const cleanupNode = async(state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
     const updates: Partial<ConversationStateType> = {};
 
-    // After transitioning OUT of training, ensure session is completed
-    if (state.activeSessionId) {
-      // Only clear if we've moved away from training phase
-      if (state.phase !== 'training') {
-        await trainingService.completeSession(state.activeSessionId).catch(() => null);
-        updates.activeSessionId = null;
-      }
+    if (state.activeSessionId && state.phase !== 'training') {
+      await trainingService.completeSession(state.activeSessionId).catch(() => null);
+      updates.activeSessionId = null;
     }
-
-    // When entering training phase from session_planning, session is already 'planning' status
-    // The first training node invocation will update it to 'in_progress'
 
     return updates;
   };
@@ -100,7 +88,7 @@ function buildGraph(deps: ConversationGraphDeps) {
   const graph = new StateGraph(ConversationState)
     .addNode('router', routerNode)
     .addNode('registration', stubPhaseNode('registration'))
-    .addNode('chat', stubPhaseNode('chat'))
+    .addNode('chat', chatSubgraph)
     .addNode('plan_creation', stubPhaseNode('plan_creation'))
     .addNode('session_planning', stubPhaseNode('session_planning'))
     .addNode('training', stubPhaseNode('training'))
@@ -108,9 +96,7 @@ function buildGraph(deps: ConversationGraphDeps) {
     .addNode('transition_guard', transitionGuardNode)
     .addNode('cleanup', cleanupNode)
 
-    // Entry
     .addEdge(START, 'router')
-    // Router → dispatch to phase or early exit
     .addConditionalEdges('router', routeToPhase, {
       registration: 'registration',
       chat: 'chat',
@@ -119,13 +105,11 @@ function buildGraph(deps: ConversationGraphDeps) {
       training: 'training',
       persist: 'persist',
     })
-    // All phases → persist
     .addEdge('registration', 'persist')
     .addEdge('chat', 'persist')
     .addEdge('plan_creation', 'persist')
     .addEdge('session_planning', 'persist')
     .addEdge('training', 'persist')
-    // Persist → transition guard or end
     .addConditionalEdges('persist', routeAfterPersist, {
       transition_guard: 'transition_guard',
       [END]: END,
