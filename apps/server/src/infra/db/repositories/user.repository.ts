@@ -36,7 +36,7 @@ function mapRowToUser(row: UserRow): User {
     firstName: row.firstName ?? null,
     lastName: row.lastName ?? null,
     languageCode: row.languageCode ?? null,
-    profileStatus: row.profileStatus ?? 'incomplete',
+    profileStatus: row.profileStatus ?? 'registration',
     fitnessLevel: row.fitnessLevel ?? null,
     age: row.age ?? null,
     gender: safeGenderCast(row.gender),
@@ -67,7 +67,7 @@ function createUserData(input: CreateUserInput) {
     weight: null,
     fitnessGoal: null,
     // Set default values
-    profileStatus: 'incomplete',
+    profileStatus: 'registration',
     fitnessLevel: null,
     // Set provided values
     username: input.username ?? null,
@@ -151,7 +151,7 @@ export class DrizzleUserRepository implements UserRepository {
       firstName: data.firstName ?? null,
       lastName: data.lastName ?? null,
       languageCode: data.languageCode ?? null,
-      profileStatus: 'incomplete',
+      profileStatus: 'registration',
       fitnessLevel: null,
       age: null,
       gender: null,

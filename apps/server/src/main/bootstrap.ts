@@ -5,11 +5,10 @@ import { FastifyInstance } from 'fastify';
 
 import { buildServer } from '@app/server';
 
-import { LLMService } from '@domain/ai/ports';
 import type { ICompiledConversationGraph } from '@domain/conversation/graph/conversation.graph.ports';
 import { IConversationContextService } from '@domain/conversation/ports';
 import { ITrainingService } from '@domain/training/ports';
-import { IChatService, IRegistrationService, IUserService } from '@domain/user/ports';
+import { IUserService } from '@domain/user/ports';
 
 import { Container } from '@infra/di/container';
 
@@ -41,21 +40,13 @@ async function startServer(app: FastifyInstance, port: number, host: string): Pr
 }
 
 async function decorateAppWithServices(app: FastifyInstance, container: Container): Promise<void> {
-  const {
-    USER_SERVICE_TOKEN,
-    REGISTRATION_SERVICE_TOKEN,
-    CHAT_SERVICE_TOKEN,
-  } = await import('@domain/user/ports');
-  const { LLM_SERVICE_TOKEN } = await import('@domain/ai/ports');
+  const { USER_SERVICE_TOKEN } = await import('@domain/user/ports');
   const { CONVERSATION_CONTEXT_SERVICE_TOKEN } = await import('@domain/conversation/ports');
   const { TRAINING_SERVICE_TOKEN } = await import('@domain/training/ports');
   const { CONVERSATION_GRAPH_TOKEN } = await import('@infra/ai/graph/conversation.graph');
 
   app.decorate('services', {
     userService: container.get<IUserService>(USER_SERVICE_TOKEN),
-    registrationService: container.get<IRegistrationService>(REGISTRATION_SERVICE_TOKEN),
-    chatService: container.get<IChatService>(CHAT_SERVICE_TOKEN),
-    llmService: container.get<LLMService>(LLM_SERVICE_TOKEN),
     conversationContextService: container.get<IConversationContextService>(CONVERSATION_CONTEXT_SERVICE_TOKEN),
     trainingService: container.get<ITrainingService>(TRAINING_SERVICE_TOKEN),
     conversationGraph: container.get<ICompiledConversationGraph>(CONVERSATION_GRAPH_TOKEN),

@@ -19,18 +19,12 @@ export async function registerInfraServices(
   // Lazy load all dependencies to avoid circular imports and config loading issues
   const { ensureSchema } = await import('@infra/db/init');
   const { DrizzleUserRepository } = await import('@infra/db/repositories/user.repository');
-  const { LLMService } = await import('@infra/ai/llm.service');
   const { PromptService } = await import('@domain/user/services/prompt.service');
-  const { ChatService } = await import('@domain/user/services/chat.service');
-  const { RegistrationService } = await import('@domain/user/services/registration.service');
   const { UserService } = await import('@domain/user/services/user.service');
-  const { LLM_SERVICE_TOKEN } = await import('@domain/ai/ports');
   const { CONVERSATION_CONTEXT_SERVICE_TOKEN } = await import('@domain/conversation/ports');
   const { DrizzleConversationContextService } = await import('@infra/conversation/drizzle-conversation-context.service');
   const {
-    CHAT_SERVICE_TOKEN,
     PROMPT_SERVICE_TOKEN,
-    REGISTRATION_SERVICE_TOKEN,
     USER_REPOSITORY_TOKEN,
     USER_SERVICE_TOKEN,
   } = await import('@domain/user/ports');
@@ -66,11 +60,12 @@ export async function registerInfraServices(
   container.register(USER_REPOSITORY_TOKEN, new DrizzleUserRepository());
   container.registerFactory(USER_SERVICE_TOKEN, c => new UserService(c.get(USER_REPOSITORY_TOKEN)));
   container.register(PROMPT_SERVICE_TOKEN, new PromptService());
+
+  // TODO: remove LLMService when TrainingService.getNextSessionRecommendation is migrated to graph
+  const { LLMService } = await import('@infra/ai/llm.service');
+  const { LLM_SERVICE_TOKEN } = await import('@domain/ai/ports');
   container.register(LLM_SERVICE_TOKEN, new LLMService());
-  container.registerFactory(
-    REGISTRATION_SERVICE_TOKEN,
-    c => new RegistrationService(c.get(PROMPT_SERVICE_TOKEN), c.get(LLM_SERVICE_TOKEN)),
-  );
+
   // Training repositories
   container.register(EXERCISE_REPOSITORY_TOKEN, new ExerciseRepository());
   container.register(WORKOUT_PLAN_REPOSITORY_TOKEN, new WorkoutPlanRepository());
@@ -78,7 +73,6 @@ export async function registerInfraServices(
   container.register(SESSION_EXERCISE_REPOSITORY_TOKEN, new SessionExerciseRepository());
   container.register(SESSION_SET_REPOSITORY_TOKEN, new SessionSetRepository());
 
-  // Training service
   container.registerFactory(
     TRAINING_SERVICE_TOKEN,
     c =>
@@ -93,35 +87,29 @@ export async function registerInfraServices(
       ),
   );
 
-  // Session planning context builder
-  const sessionPlanningContextBuilder = new SessionPlanningContextBuilder(
+  // Session planning context builder (retained for plan_creation/session_planning phases)
+  new SessionPlanningContextBuilder(
     container.get(WORKOUT_PLAN_REPOSITORY_TOKEN),
     container.get(WORKOUT_SESSION_REPOSITORY_TOKEN),
     container.get(EXERCISE_REPOSITORY_TOKEN),
   );
 
-  // Chat service (depends on training service, plan repo, exercise repo, context builder, and user service)
-  container.registerFactory(
-    CHAT_SERVICE_TOKEN,
-    c => new ChatService(
-      c.get(PROMPT_SERVICE_TOKEN),
-      c.get(LLM_SERVICE_TOKEN),
-      c.get(CONVERSATION_CONTEXT_SERVICE_TOKEN),
-      c.get(TRAINING_SERVICE_TOKEN),
-      c.get(WORKOUT_PLAN_REPOSITORY_TOKEN),
-      c.get(EXERCISE_REPOSITORY_TOKEN),
-      sessionPlanningContextBuilder,
-      c.get(USER_SERVICE_TOKEN),
-    ),
-  );
+  // PostgreSQL checkpointer for LangGraph state persistence
+  const { PostgresSaver } = await import('@langchain/langgraph-checkpoint-postgres');
+  const { loadConfig } = await import('@config/index');
+  const config = loadConfig();
+  const connString = `postgresql://${config.DB_USER}:${config.DB_PASSWORD}@${config.DB_HOST}:${config.DB_PORT}/${config.DB_NAME}`;
+  const checkpointer = PostgresSaver.fromConnString(connString);
+  await checkpointer.setup();
 
   const { buildConversationGraph, CONVERSATION_GRAPH_TOKEN } = await import('@infra/ai/graph/conversation.graph');
   container.register(CONVERSATION_GRAPH_TOKEN, buildConversationGraph({
     promptService: container.get(PROMPT_SERVICE_TOKEN),
-    llmService: container.get(LLM_SERVICE_TOKEN),
     trainingService: container.get(TRAINING_SERVICE_TOKEN),
     workoutPlanRepo: container.get(WORKOUT_PLAN_REPOSITORY_TOKEN),
     userService: container.get(USER_SERVICE_TOKEN),
+    contextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN),
+    checkpointer,
   }));
 
   return container;

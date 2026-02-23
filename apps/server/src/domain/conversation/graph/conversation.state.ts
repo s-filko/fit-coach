@@ -1,26 +1,40 @@
 import { Annotation } from '@langchain/langgraph';
 
 import { ConversationPhase } from '@domain/conversation/ports';
-import { ChatMsg } from '@domain/user/ports';
+import { User } from '@domain/user/services/user.service';
+
+export interface TransitionRequest {
+  toPhase: ConversationPhase;
+  reason?: string;
+}
 
 export const ConversationState = Annotation.Root({
-  userId: Annotation<string>,
-  phase: Annotation<ConversationPhase>,
-  messages: Annotation<ChatMsg[]>({
-    reducer: (cur, upd) => [...cur, ...upd],
-    default: () => [],
-  }),
-  userMessage: Annotation<string>,
-  responseMessage: Annotation<string>({
-    reducer: (_, upd) => upd,
+  userId: Annotation<string>({
+    reducer: (_, v) => v,
     default: () => '',
   }),
-  requestedTransition: Annotation<{
-    toPhase: ConversationPhase;
-    reason?: string;
-    sessionId?: string;
-  } | null>({
-    reducer: (_, upd) => upd,
+  phase: Annotation<ConversationPhase>({
+    reducer: (_, v) => v,
+    default: () => 'registration' as ConversationPhase,
+  }),
+  userMessage: Annotation<string>({
+    reducer: (_, v) => v,
+    default: () => '',
+  }),
+  responseMessage: Annotation<string>({
+    reducer: (_, v) => v,
+    default: () => '',
+  }),
+  user: Annotation<User | null>({
+    reducer: (_, v) => v,
+    default: () => null,
+  }),
+  activeSessionId: Annotation<string | null>({
+    reducer: (_, v) => v,
+    default: () => null,
+  }),
+  requestedTransition: Annotation<TransitionRequest | null>({
+    reducer: (_, v) => v,
     default: () => null,
   }),
 });

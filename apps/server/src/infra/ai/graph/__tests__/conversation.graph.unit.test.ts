@@ -1,23 +1,18 @@
-import type { LLMService } from '@domain/ai/ports';
+import { MemorySaver } from '@langchain/langgraph';
+
 import type { ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
 import type { IPromptService, IUserService } from '@domain/user/ports';
+
+import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
 
 import { buildConversationGraph, type ConversationGraphDeps } from '../conversation.graph';
 
 const makeDeps = (): ConversationGraphDeps => ({
-  promptService: {
-    buildChatSystemPrompt: jest.fn().mockReturnValue('system'),
-    buildUnifiedRegistrationPrompt: jest.fn(),
-    buildPlanCreationPrompt: jest.fn(),
-    buildSessionPlanningPrompt: jest.fn(),
-    buildTrainingPrompt: jest.fn(),
-  } as unknown as IPromptService,
-  llmService: {
-    generateWithSystemPrompt: jest.fn().mockResolvedValue('{"message": "ok"}'),
-    generateStructured: jest.fn(),
-  } as unknown as LLMService,
+  promptService: {} as unknown as IPromptService,
   trainingService: {
     getTrainingHistory: jest.fn().mockResolvedValue([]),
+    getSessionDetails: jest.fn().mockResolvedValue(null),
+    completeSession: jest.fn().mockResolvedValue({}),
   } as unknown as ITrainingService,
   workoutPlanRepo: {
     findActiveByUserId: jest.fn().mockResolvedValue(null),
@@ -30,8 +25,11 @@ const makeDeps = (): ConversationGraphDeps => ({
     }),
     updateProfileData: jest.fn(),
     isRegistrationComplete: jest.fn().mockReturnValue(true),
+    needsRegistration: jest.fn().mockReturnValue(false),
     upsertUser: jest.fn(),
   } as unknown as IUserService,
+  contextService: new InMemoryConversationContextService(),
+  checkpointer: new MemorySaver() as unknown as InstanceType<typeof import('@langchain/langgraph-checkpoint-postgres').PostgresSaver>,
 });
 
 describe('ConversationGraph', () => {
@@ -39,33 +37,29 @@ describe('ConversationGraph', () => {
     expect(() => buildConversationGraph(makeDeps())).not.toThrow();
   });
 
-  it('routes chat phase to chatNode and returns responseMessage', async() => {
+  it('routes to chat stub and returns responseMessage', async () => {
     const graph = buildConversationGraph(makeDeps());
 
-    const result = await graph.invoke({
-      userId: 'u1',
-      phase: 'chat',
-      messages: [],
-      userMessage: 'hello',
-      responseMessage: '',
-      requestedTransition: null,
-    });
+    const result = await graph.invoke(
+      { userId: 'u1', phase: 'chat', userMessage: 'hello' },
+      { configurable: { thread_id: 'u1' } },
+    );
 
-    expect(result.responseMessage).toBe('ok');
+    expect(result.responseMessage).toBeTruthy();
     expect(result.userId).toBe('u1');
     expect(result.phase).toBe('chat');
   });
 
-  it('throws stub error for plan_creation phase', async() => {
-    const graph = buildConversationGraph(makeDeps());
+  it('router loads user and sets phase from profile', async () => {
+    const deps = makeDeps();
+    const graph = buildConversationGraph(deps);
 
-    await expect(graph.invoke({
-      userId: 'u1',
-      phase: 'plan_creation',
-      messages: [],
-      userMessage: 'create plan',
-      responseMessage: '',
-      requestedTransition: null,
-    })).rejects.toThrow('Phase \'plan_creation\' not yet migrated');
+    const result = await graph.invoke(
+      { userId: 'u1', phase: 'registration', userMessage: 'hi' },
+      { configurable: { thread_id: 'u1-new' } },
+    );
+
+    expect(result.user).not.toBeNull();
+    expect(result.user?.id).toBe('u1');
   });
 });
