@@ -16,23 +16,16 @@ describe('Server Basic Functionality – integration', () => {
            app = buildServer();
     
     // Decorate app with services for tests
-    const { 
-      USER_SERVICE_TOKEN,
-      REGISTRATION_SERVICE_TOKEN,
-    } = await import('../../../src/domain/user/ports');
-    const { LLM_SERVICE_TOKEN } = await import('../../../src/domain/ai/ports');
+    const { USER_SERVICE_TOKEN } = await import('../../../src/domain/user/ports');
     const { CONVERSATION_CONTEXT_SERVICE_TOKEN } = await import('../../../src/domain/conversation/ports');
-    const { InMemoryConversationContextService } = await import('../../../src/infra/conversation/conversation-context.service');
-    container.register(CONVERSATION_CONTEXT_SERVICE_TOKEN, new InMemoryConversationContextService());
+    const { TRAINING_SERVICE_TOKEN } = await import('../../../src/domain/training/ports');
+    const { CONVERSATION_GRAPH_TOKEN } = await import('../../../src/infra/ai/graph/conversation.graph');
 
     app.decorate('services', {
       userService: container.get(USER_SERVICE_TOKEN) as any,
-      registrationService: container.get(REGISTRATION_SERVICE_TOKEN) as any,
-      llmService: container.get(LLM_SERVICE_TOKEN) as any,
-      chatService: { processMessage: jest.fn().mockResolvedValue({ message: 'Stub chat response', effectivePhase: 'chat' }) } as any,
       conversationContextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN) as any,
-      trainingService: {} as any, // Stub for server tests
-      conversationGraph: {} as any,
+      trainingService: container.get(TRAINING_SERVICE_TOKEN) as any,
+      conversationGraph: container.get(CONVERSATION_GRAPH_TOKEN) as any,
     });
     
     await app.ready();

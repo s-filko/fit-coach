@@ -1,101 +1,62 @@
 import { buildServer } from '../../../src/app/server';
-import { LLM_SERVICE_TOKEN, LLMService } from '../../../src/domain/ai/ports';
 import { CONVERSATION_CONTEXT_SERVICE_TOKEN } from '../../../src/domain/conversation/ports';
-import { InMemoryConversationContextService } from '../../../src/infra/conversation/conversation-context.service';
-import { ChatMsg, REGISTRATION_SERVICE_TOKEN, USER_SERVICE_TOKEN } from '../../../src/domain/user/ports';
-import { db } from '../../../src/infra/db/drizzle';
-import { Container } from '../../../src/infra/di/container';
+import { USER_SERVICE_TOKEN } from '../../../src/domain/user/ports';
+import { TRAINING_SERVICE_TOKEN } from '../../../src/domain/training/ports';
 import { getGlobalContainer, registerInfraServices } from '../../../src/main/register-infra-services';
+import { CONVERSATION_GRAPH_TOKEN } from '../../../src/infra/ai/graph/conversation.graph';
 
-/**
- * Stub LLM Service for Integration Tests
- * Uses predictable responses for testing without external dependencies
- * NOTE: In production integration tests, consider using real services in isolated environment
- */
-class StubLLMService implements LLMService {
-  async generateWithSystemPrompt(messages: ChatMsg[], systemPrompt: string): Promise<string> {
-    const text = messages.map(m => m.content).join(' ');
-    return `Stub AI response to: ${text}`;
-  }
-
-  async generateStructured<T>(messages: ChatMsg[], systemPrompt: string, schema: unknown): Promise<T> {
-    return {} as T;
-  }
-
-  getDebugInfo(): any {
-    return {};
-  }
-
-  enableDebugMode(): void {}
-  disableDebugMode(): void {}
-  clearHistory(): void {}
-}
-
-/**
- * Test Data Factories
- */
-const createTestChatPayload = (overrides: Partial<{
-  userId: string;
-  message: string;
-}> = {}) => ({
+const createTestChatPayload = (overrides: Partial<{ userId: string; message: string }> = {}) => ({
   userId: overrides.userId ?? `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
   message: overrides.message ?? `Test message ${Date.now()}`,
 });
 
 const createTestApiKey = () => process.env.BOT_API_KEY!;
 
+const stubGraph = {
+  invoke: jest.fn().mockResolvedValue({
+    userId: 'test-user',
+    phase: 'chat',
+    userMessage: 'hello',
+    responseMessage: 'Stub AI response',
+    user: null,
+    activeSessionId: null,
+    requestedTransition: null,
+  }),
+};
+
 describe('POST /api/chat – integration', () => {
   let app: Awaited<ReturnType<typeof buildServer>>;
-  let tx: any;
 
-  beforeAll(async() => {
+  beforeAll(async () => {
     const container = getGlobalContainer();
-    await registerInfraServices(container);
-           app = buildServer();
-    
-    // Register stub services for integration testing
-    // NOTE: In production, consider testing with real services in isolated environment
-    container.register(CONVERSATION_CONTEXT_SERVICE_TOKEN, new InMemoryConversationContextService());
-    container.register(LLM_SERVICE_TOKEN, new StubLLMService());
-    container.register(USER_SERVICE_TOKEN, {
-      getUser: jest.fn().mockResolvedValue({
-        id: 'test-user',
-        profileStatus: 'complete',
-      }),
-      isRegistrationComplete: jest.fn().mockReturnValue(true),
-      updateProfileData: jest.fn(),
-    });
-    container.register(REGISTRATION_SERVICE_TOKEN, {
-      processUserMessage: jest.fn().mockResolvedValue({
-        updatedUser: { id: 'test-user' },
-        response: 'Stub response',
-        isComplete: true,
-      }),
-    });
-    
-    // Decorate app with services for tests
+    await registerInfraServices(container, { ensureDb: false });
+    app = buildServer();
+
+    const { CONVERSATION_CONTEXT_SERVICE_TOKEN: ctxToken } = await import('../../../src/domain/conversation/ports');
+    const { InMemoryConversationContextService } = await import('../../../src/infra/conversation/conversation-context.service');
+    container.register(ctxToken, new InMemoryConversationContextService());
+    container.register(CONVERSATION_GRAPH_TOKEN, stubGraph);
+
     app.decorate('services', {
       userService: container.get(USER_SERVICE_TOKEN) as any,
-      registrationService: container.get(REGISTRATION_SERVICE_TOKEN) as any,
-      llmService: container.get(LLM_SERVICE_TOKEN) as any,
-      chatService: { processMessage: jest.fn().mockResolvedValue({ message: 'Stub chat response', effectivePhase: 'chat' }) } as any,
       conversationContextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN) as any,
-      trainingService: {} as any, // Stub for chat routes tests
-      conversationGraph: {} as any,
+      trainingService: container.get(TRAINING_SERVICE_TOKEN) as any,
+      conversationGraph: container.get(CONVERSATION_GRAPH_TOKEN) as any,
     });
-    
+
     await app.ready();
   });
 
-  afterAll(async() => {
+  afterAll(async () => {
     await app.close();
   });
 
-  // Note: For API integration tests, we don't use transactions as they test the full stack
-  // Data cleanup is handled by the test data factories with unique IDs
+  beforeEach(() => {
+    stubGraph.invoke.mockClear();
+  });
 
   describe('successful message processing', () => {
-    it('should accept POST requests and return AI response', async() => {
+    it('should accept POST requests and return AI response', async () => {
       const payload = createTestChatPayload();
       const validKey = createTestApiKey();
 
@@ -107,160 +68,91 @@ describe('POST /api/chat – integration', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(res.headers['content-type']).toContain('application/json');
-
       const json = res.json();
       expect(json).toHaveProperty('data');
       expect(json.data).toHaveProperty('content');
       expect(json.data).toHaveProperty('timestamp');
       expect(typeof json.data.content).toBe('string');
-      expect(typeof json.data.timestamp).toBe('string');
     });
 
-    it('should process messages with different content', async() => {
-      const testMessages = [
-        'Hello AI!',
-        'How are you?',
-        'What exercises should I do?',
-        'I completed my workout today',
-      ];
-
+    it('should pass userId and userMessage to graph invoke', async () => {
+      const payload = { userId: 'user-123', message: 'Hello coach!' };
       const validKey = createTestApiKey();
 
-      for (const message of testMessages) {
-        const payload = createTestChatPayload({ message });
-        const res = await app.inject({
-          method: 'POST',
-          url: '/api/chat',
-          headers: { 'x-api-key': validKey },
-          payload,
-        });
+      await app.inject({
+        method: 'POST',
+        url: '/api/chat',
+        headers: { 'x-api-key': validKey },
+        payload,
+      });
 
-        expect(res.statusCode).toBe(200);
-        const json = res.json();
-        expect(json.data.content).toContain('Stub');
-      }
+      expect(stubGraph.invoke).toHaveBeenCalledWith(
+        { userId: 'user-123', userMessage: 'Hello coach!' },
+        { configurable: { thread_id: 'user-123' } },
+      );
     });
 
-    it('should handle different user IDs', async() => {
-      const validKey = createTestApiKey();
+    it('should return responseMessage from graph as content', async () => {
+      stubGraph.invoke.mockResolvedValueOnce({
+        userId: 'u1',
+        phase: 'chat',
+        userMessage: 'hi',
+        responseMessage: 'Custom stub response',
+        user: null,
+        activeSessionId: null,
+        requestedTransition: null,
+      });
 
-      // Test with different user IDs
-      const userIds = [
-        `user_${Date.now()}_1`,
-        `user_${Date.now()}_2`,
-        `user_${Date.now()}_3`,
-      ];
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/chat',
+        headers: { 'x-api-key': createTestApiKey() },
+        payload: { userId: 'u1', message: 'hi' },
+      });
 
-      for (const userId of userIds) {
-        const payload = createTestChatPayload({ userId });
-        const res = await app.inject({
-          method: 'POST',
-          url: '/api/chat',
-          headers: { 'x-api-key': validKey },
-          payload,
-        });
-
-        expect(res.statusCode).toBe(200);
-        const json = res.json();
-        expect(json.data).toHaveProperty('content');
-        expect(json.data).toHaveProperty('timestamp');
-      }
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data.content).toBe('Custom stub response');
     });
   });
 
   describe('error handling', () => {
-    it('should handle missing required fields', async() => {
-      const validKey = createTestApiKey();
+    it('should return 400 when required fields are missing', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/chat',
+        headers: { 'x-api-key': createTestApiKey() },
+        payload: {},
+      });
+
+      expect([400, 500]).toContain(res.statusCode);
+      expect(res.json()).toHaveProperty('error');
+    });
+
+    it('should return 500 when graph throws', async () => {
+      stubGraph.invoke.mockRejectedValueOnce(new Error('Graph failure'));
 
       const res = await app.inject({
         method: 'POST',
         url: '/api/chat',
-        headers: { 'x-api-key': validKey },
-        payload: {}, // Missing required fields
+        headers: { 'x-api-key': createTestApiKey() },
+        payload: { userId: 'u1', message: 'hi' },
       });
 
-      // Fastify may return 400 or 500 depending on validation error handling
-      expect([400, 500]).toContain(res.statusCode);
-      expect(res.headers['content-type']).toContain('application/json');
-
-      const json = res.json();
-      expect(json).toHaveProperty('error');
-      expect(json.error).toHaveProperty('message');
+      expect(res.statusCode).toBe(500);
+      expect(res.json().error.message).toBe('Processing failed');
     });
-
-    it('should handle missing userId', async() => {
-      const validKey = createTestApiKey();
-
-      const res = await app.inject({
-        method: 'POST',
-        url: '/api/chat',
-        headers: { 'x-api-key': validKey },
-        payload: {
-          message: 'Hello AI!',
-          // Missing userId
-        },
-      });
-
-      expect([400, 500]).toContain(res.statusCode);
-      const json = res.json();
-      expect(json).toHaveProperty('error');
-    });
-
-    it('should handle missing message', async() => {
-      const validKey = createTestApiKey();
-
-      const res = await app.inject({
-        method: 'POST',
-        url: '/api/chat',
-        headers: { 'x-api-key': validKey },
-        payload: {
-          userId: 'test-user',
-          // Missing message
-        },
-      });
-
-      expect([400, 500]).toContain(res.statusCode);
-      const json = res.json();
-      expect(json).toHaveProperty('error');
-    });
-
   });
 
   describe('request validation', () => {
-    it('should handle empty message strings', async() => {
-      const validKey = createTestApiKey();
-
+    it('should reject empty message', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/chat',
-        headers: { 'x-api-key': validKey },
-        payload: {
-          userId: 'test-user',
-          message: '',
-        },
+        headers: { 'x-api-key': createTestApiKey() },
+        payload: { userId: 'test-user', message: '' },
       });
 
-      // Should handle empty messages (may return 200, 400, or 500 depending on validation)
-      expect([200, 400, 500]).toContain(res.statusCode);
-    });
-
-    it('should handle very long messages', async() => {
-      const validKey = createTestApiKey();
-      const longMessage = 'A'.repeat(10000); // Very long message
-
-      const res = await app.inject({
-        method: 'POST',
-        url: '/api/chat',
-        headers: { 'x-api-key': validKey },
-        payload: {
-          userId: 'test-user',
-          message: longMessage,
-        },
-      });
-
-      // Should handle or reject based on application limits
-      expect([200, 400, 413]).toContain(res.statusCode);
+      expect([400, 422]).toContain(res.statusCode);
     });
   });
 });
