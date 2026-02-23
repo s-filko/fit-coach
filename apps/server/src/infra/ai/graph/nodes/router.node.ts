@@ -1,5 +1,4 @@
 import { ConversationStateType } from '@domain/conversation/graph/conversation.state';
-import { ConversationPhase } from '@domain/conversation/ports';
 import type { ITrainingService } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 
@@ -61,12 +60,17 @@ export function buildRouterNode(deps: RouterNodeDeps) {
       }
     }
 
-    // Determine phase for new users (checkpointer default phase = 'registration')
-    // For existing users whose profile is complete, override to 'chat' only on first invocation
-    if (!state.userId) {
-      // New thread: determine from profile
-      const phase: ConversationPhase = userService.isRegistrationComplete(user) ? 'chat' : 'registration';
-      updates.phase = phase;
+    // Sync phase with profile status.
+    // Default phase from checkpointer is 'registration'. If profile is already complete,
+    // advance to 'chat'. This also covers the case where 'incomplete' profileStatus was
+    // migrated to 'registration' but the user is actually done.
+    if (state.phase === 'registration' && userService.isRegistrationComplete(user)) {
+      updates.phase = 'chat';
+    }
+
+    // If profile is not complete, always stay in registration regardless of stored phase
+    if (!userService.isRegistrationComplete(user) && state.phase !== 'registration') {
+      updates.phase = 'registration';
     }
 
     return updates;
