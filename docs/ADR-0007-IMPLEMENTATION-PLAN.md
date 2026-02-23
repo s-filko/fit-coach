@@ -365,29 +365,41 @@ The largest step. Builds the entire foundation of the new architecture.
 
 First phase subgraph — establishes the pattern for all other phases.
 
-**Key decision:** Determine the tools→state update mechanism (Command, post-processing, or closure — see Architecture section). This pattern is reused by all subsequent subgraphs.
+#### Tools → State Update: Command Pattern (decided)
+
+Tools inside a subgraph need to update the **parent graph state** (`requestedTransition`, `activeSessionId`, `user`). Three options were considered:
+
+- **Command pattern** ✓ — tool returns `new Command({ update: { requestedTransition: ... } })`. LangGraph propagates the update to the parent state automatically. Supported in LangGraph JS v1.1+. Clean, declarative, no hacks.
+- **Post-processing** — agent node reads `tool_calls` from last `AIMessage` after ToolNode loop and maps args to state updates. Works but duplicates logic and requires manual parsing.
+- **Closure** — tool closes over a mutable `stateRef` object and writes to it directly. Stateful, fragile, not thread-safe.
+
+**Decision: Command pattern.** Tools that need to update parent state return `new Command({ update: { field: value } })`. Tools that only perform DB side effects (e.g. `update_profile`) return a plain string — the state update (`state.user`) happens via the agent node reading the fresh user after tool execution, or via a separate `Command`.
+
+In practice:
+- `request_transition` → `return new Command({ update: { requestedTransition: { toPhase, reason } } })`
+- `update_profile` → calls `userService.updateProfileData()`, then `return new Command({ update: { user: updatedUser } })` with a confirmation string as the ToolMessage content
+- `start_training_session` (Step 6) → `return new Command({ update: { activeSessionId: session.id, requestedTransition: { toPhase: 'training' } } })`
 
 **New files:**
 - `infra/ai/graph/tools/chat.tools.ts`:
-  - `update_profile` — Zod: `{ age?, gender?, height?, weight?, fitnessLevel?, fitnessGoal? }`. Calls `userService.updateProfileData()`, re-reads user, returns confirmation string. Updates `state.user`.
-  - `request_transition` — Zod: `{ toPhase, reason? }`. Sets `state.requestedTransition`.
-- `infra/ai/graph/subgraphs/chat.subgraph.ts` — agent_node + ToolNode + toolsCondition loop
+  - `update_profile` — Zod: `{ age?, gender?, height?, weight?, fitnessLevel?, fitnessGoal? }`. Calls `userService.updateProfileData()`, returns `Command({ update: { user: updatedUser } })` + confirmation string.
+  - `request_transition` — Zod: `{ toPhase, reason? }`. Returns `Command({ update: { requestedTransition: { toPhase, reason } } })`.
+- `infra/ai/graph/subgraphs/chat.subgraph.ts` — agent_node + ToolNode + toolsCondition loop. Subgraph state extends `MessagesAnnotation` + relevant parent fields passed as input.
 
 **Rewritten files:**
-- `infra/ai/graph/nodes/chat.node.ts` — becomes agent_node inside subgraph: loads history via `getMessagesForPrompt(userId, phase)`, builds prompt, invokes model with tools
-- `domain/user/services/prompt.service.ts` — `buildChatSystemPrompt`: remove JSON response format section (~40 lines)
+- `infra/ai/graph/nodes/chat.node.ts` — agent node inside subgraph: loads history via `getMessagesForPrompt(userId, phase)`, builds system prompt, invokes `model.bindTools([...])`, returns `AIMessage`.
+- `domain/user/services/prompt.service.ts` — `buildChatSystemPrompt`: remove JSON response format section (~40 lines).
 
 **Deleted:**
-- `parseLLMResponse()` function
-- `LLMConversationResponseSchema`
-- `chat.node.unit.test.ts` (old JSON-mode test) — replaced by new subgraph test
+- `parseLLMResponse()` function and `LLMConversationResponseSchema`
+- `chat.node.unit.test.ts` (old stub test) — replaced by subgraph test
 
 **How to test:**
-- [ ] Unit test: LLM returns text only → responseMessage set, no tools called
-- [ ] Unit test: LLM calls `update_profile` → `userService.updateProfileData` called, state.user updated
-- [ ] Unit test: LLM calls `request_transition` → `requestedTransition` set in state via chosen mechanism
-- [ ] Unit test: tools→state mechanism works end-to-end (tool updates state, subgraph returns updated state)
-- [ ] Manual: send "change my weight to 85kg" → verify DB updated, natural text response
+- [ ] Unit test: LLM returns text only → `responseMessage` set, no tools called
+- [ ] Unit test: LLM calls `update_profile` → `userService.updateProfileData` called, `state.user` updated via Command
+- [ ] Unit test: LLM calls `request_transition` → `requestedTransition` set in parent state via Command
+- [ ] Unit test: Command propagation — subgraph invoke returns updated parent state fields
+- [ ] Manual: send "change my weight to 85kg" → DB updated, natural text response
 - [ ] `npm run test:unit` — all pass
 
 ---
