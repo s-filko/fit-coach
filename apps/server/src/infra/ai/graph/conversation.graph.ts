@@ -9,6 +9,7 @@ import type { IPromptService, IUserService } from '@domain/user/ports';
 import { buildPersistNode } from './nodes/persist.node';
 import { buildRouterNode } from './nodes/router.node';
 import { buildChatSubgraph } from './subgraphs/chat.subgraph';
+import { buildRegistrationSubgraph } from './subgraphs/registration.subgraph';
 
 export const CONVERSATION_GRAPH_TOKEN = Symbol('ConversationGraph');
 
@@ -49,6 +50,7 @@ function buildGraph(deps: ConversationGraphDeps) {
   const routerNode = buildRouterNode({ userService, trainingService });
   const persistNode = buildPersistNode(contextService);
   const chatSubgraph = buildChatSubgraph({ userService, workoutPlanRepo, contextService });
+  const registrationSubgraph = buildRegistrationSubgraph({ userService, contextService });
 
   const transitionGuardNode = async(state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
     const { requestedTransition, phase } = state;
@@ -87,7 +89,7 @@ function buildGraph(deps: ConversationGraphDeps) {
 
   const graph = new StateGraph(ConversationState)
     .addNode('router', routerNode)
-    .addNode('registration', stubPhaseNode('registration'))
+    .addNode('registration', registrationSubgraph)
     .addNode('chat', chatSubgraph)
     .addNode('plan_creation', stubPhaseNode('plan_creation'))
     .addNode('session_planning', stubPhaseNode('session_planning'))

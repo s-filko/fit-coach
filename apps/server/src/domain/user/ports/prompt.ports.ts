@@ -42,9 +42,9 @@ export const PROMPT_SERVICE_TOKEN = Symbol('PromptService');
 
 // Prompt service interface - specialized for prompt generation
 export interface IPromptService {
-  /** System prompt for unified registration: extract data + generate response in one LLM call */
+  // TODO: remove — registration prompt lives in infra/ai/graph/nodes/registration.node.ts
   buildUnifiedRegistrationPrompt(user: User): string;
-  /** System prompt for general chat mode (post-registration) */
+  // TODO: remove — chat prompt lives in infra/ai/graph/nodes/chat.node.ts
   buildChatSystemPrompt(user: User, hasActivePlan: boolean, recentSessions?: WorkoutSessionWithDetails[]): string;
   /** System prompt for plan creation phase */
   buildPlanCreationPrompt(context: PlanCreationPromptContext): string;

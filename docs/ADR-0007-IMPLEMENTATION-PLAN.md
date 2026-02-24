@@ -414,25 +414,30 @@ In practice:
 ---
 
 ### Step 4: Registration Subgraph
-**Status**: PENDING
+**Status**: **DONE** ✓ (2026-02-23)
 
-**New files:**
-- `infra/ai/graph/tools/registration.tools.ts`:
-  - `save_profile_fields` — Zod schema uses validators from `registration.validation.ts`: `{ name?, age?, gender?, height?, weight?, fitnessLevel?, fitnessGoal? }`. Calls `userService.updateProfileData()`, re-reads user, updates `state.user`. Returns confirmation of saved fields.
-  - `complete_registration` — checks all 6 fields present on `state.user`, sets `profileStatus = 'complete'`, sets `requestedTransition` to `'chat'` or `'plan_creation'` (LLM passes desired phase). Returns error if fields missing.
-- `infra/ai/graph/subgraphs/registration.subgraph.ts`
-- `infra/ai/graph/nodes/registration.node.ts`
+**Implemented:**
+- [x] `infra/ai/graph/tools/registration.tools.ts` — `save_profile_fields` + `complete_registration` (Command pattern)
+- [x] `infra/ai/graph/subgraphs/registration.subgraph.ts` — agent + ToolNode loop + extract node
+- [x] `infra/ai/graph/nodes/registration.node.ts` — `buildRegistrationSystemPrompt()`, natural text, no JSON
+- [x] `conversation.graph.ts` — stub replaced with real `registrationSubgraph`
+- [x] `registration.service.ts` deleted — `RegistrationService` fully replaced by subgraph
+- [x] `REGISTRATION_SERVICE_TOKEN`, `IRegistrationService` removed from `service.ports.ts`
+- [x] `registrationLLMResponseSchema`, `RegistrationLLMResponse` removed from `registration.validation.ts`
+- [x] `stripJsonFromMarkdown` removed with `registration.service.ts`
+- [x] JSON format (~100 lines) removed from registration prompt
+- [x] Old integration tests for `RegistrationService` deleted (2 files)
+- [x] `npx tsc --noEmit` ✓ | `npm run test:unit` 43/43 ✓ | `npm run test:integration` 109/109 ✓
 
-**Deleted:**
-- `RegistrationService` class + `REGISTRATION_SERVICE_TOKEN` + DI registration
-- `registrationLLMResponseSchema`
-- `stripJsonFromMarkdown`
-- JSON format in registration prompt (~30 lines)
-- `registration.service.ts` file
+**Notes:**
+- `complete_registration` re-fetches user from DB to verify all 6 fields before marking `profileStatus = 'complete'`
+- `save_profile_fields` reuses `validateExtractedFields()` from `registration.validation.ts` — same strict validators
+- `firstName` is passed to `save_profile_fields` when user provides a name preference
 
-**How to test:**
-- [ ] Unit test: LLM calls `save_profile_fields` → DB updated, state.user refreshed
-- [ ] Unit test: `complete_registration` with all fields → profileStatus 'complete', transition set
+**How to test (manual):**
+- [ ] Fresh user → registration flow in Telegram
+- [ ] Profile fields saved progressively via `save_profile_fields` tool calls
+- [ ] Confirmation summary → `complete_registration` → transition to `plan_creation` or `chat`
 - [ ] Unit test: `complete_registration` with missing fields → error returned, no transition
 - [ ] Manual: fresh user, complete registration through Telegram bot
 

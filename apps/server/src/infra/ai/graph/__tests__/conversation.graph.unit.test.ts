@@ -77,7 +77,7 @@ describe('ConversationGraph', () => {
     expect(result.phase).toBe('chat');
   });
 
-  it('returns stub response for unimplemented phases', async () => {
+  it('routes unregistered user to registration subgraph', async () => {
     const deps = makeDeps();
     // Override: user is NOT registered → stays in registration
     (deps.userService.isRegistrationComplete as jest.Mock).mockReturnValue(false);
@@ -93,7 +93,8 @@ describe('ConversationGraph', () => {
       { configurable: { thread_id: 'u2' } },
     );
 
-    expect(result.responseMessage).toContain('not yet implemented');
+    // Registration subgraph is now real (mocked LLM) — check it returned a response
+    expect(result.responseMessage).toBeTruthy();
     expect(result.phase).toBe('registration');
   });
 });

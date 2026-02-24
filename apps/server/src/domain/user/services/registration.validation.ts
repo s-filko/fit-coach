@@ -92,30 +92,6 @@ export const FIELD_HINTS: Record<ProfileDataKey, string> = {
   fitnessGoal: 'e.g. lose weight, build muscle, maintain fitness',
 };
 
-// --- Unified registration LLM response schema ---
-
-/** Shape of the JSON response expected from LLM during registration */
-export const registrationLLMResponseSchema = z.object({
-  extracted_data: z.object({
-    name: z.union([z.string(), z.null()]).optional(),
-    age: z.union([z.number(), z.null()]).optional(),
-    gender: z.union([z.string(), z.null()]).optional(),
-    height: z.union([z.number(), z.null()]).optional(),
-    weight: z.union([z.number(), z.null()]).optional(),
-    fitnessLevel: z.union([z.string(), z.null()]).optional(),
-    fitnessGoal: z.union([z.string(), z.null()]).optional(),
-  }),
-  response: z.string().min(1),
-  is_confirmed: z.boolean(),
-  // Optional phase transition after registration complete
-  phaseTransition: z.object({
-    toPhase: z.enum(['chat', 'plan_creation']),
-    reason: z.string().optional(),
-  }).optional(),
-});
-
-export type RegistrationLLMResponse = z.infer<typeof registrationLLMResponseSchema>;
-
 /**
  * Validate extracted fields from LLM using the strict field validators.
  * Only returns fields that pass validation (invalid values → undefined).
