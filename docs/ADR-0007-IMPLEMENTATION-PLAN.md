@@ -616,6 +616,32 @@ Blocked (3):
 
 ---
 
+### Step 9.5: User Long-Term Memory
+**Status**: PENDING  
+**ADR**: `docs/adr/0009-user-long-term-memory.md`
+
+Passive memory extraction layer — listens to every conversation turn, extracts permanent user facts (constraints, preferences, physiological patterns, coaching preferences), stores in `user_facts` table, injects into all phase prompts.
+
+**New files:**
+- `domain/user/ports/user-facts.ports.ts` — `IUserFactsService`, `FactCategory`, `UserFact`
+- `infra/user/user-facts.service.ts` — extraction LLM call + dedup + storage
+- `infra/ai/graph/nodes/memory-extractor.node.ts` — graph node (after persist, non-blocking)
+- `infra/db/repositories/user-facts.repository.ts`
+- DB migration: `user_facts` table
+
+**Graph change:** `persist → memory_extractor → [transition_guard] → END`
+
+**All 5 subgraphs:** inject `userFactsService.getFactsForPrompt(userId)` into `agentNode` system prompt.
+
+**How to test:**
+- [ ] Unit test: extraction LLM call returns fact → stored in DB
+- [ ] Unit test: extraction returns no fact → nothing stored
+- [ ] Unit test: `getFactsForPrompt` returns formatted string list
+- [ ] Unit test: facts injected into agentNode prompt
+- [ ] Integration: say constraint → next turn prompt contains it
+
+---
+
 ### Step 9: Final Cleanup
 **Status**: PENDING
 

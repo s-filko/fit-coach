@@ -297,6 +297,7 @@ Each phase subgraph runs a tool-calling loop:
 - **ADR-0006**: Session plan storage
 - **ADR-0007**: LangGraph migration — IN PROGRESS (Steps 0–5 done; see `docs/ADR-0007-IMPLEMENTATION-PLAN.md`)
 - **ADR-0008**: Centralized logging with Grafana/Loki
+- **ADR-0009**: User long-term memory — passive fact extraction per conversation turn, persistent `user_facts` table, injected into all phase prompts (PROPOSED)
 
 ## Docs-first Workflow (mandatory)
 All changes go through docs before code:
