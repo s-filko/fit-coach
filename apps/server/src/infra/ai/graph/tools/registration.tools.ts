@@ -1,5 +1,4 @@
 import { tool } from '@langchain/core/tools';
-import { Command } from '@langchain/langgraph';
 import { z } from 'zod';
 
 import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
@@ -9,6 +8,8 @@ import { FIELD_LABELS, type ProfileDataKey, validateExtractedFields } from '@dom
 
 export interface RegistrationToolsDeps {
   userService: IUserService;
+  /** Mutable ref — tools write here, extractNode reads it to update parent state */
+  pendingTransition: { value: TransitionRequest | null };
 }
 
 const REQUIRED_FIELDS: ProfileDataKey[] = ['age', 'gender', 'height', 'weight', 'fitnessLevel', 'fitnessGoal'];
@@ -29,7 +30,7 @@ const COMPLETE_REGISTRATION_DESCRIPTION = [
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function buildRegistrationTools(deps: RegistrationToolsDeps) {
-  const { userService } = deps;
+  const { userService, pendingTransition } = deps;
 
   const saveProfileFields = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
@@ -46,23 +47,22 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
         Object.entries(validated).filter(([, v]) => v !== undefined),
       );
 
+      // Save firstName separately if provided
+      if (typeof input.firstName === 'string' && input.firstName.trim()) {
+        fieldsToSave.firstName = input.firstName.trim();
+      }
+
       if (Object.keys(fieldsToSave).length === 0) {
         return 'No valid fields to save. Please provide at least one profile field.';
       }
 
-      const updatedUser = await userService.updateProfileData(userId, fieldsToSave);
-      if (!updatedUser) {
-        return 'Failed to save profile fields. Please try again.';
-      }
+      await userService.updateProfileData(userId, fieldsToSave);
 
       const saved = Object.keys(fieldsToSave)
         .map((k) => FIELD_LABELS[k as ProfileDataKey] ?? k)
         .join(', ');
 
-      return new Command({
-        update: { user: updatedUser },
-        resume: `Saved: ${saved}`,
-      });
+      return `Saved: ${saved}`;
     },
     {
       name: 'save_profile_fields',
@@ -72,8 +72,7 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
         gender: z.enum(['male', 'female']).optional().describe('Biological gender'),
         height: z.number().optional().describe('Height in cm (100–250)'),
         weight: z.number().optional().describe('Weight in kg (20–300)'),
-        fitnessLevel: z.enum(['beginner', 'intermediate', 'advanced']).optional()
-          .describe('Self-assessed fitness level'),
+        fitnessLevel: z.enum(['beginner', 'intermediate', 'advanced']).optional().describe('Self-assessed fitness level'),
         fitnessGoal: z.string().optional().describe('Fitness goal in their own words'),
         firstName: z.string().optional().describe('Preferred name if user provides one'),
       }),
@@ -100,26 +99,19 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
       });
 
       if (missingFields.length > 0) {
-        const missing = missingFields
-          .map((k) => FIELD_LABELS[k])
-          .join(', ');
+        const missing = missingFields.map((k) => FIELD_LABELS[k]).join(', ');
         return `Cannot complete registration — still missing: ${missing}. Please collect these fields first.`;
       }
 
-      const completedUser = await userService.updateProfileData(userId, { profileStatus: 'complete' });
-      if (!completedUser) {
-        return 'Failed to complete registration. Please try again.';
-      }
+      await userService.updateProfileData(userId, { profileStatus: 'complete' });
 
-      const transition: TransitionRequest = {
+      // Signal transition via closure ref — extractNode will pick this up
+      pendingTransition.value = {
         toPhase: input.toPhase as ConversationPhase,
         reason: 'registration_complete',
       };
 
-      return new Command({
-        update: { user: completedUser, requestedTransition: transition },
-        resume: 'Registration complete.',
-      });
+      return 'Registration complete! Profile saved successfully.';
     },
     {
       name: 'complete_registration',

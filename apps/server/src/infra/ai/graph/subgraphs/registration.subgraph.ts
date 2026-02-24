@@ -30,7 +30,15 @@ type RegistrationSubgraphStateType = typeof RegistrationSubgraphState.State;
 
 export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
   const { userService, contextService } = deps;
-  const tools = buildRegistrationTools({ userService });
+
+  /**
+   * Mutable closure ref: tools write their pending transition here instead of
+   * returning a Command (which would break ToolNode's ToolMessage flow and cause
+   * an infinite recursion loop). extractNode reads this ref once and clears it.
+   */
+  const pendingTransition: { value: TransitionRequest | null } = { value: null };
+
+  const tools = buildRegistrationTools({ userService, pendingTransition });
   const toolNode = new ToolNode(tools);
   const model = getModel().bindTools(tools);
 
@@ -39,7 +47,14 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
 
     const history = await contextService.getMessagesForPrompt(userId, 'registration');
 
-    const systemPrompt = buildRegistrationSystemPrompt(user);
+    // Fetch fresh user before each LLM call so the prompt reflects tool-saved fields
+    const freshUser = await userService.getUser(userId);
+    const systemPrompt = buildRegistrationSystemPrompt(freshUser ?? user);
+
+    // state.messages holds AIMessage(tool_calls) + ToolMessages from the current turn.
+    // These are NOT in DB history yet (persist runs after subgraph finishes).
+    // Including them lets the LLM see tool results and stop calling tools.
+    const inFlightMessages = state.messages ?? [];
 
     const llmMessages = [
       new SystemMessage(systemPrompt),
@@ -47,6 +62,7 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
         m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content),
       ),
       new HumanMessage(userMessage),
+      ...inFlightMessages,
     ];
 
     const response = await model.invoke(llmMessages, {
@@ -56,7 +72,7 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
     return { messages: [response] };
   };
 
-  const extractNode = (state: RegistrationSubgraphStateType): Partial<ConversationStateType> => {
+  const extractNode = async(state: RegistrationSubgraphStateType): Promise<Partial<ConversationStateType>> => {
     const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
     const text = typeof lastMessage.content === 'string'
       ? lastMessage.content
@@ -65,10 +81,19 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
           .map((b) => b.text ?? '')
           .join('');
 
+    // Read fresh user from DB to capture any fields saved by tools during this turn
+    const freshUser = state.userId
+      ? await userService.getUser(state.userId).catch(() => null)
+      : null;
+
+    // Consume the pending transition set by complete_registration tool
+    const transition = pendingTransition.value;
+    pendingTransition.value = null;
+
     return {
       responseMessage: text,
-      user: state.user,
-      requestedTransition: state.requestedTransition,
+      user: freshUser ?? state.user,
+      requestedTransition: transition,
     };
   };
 

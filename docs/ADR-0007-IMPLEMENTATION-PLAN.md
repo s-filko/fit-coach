@@ -365,20 +365,24 @@ The largest step. Builds the entire foundation of the new architecture.
 
 First phase subgraph — establishes the pattern for all other phases.
 
-#### Tools → State Update: Command Pattern (decided)
+#### Tools → State Update: Closure Ref Pattern (revised after live testing)
 
 Tools inside a subgraph need to update the **parent graph state** (`requestedTransition`, `activeSessionId`, `user`). Three options were considered:
 
-- **Command pattern** ✓ — tool returns `new Command({ update: { requestedTransition: ... } })`. LangGraph propagates the update to the parent state automatically. Supported in LangGraph JS v1.1+. Clean, declarative, no hacks.
+- **Command pattern** — tool returns `new Command({ update: { requestedTransition: ... } })`. Attempted first, but `Command` with `resume` breaks `ToolNode`: when tool returns `Command`, ToolNode does NOT create a `ToolMessage` → LLM sees unclosed `tool_call` → infinite recursion loop. **Rejected.**
 - **Post-processing** — agent node reads `tool_calls` from last `AIMessage` after ToolNode loop and maps args to state updates. Works but duplicates logic and requires manual parsing.
-- **Closure** — tool closes over a mutable `stateRef` object and writes to it directly. Stateful, fragile, not thread-safe.
+- **Closure ref** ✓ — tools close over a mutable `{ value: T | null }` ref created per subgraph instance. Tool writes to ref, `extractNode` reads it once and resets to null. Single-threaded (one subgraph invocation at a time per thread_id) — safe.
 
-**Decision: Command pattern.** Tools that need to update parent state return `new Command({ update: { field: value } })`. Tools that only perform DB side effects (e.g. `update_profile`) return a plain string — the state update (`state.user`) happens via the agent node reading the fresh user after tool execution, or via a separate `Command`.
+**Decision: Closure ref pattern.** All tools return plain strings (proper ToolMessages). State updates propagate via:
+- `pendingTransition: { value: TransitionRequest | null }` — written by `request_transition`, `complete_registration`, `cancel_planning`, `finish_training`, `start_training_session`
+- `state.user` freshness — `extractNode` re-fetches user from DB after tool loop to capture any profile changes
+- `activeSessionId` — `start_training_session` (Step 6) writes to a separate `pendingActiveSessionId` ref
 
 In practice:
-- `request_transition` → `return new Command({ update: { requestedTransition: { toPhase, reason } } })`
-- `update_profile` → calls `userService.updateProfileData()`, then `return new Command({ update: { user: updatedUser } })` with a confirmation string as the ToolMessage content
-- `start_training_session` (Step 6) → `return new Command({ update: { activeSessionId: session.id, requestedTransition: { toPhase: 'training' } } })`
+- `request_transition` → writes `pendingTransition.value = { toPhase, reason }`, returns `"Transition to plan_creation requested."`
+- `update_profile` → calls `userService.updateProfileData()`, returns `"Profile updated: weight 85kg"`. `extractNode` re-fetches user from DB.
+- `complete_registration` → writes `pendingTransition.value`, calls `updateProfileData({ profileStatus: 'complete' })`, returns `"Registration complete."`
+- `start_training_session` (Step 6) → writes both `pendingTransition` and `pendingActiveSessionId` refs
 
 **New files:**
 - `infra/ai/graph/tools/chat.tools.ts`:
@@ -414,10 +418,10 @@ In practice:
 ---
 
 ### Step 4: Registration Subgraph
-**Status**: **DONE** ✓ (2026-02-23)
+**Status**: **DONE + TESTED** ✓ (2026-02-24)
 
 **Implemented:**
-- [x] `infra/ai/graph/tools/registration.tools.ts` — `save_profile_fields` + `complete_registration` (Command pattern)
+- [x] `infra/ai/graph/tools/registration.tools.ts` — `save_profile_fields` + `complete_registration`
 - [x] `infra/ai/graph/subgraphs/registration.subgraph.ts` — agent + ToolNode loop + extract node
 - [x] `infra/ai/graph/nodes/registration.node.ts` — `buildRegistrationSystemPrompt()`, natural text, no JSON
 - [x] `conversation.graph.ts` — stub replaced with real `registrationSubgraph`
@@ -427,19 +431,44 @@ In practice:
 - [x] `stripJsonFromMarkdown` removed with `registration.service.ts`
 - [x] JSON format (~100 lines) removed from registration prompt
 - [x] Old integration tests for `RegistrationService` deleted (2 files)
-- [x] `npx tsc --noEmit` ✓ | `npm run test:unit` 43/43 ✓ | `npm run test:integration` 109/109 ✓
+
+**Bugs found and fixed during live API testing (2026-02-24):**
+
+**Bug 1 — `Command` with `resume` from tools caused recursion**
+- Tools returned `new Command({ resume: ... })` instead of a plain string
+- `ToolNode` receiving a `Command` does not create a `ToolMessage` → LLM sees unclosed `tool_call` → calls tool again → infinite loop
+- Fix: tools return plain strings; `pendingTransition` propagated via closure ref (`{ value: TransitionRequest | null }`) that `extractNode` reads once per turn
+- Applies to: `registration.tools.ts`, `chat.tools.ts`
+
+**Bug 2 — `state.messages` not included in agent prompt → recursion**
+- `agentNode` built LLM prompt from `contextService.getMessagesForPrompt()` (DB history) only
+- `persist` node runs *after* subgraph finishes, so in-flight `AIMessage(tool_calls)` + `ToolMessage` live only in `state.messages` during the tool loop — DB has no record yet
+- On `tools → agent` loop iteration, agent rebuilt the same prompt without ToolMessages → LLM saw only the original HumanMessage → called tool again → infinite loop
+- Fix: `agentNode` appends `state.messages` (in-flight messages) after the HumanMessage so LLM sees tool results and responds with text
+- Applies to: `registration.subgraph.ts`, `chat.subgraph.ts`
+
+**Bug 3 — `userId` not passed to tools via `configurable`**
+- `userId` was only passed to `model.invoke(..., { configurable: { userId } })` — scoped to that LLM call only
+- `ToolNode` passes the *node's* config to tools, which contains only `thread_id` from `graph.invoke()`
+- Tools checked `config.configurable.userId` → always `undefined` → returned `"Error: could not identify user"` → nothing saved to DB
+- Fix: add `userId` to graph-level `configurable` in `chat.routes.ts`: `{ configurable: { thread_id: userId, userId } }`
+
+**New tests added:**
+- [x] `infra/ai/graph/tools/__tests__/registration.tools.unit.test.ts` — 13 tests: string return (not Command), field validation, pendingTransition mechanics, missing-fields block, error paths
+- [x] `infra/ai/graph/tools/__tests__/chat.tools.unit.test.ts` — 11 tests: string return, updateProfileData calls, transition ref, no userService calls for request_transition
+- [x] `infra/ai/graph/subgraphs/__tests__/registration.subgraph.unit.test.ts` — 2 RED-then-GREEN tests reproducing Bug 2: verify ToolMessage and AIMessage(tool_calls) appear in the second LLM call's messages array
+
+**Test methodology note:** Tests were written RED first (reproducing the actual bug), confirmed to fail, then the fix was applied, tests turned GREEN. This is the required approach for all future bug fixes.
+
+**Final state after all fixes:**
+- [x] `npm run test:unit` — 69/69 ✓
+- [x] API end-to-end: 5-step registration flow via `curl`, all fields saved to DB, `profile_status = 'complete'` ✓
 
 **Notes:**
 - `complete_registration` re-fetches user from DB to verify all 6 fields before marking `profileStatus = 'complete'`
 - `save_profile_fields` reuses `validateExtractedFields()` from `registration.validation.ts` — same strict validators
 - `firstName` is passed to `save_profile_fields` when user provides a name preference
-
-**How to test (manual):**
-- [ ] Fresh user → registration flow in Telegram
-- [ ] Profile fields saved progressively via `save_profile_fields` tool calls
-- [ ] Confirmation summary → `complete_registration` → transition to `plan_creation` or `chat`
-- [ ] Unit test: `complete_registration` with missing fields → error returned, no transition
-- [ ] Manual: fresh user, complete registration through Telegram bot
+- Command pattern documented in Step 3 was revised: tools do NOT return `Command` — closure ref pattern used instead (Command with `resume` breaks ToolNode's ToolMessage flow)
 
 ---
 

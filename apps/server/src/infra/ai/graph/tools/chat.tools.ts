@@ -1,5 +1,4 @@
 import { tool } from '@langchain/core/tools';
-import { Command } from '@langchain/langgraph';
 import { z } from 'zod';
 
 import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
@@ -8,6 +7,8 @@ import type { IUserService } from '@domain/user/ports';
 
 export interface ChatToolsDeps {
   userService: IUserService;
+  /** Mutable ref — request_transition tool writes here, extractNode picks it up */
+  pendingTransition: { value: TransitionRequest | null };
 }
 
 const UPDATE_PROFILE_DESCRIPTION = [
@@ -26,7 +27,7 @@ const REQUEST_TRANSITION_DESCRIPTION = [
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function buildChatTools(deps: ChatToolsDeps) {
-  const { userService } = deps;
+  const { userService, pendingTransition } = deps;
 
   const updateProfile = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
@@ -48,10 +49,7 @@ export function buildChatTools(deps: ChatToolsDeps) {
         .map(([k, v]) => `${k}: ${v}`)
         .join(', ');
 
-      return new Command({
-        update: { user: updatedUser },
-        resume: `Profile updated: ${changed}`,
-      });
+      return `Profile updated: ${changed}`;
     },
     {
       name: 'update_profile',
@@ -70,15 +68,13 @@ export function buildChatTools(deps: ChatToolsDeps) {
   const requestTransition = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
     async(input) => {
-      const transition: TransitionRequest = {
+      // Write to closure ref — extractNode will propagate to parent state
+      pendingTransition.value = {
         toPhase: input.toPhase as ConversationPhase,
         reason: input.reason,
       };
 
-      return new Command({
-        update: { requestedTransition: transition },
-        resume: `Transition to ${input.toPhase} requested.`,
-      });
+      return `Transition to ${input.toPhase} requested.`;
     },
     {
       name: 'request_transition',
