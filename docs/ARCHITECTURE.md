@@ -26,6 +26,7 @@ The codebase has been successfully migrated to Fastify. All Express dependencies
 apps/server/src/
   app/                          # HTTP transport (Fastify adapters)
     routes/                     # Route handlers (thin controllers)
+      chat.routes.ts            # ~20-line thin proxy to ConversationGraph
     plugins/                    # Fastify plugins (routes, security, docs)
     middlewares/                # Error, logging, validation hooks
     server.ts                   # Builds Fastify instance (plugins, hooks, routes)
@@ -37,22 +38,22 @@ apps/server/src/
         index.ts               # Re-exports for convenience
         repository.ports.ts    # Data access contracts
         service.ports.ts       # Business logic contracts
-        prompt.ports.ts        # Specialized utility contracts
+        prompt.ports.ts        # Specialized utility contracts (TODO: remove after Step 9)
       services/
         user.service.ts        # User CRUD operations
-        registration.service.ts # Unified registration with JSON mode LLM
-        chat.service.ts        # Post-registration chat
-        prompt.service.ts      # Dynamic system prompt generation
+        prompt.service.ts      # Dynamic system prompt generation (TODO: remove after Step 9)
       validation/
-        registration.validation.ts # Zod validators for registration fields
+        registration.validation.ts # Zod validators for registration fields (reused in tools)
     ai/
-      ports.ts                 # ILLMService interface + types (ChatMsg, LLMRequest, LLMResponse)
+      ports.ts                 # ILLMService interface (TODO: remove after Step 9)
     conversation/
+      graph/
+        conversation.state.ts  # LangGraph ConversationState (Annotation.Root)
       ports/
-        conversation-context.ports.ts  # IConversationContextService + types
+        conversation-context.ports.ts  # IConversationContextService (2-method: appendTurn + getMessagesForPrompt)
         index.ts               # Re-exports
     training/
-      ports.ts                 # Training domain interfaces (planned for FEAT-0008)
+      ports/                   # Training domain interfaces
 
   infra/                        # Integrations + drivers
     db/
@@ -60,10 +61,28 @@ apps/server/src/
       drizzle.ts                # Pool + drizzle init + health
       repositories/             # Thin data access
         user.repository.ts
+        exercise.repository.ts  # Includes findAllWithMuscles()
+        workout-plan.repository.ts
     ai/
-      llm.service.ts            # OpenAI-compatible LLM service with JSON mode & debug support
+      model.factory.ts          # Shared ChatOpenAI factory (getModel())
+      graph/
+        conversation.graph.ts   # Main StateGraph: router→phase→persist→guard→cleanup
+        nodes/
+          router.node.ts        # Phase determination, session timeout, user loading
+          persist.node.ts       # appendTurn to conversation_turns
+          chat.node.ts          # buildChatSystemPrompt()
+          registration.node.ts  # buildRegistrationSystemPrompt()
+          plan-creation.node.ts # buildPlanCreationSystemPrompt() with muscle groups
+        subgraphs/
+          chat.subgraph.ts         # agent + ToolNode + extractNode
+          registration.subgraph.ts # agent + ToolNode + extractNode
+          plan-creation.subgraph.ts# agent + ToolNode + extractNode
+        tools/
+          chat.tools.ts            # update_profile, request_transition
+          registration.tools.ts    # save_profile_fields, complete_registration
+          plan-creation.tools.ts   # save_workout_plan, request_transition
     conversation/
-      drizzle-conversation-context.service.ts   # IConversationContextService impl (DB-backed)
+      drizzle-conversation-context.service.ts   # IConversationContextService impl (2-method, DB-backed)
     di/
       container.ts              # DI container with factory support + lazy initialization
     config/
@@ -124,13 +143,14 @@ Notes:
 - **Factory pattern**: `container.registerFactory(token, (container) => new Service(...))` allows lazy instantiation and access to other dependencies via the container parameter.
 - **Lazy initialization**: Services registered with factories are instantiated only on first `container.get(token)` call, preventing circular dependencies and improving startup time.
 - **Service registration order** (`src/main/register-infra-services.ts`):
-  1. ConversationContextService (Drizzle-backed)
+  1. ConversationContextService (Drizzle-backed, 2-method interface)
   2. UserRepository (Drizzle-backed)
   3. UserService (depends on UserRepository)
-  4. PromptService
-  5. LLMService
-  6. RegistrationService (depends on PromptService, LLMService)
-  7. ChatService (depends on PromptService, LLMService)
+  4. TrainingService (depends on training repositories)
+  5. WorkoutPlanRepository
+  6. ExerciseRepository
+  7. PostgresSaver checkpointer (LangGraph checkpoint storage)
+  8. ConversationGraph (depends on all of the above)
 - **Fastify decoration**: Services are decorated on Fastify app instance (`app.services.*`) for easy access in routes without manual DI resolution.
 
 ## Configuration
@@ -220,62 +240,49 @@ These rules are for any AI assistant working in this repo:
 9) For non-trivial changes, add an ADR entry under `docs/adr/` (see below).
 10) Preserve `tsconfig.json` path aliases and update imports accordingly if files move.
 
-## Conversation Context (Session) [FEAT-0009] ✅ IMPLEMENTED
-- A **conversation context** holds the dialogue (user + assistant turns) for a given (userId, phase) pair [INV-CONV-001]. It is the single place for "session" dialogue across all flows.
-- Context is **universal**: any flow (registration, chat, training) loads context, calls `getMessagesForPrompt(ctx)` to build the prompt, then appends the new turn after the LLM responds [BR-CONV-001][BR-CONV-002].
-- **Sliding window** (default 20 turns) limits token usage [BR-CONV-003]. Optional summarization prepends a summary before recent turns [BR-CONV-004].
-- **Phase transitions** reset or start a new phase with a system note [BR-CONV-005]. Time-based policies (idle threshold) may summarize or reset with a recap [BR-CONV-006].
-- Domain port: `IConversationContextService` (`CONVERSATION_CONTEXT_SERVICE_TOKEN`) — see `docs/domain/conversation.spec.md`. Implementations live in infra (DB-backed with Drizzle). Domain stays free of LangChain; LLM service only receives `ChatMsg[]`.
-- Module layout: `domain/conversation/ports/conversation-context.ports.ts` (types + interface); `infra/conversation/drizzle-conversation-context.service.ts` (implementation).
-- **ADR-0005**: patterns, model, and how context plugs into prompts.
-- **docs/CONVERSATION_CONTEXT_ARCHITECTURE.md**: stack-specific implementation guide (LangChain, Fastify, Drizzle) and checklist.
-- No breaking change to API: `POST /api/chat` contract remains unchanged [AC-0110]; context is used internally.
-- **Database storage**: `conversation_turns` table with (userId, phase, role, content, createdAt) indexed for efficient queries.
+## Conversation Context (Session) [FEAT-0009] ✅ IMPLEMENTED (simplified)
+- **Conversation history** (`conversation_turns` table) stores dialogue turns per (userId, phase) for prompt building and analytics.
+- **Phase/session state** is managed by **LangGraph PostgresSaver checkpointer** — not by `IConversationContextService`. No `[PHASE_ENDED]` markers, no `startNewPhase()`.
+- Domain port: `IConversationContextService` (2 methods only):
+  - `appendTurn(userId, phase, userMessage, assistantResponse): Promise<void>`
+  - `getMessagesForPrompt(userId, phase, options?): Promise<ChatMsg[]>`
+- Each phase subgraph calls `getMessagesForPrompt()` to load history before building the LLM prompt. `persist.node.ts` calls `appendTurn()` after each response.
+- **Sliding window** (default 20 turns) via `LIMIT` in SQL query [BR-CONV-003].
+- Module layout: `domain/conversation/ports/conversation-context.ports.ts`; `infra/conversation/drizzle-conversation-context.service.ts`.
+- **ADR-0005**: original patterns (partially superseded by checkpointer for state management).
+- No breaking change to API: `POST /api/chat` contract unchanged [AC-0110].
+- **Database storage**: `conversation_turns` table with (userId, phase, role, content, createdAt); `langgraph_checkpoints` table (managed by PostgresSaver).
 
 ## LLM Integration
-**Implementation**: `src/infra/ai/llm.service.ts`
+**Implementation**: `src/infra/ai/model.factory.ts`
 
-### OpenAI-Compatible API Abstraction
+### OpenAI-Compatible API via LangGraph Tool Calling
 - Supports any OpenAI-compatible API provider: OpenAI, OpenRouter, Groq, Together, Azure OpenAI, etc.
-- Single unified interface via LangChain's `ChatOpenAI` client.
-- Configuration-driven: no hardcoded provider logic.
+- All graph nodes use `ChatOpenAI` directly via shared `getModel()` factory.
+- Tool calling (`model.bindTools(tools).invoke()`) is the standard interaction pattern — no JSON mode parsing.
 
 ### Environment Configuration
 Required environment variables for LLM integration:
 ```bash
 LLM_API_KEY=<your-api-key>           # Required: API key for the provider
-LLM_MODEL=<model-name>                # Required: e.g., "gpt-4-turbo", "openrouter/meta-llama/llama-2-70b"
+LLM_MODEL=<model-name>                # Required: e.g., "google/gemini-2.0-flash-001"
 LLM_API_URL=<custom-base-url>         # Optional: custom endpoint (defaults to OpenAI)
 LLM_TEMPERATURE=<0-2>                 # Required: temperature for generation
-LLM_DEBUG=<true|false>                # Optional: enable debug mode with request/response tracking
 ```
 
-### Features
-- **JSON Mode**: Supports structured outputs via `response_format: {type: 'json_object'}` when `jsonMode: true` is passed to `generateWithSystemPrompt()`.
-- **Debug Mode**: When enabled, tracks:
-  - Last 50 requests with timestamps, messages, model, temperature
-  - Last 50 responses with content, token usage, processing time
-  - Metrics: totalRequests, totalErrors, totalTokens, averageResponseTime, errorRate
-- **Debug Endpoints** (development only):
-  - `GET /api/debug/llm` - Returns debug info and metrics
-  - `POST /api/debug/llm/clear` - Clears request/response history
+### Interaction Pattern (Tool Calling Loop)
+Each phase subgraph runs a tool-calling loop:
+1. `agentNode`: `model.bindTools(tools).invoke([systemMsg, history..., humanMsg, ...stateMessages])`
+2. If `AIMessage.tool_calls` present → `ToolNode` executes tools → `ToolMessage` results appended
+3. Loop back to `agentNode` with updated messages (tool results visible)
+4. If no `tool_calls` → `extractNode` extracts `responseMessage`, reads `pendingTransition`
 
-### Usage Pattern
-```typescript
-const llmService = container.get(LLM_SERVICE_TOKEN);
-const response = await llmService.generateWithSystemPrompt(
-  messages,        // ChatMsg[] with user/assistant history
-  systemPrompt,    // System prompt string
-  { jsonMode: true }  // Optional: enable JSON mode for structured responses
-);
-```
+### Tool Calling vs JSON Mode
+- **Old approach**: LLM forced to respond in JSON → code parses with Zod → error-prone
+- **New approach**: LLM calls typed tools for side effects → responds with natural text → LLM self-corrects on tool errors
 
-### Registration Flow with JSON Mode
-The registration flow uses JSON mode to extract profile data and generate responses in a single LLM call:
-- **Input**: User message + conversation history + dynamic system prompt (generated by PromptService)
-- **Output**: Structured JSON with `{extracted_data, response, is_confirmed}`
-- **Validation**: Zod schemas validate extracted fields (`registration.validation.ts`)
-- **Removed legacy services**: ProfileParserService, data-transformers, messages.ts, registration.config.ts
+### Verified Provider Support
+- `google/gemini-2.0-flash-001` via OpenRouter — tool calling with 5+ simultaneous tools verified (2026-02-22)
 
 ## ADRs (Architecture Decision Records)
 - Create `docs/adr/` and add numbered ADRs for major decisions.
@@ -287,6 +294,9 @@ The registration flow uses JSON mode to extract profile data and generate respon
 - **ADR-0003**: Config layer with Zod validation
 - **ADR-0004**: User profile and context storage model
 - **ADR-0005**: Conversation context with sliding window and phase transitions
+- **ADR-0006**: Session plan storage
+- **ADR-0007**: LangGraph migration — IN PROGRESS (Steps 0–5 done; see `docs/ADR-0007-IMPLEMENTATION-PLAN.md`)
+- **ADR-0008**: Centralized logging with Grafana/Loki
 
 ## Docs-first Workflow (mandatory)
 All changes go through docs before code:
@@ -318,9 +328,11 @@ Change control:
 - ✅ Clean DI pattern using `app.decorate('services', {...})` in composition root
 - ✅ All environment configuration centralized in `@config/index`
 - ✅ Proper layering with strict import boundaries enforced by ESLint
-- ✅ Comprehensive test coverage with 158 passing tests
+- ✅ 275 passing tests (unit + integration)
 - ✅ OpenAPI documentation generation with Swagger UI
 - ✅ Security plugin with API key authentication for `/api/*` routes
+- ✅ LangGraph graph fully operational: router + persist nodes, checkpointer, chat/registration/plan_creation subgraphs
+- 🔄 LangGraph migration IN PROGRESS: session_planning, training, transition guards pending (Steps 6–9)
 
 ---
 This document defines architectural contract for the backend. Changes to this contract must be explicit, reviewed, and documented via ADR.

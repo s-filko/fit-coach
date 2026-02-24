@@ -1,7 +1,7 @@
 # FEAT-0003: AI Chat
 
 **Status**: ✅ Implemented
-**Version**: 2.0 (Refactored with conversation context and phase-based routing)
+**Version**: 3.0 (LangGraph Architecture — tool calling, PostgreSQL checkpointer, subgraphs)
 
 ## User Story
 
@@ -9,14 +9,15 @@ As a user, I want to send messages and receive AI-generated responses through na
 
 ## Overview
 
-The AI Chat feature provides a unified conversational interface for all user interactions. The system automatically determines the appropriate service (Registration or Chat) based on the user's profile status and manages conversation history with a sliding window approach.
+The AI Chat feature provides a unified conversational interface for all user interactions. The system routes each message through a LangGraph `ConversationGraph` that manages phase state via PostgreSQL checkpointer, invokes the appropriate phase subgraph, and persists conversation history.
 
 ## Key Features
 
-- **Phase-based routing**: Automatic service selection based on `profileStatus`
-- **Conversation context**: Persistent dialogue history with sliding window
-- **Multi-language support**: Responds in user's preferred language
-- **Incremental state management**: Progress saved after each interaction
+- **Phase-based routing via LangGraph**: Router node determines phase from checkpointer state or user profile
+- **Tool calling**: LLM calls typed tools for side effects (save profile, save plan, log sets); responds with natural text
+- **Conversation history**: Persistent dialogue history with sliding window (20 turns) via `conversation_turns` table
+- **Multi-language support**: LLM responds in user's preferred language
+- **Atomic state**: Phase, activeSessionId persisted atomically by PostgreSQL checkpointer
 
 ## Technical Architecture
 
@@ -25,103 +26,115 @@ The AI Chat feature provides a unified conversational interface for all user int
 ```
 POST /api/chat
   ↓
-Validate API key & user
+Validate API key & user existence
   ↓
-Check profileStatus
+graph.invoke({ userMessage, userId }, { configurable: { thread_id: userId, userId } })
   ↓
-├─ profileStatus === 'registration'
-│    ↓
-│    Load conversation context (userId, 'registration')
-│    ↓
-│    Get messages for prompt (sliding window: 20 turns)
-│    ↓
-│    RegistrationService.processUserMessage(user, message, history)
-│    ↓
-│    Update user profile if fields extracted
-│    ↓
-│    Check if registration complete
-│    ↓
-│    Save conversation turn
-│    ↓
-│    Phase transition if complete: 'registration' → 'chat'
-│    ↓
-│    Return {content, timestamp, registrationComplete?}
-│
-└─ profileStatus === 'complete'
-     ↓
-     Load conversation context (userId, 'chat')
-     ↓
-     Get messages for prompt (sliding window: 20 turns)
-     ↓
-     ChatService.processMessage(user, message, history)
-     ↓
-     Save conversation turn
-     ↓
-     Return {content, timestamp}
+ConversationGraph (PostgresSaver checkpointer)
+  ↓
+[Router Node]
+  ├─ Loads user from DB → state.user
+  ├─ Resets requestedTransition to null
+  ├─ New thread: phase = profileStatus === 'registration' ? 'registration' : 'chat'
+  ├─ Existing thread: phase from checkpointer
+  └─ Auto-closes timed-out sessions
+  ↓
+[Phase Subgraph] (one of 5, selected by state.phase)
+  ├─ agentNode: history from conversation_turns + user message + state.messages
+  │              → model.bindTools(phaseTools).invoke()
+  ├─ ToolNode: executes tool calls (Zod-validated), returns ToolMessages
+  ├─ (loop until no tool_calls)
+  └─ extractNode: reads pendingTransition ref, re-fetches user, sets responseMessage
+  ↓
+[Persist Node]
+  └─ appendTurn(userId, phase, userMessage, responseMessage) → conversation_turns
+  ↓
+[Transition Guard] (conditional edge)
+  └─ Validates requestedTransition; if blocked → END
+  ↓
+[Cleanup Node] (if transition allowed)
+  └─ Side effects (session state changes) + phase update
+  ↓
+Return { data: { content: responseMessage, timestamp } }
 ```
 
 ### Components
 
-#### Route Handler
+#### Route Handler (thin proxy)
 **Location**: `apps/server/src/app/routes/chat.routes.ts`
 
-**Responsibilities**:
+**Responsibilities** (~20 lines):
 - Validate request (API key, userId, message)
-- Load user profile
-- Determine phase based on `profileStatus`
-- Load conversation context for appropriate phase
-- Route to RegistrationService or ChatService
-- Handle phase transitions
-- Persist conversation turns
-- Return formatted response
+- Verify user exists in DB
+- Call `graph.invoke()` with `{ userMessage, userId }` + configurable
+- Return `{ data: { content, timestamp } }`
 
-#### RegistrationService
-**Location**: `apps/server/src/domain/user/services/registration.service.ts`
-
-**Used when**: `profileStatus === 'registration'`
+#### ConversationGraph
+**Location**: `apps/server/src/infra/ai/graph/conversation.graph.ts`
 
 **Responsibilities**:
-- Extract profile data from messages
-- Validate and normalize fields
-- Track registration progress
-- Determine when registration is complete
-- Return structured data + user-facing response
+- Wire all nodes and subgraphs into a `StateGraph`
+- Configure PostgresSaver checkpointer
+- Export compiled graph
 
-#### ChatService
-**Location**: `apps/server/src/domain/user/services/chat.service.ts`
-
-**Used when**: `profileStatus === 'complete'`
+#### Router Node
+**Location**: `apps/server/src/infra/ai/graph/nodes/router.node.ts`
 
 **Responsibilities**:
-- Generate personalized fitness coaching responses
-- Use user profile for context-aware coaching
-- Provide training advice, motivation, Q&A
+- Load user from DB
+- Determine phase for new threads from `profileStatus`
+- Auto-close timed-out training sessions
+- Reset stale `requestedTransition`
 
-#### ConversationContextService
+#### Phase Subgraphs (implemented: registration, chat, plan_creation)
+**Location**: `apps/server/src/infra/ai/graph/subgraphs/`
+
+Each subgraph: `agentNode → toolsCondition → ToolNode → agentNode → extractNode`
+
+#### Phase Nodes (system prompt builders)
+**Location**: `apps/server/src/infra/ai/graph/nodes/`
+- `registration.node.ts` — `buildRegistrationSystemPrompt()`
+- `chat.node.ts` — `buildChatSystemPrompt()`
+- `plan-creation.node.ts` — `buildPlanCreationSystemPrompt()` (loads exercises with muscle groups)
+
+#### Phase Tools
+**Location**: `apps/server/src/infra/ai/graph/tools/`
+- `registration.tools.ts` — `save_profile_fields`, `complete_registration`
+- `chat.tools.ts` — `update_profile`, `request_transition`
+- `plan-creation.tools.ts` — `save_workout_plan`, `request_transition`
+
+#### Persist Node
+**Location**: `apps/server/src/infra/ai/graph/nodes/persist.node.ts`
+
+**Responsibilities**:
+- `appendTurn()` to `conversation_turns` table after each response
+- Failure does not stop the response (try/catch + log)
+
+#### ConversationContextService (simplified)
 **Location**: `apps/server/src/infra/conversation/drizzle-conversation-context.service.ts`
 
-**Responsibilities**:
-- Load conversation history by (userId, phase)
-- Build message history with sliding window
-- Persist conversation turns (user + assistant)
-- Manage phase transitions with system notes
+**2 methods only**:
+- `appendTurn(userId, phase, userMessage, assistantResponse)` — called by persist node
+- `getMessagesForPrompt(userId, phase, options?)` — called by each agentNode to load history
 
 ## Conversation Context Integration
 
 ### Phase Management
 
-| Phase | profileStatus | Service | Context Identity |
-|-------|--------------|---------|------------------|
-| Registration | 'registration' | RegistrationService | (userId, 'registration') |
-| Chat | 'complete' | ChatService | (userId, 'chat') |
-| Future: Training | 'training' | TrainingService | (userId, 'training') |
+| Phase | Implemented | State Source | History Source |
+|-------|-------------|-------------|----------------|
+| Registration | ✅ | PostgresSaver checkpointer | `conversation_turns` |
+| Chat | ✅ | PostgresSaver checkpointer | `conversation_turns` |
+| Plan Creation | ✅ | PostgresSaver checkpointer | `conversation_turns` |
+| Session Planning | 🔄 pending Step 6 | PostgresSaver checkpointer | `conversation_turns` |
+| Training | 🔄 pending Step 7 | PostgresSaver checkpointer | `conversation_turns` |
 
 ### Sliding Window
 
-- **Default**: 20 most recent turns loaded for LLM context
-- **Configurable**: Can be adjusted via `getMessagesForPrompt(ctx, {limit: N})`
+- **Default**: 20 most recent turns loaded per agentNode invocation
+- **Implementation**: `SELECT ... ORDER BY created_at DESC LIMIT 20` reversed to chronological order
 - **Token budget**: Prevents context overflow
-- **Chronological**: Oldest to newest ordering
+- **Chronological**: Oldest to newest in LLM prompt
 
 ### Turn Storage
 
@@ -132,8 +145,8 @@ Check profileStatus
 CREATE TABLE conversation_turns (
   id UUID PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  phase TEXT NOT NULL,  -- 'registration' | 'chat' | 'training'
-  role TEXT NOT NULL,    -- 'user' | 'assistant' | 'system'
+  phase TEXT NOT NULL,  -- 'registration' | 'chat' | 'plan_creation' | 'session_planning' | 'training'
+  role TEXT NOT NULL,    -- 'user' | 'assistant'
   content TEXT NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -142,13 +155,20 @@ CREATE INDEX idx_conversation_turns_user_phase_created
   ON conversation_turns(user_id, phase, created_at);
 ```
 
+**LangGraph checkpointer table** (managed by PostgresSaver, not manually):
+```
+langgraph_checkpoints — stores serialized graph state per thread_id
+```
+
 ### Phase Transitions
 
-When registration completes:
-1. Set `profileStatus = 'complete'`
-2. Save final conversation turn in 'registration' context
-3. Create system note: "User completed registration, transitioning to chat phase"
-4. Subsequent messages use 'chat' context
+Phase transitions are managed by `requestedTransition` in graph state:
+1. Tool sets `pendingTransition.value = { toPhase: 'chat' }` (closure ref)
+2. `extractNode` reads ref and sets `state.requestedTransition`
+3. `persist.node.ts` writes conversation turn under **current phase** (before transition)
+4. Transition guard validates the requested transition (12 rules)
+5. If allowed: cleanup node updates `state.phase`, handles session side effects
+6. PostgresSaver persists new `state.phase` — next invocation starts in new phase
 
 ## API Specification
 
@@ -341,47 +361,28 @@ ChatRoute
 ## Testing
 
 ### Unit Tests
-**Location**: `apps/server/src/domain/user/services/__tests__/chat.service.unit.test.ts`
+**Location**: `apps/server/src/infra/ai/graph/`
 
 **Coverage**:
-- Chat response generation
-- System prompt construction
-- Multi-language support
+- `nodes/__tests__/chat.node.unit.test.ts` — `buildChatSystemPrompt()`
+- `tools/__tests__/chat.tools.unit.test.ts` — `update_profile`, `request_transition` (11 tests)
+- `tools/__tests__/registration.tools.unit.test.ts` — `save_profile_fields`, `complete_registration` (13 tests)
+- `tools/__tests__/plan-creation.tools.unit.test.ts` — `save_workout_plan`, `request_transition`
+- `subgraphs/__tests__/registration.subgraph.unit.test.ts` — Bug 2 regression (ToolMessages in prompt)
+- `subgraphs/__tests__/plan-creation.subgraph.unit.test.ts` — subgraph state output
+- `__tests__/conversation.graph.unit.test.ts` — graph routing, model factory mocked
 
 ### Integration Tests
-**Location**: `tests/integration/chat.integration.test.ts`
+**Location**: `apps/server/tests/integration/api/chat.routes.integration.test.ts`
 
 **Coverage**:
-- Full chat flow with context
-- Phase-based routing
-- Registration to chat transition
-- Conversation persistence
-- Error scenarios (404, 401, 403, 500)
+- Thin proxy: `graph.invoke` called with correct args
+- User not found → 404
+- Invalid API key → 401/403
+- Error scenarios (500)
 
-### Test Scenarios
-```typescript
-describe('FEAT-0003: AI Chat', () => {
-  test('S-0008: Valid chat request returns response', async () => {
-    // Test happy path
-  });
-
-  test('S-0040: Registration phase routes to RegistrationService', async () => {
-    // Test phase routing
-  });
-
-  test('S-0041: Chat phase routes to ChatService', async () => {
-    // Test phase routing
-  });
-
-  test('S-0043: Conversation context loaded with sliding window', async () => {
-    // Test context loading
-  });
-
-  test('S-0044: Conversation turns persisted after interaction', async () => {
-    // Test persistence
-  });
-});
-```
+### Test Count
+275 passing (as of Step 5 completion)
 
 ## Performance Considerations
 
@@ -415,15 +416,16 @@ describe('FEAT-0003: AI Chat', () => {
 
 ## Migration Notes
 
-### What Changed in v2.0
-- ✅ Added conversation context integration
-- ✅ Implemented phase-based routing
-- ✅ Added sliding window for context management
-- ✅ Implemented phase transitions with system notes
-- ✅ Separated RegistrationService and ChatService
-- ✅ Added `registrationComplete` field to response
+### What Changed in v3.0 (LangGraph Architecture)
+- ✅ `RegistrationService` → `registration.subgraph.ts` + `registration.tools.ts`
+- ✅ `ChatService` → `chat.subgraph.ts` + `chat.tools.ts`
+- ✅ Plan creation → `plan-creation.subgraph.ts` + `plan-creation.tools.ts`
+- ✅ `LLMService` (JSON mode wrapper) → `model.factory.ts` + tool calling
+- ✅ Phase state via `[PHASE_ENDED]` markers → PostgresSaver checkpointer
+- ✅ `IConversationContextService` (7 methods) → 2-method interface
+- ✅ `chat.routes.ts` (180-line orchestration) → ~20-line thin proxy
+- ✅ `registrationComplete` field in response removed (no longer needed — phase tracked by checkpointer)
 
 ### Backward Compatibility
-- API contract unchanged (except optional `registrationComplete` field)
-- All existing clients continue to work
-- New field ignored by clients that don't expect it
+- `POST /api/chat` request contract unchanged: `{ userId, message }`
+- `POST /api/chat` response: `{ data: { content, timestamp } }` — `registrationComplete` field removed in v3.0

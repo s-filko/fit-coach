@@ -87,30 +87,30 @@ security:
   - `registrationComplete` (boolean, optional): Present only during registration phase. `true` when user completes registration and transitions to chat phase.
 
   Notes:
-  - **All conversational phases (registration, chat, training) interact exclusively through this `/api/chat` endpoint.**
-  - **No separate REST endpoints for training operations** - all training interactions (session recommendations, logging sets, completing workouts) happen through conversational AI via `/api/chat`.
-  - Server automatically determines the phase based on user's `profileStatus` and conversation context.
-  - **Phase routing**:
-    - `profileStatus === 'registration'` → RegistrationService (collects profile data via JSON mode LLM)
-    - `profileStatus === 'complete'` + no active training session → ChatService (general fitness coaching conversation)
-    - `profileStatus === 'complete'` + active training session → ChatService with TrainingService integration (workout guidance)
-  - **Phase transitions**: 
-    - Registration complete: server updates `profileStatus` to `'complete'`, persists conversation turn with system note, returns `registrationComplete: true`
-    - Training start: conversation phase switches to `'training'`, active session ID stored in conversation context
-    - Training complete: conversation phase switches back to `'chat'`, active session cleared from context
-  - **Training flow** (all via `/api/chat`):
-    1. User: "What should I do today?" → AI calls `TrainingService.getNextSessionRecommendation()` → returns personalized workout
-    2. User: "Let's start" → AI calls `TrainingService.startSession()` → creates session in DB, stores sessionId in context
-    3. User: "Did 10 reps with 50kg" → AI parses message, calls `TrainingService.logSet()` → saves to DB
-    4. User: "Finished" → AI calls `TrainingService.completeSession()` → updates session status, clears context
+  - **All conversational phases (registration, chat, plan_creation, session_planning, training) interact exclusively through this `/api/chat` endpoint.**
+  - **No separate REST endpoints for training operations** — all interactions happen through conversational AI via `/api/chat`.
+  - Server routes through `ConversationGraph` (LangGraph StateGraph with PostgreSQL checkpointer). Phase state is persisted atomically per user.
+  - **Phase routing** (handled by Router Node inside the graph):
+    - New user: `profileStatus === 'registration'` → registration subgraph (collects profile data via tool calling)
+    - `profileStatus === 'complete'`, no plan/session → chat subgraph (general fitness coaching)
+    - User requests plan → plan_creation subgraph (LLM calls `save_workout_plan` tool)
+    - Plan saved → session_planning subgraph (LLM calls `start_training_session` tool) [pending Step 6]
+    - Session started → training subgraph (LLM calls `log_set`, `next_exercise`, etc.) [pending Step 7]
+  - **Phase transitions**: LLM calls phase transition tools (`request_transition`, `complete_registration`, `finish_training`, etc.). Transition is validated by guard node and persisted by PostgresSaver.
+  - **Tool calling**: LLM responds with natural text; uses typed tools for all DB side effects (save profile, save plan, log sets, complete session). No JSON mode parsing.
+  - **Training flow** (all via `/api/chat`, pending Steps 6–7):
+    1. User requests workout → chat LLM calls `request_transition` → phase → session_planning
+    2. Session planning → LLM calls `start_training_session` tool → session created in DB → phase → training
+    3. User: "Did 10 reps with 50kg" → LLM calls `log_set` tool → set saved to DB
+    4. User: "Finished" → LLM calls `finish_training` tool → session completed → phase → chat
 
 ### Notes
-- x-feature: FEAT-0009 ✅ IMPLEMENTED
+- x-feature: FEAT-0009 ✅ IMPLEMENTED (simplified to 2-method interface)
 - Response time may vary based on AI model load (typically < 3 seconds)
-- Server maintains conversation context per (userId, phase) internally [BR-CONV-001]; context is persisted in `conversation_turns` table.
+- Conversation history persisted in `conversation_turns` table per (userId, phase) [BR-CONV-001].
 - **Sliding window** (default 20 turns) limits token usage [BR-CONV-003].
-- **Phase transitions** create system notes and reset context [BR-CONV-005].
-- Conversation history is loaded before each LLM call and appended after response generation [BR-CONV-001][BR-CONV-002].
+- **Phase state** persisted in `langgraph_checkpoints` table by PostgresSaver (not in `conversation_turns`).
+- Conversation history is loaded before each LLM call by agentNode and appended after response by persist.node [BR-CONV-001][BR-CONV-002].
 
 ## 4. Debug Endpoints (Development Only)
 

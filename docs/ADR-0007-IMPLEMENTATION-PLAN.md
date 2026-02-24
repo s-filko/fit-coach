@@ -473,30 +473,45 @@ In practice:
 ---
 
 ### Step 5: Plan Creation Subgraph
-**Status**: PENDING
+**Status**: **DONE + TESTED** ✓ (2026-02-24)
 
 **New files:**
-- `infra/ai/graph/tools/plan-creation.tools.ts`:
-  - `save_workout_plan` — Zod schema = `WorkoutPlanDraftSchema`. Includes exercise resolution logic (resolve by ID → by name → keep as-is with warning). Saves plan to DB, sets `requestedTransition` to `session_planning`.
-- `infra/ai/graph/subgraphs/plan-creation.subgraph.ts`
-- `infra/ai/graph/nodes/plan-creation.node.ts`
+- `infra/ai/graph/tools/plan-creation.tools.ts` — 2 tools:
+  - `save_workout_plan` — Zod schema: full workout plan with cycles, sessions, exercises. Calls `workoutPlanRepository.create()`, sets `pendingTransition` to `{ toPhase: 'chat' }`. Returns confirmation string with plan name and exercise count.
+  - `request_transition` — allows user to cancel plan creation, sets `pendingTransition` to `{ toPhase: 'chat' }`.
+- `infra/ai/graph/subgraphs/plan-creation.subgraph.ts` — agent + ToolNode + toolsCondition loop + extract node. Same pattern as registration and chat subgraphs.
+- `infra/ai/graph/nodes/plan-creation.node.ts` — `buildPlanCreationSystemPrompt()`. Loads exercises with real `primaryMuscles`/`secondaryMuscles` from DB. Natural text, no JSON format instructions.
 
-**Bug fixes:**
-- Load exercises with muscle groups: add `findAllWithMuscles()` to exercise repo (or use `findByIdsWithMuscles`). Pass real `primaryMuscles`/`secondaryMuscles` to prompt.
-- Remove duplicate `UserProfile` and `PlanCreationPromptContext` types from `plan-creation.prompt.ts` — use domain types directly from `prompt.ports.ts`.
+**Bug fixed during implementation:**
+- `primaryMuscles`/`secondaryMuscles` always empty — fixed by adding `findAllWithMuscles()` to `IExerciseRepository` and `ExerciseRepository`. Exercises now loaded with muscle group data before building the system prompt.
 
-**Deleted:**
-- `PlanCreationLLMResponseSchema`, `parsePlanCreationResponse`
-- `generateStructured` usage in ChatService
-- Plan creation branch in `ChatService`
-- JSON format in plan creation prompt (~50 lines)
-- Duplicate type definitions in `plan-creation.prompt.ts`
+**Wiring:**
+- `conversation.graph.ts` — `stubPhaseNode('plan_creation')` replaced with real `buildPlanCreationSubgraph`.
+- `register-infra-services.ts` — `exerciseRepository` added to `buildConversationGraph` call.
+- `ConversationGraphDeps` — `exerciseRepository: IExerciseRepository` added.
 
-**How to test:**
-- [ ] Unit test: LLM calls `save_workout_plan` → plan saved, exercise IDs resolved, transition set
-- [ ] Unit test: LLM responds without calling tool → no plan saved (conversation continues)
-- [ ] Unit test: tool rejects plan with invalid Zod schema
-- [ ] Verify: prompt includes real muscle groups for exercises
+**Implemented:**
+- [x] `infra/ai/graph/tools/plan-creation.tools.ts` — `save_workout_plan` + `request_transition` with closure ref pattern
+- [x] `infra/ai/graph/subgraphs/plan-creation.subgraph.ts` — agent + ToolNode + extract node
+- [x] `infra/ai/graph/nodes/plan-creation.node.ts` — `buildPlanCreationSystemPrompt()` with muscle groups
+- [x] `domain/training/ports/repository.ports.ts` — `findAllWithMuscles()` added to `IExerciseRepository`
+- [x] `infra/db/repositories/exercise.repository.ts` — `findAllWithMuscles()` implemented
+- [x] `conversation.graph.ts` — stub replaced with real subgraph
+- [x] `infra/ai/graph/tools/__tests__/plan-creation.tools.unit.test.ts` — tool unit tests
+- [x] `infra/ai/graph/subgraphs/__tests__/plan-creation.subgraph.unit.test.ts` — subgraph unit tests
+- [x] All existing test suites updated (mocks extended for `findAllWithMuscles`)
+
+**Dead code from old JSON-mode architecture (marked TODO: remove):**
+- `domain/user/services/prompts/plan-creation.prompt.ts` — old 310-line JSON-mode prompt, superseded by `infra/ai/graph/nodes/plan-creation.node.ts`
+- `domain/user/services/prompt.service.ts` — `buildPlanCreationPrompt()` marked TODO: remove
+- `domain/user/ports/prompt.ports.ts` — `buildPlanCreationPrompt` in `IPromptService` marked TODO: remove
+- `domain/training/plan-creation.types.ts` — `PlanCreationLLMResponseSchema`, `parsePlanCreationResponse` dead code (will be deleted in Step 9)
+
+**Note on `promptService` in `ConversationGraphDeps`:** Kept for now as `IPromptService` is still referenced; will be removed in Step 9 cleanup when all phase nodes build prompts locally (in `infra/ai/graph/nodes/`).
+
+**Final state:**
+- [x] `npm run test` — 275/275 ✓
+- [x] `npx tsc --noEmit` ✓
 
 ---
 

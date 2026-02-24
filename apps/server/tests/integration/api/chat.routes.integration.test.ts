@@ -88,7 +88,7 @@ describe('POST /api/chat – integration', () => {
 
       expect(stubGraph.invoke).toHaveBeenCalledWith(
         { userId: 'user-123', userMessage: 'Hello coach!' },
-        { configurable: { thread_id: 'user-123' } },
+        { configurable: { thread_id: 'user-123', userId: 'user-123' }, recursionLimit: 25 },
       );
     });
 

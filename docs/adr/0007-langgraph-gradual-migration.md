@@ -1,6 +1,6 @@
 # ADR-0007: Gradual Migration to LangGraph for Conversation Phase Management
 
-## Status: ACCEPTED (Implementation Started)
+## Status: IN PROGRESS (Architecture Rework — Steps 0–5 complete)
 
 ## Implementation Plan: `docs/ADR-0007-IMPLEMENTATION-PLAN.md`
 
@@ -49,112 +49,80 @@ The current code works (except for the chat-phase bug). A full rewrite of 2000+ 
 
 ## Decision
 
-### Strategy: Gradual Migration with Coexistence
+### Strategy: Full Architecture Rework (revised from original Gradual Migration plan)
 
-Migrate one phase at a time from the current manual orchestration to a LangGraph StateGraph. During migration, old and new code coexist. A routing layer decides which path to use based on which phases have been migrated.
+**Note (2026-02-23):** The original "Gradual Migration with Coexistence" strategy was abandoned during implementation. Live testing revealed that keeping MVP infrastructure (LLMService, JSON mode parsing, ConversationContextService with phase detection) was incompatible with LangGraph's native patterns and caused fundamental bugs (infinite recursion, stale phase state). A full rework was the correct decision. See `docs/ADR-0007-IMPLEMENTATION-PLAN.md` — Architecture Rework section for the full rationale.
 
 ### Architecture Overview
 
 ```
-Current:
-  POST /api/chat → chat.routes.ts → [phase resolution] → ChatService.processMessage()
-                                                            ├── buildSystemPrompt()
-                                                            ├── LLMService.generateWithSystemPrompt()
-                                                            ├── parseXxxResponse()
-                                                            ├── side effects (DB writes)
-                                                            └── executePhaseTransition()
-
-Target (after full migration):
-  POST /api/chat → chat.routes.ts → ConversationGraph.invoke({ messages, userId })
-                                      ├── [router node] → determines phase from state
-                                      ├── [phase node]  → calls LLM with phase-specific prompt
-                                      ├── [tools]       → training intents, profile updates
-                                      ├── [transition]  → conditional edges validate & route
-                                      └── state persisted via checkpointer
-
-During migration (hybrid):
-  POST /api/chat → chat.routes.ts → if phase in migratedPhases
-                                        → ConversationGraph.invoke(...)
-                                     else
-                                        → ChatService.processMessage(...)  (old path)
+Target (current implementation in progress):
+  POST /api/chat → chat.routes.ts (~20 lines, thin proxy)
+                 → graph.invoke({ userMessage, userId }, { configurable: { thread_id: userId, userId } })
+                 → ConversationGraph (compiled with PostgresSaver checkpointer)
+                     ├── [Router Node]
+                     │     Loads user from DB → state.user
+                     │     Determines phase (new: from profileStatus; existing: from checkpointer)
+                     │     Auto-closes timed-out sessions
+                     │     Resets requestedTransition to null (prevents stale transitions)
+                     │
+                     ├── [Phase Subgraph] (one of 5, routed by state.phase)
+                     │     Each is a compiled subgraph with tool-calling loop:
+                     │     ┌─ [agentNode] model.bindTools(tools).invoke(messages)
+                     │     │    ↓ has tool_calls? (toolsCondition)
+                     │     ├─ [toolNode] ToolNode executes, returns ToolMessage
+                     │     │    ↓ always → back to agentNode
+                     │     └─ agentNode (no tool_calls) → extractNode → END subgraph
+                     │     Returns: responseMessage, requestedTransition, freshUser
+                     │
+                     ├── [Persist Node]
+                     │     Writes user+assistant turn to conversation_turns
+                     │
+                     ├── [Transition Guard] (conditional edge)
+                     │     Validates requestedTransition against 12 rules
+                     │
+                     ├── [Cleanup Node] (if transition allowed)
+                     │     Side effects: session state changes, phase update
+                     │
+                     └── State saved to PostgreSQL checkpointer
+                         (phase, activeSessionId, user)
 ```
 
-### Key Design Decisions
+### Key Design Decisions (as actually implemented)
 
-#### 1. ConversationContextService: COEXIST (option b)
+#### 1. State Management: PostgreSQL Checkpointer
 
-Do NOT replace `IConversationContextService` with LangGraph checkpointing. Instead:
+LangGraph `PostgresSaver` (from `@langchain/langgraph-checkpoint-postgres`) is the single source of truth for conversation phase state. No custom phase detection — checkpointer stores `phase`, `activeSessionId`, `requestedTransition` atomically per `thread_id` (= `userId`).
 
-- LangGraph graph state holds **messages for the current invocation only**
-- `ConversationContextService` remains the **source of truth** for persistent conversation history
-- Graph nodes read history from `ConversationContextService` at the start
-- Graph nodes write turns back via `ConversationContextService` at the end
-- This preserves all existing DB data, sliding window logic, and phase-specific contexts
+#### 2. LLMService: REPLACED
 
-Rationale: replacing the conversation storage is the highest-risk change with the least payoff. The current DB-backed system works. LangGraph checkpointing can be adopted later if needed.
+`LLMService` wrapper was removed. All graph nodes use `ChatOpenAI` directly via a shared `model.factory.ts` (`getModel()`). Logging via LangChain callback system. `generateWithSystemPrompt()` was incompatible with tool calling (returned `string` instead of `AIMessage` with `tool_calls`).
 
-#### 2. LLMService: KEEP as-is
+#### 3. Zod Parsers: REPLACED by Tool Calling
 
-Do NOT replace `LLMService` with direct `ChatOpenAI` usage in graph nodes. Instead:
+All JSON-mode parsers (`parseLLMResponse`, `parsePlanCreationResponse`, `parseTrainingResponse`, etc.) are eliminated. LLM calls typed tools for side effects and responds with natural text. Zod schemas on tool inputs provide native validation.
 
-- Graph nodes call `LLMService.generateWithSystemPrompt()` just like current code
-- This preserves: debug logging, metrics, JSON mode validation, error handling
-- LLMService is injected into graph node functions via closure
+#### 4. PromptService: DEPRECATED (phase by phase)
 
-Rationale: LLMService has 315 lines of battle-tested debug infrastructure. Bypassing it would lose observability.
+`PromptService` methods for migrated phases are superseded by `buildXxxSystemPrompt()` functions co-located with each graph node (`infra/ai/graph/nodes/`). `PromptService` will be fully removed in Step 9 cleanup.
 
-#### 3. Zod Parsers: REUSE
+#### 5. ConversationContextService: SIMPLIFIED to 2 methods
 
-All existing Zod schemas and parse functions stay:
+Original 7-method `IConversationContextService` (with phase detection via `[PHASE_ENDED]` markers) replaced by 2-method interface: `appendTurn()` + `getMessagesForPrompt()`. History storage for prompts only — state management moved to checkpointer.
 
-- `parseLLMResponse()` — for chat phase
-- `parsePlanCreationResponse()` — for plan_creation phase  
-- `parseSessionPlanningResponse()` — for session_planning phase
-- `parseTrainingResponse()` — for training phase
-- `registrationLLMResponseSchema` — for registration phase
+#### 6. Tools: CLOSURE REF PATTERN for State Updates
 
-Graph nodes will call these parsers on LLM output, same as today.
+Tools are closures created per-subgraph invocation. They write state updates to mutable refs (`pendingTransition: { value: T | null }`). `extractNode` reads and clears refs to propagate changes to parent graph. `Command` pattern with `resume` was attempted but rejected — it breaks `ToolNode`'s ToolMessage flow causing infinite recursion.
 
-#### 4. PromptService: REUSE
+#### 7. Phase-specific Tools
 
-`PromptService` methods (`buildChatSystemPrompt`, `buildPlanCreationPrompt`, etc.) are reused in graph nodes. No changes needed.
-
-#### 5. Validation Logic: MOVE to Edge Guards
-
-`validatePhaseTransition()` (100+ lines in `ChatService`) becomes guard functions on conditional edges. The business rules stay identical; only the location changes.
-
-#### 6. Training Intents: CONVERT to LangChain Tools
-
-The 7 training intent types become LangChain `tool()` definitions:
-
-```typescript
-// Example: log_set tool
-const logSetTool = tool(
-  async ({ reps, weight, rpe }) => {
-    await trainingService.logSet(exerciseId, { setNumber, setData: { type: 'strength', reps, weight }, rpe });
-    return 'Set logged successfully';
-  },
-  { name: 'log_set', description: 'Log a completed set', schema: LogSetIntentSchema }
-);
-```
-
-This is the biggest architectural improvement: instead of LLM outputting JSON intents that code parses and routes, the LLM directly calls tools. This eliminates the intent parsing layer entirely for training.
-
-#### 7. Profile Update: NEW Inline Tool
-
-A new `update_profile` tool allows profile changes from any phase:
-
-```typescript
-const updateProfileTool = tool(
-  async ({ field, value }) => {
-    await userService.updateProfileData(userId, { [field]: value });
-    return `Profile updated: ${field} = ${value}`;
-  },
-  { name: 'update_profile', description: 'Update user profile field', schema: UpdateProfileSchema }
-);
-```
-
-This solves the "change gender from chat phase" problem without phase transitions.
+| Phase | Tools |
+|-------|-------|
+| Registration | `save_profile_fields`, `complete_registration` |
+| Chat | `update_profile`, `request_transition` |
+| Plan Creation | `save_workout_plan`, `request_transition` |
+| Session Planning | `start_training_session`, `cancel_planning` |
+| Training | `log_set`, `next_exercise`, `skip_exercise`, `finish_training` |
 
 ---
 
@@ -468,31 +436,29 @@ graph.addConditionalEdges('checkTransition', async (state) => {
 
 ---
 
-## What NOT to Do (Critical Guardrails)
+## Guardrails (Current Architecture)
 
-1. **DO NOT replace ConversationContextService with LangGraph checkpointing.** The DB-backed conversation system works. Coexist.
+**Note:** The original 12 guardrails from the gradual migration plan are superseded by the Architecture Rework. The following rules apply to the current implementation.
 
-2. **DO NOT bypass LLMService.** All LLM calls go through `LLMService.generateWithSystemPrompt()` to preserve debug logging and metrics.
+1. **DO NOT change the API contract.** `POST /api/chat` request/response format stays identical. Migration is internal only.
 
-3. **DO NOT change the API contract.** `POST /api/chat` request/response format stays identical. The migration is internal only.
+2. **DO NOT use Command pattern with `resume` in tools.** Tools must return plain strings. State updates go through closure refs (`pendingTransition`, `pendingActiveSessionId`). `Command({ resume })` breaks `ToolNode`'s ToolMessage flow → infinite recursion.
 
-4. **DO NOT migrate all phases at once.** One phase per step. Test after each step. The hybrid routing (graph for migrated phases, ChatService for others) must work at every intermediate state.
+3. **DO NOT call LLM directly** (bypassing `getModel()` factory). All LLM calls go through the shared model factory to ensure consistent configuration.
 
-5. **DO NOT delete old code until the phase is fully tested in the graph.** Keep both paths working during migration.
+4. **DO NOT store phase/session state outside the checkpointer.** No in-memory Maps, no `[PHASE_ENDED]` markers, no DB fields for phase tracking. Checkpointer is the single source of truth.
 
-6. **DO NOT change Zod schemas.** Reuse existing `parsePlanCreationResponse`, `parseSessionPlanningResponse`, etc. The validated types are correct.
+5. **DO NOT implement logic in agentNode that belongs in a tool.** Any action with a DB side effect must be a tool. Natural conversation (no side effects) needs no tool — LLM responds with text.
 
-7. **DO NOT restructure folders** beyond adding new files in `infra/ai/` and `domain/conversation/`. Follow existing module layout from `ARCHITECTURE.md`.
+6. **DO NOT bypass `IConversationContextService.appendTurn()`.** All conversation turns must be persisted via `persist.node.ts` using the 2-method interface. This is for analytics and prompt history.
 
-8. **DO NOT introduce new error types.** Use existing `AppError` and error patterns.
+7. **DO NOT restructure folders.** Follow existing module layout. Graph files live in `infra/ai/graph/{nodes,tools,subgraphs,guards}/`.
 
-9. **DO NOT change DI patterns.** Graph is registered via the same DI container. Nodes access services via closure injection, not new DI mechanisms.
+8. **DO NOT introduce new error types.** Use existing `AppError`. Tool errors return error strings — ToolNode handles them, LLM self-corrects.
 
-10. **DO NOT skip Phase 0 (bug fixes).** Both Step 0a (chat JSON bug) and Step 0b (training intent naming mismatch) must be fixed before any LangGraph work. They validate that all phases produce correct structured responses.
+9. **DO NOT add business logic to `chat.routes.ts`.** Route is a thin proxy (~20 lines). All orchestration is inside the graph.
 
-11. **DO NOT add tool-related methods to the `LLMService` port.** Tool binding (`model.bindTools()`) and tool invocation happen inside LangGraph graph nodes, not through `LLMService`. The `LLMService` interface stays as-is: `generateWithSystemPrompt()` and `generateStructured()` only. Adding `generateWithTools()` to the port would couple the domain interface to tool-calling semantics that belong in the graph layer.
-
-12. **DO NOT implement tool calling outside of LangGraph.** Standalone tool calling (e.g., adding tools support directly in `ChatService` or `LLMService`) creates a parallel architecture that must be immediately refactored when LangGraph migration reaches Phase 5. All tool-related work waits for the graph infrastructure (Phases 1-4).
+10. **DO NOT skip writing tests.** Each tool needs a unit test. Each subgraph needs a unit test. Tests must go RED first when reproducing a bug, then GREEN after the fix.
 
 ---
 
@@ -602,8 +568,9 @@ For quick orientation when starting a new session:
 
 *Author: AI Assistant*
 *Decision Date: 2026-02-11*
-*Updated: 2026-02-15 — Added Step 0b (training intent naming mismatch fix), Phase 5 tool result loop details, guardrails #11-#12*
+*Updated: 2026-02-15 — Added Step 0b fix, Phase 5 tool result loop details*
 *Updated: 2026-02-22 — Status changed to Implementation Started, linked implementation plan*
+*Updated: 2026-02-24 — Architecture Rework: replaced gradual migration strategy with full rework; updated Design Decisions and Guardrails to reflect actual implementation (Steps 0–5 complete: skeleton, chat subgraph, registration subgraph, plan creation subgraph)*
 *Supersedes: Custom FSM discussion (not implemented)*
 *Related: ADR-0001 (AI integration), ADR-0005 (Conversation context)*
 *Implementation Plan: `docs/ADR-0007-IMPLEMENTATION-PLAN.md`*

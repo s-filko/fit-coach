@@ -1,6 +1,6 @@
 FEAT-0008 Training Plan Generation
 
-x-status: Proposed
+x-status: Partially Implemented (plan_creation phase done; session_planning pending Step 6)
 
 User Story
 
@@ -23,7 +23,14 @@ Acceptance Criteria
 	• AC-0205: Planning conversations remain within `/api/chat`; no alternate endpoints manage plan lifecycle.
 
 API Mapping
-	• POST /api/chat (profileStatus='planning' or replan from 'active') → PlanningFlowService.handleMessage → WorkoutPlanService.*
+	• POST /api/chat (phase='plan_creation') → ConversationGraph → plan-creation.subgraph → save_workout_plan tool → IWorkoutPlanRepository.create()
+	• Phase entered via: `request_transition` tool from chat phase (LLM calls tool when user requests a plan)
+
+Implementation Notes
+	• plan_creation subgraph: `infra/ai/graph/subgraphs/plan-creation.subgraph.ts`
+	• System prompt: `infra/ai/graph/nodes/plan-creation.node.ts` — loads exercises with real primaryMuscles/secondaryMuscles
+	• save_workout_plan tool: `infra/ai/graph/tools/plan-creation.tools.ts` — Zod-validated full plan schema, calls workoutPlanRepository.create()
+	• Transition: save_workout_plan sets pendingTransition → chat (to be updated to session_planning in Step 6)
 
 Domain Rules Reference
 	• BR-USER-026, BR-USER-027, BR-USER-028 from docs/domain/user.spec.md

@@ -124,4 +124,18 @@ export class ExerciseRepository implements IExerciseRepository {
       .from(exercises)
       .where(sql`${sql.join(conditions, sql` AND `)}`) as Promise<Exercise[]>;
   }
+
+  async findAllWithMuscles(filters?: {
+    category?: string;
+    equipment?: string;
+    energyCost?: string;
+    complexity?: string;
+  }): Promise<ExerciseWithMuscles[]> {
+    const exercisesList = await this.findAll(filters);
+    if (exercisesList.length === 0) {
+      return [];
+    }
+    const ids = exercisesList.map((e) => e.id);
+    return this.findByIdsWithMuscles(ids);
+  }
 }

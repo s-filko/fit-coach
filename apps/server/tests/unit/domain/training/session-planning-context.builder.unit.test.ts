@@ -40,6 +40,7 @@ describe('SessionPlanningContextBuilder', () => {
     findByMuscleGroup: jest.fn(),
     search: jest.fn(),
     findAll: jest.fn(),
+    findAllWithMuscles: jest.fn(),
   });
 
   describe('buildContext', () => {

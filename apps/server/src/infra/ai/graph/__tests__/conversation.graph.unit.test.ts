@@ -1,8 +1,8 @@
 import { AIMessage } from '@langchain/core/messages';
 import { MemorySaver } from '@langchain/langgraph';
 
-import type { ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
-import type { IPromptService, IUserService } from '@domain/user/ports';
+import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
+import type { IUserService } from '@domain/user/ports';
 
 import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
 
@@ -20,7 +20,6 @@ jest.mock('@infra/ai/model.factory', () => ({
 }));
 
 const makeDeps = (): ConversationGraphDeps => ({
-  promptService: {} as unknown as IPromptService,
   trainingService: {
     getTrainingHistory: jest.fn().mockResolvedValue([]),
     getSessionDetails: jest.fn().mockResolvedValue(null),
@@ -28,7 +27,18 @@ const makeDeps = (): ConversationGraphDeps => ({
   } as unknown as ITrainingService,
   workoutPlanRepo: {
     findActiveByUserId: jest.fn().mockResolvedValue(null),
+    create: jest.fn(),
   } as unknown as IWorkoutPlanRepository,
+  exerciseRepository: {
+    findAllWithMuscles: jest.fn().mockResolvedValue([]),
+    findAll: jest.fn().mockResolvedValue([]),
+    findByIdsWithMuscles: jest.fn().mockResolvedValue([]),
+    findById: jest.fn(),
+    findByIdWithMuscles: jest.fn(),
+    findByIds: jest.fn(),
+    findByMuscleGroup: jest.fn(),
+    search: jest.fn(),
+  } as unknown as IExerciseRepository,
   userService: {
     getUser: jest.fn().mockResolvedValue({
       id: 'u1',
@@ -96,5 +106,68 @@ describe('ConversationGraph', () => {
     // Registration subgraph is now real (mocked LLM) — check it returned a response
     expect(result.responseMessage).toBeTruthy();
     expect(result.phase).toBe('registration');
+  });
+
+  describe('session timeout routing', () => {
+    it('session ended: router uses Command(goto=persist) — LLM subgraph is NOT invoked', async () => {
+      const deps = makeDeps();
+
+      // Simulate: user is in training phase with an active session that has already ended
+      (deps.trainingService.getSessionDetails as jest.Mock).mockResolvedValue({
+        id: 'session-1',
+        status: 'completed',
+        lastActivityAt: new Date(),
+        updatedAt: new Date(),
+        createdAt: new Date(),
+      });
+
+      const graph = buildConversationGraph(deps);
+
+      // Start the thread in training phase with an active session
+      const result = await graph.invoke(
+        { userId: 'u1', phase: 'training', userMessage: 'hi', activeSessionId: 'session-1' },
+        { configurable: { thread_id: 'u1-timeout-ended' } },
+      );
+
+      // Router should have bypassed the training subgraph via Command(goto='persist')
+      // and returned the timeout message directly — NOT the mocked LLM response
+      expect(result.responseMessage).toContain('completed');
+      expect(result.phase).toBe('chat');
+      expect(result.activeSessionId).toBeNull();
+
+      // LLM was NOT invoked — the mocked LLM returns 'Mocked LLM response'
+      // so if responseMessage equals that, the subgraph ran (which is the bug)
+      expect(result.responseMessage).not.toBe('Mocked LLM response');
+    });
+
+    it('session idle timeout: router completes session, uses Command(goto=persist)', async () => {
+      const deps = makeDeps();
+
+      // Session is in_progress but idle for > 2 hours
+      const twoHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      (deps.trainingService.getSessionDetails as jest.Mock).mockResolvedValue({
+        id: 'session-2',
+        status: 'in_progress',
+        lastActivityAt: twoHoursAgo,
+        updatedAt: twoHoursAgo,
+        createdAt: twoHoursAgo,
+      });
+
+      const graph = buildConversationGraph(deps);
+
+      const result = await graph.invoke(
+        { userId: 'u1', phase: 'training', userMessage: 'hello', activeSessionId: 'session-2' },
+        { configurable: { thread_id: 'u1-timeout-idle' } },
+      );
+
+      // completeSession should have been called
+      expect(deps.trainingService.completeSession).toHaveBeenCalledWith('session-2');
+
+      // Router bypassed the training subgraph
+      expect(result.responseMessage).toContain('inactivity');
+      expect(result.phase).toBe('chat');
+      expect(result.activeSessionId).toBeNull();
+      expect(result.responseMessage).not.toBe('Mocked LLM response');
+    });
   });
 });

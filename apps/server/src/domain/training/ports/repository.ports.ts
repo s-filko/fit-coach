@@ -47,6 +47,12 @@ export interface IExerciseRepository {
     energyCost?: string;
     complexity?: string;
   }): Promise<Exercise[]>;
+  findAllWithMuscles(filters?: {
+    category?: string;
+    equipment?: string;
+    energyCost?: string;
+    complexity?: string;
+  }): Promise<ExerciseWithMuscles[]>;
 }
 
 export interface IWorkoutSessionRepository {

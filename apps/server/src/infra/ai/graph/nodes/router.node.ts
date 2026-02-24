@@ -1,3 +1,5 @@
+import { Command } from '@langchain/langgraph';
+
 import { ConversationStateType } from '@domain/conversation/graph/conversation.state';
 import type { ITrainingService } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
@@ -18,7 +20,7 @@ export function buildRouterNode(deps: RouterNodeDeps) {
 
   return async function routerNode(
     state: ConversationStateType,
-  ): Promise<Partial<ConversationStateType>> {
+  ): Promise<Partial<ConversationStateType> | Command> {
     const { userId } = state;
 
     // Always reset requestedTransition to prevent stale blocked transitions
@@ -31,7 +33,9 @@ export function buildRouterNode(deps: RouterNodeDeps) {
     }
     updates.user = user;
 
-    // Handle training phase — check if active session has timed out
+    // Handle training phase — check if active session has ended or timed out.
+    // Use Command(goto='persist') to skip the training subgraph entirely and jump
+    // directly to persist, which is the native LangGraph way to short-circuit routing.
     if (state.phase === 'training' && state.activeSessionId) {
       const session = await trainingService.getSessionDetails(state.activeSessionId).catch(() => null);
 
@@ -41,10 +45,15 @@ export function buildRouterNode(deps: RouterNodeDeps) {
 
       if (isSessionEnded) {
         log.info({ userId, sessionId: state.activeSessionId, status: session?.status }, 'Session ended — returning to chat');
-        updates.phase = 'chat';
-        updates.activeSessionId = null;
-        updates.responseMessage = 'Your training session has been completed. Ready for a new workout? 💪';
-        return updates;
+        return new Command({
+          goto: 'persist',
+          update: {
+            ...updates,
+            phase: 'chat',
+            activeSessionId: null,
+            responseMessage: 'Your training session has been completed. Ready for a new workout?',
+          },
+        });
       }
 
       // Check idle timeout
@@ -53,10 +62,15 @@ export function buildRouterNode(deps: RouterNodeDeps) {
       if (idleMs > SESSION_TIMEOUT_MS) {
         log.info({ userId, sessionId: state.activeSessionId, idleMs }, 'Session idle timeout — auto-completing');
         await trainingService.completeSession(state.activeSessionId).catch(() => null);
-        updates.phase = 'chat';
-        updates.activeSessionId = null;
-        updates.responseMessage = 'Your training session was automatically completed due to inactivity. Ready for a new workout? 💪';
-        return updates;
+        return new Command({
+          goto: 'persist',
+          update: {
+            ...updates,
+            phase: 'chat',
+            activeSessionId: null,
+            responseMessage: 'Your training session was automatically completed due to inactivity. Ready for a new workout?',
+          },
+        });
       }
     }
 

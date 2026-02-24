@@ -1,22 +1,23 @@
-import { END, START, StateGraph } from '@langchain/langgraph';
+import { Command, END, START, StateGraph } from '@langchain/langgraph';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 
 import { ConversationState, ConversationStateType } from '@domain/conversation/graph/conversation.state';
 import { IConversationContextService } from '@domain/conversation/ports';
-import type { ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
-import type { IPromptService, IUserService } from '@domain/user/ports';
+import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
+import type { IUserService } from '@domain/user/ports';
 
 import { buildPersistNode } from './nodes/persist.node';
 import { buildRouterNode } from './nodes/router.node';
 import { buildChatSubgraph } from './subgraphs/chat.subgraph';
+import { buildPlanCreationSubgraph } from './subgraphs/plan-creation.subgraph';
 import { buildRegistrationSubgraph } from './subgraphs/registration.subgraph';
 
 export const CONVERSATION_GRAPH_TOKEN = Symbol('ConversationGraph');
 
 export interface ConversationGraphDeps {
-  promptService: IPromptService;
   trainingService: ITrainingService;
   workoutPlanRepo: IWorkoutPlanRepository;
+  exerciseRepository: IExerciseRepository;
   userService: IUserService;
   contextService: IConversationContextService;
   checkpointer: PostgresSaver;
@@ -28,14 +29,6 @@ function stubPhaseNode(phase: string) {
   });
 }
 
-function routeToPhase(state: ConversationStateType): string {
-  // Router returned early response (e.g. session timeout) — skip phase, go to persist
-  if (state.responseMessage && !state.userMessage) {
-    return 'persist';
-  }
-  return state.phase;
-}
-
 function routeAfterPersist(state: ConversationStateType): string {
   if (state.requestedTransition) {
     return 'transition_guard';
@@ -45,12 +38,18 @@ function routeAfterPersist(state: ConversationStateType): string {
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function buildGraph(deps: ConversationGraphDeps) {
-  const { userService, trainingService, contextService, workoutPlanRepo, checkpointer } = deps;
+  const { userService, trainingService, contextService, workoutPlanRepo, exerciseRepository, checkpointer } = deps;
 
   const routerNode = buildRouterNode({ userService, trainingService });
   const persistNode = buildPersistNode(contextService);
   const chatSubgraph = buildChatSubgraph({ userService, workoutPlanRepo, contextService });
   const registrationSubgraph = buildRegistrationSubgraph({ userService, contextService });
+  const planCreationSubgraph = buildPlanCreationSubgraph({
+    userService,
+    contextService,
+    exerciseRepository,
+    workoutPlanRepository: workoutPlanRepo,
+  });
 
   const transitionGuardNode = async(state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
     const { requestedTransition, phase } = state;
@@ -87,11 +86,26 @@ function buildGraph(deps: ConversationGraphDeps) {
     return updates;
   };
 
+  // Router always returns Command(goto=phase) so LangGraph uses it for routing.
+  // 'ends' declares all possible destinations — required when node returns Command.
+  const routerEnds = ['registration', 'chat', 'plan_creation', 'session_planning', 'training', 'persist'];
+
+  // Wrap routerNode to always emit a Command so that routing is driven by the node
+  // itself rather than a separate conditional edge.  Timeout paths use goto='persist'
+  // to short-circuit subgraph execution; all other paths use goto=state.phase.
+  const routerNodeWithCommand = async (state: ConversationStateType) => {
+    const result = await routerNode(state);
+    if (result instanceof Command) {
+      return result;
+    }
+    return new Command({ goto: result.phase ?? state.phase, update: result });
+  };
+
   const graph = new StateGraph(ConversationState)
-    .addNode('router', routerNode)
+    .addNode('router', routerNodeWithCommand, { ends: routerEnds })
     .addNode('registration', registrationSubgraph)
     .addNode('chat', chatSubgraph)
-    .addNode('plan_creation', stubPhaseNode('plan_creation'))
+    .addNode('plan_creation', planCreationSubgraph)
     .addNode('session_planning', stubPhaseNode('session_planning'))
     .addNode('training', stubPhaseNode('training'))
     .addNode('persist', persistNode)
@@ -99,14 +113,6 @@ function buildGraph(deps: ConversationGraphDeps) {
     .addNode('cleanup', cleanupNode)
 
     .addEdge(START, 'router')
-    .addConditionalEdges('router', routeToPhase, {
-      registration: 'registration',
-      chat: 'chat',
-      plan_creation: 'plan_creation',
-      session_planning: 'session_planning',
-      training: 'training',
-      persist: 'persist',
-    })
     .addEdge('registration', 'persist')
     .addEdge('chat', 'persist')
     .addEdge('plan_creation', 'persist')
