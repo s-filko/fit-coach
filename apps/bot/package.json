@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "serve-bot": "mkdir -p ../../logs && npx tsx index.ts 2>&1 | tee ../../logs/bot.log",
-    "dev": "mkdir -p ../../logs && npx tsx index.ts 2>&1 | tee ../../logs/bot.log"
+    "serve-bot": "mkdir -p ../../logs && npx tsx index.ts 2>&1 | tee -a ../../logs/bot.log",
+    "dev": "mkdir -p ../../logs && npx tsx index.ts 2>&1 | tee -a ../../logs/bot.log"
   },
   "keywords": [],
   "author": "",

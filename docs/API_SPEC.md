@@ -84,7 +84,6 @@ security:
   Response fields:
   - `content` (string): AI-generated response message
   - `timestamp` (string): ISO 8601 timestamp of the response
-  - `registrationComplete` (boolean, optional): Present only during registration phase. `true` when user completes registration and transitions to chat phase.
 
   Notes:
   - **All conversational phases (registration, chat, plan_creation, session_planning, training) interact exclusively through this `/api/chat` endpoint.**
@@ -94,11 +93,11 @@ security:
     - New user: `profileStatus === 'registration'` → registration subgraph (collects profile data via tool calling)
     - `profileStatus === 'complete'`, no plan/session → chat subgraph (general fitness coaching)
     - User requests plan → plan_creation subgraph (LLM calls `save_workout_plan` tool)
-    - Plan saved → session_planning subgraph (LLM calls `start_training_session` tool) [pending Step 6]
+    - Plan saved → session_planning subgraph (LLM calls `start_training_session` tool) ✓
     - Session started → training subgraph (LLM calls `log_set`, `next_exercise`, etc.) [pending Step 7]
   - **Phase transitions**: LLM calls phase transition tools (`request_transition`, `complete_registration`, `finish_training`, etc.). Transition is validated by guard node and persisted by PostgresSaver.
   - **Tool calling**: LLM responds with natural text; uses typed tools for all DB side effects (save profile, save plan, log sets, complete session). No JSON mode parsing.
-  - **Training flow** (all via `/api/chat`, pending Steps 6–7):
+  - **Training flow** (all via `/api/chat`, pending Step 7 — training subgraph):
     1. User requests workout → chat LLM calls `request_transition` → phase → session_planning
     2. Session planning → LLM calls `start_training_session` tool → session created in DB → phase → training
     3. User: "Did 10 reps with 50kg" → LLM calls `log_set` tool → set saved to DB

@@ -1,6 +1,6 @@
 # ADR-0007: Gradual Migration to LangGraph for Conversation Phase Management
 
-## Status: IN PROGRESS (Architecture Rework — Steps 0–5 complete)
+## Status: IN PROGRESS (Architecture Rework — Steps 0–6 complete)
 
 ## Implementation Plan: `docs/ADR-0007-IMPLEMENTATION-PLAN.md`
 
@@ -121,7 +121,7 @@ Tools are closures created per-subgraph invocation. They write state updates to 
 | Registration | `save_profile_fields`, `complete_registration` |
 | Chat | `update_profile`, `request_transition` |
 | Plan Creation | `save_workout_plan`, `request_transition` |
-| Session Planning | `start_training_session`, `cancel_planning` |
+| Session Planning | `start_training_session`, `request_transition` |
 | Training | `log_set`, `next_exercise`, `skip_exercise`, `finish_training` |
 
 ---

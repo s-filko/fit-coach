@@ -44,8 +44,9 @@ Implement a **passive always-on memory extraction layer** that listens to every 
 
 | Category | Description | Example (stored form) |
 |---|---|---|
-| `physical_constraint` | Body limitations, injuries, medical restrictions | "Cannot do barbell squats — lower back injury" |
-| `exercise_preference` | Preferred exercises, styles, variations | "Prefers alternating exercises per muscle group across sessions (e.g. pull-ups / lat pulldown)" |
+| `physical_constraint` | Body limitations, injuries, medical restrictions — **always respected, never overridden** | "Cannot do barbell squats — lower back injury" |
+| `exercise_preference` | Preferred exercises, styles, variations, personal names for equipment | "Prefers alternating exercises per muscle group across sessions (e.g. pull-ups / lat pulldown)"; "Calls the calf raise machine 'the blue machine'" |
+| `exercise_dislike` | Exercises or muscle groups the user dislikes — **use as motivation anchor, not avoidance** | "Dislikes leg day"; "Does not enjoy isolation exercises" |
 | `physiological_pattern` | Personal recovery, response patterns | "DOMS peaks day 2 after training, not day 1" |
 | `coaching_preference` | How the user wants to be coached | "Wants previous set history shown before starting each exercise in a session" |
 | `schedule_constraint` | Availability, training days, timing | "Can only train Mon/Wed/Fri, works late on Tuesdays" |
@@ -119,8 +120,9 @@ CREATE INDEX ON user_facts(user_id);
 // domain/user/ports/user-facts.ports.ts
 
 export type FactCategory =
-  | 'physical_constraint'
-  | 'exercise_preference'
+  | 'physical_constraint'   // hard constraint — never override
+  | 'exercise_preference'   // soft preference — apply when choice exists
+  | 'exercise_dislike'      // motivational cue — acknowledge, do not avoid
   | 'physiological_pattern'
   | 'coaching_preference'
   | 'schedule_constraint'
@@ -184,11 +186,37 @@ the full list has far better semantic understanding than any similarity metric.
 ```
 ## User Facts (permanent — always apply)
 - [physical_constraint] Cannot do barbell squats — lower back injury
+- [exercise_dislike] Dislikes leg day
+- [exercise_preference] Calls the calf raise machine "the blue machine"
 - [coaching_preference] Wants previous set history shown before each exercise
 - [physiological_pattern] DOMS peaks day 2, not day 1
 ```
 
 Injected after the phase-specific system prompt instructions, before conversation history.
+
+### Fact Category Behavior Rules (injected into all phase prompts)
+
+```
+## User Facts — How to apply them
+
+[physical_constraint] — HARD RULE. Never suggest, never include in plan, never override.
+  Always substitute with a safe alternative. No exceptions.
+
+[exercise_dislike] — MOTIVATIONAL CUE. Do NOT avoid the session or exercise.
+  Instead, acknowledge the dislike and use it to engage and motivate.
+  Example: "I know you're not a fan of leg day — but this is exactly what drives
+  the hormonal response that grows your shoulders too. Let's make it count."
+  Never silently skip a planned session because of a dislike fact.
+
+[exercise_preference] — SOFT PREFERENCE. Apply when there is a choice between
+  equal alternatives. Do not over-index — vary exercises for stimulus diversity
+  while respecting the preference.
+  If the user has given personal names to equipment — always use those names.
+
+[coaching_preference] — Apply to coaching style in all interactions.
+
+[physiological_pattern] — Apply to recovery estimates and session timing advice.
+```
 
 ### Temporary Session Context
 

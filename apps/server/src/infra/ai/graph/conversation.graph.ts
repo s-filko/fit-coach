@@ -3,7 +3,7 @@ import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 
 import { ConversationState, ConversationStateType } from '@domain/conversation/graph/conversation.state';
 import { IConversationContextService } from '@domain/conversation/ports';
-import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
+import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository, IWorkoutSessionRepository } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 
 import { buildPersistNode } from './nodes/persist.node';
@@ -11,12 +11,14 @@ import { buildRouterNode } from './nodes/router.node';
 import { buildChatSubgraph } from './subgraphs/chat.subgraph';
 import { buildPlanCreationSubgraph } from './subgraphs/plan-creation.subgraph';
 import { buildRegistrationSubgraph } from './subgraphs/registration.subgraph';
+import { buildSessionPlanningSubgraph } from './subgraphs/session-planning.subgraph';
 
 export const CONVERSATION_GRAPH_TOKEN = Symbol('ConversationGraph');
 
 export interface ConversationGraphDeps {
   trainingService: ITrainingService;
   workoutPlanRepo: IWorkoutPlanRepository;
+  workoutSessionRepo: IWorkoutSessionRepository;
   exerciseRepository: IExerciseRepository;
   userService: IUserService;
   contextService: IConversationContextService;
@@ -38,17 +40,28 @@ function routeAfterPersist(state: ConversationStateType): string {
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function buildGraph(deps: ConversationGraphDeps) {
-  const { userService, trainingService, contextService, workoutPlanRepo, exerciseRepository, checkpointer } = deps;
+  const {
+    userService, trainingService, contextService,
+    workoutPlanRepo, workoutSessionRepo, exerciseRepository, checkpointer,
+  } = deps;
 
   const routerNode = buildRouterNode({ userService, trainingService });
   const persistNode = buildPersistNode(contextService);
-  const chatSubgraph = buildChatSubgraph({ userService, workoutPlanRepo, contextService });
+  const chatSubgraph = buildChatSubgraph({ userService, workoutPlanRepo, workoutSessionRepo, contextService });
   const registrationSubgraph = buildRegistrationSubgraph({ userService, contextService });
   const planCreationSubgraph = buildPlanCreationSubgraph({
     userService,
     contextService,
     exerciseRepository,
     workoutPlanRepository: workoutPlanRepo,
+  });
+  const sessionPlanningSubgraph = buildSessionPlanningSubgraph({
+    userService,
+    contextService,
+    exerciseRepository,
+    workoutPlanRepository: workoutPlanRepo,
+    workoutSessionRepository: workoutSessionRepo,
+    trainingService,
   });
 
   const transitionGuardNode = async(state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
@@ -78,7 +91,17 @@ function buildGraph(deps: ConversationGraphDeps) {
   const cleanupNode = async(state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
     const updates: Partial<ConversationStateType> = {};
 
-    if (state.activeSessionId && state.phase !== 'training') {
+    if (state.activeSessionId && state.phase === 'training') {
+      // Transition session_planning → training: activate the planning session
+      const session = await trainingService.getSessionDetails(state.activeSessionId).catch(() => null);
+      if (session?.status === 'planning') {
+        await workoutSessionRepo.update(state.activeSessionId, {
+          status: 'in_progress',
+          startedAt: new Date(),
+        }).catch(() => null);
+      }
+    } else if (state.activeSessionId && state.phase !== 'training') {
+      // Leaving training phase: complete any lingering active session
       await trainingService.completeSession(state.activeSessionId).catch(() => null);
       updates.activeSessionId = null;
     }
@@ -106,7 +129,7 @@ function buildGraph(deps: ConversationGraphDeps) {
     .addNode('registration', registrationSubgraph)
     .addNode('chat', chatSubgraph)
     .addNode('plan_creation', planCreationSubgraph)
-    .addNode('session_planning', stubPhaseNode('session_planning'))
+    .addNode('session_planning', sessionPlanningSubgraph)
     .addNode('training', stubPhaseNode('training'))
     .addNode('persist', persistNode)
     .addNode('transition_guard', transitionGuardNode)

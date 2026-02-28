@@ -68,19 +68,22 @@ apps/server/src/
       graph/
         conversation.graph.ts   # Main StateGraph: router→phase→persist→guard→cleanup
         nodes/
-          router.node.ts        # Phase determination, session timeout, user loading
-          persist.node.ts       # appendTurn to conversation_turns
-          chat.node.ts          # buildChatSystemPrompt()
-          registration.node.ts  # buildRegistrationSystemPrompt()
-          plan-creation.node.ts # buildPlanCreationSystemPrompt() with muscle groups
+          router.node.ts             # Phase determination, session timeout, user loading
+          persist.node.ts            # appendTurn to conversation_turns
+          chat.node.ts               # buildChatSystemPrompt()
+          registration.node.ts       # buildRegistrationSystemPrompt()
+          plan-creation.node.ts      # buildPlanCreationSystemPrompt() with muscle groups
+          session-planning.node.ts   # buildSessionPlanningSystemPrompt() with context + exercises
         subgraphs/
-          chat.subgraph.ts         # agent + ToolNode + extractNode
-          registration.subgraph.ts # agent + ToolNode + extractNode
-          plan-creation.subgraph.ts# agent + ToolNode + extractNode
+          chat.subgraph.ts              # agent + ToolNode + extractNode
+          registration.subgraph.ts      # agent + ToolNode + extractNode
+          plan-creation.subgraph.ts     # agent + ToolNode + extractNode
+          session-planning.subgraph.ts  # agent + ToolNode + extractNode + activeSessionId propagation
         tools/
-          chat.tools.ts            # update_profile, request_transition
-          registration.tools.ts    # save_profile_fields, complete_registration
-          plan-creation.tools.ts   # save_workout_plan, request_transition
+          chat.tools.ts                 # update_profile, request_transition
+          registration.tools.ts         # save_profile_fields, complete_registration
+          plan-creation.tools.ts        # save_workout_plan, request_transition
+          session-planning.tools.ts     # start_training_session, request_transition
     conversation/
       drizzle-conversation-context.service.ts   # IConversationContextService impl (2-method, DB-backed)
     di/
@@ -295,7 +298,7 @@ Each phase subgraph runs a tool-calling loop:
 - **ADR-0004**: User profile and context storage model
 - **ADR-0005**: Conversation context with sliding window and phase transitions
 - **ADR-0006**: Session plan storage
-- **ADR-0007**: LangGraph migration — IN PROGRESS (Steps 0–5 done; see `docs/ADR-0007-IMPLEMENTATION-PLAN.md`)
+- **ADR-0007**: LangGraph migration — IN PROGRESS (Steps 0–6 done; see `docs/ADR-0007-IMPLEMENTATION-PLAN.md`)
 - **ADR-0008**: Centralized logging with Grafana/Loki
 - **ADR-0009**: User long-term memory — passive fact extraction per conversation turn, persistent `user_facts` table, injected into all phase prompts (PROPOSED)
 
@@ -333,7 +336,7 @@ Change control:
 - ✅ OpenAPI documentation generation with Swagger UI
 - ✅ Security plugin with API key authentication for `/api/*` routes
 - ✅ LangGraph graph fully operational: router + persist nodes, checkpointer, chat/registration/plan_creation subgraphs
-- 🔄 LangGraph migration IN PROGRESS: session_planning, training, transition guards pending (Steps 6–9)
+- 🔄 LangGraph migration IN PROGRESS: training subgraph, full transition guard conditions pending (Steps 7–9); session_planning implemented (Step 6 ✓)
 
 ---
 This document defines architectural contract for the backend. Changes to this contract must be explicit, reviewed, and documented via ADR.

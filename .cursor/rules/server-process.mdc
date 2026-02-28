@@ -1,0 +1,33 @@
+---
+description: Rules for working with the running dev server process
+alwaysApply: true
+---
+
+# Dev Server Process Rules
+
+The user runs the dev server manually (`npm run dev` in `apps/server`).
+It writes logs to `logs/server.log` and `logs/bot.log` via `tee`.
+
+## NEVER do this
+
+- NEVER run `npm run dev`, `npm run start`, or any command that starts a server process
+- NEVER run `tsx src/index.ts` or any variant that boots the Fastify or bot process
+- NEVER start a second server instance — it will corrupt logs via `tee` stream collision
+- NEVER write to `logs/server.log` or `logs/bot.log` directly (no `>`, `>>`, pipes, redirects)
+- NEVER pipe anything into these log files from any shell command
+- NEVER run `tail -f` or any streaming/watch command on log files
+- NEVER run commands whose stdout or stderr could be redirected into log files
+
+## For e2e / manual testing
+
+- Use `curl` against the already-running server (port 3000)
+- Check if server is running first: `lsof -i :3000`
+
+## Reading logs
+
+Logs are ndjson (pino). Read with a one-shot command only:
+```bash
+tail -n 100 logs/server.log | cat
+```
+- NEVER use `tail -f`, `watch`, or any streaming variant
+- NEVER redirect the output of a read command back into the log file

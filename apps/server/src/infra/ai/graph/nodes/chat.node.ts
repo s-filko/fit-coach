@@ -51,8 +51,8 @@ export function buildChatSystemPrompt(
     : 'Respond in the same language the user writes in.';
 
   const planRule = hasActivePlan
-    ? 'Guide user to plan a session when they want to train.'
-    : 'Suggest creating a workout plan if user wants to train.';
+    ? 'When the user wants to train/start a workout/plan today\'s session, IMMEDIATELY call request_transition({ toPhase: "session_planning" }). Do NOT give workout advice directly from chat.'
+    : 'Suggest creating a workout plan if user wants to train. Call request_transition({ toPhase: "plan_creation" }) when user agrees.';
 
   return `Your name is FitCoach. You are a professional fitness coach and personal trainer.
 You are NOT an AI assistant — you are a real fitness coach. Always stay in character.
@@ -75,7 +75,9 @@ RULES:
 
 TOOLS (use when needed):
 - update_profile: when user wants to change age, gender, weight, height, fitness level, or goal.
-- request_transition: when user explicitly wants to create a workout plan or start a session.
+- request_transition toPhase="plan_creation": when user explicitly wants to create a workout plan.
+- request_transition toPhase="session_planning": when user wants to train today / start a session / plan a workout.
+  ALWAYS use this tool — never describe workouts yourself from chat.
 
 Respond with natural text only. Do NOT include JSON in your response.`;
 }

@@ -31,7 +31,6 @@ export async function registerInfraServices(
 
   // Training domain
   const { TrainingService } = await import('@domain/training/services/training.service');
-  const { SessionPlanningContextBuilder } = await import('@domain/training/services/session-planning-context.builder');
   const { ExerciseRepository } = await import('@infra/db/repositories/exercise.repository');
   const { WorkoutPlanRepository } = await import('@infra/db/repositories/workout-plan.repository');
   const { WorkoutSessionRepository } = await import('@infra/db/repositories/workout-session.repository');
@@ -87,13 +86,6 @@ export async function registerInfraServices(
       ),
   );
 
-  // Session planning context builder (retained for plan_creation/session_planning phases)
-  new SessionPlanningContextBuilder(
-    container.get(WORKOUT_PLAN_REPOSITORY_TOKEN),
-    container.get(WORKOUT_SESSION_REPOSITORY_TOKEN),
-    container.get(EXERCISE_REPOSITORY_TOKEN),
-  );
-
   // PostgreSQL checkpointer for LangGraph state persistence
   const { PostgresSaver } = await import('@langchain/langgraph-checkpoint-postgres');
   const { loadConfig } = await import('@config/index');
@@ -106,6 +98,7 @@ export async function registerInfraServices(
   container.register(CONVERSATION_GRAPH_TOKEN, buildConversationGraph({
     trainingService: container.get(TRAINING_SERVICE_TOKEN),
     workoutPlanRepo: container.get(WORKOUT_PLAN_REPOSITORY_TOKEN),
+    workoutSessionRepo: container.get(WORKOUT_SESSION_REPOSITORY_TOKEN),
     exerciseRepository: container.get(EXERCISE_REPOSITORY_TOKEN),
     userService: container.get(USER_SERVICE_TOKEN),
     contextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN),

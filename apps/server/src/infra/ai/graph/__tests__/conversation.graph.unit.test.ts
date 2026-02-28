@@ -1,7 +1,7 @@
 import { AIMessage } from '@langchain/core/messages';
 import { MemorySaver } from '@langchain/langgraph';
 
-import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
+import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository, IWorkoutSessionRepository } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 
 import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
@@ -24,11 +24,33 @@ const makeDeps = (): ConversationGraphDeps => ({
     getTrainingHistory: jest.fn().mockResolvedValue([]),
     getSessionDetails: jest.fn().mockResolvedValue(null),
     completeSession: jest.fn().mockResolvedValue({}),
+    startSession: jest.fn().mockResolvedValue({ id: 'session-1' }),
+    getNextSessionRecommendation: jest.fn(),
+    addExerciseToSession: jest.fn(),
+    logSet: jest.fn(),
+    skipSession: jest.fn(),
+    startNextExercise: jest.fn(),
+    skipCurrentExercise: jest.fn(),
+    completeCurrentExercise: jest.fn(),
+    ensureCurrentExercise: jest.fn(),
   } as unknown as ITrainingService,
   workoutPlanRepo: {
     findActiveByUserId: jest.fn().mockResolvedValue(null),
     create: jest.fn(),
   } as unknown as IWorkoutPlanRepository,
+  workoutSessionRepo: {
+    create: jest.fn(),
+    findById: jest.fn(),
+    findByIdWithDetails: jest.fn(),
+    findRecentByUserId: jest.fn().mockResolvedValue([]),
+    findRecentByUserIdWithDetails: jest.fn().mockResolvedValue([]),
+    findActiveByUserId: jest.fn().mockResolvedValue(null),
+    update: jest.fn().mockResolvedValue({}),
+    complete: jest.fn(),
+    updateActivity: jest.fn(),
+    findTimedOut: jest.fn().mockResolvedValue([]),
+    autoCloseTimedOut: jest.fn().mockResolvedValue(0),
+  } as unknown as IWorkoutSessionRepository,
   exerciseRepository: {
     findAllWithMuscles: jest.fn().mockResolvedValue([]),
     findAll: jest.fn().mockResolvedValue([]),
@@ -168,6 +190,22 @@ describe('ConversationGraph', () => {
       expect(result.phase).toBe('chat');
       expect(result.activeSessionId).toBeNull();
       expect(result.responseMessage).not.toBe('Mocked LLM response');
+    });
+  });
+
+  describe('session_planning subgraph routing', () => {
+    it('routes to session_planning subgraph and returns LLM response', async () => {
+      const deps = makeDeps();
+      const graph = buildConversationGraph(deps);
+
+      const result = await graph.invoke(
+        { userId: 'u1', phase: 'session_planning', userMessage: 'what should I do today?' },
+        { configurable: { thread_id: 'u1-sp-basic' } },
+      );
+
+      expect(result.responseMessage).toBe('Mocked LLM response');
+      expect(result.phase).toBe('session_planning');
+      expect(result.activeSessionId).toBeNull();
     });
   });
 });

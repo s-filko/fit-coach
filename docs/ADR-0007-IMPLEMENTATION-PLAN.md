@@ -2,7 +2,7 @@
 
 **ADR**: `docs/adr/0007-langgraph-gradual-migration.md`  
 **Status**: IN PROGRESS (Architecture Rework)  
-**Last Updated**: 2026-02-23
+**Last Updated**: 2026-02-28
 
 ## Related
 
@@ -118,7 +118,6 @@ Each graph node is built **based on existing logic**, but with active improvemen
 - `TrainingIntentSchema` + `executeTrainingIntent` switch → individual tools
 - Phase determination in `chat.routes.ts` → Router Node
 - `[PHASE_ENDED]` markers, `phaseContextStore`, `startNewPhase()` → checkpointer state
-- `SessionPlanningContextBuilder.formatForPrompt()` → dead code, never called
 
 ---
 
@@ -209,8 +208,8 @@ IConversationContextService:
 
 - **Registration** (2): `save_profile_fields`, `complete_registration`
 - **Chat** (2): `update_profile`, `request_transition`
-- **Plan Creation** (1): `save_workout_plan`
-- **Session Planning** (2): `start_training_session`, `cancel_planning`
+- **Plan Creation** (2): `save_workout_plan`, `request_transition`
+- **Session Planning** (2): `start_training_session`, `request_transition`
 - **Training** (4): `log_set`, `next_exercise`, `skip_exercise`, `finish_training`
 
 Total: 11 tools across 5 phases.
@@ -223,7 +222,7 @@ Total: 11 tools across 5 phases.
 - `request_transition` → `"Transition to plan_creation requested."`
 - `save_workout_plan` → `"Plan 'Upper/Lower 4-Day' saved with 4 templates, 24 exercises."`
 - `start_training_session` → `"Session created (ID: xxx, status: planning). 6 exercises, est. 60 min."`
-- `cancel_planning` → `"Planning cancelled."`
+- `request_transition` (session_planning) → `"Transition to chat requested."`
 - `log_set` → `"Set 3 logged: Bench Press — 8 reps @ 80kg (RPE 8)"`
 - `next_exercise` → `"Bench Press completed (3 sets). Next pending: Barbell Row"`
 - `skip_exercise` → `"Lat Pulldown skipped. Next pending: Dumbbell Curl"`
@@ -374,7 +373,7 @@ Tools inside a subgraph need to update the **parent graph state** (`requestedTra
 - **Closure ref** ✓ — tools close over a mutable `{ value: T | null }` ref created per subgraph instance. Tool writes to ref, `extractNode` reads it once and resets to null. Single-threaded (one subgraph invocation at a time per thread_id) — safe.
 
 **Decision: Closure ref pattern.** All tools return plain strings (proper ToolMessages). State updates propagate via:
-- `pendingTransition: { value: TransitionRequest | null }` — written by `request_transition`, `complete_registration`, `cancel_planning`, `finish_training`, `start_training_session`
+- `pendingTransition: { value: TransitionRequest | null }` — written by `request_transition`, `complete_registration`, `finish_training`, `start_training_session`
 - `state.user` freshness — `extractNode` re-fetches user from DB after tool loop to capture any profile changes
 - `activeSessionId` — `start_training_session` (Step 6) writes to a separate `pendingActiveSessionId` ref
 
@@ -516,25 +515,95 @@ In practice:
 ---
 
 ### Step 6: Session Planning Subgraph
-**Status**: PENDING
+**Status**: **DONE + TESTED** ✓ (2026-02-28)
 
-**New files:**
+Session planning is the iterative phase where the AI coach discusses the upcoming workout with the user: asks about mood, available time, intensity, builds a personalized session plan from the active workout plan, adjusts on feedback, and starts training only after explicit user approval.
+
+#### Architecture Decisions
+
+**1. Iterative UX preserved.** LLM discusses context (mood, time, soreness), proposes session plan as natural text, user reviews/corrects, LLM adjusts. `start_training_session` tool is called only when user explicitly approves the plan. Multi-turn conversation within one phase — same as plan-creation.
+
+**2. `cancel_planning` eliminated → `request_transition`.** Reuses the same `request_transition({ toPhase: 'chat' })` pattern from chat and plan-creation subgraphs. No need for a specialized cancel tool.
+
+**3. `start_training_session` combines session creation + transition.** Intentional exception to the "separate side-effect and transition tools" pattern. Creating a session and transitioning to training is an atomic operation — it makes no sense to create a session without immediately starting it. Tool writes both `pendingTransition` and `pendingActiveSessionId` closure refs.
+
+**4. `pendingActiveSessionId` closure ref.** New mutable ref alongside `pendingTransition`, created in subgraph, read and cleared by `extractNode`. Propagates `activeSessionId` from subgraph to parent `ConversationState`.
+
+**5. Cleanup node updated in this step.** Session status `'planning' → 'in_progress'` on `session_planning → training` transition. Without this, sessions remain in `planning` status forever (transition_guard changes `phase` to `training` but nobody updates session status). Cleanup node is the correct place per architecture: "side effects on transitions".
+
+**6. Prompt built locally in node.** New `buildSessionPlanningSystemPrompt()` in `session-planning.node.ts` — not reusing the old 315-line JSON-mode prompt from `domain/user/services/prompts/`. Old prompt marked dead code (TODO: remove in Step 9).
+
+#### New files
+
 - `infra/ai/graph/tools/session-planning.tools.ts`:
-  - `start_training_session` — Zod schema includes `SessionRecommendationSchema`. Creates session with `status: 'planning'` and `planId` from active workout plan. Sets `state.activeSessionId`, sets `requestedTransition` to `training`. LLM must include full session plan in tool call args (prompt instructs this).
-  - `cancel_planning` — sets `requestedTransition` to `chat`
-- `infra/ai/graph/subgraphs/session-planning.subgraph.ts`
-- `infra/ai/graph/nodes/session-planning.node.ts`
+  - `start_training_session` — Zod schema uses `SessionRecommendationSchema` (from `domain/training/session-planning.types.ts`). Resolves `planId` from `workoutPlanRepository.findActiveByUserId(userId)`. Calls `trainingService.startSession(userId, { planId, sessionKey, status: 'planning', sessionPlanJson })`. Writes `pendingActiveSessionId.value = session.id` and `pendingTransition.value = { toPhase: 'training' }`. Returns `"Session created (ID: xxx). N exercises, est. M min."`.
+  - `request_transition` — Zod: `{ toPhase: z.enum(['chat']), reason? }`. Writes `pendingTransition`. Returns confirmation string. Same pattern as chat/plan-creation.
+- `infra/ai/graph/subgraphs/session-planning.subgraph.ts` — agent + ToolNode + toolsCondition loop + extract node. Same structure as plan-creation subgraph. State includes `activeSessionId` field for propagation to parent.
+- `infra/ai/graph/nodes/session-planning.node.ts` — `buildSessionPlanningSystemPrompt(user, contextData, exercises)`. Context sections: client profile, active plan with session templates, recent training history with recovery timeline (muscle groups last trained N days ago), available exercises with IDs and muscle groups. Instructions: discuss context first, propose plan, modify on feedback, call `start_training_session` only after user approval. Natural text, no JSON format.
 
-**Deleted:**
-- `SessionPlanningLLMResponseSchema`, `parseSessionPlanningResponse`
-- `lastSessionPlan` caching in `phaseContextStore`
-- Session planning branch in `ChatService`
-- JSON format in session planning prompt (~50 lines)
+**Dependencies interface `SessionPlanningSubgraphDeps`:**
+- `userService: IUserService` — fresh user in extractNode
+- `contextService: IConversationContextService` — `getMessagesForPrompt(userId, 'session_planning')`
+- `exerciseRepository: IExerciseRepository` — `findAllWithMuscles()` for prompt
+- `workoutPlanRepository: IWorkoutPlanRepository` — `findActiveByUserId()` for planId in tool
+- `workoutSessionRepository: IWorkoutSessionRepository` — needed by `SessionPlanningContextBuilder`
+- `trainingService: ITrainingService` — `startSession()` in tool
 
-**How to test:**
-- [ ] Unit test: LLM calls `start_training_session` → session created with status 'planning', planId set, activeSessionId set
-- [ ] Unit test: LLM calls `cancel_planning` → transition to chat
-- [ ] Unit test: tool validates session plan against Zod schema, rejects invalid plans
+**Subgraph state:**
+```
+SessionPlanningSubgraphState = Annotation.Root({
+  ...MessagesAnnotation.spec,
+  userId, user, userMessage, responseMessage, requestedTransition,
+  activeSessionId   // propagated to parent ConversationState
+})
+```
+
+**Context loading in agentNode** (parallel):
+1. `contextService.getMessagesForPrompt(userId, 'session_planning')` — conversation history
+2. `contextBuilder.buildContext(userId)` — `activePlan`, `recentSessions`, `daysSinceLastWorkout`
+3. `exerciseRepository.findAllWithMuscles()` — exercises with muscle groups for prompt
+4. `userService.getUser(userId)` — fresh user profile
+
+`SessionPlanningContextBuilder` instantiated inside subgraph builder. Uses `workoutPlanRepo`, `workoutSessionRepo`.
+
+**Note:** `SessionPlanningContextBuilder.buildContext()` returns `activePlan`, `recentSessions`, `daysSinceLastWorkout`. Exercises loaded separately via `findAllWithMuscles()` in agentNode — same pattern as plan-creation subgraph.
+
+#### Modified files
+
+- `conversation.graph.ts`:
+  - Replace `stubPhaseNode('session_planning')` with `buildSessionPlanningSubgraph(deps)`
+  - Add `workoutSessionRepository: IWorkoutSessionRepository` to `ConversationGraphDeps`
+  - Update `cleanupNode`: when `activeSessionId` is set AND `phase === 'training'`, check session status — if `'planning'`, update to `{ status: 'in_progress', startedAt: new Date() }` via `workoutSessionRepository.update()`. This is a graph-level concern (transition side effect), not domain logic.
+- `main/register-infra-services.ts`:
+  - Pass `workoutSessionRepository` to `buildConversationGraph()`
+
+#### Dead code (marked TODO: remove in Step 9)
+
+- `domain/user/services/prompts/session-planning.prompt.ts` — old 315-line JSON-mode prompt, superseded by `infra/ai/graph/nodes/session-planning.node.ts`
+- `domain/user/services/prompt.service.ts` — `buildSessionPlanningPrompt()` method
+- `domain/user/ports/prompt.ports.ts` — `SessionPlanningPromptContext` interface, `buildSessionPlanningPrompt` in `IPromptService`
+- `SessionPlanningLLMResponseSchema`, `parseSessionPlanningResponse` from `domain/training/session-planning.types.ts` (keep `SessionRecommendationSchema`, `RecommendedExerciseSchema` — used by tools)
+
+#### How to test
+
+Tool unit tests (`session-planning.tools.unit.test.ts`):
+- [x] `start_training_session`: returns string (not Command), calls `trainingService.startSession()` with correct args (`{ planId, sessionKey, status: 'planning', sessionPlanJson }`)
+- [x] `start_training_session`: sets `pendingActiveSessionId.value` to created session ID
+- [x] `start_training_session`: sets `pendingTransition.value` to `{ toPhase: 'training' }`
+- [x] `start_training_session`: resolves `planId` from `workoutPlanRepository.findActiveByUserId(userId)`
+- [x] `start_training_session`: error path — `startSession` throws → returns error string, refs not set
+- [x] `request_transition`: sets `pendingTransition.value`, returns confirmation string
+
+Subgraph unit tests (`session-planning.subgraph.unit.test.ts`):
+- [x] `extractNode` reads and clears both `pendingTransition` and `pendingActiveSessionId`
+- [x] `extractNode` returns `activeSessionId` in output when `pendingActiveSessionId` was set
+- [x] LLM text response (no tool calls) → `responseMessage` set, no side effects
+- [x] LLM tool call → ToolNode → agent loop (verify in-flight messages included in next LLM call)
+
+Graph-level tests (additions to `conversation.graph.unit.test.ts`):
+- [x] Cleanup node: `activeSessionId` set + `phase === 'training'` + session `status: 'planning'` → session updated to `status: 'in_progress'`
+- [x] Cleanup node: `activeSessionId` set + `phase !== 'training'` → session completed (existing behavior preserved)
+- [x] Graph compiles with session_planning subgraph (no stub)
 
 ---
 
@@ -599,7 +668,7 @@ Allowed without conditions (5):
 Allowed with conditions (4):
 - `plan_creation → session_planning` — requires active workout plan
 - `chat → session_planning` — requires active workout plan
-- `session_planning → training` — requires `activeSessionId`, session exists, belongs to user, status='planning'. **Side effect:** cleanup node updates session to `status: 'in_progress'`, sets `startedAt`.
+- `session_planning → training` — requires `activeSessionId`, session exists, belongs to user, status='planning'. **Side effect:** cleanup node updates session to `status: 'in_progress'`, sets `startedAt`. *(Cleanup logic implemented in Step 6.)*
 - `training → chat` — **side effect:** cleanup node auto-completes active session if status is `in_progress`
 
 Blocked (3):
@@ -650,7 +719,6 @@ Passive memory extraction layer — listens to every conversation turn, extracts
 - `LLMService` class + `LLM_SERVICE_TOKEN`
 - All JSON parsers (5): `parseLLMResponse`, `parseTrainingResponse`, `parseSessionPlanningResponse`, `parsePlanCreationResponse`, `registrationLLMResponseSchema`
 - All Zod response schemas: `LLMConversationResponseSchema`, `LLMTrainingResponseSchema`, `SessionPlanningLLMResponseSchema`, `PlanCreationLLMResponseSchema`
-- `SessionPlanningContextBuilder.formatForPrompt()` — dead code, never called
 - Unused imports, dead tests, orphaned type files
 - Update DI registration (remove ChatService, RegistrationService, LLMService)
 
