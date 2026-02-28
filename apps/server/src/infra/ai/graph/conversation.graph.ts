@@ -12,6 +12,7 @@ import { buildChatSubgraph } from './subgraphs/chat.subgraph';
 import { buildPlanCreationSubgraph } from './subgraphs/plan-creation.subgraph';
 import { buildRegistrationSubgraph } from './subgraphs/registration.subgraph';
 import { buildSessionPlanningSubgraph } from './subgraphs/session-planning.subgraph';
+import { buildTrainingSubgraph } from './subgraphs/training.subgraph';
 
 export const CONVERSATION_GRAPH_TOKEN = Symbol('ConversationGraph');
 
@@ -23,12 +24,6 @@ export interface ConversationGraphDeps {
   userService: IUserService;
   contextService: IConversationContextService;
   checkpointer: PostgresSaver;
-}
-
-function stubPhaseNode(phase: string) {
-  return (): Partial<ConversationStateType> => ({
-    responseMessage: `[Phase '${phase}' not yet implemented — coming soon]`,
-  });
 }
 
 function routeAfterPersist(state: ConversationStateType): string {
@@ -62,6 +57,12 @@ function buildGraph(deps: ConversationGraphDeps) {
     workoutPlanRepository: workoutPlanRepo,
     workoutSessionRepository: workoutSessionRepo,
     trainingService,
+  });
+  const trainingSubgraph = buildTrainingSubgraph({
+    userService,
+    trainingService,
+    workoutSessionRepo,
+    contextService,
   });
 
   const transitionGuardNode = async(state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
@@ -130,7 +131,7 @@ function buildGraph(deps: ConversationGraphDeps) {
     .addNode('chat', chatSubgraph)
     .addNode('plan_creation', planCreationSubgraph)
     .addNode('session_planning', sessionPlanningSubgraph)
-    .addNode('training', stubPhaseNode('training'))
+    .addNode('training', trainingSubgraph)
     .addNode('persist', persistNode)
     .addNode('transition_guard', transitionGuardNode)
     .addNode('cleanup', cleanupNode)

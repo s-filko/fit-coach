@@ -87,7 +87,7 @@ function createUpdateData(updates: Partial<User>): Record<string, unknown> {
   };
 
   const updateableFields: (keyof User)[] = [
-    'profileStatus', 'fitnessLevel', 'age', 'gender',
+    'firstName', 'profileStatus', 'fitnessLevel', 'age', 'gender',
     'height', 'weight', 'fitnessGoal',
   ];
 

@@ -7,6 +7,7 @@ import type {
   SessionExercise,
   SessionRecommendation,
   SessionSet,
+  SetData,
   WorkoutSession,
   WorkoutSessionWithDetails,
 } from '@domain/training/types';
@@ -37,4 +38,16 @@ export interface ITrainingService {
     sessionId: string,
     opts?: { exerciseId?: number; exerciseName?: string },
   ): Promise<SessionExercise>;
+
+  // Log a set for the current exercise, auto-computing setNumber from existing sets in DB
+  logSetWithContext(
+    sessionId: string,
+    opts: {
+      exerciseId?: number;
+      exerciseName?: string;
+      setData: SetData;
+      rpe?: number;
+      feedback?: string;
+    },
+  ): Promise<{ set: SessionSet; setNumber: number }>;
 }

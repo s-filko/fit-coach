@@ -13,7 +13,7 @@ export interface ChatToolsDeps {
 
 const UPDATE_PROFILE_DESCRIPTION = [
   'Update one or more fields of the user\'s fitness profile.',
-  'Call this when the user explicitly tells you their age, gender, height, weight,',
+  'Call this when the user explicitly tells you their name, age, gender, height, weight,',
   'fitness level, or goal — or when they want to change an existing value.',
   'Only include fields the user actually mentioned.',
 ].join(' ');
@@ -55,6 +55,7 @@ export function buildChatTools(deps: ChatToolsDeps) {
       name: 'update_profile',
       description: UPDATE_PROFILE_DESCRIPTION,
       schema: z.object({
+        firstName: z.string().optional().describe('Preferred name or nickname'),
         age: z.number().int().optional().describe('Age in years'),
         gender: z.enum(['male', 'female']).optional().describe('Biological gender'),
         height: z.number().optional().describe('Height in cm'),

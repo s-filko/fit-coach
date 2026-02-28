@@ -14,6 +14,7 @@ import type {
   SessionExercise,
   SessionRecommendation,
   SessionSet,
+  SetData,
   UserProfile,
   WorkoutSession,
   WorkoutSessionWithDetails,
@@ -128,11 +129,11 @@ export class TrainingService implements ITrainingService {
     // Update session activity
     await this.sessionRepo.updateActivity(exercise.sessionId);
 
-    // Create set
+    // Create set — setNumber computed atomically in DB
     const set = await this.sessionSetRepo.create(exerciseId, dto);
 
-    // Update exercise status to in_progress if first set
-    if (dto.setNumber === 1) {
+    // Mark exercise as in_progress on first set
+    if (set.setNumber === 1) {
       await this.sessionExerciseRepo.update(exerciseId, { status: 'in_progress' });
     }
 
@@ -274,7 +275,7 @@ export class TrainingService implements ITrainingService {
    * Skip the current in_progress exercise
    * Marks it as skipped and moves to next
    */
-  async skipCurrentExercise(sessionId: string): Promise<void> {
+  async skipCurrentExercise(sessionId: string, reason?: string): Promise<void> {
     // Get session with exercises
     const session = await this.sessionRepo.findByIdWithDetails(sessionId);
     if (!session) {
@@ -287,9 +288,10 @@ export class TrainingService implements ITrainingService {
       throw new Error('No exercise currently in progress');
     }
 
-    // Mark as skipped
-    await this.sessionExerciseRepo.update(currentExercise.id, { 
+    // Mark as skipped, persisting reason as userFeedback
+    await this.sessionExerciseRepo.update(currentExercise.id, {
       status: 'skipped',
+      userFeedback: reason ?? null,
     });
 
     // Update session activity
@@ -320,6 +322,30 @@ export class TrainingService implements ITrainingService {
 
     // Update session activity
     await this.sessionRepo.updateActivity(sessionId);
+  }
+
+  async logSetWithContext(
+    sessionId: string,
+    opts: {
+      exerciseId?: number;
+      exerciseName?: string;
+      setData: SetData;
+      rpe?: number;
+      feedback?: string;
+    },
+  ): Promise<{ set: SessionSet; setNumber: number }> {
+    const sessionExercise = await this.ensureCurrentExercise(sessionId, {
+      exerciseId: opts.exerciseId,
+      exerciseName: opts.exerciseName,
+    });
+
+    const set = await this.logSet(sessionExercise.id, {
+      setData: opts.setData,
+      rpe: opts.rpe,
+      userFeedback: opts.feedback,
+    });
+
+    return { set, setNumber: set.setNumber };
   }
 
   // --- Private helpers ---

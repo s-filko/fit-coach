@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, lt } from 'drizzle-orm';
 
 import type { IWorkoutSessionRepository } from '@domain/training/ports';
 import type {
@@ -244,5 +244,30 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     }
 
     return timedOutSessions.length;
+  }
+
+  async findLastCompletedByUserAndKey(
+    userId: string,
+    sessionKey: string,
+  ): Promise<WorkoutSessionWithDetails | null> {
+    const [session] = await db
+      .select()
+      .from(workoutSessions)
+      .where(
+        and(
+          eq(workoutSessions.userId, userId),
+          eq(workoutSessions.status, 'completed'),
+          eq(workoutSessions.sessionKey, sessionKey),
+          isNotNull(workoutSessions.completedAt),
+        ),
+      )
+      .orderBy(desc(workoutSessions.completedAt))
+      .limit(1);
+
+    if (!session) {
+      return null;
+    }
+
+    return this.findByIdWithDetails(session.id);
   }
 }

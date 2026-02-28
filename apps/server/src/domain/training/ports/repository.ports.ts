@@ -67,6 +67,7 @@ export interface IWorkoutSessionRepository {
   updateActivity(sessionId: string): Promise<void>;
   findTimedOut(cutoffTime: Date): Promise<WorkoutSession[]>;
   autoCloseTimedOut(userId: string, cutoffTime: Date): Promise<number>;
+  findLastCompletedByUserAndKey(userId: string, sessionKey: string): Promise<WorkoutSessionWithDetails | null>;
 }
 
 export interface ISessionExerciseRepository {

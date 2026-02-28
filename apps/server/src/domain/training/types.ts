@@ -301,7 +301,6 @@ export interface CreateSessionExerciseDto {
 }
 
 export interface CreateSessionSetDto {
-  setNumber: number;
   setData: SetData;
   rpe?: number;
   userFeedback?: string;

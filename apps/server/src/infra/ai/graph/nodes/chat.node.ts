@@ -74,7 +74,7 @@ RULES:
 6. WORKOUT PLAN: ${planRule}
 
 TOOLS (use when needed):
-- update_profile: when user wants to change age, gender, weight, height, fitness level, or goal.
+- update_profile: when user wants to change their name, age, gender, weight, height, fitness level, or goal.
 - request_transition toPhase="plan_creation": when user explicitly wants to create a workout plan.
 - request_transition toPhase="session_planning": when user wants to train today / start a session / plan a workout.
   ALWAYS use this tool — never describe workouts yourself from chat.
