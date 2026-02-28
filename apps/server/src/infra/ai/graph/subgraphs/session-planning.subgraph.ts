@@ -11,6 +11,7 @@ import type { IUserService } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
 
 import { buildSessionPlanningSystemPrompt } from '@infra/ai/graph/nodes/session-planning.node';
+import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildSessionPlanningTools } from '@infra/ai/graph/tools/session-planning.tools';
 import { getModel } from '@infra/ai/model.factory';
 
@@ -47,12 +48,12 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
   } = deps;
 
   /**
-   * Mutable closure refs: tools write pending state updates here instead of returning a Command
-   * (which would break ToolNode's ToolMessage flow → infinite recursion loop).
-   * extractNode reads both refs once per turn and clears them.
+   * Per-user maps: tools set entries by userId, extractNode reads and deletes them.
+   * Maps keyed by userId are safe when the graph is a singleton shared across concurrent
+   * requests — single-value refs would cause a race condition between users.
    */
-  const pendingTransition: { value: TransitionRequest | null } = { value: null };
-  const pendingActiveSessionId: { value: string | null } = { value: null };
+  const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
+  const pendingActiveSessionIds = new PendingRefMap<string | null>();
 
   const contextBuilder = new SessionPlanningContextBuilder(
     workoutPlanRepository,
@@ -62,8 +63,8 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
   const tools = buildSessionPlanningTools({
     trainingService,
     workoutPlanRepository,
-    pendingTransition,
-    pendingActiveSessionId,
+    pendingTransitions,
+    pendingActiveSessionIds,
   });
   const toolNode = new ToolNode(tools);
   const model = getModel().bindTools(tools);
@@ -116,12 +117,12 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
       ? await userService.getUser(state.userId).catch(() => null)
       : null;
 
-    // Consume both pending refs set by tools — read once and clear
-    const transition = pendingTransition.value;
-    pendingTransition.value = null;
+    // Consume both per-user map entries set by tools — read and delete atomically
+    const transition = pendingTransitions.get(state.userId) ?? null;
+    pendingTransitions.delete(state.userId);
 
-    const activeSessionId = pendingActiveSessionId.value;
-    pendingActiveSessionId.value = null;
+    const activeSessionId = pendingActiveSessionIds.get(state.userId) ?? null;
+    pendingActiveSessionIds.delete(state.userId);
 
     return {
       responseMessage: text,

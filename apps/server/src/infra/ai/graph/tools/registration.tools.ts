@@ -6,10 +6,12 @@ import type { ConversationPhase } from '@domain/conversation/ports';
 import type { IUserService } from '@domain/user/ports';
 import { FIELD_LABELS, type ProfileDataKey, validateExtractedFields } from '@domain/user/services/registration.validation';
 
+import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
+
 export interface RegistrationToolsDeps {
   userService: IUserService;
-  /** Mutable ref — tools write here, extractNode reads it to update parent state */
-  pendingTransition: { value: TransitionRequest | null };
+  /** Per-user map — tools set entry by userId, extractNode deletes it */
+  pendingTransitions: IPendingRefMap<TransitionRequest | null>;
 }
 
 const REQUIRED_FIELDS: ProfileDataKey[] = ['age', 'gender', 'height', 'weight', 'fitnessLevel', 'fitnessGoal'];
@@ -30,7 +32,7 @@ const COMPLETE_REGISTRATION_DESCRIPTION = [
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function buildRegistrationTools(deps: RegistrationToolsDeps) {
-  const { userService, pendingTransition } = deps;
+  const { userService, pendingTransitions } = deps;
 
   const saveProfileFields = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
@@ -105,11 +107,11 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
 
       await userService.updateProfileData(userId, { profileStatus: 'complete' });
 
-      // Signal transition via closure ref — extractNode will pick this up
-      pendingTransition.value = {
+      // Signal transition — extractNode will read and delete this entry
+      pendingTransitions.set(userId, {
         toPhase: input.toPhase as ConversationPhase,
         reason: 'registration_complete',
-      };
+      });
 
       return 'Registration complete! Profile saved successfully.';
     },

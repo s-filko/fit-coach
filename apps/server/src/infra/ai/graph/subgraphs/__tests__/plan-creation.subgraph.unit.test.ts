@@ -90,7 +90,7 @@ describe('plan-creation.subgraph — tool-calling loop', () => {
 
     await subgraph.invoke(
       { userId: 'u1', userMessage: 'нет, не хочу план', user: BASE_USER },
-      { recursionLimit: 10 },
+      { recursionLimit: 10, configurable: { userId: 'u1', thread_id: 'u1' } },
     );
 
     expect(mockInvoke).toHaveBeenCalledTimes(2);
@@ -136,7 +136,7 @@ describe('plan-creation.subgraph — tool-calling loop', () => {
 
     await subgraph.invoke(
       { userId: 'u1', userMessage: 'отмена', user: BASE_USER },
-      { recursionLimit: 10 },
+      { recursionLimit: 10, configurable: { userId: 'u1', thread_id: 'u1' } },
     );
 
     const secondCallMessages = capturedMessages[1] as Array<{ _getType?: () => string; tool_calls?: unknown[] }>;

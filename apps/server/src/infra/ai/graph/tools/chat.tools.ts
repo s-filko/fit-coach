@@ -5,10 +5,12 @@ import type { TransitionRequest } from '@domain/conversation/graph/conversation.
 import type { ConversationPhase } from '@domain/conversation/ports';
 import type { IUserService } from '@domain/user/ports';
 
+import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
+
 export interface ChatToolsDeps {
   userService: IUserService;
-  /** Mutable ref — request_transition tool writes here, extractNode picks it up */
-  pendingTransition: { value: TransitionRequest | null };
+  /** Per-user map — request_transition tool sets entry by userId, extractNode deletes it */
+  pendingTransitions: IPendingRefMap<TransitionRequest | null>;
 }
 
 const UPDATE_PROFILE_DESCRIPTION = [
@@ -27,7 +29,7 @@ const REQUEST_TRANSITION_DESCRIPTION = [
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function buildChatTools(deps: ChatToolsDeps) {
-  const { userService, pendingTransition } = deps;
+  const { userService, pendingTransitions } = deps;
 
   const updateProfile = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
@@ -68,12 +70,12 @@ export function buildChatTools(deps: ChatToolsDeps) {
 
   const requestTransition = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async(input) => {
-      // Write to closure ref — extractNode will propagate to parent state
-      pendingTransition.value = {
+    async(input, config) => {
+      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined ?? '';
+      pendingTransitions.set(userId, {
         toPhase: input.toPhase as ConversationPhase,
         reason: input.reason,
-      };
+      });
 
       return `Transition to ${input.toPhase} requested.`;
     },

@@ -6,10 +6,12 @@ import type { ConversationPhase } from '@domain/conversation/ports';
 import type { IWorkoutPlanRepository } from '@domain/training/ports';
 import type { MuscleGroup } from '@domain/training/types';
 
+import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
+
 export interface PlanCreationToolsDeps {
   workoutPlanRepository: IWorkoutPlanRepository;
-  /** Mutable ref — tools write here, extractNode reads it to update parent state */
-  pendingTransition: { value: TransitionRequest | null };
+  /** Per-user map — tools set entry by userId, extractNode deletes it */
+  pendingTransitions: IPendingRefMap<TransitionRequest | null>;
 }
 
 const MUSCLE_GROUPS: [MuscleGroup, ...MuscleGroup[]] = [
@@ -73,7 +75,7 @@ const REQUEST_TRANSITION_DESCRIPTION = [
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
-  const { workoutPlanRepository, pendingTransition } = deps;
+  const { workoutPlanRepository, pendingTransitions } = deps;
 
   const saveWorkoutPlan = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
@@ -97,10 +99,10 @@ export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
         status: 'active',
       });
 
-      pendingTransition.value = {
+      pendingTransitions.set(userId, {
         toPhase: 'chat' as ConversationPhase,
         reason: 'plan_creation_complete',
-      };
+      });
 
       return 'Workout plan saved successfully!';
     },
@@ -121,11 +123,12 @@ export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
 
   const requestTransition = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async(input) => {
-      pendingTransition.value = {
+    async(input, config) => {
+      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined ?? '';
+      pendingTransitions.set(userId, {
         toPhase: input.toPhase as ConversationPhase,
         reason: input.reason ?? 'user_cancelled',
-      };
+      });
 
       return `Transition to ${input.toPhase} requested.`;
     },

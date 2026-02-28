@@ -6,13 +6,15 @@ import type { ConversationPhase } from '@domain/conversation/ports';
 import type { ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
 import { RecommendedExerciseSchema, SessionRecommendationSchema } from '@domain/training/session-planning.types';
 
+import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
+
 export interface SessionPlanningToolsDeps {
   trainingService: ITrainingService;
   workoutPlanRepository: IWorkoutPlanRepository;
-  /** Mutable ref — start_training_session writes here, extractNode reads it to update parent state */
-  pendingTransition: { value: TransitionRequest | null };
-  /** Mutable ref — start_training_session writes session ID here for activeSessionId propagation */
-  pendingActiveSessionId: { value: string | null };
+  /** Per-user map — start_training_session sets entry by userId, extractNode deletes it */
+  pendingTransitions: IPendingRefMap<TransitionRequest | null>;
+  /** Per-user map — start_training_session sets session ID by userId, extractNode deletes it */
+  pendingActiveSessionIds: IPendingRefMap<string | null>;
 }
 
 const START_TRAINING_SESSION_DESCRIPTION = [
@@ -32,7 +34,7 @@ export { RecommendedExerciseSchema, SessionRecommendationSchema };
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
-  const { trainingService, workoutPlanRepository, pendingTransition, pendingActiveSessionId } = deps;
+  const { trainingService, workoutPlanRepository, pendingTransitions, pendingActiveSessionIds } = deps;
 
   const startTrainingSession = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
@@ -62,12 +64,12 @@ export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
           },
         });
 
-        // Write to closure refs — extractNode propagates to parent ConversationState
-        pendingActiveSessionId.value = session.id;
-        pendingTransition.value = {
+        // Write to per-user maps — extractNode propagates to parent ConversationState
+        pendingActiveSessionIds.set(userId, session.id);
+        pendingTransitions.set(userId, {
           toPhase: 'training' as ConversationPhase,
           reason: 'session_planning_complete',
-        };
+        });
 
         const exerciseCount = input.exercises.length;
         const duration = input.estimatedDuration;
@@ -86,11 +88,12 @@ export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
 
   const requestTransition = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async(input) => {
-      pendingTransition.value = {
+    async(input, config) => {
+      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined ?? '';
+      pendingTransitions.set(userId, {
         toPhase: input.toPhase as ConversationPhase,
         reason: input.reason ?? 'user_cancelled',
-      };
+      });
 
       return `Transition to ${input.toPhase} requested.`;
     },

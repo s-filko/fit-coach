@@ -10,6 +10,7 @@ import type { IUserService } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
 
 import { buildTrainingSystemPrompt } from '@infra/ai/graph/nodes/training.node';
+import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildTrainingTools, LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '@infra/ai/graph/tools/training.tools';
 import { getModel } from '@infra/ai/model.factory';
 
@@ -68,14 +69,16 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
   const { userService, trainingService, workoutSessionRepo, contextService } = deps;
 
   /**
-   * pendingTransition: finish_training writes here, extractNode reads and clears.
-   * currentSessionId: agentNode writes active sessionId before each model.invoke so tool
-   * handlers can read it via closure without relying on ToolNode configurable (which only
-   * propagates config from the root graph.invoke, not from model.invoke).
+   * Per-user maps: tools set entries by userId, extractNode/agentNode reads and deletes them.
+   * Maps keyed by userId are safe when the graph is a singleton shared across concurrent
+   * requests — single-value refs would cause a race condition between users.
+   *
+   * currentSessionIds: agentNode sets active sessionId before each model.invoke so tool
+   * handlers can look up the correct session for the current user.
    */
-  const pendingTransition: { value: TransitionRequest | null } = { value: null };
-  const currentSessionId: { value: string | null } = { value: null };
-  const tools = buildTrainingTools({ trainingService, pendingTransition, currentSessionId });
+  const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
+  const currentSessionIds = new PendingRefMap<string | null>();
+  const tools = buildTrainingTools({ trainingService, pendingTransitions, currentSessionIds });
   const toolMap = Object.fromEntries(tools.map((t) => [t.name, t]));
   const model = getModel().bindTools(tools);
 
@@ -87,7 +90,7 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
    * (e.g. warmup → main → finishing).
    */
   const sequentialToolNode = async (state: TrainingSubgraphStateType) => {
-    const { messages } = state;
+    const { messages, userId } = state;
     const lastMessage = messages[messages.length - 1] as AIMessage;
     const toolCalls = lastMessage.tool_calls ?? [];
 
@@ -108,8 +111,9 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
         continue;
       }
       // eslint-disable-next-line no-await-in-loop
-      const result = await (targetTool as { invoke: (args: Record<string, unknown>) => Promise<unknown> })
-        .invoke(call.args as Record<string, unknown>);
+      const result = await (targetTool as {
+        invoke: (args: Record<string, unknown>, config: { configurable: Record<string, unknown> }) => Promise<unknown>
+      }).invoke(call.args as Record<string, unknown>, { configurable: { userId } });
       toolMessages.push(new ToolMessage({
         tool_call_id: call.id ?? '',
         content: String(result),
@@ -167,8 +171,8 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
         };
       }
 
-      // Update closure ref so tool handlers get the correct sessionId for this turn
-      currentSessionId.value = activeSessionId;
+      // Update per-user map so tool handlers get the correct sessionId for this user's turn
+      currentSessionIds.set(userId, activeSessionId);
 
       const [history, session, freshUser] = await Promise.all([
         contextService.getMessagesForPrompt(userId, 'training'),
@@ -240,8 +244,9 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
       ? await userService.getUser(state.userId).catch(() => null)
       : null;
 
-    const transition = pendingTransition.value;
-    pendingTransition.value = null;
+    // Consume the pending transition set by finish_training tool — read and delete atomically
+    const transition = pendingTransitions.get(state.userId) ?? null;
+    pendingTransitions.delete(state.userId);
 
     return {
       responseMessage: text,

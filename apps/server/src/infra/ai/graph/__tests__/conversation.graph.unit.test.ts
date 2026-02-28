@@ -208,4 +208,75 @@ describe('ConversationGraph', () => {
       expect(result.activeSessionId).toBeNull();
     });
   });
+
+  describe('training phase guards', () => {
+    it('router falls back to chat when phase=training but activeSessionId is null', async () => {
+      const deps = makeDeps();
+      const graph = buildConversationGraph(deps);
+
+      const result = await graph.invoke(
+        { userId: 'u1', phase: 'training', userMessage: 'hi', activeSessionId: null },
+        { configurable: { thread_id: 'u1-guard-null-session' } },
+      );
+
+      // Router should have bypassed the training subgraph and fallen back to chat
+      expect(result.phase).toBe('chat');
+      expect(result.activeSessionId).toBeNull();
+      expect(result.responseMessage).not.toBe('Mocked LLM response');
+      expect(result.responseMessage).toContain('could not be resumed');
+    });
+
+    it('transitionGuard blocks session_planning→training when activeSessionId is missing', async () => {
+      // Mock LLM to call request_transition with toPhase=training via a tool call
+      // that writes pendingTransition directly. We simulate this by having the LLM
+      // call start_training_session which would normally set activeSessionId, but here
+      // the service throws — so activeSessionId stays null while requestedTransition is set.
+      let callCount = 0;
+      jest.resetModules();
+      jest.mock('@infra/ai/model.factory', () => ({
+        getModel: () => ({
+          bindTools: () => ({
+            invoke: jest.fn().mockImplementation(async () => {
+              callCount++;
+              if (callCount === 1) {
+                // First call in session_planning: call start_training_session
+                return new AIMessage({
+                  content: '',
+                  tool_calls: [{
+                    id: 'tc-guard-1',
+                    name: 'start_training_session',
+                    args: {
+                      sessionKey: 'test',
+                      sessionName: 'Test',
+                      reasoning: 'test',
+                      exercises: [{ exerciseId: 1, exerciseName: 'Bench Press', targetSets: 3, targetReps: '8-10', restSeconds: 90 }],
+                      estimatedDuration: 60,
+                    },
+                    type: 'tool_call',
+                  }],
+                });
+              }
+              return new AIMessage({ content: 'OK ready!', tool_calls: [] });
+            }),
+          }),
+        }),
+      }));
+
+      const { buildConversationGraph: buildGraph } = await import('../conversation.graph');
+
+      const guardDeps = makeDeps();
+      // startSession throws → pendingActiveSessionId stays null, but pendingTransition IS set
+      (guardDeps.trainingService.startSession as jest.Mock).mockRejectedValue(new Error('DB unavailable'));
+
+      const graph = buildGraph(guardDeps);
+      const result = await graph.invoke(
+        { userId: 'u1', phase: 'session_planning', userMessage: 'start!' },
+        { configurable: { thread_id: 'u1-guard-block' }, recursionLimit: 10 },
+      );
+
+      // Guard should have blocked: phase stays session_planning, no activeSessionId
+      expect(result.phase).toBe('session_planning');
+      expect(result.activeSessionId).toBeNull();
+    });
+  });
 });

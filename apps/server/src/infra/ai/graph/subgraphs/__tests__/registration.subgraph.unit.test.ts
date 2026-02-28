@@ -85,7 +85,7 @@ describe('registration.subgraph — tool-calling loop', () => {
 
     await subgraph.invoke(
       { userId: 'u1', userMessage: 'мне 28 лет, мужской', user: BASE_USER },
-      { recursionLimit: 10 },
+      { recursionLimit: 10, configurable: { userId: 'u1', thread_id: 'u1' } },
     );
 
     // Must have been called exactly twice
@@ -137,7 +137,7 @@ describe('registration.subgraph — tool-calling loop', () => {
 
     await subgraph.invoke(
       { userId: 'u1', userMessage: 'мне 30 лет', user: BASE_USER },
-      { recursionLimit: 10 },
+      { recursionLimit: 10, configurable: { userId: 'u1', thread_id: 'u1' } },
     );
 
     const secondCallMessages = capturedMessages[1] as Array<{ _getType?: () => string; tool_calls?: unknown[] }>;

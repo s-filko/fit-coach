@@ -10,6 +10,7 @@ import type { IUserService } from '@domain/user/ports';
 import { User } from '@domain/user/services/user.service';
 
 import { buildChatSystemPrompt } from '@infra/ai/graph/nodes/chat.node';
+import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildChatTools } from '@infra/ai/graph/tools/chat.tools';
 import { getModel } from '@infra/ai/model.factory';
 
@@ -36,13 +37,13 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
   const { userService, workoutPlanRepo, workoutSessionRepo, contextService } = deps;
 
   /**
-   * Mutable closure ref: request_transition tool writes the desired transition here
-   * instead of returning a Command (which breaks ToolNode's ToolMessage flow).
-   * extractNode reads this ref and propagates it to parent state.
+   * Per-user map: request_transition tool sets entry by userId, extractNode reads and
+   * deletes it. A Map keyed by userId is safe when the graph is a singleton shared
+   * across concurrent requests — single-value refs would cause a race condition.
    */
-  const pendingTransition: { value: TransitionRequest | null } = { value: null };
+  const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
 
-  const tools = buildChatTools({ userService, pendingTransition });
+  const tools = buildChatTools({ userService, pendingTransitions });
   const toolNode = new ToolNode(tools);
   const model = getModel().bindTools(tools);
 
@@ -92,9 +93,9 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
       ? await userService.getUser(state.userId).catch(() => null)
       : null;
 
-    // Consume the pending transition set by request_transition tool
-    const transition = pendingTransition.value;
-    pendingTransition.value = null;
+    // Consume the pending transition set by request_transition tool — read and delete atomically
+    const transition = pendingTransitions.get(state.userId) ?? null;
+    pendingTransitions.delete(state.userId);
 
     return {
       responseMessage: text,

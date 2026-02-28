@@ -2,7 +2,7 @@
  * Tests for session-planning.subgraph.ts
  *
  * Verifies:
- * 1. extractNode reads and clears both pendingTransition and pendingActiveSessionId refs
+ * 1. extractNode reads and deletes both pendingTransitions and pendingActiveSessionIds Map entries
  * 2. activeSessionId propagates to parent state when start_training_session is called
  * 3. LLM text response (no tool calls) produces responseMessage with no side effects
  * 4. Tool-calling loop includes in-flight messages in the second LLM call (prevents recursion bug)
@@ -117,7 +117,7 @@ describe('session-planning.subgraph — text response (no tools)', () => {
 
     const result = await subgraph.invoke(
       { userId: 'u1', userMessage: 'hello', user: BASE_USER },
-      { recursionLimit: 10 },
+      { recursionLimit: 10, configurable: { userId: 'u1', thread_id: 'u1' } },
     );
 
     expect(result.responseMessage).toBe('How are you feeling today?');
@@ -214,7 +214,7 @@ describe('session-planning.subgraph — tool-calling loop (recursion prevention)
 
     await subgraph.invoke(
       { userId: 'u1', userMessage: 'cancel', user: BASE_USER },
-      { recursionLimit: 10 },
+      { recursionLimit: 10, configurable: { userId: 'u1', thread_id: 'u1' } },
     );
 
     expect(mockInvoke).toHaveBeenCalledTimes(2);
@@ -261,7 +261,7 @@ describe('session-planning.subgraph — tool-calling loop (recursion prevention)
 
     await subgraph.invoke(
       { userId: 'u1', userMessage: 'no thanks', user: BASE_USER },
-      { recursionLimit: 10 },
+      { recursionLimit: 10, configurable: { userId: 'u1', thread_id: 'u1' } },
     );
 
     const secondCallMessages = capturedMessages[1] as Array<{ _getType?: () => string; tool_calls?: unknown[] }>;

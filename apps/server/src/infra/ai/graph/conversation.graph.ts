@@ -6,6 +6,8 @@ import { IConversationContextService } from '@domain/conversation/ports';
 import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository, IWorkoutSessionRepository } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 
+import { createLogger } from '@shared/logger';
+
 import { buildPersistNode } from './nodes/persist.node';
 import { buildRouterNode } from './nodes/router.node';
 import { buildChatSubgraph } from './subgraphs/chat.subgraph';
@@ -13,6 +15,8 @@ import { buildPlanCreationSubgraph } from './subgraphs/plan-creation.subgraph';
 import { buildRegistrationSubgraph } from './subgraphs/registration.subgraph';
 import { buildSessionPlanningSubgraph } from './subgraphs/session-planning.subgraph';
 import { buildTrainingSubgraph } from './subgraphs/training.subgraph';
+
+const log = createLogger('conversation-graph');
 
 export const CONVERSATION_GRAPH_TOKEN = Symbol('ConversationGraph');
 
@@ -66,7 +70,7 @@ function buildGraph(deps: ConversationGraphDeps) {
   });
 
   const transitionGuardNode = async(state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
-    const { requestedTransition, phase } = state;
+    const { requestedTransition, phase, userId } = state;
     if (!requestedTransition) {
       return {};
     }
@@ -83,6 +87,13 @@ function buildGraph(deps: ConversationGraphDeps) {
 
     const allowedTargets = allowed[phase] ?? [];
     if (!allowedTargets.includes(toPhase)) {
+      log.warn({ userId, from: phase, to: toPhase }, 'Guard blocked: transition not in allowed matrix');
+      return { requestedTransition: null };
+    }
+
+    // Data prerequisite guard: training phase requires an active session
+    if (toPhase === 'training' && !state.activeSessionId) {
+      log.warn({ userId, from: phase }, 'Guard blocked: training transition without activeSessionId');
       return { requestedTransition: null };
     }
 
@@ -102,8 +113,11 @@ function buildGraph(deps: ConversationGraphDeps) {
         }).catch(() => null);
       }
     } else if (state.activeSessionId && state.phase !== 'training') {
-      // Leaving training phase: complete any lingering active session
-      await trainingService.completeSession(state.activeSessionId).catch(() => null);
+      // Leaving training phase: complete the session only if not already finished
+      const lingering = await trainingService.getSessionDetails(state.activeSessionId).catch(() => null);
+      if (lingering && lingering.status !== 'completed' && lingering.status !== 'skipped') {
+        await trainingService.completeSession(state.activeSessionId).catch(() => null);
+      }
       updates.activeSessionId = null;
     }
 

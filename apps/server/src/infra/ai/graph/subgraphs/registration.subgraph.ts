@@ -9,6 +9,7 @@ import type { IUserService } from '@domain/user/ports';
 import { User } from '@domain/user/services/user.service';
 
 import { buildRegistrationSystemPrompt } from '@infra/ai/graph/nodes/registration.node';
+import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildRegistrationTools } from '@infra/ai/graph/tools/registration.tools';
 import { getModel } from '@infra/ai/model.factory';
 
@@ -32,13 +33,13 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
   const { userService, contextService } = deps;
 
   /**
-   * Mutable closure ref: tools write their pending transition here instead of
-   * returning a Command (which would break ToolNode's ToolMessage flow and cause
-   * an infinite recursion loop). extractNode reads this ref once and clears it.
+   * Per-user map: tools set entry by userId, extractNode reads and deletes it.
+   * A Map keyed by userId is safe when the graph is a singleton shared across
+   * concurrent requests — single-value refs would cause a race condition.
    */
-  const pendingTransition: { value: TransitionRequest | null } = { value: null };
+  const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
 
-  const tools = buildRegistrationTools({ userService, pendingTransition });
+  const tools = buildRegistrationTools({ userService, pendingTransitions });
   const toolNode = new ToolNode(tools);
   const model = getModel().bindTools(tools);
 
@@ -86,9 +87,9 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
       ? await userService.getUser(state.userId).catch(() => null)
       : null;
 
-    // Consume the pending transition set by complete_registration tool
-    const transition = pendingTransition.value;
-    pendingTransition.value = null;
+    // Consume the pending transition set by complete_registration tool — read and delete atomically
+    const transition = pendingTransitions.get(state.userId) ?? null;
+    pendingTransitions.delete(state.userId);
 
     return {
       responseMessage: text,

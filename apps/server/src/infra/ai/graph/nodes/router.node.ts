@@ -74,6 +74,21 @@ export function buildRouterNode(deps: RouterNodeDeps) {
       }
     }
 
+    // Training phase without an active session: no mechanism to recover inside the subgraph,
+    // so fall back to chat immediately to prevent the user from getting stuck.
+    if (state.phase === 'training' && !state.activeSessionId) {
+      log.warn({ userId }, 'Training phase without activeSessionId — falling back to chat');
+      return new Command({
+        goto: 'persist',
+        update: {
+          ...updates,
+          phase: 'chat',
+          activeSessionId: null,
+          responseMessage: 'Your training session could not be resumed. You can plan a new session whenever you\'re ready.',
+        },
+      });
+    }
+
     // Sync phase with profile status.
     // Default phase from checkpointer is 'registration'. If profile is already complete,
     // advance to 'chat'. This also covers the case where 'incomplete' profileStatus was

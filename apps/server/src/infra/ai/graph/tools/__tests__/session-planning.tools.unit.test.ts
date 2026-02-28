@@ -50,8 +50,8 @@ const makeWorkoutPlanRepo = (planId = 'plan-1'): jest.Mocked<IWorkoutPlanReposit
   archive: jest.fn(),
 } as unknown as jest.Mocked<IWorkoutPlanRepository>);
 
-const makePendingTransition = (): { value: TransitionRequest | null } => ({ value: null });
-const makePendingActiveSessionId = (): { value: string | null } => ({ value: null });
+const makePendingTransitions = (): Map<string, TransitionRequest | null> => new Map();
+const makePendingActiveSessionIds = (): Map<string, string | null> => new Map();
 
 const makeConfig = (userId = 'u1'): RunnableConfig => ({
   configurable: { userId, thread_id: userId },
@@ -60,14 +60,14 @@ const makeConfig = (userId = 'u1'): RunnableConfig => ({
 const buildTools = (
   trainingService: jest.Mocked<ITrainingService>,
   workoutPlanRepository: jest.Mocked<IWorkoutPlanRepository>,
-  pendingTransition: { value: TransitionRequest | null },
-  pendingActiveSessionId: { value: string | null },
+  pendingTransitions: Map<string, TransitionRequest | null>,
+  pendingActiveSessionIds: Map<string, string | null>,
 ): [InvokableTool, InvokableTool] =>
   buildSessionPlanningTools({
     trainingService,
     workoutPlanRepository,
-    pendingTransition,
-    pendingActiveSessionId,
+    pendingTransitions,
+    pendingActiveSessionIds,
   }) as unknown as [InvokableTool, InvokableTool];
 
 describe('session-planning.tools — start_training_session', () => {
@@ -75,8 +75,8 @@ describe('session-planning.tools — start_training_session', () => {
     const [startTrainingSession] = buildTools(
       makeTrainingService(),
       makeWorkoutPlanRepo(),
-      makePendingTransition(),
-      makePendingActiveSessionId(),
+      makePendingTransitions(),
+      makePendingActiveSessionIds(),
     );
 
     const result = await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig());
@@ -91,8 +91,8 @@ describe('session-planning.tools — start_training_session', () => {
     const [startTrainingSession] = buildTools(
       trainingService,
       workoutPlanRepo,
-      makePendingTransition(),
-      makePendingActiveSessionId(),
+      makePendingTransitions(),
+      makePendingActiveSessionIds(),
     );
 
     await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig('u1'));
@@ -110,34 +110,34 @@ describe('session-planning.tools — start_training_session', () => {
     }));
   });
 
-  it('sets pendingActiveSessionId.value to the created session ID', async () => {
-    const pendingActiveSessionId = makePendingActiveSessionId();
+  it('sets pendingActiveSessionIds entry for userId to the created session ID', async () => {
+    const pendingActiveSessionIds = makePendingActiveSessionIds();
     const [startTrainingSession] = buildTools(
       makeTrainingService('session-xyz'),
       makeWorkoutPlanRepo(),
-      makePendingTransition(),
-      pendingActiveSessionId,
+      makePendingTransitions(),
+      pendingActiveSessionIds,
     );
 
-    await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig());
+    await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig('u1'));
 
-    expect(pendingActiveSessionId.value).toBe('session-xyz');
+    expect(pendingActiveSessionIds.get('u1')).toBe('session-xyz');
   });
 
-  it('sets pendingTransition.value to training phase', async () => {
-    const pendingTransition = makePendingTransition();
+  it('sets pendingTransitions entry for userId to training phase', async () => {
+    const pendingTransitions = makePendingTransitions();
     const [startTrainingSession] = buildTools(
       makeTrainingService(),
       makeWorkoutPlanRepo(),
-      pendingTransition,
-      makePendingActiveSessionId(),
+      pendingTransitions,
+      makePendingActiveSessionIds(),
     );
 
-    await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig());
+    await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig('u1'));
 
-    expect(pendingTransition.value).not.toBeNull();
-    expect(pendingTransition.value?.toPhase).toBe('training');
-    expect(pendingTransition.value?.reason).toBe('session_planning_complete');
+    expect(pendingTransitions.get('u1')).not.toBeNull();
+    expect(pendingTransitions.get('u1')?.toPhase).toBe('training');
+    expect(pendingTransitions.get('u1')?.reason).toBe('session_planning_complete');
   });
 
   it('resolves planId from workoutPlanRepository.findActiveByUserId', async () => {
@@ -145,8 +145,8 @@ describe('session-planning.tools — start_training_session', () => {
     const [startTrainingSession] = buildTools(
       makeTrainingService(),
       workoutPlanRepo,
-      makePendingTransition(),
-      makePendingActiveSessionId(),
+      makePendingTransitions(),
+      makePendingActiveSessionIds(),
     );
 
     await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig('u99'));
@@ -158,8 +158,8 @@ describe('session-planning.tools — start_training_session', () => {
     const [startTrainingSession] = buildTools(
       makeTrainingService('session-1'),
       makeWorkoutPlanRepo(),
-      makePendingTransition(),
-      makePendingActiveSessionId(),
+      makePendingTransitions(),
+      makePendingActiveSessionIds(),
     );
 
     const result = await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig());
@@ -171,8 +171,8 @@ describe('session-planning.tools — start_training_session', () => {
     const [startTrainingSession] = buildTools(
       makeTrainingService(),
       makeWorkoutPlanRepo(),
-      makePendingTransition(),
-      makePendingActiveSessionId(),
+      makePendingTransitions(),
+      makePendingActiveSessionIds(),
     );
 
     const result = await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, { configurable: {} });
@@ -180,41 +180,41 @@ describe('session-planning.tools — start_training_session', () => {
     expect(result as string).toContain('Error: could not identify user');
   });
 
-  it('does NOT set refs when userId is missing', async () => {
-    const pendingTransition = makePendingTransition();
-    const pendingActiveSessionId = makePendingActiveSessionId();
+  it('does NOT set maps when userId is missing', async () => {
+    const pendingTransitions = makePendingTransitions();
+    const pendingActiveSessionIds = makePendingActiveSessionIds();
     const [startTrainingSession] = buildTools(
       makeTrainingService(),
       makeWorkoutPlanRepo(),
-      pendingTransition,
-      pendingActiveSessionId,
+      pendingTransitions,
+      pendingActiveSessionIds,
     );
 
     await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, { configurable: {} });
 
-    expect(pendingTransition.value).toBeNull();
-    expect(pendingActiveSessionId.value).toBeNull();
+    expect(pendingTransitions.size).toBe(0);
+    expect(pendingActiveSessionIds.size).toBe(0);
   });
 
   it('returns error string when trainingService.startSession throws', async () => {
     const trainingService = makeTrainingService();
     trainingService.startSession.mockRejectedValue(new Error('DB connection failed'));
-    const pendingTransition = makePendingTransition();
-    const pendingActiveSessionId = makePendingActiveSessionId();
+    const pendingTransitions = makePendingTransitions();
+    const pendingActiveSessionIds = makePendingActiveSessionIds();
     const [startTrainingSession] = buildTools(
       trainingService,
       makeWorkoutPlanRepo(),
-      pendingTransition,
-      pendingActiveSessionId,
+      pendingTransitions,
+      pendingActiveSessionIds,
     );
 
-    const result = await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig());
+    const result = await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig('u1'));
 
     expect(result as string).toContain('Error creating session');
     expect(result as string).toContain('DB connection failed');
-    // refs must remain null on error
-    expect(pendingTransition.value).toBeNull();
-    expect(pendingActiveSessionId.value).toBeNull();
+    // maps must remain empty on error
+    expect(pendingTransitions.size).toBe(0);
+    expect(pendingActiveSessionIds.size).toBe(0);
   });
 
   it('works when no active plan exists (planId is undefined)', async () => {
@@ -224,8 +224,8 @@ describe('session-planning.tools — start_training_session', () => {
     const [startTrainingSession] = buildTools(
       trainingService,
       workoutPlanRepo,
-      makePendingTransition(),
-      makePendingActiveSessionId(),
+      makePendingTransitions(),
+      makePendingActiveSessionIds(),
     );
 
     await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig());
@@ -235,6 +235,22 @@ describe('session-planning.tools — start_training_session', () => {
       expect.objectContaining({ planId: undefined }),
     );
   });
+
+  it('isolates entries by userId — two users do not overwrite each other', async () => {
+    const pendingTransitions = makePendingTransitions();
+    const pendingActiveSessionIds = makePendingActiveSessionIds();
+    const trainingA = makeTrainingService('session-A');
+    const trainingB = makeTrainingService('session-B');
+
+    const [startA] = buildTools(trainingA, makeWorkoutPlanRepo(), pendingTransitions, pendingActiveSessionIds);
+    await startA.invoke(MINIMAL_SESSION_PLAN, makeConfig('userA'));
+
+    const [startB] = buildTools(trainingB, makeWorkoutPlanRepo(), pendingTransitions, pendingActiveSessionIds);
+    await startB.invoke(MINIMAL_SESSION_PLAN, makeConfig('userB'));
+
+    expect(pendingActiveSessionIds.get('userA')).toBe('session-A');
+    expect(pendingActiveSessionIds.get('userB')).toBe('session-B');
+  });
 });
 
 describe('session-planning.tools — request_transition', () => {
@@ -242,8 +258,8 @@ describe('session-planning.tools — request_transition', () => {
     const [, requestTransition] = buildTools(
       makeTrainingService(),
       makeWorkoutPlanRepo(),
-      makePendingTransition(),
-      makePendingActiveSessionId(),
+      makePendingTransitions(),
+      makePendingActiveSessionIds(),
     );
 
     const result = await requestTransition.invoke({ toPhase: 'chat' }, makeConfig());
@@ -252,40 +268,40 @@ describe('session-planning.tools — request_transition', () => {
     expect(result as object).not.toHaveProperty('lc_direct_tool_output');
   });
 
-  it('sets pendingTransition.value with toPhase=chat', async () => {
-    const pendingTransition = makePendingTransition();
+  it('sets pendingTransitions entry for userId with toPhase=chat', async () => {
+    const pendingTransitions = makePendingTransitions();
     const [, requestTransition] = buildTools(
       makeTrainingService(),
       makeWorkoutPlanRepo(),
-      pendingTransition,
-      makePendingActiveSessionId(),
+      pendingTransitions,
+      makePendingActiveSessionIds(),
     );
 
-    await requestTransition.invoke({ toPhase: 'chat' }, makeConfig());
+    await requestTransition.invoke({ toPhase: 'chat' }, makeConfig('u1'));
 
-    expect(pendingTransition.value?.toPhase).toBe('chat');
+    expect(pendingTransitions.get('u1')?.toPhase).toBe('chat');
   });
 
-  it('sets optional reason in pendingTransition', async () => {
-    const pendingTransition = makePendingTransition();
+  it('sets optional reason in pendingTransitions entry', async () => {
+    const pendingTransitions = makePendingTransitions();
     const [, requestTransition] = buildTools(
       makeTrainingService(),
       makeWorkoutPlanRepo(),
-      pendingTransition,
-      makePendingActiveSessionId(),
+      pendingTransitions,
+      makePendingActiveSessionIds(),
     );
 
-    await requestTransition.invoke({ toPhase: 'chat', reason: 'user cancelled' }, makeConfig());
+    await requestTransition.invoke({ toPhase: 'chat', reason: 'user cancelled' }, makeConfig('u1'));
 
-    expect(pendingTransition.value?.reason).toBe('user cancelled');
+    expect(pendingTransitions.get('u1')?.reason).toBe('user cancelled');
   });
 
   it('returns confirmation string mentioning the target phase', async () => {
     const [, requestTransition] = buildTools(
       makeTrainingService(),
       makeWorkoutPlanRepo(),
-      makePendingTransition(),
-      makePendingActiveSessionId(),
+      makePendingTransitions(),
+      makePendingActiveSessionIds(),
     );
 
     const result = await requestTransition.invoke({ toPhase: 'chat' }, makeConfig());
@@ -293,19 +309,19 @@ describe('session-planning.tools — request_transition', () => {
     expect(result as string).toContain('chat');
   });
 
-  it('does NOT touch trainingService or pendingActiveSessionId', async () => {
+  it('does NOT touch trainingService or pendingActiveSessionIds', async () => {
     const trainingService = makeTrainingService();
-    const pendingActiveSessionId = makePendingActiveSessionId();
+    const pendingActiveSessionIds = makePendingActiveSessionIds();
     const [, requestTransition] = buildTools(
       trainingService,
       makeWorkoutPlanRepo(),
-      makePendingTransition(),
-      pendingActiveSessionId,
+      makePendingTransitions(),
+      pendingActiveSessionIds,
     );
 
     await requestTransition.invoke({ toPhase: 'chat' }, makeConfig());
 
     expect(trainingService.startSession).not.toHaveBeenCalled();
-    expect(pendingActiveSessionId.value).toBeNull();
+    expect(pendingActiveSessionIds.size).toBe(0);
   });
 });

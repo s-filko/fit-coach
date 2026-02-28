@@ -7,6 +7,8 @@ import type { ConversationPhase } from '@domain/conversation/ports';
 import type { ITrainingService } from '@domain/training/ports';
 import { SetDataSchema } from '@domain/training/set-data.types';
 
+import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
+
 import { createLogger } from '@shared/logger';
 
 const log = createLogger('training-tools');
@@ -25,21 +27,22 @@ export const LLM_ERROR_PREFIX = 'LLM_ERROR:';
 
 export interface TrainingToolsDeps {
   trainingService: ITrainingService;
-  /** Mutable ref — finish_training writes here, extractNode propagates to parent state */
-  pendingTransition: { value: TransitionRequest | null };
-  /** Mutable ref — agentNode writes current sessionId before each model.invoke */
-  currentSessionId: { value: string | null };
+  /** Per-user map — finish_training sets entry by userId, extractNode deletes it */
+  pendingTransitions: IPendingRefMap<TransitionRequest | null>;
+  /** Per-user map — agentNode sets current sessionId by userId before each model.invoke */
+  currentSessionIds: IPendingRefMap<string | null>;
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function buildTrainingTools(deps: TrainingToolsDeps) {
-  const { trainingService, pendingTransition, currentSessionId } = deps;
+  const { trainingService, pendingTransitions, currentSessionIds } = deps;
 
   const logSet = tool(
-    async(input) => {
-      const sessionId = currentSessionId.value;
+    async(input, config) => {
+      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined ?? '';
+      const sessionId = currentSessionIds.get(userId) ?? null;
       if (!sessionId) {
-        log.error('log_set called without active sessionId');
+        log.error({ userId }, 'log_set called without active sessionId');
         return `${SYSTEM_ERROR_PREFIX} No active training session found. Cannot log set.`;
       }
 
@@ -127,10 +130,11 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
   );
 
   const nextExercise = tool(
-    async() => {
-      const sessionId = currentSessionId.value;
+    async(_input, config) => {
+      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined ?? '';
+      const sessionId = currentSessionIds.get(userId) ?? null;
       if (!sessionId) {
-        log.error('next_exercise called without active sessionId');
+        log.error({ userId }, 'next_exercise called without active sessionId');
         return `${SYSTEM_ERROR_PREFIX} No active training session found. Cannot complete exercise.`;
       }
 
@@ -155,10 +159,11 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
   );
 
   const skipExercise = tool(
-    async(input) => {
-      const sessionId = currentSessionId.value;
+    async(input, config) => {
+      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined ?? '';
+      const sessionId = currentSessionIds.get(userId) ?? null;
       if (!sessionId) {
-        log.error('skip_exercise called without active sessionId');
+        log.error({ userId }, 'skip_exercise called without active sessionId');
         return `${SYSTEM_ERROR_PREFIX} No active training session found. Cannot skip exercise.`;
       }
 
@@ -181,10 +186,11 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
   );
 
   const finishTraining = tool(
-    async(input) => {
-      const sessionId = currentSessionId.value;
+    async(input, config) => {
+      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined ?? '';
+      const sessionId = currentSessionIds.get(userId) ?? null;
       if (!sessionId) {
-        log.error('finish_training called without active sessionId');
+        log.error({ userId }, 'finish_training called without active sessionId');
         return `${SYSTEM_ERROR_PREFIX} No active training session found. Cannot complete session.`;
       }
 
@@ -192,10 +198,10 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
         const session = await trainingService.completeSession(sessionId);
         const duration = session.durationMinutes ?? 0;
 
-        pendingTransition.value = {
+        pendingTransitions.set(userId, {
           toPhase: 'chat' as ConversationPhase,
           reason: 'training_completed',
-        };
+        });
 
         const feedbackNote = input.feedback ? ` Feedback: "${input.feedback}".` : '';
         return `Session completed in ${duration} min.${feedbackNote} Great work!`;
