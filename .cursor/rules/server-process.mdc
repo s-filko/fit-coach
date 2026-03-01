@@ -5,18 +5,22 @@ alwaysApply: true
 
 # Dev Server Process Rules
 
-The user runs the dev server manually (`npm run dev` in `apps/server`).
-It writes logs to `logs/server.log` and `logs/bot.log` via `tee`.
+The user runs the dev server and bot manually. Both write logs to `logs/server.log` and
+`logs/bot.log` via `tee -a` (built into the npm scripts in `apps/server/package.json` and
+`apps/bot/package.json`). The user starts them — the AI never does.
 
-## NEVER do this
+## NEVER do this (AI assistant rules)
 
-- NEVER run `npm run dev`, `npm run start`, or any command that starts a server process
+- NEVER run `npm run dev`, `npm run start`, or any command that starts a server or bot process
 - NEVER run `tsx src/index.ts` or any variant that boots the Fastify or bot process
 - NEVER start a second server instance — it will corrupt logs via `tee` stream collision
-- NEVER write to `logs/server.log` or `logs/bot.log` directly (no `>`, `>>`, pipes, redirects)
-- NEVER pipe anything into these log files from any shell command
+- NEVER write to `logs/server.log` or `logs/bot.log` directly from an AI-issued shell command
+  (no `>`, `>>`, explicit pipes or redirects to these files)
 - NEVER run `tail -f` or any streaming/watch command on log files
 - NEVER run commands whose stdout or stderr could be redirected into log files
+
+Note: the `tee -a` inside `npm run dev` / `npm run serve-bot` is intentional and run by the
+**user**, not the AI. Do not remove or modify those scripts.
 
 ## For e2e / manual testing
 
