@@ -67,12 +67,12 @@ echo "==> Starting services"
 docker compose -f "$COMPOSE_FILE" -p "$PROJECT" up -d
 
 # --- Health check ---
-echo "==> Waiting for health check..."
+CONTAINER="fitcoach-${DEPLOY_ENV}-server"
+echo "==> Waiting for health check (${CONTAINER})..."
 HEALTH_OK=false
 for i in $(seq 1 12); do
   sleep 5
-  if docker compose -f "$COMPOSE_FILE" -p "$PROJECT" exec -T server \
-    wget --spider -q http://127.0.0.1:3000/health 2>/dev/null; then
+  if docker exec "$CONTAINER" wget --spider -q http://127.0.0.1:3000/health 2>/dev/null; then
     HEALTH_OK=true
     break
   fi
