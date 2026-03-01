@@ -3,6 +3,7 @@ import {
   formattingDirective,
   identityDirective,
   languageDirective,
+  nameUsageDirective,
   outputDirective,
 } from '../prompt-directives';
 
@@ -74,6 +75,14 @@ describe('prompt-directives', () => {
     });
   });
 
+  describe('nameUsageDirective', () => {
+    it('restricts name usage to sparingly', () => {
+      const result = nameUsageDirective();
+      expect(result).toContain('SPARINGLY');
+      expect(result).toContain('Do NOT repeat the name');
+    });
+  });
+
   describe('outputDirective', () => {
     it('prohibits JSON in response', () => {
       const result = outputDirective();
@@ -85,6 +94,7 @@ describe('prompt-directives', () => {
     it('includes all directives by default', () => {
       const result = composeDirectives(makeUser());
       expect(result).toContain('FitCoach');
+      expect(result).toContain('SPARINGLY');
       expect(result).toContain('=== FORMATTING ===');
       expect(result).toMatch(/en/);
       expect(result).toContain('Do NOT include JSON');

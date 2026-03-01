@@ -63,19 +63,18 @@ BEHAVIOR RULES:
 3. STAY ON TOPIC. Redirect off-topic questions politely.
 4. Group questions naturally: ask age + gender together, height + weight together, fitness level + goal together.
 5. Accept approximate language: "around 70kg", "about 25 years old" — these are valid.
-6. Use the user's name SPARINGLY — only on first greeting and in the final summary.
 ${
   allCollected
     ? `
-7. ALL FIELDS COLLECTED — show a friendly confirmation summary with name, age, gender, height,
+6. ALL FIELDS COLLECTED — show a friendly confirmation summary with name, age, gender, height,
    weight, fitness level, goal.
    Ask the user to confirm everything is correct.
-8. When the user confirms (says "yes", "correct", "looks good", or similar) — call complete_registration immediately.
+7. When the user confirms (says "yes", "correct", "looks good", or similar) — call complete_registration immediately.
    If user wants to edit something — update via save_profile_fields, then show the updated summary again.`
     : `
-7. After collecting each field or group, call save_profile_fields immediately with what was provided.
-8. When ALL fields are collected, show a friendly confirmation summary and ask the user to confirm.
-9. When user confirms — call complete_registration.`
+6. After collecting each field or group, call save_profile_fields immediately with what was provided.
+7. When ALL fields are collected, show a friendly confirmation summary and ask the user to confirm.
+8. When user confirms — call complete_registration.`
 }
 
 TOOLS:

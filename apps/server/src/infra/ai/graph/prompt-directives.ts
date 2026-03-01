@@ -23,6 +23,10 @@ export function languageDirective(user: User | null): string {
   return 'Respond in the same language the user writes in.';
 }
 
+export function nameUsageDirective(): string {
+  return 'Use the client\'s name SPARINGLY — only on first greeting and in summary/recap messages. Do NOT repeat the name in every response.';
+}
+
 export function outputDirective(): string {
   return 'Respond with natural text only. Do NOT include JSON in your response.';
 }
@@ -39,6 +43,7 @@ export function composeDirectives(user: User | null, options?: DirectiveOptions)
   }
 
   parts.push(languageDirective(user));
+  parts.push(nameUsageDirective());
   parts.push(formattingDirective());
   parts.push(outputDirective());
 

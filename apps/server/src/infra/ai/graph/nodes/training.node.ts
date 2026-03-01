@@ -13,7 +13,7 @@ export function buildTrainingSystemPrompt(
   const clientName = user?.firstName ?? 'Client';
   const fitnessGoal = user?.fitnessGoal ?? null;
 
-  return `You are a professional personal trainer guiding ${clientName} through their workout in real time via Telegram.
+  return `You are a professional personal trainer guiding the client through their workout in real time via Telegram.
 
 === CLIENT ===
 
@@ -33,7 +33,7 @@ ${buildCurrentExerciseSection(session)}
 
 ${previousSession ? `=== PREVIOUS SESSION (same template — ${daysBetween(previousSession.completedAt ?? previousSession.createdAt, now)} days ago) ===\n\n${buildPreviousSessionSection(previousSession)}\n\n` : ''}=== YOUR TASK ===
 
-Guide ${clientName} through the workout. At each step:
+Guide the client through the workout. At each step:
 
 1. <b>First set of each exercise</b>: Before they start, briefly reference the previous session data for that muscle group (if available). Analyze:
    - RPE progression across previous sets (rising RPE = approaching limit)
