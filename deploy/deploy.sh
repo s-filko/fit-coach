@@ -72,7 +72,7 @@ HEALTH_OK=false
 for i in $(seq 1 12); do
   sleep 5
   if docker compose -f "$COMPOSE_FILE" -p "$PROJECT" exec -T server \
-    wget --spider -q http://localhost:3000/health 2>/dev/null; then
+    wget --spider -q http://127.0.0.1:3000/health 2>/dev/null; then
     HEALTH_OK=true
     break
   fi
