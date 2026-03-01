@@ -1,0 +1,77 @@
+services:
+  db:
+    image: ankane/pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  server:
+    build:
+      context: ../apps/server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "3000"
+    env_file:
+      - ../.env.${DEPLOY_ENV}
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - default
+      - npm_net
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  bot:
+    build:
+      context: ../apps/bot
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../.env.${DEPLOY_ENV}
+    environment:
+      SERVER_URL: http://server:3000
+    depends_on:
+      server:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  npm_net:
+    external: true
+    name: ${NPM_NETWORK:-nginx-proxy-manager_default}
+
+volumes:
+  pgdata:

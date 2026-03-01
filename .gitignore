@@ -21,6 +21,7 @@ apps/server/dist/
 .env.*
 **/.env
 **/.env.*
+!**/.env.example
 
 ### Logs & reports
 logs/
@@ -36,8 +37,6 @@ coverage/
 ### Database backups
 backups/
 
-### Lockfiles
+### Lockfiles (root only)
 /package-lock.json
-apps/server/package-lock.json
-apps/bot/package-lock.json
 apps/server/node_modules/.package-lock.json

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Fit Coach</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --tg-theme-bg-color: #ffffff;
+            --tg-theme-text-color: #000000;
+            --tg-theme-hint-color: #999999;
+            --tg-theme-link-color: #2481cc;
+            --tg-theme-button-color: #2481cc;
+            --tg-theme-button-text-color: #ffffff;
+            --tg-theme-secondary-bg-color: #f0f0f0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--tg-theme-bg-color);
+            color: var(--tg-theme-text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .container {
+            text-align: center;
+            max-width: 360px;
+            width: 100%;
+        }
+
+        .icon {
+            width: 96px;
+            height: 96px;
+            border-radius: 24px;
+            background: linear-gradient(135deg, var(--tg-theme-button-color), #5ba3d9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 48px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 15px;
+            color: var(--tg-theme-hint-color);
+            margin-bottom: 32px;
+            line-height: 1.4;
+        }
+
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: var(--tg-theme-secondary-bg-color);
+            border-radius: 12px;
+            font-size: 14px;
+            color: var(--tg-theme-hint-color);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #f59e0b;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .user-info {
+            margin-top: 32px;
+            padding: 16px;
+            background: var(--tg-theme-secondary-bg-color);
+            border-radius: 12px;
+            font-size: 13px;
+            color: var(--tg-theme-hint-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">&#x1F3CB;</div>
+        <h1>Fit Coach</h1>
+        <p class="subtitle">Mini App in development.<br>Stay tuned!</p>
+        <div class="status">
+            <span class="status-dot"></span>
+            Coming soon
+        </div>
+        <div class="user-info" id="user-info"></div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        const info = document.getElementById('user-info');
+        if (tg.initDataUnsafe?.user) {
+            const u = tg.initDataUnsafe.user;
+            info.textContent = `${u.first_name || ''} ${u.last_name || ''} (@${u.username || 'N/A'})`.trim();
+        } else {
+            info.textContent = 'Open this page inside Telegram to see your info.';
+        }
+    </script>
+</body>
+</html>

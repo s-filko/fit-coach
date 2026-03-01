@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "serve-bot": "mkdir -p ../../logs && npx tsx index.ts 2>&1 | tee -a ../../logs/bot.log",
-    "dev": "mkdir -p ../../logs && npx tsx index.ts 2>&1 | tee -a ../../logs/bot.log"
+    "dev": "mkdir -p ../../logs && npx tsx index.ts 2>&1 | tee -a ../../logs/bot.log",
+    "build": "tsup index.ts --format cjs --out-dir dist --clean",
+    "start": "node dist/index.js"
   },
   "keywords": [],
   "author": "",
@@ -21,6 +23,8 @@
   "devDependencies": {
     "@types/node": "^22.15.29",
     "@types/node-telegram-bot-api": "^0.64.8",
-    "tsx": "^4.19.4"
+    "tsup": "^8.1.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.2"
   }
 }
