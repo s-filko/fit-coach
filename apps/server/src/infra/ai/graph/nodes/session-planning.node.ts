@@ -2,6 +2,8 @@ import type { SessionPlanningContextData } from '@domain/training/services/sessi
 import type { ExerciseWithMuscles, WorkoutSessionWithDetails } from '@domain/training/types';
 import type { User } from '@domain/user/services/user.service';
 
+import { composeDirectives } from '@infra/ai/graph/prompt-directives';
+
 /* eslint-disable max-len */
 export function buildSessionPlanningSystemPrompt(
   user: User | null,
@@ -73,9 +75,7 @@ export function buildSessionPlanningSystemPrompt(
       ? `${context.daysSinceLastWorkout} days since last workout`
       : 'No previous workouts';
 
-  return `You are FitCoach — a professional fitness trainer helping a client plan their next training session.
-
-Current Date: ${dateOnly}
+  return `Current Date: ${dateOnly}
 ${daysSince}
 
 === CLIENT PROFILE ===
@@ -139,12 +139,7 @@ Adjust the plan if the client requests changes (different exercises, shorter dur
 
 If no active plan exists → tell the client they need a workout plan first and call \`request_transition({ toPhase: 'chat' })\`.
 
-=== FORMATTING ===
-
-Use Telegram HTML for all responses: <b>bold</b> for exercise names and key data, <i>italic</i> for tips or secondary info.
-Do NOT use Markdown asterisks (**bold**), underscores (_italic_), or any other Markdown syntax.
-Respond in the user's language (detected from their messages). Never use Russian or any other language unless the user writes in it.
-Respond with natural text only. Do NOT include JSON in your response.`;
+${composeDirectives(user)}`;
 }
 
 function buildActivePlanSection(

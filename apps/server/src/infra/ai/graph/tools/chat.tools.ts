@@ -14,7 +14,7 @@ export interface ChatToolsDeps {
 }
 
 const UPDATE_PROFILE_DESCRIPTION = [
-  "Update one or more fields of the user's fitness profile.",
+  'Update one or more fields of the user\'s fitness profile.',
   'Call this when the user explicitly tells you their name, age, gender, height, weight,',
   'fitness level, or goal — or when they want to change an existing value.',
   'Only include fields the user actually mentioned.',
@@ -32,10 +32,10 @@ export function buildChatTools(deps: ChatToolsDeps) {
   const { userService, pendingTransitions } = deps;
 
   const updateProfile = tool(
-    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async (input, config) => {
+     
+    async(input, config) => {
       // configurable is typed as Record<string, unknown> in LangChain
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+       
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
         return 'Error: could not identify user. Please try again.';
@@ -72,8 +72,8 @@ export function buildChatTools(deps: ChatToolsDeps) {
   );
 
   const requestTransition = tool(
-    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async (input, config) => {
+     
+    async(input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       pendingTransitions.set(userId, {
         toPhase: input.toPhase as ConversationPhase,

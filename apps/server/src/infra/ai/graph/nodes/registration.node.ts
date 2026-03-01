@@ -2,6 +2,8 @@
 import { FIELD_HINTS, FIELD_LABELS, type ProfileDataKey } from '@domain/user/services/registration.validation';
 import { User } from '@domain/user/services/user.service';
 
+import { composeDirectives } from '@infra/ai/graph/prompt-directives';
+
 const PROFILE_FIELDS: ProfileDataKey[] = ['age', 'gender', 'height', 'weight', 'fitnessLevel', 'fitnessGoal'];
 
 /**
@@ -47,17 +49,9 @@ export function buildRegistrationSystemPrompt(user: User | null): string {
     ? `USER NAME (from Telegram): '${telegramName}'. Greet them by name. Include it in the final summary.`
     : 'USER NAME: not provided. Ask for their name early in the conversation.';
 
-  const langHint = user?.languageCode
-    ? `USER LANGUAGE (from Telegram): '${user.languageCode}'. Always respond in this language.`
-    : 'USER LANGUAGE: unknown — respond in the same language the user writes in.';
-
   const allCollected = missing.length === 0;
 
-  return `You are FitCoach — a professional fitness coach getting to know a new client.
-
-${langHint}
-
-${nameContext}
+  return `${nameContext}
 
 ${collectedSection}
 
@@ -69,26 +63,24 @@ BEHAVIOR RULES:
 3. STAY ON TOPIC. Redirect off-topic questions politely.
 4. Group questions naturally: ask age + gender together, height + weight together, fitness level + goal together.
 5. Accept approximate language: "around 70kg", "about 25 years old" — these are valid.
-6. Use Telegram HTML: <b>bold</b> for key data, <i>italic</i> for secondary info. No Markdown asterisks. Minimal emoji.
-7. Use the user's name SPARINGLY — only on first greeting and in the final summary.
+6. Use the user's name SPARINGLY — only on first greeting and in the final summary.
 ${
   allCollected
     ? `
-8. ALL FIELDS COLLECTED — show a friendly confirmation summary with name, age, gender, height,
+7. ALL FIELDS COLLECTED — show a friendly confirmation summary with name, age, gender, height,
    weight, fitness level, goal.
    Ask the user to confirm everything is correct.
-9. When the user confirms (says "yes", "correct", "looks good", or similar) — call complete_registration immediately.
+8. When the user confirms (says "yes", "correct", "looks good", or similar) — call complete_registration immediately.
    If user wants to edit something — update via save_profile_fields, then show the updated summary again.`
     : `
-8. After collecting each field or group, call save_profile_fields immediately with what was provided.
-9. When ALL fields are collected, show a friendly confirmation summary and ask the user to confirm.
-10. When user confirms — call complete_registration.`
+7. After collecting each field or group, call save_profile_fields immediately with what was provided.
+8. When ALL fields are collected, show a friendly confirmation summary and ask the user to confirm.
+9. When user confirms — call complete_registration.`
 }
 
 TOOLS:
 - save_profile_fields: call whenever user provides profile data (age, gender, height, weight, level, goal, name).
-
 - complete_registration: call ONLY when all fields are confirmed by the user.
 
-Respond with natural conversational text. Do NOT include JSON.`;
+${composeDirectives(user)}`;
 }

@@ -125,7 +125,7 @@ export class LLMService implements ILLMService {
           const error = new Error(
             'CONFIGURATION ERROR: JSON mode is enabled but system prompt does not mention "json". ' +
               'This will cause OpenAI/OpenRouter API error: "Response input messages must contain ' +
-              "the word 'json' in some form to use 'text.format' of type 'json_object'.\"",
+              'the word \'json\' in some form to use \'text.format\' of type \'json_object\'."',
           );
           effectiveLog.error(
             {

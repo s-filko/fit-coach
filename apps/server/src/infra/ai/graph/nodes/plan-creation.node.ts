@@ -1,7 +1,8 @@
 import type { ExerciseWithMuscles } from '@domain/training/types';
 import type { User } from '@domain/user/services/user.service';
 
-// eslint-disable-next-line max-len
+import { composeDirectives } from '@infra/ai/graph/prompt-directives';
+
 export function buildPlanCreationSystemPrompt(user: User | null, exercises: ExerciseWithMuscles[]): string {
   const now = new Date();
   const dateOnly = now.toISOString().split('T')[0] ?? '';
@@ -51,9 +52,7 @@ export function buildPlanCreationSystemPrompt(user: User | null, exercises: Exer
     })
     .join('\n\n');
 
-  return `You are FitCoach — a professional fitness trainer helping a client create their personalized workout plan.
-
-Current Date: ${dateOnly}
+  return `Current Date: ${dateOnly}
 
 === CLIENT PROFILE ===
 
@@ -91,11 +90,8 @@ Step 4 — when user explicitly approves: call save_workout_plan with the comple
 - Match exercises to fitness level: beginner → machines/basics, intermediate → mix, advanced → complex movements.
 - Balance volume. Ensure recovery between sessions targeting the same muscles.
 - Progression rules must be specific and actionable.
-- ALWAYS respond in the same language the user writes in.
-  Translate exercise names to the user's language, add English name in parentheses.
+- Translate exercise names to the user's language, add English name in parentheses.
   JSON fields (exerciseName, key, etc.) stay in English.
-- Use Telegram HTML in message text: <b>bold</b> for names, <i>italic</i> for tips.
-  Do NOT use Markdown or asterisks.
 
 === TOOLS ===
 
@@ -104,5 +100,5 @@ Step 4 — when user explicitly approves: call save_workout_plan with the comple
   Plan must include all required fields (sessionTemplates, recoveryGuidelines, progressionRules).
 - request_transition: call with toPhase="chat" ONLY when user explicitly cancels plan creation.
 
-Respond with natural text only. Do NOT include JSON in your response.`;
+${composeDirectives(user)}`;
 }

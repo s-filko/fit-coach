@@ -10,7 +10,6 @@
 
 import { AIMessage, ToolMessage } from '@langchain/core/messages';
 
-import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
 import type {
   IExerciseRepository,
   ITrainingService,
@@ -18,6 +17,8 @@ import type {
   IWorkoutSessionRepository,
 } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
+
+import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
 
 const BASE_USER = {
   id: 'u1',
@@ -106,7 +107,7 @@ describe('session-planning.subgraph — text response (no tools)', () => {
     jest.resetModules();
   });
 
-  it('sets responseMessage and no side effects when LLM responds with text only', async () => {
+  it('sets responseMessage and no side effects when LLM responds with text only', async() => {
     const mockInvoke = jest
       .fn()
       .mockResolvedValue(new AIMessage({ content: 'How are you feeling today?', tool_calls: [] }));
@@ -142,9 +143,9 @@ describe('session-planning.subgraph — start_training_session tool', () => {
     jest.resetModules();
   });
 
-  it('extractNode propagates activeSessionId to output when start_training_session is called', async () => {
+  it('extractNode propagates activeSessionId to output when start_training_session is called', async() => {
     let llmCallCount = 0;
-    const mockInvoke = jest.fn().mockImplementation(async () => {
+    const mockInvoke = jest.fn().mockImplementation(async() => {
       llmCallCount++;
       if (llmCallCount === 1) {
         return new AIMessage({
@@ -159,7 +160,7 @@ describe('session-planning.subgraph — start_training_session tool', () => {
           ],
         });
       }
-      return new AIMessage({ content: "Let's go! Starting training.", tool_calls: [] });
+      return new AIMessage({ content: 'Let\'s go! Starting training.', tool_calls: [] });
     });
 
     jest.mock('@infra/ai/model.factory', () => ({
@@ -177,7 +178,7 @@ describe('session-planning.subgraph — start_training_session tool', () => {
     });
 
     const result = await subgraph.invoke(
-      { userId: 'u1', userMessage: "yes, let's start!", user: BASE_USER },
+      { userId: 'u1', userMessage: 'yes, let\'s start!', user: BASE_USER },
       { recursionLimit: 10, configurable: { userId: 'u1', thread_id: 'u1' } },
     );
 
@@ -191,10 +192,10 @@ describe('session-planning.subgraph — tool-calling loop (recursion prevention)
     jest.resetModules();
   });
 
-  it('includes ToolMessage from current turn in the prompt for the second LLM call', async () => {
+  it('includes ToolMessage from current turn in the prompt for the second LLM call', async() => {
     const capturedMessages: unknown[][] = [];
 
-    const mockInvoke = jest.fn().mockImplementation(async (messages: unknown[]) => {
+    const mockInvoke = jest.fn().mockImplementation(async(messages: unknown[]) => {
       capturedMessages.push([...messages]);
       if (capturedMessages.length === 1) {
         return new AIMessage({
@@ -240,10 +241,10 @@ describe('session-planning.subgraph — tool-calling loop (recursion prevention)
     expect(hasToolMessage).toBe(true);
   });
 
-  it('includes the AIMessage with tool_calls in the prompt for the second LLM call', async () => {
+  it('includes the AIMessage with tool_calls in the prompt for the second LLM call', async() => {
     const capturedMessages: unknown[][] = [];
 
-    const mockInvoke = jest.fn().mockImplementation(async (messages: unknown[]) => {
+    const mockInvoke = jest.fn().mockImplementation(async(messages: unknown[]) => {
       capturedMessages.push([...messages]);
       if (capturedMessages.length === 1) {
         return new AIMessage({

@@ -1,6 +1,8 @@
-/* eslint-disable max-len, @typescript-eslint/explicit-function-return-type */
+/* eslint-disable max-len */
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import type { User } from '@domain/user/services/user.service';
+
+import { composeDirectives } from '@infra/ai/graph/prompt-directives';
 
 export function buildTrainingSystemPrompt(
   user: User | null,
@@ -74,12 +76,9 @@ CRITICAL RULES — NEVER VIOLATE:
 
 FIRST MESSAGE RULE: If CURRENT PROGRESS shows "No exercises started yet", display the full workout plan clearly (all exercises with sets/reps/weight), then tell the user what the first exercise is and how to start.
 
-=== FORMATTING ===
+Do NOT include internal IDs in your response text. Exercise IDs are for tool calls only.
 
-Use Telegram HTML: <b>bold</b> for exercise names and key data, <i>italic</i> for tips or secondary info.
-Do NOT use Markdown (no **bold**, no _italic_).
-Respond in the user's language (detected from their messages). Never use Russian or any other language unless the user writes in it.
-Do NOT include JSON or internal IDs in your response text. Exercise IDs are for tool calls only.`;
+${composeDirectives(user, { includeIdentity: false })}`;
 }
 
 function buildSessionPlanSection(session: WorkoutSessionWithDetails): string {

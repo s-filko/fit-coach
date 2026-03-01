@@ -78,7 +78,7 @@ const recoveryGuidelinesSchema = z.object({
 });
 
 const SAVE_WORKOUT_PLAN_DESCRIPTION = [
-  "Save the user's approved workout plan to the database.",
+  'Save the user\'s approved workout plan to the database.',
   'Call this ONLY when the user has explicitly approved the complete plan.',
   'Do NOT call this during discussion, proposal, or refinement.',
   'All fields (sessionTemplates, recoveryGuidelines, progressionRules) must be complete.',
@@ -94,9 +94,9 @@ export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
   const { workoutPlanRepository, pendingTransitions } = deps;
 
   const saveWorkoutPlan = tool(
-    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async (input, config) => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+     
+    async(input, config) => {
+       
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
         return 'Error: could not identify user. Please try again.';
@@ -138,8 +138,8 @@ export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
   );
 
   const requestTransition = tool(
-    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async (input, config) => {
+     
+    async(input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       pendingTransitions.set(userId, {
         toPhase: input.toPhase as ConversationPhase,
