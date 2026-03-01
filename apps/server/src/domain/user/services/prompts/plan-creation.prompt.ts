@@ -11,7 +11,7 @@ export interface UserProfile {
 
 /**
  * System prompt for plan_creation phase
- * 
+ *
  * This prompt helps LLM:
  * 1. Understand user's fitness goals, experience, and constraints
  * 2. Design a comprehensive long-term workout plan
@@ -57,15 +57,13 @@ export function buildPlanCreationPrompt(context: PlanCreationPromptContext): str
   );
 
   const exercisesSection = Object.entries(exercisesByCategory)
-    .map(
-      ([category, exs]) => {
-        const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
-        const exerciseList = exs
-          .map((ex) => `- ${ex.name} (ID: ${ex.id}, Equipment: ${ex.equipment}, Primary: ${ex.primaryMuscles.join(', ')})`)
-          .join('\n');
-        return `### ${categoryName} Exercises\n${exerciseList}`;
-      },
-    )
+    .map(([category, exs]) => {
+      const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
+      const exerciseList = exs
+        .map(ex => `- ${ex.name} (ID: ${ex.id}, Equipment: ${ex.equipment}, Primary: ${ex.primaryMuscles.join(', ')})`)
+        .join('\n');
+      return `### ${categoryName} Exercises\n${exerciseList}`;
+    })
     .join('\n\n');
 
   const intro = 'You are FitCoach, a professional fitness trainer helping a user';

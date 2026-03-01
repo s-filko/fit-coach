@@ -213,9 +213,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     complexity: 'beginner',
     typicalDurationMinutes: 6,
     requiresSpotter: false,
-    muscleGroups: [
-      { muscle: 'triceps', involvement: 'primary' },
-    ],
+    muscleGroups: [{ muscle: 'triceps', involvement: 'primary' }],
   },
   {
     name: 'Leg Extension',
@@ -227,9 +225,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     complexity: 'beginner',
     typicalDurationMinutes: 6,
     requiresSpotter: false,
-    muscleGroups: [
-      { muscle: 'quads', involvement: 'primary' },
-    ],
+    muscleGroups: [{ muscle: 'quads', involvement: 'primary' }],
   },
   {
     name: 'Leg Curl',
@@ -241,9 +237,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     complexity: 'beginner',
     typicalDurationMinutes: 6,
     requiresSpotter: false,
-    muscleGroups: [
-      { muscle: 'hamstrings', involvement: 'primary' },
-    ],
+    muscleGroups: [{ muscle: 'hamstrings', involvement: 'primary' }],
   },
   {
     name: 'Lateral Raise',
@@ -641,9 +635,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     complexity: 'beginner',
     typicalDurationMinutes: 6,
     requiresSpotter: false,
-    muscleGroups: [
-      { muscle: 'triceps', involvement: 'primary' },
-    ],
+    muscleGroups: [{ muscle: 'triceps', involvement: 'primary' }],
   },
   {
     name: 'Cable Overhead Tricep Extension',
@@ -655,9 +647,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     complexity: 'intermediate',
     typicalDurationMinutes: 6,
     requiresSpotter: false,
-    muscleGroups: [
-      { muscle: 'triceps', involvement: 'primary' },
-    ],
+    muscleGroups: [{ muscle: 'triceps', involvement: 'primary' }],
   },
 
   // --- MACHINE / CABLE BICEP EXERCISES ---
@@ -737,9 +727,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     complexity: 'beginner',
     typicalDurationMinutes: 6,
     requiresSpotter: false,
-    muscleGroups: [
-      { muscle: 'calves', involvement: 'primary' },
-    ],
+    muscleGroups: [{ muscle: 'calves', involvement: 'primary' }],
   },
   {
     name: 'Hack Squat Machine',
@@ -768,9 +756,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     complexity: 'beginner',
     typicalDurationMinutes: 6,
     requiresSpotter: false,
-    muscleGroups: [
-      { muscle: 'calves', involvement: 'primary' },
-    ],
+    muscleGroups: [{ muscle: 'calves', involvement: 'primary' }],
   },
   {
     name: 'Seated Calf Raise Machine',
@@ -782,9 +768,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     complexity: 'beginner',
     typicalDurationMinutes: 6,
     requiresSpotter: false,
-    muscleGroups: [
-      { muscle: 'calves', involvement: 'primary' },
-    ],
+    muscleGroups: [{ muscle: 'calves', involvement: 'primary' }],
   },
 
   // --- CORE / POSTERIOR CHAIN / FUNCTIONAL ---
@@ -1029,11 +1013,14 @@ export async function seedExercises() {
 
     // Insert muscle group mappings
     for (const mg of seed.muscleGroups) {
-      await db.insert(exerciseMuscleGroups).values({
-        exerciseId: exercise.id,
-        muscleGroup: mg.muscle,
-        involvement: mg.involvement,
-      }).onConflictDoNothing();
+      await db
+        .insert(exerciseMuscleGroups)
+        .values({
+          exerciseId: exercise.id,
+          muscleGroup: mg.muscle,
+          involvement: mg.involvement,
+        })
+        .onConflictDoNothing();
     }
 
     log.debug({ name: seed.name, category: seed.category }, 'exercise seeded');

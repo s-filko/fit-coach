@@ -1,10 +1,6 @@
 import { desc, eq } from 'drizzle-orm';
 
-import {
-  ConversationPhase,
-  GetMessagesOptions,
-  IConversationContextService,
-} from '@domain/conversation/ports';
+import { ConversationPhase, GetMessagesOptions, IConversationContextService } from '@domain/conversation/ports';
 import { ChatMsg } from '@domain/user/ports';
 
 const DEFAULT_MAX_TURNS = 20;

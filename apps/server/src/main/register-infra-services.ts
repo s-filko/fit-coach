@@ -22,12 +22,10 @@ export async function registerInfraServices(
   const { PromptService } = await import('@domain/user/services/prompt.service');
   const { UserService } = await import('@domain/user/services/user.service');
   const { CONVERSATION_CONTEXT_SERVICE_TOKEN } = await import('@domain/conversation/ports');
-  const { DrizzleConversationContextService } = await import('@infra/conversation/drizzle-conversation-context.service');
-  const {
-    PROMPT_SERVICE_TOKEN,
-    USER_REPOSITORY_TOKEN,
-    USER_SERVICE_TOKEN,
-  } = await import('@domain/user/ports');
+  const { DrizzleConversationContextService } = await import(
+    '@infra/conversation/drizzle-conversation-context.service'
+  );
+  const { PROMPT_SERVICE_TOKEN, USER_REPOSITORY_TOKEN, USER_SERVICE_TOKEN } = await import('@domain/user/ports');
 
   // Training domain
   const { TrainingService } = await import('@domain/training/services/training.service');
@@ -95,15 +93,18 @@ export async function registerInfraServices(
   await checkpointer.setup();
 
   const { buildConversationGraph, CONVERSATION_GRAPH_TOKEN } = await import('@infra/ai/graph/conversation.graph');
-  container.register(CONVERSATION_GRAPH_TOKEN, buildConversationGraph({
-    trainingService: container.get(TRAINING_SERVICE_TOKEN),
-    workoutPlanRepo: container.get(WORKOUT_PLAN_REPOSITORY_TOKEN),
-    workoutSessionRepo: container.get(WORKOUT_SESSION_REPOSITORY_TOKEN),
-    exerciseRepository: container.get(EXERCISE_REPOSITORY_TOKEN),
-    userService: container.get(USER_SERVICE_TOKEN),
-    contextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN),
-    checkpointer,
-  }));
+  container.register(
+    CONVERSATION_GRAPH_TOKEN,
+    buildConversationGraph({
+      trainingService: container.get(TRAINING_SERVICE_TOKEN),
+      workoutPlanRepo: container.get(WORKOUT_PLAN_REPOSITORY_TOKEN),
+      workoutSessionRepo: container.get(WORKOUT_SESSION_REPOSITORY_TOKEN),
+      exerciseRepository: container.get(EXERCISE_REPOSITORY_TOKEN),
+      userService: container.get(USER_SERVICE_TOKEN),
+      contextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN),
+      checkpointer,
+    }),
+  );
 
   return container;
 }

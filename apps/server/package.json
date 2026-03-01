@@ -35,8 +35,8 @@
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "lint:file": "eslint",
-    "format": "prettier --write src/**/*.{ts,js,json}",
-    "format:check": "prettier --check src/**/*.{ts,js,json}",
+    "format": "prettier --write 'src/**/*.ts'",
+    "format:check": "prettier --check 'src/**/*.ts'",
     "type-check": "tsc --noEmit",
     "check-all": "npm run lint && npm run format:check && npm run type-check",
     "prepare": "husky"

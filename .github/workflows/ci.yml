@@ -5,6 +5,7 @@ on:
     branches: [main, dev]
   pull_request:
     branches: [main, dev]
+  workflow_call:
 
 jobs:
   check:
@@ -22,6 +23,23 @@ jobs:
           cache-dependency-path: apps/server/package-lock.json
 
       - run: npm ci
+
+      - name: Create test env
+        run: |
+          printf '%s\n' \
+            'NODE_ENV=test' \
+            'PORT=3000' \
+            'HOST=0.0.0.0' \
+            'DB_HOST=localhost' \
+            'DB_PORT=5432' \
+            'DB_USER=postgres' \
+            'DB_PASSWORD=postgres' \
+            'DB_NAME=fitcoach_test' \
+            'BOT_API_KEY=ci-key' \
+            'LLM_API_KEY=ci-key' \
+            'LLM_MODEL=mock' \
+            'LLM_TEMPERATURE=0.7' \
+            > .env.test
 
       - name: Lint
         run: npm run lint

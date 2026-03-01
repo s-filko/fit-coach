@@ -33,13 +33,14 @@ const BASE_USER = {
   fitnessGoal: null,
 };
 
-const makeUserService = (): jest.Mocked<IUserService> => ({
-  getUser: jest.fn().mockResolvedValue(BASE_USER),
-  updateProfileData: jest.fn().mockResolvedValue({ ...BASE_USER, age: 28, gender: 'male' }),
-  upsertUser: jest.fn(),
-  isRegistrationComplete: jest.fn().mockReturnValue(false),
-  needsRegistration: jest.fn().mockReturnValue(true),
-} as unknown as jest.Mocked<IUserService>);
+const makeUserService = (): jest.Mocked<IUserService> =>
+  ({
+    getUser: jest.fn().mockResolvedValue(BASE_USER),
+    updateProfileData: jest.fn().mockResolvedValue({ ...BASE_USER, age: 28, gender: 'male' }),
+    upsertUser: jest.fn(),
+    isRegistrationComplete: jest.fn().mockReturnValue(false),
+    needsRegistration: jest.fn().mockReturnValue(true),
+  }) as unknown as jest.Mocked<IUserService>;
 
 describe('registration.subgraph — tool-calling loop', () => {
   beforeEach(() => {
@@ -62,12 +63,14 @@ describe('registration.subgraph — tool-calling loop', () => {
       if (capturedMessages.length === 1) {
         return new AIMessage({
           content: '',
-          tool_calls: [{
-            id: 'tc-1',
-            name: 'save_profile_fields',
-            args: { age: 28, gender: 'male' },
-            type: 'tool_call',
-          }],
+          tool_calls: [
+            {
+              id: 'tc-1',
+              name: 'save_profile_fields',
+              args: { age: 28, gender: 'male' },
+              type: 'tool_call',
+            },
+          ],
         });
       }
       return new AIMessage({ content: 'Возраст и пол сохранены.', tool_calls: [] });
@@ -94,7 +97,7 @@ describe('registration.subgraph — tool-calling loop', () => {
     // The 2nd call must include ToolMessage in its messages array
     const secondCallMessages = capturedMessages[1] as Array<{ _getType?: () => string }>;
     const hasToolMessage = secondCallMessages.some(
-      (m) => m instanceof ToolMessage || (typeof m._getType === 'function' && m._getType() === 'tool'),
+      m => m instanceof ToolMessage || (typeof m._getType === 'function' && m._getType() === 'tool'),
     );
     // RED with bug: ToolMessage is absent → false
     // GREEN with fix: ToolMessage is present → true
@@ -114,12 +117,14 @@ describe('registration.subgraph — tool-calling loop', () => {
       if (capturedMessages.length === 1) {
         return new AIMessage({
           content: '',
-          tool_calls: [{
-            id: 'tc-2',
-            name: 'save_profile_fields',
-            args: { age: 30 },
-            type: 'tool_call',
-          }],
+          tool_calls: [
+            {
+              id: 'tc-2',
+              name: 'save_profile_fields',
+              args: { age: 30 },
+              type: 'tool_call',
+            },
+          ],
         });
       }
       return new AIMessage({ content: 'Готово.', tool_calls: [] });
@@ -143,7 +148,7 @@ describe('registration.subgraph — tool-calling loop', () => {
     const secondCallMessages = capturedMessages[1] as Array<{ _getType?: () => string; tool_calls?: unknown[] }>;
 
     const hasAIWithToolCalls = secondCallMessages.some(
-      (m) => m instanceof AIMessage && Array.isArray(m.tool_calls) && m.tool_calls.length > 0,
+      m => m instanceof AIMessage && Array.isArray(m.tool_calls) && m.tool_calls.length > 0,
     );
     // RED with bug: AIMessage(tool_calls) absent from prompt → false
     // GREEN with fix: present → true

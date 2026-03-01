@@ -13,7 +13,6 @@ import { buildSessionPlanningPrompt } from './prompts/session-planning.prompt';
 import { buildTrainingPrompt } from './prompts/training.prompt';
 
 export class PromptService implements IPromptService {
-
   // TODO: remove — registration prompt lives in infra/ai/graph/nodes/registration.node.ts
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   buildUnifiedRegistrationPrompt(_user: User): string {
@@ -49,7 +48,7 @@ export class PromptService implements IPromptService {
         fitnessLevel: context.user.fitnessLevel ?? 'beginner',
         fitnessGoal: context.user.fitnessGoal ?? 'general_fitness',
       },
-      availableExercises: context.availableExercises.map((ex) => ({
+      availableExercises: context.availableExercises.map(ex => ({
         id: ex.id,
         name: ex.name,
         category: ex.category,

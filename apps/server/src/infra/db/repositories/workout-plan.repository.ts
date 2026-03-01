@@ -65,7 +65,7 @@ export class WorkoutPlanRepository implements IWorkoutPlanRepository {
       .from(workoutPlans)
       .where(and(...conditions));
 
-    return plans.map((plan) => ({
+    return plans.map(plan => ({
       ...plan,
       planJson: plan.planJson as WorkoutPlan['planJson'],
     }));
@@ -88,9 +88,6 @@ export class WorkoutPlanRepository implements IWorkoutPlanRepository {
   }
 
   async archive(planId: string): Promise<void> {
-    await db
-      .update(workoutPlans)
-      .set({ status: 'archived', updatedAt: new Date() })
-      .where(eq(workoutPlans.id, planId));
+    await db.update(workoutPlans).set({ status: 'archived', updatedAt: new Date() }).where(eq(workoutPlans.id, planId));
   }
 }

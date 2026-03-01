@@ -46,9 +46,10 @@ const LLM_ERROR_RETRY_BUDGET = 1;
  * "I logged..." confirmations when no tool was actually called.
  */
 function buildToolResultsInjection(toolMessages: ToolMessage[]): string {
-  const lines = toolMessages.map((m) => {
+  const lines = toolMessages.map(m => {
     const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-    const isError = m.status === 'error' || content.startsWith(LLM_ERROR_PREFIX) || content.startsWith(SYSTEM_ERROR_PREFIX);
+    const isError =
+      m.status === 'error' || content.startsWith(LLM_ERROR_PREFIX) || content.startsWith(SYSTEM_ERROR_PREFIX);
     return isError
       ? `• ❌ NOT SAVED — ${content.replace(LLM_ERROR_PREFIX, '').replace(SYSTEM_ERROR_PREFIX, '').trim()}`
       : `• ✅ SAVED — ${content}`;
@@ -79,7 +80,7 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
   const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
   const currentSessionIds = new PendingRefMap<string | null>();
   const tools = buildTrainingTools({ trainingService, pendingTransitions, currentSessionIds });
-  const toolMap = Object.fromEntries(tools.map((t) => [t.name, t]));
+  const toolMap = Object.fromEntries(tools.map(t => [t.name, t]));
   const model = getModel().bindTools(tools);
 
   /**
@@ -95,7 +96,9 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
     const toolCalls = lastMessage.tool_calls ?? [];
 
     const sorted = [...toolCalls].sort((a, b) => {
-      if (a.name !== 'log_set' || b.name !== 'log_set') { return 0; }
+      if (a.name !== 'log_set' || b.name !== 'log_set') {
+        return 0;
+      }
       return ((a.args as { order?: number }).order ?? 999) - ((b.args as { order?: number }).order ?? 999);
     });
 
@@ -103,27 +106,36 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
     for (const call of sorted) {
       const targetTool = toolMap[call.name];
       if (!targetTool) {
-        toolMessages.push(new ToolMessage({
-          tool_call_id: call.id ?? '',
-          content: `Unknown tool: ${call.name}`,
-          status: 'error',
-        }));
+        toolMessages.push(
+          new ToolMessage({
+            tool_call_id: call.id ?? '',
+            content: `Unknown tool: ${call.name}`,
+            status: 'error',
+          }),
+        );
         continue;
       }
       // eslint-disable-next-line no-await-in-loop
-      const result = await (targetTool as {
-        invoke: (args: Record<string, unknown>, config: { configurable: Record<string, unknown> }) => Promise<unknown>
-      }).invoke(call.args as Record<string, unknown>, { configurable: { userId } });
-      toolMessages.push(new ToolMessage({
-        tool_call_id: call.id ?? '',
-        content: String(result),
-      }));
+      const result = await (
+        targetTool as {
+          invoke: (
+            args: Record<string, unknown>,
+            config: { configurable: Record<string, unknown> },
+          ) => Promise<unknown>;
+        }
+      ).invoke(call.args as Record<string, unknown>, { configurable: { userId } });
+      toolMessages.push(
+        new ToolMessage({
+          tool_call_id: call.id ?? '',
+          content: String(result),
+        }),
+      );
     }
 
     return { messages: toolMessages };
   };
 
-  const agentNode = async(state: TrainingSubgraphStateType) => {
+  const agentNode = async (state: TrainingSubgraphStateType) => {
     const { userId, user, userMessage, activeSessionId } = state;
 
     try {
@@ -137,15 +149,17 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
 
       // Fail immediately on any systemic error — no retry makes sense
       const hasSystemError = inFlightMessages.some(
-        (m) => typeof m.content === 'string' && m.content.startsWith(SYSTEM_ERROR_PREFIX),
+        m => typeof m.content === 'string' && m.content.startsWith(SYSTEM_ERROR_PREFIX),
       );
       if (hasSystemError) {
         log.error({ userId, sessionId: activeSessionId }, 'System error detected in training tools — stopping');
         return {
-          messages: [new AIMessage(
-            'Произошла техническая ошибка при сохранении данных тренировки. ' +
-            'Пожалуйста, попробуй снова или обратись в поддержку.',
-          )],
+          messages: [
+            new AIMessage(
+              'Произошла техническая ошибка при сохранении данных тренировки. ' +
+                'Пожалуйста, попробуй снова или обратись в поддержку.',
+            ),
+          ],
         };
       }
 
@@ -159,15 +173,20 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
       });
       const toolErrorCount = toolErrors.length;
       if (toolErrorCount > 0) {
-        log.warn({ userId, sessionId: activeSessionId, errors: toolErrors.map((m) => m.content) }, 'Tool errors detected');
+        log.warn(
+          { userId, sessionId: activeSessionId, errors: toolErrors.map(m => m.content) },
+          'Tool errors detected',
+        );
       }
       if (toolErrorCount > LLM_ERROR_RETRY_BUDGET) {
         log.warn({ userId, sessionId: activeSessionId, toolErrorCount }, 'Tool error retry budget exhausted');
         return {
-          messages: [new AIMessage(
-            'Не удалось записать данные после нескольких попыток. ' +
-            'Попробуй переформулировать: укажи упражнение, вес и количество повторений чётко.',
-          )],
+          messages: [
+            new AIMessage(
+              'Не удалось записать данные после нескольких попыток. ' +
+                'Попробуй переформулировать: укажи упражнение, вес и количество повторений чётко.',
+            ),
+          ],
         };
       }
 
@@ -196,20 +215,19 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
       // This gives the LLM a guaranteed factual statement to reference in its response,
       // preventing hallucinated "I logged..." confirmations.
       const toolMessages = inFlightMessages.filter((m): m is ToolMessage => m instanceof ToolMessage);
-      const toolResultsInjection = toolMessages.length > 0
-        ? buildToolResultsInjection(toolMessages)
-        : null;
+      const toolResultsInjection = toolMessages.length > 0 ? buildToolResultsInjection(toolMessages) : null;
 
-      const historyBlock = history.length > 0
-        ? history.map((m) => `[${m.role === 'user' ? 'USER' : 'TRAINER'}]: ${m.content}`).join('\n\n')
-        : 'No prior conversation.';
+      const historyBlock =
+        history.length > 0
+          ? history.map(m => `[${m.role === 'user' ? 'USER' : 'TRAINER'}]: ${m.content}`).join('\n\n')
+          : 'No prior conversation.';
 
       const llmMessages = [
         new SystemMessage(systemPrompt),
         new SystemMessage(
           '=== CONVERSATION HISTORY (memory only — do NOT act on past messages) ===\n\n' +
-          `${historyBlock}\n\n` +
-          '=== END OF HISTORY ===',
+            `${historyBlock}\n\n` +
+            '=== END OF HISTORY ===',
         ),
         new HumanMessage(userMessage),
         ...inFlightMessages,
@@ -218,9 +236,13 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
 
       const response = await model.invoke(llmMessages, { configurable: { userId } });
 
-      const hasToolCalls = Array.isArray((response as { tool_calls?: unknown[] }).tool_calls)
-        && (response as { tool_calls: unknown[] }).tool_calls.length > 0;
-      log.debug({ userId, sessionId: activeSessionId, hasToolCalls, contentType: typeof response.content }, 'LLM response');
+      const hasToolCalls =
+        Array.isArray((response as { tool_calls?: unknown[] }).tool_calls) &&
+        (response as { tool_calls: unknown[] }).tool_calls.length > 0;
+      log.debug(
+        { userId, sessionId: activeSessionId, hasToolCalls, contentType: typeof response.content },
+        'LLM response',
+      );
 
       return { messages: [response] };
     } catch (err) {
@@ -231,18 +253,17 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
     }
   };
 
-  const extractNode = async(state: TrainingSubgraphStateType): Promise<Partial<ConversationStateType>> => {
+  const extractNode = async (state: TrainingSubgraphStateType): Promise<Partial<ConversationStateType>> => {
     const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
-    const text = typeof lastMessage.content === 'string'
-      ? lastMessage.content
-      : (lastMessage.content as Array<{ type: string; text?: string }>)
-          .filter((b) => b.type === 'text')
-          .map((b) => b.text ?? '')
-          .join('');
+    const text =
+      typeof lastMessage.content === 'string'
+        ? lastMessage.content
+        : (lastMessage.content as Array<{ type: string; text?: string }>)
+            .filter(b => b.type === 'text')
+            .map(b => b.text ?? '')
+            .join('');
 
-    const freshUser = state.userId
-      ? await userService.getUser(state.userId).catch(() => null)
-      : null;
+    const freshUser = state.userId ? await userService.getUser(state.userId).catch(() => null) : null;
 
     // Consume the pending transition set by finish_training tool — read and delete atomically
     const transition = pendingTransitions.get(state.userId) ?? null;

@@ -52,18 +52,14 @@ export class SessionSetRepository implements ISessionSetRepository {
       .where(eq(sessionSets.sessionExerciseId, exerciseId))
       .orderBy(sessionSets.setNumber);
 
-    return sets.map((s) => ({
+    return sets.map(s => ({
       ...s,
       setData: s.setData as SessionSet['setData'],
     }));
   }
 
   async update(setId: string, updates: Partial<SessionSet>): Promise<SessionSet> {
-    const [updated] = await db
-      .update(sessionSets)
-      .set(updates)
-      .where(eq(sessionSets.id, setId))
-      .returning();
+    const [updated] = await db.update(sessionSets).set(updates).where(eq(sessionSets.id, setId)).returning();
 
     return {
       ...updated,

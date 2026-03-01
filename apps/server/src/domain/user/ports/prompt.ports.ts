@@ -1,9 +1,4 @@
-import type {
-  Exercise,
-  SessionRecommendation,
-  WorkoutPlan,
-  WorkoutSessionWithDetails,
-} from '@domain/training/types';
+import type { Exercise, SessionRecommendation, WorkoutPlan, WorkoutSessionWithDetails } from '@domain/training/types';
 import { User } from '@domain/user/services/user.service';
 
 // Chat message interface for LLM interactions

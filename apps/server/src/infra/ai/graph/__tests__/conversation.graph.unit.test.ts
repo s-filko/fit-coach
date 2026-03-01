@@ -1,7 +1,12 @@
 import { AIMessage } from '@langchain/core/messages';
 import { MemorySaver } from '@langchain/langgraph';
 
-import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository, IWorkoutSessionRepository } from '@domain/training/ports';
+import type {
+  IExerciseRepository,
+  ITrainingService,
+  IWorkoutPlanRepository,
+  IWorkoutSessionRepository,
+} from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 
 import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
@@ -12,9 +17,7 @@ import { buildConversationGraph, type ConversationGraphDeps } from '../conversat
 jest.mock('@infra/ai/model.factory', () => ({
   getModel: () => ({
     bindTools: () => ({
-      invoke: jest.fn().mockResolvedValue(
-        new AIMessage({ content: 'Mocked LLM response', tool_calls: [] }),
-      ),
+      invoke: jest.fn().mockResolvedValue(new AIMessage({ content: 'Mocked LLM response', tool_calls: [] })),
     }),
   }),
 }));
@@ -73,7 +76,9 @@ const makeDeps = (): ConversationGraphDeps => ({
     upsertUser: jest.fn(),
   } as unknown as IUserService,
   contextService: new InMemoryConversationContextService(),
-  checkpointer: new MemorySaver() as unknown as InstanceType<typeof import('@langchain/langgraph-checkpoint-postgres').PostgresSaver>,
+  checkpointer: new MemorySaver() as unknown as InstanceType<
+    typeof import('@langchain/langgraph-checkpoint-postgres').PostgresSaver
+  >,
 });
 
 describe('ConversationGraph', () => {
@@ -242,18 +247,28 @@ describe('ConversationGraph', () => {
                 // First call in session_planning: call start_training_session
                 return new AIMessage({
                   content: '',
-                  tool_calls: [{
-                    id: 'tc-guard-1',
-                    name: 'start_training_session',
-                    args: {
-                      sessionKey: 'test',
-                      sessionName: 'Test',
-                      reasoning: 'test',
-                      exercises: [{ exerciseId: 1, exerciseName: 'Bench Press', targetSets: 3, targetReps: '8-10', restSeconds: 90 }],
-                      estimatedDuration: 60,
+                  tool_calls: [
+                    {
+                      id: 'tc-guard-1',
+                      name: 'start_training_session',
+                      args: {
+                        sessionKey: 'test',
+                        sessionName: 'Test',
+                        reasoning: 'test',
+                        exercises: [
+                          {
+                            exerciseId: 1,
+                            exerciseName: 'Bench Press',
+                            targetSets: 3,
+                            targetReps: '8-10',
+                            restSeconds: 90,
+                          },
+                        ],
+                        estimatedDuration: 60,
+                      },
+                      type: 'tool_call',
                     },
-                    type: 'tool_call',
-                  }],
+                  ],
                 });
               }
               return new AIMessage({ content: 'OK ready!', tool_calls: [] });

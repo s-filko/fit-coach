@@ -14,7 +14,7 @@ export interface User {
   fitnessGoal?: string | null;
 }
 
-export type ParsedProfileData = Pick<User, 'age' | 'gender' | 'height' | 'weight' | 'fitnessLevel' | 'fitnessGoal' >
+export type ParsedProfileData = Pick<User, 'age' | 'gender' | 'height' | 'weight' | 'fitnessLevel' | 'fitnessGoal'>;
 
 export interface CreateUserInput {
   provider: string;
@@ -32,7 +32,9 @@ export class UserService implements IUserService {
 
   async upsertUser(input: CreateUserInput): Promise<User> {
     const existing = await this.repo.findByProvider(input.provider, input.providerUserId);
-    if (existing) {return existing;} // minimal behavior
+    if (existing) {
+      return existing;
+    } // minimal behavior
     return this.repo.create(input);
   }
 

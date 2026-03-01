@@ -10,13 +10,7 @@ import type {
 } from '@domain/training/types';
 
 import { db } from '@infra/db/drizzle';
-import {
-  exerciseMuscleGroups,
-  exercises,
-  sessionExercises,
-  sessionSets,
-  workoutSessions,
-} from '@infra/db/schema';
+import { exerciseMuscleGroups, exercises, sessionExercises, sessionSets, workoutSessions } from '@infra/db/schema';
 
 export class WorkoutSessionRepository implements IWorkoutSessionRepository {
   async create(userId: string, session: CreateSessionDto): Promise<WorkoutSession> {
@@ -41,10 +35,7 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
   }
 
   async findById(sessionId: string): Promise<WorkoutSession | null> {
-    const [session] = await db
-      .select()
-      .from(workoutSessions)
-      .where(eq(workoutSessions.id, sessionId));
+    const [session] = await db.select().from(workoutSessions).where(eq(workoutSessions.id, sessionId));
 
     if (!session) {
       return null;
@@ -73,7 +64,7 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
 
     // Get exercise IDs to fetch muscle groups
     const exerciseIdsForMuscles = sessionExercisesList
-      .map((se) => se.exercises?.id)
+      .map(se => se.exercises?.id)
       .filter((id): id is number => id !== undefined);
 
     // Get muscle groups for all exercises
@@ -86,7 +77,7 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
         : [];
 
     // Get all sets for these exercises
-    const sessionExerciseIds = sessionExercisesList.map((se) => se.session_exercises.id);
+    const sessionExerciseIds = sessionExercisesList.map(se => se.session_exercises.id);
     const sets =
       sessionExerciseIds.length > 0
         ? await db
@@ -98,20 +89,18 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
 
     return {
       ...session,
-      exercises: sessionExercisesList.map((se) => ({
+      exercises: sessionExercisesList.map(se => ({
         ...se.session_exercises,
         exercise: {
           ...se.exercises!,
           muscleGroups: muscleGroupsList
-            .filter((mg) => mg.exerciseId === se.exercises!.id)
-            .map((mg) => ({
+            .filter(mg => mg.exerciseId === se.exercises!.id)
+            .map(mg => ({
               muscleGroup: mg.muscleGroup as MuscleGroup,
               involvement: mg.involvement as Involvement,
             })),
         },
-        sets: sets
-          .filter((s) => s.sessionExerciseId === se.session_exercises.id)
-          .map((s) => s),
+        sets: sets.filter(s => s.sessionExerciseId === se.session_exercises.id).map(s => s),
       })),
     } as WorkoutSessionWithDetails;
   }
@@ -124,21 +113,16 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
       .orderBy(desc(workoutSessions.createdAt))
       .limit(limit);
 
-    return sessions.map((s) => ({
+    return sessions.map(s => ({
       ...s,
       userContextJson: s.userContextJson as WorkoutSession['userContextJson'],
       autoCloseReason: s.autoCloseReason as WorkoutSession['autoCloseReason'],
     })) as WorkoutSession[];
   }
 
-  async findRecentByUserIdWithDetails(
-    userId: string,
-    limit: number,
-  ): Promise<WorkoutSessionWithDetails[]> {
+  async findRecentByUserIdWithDetails(userId: string, limit: number): Promise<WorkoutSessionWithDetails[]> {
     const sessions = await this.findRecentByUserId(userId, limit);
-    const detailed = await Promise.all(
-      sessions.map((s) => this.findByIdWithDetails(s.id)),
-    );
+    const detailed = await Promise.all(sessions.map(s => this.findByIdWithDetails(s.id)));
     return detailed.filter((s): s is WorkoutSessionWithDetails => s !== null);
   }
 
@@ -177,11 +161,7 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     } as WorkoutSession;
   }
 
-  async complete(
-    sessionId: string,
-    completedAt: Date,
-    durationMinutes: number,
-  ): Promise<WorkoutSession> {
+  async complete(sessionId: string, completedAt: Date, durationMinutes: number): Promise<WorkoutSession> {
     return this.update(sessionId, {
       status: 'completed',
       completedAt,
@@ -190,24 +170,16 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
   }
 
   async updateActivity(sessionId: string): Promise<void> {
-    await db
-      .update(workoutSessions)
-      .set({ lastActivityAt: new Date() })
-      .where(eq(workoutSessions.id, sessionId));
+    await db.update(workoutSessions).set({ lastActivityAt: new Date() }).where(eq(workoutSessions.id, sessionId));
   }
 
   async findTimedOut(cutoffTime: Date): Promise<WorkoutSession[]> {
     const sessions = await db
       .select()
       .from(workoutSessions)
-      .where(
-        and(
-          eq(workoutSessions.status, 'in_progress'),
-          lt(workoutSessions.lastActivityAt, cutoffTime),
-        ),
-      );
+      .where(and(eq(workoutSessions.status, 'in_progress'), lt(workoutSessions.lastActivityAt, cutoffTime)));
 
-    return sessions.map((s) => ({
+    return sessions.map(s => ({
       ...s,
       userContextJson: s.userContextJson as WorkoutSession['userContextJson'],
       autoCloseReason: s.autoCloseReason as WorkoutSession['autoCloseReason'],
@@ -246,10 +218,7 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     return timedOutSessions.length;
   }
 
-  async findLastCompletedByUserAndKey(
-    userId: string,
-    sessionKey: string,
-  ): Promise<WorkoutSessionWithDetails | null> {
+  async findLastCompletedByUserAndKey(userId: string, sessionKey: string): Promise<WorkoutSessionWithDetails | null> {
     const [session] = await db
       .select()
       .from(workoutSessions)

@@ -31,8 +31,8 @@ export class LLMService implements ILLMService {
   }
 
   async generateWithSystemPrompt(
-    messages: ChatMsg[], 
-    systemPrompt: string, 
+    messages: ChatMsg[],
+    systemPrompt: string,
     opts?: { jsonMode?: boolean; log?: Logger },
   ): Promise<string> {
     return this.invokeModel(messages, systemPrompt, opts?.jsonMode, opts?.log);
@@ -76,25 +76,31 @@ export class LLMService implements ILLMService {
       const endTime = new Date();
       const processingTime = endTime.getTime() - startTime.getTime();
 
-      log.info({
-        requestId,
-        model: this.model.model,
-        processingTime,
-        jsonMode: true,
-        structured: true,
-      }, 'LLM structured call completed');
+      log.info(
+        {
+          requestId,
+          model: this.model.model,
+          processingTime,
+          jsonMode: true,
+          structured: true,
+        },
+        'LLM structured call completed',
+      );
 
       return validated;
     } catch (error) {
       const processingTime = new Date().getTime() - startTime.getTime();
-      log.error({
-        err: error,
-        requestId,
-        model: this.model.model,
-        processingTime,
-        jsonMode: true,
-        structured: true,
-      }, 'LLM structured call failed');
+      log.error(
+        {
+          err: error,
+          requestId,
+          model: this.model.model,
+          processingTime,
+          jsonMode: true,
+          structured: true,
+        },
+        'LLM structured call failed',
+      );
       throw error;
     }
   }
@@ -118,13 +124,16 @@ export class LLMService implements ILLMService {
         if (!promptLower.includes('json')) {
           const error = new Error(
             'CONFIGURATION ERROR: JSON mode is enabled but system prompt does not mention "json". ' +
-            'This will cause OpenAI/OpenRouter API error: "Response input messages must contain ' +
-            'the word \'json\' in some form to use \'text.format\' of type \'json_object\'."',
+              'This will cause OpenAI/OpenRouter API error: "Response input messages must contain ' +
+              "the word 'json' in some form to use 'text.format' of type 'json_object'.\"",
           );
-          effectiveLog.error({
-            requestId,
-            systemPromptPreview: systemPromptText.slice(0, 200),
-          }, 'JSON mode enabled but system prompt missing "json" keyword');
+          effectiveLog.error(
+            {
+              requestId,
+              systemPromptPreview: systemPromptText.slice(0, 200),
+            },
+            'JSON mode enabled but system prompt missing "json" keyword',
+          );
           throw error;
         }
       }
@@ -154,24 +163,30 @@ export class LLMService implements ILLMService {
 
       // Log request (full content in dev, metadata only in prod)
       if (isDevelopment) {
-        effectiveLog.debug({
-          requestId,
-          model: this.model.model,
-          jsonMode,
-          messageCount: messages.length,
-          systemPrompt: systemPromptText,
-          messages: messages.map(m => ({ role: m.role, content: m.content })),
-          httpPayload,
-        }, 'LLM request prepared');
+        effectiveLog.debug(
+          {
+            requestId,
+            model: this.model.model,
+            jsonMode,
+            messageCount: messages.length,
+            systemPrompt: systemPromptText,
+            messages: messages.map(m => ({ role: m.role, content: m.content })),
+            httpPayload,
+          },
+          'LLM request prepared',
+        );
       } else {
-        effectiveLog.debug({
-          requestId,
-          model: this.model.model,
-          jsonMode,
-          messageCount: messages.length,
-          systemPromptLength: systemPromptText.length,
-          messagesLengths: messages.map(m => ({ role: m.role, length: m.content.length })),
-        }, 'LLM request prepared');
+        effectiveLog.debug(
+          {
+            requestId,
+            model: this.model.model,
+            jsonMode,
+            messageCount: messages.length,
+            systemPromptLength: systemPromptText.length,
+            messagesLengths: messages.map(m => ({ role: m.role, length: m.content.length })),
+          },
+          'LLM request prepared',
+        );
       }
 
       const callOptions = jsonMode ? { response_format: { type: 'json_object' as const } } : undefined;
@@ -193,35 +208,42 @@ export class LLMService implements ILLMService {
       const endTime = new Date();
       const processingTime = endTime.getTime() - startTime.getTime();
       const tokenUsage = (response.response_metadata as Record<string, unknown>)?.tokenUsage as
-        { totalTokens?: number; promptTokens?: number; completionTokens?: number } | undefined;
+        | { totalTokens?: number; promptTokens?: number; completionTokens?: number }
+        | undefined;
 
       // Log response (full content in dev, metadata only in prod)
       if (isDevelopment) {
-        effectiveLog.info({
-          requestId,
-          processingTime,
-          totalTokens: tokenUsage?.totalTokens,
-          promptTokens: tokenUsage?.promptTokens,
-          completionTokens: tokenUsage?.completionTokens,
-          contentLength: content.length,
-          content,
-          responseMetadata: response.response_metadata,
-        }, 'LLM call completed');
+        effectiveLog.info(
+          {
+            requestId,
+            processingTime,
+            totalTokens: tokenUsage?.totalTokens,
+            promptTokens: tokenUsage?.promptTokens,
+            completionTokens: tokenUsage?.completionTokens,
+            contentLength: content.length,
+            content,
+            responseMetadata: response.response_metadata,
+          },
+          'LLM call completed',
+        );
       } else {
-        effectiveLog.info({
-          requestId,
-          processingTime,
-          totalTokens: tokenUsage?.totalTokens,
-          promptTokens: tokenUsage?.promptTokens,
-          completionTokens: tokenUsage?.completionTokens,
-          contentLength: content.length,
-        }, 'LLM call completed');
+        effectiveLog.info(
+          {
+            requestId,
+            processingTime,
+            totalTokens: tokenUsage?.totalTokens,
+            promptTokens: tokenUsage?.promptTokens,
+            completionTokens: tokenUsage?.completionTokens,
+            contentLength: content.length,
+          },
+          'LLM call completed',
+        );
       }
 
       return content;
     } catch (error) {
       const originalMessage = error instanceof Error ? error.message : String(error);
-      
+
       // Extract provider error details if available
       let providerError = '';
       if (error && typeof error === 'object' && 'error' in error) {
@@ -243,22 +265,25 @@ export class LLMService implements ILLMService {
           }
         }
       }
-      
+
       const processingTime = new Date().getTime() - startTime.getTime();
-      
-      effectiveLog.error({
-        err: error,
-        requestId,
-        model: this.model.model,
-        processingTime,
-        providerError: providerError || undefined,
-      }, 'LLM call failed');
-      
+
+      effectiveLog.error(
+        {
+          err: error,
+          requestId,
+          model: this.model.model,
+          processingTime,
+          providerError: providerError || undefined,
+        },
+        'LLM call failed',
+      );
+
       // Include provider error in thrown message for better error reporting
-      const errorMessage = providerError 
+      const errorMessage = providerError
         ? `Failed to generate LLM response: ${originalMessage} (Provider: ${providerError})`
         : `Failed to generate LLM response: ${originalMessage}`;
-      
+
       throw new Error(errorMessage);
     }
   }

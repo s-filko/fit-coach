@@ -93,7 +93,7 @@ describe('TrainingService.logSetWithContext', () => {
     jest.spyOn(trainingService, 'ensureCurrentExercise').mockResolvedValue(makeSessionExercise());
   });
 
-  it('returns setNumber from the created set (computed in DB)', async() => {
+  it('returns setNumber from the created set (computed in DB)', async () => {
     // DB computes setNumber = 3 atomically — service just returns it from the created row
     jest.spyOn(trainingService, 'logSet').mockResolvedValue(makeSessionSet(3));
 
@@ -106,7 +106,7 @@ describe('TrainingService.logSetWithContext', () => {
     expect(result.set.setNumber).toBe(3);
   });
 
-  it('passes rpe and feedback to logSet without setNumber', async() => {
+  it('passes rpe and feedback to logSet without setNumber', async () => {
     jest.spyOn(trainingService, 'logSet').mockResolvedValue(makeSessionSet(2));
 
     await trainingService.logSetWithContext('session-1', {
@@ -123,7 +123,7 @@ describe('TrainingService.logSetWithContext', () => {
     });
   });
 
-  it('calls ensureCurrentExercise with exerciseId and exerciseName', async() => {
+  it('calls ensureCurrentExercise with exerciseId and exerciseName', async () => {
     jest.spyOn(trainingService, 'logSet').mockResolvedValue(makeSessionSet(1));
 
     await trainingService.logSetWithContext('session-1', {

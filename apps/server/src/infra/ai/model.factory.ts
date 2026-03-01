@@ -19,9 +19,7 @@ export function getModel(): ChatOpenAI {
     model: config.LLM_MODEL,
     temperature: config.LLM_TEMPERATURE,
     apiKey: config.LLM_API_KEY,
-    configuration: config.LLM_API_URL
-      ? { baseURL: config.LLM_API_URL }
-      : undefined,
+    configuration: config.LLM_API_URL ? { baseURL: config.LLM_API_URL } : undefined,
   });
 
   return _model;

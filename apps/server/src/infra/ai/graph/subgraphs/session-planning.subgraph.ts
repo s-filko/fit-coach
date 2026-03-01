@@ -5,7 +5,12 @@ import { ToolNode, toolsCondition } from '@langchain/langgraph/prebuilt';
 
 import { type ConversationStateType, type TransitionRequest } from '@domain/conversation/graph/conversation.state';
 import { IConversationContextService } from '@domain/conversation/ports';
-import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository, IWorkoutSessionRepository } from '@domain/training/ports';
+import type {
+  IExerciseRepository,
+  ITrainingService,
+  IWorkoutPlanRepository,
+  IWorkoutSessionRepository,
+} from '@domain/training/ports';
 import { SessionPlanningContextBuilder } from '@domain/training/services/session-planning-context.builder';
 import type { IUserService } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
@@ -55,10 +60,7 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
   const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
   const pendingActiveSessionIds = new PendingRefMap<string | null>();
 
-  const contextBuilder = new SessionPlanningContextBuilder(
-    workoutPlanRepository,
-    workoutSessionRepository,
-  );
+  const contextBuilder = new SessionPlanningContextBuilder(workoutPlanRepository, workoutSessionRepository);
 
   const tools = buildSessionPlanningTools({
     trainingService,
@@ -69,7 +71,7 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
   const toolNode = new ToolNode(tools);
   const model = getModel().bindTools(tools);
 
-  const agentNode = async(state: SessionPlanningSubgraphStateType) => {
+  const agentNode = async (state: SessionPlanningSubgraphStateType) => {
     const { userId, user, userMessage } = state;
 
     // Load all context data in parallel
@@ -89,9 +91,7 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
 
     const llmMessages = [
       new SystemMessage(systemPrompt),
-      ...history.map((m) =>
-        m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content),
-      ),
+      ...history.map(m => (m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content))),
       new HumanMessage(userMessage),
       ...inFlightMessages,
     ];
@@ -103,19 +103,18 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
     return { messages: [response] };
   };
 
-  const extractNode = async(state: SessionPlanningSubgraphStateType): Promise<Partial<ConversationStateType>> => {
+  const extractNode = async (state: SessionPlanningSubgraphStateType): Promise<Partial<ConversationStateType>> => {
     const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
-    const text = typeof lastMessage.content === 'string'
-      ? lastMessage.content
-      : (lastMessage.content as Array<{ type: string; text?: string }>)
-          .filter((b) => b.type === 'text')
-          .map((b) => b.text ?? '')
-          .join('');
+    const text =
+      typeof lastMessage.content === 'string'
+        ? lastMessage.content
+        : (lastMessage.content as Array<{ type: string; text?: string }>)
+            .filter(b => b.type === 'text')
+            .map(b => b.text ?? '')
+            .join('');
 
     // Read fresh user from DB to capture any profile changes during this turn
-    const freshUser = state.userId
-      ? await userService.getUser(state.userId).catch(() => null)
-      : null;
+    const freshUser = state.userId ? await userService.getUser(state.userId).catch(() => null) : null;
 
     // Consume both per-user map entries set by tools — read and delete atomically
     const transition = pendingTransitions.get(state.userId) ?? null;

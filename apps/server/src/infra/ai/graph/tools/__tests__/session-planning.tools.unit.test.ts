@@ -26,29 +26,31 @@ const MINIMAL_SESSION_PLAN = {
   estimatedDuration: 60,
 };
 
-const makeTrainingService = (sessionId = 'session-1'): jest.Mocked<ITrainingService> => ({
-  startSession: jest.fn().mockResolvedValue({ id: sessionId, status: 'planning' }),
-  getSessionDetails: jest.fn(),
-  completeSession: jest.fn(),
-  skipSession: jest.fn(),
-  getTrainingHistory: jest.fn(),
-  getNextSessionRecommendation: jest.fn(),
-  addExerciseToSession: jest.fn(),
-  logSet: jest.fn(),
-  startNextExercise: jest.fn(),
-  skipCurrentExercise: jest.fn(),
-  completeCurrentExercise: jest.fn(),
-  ensureCurrentExercise: jest.fn(),
-} as unknown as jest.Mocked<ITrainingService>);
+const makeTrainingService = (sessionId = 'session-1'): jest.Mocked<ITrainingService> =>
+  ({
+    startSession: jest.fn().mockResolvedValue({ id: sessionId, status: 'planning' }),
+    getSessionDetails: jest.fn(),
+    completeSession: jest.fn(),
+    skipSession: jest.fn(),
+    getTrainingHistory: jest.fn(),
+    getNextSessionRecommendation: jest.fn(),
+    addExerciseToSession: jest.fn(),
+    logSet: jest.fn(),
+    startNextExercise: jest.fn(),
+    skipCurrentExercise: jest.fn(),
+    completeCurrentExercise: jest.fn(),
+    ensureCurrentExercise: jest.fn(),
+  }) as unknown as jest.Mocked<ITrainingService>;
 
-const makeWorkoutPlanRepo = (planId = 'plan-1'): jest.Mocked<IWorkoutPlanRepository> => ({
-  findActiveByUserId: jest.fn().mockResolvedValue({ id: planId }),
-  create: jest.fn(),
-  findById: jest.fn(),
-  findByUserId: jest.fn(),
-  update: jest.fn(),
-  archive: jest.fn(),
-} as unknown as jest.Mocked<IWorkoutPlanRepository>);
+const makeWorkoutPlanRepo = (planId = 'plan-1'): jest.Mocked<IWorkoutPlanRepository> =>
+  ({
+    findActiveByUserId: jest.fn().mockResolvedValue({ id: planId }),
+    create: jest.fn(),
+    findById: jest.fn(),
+    findByUserId: jest.fn(),
+    update: jest.fn(),
+    archive: jest.fn(),
+  }) as unknown as jest.Mocked<IWorkoutPlanRepository>;
 
 const makePendingTransitions = (): Map<string, TransitionRequest | null> => new Map();
 const makePendingActiveSessionIds = (): Map<string, string | null> => new Map();
@@ -97,17 +99,20 @@ describe('session-planning.tools — start_training_session', () => {
 
     await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig('u1'));
 
-    expect(trainingService.startSession).toHaveBeenCalledWith('u1', expect.objectContaining({
-      planId: 'plan-42',
-      sessionKey: MINIMAL_SESSION_PLAN.sessionKey,
-      status: 'planning',
-      sessionPlanJson: expect.objectContaining({
+    expect(trainingService.startSession).toHaveBeenCalledWith(
+      'u1',
+      expect.objectContaining({
+        planId: 'plan-42',
         sessionKey: MINIMAL_SESSION_PLAN.sessionKey,
-        sessionName: MINIMAL_SESSION_PLAN.sessionName,
-        exercises: MINIMAL_SESSION_PLAN.exercises,
-        estimatedDuration: MINIMAL_SESSION_PLAN.estimatedDuration,
+        status: 'planning',
+        sessionPlanJson: expect.objectContaining({
+          sessionKey: MINIMAL_SESSION_PLAN.sessionKey,
+          sessionName: MINIMAL_SESSION_PLAN.sessionName,
+          exercises: MINIMAL_SESSION_PLAN.exercises,
+          estimatedDuration: MINIMAL_SESSION_PLAN.estimatedDuration,
+        }),
       }),
-    }));
+    );
   });
 
   it('sets pendingActiveSessionIds entry for userId to the created session ID', async () => {

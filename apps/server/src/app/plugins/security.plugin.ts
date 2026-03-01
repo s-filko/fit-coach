@@ -12,13 +12,16 @@ function shouldSkipSecurityCheck(request: FastifyRequest): boolean {
   return request.method === 'OPTIONS';
 }
 
-export default fp(async(app: FastifyInstance): Promise<void> => {
-  app.addHook('preHandler', async(request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    if (shouldSkipSecurityCheck(request)) {
-      return;
-    }
-    await apiKeyPreHandler(request, reply);
-  });
-}, {
-  name: 'security',
-});
+export default fp(
+  async (app: FastifyInstance): Promise<void> => {
+    app.addHook('preHandler', async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+      if (shouldSkipSecurityCheck(request)) {
+        return;
+      }
+      await apiKeyPreHandler(request, reply);
+    });
+  },
+  {
+    name: 'security',
+  },
+);

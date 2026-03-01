@@ -24,33 +24,36 @@ const BASE_USER = {
   fitnessGoal: 'Build muscle',
 };
 
-const makeUserService = (): jest.Mocked<IUserService> => ({
-  getUser: jest.fn().mockResolvedValue(BASE_USER),
-  updateProfileData: jest.fn().mockResolvedValue(BASE_USER),
-  upsertUser: jest.fn(),
-  isRegistrationComplete: jest.fn().mockReturnValue(true),
-  needsRegistration: jest.fn().mockReturnValue(false),
-} as unknown as jest.Mocked<IUserService>);
+const makeUserService = (): jest.Mocked<IUserService> =>
+  ({
+    getUser: jest.fn().mockResolvedValue(BASE_USER),
+    updateProfileData: jest.fn().mockResolvedValue(BASE_USER),
+    upsertUser: jest.fn(),
+    isRegistrationComplete: jest.fn().mockReturnValue(true),
+    needsRegistration: jest.fn().mockReturnValue(false),
+  }) as unknown as jest.Mocked<IUserService>;
 
-const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> => ({
-  findById: jest.fn(),
-  findByIdWithMuscles: jest.fn(),
-  findByIds: jest.fn(),
-  findByIdsWithMuscles: jest.fn().mockResolvedValue([]),
-  findByMuscleGroup: jest.fn(),
-  search: jest.fn(),
-  findAll: jest.fn().mockResolvedValue([]),
-  findAllWithMuscles: jest.fn().mockResolvedValue([]),
-} as unknown as jest.Mocked<IExerciseRepository>);
+const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> =>
+  ({
+    findById: jest.fn(),
+    findByIdWithMuscles: jest.fn(),
+    findByIds: jest.fn(),
+    findByIdsWithMuscles: jest.fn().mockResolvedValue([]),
+    findByMuscleGroup: jest.fn(),
+    search: jest.fn(),
+    findAll: jest.fn().mockResolvedValue([]),
+    findAllWithMuscles: jest.fn().mockResolvedValue([]),
+  }) as unknown as jest.Mocked<IExerciseRepository>;
 
-const makeWorkoutPlanRepo = (): jest.Mocked<IWorkoutPlanRepository> => ({
-  create: jest.fn().mockResolvedValue({ id: 'plan-1' }),
-  findById: jest.fn(),
-  findActiveByUserId: jest.fn().mockResolvedValue(null),
-  findByUserId: jest.fn(),
-  update: jest.fn(),
-  archive: jest.fn(),
-} as unknown as jest.Mocked<IWorkoutPlanRepository>);
+const makeWorkoutPlanRepo = (): jest.Mocked<IWorkoutPlanRepository> =>
+  ({
+    create: jest.fn().mockResolvedValue({ id: 'plan-1' }),
+    findById: jest.fn(),
+    findActiveByUserId: jest.fn().mockResolvedValue(null),
+    findByUserId: jest.fn(),
+    update: jest.fn(),
+    archive: jest.fn(),
+  }) as unknown as jest.Mocked<IWorkoutPlanRepository>;
 
 describe('plan-creation.subgraph — tool-calling loop', () => {
   beforeEach(() => {
@@ -65,12 +68,14 @@ describe('plan-creation.subgraph — tool-calling loop', () => {
       if (capturedMessages.length === 1) {
         return new AIMessage({
           content: '',
-          tool_calls: [{
-            id: 'tc-plan-1',
-            name: 'request_transition',
-            args: { toPhase: 'chat', reason: 'user declined' },
-            type: 'tool_call',
-          }],
+          tool_calls: [
+            {
+              id: 'tc-plan-1',
+              name: 'request_transition',
+              args: { toPhase: 'chat', reason: 'user declined' },
+              type: 'tool_call',
+            },
+          ],
         });
       }
       return new AIMessage({ content: 'Понял, возвращаемся в чат.', tool_calls: [] });
@@ -97,7 +102,7 @@ describe('plan-creation.subgraph — tool-calling loop', () => {
 
     const secondCallMessages = capturedMessages[1] as Array<{ _getType?: () => string }>;
     const hasToolMessage = secondCallMessages.some(
-      (m) => m instanceof ToolMessage || (typeof m._getType === 'function' && m._getType() === 'tool'),
+      m => m instanceof ToolMessage || (typeof m._getType === 'function' && m._getType() === 'tool'),
     );
     // GREEN: ToolMessage must be present (in-flight from current turn)
     expect(hasToolMessage).toBe(true);
@@ -111,12 +116,14 @@ describe('plan-creation.subgraph — tool-calling loop', () => {
       if (capturedMessages.length === 1) {
         return new AIMessage({
           content: '',
-          tool_calls: [{
-            id: 'tc-plan-2',
-            name: 'request_transition',
-            args: { toPhase: 'chat' },
-            type: 'tool_call',
-          }],
+          tool_calls: [
+            {
+              id: 'tc-plan-2',
+              name: 'request_transition',
+              args: { toPhase: 'chat' },
+              type: 'tool_call',
+            },
+          ],
         });
       }
       return new AIMessage({ content: 'Хорошо.', tool_calls: [] });
@@ -141,7 +148,7 @@ describe('plan-creation.subgraph — tool-calling loop', () => {
 
     const secondCallMessages = capturedMessages[1] as Array<{ _getType?: () => string; tool_calls?: unknown[] }>;
     const hasAIWithToolCalls = secondCallMessages.some(
-      (m) => m instanceof AIMessage && Array.isArray(m.tool_calls) && m.tool_calls.length > 0,
+      m => m instanceof AIMessage && Array.isArray(m.tool_calls) && m.tool_calls.length > 0,
     );
     // GREEN: AIMessage(tool_calls) must be present (in-flight from current turn)
     expect(hasAIWithToolCalls).toBe(true);

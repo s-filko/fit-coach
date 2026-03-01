@@ -97,7 +97,9 @@ function buildSessionPlanSection(session: WorkoutSessionWithDetails): string {
 
   for (const ex of plan.exercises) {
     const weight = ex.targetWeight ? ` @ ${ex.targetWeight} kg` : '';
-    lines.push(`  [ID:${ex.exerciseId}] ${ex.exerciseName}: ${ex.targetSets}×${ex.targetReps}${weight} (rest: ${ex.restSeconds}s)`);
+    lines.push(
+      `  [ID:${ex.exerciseId}] ${ex.exerciseName}: ${ex.targetSets}×${ex.targetReps}${weight} (rest: ${ex.restSeconds}s)`,
+    );
   }
 
   return lines.join('\n');
@@ -109,7 +111,7 @@ function buildProgressSection(session: WorkoutSessionWithDetails, now: Date): st
   }
 
   return session.exercises
-    .map((ex) => {
+    .map(ex => {
       const header = `${ex.exercise.name} — ${ex.status.toUpperCase()}`;
       const target = `  Target: ${ex.targetSets ?? '?'}×${ex.targetReps ?? '?'}${ex.targetWeight ? ` @ ${ex.targetWeight} kg` : ''}`;
 
@@ -117,7 +119,7 @@ function buildProgressSection(session: WorkoutSessionWithDetails, now: Date): st
         return `${header}\n${target}\n  No sets logged yet.`;
       }
 
-      const setsText = ex.sets.map((s) => {
+      const setsText = ex.sets.map(s => {
         const minutesAgo = Math.floor((now.getTime() - new Date(s.createdAt).getTime()) / 60000);
         const timeLabel = minutesAgo === 0 ? 'just now' : `${minutesAgo}min ago`;
         const base = formatSetData(s.setData);
@@ -133,14 +135,12 @@ function buildProgressSection(session: WorkoutSessionWithDetails, now: Date): st
 }
 
 function buildCurrentExerciseSection(session: WorkoutSessionWithDetails): string {
-  const current = session.exercises.find((ex) => ex.status === 'in_progress');
+  const current = session.exercises.find(ex => ex.status === 'in_progress');
   if (!current) {
     return 'No exercise currently in progress.';
   }
 
-  const setsLeft = current.targetSets !== null
-    ? Math.max(0, current.targetSets - current.sets.length)
-    : '?';
+  const setsLeft = current.targetSets !== null ? Math.max(0, current.targetSets - current.sets.length) : '?';
 
   return [
     `${current.exercise.name} [ID:${current.exerciseId}]`,
@@ -155,13 +155,13 @@ function buildPreviousSessionSection(session: WorkoutSessionWithDetails): string
   }
 
   return session.exercises
-    .map((ex) => {
+    .map(ex => {
       const header = `${ex.exercise.name} [ID:${ex.exerciseId}]`;
       if (ex.sets.length === 0) {
         return `${header}\n  No sets logged.`;
       }
 
-      const setsText = ex.sets.map((s) => {
+      const setsText = ex.sets.map(s => {
         const base = formatSetData(s.setData);
         const rpe = s.rpe ? ` | RPE ${s.rpe}` : '';
         const fb = s.userFeedback ? ` | "${s.userFeedback}"` : '';
@@ -194,7 +194,9 @@ function formatSetData(setData: WorkoutSessionWithDetails['exercises'][number]['
 }
 
 function daysBetween(date: Date | null | string, now: Date): number {
-  if (!date) { return 0; }
+  if (!date) {
+    return 0;
+  }
   const ms = now.getTime() - new Date(date).getTime();
   return Math.floor(ms / (1000 * 60 * 60 * 24));
 }

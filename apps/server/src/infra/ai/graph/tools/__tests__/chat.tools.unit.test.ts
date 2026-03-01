@@ -23,13 +23,14 @@ const UPDATED_USER = {
   fitnessGoal: 'Lose fat',
 };
 
-const makeUserService = (): jest.Mocked<IUserService> => ({
-  getUser: jest.fn().mockResolvedValue(UPDATED_USER),
-  updateProfileData: jest.fn().mockResolvedValue(UPDATED_USER),
-  upsertUser: jest.fn(),
-  isRegistrationComplete: jest.fn().mockReturnValue(true),
-  needsRegistration: jest.fn().mockReturnValue(false),
-} as unknown as jest.Mocked<IUserService>);
+const makeUserService = (): jest.Mocked<IUserService> =>
+  ({
+    getUser: jest.fn().mockResolvedValue(UPDATED_USER),
+    updateProfileData: jest.fn().mockResolvedValue(UPDATED_USER),
+    upsertUser: jest.fn(),
+    isRegistrationComplete: jest.fn().mockReturnValue(true),
+    needsRegistration: jest.fn().mockReturnValue(false),
+  }) as unknown as jest.Mocked<IUserService>;
 
 const makePendingTransitions = (): Map<string, TransitionRequest | null> => new Map();
 
@@ -59,10 +60,13 @@ describe('chat.tools — update_profile', () => {
 
     await updateProfile.invoke({ age: 30, weight: 85 }, makeConfig());
 
-    expect(userService.updateProfileData).toHaveBeenCalledWith('u1', expect.objectContaining({
-      age: 30,
-      weight: 85,
-    }));
+    expect(userService.updateProfileData).toHaveBeenCalledWith(
+      'u1',
+      expect.objectContaining({
+        age: 30,
+        weight: 85,
+      }),
+    );
   });
 
   it('returns "Profile updated:" confirmation string', async () => {
@@ -125,10 +129,7 @@ describe('chat.tools — request_transition', () => {
     const pendingTransitions = makePendingTransitions();
     const [, requestTransition] = buildTools(makeUserService(), pendingTransitions);
 
-    await requestTransition.invoke(
-      { toPhase: 'session_planning', reason: 'user wants workout' },
-      makeConfig('u1'),
-    );
+    await requestTransition.invoke({ toPhase: 'session_planning', reason: 'user wants workout' }, makeConfig('u1'));
 
     expect(pendingTransitions.get('u1')?.reason).toBe('user wants workout');
   });

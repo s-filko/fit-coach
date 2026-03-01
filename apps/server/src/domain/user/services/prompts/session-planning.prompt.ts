@@ -3,7 +3,7 @@ import type { SessionPlanningPromptContext } from '@domain/user/ports';
 
 /**
  * Build system prompt for session_planning phase
- * 
+ *
  * This prompt helps LLM:
  * 1. Collect user context (mood, availableTime, intensity)
  * 2. Generate personalized workout plan based on history and recovery
@@ -36,11 +36,11 @@ export function buildSessionPlanningPrompt(context: SessionPlanningPromptContext
           const sessionDate = new Date(session.startedAt ?? session.createdAt);
           const daysAgo = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24));
           const hoursAgo = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60));
-          
+
           const exercisesList = session.exercises
-            .map((ex) => {
+            .map(ex => {
               const setsInfo = ex.sets
-                .map((set) => {
+                .map(set => {
                   if (set.setData.type === 'strength') {
                     return `${set.setData.reps} reps @ ${set.setData.weight ?? 'BW'}${set.setData.weightUnit ?? 'kg'}${set.rpe ? ` (RPE ${set.rpe})` : ''}`;
                   }
@@ -52,7 +52,7 @@ export function buildSessionPlanningPrompt(context: SessionPlanningPromptContext
             .join('\n');
 
           const timeAgo = daysAgo > 0 ? `${daysAgo} days ago` : `${hoursAgo} hours ago`;
-          
+
           return `  ${idx + 1}. ${session.sessionKey ?? 'Custom'} - ${sessionDate.toISOString()} (${timeAgo})
     Status: ${session.status}
     Duration: ${session.durationMinutes ?? 'N/A'} min
@@ -100,12 +100,12 @@ ${JSON.stringify(context.activePlan.planJson.recoveryGuidelines, null, 2)}
 Session Templates:
 ${context.activePlan.planJson.sessionTemplates
   .map(
-    (template) => `### ${template.name} (${template.key})
+    template => `### ${template.name} (${template.key})
 Focus: ${template.focus}
 Energy Cost: ${template.energyCost}
 Estimated Duration: ${template.estimatedDuration} min
 Exercises:
-${template.exercises.map((ex) => `  - [ID:${ex.exerciseId}] ${ex.exerciseName}: ${ex.targetSets}x${ex.targetReps}${ex.targetWeight ? ` @ ${ex.targetWeight}kg` : ''} (rest: ${ex.restSeconds}s)`).join('\n')}`,
+${template.exercises.map(ex => `  - [ID:${ex.exerciseId}] ${ex.exerciseName}: ${ex.targetSets}x${ex.targetReps}${ex.targetWeight ? ` @ ${ex.targetWeight}kg` : ''} (rest: ${ex.restSeconds}s)`).join('\n')}`,
   )
   .join('\n\n')}`
     : 'No active workout plan. User needs to create a plan first.';
@@ -120,10 +120,10 @@ Estimated Duration: ${context.currentPlan.estimatedDuration} min
 ${context.currentPlan.timeLimit ? `Time Limit: ${context.currentPlan.timeLimit} min (user-specified)` : ''}
 
 Exercises:
-${context.currentPlan.exercises.map((ex) => `  - ${ex.exerciseName}: ${ex.targetSets}x${ex.targetReps}${ex.targetWeight ? ` @ ${ex.targetWeight}kg` : ''}`).join('\n')}
+${context.currentPlan.exercises.map(ex => `  - ${ex.exerciseName}: ${ex.targetSets}x${ex.targetReps}${ex.targetWeight ? ` @ ${ex.targetWeight}kg` : ''}`).join('\n')}
 
-${context.currentPlan.warnings?.length ? `Warnings:\n${context.currentPlan.warnings.map((w) => `  - ${w}`).join('\n')}` : ''}
-${context.currentPlan.modifications?.length ? `Modifications:\n${context.currentPlan.modifications.map((m) => `  - ${m}`).join('\n')}` : ''}`
+${context.currentPlan.warnings?.length ? `Warnings:\n${context.currentPlan.warnings.map(w => `  - ${w}`).join('\n')}` : ''}
+${context.currentPlan.modifications?.length ? `Modifications:\n${context.currentPlan.modifications.map(m => `  - ${m}`).join('\n')}` : ''}`
     : 'No draft plan yet. Start by asking user about their current state.';
 
   return `# SYSTEM ROLE
@@ -158,7 +158,7 @@ Total exercises available: ${context.totalExercisesAvailable}
 
 # ALL AVAILABLE EXERCISES (use these IDs)
 
-${context.availableExercises.map((ex) => `[ID:${ex.id}] ${ex.name} (${ex.category})`).join('\n')}
+${context.availableExercises.map(ex => `[ID:${ex.id}] ${ex.name} (${ex.category})`).join('\n')}
 
 # YOUR TASK
 

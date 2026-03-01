@@ -24,4 +24,4 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script_stop: true
-          script: /opt/fitcoach/deploy/deploy.sh prod
+          script: bash /srv/docker/fitcoach/deploy/deploy.sh prod

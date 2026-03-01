@@ -27,7 +27,7 @@ export interface ITrainingService {
   skipSession(sessionId: string): Promise<WorkoutSession>;
   getTrainingHistory(userId: string, limit?: number): Promise<WorkoutSessionWithDetails[]>;
   getSessionDetails(sessionId: string): Promise<WorkoutSessionWithDetails | null>;
-  
+
   // Exercise management during training
   startNextExercise(sessionId: string): Promise<SessionExercise | null>;
   skipCurrentExercise(sessionId: string, reason?: string): Promise<void>;

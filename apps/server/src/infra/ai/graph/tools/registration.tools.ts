@@ -4,7 +4,11 @@ import { z } from 'zod';
 import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
 import type { ConversationPhase } from '@domain/conversation/ports';
 import type { IUserService } from '@domain/user/ports';
-import { FIELD_LABELS, type ProfileDataKey, validateExtractedFields } from '@domain/user/services/registration.validation';
+import {
+  FIELD_LABELS,
+  type ProfileDataKey,
+  validateExtractedFields,
+} from '@domain/user/services/registration.validation';
 
 import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
 
@@ -36,7 +40,7 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
 
   const saveProfileFields = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async(input, config) => {
+    async (input, config) => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
@@ -45,9 +49,7 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
 
       // Reuse strict validators from registration.validation.ts
       const validated = validateExtractedFields(input as Record<string, unknown>);
-      const fieldsToSave = Object.fromEntries(
-        Object.entries(validated).filter(([, v]) => v !== undefined),
-      );
+      const fieldsToSave = Object.fromEntries(Object.entries(validated).filter(([, v]) => v !== undefined));
 
       // Save firstName separately if provided
       if (typeof input.firstName === 'string' && input.firstName.trim()) {
@@ -61,7 +63,7 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
       await userService.updateProfileData(userId, fieldsToSave);
 
       const saved = Object.keys(fieldsToSave)
-        .map((k) => FIELD_LABELS[k as ProfileDataKey] ?? k)
+        .map(k => FIELD_LABELS[k as ProfileDataKey] ?? k)
         .join(', ');
 
       return `Saved: ${saved}`;
@@ -74,7 +76,10 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
         gender: z.enum(['male', 'female']).optional().describe('Biological gender'),
         height: z.number().optional().describe('Height in cm (100–250)'),
         weight: z.number().optional().describe('Weight in kg (20–300)'),
-        fitnessLevel: z.enum(['beginner', 'intermediate', 'advanced']).optional().describe('Self-assessed fitness level'),
+        fitnessLevel: z
+          .enum(['beginner', 'intermediate', 'advanced'])
+          .optional()
+          .describe('Self-assessed fitness level'),
         fitnessGoal: z.string().optional().describe('Fitness goal in their own words'),
         firstName: z.string().optional().describe('Preferred name if user provides one'),
       }),
@@ -83,7 +88,7 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
 
   const completeRegistration = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async(input, config) => {
+    async (input, config) => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
@@ -95,13 +100,13 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
         return 'Error: user not found.';
       }
 
-      const missingFields = REQUIRED_FIELDS.filter((k) => {
+      const missingFields = REQUIRED_FIELDS.filter(k => {
         const v = currentUser[k as keyof typeof currentUser];
         return v === undefined || v === null || v === '';
       });
 
       if (missingFields.length > 0) {
-        const missing = missingFields.map((k) => FIELD_LABELS[k]).join(', ');
+        const missing = missingFields.map(k => FIELD_LABELS[k]).join(', ');
         return `Cannot complete registration — still missing: ${missing}. Please collect these fields first.`;
       }
 
@@ -119,9 +124,9 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
       name: 'complete_registration',
       description: COMPLETE_REGISTRATION_DESCRIPTION,
       schema: z.object({
-        toPhase: z.enum(['plan_creation', 'chat']).describe(
-          'Next phase: "plan_creation" if user wants to build a plan, "chat" if they want to talk first',
-        ),
+        toPhase: z
+          .enum(['plan_creation', 'chat'])
+          .describe('Next phase: "plan_creation" if user wants to build a plan, "chat" if they want to talk first'),
       }),
     },
   );

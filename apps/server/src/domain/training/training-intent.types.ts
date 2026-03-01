@@ -13,7 +13,7 @@ import { z } from 'zod';
  * 1. Zod schemas (type validation)
  * 2. System prompts (LLM instructions)
  * 3. Switch statements (intent execution)
- * 
+ *
  * DO NOT use string literals elsewhere. Always import and use these constants.
  */
 export const trainingIntentTypes = {
@@ -121,7 +121,7 @@ export const LogSetIntentSchema = z
     // Optional user feedback about the set
     feedback: z.string().optional(),
   })
-  .refine((data) => data.exerciseId !== undefined || data.exerciseName !== undefined, {
+  .refine(data => data.exerciseId !== undefined || data.exerciseName !== undefined, {
     message: 'Either exerciseId or exerciseName must be provided in log_set intent',
   });
 
@@ -212,10 +212,14 @@ export const LLMTrainingResponseSchema = z.object({
   message: z.string(),
   intents: z.array(TrainingIntentSchema).min(1),
   // Phase transition (e.g., finish training -> return to chat)
-  phaseTransition: z.object({
-    toPhase: z.enum(['chat', 'session_planning']),
-    reason: z.string().optional(),
-  }).nullable().optional().transform((v) => v ?? undefined),
+  phaseTransition: z
+    .object({
+      toPhase: z.enum(['chat', 'session_planning']),
+      reason: z.string().optional(),
+    })
+    .nullable()
+    .optional()
+    .transform(v => v ?? undefined),
 });
 
 export type LLMTrainingResponse = z.infer<typeof LLMTrainingResponseSchema>;
@@ -254,11 +258,13 @@ function normalizeSetData(setData: Record<string, unknown>): Record<string, unkn
  * Walk parsed JSON and normalize setData.type in every intent before Zod validation.
  */
 function normalizeTrainingResponse(parsed: unknown): unknown {
-  if (typeof parsed !== 'object' || parsed === null) { return parsed; }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return parsed;
+  }
   const obj = parsed as Record<string, unknown>;
 
   if (Array.isArray(obj.intents)) {
-    obj.intents = (obj.intents as Record<string, unknown>[]).map((intent) => {
+    obj.intents = (obj.intents as Record<string, unknown>[]).map(intent => {
       if (intent.setData && typeof intent.setData === 'object') {
         return { ...intent, setData: normalizeSetData(intent.setData as Record<string, unknown>) };
       }

@@ -6,9 +6,7 @@ import { createLogger } from '@shared/logger';
 const log = createLogger('persist-node');
 
 export function buildPersistNode(contextService: IConversationContextService) {
-  return async function persistNode(
-    state: ConversationStateType,
-  ): Promise<Partial<ConversationStateType>> {
+  return async function persistNode(state: ConversationStateType): Promise<Partial<ConversationStateType>> {
     const { userId, phase, userMessage, responseMessage } = state;
 
     if (!userMessage || !responseMessage) {

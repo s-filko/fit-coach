@@ -35,13 +35,13 @@ export function buildRegistrationSystemPrompt(user: User | null): string {
     missing.unshift('  - name (what to call you)');
   }
 
-  const collectedSection = collected.length > 0
-    ? `ALREADY COLLECTED:\n${collected.join('\n')}`
-    : 'ALREADY COLLECTED: nothing yet';
+  const collectedSection =
+    collected.length > 0 ? `ALREADY COLLECTED:\n${collected.join('\n')}` : 'ALREADY COLLECTED: nothing yet';
 
-  const missingSection = missing.length > 0
-    ? `STILL MISSING:\n${missing.join('\n')}`
-    : 'STILL MISSING: nothing — all fields collected! Show summary and ask for confirmation.';
+  const missingSection =
+    missing.length > 0
+      ? `STILL MISSING:\n${missing.join('\n')}`
+      : 'STILL MISSING: nothing — all fields collected! Show summary and ask for confirmation.';
 
   const nameContext = telegramName
     ? `USER NAME (from Telegram): '${telegramName}'. Greet them by name. Include it in the final summary.`
@@ -71,15 +71,19 @@ BEHAVIOR RULES:
 5. Accept approximate language: "around 70kg", "about 25 years old" — these are valid.
 6. Use Telegram HTML: <b>bold</b> for key data, <i>italic</i> for secondary info. No Markdown asterisks. Minimal emoji.
 7. Use the user's name SPARINGLY — only on first greeting and in the final summary.
-${allCollected ? `
+${
+  allCollected
+    ? `
 8. ALL FIELDS COLLECTED — show a friendly confirmation summary with name, age, gender, height,
    weight, fitness level, goal.
    Ask the user to confirm everything is correct.
 9. When the user confirms (says "yes", "correct", "looks good", or similar) — call complete_registration immediately.
-   If user wants to edit something — update via save_profile_fields, then show the updated summary again.` : `
+   If user wants to edit something — update via save_profile_fields, then show the updated summary again.`
+    : `
 8. After collecting each field or group, call save_profile_fields immediately with what was provided.
 9. When ALL fields are collected, show a friendly confirmation summary and ask the user to confirm.
-10. When user confirms — call complete_registration.`}
+10. When user confirms — call complete_registration.`
+}
 
 TOOLS:
 - save_profile_fields: call whenever user provides profile data (age, gender, height, weight, level, goal, name).

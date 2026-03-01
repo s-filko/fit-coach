@@ -25,10 +25,7 @@ export class SessionExerciseRepository implements ISessionExerciseRepository {
   }
 
   async findById(exerciseId: string): Promise<SessionExercise | null> {
-    const [exercise] = await db
-      .select()
-      .from(sessionExercises)
-      .where(eq(sessionExercises.id, exerciseId));
+    const [exercise] = await db.select().from(sessionExercises).where(eq(sessionExercises.id, exerciseId));
 
     return exercise ?? null;
   }

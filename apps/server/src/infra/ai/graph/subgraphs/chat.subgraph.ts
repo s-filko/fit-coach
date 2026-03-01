@@ -47,7 +47,7 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
   const toolNode = new ToolNode(tools);
   const model = getModel().bindTools(tools);
 
-  const agentNode = async(state: ChatSubgraphStateType) => {
+  const agentNode = async (state: ChatSubgraphStateType) => {
     const { userId, user, userMessage } = state;
 
     const [history, activePlan, recentSessions] = await Promise.all([
@@ -65,9 +65,7 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
 
     const llmMessages = [
       new SystemMessage(systemPrompt),
-      ...history.map((m) =>
-        m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content),
-      ),
+      ...history.map(m => (m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content))),
       new HumanMessage(userMessage),
       ...inFlightMessages,
     ];
@@ -79,19 +77,18 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
     return { messages: [response] };
   };
 
-  const extractNode = async(state: ChatSubgraphStateType): Promise<Partial<ConversationStateType>> => {
+  const extractNode = async (state: ChatSubgraphStateType): Promise<Partial<ConversationStateType>> => {
     const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
-    const text = typeof lastMessage.content === 'string'
-      ? lastMessage.content
-      : (lastMessage.content as Array<{ type: string; text?: string }>)
-          .filter((b) => b.type === 'text')
-          .map((b) => b.text ?? '')
-          .join('');
+    const text =
+      typeof lastMessage.content === 'string'
+        ? lastMessage.content
+        : (lastMessage.content as Array<{ type: string; text?: string }>)
+            .filter(b => b.type === 'text')
+            .map(b => b.text ?? '')
+            .join('');
 
     // Read fresh user from DB to capture any fields saved by update_profile tool
-    const freshUser = state.userId
-      ? await userService.getUser(state.userId).catch(() => null)
-      : null;
+    const freshUser = state.userId ? await userService.getUser(state.userId).catch(() => null) : null;
 
     // Consume the pending transition set by request_transition tool — read and delete atomically
     const transition = pendingTransitions.get(state.userId) ?? null;

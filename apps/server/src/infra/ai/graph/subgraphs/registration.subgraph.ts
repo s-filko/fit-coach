@@ -43,7 +43,7 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
   const toolNode = new ToolNode(tools);
   const model = getModel().bindTools(tools);
 
-  const agentNode = async(state: RegistrationSubgraphStateType) => {
+  const agentNode = async (state: RegistrationSubgraphStateType) => {
     const { userId, user, userMessage } = state;
 
     const history = await contextService.getMessagesForPrompt(userId, 'registration');
@@ -59,9 +59,7 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
 
     const llmMessages = [
       new SystemMessage(systemPrompt),
-      ...history.map((m) =>
-        m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content),
-      ),
+      ...history.map(m => (m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content))),
       new HumanMessage(userMessage),
       ...inFlightMessages,
     ];
@@ -73,19 +71,18 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
     return { messages: [response] };
   };
 
-  const extractNode = async(state: RegistrationSubgraphStateType): Promise<Partial<ConversationStateType>> => {
+  const extractNode = async (state: RegistrationSubgraphStateType): Promise<Partial<ConversationStateType>> => {
     const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
-    const text = typeof lastMessage.content === 'string'
-      ? lastMessage.content
-      : (lastMessage.content as Array<{ type: string; text?: string }>)
-          .filter((b) => b.type === 'text')
-          .map((b) => b.text ?? '')
-          .join('');
+    const text =
+      typeof lastMessage.content === 'string'
+        ? lastMessage.content
+        : (lastMessage.content as Array<{ type: string; text?: string }>)
+            .filter(b => b.type === 'text')
+            .map(b => b.text ?? '')
+            .join('');
 
     // Read fresh user from DB to capture any fields saved by tools during this turn
-    const freshUser = state.userId
-      ? await userService.getUser(state.userId).catch(() => null)
-      : null;
+    const freshUser = state.userId ? await userService.getUser(state.userId).catch(() => null) : null;
 
     // Consume the pending transition set by complete_registration tool — read and delete atomically
     const transition = pendingTransitions.get(state.userId) ?? null;

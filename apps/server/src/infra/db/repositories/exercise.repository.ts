@@ -1,11 +1,7 @@
 import { eq, ilike, inArray, sql } from 'drizzle-orm';
 
 import type { IExerciseRepository } from '@domain/training/ports';
-import type {
-  Exercise,
-  ExerciseWithMuscles,
-  MuscleGroup,
-} from '@domain/training/types';
+import type { Exercise, ExerciseWithMuscles, MuscleGroup } from '@domain/training/types';
 
 import { db } from '@infra/db/drizzle';
 import { exerciseMuscleGroups, exercises } from '@infra/db/schema';
@@ -13,7 +9,7 @@ import { exerciseMuscleGroups, exercises } from '@infra/db/schema';
 export class ExerciseRepository implements IExerciseRepository {
   async findById(id: number): Promise<Exercise | null> {
     const [exercise] = await db.select().from(exercises).where(eq(exercises.id, id));
-    return exercise as Exercise ?? null;
+    return (exercise as Exercise) ?? null;
   }
 
   async findByIdWithMuscles(id: number): Promise<ExerciseWithMuscles | null> {
@@ -22,14 +18,11 @@ export class ExerciseRepository implements IExerciseRepository {
       return null;
     }
 
-    const muscles = await db
-      .select()
-      .from(exerciseMuscleGroups)
-      .where(eq(exerciseMuscleGroups.exerciseId, id));
+    const muscles = await db.select().from(exerciseMuscleGroups).where(eq(exerciseMuscleGroups.exerciseId, id));
 
     return {
       ...exercise,
-      muscleGroups: muscles.map((m) => ({
+      muscleGroups: muscles.map(m => ({
         muscleGroup: m.muscleGroup as MuscleGroup,
         involvement: m.involvement as 'primary' | 'secondary',
       })),
@@ -49,37 +42,29 @@ export class ExerciseRepository implements IExerciseRepository {
     }
 
     const exercisesList = await this.findByIds(ids);
-    const muscles = await db
-      .select()
-      .from(exerciseMuscleGroups)
-      .where(inArray(exerciseMuscleGroups.exerciseId, ids));
+    const muscles = await db.select().from(exerciseMuscleGroups).where(inArray(exerciseMuscleGroups.exerciseId, ids));
 
-    return exercisesList.map((exercise) => ({
+    return exercisesList.map(exercise => ({
       ...exercise,
       muscleGroups: muscles
-        .filter((m) => m.exerciseId === exercise.id)
-        .map((m) => ({
+        .filter(m => m.exerciseId === exercise.id)
+        .map(m => ({
           muscleGroup: m.muscleGroup as MuscleGroup,
           involvement: m.involvement as 'primary' | 'secondary',
         })),
     })) as ExerciseWithMuscles[];
   }
 
-  async findByMuscleGroup(
-    muscleGroup: MuscleGroup,
-    primaryOnly = false,
-  ): Promise<ExerciseWithMuscles[]> {
+  async findByMuscleGroup(muscleGroup: MuscleGroup, primaryOnly = false): Promise<ExerciseWithMuscles[]> {
     const muscleFilter = eq(exerciseMuscleGroups.muscleGroup, muscleGroup);
-    const involvementFilter = primaryOnly
-      ? eq(exerciseMuscleGroups.involvement, 'primary')
-      : undefined;
+    const involvementFilter = primaryOnly ? eq(exerciseMuscleGroups.involvement, 'primary') : undefined;
 
     const matchingMuscles = await db
       .select()
       .from(exerciseMuscleGroups)
       .where(involvementFilter ? sql`${muscleFilter} AND ${involvementFilter}` : muscleFilter);
 
-    const exerciseIds = [...new Set(matchingMuscles.map((m) => m.exerciseId))];
+    const exerciseIds = [...new Set(matchingMuscles.map(m => m.exerciseId))];
     return this.findByIdsWithMuscles(exerciseIds);
   }
 
@@ -135,7 +120,7 @@ export class ExerciseRepository implements IExerciseRepository {
     if (exercisesList.length === 0) {
       return [];
     }
-    const ids = exercisesList.map((e) => e.id);
+    const ids = exercisesList.map(e => e.id);
     return this.findByIdsWithMuscles(ids);
   }
 }

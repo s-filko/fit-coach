@@ -21,24 +21,24 @@ async function registerApiRoutes(instance: FastifyInstance): Promise<void> {
 
 async function registerCorePlugins(app: FastifyInstance): Promise<void> {
   const config = loadConfig();
-  
+
   app.register(cors, { origin: true });
   app.register(sensible);
   registerErrorHandler(app);
   app.register(healthPlugin);
-  
+
   // Register test plugin only in test environment
   if (config.NODE_ENV === 'test') {
     app.register(testPlugin);
   }
-  
+
   // Swagger/OpenAPI - register with encapsulate: false to see routes from other contexts
   app.register(docsPlugin);
 }
 
 export function buildServer(): FastifyInstance {
   const config = loadConfig();
-  
+
   const app = Fastify({
     logger: {
       level: config.LOG_LEVEL ?? 'info',

@@ -1,8 +1,4 @@
-import type {
-  UserProfile,
-  WorkoutPlan,
-  WorkoutSessionWithDetails,
-} from '@domain/training/types';
+import type { UserProfile, WorkoutPlan, WorkoutSessionWithDetails } from '@domain/training/types';
 
 export async function buildSessionRecommendationPrompt(
   user: UserProfile,
@@ -15,13 +11,11 @@ export async function buildSessionRecommendationPrompt(
   const historySection = recentSessions.length
     ? recentSessions
         .map((session, idx) => {
-          const daysAgo = Math.floor(
-            (Date.now() - session.createdAt.getTime()) / (1000 * 60 * 60 * 24),
-          );
+          const daysAgo = Math.floor((Date.now() - session.createdAt.getTime()) / (1000 * 60 * 60 * 24));
           const exercisesList = session.exercises
-            .map((ex) => {
+            .map(ex => {
               const setsInfo = ex.sets
-                .map((set) => {
+                .map(set => {
                   if (set.setData.type === 'strength') {
                     return `${set.setData.reps} reps @ ${set.setData.weight ?? 'BW'}${set.setData.weightUnit ?? 'kg'}${set.rpe ? ` (RPE ${set.rpe})` : ''}`;
                   }
@@ -43,9 +37,7 @@ ${exercisesList}`;
   // Build timeline analysis
   const muscleGroupsTrainedRecently = new Map<string, number>();
   for (const session of recentSessions) {
-    const daysAgo = Math.floor(
-      (Date.now() - session.createdAt.getTime()) / (1000 * 60 * 60 * 24),
-    );
+    const daysAgo = Math.floor((Date.now() - session.createdAt.getTime()) / (1000 * 60 * 60 * 24));
     for (const ex of session.exercises) {
       for (const mg of ex.exercise.muscleGroups ?? []) {
         const current = muscleGroupsTrainedRecently.get(mg.muscleGroup);
@@ -86,12 +78,12 @@ ${JSON.stringify(plan.planJson.recoveryGuidelines, null, 2)}
 
 ${plan.planJson.sessionTemplates
   .map(
-    (template) => `### ${template.name} (${template.key})
+    template => `### ${template.name} (${template.key})
 Focus: ${template.focus}
 Energy Cost: ${template.energyCost}
 Estimated Duration: ${template.estimatedDuration} min
 Exercises:
-${template.exercises.map((ex) => `  - ${ex.exerciseName}: ${ex.targetSets}x${ex.targetReps}${ex.targetWeight ? ` @ ${ex.targetWeight}kg` : ''}`).join('\n')}`,
+${template.exercises.map(ex => `  - ${ex.exerciseName}: ${ex.targetSets}x${ex.targetReps}${ex.targetWeight ? ` @ ${ex.targetWeight}kg` : ''}`).join('\n')}`,
   )
   .join('\n\n')}
 

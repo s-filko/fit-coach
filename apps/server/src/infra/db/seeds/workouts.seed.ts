@@ -216,10 +216,7 @@ async function findUser(telegramId: string): Promise<string> {
 }
 
 async function findExerciseId(name: string): Promise<number> {
-  const [exercise] = await db
-    .select({ id: exercises.id })
-    .from(exercises)
-    .where(eq(exercises.name, name));
+  const [exercise] = await db.select({ id: exercises.id }).from(exercises).where(eq(exercises.name, name));
 
   if (!exercise) {
     throw new Error(`Exercise "${name}" not found. Run db:seed:exercises first.`);
@@ -240,10 +237,7 @@ export async function seedWorkouts() {
     const [existing] = await db
       .select({ id: workoutSessions.id })
       .from(workoutSessions)
-      .where(and(
-        eq(workoutSessions.userId, userId),
-        eq(workoutSessions.sessionKey, `seed_${dateStr}`),
-      ));
+      .where(and(eq(workoutSessions.userId, userId), eq(workoutSessions.sessionKey, `seed_${dateStr}`)));
 
     if (existing) {
       log.info({ date: dateStr }, 'session already exists, skipping');

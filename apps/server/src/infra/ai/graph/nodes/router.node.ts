@@ -18,9 +18,7 @@ export interface RouterNodeDeps {
 export function buildRouterNode(deps: RouterNodeDeps) {
   const { userService, trainingService } = deps;
 
-  return async function routerNode(
-    state: ConversationStateType,
-  ): Promise<Partial<ConversationStateType> | Command> {
+  return async function routerNode(state: ConversationStateType): Promise<Partial<ConversationStateType> | Command> {
     const { userId } = state;
 
     // Always reset requestedTransition to prevent stale blocked transitions
@@ -39,12 +37,13 @@ export function buildRouterNode(deps: RouterNodeDeps) {
     if (state.phase === 'training' && state.activeSessionId) {
       const session = await trainingService.getSessionDetails(state.activeSessionId).catch(() => null);
 
-      const isSessionEnded = !session
-        || session.status === 'completed'
-        || session.status === 'skipped';
+      const isSessionEnded = !session || session.status === 'completed' || session.status === 'skipped';
 
       if (isSessionEnded) {
-        log.info({ userId, sessionId: state.activeSessionId, status: session?.status }, 'Session ended — returning to chat');
+        log.info(
+          { userId, sessionId: state.activeSessionId, status: session?.status },
+          'Session ended — returning to chat',
+        );
         return new Command({
           goto: 'persist',
           update: {
@@ -68,7 +67,8 @@ export function buildRouterNode(deps: RouterNodeDeps) {
             ...updates,
             phase: 'chat',
             activeSessionId: null,
-            responseMessage: 'Your training session was automatically completed due to inactivity. Ready for a new workout?',
+            responseMessage:
+              'Your training session was automatically completed due to inactivity. Ready for a new workout?',
           },
         });
       }
@@ -84,7 +84,8 @@ export function buildRouterNode(deps: RouterNodeDeps) {
           ...updates,
           phase: 'chat',
           activeSessionId: null,
-          responseMessage: 'Your training session could not be resumed. You can plan a new session whenever you\'re ready.',
+          responseMessage:
+            "Your training session could not be resumed. You can plan a new session whenever you're ready.",
         },
       });
     }

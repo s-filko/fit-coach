@@ -38,7 +38,7 @@ export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
 
   const startTrainingSession = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async(input, config) => {
+    async (input, config) => {
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
         return 'Error: could not identify user. Please try again.';
@@ -88,8 +88,8 @@ export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
 
   const requestTransition = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async(input, config) => {
-      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined ?? '';
+    async (input, config) => {
+      const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       pendingTransitions.set(userId, {
         toPhase: input.toPhase as ConversationPhase,
         reason: input.reason ?? 'user_cancelled',

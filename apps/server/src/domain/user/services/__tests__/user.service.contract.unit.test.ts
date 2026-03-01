@@ -42,7 +42,7 @@ describe('IUserService – contract unit tests (with mocks)', () => {
   });
 
   describe('updateProfileData', () => {
-    it('should call repository updateProfileData with correct parameters and return result', async() => {
+    it('should call repository updateProfileData with correct parameters and return result', async () => {
       // Arrange
       const userId = 'test-user-123';
       const profileData = { age: 25, gender: 'male' as const };
@@ -58,7 +58,7 @@ describe('IUserService – contract unit tests (with mocks)', () => {
       expect(result).toEqual(expectedResult);
     });
 
-    it('should return null when repository returns null', async() => {
+    it('should return null when repository returns null', async () => {
       // Arrange
       const userId = 'non-existent-user';
       const profileData = { age: 25 };
@@ -73,7 +73,7 @@ describe('IUserService – contract unit tests (with mocks)', () => {
       expect(result).toBeNull();
     });
 
-    it('should handle empty profile data', async() => {
+    it('should handle empty profile data', async () => {
       // Arrange
       const userId = 'test-user-123';
       const profileData = {};
@@ -88,7 +88,7 @@ describe('IUserService – contract unit tests (with mocks)', () => {
       expect(result).toBeTruthy();
     });
 
-    it('should handle partial updates correctly', async() => {
+    it('should handle partial updates correctly', async () => {
       // Arrange
       const userId = 'test-user-123';
       const profileData = { height: 175 };
@@ -106,7 +106,7 @@ describe('IUserService – contract unit tests (with mocks)', () => {
   });
 
   describe('getUser', () => {
-    it('should call repository getById with correct id and return result', async() => {
+    it('should call repository getById with correct id and return result', async () => {
       // Arrange
       const userId = 'test-user-123';
       const expectedUser = { id: userId, username: 'testuser' };
@@ -121,7 +121,7 @@ describe('IUserService – contract unit tests (with mocks)', () => {
       expect(result).toEqual(expectedUser);
     });
 
-    it('should return null when user not found', async() => {
+    it('should return null when user not found', async () => {
       // Arrange
       const userId = 'non-existent-user';
 
@@ -137,7 +137,7 @@ describe('IUserService – contract unit tests (with mocks)', () => {
   });
 
   describe('error handling', () => {
-    it('should handle repository errors in updateProfileData', async() => {
+    it('should handle repository errors in updateProfileData', async () => {
       // Arrange
       const userId = 'test-user-123';
       const profileData = { age: 25 };
@@ -146,11 +146,10 @@ describe('IUserService – contract unit tests (with mocks)', () => {
       mockRepository.updateProfileData.mockRejectedValue(error);
 
       // Act & Assert
-      await expect(userService.updateProfileData(userId, profileData))
-        .rejects.toThrow('Database connection failed');
+      await expect(userService.updateProfileData(userId, profileData)).rejects.toThrow('Database connection failed');
     });
 
-    it('should handle repository errors in getUser', async() => {
+    it('should handle repository errors in getUser', async () => {
       // Arrange
       const userId = 'test-user-123';
       const error = new Error('Database connection failed');
@@ -158,13 +157,12 @@ describe('IUserService – contract unit tests (with mocks)', () => {
       mockRepository.getById.mockRejectedValue(error);
 
       // Act & Assert
-      await expect(userService.getUser(userId))
-        .rejects.toThrow('Database connection failed');
+      await expect(userService.getUser(userId)).rejects.toThrow('Database connection failed');
     });
   });
 
   describe('upsertUser', () => {
-    it('should return existing user if found by provider', async() => {
+    it('should return existing user if found by provider', async () => {
       // Arrange
       const provider = 'telegram';
       const providerUserId = 'user123';
@@ -181,7 +179,7 @@ describe('IUserService – contract unit tests (with mocks)', () => {
       expect(result).toEqual(existingUser);
     });
 
-    it('should create new user if not found by provider', async() => {
+    it('should create new user if not found by provider', async () => {
       // Arrange
       const provider = 'telegram';
       const providerUserId = 'newuser123';
@@ -199,7 +197,7 @@ describe('IUserService – contract unit tests (with mocks)', () => {
       expect(result).toEqual(newUser);
     });
 
-    it('should handle create failure after find', async() => {
+    it('should handle create failure after find', async () => {
       // Arrange
       const provider = 'telegram';
       const providerUserId = 'newuser123';
@@ -209,8 +207,7 @@ describe('IUserService – contract unit tests (with mocks)', () => {
       mockRepository.create.mockRejectedValue(error);
 
       // Act & Assert
-      await expect(userService.upsertUser({ provider, providerUserId }))
-        .rejects.toThrow('Failed to create user');
+      await expect(userService.upsertUser({ provider, providerUserId })).rejects.toThrow('Failed to create user');
     });
   });
 });

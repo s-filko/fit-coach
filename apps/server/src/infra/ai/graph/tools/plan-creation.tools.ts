@@ -15,10 +15,26 @@ export interface PlanCreationToolsDeps {
 }
 
 const MUSCLE_GROUPS: [MuscleGroup, ...MuscleGroup[]] = [
-  'chest', 'back_lats', 'back_traps', 'shoulders_front', 'shoulders_side',
-  'shoulders_rear', 'quads', 'hamstrings', 'glutes', 'calves', 'biceps',
-  'triceps', 'forearms', 'abs', 'lower_back', 'core', 'cardio_system',
-  'full_body', 'lower_body_endurance', 'core_stability',
+  'chest',
+  'back_lats',
+  'back_traps',
+  'shoulders_front',
+  'shoulders_side',
+  'shoulders_rear',
+  'quads',
+  'hamstrings',
+  'glutes',
+  'calves',
+  'biceps',
+  'triceps',
+  'forearms',
+  'abs',
+  'lower_back',
+  'core',
+  'cardio_system',
+  'full_body',
+  'lower_body_endurance',
+  'core_stability',
 ];
 
 const ENERGY_COST = ['very_low', 'low', 'medium', 'high', 'very_high'] as const;
@@ -62,7 +78,7 @@ const recoveryGuidelinesSchema = z.object({
 });
 
 const SAVE_WORKOUT_PLAN_DESCRIPTION = [
-  'Save the user\'s approved workout plan to the database.',
+  "Save the user's approved workout plan to the database.",
   'Call this ONLY when the user has explicitly approved the complete plan.',
   'Do NOT call this during discussion, proposal, or refinement.',
   'All fields (sessionTemplates, recoveryGuidelines, progressionRules) must be complete.',
@@ -79,7 +95,7 @@ export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
 
   const saveWorkoutPlan = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async(input, config) => {
+    async (input, config) => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
@@ -123,8 +139,8 @@ export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
 
   const requestTransition = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async(input, config) => {
-      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined ?? '';
+    async (input, config) => {
+      const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       pendingTransitions.set(userId, {
         toPhase: input.toPhase as ConversationPhase,
         reason: input.reason ?? 'user_cancelled',

@@ -14,8 +14,10 @@ export const RecommendedExerciseSchema = z.object({
   targetWeight: z
     .union([z.number(), z.string(), z.null()])
     .optional()
-    .transform((v) => {
-      if (v === null || v === undefined) { return undefined; }
+    .transform(v => {
+      if (v === null || v === undefined) {
+        return undefined;
+      }
       if (typeof v === 'string') {
         const n = parseFloat(v);
         return isNaN(n) ? undefined : n;
@@ -57,8 +59,12 @@ export const SessionPlanningPhaseTransitionSchema = z.object({
  */
 export const SessionPlanningLLMResponseSchema = z.object({
   message: z.string().min(1),
-  sessionPlan: SessionRecommendationSchema.nullable().optional().transform((v) => v ?? undefined),
-  phaseTransition: SessionPlanningPhaseTransitionSchema.nullable().optional().transform((v) => v ?? undefined),
+  sessionPlan: SessionRecommendationSchema.nullable()
+    .optional()
+    .transform(v => v ?? undefined),
+  phaseTransition: SessionPlanningPhaseTransitionSchema.nullable()
+    .optional()
+    .transform(v => v ?? undefined),
 });
 
 export type SessionPlanningLLMResponse = z.infer<typeof SessionPlanningLLMResponseSchema>;
@@ -85,9 +91,7 @@ export function parseSessionPlanningResponse(
   }
 
   // Check if the ONLY errors are in phaseTransition
-  const allErrorsInPhaseTransition = result.error.issues.every(
-    (issue) => issue.path[0] === 'phaseTransition',
-  );
+  const allErrorsInPhaseTransition = result.error.issues.every(issue => issue.path[0] === 'phaseTransition');
 
   if (allErrorsInPhaseTransition && raw['phaseTransition'] !== undefined) {
     // Strip the invalid phaseTransition and re-parse

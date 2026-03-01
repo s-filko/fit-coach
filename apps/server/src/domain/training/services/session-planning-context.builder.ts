@@ -1,7 +1,4 @@
-import type {
-  IWorkoutPlanRepository,
-  IWorkoutSessionRepository,
-} from '@domain/training/ports/repository.ports';
+import type { IWorkoutPlanRepository, IWorkoutSessionRepository } from '@domain/training/ports/repository.ports';
 import type { WorkoutPlan, WorkoutSessionWithDetails } from '@domain/training/types';
 
 /**
@@ -45,5 +42,4 @@ export class SessionPlanningContextBuilder {
 
     return { activePlan, recentSessions, daysSinceLastWorkout };
   }
-
 }

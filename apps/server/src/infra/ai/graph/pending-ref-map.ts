@@ -29,7 +29,9 @@ export class PendingRefMap<T> implements IPendingRefMap<T> {
 
   get(key: string): T | undefined {
     const entry = this.entries.get(key);
-    if (!entry) { return undefined; }
+    if (!entry) {
+      return undefined;
+    }
     if (Date.now() - entry.ts > this.ttlMs) {
       this.entries.delete(key);
       return undefined;

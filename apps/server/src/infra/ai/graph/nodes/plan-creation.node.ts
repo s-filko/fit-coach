@@ -8,20 +8,22 @@ export function buildPlanCreationSystemPrompt(user: User | null, exercises: Exer
 
   const profileSection = user
     ? [
-      `Name: ${user.firstName ?? 'Unknown'}`,
-      `Age: ${user.age ?? '?'}`,
-      `Gender: ${user.gender ?? '?'}`,
-      `Height: ${user.height ?? '?'} cm`,
-      `Weight: ${user.weight ?? '?'} kg`,
-      `Fitness Level: ${user.fitnessLevel ?? '?'}`,
-      `Fitness Goal: ${user.fitnessGoal ?? '?'}`,
-    ].join('\n')
+        `Name: ${user.firstName ?? 'Unknown'}`,
+        `Age: ${user.age ?? '?'}`,
+        `Gender: ${user.gender ?? '?'}`,
+        `Height: ${user.height ?? '?'} cm`,
+        `Weight: ${user.weight ?? '?'} kg`,
+        `Fitness Level: ${user.fitnessLevel ?? '?'}`,
+        `Fitness Goal: ${user.fitnessGoal ?? '?'}`,
+      ].join('\n')
     : 'Profile not loaded.';
 
   // Group exercises by category, include muscle groups
   const byCategory = exercises.reduce<Record<string, ExerciseWithMuscles[]>>((acc, ex) => {
     const cat = ex.category ?? 'other';
-    if (!acc[cat]) { acc[cat] = []; }
+    if (!acc[cat]) {
+      acc[cat] = [];
+    }
     acc[cat].push(ex);
     return acc;
   }, {});
@@ -29,20 +31,22 @@ export function buildPlanCreationSystemPrompt(user: User | null, exercises: Exer
   const exercisesSection = Object.entries(byCategory)
     .map(([category, exs]) => {
       const name = category.charAt(0).toUpperCase() + category.slice(1);
-      const list = exs.map((ex) => {
-        const primary = ex.muscleGroups
-          .filter((m) => m.involvement === 'primary')
-          .map((m) => m.muscleGroup)
-          .join(', ');
-        const secondary = ex.muscleGroups
-          .filter((m) => m.involvement === 'secondary')
-          .map((m) => m.muscleGroup)
-          .join(', ');
-        const muscles = [primary && `Primary: ${primary}`, secondary && `Secondary: ${secondary}`]
-          .filter(Boolean)
-          .join(' | ');
-        return `- ${ex.name} (ID: ${ex.id}, Equipment: ${ex.equipment ?? 'none'}${muscles ? `, ${muscles}` : ''})`;
-      }).join('\n');
+      const list = exs
+        .map(ex => {
+          const primary = ex.muscleGroups
+            .filter(m => m.involvement === 'primary')
+            .map(m => m.muscleGroup)
+            .join(', ');
+          const secondary = ex.muscleGroups
+            .filter(m => m.involvement === 'secondary')
+            .map(m => m.muscleGroup)
+            .join(', ');
+          const muscles = [primary && `Primary: ${primary}`, secondary && `Secondary: ${secondary}`]
+            .filter(Boolean)
+            .join(' | ');
+          return `- ${ex.name} (ID: ${ex.id}, Equipment: ${ex.equipment ?? 'none'}${muscles ? `, ${muscles}` : ''})`;
+        })
+        .join('\n');
       return `### ${name}\n${list}`;
     })
     .join('\n\n');

@@ -38,8 +38,8 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
   const { trainingService, pendingTransitions, currentSessionIds } = deps;
 
   const logSet = tool(
-    async(input, config) => {
-      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined ?? '';
+    async (input, config) => {
+      const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       const sessionId = currentSessionIds.get(userId) ?? null;
       if (!sessionId) {
         log.error({ userId }, 'log_set called without active sessionId');
@@ -102,36 +102,50 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
         'setNumber is computed automatically — do NOT pass it.',
         'Call once per set. For multiple sets reported at once, call log_set multiple times.',
       ].join(' '),
-      schema: z.object({
-        exerciseId: z.number().int().positive().optional()
-          .describe('Exercise ID from the session plan. Preferred over exerciseName.'),
-        exerciseName: z.string().optional()
-          .describe('Exercise name — only if exerciseId is unknown.'),
-        reps: z.number().int().positive().optional()
-          .describe('Number of repetitions performed.'),
-        weight: z.number().positive().optional()
-          .describe('Weight used in kilograms (kg). Omit for bodyweight exercises.'),
-        durationSeconds: z.number().int().positive().optional()
-          .describe('Duration in seconds — only for cardio exercises.'),
-        rpe: z.number().min(1).max(10).optional()
-          .describe('Rate of Perceived Exertion (1–10).'),
-        feedback: z.string().optional()
-          .describe('Any user comment about this set.'),
-        order: z.number().int().min(1).optional()
-          .describe('Execution order when logging multiple sets in one response. First set = 1, second = 2, etc. Required when calling log_set more than once per response.'),
-      }).refine(
-        (d) => d.exerciseId !== undefined || d.exerciseName !== undefined,
-        { message: 'Either exerciseId or exerciseName must be provided' },
-      ).refine(
-        (d) => d.reps !== undefined || d.durationSeconds !== undefined,
-        { message: 'Either reps or durationSeconds must be provided' },
-      ),
+      schema: z
+        .object({
+          exerciseId: z
+            .number()
+            .int()
+            .positive()
+            .optional()
+            .describe('Exercise ID from the session plan. Preferred over exerciseName.'),
+          exerciseName: z.string().optional().describe('Exercise name — only if exerciseId is unknown.'),
+          reps: z.number().int().positive().optional().describe('Number of repetitions performed.'),
+          weight: z
+            .number()
+            .positive()
+            .optional()
+            .describe('Weight used in kilograms (kg). Omit for bodyweight exercises.'),
+          durationSeconds: z
+            .number()
+            .int()
+            .positive()
+            .optional()
+            .describe('Duration in seconds — only for cardio exercises.'),
+          rpe: z.number().min(1).max(10).optional().describe('Rate of Perceived Exertion (1–10).'),
+          feedback: z.string().optional().describe('Any user comment about this set.'),
+          order: z
+            .number()
+            .int()
+            .min(1)
+            .optional()
+            .describe(
+              'Execution order when logging multiple sets in one response. First set = 1, second = 2, etc. Required when calling log_set more than once per response.',
+            ),
+        })
+        .refine(d => d.exerciseId !== undefined || d.exerciseName !== undefined, {
+          message: 'Either exerciseId or exerciseName must be provided',
+        })
+        .refine(d => d.reps !== undefined || d.durationSeconds !== undefined, {
+          message: 'Either reps or durationSeconds must be provided',
+        }),
     },
   );
 
   const nextExercise = tool(
-    async(_input, config) => {
-      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined ?? '';
+    async (_input, config) => {
+      const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       const sessionId = currentSessionIds.get(userId) ?? null;
       if (!sessionId) {
         log.error({ userId }, 'next_exercise called without active sessionId');
@@ -159,8 +173,8 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
   );
 
   const skipExercise = tool(
-    async(input, config) => {
-      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined ?? '';
+    async (input, config) => {
+      const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       const sessionId = currentSessionIds.get(userId) ?? null;
       if (!sessionId) {
         log.error({ userId }, 'skip_exercise called without active sessionId');
@@ -178,7 +192,8 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
     },
     {
       name: 'skip_exercise',
-      description: 'Skip the current exercise. Use when user explicitly wants to skip it (equipment busy, pain, preference).',
+      description:
+        'Skip the current exercise. Use when user explicitly wants to skip it (equipment busy, pain, preference).',
       schema: z.object({
         reason: z.string().optional().describe('Reason for skipping the exercise.'),
       }),
@@ -186,8 +201,8 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
   );
 
   const finishTraining = tool(
-    async(input, config) => {
-      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined ?? '';
+    async (input, config) => {
+      const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       const sessionId = currentSessionIds.get(userId) ?? null;
       if (!sessionId) {
         log.error({ userId }, 'finish_training called without active sessionId');

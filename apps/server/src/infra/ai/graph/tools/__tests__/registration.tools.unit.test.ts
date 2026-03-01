@@ -23,13 +23,14 @@ const FULL_USER = {
   fitnessGoal: 'Build muscle',
 };
 
-const makeUserService = (userOverrides: Partial<typeof FULL_USER> = {}): jest.Mocked<IUserService> => ({
-  getUser: jest.fn().mockResolvedValue({ ...FULL_USER, ...userOverrides }),
-  updateProfileData: jest.fn().mockResolvedValue({ ...FULL_USER, ...userOverrides }),
-  upsertUser: jest.fn(),
-  isRegistrationComplete: jest.fn().mockReturnValue(false),
-  needsRegistration: jest.fn().mockReturnValue(true),
-} as unknown as jest.Mocked<IUserService>);
+const makeUserService = (userOverrides: Partial<typeof FULL_USER> = {}): jest.Mocked<IUserService> =>
+  ({
+    getUser: jest.fn().mockResolvedValue({ ...FULL_USER, ...userOverrides }),
+    updateProfileData: jest.fn().mockResolvedValue({ ...FULL_USER, ...userOverrides }),
+    upsertUser: jest.fn(),
+    isRegistrationComplete: jest.fn().mockReturnValue(false),
+    needsRegistration: jest.fn().mockReturnValue(true),
+  }) as unknown as jest.Mocked<IUserService>;
 
 const makePendingTransitions = (): Map<string, TransitionRequest | null> => new Map();
 
@@ -61,11 +62,14 @@ describe('registration.tools — save_profile_fields', () => {
 
     await saveProfileFields.invoke({ age: 28, gender: 'male', height: 180 }, makeConfig());
 
-    expect(userService.updateProfileData).toHaveBeenCalledWith('u1', expect.objectContaining({
-      age: 28,
-      gender: 'male',
-      height: 180,
-    }));
+    expect(userService.updateProfileData).toHaveBeenCalledWith(
+      'u1',
+      expect.objectContaining({
+        age: 28,
+        gender: 'male',
+        height: 180,
+      }),
+    );
   });
 
   it('returns "Saved:" confirmation with field names', async () => {
@@ -107,9 +111,12 @@ describe('registration.tools — save_profile_fields', () => {
 
     await saveProfileFields.invoke({ firstName: 'Alex' }, makeConfig());
 
-    expect(userService.updateProfileData).toHaveBeenCalledWith('u1', expect.objectContaining({
-      firstName: 'Alex',
-    }));
+    expect(userService.updateProfileData).toHaveBeenCalledWith(
+      'u1',
+      expect.objectContaining({
+        firstName: 'Alex',
+      }),
+    );
   });
 });
 

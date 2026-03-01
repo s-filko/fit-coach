@@ -15,19 +15,17 @@ for (const [key, value] of Object.entries(process.env)) {
 
 /**
  * Root Pino logger instance.
- * 
+ *
  * ARCHITECTURAL NOTE: This is a shared singleton, which is an intentional exception
  * to the "no shared singletons" rule (ADR-0008). Logging is a cross-cutting concern
  * that needs to be available to all layers without creating circular dependencies.
- * 
+ *
  * Security: Automatically redacts sensitive fields (passwords, tokens, API keys, etc.)
  * to prevent accidental logging of credentials.
  */
 export const rootLogger = pino({
   level: LOG_LEVEL,
-  transport: NODE_ENV === 'development'
-    ? { target: 'pino-pretty' }
-    : undefined,
+  transport: NODE_ENV === 'development' ? { target: 'pino-pretty' } : undefined,
   redact: {
     paths: [
       'req.headers.authorization',
@@ -50,16 +48,16 @@ export type Logger = pino.Logger;
 
 /**
  * Creates a child logger for a specific module.
- * 
+ *
  * @param module - Module name (e.g., 'llm', 'chat', 'training', 'bot')
  * @returns Child logger with module label and optional per-module log level
- * 
+ *
  * @example
  * ```typescript
  * const log = createLogger('llm');
  * log.info({ model, latency }, 'LLM call completed');
  * ```
- * 
+ *
  * Per-module log levels can be set via environment variables:
  * - LOG_LEVEL_LLM=debug -> only LLM module logs at debug level
  * - LOG_LEVEL_CHAT=trace -> only chat module logs at trace level

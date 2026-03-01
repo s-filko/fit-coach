@@ -14,14 +14,14 @@ export function buildSessionPlanningSystemPrompt(
   // === CLIENT PROFILE ===
   const profileSection = user
     ? [
-      `Name: ${user.firstName ?? 'Unknown'}`,
-      `Age: ${user.age ?? '?'}`,
-      `Gender: ${user.gender ?? '?'}`,
-      `Height: ${user.height ?? '?'} cm`,
-      `Weight: ${user.weight ?? '?'} kg`,
-      `Fitness Level: ${user.fitnessLevel ?? '?'}`,
-      `Fitness Goal: ${user.fitnessGoal ?? '?'}`,
-    ].join('\n')
+        `Name: ${user.firstName ?? 'Unknown'}`,
+        `Age: ${user.age ?? '?'}`,
+        `Gender: ${user.gender ?? '?'}`,
+        `Height: ${user.height ?? '?'} cm`,
+        `Weight: ${user.weight ?? '?'} kg`,
+        `Fitness Level: ${user.fitnessLevel ?? '?'}`,
+        `Fitness Goal: ${user.fitnessGoal ?? '?'}`,
+      ].join('\n')
     : 'Profile not loaded.';
 
   // === ACTIVE WORKOUT PLAN ===
@@ -38,7 +38,9 @@ export function buildSessionPlanningSystemPrompt(
   // === AVAILABLE EXERCISES ===
   const byCategory = exercises.reduce<Record<string, ExerciseWithMuscles[]>>((acc, ex) => {
     const cat = ex.category ?? 'other';
-    if (!acc[cat]) { acc[cat] = []; }
+    if (!acc[cat]) {
+      acc[cat] = [];
+    }
     acc[cat].push(ex);
     return acc;
   }, {});
@@ -46,27 +48,30 @@ export function buildSessionPlanningSystemPrompt(
   const exercisesSection = Object.entries(byCategory)
     .map(([category, exs]) => {
       const name = category.charAt(0).toUpperCase() + category.slice(1);
-      const list = exs.map((ex) => {
-        const primary = ex.muscleGroups
-          .filter((m) => m.involvement === 'primary')
-          .map((m) => m.muscleGroup)
-          .join(', ');
-        const secondary = ex.muscleGroups
-          .filter((m) => m.involvement === 'secondary')
-          .map((m) => m.muscleGroup)
-          .join(', ');
-        const muscles = [primary && `Primary: ${primary}`, secondary && `Secondary: ${secondary}`]
-          .filter(Boolean)
-          .join(' | ');
-        return `- ${ex.name} (ID: ${ex.id}, Equip: ${ex.equipment ?? 'none'}${muscles ? `, ${muscles}` : ''})`;
-      }).join('\n');
+      const list = exs
+        .map(ex => {
+          const primary = ex.muscleGroups
+            .filter(m => m.involvement === 'primary')
+            .map(m => m.muscleGroup)
+            .join(', ');
+          const secondary = ex.muscleGroups
+            .filter(m => m.involvement === 'secondary')
+            .map(m => m.muscleGroup)
+            .join(', ');
+          const muscles = [primary && `Primary: ${primary}`, secondary && `Secondary: ${secondary}`]
+            .filter(Boolean)
+            .join(' | ');
+          return `- ${ex.name} (ID: ${ex.id}, Equip: ${ex.equipment ?? 'none'}${muscles ? `, ${muscles}` : ''})`;
+        })
+        .join('\n');
       return `### ${name}\n${list}`;
     })
     .join('\n\n');
 
-  const daysSince = context.daysSinceLastWorkout !== null
-    ? `${context.daysSinceLastWorkout} days since last workout`
-    : 'No previous workouts';
+  const daysSince =
+    context.daysSinceLastWorkout !== null
+      ? `${context.daysSinceLastWorkout} days since last workout`
+      : 'No previous workouts';
 
   return `You are FitCoach — a professional fitness trainer helping a client plan their next training session.
 
@@ -144,10 +149,27 @@ Respond with natural text only. Do NOT include JSON in your response.`;
 
 function buildActivePlanSection(
   name: string,
-  planJson: { goal?: string; trainingStyle?: string; sessionTemplates?: Array<{
-    key: string; name: string; focus: string; estimatedDuration: number;
-    exercises: Array<{ exerciseId: number; exerciseName: string; targetSets: number; targetReps: string; targetWeight?: number; restSeconds: number }>;
-  }> } | undefined | null,
+  planJson:
+    | {
+        goal?: string;
+        trainingStyle?: string;
+        sessionTemplates?: Array<{
+          key: string;
+          name: string;
+          focus: string;
+          estimatedDuration: number;
+          exercises: Array<{
+            exerciseId: number;
+            exerciseName: string;
+            targetSets: number;
+            targetReps: string;
+            targetWeight?: number;
+            restSeconds: number;
+          }>;
+        }>;
+      }
+    | undefined
+    | null,
 ): string {
   if (!planJson) {
     return `Plan: ${name}\n(Plan details not available)`;
@@ -161,13 +183,15 @@ function buildActivePlanSection(
     'Session Templates:',
   ];
 
-  for (const template of (planJson.sessionTemplates ?? [])) {
+  for (const template of planJson.sessionTemplates ?? []) {
     lines.push(`\n### ${template.name} (key: ${template.key})`);
     lines.push(`Focus: ${template.focus} | Est. ${template.estimatedDuration} min`);
     lines.push('Exercises:');
     for (const ex of template.exercises) {
       const weight = ex.targetWeight ? ` @ ${ex.targetWeight}kg` : '';
-      lines.push(`  - [ID:${ex.exerciseId}] ${ex.exerciseName}: ${ex.targetSets}x${ex.targetReps}${weight} (rest: ${ex.restSeconds}s)`);
+      lines.push(
+        `  - [ID:${ex.exerciseId}] ${ex.exerciseName}: ${ex.targetSets}x${ex.targetReps}${weight} (rest: ${ex.restSeconds}s)`,
+      );
     }
   }
 
@@ -179,28 +203,34 @@ function buildHistorySection(sessions: WorkoutSessionWithDetails[], now: Date): 
     return 'No training history yet. This will be the first session.';
   }
 
-  return sessions.map((session, idx) => {
-    const sessionDate = new Date(session.startedAt ?? session.createdAt);
-    const daysAgo = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24));
-    const hoursAgo = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60));
-    const timeAgo = daysAgo > 0 ? `${daysAgo}d ago` : `${hoursAgo}h ago`;
+  return sessions
+    .map((session, idx) => {
+      const sessionDate = new Date(session.startedAt ?? session.createdAt);
+      const daysAgo = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24));
+      const hoursAgo = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60));
+      const timeAgo = daysAgo > 0 ? `${daysAgo}d ago` : `${hoursAgo}h ago`;
 
-    const exerciseList = session.exercises.map((ex) => {
-      const setsInfo = ex.sets.map((s) => {
-        if (s.setData.type === 'strength') {
-          const w = s.setData.weight ?? 'BW';
-          return `${s.setData.reps}x${w}${s.setData.weightUnit ?? 'kg'}`;
-        }
-        return `${s.setData.type}`;
-      }).join(', ');
-      return `    - ${ex.exercise.name}: ${setsInfo || 'no sets logged'}`;
-    }).join('\n');
+      const exerciseList = session.exercises
+        .map(ex => {
+          const setsInfo = ex.sets
+            .map(s => {
+              if (s.setData.type === 'strength') {
+                const w = s.setData.weight ?? 'BW';
+                return `${s.setData.reps}x${w}${s.setData.weightUnit ?? 'kg'}`;
+              }
+              return `${s.setData.type}`;
+            })
+            .join(', ');
+          return `    - ${ex.exercise.name}: ${setsInfo || 'no sets logged'}`;
+        })
+        .join('\n');
 
-    return [
-      `${idx + 1}. ${session.sessionKey ?? 'Custom'} (${timeAgo}) — ${session.status} — ${session.durationMinutes ?? '?'} min`,
-      exerciseList || '    (no exercises logged)',
-    ].join('\n');
-  }).join('\n\n');
+      return [
+        `${idx + 1}. ${session.sessionKey ?? 'Custom'} (${timeAgo}) — ${session.status} — ${session.durationMinutes ?? '?'} min`,
+        exerciseList || '    (no exercises logged)',
+      ].join('\n');
+    })
+    .join('\n\n');
 }
 
 function buildRecoverySection(sessions: WorkoutSessionWithDetails[], now: Date): string {
@@ -228,10 +258,15 @@ function buildRecoverySection(sessions: WorkoutSessionWithDetails[], now: Date):
     .sort((a, b) => a[1] - b[1])
     .map(([muscle, daysAgo]) => {
       let status: string;
-      if (daysAgo === 0) { status = '⚠ trained today'; }
-      else if (daysAgo === 1) { status = '⚠ trained yesterday'; }
-      else if (daysAgo <= 2) { status = `${daysAgo}d ago — may still be sore`; }
-      else { status = `${daysAgo}d ago — likely recovered`; }
+      if (daysAgo === 0) {
+        status = '⚠ trained today';
+      } else if (daysAgo === 1) {
+        status = '⚠ trained yesterday';
+      } else if (daysAgo <= 2) {
+        status = `${daysAgo}d ago — may still be sore`;
+      } else {
+        status = `${daysAgo}d ago — likely recovered`;
+      }
       return `- ${muscle}: ${status}`;
     })
     .join('\n');

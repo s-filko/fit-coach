@@ -67,4 +67,3 @@ export function registerErrorHandler(app: FastifyInstance): void {
     });
   });
 }
-

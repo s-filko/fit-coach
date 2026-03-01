@@ -5,7 +5,7 @@ import type { TrainingPromptContext } from '@domain/user/ports';
 
 /**
  * Build system prompt for training phase
- * 
+ *
  * This prompt helps LLM:
  * 1. Guide user through exercises
  * 2. Log sets with proper data structure
@@ -26,7 +26,9 @@ export function buildTrainingPrompt(context: TrainingPromptContext): string {
   // Build all exercises list grouped by category (for off-plan exercise lookup)
   const exercisesByCategory = context.availableExercises.reduce(
     (acc, ex) => {
-      if (!acc[ex.category]) { acc[ex.category] = []; }
+      if (!acc[ex.category]) {
+        acc[ex.category] = [];
+      }
       acc[ex.category].push(`[ID:${ex.id}] ${ex.name}`);
       return acc;
     },
@@ -64,7 +66,7 @@ ${session.sessionPlanJson.exercises.map((ex, idx) => `  ${idx + 1}. [ID:${ex.exe
               const setTime = new Date(set.createdAt).toISOString();
               const minutesAgo = Math.floor((now.getTime() - new Date(set.createdAt).getTime()) / (1000 * 60));
               const timeAgo = minutesAgo > 0 ? `${minutesAgo}min ago` : 'just now';
-              
+
               if (set.setData.type === 'strength') {
                 return `    Set ${setIdx + 1} (${setTime}, ${timeAgo}): ${set.setData.reps} reps @ ${set.setData.weight ?? 'BW'}${set.setData.weightUnit ?? 'kg'}${set.rpe ? ` RPE ${set.rpe}` : ''}${set.userFeedback ? ` - ${set.userFeedback}` : ''}`;
               }
@@ -81,7 +83,7 @@ ${setsInfo}`;
     : '  No exercises started yet.';
 
   // Determine current exercise
-  const currentExercise = session.exercises.find((ex) => ex.status === 'in_progress');
+  const currentExercise = session.exercises.find(ex => ex.status === 'in_progress');
   const currentExerciseSection = currentExercise
     ? `
 **Current Exercise**: ${currentExercise.exercise.name}

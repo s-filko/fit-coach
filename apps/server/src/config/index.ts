@@ -22,15 +22,22 @@ const EnvSchema = z.object({
   BOT_API_KEY: z.string().min(1),
   // LLM Configuration — any OpenAI-compatible API (OpenAI, OpenRouter, Groq, Together, Azure, etc.)
   LLM_API_KEY: z.string().min(1),
-  LLM_API_URL: z.string().optional().transform(s => (s == null || s.trim() === '') ? undefined : s).pipe(z.string().url().min(1).optional()),
+  LLM_API_URL: z
+    .string()
+    .optional()
+    .transform(s => (s == null || s.trim() === '' ? undefined : s))
+    .pipe(z.string().url().min(1).optional()),
   LLM_MODEL: z.string().min(1),
-  LLM_TEMPERATURE: z.string().transform(v => {
-    const n = Number(v);
-    if (Number.isNaN(n)) {
-      throw new Error('LLM_TEMPERATURE must be a number');
-    }
-    return n;
-  }).pipe(z.number().min(0).max(2)),
+  LLM_TEMPERATURE: z
+    .string()
+    .transform(v => {
+      const n = Number(v);
+      if (Number.isNaN(n)) {
+        throw new Error('LLM_TEMPERATURE must be a number');
+      }
+      return n;
+    })
+    .pipe(z.number().min(0).max(2)),
 });
 
 export type Env = z.infer<typeof EnvSchema> & { PORT: number };
@@ -41,10 +48,9 @@ export function loadConfig(): Env {
     const issues = parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
     throw new Error(
       `Invalid environment configuration: ${issues}\n\n` +
-      'Please ensure all required environment variables are set in your .env file.',
+        'Please ensure all required environment variables are set in your .env file.',
     );
   }
   const data = parsed.data as Env;
   return { ...data, PORT: data.PORT } as Env;
 }
-

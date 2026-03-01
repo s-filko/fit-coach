@@ -6,8 +6,12 @@ const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 function formatSessionAge(date: Date): string {
   const daysAgo = Math.floor((Date.now() - date.getTime()) / MS_PER_DAY);
-  if (daysAgo === 0) { return 'today'; }
-  if (daysAgo === 1) { return 'yesterday'; }
+  if (daysAgo === 0) {
+    return 'today';
+  }
+  if (daysAgo === 1) {
+    return 'yesterday';
+  }
   return `${daysAgo} days ago`;
 }
 
@@ -28,22 +32,25 @@ export function buildChatSystemPrompt(
     user?.weight && `Weight: ${user.weight} kg`,
     user?.fitnessLevel && `Fitness level: ${user.fitnessLevel}`,
     user?.fitnessGoal && `Goal: ${user.fitnessGoal}`,
-  ].filter(Boolean).join(', ');
+  ]
+    .filter(Boolean)
+    .join(', ');
 
   const planStatus = hasActivePlan
     ? 'User HAS an active workout plan. They can start planning workout sessions.'
     : 'User DOES NOT have a workout plan yet. Suggest creating one when appropriate.';
 
-  const recentSessionsSection = recentSessions.length > 0
-    ? recentSessions.map((s) => {
-        const date = s.completedAt ?? s.startedAt ?? s.createdAt;
-        const when = formatSessionAge(new Date(date));
-        const exercises = s.exercises
-          .map((ex) => `${ex.exercise.name} (${ex.sets.length} sets)`)
-          .join(', ');
-        return `- ${s.sessionKey ?? 'session'} — ${when}, ${s.durationMinutes ?? '?'} min: ${exercises || 'no exercises logged'}`;
-      }).join('\n')
-    : 'No recent sessions.';
+  const recentSessionsSection =
+    recentSessions.length > 0
+      ? recentSessions
+          .map(s => {
+            const date = s.completedAt ?? s.startedAt ?? s.createdAt;
+            const when = formatSessionAge(new Date(date));
+            const exercises = s.exercises.map(ex => `${ex.exercise.name} (${ex.sets.length} sets)`).join(', ');
+            return `- ${s.sessionKey ?? 'session'} — ${when}, ${s.durationMinutes ?? '?'} min: ${exercises || 'no exercises logged'}`;
+          })
+          .join('\n')
+      : 'No recent sessions.';
 
   const clientName = user?.firstName ?? null;
   const langInstruction = user?.languageCode

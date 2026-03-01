@@ -11,7 +11,9 @@ type UserRow = typeof users.$inferSelect;
  * Helper function to safely convert gender to the expected type
  */
 function safeGenderCast(gender: string | null): 'male' | 'female' | null {
-  if (!gender) {return null;}
+  if (!gender) {
+    return null;
+  }
   return gender === 'male' || gender === 'female' ? gender : null;
 }
 
@@ -20,8 +22,12 @@ function safeGenderCast(gender: string | null): 'male' | 'female' | null {
  * Drizzle returns numeric columns as strings to preserve precision
  */
 function parseNumeric(value: string | number | null): number | null {
-  if (value === null || value === undefined) {return null;}
-  if (typeof value === 'number') {return value;}
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'number') {
+    return value;
+  }
   const parsed = parseFloat(value);
   return isNaN(parsed) ? null : parsed;
 }
@@ -87,8 +93,14 @@ function createUpdateData(updates: Partial<User>): Record<string, unknown> {
   };
 
   const updateableFields: (keyof User)[] = [
-    'firstName', 'profileStatus', 'fitnessLevel', 'age', 'gender',
-    'height', 'weight', 'fitnessGoal',
+    'firstName',
+    'profileStatus',
+    'fitnessLevel',
+    'age',
+    'gender',
+    'height',
+    'weight',
+    'fitnessGoal',
   ];
 
   updateableFields.forEach(field => {
@@ -108,21 +120,18 @@ export class DrizzleUserRepository implements UserRepository {
     const accountRows = await db
       .select()
       .from(userAccounts)
-      .where(and(
-        eq(userAccounts.provider, provider),
-        eq(userAccounts.providerUserId, providerUserId),
-      ))
+      .where(and(eq(userAccounts.provider, provider), eq(userAccounts.providerUserId, providerUserId)))
       .limit(1);
 
-    if (!accountRows[0]) {return null;}
+    if (!accountRows[0]) {
+      return null;
+    }
 
-    const userRows = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, accountRows[0].userId))
-      .limit(1);
+    const userRows = await db.select().from(users).where(eq(users.id, accountRows[0].userId)).limit(1);
 
-    if (!userRows[0]) {return null;}
+    if (!userRows[0]) {
+      return null;
+    }
 
     return mapRowToUser(userRows[0]);
   }
@@ -132,18 +141,13 @@ export class DrizzleUserRepository implements UserRepository {
 
     const userData = createUserData(data);
 
-    const [insertedUser] = await db
-      .insert(users)
-      .values(userData)
-      .returning({ id: users.id });
+    const [insertedUser] = await db.insert(users).values(userData).returning({ id: users.id });
 
-    await db
-      .insert(userAccounts)
-      .values({
-        userId: insertedUser.id,
-        provider: data.provider,
-        providerUserId: data.providerUserId,
-      });
+    await db.insert(userAccounts).values({
+      userId: insertedUser.id,
+      provider: data.provider,
+      providerUserId: data.providerUserId,
+    });
 
     return {
       id: insertedUser.id,
@@ -164,13 +168,11 @@ export class DrizzleUserRepository implements UserRepository {
   async getById(id: string): Promise<User | null> {
     const { db, users } = await getDbAndSchema();
 
-    const rows = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, id))
-      .limit(1);
+    const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
 
-    if (!rows[0]) {return null;}
+    if (!rows[0]) {
+      return null;
+    }
 
     return mapRowToUser(rows[0]);
   }
@@ -187,15 +189,12 @@ export class DrizzleUserRepository implements UserRepository {
       return await this.getById(id);
     }
 
-    const result = await db
-      .update(users)
-      .set(updateData)
-      .where(eq(users.id, id))
-      .returning();
+    const result = await db.update(users).set(updateData).where(eq(users.id, id)).returning();
 
-    if (result.length === 0) {return null;}
+    if (result.length === 0) {
+      return null;
+    }
 
     return mapRowToUser(result[0]);
   }
 }
-

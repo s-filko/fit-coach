@@ -11,7 +11,12 @@
 import { AIMessage, ToolMessage } from '@langchain/core/messages';
 
 import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
-import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository, IWorkoutSessionRepository } from '@domain/training/ports';
+import type {
+  IExerciseRepository,
+  ITrainingService,
+  IWorkoutPlanRepository,
+  IWorkoutSessionRepository,
+} from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 
 const BASE_USER = {
@@ -34,62 +39,67 @@ const MINIMAL_SESSION_PLAN = {
   estimatedDuration: 60,
 };
 
-const makeUserService = (): jest.Mocked<IUserService> => ({
-  getUser: jest.fn().mockResolvedValue(BASE_USER),
-  updateProfileData: jest.fn().mockResolvedValue(BASE_USER),
-  upsertUser: jest.fn(),
-  isRegistrationComplete: jest.fn().mockReturnValue(true),
-  needsRegistration: jest.fn().mockReturnValue(false),
-} as unknown as jest.Mocked<IUserService>);
+const makeUserService = (): jest.Mocked<IUserService> =>
+  ({
+    getUser: jest.fn().mockResolvedValue(BASE_USER),
+    updateProfileData: jest.fn().mockResolvedValue(BASE_USER),
+    upsertUser: jest.fn(),
+    isRegistrationComplete: jest.fn().mockReturnValue(true),
+    needsRegistration: jest.fn().mockReturnValue(false),
+  }) as unknown as jest.Mocked<IUserService>;
 
-const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> => ({
-  findById: jest.fn(),
-  findByIdWithMuscles: jest.fn(),
-  findByIds: jest.fn(),
-  findByIdsWithMuscles: jest.fn().mockResolvedValue([]),
-  findByMuscleGroup: jest.fn(),
-  search: jest.fn(),
-  findAll: jest.fn().mockResolvedValue([]),
-  findAllWithMuscles: jest.fn().mockResolvedValue([]),
-} as unknown as jest.Mocked<IExerciseRepository>);
+const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> =>
+  ({
+    findById: jest.fn(),
+    findByIdWithMuscles: jest.fn(),
+    findByIds: jest.fn(),
+    findByIdsWithMuscles: jest.fn().mockResolvedValue([]),
+    findByMuscleGroup: jest.fn(),
+    search: jest.fn(),
+    findAll: jest.fn().mockResolvedValue([]),
+    findAllWithMuscles: jest.fn().mockResolvedValue([]),
+  }) as unknown as jest.Mocked<IExerciseRepository>;
 
-const makeWorkoutPlanRepo = (): jest.Mocked<IWorkoutPlanRepository> => ({
-  create: jest.fn(),
-  findById: jest.fn(),
-  findActiveByUserId: jest.fn().mockResolvedValue({ id: 'plan-1' }),
-  findByUserId: jest.fn(),
-  update: jest.fn(),
-  archive: jest.fn(),
-} as unknown as jest.Mocked<IWorkoutPlanRepository>);
+const makeWorkoutPlanRepo = (): jest.Mocked<IWorkoutPlanRepository> =>
+  ({
+    create: jest.fn(),
+    findById: jest.fn(),
+    findActiveByUserId: jest.fn().mockResolvedValue({ id: 'plan-1' }),
+    findByUserId: jest.fn(),
+    update: jest.fn(),
+    archive: jest.fn(),
+  }) as unknown as jest.Mocked<IWorkoutPlanRepository>;
 
-const makeWorkoutSessionRepo = (): jest.Mocked<IWorkoutSessionRepository> => ({
-  create: jest.fn(),
-  findById: jest.fn(),
-  findByIdWithDetails: jest.fn(),
-  findRecentByUserId: jest.fn().mockResolvedValue([]),
-  findRecentByUserIdWithDetails: jest.fn().mockResolvedValue([]),
-  findActiveByUserId: jest.fn().mockResolvedValue(null),
-  update: jest.fn(),
-  complete: jest.fn(),
-  updateActivity: jest.fn(),
-  findTimedOut: jest.fn().mockResolvedValue([]),
-  autoCloseTimedOut: jest.fn().mockResolvedValue(0),
-} as unknown as jest.Mocked<IWorkoutSessionRepository>);
+const makeWorkoutSessionRepo = (): jest.Mocked<IWorkoutSessionRepository> =>
+  ({
+    create: jest.fn(),
+    findById: jest.fn(),
+    findByIdWithDetails: jest.fn(),
+    findRecentByUserId: jest.fn().mockResolvedValue([]),
+    findRecentByUserIdWithDetails: jest.fn().mockResolvedValue([]),
+    findActiveByUserId: jest.fn().mockResolvedValue(null),
+    update: jest.fn(),
+    complete: jest.fn(),
+    updateActivity: jest.fn(),
+    findTimedOut: jest.fn().mockResolvedValue([]),
+    autoCloseTimedOut: jest.fn().mockResolvedValue(0),
+  }) as unknown as jest.Mocked<IWorkoutSessionRepository>;
 
-const makeTrainingService = (sessionId = 'session-1'): jest.Mocked<ITrainingService> => ({
-  startSession: jest.fn().mockResolvedValue({ id: sessionId, status: 'planning' }),
-  getSessionDetails: jest.fn(),
-  completeSession: jest.fn(),
-  skipSession: jest.fn(),
-  getTrainingHistory: jest.fn(),
-  getNextSessionRecommendation: jest.fn(),
-  addExerciseToSession: jest.fn(),
-  logSet: jest.fn(),
-  startNextExercise: jest.fn(),
-  skipCurrentExercise: jest.fn(),
-  completeCurrentExercise: jest.fn(),
-  ensureCurrentExercise: jest.fn(),
-} as unknown as jest.Mocked<ITrainingService>);
+const makeTrainingService = (sessionId = 'session-1'): jest.Mocked<ITrainingService> =>
+  ({
+    startSession: jest.fn().mockResolvedValue({ id: sessionId, status: 'planning' }),
+    getSessionDetails: jest.fn(),
+    completeSession: jest.fn(),
+    skipSession: jest.fn(),
+    getTrainingHistory: jest.fn(),
+    getNextSessionRecommendation: jest.fn(),
+    addExerciseToSession: jest.fn(),
+    logSet: jest.fn(),
+    startNextExercise: jest.fn(),
+    skipCurrentExercise: jest.fn(),
+    completeCurrentExercise: jest.fn(),
+    ensureCurrentExercise: jest.fn(),
+  }) as unknown as jest.Mocked<ITrainingService>;
 
 describe('session-planning.subgraph — text response (no tools)', () => {
   beforeEach(() => {
@@ -97,9 +107,9 @@ describe('session-planning.subgraph — text response (no tools)', () => {
   });
 
   it('sets responseMessage and no side effects when LLM responds with text only', async () => {
-    const mockInvoke = jest.fn().mockResolvedValue(
-      new AIMessage({ content: 'How are you feeling today?', tool_calls: [] }),
-    );
+    const mockInvoke = jest
+      .fn()
+      .mockResolvedValue(new AIMessage({ content: 'How are you feeling today?', tool_calls: [] }));
 
     jest.mock('@infra/ai/model.factory', () => ({
       getModel: () => ({ bindTools: () => ({ invoke: mockInvoke }) }),
@@ -139,15 +149,17 @@ describe('session-planning.subgraph — start_training_session tool', () => {
       if (llmCallCount === 1) {
         return new AIMessage({
           content: '',
-          tool_calls: [{
-            id: 'tc-start-1',
-            name: 'start_training_session',
-            args: MINIMAL_SESSION_PLAN,
-            type: 'tool_call',
-          }],
+          tool_calls: [
+            {
+              id: 'tc-start-1',
+              name: 'start_training_session',
+              args: MINIMAL_SESSION_PLAN,
+              type: 'tool_call',
+            },
+          ],
         });
       }
-      return new AIMessage({ content: 'Let\'s go! Starting training.', tool_calls: [] });
+      return new AIMessage({ content: "Let's go! Starting training.", tool_calls: [] });
     });
 
     jest.mock('@infra/ai/model.factory', () => ({
@@ -164,8 +176,8 @@ describe('session-planning.subgraph — start_training_session tool', () => {
       trainingService: makeTrainingService('session-abc'),
     });
 
-    const result =     await subgraph.invoke(
-      { userId: 'u1', userMessage: 'yes, let\'s start!', user: BASE_USER },
+    const result = await subgraph.invoke(
+      { userId: 'u1', userMessage: "yes, let's start!", user: BASE_USER },
       { recursionLimit: 10, configurable: { userId: 'u1', thread_id: 'u1' } },
     );
 
@@ -187,12 +199,14 @@ describe('session-planning.subgraph — tool-calling loop (recursion prevention)
       if (capturedMessages.length === 1) {
         return new AIMessage({
           content: '',
-          tool_calls: [{
-            id: 'tc-sp-1',
-            name: 'request_transition',
-            args: { toPhase: 'chat', reason: 'user cancelled' },
-            type: 'tool_call',
-          }],
+          tool_calls: [
+            {
+              id: 'tc-sp-1',
+              name: 'request_transition',
+              args: { toPhase: 'chat', reason: 'user cancelled' },
+              type: 'tool_call',
+            },
+          ],
         });
       }
       return new AIMessage({ content: 'Ok, going back to chat.', tool_calls: [] });
@@ -221,7 +235,7 @@ describe('session-planning.subgraph — tool-calling loop (recursion prevention)
 
     const secondCallMessages = capturedMessages[1] as Array<{ _getType?: () => string }>;
     const hasToolMessage = secondCallMessages.some(
-      (m) => m instanceof ToolMessage || (typeof m._getType === 'function' && m._getType() === 'tool'),
+      m => m instanceof ToolMessage || (typeof m._getType === 'function' && m._getType() === 'tool'),
     );
     expect(hasToolMessage).toBe(true);
   });
@@ -234,12 +248,14 @@ describe('session-planning.subgraph — tool-calling loop (recursion prevention)
       if (capturedMessages.length === 1) {
         return new AIMessage({
           content: '',
-          tool_calls: [{
-            id: 'tc-sp-2',
-            name: 'request_transition',
-            args: { toPhase: 'chat' },
-            type: 'tool_call',
-          }],
+          tool_calls: [
+            {
+              id: 'tc-sp-2',
+              name: 'request_transition',
+              args: { toPhase: 'chat' },
+              type: 'tool_call',
+            },
+          ],
         });
       }
       return new AIMessage({ content: 'Done.', tool_calls: [] });
@@ -266,7 +282,7 @@ describe('session-planning.subgraph — tool-calling loop (recursion prevention)
 
     const secondCallMessages = capturedMessages[1] as Array<{ _getType?: () => string; tool_calls?: unknown[] }>;
     const hasAIWithToolCalls = secondCallMessages.some(
-      (m) => m instanceof AIMessage && Array.isArray(m.tool_calls) && m.tool_calls.length > 0,
+      m => m instanceof AIMessage && Array.isArray(m.tool_calls) && m.tool_calls.length > 0,
     );
     expect(hasAIWithToolCalls).toBe(true);
   });

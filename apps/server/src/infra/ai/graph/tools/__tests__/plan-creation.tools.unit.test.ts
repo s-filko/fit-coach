@@ -62,14 +62,15 @@ const MINIMAL_PLAN = {
   progressionRules: ['Increase weight by 2.5kg when you hit the top of the rep range for all sets'],
 };
 
-const makeWorkoutPlanRepo = (): jest.Mocked<IWorkoutPlanRepository> => ({
-  create: jest.fn().mockResolvedValue({ id: 'plan-1', ...MINIMAL_PLAN }),
-  findById: jest.fn(),
-  findActiveByUserId: jest.fn(),
-  findByUserId: jest.fn(),
-  update: jest.fn(),
-  archive: jest.fn(),
-} as unknown as jest.Mocked<IWorkoutPlanRepository>);
+const makeWorkoutPlanRepo = (): jest.Mocked<IWorkoutPlanRepository> =>
+  ({
+    create: jest.fn().mockResolvedValue({ id: 'plan-1', ...MINIMAL_PLAN }),
+    findById: jest.fn(),
+    findActiveByUserId: jest.fn(),
+    findByUserId: jest.fn(),
+    update: jest.fn(),
+    archive: jest.fn(),
+  }) as unknown as jest.Mocked<IWorkoutPlanRepository>;
 
 const makePendingTransitions = (): Map<string, TransitionRequest | null> => new Map();
 
@@ -99,14 +100,17 @@ describe('plan-creation.tools — save_workout_plan', () => {
 
     await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig('u1'));
 
-    expect(repo.create).toHaveBeenCalledWith('u1', expect.objectContaining({
-      name: MINIMAL_PLAN.name,
-      status: 'active',
-      planJson: expect.objectContaining({
-        goal: MINIMAL_PLAN.goal,
-        trainingStyle: MINIMAL_PLAN.trainingStyle,
+    expect(repo.create).toHaveBeenCalledWith(
+      'u1',
+      expect.objectContaining({
+        name: MINIMAL_PLAN.name,
+        status: 'active',
+        planJson: expect.objectContaining({
+          goal: MINIMAL_PLAN.goal,
+          trainingStyle: MINIMAL_PLAN.trainingStyle,
+        }),
       }),
-    }));
+    );
   });
 
   it('sets pendingTransitions entry for userId to chat after saving the plan', async () => {

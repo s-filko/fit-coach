@@ -20,7 +20,13 @@ import {
 // Enums for conversation_turns
 // MVP phases: 'registration' | 'chat'
 // Training phases: 'plan_creation' | 'session_planning' | 'training'
-export const conversationPhaseEnum = pgEnum('conversation_phase', ['registration', 'chat', 'plan_creation', 'session_planning', 'training']);
+export const conversationPhaseEnum = pgEnum('conversation_phase', [
+  'registration',
+  'chat',
+  'plan_creation',
+  'session_planning',
+  'training',
+]);
 export const conversationRoleEnum = pgEnum('conversation_role', ['user', 'assistant', 'system', 'summary']);
 
 export const users = pgTable('users', {
@@ -44,33 +50,48 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-export const userAccounts = pgTable('user_accounts', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
-  provider: text('provider').notNull(),
-  providerUserId: text('provider_user_id').notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-}, (table) => {
-  return {
-    uniqueProviderAccount: unique().on(table.provider, table.providerUserId),
-  };
-});
+export const userAccounts = pgTable(
+  'user_accounts',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    provider: text('provider').notNull(),
+    providerUserId: text('provider_user_id').notNull(),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+  },
+  table => {
+    return {
+      uniqueProviderAccount: unique().on(table.provider, table.providerUserId),
+    };
+  },
+);
 
 // Conversation context: append-only table, one row per message (ADR-0005)
-export const conversationTurns = pgTable('conversation_turns', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
-  phase: conversationPhaseEnum('phase').notNull(),
-  role: conversationRoleEnum('role').notNull(),
-  content: text('content').notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-}, (table) => {
-  return {
-    userPhaseCreatedIdx: index('idx_conversation_turns_user_phase_created')
-      .on(table.userId, table.phase, table.createdAt),
-  };
-});
+export const conversationTurns = pgTable(
+  'conversation_turns',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    phase: conversationPhaseEnum('phase').notNull(),
+    role: conversationRoleEnum('role').notNull(),
+    content: text('content').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  table => {
+    return {
+      userPhaseCreatedIdx: index('idx_conversation_turns_user_phase_created').on(
+        table.userId,
+        table.phase,
+        table.createdAt,
+      ),
+    };
+  },
+);
 
 // --- Training domain enums (see plan: training_session_management_mvp) ---
 
@@ -109,10 +130,10 @@ export const muscleGroupEnum = pgEnum('muscle_group', [
 export const workoutPlanStatusEnum = pgEnum('workout_plan_status', ['draft', 'active', 'archived']);
 
 export const sessionStatusEnum = pgEnum('session_status', [
-  'planning',    // Session created, LLM is generating/user is modifying plan
+  'planning', // Session created, LLM is generating/user is modifying plan
   'in_progress', // Training started
-  'completed',   // Training finished
-  'skipped',     // User cancelled/skipped
+  'completed', // Training finished
+  'skipped', // User cancelled/skipped
 ]);
 
 export const sessionExerciseStatusEnum = pgEnum('session_exercise_status', [
@@ -137,11 +158,8 @@ export const workoutPlans = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
-  (table) => ({
-    userStatusIdx: index('idx_workout_plans_user_status').on(
-      table.userId,
-      table.status,
-    ),
+  table => ({
+    userStatusIdx: index('idx_workout_plans_user_status').on(table.userId, table.status),
   }),
 );
 
@@ -162,7 +180,7 @@ export const exercises = pgTable(
     videoUrl: text('video_url'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     categoryIdx: index('idx_exercises_category').on(table.category),
     energyCostIdx: index('idx_exercises_energy_cost').on(table.energyCost),
     typeIdx: index('idx_exercises_type').on(table.exerciseType),
@@ -178,7 +196,7 @@ export const exerciseMuscleGroups = pgTable(
     muscleGroup: muscleGroupEnum('muscle_group').notNull(),
     involvement: text('involvement').notNull(),
   },
-  (table) => ({
+  table => ({
     pk: primaryKey({ columns: [table.exerciseId, table.muscleGroup] }),
     muscleIdx: index('idx_exercise_muscle_groups_muscle').on(table.muscleGroup),
   }),
@@ -204,31 +222,16 @@ export const workoutSessions = pgTable(
     // Contains: exercises list, reasoning, estimated duration, warnings
     // Updated during session_planning phase, read-only during training
     sessionPlanJson: jsonb('session_plan_json'),
-    lastActivityAt: timestamp('last_activity_at')
-      .defaultNow()
-      .notNull(),
+    lastActivityAt: timestamp('last_activity_at').defaultNow().notNull(),
     autoCloseReason: text('auto_close_reason'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
-  (table) => ({
-    userCompletedIdx: index('idx_workout_sessions_user_completed').on(
-      table.userId,
-      table.completedAt,
-    ),
-    userStatusIdx: index('idx_workout_sessions_user_status').on(
-      table.userId,
-      table.status,
-    ),
-    activityIdx: index('idx_workout_sessions_activity').on(
-      table.userId,
-      table.status,
-      table.lastActivityAt,
-    ),
-    abandonedIdx: index('idx_workout_sessions_abandoned').on(
-      table.status,
-      table.lastActivityAt,
-    ),
+  table => ({
+    userCompletedIdx: index('idx_workout_sessions_user_completed').on(table.userId, table.completedAt),
+    userStatusIdx: index('idx_workout_sessions_user_status').on(table.userId, table.status),
+    activityIdx: index('idx_workout_sessions_activity').on(table.userId, table.status, table.lastActivityAt),
+    abandonedIdx: index('idx_workout_sessions_abandoned').on(table.status, table.lastActivityAt),
   }),
 );
 
@@ -251,11 +254,8 @@ export const sessionExercises = pgTable(
     userFeedback: text('user_feedback'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => ({
-    sessionOrderIdx: index('idx_session_exercises_session').on(
-      table.sessionId,
-      table.orderIndex,
-    ),
+  table => ({
+    sessionOrderIdx: index('idx_session_exercises_session').on(table.sessionId, table.orderIndex),
   }),
 );
 
@@ -273,11 +273,8 @@ export const sessionSets = pgTable(
     completedAt: timestamp('completed_at'),
     setData: jsonb('set_data').notNull(),
   },
-  (table) => ({
-    exerciseSetIdx: index('idx_session_sets_exercise').on(
-      table.sessionExerciseId,
-      table.setNumber,
-    ),
+  table => ({
+    exerciseSetIdx: index('idx_session_sets_exercise').on(table.sessionExerciseId, table.setNumber),
     // GIN index on set_data for jsonb queries - add manually in migration if needed
     validSetDataCheck: check(
       'valid_set_data',
@@ -285,4 +282,3 @@ export const sessionSets = pgTable(
     ),
   }),
 );
-

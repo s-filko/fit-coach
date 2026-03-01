@@ -16,21 +16,22 @@ const FLAT_SET_INPUT = { reps: 10, weight: 80 };
 // Expected setData built by the tool handler from flat fields
 const EXPECTED_SET_DATA = { type: 'strength' as const, reps: 10, weight: 80, weightUnit: 'kg' as const };
 
-const makeTrainingService = (): jest.Mocked<ITrainingService> => ({
-  startSession: jest.fn(),
-  getSessionDetails: jest.fn(),
-  completeSession: jest.fn(),
-  skipSession: jest.fn(),
-  getTrainingHistory: jest.fn(),
-  getNextSessionRecommendation: jest.fn(),
-  addExerciseToSession: jest.fn(),
-  logSet: jest.fn(),
-  startNextExercise: jest.fn(),
-  skipCurrentExercise: jest.fn(),
-  completeCurrentExercise: jest.fn(),
-  ensureCurrentExercise: jest.fn(),
-  logSetWithContext: jest.fn(),
-} as unknown as jest.Mocked<ITrainingService>);
+const makeTrainingService = (): jest.Mocked<ITrainingService> =>
+  ({
+    startSession: jest.fn(),
+    getSessionDetails: jest.fn(),
+    completeSession: jest.fn(),
+    skipSession: jest.fn(),
+    getTrainingHistory: jest.fn(),
+    getNextSessionRecommendation: jest.fn(),
+    addExerciseToSession: jest.fn(),
+    logSet: jest.fn(),
+    startNextExercise: jest.fn(),
+    skipCurrentExercise: jest.fn(),
+    completeCurrentExercise: jest.fn(),
+    ensureCurrentExercise: jest.fn(),
+    logSetWithContext: jest.fn(),
+  }) as unknown as jest.Mocked<ITrainingService>;
 
 const makeConfig = (userId = 'u1'): RunnableConfig => ({
   configurable: { userId, thread_id: userId },
@@ -43,13 +44,13 @@ const makeDeps = (trainingService: jest.Mocked<ITrainingService>, sessionId: str
     currentSessionIds.set('u1', sessionId);
   }
   const tools = buildTrainingTools({ trainingService, pendingTransitions, currentSessionIds });
-  const byName = (name: string) => tools.find((t) => t.name === name) as InvokableTool;
+  const byName = (name: string) => tools.find(t => t.name === name) as InvokableTool;
   return { tools, byName, pendingTransitions, currentSessionIds };
 };
 
 describe('buildTrainingTools', () => {
   describe('log_set', () => {
-    it('calls logSetWithContext with flat fields converted to setData object', async() => {
+    it('calls logSetWithContext with flat fields converted to setData object', async () => {
       const trainingService = makeTrainingService();
       const mockSet: SessionSet = {
         id: 'set-1',
@@ -64,11 +65,14 @@ describe('buildTrainingTools', () => {
       trainingService.logSetWithContext.mockResolvedValue({ set: mockSet, setNumber: 2 });
 
       const { byName } = makeDeps(trainingService);
-      const result = await byName('log_set').invoke({
-        exerciseId: 12,
-        ...FLAT_SET_INPUT,
-        rpe: 8,
-      }, makeConfig('u1'));
+      const result = await byName('log_set').invoke(
+        {
+          exerciseId: 12,
+          ...FLAT_SET_INPUT,
+          rpe: 8,
+        },
+        makeConfig('u1'),
+      );
 
       expect(trainingService.logSetWithContext).toHaveBeenCalledWith('session-1', {
         exerciseId: 12,
@@ -81,20 +85,23 @@ describe('buildTrainingTools', () => {
       expect(result).toContain('10 reps @ 80 kg');
     });
 
-    it('returns SYSTEM_ERROR when no sessionId is set for the user', async() => {
+    it('returns SYSTEM_ERROR when no sessionId is set for the user', async () => {
       const trainingService = makeTrainingService();
 
       const { byName } = makeDeps(trainingService, null);
-      const result = await byName('log_set').invoke({
-        exerciseId: 12,
-        ...FLAT_SET_INPUT,
-      }, makeConfig('u1'));
+      const result = await byName('log_set').invoke(
+        {
+          exerciseId: 12,
+          ...FLAT_SET_INPUT,
+        },
+        makeConfig('u1'),
+      );
 
       expect(result).toContain(SYSTEM_ERROR_PREFIX);
       expect(trainingService.logSetWithContext).not.toHaveBeenCalled();
     });
 
-    it('ignores order field — does not pass it to logSetWithContext', async() => {
+    it('ignores order field — does not pass it to logSetWithContext', async () => {
       const trainingService = makeTrainingService();
       const mockSet: SessionSet = {
         id: 'set-1',
@@ -120,15 +127,18 @@ describe('buildTrainingTools', () => {
       });
     });
 
-    it('returns LLM_ERROR when logSetWithContext throws', async() => {
+    it('returns LLM_ERROR when logSetWithContext throws', async () => {
       const trainingService = makeTrainingService();
       trainingService.logSetWithContext.mockRejectedValue(new Error('Exercise not found'));
 
       const { byName } = makeDeps(trainingService);
-      const result = await byName('log_set').invoke({
-        exerciseId: 99,
-        ...FLAT_SET_INPUT,
-      }, makeConfig('u1'));
+      const result = await byName('log_set').invoke(
+        {
+          exerciseId: 99,
+          ...FLAT_SET_INPUT,
+        },
+        makeConfig('u1'),
+      );
 
       expect(result).toContain(LLM_ERROR_PREFIX);
       expect(result).toContain('Exercise not found');
@@ -136,7 +146,7 @@ describe('buildTrainingTools', () => {
   });
 
   describe('next_exercise', () => {
-    it('calls completeCurrentExercise and returns confirmation', async() => {
+    it('calls completeCurrentExercise and returns confirmation', async () => {
       const trainingService = makeTrainingService();
       trainingService.completeCurrentExercise.mockResolvedValue(undefined);
 
@@ -147,7 +157,7 @@ describe('buildTrainingTools', () => {
       expect(result).toContain('complete');
     });
 
-    it('returns SYSTEM_ERROR when no sessionId is set for the user', async() => {
+    it('returns SYSTEM_ERROR when no sessionId is set for the user', async () => {
       const trainingService = makeTrainingService();
 
       const { byName } = makeDeps(trainingService, null);
@@ -157,7 +167,7 @@ describe('buildTrainingTools', () => {
       expect(trainingService.completeCurrentExercise).not.toHaveBeenCalled();
     });
 
-    it('returns LLM_ERROR when completeCurrentExercise throws', async() => {
+    it('returns LLM_ERROR when completeCurrentExercise throws', async () => {
       const trainingService = makeTrainingService();
       trainingService.completeCurrentExercise.mockRejectedValue(new Error('No exercise in progress'));
 
@@ -170,7 +180,7 @@ describe('buildTrainingTools', () => {
   });
 
   describe('skip_exercise', () => {
-    it('calls skipCurrentExercise with reason and returns confirmation', async() => {
+    it('calls skipCurrentExercise with reason and returns confirmation', async () => {
       const trainingService = makeTrainingService();
       trainingService.skipCurrentExercise.mockResolvedValue(undefined);
 
@@ -181,7 +191,7 @@ describe('buildTrainingTools', () => {
       expect(result).toContain('skipped');
     });
 
-    it('returns SYSTEM_ERROR when no sessionId is set for the user', async() => {
+    it('returns SYSTEM_ERROR when no sessionId is set for the user', async () => {
       const trainingService = makeTrainingService();
 
       const { byName } = makeDeps(trainingService, null);
@@ -193,7 +203,7 @@ describe('buildTrainingTools', () => {
   });
 
   describe('finish_training', () => {
-    it('calls completeSession, sets pendingTransitions entry, returns summary', async() => {
+    it('calls completeSession, sets pendingTransitions entry, returns summary', async () => {
       const trainingService = makeTrainingService();
       const mockSession: WorkoutSession = {
         id: 'session-1',
@@ -222,7 +232,7 @@ describe('buildTrainingTools', () => {
       expect(result).toContain('Great session!');
     });
 
-    it('returns SYSTEM_ERROR when no sessionId is set for the user', async() => {
+    it('returns SYSTEM_ERROR when no sessionId is set for the user', async () => {
       const trainingService = makeTrainingService();
 
       const { byName } = makeDeps(trainingService, null);
@@ -232,7 +242,7 @@ describe('buildTrainingTools', () => {
       expect(trainingService.completeSession).not.toHaveBeenCalled();
     });
 
-    it('returns LLM_ERROR when completeSession throws', async() => {
+    it('returns LLM_ERROR when completeSession throws', async () => {
       const trainingService = makeTrainingService();
       trainingService.completeSession.mockRejectedValue(new Error('Session not found'));
 
@@ -243,13 +253,23 @@ describe('buildTrainingTools', () => {
       expect(result).toContain('Session not found');
     });
 
-    it('isolates pendingTransitions by userId — two users do not overwrite each other', async() => {
+    it('isolates pendingTransitions by userId — two users do not overwrite each other', async () => {
       const trainingService = makeTrainingService();
       const mockSession: WorkoutSession = {
-        id: 'session-1', userId: 'u', planId: null, sessionKey: null, status: 'completed',
-        startedAt: new Date(), completedAt: new Date(), durationMinutes: 30,
-        userContextJson: null, sessionPlanJson: null, lastActivityAt: new Date(),
-        autoCloseReason: null, createdAt: new Date(), updatedAt: new Date(),
+        id: 'session-1',
+        userId: 'u',
+        planId: null,
+        sessionKey: null,
+        status: 'completed',
+        startedAt: new Date(),
+        completedAt: new Date(),
+        durationMinutes: 30,
+        userContextJson: null,
+        sessionPlanJson: null,
+        lastActivityAt: new Date(),
+        autoCloseReason: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
       trainingService.completeSession.mockResolvedValue(mockSession);
 
@@ -258,7 +278,7 @@ describe('buildTrainingTools', () => {
       currentSessionIds.set('userA', 'session-A');
       currentSessionIds.set('userB', 'session-B');
       const tools = buildTrainingTools({ trainingService, pendingTransitions, currentSessionIds });
-      const finishTraining = tools.find((t) => t.name === 'finish_training') as InvokableTool;
+      const finishTraining = tools.find(t => t.name === 'finish_training') as InvokableTool;
 
       await finishTraining.invoke({}, makeConfig('userA'));
       await finishTraining.invoke({}, makeConfig('userB'));

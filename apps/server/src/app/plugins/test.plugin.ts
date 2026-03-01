@@ -26,7 +26,7 @@ export async function testPlugin(fastify: FastifyInstance): Promise<void> {
     hasConversationGraph: !!fastify.services.conversationGraph,
   }));
 
-  fastify.post('/test-profile-save', async (request) => {
+  fastify.post('/test-profile-save', async request => {
     const { userId, profileData } = request.body as { userId: string; profileData: Partial<User> };
 
     try {

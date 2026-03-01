@@ -9,11 +9,11 @@ export const AI_CONTEXT_SERVICE_TOKEN = Symbol('AIContextService');
 // Port interfaces - domain contracts
 export interface LLMService {
   generateWithSystemPrompt(
-    messages: ChatMsg[], 
-    systemPrompt: string, 
+    messages: ChatMsg[],
+    systemPrompt: string,
     opts?: { jsonMode?: boolean; log?: Logger },
   ): Promise<string>;
-  
+
   /**
    * Generate response with structured output enforced by JSON Schema
    * @param messages - Chat messages
@@ -23,9 +23,9 @@ export interface LLMService {
    * @returns Parsed object matching the schema
    */
   generateStructured<T>(
-    messages: ChatMsg[], 
-    systemPrompt: string, 
-    schema: unknown, 
+    messages: ChatMsg[],
+    systemPrompt: string,
+    schema: unknown,
     opts?: { log?: Logger },
   ): Promise<T>;
 }

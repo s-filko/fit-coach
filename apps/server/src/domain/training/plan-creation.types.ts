@@ -118,9 +118,7 @@ export function parsePlanCreationResponse(jsonString: string): PlanCreationLLMRe
     return PlanCreationLLMResponseSchema.parse(parsed);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const issues = error.issues
-        .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
-        .join(', ');
+      const issues = error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ');
       throw new Error(`Invalid plan creation response: ${issues}`);
     }
     const message = error instanceof Error ? error.message : String(error);

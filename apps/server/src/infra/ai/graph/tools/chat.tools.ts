@@ -14,7 +14,7 @@ export interface ChatToolsDeps {
 }
 
 const UPDATE_PROFILE_DESCRIPTION = [
-  'Update one or more fields of the user\'s fitness profile.',
+  "Update one or more fields of the user's fitness profile.",
   'Call this when the user explicitly tells you their name, age, gender, height, weight,',
   'fitness level, or goal — or when they want to change an existing value.',
   'Only include fields the user actually mentioned.',
@@ -33,7 +33,7 @@ export function buildChatTools(deps: ChatToolsDeps) {
 
   const updateProfile = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async(input, config) => {
+    async (input, config) => {
       // configurable is typed as Record<string, unknown> in LangChain
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
@@ -62,7 +62,10 @@ export function buildChatTools(deps: ChatToolsDeps) {
         gender: z.enum(['male', 'female']).optional().describe('Biological gender'),
         height: z.number().optional().describe('Height in cm'),
         weight: z.number().optional().describe('Weight in kg'),
-        fitnessLevel: z.enum(['beginner', 'intermediate', 'advanced']).optional().describe('Self-assessed fitness level'),
+        fitnessLevel: z
+          .enum(['beginner', 'intermediate', 'advanced'])
+          .optional()
+          .describe('Self-assessed fitness level'),
         fitnessGoal: z.string().optional().describe('User fitness goal in their own words'),
       }),
     },
@@ -70,8 +73,8 @@ export function buildChatTools(deps: ChatToolsDeps) {
 
   const requestTransition = tool(
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async(input, config) => {
-      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined ?? '';
+    async (input, config) => {
+      const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       pendingTransitions.set(userId, {
         toPhase: input.toPhase as ConversationPhase,
         reason: input.reason,

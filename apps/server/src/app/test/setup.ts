@@ -58,9 +58,7 @@ export async function setupTestDI(): Promise<void> {
     const path = await import('path');
     const migrationsDir = path.resolve(process.cwd(), 'drizzle');
     const files = await readdir(migrationsDir);
-    const sqlFiles = files
-      .filter(f => f.endsWith('.sql'))
-      .sort(); // Sort to apply in order
+    const sqlFiles = files.filter(f => f.endsWith('.sql')).sort(); // Sort to apply in order
 
     for (const file of sqlFiles) {
       const sqlPath = path.join(migrationsDir, file);
@@ -94,7 +92,7 @@ export async function setupTestDI(): Promise<void> {
         ON CONFLICT (name) DO NOTHING
         RETURNING id;
       `);
-      
+
       // Get exercise IDs
       const result = await client3.query(`
         SELECT id, name FROM exercises 
@@ -102,33 +100,45 @@ export async function setupTestDI(): Promise<void> {
           'Barbell Bench Press', 'Barbell Back Squat', 'Pull-ups', 'Running'
         )
       `);
-      
+
       // Insert muscle group mappings
       for (const row of result.rows) {
         if (row.name === 'Barbell Bench Press') {
-          await client3.query(`
+          await client3.query(
+            `
             INSERT INTO exercise_muscle_groups (exercise_id, muscle_group, involvement)
             VALUES ($1, 'chest', 'primary'), ($1, 'shoulders_front', 'secondary'), ($1, 'triceps', 'secondary')
             ON CONFLICT DO NOTHING
-          `, [row.id]);
+          `,
+            [row.id],
+          );
         } else if (row.name === 'Barbell Back Squat') {
-          await client3.query(`
+          await client3.query(
+            `
             INSERT INTO exercise_muscle_groups (exercise_id, muscle_group, involvement)
             VALUES ($1, 'quads', 'primary'), ($1, 'glutes', 'primary'), ($1, 'hamstrings', 'secondary')
             ON CONFLICT DO NOTHING
-          `, [row.id]);
+          `,
+            [row.id],
+          );
         } else if (row.name === 'Pull-ups') {
-          await client3.query(`
+          await client3.query(
+            `
             INSERT INTO exercise_muscle_groups (exercise_id, muscle_group, involvement)
             VALUES ($1, 'back_lats', 'primary'), ($1, 'biceps', 'secondary')
             ON CONFLICT DO NOTHING
-          `, [row.id]);
+          `,
+            [row.id],
+          );
         } else if (row.name === 'Running') {
-          await client3.query(`
+          await client3.query(
+            `
             INSERT INTO exercise_muscle_groups (exercise_id, muscle_group, involvement)
             VALUES ($1, 'cardio_system', 'primary'), ($1, 'lower_body_endurance', 'secondary')
             ON CONFLICT DO NOTHING
-          `, [row.id]);
+          `,
+            [row.id],
+          );
         }
       }
     } finally {
@@ -137,17 +147,21 @@ export async function setupTestDI(): Promise<void> {
 
     // Register services in test container
     const c = Container.getInstance();
-    if (!c.has(USER_REPOSITORY_TOKEN)) {c.register(USER_REPOSITORY_TOKEN, new DrizzleUserRepository());}
-    if (!c.has(USER_SERVICE_TOKEN)) {
-      c.registerFactory(USER_SERVICE_TOKEN, (c) => new UserService(c.get(USER_REPOSITORY_TOKEN)));
+    if (!c.has(USER_REPOSITORY_TOKEN)) {
+      c.register(USER_REPOSITORY_TOKEN, new DrizzleUserRepository());
     }
-    if (!c.has(LLM_SERVICE_TOKEN)) {c.register(LLM_SERVICE_TOKEN, new LLMService());}
+    if (!c.has(USER_SERVICE_TOKEN)) {
+      c.registerFactory(USER_SERVICE_TOKEN, c => new UserService(c.get(USER_REPOSITORY_TOKEN)));
+    }
+    if (!c.has(LLM_SERVICE_TOKEN)) {
+      c.register(LLM_SERVICE_TOKEN, new LLMService());
+    }
 
     // Close the pool to avoid connection leaks
     await pool.end();
   }
 }
 
-beforeAll(async() => {
+beforeAll(async () => {
   await setupTestDI();
 });

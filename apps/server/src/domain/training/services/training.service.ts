@@ -108,10 +108,7 @@ export class TrainingService implements ITrainingService {
     });
   }
 
-  async addExerciseToSession(
-    sessionId: string,
-    dto: CreateSessionExerciseDto,
-  ): Promise<SessionExercise> {
+  async addExerciseToSession(sessionId: string, dto: CreateSessionExerciseDto): Promise<SessionExercise> {
     // Update session activity
     await this.sessionRepo.updateActivity(sessionId);
 
@@ -153,13 +150,15 @@ export class TrainingService implements ITrainingService {
     opts?: { exerciseId?: number; exerciseName?: string },
   ): Promise<SessionExercise> {
     const session = await this.sessionRepo.findByIdWithDetails(sessionId);
-    if (!session) { throw new Error('Session not found'); }
+    if (!session) {
+      throw new Error('Session not found');
+    }
 
     const { exerciseId } = opts ?? {};
 
     if (exerciseId) {
       // Check if this exercise already exists in the session
-      const existing = session.exercises.find((ex) => ex.exerciseId === exerciseId);
+      const existing = session.exercises.find(ex => ex.exerciseId === exerciseId);
       if (existing) {
         if (existing.status !== 'in_progress') {
           await this.sessionExerciseRepo.update(existing.id, { status: 'in_progress' });
@@ -168,7 +167,7 @@ export class TrainingService implements ITrainingService {
       }
 
       // Not yet in session — create it (from plan or ad-hoc)
-      const planEx = session.sessionPlanJson?.exercises.find((ex) => ex.exerciseId === exerciseId);
+      const planEx = session.sessionPlanJson?.exercises.find(ex => ex.exerciseId === exerciseId);
       const created = await this.sessionExerciseRepo.create(sessionId, {
         exerciseId,
         orderIndex: session.exercises.length,
@@ -184,22 +183,16 @@ export class TrainingService implements ITrainingService {
     // No exerciseId — only acceptable if exerciseName provided (off-plan exercise)
     // We cannot guess which exercise the user is doing
     if (!opts?.exerciseName) {
-      throw new Error(
-        'exerciseId is required to log a set. AI must identify the exercise being performed.',
-      );
+      throw new Error('exerciseId is required to log a set. AI must identify the exercise being performed.');
     }
 
     // Off-plan exercise by name only — find by name in DB first
     const allExercises = await this.exerciseRepo.findAll();
-    const matchByName = allExercises.find(
-      (ex) => ex.name.toLowerCase() === (opts.exerciseName ?? '').toLowerCase(),
-    );
+    const matchByName = allExercises.find(ex => ex.name.toLowerCase() === (opts.exerciseName ?? '').toLowerCase());
 
     const resolvedExerciseId = matchByName?.id;
     if (!resolvedExerciseId) {
-      throw new Error(
-        `Exercise "${opts.exerciseName}" not found in DB. Cannot log set for unknown exercise.`,
-      );
+      throw new Error(`Exercise "${opts.exerciseName}" not found in DB. Cannot log set for unknown exercise.`);
     }
 
     const created = await this.sessionExerciseRepo.create(sessionId, {
@@ -220,9 +213,7 @@ export class TrainingService implements ITrainingService {
     const completedAt = new Date();
     const duration =
       durationMinutes ??
-      (session.startedAt
-        ? Math.floor((completedAt.getTime() - session.startedAt.getTime()) / 60000)
-        : null);
+      (session.startedAt ? Math.floor((completedAt.getTime() - session.startedAt.getTime()) / 60000) : null);
 
     return this.sessionRepo.complete(sessionId, completedAt, duration ?? 0);
   }
@@ -257,7 +248,7 @@ export class TrainingService implements ITrainingService {
     }
 
     // Find first pending exercise
-    const nextExercise = session.exercises.find((ex) => ex.status === 'pending');
+    const nextExercise = session.exercises.find(ex => ex.status === 'pending');
     if (!nextExercise) {
       return null; // No more pending exercises
     }
@@ -283,7 +274,7 @@ export class TrainingService implements ITrainingService {
     }
 
     // Find current in_progress exercise
-    const currentExercise = session.exercises.find((ex) => ex.status === 'in_progress');
+    const currentExercise = session.exercises.find(ex => ex.status === 'in_progress');
     if (!currentExercise) {
       throw new Error('No exercise currently in progress');
     }
@@ -310,13 +301,13 @@ export class TrainingService implements ITrainingService {
     }
 
     // Find current in_progress exercise
-    const currentExercise = session.exercises.find((ex) => ex.status === 'in_progress');
+    const currentExercise = session.exercises.find(ex => ex.status === 'in_progress');
     if (!currentExercise) {
       throw new Error('No exercise currently in progress');
     }
 
     // Mark as completed
-    await this.sessionExerciseRepo.update(currentExercise.id, { 
+    await this.sessionExerciseRepo.update(currentExercise.id, {
       status: 'completed',
     });
 

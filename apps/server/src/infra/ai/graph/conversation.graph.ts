@@ -3,7 +3,12 @@ import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 
 import { ConversationState, ConversationStateType } from '@domain/conversation/graph/conversation.state';
 import { IConversationContextService } from '@domain/conversation/ports';
-import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository, IWorkoutSessionRepository } from '@domain/training/ports';
+import type {
+  IExerciseRepository,
+  ITrainingService,
+  IWorkoutPlanRepository,
+  IWorkoutSessionRepository,
+} from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 
 import { createLogger } from '@shared/logger';
@@ -40,8 +45,13 @@ function routeAfterPersist(state: ConversationStateType): string {
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function buildGraph(deps: ConversationGraphDeps) {
   const {
-    userService, trainingService, contextService,
-    workoutPlanRepo, workoutSessionRepo, exerciseRepository, checkpointer,
+    userService,
+    trainingService,
+    contextService,
+    workoutPlanRepo,
+    workoutSessionRepo,
+    exerciseRepository,
+    checkpointer,
   } = deps;
 
   const routerNode = buildRouterNode({ userService, trainingService });
@@ -69,7 +79,7 @@ function buildGraph(deps: ConversationGraphDeps) {
     contextService,
   });
 
-  const transitionGuardNode = async(state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
+  const transitionGuardNode = async (state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
     const { requestedTransition, phase, userId } = state;
     if (!requestedTransition) {
       return {};
@@ -100,17 +110,19 @@ function buildGraph(deps: ConversationGraphDeps) {
     return { phase: toPhase, requestedTransition: null };
   };
 
-  const cleanupNode = async(state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
+  const cleanupNode = async (state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
     const updates: Partial<ConversationStateType> = {};
 
     if (state.activeSessionId && state.phase === 'training') {
       // Transition session_planning → training: activate the planning session
       const session = await trainingService.getSessionDetails(state.activeSessionId).catch(() => null);
       if (session?.status === 'planning') {
-        await workoutSessionRepo.update(state.activeSessionId, {
-          status: 'in_progress',
-          startedAt: new Date(),
-        }).catch(() => null);
+        await workoutSessionRepo
+          .update(state.activeSessionId, {
+            status: 'in_progress',
+            startedAt: new Date(),
+          })
+          .catch(() => null);
       }
     } else if (state.activeSessionId && state.phase !== 'training') {
       // Leaving training phase: complete the session only if not already finished
