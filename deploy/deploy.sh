@@ -2,15 +2,15 @@
 set -euo pipefail
 
 DEPLOY_ENV=${1:?Usage: deploy.sh <dev|prod>}
-REPO_DIR="/opt/fitcoach"
+REPO_DIR="/srv/docker/fitcoach"
 BRANCH=$([ "$DEPLOY_ENV" = "prod" ] && echo "main" || echo "dev")
 PROJECT="fitcoach-${DEPLOY_ENV}"
 COMPOSE_FILE="deploy/docker-compose.yml"
 
 cd "$REPO_DIR"
 
-# --- Deploy lock ---
-LOCKFILE="/tmp/${PROJECT}.deploy.lock"
+# --- Deploy lock (global — prevents concurrent dev/prod deploys) ---
+LOCKFILE="/tmp/fitcoach.deploy.lock"
 if [ -f "$LOCKFILE" ]; then
   LOCK_AGE=$(( $(date +%s) - $(stat -c %Y "$LOCKFILE" 2>/dev/null || stat -f %m "$LOCKFILE") ))
   if [ "$LOCK_AGE" -gt 600 ]; then
@@ -40,8 +40,11 @@ git reset --hard "origin/${BRANCH}"
 
 # --- Export compose variables ---
 export DEPLOY_ENV
-export DB_USER DB_PASSWORD DB_NAME NPM_NETWORK
-eval "$(grep -E '^(DB_USER|DB_PASSWORD|DB_NAME|NPM_NETWORK)=' "$ENV_FILE")"
+export DB_USER DB_PASSWORD DB_NAME
+eval "$(grep -E '^(DB_USER|DB_PASSWORD|DB_NAME)=' "$ENV_FILE")"
+
+# --- Create data directory ---
+mkdir -p "data/${DEPLOY_ENV}/postgres"
 
 # --- Backup database (if running) ---
 if docker compose -f "$COMPOSE_FILE" -p "$PROJECT" ps db --status running -q 2>/dev/null | grep -q .; then
@@ -63,7 +66,7 @@ docker compose -f "$COMPOSE_FILE" -p "$PROJECT" build
 echo "==> Starting services"
 docker compose -f "$COMPOSE_FILE" -p "$PROJECT" up -d
 
-# --- Health check (via internal Docker network) ---
+# --- Health check ---
 echo "==> Waiting for health check..."
 HEALTH_OK=false
 for i in $(seq 1 12); do
