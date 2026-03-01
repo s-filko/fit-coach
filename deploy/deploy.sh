@@ -60,7 +60,11 @@ fi
 
 # --- Build and deploy ---
 GIT_SHA=$(git rev-parse --short HEAD)
-echo "==> Building images (commit: ${GIT_SHA})"
+APP_VERSION=$(cat VERSION 2>/dev/null || echo "0.0.0")
+BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+export GIT_SHA APP_VERSION BUILD_TIME
+
+echo "==> Building images (v${APP_VERSION} commit: ${GIT_SHA})"
 docker compose -f "$COMPOSE_FILE" -p "$PROJECT" build
 
 echo "==> Starting services"
@@ -80,7 +84,7 @@ for i in $(seq 1 12); do
 done
 
 if [ "$HEALTH_OK" = true ]; then
-  echo "==> Deploy ${DEPLOY_ENV} OK (commit: ${GIT_SHA})"
+  echo "==> Deploy ${DEPLOY_ENV} OK (v${APP_VERSION} commit: ${GIT_SHA})"
 else
   echo "==> ERROR: Health check failed after 60s"
   echo "Container logs:"

@@ -24,6 +24,10 @@ services:
     build:
       context: ../apps/server
       dockerfile: Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+        APP_VERSION: ${APP_VERSION:-0.0.0}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
     container_name: fitcoach-${DEPLOY_ENV}-server
     restart: unless-stopped
     expose:
