@@ -21,7 +21,6 @@ class LLMLogHandler extends BaseCallbackHandler {
   ): void {
     const flat = messages[0] ?? [];
     const system = flat.find(m => m._getType() === 'system');
-    const systemLen = typeof system?.content === 'string' ? system.content.length : 0;
     const humanMsgs = flat.filter(m => m._getType() === 'human');
     const lastHuman = humanMsgs[humanMsgs.length - 1];
     const userId = (extraParams?.['configurable'] as Record<string, unknown>)?.['userId'] as string | undefined;
@@ -30,9 +29,8 @@ class LLMLogHandler extends BaseCallbackHandler {
       {
         userId,
         totalMessages: flat.length,
-        systemPromptLength: systemLen,
-        systemPromptPreview: typeof system?.content === 'string' ? system.content.slice(0, 300) : null,
-        lastUserMessage: typeof lastHuman?.content === 'string' ? lastHuman.content.slice(0, 200) : null,
+        systemPrompt: typeof system?.content === 'string' ? system.content : null,
+        lastUserMessage: typeof lastHuman?.content === 'string' ? lastHuman.content : null,
         historyCount: flat.length - (system ? 1 : 0) - (lastHuman ? 1 : 0),
       },
       'LLM invoke',
@@ -44,7 +42,7 @@ class LLMLogHandler extends BaseCallbackHandler {
     log.debug(
       {
         responseLength: text?.length ?? 0,
-        responsePreview: text?.slice(0, 300) ?? null,
+        response: text ?? null,
       },
       'LLM response',
     );

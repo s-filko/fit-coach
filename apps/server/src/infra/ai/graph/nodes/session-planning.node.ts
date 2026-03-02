@@ -139,6 +139,17 @@ Adjust the plan if the client requests changes (different exercises, shorter dur
 
 If no active plan exists → tell the client they need a workout plan first and call \`request_transition({ toPhase: 'chat' })\`.
 
+--- OFF-TOPIC GUARD ---
+
+If the user's message is NOT about session planning (choosing a workout, exercises, sets, reps, weights, scheduling, recovery, or starting/cancelling a session):
+1. Ask ONE short contextual question to clarify whether they want to stop planning.
+   Keep it natural and tied to the current context. Examples:
+   - "good night" → "Спокойной ночи! Тренировку на сегодня откладываем?"
+   - non-fitness question → "Понял! Планирование сессии ставим на паузу?"
+   - "thanks, bye" → "Удачи! Сессию оставляем на потом?"
+2. If the user confirms leaving OR their next message is still not about session planning → call \`request_transition({ toPhase: 'chat', reason: 'off_topic' })\`.
+3. If the user says they want to continue planning → stay and proceed normally.
+
 ${composeDirectives(user)}`;
 }
 
