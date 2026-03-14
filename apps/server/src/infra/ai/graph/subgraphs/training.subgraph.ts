@@ -18,6 +18,90 @@ import { createLogger } from '@shared/logger';
 
 const log = createLogger('training-subgraph');
 
+// ---------------------------------------------------------------------------
+// ADR-0011 Fix 1.1: Deterministic tool call ordering
+//
+// Exported as pure functions so they can be unit-tested in isolation without
+// instantiating the full subgraph.
+// ---------------------------------------------------------------------------
+
+/** Execution priority for training tools. Lower number = runs first. */
+const TOOL_PRIORITY: Record<string, number> = {
+  log_set: 0,
+  next_exercise: 1,
+  skip_exercise: 1,
+  delete_last_sets: 2,
+  update_last_set: 2,
+  finish_training: 3,
+};
+
+interface ToolCallLike {
+  name: string;
+  args: Record<string, unknown>;
+  id?: string;
+}
+
+/**
+ * Sorts tool calls by execution priority, then by the `order` field within log_set calls.
+ * Unknown tools are assigned the lowest priority (treated as last).
+ */
+export function sortToolCallsByPriority<T extends ToolCallLike>(calls: T[]): T[] {
+  return [...calls].sort((a, b) => {
+    const pa = TOOL_PRIORITY[a.name] ?? 99;
+    const pb = TOOL_PRIORITY[b.name] ?? 99;
+    if (pa !== pb) {
+      return pa - pb;
+    }
+    // Within same priority (both log_set), sort by the `order` field
+    if (a.name === 'log_set' && b.name === 'log_set') {
+      return ((a.args as { order?: number }).order ?? 999) - ((b.args as { order?: number }).order ?? 999);
+    }
+    return 0;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// ADR-0011 Fix 1.2: Batch deduplication validation for log_set calls
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the IDs of all log_set calls that have identical arguments (excluding
+ * the `order` field) within the same batch. If any two calls are identical,
+ * ALL of them are returned so the entire duplicate group is rejected.
+ *
+ * Calls with different `order` values are treated as intentionally distinct.
+ */
+export function findDuplicateLogSets<T extends ToolCallLike>(calls: T[]): string[] {
+  const logSetCalls = calls.filter(c => c.name === 'log_set');
+  if (logSetCalls.length < 2) {
+    return [];
+  }
+
+  // Fingerprint: all args including `order` — calls with different order values
+  // are treated as intentionally distinct (the LLM explicitly ordered them).
+  const fingerprint = (call: T): string => {
+    return JSON.stringify(call.args, Object.keys(call.args).sort());
+  };
+
+  // Group call IDs by fingerprint
+  const groups = new Map<string, string[]>();
+  for (const call of logSetCalls) {
+    const key = fingerprint(call);
+    const group = groups.get(key) ?? [];
+    group.push(call.id ?? '');
+    groups.set(key, group);
+  }
+
+  // Collect IDs from groups that have more than one member
+  const duplicateIds: string[] = [];
+  for (const ids of groups.values()) {
+    if (ids.length > 1) {
+      duplicateIds.push(...ids);
+    }
+  }
+  return duplicateIds;
+}
+
 export interface TrainingSubgraphDeps {
   userService: IUserService;
   trainingService: ITrainingService;
@@ -84,25 +168,65 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
   const model = getModel().bindTools(tools);
 
   /**
-   * Executes tool calls sequentially, sorted by the optional `order` field on log_set calls.
-   * This replaces the prebuilt ToolNode (which uses Promise.all) to guarantee that when
-   * multiple log_set calls are made in one LLM response, they run in the declared order —
-   * ensuring correct set_number assignment and preserving semantic distinction between sets
-   * (e.g. warmup → main → finishing).
+   * Executes tool calls sequentially, sorted by priority then by the optional `order`
+   * field on log_set calls (ADR-0011 Fix 1.1 + Fix 1.2).
+   *
+   * Priority map guarantees log_set always runs before any exercise transition,
+   * which in turn runs before corrections, which run before finish_training.
+   * Within log_set calls, the `order` field determines execution sequence.
+   *
+   * Duplicate log_set calls with identical arguments are rejected before execution
+   * and returned as LLM_ERROR ToolMessages so the LLM can self-correct.
    */
   const sequentialToolNode = async (state: TrainingSubgraphStateType) => {
     const { messages, userId } = state;
     const lastMessage = messages[messages.length - 1] as AIMessage;
     const toolCalls = lastMessage.tool_calls ?? [];
 
-    const sorted = [...toolCalls].sort((a, b) => {
-      if (a.name !== 'log_set' || b.name !== 'log_set') {
-        return 0;
-      }
-      return ((a.args as { order?: number }).order ?? 999) - ((b.args as { order?: number }).order ?? 999);
-    });
+    const sorted = sortToolCallsByPriority(toolCalls);
 
+    const duplicateIds = findDuplicateLogSets(sorted);
     const toolMessages: ToolMessage[] = [];
+
+    if (duplicateIds.length > 0) {
+      log.warn({ userId, duplicateIds }, 'Duplicate log_set calls detected in batch — rejecting all duplicates');
+      for (const call of sorted) {
+        if (duplicateIds.includes(call.id ?? '')) {
+          toolMessages.push(
+            new ToolMessage({
+              tool_call_id: call.id ?? '',
+              content:
+                `${LLM_ERROR_PREFIX} Duplicate log_set calls detected: two or more calls have identical arguments ` +
+                'in the same response. To log multiple identical sets, add a unique order field to each call ' +
+                '(order=1, order=2). To log a single set, send only one log_set call.',
+              status: 'error',
+            }),
+          );
+        }
+      }
+      const nonDuplicateCalls = sorted.filter(c => !duplicateIds.includes(c.id ?? ''));
+      for (const call of nonDuplicateCalls) {
+        const targetTool = toolMap[call.name];
+        if (!targetTool) {
+          toolMessages.push(
+            new ToolMessage({ tool_call_id: call.id ?? '', content: `Unknown tool: ${call.name}`, status: 'error' }),
+          );
+          continue;
+        }
+        type InvokableConfig = { configurable: Record<string, unknown> };
+        type InvokableTool = {
+          invoke: (args: Record<string, unknown>, config: InvokableConfig) => Promise<unknown>;
+        };
+        // eslint-disable-next-line no-await-in-loop
+        const result = await (targetTool as InvokableTool).invoke(
+          call.args as Record<string, unknown>,
+          { configurable: { userId } },
+        );
+        toolMessages.push(new ToolMessage({ tool_call_id: call.id ?? '', content: String(result) }));
+      }
+      return { messages: toolMessages };
+    }
+
     for (const call of sorted) {
       const targetTool = toolMap[call.name];
       if (!targetTool) {

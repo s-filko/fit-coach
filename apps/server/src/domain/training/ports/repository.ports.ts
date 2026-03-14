@@ -82,4 +82,5 @@ export interface ISessionSetRepository {
   findById(setId: string): Promise<SessionSet | null>;
   findByExerciseId(exerciseId: string): Promise<SessionSet[]>;
   update(setId: string, updates: Partial<SessionSet>): Promise<SessionSet>;
+  deleteById(setId: string): Promise<void>;
 }

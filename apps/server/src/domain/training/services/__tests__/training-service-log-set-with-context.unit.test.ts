@@ -4,6 +4,7 @@ import type {
   ISessionSetRepository,
   IWorkoutPlanRepository,
   IWorkoutSessionRepository,
+  EnsureExerciseResult,
 } from '@domain/training/ports';
 import type { SessionExercise, SessionSet } from '@domain/training/types';
 import { TrainingService } from '@domain/training/services/training.service';
@@ -90,7 +91,8 @@ describe('TrainingService.logSetWithContext', () => {
       mockLlmService,
     );
 
-    jest.spyOn(trainingService, 'ensureCurrentExercise').mockResolvedValue(makeSessionExercise());
+    const ensureResult: EnsureExerciseResult = { exercise: makeSessionExercise() };
+    jest.spyOn(trainingService, 'ensureCurrentExercise').mockResolvedValue(ensureResult);
   });
 
   it('returns setNumber from the created set (computed in DB)', async () => {

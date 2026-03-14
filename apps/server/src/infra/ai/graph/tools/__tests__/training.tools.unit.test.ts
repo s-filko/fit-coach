@@ -374,7 +374,7 @@ describe('buildTrainingTools', () => {
       });
 
       const { byName } = makeDeps(trainingService);
-      await byName('next_exercise').invoke({ exerciseId: 5 }, makeConfig('u1'));
+      await byName('next_exercise').invoke({ exercise_id: 5 }, makeConfig('u1'));
 
       expect(trainingService.startNextExercise).toHaveBeenCalledWith('session-1', 5);
     });

@@ -12,7 +12,6 @@
  * GREEN after: extracting sort + dedup logic into exported pure functions.
  */
 
-// @ts-expect-error — functions do not exist yet; will be exported in ADR-0011 Phase 1
 import { sortToolCallsByPriority, findDuplicateLogSets } from '../training.subgraph';
 
 interface ToolCallStub {

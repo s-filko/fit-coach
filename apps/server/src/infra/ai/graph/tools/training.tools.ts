@@ -66,7 +66,7 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
       }
 
       try {
-        const { set, setNumber } = await trainingService.logSetWithContext(sessionId, {
+        const { set, setNumber, autoCompleted } = await trainingService.logSetWithContext(sessionId, {
           exerciseId: input.exerciseId,
           exerciseName: input.exerciseName,
           setData: parsed.data,
@@ -84,7 +84,32 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
         }
 
         const rpeNote = input.rpe != null ? ` | RPE ${input.rpe}` : '';
-        return `Set ${setNumber} logged: ${summary}${rpeNote}.`;
+        const setConfirmation = `Set ${setNumber} logged: ${summary}${rpeNote}.`;
+
+        log.info(
+          {
+            audit: 'log_set',
+            userId,
+            sessionId,
+            setId: set.id,
+            exerciseId: input.exerciseId,
+            setNumber,
+            setData: set.setData,
+            rpe: set.rpe,
+            autoCompleted: autoCompleted ?? null,
+          },
+          'AUDIT: set logged',
+        );
+
+        if (autoCompleted) {
+          const prevStatus = autoCompleted.setsLogged > 0 ? 'completed' : 'skipped';
+          return (
+            `Exercise '${autoCompleted.exerciseName}' auto-${prevStatus} ` +
+            `(${autoCompleted.setsLogged} sets). ${setConfirmation}`
+          );
+        }
+
+        return setConfirmation;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         log.error({ err, sessionId }, 'log_set failed');
@@ -144,7 +169,7 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
   );
 
   const nextExercise = tool(
-    async (_input, config) => {
+    async (input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       const sessionId = currentSessionIds.get(userId) ?? null;
       if (!sessionId) {
@@ -153,6 +178,15 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
       }
 
       try {
+        // ADR-0011 Fix 2.3: optional exerciseId to navigate directly to a specific exercise
+        if (input.exercise_id != null) {
+          const exercise = await trainingService.startNextExercise(sessionId, input.exercise_id);
+          if (!exercise) {
+            return `${LLM_ERROR_PREFIX} Exercise ${input.exercise_id} not found in session.`;
+          }
+          return `Navigated to exercise ${exercise.exerciseId}.`;
+        }
+
         await trainingService.completeCurrentExercise(sessionId);
         return 'Exercise marked as complete. Ready for the next one.';
       } catch (err) {
@@ -167,8 +201,15 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
         'Mark the current in-progress exercise as completed and move on.',
         'Call this only after the user has finished all sets of the current exercise.',
         'Do NOT call this to start the very first exercise of a session.',
+        'Optionally provide exercise_id to jump to a specific exercise by its numeric ID.',
       ].join(' '),
-      schema: z.object({}),
+      schema: z.object({
+        exercise_id: z
+          .number()
+          .int()
+          .optional()
+          .describe('Optional numeric ID of a specific exercise to navigate to directly'),
+      }),
     },
   );
 
@@ -239,5 +280,112 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
     },
   );
 
-  return [logSet, nextExercise, skipExercise, finishTraining];
+  // -------------------------------------------------------------------------
+  // ADR-0011 Phase 2: Correction tools
+  // -------------------------------------------------------------------------
+
+  const deleteLastSets = tool(
+    async (input, config) => {
+      const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
+      const sessionId = currentSessionIds.get(userId) ?? null;
+      if (!sessionId) {
+        return `${SYSTEM_ERROR_PREFIX} No active training session found. Start a session first.`;
+      }
+
+      const count = input.count ?? 1;
+      try {
+        const result = await trainingService.deleteLastSets(sessionId, input.exercise_id, count);
+        const deleted = result.deletedSets
+          .map(s => `Set ${s.setNumber}: ${JSON.stringify(s.setData)}${s.rpe != null ? ` RPE ${s.rpe}` : ''}`)
+          .join(', ');
+        log.info(
+          {
+            audit: 'delete_last_sets',
+            userId,
+            sessionId,
+            exerciseId: input.exercise_id,
+            count,
+            deletedSets: result.deletedSets,
+          },
+          'AUDIT: sets deleted',
+        );
+        return `Deleted ${result.deletedSets.length} set(s) for exercise ${input.exercise_id}: ${deleted}.`;
+      } catch (err) {
+        return `${LLM_ERROR_PREFIX} ${(err as Error).message}`;
+      }
+    },
+    {
+      name: 'delete_last_sets',
+      description:
+        'Delete the last N logged sets for a given exercise in the current session. ' +
+        'Use this when the user says a set was logged by mistake or wants to correct a logging error. ' +
+        'Default count is 1 (deletes only the most recent set).',
+      schema: z.object({
+        exercise_id: z.number().describe('The numeric ID of the exercise whose sets should be deleted'),
+        count: z
+          .number()
+          .int()
+          .min(1)
+          .max(10)
+          .optional()
+          .describe('How many of the most recent sets to delete (default: 1)'),
+      }),
+    },
+  );
+
+  const updateLastSet = tool(
+    async (input, config) => {
+      const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
+      const sessionId = currentSessionIds.get(userId) ?? null;
+      if (!sessionId) {
+        return `${SYSTEM_ERROR_PREFIX} No active training session found. Start a session first.`;
+      }
+
+      try {
+        const result = await trainingService.updateLastSet(sessionId, input.exercise_id, {
+          weight: input.weight,
+          reps: input.reps,
+          rpe: input.rpe,
+          feedback: input.feedback,
+        });
+        const beforeStr = JSON.stringify(result.before.setData);
+        const afterStr = JSON.stringify(result.after.setData);
+        log.info(
+          {
+            audit: 'update_last_set',
+            userId,
+            sessionId,
+            exerciseId: input.exercise_id,
+            setNumber: result.setNumber,
+            before: result.before,
+            after: result.after,
+          },
+          'AUDIT: set updated',
+        );
+        return (
+          `Set ${result.setNumber} updated for exercise ${input.exercise_id}. ` +
+          `Before: ${beforeStr}${result.before.rpe != null ? ` RPE ${result.before.rpe}` : ''}. ` +
+          `After: ${afterStr}${result.after.rpe != null ? ` RPE ${result.after.rpe}` : ''}.`
+        );
+      } catch (err) {
+        return `${LLM_ERROR_PREFIX} ${(err as Error).message}`;
+      }
+    },
+    {
+      name: 'update_last_set',
+      description:
+        'Correct the last logged set for a given exercise — update weight, reps, RPE, or feedback. ' +
+        'Use this when the user says they entered wrong numbers. ' +
+        'Only provide the fields you want to change; others remain unchanged.',
+      schema: z.object({
+        exercise_id: z.number().describe('The numeric ID of the exercise whose last set should be updated'),
+        weight: z.number().optional().describe('New weight in kg (if correcting weight)'),
+        reps: z.number().int().optional().describe('New rep count (if correcting reps)'),
+        rpe: z.number().min(1).max(10).optional().describe('New RPE value (if correcting perceived exertion)'),
+        feedback: z.string().optional().describe('Updated feedback note from the user'),
+      }),
+    },
+  );
+
+  return [logSet, nextExercise, skipExercise, finishTraining, deleteLastSets, updateLastSet];
 }

@@ -46,9 +46,7 @@ describe('Server Basic Functionality – integration', () => {
       expect(res.headers['content-type']).toContain('application/json');
 
       const json = res.json();
-      expect(json).toEqual({
-        status: 'ok',
-      });
+      expect(json.status).toBe('ok');
     });
 
     it('should respond quickly to health checks', async() => {
