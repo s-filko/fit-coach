@@ -1,9 +1,8 @@
-import type { ExerciseWithMuscles } from '@domain/training/types';
 import type { User } from '@domain/user/services/user.service';
 
 import { composeDirectives } from '@infra/ai/graph/prompt-directives';
 
-export function buildPlanCreationSystemPrompt(user: User | null, exercises: ExerciseWithMuscles[]): string {
+export function buildPlanCreationSystemPrompt(user: User | null): string {
   const now = new Date();
   const dateOnly = now.toISOString().split('T')[0] ?? '';
 
@@ -19,48 +18,11 @@ export function buildPlanCreationSystemPrompt(user: User | null, exercises: Exer
       ].join('\n')
     : 'Profile not loaded.';
 
-  // Group exercises by category, include muscle groups
-  const byCategory = exercises.reduce<Record<string, ExerciseWithMuscles[]>>((acc, ex) => {
-    const cat = ex.category ?? 'other';
-    if (!acc[cat]) {
-      acc[cat] = [];
-    }
-    acc[cat].push(ex);
-    return acc;
-  }, {});
-
-  const exercisesSection = Object.entries(byCategory)
-    .map(([category, exs]) => {
-      const name = category.charAt(0).toUpperCase() + category.slice(1);
-      const list = exs
-        .map(ex => {
-          const primary = ex.muscleGroups
-            .filter(m => m.involvement === 'primary')
-            .map(m => m.muscleGroup)
-            .join(', ');
-          const secondary = ex.muscleGroups
-            .filter(m => m.involvement === 'secondary')
-            .map(m => m.muscleGroup)
-            .join(', ');
-          const muscles = [primary && `Primary: ${primary}`, secondary && `Secondary: ${secondary}`]
-            .filter(Boolean)
-            .join(' | ');
-          return `- ${ex.name} (ID: ${ex.id}, Equipment: ${ex.equipment ?? 'none'}${muscles ? `, ${muscles}` : ''})`;
-        })
-        .join('\n');
-      return `### ${name}\n${list}`;
-    })
-    .join('\n\n');
-
   return `Current Date: ${dateOnly}
 
 === CLIENT PROFILE ===
 
 ${profileSection}
-
-=== AVAILABLE EXERCISES (${exercises.length} total) ===
-
-${exercisesSection}
 
 === YOUR TASK ===
 
@@ -78,16 +40,23 @@ Step 1 (first response) — gather information immediately:
 - How much time per session?
 - What split interests you? (Full body / Upper-Lower / PPL / classic)
 
-Step 2 — propose a complete plan with rationale, ask for approval.
+Step 2 — use search_exercises to find suitable exercises for each session template.
+  Search by muscle group and equipment that matches the client's context.
+  You may call search_exercises multiple times in a single turn (once per muscle group / session focus).
+  Once you have results with IDs, cache them — do NOT re-search the same muscle group or query again later.
 
-Step 3 — refine based on feedback, iterate.
+Step 3 — propose a complete plan with rationale, ask for approval.
 
-Step 4 — when user explicitly approves: call save_workout_plan with the complete plan.
+Step 4 — refine based on feedback. Re-search ONLY if the user requests different exercises or equipment.
+
+Step 5 — when user explicitly approves: call save_workout_plan using the IDs already found. Do NOT re-search.
 
 === RULES ===
 
-- Use ONLY exercises from the list above. exerciseId MUST be the exact numeric ID shown.
+- Use search_exercises to find exercises before proposing them.
+  IDs from search results are valid for the entire conversation — reuse them, never re-fetch the same query.
 - Match exercises to fitness level: beginner → machines/basics, intermediate → mix, advanced → complex movements.
+- Apply equipment and category filters in search_exercises when the context clearly constrains the search.
 - Balance volume. Ensure recovery between sessions targeting the same muscles.
 - Progression rules must be specific and actionable.
 - Translate exercise names to the user's language, add English name in parentheses.
@@ -95,8 +64,12 @@ Step 4 — when user explicitly approves: call save_workout_plan with the comple
 
 === TOOLS ===
 
+- search_exercises: search exercise catalog by meaning. Call when you need new exercises not yet in context.
+  Examples: query="chest compound barbell press", equipment="barbell", category="compound".
+  Returns exercises with IDs — use these exact IDs everywhere.
+  Results persist in conversation history, no need to repeat.
 - save_workout_plan: call ONLY when the user explicitly approves the complete plan.
-  Do NOT call during discussion, proposal, or refinement.
+  Do NOT call during discussion, proposal, or refinement. Do NOT re-search exercises before saving.
   Plan must include all required fields (sessionTemplates, recoveryGuidelines, progressionRules).
 - request_transition: call with toPhase="chat" ONLY when user explicitly cancels plan creation.
 

@@ -1,5 +1,6 @@
 import type { LLMService } from '@domain/ai/ports';
 import type {
+  IEmbeddingService,
   IExerciseRepository,
   ISessionExerciseRepository,
   ISessionSetRepository,
@@ -70,6 +71,7 @@ export class TrainingService implements ITrainingService {
     private sessionSetRepo: ISessionSetRepository,
     private userRepo: UserRepository,
     private llmService: LLMService,
+    private embeddingService?: IEmbeddingService,
   ) {}
 
   async getNextSessionRecommendation(userId: string): Promise<SessionRecommendation> {
@@ -237,13 +239,32 @@ export class TrainingService implements ITrainingService {
       throw new Error('exerciseId is required to log a set. AI must identify the exercise being performed.');
     }
 
-    // Off-plan exercise by name only — find by name in DB first
-    const allExercises = await this.exerciseRepo.findAll();
-    const matchByName = allExercises.find(ex => ex.name.toLowerCase() === (opts.exerciseName ?? '').toLowerCase());
+    // Off-plan exercise by name — try exact match first, fall back to embedding search
+    const exerciseName = opts.exerciseName ?? '';
+    let resolvedExerciseId: number | undefined;
 
-    const resolvedExerciseId = matchByName?.id;
+    const exactMatches = await this.exerciseRepo.search(exerciseName, 1);
+    const exactMatch = exactMatches.find(ex => ex.name.toLowerCase() === exerciseName.toLowerCase());
+    if (exactMatch) {
+      resolvedExerciseId = exactMatch.id;
+    } else if (this.embeddingService) {
+      // Semantic fallback: embed the exercise name and find the closest match
+      const queryVector = await this.embeddingService.embed(exerciseName);
+      const semanticMatches = await this.exerciseRepo.searchByEmbedding(queryVector, { limit: 1 });
+      const [topMatch] = semanticMatches;
+      if (topMatch) {
+        resolvedExerciseId = topMatch.id;
+      }
+    } else {
+      // No embedding service — reuse the ilike result from exact match attempt
+      const [topIlike] = exactMatches;
+      if (topIlike) {
+        resolvedExerciseId = topIlike.id;
+      }
+    }
+
     if (!resolvedExerciseId) {
-      throw new Error(`Exercise "${opts.exerciseName}" not found in DB. Cannot log set for unknown exercise.`);
+      throw new Error(`Exercise "${exerciseName}" not found in DB. Cannot log set for unknown exercise.`);
     }
 
     const created = await this.sessionExerciseRepo.create(sessionId, {

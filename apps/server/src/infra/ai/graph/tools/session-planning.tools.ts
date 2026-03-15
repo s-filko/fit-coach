@@ -1,16 +1,20 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
 import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
 import type { ConversationPhase } from '@domain/conversation/ports';
-import type { ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
+import type { IEmbeddingService, IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
 import { RecommendedExerciseSchema, SessionRecommendationSchema } from '@domain/training/session-planning.types';
 
 import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
+import { buildSearchExercisesTool } from '@infra/ai/graph/tools/search-exercises.tool';
 
 export interface SessionPlanningToolsDeps {
   trainingService: ITrainingService;
   workoutPlanRepository: IWorkoutPlanRepository;
+  exerciseRepository: IExerciseRepository;
+  embeddingService: IEmbeddingService;
   /** Per-user map — start_training_session sets entry by userId, extractNode deletes it */
   pendingTransitions: IPendingRefMap<TransitionRequest | null>;
   /** Per-user map — start_training_session sets session ID by userId, extractNode deletes it */
@@ -32,16 +36,34 @@ const REQUEST_TRANSITION_DESCRIPTION = [
 // Re-export schema for use in tests
 export { RecommendedExerciseSchema, SessionRecommendationSchema };
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
-  const { trainingService, workoutPlanRepository, pendingTransitions, pendingActiveSessionIds } = deps;
+  const {
+    trainingService,
+    workoutPlanRepository,
+    exerciseRepository,
+    embeddingService,
+    pendingTransitions,
+    pendingActiveSessionIds,
+  } = deps;
+  const searchExercises = buildSearchExercisesTool({ embeddingService, exerciseRepository });
 
   const startTrainingSession = tool(
-    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
     async (input, config) => {
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
         return 'Error: could not identify user. Please try again.';
+      }
+
+      // Validate all exerciseIds exist in DB before creating the session
+      const allIds = input.exercises.map((e: { exerciseId: number }) => e.exerciseId);
+      const uniqueIds = [...new Set(allIds)];
+      if (uniqueIds.length > 0) {
+        const found = await exerciseRepository.findByIds(uniqueIds);
+        const foundIds = new Set(found.map(e => e.id));
+        const missing = uniqueIds.filter(id => !foundIds.has(id));
+        if (missing.length > 0) {
+          return `LLM_ERROR: Invalid exerciseId(s): ${missing.join(', ')}. These IDs do not exist in the exercise catalog. Use search_exercises to find valid exercise IDs, then retry.`;
+        }
       }
 
       try {
@@ -73,7 +95,12 @@ export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
 
         const exerciseCount = input.exercises.length;
         const duration = input.estimatedDuration;
-        return `Session created (ID: ${session.id}). ${exerciseCount} exercises, est. ${duration} min. Let's go!`;
+        return [
+          `Session created (ID: ${session.id}).`,
+          `${exerciseCount} exercises, est. ${duration} min.`,
+          'Now write a brief energetic message to the user in their language',
+          '— confirm the session started and motivate them for the workout.',
+        ].join(' ');
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         return `Error creating session: ${message}. Please try again.`;
@@ -87,7 +114,6 @@ export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
   );
 
   const requestTransition = tool(
-    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
     async (input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       pendingTransitions.set(userId, {
@@ -95,7 +121,7 @@ export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
         reason: input.reason ?? 'user_cancelled',
       });
 
-      return `Transition to ${input.toPhase} requested.`;
+      return `Transition to ${input.toPhase} registered. Write a brief closing message to the user in their language.`;
     },
     {
       name: 'request_transition',
@@ -107,5 +133,5 @@ export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
     },
   );
 
-  return [startTrainingSession, requestTransition];
+  return [searchExercises, startTrainingSession, requestTransition];
 }

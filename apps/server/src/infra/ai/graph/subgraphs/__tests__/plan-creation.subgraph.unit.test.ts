@@ -9,7 +9,7 @@
 import { AIMessage, ToolMessage } from '@langchain/core/messages';
 
 import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
-import type { IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
+import type { IEmbeddingService, IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 
 const BASE_USER = {
@@ -37,13 +37,21 @@ const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> =>
   ({
     findById: jest.fn(),
     findByIdWithMuscles: jest.fn(),
-    findByIds: jest.fn(),
+    findByIds: jest.fn().mockResolvedValue([]),
     findByIdsWithMuscles: jest.fn().mockResolvedValue([]),
     findByMuscleGroup: jest.fn(),
-    search: jest.fn(),
+    search: jest.fn().mockResolvedValue([]),
     findAll: jest.fn().mockResolvedValue([]),
     findAllWithMuscles: jest.fn().mockResolvedValue([]),
+    searchByEmbedding: jest.fn().mockResolvedValue([]),
+    updateEmbedding: jest.fn(),
   }) as unknown as jest.Mocked<IExerciseRepository>;
+
+const makeEmbeddingService = (): jest.Mocked<IEmbeddingService> =>
+  ({
+    embed: jest.fn().mockResolvedValue(new Array(384).fill(0)),
+    embedBatch: jest.fn().mockResolvedValue([]),
+  }) as unknown as jest.Mocked<IEmbeddingService>;
 
 const makeWorkoutPlanRepo = (): jest.Mocked<IWorkoutPlanRepository> =>
   ({
@@ -90,6 +98,7 @@ describe('plan-creation.subgraph — tool-calling loop', () => {
       userService: makeUserService(),
       contextService: new InMemoryConversationContextService(),
       exerciseRepository: makeExerciseRepository(),
+      embeddingService: makeEmbeddingService(),
       workoutPlanRepository: makeWorkoutPlanRepo(),
     });
 
@@ -138,6 +147,7 @@ describe('plan-creation.subgraph — tool-calling loop', () => {
       userService: makeUserService(),
       contextService: new InMemoryConversationContextService(),
       exerciseRepository: makeExerciseRepository(),
+      embeddingService: makeEmbeddingService(),
       workoutPlanRepository: makeWorkoutPlanRepo(),
     });
 

@@ -1,6 +1,6 @@
 import { eq, ilike, inArray, sql } from 'drizzle-orm';
 
-import type { IExerciseRepository } from '@domain/training/ports';
+import type { ExerciseSearchFilters, IExerciseRepository } from '@domain/training/ports';
 import type { Exercise, ExerciseWithMuscles, MuscleGroup } from '@domain/training/types';
 
 import { db } from '@infra/db/drizzle';
@@ -122,5 +122,64 @@ export class ExerciseRepository implements IExerciseRepository {
     }
     const ids = exercisesList.map(e => e.id);
     return this.findByIdsWithMuscles(ids);
+  }
+
+  async searchByEmbedding(
+    queryVector: number[],
+    opts?: { limit?: number; filters?: ExerciseSearchFilters },
+  ): Promise<ExerciseWithMuscles[]> {
+    const limit = opts?.limit ?? 10;
+    const filters = opts?.filters;
+
+    const filterConditions: ReturnType<typeof sql>[] = [];
+
+    if (filters?.category) {
+      filterConditions.push(sql`${exercises.category} = ${filters.category}`);
+    }
+    if (filters?.equipment) {
+      filterConditions.push(sql`${exercises.equipment} = ${filters.equipment}`);
+    }
+    if (filters?.muscleGroup) {
+      // Join to exercise_muscle_groups for muscle group filter
+      filterConditions.push(
+        sql`${exercises.id} IN (
+          SELECT exercise_id FROM exercise_muscle_groups
+          WHERE muscle_group = ${filters.muscleGroup}
+        )`,
+      );
+    }
+
+    const whereClause =
+      filterConditions.length > 0
+        ? sql`${exercises.embedding} IS NOT NULL AND ${sql.join(filterConditions, sql` AND `)}`
+        : sql`${exercises.embedding} IS NOT NULL`;
+
+    // Cast vector literal using pgvector operator
+    const vectorLiteral = `[${queryVector.join(',')}]`;
+
+    const rows = await db
+      .select({ id: exercises.id })
+      .from(exercises)
+      .where(whereClause)
+      .orderBy(sql`${exercises.embedding} <=> ${vectorLiteral}::vector`)
+      .limit(limit);
+
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const ids = rows.map(r => r.id);
+    // Preserve order from similarity ranking
+    const withMuscles = await this.findByIdsWithMuscles(ids);
+    const byId = new Map(withMuscles.map(e => [e.id, e]));
+    return ids.map(id => byId.get(id)).filter((e): e is ExerciseWithMuscles => e !== undefined);
+  }
+
+  async updateEmbedding(exerciseId: number, embedding: number[]): Promise<void> {
+    const vectorLiteral = `[${embedding.join(',')}]`;
+    await db
+      .update(exercises)
+      .set({ embedding: sql`${vectorLiteral}::vector` })
+      .where(eq(exercises.id, exerciseId));
   }
 }

@@ -61,29 +61,34 @@ apps/server/src/
       drizzle.ts                # Pool + drizzle init + health
       repositories/             # Thin data access
         user.repository.ts
-        exercise.repository.ts  # Includes findAllWithMuscles()
+        exercise.repository.ts  # Includes searchByEmbedding() for vector search
         workout-plan.repository.ts
     ai/
       model.factory.ts          # Shared ChatOpenAI factory (getModel())
+      embedding.service.ts      # Local all-MiniLM-L6-v2 via @huggingface/transformers (ONNX)
+      embedding-text.util.ts    # buildEmbeddingText() — composite text for exercise embeddings
       graph/
         conversation.graph.ts   # Main StateGraph: router→phase→persist→guard→cleanup
+        dedup-tool-node.ts      # Per-turn deduplication of identical search_exercises calls
+        invoke-with-retry.ts    # Retry wrapper for empty LLM responses after tool calls
         nodes/
           router.node.ts             # Phase determination, session timeout, user loading
           persist.node.ts            # appendTurn to conversation_turns
           chat.node.ts               # buildChatSystemPrompt()
           registration.node.ts       # buildRegistrationSystemPrompt()
-          plan-creation.node.ts      # buildPlanCreationSystemPrompt() with muscle groups
-          session-planning.node.ts   # buildSessionPlanningSystemPrompt() with context + exercises
+          plan-creation.node.ts      # buildPlanCreationSystemPrompt()
+          session-planning.node.ts   # buildSessionPlanningSystemPrompt() with context
         subgraphs/
           chat.subgraph.ts              # agent + ToolNode + extractNode
           registration.subgraph.ts      # agent + ToolNode + extractNode
-          plan-creation.subgraph.ts     # agent + ToolNode + extractNode
-          session-planning.subgraph.ts  # agent + ToolNode + extractNode + activeSessionId propagation
+          plan-creation.subgraph.ts     # agent + dedupToolNode + extractNode
+          session-planning.subgraph.ts  # agent + dedupToolNode + extractNode + activeSessionId
         tools/
           chat.tools.ts                 # update_profile, request_transition
           registration.tools.ts         # save_profile_fields, complete_registration
-          plan-creation.tools.ts        # save_workout_plan, request_transition
-          session-planning.tools.ts     # start_training_session, request_transition
+          plan-creation.tools.ts        # save_workout_plan, search_exercises, request_transition
+          session-planning.tools.ts     # start_training_session, search_exercises, request_transition
+          search-exercises.tool.ts      # search_exercises — vector search via EmbeddingService
     conversation/
       drizzle-conversation-context.service.ts   # IConversationContextService impl (2-method, DB-backed)
     di/

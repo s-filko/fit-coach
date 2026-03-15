@@ -1,15 +1,19 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
 import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
 import type { ConversationPhase } from '@domain/conversation/ports';
-import type { IWorkoutPlanRepository } from '@domain/training/ports';
+import type { IEmbeddingService, IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
 import type { MuscleGroup } from '@domain/training/types';
 
 import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
+import { buildSearchExercisesTool } from '@infra/ai/graph/tools/search-exercises.tool';
 
 export interface PlanCreationToolsDeps {
   workoutPlanRepository: IWorkoutPlanRepository;
+  exerciseRepository: IExerciseRepository;
+  embeddingService: IEmbeddingService;
   /** Per-user map — tools set entry by userId, extractNode deletes it */
   pendingTransitions: IPendingRefMap<TransitionRequest | null>;
 }
@@ -89,17 +93,27 @@ const REQUEST_TRANSITION_DESCRIPTION = [
   'Use "chat" if the user explicitly cancels plan creation and wants to go back to chat.',
 ].join(' ');
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
-  const { workoutPlanRepository, pendingTransitions } = deps;
+  const { workoutPlanRepository, exerciseRepository, embeddingService, pendingTransitions } = deps;
+  const searchExercises = buildSearchExercisesTool({ embeddingService, exerciseRepository });
 
   const saveWorkoutPlan = tool(
-     
-    async(input, config) => {
-       
+    async (input, config) => {
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
         return 'Error: could not identify user. Please try again.';
+      }
+
+      // Validate all exerciseIds exist in DB before saving
+      const allIds = input.sessionTemplates.flatMap(t => t.exercises.map(e => e.exerciseId));
+      const uniqueIds = [...new Set(allIds)];
+      if (uniqueIds.length > 0) {
+        const found = await exerciseRepository.findByIds(uniqueIds);
+        const foundIds = new Set(found.map(e => e.id));
+        const missing = uniqueIds.filter(id => !foundIds.has(id));
+        if (missing.length > 0) {
+          return `LLM_ERROR: Invalid exerciseId(s): ${missing.join(', ')}. These IDs do not exist in the exercise catalog. Use search_exercises to find valid exercise IDs.`;
+        }
       }
 
       await workoutPlanRepository.create(userId, {
@@ -120,7 +134,7 @@ export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
         reason: 'plan_creation_complete',
       });
 
-      return 'Workout plan saved successfully!';
+      return 'Plan saved. Now write a brief confirmation to the user in their language — congratulate them and say you are ready to start training.';
     },
     {
       name: 'save_workout_plan',
@@ -138,15 +152,14 @@ export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
   );
 
   const requestTransition = tool(
-     
-    async(input, config) => {
+    async (input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       pendingTransitions.set(userId, {
         toPhase: input.toPhase as ConversationPhase,
         reason: input.reason ?? 'user_cancelled',
       });
 
-      return `Transition to ${input.toPhase} requested.`;
+      return `Transition to ${input.toPhase} registered. Write a brief closing message to the user in their language.`;
     },
     {
       name: 'request_transition',
@@ -158,5 +171,5 @@ export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
     },
   );
 
-  return [saveWorkoutPlan, requestTransition];
+  return [searchExercises, saveWorkoutPlan, requestTransition];
 }

@@ -58,10 +58,16 @@ const makeDeps = (): ConversationGraphDeps => ({
     findByIdsWithMuscles: jest.fn().mockResolvedValue([]),
     findById: jest.fn(),
     findByIdWithMuscles: jest.fn(),
-    findByIds: jest.fn(),
+    findByIds: jest.fn().mockResolvedValue([]),
     findByMuscleGroup: jest.fn(),
-    search: jest.fn(),
+    search: jest.fn().mockResolvedValue([]),
+    searchByEmbedding: jest.fn().mockResolvedValue([]),
+    updateEmbedding: jest.fn(),
   } as unknown as IExerciseRepository,
+  embeddingService: {
+    embed: jest.fn().mockResolvedValue(new Array(384).fill(0)),
+    embedBatch: jest.fn().mockResolvedValue([]),
+  },
   userService: {
     getUser: jest.fn().mockResolvedValue({
       id: 'u1',

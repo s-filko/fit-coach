@@ -72,6 +72,7 @@
     "@fastify/static": "^8.2.0",
     "@fastify/swagger": "^9.5.1",
     "@fastify/swagger-ui": "^5.2.3",
+    "@huggingface/transformers": "^3.8.1",
     "@langchain/core": "^1.1.27",
     "@langchain/langgraph": "^1.1.5",
     "@langchain/langgraph-checkpoint-postgres": "^1.0.1",

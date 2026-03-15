@@ -4,6 +4,7 @@ import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import { ConversationState, ConversationStateType } from '@domain/conversation/graph/conversation.state';
 import { IConversationContextService } from '@domain/conversation/ports';
 import type {
+  IEmbeddingService,
   IExerciseRepository,
   ITrainingService,
   IWorkoutPlanRepository,
@@ -30,6 +31,7 @@ export interface ConversationGraphDeps {
   workoutPlanRepo: IWorkoutPlanRepository;
   workoutSessionRepo: IWorkoutSessionRepository;
   exerciseRepository: IExerciseRepository;
+  embeddingService: IEmbeddingService;
   userService: IUserService;
   contextService: IConversationContextService;
   checkpointer: PostgresSaver;
@@ -51,6 +53,7 @@ function buildGraph(deps: ConversationGraphDeps) {
     workoutPlanRepo,
     workoutSessionRepo,
     exerciseRepository,
+    embeddingService,
     checkpointer,
   } = deps;
 
@@ -62,12 +65,14 @@ function buildGraph(deps: ConversationGraphDeps) {
     userService,
     contextService,
     exerciseRepository,
+    embeddingService,
     workoutPlanRepository: workoutPlanRepo,
   });
   const sessionPlanningSubgraph = buildSessionPlanningSubgraph({
     userService,
     contextService,
     exerciseRepository,
+    embeddingService,
     workoutPlanRepository: workoutPlanRepo,
     workoutSessionRepository: workoutSessionRepo,
     trainingService,
@@ -77,6 +82,8 @@ function buildGraph(deps: ConversationGraphDeps) {
     trainingService,
     workoutSessionRepo,
     contextService,
+    exerciseRepository,
+    embeddingService,
   });
 
   const transitionGuardNode = async (state: ConversationStateType): Promise<Partial<ConversationStateType>> => {

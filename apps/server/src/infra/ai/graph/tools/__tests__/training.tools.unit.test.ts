@@ -1,7 +1,7 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
 
 import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
-import type { ITrainingService } from '@domain/training/ports';
+import type { IEmbeddingService, IExerciseRepository, ITrainingService } from '@domain/training/ports';
 import type { SessionSet, WorkoutSession } from '@domain/training/types';
 
 import { LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX, buildTrainingTools } from '../training.tools';
@@ -35,13 +35,39 @@ const makeConfig = (userId = 'u1'): RunnableConfig => ({
   configurable: { userId, thread_id: userId },
 });
 
+const makeExerciseRepository = () =>
+  ({
+    findByIds: jest.fn().mockResolvedValue([]),
+    searchByEmbedding: jest.fn().mockResolvedValue([]),
+    updateEmbedding: jest.fn(),
+    findAll: jest.fn(),
+    findAllWithMuscles: jest.fn(),
+    findById: jest.fn(),
+    findByIdWithMuscles: jest.fn(),
+    findByIdsWithMuscles: jest.fn(),
+    findByMuscleGroup: jest.fn(),
+    search: jest.fn(),
+  }) as unknown as IExerciseRepository;
+
+const makeEmbeddingService = () =>
+  ({
+    embed: jest.fn().mockResolvedValue(new Array(384).fill(0)),
+    embedBatch: jest.fn().mockResolvedValue([]),
+  }) as unknown as IEmbeddingService;
+
 const makeDeps = (trainingService: jest.Mocked<ITrainingService>, sessionId: string | null = 'session-1') => {
   const pendingTransitions = new Map<string, TransitionRequest | null>();
   const currentSessionIds = new Map<string, string | null>();
   if (sessionId !== null) {
     currentSessionIds.set('u1', sessionId);
   }
-  const tools = buildTrainingTools({ trainingService, pendingTransitions, currentSessionIds });
+  const tools = buildTrainingTools({
+    trainingService,
+    exerciseRepository: makeExerciseRepository(),
+    embeddingService: makeEmbeddingService(),
+    pendingTransitions,
+    currentSessionIds,
+  });
   const byName = (name: string) => tools.find(t => t.name === name) as InvokableTool;
   return { tools, byName, pendingTransitions, currentSessionIds };
 };
@@ -271,7 +297,13 @@ describe('buildTrainingTools', () => {
       const currentSessionIds = new Map<string, string | null>();
       currentSessionIds.set('userA', 'session-A');
       currentSessionIds.set('userB', 'session-B');
-      const tools = buildTrainingTools({ trainingService, pendingTransitions, currentSessionIds });
+      const tools = buildTrainingTools({
+        trainingService,
+        exerciseRepository: makeExerciseRepository(),
+        embeddingService: makeEmbeddingService(),
+        pendingTransitions,
+        currentSessionIds,
+      });
       const finishTraining = tools.find(t => t.name === 'finish_training') as InvokableTool;
 
       await finishTraining.invoke({}, makeConfig('userA'));

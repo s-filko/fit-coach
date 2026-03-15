@@ -35,6 +35,7 @@ export async function registerInfraServices(
   const { SessionExerciseRepository } = await import('@infra/db/repositories/session-exercise.repository');
   const { SessionSetRepository } = await import('@infra/db/repositories/session-set.repository');
   const {
+    EMBEDDING_SERVICE_TOKEN,
     EXERCISE_REPOSITORY_TOKEN,
     SESSION_EXERCISE_REPOSITORY_TOKEN,
     SESSION_SET_REPOSITORY_TOKEN,
@@ -51,6 +52,11 @@ export async function registerInfraServices(
       throw new Error(`Failed to ensure database schema: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
+
+  // Embedding service — loaded lazily, warm-up triggered below after all registrations
+  const { EmbeddingService } = await import('@infra/ai/embedding.service');
+  const embeddingService = new EmbeddingService();
+  container.register(EMBEDDING_SERVICE_TOKEN, embeddingService);
 
   // Register infrastructure implementations
   container.register(CONVERSATION_CONTEXT_SERVICE_TOKEN, new DrizzleConversationContextService());
@@ -81,6 +87,7 @@ export async function registerInfraServices(
         c.get(SESSION_SET_REPOSITORY_TOKEN),
         c.get(USER_REPOSITORY_TOKEN),
         c.get(LLM_SERVICE_TOKEN),
+        c.get(EMBEDDING_SERVICE_TOKEN),
       ),
   );
 
@@ -100,11 +107,15 @@ export async function registerInfraServices(
       workoutPlanRepo: container.get(WORKOUT_PLAN_REPOSITORY_TOKEN),
       workoutSessionRepo: container.get(WORKOUT_SESSION_REPOSITORY_TOKEN),
       exerciseRepository: container.get(EXERCISE_REPOSITORY_TOKEN),
+      embeddingService: container.get(EMBEDDING_SERVICE_TOKEN),
       userService: container.get(USER_SERVICE_TOKEN),
       contextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN),
       checkpointer,
     }),
   );
+
+  // Kick off model warm-up in background — do not await so server starts immediately
+  void embeddingService.warmUp();
 
   return container;
 }

@@ -1,12 +1,13 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
 
 import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
-import type { IWorkoutPlanRepository } from '@domain/training/ports';
+import type { IEmbeddingService, IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
 
 import { buildPlanCreationTools } from '../plan-creation.tools';
 
 // StructuredTool has overloaded .invoke() signatures that TS cannot unify in tests.
 type InvokableTool = {
+  name: string;
   invoke: (input: Record<string, unknown>, config?: RunnableConfig) => Promise<unknown>;
 };
 
@@ -78,15 +79,44 @@ const makeConfig = (userId = 'u1'): RunnableConfig => ({
   configurable: { userId, thread_id: userId },
 });
 
+const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> =>
+  ({
+    findByIds: jest.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]),
+    searchByEmbedding: jest.fn().mockResolvedValue([]),
+    updateEmbedding: jest.fn(),
+    findAll: jest.fn(),
+    findAllWithMuscles: jest.fn(),
+    findById: jest.fn(),
+    findByIdWithMuscles: jest.fn(),
+    findByIdsWithMuscles: jest.fn(),
+    findByMuscleGroup: jest.fn(),
+    search: jest.fn(),
+  }) as unknown as jest.Mocked<IExerciseRepository>;
+
+const makeEmbeddingService = (): jest.Mocked<IEmbeddingService> =>
+  ({
+    embed: jest.fn().mockResolvedValue(new Array(384).fill(0)),
+    embedBatch: jest.fn().mockResolvedValue([]),
+  }) as unknown as jest.Mocked<IEmbeddingService>;
+
 const buildTools = (
   workoutPlanRepository: jest.Mocked<IWorkoutPlanRepository>,
   pendingTransitions: Map<string, TransitionRequest | null>,
-): [InvokableTool, InvokableTool] =>
-  buildPlanCreationTools({ workoutPlanRepository, pendingTransitions }) as unknown as [InvokableTool, InvokableTool];
+  exerciseRepository?: jest.Mocked<IExerciseRepository>,
+) => {
+  const tools = buildPlanCreationTools({
+    workoutPlanRepository,
+    exerciseRepository: exerciseRepository ?? makeExerciseRepository(),
+    embeddingService: makeEmbeddingService(),
+    pendingTransitions,
+  }) as unknown as InvokableTool[];
+  const byName = (name: string) => tools.find((t: { name?: string }) => (t as { name?: string }).name === name)!;
+  return { byName, saveWorkoutPlan: byName('save_workout_plan'), requestTransition: byName('request_transition') };
+};
 
 describe('plan-creation.tools — save_workout_plan', () => {
   it('returns a plain string, never a Command object', async () => {
-    const [saveWorkoutPlan] = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
+    const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
 
     const result = await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig());
 
@@ -96,7 +126,7 @@ describe('plan-creation.tools — save_workout_plan', () => {
 
   it('calls workoutPlanRepository.create with correct userId and plan data', async () => {
     const repo = makeWorkoutPlanRepo();
-    const [saveWorkoutPlan] = buildTools(repo, makePendingTransitions());
+    const { saveWorkoutPlan } = buildTools(repo, makePendingTransitions());
 
     await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig('u1'));
 
@@ -115,7 +145,7 @@ describe('plan-creation.tools — save_workout_plan', () => {
 
   it('sets pendingTransitions entry for userId to chat after saving the plan', async () => {
     const pendingTransitions = makePendingTransitions();
-    const [saveWorkoutPlan] = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
+    const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
 
     await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig('u1'));
 
@@ -125,7 +155,7 @@ describe('plan-creation.tools — save_workout_plan', () => {
   });
 
   it('returns success string', async () => {
-    const [saveWorkoutPlan] = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
+    const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
 
     const result = await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig());
 
@@ -133,7 +163,7 @@ describe('plan-creation.tools — save_workout_plan', () => {
   });
 
   it('returns error string when userId is missing from configurable', async () => {
-    const [saveWorkoutPlan] = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
+    const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
 
     const result = await saveWorkoutPlan.invoke(MINIMAL_PLAN, { configurable: {} });
 
@@ -142,7 +172,7 @@ describe('plan-creation.tools — save_workout_plan', () => {
 
   it('does NOT call create when userId is missing', async () => {
     const repo = makeWorkoutPlanRepo();
-    const [saveWorkoutPlan] = buildTools(repo, makePendingTransitions());
+    const { saveWorkoutPlan } = buildTools(repo, makePendingTransitions());
 
     await saveWorkoutPlan.invoke(MINIMAL_PLAN, { configurable: {} });
 
@@ -151,7 +181,7 @@ describe('plan-creation.tools — save_workout_plan', () => {
 
   it('does NOT set pendingTransitions when userId is missing', async () => {
     const pendingTransitions = makePendingTransitions();
-    const [saveWorkoutPlan] = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
+    const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
 
     await saveWorkoutPlan.invoke(MINIMAL_PLAN, { configurable: {} });
 
@@ -161,7 +191,7 @@ describe('plan-creation.tools — save_workout_plan', () => {
 
 describe('plan-creation.tools — request_transition', () => {
   it('returns a plain string, never a Command object', async () => {
-    const [, requestTransition] = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
+    const { requestTransition } = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
 
     const result = await requestTransition.invoke({ toPhase: 'chat' }, makeConfig());
 
@@ -171,7 +201,7 @@ describe('plan-creation.tools — request_transition', () => {
 
   it('sets pendingTransitions entry for userId with toPhase=chat', async () => {
     const pendingTransitions = makePendingTransitions();
-    const [, requestTransition] = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
+    const { requestTransition } = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
 
     await requestTransition.invoke({ toPhase: 'chat' }, makeConfig('u1'));
 
@@ -181,7 +211,7 @@ describe('plan-creation.tools — request_transition', () => {
 
   it('sets optional reason in pendingTransitions entry', async () => {
     const pendingTransitions = makePendingTransitions();
-    const [, requestTransition] = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
+    const { requestTransition } = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
 
     await requestTransition.invoke({ toPhase: 'chat', reason: 'user cancelled' }, makeConfig('u1'));
 
@@ -189,7 +219,7 @@ describe('plan-creation.tools — request_transition', () => {
   });
 
   it('returns confirmation string mentioning the target phase', async () => {
-    const [, requestTransition] = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
+    const { requestTransition } = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
 
     const result = await requestTransition.invoke({ toPhase: 'chat' }, makeConfig());
 
@@ -198,7 +228,7 @@ describe('plan-creation.tools — request_transition', () => {
 
   it('does NOT call workoutPlanRepository', async () => {
     const repo = makeWorkoutPlanRepo();
-    const [, requestTransition] = buildTools(repo, makePendingTransitions());
+    const { requestTransition } = buildTools(repo, makePendingTransitions());
 
     await requestTransition.invoke({ toPhase: 'chat' }, makeConfig());
 
@@ -207,7 +237,7 @@ describe('plan-creation.tools — request_transition', () => {
 
   it('isolates entries by userId — two users do not overwrite each other', async () => {
     const pendingTransitions = makePendingTransitions();
-    const [, requestTransition] = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
+    const { requestTransition } = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
 
     await requestTransition.invoke({ toPhase: 'chat', reason: 'A cancelled' }, makeConfig('userA'));
     await requestTransition.invoke({ toPhase: 'chat', reason: 'B cancelled' }, makeConfig('userB'));

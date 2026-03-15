@@ -1,14 +1,16 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
-import { ToolNode, toolsCondition } from '@langchain/langgraph/prebuilt';
+import { toolsCondition } from '@langchain/langgraph/prebuilt';
 
 import { type ConversationStateType, type TransitionRequest } from '@domain/conversation/graph/conversation.state';
 import { IConversationContextService } from '@domain/conversation/ports';
-import type { IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
+import type { IEmbeddingService, IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
 
+import { buildDedupToolNode } from '@infra/ai/graph/dedup-tool-node';
+import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
 import { buildPlanCreationSystemPrompt } from '@infra/ai/graph/nodes/plan-creation.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildPlanCreationTools } from '@infra/ai/graph/tools/plan-creation.tools';
@@ -18,6 +20,7 @@ export interface PlanCreationSubgraphDeps {
   userService: IUserService;
   contextService: IConversationContextService;
   exerciseRepository: IExerciseRepository;
+  embeddingService: IEmbeddingService;
   workoutPlanRepository: IWorkoutPlanRepository;
 }
 
@@ -33,7 +36,7 @@ const PlanCreationSubgraphState = Annotation.Root({
 type PlanCreationSubgraphStateType = typeof PlanCreationSubgraphState.State;
 
 export function buildPlanCreationSubgraph(deps: PlanCreationSubgraphDeps) {
-  const { userService, contextService, exerciseRepository, workoutPlanRepository } = deps;
+  const { userService, contextService, exerciseRepository, embeddingService, workoutPlanRepository } = deps;
 
   /**
    * Per-user map: tools set entry by userId, extractNode reads and deletes it.
@@ -42,21 +45,24 @@ export function buildPlanCreationSubgraph(deps: PlanCreationSubgraphDeps) {
    */
   const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
 
-  const tools = buildPlanCreationTools({ workoutPlanRepository, pendingTransitions });
-  const toolNode = new ToolNode(tools);
+  const tools = buildPlanCreationTools({
+    workoutPlanRepository,
+    exerciseRepository,
+    embeddingService,
+    pendingTransitions,
+  });
+  const dedupToolNode = buildDedupToolNode(tools);
   const model = getModel().bindTools(tools);
 
   const agentNode = async (state: PlanCreationSubgraphStateType) => {
     const { userId, user, userMessage } = state;
 
-    const [history, exercises] = await Promise.all([
+    const [history, freshUser] = await Promise.all([
       contextService.getMessagesForPrompt(userId, 'plan_creation'),
-      exerciseRepository.findAllWithMuscles(),
+      userService.getUser(userId),
     ]);
 
-    // Fetch fresh user so the prompt always has the latest profile
-    const freshUser = await userService.getUser(userId);
-    const systemPrompt = buildPlanCreationSystemPrompt(freshUser ?? user, exercises);
+    const systemPrompt = buildPlanCreationSystemPrompt(freshUser ?? user);
 
     // state.messages holds AIMessage(tool_calls) + ToolMessages from the current turn.
     // These are NOT in DB history yet (persist runs after subgraph finishes).
@@ -70,9 +76,7 @@ export function buildPlanCreationSubgraph(deps: PlanCreationSubgraphDeps) {
       ...inFlightMessages,
     ];
 
-    const response = await model.invoke(llmMessages, {
-      configurable: { userId },
-    });
+    const response = await invokeWithRetry(model, llmMessages, userId);
 
     return { messages: [response] };
   };
@@ -103,7 +107,7 @@ export function buildPlanCreationSubgraph(deps: PlanCreationSubgraphDeps) {
 
   const graph = new StateGraph(PlanCreationSubgraphState)
     .addNode('agent', agentNode)
-    .addNode('tools', toolNode)
+    .addNode('tools', dedupToolNode)
     .addNode('extract', extractNode)
     .addEdge(START, 'agent')
     .addConditionalEdges('agent', toolsCondition, { tools: 'tools', [END]: 'extract' })

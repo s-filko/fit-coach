@@ -5,10 +5,11 @@ import { toolsCondition } from '@langchain/langgraph/prebuilt';
 
 import { type ConversationStateType, type TransitionRequest } from '@domain/conversation/graph/conversation.state';
 import { IConversationContextService } from '@domain/conversation/ports';
-import type { ITrainingService, IWorkoutSessionRepository } from '@domain/training/ports';
+import type { IEmbeddingService, IExerciseRepository, ITrainingService, IWorkoutSessionRepository } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
 
+import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
 import { buildTrainingSystemPrompt } from '@infra/ai/graph/nodes/training.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildTrainingTools, LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '@infra/ai/graph/tools/training.tools';
@@ -27,11 +28,12 @@ const log = createLogger('training-subgraph');
 
 /** Execution priority for training tools. Lower number = runs first. */
 const TOOL_PRIORITY: Record<string, number> = {
-  log_set: 0,
-  complete_current_exercise: 1,
-  delete_last_sets: 2,
-  update_last_set: 2,
-  finish_training: 3,
+  search_exercises: 0,
+  log_set: 1,
+  complete_current_exercise: 2,
+  delete_last_sets: 3,
+  update_last_set: 3,
+  finish_training: 4,
 };
 
 interface ToolCallLike {
@@ -106,6 +108,8 @@ export interface TrainingSubgraphDeps {
   trainingService: ITrainingService;
   workoutSessionRepo: IWorkoutSessionRepository;
   contextService: IConversationContextService;
+  exerciseRepository: IExerciseRepository;
+  embeddingService: IEmbeddingService;
 }
 
 const TrainingSubgraphState = Annotation.Root({
@@ -150,7 +154,14 @@ function buildToolResultsInjection(toolMessages: ToolMessage[]): string {
 }
 
 export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
-  const { userService, trainingService, workoutSessionRepo, contextService } = deps;
+  const {
+    userService,
+    trainingService,
+    workoutSessionRepo,
+    contextService,
+    exerciseRepository,
+    embeddingService,
+  } = deps;
 
   /**
    * Per-user maps: tools set entries by userId, extractNode/agentNode reads and deletes them.
@@ -162,7 +173,13 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
    */
   const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
   const currentSessionIds = new PendingRefMap<string | null>();
-  const tools = buildTrainingTools({ trainingService, pendingTransitions, currentSessionIds });
+  const tools = buildTrainingTools({
+    trainingService,
+    exerciseRepository,
+    embeddingService,
+    pendingTransitions,
+    currentSessionIds,
+  });
   const toolMap = Object.fromEntries(tools.map(t => [t.name, t]));
   const baseModel = getModel();
 
@@ -273,7 +290,7 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
         };
       }
 
-      // Count all tool errors: our LLM_ERROR prefix OR ToolNode error status (e.g. Zod validation)
+      // Count all tool errors: our LLM_ERROR prefix OR ToolMessage error status (e.g. Zod validation)
       const toolErrors = inFlightMessages.filter((m): m is ToolMessage => {
         if (m instanceof ToolMessage) {
           const content = typeof m.content === 'string' ? m.content : '';
@@ -360,13 +377,15 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
         ...(toolResultsInjection ? [new SystemMessage(toolResultsInjection)] : []),
       ];
 
-      const response = await model.invoke(llmMessages, { configurable: { userId } });
+      const response = await invokeWithRetry(model, llmMessages, userId);
 
-      const hasToolCalls =
-        Array.isArray((response as { tool_calls?: unknown[] }).tool_calls) &&
-        (response as { tool_calls: unknown[] }).tool_calls.length > 0;
       log.debug(
-        { userId, sessionId: activeSessionId, hasToolCalls, contentType: typeof response.content },
+        {
+          userId,
+          sessionId: activeSessionId,
+          hasToolCalls: Array.isArray(response.tool_calls) && response.tool_calls.length > 0,
+          contentType: typeof response.content,
+        },
         'LLM response',
       );
 

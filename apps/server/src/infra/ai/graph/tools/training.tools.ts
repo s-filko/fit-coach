@@ -4,10 +4,11 @@ import { z } from 'zod';
 
 import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
 import type { ConversationPhase } from '@domain/conversation/ports';
-import type { AutoCompletedExercise, ITrainingService } from '@domain/training/ports';
+import type { AutoCompletedExercise, IEmbeddingService, IExerciseRepository, ITrainingService } from '@domain/training/ports';
 import { SetDataSchema } from '@domain/training/set-data.types';
 
 import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
+import { buildSearchExercisesTool } from '@infra/ai/graph/tools/search-exercises.tool';
 
 import { createLogger } from '@shared/logger';
 
@@ -49,15 +50,17 @@ export const LLM_ERROR_PREFIX = 'LLM_ERROR:';
 
 export interface TrainingToolsDeps {
   trainingService: ITrainingService;
+  exerciseRepository: IExerciseRepository;
+  embeddingService: IEmbeddingService;
   /** Per-user map — finish_training sets entry by userId, extractNode deletes it */
   pendingTransitions: IPendingRefMap<TransitionRequest | null>;
   /** Per-user map — agentNode sets current sessionId by userId before each model.invoke */
   currentSessionIds: IPendingRefMap<string | null>;
 }
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function buildTrainingTools(deps: TrainingToolsDeps) {
-  const { trainingService, pendingTransitions, currentSessionIds } = deps;
+  const { trainingService, exerciseRepository, embeddingService, pendingTransitions, currentSessionIds } = deps;
+  const searchExercises = buildSearchExercisesTool({ embeddingService, exerciseRepository });
 
   const logSet = tool(
     async (input, config) => {
@@ -253,7 +256,11 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
         );
 
         const feedbackNote = input.feedback ? ` Feedback: "${input.feedback}".` : '';
-        return `Session completed in ${duration} min.${feedbackNote} Great work!`;
+        return [
+          `Session completed in ${duration} min.${feedbackNote}`,
+          'Now congratulate the user in their language',
+          '— summarize the workout briefly and wish them recovery.',
+        ].join(' ');
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         log.error({ err, sessionId }, 'finish_training failed');
@@ -304,7 +311,8 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
         );
         return `Deleted ${result.deletedSets.length} set(s) for exercise ${input.exercise_id}: ${deleted}.`;
       } catch (err) {
-        return `${LLM_ERROR_PREFIX} ${(err as Error).message}`;
+        const message = err instanceof Error ? err.message : String(err);
+        return `${LLM_ERROR_PREFIX} ${message}`;
       }
     },
     {
@@ -361,7 +369,8 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
           `After: ${afterStr}${result.after.rpe != null ? ` RPE ${result.after.rpe}` : ''}.`
         );
       } catch (err) {
-        return `${LLM_ERROR_PREFIX} ${(err as Error).message}`;
+        const message = err instanceof Error ? err.message : String(err);
+        return `${LLM_ERROR_PREFIX} ${message}`;
       }
     },
     {
@@ -380,5 +389,5 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
     },
   );
 
-  return [logSet, completeCurrentExercise, finishTraining, deleteLastSets, updateLastSet];
+  return [searchExercises, logSet, completeCurrentExercise, finishTraining, deleteLastSets, updateLastSet];
 }

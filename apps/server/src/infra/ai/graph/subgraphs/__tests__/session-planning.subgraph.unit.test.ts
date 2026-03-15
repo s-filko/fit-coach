@@ -11,6 +11,7 @@
 import { AIMessage, ToolMessage } from '@langchain/core/messages';
 
 import type {
+  IEmbeddingService,
   IExerciseRepository,
   ITrainingService,
   IWorkoutPlanRepository,
@@ -53,13 +54,22 @@ const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> =>
   ({
     findById: jest.fn(),
     findByIdWithMuscles: jest.fn(),
-    findByIds: jest.fn(),
+    // Return any requested IDs so exerciseId validation always passes in subgraph tests
+    findByIds: jest.fn().mockImplementation(async (ids: number[]) => ids.map(id => ({ id }))),
     findByIdsWithMuscles: jest.fn().mockResolvedValue([]),
     findByMuscleGroup: jest.fn(),
-    search: jest.fn(),
+    search: jest.fn().mockResolvedValue([]),
     findAll: jest.fn().mockResolvedValue([]),
     findAllWithMuscles: jest.fn().mockResolvedValue([]),
+    searchByEmbedding: jest.fn().mockResolvedValue([]),
+    updateEmbedding: jest.fn(),
   }) as unknown as jest.Mocked<IExerciseRepository>;
+
+const makeEmbeddingService = (): jest.Mocked<IEmbeddingService> =>
+  ({
+    embed: jest.fn().mockResolvedValue(new Array(384).fill(0)),
+    embedBatch: jest.fn().mockResolvedValue([]),
+  }) as unknown as jest.Mocked<IEmbeddingService>;
 
 const makeWorkoutPlanRepo = (): jest.Mocked<IWorkoutPlanRepository> =>
   ({
@@ -119,6 +129,7 @@ describe('session-planning.subgraph — text response (no tools)', () => {
       userService: makeUserService(),
       contextService: new InMemoryConversationContextService(),
       exerciseRepository: makeExerciseRepository(),
+      embeddingService: makeEmbeddingService(),
       workoutPlanRepository: makeWorkoutPlanRepo(),
       workoutSessionRepository: makeWorkoutSessionRepo(),
       trainingService: makeTrainingService(),
@@ -170,6 +181,7 @@ describe('session-planning.subgraph — start_training_session tool', () => {
       userService: makeUserService(),
       contextService: new InMemoryConversationContextService(),
       exerciseRepository: makeExerciseRepository(),
+      embeddingService: makeEmbeddingService(),
       workoutPlanRepository: makeWorkoutPlanRepo(),
       workoutSessionRepository: makeWorkoutSessionRepo(),
       trainingService: makeTrainingService('session-abc'),
@@ -220,6 +232,7 @@ describe('session-planning.subgraph — tool-calling loop (recursion prevention)
       userService: makeUserService(),
       contextService: new InMemoryConversationContextService(),
       exerciseRepository: makeExerciseRepository(),
+      embeddingService: makeEmbeddingService(),
       workoutPlanRepository: makeWorkoutPlanRepo(),
       workoutSessionRepository: makeWorkoutSessionRepo(),
       trainingService: makeTrainingService(),
@@ -269,6 +282,7 @@ describe('session-planning.subgraph — tool-calling loop (recursion prevention)
       userService: makeUserService(),
       contextService: new InMemoryConversationContextService(),
       exerciseRepository: makeExerciseRepository(),
+      embeddingService: makeEmbeddingService(),
       workoutPlanRepository: makeWorkoutPlanRepo(),
       workoutSessionRepository: makeWorkoutSessionRepo(),
       trainingService: makeTrainingService(),

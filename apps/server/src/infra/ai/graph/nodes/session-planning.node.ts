@@ -1,5 +1,5 @@
 import type { SessionPlanningContextData } from '@domain/training/services/session-planning-context.builder';
-import type { ExerciseWithMuscles, WorkoutSessionWithDetails } from '@domain/training/types';
+import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import type { User } from '@domain/user/services/user.service';
 
 import { composeDirectives } from '@infra/ai/graph/prompt-directives';
@@ -8,7 +8,6 @@ import { composeDirectives } from '@infra/ai/graph/prompt-directives';
 export function buildSessionPlanningSystemPrompt(
   user: User | null,
   context: SessionPlanningContextData,
-  exercises: ExerciseWithMuscles[],
 ): string {
   const now = new Date();
   const dateOnly = now.toISOString().split('T')[0] ?? '';
@@ -37,39 +36,6 @@ export function buildSessionPlanningSystemPrompt(
   // === RECOVERY TIMELINE ===
   const recoverySection = buildRecoverySection(context.recentSessions, now);
 
-  // === AVAILABLE EXERCISES ===
-  const byCategory = exercises.reduce<Record<string, ExerciseWithMuscles[]>>((acc, ex) => {
-    const cat = ex.category ?? 'other';
-    if (!acc[cat]) {
-      acc[cat] = [];
-    }
-    acc[cat].push(ex);
-    return acc;
-  }, {});
-
-  const exercisesSection = Object.entries(byCategory)
-    .map(([category, exs]) => {
-      const name = category.charAt(0).toUpperCase() + category.slice(1);
-      const list = exs
-        .map(ex => {
-          const primary = ex.muscleGroups
-            .filter(m => m.involvement === 'primary')
-            .map(m => m.muscleGroup)
-            .join(', ');
-          const secondary = ex.muscleGroups
-            .filter(m => m.involvement === 'secondary')
-            .map(m => m.muscleGroup)
-            .join(', ');
-          const muscles = [primary && `Primary: ${primary}`, secondary && `Secondary: ${secondary}`]
-            .filter(Boolean)
-            .join(' | ');
-          return `- ${ex.name} (ID: ${ex.id}, Equip: ${ex.equipment ?? 'none'}${muscles ? `, ${muscles}` : ''})`;
-        })
-        .join('\n');
-      return `### ${name}\n${list}`;
-    })
-    .join('\n\n');
-
   const daysSince =
     context.daysSinceLastWorkout !== null
       ? `${context.daysSinceLastWorkout} days since last workout`
@@ -94,10 +60,6 @@ ${historySection}
 
 ${recoverySection}
 
-=== AVAILABLE EXERCISES (${exercises.length} total) ===
-
-${exercisesSection}
-
 === YOUR TASK ===
 
 Follow this sequence:
@@ -121,16 +83,22 @@ Before proposing any plan, ask exactly ONE personalized question. Make it specif
 
 Do NOT ask multiple questions. Do NOT propose the plan yet. Wait for the client's answer.
 
---- STEP 3: PROPOSE THE PLAN ---
+--- STEP 3: SEARCH AND PROPOSE THE PLAN ---
 
-After the client responds, propose the session with:
-1. Brief reasoning — why this template today: gap since last done, recovery status, and how it serves their goal.
-2. The exercise list with IDs, sets, reps, rest times.
-3. A short closing invite: "Want to swap anything or shall we go?"
+After the client responds:
+1. Use search_exercises to find suitable exercises for the session (by muscle group, equipment).
+   Apply equipment filter if context is clear (e.g. client trains at home → equipment="bodyweight").
+   You may call search_exercises multiple times in a single turn for different muscle groups.
+   Once you have results with IDs, do NOT re-search the same muscle group — reuse the IDs from this conversation history.
+2. Propose the session with:
+   - Brief reasoning — why this template today: gap since last done, recovery status, goal relevance.
+   - The exercise list with IDs from search results, sets, reps, rest times.
+   - A short closing invite: "Want to swap anything or shall we go?"
 
 --- STEP 4: REFINE ---
 
-Adjust the plan if the client requests changes (different exercises, shorter duration, skip something). Always keep exact numeric exercise IDs.
+Adjust the plan if the client requests changes (different exercises, shorter duration, skip something).
+Use search_exercises ONLY if you need exercises not yet found in this conversation. Always keep exact numeric exercise IDs.
 
 --- STEP 5: START or CANCEL ---
 
@@ -138,6 +106,14 @@ Adjust the plan if the client requests changes (different exercises, shorter dur
 - If the client decides not to train today → call \`request_transition({ toPhase: 'chat' })\`.
 
 If no active plan exists → tell the client they need a workout plan first and call \`request_transition({ toPhase: 'chat' })\`.
+
+=== TOOLS ===
+
+- search_exercises: search exercise catalog by meaning. Call when you need exercises not yet in conversation history.
+  Examples: query="chest compound barbell", muscleGroup="chest", equipment="barbell".
+  Returns exercises with IDs — IDs are valid for the entire conversation, no need to re-fetch.
+- start_training_session: call ONLY when user explicitly approves the final plan. Do NOT re-search before calling.
+- request_transition: call with toPhase="chat" ONLY when user explicitly cancels.
 
 --- OFF-TOPIC GUARD ---
 

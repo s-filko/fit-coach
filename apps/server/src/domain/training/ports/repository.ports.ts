@@ -34,6 +34,12 @@ export interface IWorkoutPlanRepository {
   archive(planId: string): Promise<void>;
 }
 
+export interface ExerciseSearchFilters {
+  category?: string;
+  equipment?: string;
+  muscleGroup?: MuscleGroup;
+}
+
 export interface IExerciseRepository {
   findById(id: number): Promise<Exercise | null>;
   findByIdWithMuscles(id: number): Promise<ExerciseWithMuscles | null>;
@@ -53,6 +59,19 @@ export interface IExerciseRepository {
     energyCost?: string;
     complexity?: string;
   }): Promise<ExerciseWithMuscles[]>;
+  /**
+   * Vector similarity search using cosine distance on the embedding column.
+   * Applies optional SQL filters before ranking by similarity.
+   * Returns exercises with muscles, sorted by descending similarity score.
+   */
+  searchByEmbedding(
+    queryVector: number[],
+    opts?: { limit?: number; filters?: ExerciseSearchFilters },
+  ): Promise<ExerciseWithMuscles[]>;
+  /**
+   * Store the computed embedding for an exercise.
+   */
+  updateEmbedding(exerciseId: number, embedding: number[]): Promise<void>;
 }
 
 export interface IWorkoutSessionRepository {
