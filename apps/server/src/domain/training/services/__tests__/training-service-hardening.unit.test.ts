@@ -253,13 +253,15 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
 
     const result = await trainingService.ensureCurrentExercise('session-1', { exerciseId: 15 });
 
-    // Result must include autoCompleted metadata
     expect(result).toHaveProperty('autoCompleted');
-    expect((result as { autoCompleted?: unknown }).autoCompleted).toEqual({
-      exerciseId: 12,
-      exerciseName: 'Bench Press',
-      setsLogged: 3,
-    });
+    const ac = (result as { autoCompleted?: Record<string, unknown> }).autoCompleted!;
+    expect(ac.exerciseId).toBe(12);
+    expect(ac.exerciseName).toBe('Bench Press');
+    expect(ac.setsLogged).toBe(3);
+    expect(ac.targetSets).toBe(4);
+    expect(ac.targetReps).toBe('8-10');
+    expect(Array.isArray(ac.sets)).toBe(true);
+    expect((ac.sets as unknown[]).length).toBe(3);
   });
 
   it('should NOT auto-complete when exerciseId matches current in_progress exercise', async () => {
@@ -283,6 +285,62 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
         (updates as Partial<SessionExercise>).status === 'skipped',
     );
     expect(completeCalls).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// BUG-012: completeSession should close in_progress exercises
+// ---------------------------------------------------------------------------
+
+describe('TrainingService.completeSession — closes in_progress exercises (BUG-012)', () => {
+  it('should complete all in_progress exercises before closing the session', async () => {
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo } = createMocks();
+
+    const session = {
+      id: 'session-1',
+      userId: 'user-1',
+      status: 'in_progress' as const,
+      startedAt: new Date(Date.now() - 30 * 60_000),
+      completedAt: null,
+      durationMinutes: null,
+    };
+    mockSessionRepo.findById.mockResolvedValue(session as never);
+    mockSessionExerciseRepo.findBySessionId.mockResolvedValue([
+      { id: 'se-1', status: 'completed' },
+      { id: 'se-2', status: 'in_progress' },
+    ] as never);
+    mockSessionRepo.complete.mockResolvedValue({ ...session, status: 'completed' } as never);
+
+    await trainingService.completeSession('session-1');
+
+    expect(mockSessionExerciseRepo.findBySessionId).toHaveBeenCalledWith('session-1');
+    expect(mockSessionExerciseRepo.update).toHaveBeenCalledWith('se-2', { status: 'completed' });
+    expect(mockSessionExerciseRepo.update).not.toHaveBeenCalledWith('se-1', expect.anything());
+    expect(mockSessionRepo.complete).toHaveBeenCalled();
+  });
+
+  it('should not call update when no exercises are in_progress', async () => {
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo } = createMocks();
+
+    const session = {
+      id: 'session-1',
+      userId: 'user-1',
+      status: 'in_progress' as const,
+      startedAt: new Date(Date.now() - 30 * 60_000),
+      completedAt: null,
+      durationMinutes: null,
+    };
+    mockSessionRepo.findById.mockResolvedValue(session as never);
+    mockSessionExerciseRepo.findBySessionId.mockResolvedValue([
+      { id: 'se-1', status: 'completed' },
+      { id: 'se-2', status: 'completed' },
+    ] as never);
+    mockSessionRepo.complete.mockResolvedValue({ ...session, status: 'completed' } as never);
+
+    await trainingService.completeSession('session-1');
+
+    expect(mockSessionExerciseRepo.update).not.toHaveBeenCalled();
+    expect(mockSessionRepo.complete).toHaveBeenCalled();
   });
 });
 

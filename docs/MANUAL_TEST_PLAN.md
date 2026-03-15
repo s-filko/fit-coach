@@ -59,7 +59,7 @@ Note the IDs — referred to as `$BENCH_ID`, `$SQUAT_ID`, `$PULLUP_ID`, `$RUN_ID
 | POST /api/user | Create/upsert user by provider |
 | POST /api/chat | All conversation (registration, chat, training) |
 | Conversation phases | `registration` → `chat` → `session_planning` → `training` → `chat` |
-| Training tools | `log_set`, `next_exercise`, `skip_exercise`, `finish_training`, `delete_last_sets`, `update_last_set` |
+| Training tools | `log_set`, `complete_current_exercise`, `finish_training`, `delete_last_sets`, `update_last_set` |
 | Session lifecycle | `planning` → `in_progress` → `completed` / `skipped` |
 | Exercise lifecycle | `pending` → `in_progress` → `completed` / `skipped` |
 
@@ -286,7 +286,7 @@ curl -s -X POST http://localhost:3000/api/chat \
   -H "Content-Type: application/json" -H "X-Api-Key: dev-key" \
   -d "{\"userId\": \"$USER_ID\", \"message\": \"Done with bench press, moving to squats\"}" | jq .data.content
 ```
-**Expected:** Bot calls `next_exercise`, acknowledges completion, tells user about next exercise.
+**Expected:** Bot calls `complete_current_exercise`, acknowledges completion, tells user about next exercise.
 
 **DB verification:**
 ```sql
@@ -444,7 +444,7 @@ ORDER BY ss.created_at DESC LIMIT 1;
 
 ### 6.3 Auto-complete on exercise switch
 
-Mid-session, log a set for a different exercise without explicitly calling next_exercise:
+Mid-session, log a set for a different exercise without explicitly calling complete_current_exercise:
 ```bash
 curl -s -X POST http://localhost:3000/api/chat \
   -H "Content-Type: application/json" -H "X-Api-Key: dev-key" \
@@ -595,7 +595,7 @@ curl -s -X POST http://localhost:3000/api/chat \
   -H "Content-Type: application/json" -H "X-Api-Key: dev-key" \
   -d "{\"userId\": \"$USER_ID\", \"message\": \"Skip bench press today, my shoulder hurts\"}" | jq .data.content
 ```
-**Expected:** Bot calls `skip_exercise`, acknowledges the skip with reason.
+**Expected:** Bot calls acknowledges the skip with reason.
 
 **DB verification:**
 ```sql

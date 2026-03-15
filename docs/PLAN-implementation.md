@@ -2,102 +2,61 @@
 
 ## Phase 1 — Bug Fixes + Dynamic Tools
 
-All quick fixes plus BUG-008 Plan A. These are interdependent — dynamic tools and prompt changes solve multiple bugs at once. Execute in this order:
+All quick fixes plus BUG-008 Plan A. These are interdependent — dynamic tools and prompt changes solve multiple bugs at once.
 
-### 1.1 Dead code removal (BUG-004)
+### 1.1 Dead code removal (BUG-004) — [DONE]
 
-Remove `generateStructured` from `llm.service.ts` and `ILLMService` interface. Remove `AIContextService` and `AI_CONTEXT_SERVICE_TOKEN` from `domain/ai/ports.ts`. Verify `tsc --noEmit`.
+Removed `generateStructured` from `llm.service.ts` and `ILLMService` interface. Removed `AIContextService` and `AI_CONTEXT_SERVICE_TOKEN` from `domain/ai/ports.ts`. Also removed dead `startNextExercise` method from `ITrainingService` and `TrainingService`.
 
-Files:
-- `apps/server/src/infra/ai/llm.service.ts`
-- `apps/server/src/domain/ai/ports.ts`
+### 1.2 Replay payload logging (BUG-003) — [DONE]
 
-### 1.2 Replay payload logging (BUG-003)
+`LLMLogHandler` in `model.factory.ts` logs full replay payload (messages, tools, model, temperature) for every LLM call in debug mode. ndjson format in `logs/server.log`, field `replayPayload`.
 
-Expand `LLMLogHandler` in `model.factory.ts` to log full replay payload (messages, tools, model, temperature) for every LLM call in debug mode. ndjson format in `logs/server.log`, field `replayPayload`.
+### 1.3 Bot empty response guard (BUG-001) — [DONE]
 
-Files:
-- `apps/server/src/infra/ai/model.factory.ts`
+Added `if (!aiResponse?.trim())` guard before `sendHtml` in `apps/bot/handlers.ts`. Logs warn, skips send.
 
-### 1.3 Bot empty response guard (BUG-001)
+### 1.4 skip_exercise (BUG-002) — [SUPERSEDED]
 
-Add `if (!aiResponse?.trim())` guard before `sendHtml` in both `/start` and general message handlers. Log warn, skip send.
+**Original plan:** Add optional `exercise_id` to `skip_exercise` tool schema.
 
-Files:
-- `apps/bot/handlers.ts`
+**What happened:** After analysis, `skip_exercise` was deemed unnecessary in all practical scenarios. The tool was fully removed from code, tests, and documentation. Exercise transitions are handled by `log_set` (auto-completes previous exercise on switch) and `complete_current_exercise` (explicit completion). Skip requests are acknowledged in text with no DB write needed for unstarted exercises.
 
-### 1.4 `skip_exercise` with `exercise_id` (BUG-002)
+### 1.5 `finish_training` audit log (BUG-006) — [DONE]
 
-Add optional `exercise_id` to tool schema. Service logic:
-- `in_progress` → mark `skipped`
-- `completed` → return error
-- Not in `session_exercises` → return OK, no DB write
+Added `log.info({ audit: 'finish_training', userId, sessionId })` in `training.tools.ts`. Rule 7 in prompt rewritten to require explicit user confirmation.
 
-Files:
-- `apps/server/src/infra/ai/graph/tools/training.tools.ts`
-- `apps/server/src/domain/training/ports/service.ports.ts`
-- `apps/server/src/domain/training/services/training.service.ts`
+### 1.6 Dynamic tools + prompt hardening (BUG-008, BUG-006, BUG-001) — [PARTIALLY DONE]
 
-Tests:
-- Unit test for skip by ID (3 states)
+**Prompt changes — DONE:**
+- RULE 0 (conversation priority — classify intent before calling tools)
+- Rule 5 rewritten (never invent data, ask if 0 sets)
+- Rule 6 softened (allow contextually obvious values from recent dialogue, e.g. weight just discussed)
+- Rule 8 rewritten (tools triggered by user data only, not system state alone)
+- Anti-patterns section added
+- Rule 7 rewritten for `finish_training` (BUG-006: never as fallback, explicit confirmation only)
+- `toolReplyDirective` added to all tool-using subgraphs via `composeDirectives`
 
-### 1.5 `finish_training` audit log (BUG-006)
+**Dynamic tools — PARTIALLY DONE:**
+- `delete_last_sets` / `update_last_set` hidden when 0 sets — DONE
+- `log_set` hidden when no `in_progress` exercise — IMPLEMENTED THEN REVERTED (broke first-set logging because `logSetWithContext` creates the exercise on the fly)
 
-Add `log.info({ audit: 'finish_training', userId, sessionId })` before `pendingTransitions.set(...)`.
+**Programmatic guard — REMOVED:**
+- Guard rejecting `log_set` + `complete_current_exercise` in same response was implemented then removed. `TOOL_PRIORITY` handles execution order deterministically, making the guard unnecessary and user-hostile.
 
-Files:
-- `apps/server/src/infra/ai/graph/tools/training.tools.ts`
+### 1.7 Chat hallucination guard (BUG-009) — [DONE]
 
-### 1.6 Dynamic tools + prompt hardening (BUG-008, BUG-006, BUG-001)
+Anti-hallucination rule added to `chat.node.ts`: "You do NOT have log_set... NEVER write '✅', 'logged', 'saved', 'recorded'..."
 
-**Dynamic tools** — in `agentNode`, filter tools before each `model.bindTools().invoke()`:
+`toolReplyDirective` added to `prompt-directives.ts` and composed into all tool-using subgraphs.
 
-| State | Hide tools |
-|---|---|
-| No `in_progress` exercise | `log_set` |
-| 0 sets for current exercise | `delete_last_sets`, `update_last_set` |
+### Phase 1 — Validation — [DONE]
 
-`finish_training`, `next_exercise`, `skip_exercise` — always available.
-
-**Prompt changes** in `training.node.ts`:
-- Add RULE 0 (conversation priority — classify intent before calling tools)
-- Rewrite Rule 5 (never invent data, ask if 0 sets)
-- Harden Rule 8 (ban HISTORY data as tool arguments)
-- Add anti-patterns section
-- Rewrite Rule 7 for `finish_training` (BUG-006: never as fallback, explicit confirmation only)
-
-**Programmatic guard** in `sequentialToolNode` — reject `log_set` combined with `skip_exercise` or `next_exercise`.
-
-Files:
-- `apps/server/src/infra/ai/graph/subgraphs/training.subgraph.ts`
-- `apps/server/src/infra/ai/graph/nodes/training.node.ts`
-
-### 1.7 Chat hallucination guard (BUG-009)
-
-Add rule to `chat.node.ts` prompt: "You cannot save sets. NEVER write '✅' or 'Recorded' or 'Logged'. If user reports sets after session ended — explain warmly, offer new session."
-
-**Prompt for all tool-using subgraphs** (BUG-001): "When you call a tool, ALWAYS include a natural text reply. The user cannot see tool calls."
-
-Files:
-- `apps/server/src/infra/ai/graph/nodes/chat.node.ts`
-- `apps/server/src/infra/ai/graph/nodes/session-planning.node.ts` (tool reply rule)
-- `apps/server/src/infra/ai/graph/nodes/training.node.ts` (already in 1.6)
-
-### Phase 1 — Validation
-
-Run full test suite. Manual test: one real training session through Telegram bot. Check:
-- No phantom sets (BUG-008)
-- `skip_exercise` by name works (BUG-002)
-- No premature `finish_training` (BUG-006)
-- No empty responses (BUG-001)
-- No false "✅ Recorded" in chat (BUG-009)
-- Replay payload in logs (BUG-003)
-
-If phantom sets still appear → proceed to Dual LLM (Plan B in `docs/PLAN-dual-llm-training.md`).
+Manual testing performed: multiple training sessions via API. Bugs BUG-001, BUG-003, BUG-004, BUG-006, BUG-008, BUG-009, BUG-010 verified fixed. Chaotic non-linear testing performed. `skip_exercise` fully removed.
 
 ---
 
-## Phase 2 — Muscle-Centric History (BUG-005)
+## Phase 2 — Muscle-Centric History (BUG-005) — [NOT STARTED]
 
 Full plan: [`docs/PLAN-muscle-centric-history.md`](PLAN-muscle-centric-history.md)
 
@@ -140,4 +99,4 @@ Not scheduled. Implement when needed.
 - **BUG-007 — Retrospective subgraph**: plan at [`docs/PLAN-retrospective-subgraph.md`](PLAN-retrospective-subgraph.md). Deferred — rare scenario, can be addressed after core issues are fixed.
 - **Dual LLM (Plan B for BUG-008)**: plan at [`docs/PLAN-dual-llm-training.md`](PLAN-dual-llm-training.md). Only if Phase 1 dynamic tools fail to prevent phantom sets.
 - **Tech debt — migrate `getNextSessionRecommendation` to graph**: TODO in `register-infra-services.ts`. After migration, delete `LLMService` entirely.
-- **ADR-0012**: document architectural decision (dynamic tools as Plan A, Dual LLM as Plan B). Write after Phase 1 validation confirms which approach works.
+- **BUG-011 — Chat LLM does not transition to training phase**: intermittent, needs prompt strengthening or programmatic check.

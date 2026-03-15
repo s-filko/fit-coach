@@ -78,6 +78,13 @@ TOOLS (use when needed):
 - request_transition toPhase="plan_creation": when user explicitly wants to create a workout plan.
 - request_transition toPhase="session_planning": when user wants to train today / start a session / plan a workout.
   ALWAYS use this tool — never describe workouts yourself from chat.
+  ANTI-PATTERN: announcing a transition in text WITHOUT calling request_transition.
+  Text alone does not trigger a transition — only the tool call does.
+  Always call the tool; your text accompanies the call, not replaces it.
+
+IMPORTANT: You do NOT have log_set or any set-logging capability. You CANNOT save workout sets.
+NEVER write "✅", "logged", "saved", "recorded" about sets.
+If the user reports a set, transition to training or tell them to start a session first.
 
 ${composeDirectives(user)}`;
 }

@@ -79,7 +79,7 @@ Format: JSON in system prompt.
 }
 ```
 
-History updates automatically on each user message — `agentNode` checks which exercise is currently `in_progress` and fetches history for its primary muscles. When exercise changes via `next_exercise`, the next user message gets fresh history.
+History updates automatically on each user message — `agentNode` checks which exercise is currently `in_progress` and fetches history for its primary muscles. When exercise changes via `complete_current_exercise`, the next user message gets fresh history.
 
 No "previous session" block. Only current session progress + exercise history for current muscles.
 

@@ -28,8 +28,7 @@ const log = createLogger('training-subgraph');
 /** Execution priority for training tools. Lower number = runs first. */
 const TOOL_PRIORITY: Record<string, number> = {
   log_set: 0,
-  next_exercise: 1,
-  skip_exercise: 1,
+  complete_current_exercise: 1,
   delete_last_sets: 2,
   update_last_set: 2,
   finish_training: 3,
@@ -165,7 +164,7 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
   const currentSessionIds = new PendingRefMap<string | null>();
   const tools = buildTrainingTools({ trainingService, pendingTransitions, currentSessionIds });
   const toolMap = Object.fromEntries(tools.map(t => [t.name, t]));
-  const model = getModel().bindTools(tools);
+  const baseModel = getModel();
 
   /**
    * Executes tool calls sequentially, sorted by priority then by the optional `order`
@@ -178,6 +177,32 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
    * Duplicate log_set calls with identical arguments are rejected before execution
    * and returned as LLM_ERROR ToolMessages so the LLM can self-correct.
    */
+  type InvokableTool = {
+    invoke: (args: Record<string, unknown>, config: { configurable: Record<string, unknown> }) => Promise<unknown>;
+  };
+
+  async function invokeTool(call: ToolCallLike, userId: string): Promise<ToolMessage> {
+    const targetTool = toolMap[call.name];
+    if (!targetTool) {
+      return new ToolMessage({ tool_call_id: call.id ?? '', content: `Unknown tool: ${call.name}`, status: 'error' });
+    }
+    try {
+      const result = await (targetTool as InvokableTool).invoke(
+        call.args,
+        { configurable: { userId } },
+      );
+      return new ToolMessage({ tool_call_id: call.id ?? '', content: String(result) });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.warn({ userId, tool: call.name, err: message, args: call.args }, 'Tool invocation failed');
+      return new ToolMessage({
+        tool_call_id: call.id ?? '',
+        content: `${LLM_ERROR_PREFIX} ${message}`,
+        status: 'error',
+      });
+    }
+  }
+
   const sequentialToolNode = async (state: TrainingSubgraphStateType) => {
     const { messages, userId } = state;
     const lastMessage = messages[messages.length - 1] as AIMessage;
@@ -206,54 +231,15 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
       }
       const nonDuplicateCalls = sorted.filter(c => !duplicateIds.includes(c.id ?? ''));
       for (const call of nonDuplicateCalls) {
-        const targetTool = toolMap[call.name];
-        if (!targetTool) {
-          toolMessages.push(
-            new ToolMessage({ tool_call_id: call.id ?? '', content: `Unknown tool: ${call.name}`, status: 'error' }),
-          );
-          continue;
-        }
-        type InvokableConfig = { configurable: Record<string, unknown> };
-        type InvokableTool = {
-          invoke: (args: Record<string, unknown>, config: InvokableConfig) => Promise<unknown>;
-        };
         // eslint-disable-next-line no-await-in-loop
-        const result = await (targetTool as InvokableTool).invoke(
-          call.args as Record<string, unknown>,
-          { configurable: { userId } },
-        );
-        toolMessages.push(new ToolMessage({ tool_call_id: call.id ?? '', content: String(result) }));
+        toolMessages.push(await invokeTool(call, userId));
       }
       return { messages: toolMessages };
     }
 
     for (const call of sorted) {
-      const targetTool = toolMap[call.name];
-      if (!targetTool) {
-        toolMessages.push(
-          new ToolMessage({
-            tool_call_id: call.id ?? '',
-            content: `Unknown tool: ${call.name}`,
-            status: 'error',
-          }),
-        );
-        continue;
-      }
       // eslint-disable-next-line no-await-in-loop
-      const result = await (
-        targetTool as {
-          invoke: (
-            args: Record<string, unknown>,
-            config: { configurable: Record<string, unknown> },
-          ) => Promise<unknown>;
-        }
-      ).invoke(call.args as Record<string, unknown>, { configurable: { userId } });
-      toolMessages.push(
-        new ToolMessage({
-          tool_call_id: call.id ?? '',
-          content: String(result),
-        }),
-      );
+      toolMessages.push(await invokeTool(call, userId));
     }
 
     return { messages: toolMessages };
@@ -335,9 +321,25 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
 
       const systemPrompt = buildTrainingSystemPrompt(freshUser ?? user, session, previousSession);
 
-      // Build tool results summary injection — only when there are ToolMessages in flight.
-      // This gives the LLM a guaranteed factual statement to reference in its response,
-      // preventing hallucinated "I logged..." confirmations.
+      // Dynamic tool filtering (BUG-008 Plan A):
+      // Remove tools that should not be available given the current session state.
+      const currentExercise = session.exercises.find(ex => ex.status === 'in_progress');
+      const currentSetsCount = currentExercise?.sets.length ?? 0;
+
+      const availableTools = tools.filter(t => {
+        if ((t.name === 'delete_last_sets' || t.name === 'update_last_set') && currentSetsCount === 0) {
+          return false;
+        }
+        return true;
+      });
+
+      if (availableTools.length < tools.length) {
+        const removed = tools.filter(t => !availableTools.includes(t)).map(t => t.name);
+        log.debug({ userId, sessionId: activeSessionId, removed }, 'Dynamic tools: restricted unavailable tools');
+      }
+
+      const model = baseModel.bindTools(availableTools);
+
       const toolMessages = inFlightMessages.filter((m): m is ToolMessage => m instanceof ToolMessage);
       const toolResultsInjection = toolMessages.length > 0 ? buildToolResultsInjection(toolMessages) : null;
 

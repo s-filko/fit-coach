@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
 import type { ConversationPhase } from '@domain/conversation/ports';
-import type { ITrainingService } from '@domain/training/ports';
+import type { AutoCompletedExercise, ITrainingService } from '@domain/training/ports';
 import { SetDataSchema } from '@domain/training/set-data.types';
 
 import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
@@ -12,6 +12,28 @@ import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { createLogger } from '@shared/logger';
 
 const log = createLogger('training-tools');
+
+function formatExerciseSummary(ex: AutoCompletedExercise): string {
+  const setsDetail = ex.sets
+    .map(s => {
+      const parts = [`Set ${s.setNumber}:`];
+      if (s.reps != null) { parts.push(`${s.reps} reps`); }
+      if (s.weight != null) { parts.push(`@ ${s.weight} ${s.weightUnit ?? 'kg'}`); }
+      if (s.duration != null) { parts.push(`${s.duration}s`); }
+      if (s.rpe != null) { parts.push(`| RPE ${s.rpe}`); }
+      return '  ' + parts.join(' ');
+    })
+    .join('\n');
+  const targetWeightStr = ex.targetWeight ? ` @ ${ex.targetWeight} kg` : '';
+  const target = `Target: ${ex.targetSets ?? '?'}x${ex.targetReps ?? '?'}${targetWeightStr}`;
+  return (
+    `Exercise '${ex.exerciseName}' completed.\n` +
+    `${target}\n` +
+    `Sets performed:\n${setsDetail}\n` +
+    `Total: ${ex.setsLogged}/${ex.targetSets ?? '?'} sets.\n` +
+    'Summarize this exercise for the user: list the sets, analyze RPE trend, compare to target, give a coaching comment. Then announce the next exercise from SESSION PLAN.'
+  );
+}
 
 /**
  * Prefix for errors caused by infrastructure/configuration issues.
@@ -102,11 +124,8 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
         );
 
         if (autoCompleted) {
-          const prevStatus = autoCompleted.setsLogged > 0 ? 'completed' : 'skipped';
-          return (
-            `Exercise '${autoCompleted.exerciseName}' auto-${prevStatus} ` +
-            `(${autoCompleted.setsLogged} sets). ${setConfirmation}`
-          );
+          const prevSummary = formatExerciseSummary(autoCompleted);
+          return `${setConfirmation}\n\n${prevSummary}`;
         }
 
         return setConfirmation;
@@ -168,76 +187,39 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
     },
   );
 
-  const nextExercise = tool(
-    async (input, config) => {
+  const completeCurrentExercise = tool(
+    async (_input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       const sessionId = currentSessionIds.get(userId) ?? null;
       if (!sessionId) {
-        log.error({ userId }, 'next_exercise called without active sessionId');
+        log.error({ userId }, 'complete_current_exercise called without active sessionId');
         return `${SYSTEM_ERROR_PREFIX} No active training session found. Cannot complete exercise.`;
       }
 
       try {
-        // ADR-0011 Fix 2.3: optional exerciseId to navigate directly to a specific exercise
-        if (input.exercise_id != null) {
-          const exercise = await trainingService.startNextExercise(sessionId, input.exercise_id);
-          if (!exercise) {
-            return `${LLM_ERROR_PREFIX} Exercise ${input.exercise_id} not found in session.`;
-          }
-          return `Navigated to exercise ${exercise.exerciseId}.`;
-        }
+        const summary = await trainingService.completeCurrentExercise(sessionId);
 
-        await trainingService.completeCurrentExercise(sessionId);
-        return 'Exercise marked as complete. Ready for the next one.';
+        log.info(
+          { audit: 'complete_exercise', userId, sessionId, exerciseId: summary.exerciseId, setsLogged: summary.setsLogged },
+          'AUDIT: exercise completed',
+        );
+
+        return formatExerciseSummary(summary);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
-        log.error({ err, sessionId }, 'next_exercise failed');
+        log.error({ err, sessionId }, 'complete_current_exercise failed');
         return `${LLM_ERROR_PREFIX} ${message}`;
       }
     },
     {
-      name: 'next_exercise',
+      name: 'complete_current_exercise',
       description: [
-        'Mark the current in-progress exercise as completed and move on.',
-        'Call this only after the user has finished all sets of the current exercise.',
-        'Do NOT call this to start the very first exercise of a session.',
-        'Optionally provide exercise_id to jump to a specific exercise by its numeric ID.',
+        'Mark the current in-progress exercise as completed.',
+        'Call ONLY when the user explicitly says they are done with this exercise',
+        '("next", "done with this", "moving on", "following exercise").',
+        'Do NOT call automatically after the planned number of sets — wait for the user.',
       ].join(' '),
-      schema: z.object({
-        exercise_id: z
-          .number()
-          .int()
-          .optional()
-          .describe('Optional numeric ID of a specific exercise to navigate to directly'),
-      }),
-    },
-  );
-
-  const skipExercise = tool(
-    async (input, config) => {
-      const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
-      const sessionId = currentSessionIds.get(userId) ?? null;
-      if (!sessionId) {
-        log.error({ userId }, 'skip_exercise called without active sessionId');
-        return `${SYSTEM_ERROR_PREFIX} No active training session found. Cannot skip exercise.`;
-      }
-
-      try {
-        await trainingService.skipCurrentExercise(sessionId, input.reason);
-        return `Exercise skipped${input.reason ? ` (${input.reason})` : ''}. Moving to the next one.`;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        log.error({ err, sessionId }, 'skip_exercise failed');
-        return `${LLM_ERROR_PREFIX} ${message}`;
-      }
-    },
-    {
-      name: 'skip_exercise',
-      description:
-        'Skip the current exercise. Use when user explicitly wants to skip it (equipment busy, pain, preference).',
-      schema: z.object({
-        reason: z.string().optional().describe('Reason for skipping the exercise.'),
-      }),
+      schema: z.object({}),
     },
   );
 
@@ -258,6 +240,17 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
           toPhase: 'chat' as ConversationPhase,
           reason: 'training_completed',
         });
+
+        log.info(
+          {
+            audit: 'finish_training',
+            userId,
+            sessionId,
+            durationMinutes: duration,
+            feedback: input.feedback ?? null,
+          },
+          'AUDIT: training session finished',
+        );
 
         const feedbackNote = input.feedback ? ` Feedback: "${input.feedback}".` : '';
         return `Session completed in ${duration} min.${feedbackNote} Great work!`;
@@ -387,5 +380,5 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
     },
   );
 
-  return [logSet, nextExercise, skipExercise, finishTraining, deleteLastSets, updateLastSet];
+  return [logSet, completeCurrentExercise, finishTraining, deleteLastSets, updateLastSet];
 }

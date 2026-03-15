@@ -96,8 +96,6 @@ const makeTrainingService = (sessionId = 'session-1'): jest.Mocked<ITrainingServ
     getNextSessionRecommendation: jest.fn(),
     addExerciseToSession: jest.fn(),
     logSet: jest.fn(),
-    startNextExercise: jest.fn(),
-    skipCurrentExercise: jest.fn(),
     completeCurrentExercise: jest.fn(),
     ensureCurrentExercise: jest.fn(),
   }) as unknown as jest.Mocked<ITrainingService>;

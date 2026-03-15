@@ -26,8 +26,6 @@ const makeTrainingService = (): jest.Mocked<ITrainingService> =>
     getNextSessionRecommendation: jest.fn(),
     addExerciseToSession: jest.fn(),
     logSet: jest.fn(),
-    startNextExercise: jest.fn(),
-    skipCurrentExercise: jest.fn(),
     completeCurrentExercise: jest.fn(),
     ensureCurrentExercise: jest.fn(),
     logSetWithContext: jest.fn(),
@@ -145,23 +143,42 @@ describe('buildTrainingTools', () => {
     });
   });
 
-  describe('next_exercise', () => {
-    it('calls completeCurrentExercise and returns confirmation', async () => {
+  describe('complete_current_exercise', () => {
+    const mockSummary = {
+      exerciseId: 4,
+      exerciseName: 'Overhead Press',
+      setsLogged: 3,
+      sets: [
+        { setNumber: 1, reps: 10, weight: 40, weightUnit: 'kg', rpe: null },
+        { setNumber: 2, reps: 9, weight: 40, weightUnit: 'kg', rpe: 8 },
+        { setNumber: 3, reps: 8, weight: 40, weightUnit: 'kg', rpe: 9 },
+      ],
+      targetSets: 3,
+      targetReps: '8-10',
+      targetWeight: null,
+    };
+
+    it('calls completeCurrentExercise and returns full exercise summary', async () => {
       const trainingService = makeTrainingService();
-      trainingService.completeCurrentExercise.mockResolvedValue(undefined);
+      trainingService.completeCurrentExercise.mockResolvedValue(mockSummary);
 
       const { byName } = makeDeps(trainingService);
-      const result = await byName('next_exercise').invoke({}, makeConfig('u1'));
+      const result = await byName('complete_current_exercise').invoke({}, makeConfig('u1'));
 
       expect(trainingService.completeCurrentExercise).toHaveBeenCalledWith('session-1');
-      expect(result).toContain('complete');
+      expect(result).toContain('Overhead Press');
+      expect(result).toContain('completed');
+      expect(result).toContain('Set 1');
+      expect(result).toContain('Set 2');
+      expect(result).toContain('Set 3');
+      expect(result).toContain('3/3 sets');
     });
 
     it('returns SYSTEM_ERROR when no sessionId is set for the user', async () => {
       const trainingService = makeTrainingService();
 
       const { byName } = makeDeps(trainingService, null);
-      const result = await byName('next_exercise').invoke({}, makeConfig('u1'));
+      const result = await byName('complete_current_exercise').invoke({}, makeConfig('u1'));
 
       expect(result).toContain(SYSTEM_ERROR_PREFIX);
       expect(trainingService.completeCurrentExercise).not.toHaveBeenCalled();
@@ -172,33 +189,10 @@ describe('buildTrainingTools', () => {
       trainingService.completeCurrentExercise.mockRejectedValue(new Error('No exercise in progress'));
 
       const { byName } = makeDeps(trainingService);
-      const result = await byName('next_exercise').invoke({}, makeConfig('u1'));
+      const result = await byName('complete_current_exercise').invoke({}, makeConfig('u1'));
 
       expect(result).toContain(LLM_ERROR_PREFIX);
       expect(result).toContain('No exercise in progress');
-    });
-  });
-
-  describe('skip_exercise', () => {
-    it('calls skipCurrentExercise with reason and returns confirmation', async () => {
-      const trainingService = makeTrainingService();
-      trainingService.skipCurrentExercise.mockResolvedValue(undefined);
-
-      const { byName } = makeDeps(trainingService);
-      const result = await byName('skip_exercise').invoke({ reason: 'equipment busy' }, makeConfig('u1'));
-
-      expect(trainingService.skipCurrentExercise).toHaveBeenCalledWith('session-1', 'equipment busy');
-      expect(result).toContain('skipped');
-    });
-
-    it('returns SYSTEM_ERROR when no sessionId is set for the user', async () => {
-      const trainingService = makeTrainingService();
-
-      const { byName } = makeDeps(trainingService, null);
-      const result = await byName('skip_exercise').invoke({ reason: 'pain' }, makeConfig('u1'));
-
-      expect(result).toContain(SYSTEM_ERROR_PREFIX);
-      expect(trainingService.skipCurrentExercise).not.toHaveBeenCalled();
     });
   });
 
@@ -310,7 +304,18 @@ describe('buildTrainingTools', () => {
       const mockResult = {
         set: mockSet,
         setNumber: 1,
-        autoCompleted: { exerciseId: 10, exerciseName: 'Lateral Raise', setsLogged: 4 },
+        autoCompleted: {
+          exerciseId: 10,
+          exerciseName: 'Lateral Raise',
+          setsLogged: 2,
+          sets: [
+            { setNumber: 1, reps: 15, weight: 10, weightUnit: 'kg', rpe: null },
+            { setNumber: 2, reps: 12, weight: 10, weightUnit: 'kg', rpe: 8 },
+          ],
+          targetSets: 3,
+          targetReps: '12-15',
+          targetWeight: null,
+        },
       };
       trainingService.logSetWithContext.mockResolvedValue(mockResult);
 
@@ -320,8 +325,10 @@ describe('buildTrainingTools', () => {
         makeConfig('u1'),
       );
 
-      expect(result).toContain('auto-completed');
       expect(result).toContain('Lateral Raise');
+      expect(result).toContain('completed');
+      expect(result).toContain('Set 1');
+      expect(result).toContain('Set 2');
     });
 
     it('should NOT include auto-complete notice when no switch occurred', async () => {
@@ -349,45 +356,16 @@ describe('buildTrainingTools', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // ADR-0011 Phase 2.3: next_exercise with exerciseId
-  // WHY RED: current schema is z.object({}) — exerciseId stripped; handler only
-  //          calls completeCurrentExercise, never startNextExercise
-  // -------------------------------------------------------------------------
-
-  describe('next_exercise — exerciseId param (ADR-0011 Fix 2.3)', () => {
-    it('should navigate to specific exercise when exerciseId is provided', async () => {
-      const trainingService = makeTrainingService();
-      trainingService.completeCurrentExercise.mockResolvedValue(undefined);
-      trainingService.startNextExercise.mockResolvedValue({
-        id: 'se-5',
-        sessionId: 'session-1',
-        exerciseId: 5,
-        orderIndex: 1,
-        status: 'in_progress',
-        targetSets: 3,
-        targetReps: '10-12',
-        targetWeight: null,
-        actualRepsRange: null,
-        userFeedback: null,
-        createdAt: new Date(),
-      });
-
-      const { byName } = makeDeps(trainingService);
-      await byName('next_exercise').invoke({ exercise_id: 5 }, makeConfig('u1'));
-
-      expect(trainingService.startNextExercise).toHaveBeenCalledWith('session-1', 5);
+  describe('complete_current_exercise — available in tools', () => {
+    it('should be available in training tools', () => {
+      const { tools } = makeDeps(makeTrainingService());
+      expect(tools.map(t => t.name as string)).toContain('complete_current_exercise');
     });
 
-    it('should still work without exerciseId (current behavior)', async () => {
-      const trainingService = makeTrainingService();
-      trainingService.completeCurrentExercise.mockResolvedValue(undefined);
-
-      const { byName } = makeDeps(trainingService);
-      const result = await byName('next_exercise').invoke({}, makeConfig('u1'));
-
-      expect(trainingService.completeCurrentExercise).toHaveBeenCalledWith('session-1');
-      expect(result).toContain('complete');
+    it('should NOT have exercise_id param — it only completes the current exercise', () => {
+      const { tools } = makeDeps(makeTrainingService());
+      const completeTool = tools.find(t => t.name === 'complete_current_exercise');
+      expect(completeTool).toBeDefined();
     });
   });
 

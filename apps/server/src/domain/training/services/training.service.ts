@@ -9,6 +9,7 @@ import type {
 } from '@domain/training/ports';
 import type {
   AutoCompletedExercise,
+  CompletedSetDetail,
   DeletedSetsResult,
   EnsureExerciseResult,
   UpdateSetResult,
@@ -30,6 +31,35 @@ import type { ChatMsg, UserRepository } from '@domain/user/ports';
 import { buildSessionRecommendationPrompt } from './prompts/session-recommendation.prompt';
 
 const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+function extractSetDetail(s: SessionSet): CompletedSetDetail {
+  const detail: CompletedSetDetail = { setNumber: s.setNumber, rpe: s.rpe };
+  const d = s.setData;
+  if (d.type === 'strength') {
+    detail.reps = d.reps;
+    detail.weight = d.weight;
+    detail.weightUnit = d.weightUnit ?? 'kg';
+  } else if (d.type === 'functional_reps') {
+    detail.reps = d.reps;
+  } else if (d.type === 'cardio_duration' || d.type === 'isometric') {
+    detail.duration = d.duration;
+  }
+  return detail;
+}
+
+function buildExerciseSummary(
+  ex: WorkoutSessionWithDetails['exercises'][number],
+): AutoCompletedExercise {
+  return {
+    exerciseId: ex.exerciseId,
+    exerciseName: ex.exercise?.name ?? `Exercise ${ex.exerciseId}`,
+    setsLogged: ex.sets.length,
+    sets: ex.sets.map(extractSetDetail),
+    targetSets: ex.targetSets,
+    targetReps: ex.targetReps,
+    targetWeight: ex.targetWeight,
+  };
+}
 
 export class TrainingService implements ITrainingService {
   constructor(
@@ -175,11 +205,7 @@ export class TrainingService implements ITrainingService {
       if (currentInProgress && currentInProgress.exerciseId !== exerciseId) {
         const newStatus = currentInProgress.sets.length > 0 ? 'completed' : 'skipped';
         await this.sessionExerciseRepo.update(currentInProgress.id, { status: newStatus });
-        autoCompleted = {
-          exerciseId: currentInProgress.exerciseId,
-          exerciseName: currentInProgress.exercise.name,
-          setsLogged: currentInProgress.sets.length,
-        };
+        autoCompleted = buildExerciseSummary(currentInProgress);
       }
 
       // Check if this exercise already exists in the session
@@ -235,6 +261,13 @@ export class TrainingService implements ITrainingService {
       throw new Error('Session not found');
     }
 
+    const exercises = await this.sessionExerciseRepo.findBySessionId(sessionId);
+    for (const ex of exercises) {
+      if (ex.status === 'in_progress') {
+        await this.sessionExerciseRepo.update(ex.id, { status: 'completed' });
+      }
+    }
+
     const completedAt = new Date();
     const duration =
       durationMinutes ??
@@ -260,86 +293,21 @@ export class TrainingService implements ITrainingService {
     return this.sessionRepo.findByIdWithDetails(sessionId);
   }
 
-  /**
-   * Start next pending exercise in the session
-   * Marks the first pending exercise as in_progress
-   * @returns The started exercise or null if no pending exercises
-   */
-  async startNextExercise(sessionId: string, exerciseId?: number): Promise<SessionExercise | null> {
+  async completeCurrentExercise(sessionId: string): Promise<AutoCompletedExercise> {
     const session = await this.sessionRepo.findByIdWithDetails(sessionId);
     if (!session) {
       throw new Error('Session not found');
     }
 
-    // ADR-0011 Fix 2.3: if exerciseId provided, navigate directly to that exercise
-    if (exerciseId != null) {
-      const { exercise } = await this.ensureCurrentExercise(sessionId, { exerciseId });
-      return exercise;
-    }
-
-    // Default: find first pending exercise in plan order
-    const nextExercise = session.exercises.find(ex => ex.status === 'pending');
-    if (!nextExercise) {
-      return null;
-    }
-
-    await this.sessionExerciseRepo.update(nextExercise.id, { status: 'in_progress' });
-    await this.sessionRepo.updateActivity(sessionId);
-
-    return { ...nextExercise, status: 'in_progress' };
-  }
-
-  /**
-   * Skip the current in_progress exercise
-   * Marks it as skipped and moves to next
-   */
-  async skipCurrentExercise(sessionId: string, reason?: string): Promise<void> {
-    // Get session with exercises
-    const session = await this.sessionRepo.findByIdWithDetails(sessionId);
-    if (!session) {
-      throw new Error('Session not found');
-    }
-
-    // Find current in_progress exercise
     const currentExercise = session.exercises.find(ex => ex.status === 'in_progress');
     if (!currentExercise) {
       throw new Error('No exercise currently in progress');
     }
 
-    // Mark as skipped, persisting reason as userFeedback
-    await this.sessionExerciseRepo.update(currentExercise.id, {
-      status: 'skipped',
-      userFeedback: reason ?? null,
-    });
-
-    // Update session activity
+    await this.sessionExerciseRepo.update(currentExercise.id, { status: 'completed' });
     await this.sessionRepo.updateActivity(sessionId);
-  }
 
-  /**
-   * Complete the current in_progress exercise
-   * Marks it as completed
-   */
-  async completeCurrentExercise(sessionId: string): Promise<void> {
-    // Get session with exercises
-    const session = await this.sessionRepo.findByIdWithDetails(sessionId);
-    if (!session) {
-      throw new Error('Session not found');
-    }
-
-    // Find current in_progress exercise
-    const currentExercise = session.exercises.find(ex => ex.status === 'in_progress');
-    if (!currentExercise) {
-      throw new Error('No exercise currently in progress');
-    }
-
-    // Mark as completed
-    await this.sessionExerciseRepo.update(currentExercise.id, {
-      status: 'completed',
-    });
-
-    // Update session activity
-    await this.sessionRepo.updateActivity(sessionId);
+    return buildExerciseSummary(currentExercise);
   }
 
   async logSetWithContext(

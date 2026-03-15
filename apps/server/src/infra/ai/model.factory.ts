@@ -8,6 +8,35 @@ import { loadConfig } from '@config/index';
 import { createLogger } from '@shared/logger';
 
 const log = createLogger('llm');
+const config = loadConfig();
+const isDebug = config.LOG_LEVEL === 'debug' || config.LOG_LEVEL === 'trace';
+
+interface OpenAIMessage {
+  role: string;
+  content: unknown;
+  tool_calls?: unknown;
+  tool_call_id?: string;
+}
+
+function messageToOpenAI(msg: BaseMessage): OpenAIMessage {
+  const type = msg._getType();
+  let role: string;
+  if (type === 'human') {
+    role = 'user';
+  } else if (type === 'ai') {
+    role = 'assistant';
+  } else {
+    role = type;
+  }
+  const base: OpenAIMessage = { role, content: msg.content };
+  if (type === 'ai' && 'tool_calls' in msg && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+    base.tool_calls = msg.tool_calls;
+  }
+  if (type === 'tool' && 'tool_call_id' in msg) {
+    base.tool_call_id = msg.tool_call_id as string;
+  }
+  return base;
+}
 
 class LLMLogHandler extends BaseCallbackHandler {
   name = 'LLMLogHandler';
@@ -23,18 +52,43 @@ class LLMLogHandler extends BaseCallbackHandler {
     const system = flat.find(m => m._getType() === 'system');
     const humanMsgs = flat.filter(m => m._getType() === 'human');
     const lastHuman = humanMsgs[humanMsgs.length - 1];
-    const userId = (extraParams?.['configurable'] as Record<string, unknown>)?.['userId'] as string | undefined;
+    const options = extraParams?.['options'] as Record<string, unknown> | undefined;
+    const userId = (options?.['configurable'] as Record<string, unknown>)?.['userId'] as string | undefined;
 
-    log.debug(
-      {
-        userId,
-        totalMessages: flat.length,
-        systemPrompt: typeof system?.content === 'string' ? system.content : null,
-        lastUserMessage: typeof lastHuman?.content === 'string' ? lastHuman.content : null,
-        historyCount: flat.length - (system ? 1 : 0) - (lastHuman ? 1 : 0),
-      },
-      'LLM invoke',
-    );
+    if (isDebug) {
+      const invocationParams = extraParams?.['invocation_params'] as Record<string, unknown> | undefined;
+      const tools = options?.['tools'] as unknown[] | undefined;
+
+      const openaiMessages = flat.map(messageToOpenAI);
+      const replayPayload: Record<string, unknown> = {
+        model: invocationParams?.['model'] ?? config.LLM_MODEL,
+        messages: openaiMessages,
+        temperature: invocationParams?.['temperature'] ?? config.LLM_TEMPERATURE,
+      };
+      if (tools && tools.length > 0) {
+        replayPayload['tools'] = tools;
+      }
+
+      log.debug(
+        {
+          userId,
+          totalMessages: flat.length,
+          replayPayload,
+        },
+        'LLM invoke [debug]',
+      );
+    } else {
+      log.debug(
+        {
+          userId,
+          totalMessages: flat.length,
+          systemPromptLength: typeof system?.content === 'string' ? system.content.length : 0,
+          lastUserMessage: typeof lastHuman?.content === 'string' ? lastHuman.content : null,
+          historyCount: flat.length - (system ? 1 : 0) - (lastHuman ? 1 : 0),
+        },
+        'LLM invoke',
+      );
+    }
   }
 
   handleLLMEnd(output: { generations: Array<Array<{ text: string }>> }): void {

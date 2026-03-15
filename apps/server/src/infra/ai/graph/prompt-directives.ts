@@ -31,6 +31,10 @@ export function outputDirective(): string {
   return 'Respond with natural text only. Do NOT include JSON in your response.';
 }
 
+export function toolReplyDirective(): string {
+  return 'TOOL CALL RULE: When you call any tool, you MUST ALWAYS include a natural text reply alongside the tool call. NEVER send a tool call without accompanying text visible to the user.';
+}
+
 export interface DirectiveOptions {
   includeIdentity?: boolean;
 }
@@ -46,6 +50,7 @@ export function composeDirectives(user: User | null, options?: DirectiveOptions)
   parts.push(nameUsageDirective());
   parts.push(formattingDirective());
   parts.push(outputDirective());
+  parts.push(toolReplyDirective());
 
   return parts.join('\n\n');
 }

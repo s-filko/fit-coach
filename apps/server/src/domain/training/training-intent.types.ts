@@ -18,8 +18,7 @@ import { z } from 'zod';
  */
 export const trainingIntentTypes = {
   logSet: 'log_set',
-  nextExercise: 'next_exercise',
-  skipExercise: 'skip_exercise',
+  completeCurrentExercise: 'complete_current_exercise',
   finishTraining: 'finish_training',
   requestAdvice: 'request_advice',
   modifySession: 'modify_session',
@@ -127,25 +126,14 @@ export const LogSetIntentSchema = z
 
 export type LogSetIntent = z.infer<typeof LogSetIntentSchema>;
 
-// --- Next Exercise Intent ---
+// --- Complete Exercise Intent ---
 
-export const NextExerciseIntentSchema = z.object({
-  type: z.literal(trainingIntentTypes.nextExercise),
-  // Optional reason for moving to next exercise
+export const CompleteExerciseIntentSchema = z.object({
+  type: z.literal(trainingIntentTypes.completeCurrentExercise),
   reason: z.string().optional(),
 });
 
-export type NextExerciseIntent = z.infer<typeof NextExerciseIntentSchema>;
-
-// --- Skip Exercise Intent ---
-
-export const SkipExerciseIntentSchema = z.object({
-  type: z.literal(trainingIntentTypes.skipExercise),
-  // Reason for skipping
-  reason: z.string().optional(),
-});
-
-export type SkipExerciseIntent = z.infer<typeof SkipExerciseIntentSchema>;
+export type CompleteExerciseIntent = z.infer<typeof CompleteExerciseIntentSchema>;
 
 // --- Finish Training Intent ---
 
@@ -190,8 +178,7 @@ export type JustChatIntent = z.infer<typeof JustChatIntentSchema>;
 
 export const TrainingIntentSchema = z.discriminatedUnion('type', [
   LogSetIntentSchema,
-  NextExerciseIntentSchema,
-  SkipExerciseIntentSchema,
+  CompleteExerciseIntentSchema,
   FinishTrainingIntentSchema,
   RequestAdviceIntentSchema,
   ModifySessionIntentSchema,
@@ -309,7 +296,7 @@ export function parseTrainingResponse(jsonString: string): LLMTrainingResponse {
  * {
  *   "message": "Moving to the next exercise!",
  *   "intent": {
- *     "type": "next_exercise"
+ *     "type": "complete_current_exercise"
  *   }
  * }
  *

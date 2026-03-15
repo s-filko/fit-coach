@@ -8,7 +8,7 @@
 
 ## BUG-001 — Empty API response when LLM calls `request_transition` without accompanying text
 
-**Status:** Open  
+**Status:** Fixed (Phase 1)  
 **Severity:** High  
 **Found during:** Manual test run 2026-03-12, Scenario 3.1  
 **Component:** `apps/server/src/infra/ai/graph/nodes/chat.node.ts`, `apps/bot/handlers.ts`
@@ -93,66 +93,28 @@ After fix: send "I want to train today" — expect a non-empty text response AND
 
 ## BUG-002 — `skip_exercise` skips the currently `in_progress` exercise, not the named one
 
-**Status:** Open  
+**Status:** Fixed (Phase 1 — tool fully removed)  
 **Severity:** Medium  
 **Found during:** Manual test run 2026-03-12, Scenario 9  
 **Component:** `apps/server/src/infra/ai/graph/tools/training.tools.ts`, `apps/server/src/infra/ai/graph/nodes/training.node.ts`
 
 ### Description
 
-User asked to skip "Dumbbell Row". The LLM called `skip_exercise` but the exercise that was marked `skipped` in the DB was Lat Pulldown (ID 23, which was the currently `in_progress` exercise), not Dumbbell Row (ID 16, the next pending exercise). The `skip_exercise` tool operates on the current `in_progress` exercise without accepting an explicit `exercise_id` parameter.
+User asked to skip "Dumbbell Row". The LLM called `skip_exercise` but the exercise that was marked `skipped` was Lat Pulldown (the currently `in_progress` exercise), not Dumbbell Row (the next pending exercise).
 
 ### Root cause
 
-The `skip_exercise` tool has no `exercise_id` parameter — it calls `trainingService.skipCurrentExercise(sessionId)` which always acts on whatever is currently `in_progress`. When the user says "skip Dumbbell Row" but Lat Pulldown is `in_progress`, the wrong exercise gets skipped.
+The `skip_exercise` tool had no `exercise_id` parameter and always acted on the current `in_progress` exercise.
 
-The prompt does not instruct the LLM to first call `next_exercise` to advance to the target exercise before calling `skip_exercise`.
+### Resolution
 
-### Flow
+After analysis, `skip_exercise` was determined to be unnecessary in all practical scenarios:
+- If an exercise is `in_progress` with sets logged → user should call `complete_current_exercise`
+- If an exercise is `in_progress` with 0 sets → `complete_current_exercise` marks it as `skipped`
+- If an exercise is not yet started (only in plan) → no DB record exists and none should be created
+- If user wants a different exercise → `log_set` for the new exercise auto-completes the previous one
 
-```
-User: "Skip the Dumbbell Row, back is tired"
-  → LLM sees Lat Pulldown is in_progress, Dumbbell Row is next
-  → LLM calls skip_exercise (no exercise_id parameter available)
-  → skip_exercise skips current in_progress = Lat Pulldown (ID 23)
-  → DB: exercise_id=23 status='skipped' ← WRONG, should be exercise_id=16
-```
-
-### DB evidence
-
-```
-session_exercises after skip:
-  exercise_id=23 (Lat Pulldown), status='skipped'   ← skipped wrong exercise
-  exercise_id=14 (Lateral Raise),  status='in_progress'
-```
-
-Dumbbell Row (ID 16) never appeared in session_exercises at all.
-
-### Impact
-
-- User asks to skip exercise X, but exercise Y (currently active) gets skipped instead.
-- Affects any scenario where user wants to skip a *future* exercise while the *current* one is still in progress.
-- Training data is incorrect — wrong exercise is marked skipped in history.
-
-### Fix plan
-
-Add optional `exercise_id` parameter to `skip_exercise` tool. Logic by state:
-
-- **`exercise_id` provided, exercise exists in `session_exercises` as `in_progress`** → mark `skipped`
-- **`exercise_id` provided, exercise exists as `completed`** → return error "exercise already completed"
-- **`exercise_id` provided, exercise NOT in `session_exercises`** (still in plan only) → do nothing in DB, return OK. No reason to create a record for something that was never started.
-- **`exercise_id` not provided** → current behavior: skip whatever is `in_progress`
-
-Files to change:
-1. [`training.tools.ts`](apps/server/src/infra/ai/graph/tools/training.tools.ts) — add `exercise_id: z.number().optional()` to schema
-2. [`service.ports.ts`](apps/server/src/domain/training/ports/service.ports.ts) — update signature: `skipExercise(sessionId, opts?: { exerciseId?: number; reason?: string })`
-3. [`training.service.ts`](apps/server/src/domain/training/services/training.service.ts) — implement lookup + state-based logic
-
-### Regression test
-
-1. Exercise A is `in_progress`. Ask to skip exercise B (in plan but not started). Verify: A stays `in_progress`, B has no `session_exercises` record, LLM confirms skip.
-2. Exercise A is `in_progress`. Ask to skip exercise A by ID. Verify: A is `skipped`.
-3. Exercise A is `completed`. Ask to skip A. Verify: error returned.
+The `skip_exercise` tool, its service method, prompt references, and test code were fully removed. Skip requests are acknowledged in text via RULE 0 in the training prompt.
 
 ---
 
@@ -160,7 +122,7 @@ Files to change:
 
 ## BUG-003 — Full LLM request payload not logged; impossible to replay empty-response incidents
 
-**Status:** Open  
+**Status:** Fixed (Phase 1)  
 **Severity:** Medium  
 **Found during:** Manual test run 2026-03-12, investigation of BUG-001  
 **Component:** `apps/server/src/infra/ai/llm.service.ts`, LangGraph node invocations in `apps/server/src/infra/ai/graph/`
@@ -228,7 +190,7 @@ After fix: send any message, verify `logs/server.log` contains a `replayPayload`
 
 ## BUG-004 — Dead code: `generateStructured`, `AIContextService`, `AI_CONTEXT_SERVICE_TOKEN`
 
-**Status:** Open  
+**Status:** Fixed (Phase 1)  
 **Severity:** Low  
 **Found during:** Manual test investigation 2026-03-12 (BUG-003 root cause analysis)  
 **Component:** `apps/server/src/infra/ai/llm.service.ts`, `apps/server/src/domain/ai/ports.ts`
@@ -367,16 +329,16 @@ No "previous session" block. `previousSession` parameter removed from prompt bui
 
 ---
 
-## BUG-006 — LLM calls `finish_training` without user intent (fallback after `skip_exercise` error)
+## BUG-006 — LLM calls `finish_training` without user intent (fallback after removed error)
 
-**Status:** Open  
+**Status:** Fixed (Phase 1)  
 **Severity:** Critical  
 **Found during:** Manual test run 2026-03-12, real training session  
 **Component:** `apps/server/src/infra/ai/graph/nodes/training.node.ts`, `apps/server/src/infra/ai/graph/tools/training.tools.ts`
 
 ### Description
 
-User wrote "let's skip, what else?" meaning Cable Crunch (next planned exercise). LLM called `skip_exercise`, got error `No exercise currently in progress` (all previous exercises were `COMPLETED`, none active), and on the next turn called `finish_training` on its own. Session closed without user request.
+User wrote "let's skip, what else?" meaning Cable Crunch (next planned exercise). LLM called got error `No exercise currently in progress` (all previous exercises were `COMPLETED`, none active), and on the next turn called `finish_training` on its own. Session closed without user request.
 
 User did not ask to end training. They wanted to skip a specific exercise and see what's left. Result: session closed, Cable Crunch dropped from history, subsequent sets (Cable Crunch and Chest-Supported Row) went to chat phase where `log_set` is unavailable — **data lost**.
 
@@ -384,8 +346,8 @@ User did not ask to end training. They wanted to skip a specific exercise and se
 
 Two interacting failures:
 
-1. **`skip_exercise` lacks `exercise_id`** (BUG-002) — cannot target a specific exercise.
-2. **Prompt allows `finish_training` as fallback** — after `skip_exercise` error and seeing `CURRENT EXERCISE = No exercise currently in progress`, LLM concludes "everything is done + user wants to skip → training is over" and calls `finish_training`. This is state interpretation, not explicit user request.
+1. **removed lacks `exercise_id`** (BUG-002) — cannot target a specific exercise.
+2. **Prompt allows `finish_training` as fallback** — after removed error and seeing `CURRENT EXERCISE = No exercise currently in progress`, LLM concludes "everything is done + user wants to skip → training is over" and calls `finish_training`. This is state interpretation, not explicit user request.
 
 The prompt says:
 ```
@@ -539,7 +501,7 @@ Planned approach: minimal `retrospective` subgraph with `log_retro_set` and `don
 
 ## BUG-008 — LLM hallucinates sets and ignores user's actual message (tool calls prioritized over dialogue)
 
-**Status:** Open
+**Status:** Fixed (Phase 1 — Plan A)
 **Severity:** Critical
 **Found during:** Manual test run 2026-03-12, real training session (user: Sergey/filko)
 **Component:** `apps/server/src/infra/ai/graph/nodes/training.node.ts`, `apps/server/src/infra/ai/graph/subgraphs/training.subgraph.ts`
@@ -592,7 +554,7 @@ Three interacting problems in the training prompt (`training.node.ts`):
 **1. Rule 5 creates a "gap-filling" instinct:**
 ```
 Rule 5: If the user asks to move on but CURRENT PROGRESS shows 0 sets,
-        call log_set first, then next_exercise.
+        call log_set first, then complete_current_exercise.
 ```
 This teaches the LLM: "incomplete progress = must log something." When the user comments or asks a question, the LLM interprets it as "moving forward" and fills gaps with data from CONVERSATION HISTORY.
 
@@ -649,7 +611,7 @@ Session `7c9818cb` (user Sergey, real training):
 | No `in_progress` exercise | `log_set` |
 | 0 sets logged for current exercise | `delete_last_sets`, `update_last_set` |
 
-`finish_training`, `next_exercise`, `skip_exercise` — always available.
+`finish_training`, `complete_current_exercise` — always available.
 
 This prevents the main BUG-008 scenario: LLM physically cannot call `log_set` when there's no active exercise.
 
@@ -675,7 +637,7 @@ Rule 5: If the user asks to move on but CURRENT PROGRESS shows 0 sets,
 
 Add anti-patterns section with explicit negative examples.
 
-**3. Programmatic guard** in `sequentialToolNode` — reject `log_set` combined with `skip_exercise` or `next_exercise` in the same response.
+**3. Programmatic guard** in `sequentialToolNode` — reject `log_set` combined with removed or `complete_current_exercise` in the same response.
 
 **Plan B — Dual LLM Architecture** (if Plan A fails):
 
@@ -685,8 +647,8 @@ If phantom sets still appear after Plan A, proceed to [`docs/PLAN-dual-llm-train
 
 1. Log Set 1. Say "это было легко" — bot should respond with advice, NOT log another set.
 2. Say "или может штанга в наклоне?" — bot should answer the question, NOT log a set.
-3. Say "пропусти следующее" — only `skip_exercise` called, no `log_set`.
-4. Say "давай дальше" — only `next_exercise` called, no `log_set`.
+3. Say "пропусти следующее" — only removed called, no `log_set`.
+4. Say "давай дальше" — only `complete_current_exercise` called, no `log_set`.
 5. Verify DB: no sets with identical data within seconds of each other.
 6. Verify: after fix, the bot never says "✅ Set logged" unless the user's message contained explicit numeric data.
 
@@ -694,7 +656,7 @@ If phantom sets still appear after Plan A, proceed to [`docs/PLAN-dual-llm-train
 
 ## BUG-009 — Chat LLM hallucinates "Set logged" confirmation without actual `log_set`
 
-**Status:** Open
+**Status:** Fixed (Phase 1 — anti-hallucination prompt rule + `toolReplyDirective`)
 **Severity:** Critical
 **Found during:** Manual test run 2026-03-12, after BUG-006 triggered premature session close
 **Component:** `apps/server/src/infra/ai/graph/nodes/chat.node.ts`
@@ -746,6 +708,91 @@ NEVER write "✅" or "Recorded" or "Logged" — you cannot save sets from chat.
 
 1. End training session. Write "did 3 sets of planks @ 60 sec". Verify: bot does NOT say "✅ Recorded", instead explains session is closed.
 2. Verify DB: no new `session_sets` rows after session close.
+
+---
+
+## BUG-010 — `ToolInputParsingException` crashes graph instead of returning error to LLM
+
+**Status:** Fixed (Phase 1)
+**Severity:** Critical
+**Found during:** Manual test run 2026-03-14, Scenario 3.3
+**Component:** `apps/server/src/infra/ai/graph/subgraphs/training.subgraph.ts`
+
+### Description
+
+When the LLM passes tool arguments in the wrong shape (e.g., nested `{ exerciseId: 1, setData: { reps: 10, weight: 80 } }` instead of flat `{ exerciseId: 1, reps: 10, weight: 80 }`), LangChain's `DynamicStructuredTool.invoke()` throws a `ToolInputParsingException`. This error was unhandled in `sequentialToolNode`, causing the entire graph to crash with HTTP 500.
+
+### Root cause
+
+`sequentialToolNode` called `tool.invoke(args)` directly without try-catch. When Zod validation fails inside the tool, LangChain throws `ToolInputParsingException` which propagates up, crashing the LangGraph execution.
+
+### Fix
+
+Created centralized `invokeTool` helper in `training.subgraph.ts` that wraps all tool invocations in try-catch, converting errors into `ToolMessage` with `status: 'error'` and `LLM_ERROR_PREFIX`. The LLM receives explicit feedback on invalid arguments and can self-correct.
+
+### Regression test
+
+After fix: send message that triggers tool call with malformed args — graph continues, LLM receives error message, no HTTP 500.
+
+---
+
+## BUG-011 — Chat LLM does not transition to training phase on explicit request
+
+**Status:** Open
+**Severity:** High
+**Found during:** Manual test run 2026-03-14, Scenario 6/10 setup
+**Component:** `apps/server/src/infra/ai/graph/nodes/chat.node.ts`, `apps/server/src/infra/ai/graph/subgraphs/chat.subgraph.ts`
+
+### Description
+
+When user explicitly asks "Upper A давай" or "Начни тренировку" from chat phase, the LLM generates a detailed training-style response ("план на сегодня", exercise list, coaching advice) but does NOT call `request_transition(toPhase='session_planning')`. The conversation stays in `chat` phase with no training session created.
+
+On subsequent user messages, the system enters `session_planning` phase (delayed transition) but the initial response created a false impression that training had started.
+
+### Root cause
+
+The chat prompt instructs `ALWAYS use this tool — never describe workouts yourself from chat.` but the LLM intermittently ignores this and generates workout descriptions directly. The anti-hallucination rule added for BUG-009 (`You do NOT have log_set`) may inadvertently make the LLM overconfident in its chat capabilities.
+
+### Flow
+
+```
+User: "Upper A давай"
+  → Chat LLM generates detailed training plan with exercises, sets, reps
+  → NO request_transition tool call
+  → conversation_turns.phase = 'chat'
+  → No workout_session created
+  → User thinks training started, reports sets
+  → Sets not saved (no training session)
+```
+
+### DB evidence
+
+```
+conversation_turns:
+  phase = 'chat'
+  content = "OK. Let's get to work! ... plan with exercises ..."
+  
+workout_sessions: no new in_progress session
+```
+
+### Impact
+
+- User believes training started but no session exists
+- Subsequent set reports from user may be lost
+- Inconsistent UX — sometimes transitions work, sometimes they don't
+- Reproduces intermittently (LLM non-determinism)
+
+### Fix plan
+
+1. **Strengthen prompt** — move `request_transition` instruction higher in prompt priority, make it an explicit rule with examples.
+2. **Add programmatic check** — in `extractNode` or post-processing, if chat LLM response mentions exercise IDs, weights, sets/reps pattern but no `request_transition` was called, automatically trigger the transition or add a warning.
+3. **Consider making `request_transition` mandatory** — if user intent is detected as "start training", force the transition at the graph level.
+
+### Regression test
+
+1. From chat phase, say "давай тренировку" — verify `request_transition` is called, phase changes to `session_planning`.
+2. From chat phase, say "Upper A" — same verification.
+3. Check: no training-style response content in chat phase.
 
 ---
 

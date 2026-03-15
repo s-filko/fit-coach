@@ -210,7 +210,7 @@ IConversationContextService:
 - **Chat** (2): `update_profile`, `request_transition`
 - **Plan Creation** (2): `save_workout_plan`, `request_transition`
 - **Session Planning** (2): `start_training_session`, `request_transition`
-- **Training** (4): `log_set`, `next_exercise`, `skip_exercise`, `finish_training`
+- **Training** (4): `log_set`, `complete_current_exercise`, `finish_training`
 
 Total: 11 tools across 5 phases.
 
@@ -224,8 +224,8 @@ Total: 11 tools across 5 phases.
 - `start_training_session` → `"Session created (ID: xxx, status: planning). 6 exercises, est. 60 min."`
 - `request_transition` (session_planning) → `"Transition to chat requested."`
 - `log_set` → `"Set 3 logged: Bench Press — 8 reps @ 80kg (RPE 8)"`
-- `next_exercise` → `"Bench Press completed (3 sets). Next pending: Barbell Row"`
-- `skip_exercise` → `"Lat Pulldown skipped. Next pending: Dumbbell Curl"`
+- `complete_current_exercise` → `"Bench Press completed (3 sets). Next pending: Barbell Row"`
+-  → `"Lat Pulldown skipped. Next pending: Dumbbell Curl"`
 - `finish_training` → `"Session completed. Duration: 47 min, 5 exercises, 18 sets total."`
 
 ### Error Handling Pattern
@@ -613,8 +613,8 @@ Graph-level tests (additions to `conversation.graph.unit.test.ts`):
 **New files:**
 - `infra/ai/graph/tools/training.tools.ts` — 4 tools:
   - `log_set` — calls `TrainingService.logSetWithContext(sessionId, { exerciseId?, exerciseName?, setData, rpe?, feedback? })`
-  - `next_exercise` — calls `completeCurrentExercise(sessionId)`
-  - `skip_exercise` — calls `skipCurrentExercise(sessionId)`
+  - `complete_current_exercise` — calls `completeCurrentExercise(sessionId)`
+  -  — calls `skipCurrentExercise(sessionId)`
   - `finish_training` — calls `completeSession(sessionId)`, sets `requestedTransition` to `chat`
 - `infra/ai/graph/subgraphs/training.subgraph.ts`
 - `infra/ai/graph/nodes/training.node.ts`

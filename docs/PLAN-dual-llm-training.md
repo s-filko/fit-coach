@@ -30,7 +30,7 @@ Before implementing the full dual-LLM architecture, try a simpler approach:
 flowchart TD
     msg["User message"] --> parser["Parser LLM (cheap/fast)\nIntent classification\nData extraction\nRPE from natural language"]
     parser --> validate["Programmatic Validator\nADR-0011 rules\nBatch guards\nEntity resolution"]
-    validate -->|"valid actions"| execute["Execute tools\n(log_set, next_exercise, etc.)"]
+    validate -->|"valid actions"| execute["Execute tools\n(log_set, complete_current_exercise, etc.)"]
     validate -->|"no actions / rejected"| noTools["No tools\n(question, comment, ambiguous)"]
     execute --> results["Tool results\n(success / error)"]
     results --> trainer["Trainer LLM (smart)\nSees: user msg + tool results\n+ updated progress"]
@@ -66,7 +66,7 @@ interface ParserInput {
 interface ParserOutput {
   intent: 'set_data' | 'correction' | 'navigation' | 'question' | 'comment' | 'finish' | 'mixed';
   actions: Array<{
-    tool: 'log_set' | 'update_last_set' | 'delete_last_sets' | 'next_exercise' | 'skip_exercise' | 'finish_training';
+    tool: 'log_set' | 'update_last_set' | 'delete_last_sets' | 'complete_current_exercise' | 'finish_training';
     exerciseId?: number;
     reps?: number;
     weight?: number;
@@ -114,7 +114,7 @@ Located in [`training.subgraph.ts`](apps/server/src/infra/ai/graph/subgraphs/tra
 - Resolve `exerciseId` if parser used exercise name matching
 - ADR-0011: sort by priority, deduplicate log_set calls
 - Guard: `finish_training` only allowed as sole action, not in batch
-- Guard: `log_set` + `skip_exercise` for same exercise → reject `log_set`
+- Guard: `log_set` +  for same exercise → reject `log_set`
 - Guard: `delete_last_sets` + `log_set` for same exercise → convert to `update_last_set`
 - Guard: if `confidence: 'low'` → reject all actions, pass ambiguity note to trainer
 - Validate: reps > 0, weight > 0, RPE 1-10

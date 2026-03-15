@@ -18,11 +18,25 @@ export const TRAINING_SERVICE_TOKEN = Symbol('TrainingService');
 
 // --- Result Types ---
 
-/** Metadata returned when ensureCurrentExercise auto-completes a previous exercise on switch. */
+/** Per-set detail included in exercise completion summaries so the LLM can cite exact data. */
+export interface CompletedSetDetail {
+  setNumber: number;
+  reps?: number;
+  weight?: number;
+  weightUnit?: string;
+  duration?: number;
+  rpe: number | null;
+}
+
+/** Metadata returned when an exercise is completed (explicitly or auto-completed on switch). */
 export interface AutoCompletedExercise {
   exerciseId: number;
   exerciseName: string;
   setsLogged: number;
+  sets: CompletedSetDetail[];
+  targetSets?: number | null;
+  targetReps?: string | null;
+  targetWeight?: string | null;
 }
 
 /** Return type for ensureCurrentExercise — includes optional auto-complete metadata. */
@@ -64,9 +78,7 @@ export interface ITrainingService {
   getSessionDetails(sessionId: string): Promise<WorkoutSessionWithDetails | null>;
 
   // Exercise management during training
-  startNextExercise(sessionId: string, exerciseId?: number): Promise<SessionExercise | null>;
-  skipCurrentExercise(sessionId: string, reason?: string): Promise<void>;
-  completeCurrentExercise(sessionId: string): Promise<void>;
+  completeCurrentExercise(sessionId: string): Promise<AutoCompletedExercise>;
 
   // Lazily ensure an in_progress exercise exists (creates from plan or ad-hoc if needed).
   // Auto-completes the current in_progress exercise when switching to a different exerciseId.

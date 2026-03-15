@@ -90,6 +90,11 @@ export function registerBotHandlers(bot: TelegramBot) {
                     throw new Error('Invalid response from AI service');
                 }
 
+                if (!aiResponse.trim()) {
+                    log.warn({ chatId, username: msg.from?.username }, 'LLM returned empty response on /start, suppressing');
+                    return;
+                }
+
                 await sendHtml(bot, chatId, aiResponse);
             } catch (error) {
                 log.error({ 
@@ -123,6 +128,11 @@ export function registerBotHandlers(bot: TelegramBot) {
             if (typeof aiResponse !== 'string') {
                 log.error({ responseData: chatResponse.data }, 'invalid AI response');
                 throw new Error('Invalid response from AI service');
+            }
+
+            if (!aiResponse.trim()) {
+                log.warn({ chatId, username: msg.from?.username, userText }, 'LLM returned empty response, suppressing');
+                return;
             }
 
             await sendHtml(bot, chatId, aiResponse);

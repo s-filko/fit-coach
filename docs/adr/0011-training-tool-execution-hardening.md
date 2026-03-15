@@ -13,9 +13,9 @@ After deploying the training phase with LangGraph tool calling (ADR-0007, Phase 
 
 ### Observed failure patterns
 
-**P1. Premature exercise transitions.** LLM called `next_exercise` after 1 set when the target was 3-4, then logged a phantom set for the next exercise — all in a single response.
+**P1. Premature exercise transitions.** LLM called `complete_current_exercise` after 1 set when the target was 3-4, then logged a phantom set for the next exercise — all in a single response.
 
-**P2. Cross-exercise logging.** LLM generated `log_set` + `next_exercise` + `log_set` (for the new exercise) in one tool call batch. Due to non-deterministic execution order, the second `log_set` could land on the wrong exercise.
+**P2. Cross-exercise logging.** LLM generated `log_set` + `complete_current_exercise` + `log_set` (for the new exercise) in one tool call batch. Due to non-deterministic execution order, the second `log_set` could land on the wrong exercise.
 
 **P3. Correction-triggered phantom sets.** When the user said "that was my first set" (correcting a miscount), the LLM interpreted this as a new set report and called `log_set` again — creating duplicates. Without deletion tools, every correction attempt produced more phantom data.
 
@@ -23,13 +23,13 @@ After deploying the training phase with LangGraph tool calling (ADR-0007, Phase 
 
 ### Root causes in code
 
-1. **`sequentialToolNode` sorting** ([training.subgraph.ts](../apps/server/src/infra/ai/graph/subgraphs/training.subgraph.ts)): only sorts `log_set` calls relative to each other (by `order` field). `next_exercise`, `skip_exercise`, `finish_training` are not ordered, so they can execute before `log_set` in the same batch.
+1. **`sequentialToolNode` sorting** ([training.subgraph.ts](../apps/server/src/infra/ai/graph/subgraphs/training.subgraph.ts)): only sorts `log_set` calls relative to each other (by `order` field). `complete_current_exercise`, `finish_training` are not ordered, so they can execute before `log_set` in the same batch.
 
 2. **No batch deduplication**: if the LLM generates two `log_set` calls with identical `(exerciseId, reps, weight)` in one response, both execute (gap ~20ms).
 
 3. **Silent exercise switching**: `ensureCurrentExercise` switches the `in_progress` exercise without closing the previous one, leading to multiple exercises in `in_progress` simultaneously. Neither LLM nor user see the switch.
 
-4. **No correction tools**: ADR-0007 defined `log_set`, `next_exercise`, `skip_exercise`, `finish_training` — but no tools for deleting or updating sets.
+4. **No correction tools**: ADR-0007 defined `log_set`, `complete_current_exercise`, `finish_training` — but no tools for deleting or updating sets.
 
 5. **Insufficient prompt rules**: the system prompt's CRITICAL RULES did not distinguish between new set reports and correction messages.
 
@@ -48,7 +48,7 @@ Assign execution priority to all training tools:
 | Priority | Tools |
 |----------|-------|
 | 0 (first) | `log_set` |
-| 1 | `next_exercise`, `skip_exercise` |
+| 1 | `complete_current_exercise` |
 | 2 | `delete_last_sets`, `update_last_set` |
 | 3 (last) | `finish_training` |
 
@@ -85,7 +85,7 @@ Two new tools extend the training toolset:
 - LLM does not specify `setNumber` — the server resolves `MAX(set_number)` and deletes top-down
 - Validation: `exerciseId` must belong to the current session; `count` must not exceed actual set count
 - Returns details of deleted sets for LLM to relay to the user
-- **Status after deleting ALL sets:** if all sets are removed, exercise status is set to `in_progress`. If subsequently closed without new sets (via `next_exercise` or `skip_exercise`), it becomes `skipped`
+- **Status after deleting ALL sets:** if all sets are removed, exercise status is set to `in_progress`. If subsequently closed without new sets (via `complete_current_exercise` or ), it becomes `skipped`
 
 **`update_last_set(exerciseId, updates)`**
 - Updates the most recent set (MAX `set_number`) for the specified exercise
@@ -96,9 +96,9 @@ Two new tools extend the training toolset:
 
 Both tools follow the same architectural pattern as existing tools: thin wrappers that call `TrainingService` methods, which in turn call repository methods.
 
-### 3b. next_exercise with optional exerciseId
+### 3b. complete_current_exercise with optional exerciseId
 
-Current `next_exercise` has an empty schema and always picks the first `pending` exercise. Add an optional `exerciseId` parameter:
+Current `complete_current_exercise` has an empty schema and always picks the first `pending` exercise. Add an optional `exerciseId` parameter:
 
 - If `exerciseId` is provided: complete the current exercise, then find the specified exercise in the session and set it to `in_progress` (reopening it if it was previously `completed` or `skipped`). If not found in session, create it from the plan.
 - If `exerciseId` is omitted: current behavior (first `pending` exercise in plan order).
@@ -113,7 +113,7 @@ Add three protocol sections to the training system prompt:
 
 For type A (new set report): if the exercise name does not match the current in-progress exercise, is unclear, or the user names an unknown exercise — do NOT log. Ask one clarifying question first: "Hammer Strength Bicep Curl, 15 kg x 10 — first set, correct?" Never silently substitute one exercise for another.
 
-**One Exercise At A Time** — never log a set for an exercise that is not `in_progress`. Never call `next_exercise` + `log_set` for the new exercise in the same response.
+**One Exercise At A Time** — never log a set for an exercise that is not `in_progress`. Never call `complete_current_exercise` + `log_set` for the new exercise in the same response.
 
 **Deletion/Update Protocols** — before calling `delete_last_sets` or `update_last_set`, the LLM must list the affected sets with full details from CURRENT PROGRESS and wait for explicit user confirmation.
 
@@ -175,7 +175,7 @@ LLM response with tool_calls
 | File | Changes |
 |------|---------|
 | `apps/server/src/infra/ai/graph/subgraphs/training.subgraph.ts` | Tool ordering, batch dedup validation, dedup audit log |
-| `apps/server/src/infra/ai/graph/tools/training.tools.ts` | `delete_last_sets`, `update_last_set` tool definitions; `next_exercise` exerciseId param; auto-complete notice in `log_set` response |
+| `apps/server/src/infra/ai/graph/tools/training.tools.ts` | `delete_last_sets`, `update_last_set` tool definitions; `complete_current_exercise` exerciseId param; auto-complete notice in `log_set` response |
 | `apps/server/src/infra/ai/graph/nodes/training.node.ts` | Prompt rewrite (message classification, protocols) |
 | `apps/server/src/domain/training/services/training.service.ts` | `deleteLastSets()`, `updateLastSet()` methods; `ensureCurrentExercise` auto-complete + return type; `startNextExercise` exerciseId param; audit logging |
 | `apps/server/src/domain/training/ports/service.ports.ts` | `EnsureExerciseResult` type; `startNextExercise` signature update |
@@ -198,14 +198,14 @@ LLM response with tool_calls
 - Exercise status leaks are impossible — auto-complete ensures exactly one `in_progress` exercise at a time (Fix 1b)
 - LLM can correct mistakes instead of compounding them (delete/update tools)
 - User confirmation required before destructive actions (deletion protocol)
-- Exercise navigation is flexible — user can go back to any exercise via `next_exercise(exerciseId)` or implicit switch via `log_set`
+- Exercise navigation is flexible — user can go back to any exercise via `complete_current_exercise(exerciseId)` or implicit switch via `log_set`
 - Full mutation audit trail for incident investigation (structured logging)
 
 **Negative / Risks:**
 - Pre-execution validation rejects all duplicate log_set calls and forces LLM to retry, adding one extra LLM call. Mitigation: this only triggers when LLM sends identical calls (a bug pattern), costing one retry cycle but preventing incorrect data. Legitimate identical sets pass on retry with unique `order` values.
 - Prompt rules (message classification, protocols) depend on LLM compliance. Mitigation: server-side guards (dedup, ordering, auto-complete) provide hard protection regardless of LLM behavior.
 - `delete_last_sets` with `count > 1` removes multiple sets atomically. Mitigation: max cap of 10; deletion protocol requires explicit user confirmation before execution.
-- Auto-complete on switch may close an exercise the user intended to return to. Mitigation: the exercise can be reopened immediately by targeting it with `log_set` or `next_exercise(exerciseId)`. The auto-complete notice in the tool response makes the switch visible.
+- Auto-complete on switch may close an exercise the user intended to return to. Mitigation: the exercise can be reopened immediately by targeting it with `log_set` or `complete_current_exercise(exerciseId)`. The auto-complete notice in the tool response makes the switch visible.
 
 ---
 
@@ -218,7 +218,7 @@ Phase 1: Infrastructure guards
 
 Phase 2: Correction tools + exercise navigation
   Fix 6a (delete_last_sets) + Fix 6b (update_last_set)
-  next_exercise(exerciseId) parameter
+  complete_current_exercise(exerciseId) parameter
 
 Phase 3: Prompt + business guards
   Fix 5 (prompt rewrite — message classification, protocols)

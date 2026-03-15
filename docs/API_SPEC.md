@@ -94,7 +94,7 @@ security:
     - `profileStatus === 'complete'`, no plan/session → chat subgraph (general fitness coaching)
     - User requests plan → plan_creation subgraph (LLM calls `save_workout_plan` tool)
     - Plan saved → session_planning subgraph (LLM calls `start_training_session` tool) ✓
-    - Session started → training subgraph (LLM calls `log_set`, `next_exercise`, etc.) [pending Step 7]
+    - Session started → training subgraph (LLM calls `log_set`, `complete_current_exercise`, etc.) [pending Step 7]
   - **Phase transitions**: LLM calls phase transition tools (`request_transition`, `complete_registration`, `finish_training`, etc.). Transition is validated by guard node and persisted by PostgresSaver.
   - **Tool calling**: LLM responds with natural text; uses typed tools for all DB side effects (save profile, save plan, log sets, complete session). No JSON mode parsing.
   - **Training flow** (all via `/api/chat`, pending Step 7 — training subgraph):

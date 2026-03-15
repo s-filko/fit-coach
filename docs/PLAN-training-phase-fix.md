@@ -1,5 +1,7 @@
 # Training Phase: Architectural Analysis & Fix Plan
 
+> **Status summary:** Most fixes are implemented. See `[DONE]` / `[SUPERSEDED]` / `[NOT DONE]` markers below.
+
 ## Versions: prod vs local
 
 - `origin/main` (prod): commit `f291441`
@@ -70,7 +72,7 @@ Duplicates with gap 20-40s = LLM re-called log_set in the next turn due to user'
 
 ## Failure Patterns
 
-**P1. LLM prematurely calls `next_exercise`** — after 1 set when target=3. Current CRITICAL RULE "at least one set" is too weak.
+**P1. LLM prematurely calls `complete_current_exercise`** — after 1 set when target=3. Current CRITICAL RULE "at least one set" is too weak.
 
 **P2. LLM logs for different exercises in one response** — logs Lateral Raise, completes it, and immediately logs Bicep Curl. User never asked for this.
 
@@ -99,7 +101,7 @@ LLM sees CURRENT PROGRESS with already-logged sets, but instead of responding "u
 
 **Level:** Missing correction tool + insufficient prompt rules.
 
-### Cause 3: `getMessagesForPrompt` does not filter by phase
+### Cause 3: `getMessagesForPrompt` does not filter by phase — [NOT DONE]
 
 **File:** [drizzle-conversation-context.service.ts](apps/server/src/infra/conversation/drizzle-conversation-context.service.ts)
 
@@ -109,252 +111,109 @@ LLM sees CURRENT PROGRESS with already-logged sets, but instead of responding "u
 
 In the March 3rd incident, all 44 recent messages were from the `training` phase, so this bug was NOT a direct cause. However, it is a **latent bug**: if the user had a long `chat`/`plan_creation` conversation before training, part of the 40-message window would be occupied by irrelevant history, displacing important training context.
 
-**Level:** Latent, easy fix.
+**Level:** Latent, easy fix. Still pending.
 
-### Cause 4: Tool call ordering does not guarantee log_set before next_exercise
+### Cause 4: Tool call ordering does not guarantee log_set before complete_current_exercise — [DONE]
 
 **File:** [training.subgraph.ts](apps/server/src/infra/ai/graph/subgraphs/training.subgraph.ts)
 
-```typescript
-const sorted = [...toolCalls].sort((a, b) => {
-  if (a.name !== 'log_set' || b.name !== 'log_set') {
-    return 0;  // next_exercise is not ordered
-  }
-  //...
-});
-```
-
-If LLM calls `[next_exercise, log_set]`, `next_exercise` may execute first, switching the `in_progress` exercise. The following `log_set` lands on the wrong exercise (via `ensureCurrentExercise`).
-
-Evidence: Bicep Curl set 1 created at 04:12:38.625, Lateral Raise set 1 at 04:12:38.591. Difference 34ms = same batch. LLM called `log_set` for two different exercises and `next_exercise` — order undefined.
-
-**Level:** Infrastructure. Fix with sorting.
+Fixed via `TOOL_PRIORITY` map and `sortToolCallsByPriority()`.
 
 ### Cause 5: No guard against excessive set count
 
 `logSetWithContext` does not check `setNumber` against `targetSets`. Tricep Pushdown had target=3 but 10 sets were recorded without a single warning. LLM sees CURRENT PROGRESS with growing set count but lacks context that this is an anomaly.
 
-**Level:** Missing business rule in service layer.
+**Level:** Missing business rule in service layer. **Decision: intentionally NOT implemented** — the LLM should be transparent about what was logged, and the user decides. The correction tools (`delete_last_sets`, `update_last_set`) handle mistakes.
 
 ## Fix Plan (execution order)
 
 ### Phase 1: Infrastructure Guards (prevent worst damage)
 
-#### Fix 2: Deterministic tool call ordering
+#### Fix 2: Deterministic tool call ordering — [DONE]
 
 **File:** [training.subgraph.ts](apps/server/src/infra/ai/graph/subgraphs/training.subgraph.ts)
 
-Priority map: `log_set` (0) → `next_exercise`/`skip_exercise` (1) → `delete_last_sets`/`update_last_set` (2) → `finish_training` (3). Within `log_set` — sort by `order` field.
+Priority map: `log_set` (0) → `complete_current_exercise` (1) → `delete_last_sets`/`update_last_set` (2) → `finish_training` (3). Within `log_set` — sort by `order` field.
 
-This is the foundation — until ordering is guaranteed, cross-exercise logging will keep happening. Fix 3 depends on this.
+Implemented as `TOOL_PRIORITY` constant + `sortToolCallsByPriority()` exported function with unit tests.
 
-#### Fix 3: Pre-execution validation for duplicate log_set calls
+#### Fix 3: Pre-execution validation for duplicate log_set calls — [DONE]
 
 **File:** [training.subgraph.ts](apps/server/src/infra/ai/graph/subgraphs/training.subgraph.ts)
 
-In `sequentialToolNode`, before execution: check all `log_set` calls in the sorted list for exact argument equality. If any two calls have identical arguments (including `order` or lack thereof) — **reject ALL duplicate log_set calls** (do not execute any of them). Return `ToolMessage` with error:
+Implemented as `findDuplicateLogSets()` — rejects all duplicate log_set calls (identical args including `order`) before execution. Returns `ToolMessage` with `LLM_ERROR_PREFIX` so LLM can self-correct.
 
-`"Rejected: N identical log_set calls detected. If these are separate sets, each must have a unique order field (order=1, order=2, etc.). If this is one set, send a single log_set call."`
-
-The LLM sees the error and retries in the next `agent → tools` cycle — either with a single call (it was a bug) or with proper `order` values (legitimate multiple sets).
-
-Key difference from silent dedup: **zero incorrect records written to DB**. The LLM decides whether it was a bug or legitimate, not the server.
-
-Validation applies **only within a single LLM response** (one batch of tool_calls). Between turns, identical sets are allowed (user may do multiple sets with the same weight).
-
-**Audit log:** `log.warn({ userId, duplicateArgs, rejectedCount }, 'Identical log_set calls rejected — awaiting LLM correction')`
-
-#### Fix 7: Transparent exercise switching in ensureCurrentExercise
+#### Fix 7: Transparent exercise switching in ensureCurrentExercise — [DONE]
 
 **Files:** [training.service.ts](apps/server/src/domain/training/services/training.service.ts), [service.ports.ts](apps/server/src/domain/training/ports/service.ports.ts), [training.tools.ts](apps/server/src/infra/ai/graph/tools/training.tools.ts)
 
-**Problem:** `ensureCurrentExercise` silently switches exercises without closing the current one. If LLM sends `log_set(exerciseId=39)` while `exerciseId=14` is `in_progress`, both end up `in_progress` — status leak. Neither LLM nor user see that a switch happened.
+`ensureCurrentExercise` returns `EnsureExerciseResult` with `autoCompleted` metadata. `logSetWithContext` propagates `autoCompleted`. Tool handler formats rich summary including all sets performed.
 
-**Fix:** Auto-complete the current exercise on switch + return metadata:
+Additionally, `completeCurrentExercise` returns enriched `AutoCompletedExercise` with per-set details (`CompletedSetDetail`) so the LLM can provide coaching analysis.
 
-1. At the start of `ensureCurrentExercise`, find the current `in_progress` exercise
-2. If `exerciseId` matches → return as-is (no change)
-3. If `exerciseId` is different:
-   - If current exercise has sets > 0 → set status to `completed`
-   - If current exercise has sets === 0 → set status to `skipped`
-   - Populate `autoCompleted` metadata
-4. If no `in_progress` exercise exists → proceed normally (first exercise)
+### Phase 2: Correction Tools (give LLM a way out of errors) — [DONE]
 
-**Return type change:**
+#### Fix 6a: delete_last_sets tool — [DONE]
 
-```typescript
-type EnsureExerciseResult = {
-  exercise: SessionExercise;
-  autoCompleted?: {
-    exerciseId: number;
-    exerciseName: string;
-    setsLogged: number;
-  };
-};
-```
+Implemented: tool + `TrainingService.deleteLastSets` + `SessionSetRepository.deleteById`. Returns deleted set details. Audit logging included.
 
-**Propagation:** `logSetWithContext` returns `autoCompletedExercise` alongside `set` and `setNumber`. The tool handler in `training.tools.ts` prepends to the response:
+#### Fix 6b: update_last_set tool — [DONE]
 
-`"Exercise 'Lateral Raise' auto-completed (4 sets). Set 1 logged for 'Bicep Curl': 10 reps @ 25 kg."`
+Implemented: tool + `TrainingService.updateLastSet`. setData merge logic (`{ ...existingSetData, ...updates }`) preserves unmodified fields. Returns before/after diff. Audit logging included.
 
-If auto-completed with 0 sets: `"Exercise 'Lateral Raise' skipped (0 sets). ..."`
+#### complete_current_exercise: add optional exerciseId parameter — [SUPERSEDED]
 
-**Reopen support:** The existing code at line 163 already re-opens `completed`/`skipped` exercises when `log_set` targets them. With Fix 7, the *current* exercise is properly closed first. No separate `reopen_exercise` tool needed — covered by `log_set(exerciseId=X)` and `next_exercise(exerciseId=X)`.
+**Original plan:** Add `exerciseId` to navigate to a specific exercise.
 
-**Audit log:** `log.info({ userId, sessionId, prevExerciseId, newExerciseId, setsLogged, newStatus }, 'Exercise auto-completed on switch')`
-
-### Phase 2: Correction Tools (give LLM a way out of errors)
-
-Must be implemented BEFORE Fix 5 (prompt), because the prompt references these tools.
-
-#### Fix 6a: delete_last_sets tool (hard delete)
-
-**Files:** [training.tools.ts](apps/server/src/infra/ai/graph/tools/training.tools.ts), [training.service.ts](apps/server/src/domain/training/services/training.service.ts), [session-set.repository.ts](apps/server/src/infra/db/repositories/session-set.repository.ts)
-
-- `delete_last_sets(exerciseId, count?)` — physically deletes `count` most recent sets (by descending `set_number`) for the specified exercise
-- `count` default=1, max=10 (safety cap)
-- LLM does not specify setNumber — server finds MAX(set_number) and deletes top-down
-- `exerciseId` is required — no risk of confusing exercises
-- Validation: `exerciseId` belongs to current session, `count` <= actual set count
-- Returns: `"Deleted 2 sets: #4 (10 reps @ 20kg), #3 (10 reps @ 20kg)"`
-- New methods:
-  - `TrainingService.deleteLastSets(sessionId, exerciseId, count)`
-  - `SessionSetRepository.deleteById(setId)`
-
-**Status after deleting ALL sets:** If all sets for an exercise are deleted, the exercise status is set to `in_progress` (not completed — there are no sets to justify completion). If the exercise is subsequently closed without any new sets (via `next_exercise` or `skip_exercise`), it becomes `skipped`.
-
-**Audit log:** `log.info({ userId, sessionId, exerciseId, deletedSets: [...] }, 'Sets deleted by LLM correction')`
-
-#### Fix 6b: update_last_set tool
-
-**Files:** [training.tools.ts](apps/server/src/infra/ai/graph/tools/training.tools.ts), [training.service.ts](apps/server/src/domain/training/services/training.service.ts)
-
-- `update_last_set(exerciseId, { rpe?, feedback?, weight?, reps? })` — updates the last set (MAX set_number) for the specified exercise
-- `exerciseId` is required — explicit exercise binding
-- LLM does not specify setNumber — server finds the last set
-- Case: "last set was really hard" → `update_last_set(exerciseId, { rpe: 10, feedback: "barely finished" })`
-- Case: "no, the weight was 15, not 12" → `update_last_set(exerciseId, { weight: 15 })`
-- Returns: `"Set 2 updated: was [10 reps @ 12 kg, RPE —], now [10 reps @ 15 kg, RPE —]"`
-
-**setData merge logic:** `weight` and `reps` live inside the jsonb `setData` column. `TrainingService.updateLastSet()` must read the existing `setData`, merge only the changed fields, and write the merged object back. Must NOT overwrite the entire `setData` — otherwise `update_last_set({ weight: 15 })` would lose the `reps` value. Implementation: `{ ...existingSetData, ...updates }` before calling `SessionSetRepository.update()`.
-
-**Audit log:** `log.info({ userId, sessionId, exerciseId, before: {...}, after: {...} }, 'Set updated by LLM correction')`
-
-#### next_exercise: add optional exerciseId parameter
-
-**Files:** [training.tools.ts](apps/server/src/infra/ai/graph/tools/training.tools.ts), [training.service.ts](apps/server/src/domain/training/services/training.service.ts)
-
-Current `next_exercise` has an empty schema (`z.object({})`) and always picks the first `pending` exercise via `startNextExercise`. There is no way to jump to a specific exercise.
-
-**Change:** Add optional `exerciseId` parameter to the tool schema:
-
-```typescript
-schema: z.object({
-  exerciseId: z.number().int().positive().optional()
-    .describe('Target exercise ID to switch to. If omitted, moves to the next pending exercise in plan order.'),
-})
-```
-
-If `exerciseId` is provided: complete the current exercise (as now), then find the specified exercise in the session and set it to `in_progress` (reopening it if it was previously `completed` or `skipped`). If not found in session, create it from the plan.
-
-If `exerciseId` is omitted: current behavior (first `pending` exercise).
-
-This enables the user to say "let's go back to Lateral Raise" without logging a set first, and gives LLM explicit control over exercise navigation.
+**What happened:** `exerciseId` parameter was added to `complete_current_exercise` (previously `next_exercise`), then removed during a later iteration. The tool was renamed to `complete_current_exercise` with an empty schema. Exercise navigation is handled entirely by `log_set` (auto-completes previous exercise via `ensureCurrentExercise` on switch) and explicit completion via `complete_current_exercise` (no exerciseId — always acts on current in_progress). The `startNextExercise` method was also removed as dead code.
 
 ### Phase 3: Prompt + Business Guards (teach LLM correct behavior)
 
-#### Fix 5: Prompt rewrite — message classification + confirmation protocols
+#### Fix 5: Prompt rewrite — message classification + confirmation protocols — [DONE with modifications]
 
 **File:** [training.node.ts](apps/server/src/infra/ai/graph/nodes/training.node.ts)
 
-Add clear message classification and confirmation protocols:
+Implemented as RULE 0 (conversation priority) + RULE 1-10 + anti-patterns section. Key differences from plan:
 
-```
-=== MESSAGE CLASSIFICATION (apply before ANY action) ===
-
-Before calling any tool, classify the user's message:
-A) NEW SET REPORT — user reports completion of a set they just did NOW
-   → If exercise name matches current in_progress exercise: call log_set
-   → If exercise name does NOT match plan, is unclear, or user names an unknown exercise:
-     ask ONE clarifying question before logging: "Hammer Strength Bicep Curl, 15 kg x 10 — first set, correct?"
-     Do NOT log until the user confirms.
-   → NEVER guess which exercise the user means. NEVER silently substitute one exercise for another.
-B) CORRECTION — user says a previous confirmation was wrong ("that was my first set",
-   "I only did one", "the weight was X not Y")
-   → Do NOT call log_set. Acknowledge the discrepancy. Explain what is in CURRENT PROGRESS.
-   If user wants to delete a wrong entry, use delete_last_sets.
-   If user wants to fix data, use update_last_set.
-C) QUESTION / CHAT — user asks a question, comments, or discusses
-   → Do NOT call any tool. Respond conversationally.
-D) EXERCISE TRANSITION — user says "done", "next", "moving on"
-   → Call next_exercise (only if CURRENT PROGRESS shows sets >= targetSets for current exercise,
-     OR user explicitly requests transition despite fewer sets)
-E) SESSION END — user says "finished", "that's it for today"
-   → Call finish_training
-
-If classification is ambiguous, ask the user to clarify BEFORE calling any tool.
-
-=== ONE EXERCISE AT A TIME ===
-- NEVER log a set for an exercise that is not currently in_progress
-- NEVER call next_exercise + log_set for the new exercise in the same response
-- When transitioning: call next_exercise ONLY. Introduce the new exercise. Wait for user's first set report.
-
-=== DELETION PROTOCOL ===
-NEVER call delete_last_sets immediately upon user request.
-1. Read CURRENT PROGRESS and identify the sets that would be deleted
-2. List them to the user with FULL details from CURRENT PROGRESS:
-   "I'll delete Set 3 (10 reps x 20 kg) and Set 4 (10 reps x 20 kg). Correct?"
-3. Wait for explicit user confirmation
-4. Only THEN call delete_last_sets with the correct exerciseId and count
-
-=== UPDATE PROTOCOL ===
-Before calling update_last_set, confirm the change:
-   "I'll update Set 2: RPE → 10, comment → 'barely finished'. Correct?"
-Wait for explicit confirmation, then call update_last_set.
-```
+- **Deletion protocol simplified:** No explicit confirmation step required before `delete_last_sets`. LLM uses judgment.
+- **Update protocol simplified:** Same — no mandatory confirmation.
+- **RULE 6 softened:** LLM may use contextually obvious values from recent dialogue (e.g. user said "bench 80 kg" then "did 8" — 80 kg is clearly implied). Plan originally required all data in current message only, but user feedback confirmed this was too strict for natural dialogue.
+- **One-exercise-at-a-time rule removed:** `log_set` for a different exercise auto-completes the previous one via `ensureCurrentExercise`. This is intentional and works well.
 
 #### ~~Fix 4: targetSets guard~~ REMOVED
 
-Not needed. The LLM must simply be transparent — always report what was logged and show current progress. If the user disagrees, they will say so, and Fix 5 (message classification) + Fix 6a/6b (correction tools) handle it. The server should never second-guess the user's intent to do more sets than planned.
-
-**Audit log:** `log.warn({ userId, exerciseId, setNumber, targetSets }, 'Set exceeds target count')`
+Not needed. Correct decision, confirmed by testing.
 
 ### Phase 4: Latent Bugs
 
-#### Fix 1: Phase filter in getMessagesForPrompt
+#### Fix 1: Phase filter in getMessagesForPrompt — [NOT DONE]
 
 **File:** [drizzle-conversation-context.service.ts](apps/server/src/infra/conversation/drizzle-conversation-context.service.ts)
 
-Add `eq(conversationTurns.phase, phase)` to WHERE clause. Latent bug, simple fix.
+Add `eq(conversationTurns.phase, phase)` to WHERE clause. Latent bug, simple fix. Still pending.
 
-**Compatibility note:** ADR-0010 (Conversation Thread Summarization) proposes replacing the flat sliding window with thread-based history. When ADR-0010 is implemented, raw messages will only come from the current thread, which naturally scopes by phase. This fix is a lightweight interim solution that does not conflict with ADR-0010.
+### Cross-cutting: Audit Logging (Fix 8) — [DONE]
 
-### Cross-cutting: Audit Logging (Fix 8)
+All mutating tool operations have `log.info({ audit: ... })` with full before/after data:
 
-**Files:** [training.service.ts](apps/server/src/domain/training/services/training.service.ts), [training.subgraph.ts](apps/server/src/infra/ai/graph/subgraphs/training.subgraph.ts)
+- `log_set` → `{ userId, sessionId, exerciseId, setNumber, setData, rpe, autoCompleted }`
+- `delete_last_sets` → `{ userId, sessionId, exerciseId, count, deletedSets }`
+- `update_last_set` → `{ userId, sessionId, exerciseId, setNumber, before, after }`
+- `complete_current_exercise` → `{ userId, sessionId, exerciseId, setsLogged }`
+- `finish_training` → `{ userId, sessionId }`
+- dedup skip → `warn` level: `{ userId, duplicateIds }`
 
-All mutating operations are logged via `createLogger('training')` at `info` level with full before/after data:
+**Note:** `skipCurrentExercise` audit line from original plan is obsolete — `skip_exercise` tool was fully removed.
 
-- `logSet` → `{ userId, sessionId, exerciseId, setNumber, setData }` — "Set logged"
-- `deleteLastSets` → `{ userId, sessionId, exerciseId, deletedSets: [...] }` — "Sets deleted"
-- `updateLastSet` → `{ userId, sessionId, exerciseId, before, after }` — "Set updated"
-- `completeCurrentExercise` → `{ userId, sessionId, exerciseId }` — "Exercise completed"
-- `skipCurrentExercise` → `{ userId, sessionId, exerciseId, reason }` — "Exercise skipped"
-- dedup skip → `warn` level: `{ userId, duplicateKey, skippedCount }` — "Duplicate log_set calls skipped"
+### Cross-cutting: Tests (Fix 9) — [DONE]
 
-Format: structured JSON (pino ndjson), one line per event. Enables full mutation timeline reconstruction during incidents.
+Unit tests written:
+- `training.subgraph.unit.test.ts`: `sortToolCallsByPriority`, `findDuplicateLogSets`
+- `training.tools.unit.test.ts`: `delete_last_sets`, `update_last_set`, `complete_current_exercise`
+- `training-service-hardening.unit.test.ts`: `ensureCurrentExercise` auto-complete, `deleteLastSets`, `updateLastSet`
+- `prompt-directives.unit.test.ts`: `composeDirectives`, `toolReplyDirective`
 
-Audit logging is NOT a separate phase — it is woven INTO each fix. Every new service method includes logging from the start.
-
-### Cross-cutting: Tests (Fix 9)
-
-Unit tests for each fix, written alongside:
-
-- `sequentialToolNode.test.ts`: dedup logic, ordering guarantee
-- `drizzle-conversation-context.test.ts`: phase filtering
-- `training.tools.test.ts`: delete_last_sets, update_last_set, next_exercise(exerciseId)
-- `training-service.test.ts`: ensureCurrentExercise auto-complete, setData merge, delete-all-sets status transition
-- Integration: reproduce scenario "user corrects a set"
+Integration test: `training.service.integration.test.ts`
 
 ## What We Do NOT Change
 
@@ -365,69 +224,8 @@ Unit tests for each fix, written alongside:
 - `buildToolResultsInjection` — correct
 - `agentNode` general flow — correct (re-reads session from DB on every call)
 
-## Execution Order Diagram
+## Pending Items
 
-```mermaid
-flowchart TD
-    subgraph phase1 [Phase 1: Infrastructure Guards]
-        F2["Fix 2: Tool ordering"] --> F3["Fix 3: Batch dedup"]
-        F7["Fix 7: ensureCurrentExercise\nauto-complete on switch"]
-    end
-
-    subgraph phase2 [Phase 2: Correction Tools + Exercise Navigation]
-        F6a["Fix 6a: delete_last_sets"]
-        F6b["Fix 6b: update_last_set"]
-        FNE["next_exercise(exerciseId)"]
-    end
-
-    subgraph phase3 [Phase 3: Prompt + Business Guards]
-        F5["Fix 5: Prompt rules + protocols"]
-    end
-
-    subgraph phase4 [Phase 4: Latent Bugs]
-        F1["Fix 1: Phase filter"]
-    end
-
-    F3 --> F6a
-    F3 --> F6b
-    F7 --> F6a
-    F6a --> F5
-    F6b --> F5
-    FNE --> F5
-    F5 --> F1
-```
-
-## Bug-to-Fix Mapping
-
-```mermaid
-flowchart TD
-    subgraph bugs [Failure Patterns]
-        P1["P1: Premature next_exercise\nafter 1 set"]
-        P2["P2: Cross-exercise logging\nin single response"]
-        P3["P3: Corrections trigger\nnew log_set calls"]
-        P4["P4: No correction tools\navailable to LLM"]
-        P5["P5: No audit trail\nfor mutations"]
-    end
-
-    subgraph fixes [Fixes]
-        F2["Fix 2: Tool ordering"]
-        F3["Fix 3: Batch dedup"]
-        F5["Fix 5: Prompt rules"]
-        F6a["Fix 6a: delete_last_sets"]
-        F6b["Fix 6b: update_last_set"]
-        F7["Fix 7: ensureCurrentExercise"]
-        F8["Fix 8: Audit logging"]
-    end
-
-    P1 --> F2
-    P1 --> F5
-    P2 --> F2
-    P2 --> F5
-    P2 --> F7
-    P3 --> F5
-    P3 --> F3
-    P3 --> F6a
-    P4 --> F6a
-    P4 --> F6b
-    P5 --> F8
-```
+- **Fix 1 (phase filter)** — latent bug, not yet implemented
+- **`skip_exercise` references in this document** — historical, tool was fully removed
+- **`startNextExercise` references** — historical, method was removed as dead code

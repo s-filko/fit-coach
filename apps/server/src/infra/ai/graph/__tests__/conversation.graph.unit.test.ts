@@ -32,8 +32,6 @@ const makeDeps = (): ConversationGraphDeps => ({
     addExerciseToSession: jest.fn(),
     logSet: jest.fn(),
     skipSession: jest.fn(),
-    startNextExercise: jest.fn(),
-    skipCurrentExercise: jest.fn(),
     completeCurrentExercise: jest.fn(),
     ensureCurrentExercise: jest.fn(),
   } as unknown as ITrainingService,

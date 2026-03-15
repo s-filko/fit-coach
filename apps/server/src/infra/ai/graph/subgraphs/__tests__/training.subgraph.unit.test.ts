@@ -33,41 +33,29 @@ const makeToolCall = (name: string, args: Record<string, unknown> = {}, id?: str
 // ---------------------------------------------------------------------------
 
 describe('sortToolCallsByPriority (ADR-0011 Fix 1.1)', () => {
-  it('should sort log_set before next_exercise in a mixed batch', () => {
+  it('should sort log_set before complete_current_exercise in a mixed batch', () => {
     const calls = [
-      makeToolCall('next_exercise', {}, 'next'),
+      makeToolCall('complete_current_exercise', {}, 'complete'),
       makeToolCall('log_set', { exerciseId: 12, reps: 10, weight: 80, order: 1 }, 'set'),
     ];
 
     const sorted = sortToolCallsByPriority(calls);
 
     expect(sorted[0].name).toBe('log_set');
-    expect(sorted[1].name).toBe('next_exercise');
-  });
-
-  it('should sort log_set before skip_exercise', () => {
-    const calls = [
-      makeToolCall('skip_exercise', { reason: 'pain' }, 'skip'),
-      makeToolCall('log_set', { exerciseId: 12, reps: 10, order: 1 }, 'set'),
-    ];
-
-    const sorted = sortToolCallsByPriority(calls);
-
-    expect(sorted[0].name).toBe('log_set');
-    expect(sorted[1].name).toBe('skip_exercise');
+    expect(sorted[1].name).toBe('complete_current_exercise');
   });
 
   it('should sort finish_training after all other tools', () => {
     const calls = [
       makeToolCall('finish_training', {}, 'finish'),
-      makeToolCall('next_exercise', {}, 'next'),
+      makeToolCall('complete_current_exercise', {}, 'complete'),
       makeToolCall('log_set', { exerciseId: 12, reps: 10, order: 1 }, 'set'),
     ];
 
     const sorted = sortToolCallsByPriority(calls);
 
     expect(sorted[0].name).toBe('log_set');
-    expect(sorted[1].name).toBe('next_exercise');
+    expect(sorted[1].name).toBe('complete_current_exercise');
     expect(sorted[2].name).toBe('finish_training');
   });
 
@@ -75,14 +63,14 @@ describe('sortToolCallsByPriority (ADR-0011 Fix 1.1)', () => {
     const calls = [
       makeToolCall('finish_training', {}, 'finish'),
       makeToolCall('delete_last_sets', { exerciseId: 12, count: 1 }, 'del'),
-      makeToolCall('next_exercise', {}, 'next'),
+      makeToolCall('complete_current_exercise', {}, 'complete'),
       makeToolCall('log_set', { exerciseId: 12, reps: 10, order: 1 }, 'set'),
     ];
 
     const sorted = sortToolCallsByPriority(calls);
 
     expect(sorted[0].name).toBe('log_set');
-    expect(sorted[1].name).toBe('next_exercise');
+    expect(sorted[1].name).toBe('complete_current_exercise');
     expect(sorted[2].name).toBe('delete_last_sets');
     expect(sorted[3].name).toBe('finish_training');
   });
@@ -166,7 +154,7 @@ describe('findDuplicateLogSets (ADR-0011 Fix 1.2)', () => {
   it('should only consider log_set calls, ignore other tool types', () => {
     const calls = [
       makeToolCall('log_set', { exerciseId: 12, reps: 10, weight: 80 }, 'set-a'),
-      makeToolCall('next_exercise', {}, 'next'),
+      makeToolCall('complete_current_exercise', {}, 'complete'),
     ];
 
     const duplicateIds = findDuplicateLogSets(calls);

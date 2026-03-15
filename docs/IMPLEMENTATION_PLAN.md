@@ -74,7 +74,7 @@ This document tracks the implementation progress of the Training Session Managem
 **Status**: COMPLETED  
 **Commits**: `90257bc`
 
-- [x] Define all training intents (logSet, nextExercise, skipExercise, etc.)
+- [x] Define all training intents (logSet, nextExercise, etc.)
 - [x] Create Zod schemas for each intent type
 - [x] Implement discriminated union `TrainingIntent`
 - [x] Create `LLMTrainingResponse` schema
@@ -166,8 +166,8 @@ This document tracks the implementation progress of the Training Session Managem
 - [x] Parse `LLMTrainingResponse` in training phase
 - [x] Implement `executeTrainingIntent()` method
 - [x] Route `log_set` to calculate set number and log
-- [x] Route `next_exercise` to complete current and start next
-- [x] Route `skip_exercise` to skip current exercise
+- [x] Route `complete_current_exercise` to complete current and start next
+- [x] Route  to skip current exercise
 - [x] Route `finish_training` to complete session
 - [x] Handle `request_advice`, `modify_session`, `just_chat` conversationally
 - [x] Add exercise management methods to TrainingService:
@@ -428,7 +428,7 @@ POST /api/chat
   "message": "Переходим к следующему"
 }
 # Expected: LLM shows next exercise
-# Intent: next_exercise executed
+# Intent: complete_current_exercise executed
 
 # 7. Finish training
 POST /api/chat

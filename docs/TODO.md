@@ -22,7 +22,7 @@ Confirmed in logs: `server.log` prompt at 18:09 — `RECENT TRAINING HISTORY` co
 - Include: date, all sets in order (Set 1: 40kg x 10, Set 2: 50kg x 8 ...), peak weight, last set weight, any RPE if logged
 
 **Exercise intro format (mandatory when LLM introduces a new exercise):**
-When transitioning to a new exercise (via `next_exercise` intent or at session start), the LLM MUST produce a structured briefing:
+When transitioning to a new exercise (via `complete_current_exercise` intent or at session start), the LLM MUST produce a structured briefing:
 1. **Last time** — "Last session (Feb 17): 50x10, 55x8, 55x6 (failed on set 4)"
 2. **Context from current session** — account for fatigue already accumulated (exercises done, total volume, any user comments like "feeling heavy", "no spotter")
 3. **Recommendation** — "Today I suggest starting with X kg. If it feels easy — add Y kg on the next set. If it feels heavy — stay at X or drop to Z"

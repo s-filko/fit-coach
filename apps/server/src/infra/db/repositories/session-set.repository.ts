@@ -1,4 +1,4 @@
-import { desc, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 import type { ISessionSetRepository } from '@domain/training/ports';
 import type { CreateSessionSetDto, SessionSet } from '@domain/training/types';
@@ -69,16 +69,5 @@ export class SessionSetRepository implements ISessionSetRepository {
 
   async deleteById(setId: string): Promise<void> {
     await db.delete(sessionSets).where(eq(sessionSets.id, setId));
-  }
-
-  async findLastByExerciseId(exerciseId: string, count: number): Promise<SessionSet[]> {
-    const sets = await db
-      .select()
-      .from(sessionSets)
-      .where(eq(sessionSets.sessionExerciseId, exerciseId))
-      .orderBy(desc(sessionSets.setNumber))
-      .limit(count);
-
-    return sets.map(s => ({ ...s, setData: s.setData as SessionSet['setData'] }));
   }
 }
