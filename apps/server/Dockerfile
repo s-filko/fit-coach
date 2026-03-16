@@ -1,5 +1,5 @@
-FROM node:22-alpine
-RUN apk add --no-cache expect gcompat libstdc++ postgresql-client
+FROM node:22-slim
+RUN apt-get update && apt-get install -y --no-install-recommends expect postgresql-client && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts

@@ -44,7 +44,7 @@ deploy/
 └── VPS_SETUP.md        # One-time VPS setup guide
 
 apps/server/
-├── Dockerfile          # Server image (node:22-alpine + expect + tsx)
+├── Dockerfile          # Server image (node:22-slim + expect + tsx)
 ├── docker-entrypoint.sh # Runs drizzle push then starts server
 ├── .dockerignore       # Excludes tests, docs, .env from build context
 └── public/             # Static files (webapp.html for Telegram Mini App)
@@ -154,8 +154,8 @@ a second deploy.
 ### Server Dockerfile
 
 ```dockerfile
-FROM node:22-alpine
-RUN apk add --no-cache expect          # For drizzle-kit interactive prompts
+FROM node:22-slim
+RUN apt-get update && apt-get install -y --no-install-recommends expect postgresql-client && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts            # --ignore-scripts bypasses husky prepare
