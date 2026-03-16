@@ -159,7 +159,7 @@ describe('plan-creation.tools — save_workout_plan', () => {
 
     const result = await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig());
 
-    expect(result as string).toContain('saved successfully');
+    expect(result as string).toContain('Plan saved');
   });
 
   it('returns error string when userId is missing from configurable', async () => {

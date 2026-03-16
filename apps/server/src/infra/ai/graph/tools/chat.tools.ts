@@ -14,7 +14,7 @@ export interface ChatToolsDeps {
 }
 
 const UPDATE_PROFILE_DESCRIPTION = [
-  'Update one or more fields of the user\'s fitness profile.',
+  "Update one or more fields of the user's fitness profile.",
   'Call this when the user explicitly tells you their name, age, gender, height, weight,',
   'fitness level, or goal — or when they want to change an existing value.',
   'Only include fields the user actually mentioned.',

@@ -169,7 +169,7 @@ describe('session-planning.subgraph — start_training_session tool', () => {
           ],
         });
       }
-      return new AIMessage({ content: 'Let\'s go! Starting training.', tool_calls: [] });
+      return new AIMessage({ content: "Let's go! Starting training.", tool_calls: [] });
     });
 
     jest.mock('@infra/ai/model.factory', () => ({
@@ -188,7 +188,7 @@ describe('session-planning.subgraph — start_training_session tool', () => {
     });
 
     const result = await subgraph.invoke(
-      { userId: 'u1', userMessage: 'yes, let\'s start!', user: BASE_USER },
+      { userId: 'u1', userMessage: "yes, let's start!", user: BASE_USER },
       { recursionLimit: 10, configurable: { userId: 'u1', thread_id: 'u1' } },
     );
 

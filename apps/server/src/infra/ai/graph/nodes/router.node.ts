@@ -85,7 +85,7 @@ export function buildRouterNode(deps: RouterNodeDeps) {
           phase: 'chat',
           activeSessionId: null,
           responseMessage:
-            'Your training session could not be resumed. You can plan a new session whenever you\'re ready.',
+            "Your training session could not be resumed. You can plan a new session whenever you're ready.",
         },
       });
     }

@@ -41,12 +41,6 @@
     "check-all": "npm run lint && npm run format:check && npm run type-check",
     "prepare": "husky"
   },
-  "lint-staged": {
-    "src/**/*.ts": [
-      "prettier --check",
-      "eslint --quiet"
-    ]
-  },
   "keywords": [],
   "author": "",
   "license": "ISC",

@@ -82,7 +82,7 @@ const recoveryGuidelinesSchema = z.object({
 });
 
 const SAVE_WORKOUT_PLAN_DESCRIPTION = [
-  'Save the user\'s approved workout plan to the database.',
+  "Save the user's approved workout plan to the database.",
   'Call this ONLY when the user has explicitly approved the complete plan.',
   'Do NOT call this during discussion, proposal, or refinement.',
   'All fields (sessionTemplates, recoveryGuidelines, progressionRules) must be complete.',

@@ -1,2 +1,7 @@
 #!/usr/bin/env sh
-cd apps/server && npx lint-staged
+cd apps/server || exit 1
+
+npm run lint || exit 1
+npm run format:check || exit 1
+npm run type-check || exit 1
+npm run test:unit || exit 1

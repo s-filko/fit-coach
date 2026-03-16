@@ -24,7 +24,7 @@ export function languageDirective(user: User | null): string {
 }
 
 export function nameUsageDirective(): string {
-  return 'Use the client\'s name SPARINGLY — only on first greeting and in summary/recap messages. Do NOT repeat the name in every response.';
+  return "Use the client's name SPARINGLY — only on first greeting and in summary/recap messages. Do NOT repeat the name in every response.";
 }
 
 export function outputDirective(): string {
