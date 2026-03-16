@@ -21,6 +21,9 @@ exit $value
 EXPECT_SCRIPT
 echo "Schema push complete."
 
+echo "Seeding exercises (skips existing)..."
+npx tsx src/infra/db/seeds/exercises.seed.ts || echo "WARN: exercise seed failed (non-fatal)"
+
 echo "Seeding exercise embeddings (skips if already present)..."
 npx tsx src/infra/db/seeds/seed-embeddings.ts || echo "WARN: embedding seed failed (non-fatal)"
 
