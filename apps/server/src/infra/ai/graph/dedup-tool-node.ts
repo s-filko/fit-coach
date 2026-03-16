@@ -35,10 +35,9 @@ export function buildDedupToolNode(tools: StructuredToolInterface[]) {
       });
     }
     try {
-      const result = await (targetTool as InvokableTool).invoke(
-        call.args as Record<string, unknown>,
-        { configurable: { userId } },
-      );
+      const result = await (targetTool as InvokableTool).invoke(call.args as Record<string, unknown>, {
+        configurable: { userId },
+      });
       return new ToolMessage({ tool_call_id: call.id ?? '', content: String(result) });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -98,7 +97,9 @@ export function buildDedupToolNode(tools: StructuredToolInterface[]) {
 
 function buildSearchKey(args: Record<string, unknown>): string {
   return JSON.stringify({
-    q: String(args['query'] ?? '').toLowerCase().trim(),
+    q: String(args['query'] ?? '')
+      .toLowerCase()
+      .trim(),
     c: args['category'] ?? null,
     e: args['equipment'] ?? null,
     m: args['muscleGroup'] ?? null,

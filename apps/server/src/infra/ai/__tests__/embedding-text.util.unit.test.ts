@@ -67,9 +67,11 @@ describe('buildEmbeddingText', () => {
   });
 
   it('handles exercise with only primary muscles (no secondary)', () => {
-    const text = buildEmbeddingText(makeExercise({
-      muscleGroups: [{ muscleGroup: 'chest' as const, involvement: 'primary' as const }],
-    }));
+    const text = buildEmbeddingText(
+      makeExercise({
+        muscleGroups: [{ muscleGroup: 'chest' as const, involvement: 'primary' as const }],
+      }),
+    );
     expect(text).toContain('chest (primary)');
     expect(text).not.toContain('secondary');
   });

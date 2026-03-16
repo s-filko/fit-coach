@@ -4,7 +4,12 @@ import { z } from 'zod';
 
 import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
 import type { ConversationPhase } from '@domain/conversation/ports';
-import type { IEmbeddingService, IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
+import type {
+  IEmbeddingService,
+  IExerciseRepository,
+  ITrainingService,
+  IWorkoutPlanRepository,
+} from '@domain/training/ports';
 import { RecommendedExerciseSchema, SessionRecommendationSchema } from '@domain/training/session-planning.types';
 
 import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';

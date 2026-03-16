@@ -41,9 +41,7 @@ const makeSessionSet = (overrides: Partial<SessionSet> = {}): SessionSet => ({
   ...overrides,
 });
 
-const makeExerciseWithDetails = (
-  overrides: Partial<SessionExerciseWithDetails> = {},
-): SessionExerciseWithDetails => ({
+const makeExerciseWithDetails = (overrides: Partial<SessionExerciseWithDetails> = {}): SessionExerciseWithDetails => ({
   id: 'se-default',
   sessionId: 'session-1',
   exerciseId: 12,
@@ -75,9 +73,7 @@ const makeExerciseWithDetails = (
   ...overrides,
 });
 
-const makeSession = (
-  exercises: SessionExerciseWithDetails[] = [],
-): WorkoutSessionWithDetails => ({
+const makeSession = (exercises: SessionExerciseWithDetails[] = []): WorkoutSessionWithDetails => ({
   id: 'session-1',
   userId: 'user-1',
   planId: null,
@@ -166,10 +162,20 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
       status: 'in_progress',
       sets: [makeSessionSet({ sessionExerciseId: 'se-A', setNumber: 1 })],
       exercise: {
-        id: 12, name: 'Bench Press', category: 'compound', equipment: 'barbell',
-        exerciseType: 'strength', description: null, energyCost: 'high',
-        complexity: 'intermediate', typicalDurationMinutes: 15, requiresSpotter: true,
-        imageUrl: null, videoUrl: null, createdAt: new Date(), muscleGroups: [],
+        id: 12,
+        name: 'Bench Press',
+        category: 'compound',
+        equipment: 'barbell',
+        exerciseType: 'strength',
+        description: null,
+        energyCost: 'high',
+        complexity: 'intermediate',
+        typicalDurationMinutes: 15,
+        requiresSpotter: true,
+        imageUrl: null,
+        videoUrl: null,
+        createdAt: new Date(),
+        muscleGroups: [],
       },
     });
 
@@ -178,18 +184,31 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
       exerciseId: 15,
       status: 'pending',
       exercise: {
-        id: 15, name: 'Bicep Curl', category: 'isolation', equipment: 'dumbbell',
-        exerciseType: 'strength', description: null, energyCost: 'medium',
-        complexity: 'beginner', typicalDurationMinutes: 10, requiresSpotter: false,
-        imageUrl: null, videoUrl: null, createdAt: new Date(), muscleGroups: [],
+        id: 15,
+        name: 'Bicep Curl',
+        category: 'isolation',
+        equipment: 'dumbbell',
+        exerciseType: 'strength',
+        description: null,
+        energyCost: 'medium',
+        complexity: 'beginner',
+        typicalDurationMinutes: 10,
+        requiresSpotter: false,
+        imageUrl: null,
+        videoUrl: null,
+        createdAt: new Date(),
+        muscleGroups: [],
       },
     });
 
     mockSessionRepo.findByIdWithDetails.mockResolvedValue(makeSession([exerciseA, exerciseB]));
-    mockSessionExerciseRepo.update.mockImplementation(async (id, updates) => ({
-      ...(id === 'se-A' ? exerciseA : exerciseB),
-      ...updates,
-    }) as unknown as SessionExercise);
+    mockSessionExerciseRepo.update.mockImplementation(
+      async (id, updates) =>
+        ({
+          ...(id === 'se-A' ? exerciseA : exerciseB),
+          ...updates,
+        }) as unknown as SessionExercise,
+    );
 
     await trainingService.ensureCurrentExercise('session-1', { exerciseId: 15 });
 
@@ -214,10 +233,13 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
     });
 
     mockSessionRepo.findByIdWithDetails.mockResolvedValue(makeSession([exerciseA, exerciseB]));
-    mockSessionExerciseRepo.update.mockImplementation(async (id, updates) => ({
-      ...(id === 'se-A' ? exerciseA : exerciseB),
-      ...updates,
-    }) as unknown as SessionExercise);
+    mockSessionExerciseRepo.update.mockImplementation(
+      async (id, updates) =>
+        ({
+          ...(id === 'se-A' ? exerciseA : exerciseB),
+          ...updates,
+        }) as unknown as SessionExercise,
+    );
 
     await trainingService.ensureCurrentExercise('session-1', { exerciseId: 15 });
 
@@ -246,10 +268,13 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
     });
 
     mockSessionRepo.findByIdWithDetails.mockResolvedValue(makeSession([exerciseA, exerciseB]));
-    mockSessionExerciseRepo.update.mockImplementation(async (id, updates) => ({
-      ...(id === 'se-A' ? exerciseA : exerciseB),
-      ...updates,
-    }) as unknown as SessionExercise);
+    mockSessionExerciseRepo.update.mockImplementation(
+      async (id, updates) =>
+        ({
+          ...(id === 'se-A' ? exerciseA : exerciseB),
+          ...updates,
+        }) as unknown as SessionExercise,
+    );
 
     const result = await trainingService.ensureCurrentExercise('session-1', { exerciseId: 15 });
 
@@ -358,9 +383,7 @@ describe('TrainingService.deleteLastSets (ADR-0011 Fix 2.1)', () => {
   it('should have deleteLastSets as a function', () => {
     const { trainingService } = createMocks();
 
-    expect(typeof (trainingService as unknown as Record<string, unknown>)['deleteLastSets']).toBe(
-      'function',
-    );
+    expect(typeof (trainingService as unknown as Record<string, unknown>)['deleteLastSets']).toBe('function');
   });
 });
 
@@ -378,8 +401,6 @@ describe('TrainingService.updateLastSet (ADR-0011 Fix 2.2)', () => {
   it('should have updateLastSet as a function', () => {
     const { trainingService } = createMocks();
 
-    expect(typeof (trainingService as unknown as Record<string, unknown>)['updateLastSet']).toBe(
-      'function',
-    );
+    expect(typeof (trainingService as unknown as Record<string, unknown>)['updateLastSet']).toBe('function');
   });
 });

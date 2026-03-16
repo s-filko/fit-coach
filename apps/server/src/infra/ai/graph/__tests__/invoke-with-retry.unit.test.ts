@@ -78,7 +78,9 @@ describe('invokeWithRetry', () => {
       await invokeWithRetry(model as never, messages, 'user-1');
 
       const sent = model.invoke.mock.calls[0][0] as unknown[];
-      const nudgeIdx = sent.findIndex(m => m instanceof SystemMessage && (m.content as string).includes('All tool calls'));
+      const nudgeIdx = sent.findIndex(
+        m => m instanceof SystemMessage && (m.content as string).includes('All tool calls'),
+      );
       const toolIdx = sent.findIndex(m => m instanceof ToolMessage);
       expect(nudgeIdx).toBeGreaterThanOrEqual(0);
       expect(nudgeIdx).toBeLessThan(toolIdx);

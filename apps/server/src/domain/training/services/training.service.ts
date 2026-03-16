@@ -48,9 +48,7 @@ function extractSetDetail(s: SessionSet): CompletedSetDetail {
   return detail;
 }
 
-function buildExerciseSummary(
-  ex: WorkoutSessionWithDetails['exercises'][number],
-): AutoCompletedExercise {
+function buildExerciseSummary(ex: WorkoutSessionWithDetails['exercises'][number]): AutoCompletedExercise {
   return {
     exerciseId: ex.exerciseId,
     exerciseName: ex.exercise?.name ?? `Exercise ${ex.exerciseId}`,
@@ -418,7 +416,7 @@ export class TrainingService implements ITrainingService {
       throw new Error(`Exercise ${exerciseId} not found in session ${sessionId}`);
     }
 
-    const lastSet = sessionExercise.sets.reduce<typeof sessionExercise.sets[0] | null>(
+    const lastSet = sessionExercise.sets.reduce<(typeof sessionExercise.sets)[0] | null>(
       (max, s) => (s.setNumber > (max?.setNumber ?? -Infinity) ? s : max),
       null,
     );

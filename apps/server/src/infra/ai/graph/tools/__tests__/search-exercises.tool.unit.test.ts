@@ -81,10 +81,7 @@ describe('search_exercises tool', () => {
 
     await tool.invoke({ query: 'chest press', limit: 5 });
 
-    expect(exerciseRepository.searchByEmbedding).toHaveBeenCalledWith(
-      vector,
-      expect.objectContaining({ limit: 5 }),
-    );
+    expect(exerciseRepository.searchByEmbedding).toHaveBeenCalledWith(vector, expect.objectContaining({ limit: 5 }));
   });
 
   it('passes category filter to searchByEmbedding', async () => {
@@ -126,7 +123,7 @@ describe('search_exercises tool', () => {
       exerciseRepository,
     }) as unknown as InvokableTool;
 
-    const result = await tool.invoke({ query: 'bench press' }) as string;
+    const result = (await tool.invoke({ query: 'bench press' })) as string;
 
     expect(result).toContain('ID:1');
     expect(result).toContain('Barbell Bench Press');
@@ -142,7 +139,7 @@ describe('search_exercises tool', () => {
       exerciseRepository,
     }) as unknown as InvokableTool;
 
-    const result = await tool.invoke({ query: 'nonexistent' }) as string;
+    const result = (await tool.invoke({ query: 'nonexistent' })) as string;
 
     expect(result).toContain('No exercises found');
   });
@@ -156,7 +153,7 @@ describe('search_exercises tool', () => {
       exerciseRepository: makeExerciseRepository(),
     }) as unknown as InvokableTool;
 
-    const result = await tool.invoke({ query: 'chest' }) as string;
+    const result = (await tool.invoke({ query: 'chest' })) as string;
 
     expect(result).toContain('Error searching exercises');
     expect(result).toContain('Model not loaded');

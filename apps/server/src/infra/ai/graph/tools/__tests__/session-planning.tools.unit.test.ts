@@ -1,7 +1,12 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
 
 import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
-import type { IEmbeddingService, IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
+import type {
+  IEmbeddingService,
+  IExerciseRepository,
+  ITrainingService,
+  IWorkoutPlanRepository,
+} from '@domain/training/ports';
 
 import { buildSessionPlanningTools } from '../session-planning.tools';
 
@@ -93,7 +98,11 @@ const buildTools = (
     pendingActiveSessionIds,
   }) as unknown as InvokableTool[];
   const byName = (name: string) => tools.find((t: { name?: string }) => (t as { name?: string }).name === name)!;
-  return { byName, startTrainingSession: byName('start_training_session'), requestTransition: byName('request_transition') };
+  return {
+    byName,
+    startTrainingSession: byName('start_training_session'),
+    requestTransition: byName('request_transition'),
+  };
 };
 
 describe('session-planning.tools — start_training_session', () => {
@@ -271,14 +280,10 @@ describe('session-planning.tools — start_training_session', () => {
     const trainingA = makeTrainingService('session-A');
     const trainingB = makeTrainingService('session-B');
 
-    const toolsA = buildTools(
-      trainingA, makeWorkoutPlanRepo(), pendingTransitions, pendingActiveSessionIds,
-    );
+    const toolsA = buildTools(trainingA, makeWorkoutPlanRepo(), pendingTransitions, pendingActiveSessionIds);
     await toolsA.startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig('userA'));
 
-    const toolsB = buildTools(
-      trainingB, makeWorkoutPlanRepo(), pendingTransitions, pendingActiveSessionIds,
-    );
+    const toolsB = buildTools(trainingB, makeWorkoutPlanRepo(), pendingTransitions, pendingActiveSessionIds);
     await toolsB.startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig('userB'));
 
     expect(pendingActiveSessionIds.get('userA')).toBe('session-A');

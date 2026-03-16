@@ -352,10 +352,7 @@ describe('buildTrainingTools', () => {
       trainingService.logSetWithContext.mockResolvedValue(mockResult);
 
       const { byName } = makeDeps(trainingService);
-      const result = await byName('log_set').invoke(
-        { exerciseId: 12, ...FLAT_SET_INPUT },
-        makeConfig('u1'),
-      );
+      const result = await byName('log_set').invoke({ exerciseId: 12, ...FLAT_SET_INPUT }, makeConfig('u1'));
 
       expect(result).toContain('Lateral Raise');
       expect(result).toContain('completed');
@@ -378,10 +375,7 @@ describe('buildTrainingTools', () => {
       trainingService.logSetWithContext.mockResolvedValue({ set: mockSet, setNumber: 2 });
 
       const { byName } = makeDeps(trainingService);
-      const result = await byName('log_set').invoke(
-        { exerciseId: 12, ...FLAT_SET_INPUT },
-        makeConfig('u1'),
-      );
+      const result = await byName('log_set').invoke({ exerciseId: 12, ...FLAT_SET_INPUT }, makeConfig('u1'));
 
       expect(result).not.toContain('auto-completed');
       expect(result).toContain('Set 2 logged');

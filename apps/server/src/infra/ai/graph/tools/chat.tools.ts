@@ -32,10 +32,9 @@ export function buildChatTools(deps: ChatToolsDeps) {
   const { userService, pendingTransitions } = deps;
 
   const updateProfile = tool(
-     
-    async(input, config) => {
+    async (input, config) => {
       // configurable is typed as Record<string, unknown> in LangChain
-       
+
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
         return 'Error: could not identify user. Please try again.';
@@ -72,8 +71,7 @@ export function buildChatTools(deps: ChatToolsDeps) {
   );
 
   const requestTransition = tool(
-     
-    async(input, config) => {
+    async (input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       pendingTransitions.set(userId, {
         toPhase: input.toPhase as ConversationPhase,

@@ -4,7 +4,12 @@ import { z } from 'zod';
 
 import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
 import type { ConversationPhase } from '@domain/conversation/ports';
-import type { AutoCompletedExercise, IEmbeddingService, IExerciseRepository, ITrainingService } from '@domain/training/ports';
+import type {
+  AutoCompletedExercise,
+  IEmbeddingService,
+  IExerciseRepository,
+  ITrainingService,
+} from '@domain/training/ports';
 import { SetDataSchema } from '@domain/training/set-data.types';
 
 import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
@@ -18,10 +23,18 @@ function formatExerciseSummary(ex: AutoCompletedExercise): string {
   const setsDetail = ex.sets
     .map(s => {
       const parts = [`Set ${s.setNumber}:`];
-      if (s.reps != null) { parts.push(`${s.reps} reps`); }
-      if (s.weight != null) { parts.push(`@ ${s.weight} ${s.weightUnit ?? 'kg'}`); }
-      if (s.duration != null) { parts.push(`${s.duration}s`); }
-      if (s.rpe != null) { parts.push(`| RPE ${s.rpe}`); }
+      if (s.reps != null) {
+        parts.push(`${s.reps} reps`);
+      }
+      if (s.weight != null) {
+        parts.push(`@ ${s.weight} ${s.weightUnit ?? 'kg'}`);
+      }
+      if (s.duration != null) {
+        parts.push(`${s.duration}s`);
+      }
+      if (s.rpe != null) {
+        parts.push(`| RPE ${s.rpe}`);
+      }
       return '  ' + parts.join(' ');
     })
     .join('\n');
@@ -203,7 +216,13 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
         const summary = await trainingService.completeCurrentExercise(sessionId);
 
         log.info(
-          { audit: 'complete_exercise', userId, sessionId, exerciseId: summary.exerciseId, setsLogged: summary.setsLogged },
+          {
+            audit: 'complete_exercise',
+            userId,
+            sessionId,
+            exerciseId: summary.exerciseId,
+            setsLogged: summary.setsLogged,
+          },
           'AUDIT: exercise completed',
         );
 

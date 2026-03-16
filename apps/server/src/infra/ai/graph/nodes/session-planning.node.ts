@@ -5,10 +5,7 @@ import type { User } from '@domain/user/services/user.service';
 import { composeDirectives } from '@infra/ai/graph/prompt-directives';
 
 /* eslint-disable max-len */
-export function buildSessionPlanningSystemPrompt(
-  user: User | null,
-  context: SessionPlanningContextData,
-): string {
+export function buildSessionPlanningSystemPrompt(user: User | null, context: SessionPlanningContextData): string {
   const now = new Date();
   const dateOnly = now.toISOString().split('T')[0] ?? '';
 

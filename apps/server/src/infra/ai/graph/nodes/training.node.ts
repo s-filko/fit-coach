@@ -126,12 +126,18 @@ function buildWorkoutOverview(session: WorkoutSessionWithDetails, now: Date): st
     for (const p of plan.exercises) {
       const started = startedById.get(p.exerciseId);
       let marker = '—';
-      if (started?.status === 'completed') { marker = 'DONE'; }
-      else if (started?.status === 'skipped') { marker = 'SKIPPED'; }
-      else if (started?.status === 'in_progress') { marker = 'IN PROGRESS'; }
+      if (started?.status === 'completed') {
+        marker = 'DONE';
+      } else if (started?.status === 'skipped') {
+        marker = 'SKIPPED';
+      } else if (started?.status === 'in_progress') {
+        marker = 'IN PROGRESS';
+      }
       const weight = p.targetWeight ? ` @ ${p.targetWeight} kg` : '';
       const setsInfo = started ? ` (${started.sets.length}/${p.targetSets} sets)` : '';
-      guideLines.push(`  [${marker.padEnd(11)}] [ID:${p.exerciseId}] ${p.exerciseName}: ${p.targetSets}×${p.targetReps}${weight}${setsInfo}`);
+      guideLines.push(
+        `  [${marker.padEnd(11)}] [ID:${p.exerciseId}] ${p.exerciseName}: ${p.targetSets}×${p.targetReps}${weight}${setsInfo}`,
+      );
     }
 
     // off-plan exercises (in session_exercises but not in plan)
@@ -142,8 +148,11 @@ function buildWorkoutOverview(session: WorkoutSessionWithDetails, now: Date): st
       guideLines.push('  Off-plan (user added):');
       for (const ex of offPlan) {
         let marker = '—';
-        if (ex.status === 'completed') { marker = 'DONE'; }
-        else if (ex.status === 'in_progress') { marker = 'IN PROGRESS'; }
+        if (ex.status === 'completed') {
+          marker = 'DONE';
+        } else if (ex.status === 'in_progress') {
+          marker = 'IN PROGRESS';
+        }
         guideLines.push(`  [${marker.padEnd(11)}] [ID:${ex.exerciseId}] ${ex.exercise.name} (${ex.sets.length} sets)`);
       }
     }
@@ -160,7 +169,9 @@ function buildWorkoutOverview(session: WorkoutSessionWithDetails, now: Date): st
     for (const ex of startedExercises) {
       const statusLabel = ex.status === 'in_progress' ? ' ← ACTIVE' : ` (${ex.status})`;
       detailLines.push(`  ${ex.exercise.name} [ID:${ex.exerciseId}]${statusLabel}`);
-      detailLines.push(`    Target: ${ex.targetSets ?? '?'}×${ex.targetReps ?? '?'}${ex.targetWeight ? ` @ ${ex.targetWeight} kg` : ''}`);
+      detailLines.push(
+        `    Target: ${ex.targetSets ?? '?'}×${ex.targetReps ?? '?'}${ex.targetWeight ? ` @ ${ex.targetWeight} kg` : ''}`,
+      );
       if (ex.sets.length === 0) {
         detailLines.push('    No sets logged yet.');
       } else {
@@ -172,7 +183,9 @@ function buildWorkoutOverview(session: WorkoutSessionWithDetails, now: Date): st
           detailLines.push(`    Set ${s.setNumber} (${timeLabel}): ${formatSetData(s.setData)}${rpe}${fb}`);
         }
       }
-      if (ex.userFeedback) { detailLines.push(`    Exercise feedback: "${ex.userFeedback}"`); }
+      if (ex.userFeedback) {
+        detailLines.push(`    Exercise feedback: "${ex.userFeedback}"`);
+      }
     }
   }
 
@@ -187,7 +200,9 @@ function buildWorkoutOverview(session: WorkoutSessionWithDetails, now: Date): st
   }
 
   const parts = [guideLines.join('\n')];
-  if (detailLines.length > 0) { parts.push(detailLines.join('\n')); }
+  if (detailLines.length > 0) {
+    parts.push(detailLines.join('\n'));
+  }
   parts.push(activeStatus);
   return parts.join('\n\n');
 }

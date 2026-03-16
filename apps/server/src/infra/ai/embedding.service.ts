@@ -7,10 +7,7 @@ const log = createLogger('embedding-service');
 const MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
 const EMBEDDING_DIMS = 384;
 
-type PipelineFn = (
-  texts: string | string[],
-  opts?: Record<string, unknown>,
-) => Promise<{ data: Float32Array }>;
+type PipelineFn = (texts: string | string[], opts?: Record<string, unknown>) => Promise<{ data: Float32Array }>;
 
 /**
  * Local embedding service using all-MiniLM-L6-v2 via @huggingface/transformers (ONNX).

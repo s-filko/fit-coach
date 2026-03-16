@@ -1,6 +1,9 @@
 import type { ExerciseWithMuscles } from '@domain/training/types';
 
-type EmbeddingInput = Pick<ExerciseWithMuscles, 'name' | 'category' | 'equipment' | 'muscleGroups' | 'complexity' | 'description'>;
+type EmbeddingInput = Pick<
+  ExerciseWithMuscles,
+  'name' | 'category' | 'equipment' | 'muscleGroups' | 'complexity' | 'description'
+>;
 
 /**
  * Builds a composite English text for embedding generation.

@@ -24,9 +24,7 @@ describe('buildDedupToolNode', () => {
     const tools = [makeFakeTool('search_exercises', invoke)] as never[];
     const node = buildDedupToolNode(tools);
 
-    const result = await node(
-      makeState([makeToolCall('id-1', 'search_exercises', { query: 'chest barbell' })]),
-    );
+    const result = await node(makeState([makeToolCall('id-1', 'search_exercises', { query: 'chest barbell' })]));
 
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(result.messages).toHaveLength(1);
@@ -59,10 +57,7 @@ describe('buildDedupToolNode', () => {
   });
 
   it('treats different query params as distinct calls', async () => {
-    const invoke = jest
-      .fn()
-      .mockResolvedValueOnce('chest results')
-      .mockResolvedValueOnce('legs results');
+    const invoke = jest.fn().mockResolvedValueOnce('chest results').mockResolvedValueOnce('legs results');
     const tools = [makeFakeTool('search_exercises', invoke)] as never[];
     const node = buildDedupToolNode(tools);
 
@@ -133,9 +128,7 @@ describe('buildDedupToolNode', () => {
     const tools = [] as never[];
     const node = buildDedupToolNode(tools);
 
-    const result = await node(
-      makeState([makeToolCall('id-1', 'unknown_tool', {})]),
-    );
+    const result = await node(makeState([makeToolCall('id-1', 'unknown_tool', {})]));
 
     expect(result.messages).toHaveLength(1);
     expect((result.messages[0] as ToolMessage).content).toContain('Unknown tool');
@@ -147,9 +140,7 @@ describe('buildDedupToolNode', () => {
     const tools = [makeFakeTool('search_exercises', invoke)] as never[];
     const node = buildDedupToolNode(tools);
 
-    const result = await node(
-      makeState([makeToolCall('id-1', 'search_exercises', { query: 'chest' })]),
-    );
+    const result = await node(makeState([makeToolCall('id-1', 'search_exercises', { query: 'chest' })]));
 
     expect(result.messages).toHaveLength(1);
     expect((result.messages[0] as ToolMessage).content).toContain('DB connection failed');

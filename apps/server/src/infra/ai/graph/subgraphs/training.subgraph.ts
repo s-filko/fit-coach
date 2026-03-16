@@ -5,7 +5,12 @@ import { toolsCondition } from '@langchain/langgraph/prebuilt';
 
 import { type ConversationStateType, type TransitionRequest } from '@domain/conversation/graph/conversation.state';
 import { IConversationContextService } from '@domain/conversation/ports';
-import type { IEmbeddingService, IExerciseRepository, ITrainingService, IWorkoutSessionRepository } from '@domain/training/ports';
+import type {
+  IEmbeddingService,
+  IExerciseRepository,
+  ITrainingService,
+  IWorkoutSessionRepository,
+} from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
 
@@ -154,14 +159,8 @@ function buildToolResultsInjection(toolMessages: ToolMessage[]): string {
 }
 
 export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
-  const {
-    userService,
-    trainingService,
-    workoutSessionRepo,
-    contextService,
-    exerciseRepository,
-    embeddingService,
-  } = deps;
+  const { userService, trainingService, workoutSessionRepo, contextService, exerciseRepository, embeddingService } =
+    deps;
 
   /**
    * Per-user maps: tools set entries by userId, extractNode/agentNode reads and deletes them.
@@ -204,10 +203,7 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
       return new ToolMessage({ tool_call_id: call.id ?? '', content: `Unknown tool: ${call.name}`, status: 'error' });
     }
     try {
-      const result = await (targetTool as InvokableTool).invoke(
-        call.args,
-        { configurable: { userId } },
-      );
+      const result = await (targetTool as InvokableTool).invoke(call.args, { configurable: { userId } });
       return new ToolMessage({ tool_call_id: call.id ?? '', content: String(result) });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
