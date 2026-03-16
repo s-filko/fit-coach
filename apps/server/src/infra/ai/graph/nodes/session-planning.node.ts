@@ -71,8 +71,9 @@ a) For each session template, look at its exercises and identify the primary mus
 b) Cross-reference with the RECOVERY TIMELINE to find when those muscle groups were last trained.
 c) Rank templates by how long their primary muscles have been resting — longest gap = highest priority candidate.
 d) If the top candidate has primary muscles trained <2 days ago, move to the next.
-e) If multiple templates are equally recovered, apply GOAL PRIORITY: choose the one that best serves the client's fitnessGoal. Example: goal "V-silhouette / wide shoulders" → prefer Upper Body template over Lower Body when recovery is equal.
-f) Commit to ONE recommended template with clear reasoning (recovery gap, goal relevance).
+e) NEGLECT OVERRIDE: If a template's primary muscles have not been trained for 10+ days, that template gets TOP PRIORITY regardless of fitness goal. Long neglect causes muscle loss and imbalance — address it first. If the client has concerns (soreness, injury, joint issues after a long break), adapt intensity (reduce weights, add warm-up sets) but still recommend that template.
+f) If multiple templates are equally recovered AND none triggers the neglect override, apply GOAL PRIORITY: choose the one that best serves the client's fitnessGoal. Example: goal "V-silhouette / wide shoulders" → prefer Upper Body template over Lower Body when recovery is equal.
+g) Commit to ONE recommended template with clear reasoning (recovery gap, neglect risk, goal relevance).
 
 --- STEP 2: ASK ONE SMART QUESTION ---
 
