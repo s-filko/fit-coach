@@ -182,6 +182,33 @@ Subgraphs adapt to the new return type: if `summaries` is non-empty, prepend as 
 
 ---
 
+## Phase 0: Session Gap Prompt Hint (pre-summarization)
+
+Before implementing full thread summarization, a lightweight step can deliver the most visible UX improvement with minimal code changes: **detect the time gap since the last message and inject a behavioral directive into the system prompt**.
+
+### Problem
+
+When a user returns after hours or days, the LLM continues the conversation from exactly where it left off — mid-topic, no greeting, as if no time has passed. This feels unnatural. A human trainer would greet the client, ask how they're doing, and only reference past topics if relevant.
+
+### Approach
+
+1. **Detect time gap** — in `getMessagesForPrompt` (or a dedicated method), query `MAX(created_at)` from `conversation_turns` for the user. Calculate `gap = now() - lastMessageTime`.
+2. **Inject prompt hint** — in `buildChatSystemPrompt` (and other subgraph prompt builders), add a conditional directive based on the gap:
+   - Gap < 3 hours: no change (ongoing conversation).
+   - Gap 3h–24h: "The user hasn't written for several hours. Start fresh — greet naturally, don't continue the previous topic directly. You may reference past context if relevant."
+   - Gap > 24h: "The user hasn't written since [date]. This is a new conversation. Greet them, ask how they're doing. Use history only as background knowledge, not as a conversation to continue."
+3. **Reduce history window** — when the gap is large, pass fewer history pairs to the LLM (e.g. last 3–5 instead of 20). This reduces the influence of stale messages on LLM behavior and saves tokens.
+
+### Relationship to Full Implementation
+
+This phase is a **complement**, not an alternative, to the full thread summarization described above. When threads and summarization are implemented:
+- The prompt hint becomes redundant — thread boundaries naturally reset the conversation flow.
+- The history trimming becomes redundant — only current-thread messages are loaded.
+
+Phase 0 provides immediate value and can be shipped independently. It reuses the same `CONVERSATION_THREAD_TIMEOUT_MS` configuration variable for the gap threshold.
+
+---
+
 ## Consequences
 
 **Positive:**
