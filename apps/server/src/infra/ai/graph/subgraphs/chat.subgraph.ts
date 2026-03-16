@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { AIMessage, HumanMessage, mergeMessageRuns, SystemMessage } from '@langchain/core/messages';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
 import { ToolNode, toolsCondition } from '@langchain/langgraph/prebuilt';
 
@@ -63,12 +63,12 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
     // Including them lets the LLM see tool results and stop calling tools.
     const inFlightMessages = state.messages ?? [];
 
-    const llmMessages = [
+    const llmMessages = mergeMessageRuns([
       new SystemMessage(systemPrompt),
       ...history.map(m => (m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content))),
       new HumanMessage(userMessage),
       ...inFlightMessages,
-    ];
+    ]);
 
     const response = await model.invoke(llmMessages, {
       configurable: { userId },

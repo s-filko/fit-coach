@@ -717,4 +717,81 @@ tests/integration/api/*.integration.test.ts  # Only business logic
 
 ---
 
+## 19) Manual Smoke Testing (curl)
+
+Use these commands to verify the running dev server after code changes.
+The server must already be running (`lsof -i :3000` to check).
+
+### Prerequisites
+- Dev server running on port 3000
+- API key: value of `BOT_API_KEY` from `apps/server/.env` (default: `dev-key`)
+- A valid `userId` from the `users` table
+
+### 19.1) Health Check (no auth required)
+```bash
+curl -s http://localhost:3000/health
+# Expected: {"status":"ok", ...}
+```
+
+### 19.2) Chat — Basic Greeting (complete profile user)
+```bash
+curl -s -X POST http://localhost:3000/api/chat \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: dev-key" \
+  -d '{"userId": "<USER_ID>", "message": "привет"}'
+# Expected 200: {"data":{"content":"...", "timestamp":"..."}}
+# Verify: response is a greeting, not a stale answer from previous context.
+```
+
+### 19.3) Chat — Follow-up Message (context continuity)
+```bash
+curl -s -X POST http://localhost:3000/api/chat \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: dev-key" \
+  -d '{"userId": "<USER_ID>", "message": "как дела?"}'
+# Expected 200: response references the previous greeting and maintains context.
+```
+
+### 19.4) Registration Flow (registration-status user)
+```bash
+curl -s -X POST http://localhost:3000/api/chat \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: dev-key" \
+  -d '{"userId": "<REG_USER_ID>", "message": "привет"}'
+# Expected 200: bot starts collecting profile data (asks for age, gender, etc.)
+```
+
+### 19.5) Auth Validation
+```bash
+# Missing key — expect 401
+curl -s -X POST http://localhost:3000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"userId": "any", "message": "test"}'
+
+# Wrong key — expect 403
+curl -s -X POST http://localhost:3000/api/chat \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: wrong-key" \
+  -d '{"userId": "any", "message": "test"}'
+```
+
+### 19.6) Verify Logs (after any manual test)
+```bash
+# One-shot read, NEVER use tail -f
+tail -n 50 logs/server.log | cat
+# Check for: no ERROR/WARN entries, correct status codes, reasonable response times.
+```
+
+### What to Watch For
+- **Stale context**: Bot responds to an old question instead of the current message.
+  This was caused by broken message alternation in `conversation_turns` (consecutive
+  same-role rows). Fixed by applying `mergeMessageRuns` from `@langchain/core/messages`
+  in all subgraphs before `model.invoke`.
+- **Phase leaking**: Bot references data from a different phase (e.g., training data
+  shown during chat). Check that `getMessagesForPrompt` filters correctly.
+- **Slow responses**: Typical LLM response time is 2-8 seconds. Anything > 15 seconds
+  suggests a timeout or retry loop.
+
+---
+
 **Maintenance:** This document MUST be updated with every process change. Any exception MUST be explicitly documented here.  

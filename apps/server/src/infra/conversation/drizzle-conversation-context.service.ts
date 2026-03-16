@@ -39,7 +39,7 @@ export class DrizzleConversationContextService implements IConversationContextSe
       .select({ role: conversationTurns.role, content: conversationTurns.content })
       .from(conversationTurns)
       .where(eq(conversationTurns.userId, userId))
-      .orderBy(desc(conversationTurns.createdAt))
+      .orderBy(desc(conversationTurns.createdAt), desc(conversationTurns.id))
       .limit(maxTurns);
 
     // Reverse to chronological order and filter to user/assistant only
