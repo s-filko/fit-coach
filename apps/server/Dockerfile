@@ -1,5 +1,5 @@
 FROM node:22-alpine
-RUN apk add --no-cache expect
+RUN apk add --no-cache expect gcompat libstdc++ postgresql-client
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts

@@ -1,6 +1,10 @@
 #!/bin/sh
 set -e
 
+echo "Ensuring pgvector extension..."
+PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+  -c "CREATE EXTENSION IF NOT EXISTS vector;" 2>/dev/null || echo "WARN: could not create vector extension (may already exist)"
+
 echo "Running database schema push..."
 expect <<'EXPECT_SCRIPT'
 set timeout 120
