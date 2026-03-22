@@ -435,7 +435,7 @@ function displaySessionsPreview(preview: SessionsPreview) {
     const statusColor = s.status === 'completed' ? c.green : s.status === 'in_progress' ? c.yellow : c.dim;
     print('');
     print(
-      `  ${c.bold}${fmt(s.createdAt)}${c.reset}  ` +
+      `  ${c.bold}${fmt(s.startedAt)}${c.reset}  ` +
         `${statusColor}${s.status}${c.reset}  ` +
         `${c.dim}${s.durationMinutes ? `${s.durationMinutes} min` : '—'}${c.reset}`,
     );
@@ -449,6 +449,10 @@ function displaySessionsPreview(preview: SessionsPreview) {
       const setsStr = sets
         .map(st => {
           const d = st.setData as Record<string, unknown>;
+          if (d['type'] === 'isometric') {
+            const sec = d['durationSeconds'] ?? d['duration'];
+            return sec ? `${sec}s` : '?s';
+          }
           const reps = d['reps'] ?? '?';
           const weight = d['weight'];
           return weight && Number(weight) > 0 ? `${reps}×${weight}` : `${reps}`;
