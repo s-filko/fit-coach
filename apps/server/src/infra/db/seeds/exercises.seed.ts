@@ -1,5 +1,7 @@
 import type { MuscleGroup } from '@domain/training/types';
 
+import { eq } from 'drizzle-orm';
+
 import { db } from '@infra/db/drizzle';
 import { exerciseMuscleGroups, exercises } from '@infra/db/schema';
 
@@ -989,8 +991,8 @@ export async function seedExercises() {
   log.info({ count: exerciseSeeds.length }, 'seeding exercises');
 
   for (const seed of exerciseSeeds) {
-    // Insert exercise
-    const [exercise] = await db
+    // Insert exercise — get back id whether inserted or already exists
+    const [inserted] = await db
       .insert(exercises)
       .values({
         name: seed.name,
@@ -1006,17 +1008,26 @@ export async function seedExercises() {
       .onConflictDoNothing()
       .returning();
 
-    if (!exercise) {
-      log.debug({ name: seed.name }, 'exercise already exists, skipping');
+    // If not inserted, look up existing id so we can still sync muscle groups
+    const exerciseId = inserted
+      ? inserted.id
+      : (await db.select({ id: exercises.id }).from(exercises).where(eq(exercises.name, seed.name)).limit(1))[0]?.id;
+
+    if (!exerciseId) {
+      log.warn({ name: seed.name }, 'exercise not found after upsert — skipping');
       continue;
     }
 
-    // Insert muscle group mappings
+    if (!inserted) {
+      log.debug({ name: seed.name }, 'exercise already exists — syncing muscle groups');
+    }
+
+    // Always upsert muscle group mappings (idempotent)
     for (const mg of seed.muscleGroups) {
       await db
         .insert(exerciseMuscleGroups)
         .values({
-          exerciseId: exercise.id,
+          exerciseId,
           muscleGroup: mg.muscle,
           involvement: mg.involvement,
         })

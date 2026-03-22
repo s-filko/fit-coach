@@ -80,5 +80,9 @@ export async function seedEmbeddings(): Promise<void> {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   await seedEmbeddings();
+  // Small delay to let ONNX worker threads shut down cleanly before exit.
+  // Without this, process.exit(0) races with ONNX internals and triggers
+  // "mutex lock failed" from libc++abi — data is safe but exit looks like a crash.
+  await new Promise(r => setTimeout(r, 500));
   process.exit(0);
 }
