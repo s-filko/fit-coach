@@ -1,9 +1,6 @@
 import { describe, expect, it, jest } from '@jest/globals';
 
-import type {
-  IWorkoutPlanRepository,
-  IWorkoutSessionRepository,
-} from '@domain/training/ports/repository.ports';
+import type { IWorkoutPlanRepository, IWorkoutSessionRepository } from '@domain/training/ports/repository.ports';
 import { SessionPlanningContextBuilder } from '@domain/training/services/session-planning-context.builder';
 import type { WorkoutPlan, WorkoutSessionWithDetails } from '@domain/training/types';
 
@@ -73,7 +70,7 @@ describe('SessionPlanningContextBuilder', () => {
       {
         id: 'ex-1',
         sessionId: 'session-1',
-        exerciseId: 1,
+        exerciseId: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
         orderIndex: 0,
         status: 'completed',
         targetSets: 3,
@@ -83,7 +80,7 @@ describe('SessionPlanningContextBuilder', () => {
         userFeedback: null,
         createdAt: completedAt,
         exercise: {
-          id: 1,
+          id: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
           name: 'Bench Press',
           category: 'compound',
           equipment: 'barbell',
@@ -160,9 +157,7 @@ describe('SessionPlanningContextBuilder', () => {
       threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
       mockPlanRepo.findActiveByUserId.mockResolvedValue(null);
-      mockSessionRepo.findRecentByUserIdWithDetails.mockResolvedValue([
-        makeMockSession(threeDaysAgo),
-      ]);
+      mockSessionRepo.findRecentByUserIdWithDetails.mockResolvedValue([makeMockSession(threeDaysAgo)]);
 
       const builder = new SessionPlanningContextBuilder(mockPlanRepo, mockSessionRepo);
       const context = await builder.buildContext('user-1');

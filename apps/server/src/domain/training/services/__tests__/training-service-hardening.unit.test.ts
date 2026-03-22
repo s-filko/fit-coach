@@ -44,7 +44,7 @@ const makeSessionSet = (overrides: Partial<SessionSet> = {}): SessionSet => ({
 const makeExerciseWithDetails = (overrides: Partial<SessionExerciseWithDetails> = {}): SessionExerciseWithDetails => ({
   id: 'se-default',
   sessionId: 'session-1',
-  exerciseId: 12,
+  exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
   orderIndex: 0,
   status: 'pending',
   targetSets: 4,
@@ -54,7 +54,7 @@ const makeExerciseWithDetails = (overrides: Partial<SessionExerciseWithDetails> 
   userFeedback: null,
   createdAt: new Date(),
   exercise: {
-    id: 12,
+    id: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
     name: 'Bench Press',
     category: 'compound',
     equipment: 'barbell',
@@ -158,11 +158,11 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
 
     const exerciseA = makeExerciseWithDetails({
       id: 'se-A',
-      exerciseId: 12,
+      exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
       status: 'in_progress',
       sets: [makeSessionSet({ sessionExerciseId: 'se-A', setNumber: 1 })],
       exercise: {
-        id: 12,
+        id: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
         name: 'Bench Press',
         category: 'compound',
         equipment: 'barbell',
@@ -181,10 +181,10 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
 
     const exerciseB = makeExerciseWithDetails({
       id: 'se-B',
-      exerciseId: 15,
+      exerciseId: '9b39b2e2-6a32-4756-acbd-223d6c7e564b',
       status: 'pending',
       exercise: {
-        id: 15,
+        id: '9b39b2e2-6a32-4756-acbd-223d6c7e564b',
         name: 'Bicep Curl',
         category: 'isolation',
         equipment: 'dumbbell',
@@ -210,7 +210,7 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
         }) as unknown as SessionExercise,
     );
 
-    await trainingService.ensureCurrentExercise('session-1', { exerciseId: 15 });
+    await trainingService.ensureCurrentExercise('session-1', { exerciseId: '9b39b2e2-6a32-4756-acbd-223d6c7e564b' });
 
     // Exercise A must be closed as 'completed' (it has 1 set)
     expect(mockSessionExerciseRepo.update).toHaveBeenCalledWith('se-A', { status: 'completed' });
@@ -221,14 +221,14 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
 
     const exerciseA = makeExerciseWithDetails({
       id: 'se-A',
-      exerciseId: 12,
+      exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
       status: 'in_progress',
       sets: [], // 0 sets → should be skipped
     });
 
     const exerciseB = makeExerciseWithDetails({
       id: 'se-B',
-      exerciseId: 15,
+      exerciseId: '9b39b2e2-6a32-4756-acbd-223d6c7e564b',
       status: 'pending',
     });
 
@@ -241,7 +241,7 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
         }) as unknown as SessionExercise,
     );
 
-    await trainingService.ensureCurrentExercise('session-1', { exerciseId: 15 });
+    await trainingService.ensureCurrentExercise('session-1', { exerciseId: '9b39b2e2-6a32-4756-acbd-223d6c7e564b' });
 
     // Exercise A must be closed as 'skipped' (0 sets)
     expect(mockSessionExerciseRepo.update).toHaveBeenCalledWith('se-A', { status: 'skipped' });
@@ -252,7 +252,7 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
 
     const exerciseA = makeExerciseWithDetails({
       id: 'se-A',
-      exerciseId: 12,
+      exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
       status: 'in_progress',
       sets: [
         makeSessionSet({ sessionExerciseId: 'se-A', setNumber: 1 }),
@@ -263,7 +263,7 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
 
     const exerciseB = makeExerciseWithDetails({
       id: 'se-B',
-      exerciseId: 15,
+      exerciseId: '9b39b2e2-6a32-4756-acbd-223d6c7e564b',
       status: 'pending',
     });
 
@@ -276,11 +276,13 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
         }) as unknown as SessionExercise,
     );
 
-    const result = await trainingService.ensureCurrentExercise('session-1', { exerciseId: 15 });
+    const result = await trainingService.ensureCurrentExercise('session-1', {
+      exerciseId: '9b39b2e2-6a32-4756-acbd-223d6c7e564b',
+    });
 
     expect(result).toHaveProperty('autoCompleted');
     const ac = (result as { autoCompleted?: Record<string, unknown> }).autoCompleted!;
-    expect(ac.exerciseId).toBe(12);
+    expect(ac.exerciseId).toBe('d8794819-ffc6-4d08-8336-d9bedc4e554a');
     expect(ac.exerciseName).toBe('Bench Press');
     expect(ac.setsLogged).toBe(3);
     expect(ac.targetSets).toBe(4);
@@ -294,14 +296,14 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
 
     const exerciseA = makeExerciseWithDetails({
       id: 'se-A',
-      exerciseId: 12,
+      exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
       status: 'in_progress',
       sets: [makeSessionSet()],
     });
 
     mockSessionRepo.findByIdWithDetails.mockResolvedValue(makeSession([exerciseA]));
 
-    await trainingService.ensureCurrentExercise('session-1', { exerciseId: 12 });
+    await trainingService.ensureCurrentExercise('session-1', { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a' });
 
     // Should NOT have called update with 'completed' or 'skipped'
     const completeCalls = mockSessionExerciseRepo.update.mock.calls.filter(

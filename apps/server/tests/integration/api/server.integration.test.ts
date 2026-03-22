@@ -9,12 +9,12 @@ import { createTestApiKey, createTestUserData } from '../../shared/test-factorie
 describe('Server Basic Functionality – integration', () => {
   let app: Awaited<ReturnType<typeof buildServer>>;
 
-         beforeAll(async() => {
-           const container = getGlobalContainer();
-           await registerInfraServices(container, { ensureDb: false });
+  beforeAll(async () => {
+    const container = getGlobalContainer();
+    await registerInfraServices(container, { ensureDb: false });
 
-           app = buildServer();
-    
+    app = buildServer();
+
     // Decorate app with services for tests
     const { USER_SERVICE_TOKEN } = await import('../../../src/domain/user/ports');
     const { CONVERSATION_CONTEXT_SERVICE_TOKEN } = await import('../../../src/domain/conversation/ports');
@@ -27,16 +27,16 @@ describe('Server Basic Functionality – integration', () => {
       trainingService: container.get(TRAINING_SERVICE_TOKEN) as any,
       conversationGraph: container.get(CONVERSATION_GRAPH_TOKEN) as any,
     });
-    
+
     await app.ready();
   });
 
-  afterAll(async() => {
+  afterAll(async () => {
     await app.close();
   });
 
   describe('Health Check Endpoint', () => {
-    it('should return 200 OK with correct response format', async() => {
+    it('should return 200 OK with correct response format', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/health',
@@ -49,7 +49,7 @@ describe('Server Basic Functionality – integration', () => {
       expect(json.status).toBe('ok');
     });
 
-    it('should respond quickly to health checks', async() => {
+    it('should respond quickly to health checks', async () => {
       const startTime = Date.now();
 
       const res = await app.inject({
@@ -66,7 +66,7 @@ describe('Server Basic Functionality – integration', () => {
   });
 
   describe('API Documentation', () => {
-    it('should expose OpenAPI documentation at /docs/json', async() => {
+    it('should expose OpenAPI documentation at /docs/json', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/docs/json',
@@ -82,7 +82,7 @@ describe('Server Basic Functionality – integration', () => {
       expect(typeof json.paths).toBe('object');
     });
 
-    it('should include all main API endpoints in documentation', async() => {
+    it('should include all main API endpoints in documentation', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/docs/json',
@@ -92,14 +92,10 @@ describe('Server Basic Functionality – integration', () => {
       const paths = Object.keys(json.paths ?? {});
 
       // Check that main endpoints are documented
-      expect(paths).toEqual(expect.arrayContaining([
-        '/api/user',
-        '/api/user/{id}',
-        '/api/chat',
-      ]));
+      expect(paths).toEqual(expect.arrayContaining(['/api/user', '/api/user/{id}', '/api/chat']));
     });
 
-    it('should have correct POST /api/user schema', async() => {
+    it('should have correct POST /api/user schema', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/docs/json',
@@ -120,7 +116,7 @@ describe('Server Basic Functionality – integration', () => {
       expect(props).toEqual(expect.arrayContaining(['provider', 'providerUserId']));
     });
 
-    it('should have correct GET /api/user/{id} schema with path parameter', async() => {
+    it('should have correct GET /api/user/{id} schema with path parameter', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/docs/json',
@@ -143,7 +139,7 @@ describe('Server Basic Functionality – integration', () => {
       expect(idParam.required).toBe(true);
     });
 
-    it('should have correct POST /api/chat schema', async() => {
+    it('should have correct POST /api/chat schema', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/docs/json',
@@ -166,7 +162,7 @@ describe('Server Basic Functionality – integration', () => {
   });
 
   describe('Server Configuration', () => {
-    it('should handle CORS preflight requests properly', async() => {
+    it('should handle CORS preflight requests properly', async () => {
       const res = await app.inject({
         method: 'OPTIONS',
         url: '/api/user',
@@ -186,7 +182,7 @@ describe('Server Basic Functionality – integration', () => {
       }
     });
 
-    it('should return 404 for unknown routes', async() => {
+    it('should return 404 for unknown routes', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/unknown-route',
@@ -195,7 +191,7 @@ describe('Server Basic Functionality – integration', () => {
       expect(res.statusCode).toBe(404);
     });
 
-    it('should handle different HTTP methods on health endpoint', async() => {
+    it('should handle different HTTP methods on health endpoint', async () => {
       // Test various HTTP methods on health endpoint
       const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
 
@@ -214,7 +210,7 @@ describe('Server Basic Functionality – integration', () => {
   });
 
   describe('Error Handling', () => {
-    it('should handle malformed JSON payload', async() => {
+    it('should handle malformed JSON payload', async () => {
       const payload = createTestUserData();
       const validKey = createTestApiKey();
 
@@ -232,7 +228,7 @@ describe('Server Basic Functionality – integration', () => {
       expect([400, 500]).toContain(res.statusCode);
     });
 
-    it('should handle payload size limits', async() => {
+    it('should handle payload size limits', async () => {
       const largePayload = 'x'.repeat(1024 * 1024); // 1MB payload
       const validKey = createTestApiKey();
 

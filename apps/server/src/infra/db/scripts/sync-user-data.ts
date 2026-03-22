@@ -340,7 +340,7 @@ async function buildSessionsPreview(
 
   // Fetch exercise names for preview
   const exerciseIds = [...new Set(sourceExercises.map(e => e.exerciseId))];
-  const exerciseNames = new Map<number, string>();
+  const exerciseNames = new Map<string, string>();
   if (exerciseIds.length > 0) {
     const rows = await srcDb
       .select({ id: schema.exercises.id, name: schema.exercises.name })

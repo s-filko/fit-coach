@@ -7,12 +7,12 @@ import { db } from '@infra/db/drizzle';
 import { exerciseMuscleGroups, exercises } from '@infra/db/schema';
 
 export class ExerciseRepository implements IExerciseRepository {
-  async findById(id: number): Promise<Exercise | null> {
+  async findById(id: string): Promise<Exercise | null> {
     const [exercise] = await db.select().from(exercises).where(eq(exercises.id, id));
     return (exercise as Exercise) ?? null;
   }
 
-  async findByIdWithMuscles(id: number): Promise<ExerciseWithMuscles | null> {
+  async findByIdWithMuscles(id: string): Promise<ExerciseWithMuscles | null> {
     const exercise = await this.findById(id);
     if (!exercise) {
       return null;
@@ -29,14 +29,14 @@ export class ExerciseRepository implements IExerciseRepository {
     } as ExerciseWithMuscles;
   }
 
-  async findByIds(ids: number[]): Promise<Exercise[]> {
+  async findByIds(ids: string[]): Promise<Exercise[]> {
     if (ids.length === 0) {
       return [];
     }
     return db.select().from(exercises).where(inArray(exercises.id, ids)) as Promise<Exercise[]>;
   }
 
-  async findByIdsWithMuscles(ids: number[]): Promise<ExerciseWithMuscles[]> {
+  async findByIdsWithMuscles(ids: string[]): Promise<ExerciseWithMuscles[]> {
     if (ids.length === 0) {
       return [];
     }
@@ -175,7 +175,7 @@ export class ExerciseRepository implements IExerciseRepository {
     return ids.map(id => byId.get(id)).filter((e): e is ExerciseWithMuscles => e !== undefined);
   }
 
-  async updateEmbedding(exerciseId: number, embedding: number[]): Promise<void> {
+  async updateEmbedding(exerciseId: string, embedding: number[]): Promise<void> {
     const vectorLiteral = `[${embedding.join(',')}]`;
     await db
       .update(exercises)

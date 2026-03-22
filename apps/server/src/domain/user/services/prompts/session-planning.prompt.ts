@@ -201,7 +201,7 @@ Help the user plan today's workout session through conversation.
     "reasoning": "Why this session is recommended (2-3 sentences)",
     "exercises": [
       {
-        "exerciseId": 1,
+        "exerciseId": "<exercise-uuid>",
         "exerciseName": "Barbell Bench Press",
         "targetSets": 3,
         "targetReps": "8-10",
@@ -225,10 +225,10 @@ Help the user plan today's workout session through conversation.
 **Important Rules:**
 
 - CRITICAL: \`sessionPlan.exercises\` MUST be a FLAT array of exercise objects.
-  Each element MUST have: exerciseId (number), exerciseName (string), targetSets (number), targetReps (string), restSeconds (number).
+  Each element MUST have: exerciseId (UUID string), exerciseName (string), targetSets (number), targetReps (string), restSeconds (number).
   Do NOT nest exercises inside day objects. Do NOT return all 4 day templates — pick ONE session for today.
-- CRITICAL: \`exerciseId\` MUST be the EXACT numeric ID from the available exercises list above.
-  NEVER omit exerciseId. NEVER invent IDs. Copy the ID shown as [ID:N] in the exercises list.
+- CRITICAL: \`exerciseId\` MUST be the EXACT UUID from the available exercises list above.
+  NEVER omit exerciseId. NEVER invent IDs. Copy the UUID shown as [ID:...] in the exercises list.
 - NEVER mention exercise IDs in your \`message\` text. IDs are internal data for the JSON structure only.
   The user should only see exercise names, sets, reps, and weights in your conversational response.
 - CRITICAL: When setting phaseTransition.toPhase to "training", you MUST ALWAYS include the
@@ -261,7 +261,7 @@ Ready to start:
     "reasoning": "Last trained upper body 3 days ago, good recovery time",
     "exercises": [
       {
-        "exerciseId": 1,
+        "exerciseId": "<exercise-uuid>",
         "exerciseName": "Barbell Bench Press",
         "targetSets": 3,
         "targetReps": "8-10",

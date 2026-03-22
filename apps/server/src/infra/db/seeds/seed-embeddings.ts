@@ -33,7 +33,7 @@ export async function seedEmbeddings(): Promise<void> {
 
   // Load all muscle groups in one query and group by exercise
   const allMuscles = await db.select().from(exerciseMuscleGroups);
-  const musclesByExercise = new Map<number, typeof allMuscles>();
+  const musclesByExercise = new Map<string, typeof allMuscles>();
   for (const m of allMuscles) {
     const list = musclesByExercise.get(m.exerciseId) ?? [];
     list.push(m);

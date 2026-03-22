@@ -22,14 +22,14 @@ export interface SessionPlanningPromptContext {
   currentPlan: SessionRecommendation | null;
   totalExercisesAvailable: number;
   daysSinceLastWorkout: number | null;
-  availableExercises: Array<{ id: number; name: string; category: string }>;
+  availableExercises: Array<{ id: string; name: string; category: string }>;
 }
 
 // Context for training prompt
 export interface TrainingPromptContext {
   user: User;
   activeSession: WorkoutSessionWithDetails;
-  availableExercises: Array<{ id: number; name: string; category: string }>;
+  availableExercises: Array<{ id: string; name: string; category: string }>;
 }
 
 // DI Token for prompt service

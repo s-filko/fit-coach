@@ -31,7 +31,7 @@ const MINIMAL_PLAN = {
       estimatedDuration: 60,
       exercises: [
         {
-          exerciseId: 1,
+          exerciseId: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
           exerciseName: 'Bench Press',
           energyCost: 'high',
           targetSets: 4,
@@ -49,7 +49,7 @@ const MINIMAL_PLAN = {
       estimatedDuration: 55,
       exercises: [
         {
-          exerciseId: 2,
+          exerciseId: '3818f94a-0543-4241-83b4-6840d06a4e6a',
           exerciseName: 'Squat',
           energyCost: 'very_high',
           targetSets: 4,
@@ -81,7 +81,12 @@ const makeConfig = (userId = 'u1'): RunnableConfig => ({
 
 const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> =>
   ({
-    findByIds: jest.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]),
+    findByIds: jest
+      .fn()
+      .mockResolvedValue([
+        { id: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95' },
+        { id: '3818f94a-0543-4241-83b4-6840d06a4e6a' },
+      ]),
     searchByEmbedding: jest.fn().mockResolvedValue([]),
     updateEmbedding: jest.fn(),
     findAll: jest.fn(),

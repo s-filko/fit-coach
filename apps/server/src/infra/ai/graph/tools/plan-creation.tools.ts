@@ -44,7 +44,7 @@ const MUSCLE_GROUPS: [MuscleGroup, ...MuscleGroup[]] = [
 const ENERGY_COST = ['very_low', 'low', 'medium', 'high', 'very_high'] as const;
 
 const sessionTemplateExerciseSchema = z.object({
-  exerciseId: z.number().int().describe('Exact numeric exercise ID from the list'),
+  exerciseId: z.string().uuid().describe('Exact exercise UUID from the list'),
   exerciseName: z.string().describe('Exercise name in English'),
   energyCost: z.enum(ENERGY_COST),
   targetSets: z.number().int().min(1),

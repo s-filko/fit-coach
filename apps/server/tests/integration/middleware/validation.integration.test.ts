@@ -10,17 +10,17 @@ describe('Input Validation Middleware – integration', () => {
   let app: Awaited<ReturnType<typeof buildServer>>;
   const validApiKey = 'test-api-key-for-validation';
 
-  beforeAll(async() => {
+  beforeAll(async () => {
     app = await buildServer();
     await app.ready();
   });
 
-  afterAll(async() => {
+  afterAll(async () => {
     await app.close();
   });
 
   describe('JSON parsing validation', () => {
-    it('should handle malformed JSON payload', async() => {
+    it('should handle malformed JSON payload', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
@@ -39,7 +39,7 @@ describe('Input Validation Middleware – integration', () => {
       expect(json.error).toHaveProperty('message');
     });
 
-    it('should handle empty payload when JSON expected', async() => {
+    it('should handle empty payload when JSON expected', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
@@ -55,7 +55,7 @@ describe('Input Validation Middleware – integration', () => {
       expect(json).toHaveProperty('error');
     });
 
-    it('should handle null payload when JSON expected', async() => {
+    it('should handle null payload when JSON expected', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
@@ -73,7 +73,7 @@ describe('Input Validation Middleware – integration', () => {
   });
 
   describe('Required field validation', () => {
-    it('should handle missing required fields in user creation', async() => {
+    it('should handle missing required fields in user creation', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
@@ -89,7 +89,7 @@ describe('Input Validation Middleware – integration', () => {
       expect(json.error).toHaveProperty('message');
     });
 
-    it('should handle missing provider field', async() => {
+    it('should handle missing provider field', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
@@ -108,7 +108,7 @@ describe('Input Validation Middleware – integration', () => {
       expect(json).toHaveProperty('error');
     });
 
-    it('should handle missing providerUserId field', async() => {
+    it('should handle missing providerUserId field', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
@@ -129,7 +129,7 @@ describe('Input Validation Middleware – integration', () => {
   });
 
   describe('Data type validation', () => {
-    it('should handle invalid provider type', async() => {
+    it('should handle invalid provider type', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
@@ -148,7 +148,7 @@ describe('Input Validation Middleware – integration', () => {
       expect(json).toHaveProperty('error');
     });
 
-    it('should handle invalid username format', async() => {
+    it('should handle invalid username format', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
@@ -169,7 +169,7 @@ describe('Input Validation Middleware – integration', () => {
   });
 
   describe('Payload size validation', () => {
-    it('should handle extremely large payloads', async() => {
+    it('should handle extremely large payloads', async () => {
       const largePayload = 'x'.repeat(1024 * 1024); // 1MB payload
 
       const res = await app.inject({
@@ -190,7 +190,7 @@ describe('Input Validation Middleware – integration', () => {
       expect([200, 400, 413]).toContain(res.statusCode);
     });
 
-    it('should handle deeply nested objects', async() => {
+    it('should handle deeply nested objects', async () => {
       const deeplyNested = {
         provider: 'telegram',
         providerUserId: 'test_123',
@@ -222,7 +222,7 @@ describe('Input Validation Middleware – integration', () => {
   });
 
   describe('Chat endpoint validation', () => {
-    it('should handle missing userId in chat request', async() => {
+    it('should handle missing userId in chat request', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/chat',
@@ -240,7 +240,7 @@ describe('Input Validation Middleware – integration', () => {
       expect(json).toHaveProperty('error');
     });
 
-    it('should handle missing message in chat request', async() => {
+    it('should handle missing message in chat request', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/chat',
@@ -258,7 +258,7 @@ describe('Input Validation Middleware – integration', () => {
       expect(json).toHaveProperty('error');
     });
 
-    it('should handle empty message strings', async() => {
+    it('should handle empty message strings', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/chat',
@@ -277,7 +277,7 @@ describe('Input Validation Middleware – integration', () => {
   });
 
   describe('Error message consistency', () => {
-    it('should provide consistent error message format', async() => {
+    it('should provide consistent error message format', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',
@@ -299,7 +299,7 @@ describe('Input Validation Middleware – integration', () => {
       });
     });
 
-    it('should include field information in validation errors', async() => {
+    it('should include field information in validation errors', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/user',

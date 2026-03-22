@@ -28,8 +28,8 @@ describe('TrainingService – integration (ADR-0011)', () => {
   let sessionExerciseRepo: SessionExerciseRepository;
   let sessionSetRepo: SessionSetRepository;
 
-  let benchPressId: number;
-  let squatId: number;
+  let benchPressId: string;
+  let squatId: string;
 
   beforeAll(async () => {
     userRepo = new DrizzleUserRepository();
@@ -160,9 +160,7 @@ describe('TrainingService – integration (ADR-0011)', () => {
       // Open exercise without logging any sets
       await service.ensureCurrentExercise(sessionId, { exerciseId: benchPressId });
 
-      await expect(service.deleteLastSets(sessionId, benchPressId, 1)).rejects.toThrow(
-        /No sets found/,
-      );
+      await expect(service.deleteLastSets(sessionId, benchPressId, 1)).rejects.toThrow(/No sets found/);
     });
   });
 
@@ -238,9 +236,7 @@ describe('TrainingService – integration (ADR-0011)', () => {
     });
 
     it('should not throw when deleting a non-existent set id', async () => {
-      await expect(
-        sessionSetRepo.deleteById('00000000-0000-0000-0000-000000000000'),
-      ).resolves.not.toThrow();
+      await expect(sessionSetRepo.deleteById('00000000-0000-0000-0000-000000000000')).resolves.not.toThrow();
     });
   });
 });

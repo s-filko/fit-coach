@@ -41,10 +41,10 @@ export interface ExerciseSearchFilters {
 }
 
 export interface IExerciseRepository {
-  findById(id: number): Promise<Exercise | null>;
-  findByIdWithMuscles(id: number): Promise<ExerciseWithMuscles | null>;
-  findByIds(ids: number[]): Promise<Exercise[]>;
-  findByIdsWithMuscles(ids: number[]): Promise<ExerciseWithMuscles[]>;
+  findById(id: string): Promise<Exercise | null>;
+  findByIdWithMuscles(id: string): Promise<ExerciseWithMuscles | null>;
+  findByIds(ids: string[]): Promise<Exercise[]>;
+  findByIdsWithMuscles(ids: string[]): Promise<ExerciseWithMuscles[]>;
   findByMuscleGroup(muscleGroup: MuscleGroup, primaryOnly?: boolean): Promise<ExerciseWithMuscles[]>;
   search(query: string, limit?: number): Promise<Exercise[]>;
   findAll(filters?: {
@@ -71,7 +71,7 @@ export interface IExerciseRepository {
   /**
    * Store the computed embedding for an exercise.
    */
-  updateEmbedding(exerciseId: number, embedding: number[]): Promise<void>;
+  updateEmbedding(exerciseId: string, embedding: number[]): Promise<void>;
 }
 
 export interface IWorkoutSessionRepository {

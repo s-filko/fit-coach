@@ -156,7 +156,7 @@ Guide the user through their workout session, log their sets, and provide suppor
   "intents": [
     {
       "type": "${trainingIntentTypes.logSet}",
-      "exerciseId": 1,
+      "exerciseId": "<exercise-uuid>",
       "setData": { "type": "strength", "reps": 10, "weight": 50, "weightUnit": "kg" },
       "rpe": 8
     }
@@ -208,16 +208,16 @@ Guide the user through their workout session, log their sets, and provide suppor
    \`\`\`json
    {
      "intents": [
-       { "type": "${trainingIntentTypes.logSet}", "exerciseId": 1, "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } },
-       { "type": "${trainingIntentTypes.logSet}", "exerciseId": 1, "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } },
-       { "type": "${trainingIntentTypes.logSet}", "exerciseId": 1, "setData": { "type": "strength", "reps": 6, "weight": 80, "weightUnit": "kg" } }
+       { "type": "${trainingIntentTypes.logSet}", "exerciseId": "<exercise-uuid>", "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } },
+       { "type": "${trainingIntentTypes.logSet}", "exerciseId": "<exercise-uuid>", "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } },
+       { "type": "${trainingIntentTypes.logSet}", "exerciseId": "<exercise-uuid>", "setData": { "type": "strength", "reps": 6, "weight": 80, "weightUnit": "kg" } }
      ]
    }
    \`\`\`
 
    Single set example:
    \`\`\`json
-   { "intents": [{ "type": "${trainingIntentTypes.logSet}", "exerciseId": 1, "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } }] }
+   { "intents": [{ "type": "${trainingIntentTypes.logSet}", "exerciseId": "<exercise-uuid>", "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } }] }
    \`\`\`
 
 2. **${trainingIntentTypes.completeCurrentExercise}**: Move to next exercise
@@ -313,7 +313,7 @@ User: "Did 10 reps with 50kg, felt pretty hard"
 {
   "message": "Nice! Logged 10 reps @ 50kg. Take 90s rest before the next one.",
   "intents": [
-    { "type": "${trainingIntentTypes.logSet}", "exerciseId": 1, "setData": { "type": "strength", "reps": 10, "weight": 50, "weightUnit": "kg" }, "rpe": 8, "feedback": "Felt hard" }
+    { "type": "${trainingIntentTypes.logSet}", "exerciseId": "<exercise-uuid>", "setData": { "type": "strength", "reps": 10, "weight": 50, "weightUnit": "kg" }, "rpe": 8, "feedback": "Felt hard" }
   ]
 }
 \`\`\`
@@ -323,9 +323,9 @@ User: "Did 3 sets of 8 at 80kg"
 {
   "message": "Great! Logged all 3 sets of 8 reps @ 80kg.",
   "intents": [
-    { "type": "${trainingIntentTypes.logSet}", "exerciseId": 1, "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } },
-    { "type": "${trainingIntentTypes.logSet}", "exerciseId": 1, "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } },
-    { "type": "${trainingIntentTypes.logSet}", "exerciseId": 1, "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } }
+    { "type": "${trainingIntentTypes.logSet}", "exerciseId": "<exercise-uuid>", "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } },
+    { "type": "${trainingIntentTypes.logSet}", "exerciseId": "<exercise-uuid>", "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } },
+    { "type": "${trainingIntentTypes.logSet}", "exerciseId": "<exercise-uuid>", "setData": { "type": "strength", "reps": 8, "weight": 80, "weightUnit": "kg" } }
   ]
 }
 \`\`\`
@@ -343,8 +343,8 @@ User: "2 more sets of 8 at 70kg. Done with rows, moving to overhead press."
 {
   "message": "Logged 2 sets of rows. Great work — moving on to overhead press!",
   "intents": [
-    { "type": "${trainingIntentTypes.logSet}", "exerciseId": 5, "setData": { "type": "strength", "reps": 8, "weight": 70, "weightUnit": "kg" } },
-    { "type": "${trainingIntentTypes.logSet}", "exerciseId": 5, "setData": { "type": "strength", "reps": 8, "weight": 70, "weightUnit": "kg" } },
+    { "type": "${trainingIntentTypes.logSet}", "exerciseId": "<exercise-uuid>", "setData": { "type": "strength", "reps": 8, "weight": 70, "weightUnit": "kg" } },
+    { "type": "${trainingIntentTypes.logSet}", "exerciseId": "<exercise-uuid>", "setData": { "type": "strength", "reps": 8, "weight": 70, "weightUnit": "kg" } },
     { "type": "${trainingIntentTypes.completeCurrentExercise}", "reason": "User finished the exercise" }
   ]
 }
@@ -355,7 +355,7 @@ User: "4 more pull-ups, that's it. Moved to bicep curls — 10 reps at 20kg."
 {
   "message": "Logged 4 pull-ups and your first bicep set — 10 reps @ 20kg! Biceps weren't in the plan, but great addition!",
   "intents": [
-    { "type": "${trainingIntentTypes.logSet}", "exerciseId": 6, "setData": { "type": "strength", "reps": 4, "weight": 0, "weightUnit": "kg" } },
+    { "type": "${trainingIntentTypes.logSet}", "exerciseId": "<exercise-uuid>", "setData": { "type": "strength", "reps": 4, "weight": 0, "weightUnit": "kg" } },
     { "type": "${trainingIntentTypes.completeCurrentExercise}", "reason": "User finished pull-ups" },
     { "type": "${trainingIntentTypes.logSet}", "exerciseName": "Dumbbell Bicep Curl", "setData": { "type": "strength", "reps": 10, "weight": 20, "weightUnit": "kg" } }
   ]

@@ -33,7 +33,9 @@ describe('POST /api/chat – integration', () => {
     app = buildServer();
 
     const { CONVERSATION_CONTEXT_SERVICE_TOKEN: ctxToken } = await import('../../../src/domain/conversation/ports');
-    const { InMemoryConversationContextService } = await import('../../../src/infra/conversation/conversation-context.service');
+    const { InMemoryConversationContextService } = await import(
+      '../../../src/infra/conversation/conversation-context.service'
+    );
     container.register(ctxToken, new InMemoryConversationContextService());
     container.register(CONVERSATION_GRAPH_TOKEN, stubGraph);
 

@@ -74,23 +74,22 @@ export async function setupTestDI(): Promise<void> {
     // Seed minimal test exercises data
     const client3 = await pool.connect();
     try {
-      // Insert test exercises
+      // Insert test exercises with fixed UUIDs (matching seed file)
       await client3.query(`
         INSERT INTO exercises (
-          name, category, equipment, exercise_type, description, 
+          id, name, category, equipment, exercise_type, description, 
           energy_cost, complexity, typical_duration_minutes, requires_spotter
         )
         VALUES 
-          ('Barbell Bench Press', 'compound', 'barbell', 'strength', 
+          ('c7b0899c-a0f9-47ca-a69d-4bcd531b0c95', 'Barbell Bench Press', 'compound', 'barbell', 'strength', 
            'Chest compound movement', 'high', 'intermediate', 12, true),
-          ('Barbell Back Squat', 'compound', 'barbell', 'strength', 
+          ('3818f94a-0543-4241-83b4-6840d06a4e6a', 'Barbell Back Squat', 'compound', 'barbell', 'strength', 
            'Leg compound movement', 'very_high', 'advanced', 15, true),
-          ('Pull-ups', 'compound', 'bodyweight', 'strength', 
+          ('8c88ebce-f5df-4d33-afdb-0b096a0dd7a8', 'Pull-ups', 'compound', 'bodyweight', 'strength', 
            'Back compound movement', 'high', 'intermediate', 10, false),
-          ('Running', 'cardio', 'none', 'cardio_distance', 
+          ('da89020e-f54a-4573-b70b-764833ae761a', 'Running', 'cardio', 'none', 'cardio_distance', 
            'Cardio exercise', 'medium', 'beginner', 30, false)
-        ON CONFLICT (name) DO NOTHING
-        RETURNING id;
+        ON CONFLICT (id) DO NOTHING;
       `);
 
       // Get exercise IDs

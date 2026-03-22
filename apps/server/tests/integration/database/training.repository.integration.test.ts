@@ -234,7 +234,7 @@ describe('Training Repositories – integration', () => {
 
   describe('SessionExerciseRepository', () => {
     let sessionId: string;
-    let exerciseId: number;
+    let exerciseId: string;
 
     beforeAll(async () => {
       // Create session for exercise tests

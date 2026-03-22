@@ -175,11 +175,10 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
       schema: z
         .object({
           exerciseId: z
-            .number()
-            .int()
-            .positive()
+            .string()
+            .uuid()
             .optional()
-            .describe('Exercise ID from the session plan. Preferred over exerciseName.'),
+            .describe('Exercise UUID from the session plan. Preferred over exerciseName.'),
           exerciseName: z.string().optional().describe('Exercise name — only if exerciseId is unknown.'),
           reps: z.number().int().positive().optional().describe('Number of repetitions performed.'),
           weight: z
@@ -364,7 +363,7 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
         'Use this when the user says a set was logged by mistake or wants to correct a logging error. ' +
         'Default count is 1 (deletes only the most recent set).',
       schema: z.object({
-        exercise_id: z.number().describe('The numeric ID of the exercise whose sets should be deleted'),
+        exercise_id: z.string().uuid().describe('The UUID of the exercise whose sets should be deleted'),
         count: z
           .number()
           .int()
@@ -425,7 +424,7 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
         'Use this when the user says they entered wrong numbers, or to add missing duration to a cardio_distance set logged without time. ' +
         'Only provide the fields you want to change; others remain unchanged.',
       schema: z.object({
-        exercise_id: z.number().describe('The numeric ID of the exercise whose last set should be updated'),
+        exercise_id: z.string().uuid().describe('The UUID of the exercise whose last set should be updated'),
         weight: z.number().optional().describe('New weight in kg (if correcting weight)'),
         reps: z.number().int().optional().describe('New rep count (if correcting reps)'),
         rpe: z.number().min(1).max(10).optional().describe('New RPE value (if correcting perceived exertion)'),

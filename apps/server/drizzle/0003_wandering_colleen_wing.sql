@@ -4,14 +4,14 @@ CREATE TYPE "public"."session_exercise_status" AS ENUM('pending', 'in_progress',
 CREATE TYPE "public"."session_status" AS ENUM('planned', 'in_progress', 'completed', 'skipped');--> statement-breakpoint
 CREATE TYPE "public"."workout_plan_status" AS ENUM('draft', 'active', 'archived');--> statement-breakpoint
 CREATE TABLE "exercise_muscle_groups" (
-	"exercise_id" integer NOT NULL,
+	"exercise_id" uuid NOT NULL,
 	"muscle_group" "muscle_group" NOT NULL,
 	"involvement" text NOT NULL,
 	CONSTRAINT "exercise_muscle_groups_exercise_id_muscle_group_pk" PRIMARY KEY("exercise_id","muscle_group")
 );
 --> statement-breakpoint
 CREATE TABLE "exercises" (
-	"id" serial PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"category" text NOT NULL,
 	"equipment" text NOT NULL,
@@ -30,7 +30,7 @@ CREATE TABLE "exercises" (
 CREATE TABLE "session_exercises" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"session_id" uuid NOT NULL,
-	"exercise_id" integer NOT NULL,
+	"exercise_id" uuid NOT NULL,
 	"order_index" integer NOT NULL,
 	"status" "session_exercise_status" DEFAULT 'pending' NOT NULL,
 	"target_sets" integer,

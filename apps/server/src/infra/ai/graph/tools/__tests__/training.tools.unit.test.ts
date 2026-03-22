@@ -91,7 +91,7 @@ describe('buildTrainingTools', () => {
       const { byName } = makeDeps(trainingService);
       const result = await byName('log_set').invoke(
         {
-          exerciseId: 12,
+          exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
           ...FLAT_SET_INPUT,
           rpe: 8,
         },
@@ -99,7 +99,7 @@ describe('buildTrainingTools', () => {
       );
 
       expect(trainingService.logSetWithContext).toHaveBeenCalledWith('session-1', {
-        exerciseId: 12,
+        exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
         exerciseName: undefined,
         setData: EXPECTED_SET_DATA,
         rpe: 8,
@@ -115,7 +115,7 @@ describe('buildTrainingTools', () => {
       const { byName } = makeDeps(trainingService, null);
       const result = await byName('log_set').invoke(
         {
-          exerciseId: 12,
+          exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
           ...FLAT_SET_INPUT,
         },
         makeConfig('u1'),
@@ -140,10 +140,13 @@ describe('buildTrainingTools', () => {
       trainingService.logSetWithContext.mockResolvedValue({ set: mockSet, setNumber: 1 });
 
       const { byName } = makeDeps(trainingService);
-      await byName('log_set').invoke({ exerciseId: 12, ...FLAT_SET_INPUT, order: 2 }, makeConfig('u1'));
+      await byName('log_set').invoke(
+        { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', ...FLAT_SET_INPUT, order: 2 },
+        makeConfig('u1'),
+      );
 
       expect(trainingService.logSetWithContext).toHaveBeenCalledWith('session-1', {
-        exerciseId: 12,
+        exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
         exerciseName: undefined,
         setData: EXPECTED_SET_DATA,
         rpe: undefined,
@@ -158,7 +161,7 @@ describe('buildTrainingTools', () => {
       const { byName } = makeDeps(trainingService);
       const result = await byName('log_set').invoke(
         {
-          exerciseId: 99,
+          exerciseId: '00000000-0000-4000-8000-000000000063',
           ...FLAT_SET_INPUT,
         },
         makeConfig('u1'),
@@ -171,7 +174,7 @@ describe('buildTrainingTools', () => {
 
   describe('complete_current_exercise', () => {
     const mockSummary = {
-      exerciseId: 4,
+      exerciseId: '00000000-0000-4000-8000-000000000004',
       exerciseName: 'Overhead Press',
       setsLogged: 3,
       sets: [
@@ -337,7 +340,7 @@ describe('buildTrainingTools', () => {
         set: mockSet,
         setNumber: 1,
         autoCompleted: {
-          exerciseId: 10,
+          exerciseId: '00000000-0000-4000-8000-00000000000a',
           exerciseName: 'Lateral Raise',
           setsLogged: 2,
           sets: [
@@ -352,7 +355,10 @@ describe('buildTrainingTools', () => {
       trainingService.logSetWithContext.mockResolvedValue(mockResult);
 
       const { byName } = makeDeps(trainingService);
-      const result = await byName('log_set').invoke({ exerciseId: 12, ...FLAT_SET_INPUT }, makeConfig('u1'));
+      const result = await byName('log_set').invoke(
+        { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', ...FLAT_SET_INPUT },
+        makeConfig('u1'),
+      );
 
       expect(result).toContain('Lateral Raise');
       expect(result).toContain('completed');
@@ -375,7 +381,10 @@ describe('buildTrainingTools', () => {
       trainingService.logSetWithContext.mockResolvedValue({ set: mockSet, setNumber: 2 });
 
       const { byName } = makeDeps(trainingService);
-      const result = await byName('log_set').invoke({ exerciseId: 12, ...FLAT_SET_INPUT }, makeConfig('u1'));
+      const result = await byName('log_set').invoke(
+        { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', ...FLAT_SET_INPUT },
+        makeConfig('u1'),
+      );
 
       expect(result).not.toContain('auto-completed');
       expect(result).toContain('Set 2 logged');
@@ -464,10 +473,16 @@ describe('buildTrainingTools', () => {
       const { byName } = makeDeps(trainingService);
 
       // Turn 1: user says "that was my first set" → LLM calls log_set
-      await byName('log_set').invoke({ exerciseId: 12, ...FLAT_SET_INPUT }, makeConfig('u1'));
+      await byName('log_set').invoke(
+        { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', ...FLAT_SET_INPUT },
+        makeConfig('u1'),
+      );
       // Turn 2: user says "no no, remove last one" → LLM has no delete tool,
       //         calls log_set again trying to "correct" by re-logging
-      await byName('log_set').invoke({ exerciseId: 12, ...FLAT_SET_INPUT }, makeConfig('u1'));
+      await byName('log_set').invoke(
+        { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', ...FLAT_SET_INPUT },
+        makeConfig('u1'),
+      );
 
       // Both calls succeed — 2 DB writes for what should have been 1 set
       expect(trainingService.logSetWithContext).toHaveBeenCalledTimes(2);

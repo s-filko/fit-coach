@@ -10,7 +10,7 @@ describe('DrizzleUserRepository – integration', () => {
   let repository: DrizzleUserRepository;
   let tx: any; // Transaction context for test isolation
 
-  beforeAll(async() => {
+  beforeAll(async () => {
     // Ensure database schema is initialized using lazy loading
     const { ensureSchema } = await import('../../../src/infra/db/init');
     await ensureSchema();
@@ -21,7 +21,7 @@ describe('DrizzleUserRepository – integration', () => {
   // to avoid complex transaction setup with Drizzle ORM in tests
 
   describe('create', () => {
-    it('should create user with correct data structure and return valid user object', async() => {
+    it('should create user with correct data structure and return valid user object', async () => {
       // Arrange
       const userData = createTestUserData({
         username: 'testuser_create',
@@ -45,7 +45,7 @@ describe('DrizzleUserRepository – integration', () => {
       expect(result).toHaveProperty('id');
     });
 
-    it('should create users with different providers independently', async() => {
+    it('should create users with different providers independently', async () => {
       // Arrange
       const userData1 = createTestUserData({
         provider: 'telegram',
@@ -68,7 +68,7 @@ describe('DrizzleUserRepository – integration', () => {
   });
 
   describe('updateProfileData', () => {
-    it('should update user profile data and return updated user object', async() => {
+    it('should update user profile data and return updated user object', async () => {
       // Arrange
       const createData = createTestUserData({
         username: 'testuser_update',
@@ -101,7 +101,7 @@ describe('DrizzleUserRepository – integration', () => {
       expect(result!.profileStatus).toBe('registration'); // Profile data updated but not complete yet
     });
 
-    it('should return null when updating non-existent user', async() => {
+    it('should return null when updating non-existent user', async () => {
       // Arrange
       const nonExistentId = '00000000-0000-0000-0000-000000000000';
       const profileData = {
@@ -120,7 +120,7 @@ describe('DrizzleUserRepository – integration', () => {
       expect(result).toBeNull();
     });
 
-    it('should handle partial profile updates', async() => {
+    it('should handle partial profile updates', async () => {
       // Arrange
       const createData = createTestUserData({
         username: 'testuser_partial',
@@ -147,7 +147,7 @@ describe('DrizzleUserRepository – integration', () => {
   });
 
   describe('getById', () => {
-    it('should retrieve user by ID when user exists', async() => {
+    it('should retrieve user by ID when user exists', async () => {
       // Arrange
       const createData = createTestUserData({
         username: 'testuser_getbyid',
@@ -163,7 +163,7 @@ describe('DrizzleUserRepository – integration', () => {
       expect(result!.username).toBe('testuser_getbyid');
     });
 
-    it('should return null when user does not exist', async() => {
+    it('should return null when user does not exist', async () => {
       // Arrange
       const nonExistentId = '00000000-0000-0000-0000-000000000000';
 
@@ -176,7 +176,7 @@ describe('DrizzleUserRepository – integration', () => {
   });
 
   describe('findByProvider', () => {
-    it('should find user by provider and providerUserId', async() => {
+    it('should find user by provider and providerUserId', async () => {
       // Arrange
       const createData = createTestUserData({
         provider: 'telegram',
@@ -193,7 +193,7 @@ describe('DrizzleUserRepository – integration', () => {
       expect(result!.username).toBe('testuser_findbyprovider');
     });
 
-    it('should return null when provider account does not exist', async() => {
+    it('should return null when provider account does not exist', async () => {
       // Act
       const result = await repository.findByProvider('telegram', 'nonexistent_user_id');
 
@@ -201,7 +201,7 @@ describe('DrizzleUserRepository – integration', () => {
       expect(result).toBeNull();
     });
 
-    it('should handle different providers correctly', async() => {
+    it('should handle different providers correctly', async () => {
       // Arrange
       const telegramData = createTestUserData({
         provider: 'telegram',

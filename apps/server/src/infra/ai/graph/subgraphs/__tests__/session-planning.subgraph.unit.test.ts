@@ -37,7 +37,9 @@ const MINIMAL_SESSION_PLAN = {
   sessionKey: 'upper_a',
   sessionName: 'Upper A',
   reasoning: 'Good recovery',
-  exercises: [{ exerciseId: 1, targetSets: 3, targetReps: '8-10', restSeconds: 90 }],
+  exercises: [
+    { exerciseId: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95', targetSets: 3, targetReps: '8-10', restSeconds: 90 },
+  ],
   estimatedDuration: 60,
 };
 
@@ -55,7 +57,7 @@ const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> =>
     findById: jest.fn(),
     findByIdWithMuscles: jest.fn(),
     // Return any requested IDs so exerciseId validation always passes in subgraph tests
-    findByIds: jest.fn().mockImplementation(async (ids: number[]) => ids.map(id => ({ id }))),
+    findByIds: jest.fn().mockImplementation(async (ids: string[]) => ids.map(id => ({ id }))),
     findByIdsWithMuscles: jest.fn().mockResolvedValue([]),
     findByMuscleGroup: jest.fn(),
     search: jest.fn().mockResolvedValue([]),

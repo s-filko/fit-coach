@@ -125,7 +125,7 @@ Analyze the training history and recommend the BEST session for today.
   "reasoning": "Detailed explanation of why this session is recommended (2-3 sentences)",
   "exercises": [
     {
-      "exerciseId": 1,
+      "exerciseId": "<exercise-uuid>",
       "exerciseName": "Barbell Bench Press",
       "targetSets": 3,
       "targetReps": "8-10",

@@ -215,7 +215,7 @@ async function findUser(telegramId: string): Promise<string> {
   return account.userId;
 }
 
-async function findExerciseId(name: string): Promise<number> {
+async function findExerciseId(name: string): Promise<string> {
   const [exercise] = await db.select({ id: exercises.id }).from(exercises).where(eq(exercises.name, name));
 
   if (!exercise) {

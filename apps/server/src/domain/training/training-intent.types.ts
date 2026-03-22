@@ -111,7 +111,7 @@ export const LogSetIntentSchema = z
     type: z.literal(trainingIntentTypes.logSet),
     // REQUIRED: ID of the exercise being logged (from session plan).
     // Must be provided whenever the exercise can be matched to the plan.
-    exerciseId: z.number().int().positive().optional(),
+    exerciseId: z.string().uuid().optional(),
     // Exercise name — required only for truly off-plan exercises with no matching ID.
     exerciseName: z.string().optional(),
     setData: SetDataSchema,

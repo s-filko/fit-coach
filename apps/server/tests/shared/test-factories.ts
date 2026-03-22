@@ -25,14 +25,16 @@ export const generateTestUserId = (): string => {
 /**
  * Generates unique user data for testing
  */
-export const createTestUserData = (overrides: Partial<{
-  provider: string;
-  providerUserId: string;
-  username: string;
-  firstName?: string;
-  lastName?: string;
-  languageCode?: string;
-}> = {}) => ({
+export const createTestUserData = (
+  overrides: Partial<{
+    provider: string;
+    providerUserId: string;
+    username: string;
+    firstName?: string;
+    lastName?: string;
+    languageCode?: string;
+  }> = {},
+) => ({
   provider: overrides.provider ?? 'telegram',
   providerUserId: overrides.providerUserId ?? generateUniqueId('user'),
   username: overrides.username ?? generateUniqueId('username'),
@@ -44,10 +46,12 @@ export const createTestUserData = (overrides: Partial<{
 /**
  * Generates unique chat message payload
  */
-export const createTestChatPayload = (overrides: Partial<{
-  userId: string;
-  message: string;
-}> = {}) => ({
+export const createTestChatPayload = (
+  overrides: Partial<{
+    userId: string;
+    message: string;
+  }> = {},
+) => ({
   userId: overrides.userId ?? generateUniqueId('user'),
   message: overrides.message ?? `Test message ${generateUniqueId()}`,
 });
@@ -55,14 +59,16 @@ export const createTestChatPayload = (overrides: Partial<{
 /**
  * Generates unique user profile data
  */
-export const createTestUserProfile = (overrides: Partial<{
-  age?: number;
-  gender?: 'male' | 'female' | 'other';
-  height?: number;
-  weight?: number;
-  fitnessLevel?: 'beginner' | 'intermediate' | 'advanced';
-  fitnessGoal?: string;
-}> = {}) => ({
+export const createTestUserProfile = (
+  overrides: Partial<{
+    age?: number;
+    gender?: 'male' | 'female' | 'other';
+    height?: number;
+    weight?: number;
+    fitnessLevel?: 'beginner' | 'intermediate' | 'advanced';
+    fitnessGoal?: string;
+  }> = {},
+) => ({
   age: overrides.age ?? 25,
   gender: overrides.gender ?? 'male',
   height: overrides.height ?? 175,
@@ -74,11 +80,13 @@ export const createTestUserProfile = (overrides: Partial<{
 /**
  * Generates unique workout data
  */
-export const createTestWorkoutData = (overrides: Partial<{
-  userId: string;
-  name?: string;
-  notes?: string;
-}> = {}) => ({
+export const createTestWorkoutData = (
+  overrides: Partial<{
+    userId: string;
+    name?: string;
+    notes?: string;
+  }> = {},
+) => ({
   userId: overrides.userId ?? generateUniqueId('user'),
   name: overrides.name ?? `Test Workout ${generateUniqueId()}`,
   notes: overrides.notes,
@@ -87,13 +95,15 @@ export const createTestWorkoutData = (overrides: Partial<{
 /**
  * Generates unique exercise data
  */
-export const createTestExerciseData = (overrides: Partial<{
-  name?: string;
-  category?: string;
-  description?: string;
-  isGlobal?: boolean;
-  createdBy?: string;
-}> = {}) => ({
+export const createTestExerciseData = (
+  overrides: Partial<{
+    name?: string;
+    category?: string;
+    description?: string;
+    isGlobal?: boolean;
+    createdBy?: string;
+  }> = {},
+) => ({
   name: overrides.name ?? `Test Exercise ${generateUniqueId()}`,
   category: overrides.category ?? 'strength',
   description: overrides.description ?? 'Test exercise description',
@@ -104,14 +114,16 @@ export const createTestExerciseData = (overrides: Partial<{
 /**
  * Generates unique exercise log data
  */
-export const createTestExerciseLogData = (overrides: Partial<{
-  userId: string;
-  exerciseId: string;
-  sets?: number;
-  reps?: number;
-  weight?: number;
-  comment?: string;
-}> = {}) => ({
+export const createTestExerciseLogData = (
+  overrides: Partial<{
+    userId: string;
+    exerciseId: string;
+    sets?: number;
+    reps?: number;
+    weight?: number;
+    comment?: string;
+  }> = {},
+) => ({
   userId: overrides.userId ?? generateUniqueId('user'),
   exerciseId: overrides.exerciseId ?? generateUniqueId('exercise'),
   sets: overrides.sets ?? 3,
@@ -123,11 +135,13 @@ export const createTestExerciseLogData = (overrides: Partial<{
 /**
  * Generates unique AI session data
  */
-export const createTestAiSessionData = (overrides: Partial<{
-  userId: string;
-  sessionType?: string;
-  summary?: string;
-}> = {}) => ({
+export const createTestAiSessionData = (
+  overrides: Partial<{
+    userId: string;
+    sessionType?: string;
+    summary?: string;
+  }> = {},
+) => ({
   userId: overrides.userId ?? generateUniqueId('user'),
   sessionType: overrides.sessionType ?? 'chat',
   summary: overrides.summary ?? `Test session summary ${generateUniqueId()}`,
@@ -136,15 +150,17 @@ export const createTestAiSessionData = (overrides: Partial<{
 /**
  * Generates unique user metrics data
  */
-export const createTestUserMetricsData = (overrides: Partial<{
-  userId: string;
-  weight?: number;
-  chest?: number;
-  waist?: number;
-  hips?: number;
-  biceps?: number;
-  thigh?: number;
-}> = {}) => ({
+export const createTestUserMetricsData = (
+  overrides: Partial<{
+    userId: string;
+    weight?: number;
+    chest?: number;
+    waist?: number;
+    hips?: number;
+    biceps?: number;
+    thigh?: number;
+  }> = {},
+) => ({
   userId: overrides.userId ?? generateUniqueId('user'),
   weight: overrides.weight ?? 75.5,
   chest: overrides.chest ?? 95,
@@ -176,12 +192,14 @@ export const createTestHeaders = (overrides: Record<string, string> = {}) => ({
 /**
  * Generates test request options for Fastify inject
  */
-export const createTestRequest = (overrides: Partial<{
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
-  url: string;
-  headers?: Record<string, string>;
-  payload?: any;
-}> = {}) => ({
+export const createTestRequest = (
+  overrides: Partial<{
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+    url: string;
+    headers?: Record<string, string>;
+    payload?: any;
+  }> = {},
+) => ({
   method: overrides.method ?? 'GET',
   url: overrides.url ?? '/',
   headers: overrides.headers ?? createTestHeaders(),
@@ -221,20 +239,22 @@ export const createTestDate = (offsetDays: number = 0): string => {
 /**
  * Generates test User object (for business logic tests)
  */
-export const createTestUser = (overrides: Partial<{
-  id: string;
-  username?: string | null;
-  firstName?: string | null;
-  lastName?: string | null;
-  languageCode?: string | null;
-  profileStatus?: string | null;
-  fitnessLevel?: string | null;
-  age?: number | null;
-  gender?: 'male' | 'female' | null;
-  height?: number | null;
-  weight?: number | null;
-  fitnessGoal?: string | null;
-}> = {}): {
+export const createTestUser = (
+  overrides: Partial<{
+    id: string;
+    username?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    languageCode?: string | null;
+    profileStatus?: string | null;
+    fitnessLevel?: string | null;
+    age?: number | null;
+    gender?: 'male' | 'female' | null;
+    height?: number | null;
+    weight?: number | null;
+    fitnessGoal?: string | null;
+  }> = {},
+): {
   id: string;
   username?: string | null;
   firstName?: string | null;

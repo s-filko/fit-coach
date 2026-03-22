@@ -30,7 +30,7 @@ export interface CompletedSetDetail {
 
 /** Metadata returned when an exercise is completed (explicitly or auto-completed on switch). */
 export interface AutoCompletedExercise {
-  exerciseId: number;
+  exerciseId: string;
   exerciseName: string;
   setsLogged: number;
   sets: CompletedSetDetail[];
@@ -53,13 +53,13 @@ export interface DeletedSetDetail {
 }
 
 export interface DeletedSetsResult {
-  exerciseId: number;
+  exerciseId: string;
   deletedSets: DeletedSetDetail[];
 }
 
 /** Before/after diff returned by updateLastSet. */
 export interface UpdateSetResult {
-  exerciseId: number;
+  exerciseId: string;
   setNumber: number;
   before: Pick<SessionSet, 'setData' | 'rpe' | 'userFeedback'>;
   after: Pick<SessionSet, 'setData' | 'rpe' | 'userFeedback'>;
@@ -84,14 +84,14 @@ export interface ITrainingService {
   // Auto-completes the current in_progress exercise when switching to a different exerciseId.
   ensureCurrentExercise(
     sessionId: string,
-    opts?: { exerciseId?: number; exerciseName?: string },
+    opts?: { exerciseId?: string; exerciseName?: string },
   ): Promise<EnsureExerciseResult>;
 
   // Correction tools (ADR-0011 Phase 2)
-  deleteLastSets(sessionId: string, exerciseId: number, count?: number): Promise<DeletedSetsResult>;
+  deleteLastSets(sessionId: string, exerciseId: string, count?: number): Promise<DeletedSetsResult>;
   updateLastSet(
     sessionId: string,
-    exerciseId: number,
+    exerciseId: string,
     updates: {
       rpe?: number;
       feedback?: string;
@@ -107,7 +107,7 @@ export interface ITrainingService {
   logSetWithContext(
     sessionId: string,
     opts: {
-      exerciseId?: number;
+      exerciseId?: string;
       exerciseName?: string;
       setData: SetData;
       rpe?: number;

@@ -167,7 +167,7 @@ export const workoutPlans = pgTable(
 export const exercises = pgTable(
   'exercises',
   {
-    id: serial('id').primaryKey(),
+    id: uuid('id').primaryKey(),
     name: text('name').notNull().unique(),
     category: text('category').notNull(),
     equipment: text('equipment').notNull(),
@@ -200,7 +200,7 @@ export const exercises = pgTable(
 export const exerciseMuscleGroups = pgTable(
   'exercise_muscle_groups',
   {
-    exerciseId: integer('exercise_id')
+    exerciseId: uuid('exercise_id')
       .references(() => exercises.id, { onDelete: 'cascade' })
       .notNull(),
     muscleGroup: muscleGroupEnum('muscle_group').notNull(),
@@ -252,7 +252,7 @@ export const sessionExercises = pgTable(
     sessionId: uuid('session_id')
       .references(() => workoutSessions.id, { onDelete: 'cascade' })
       .notNull(),
-    exerciseId: integer('exercise_id')
+    exerciseId: uuid('exercise_id')
       .references(() => exercises.id)
       .notNull(),
     orderIndex: integer('order_index').notNull(),

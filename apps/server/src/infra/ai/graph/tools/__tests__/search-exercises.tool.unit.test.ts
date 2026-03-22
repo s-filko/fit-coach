@@ -11,7 +11,7 @@ type InvokableTool = {
 };
 
 const makeExerciseWithMuscles = (overrides: Partial<ExerciseWithMuscles> = {}): ExerciseWithMuscles => ({
-  id: 1,
+  id: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
   name: 'Barbell Bench Press',
   category: 'compound',
   equipment: 'barbell',
@@ -125,7 +125,7 @@ describe('search_exercises tool', () => {
 
     const result = (await tool.invoke({ query: 'bench press' })) as string;
 
-    expect(result).toContain('ID:1');
+    expect(result).toContain('ID:c7b0899c-a0f9-47ca-a69d-4bcd531b0c95');
     expect(result).toContain('Barbell Bench Press');
     expect(result).toContain('chest');
   });

@@ -23,7 +23,7 @@ export interface UserProfile {
 export interface PlanCreationPromptContext {
   userProfile: UserProfile;
   availableExercises: Array<{
-    id: number;
+    id: string;
     name: string;
     category: string;
     equipment: string;
@@ -82,8 +82,8 @@ When creating workoutPlan object, you MUST use ONLY these exact values:
 2. energyCost - ONLY use these exact strings:
    "very_low", "low", "medium", "high", "very_high"
 
-3. exerciseId - MUST be the EXACT numeric ID from the available exercises list below.
-   NEVER invent or guess IDs. Copy the ID exactly as shown next to the exercise name.
+3. exerciseId - MUST be the EXACT UUID from the available exercises list below.
+   NEVER invent or guess IDs. Copy the UUID exactly as shown next to the exercise name.
    NEVER mention exercise IDs in your \`message\` text. IDs are internal data for the JSON structure only.
 
 4. estimatedDuration - MUST be a number (minutes)
@@ -186,7 +186,7 @@ When user explicitly approves:
 
 === IMPORTANT RULES ===
 
-- ONLY use exercises from the available list. The exerciseId MUST match exactly — copy the ID shown in the list. NEVER use a different number.
+- ONLY use exercises from the available list. The exerciseId MUST match exactly — copy the UUID shown in the list. NEVER invent or guess IDs.
 - Match exercises to user's fitness level:
   * Beginner: focus on machines and basic movements
   * Intermediate: mix of free weights and machines
@@ -237,7 +237,7 @@ When user explicitly approves:
         "estimatedDuration": 60,
         "exercises": [
           {
-            "exerciseId": 1,
+            "exerciseId": "<exercise-uuid>",
             "exerciseName": "Bench Press",
             "energyCost": "high",
             "targetSets": 3,

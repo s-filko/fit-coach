@@ -261,7 +261,7 @@ describe('ConversationGraph', () => {
                         reasoning: 'test',
                         exercises: [
                           {
-                            exerciseId: 1,
+                            exerciseId: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
                             exerciseName: 'Bench Press',
                             targetSets: 3,
                             targetReps: '8-10',

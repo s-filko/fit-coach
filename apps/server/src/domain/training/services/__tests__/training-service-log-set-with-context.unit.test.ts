@@ -12,7 +12,7 @@ import { TrainingService } from '@domain/training/services/training.service';
 const makeSessionExercise = (overrides: Partial<SessionExercise> = {}): SessionExercise => ({
   id: 'se-1',
   sessionId: 'session-1',
-  exerciseId: 12,
+  exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
   orderIndex: 0,
   status: 'in_progress',
   targetSets: 4,
@@ -100,7 +100,7 @@ describe('TrainingService.logSetWithContext', () => {
     jest.spyOn(trainingService, 'logSet').mockResolvedValue(makeSessionSet(3));
 
     const result = await trainingService.logSetWithContext('session-1', {
-      exerciseId: 12,
+      exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
       setData: { type: 'strength', reps: 10, weight: 80, weightUnit: 'kg' },
     });
 
@@ -112,7 +112,7 @@ describe('TrainingService.logSetWithContext', () => {
     jest.spyOn(trainingService, 'logSet').mockResolvedValue(makeSessionSet(2));
 
     await trainingService.logSetWithContext('session-1', {
-      exerciseId: 12,
+      exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
       setData: { type: 'strength', reps: 10, weight: 80 },
       rpe: 8,
       feedback: 'felt strong',
@@ -129,13 +129,13 @@ describe('TrainingService.logSetWithContext', () => {
     jest.spyOn(trainingService, 'logSet').mockResolvedValue(makeSessionSet(1));
 
     await trainingService.logSetWithContext('session-1', {
-      exerciseId: 12,
+      exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
       exerciseName: 'Bench Press',
       setData: { type: 'strength', reps: 10 },
     });
 
     expect(trainingService.ensureCurrentExercise).toHaveBeenCalledWith('session-1', {
-      exerciseId: 12,
+      exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
       exerciseName: 'Bench Press',
     });
   });

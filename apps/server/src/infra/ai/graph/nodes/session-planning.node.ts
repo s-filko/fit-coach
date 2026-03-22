@@ -96,7 +96,7 @@ After the client responds:
 --- STEP 4: REFINE ---
 
 Adjust the plan if the client requests changes (different exercises, shorter duration, skip something).
-Use search_exercises ONLY if you need exercises not yet found in this conversation. Always keep exact numeric exercise IDs.
+Use search_exercises ONLY if you need exercises not yet found in this conversation. Always keep exact exercise UUIDs.
 
 --- STEP 5: START or CANCEL ---
 
@@ -139,7 +139,7 @@ function buildActivePlanSection(
           focus: string;
           estimatedDuration: number;
           exercises: Array<{
-            exerciseId: number;
+            exerciseId: string;
             exerciseName: string;
             targetSets: number;
             targetReps: string;

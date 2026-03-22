@@ -105,7 +105,7 @@
       "columns": {
         "exercise_id": {
           "name": "exercise_id",
-          "type": "integer",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
@@ -175,7 +175,7 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "serial",
+          "type": "uuid",
           "primaryKey": true,
           "notNull": true
         },
@@ -378,7 +378,7 @@
         },
         "exercise_id": {
           "name": "exercise_id",
-          "type": "integer",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },

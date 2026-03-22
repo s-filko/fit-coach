@@ -22,7 +22,7 @@ const MINIMAL_SESSION_PLAN = {
   reasoning: 'Last trained upper body 3 days ago. Good recovery.',
   exercises: [
     {
-      exerciseId: 1,
+      exerciseId: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
       exerciseName: 'Bench Press',
       targetSets: 3,
       targetReps: '8-10',
@@ -65,7 +65,7 @@ const makeConfig = (userId = 'u1'): RunnableConfig => ({
 
 const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> =>
   ({
-    findByIds: jest.fn().mockResolvedValue([{ id: 1 }]),
+    findByIds: jest.fn().mockResolvedValue([{ id: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95' }]),
     searchByEmbedding: jest.fn().mockResolvedValue([]),
     updateEmbedding: jest.fn(),
     findAll: jest.fn(),

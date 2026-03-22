@@ -188,7 +188,7 @@ export class TrainingService implements ITrainingService {
    */
   async ensureCurrentExercise(
     sessionId: string,
-    opts?: { exerciseId?: number; exerciseName?: string },
+    opts?: { exerciseId?: string; exerciseName?: string },
   ): Promise<EnsureExerciseResult> {
     const session = await this.sessionRepo.findByIdWithDetails(sessionId);
     if (!session) {
@@ -239,7 +239,7 @@ export class TrainingService implements ITrainingService {
 
     // Off-plan exercise by name — try exact match first, fall back to embedding search
     const exerciseName = opts.exerciseName ?? '';
-    let resolvedExerciseId: number | undefined;
+    let resolvedExerciseId: string | undefined;
 
     const exactMatches = await this.exerciseRepo.search(exerciseName, 1);
     const exactMatch = exactMatches.find(ex => ex.name.toLowerCase() === exerciseName.toLowerCase());
@@ -332,7 +332,7 @@ export class TrainingService implements ITrainingService {
   async logSetWithContext(
     sessionId: string,
     opts: {
-      exerciseId?: number;
+      exerciseId?: string;
       exerciseName?: string;
       setData: SetData;
       rpe?: number;
@@ -360,7 +360,7 @@ export class TrainingService implements ITrainingService {
    * Default count = 1. Returns details of what was deleted so the tool can surface a
    * human-readable confirmation to the LLM.
    */
-  async deleteLastSets(sessionId: string, exerciseId: number, count = 1): Promise<DeletedSetsResult> {
+  async deleteLastSets(sessionId: string, exerciseId: string, count = 1): Promise<DeletedSetsResult> {
     const session = await this.sessionRepo.findByIdWithDetails(sessionId);
     if (!session) {
       throw new Error('Session not found');
@@ -403,7 +403,7 @@ export class TrainingService implements ITrainingService {
    */
   async updateLastSet(
     sessionId: string,
-    exerciseId: number,
+    exerciseId: string,
     updates: {
       rpe?: number;
       feedback?: string;

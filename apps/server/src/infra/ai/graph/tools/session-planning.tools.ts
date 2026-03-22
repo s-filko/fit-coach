@@ -60,7 +60,7 @@ export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
       }
 
       // Validate all exerciseIds exist in DB before creating the session
-      const allIds = input.exercises.map((e: { exerciseId: number }) => e.exerciseId);
+      const allIds = input.exercises.map((e: { exerciseId: string }) => e.exerciseId);
       const uniqueIds = [...new Set(allIds)];
       if (uniqueIds.length > 0) {
         const found = await exerciseRepository.findByIds(uniqueIds);
