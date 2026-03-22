@@ -11,7 +11,9 @@ export async function buildSessionRecommendationPrompt(
   const historySection = recentSessions.length
     ? recentSessions
         .map((session, idx) => {
-          const daysAgo = Math.floor((Date.now() - session.createdAt.getTime()) / (1000 * 60 * 60 * 24));
+          const daysAgo = Math.floor(
+            (Date.now() - (session.startedAt ?? session.createdAt).getTime()) / (1000 * 60 * 60 * 24),
+          );
           const exercisesList = session.exercises
             .map(ex => {
               const setsInfo = ex.sets
@@ -37,7 +39,9 @@ ${exercisesList}`;
   // Build timeline analysis
   const muscleGroupsTrainedRecently = new Map<string, number>();
   for (const session of recentSessions) {
-    const daysAgo = Math.floor((Date.now() - session.createdAt.getTime()) / (1000 * 60 * 60 * 24));
+    const daysAgo = Math.floor(
+      (Date.now() - (session.startedAt ?? session.createdAt).getTime()) / (1000 * 60 * 60 * 24),
+    );
     for (const ex of session.exercises) {
       for (const mg of ex.exercise.muscleGroups ?? []) {
         const current = muscleGroupsTrainedRecently.get(mg.muscleGroup);
@@ -99,7 +103,7 @@ ${timelineSection}
 # TODAY'S CONTEXT
 
 Date: ${today}
-Days since last workout: ${recentSessions.length ? Math.floor((Date.now() - recentSessions[0].createdAt.getTime()) / (1000 * 60 * 60 * 24)) : 'N/A'}
+Days since last workout: ${recentSessions.length ? Math.floor((Date.now() - (recentSessions[0].startedAt ?? recentSessions[0].createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 'N/A'}
 
 # YOUR TASK
 
