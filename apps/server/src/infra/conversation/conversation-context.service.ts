@@ -32,4 +32,13 @@ export class InMemoryConversationContextService implements IConversationContextS
     const maxPairs = options?.maxTurns ?? 20;
     return list.slice(-maxPairs * 2) as ChatMsg[];
   }
+
+  async insertContextReset(userId: string): Promise<void> {
+    // In-memory: just clear all turns for the user across all phases
+    for (const key of this.turns.keys()) {
+      if (key.startsWith(`${userId}:`)) {
+        this.turns.delete(key);
+      }
+    }
+  }
 }

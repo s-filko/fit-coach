@@ -71,6 +71,19 @@ export function registerBotHandlers(bot: TelegramBot) {
             return;
         }
 
+        if (userText === '/clear_context') {
+            try {
+                await bot.sendChatAction(chatId, 'typing');
+                const user = await registerOrGetUser(msg);
+                await api.post('/api/chat/clear-context', { userId: user.id });
+                await bot.sendMessage(chatId, '🧹 Context cleared. Starting fresh!');
+            } catch (error) {
+                log.error({ err: error }, '/clear_context failed');
+                await bot.sendMessage(chatId, 'Sorry, failed to clear context. Please try again.');
+            }
+            return;
+        }
+
         if (userText === '/start') {
             try {
                 await bot.sendChatAction(chatId, 'typing');
