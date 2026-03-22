@@ -37,6 +37,12 @@ coverage/
 ### Database backups
 backups/
 
+### Local DB data (bind mount — do not commit)
+data/
+
+### Sync script config — contains DB passwords and Telegram IDs
+apps/server/src/infra/db/scripts/sync.config.ts
+
 ### Lockfiles (root only)
 /package-lock.json
 apps/server/node_modules/.package-lock.json

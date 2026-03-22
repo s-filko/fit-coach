@@ -8,8 +8,30 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: fitcoach
     volumes:
-      - pgdata:/var/lib/postgresql/data
-volumes:
-  pgdata:
+      - ./data/local/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d fitcoach_dev']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: node:22-slim
+    container_name: fitcoach-migrate
+    working_dir: /app
+    volumes:
+      - ./apps/server:/app
+    command: npx drizzle-kit push --config=drizzle.config.ts
+    environment:
+      NODE_ENV: development
+      DB_HOST: db
+      DB_PORT: '5432'
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: fitcoach_dev
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles:
+      - migrate

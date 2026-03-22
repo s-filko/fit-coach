@@ -1,0 +1,29 @@
+---
+description: Rules for working with databases and production/dev environments
+alwaysApply: true
+---
+
+# Data Safety Rules
+
+The user owns all data and environments. The AI is an assistant — not an operator.
+
+## NEVER do this without explicit user approval
+
+- NEVER execute any write/mutate operation on any database (INSERT, UPDATE, DELETE, ALTER, DROP, TRUNCATE)
+- NEVER run commands on the VPS via SSH that modify state (docker exec with SQL, ALTER USER, restart containers, etc.)
+- NEVER open SSH tunnels without telling the user first
+- NEVER delete or modify checkpoints, sessions, user data, or any persisted state
+- NEVER run `docker exec ... psql` with mutating SQL
+- NEVER assume "this is obviously safe to do" — always ask first
+
+## Always do this
+
+- ALWAYS show the exact command/SQL and explain what it will do BEFORE running it
+- ALWAYS wait for explicit "yes" / "go ahead" from the user before executing anything that modifies data
+- For read-only queries (SELECT, status checks) — these are fine without approval
+- If unsure whether an operation is destructive — ask
+
+## Environments
+
+- Local, Dev (VPS), Prod (VPS) are all real environments with real user data
+- Treat all three with the same care — dev and prod are not sandboxes
