@@ -404,7 +404,15 @@ export class TrainingService implements ITrainingService {
   async updateLastSet(
     sessionId: string,
     exerciseId: number,
-    updates: { rpe?: number; feedback?: string; weight?: number; reps?: number },
+    updates: {
+      rpe?: number;
+      feedback?: string;
+      weight?: number;
+      reps?: number;
+      durationSeconds?: number;
+      distanceKm?: number;
+      inclinePct?: number;
+    },
   ): Promise<UpdateSetResult> {
     const session = await this.sessionRepo.findByIdWithDetails(sessionId);
     if (!session) {
@@ -435,6 +443,9 @@ export class TrainingService implements ITrainingService {
       ...lastSet.setData,
       ...(updates.weight != null ? { weight: updates.weight } : {}),
       ...(updates.reps != null ? { reps: updates.reps } : {}),
+      ...(updates.durationSeconds != null ? { duration: updates.durationSeconds } : {}),
+      ...(updates.distanceKm != null ? { distance: updates.distanceKm, distanceUnit: 'km' } : {}),
+      ...(updates.inclinePct != null ? { inclinePct: updates.inclinePct } : {}),
     };
 
     const updatedSet = await this.sessionSetRepo.update(lastSet.id, {

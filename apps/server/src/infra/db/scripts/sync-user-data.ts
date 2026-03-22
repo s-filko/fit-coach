@@ -453,6 +453,21 @@ function displaySessionsPreview(preview: SessionsPreview) {
             const sec = d['durationSeconds'] ?? d['duration'];
             return sec ? `${sec}s` : '?s';
           }
+          if (d['type'] === 'cardio_distance') {
+            const dist = d['distance'] != null ? `${d['distance']}${d['distanceUnit'] ?? 'km'}` : null;
+            const dur =
+              d['duration'] != null
+                ? Number(d['duration']) > 0
+                  ? `${Math.round(Number(d['duration']) / 60)}min`
+                  : '?min'
+                : null;
+            const incline = d['inclinePct'] != null ? `${d['inclinePct']}%` : null;
+            return [dist, dur, incline].filter(Boolean).join(' ');
+          }
+          if (d['type'] === 'cardio_duration') {
+            const dur = d['duration'] != null ? `${Math.round(Number(d['duration']) / 60)}min` : '?min';
+            return dur;
+          }
           const reps = d['reps'] ?? '?';
           const weight = d['weight'];
           return weight && Number(weight) > 0 ? `${reps}×${weight}` : `${reps}`;

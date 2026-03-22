@@ -202,6 +202,7 @@ export type CardioDistanceSetData = {
   distance: number;
   distanceUnit: 'km' | 'miles' | 'meters';
   duration: number; // seconds
+  inclinePct?: number;
   pace?: number; // min/km or min/mile
   restSeconds?: number;
 };

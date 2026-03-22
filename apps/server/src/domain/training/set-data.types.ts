@@ -32,6 +32,7 @@ export const CardioDistanceSetDataSchema = z.object({
   distance: z.number().min(0),
   distanceUnit: z.enum(['km', 'miles', 'meters']),
   duration: z.number().int().min(0),
+  inclinePct: z.number().min(0).max(30).optional(),
   pace: z.number().min(0).optional(),
   restSeconds: z.number().int().min(0).optional(),
 });

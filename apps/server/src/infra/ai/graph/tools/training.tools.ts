@@ -86,6 +86,15 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
 
       // Build setData from flat fields — avoids LLM confusion with nested object schemas
       const setData = (() => {
+        if (input.distanceKm != null) {
+          return {
+            type: 'cardio_distance' as const,
+            distance: input.distanceKm,
+            distanceUnit: 'km' as const,
+            duration: input.durationSeconds ?? 0,
+            ...(input.inclinePct != null && { inclinePct: input.inclinePct }),
+          };
+        }
         if (input.durationSeconds != null) {
           return { type: 'cardio_duration' as const, duration: input.durationSeconds };
         }
@@ -158,7 +167,8 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
         'Always provide exerciseId (from SESSION PLAN or exercise catalog).',
         'For strength/weighted exercises: provide reps and weight (in kg).',
         'For bodyweight exercises: provide reps only.',
-        'For cardio: provide durationSeconds.',
+        'For cardio duration (bike, elliptical): provide durationSeconds only.',
+        'For cardio distance (treadmill, running): provide distanceKm. durationSeconds is optional — if unknown, log without it and ask the user. Optionally: inclinePct (treadmill only).',
         'setNumber is computed automatically — do NOT pass it.',
         'Call once per set. For multiple sets reported at once, call log_set multiple times.',
       ].join(' '),
@@ -182,7 +192,20 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
             .int()
             .positive()
             .optional()
-            .describe('Duration in seconds — only for cardio exercises.'),
+            .describe('Duration in seconds — for cardio exercises.'),
+          distanceKm: z
+            .number()
+            .positive()
+            .optional()
+            .describe(
+              'Distance in km — only for cardio_distance exercises (treadmill, running). Triggers cardio_distance set type when combined with durationSeconds.',
+            ),
+          inclinePct: z
+            .number()
+            .min(0)
+            .max(30)
+            .optional()
+            .describe('Treadmill incline in percent (0–30). Only for treadmill. Do NOT use for strength exercises.'),
           rpe: z.number().min(1).max(10).optional().describe('Rate of Perceived Exertion (1–10).'),
           feedback: z.string().optional().describe('Any user comment about this set.'),
           order: z
@@ -197,8 +220,8 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
         .refine(d => d.exerciseId !== undefined || d.exerciseName !== undefined, {
           message: 'Either exerciseId or exerciseName must be provided',
         })
-        .refine(d => d.reps !== undefined || d.durationSeconds !== undefined, {
-          message: 'Either reps or durationSeconds must be provided',
+        .refine(d => d.reps !== undefined || d.durationSeconds !== undefined || d.distanceKm !== undefined, {
+          message: 'Either reps, durationSeconds, or distanceKm must be provided',
         }),
     },
   );
@@ -367,6 +390,9 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
           reps: input.reps,
           rpe: input.rpe,
           feedback: input.feedback,
+          durationSeconds: input.durationSeconds,
+          distanceKm: input.distanceKm,
+          inclinePct: input.inclinePct,
         });
         const beforeStr = JSON.stringify(result.before.setData);
         const afterStr = JSON.stringify(result.after.setData);
@@ -395,8 +421,8 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
     {
       name: 'update_last_set',
       description:
-        'Correct the last logged set for a given exercise — update weight, reps, RPE, or feedback. ' +
-        'Use this when the user says they entered wrong numbers. ' +
+        'Correct the last logged set for a given exercise — update weight, reps, RPE, feedback, or cardio fields. ' +
+        'Use this when the user says they entered wrong numbers, or to add missing duration to a cardio_distance set logged without time. ' +
         'Only provide the fields you want to change; others remain unchanged.',
       schema: z.object({
         exercise_id: z.number().describe('The numeric ID of the exercise whose last set should be updated'),
@@ -404,6 +430,23 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
         reps: z.number().int().optional().describe('New rep count (if correcting reps)'),
         rpe: z.number().min(1).max(10).optional().describe('New RPE value (if correcting perceived exertion)'),
         feedback: z.string().optional().describe('Updated feedback note from the user'),
+        durationSeconds: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe('Duration in seconds — use to add missing time to a cardio_distance set'),
+        distanceKm: z
+          .number()
+          .positive()
+          .optional()
+          .describe('Distance in km — use to correct distance on a cardio_distance set'),
+        inclinePct: z
+          .number()
+          .min(0)
+          .max(30)
+          .optional()
+          .describe('Treadmill incline in percent — use to add/correct incline on a cardio_distance set'),
       }),
     },
   );

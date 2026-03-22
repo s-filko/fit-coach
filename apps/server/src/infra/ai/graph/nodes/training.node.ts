@@ -80,8 +80,8 @@ RULE 4. NEVER call complete_current_exercise unless: (a) the user explicitly ask
 RULE 5. If the user asks to move on but WORKOUT OVERVIEW shows 0 sets for the current exercise, ASK them to report the set data first. NEVER invent or infer set data from CONVERSATION HISTORY or any other source.
 RULE 6. Call log_set when the user reports a set. Required data per exercise type:
   - Strength: reps AND weight
-  - Cardio/duration: duration
-  - Cardio/distance: distance AND duration
+  - Cardio/duration (bike, elliptical, rowing): durationSeconds only
+  - Cardio/distance (treadmill, running): distanceKm is required. durationSeconds is optional — if not provided, log_set with distanceKm only (duration will default to 0), then immediately ask the user for the time. Once the user provides time, call update_last_set with durationSeconds to complete the record. Optional: inclinePct (treadmill only — do NOT pass for strength/bodyweight).
   You may use values from the RECENT conversational context when the intent is obvious (e.g. user said "bench 80 kg" and then "did 8" — weight 80 kg is clearly implied). However, NEVER invent data that was not mentioned at all. NEVER copy values from WORKOUT OVERVIEW targets or from EXERCISE DETAIL of previous sets. If truly ambiguous, ASK. Count the sets in CURRENT PROGRESS first — do not re-log anything already there.
 RULE 7. When calling log_set multiple times in one response, ALWAYS set the <b>order</b> field sequentially starting from 1. Sets without order may execute in undefined sequence.
 RULE 8. Tools can ONLY be triggered by set data or action requests from the user (not by system state alone). If the current message contains no new set data or action request, do NOT call any tool. When the user reports a set, you may use contextually obvious values from recent conversation (same dialogue turn), but NEVER fabricate data.
@@ -236,8 +236,12 @@ function formatSetData(setData: WorkoutSessionWithDetails['exercises'][number]['
   switch (setData.type) {
     case 'strength':
       return `${setData.reps} reps${setData.weight != null ? ` @ ${setData.weight} ${setData.weightUnit ?? 'kg'}` : ''}`;
-    case 'cardio_distance':
-      return `${setData.distance} ${setData.distanceUnit} in ${setData.duration}s`;
+    case 'cardio_distance': {
+      const durStr = setData.duration > 0 ? `${Math.round(setData.duration / 60)}min` : '?min';
+      const parts: string[] = [`${setData.distance}${setData.distanceUnit}`, durStr];
+      if (setData.inclinePct != null) parts.push(`${setData.inclinePct}% incline`);
+      return parts.join(' ');
+    }
     case 'cardio_duration':
       return `${setData.duration}s${setData.intensity ? ` (${setData.intensity})` : ''}`;
     case 'functional_reps':

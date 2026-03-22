@@ -92,7 +92,15 @@ export interface ITrainingService {
   updateLastSet(
     sessionId: string,
     exerciseId: number,
-    updates: { rpe?: number; feedback?: string; weight?: number; reps?: number },
+    updates: {
+      rpe?: number;
+      feedback?: string;
+      weight?: number;
+      reps?: number;
+      durationSeconds?: number;
+      distanceKm?: number;
+      inclinePct?: number;
+    },
   ): Promise<UpdateSetResult>;
 
   // Log a set for the current exercise, auto-computing setNumber from existing sets in DB
