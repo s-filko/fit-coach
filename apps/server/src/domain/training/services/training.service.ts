@@ -73,10 +73,7 @@ export class TrainingService implements ITrainingService {
   ) {}
 
   async getNextSessionRecommendation(userId: string): Promise<SessionRecommendation> {
-    // 1. Auto-close timed-out sessions before analyzing history
-    await this.autoCloseTimedOutSessions(userId);
-
-    // 2. Get user profile
+    // 1. Get user profile
     const userEntity = await this.userRepo.getById(userId);
     if (!userEntity) {
       throw new Error('User not found');
@@ -153,19 +150,15 @@ export class TrainingService implements ITrainingService {
   }
 
   async logSet(exerciseId: string, dto: CreateSessionSetDto): Promise<SessionSet> {
-    // Get exercise to find session
     const exercise = await this.sessionExerciseRepo.findById(exerciseId);
     if (!exercise) {
       throw new Error('Session exercise not found');
     }
 
-    // Update session activity
     await this.sessionRepo.updateActivity(exercise.sessionId);
 
-    // Create set — setNumber computed atomically in DB
     const set = await this.sessionSetRepo.create(exerciseId, dto);
 
-    // Mark exercise as in_progress on first set
     if (set.setNumber === 1) {
       await this.sessionExerciseRepo.update(exerciseId, { status: 'in_progress' });
     }
@@ -188,7 +181,7 @@ export class TrainingService implements ITrainingService {
    */
   async ensureCurrentExercise(
     sessionId: string,
-    opts?: { exerciseId?: string; exerciseName?: string },
+    opts?: { exerciseId?: string; exerciseName?: string; skipActivityUpdate?: boolean },
   ): Promise<EnsureExerciseResult> {
     const session = await this.sessionRepo.findByIdWithDetails(sessionId);
     if (!session) {
@@ -227,7 +220,9 @@ export class TrainingService implements ITrainingService {
         targetWeight: planEx?.targetWeight ?? undefined,
       });
       await this.sessionExerciseRepo.update(created.id, { status: 'in_progress' });
-      await this.sessionRepo.updateActivity(sessionId);
+      if (!opts?.skipActivityUpdate) {
+        await this.sessionRepo.updateActivity(sessionId);
+      }
       return { exercise: { ...created, status: 'in_progress' }, autoCompleted };
     }
 
@@ -337,18 +332,29 @@ export class TrainingService implements ITrainingService {
       setData: SetData;
       rpe?: number;
       feedback?: string;
+      createdAt?: Date;
+      skipActivityUpdate?: boolean;
     },
   ): Promise<{ set: SessionSet; setNumber: number; autoCompleted?: AutoCompletedExercise }> {
     const { exercise: sessionExercise, autoCompleted } = await this.ensureCurrentExercise(sessionId, {
       exerciseId: opts.exerciseId,
       exerciseName: opts.exerciseName,
+      skipActivityUpdate: opts.skipActivityUpdate,
     });
 
-    const set = await this.logSet(sessionExercise.id, {
-      setData: opts.setData,
-      rpe: opts.rpe,
-      userFeedback: opts.feedback,
-    });
+    const set = opts.skipActivityUpdate
+      ? await this.sessionSetRepo.create(sessionExercise.id, {
+          setData: opts.setData,
+          rpe: opts.rpe,
+          userFeedback: opts.feedback,
+          createdAt: opts.createdAt,
+        })
+      : await this.logSet(sessionExercise.id, {
+          setData: opts.setData,
+          rpe: opts.rpe,
+          userFeedback: opts.feedback,
+          createdAt: opts.createdAt,
+        });
 
     return { set, setNumber: set.setNumber, autoCompleted };
   }

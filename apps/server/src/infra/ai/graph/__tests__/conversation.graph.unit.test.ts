@@ -171,10 +171,11 @@ describe('ConversationGraph', () => {
       expect(result.responseMessage).not.toBe('Mocked LLM response');
     });
 
-    it('session idle timeout: router completes session, uses Command(goto=persist)', async () => {
+    it('session idle but in_progress: router passes through to training subgraph (stale handled by finish_training)', async () => {
       const deps = makeDeps();
 
-      // Session is in_progress but idle for > 2 hours
+      // Session is in_progress but idle for > 2 hours — router does NOT auto-close
+      // Stale detection is handled inside the training subgraph via finish_training tool
       const twoHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
       (deps.trainingService.getSessionDetails as jest.Mock).mockResolvedValue({
         id: 'session-2',
@@ -182,6 +183,7 @@ describe('ConversationGraph', () => {
         lastActivityAt: twoHoursAgo,
         updatedAt: twoHoursAgo,
         createdAt: twoHoursAgo,
+        exercises: [],
       });
 
       const graph = buildConversationGraph(deps);
@@ -191,14 +193,11 @@ describe('ConversationGraph', () => {
         { configurable: { thread_id: 'u1-timeout-idle' } },
       );
 
-      // completeSession should have been called with lastActivityDate as completedAt
-      expect(deps.trainingService.completeSession).toHaveBeenCalledWith('session-2', undefined, twoHoursAgo);
+      // Router should NOT have called completeSession — it's the training subgraph's responsibility
+      expect(deps.trainingService.completeSession).not.toHaveBeenCalled();
 
-      // Router bypassed the training subgraph
-      expect(result.responseMessage).toContain('inactivity');
-      expect(result.phase).toBe('chat');
-      expect(result.activeSessionId).toBeNull();
-      expect(result.responseMessage).not.toBe('Mocked LLM response');
+      // Session remains in training phase — LLM handles the stale context
+      expect(result.phase).toBe('training');
     });
   });
 

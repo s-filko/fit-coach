@@ -305,6 +305,7 @@ export interface CreateSessionSetDto {
   setData: SetData;
   rpe?: number;
   userFeedback?: string;
+  createdAt?: Date;
 }
 
 // --- Training History ---

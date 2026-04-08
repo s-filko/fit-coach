@@ -19,6 +19,9 @@ import { createLogger } from '@shared/logger';
 
 const log = createLogger('training-tools');
 
+const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+const RETRO_SET_OFFSET_MS = 5 * 60 * 1000;
+
 function formatExerciseSummary(ex: AutoCompletedExercise): string {
   const setsDetail = ex.sets
     .map(s => {
@@ -113,12 +116,25 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
       }
 
       try {
+        const session = await trainingService.getSessionDetails(sessionId);
+        const lastActivity = session?.lastActivityAt ?? session?.updatedAt ?? session?.createdAt;
+        const lastActivityDate = lastActivity ? new Date(lastActivity) : new Date();
+        const sessionIdleMs = Date.now() - lastActivityDate.getTime();
+        const isRetro = sessionIdleMs > SESSION_TIMEOUT_MS;
+
+        let retroCreatedAt: Date | undefined;
+        if (isRetro) {
+          retroCreatedAt = new Date(lastActivityDate.getTime() + RETRO_SET_OFFSET_MS);
+        }
+
         const { set, setNumber, autoCompleted } = await trainingService.logSetWithContext(sessionId, {
           exerciseId: input.exerciseId,
           exerciseName: input.exerciseName,
           setData: parsed.data,
           rpe: input.rpe,
           feedback: input.feedback,
+          createdAt: retroCreatedAt,
+          skipActivityUpdate: isRetro,
         });
 
         const { type } = set.setData;
@@ -131,7 +147,8 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
         }
 
         const rpeNote = input.rpe != null ? ` | RPE ${input.rpe}` : '';
-        const setConfirmation = `Set ${setNumber} logged: ${summary}${rpeNote}.`;
+        const retroNote = isRetro ? ' (retro-logged)' : '';
+        const setConfirmation = `Set ${setNumber} logged: ${summary}${rpeNote}${retroNote}.`;
 
         log.info(
           {
@@ -143,6 +160,8 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
             setNumber,
             setData: set.setData,
             rpe: set.rpe,
+            isRetro,
+            retroCreatedAt: retroCreatedAt ?? null,
             autoCompleted: autoCompleted ?? null,
           },
           'AUDIT: set logged',
@@ -277,7 +296,14 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
       }
 
       try {
-        const session = await trainingService.completeSession(sessionId);
+        const currentSession = await trainingService.getSessionDetails(sessionId);
+        const lastActivity = currentSession?.lastActivityAt ?? currentSession?.updatedAt ?? currentSession?.createdAt;
+        const lastActivityDate = lastActivity ? new Date(lastActivity) : undefined;
+        const sessionIdleMs = lastActivityDate ? Date.now() - lastActivityDate.getTime() : 0;
+        const isStale = sessionIdleMs > SESSION_TIMEOUT_MS;
+
+        const completedAt = isStale ? lastActivityDate : undefined;
+        const session = await trainingService.completeSession(sessionId, undefined, completedAt);
         const duration = session.durationMinutes ?? 0;
 
         pendingTransitions.set(userId, {
@@ -291,6 +317,8 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
             userId,
             sessionId,
             durationMinutes: duration,
+            isStale,
+            completedAt: completedAt ?? null,
             feedback: input.feedback ?? null,
           },
           'AUDIT: training session finished',
@@ -312,8 +340,8 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
       name: 'finish_training',
       description: [
         'Complete the training session and return to chat.',
-        'Call only when the user confirms they are done training (all exercises complete or early finish).',
-        'Do NOT call before explicit user confirmation.',
+        'Call when: (1) user confirms they are done training, OR (2) session is stale and user wants to move on.',
+        'Do NOT call before explicit user confirmation or clear intent to start a new topic.',
       ].join(' '),
       schema: z.object({
         feedback: z.string().optional().describe('Optional session feedback from the user.'),

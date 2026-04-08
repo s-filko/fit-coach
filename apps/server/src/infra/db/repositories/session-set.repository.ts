@@ -23,6 +23,7 @@ export class SessionSetRepository implements ISessionSetRepository {
         setData: set.setData,
         rpe: set.rpe ?? null,
         userFeedback: set.userFeedback ?? null,
+        ...(set.createdAt && { createdAt: set.createdAt }),
       })
       .returning();
 

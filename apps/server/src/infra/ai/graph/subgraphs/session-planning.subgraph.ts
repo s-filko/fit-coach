@@ -82,21 +82,24 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
     const { userId, user, userMessage } = state;
 
     // Load all context data in parallel
-    const [history, context, freshUser] = await Promise.all([
+    const [history, context, freshUser, previousSummary] = await Promise.all([
       contextService.getMessagesForPrompt(userId, 'session_planning'),
       contextBuilder.buildContext(userId),
       userService.getUser(userId),
+      contextService.getLatestSummary(userId),
     ]);
 
     const systemPrompt = buildSessionPlanningSystemPrompt(freshUser ?? user, context);
 
-    // state.messages holds AIMessage(tool_calls) + ToolMessages from the current turn.
-    // These are NOT in DB history yet (persist runs after subgraph finishes).
-    // Including them lets the LLM see tool results and stop calling tools.
     const inFlightMessages = state.messages ?? [];
+
+    const summaryMessages = previousSummary
+      ? [new SystemMessage(`CONTEXT FROM PREVIOUS CONVERSATION:\n${previousSummary}`)]
+      : [];
 
     const llmMessages = mergeMessageRuns([
       new SystemMessage(systemPrompt),
+      ...summaryMessages,
       ...history.map(m => (m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content))),
       new HumanMessage(userMessage),
       ...inFlightMessages,

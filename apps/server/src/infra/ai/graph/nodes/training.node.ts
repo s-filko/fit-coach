@@ -4,6 +4,8 @@ import type { User } from '@domain/user/services/user.service';
 
 import { composeDirectives } from '@infra/ai/graph/prompt-directives';
 
+const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+
 export function buildTrainingSystemPrompt(
   user: User | null,
   session: WorkoutSessionWithDetails,
@@ -12,6 +14,11 @@ export function buildTrainingSystemPrompt(
   const now = new Date();
   const clientName = user?.firstName ?? 'Client';
   const fitnessGoal = user?.fitnessGoal ?? null;
+
+  const lastActivity = session.lastActivityAt ?? session.updatedAt ?? session.createdAt;
+  const sessionAgeMs = now.getTime() - new Date(lastActivity).getTime();
+  const isStale = sessionAgeMs > SESSION_TIMEOUT_MS;
+  const staleSection = isStale ? buildStaleSessionSection(sessionAgeMs) : '';
 
   return `You are a professional personal trainer guiding the client through their workout in real time via Telegram.
 
@@ -23,7 +30,7 @@ Name: ${clientName}${fitnessGoal ? `\nGoal: ${fitnessGoal}` : ''}
 
 ${buildWorkoutOverview(session, now)}
 
-${previousSession ? `=== PREVIOUS SESSION (same template — ${daysBetween(previousSession.completedAt ?? previousSession.createdAt, now)} days ago) ===\n\n${buildPreviousSessionSection(previousSession)}\n\n` : ''}=== YOUR TASK ===
+${staleSection}${previousSession ? `=== PREVIOUS SESSION (same template — ${daysBetween(previousSession.completedAt ?? previousSession.createdAt, now)} days ago) ===\n\n${buildPreviousSessionSection(previousSession)}\n\n` : ''}=== YOUR TASK ===
 
 Guide the client through the workout. At each step:
 
@@ -261,4 +268,32 @@ function daysBetween(date: Date | null | string, now: Date): number {
   }
   const ms = now.getTime() - new Date(date).getTime();
   return Math.floor(ms / (1000 * 60 * 60 * 24));
+}
+
+function formatDuration(ms: number): string {
+  const hours = Math.floor(ms / (1000 * 60 * 60));
+  if (hours < 24) {
+    return `${hours} hours`;
+  }
+  const days = Math.floor(hours / 24);
+  return `${days} day(s)`;
+}
+
+function buildStaleSessionSection(sessionAgeMs: number): string {
+  return `=== STALE SESSION ===
+
+This session has been inactive for ${formatDuration(sessionAgeMs)}.
+Retro-logging is active: any sets you log will be timestamped to the original training time, not now.
+
+RULES:
+1. ANALYZE the user's message carefully:
+   - If they want to ADD data to this session (extra sets, missed exercises, corrections)
+     → use log_set / complete_current_exercise as usual. The system automatically timestamps retro-sets to the original training time.
+     → After logging, ask: "Anything else to add, or shall we close this session?"
+   - If they want to START a new workout, chat casually, or do anything unrelated to this session
+     → call finish_training first to close this stale session, then respond normally.
+2. NEVER auto-close the session without asking the user first.
+3. If ambiguous, ASK: "Are you adding to the previous session or starting fresh?"
+
+`;
 }

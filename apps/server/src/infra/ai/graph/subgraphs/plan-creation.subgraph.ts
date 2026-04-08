@@ -57,20 +57,23 @@ export function buildPlanCreationSubgraph(deps: PlanCreationSubgraphDeps) {
   const agentNode = async (state: PlanCreationSubgraphStateType) => {
     const { userId, user, userMessage } = state;
 
-    const [history, freshUser] = await Promise.all([
+    const [history, freshUser, previousSummary] = await Promise.all([
       contextService.getMessagesForPrompt(userId, 'plan_creation'),
       userService.getUser(userId),
+      contextService.getLatestSummary(userId),
     ]);
 
     const systemPrompt = buildPlanCreationSystemPrompt(freshUser ?? user);
 
-    // state.messages holds AIMessage(tool_calls) + ToolMessages from the current turn.
-    // These are NOT in DB history yet (persist runs after subgraph finishes).
-    // Including them lets the LLM see tool results and stop calling tools.
     const inFlightMessages = state.messages ?? [];
+
+    const summaryMessages = previousSummary
+      ? [new SystemMessage(`CONTEXT FROM PREVIOUS CONVERSATION:\n${previousSummary}`)]
+      : [];
 
     const llmMessages = mergeMessageRuns([
       new SystemMessage(systemPrompt),
+      ...summaryMessages,
       ...history.map(m => (m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content))),
       new HumanMessage(userMessage),
       ...inFlightMessages,

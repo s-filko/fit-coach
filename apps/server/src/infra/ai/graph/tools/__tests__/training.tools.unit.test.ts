@@ -2,7 +2,7 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 
 import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
 import type { IEmbeddingService, IExerciseRepository, ITrainingService } from '@domain/training/ports';
-import type { SessionSet, WorkoutSession } from '@domain/training/types';
+import type { SessionSet, WorkoutSession, WorkoutSessionWithDetails } from '@domain/training/types';
 
 import { LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX, buildTrainingTools } from '../training.tools';
 
@@ -98,13 +98,16 @@ describe('buildTrainingTools', () => {
         makeConfig('u1'),
       );
 
-      expect(trainingService.logSetWithContext).toHaveBeenCalledWith('session-1', {
-        exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
-        exerciseName: undefined,
-        setData: EXPECTED_SET_DATA,
-        rpe: 8,
-        feedback: undefined,
-      });
+      expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
+        'session-1',
+        expect.objectContaining({
+          exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
+          exerciseName: undefined,
+          setData: EXPECTED_SET_DATA,
+          rpe: 8,
+          feedback: undefined,
+        }),
+      );
       expect(result).toContain('Set 2 logged');
       expect(result).toContain('10 reps @ 80 kg');
     });
@@ -145,13 +148,16 @@ describe('buildTrainingTools', () => {
         makeConfig('u1'),
       );
 
-      expect(trainingService.logSetWithContext).toHaveBeenCalledWith('session-1', {
-        exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
-        exerciseName: undefined,
-        setData: EXPECTED_SET_DATA,
-        rpe: undefined,
-        feedback: undefined,
-      });
+      expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
+        'session-1',
+        expect.objectContaining({
+          exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
+          exerciseName: undefined,
+          setData: EXPECTED_SET_DATA,
+          rpe: undefined,
+          feedback: undefined,
+        }),
+      );
     });
 
     it('returns LLM_ERROR when logSetWithContext throws', async () => {
@@ -228,7 +234,7 @@ describe('buildTrainingTools', () => {
   describe('finish_training', () => {
     it('calls completeSession, sets pendingTransitions entry, returns summary', async () => {
       const trainingService = makeTrainingService();
-      const mockSession: WorkoutSession = {
+      const mockSession: WorkoutSessionWithDetails = {
         id: 'session-1',
         userId: 'user-1',
         planId: null,
@@ -243,13 +249,15 @@ describe('buildTrainingTools', () => {
         autoCloseReason: null,
         createdAt: new Date(),
         updatedAt: new Date(),
+        exercises: [],
       };
       trainingService.completeSession.mockResolvedValue(mockSession);
+      trainingService.getSessionDetails.mockResolvedValue(mockSession);
 
       const { byName, pendingTransitions } = makeDeps(trainingService);
       const result = await byName('finish_training').invoke({ feedback: 'Great session!' }, makeConfig('u1'));
 
-      expect(trainingService.completeSession).toHaveBeenCalledWith('session-1');
+      expect(trainingService.completeSession).toHaveBeenCalledWith('session-1', undefined, undefined);
       expect(pendingTransitions.get('u1')).toEqual({ toPhase: 'chat', reason: 'training_completed' });
       expect(result).toContain('45 min');
       expect(result).toContain('Great session!');
@@ -278,7 +286,7 @@ describe('buildTrainingTools', () => {
 
     it('isolates pendingTransitions by userId — two users do not overwrite each other', async () => {
       const trainingService = makeTrainingService();
-      const mockSession: WorkoutSession = {
+      const mockSession: WorkoutSessionWithDetails = {
         id: 'session-1',
         userId: 'u',
         planId: null,
@@ -293,8 +301,10 @@ describe('buildTrainingTools', () => {
         autoCloseReason: null,
         createdAt: new Date(),
         updatedAt: new Date(),
+        exercises: [],
       };
       trainingService.completeSession.mockResolvedValue(mockSession);
+      trainingService.getSessionDetails.mockResolvedValue(mockSession);
 
       const pendingTransitions = new Map<string, TransitionRequest | null>();
       const currentSessionIds = new Map<string, string | null>();

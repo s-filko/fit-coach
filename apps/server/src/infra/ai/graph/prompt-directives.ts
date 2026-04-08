@@ -32,7 +32,18 @@ export function outputDirective(): string {
 }
 
 export function toolReplyDirective(): string {
-  return 'TOOL CALL RULE: When you call any tool, you MUST ALWAYS include a natural text reply alongside the tool call. NEVER send a tool call without accompanying text visible to the user.';
+  return [
+    'TOOL CALL RULE: Every response that contains a tool call MUST also contain visible text for the user.',
+    'The text MUST appear in the same response as the tool call — never send a tool call alone.',
+    '',
+    'CORRECT (tool call + text together):',
+    '  text: "Moving you to the session planner now."',
+    '  tool_call: request_transition({ toPhase: "session_planning" })',
+    '',
+    'WRONG (tool call without text — this will break the app):',
+    '  tool_call: request_transition({ toPhase: "session_planning" })',
+    '  text: ""  ← empty, user sees nothing',
+  ].join('\n');
 }
 
 export interface DirectiveOptions {

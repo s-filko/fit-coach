@@ -79,7 +79,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
         const result = await app.services.conversationGraph.invoke(
           { userId, userMessage: message },
-          { configurable: { thread_id: userId, userId }, recursionLimit: 25 },
+          { configurable: { thread_id: userId, userId }, recursionLimit: 50 },
         );
 
         return reply.send({

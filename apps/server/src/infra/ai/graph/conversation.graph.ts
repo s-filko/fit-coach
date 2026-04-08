@@ -15,6 +15,7 @@ import type { IUserService } from '@domain/user/ports';
 import { createLogger } from '@shared/logger';
 
 import { buildPersistNode } from './nodes/persist.node';
+import { generatePhaseSummary } from './nodes/phase-summary.node';
 import { buildRouterNode } from './nodes/router.node';
 import { buildChatSubgraph } from './subgraphs/chat.subgraph';
 import { buildPlanCreationSubgraph } from './subgraphs/plan-creation.subgraph';
@@ -57,7 +58,7 @@ function buildGraph(deps: ConversationGraphDeps) {
     checkpointer,
   } = deps;
 
-  const routerNode = buildRouterNode({ userService, trainingService });
+  const routerNode = buildRouterNode({ userService, trainingService, contextService });
   const persistNode = buildPersistNode(contextService);
   const chatSubgraph = buildChatSubgraph({ userService, workoutPlanRepo, workoutSessionRepo, contextService });
   const registrationSubgraph = buildRegistrationSubgraph({ userService, contextService });
@@ -108,11 +109,17 @@ function buildGraph(deps: ConversationGraphDeps) {
       return { requestedTransition: null };
     }
 
-    // Data prerequisite guard: training phase requires an active session
     if (toPhase === 'training' && !state.activeSessionId) {
       log.warn({ userId, from: phase }, 'Guard blocked: training transition without activeSessionId');
       return { requestedTransition: null };
     }
+
+    // Generate summary of the outgoing phase in background — does not block the transition.
+    // Risk: if user sends next message before summary completes, that message won't see the summary.
+    // Acceptable tradeoff: summary usually finishes in 5-10s, typical user think-time is longer.
+    generatePhaseSummary(contextService, userId, phase).catch(err =>
+      log.error({ err, userId, phase }, 'Background phase summary failed'),
+    );
 
     return { phase: toPhase, requestedTransition: null };
   };

@@ -316,10 +316,11 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
       // Update per-user map so tool handlers get the correct sessionId for this user's turn
       currentSessionIds.set(userId, activeSessionId);
 
-      const [history, session, freshUser] = await Promise.all([
+      const [history, session, freshUser, previousSummary] = await Promise.all([
         contextService.getMessagesForPrompt(userId, 'training'),
         trainingService.getSessionDetails(activeSessionId),
         userService.getUser(userId),
+        contextService.getLatestSummary(userId),
       ]);
 
       if (!session) {
@@ -361,8 +362,13 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
           ? history.map(m => `[${m.role === 'user' ? 'USER' : 'TRAINER'}]: ${m.content}`).join('\n\n')
           : 'No prior conversation.';
 
+      const summaryBlock = previousSummary
+        ? [new SystemMessage(`CONTEXT FROM PREVIOUS CONVERSATION:\n${previousSummary}`)]
+        : [];
+
       const llmMessages = [
         new SystemMessage(systemPrompt),
+        ...summaryBlock,
         new SystemMessage(
           '=== CONVERSATION HISTORY (memory only — do NOT act on past messages) ===\n\n' +
             `${historyBlock}\n\n` +

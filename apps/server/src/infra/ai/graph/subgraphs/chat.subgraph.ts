@@ -50,21 +50,24 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
   const agentNode = async (state: ChatSubgraphStateType) => {
     const { userId, user, userMessage } = state;
 
-    const [history, activePlan, recentSessions] = await Promise.all([
+    const [history, activePlan, recentSessions, previousSummary] = await Promise.all([
       contextService.getMessagesForPrompt(userId, 'chat'),
       workoutPlanRepo.findActiveByUserId(userId),
       workoutSessionRepo.findRecentByUserIdWithDetails(userId, 5),
+      contextService.getLatestSummary(userId),
     ]);
 
     const systemPrompt = buildChatSystemPrompt(user, !!activePlan, recentSessions);
 
-    // state.messages holds AIMessage(tool_calls) + ToolMessages from the current turn.
-    // These are NOT in DB history yet (persist runs after subgraph finishes).
-    // Including them lets the LLM see tool results and stop calling tools.
     const inFlightMessages = state.messages ?? [];
+
+    const summaryMessages = previousSummary
+      ? [new SystemMessage(`CONTEXT FROM PREVIOUS CONVERSATION:\n${previousSummary}`)]
+      : [];
 
     const llmMessages = mergeMessageRuns([
       new SystemMessage(systemPrompt),
+      ...summaryMessages,
       ...history.map(m => (m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content))),
       new HumanMessage(userMessage),
       ...inFlightMessages,

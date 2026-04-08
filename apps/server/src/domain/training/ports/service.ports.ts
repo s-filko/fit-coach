@@ -112,6 +112,8 @@ export interface ITrainingService {
       setData: SetData;
       rpe?: number;
       feedback?: string;
+      createdAt?: Date;
+      skipActivityUpdate?: boolean;
     },
   ): Promise<{ set: SessionSet; setNumber: number; autoCompleted?: AutoCompletedExercise }>;
 }

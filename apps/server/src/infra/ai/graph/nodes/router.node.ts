@@ -1,22 +1,24 @@
 import { Command } from '@langchain/langgraph';
 
 import { ConversationStateType } from '@domain/conversation/graph/conversation.state';
+import type { IConversationContextService } from '@domain/conversation/ports';
 import type { ITrainingService } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
+
+import { generatePhaseSummary } from '@infra/ai/graph/nodes/phase-summary.node';
 
 import { createLogger } from '@shared/logger';
 
 const log = createLogger('router-node');
 
-const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
-
 export interface RouterNodeDeps {
   userService: IUserService;
   trainingService: ITrainingService;
+  contextService: IConversationContextService;
 }
 
 export function buildRouterNode(deps: RouterNodeDeps) {
-  const { userService, trainingService } = deps;
+  const { userService, trainingService, contextService } = deps;
 
   return async function routerNode(state: ConversationStateType): Promise<Partial<ConversationStateType> | Command> {
     const { userId } = state;
@@ -31,9 +33,12 @@ export function buildRouterNode(deps: RouterNodeDeps) {
     }
     updates.user = user;
 
-    // Handle training phase — check if active session has ended or timed out.
+    // Handle training phase — check if active session has ended.
     // Use Command(goto='persist') to skip the training subgraph entirely and jump
     // directly to persist, which is the native LangGraph way to short-circuit routing.
+    // Note: NO idle timeout — session stays in_progress until explicitly closed
+    // (via finish_training tool or start of a new session). The training subgraph
+    // handles stale sessions by detecting sessionAge and letting the LLM decide.
     if (state.phase === 'training' && state.activeSessionId) {
       const session = await trainingService.getSessionDetails(state.activeSessionId).catch(() => null);
 
@@ -44,6 +49,9 @@ export function buildRouterNode(deps: RouterNodeDeps) {
           { userId, sessionId: state.activeSessionId, status: session?.status },
           'Session ended — returning to chat',
         );
+        generatePhaseSummary(contextService, userId, 'training').catch(err =>
+          log.error({ err, userId }, 'Background phase summary (training→chat) failed'),
+        );
         return new Command({
           goto: 'persist',
           update: {
@@ -51,25 +59,6 @@ export function buildRouterNode(deps: RouterNodeDeps) {
             phase: 'chat',
             activeSessionId: null,
             responseMessage: 'Your training session has been completed. Ready for a new workout?',
-          },
-        });
-      }
-
-      // Check idle timeout
-      const lastActivity = session.lastActivityAt ?? session.updatedAt ?? session.createdAt;
-      const lastActivityDate = new Date(lastActivity);
-      const idleMs = Date.now() - lastActivityDate.getTime();
-      if (idleMs > SESSION_TIMEOUT_MS) {
-        log.info({ userId, sessionId: state.activeSessionId, idleMs }, 'Session idle timeout — auto-completing');
-        await trainingService.completeSession(state.activeSessionId, undefined, lastActivityDate).catch(() => null);
-        return new Command({
-          goto: 'persist',
-          update: {
-            ...updates,
-            phase: 'chat',
-            activeSessionId: null,
-            responseMessage:
-              'Your training session was automatically completed due to inactivity. Ready for a new workout?',
           },
         });
       }

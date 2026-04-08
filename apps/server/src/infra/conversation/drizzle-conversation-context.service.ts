@@ -44,9 +44,8 @@ export class DrizzleConversationContextService implements IConversationContextSe
     options?: GetMessagesOptions,
   ): Promise<ChatMsg[]> {
     const { db, conversationTurns } = await getDbAndSchema();
-    const maxTurns = (options?.maxTurns ?? DEFAULT_MAX_TURNS) * 2; // pairs of user+assistant
+    const maxTurns = (options?.maxTurns ?? DEFAULT_MAX_TURNS) * 2;
 
-    // Find the most recent context reset marker
     const [lastReset] = await db
       .select({ createdAt: conversationTurns.createdAt })
       .from(conversationTurns)
@@ -54,21 +53,43 @@ export class DrizzleConversationContextService implements IConversationContextSe
       .orderBy(desc(conversationTurns.createdAt))
       .limit(1);
 
-    const whereClause = lastReset
-      ? and(eq(conversationTurns.userId, userId), gt(conversationTurns.createdAt, lastReset.createdAt))
-      : eq(conversationTurns.userId, userId);
+    const afterReset = lastReset ? gt(conversationTurns.createdAt, lastReset.createdAt) : undefined;
+
+    const whereClause = afterReset
+      ? and(eq(conversationTurns.userId, userId), eq(conversationTurns.phase, phase), afterReset)
+      : and(eq(conversationTurns.userId, userId), eq(conversationTurns.phase, phase));
 
     const rows = await db
       .select({ role: conversationTurns.role, content: conversationTurns.content })
       .from(conversationTurns)
       .where(whereClause)
-      .orderBy(desc(conversationTurns.createdAt), desc(conversationTurns.id))
+      .orderBy(desc(conversationTurns.createdAt))
       .limit(maxTurns);
 
-    // Reverse to chronological order and filter to user/assistant only
     return rows
       .reverse()
       .filter(r => r.role === 'user' || r.role === 'assistant')
       .map(r => ({ role: r.role as 'user' | 'assistant', content: r.content }));
+  }
+
+  async insertPhaseSummary(userId: string, phase: ConversationPhase, summary: string): Promise<void> {
+    const { db, conversationTurns } = await getDbAndSchema();
+    await db.insert(conversationTurns).values({
+      userId,
+      phase,
+      role: 'summary',
+      content: summary,
+    });
+  }
+
+  async getLatestSummary(userId: string): Promise<string | null> {
+    const { db, conversationTurns } = await getDbAndSchema();
+    const [row] = await db
+      .select({ content: conversationTurns.content })
+      .from(conversationTurns)
+      .where(and(eq(conversationTurns.userId, userId), eq(conversationTurns.role, 'summary')))
+      .orderBy(desc(conversationTurns.createdAt))
+      .limit(1);
+    return row?.content ?? null;
   }
 }
