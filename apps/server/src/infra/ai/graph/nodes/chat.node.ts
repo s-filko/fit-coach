@@ -3,11 +3,10 @@ import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import { User } from '@domain/user/services/user.service';
 
 import { composeDirectives } from '@infra/ai/graph/prompt-directives';
-
-const MS_PER_DAY = 1000 * 60 * 60 * 24;
+import { calendarDaysAgo } from '@shared/date-utils';
 
 function formatSessionAge(date: Date): string {
-  const daysAgo = Math.floor((Date.now() - date.getTime()) / MS_PER_DAY);
+  const daysAgo = calendarDaysAgo(date);
   if (daysAgo === 0) {
     return 'today';
   }

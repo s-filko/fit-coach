@@ -3,6 +3,7 @@ import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import type { User } from '@domain/user/services/user.service';
 
 import { composeDirectives } from '@infra/ai/graph/prompt-directives';
+import { calendarDaysAgo } from '@shared/date-utils';
 
 /* eslint-disable max-len */
 export function buildSessionPlanningSystemPrompt(user: User | null, context: SessionPlanningContextData): string {
@@ -113,6 +114,9 @@ If no active plan exists → tell the client they need a workout plan first and 
 - start_training_session: call ONLY when user explicitly approves the final plan. Do NOT re-search before calling.
 - request_transition: call with toPhase="chat" ONLY when user explicitly cancels.
 
+CRITICAL: NEVER write JSON in your message text. NEVER output raw JSON blocks, action objects, or structured data in the message. ALL actions MUST be performed through tool calls only. Your message text must be plain conversational language only.
+ANTI-PATTERN example — Bad: "{ action: 'start_training_session', args: { ... } }". Good: call the start_training_session tool directly. JSON in message text is a critical bug.
+
 --- OFF-TOPIC GUARD ---
 
 If the user's message is NOT about session planning (choosing a workout, exercises, sets, reps, weights, scheduling, recovery, or starting/cancelling a session):
@@ -186,7 +190,7 @@ function buildHistorySection(sessions: WorkoutSessionWithDetails[], now: Date): 
   return sessions
     .map((session, idx) => {
       const sessionDate = new Date(session.startedAt ?? session.createdAt);
-      const daysAgo = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24));
+      const daysAgo = calendarDaysAgo(sessionDate, now);
       const hoursAgo = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60));
       const timeAgo = daysAgo > 0 ? `${daysAgo}d ago` : `${hoursAgo}h ago`;
 
@@ -218,7 +222,7 @@ function buildRecoverySection(sessions: WorkoutSessionWithDetails[], now: Date):
 
   for (const session of sessions) {
     const sessionDate = new Date(session.startedAt ?? session.createdAt);
-    const daysAgo = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24));
+    const daysAgo = calendarDaysAgo(sessionDate, now);
 
     for (const ex of session.exercises) {
       for (const mg of (ex.exercise as { muscleGroups?: Array<{ muscleGroup: string }> }).muscleGroups ?? []) {

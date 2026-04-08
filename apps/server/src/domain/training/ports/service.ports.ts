@@ -72,7 +72,7 @@ export interface ITrainingService {
   startSession(userId: string, dto: CreateSessionDto): Promise<WorkoutSession>;
   addExerciseToSession(sessionId: string, dto: CreateSessionExerciseDto): Promise<SessionExercise>;
   logSet(exerciseId: string, dto: CreateSessionSetDto): Promise<SessionSet>;
-  completeSession(sessionId: string, durationMinutes?: number): Promise<WorkoutSession>;
+  completeSession(sessionId: string, durationMinutes?: number, completedAt?: Date): Promise<WorkoutSession>;
   skipSession(sessionId: string): Promise<WorkoutSession>;
   getTrainingHistory(userId: string, limit?: number): Promise<WorkoutSessionWithDetails[]>;
   getSessionDetails(sessionId: string): Promise<WorkoutSessionWithDetails | null>;

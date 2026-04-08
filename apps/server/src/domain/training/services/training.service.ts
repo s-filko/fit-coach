@@ -274,7 +274,7 @@ export class TrainingService implements ITrainingService {
     return { exercise: { ...created, status: 'in_progress' } };
   }
 
-  async completeSession(sessionId: string, durationMinutes?: number): Promise<WorkoutSession> {
+  async completeSession(sessionId: string, durationMinutes?: number, completedAt?: Date): Promise<WorkoutSession> {
     const session = await this.sessionRepo.findById(sessionId);
     if (!session) {
       throw new Error('Session not found');
@@ -287,12 +287,12 @@ export class TrainingService implements ITrainingService {
       }
     }
 
-    const completedAt = new Date();
+    const resolvedCompletedAt = completedAt ?? new Date();
     const duration =
       durationMinutes ??
-      (session.startedAt ? Math.floor((completedAt.getTime() - session.startedAt.getTime()) / 60000) : null);
+      (session.startedAt ? Math.floor((resolvedCompletedAt.getTime() - session.startedAt.getTime()) / 60000) : null);
 
-    return this.sessionRepo.complete(sessionId, completedAt, duration ?? 0);
+    return this.sessionRepo.complete(sessionId, resolvedCompletedAt, duration ?? 0);
   }
 
   async skipSession(sessionId: string): Promise<WorkoutSession> {

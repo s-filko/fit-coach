@@ -57,10 +57,11 @@ export function buildRouterNode(deps: RouterNodeDeps) {
 
       // Check idle timeout
       const lastActivity = session.lastActivityAt ?? session.updatedAt ?? session.createdAt;
-      const idleMs = Date.now() - new Date(lastActivity).getTime();
+      const lastActivityDate = new Date(lastActivity);
+      const idleMs = Date.now() - lastActivityDate.getTime();
       if (idleMs > SESSION_TIMEOUT_MS) {
         log.info({ userId, sessionId: state.activeSessionId, idleMs }, 'Session idle timeout — auto-completing');
-        await trainingService.completeSession(state.activeSessionId).catch(() => null);
+        await trainingService.completeSession(state.activeSessionId, undefined, lastActivityDate).catch(() => null);
         return new Command({
           goto: 'persist',
           update: {

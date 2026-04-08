@@ -1,19 +1,19 @@
 import type { UserProfile, WorkoutPlan, WorkoutSessionWithDetails } from '@domain/training/types';
+import { calendarDaysAgo } from '@shared/date-utils';
 
 export async function buildSessionRecommendationPrompt(
   user: UserProfile,
   plan: WorkoutPlan,
   recentSessions: WorkoutSessionWithDetails[],
 ): Promise<string> {
-  const [today] = new Date().toISOString().split('T');
+  const now = new Date();
+  const [today] = now.toISOString().split('T');
 
   // Build training history section
   const historySection = recentSessions.length
     ? recentSessions
         .map((session, idx) => {
-          const daysAgo = Math.floor(
-            (Date.now() - (session.startedAt ?? session.createdAt).getTime()) / (1000 * 60 * 60 * 24),
-          );
+          const daysAgo = calendarDaysAgo(session.startedAt ?? session.createdAt, now);
           const exercisesList = session.exercises
             .map(ex => {
               const setsInfo = ex.sets
@@ -39,9 +39,7 @@ ${exercisesList}`;
   // Build timeline analysis
   const muscleGroupsTrainedRecently = new Map<string, number>();
   for (const session of recentSessions) {
-    const daysAgo = Math.floor(
-      (Date.now() - (session.startedAt ?? session.createdAt).getTime()) / (1000 * 60 * 60 * 24),
-    );
+    const daysAgo = calendarDaysAgo(session.startedAt ?? session.createdAt, now);
     for (const ex of session.exercises) {
       for (const mg of ex.exercise.muscleGroups ?? []) {
         const current = muscleGroupsTrainedRecently.get(mg.muscleGroup);
@@ -87,7 +85,7 @@ Focus: ${template.focus}
 Energy Cost: ${template.energyCost}
 Estimated Duration: ${template.estimatedDuration} min
 Exercises:
-${template.exercises.map(ex => `  - ${ex.exerciseName}: ${ex.targetSets}x${ex.targetReps}${ex.targetWeight ? ` @ ${ex.targetWeight}kg` : ''}`).join('\n')}`,
+${template.exercises.map(ex => `  - [ID:${ex.exerciseId}] ${ex.exerciseName}: ${ex.targetSets}x${ex.targetReps}${ex.targetWeight ? ` @ ${ex.targetWeight}kg` : ''} (rest: ${ex.restSeconds}s)`).join('\n')}`,
   )
   .join('\n\n')}
 
@@ -103,7 +101,7 @@ ${timelineSection}
 # TODAY'S CONTEXT
 
 Date: ${today}
-Days since last workout: ${recentSessions.length ? Math.floor((Date.now() - (recentSessions[0].startedAt ?? recentSessions[0].createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 'N/A'}
+Days since last workout: ${recentSessions.length ? calendarDaysAgo(recentSessions[0].startedAt ?? recentSessions[0].createdAt, now) : 'N/A'}
 
 # YOUR TASK
 
@@ -116,6 +114,7 @@ Analyze the training history and recommend the BEST session for today.
 - Consider user's fitness level and recent training intensity
 - If no recent training, recommend an easy session to ease back in
 - If user trained yesterday with high intensity, consider rest or low-intensity cardio
+- CRITICAL: exerciseId MUST be the EXACT UUID shown as [ID:...] in the Session Templates above. NEVER invent or guess IDs.
 
 **Response Format (JSON):**
 

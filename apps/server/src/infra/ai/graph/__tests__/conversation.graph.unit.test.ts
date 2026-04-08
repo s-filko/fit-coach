@@ -191,8 +191,8 @@ describe('ConversationGraph', () => {
         { configurable: { thread_id: 'u1-timeout-idle' } },
       );
 
-      // completeSession should have been called
-      expect(deps.trainingService.completeSession).toHaveBeenCalledWith('session-2');
+      // completeSession should have been called with lastActivityDate as completedAt
+      expect(deps.trainingService.completeSession).toHaveBeenCalledWith('session-2', undefined, twoHoursAgo);
 
       // Router bypassed the training subgraph
       expect(result.responseMessage).toContain('inactivity');
