@@ -1,6 +1,6 @@
 FROM node:22-slim AS webapp-build
 WORKDIR /webapp
-COPY apps/webapp/package.json apps/webapp/package-lock.json ./
+COPY apps/webapp/package.json apps/webapp/package-lock.json apps/webapp/.npmrc ./
 RUN npm ci
 COPY apps/webapp/ ./
 RUN npx tsc --noEmit && npx vite build --outDir dist
