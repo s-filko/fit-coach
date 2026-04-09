@@ -18,6 +18,7 @@ import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
 import { buildTrainingSystemPrompt } from '@infra/ai/graph/nodes/training.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildTrainingTools, LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '@infra/ai/graph/tools/training.tools';
+import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
 
 import { createLogger } from '@shared/logger';
@@ -172,13 +173,16 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
    */
   const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
   const currentSessionIds = new PendingRefMap<string | null>();
-  const tools = buildTrainingTools({
-    trainingService,
-    exerciseRepository,
-    embeddingService,
-    pendingTransitions,
-    currentSessionIds,
-  });
+  const tools = [
+    ...buildTrainingTools({
+      trainingService,
+      exerciseRepository,
+      embeddingService,
+      pendingTransitions,
+      currentSessionIds,
+    }),
+    buildSaveTimezoneTool({ userService }),
+  ];
   const toolMap = Object.fromEntries(tools.map(t => [t.name, t]));
   const baseModel = getModel();
 

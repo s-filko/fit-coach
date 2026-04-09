@@ -1,4 +1,6 @@
 /* eslint-disable max-len */
+import { formatInUserTz } from '@shared/date-utils';
+
 export interface UserProfile {
   name: string;
   age: number;
@@ -34,12 +36,7 @@ export interface PlanCreationPromptContext {
 }
 
 export function buildPlanCreationPrompt(context: PlanCreationPromptContext): string {
-  const now = new Date();
-  const timestamp = now.toISOString();
-  const timestampParts = timestamp.split('T');
-  const dateOnly = timestampParts[0] ?? '';
-  const timeOnly = timestampParts[1] ?? '';
-  const time = timeOnly.split('.')[0] ?? '';
+  const { dateOnly, time } = formatInUserTz(new Date());
 
   const profile = context.userProfile;
   const exercises = context.availableExercises;

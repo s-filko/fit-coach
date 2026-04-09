@@ -92,4 +92,15 @@ export class DrizzleConversationContextService implements IConversationContextSe
       .limit(1);
     return row?.content ?? null;
   }
+
+  async getLastUserMessageTime(userId: string): Promise<Date | null> {
+    const { db, conversationTurns } = await getDbAndSchema();
+    const [row] = await db
+      .select({ createdAt: conversationTurns.createdAt })
+      .from(conversationTurns)
+      .where(and(eq(conversationTurns.userId, userId), eq(conversationTurns.role, 'user')))
+      .orderBy(desc(conversationTurns.createdAt))
+      .limit(1);
+    return row?.createdAt ?? null;
+  }
 }

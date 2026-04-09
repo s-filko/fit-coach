@@ -36,6 +36,7 @@ export const users = pgTable('users', {
   firstName: text('first_name'),
   lastName: text('last_name'),
   languageCode: text('language_code'),
+  timezone: text('timezone'),
   // Profile data
   gender: text('gender'),
   age: integer('age'), // Stored as integer, rounded from user input

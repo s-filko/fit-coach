@@ -3,6 +3,8 @@ import { setDataTypeValues, trainingIntentTypes } from '@domain/training/trainin
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import type { TrainingPromptContext } from '@domain/user/ports';
 
+import { formatInUserTz } from '@shared/date-utils';
+
 /**
  * Build system prompt for training phase
  *
@@ -15,9 +17,8 @@ import type { TrainingPromptContext } from '@domain/user/ports';
  */
 export function buildTrainingPrompt(context: TrainingPromptContext): string {
   const now = new Date();
-  const timestamp = now.toISOString();
-  const [dateOnly, timeOnly] = timestamp.split('T');
-  const time = timeOnly?.split('.')[0] ?? '';
+  const tz = context.user.timezone;
+  const { dateOnly, time, label: tzLabel } = formatInUserTz(now, tz);
 
   const session: WorkoutSessionWithDetails = context.activeSession;
   const sessionStart = new Date(session.startedAt ?? session.createdAt);
@@ -95,7 +96,7 @@ Completed Sets: ${currentExercise.sets.length}`
 
 You are a professional fitness coach guiding a user through their workout session in real-time.
 
-**Current Time**: ${dateOnly} ${time} UTC
+**Current Time**: ${dateOnly} ${time} ${tzLabel}
 **Session Started**: ${sessionStart.toISOString()}
 **Elapsed Time**: ${elapsedMinutes} minutes
 

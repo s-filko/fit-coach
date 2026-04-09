@@ -3,12 +3,13 @@ import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import type { User } from '@domain/user/services/user.service';
 
 import { composeDirectives } from '@infra/ai/graph/prompt-directives';
-import { calendarDaysAgo } from '@shared/date-utils';
+import { calendarDaysAgo, formatInUserTz, humanTimeAgo } from '@shared/date-utils';
 
 /* eslint-disable max-len */
 export function buildSessionPlanningSystemPrompt(user: User | null, context: SessionPlanningContextData): string {
   const now = new Date();
-  const dateOnly = now.toISOString().split('T')[0] ?? '';
+  const tz = user?.timezone;
+  const { dateOnly } = formatInUserTz(now, tz);
 
   // === CLIENT PROFILE ===
   const profileSection = user
@@ -29,10 +30,10 @@ export function buildSessionPlanningSystemPrompt(user: User | null, context: Ses
     : 'No active workout plan. The user should create a plan first (use chat to navigate to plan creation).';
 
   // === RECENT TRAINING HISTORY ===
-  const historySection = buildHistorySection(context.recentSessions, now);
+  const historySection = buildHistorySection(context.recentSessions, now, tz);
 
   // === RECOVERY TIMELINE ===
-  const recoverySection = buildRecoverySection(context.recentSessions, now);
+  const recoverySection = buildRecoverySection(context.recentSessions, now, tz);
 
   const daysSince =
     context.daysSinceLastWorkout !== null
@@ -182,7 +183,7 @@ function buildActivePlanSection(
   return lines.join('\n');
 }
 
-function buildHistorySection(sessions: WorkoutSessionWithDetails[], now: Date): string {
+function buildHistorySection(sessions: WorkoutSessionWithDetails[], now: Date, tz?: string | null): string {
   if (sessions.length === 0) {
     return 'No training history yet. This will be the first session.';
   }
@@ -190,9 +191,7 @@ function buildHistorySection(sessions: WorkoutSessionWithDetails[], now: Date): 
   return sessions
     .map((session, idx) => {
       const sessionDate = new Date(session.startedAt ?? session.createdAt);
-      const daysAgo = calendarDaysAgo(sessionDate, now);
-      const hoursAgo = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60));
-      const timeAgo = daysAgo > 0 ? `${daysAgo}d ago` : `${hoursAgo}h ago`;
+      const timeAgo = humanTimeAgo(sessionDate, now, tz);
 
       const exerciseList = session.exercises
         .map(ex => {
@@ -217,18 +216,18 @@ function buildHistorySection(sessions: WorkoutSessionWithDetails[], now: Date): 
     .join('\n\n');
 }
 
-function buildRecoverySection(sessions: WorkoutSessionWithDetails[], now: Date): string {
-  const lastTrainedByMuscle = new Map<string, number>();
+function buildRecoverySection(sessions: WorkoutSessionWithDetails[], now: Date, tz?: string | null): string {
+  const lastTrainedByMuscle = new Map<string, { daysAgo: number; date: Date }>();
 
   for (const session of sessions) {
     const sessionDate = new Date(session.startedAt ?? session.createdAt);
-    const daysAgo = calendarDaysAgo(sessionDate, now);
+    const daysAgo = calendarDaysAgo(sessionDate, now, tz);
 
     for (const ex of session.exercises) {
       for (const mg of (ex.exercise as { muscleGroups?: Array<{ muscleGroup: string }> }).muscleGroups ?? []) {
         const existing = lastTrainedByMuscle.get(mg.muscleGroup);
-        if (existing === undefined || daysAgo < existing) {
-          lastTrainedByMuscle.set(mg.muscleGroup, daysAgo);
+        if (!existing || daysAgo < existing.daysAgo) {
+          lastTrainedByMuscle.set(mg.muscleGroup, { daysAgo, date: sessionDate });
         }
       }
     }
@@ -239,19 +238,12 @@ function buildRecoverySection(sessions: WorkoutSessionWithDetails[], now: Date):
   }
 
   return Array.from(lastTrainedByMuscle.entries())
-    .sort((a, b) => a[1] - b[1])
-    .map(([muscle, daysAgo]) => {
-      let status: string;
-      if (daysAgo === 0) {
-        status = '⚠ trained today';
-      } else if (daysAgo === 1) {
-        status = '⚠ trained yesterday';
-      } else if (daysAgo <= 2) {
-        status = `${daysAgo}d ago — may still be sore`;
-      } else {
-        status = `${daysAgo}d ago — likely recovered`;
-      }
-      return `- ${muscle}: ${status}`;
+    .sort((a, b) => a[1].daysAgo - b[1].daysAgo)
+    .map(([muscle, { daysAgo, date }]) => {
+      const when = humanTimeAgo(date, now, tz);
+      const warn = daysAgo <= 2 ? '⚠ ' : '';
+      const note = daysAgo <= 2 ? ' — may still be sore' : ' — likely recovered';
+      return `- ${muscle}: ${warn}${when}${note}`;
     })
     .join('\n');
 }

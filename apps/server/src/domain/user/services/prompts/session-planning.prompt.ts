@@ -1,6 +1,8 @@
 /* eslint-disable max-len */
 import type { SessionPlanningPromptContext } from '@domain/user/ports';
 
+import { calendarDaysAgo, formatInUserTz, humanTimeAgo } from '@shared/date-utils';
+
 /**
  * Build system prompt for session_planning phase
  *
@@ -12,11 +14,8 @@ import type { SessionPlanningPromptContext } from '@domain/user/ports';
  */
 export function buildSessionPlanningPrompt(context: SessionPlanningPromptContext): string {
   const now = new Date();
-  const timestamp = now.toISOString();
-  const timestampParts = timestamp.split('T');
-  const dateOnly = timestampParts[0] ?? '';
-  const timeOnly = timestampParts[1] ?? '';
-  const time = timeOnly.split('.')[0] ?? '';
+  const tz = context.user.timezone;
+  const { dateOnly, time, label: tzLabel } = formatInUserTz(now, tz);
 
   // Build user profile section
   const { user } = context;
@@ -34,8 +33,7 @@ export function buildSessionPlanningPrompt(context: SessionPlanningPromptContext
     ? context.recentSessions
         .map((session, idx) => {
           const sessionDate = new Date(session.startedAt ?? session.createdAt);
-          const daysAgo = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24));
-          const hoursAgo = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60));
+          const timeAgo = humanTimeAgo(sessionDate, now, tz);
 
           const exercisesList = session.exercises
             .map(ex => {
@@ -51,9 +49,7 @@ export function buildSessionPlanningPrompt(context: SessionPlanningPromptContext
             })
             .join('\n');
 
-          const timeAgo = daysAgo > 0 ? `${daysAgo} days ago` : `${hoursAgo} hours ago`;
-
-          return `  ${idx + 1}. ${session.sessionKey ?? 'Custom'} - ${sessionDate.toISOString()} (${timeAgo})
+          return `  ${idx + 1}. ${session.sessionKey ?? 'Custom'} - ${timeAgo}
     Status: ${session.status}
     Duration: ${session.durationMinutes ?? 'N/A'} min
     Context: ${session.userContextJson ? JSON.stringify(session.userContextJson) : 'None'}
@@ -63,18 +59,15 @@ ${exercisesList}`;
     : '  No training history yet.';
 
   // Build recovery timeline
-  const muscleGroupsTrainedRecently = new Map<string, { daysAgo: number; date: string }>();
+  const muscleGroupsTrainedRecently = new Map<string, { daysAgo: number; date: Date }>();
   for (const session of context.recentSessions) {
     const sessionDate = new Date(session.startedAt ?? session.createdAt);
-    const daysAgo = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24));
+    const daysAgo = calendarDaysAgo(sessionDate, now, tz);
     for (const ex of session.exercises) {
       for (const mg of ex.exercise.muscleGroups ?? []) {
         const current = muscleGroupsTrainedRecently.get(mg.muscleGroup);
         if (!current || daysAgo < current.daysAgo) {
-          muscleGroupsTrainedRecently.set(mg.muscleGroup, {
-            daysAgo,
-            date: sessionDate.toISOString(),
-          });
+          muscleGroupsTrainedRecently.set(mg.muscleGroup, { daysAgo, date: sessionDate });
         }
       }
     }
@@ -83,7 +76,7 @@ ${exercisesList}`;
   const timelineSection = muscleGroupsTrainedRecently.size
     ? Array.from(muscleGroupsTrainedRecently.entries())
         .sort((a, b) => a[1].daysAgo - b[1].daysAgo)
-        .map(([muscle, info]) => `  - ${muscle}: ${info.daysAgo} days ago (${info.date})`)
+        .map(([muscle, info]) => `  - ${muscle}: ${humanTimeAgo(info.date, now, tz)}`)
         .join('\n')
     : '  No muscle groups trained yet.';
 
@@ -130,7 +123,7 @@ ${context.currentPlan.modifications?.length ? `Modifications:\n${context.current
 
 You are a professional fitness coach helping a user plan their workout session.
 
-**Current Time**: ${dateOnly} ${time} UTC
+**Current Time**: ${dateOnly} ${time} ${tzLabel}
 
 # CLIENT PROFILE
 

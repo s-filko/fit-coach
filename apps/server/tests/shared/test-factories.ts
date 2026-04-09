@@ -246,6 +246,7 @@ export const createTestUser = (
     firstName?: string | null;
     lastName?: string | null;
     languageCode?: string | null;
+    timezone?: string | null;
     profileStatus?: string | null;
     fitnessLevel?: string | null;
     age?: number | null;
@@ -260,6 +261,7 @@ export const createTestUser = (
   firstName?: string | null;
   lastName?: string | null;
   languageCode?: string | null;
+  timezone?: string | null;
   profileStatus?: string | null;
   fitnessLevel?: string | null;
   age?: number | null;
@@ -273,6 +275,7 @@ export const createTestUser = (
   firstName: overrides.firstName !== undefined ? overrides.firstName : 'Test',
   lastName: overrides.lastName !== undefined ? overrides.lastName : 'User',
   languageCode: overrides.languageCode !== undefined ? overrides.languageCode : 'en',
+  timezone: overrides.timezone !== undefined ? overrides.timezone : null,
   profileStatus: overrides.profileStatus !== undefined ? overrides.profileStatus : 'incomplete',
   fitnessLevel: overrides.fitnessLevel !== undefined ? overrides.fitnessLevel : null,
   age: overrides.age !== undefined ? overrides.age : null,

@@ -50,6 +50,13 @@
       "when": 1773589019598,
       "tag": "0006_large_apocalypse",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775710481505,
+      "tag": "0007_add-user-timezone",
+      "breakpoints": true
     }
   ]
 }

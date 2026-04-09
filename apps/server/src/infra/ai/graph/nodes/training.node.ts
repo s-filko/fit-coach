@@ -3,6 +3,7 @@ import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import type { User } from '@domain/user/services/user.service';
 
 import { composeDirectives } from '@infra/ai/graph/prompt-directives';
+import { humanTimeAgo } from '@shared/date-utils';
 
 const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
@@ -30,7 +31,7 @@ Name: ${clientName}${fitnessGoal ? `\nGoal: ${fitnessGoal}` : ''}
 
 ${buildWorkoutOverview(session, now)}
 
-${staleSection}${previousSession ? `=== PREVIOUS SESSION (same template — ${daysBetween(previousSession.completedAt ?? previousSession.createdAt, now)} days ago) ===\n\n${buildPreviousSessionSection(previousSession)}\n\n` : ''}=== YOUR TASK ===
+${staleSection}${previousSession ? `=== PREVIOUS SESSION (same template — ${humanTimeAgo(new Date(previousSession.completedAt ?? previousSession.createdAt), now, user?.timezone)}) ===\n\n${buildPreviousSessionSection(previousSession)}\n\n` : ''}=== YOUR TASK ===
 
 Guide the client through the workout. At each step:
 
@@ -260,14 +261,6 @@ function formatSetData(setData: WorkoutSessionWithDetails['exercises'][number]['
     default:
       return JSON.stringify(setData);
   }
-}
-
-function daysBetween(date: Date | null | string, now: Date): number {
-  if (!date) {
-    return 0;
-  }
-  const ms = now.getTime() - new Date(date).getTime();
-  return Math.floor(ms / (1000 * 60 * 60 * 24));
 }
 
 function formatDuration(ms: number): string {

@@ -12,6 +12,7 @@ import { User } from '@domain/user/services/user.service';
 import { buildChatSystemPrompt } from '@infra/ai/graph/nodes/chat.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildChatTools } from '@infra/ai/graph/tools/chat.tools';
+import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
 
 export interface ChatSubgraphDeps {
@@ -43,21 +44,22 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
    */
   const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
 
-  const tools = buildChatTools({ userService, pendingTransitions });
+  const tools = [...buildChatTools({ userService, pendingTransitions }), buildSaveTimezoneTool({ userService })];
   const toolNode = new ToolNode(tools);
   const model = getModel().bindTools(tools);
 
   const agentNode = async (state: ChatSubgraphStateType) => {
     const { userId, user, userMessage } = state;
 
-    const [history, activePlan, recentSessions, previousSummary] = await Promise.all([
+    const [history, activePlan, recentSessions, previousSummary, lastMessageTime] = await Promise.all([
       contextService.getMessagesForPrompt(userId, 'chat'),
       workoutPlanRepo.findActiveByUserId(userId),
       workoutSessionRepo.findRecentByUserIdWithDetails(userId, 5),
       contextService.getLatestSummary(userId),
+      contextService.getLastUserMessageTime(userId),
     ]);
 
-    const systemPrompt = buildChatSystemPrompt(user, !!activePlan, recentSessions);
+    const systemPrompt = buildChatSystemPrompt(user, !!activePlan, recentSessions, lastMessageTime);
 
     const inFlightMessages = state.messages ?? [];
 

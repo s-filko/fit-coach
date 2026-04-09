@@ -15,6 +15,7 @@ Business Rules
 	• BR-USER-003: Any endpoint referencing unknown user id returns 404
 	• BR-USER-004: Upsert initializes profileStatus to 'registration'
 	• BR-USER-006: Language change occurs immediately on explicit user request; when system proposes due to detected mismatch, require explicit confirmation; persist by updating user.languageCode
+	• BR-USER-006a: Timezone (IANA, e.g. "Europe/Berlin") is optional, nullable, collected lazily via save_timezone tool in any phase; used in all date/time formatting; falls back to UTC
 	• BR-USER-007: Upsert persists provider metadata when present (username, firstName, lastName, languageCode)
 	• BR-USER-008: Cross-phase extraction — collect any missing registration/onboarding fields whenever they appear (registration, planning, active); do not re-ask once captured
 	• BR-USER-009: Clarify ambiguous values/units before persisting; only store when unambiguous

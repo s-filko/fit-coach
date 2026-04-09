@@ -96,28 +96,9 @@ Format:
 Ready?
 ```
 
-## User Timezone — LLM sees wrong local time (important)
+## ~~User Timezone — LLM sees wrong local time~~ ✅ DONE
 
-**Problem:** All prompts use `new Date().toISOString()` which outputs server UTC time. If the user is in UTC+3, the LLM thinks it's 3 hours earlier — it may give wrong time-of-day context, incorrect "days ago" calculations, and wrong session timestamps shown to the user.
-
-**Telegram limitation:** Telegram does NOT provide user timezone in the `from` object. Only `language_code` is available (already stored in `users.language_code`).
-
-**Solution — store explicit timezone in user profile**
-- Add `timezone` column to `users` table (type: `text`, nullable, e.g. `"Europe/Berlin"`)
-- During registration, ask the user directly: "What city or timezone are you in?" — store as IANA timezone string
-- Alternative: add `/settings timezone` command so user can update it later
-- Replace all `new Date().toISOString()` in prompt builders with a shared helper `formatInUserTz(date, tz)` using `Intl.DateTimeFormat`
-- Fall back to UTC if no timezone is set, and note it in the prompt: "Current time: 14:00 UTC (your timezone not set — use /settings to fix)"
-
-**Note:** `language_code` from Telegram is NOT a reliable proxy for timezone — language is a user preference, not a location. Do not use it for timezone inference.
-
-**Affected files:**
-- `apps/server/src/infra/db/schema.ts` — add `timezone` column
-- `apps/server/src/domain/user/services/prompts/training.prompt.ts` — use user tz
-- `apps/server/src/domain/user/services/prompts/session-planning.prompt.ts` — use user tz
-- `apps/server/src/domain/user/services/prompts/plan-creation.prompt.ts` — use user tz
-- `apps/server/src/domain/training/services/prompts/session-recommendation.prompt.ts` — use user tz
-- Add shared util: `apps/server/src/shared/date.ts` — `formatInUserTz(date, tz)` helper
+Implemented via lazy collection: `timezoneDirective` in `composeDirectives` instructs LLM to ask for timezone when relevant. Shared `save_timezone` tool available in all phases. `formatInUserTz` + `calendarDaysAgo(date, now, tz)` used in all prompt builders. Falls back to UTC when timezone is not set.
 
 ## Training Phase — Coach Tone
 Problem: LLM praises technique, form, and execution ("great form!", "perfect technique!") which it cannot evaluate without visual feedback — sounds unprofessional and annoying.

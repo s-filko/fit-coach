@@ -1,5 +1,5 @@
 import type { UserProfile, WorkoutPlan, WorkoutSessionWithDetails } from '@domain/training/types';
-import { calendarDaysAgo } from '@shared/date-utils';
+import { calendarDaysAgo, formatInUserTz, humanTimeAgo } from '@shared/date-utils';
 
 export async function buildSessionRecommendationPrompt(
   user: UserProfile,
@@ -7,13 +7,12 @@ export async function buildSessionRecommendationPrompt(
   recentSessions: WorkoutSessionWithDetails[],
 ): Promise<string> {
   const now = new Date();
-  const [today] = now.toISOString().split('T');
+  const { dateOnly: today } = formatInUserTz(now);
 
   // Build training history section
   const historySection = recentSessions.length
     ? recentSessions
         .map((session, idx) => {
-          const daysAgo = calendarDaysAgo(session.startedAt ?? session.createdAt, now);
           const exercisesList = session.exercises
             .map(ex => {
               const setsInfo = ex.sets
@@ -28,7 +27,7 @@ export async function buildSessionRecommendationPrompt(
             })
             .join('\n');
 
-          return `  ${idx + 1}. ${session.sessionKey ?? 'Custom'} - ${daysAgo} days ago (${session.status})
+          return `  ${idx + 1}. ${session.sessionKey ?? 'Custom'} - ${humanTimeAgo(new Date(session.startedAt ?? session.createdAt), now)} (${session.status})
     Duration: ${session.durationMinutes ?? 'N/A'} min
     Context: ${session.userContextJson ? JSON.stringify(session.userContextJson) : 'None'}
 ${exercisesList}`;
@@ -37,14 +36,15 @@ ${exercisesList}`;
     : '  No training history yet.';
 
   // Build timeline analysis
-  const muscleGroupsTrainedRecently = new Map<string, number>();
+  const muscleGroupsTrainedRecently = new Map<string, { daysAgo: number; date: Date }>();
   for (const session of recentSessions) {
-    const daysAgo = calendarDaysAgo(session.startedAt ?? session.createdAt, now);
+    const sessionDate = new Date(session.startedAt ?? session.createdAt);
+    const daysAgo = calendarDaysAgo(sessionDate, now);
     for (const ex of session.exercises) {
       for (const mg of ex.exercise.muscleGroups ?? []) {
         const current = muscleGroupsTrainedRecently.get(mg.muscleGroup);
-        if (!current || daysAgo < current) {
-          muscleGroupsTrainedRecently.set(mg.muscleGroup, daysAgo);
+        if (!current || daysAgo < current.daysAgo) {
+          muscleGroupsTrainedRecently.set(mg.muscleGroup, { daysAgo, date: sessionDate });
         }
       }
     }
@@ -52,8 +52,8 @@ ${exercisesList}`;
 
   const timelineSection = muscleGroupsTrainedRecently.size
     ? Array.from(muscleGroupsTrainedRecently.entries())
-        .sort((a, b) => a[1] - b[1])
-        .map(([muscle, days]) => `  - ${muscle}: ${days} days ago`)
+        .sort((a, b) => a[1].daysAgo - b[1].daysAgo)
+        .map(([muscle, info]) => `  - ${muscle}: ${humanTimeAgo(info.date, now)}`)
         .join('\n')
     : '  No muscle groups trained yet.';
 

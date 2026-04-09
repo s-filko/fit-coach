@@ -3,18 +3,7 @@ import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import { User } from '@domain/user/services/user.service';
 
 import { composeDirectives } from '@infra/ai/graph/prompt-directives';
-import { calendarDaysAgo } from '@shared/date-utils';
-
-function formatSessionAge(date: Date): string {
-  const daysAgo = calendarDaysAgo(date);
-  if (daysAgo === 0) {
-    return 'today';
-  }
-  if (daysAgo === 1) {
-    return 'yesterday';
-  }
-  return `${daysAgo} days ago`;
-}
+import { humanTimeAgo } from '@shared/date-utils';
 
 /**
  * Builds the system prompt for the chat phase.
@@ -25,6 +14,7 @@ export function buildChatSystemPrompt(
   user: User | null,
   hasActivePlan: boolean,
   recentSessions: WorkoutSessionWithDetails[] = [],
+  lastMessageTime: Date | null = null,
 ): string {
   const profile = [
     user?.age && `Age: ${user.age}`,
@@ -46,7 +36,7 @@ export function buildChatSystemPrompt(
       ? recentSessions
           .map(s => {
             const date = s.completedAt ?? s.startedAt ?? s.createdAt;
-            const when = formatSessionAge(new Date(date));
+            const when = humanTimeAgo(new Date(date), new Date(), user?.timezone);
             const exercises = s.exercises.map(ex => `${ex.exercise.name} (${ex.sets.length} sets)`).join(', ');
             return `- ${s.sessionKey ?? 'session'} — ${when}, ${s.durationMinutes ?? '?'} min: ${exercises || 'no exercises logged'}`;
           })
@@ -85,5 +75,5 @@ IMPORTANT: You do NOT have log_set or any set-logging capability. You CANNOT sav
 NEVER write "✅", "logged", "saved", "recorded" about sets.
 If the user reports a set, transition to training or tell them to start a session first.
 
-${composeDirectives(user)}`;
+${composeDirectives(user, { lastMessageTime })}`;
 }

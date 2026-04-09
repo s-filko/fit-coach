@@ -272,6 +272,7 @@ describe('DrizzleUserRepository – repository unit', () => {
         height: null,
         weight: null,
         fitnessGoal: null,
+        timezone: null,
         profileStatus: 'registration',
         fitnessLevel: null,
         username: 'testuser',
@@ -299,6 +300,7 @@ describe('DrizzleUserRepository – repository unit', () => {
         height: null,
         weight: null,
         fitnessGoal: null,
+        timezone: null,
         profileStatus: 'registration',
         fitnessLevel: null,
         username: null,
@@ -329,6 +331,7 @@ describe('DrizzleUserRepository – repository unit', () => {
         lastName: null,
         username: null,
         languageCode: null,
+        timezone: null,
       });
     });
 

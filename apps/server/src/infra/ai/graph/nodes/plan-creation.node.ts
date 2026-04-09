@@ -1,10 +1,10 @@
 import type { User } from '@domain/user/services/user.service';
 
 import { composeDirectives } from '@infra/ai/graph/prompt-directives';
+import { formatInUserTz } from '@shared/date-utils';
 
 export function buildPlanCreationSystemPrompt(user: User | null): string {
-  const now = new Date();
-  const dateOnly = now.toISOString().split('T')[0] ?? '';
+  const { dateOnly } = formatInUserTz(new Date(), user?.timezone);
 
   const profileSection = user
     ? [

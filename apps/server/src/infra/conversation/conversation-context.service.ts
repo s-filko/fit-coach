@@ -49,4 +49,8 @@ export class InMemoryConversationContextService implements IConversationContextS
   async getLatestSummary(userId: string): Promise<string | null> {
     return this.summaries.get(userId) ?? null;
   }
+
+  async getLastUserMessageTime(_userId: string): Promise<Date | null> {
+    return null;
+  }
 }

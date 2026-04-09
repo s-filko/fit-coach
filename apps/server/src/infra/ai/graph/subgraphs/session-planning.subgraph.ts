@@ -21,6 +21,7 @@ import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
 import { buildSessionPlanningSystemPrompt } from '@infra/ai/graph/nodes/session-planning.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildSessionPlanningTools } from '@infra/ai/graph/tools/session-planning.tools';
+import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
 
 export interface SessionPlanningSubgraphDeps {
@@ -67,7 +68,7 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
 
   const contextBuilder = new SessionPlanningContextBuilder(workoutPlanRepository, workoutSessionRepository);
 
-  const tools = buildSessionPlanningTools({
+  const phaseTools = buildSessionPlanningTools({
     trainingService,
     workoutPlanRepository,
     exerciseRepository,
@@ -75,6 +76,7 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
     pendingTransitions,
     pendingActiveSessionIds,
   });
+  const tools = [...phaseTools, buildSaveTimezoneTool({ userService })];
   const dedupToolNode = buildDedupToolNode(tools);
   const model = getModel().bindTools(tools);
 

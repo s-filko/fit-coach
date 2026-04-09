@@ -14,6 +14,7 @@ import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
 import { buildPlanCreationSystemPrompt } from '@infra/ai/graph/nodes/plan-creation.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildPlanCreationTools } from '@infra/ai/graph/tools/plan-creation.tools';
+import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
 
 export interface PlanCreationSubgraphDeps {
@@ -45,12 +46,13 @@ export function buildPlanCreationSubgraph(deps: PlanCreationSubgraphDeps) {
    */
   const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
 
-  const tools = buildPlanCreationTools({
+  const phaseTools = buildPlanCreationTools({
     workoutPlanRepository,
     exerciseRepository,
     embeddingService,
     pendingTransitions,
   });
+  const tools = [...phaseTools, buildSaveTimezoneTool({ userService })];
   const dedupToolNode = buildDedupToolNode(tools);
   const model = getModel().bindTools(tools);
 

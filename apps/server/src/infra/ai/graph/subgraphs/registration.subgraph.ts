@@ -11,6 +11,7 @@ import { User } from '@domain/user/services/user.service';
 import { buildRegistrationSystemPrompt } from '@infra/ai/graph/nodes/registration.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildRegistrationTools } from '@infra/ai/graph/tools/registration.tools';
+import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
 
 export interface RegistrationSubgraphDeps {
@@ -39,7 +40,10 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
    */
   const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
 
-  const tools = buildRegistrationTools({ userService, pendingTransitions });
+  const tools = [
+    ...buildRegistrationTools({ userService, pendingTransitions }),
+    buildSaveTimezoneTool({ userService }),
+  ];
   const toolNode = new ToolNode(tools);
   const model = getModel().bindTools(tools);
 

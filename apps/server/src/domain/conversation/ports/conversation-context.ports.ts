@@ -14,4 +14,5 @@ export interface IConversationContextService {
   insertContextReset(userId: string): Promise<void>;
   insertPhaseSummary(userId: string, phase: ConversationPhase, summary: string): Promise<void>;
   getLatestSummary(userId: string): Promise<string | null>;
+  getLastUserMessageTime(userId: string): Promise<Date | null>;
 }
