@@ -6,7 +6,7 @@ on:
   workflow_call:
 
 jobs:
-  check:
+  check-server:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -50,3 +50,22 @@ jobs:
 
       - name: Unit tests
         run: npm run test:unit
+
+  check-webapp:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/webapp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: apps/webapp/package-lock.json
+
+      - run: npm ci
+
+      - name: Type check & build
+        run: npm run build

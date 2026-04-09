@@ -22,8 +22,8 @@ services:
 
   server:
     build:
-      context: ../apps/server
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: apps/server/Dockerfile
       args:
         GIT_SHA: ${GIT_SHA:-unknown}
         APP_VERSION: ${APP_VERSION:-0.0.0}

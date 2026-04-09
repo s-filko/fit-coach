@@ -1,14 +1,22 @@
+FROM node:22-slim AS webapp-build
+WORKDIR /webapp
+COPY apps/webapp/package.json apps/webapp/package-lock.json ./
+RUN npm ci
+COPY apps/webapp/ ./
+RUN npx tsc --noEmit && npx vite build --outDir dist
+
 FROM node:22-slim
 RUN apt-get update && apt-get install -y --no-install-recommends expect postgresql-client wget && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY apps/server/package.json apps/server/package-lock.json ./
 RUN npm ci --ignore-scripts
-COPY src ./src
-COPY public ./public
-COPY tsconfig.json ./
-COPY drizzle ./drizzle
-COPY drizzle.config.ts ./
-COPY docker-entrypoint.sh ./
+COPY apps/server/src ./src
+COPY apps/server/public ./public
+COPY --from=webapp-build /webapp/dist ./public/webapp
+COPY apps/server/tsconfig.json ./
+COPY apps/server/drizzle ./drizzle
+COPY apps/server/drizzle.config.ts ./
+COPY apps/server/docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 
 ARG GIT_SHA=unknown
