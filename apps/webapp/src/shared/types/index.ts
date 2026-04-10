@@ -9,7 +9,8 @@ export interface User {
   weight?: number;
   fitnessGoal?: string;
   fitnessLevel?: string;
-  profileStatus: 'registration' | 'complete';
+  profileStatus?: string;
+  timezone?: string;
 }
 
 export interface WorkoutPlan {

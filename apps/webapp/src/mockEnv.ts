@@ -47,10 +47,9 @@ if (import.meta.env.DEV) {
           ['hash', 'mock_hash'],
           ['signature', 'mock_signature'],
           ['user', JSON.stringify({
-            id: 1,
-            first_name: 'Dev',
-            last_name: 'User',
-            username: 'devuser',
+            id: 353354751,
+            first_name: 'Сергей',
+            username: 's_filko',
             language_code: 'ru',
           })],
         ]).toString()],
