@@ -106,12 +106,17 @@ function parseInitDataDev(raw: string): InitDataValidationResult {
   return parseUser(params);
 }
 
+function isLocalRequest(req: FastifyRequest): boolean {
+  const host = req.hostname;
+  return host === 'localhost' || host === '127.0.0.1' || host.startsWith('localhost:');
+}
+
 function resolveInitData(raw: string, req: FastifyRequest): InitDataValidationResult {
   const config = loadConfig();
 
-  if (config.NODE_ENV === 'development') {
+  if (config.NODE_ENV === 'development' && isLocalRequest(req)) {
     if (!hmacSkipLogged) {
-      req.log.warn('HMAC validation skipped in development mode');
+      req.log.warn('HMAC validation skipped for localhost request');
       hmacSkipLogged = true;
     }
     return parseInitDataDev(raw);
