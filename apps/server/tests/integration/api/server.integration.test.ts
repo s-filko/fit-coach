@@ -92,17 +92,17 @@ describe('Server Basic Functionality – integration', () => {
       const paths = Object.keys(json.paths ?? {});
 
       // Check that main endpoints are documented
-      expect(paths).toEqual(expect.arrayContaining(['/api/user', '/api/user/{id}', '/api/chat']));
+      expect(paths).toEqual(expect.arrayContaining(['/api/bot/user', '/api/bot/user/{id}', '/api/bot/chat']));
     });
 
-    it('should have correct POST /api/user schema', async () => {
+    it('should have correct POST /api/bot/user schema', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/docs/json',
       });
 
       const json = res.json();
-      const userPost = json.paths['/api/user'].post;
+      const userPost = json.paths['/api/bot/user'].post;
 
       expect(userPost).toBeTruthy();
       expect(userPost).toHaveProperty('requestBody');
@@ -116,14 +116,14 @@ describe('Server Basic Functionality – integration', () => {
       expect(props).toEqual(expect.arrayContaining(['provider', 'providerUserId']));
     });
 
-    it('should have correct GET /api/user/{id} schema with path parameter', async () => {
+    it('should have correct GET /api/bot/user/{id} schema with path parameter', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/docs/json',
       });
 
       const json = res.json();
-      const userGet = json.paths['/api/user/{id}'].get;
+      const userGet = json.paths['/api/bot/user/{id}'].get;
 
       expect(userGet).toBeTruthy();
       expect(userGet).toHaveProperty('parameters');
@@ -139,14 +139,14 @@ describe('Server Basic Functionality – integration', () => {
       expect(idParam.required).toBe(true);
     });
 
-    it('should have correct POST /api/chat schema', async () => {
+    it('should have correct POST /api/bot/chat schema', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/docs/json',
       });
 
       const json = res.json();
-      const chatPost = json.paths['/api/chat'].post;
+      const chatPost = json.paths['/api/bot/chat'].post;
 
       expect(chatPost).toBeTruthy();
       expect(chatPost).toHaveProperty('requestBody');
@@ -165,7 +165,7 @@ describe('Server Basic Functionality – integration', () => {
     it('should handle CORS preflight requests properly', async () => {
       const res = await app.inject({
         method: 'OPTIONS',
-        url: '/api/user',
+        url: '/api/bot/user',
       });
 
       // OPTIONS requests should either:
@@ -216,7 +216,7 @@ describe('Server Basic Functionality – integration', () => {
 
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'content-type': 'application/json',
           'x-api-key': validKey,
@@ -234,7 +234,7 @@ describe('Server Basic Functionality – integration', () => {
 
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'content-type': 'application/json',
           'x-api-key': validKey,

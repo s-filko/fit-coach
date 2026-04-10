@@ -5,11 +5,22 @@ This spec is the canonical definition of the MVP API. Code must match this docum
 Base URL: `/`
 
 ## Security
-- Protected routes: all under `/api/*` require header `X-Api-Key: <secret>`.
-- Public routes: `/health`, `/docs`, `/docs/*`.
-- Error codes:
-  - 401 Unauthorized — header `X-Api-Key` is missing
-  - 403 Forbidden — invalid `X-Api-Key`
+
+API is split into two route groups with different auth:
+
+### Bot routes (`/api/bot/*`) — machine-to-machine
+- Header: `X-Api-Key: <BOT_API_KEY>`
+- Used by the Telegram bot process
+- 401 if header missing, 403 if invalid
+
+### App routes (`/api/app/*`) — user-facing (Mini App)
+- Header: `X-Init-Data: <Telegram initData string>`
+- HMAC-SHA-256 validated against `TELEGRAM_TOKEN`
+- User identity extracted from signed initData (no userId in body)
+- 401 if header missing or signature invalid
+
+### Public routes
+- `/health`, `/docs`, `/docs/*`, `/public/*`
 
 Swagger (OpenAPI) additions:
 ```yaml
@@ -19,11 +30,10 @@ components:
       type: apiKey
       in: header
       name: X-Api-Key
-```
-Protected endpoints should declare:
-```yaml
-security:
-  - ApiKeyAuth: []
+    InitDataAuth:
+      type: apiKey
+      in: header
+      name: X-Init-Data
 ```
 
 ## 1. Health
@@ -34,7 +44,7 @@ security:
 
 ### 2.1 Create/Upsert User
 - x-feature: FEAT-0001
-- POST `/api/user`
+- POST `/api/bot/user`
 - Request body (Zod):
 ```ts
 {
@@ -54,7 +64,7 @@ security:
 
 ### 2.2 Get User by Id
 - x-feature: FEAT-0002
-- GET `/api/user/{id}`
+- GET `/api/bot/user/{id}`
 - Path params: `{ id: string }`
 - Responses:
   - 200 `{ data: { id: string } }`
@@ -66,7 +76,7 @@ security:
 
 ### 3.1 Send Chat Message
 - x-feature: FEAT-0003
-- POST `/api/chat`
+- POST `/api/bot/chat`
 - Request body (Zod):
 ```ts
 {
@@ -86,8 +96,8 @@ security:
   - `timestamp` (string): ISO 8601 timestamp of the response
 
   Notes:
-  - **All conversational phases (registration, chat, plan_creation, session_planning, training) interact exclusively through this `/api/chat` endpoint.**
-  - **No separate REST endpoints for training operations** — all interactions happen through conversational AI via `/api/chat`.
+  - **All conversational phases (registration, chat, plan_creation, session_planning, training) interact exclusively through this `/api/bot/chat` endpoint.**
+  - **No separate REST endpoints for training operations** — all interactions happen through conversational AI via `/api/bot/chat`.
   - Server routes through `ConversationGraph` (LangGraph StateGraph with PostgreSQL checkpointer). Phase state is persisted atomically per user.
   - **Phase routing** (handled by Router Node inside the graph):
     - New user: `profileStatus === 'registration'` → registration subgraph (collects profile data via tool calling)
@@ -97,7 +107,7 @@ security:
     - Session started → training subgraph (LLM calls `log_set`, `complete_current_exercise`, etc.) [pending Step 7]
   - **Phase transitions**: LLM calls phase transition tools (`request_transition`, `complete_registration`, `finish_training`, etc.). Transition is validated by guard node and persisted by PostgresSaver.
   - **Tool calling**: LLM responds with natural text; uses typed tools for all DB side effects (save profile, save plan, log sets, complete session). No JSON mode parsing.
-  - **Training flow** (all via `/api/chat`, pending Step 7 — training subgraph):
+  - **Training flow** (all via `/api/bot/chat`, pending Step 7 — training subgraph):
     1. User requests workout → chat LLM calls `request_transition` → phase → session_planning
     2. Session planning → LLM calls `start_training_session` tool → session created in DB → phase → training
     3. User: "Did 10 reps with 50kg" → LLM calls `log_set` tool → set saved to DB
@@ -111,9 +121,38 @@ security:
 - **Phase state** persisted in `langgraph_checkpoints` table by PostgresSaver (not in `conversation_turns`).
 - Conversation history is loaded before each LLM call by agentNode and appended after response by persist.node [BR-CONV-001][BR-CONV-002].
 
-## 4. Debug Endpoints (Development Only)
+## 4. Mini App Endpoints (`/api/app/*`)
 
-### 4.1 Get LLM Debug Info
+All endpoints authenticated via `X-Init-Data` header (Telegram initData HMAC validation).
+User identity is extracted from the signed initData — no userId in request body.
+
+### 4.1 Get Profile
+- GET `/api/app/profile`
+- Returns the full profile of the authenticated user
+- Response 200:
+```ts
+{
+  data: {
+    id: string,
+    username?: string | null,
+    firstName?: string | null,
+    lastName?: string | null,
+    gender?: string | null,
+    age?: number | null,
+    height?: number | null,
+    weight?: number | null,
+    fitnessGoal?: string | null,
+    fitnessLevel?: string | null,
+    profileStatus?: string | null,
+    timezone?: string | null,
+  }
+}
+```
+- 401 `{ error: { message: string } }` — missing or invalid initData
+
+## 5. Debug Endpoints (Development Only)
+
+### 5.1 Get LLM Debug Info
 - GET `/api/debug/llm`
 - **Availability**: Only in development mode (`NODE_ENV=development`)
 - **Security**: Requires `X-Api-Key` authentication
@@ -148,7 +187,7 @@ security:
 }
 ```
 
-### 4.2 Clear LLM Debug History
+### 5.2 Clear LLM Debug History
 - POST `/api/debug/llm/clear`
 - **Availability**: Only in development mode (`NODE_ENV=development`)
 - **Security**: Requires `X-Api-Key` authentication

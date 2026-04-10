@@ -45,7 +45,7 @@ describe('API Key Authentication Middleware – integration', () => {
     it('should return 401 when x-api-key header is missing', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         payload: {
           provider: 'telegram',
           providerUserId: 'test_123',
@@ -65,7 +65,7 @@ describe('API Key Authentication Middleware – integration', () => {
     it('should return 403 when x-api-key is invalid', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': 'invalid-api-key',
         },
@@ -87,7 +87,7 @@ describe('API Key Authentication Middleware – integration', () => {
     it('should return 401 when x-api-key is empty', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': '',
         },
@@ -108,7 +108,7 @@ describe('API Key Authentication Middleware – integration', () => {
 
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': validKey,
         },
@@ -133,7 +133,7 @@ describe('API Key Authentication Middleware – integration', () => {
 
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': validKey,
         },
@@ -154,7 +154,7 @@ describe('API Key Authentication Middleware – integration', () => {
 
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'X-Api-Key': validKey,
         },
@@ -175,7 +175,7 @@ describe('API Key Authentication Middleware – integration', () => {
 
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'X-API-KEY': validKey,
         },
@@ -194,9 +194,9 @@ describe('API Key Authentication Middleware – integration', () => {
 
   describe('Multiple endpoints protection', () => {
     const endpoints = [
-      { method: 'POST' as const, url: '/api/user' },
-      { method: 'GET' as const, url: '/api/user/550e8400-e29b-41d4-a716-446655440000' },
-      { method: 'POST' as const, url: '/api/chat' },
+      { method: 'POST' as const, url: '/api/bot/user' },
+      { method: 'GET' as const, url: '/api/bot/user/550e8400-e29b-41d4-a716-446655440000' },
+      { method: 'POST' as const, url: '/api/bot/chat' },
     ];
 
     endpoints.forEach(({ method, url }) => {
@@ -263,7 +263,7 @@ describe('API Key Authentication Middleware – integration', () => {
     it('should allow OPTIONS requests without api key', async () => {
       const res = await app.inject({
         method: 'OPTIONS',
-        url: '/api/user',
+        url: '/api/bot/user',
       });
 
       // OPTIONS should not require auth
@@ -272,7 +272,7 @@ describe('API Key Authentication Middleware – integration', () => {
     });
 
     it('should handle OPTIONS for all API endpoints', async () => {
-      const endpoints = ['/api/user', '/api/chat'];
+      const endpoints = ['/api/bot/user', '/api/bot/chat'];
 
       for (const url of endpoints) {
         const res = await app.inject({

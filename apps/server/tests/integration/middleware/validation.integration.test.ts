@@ -23,7 +23,7 @@ describe('Input Validation Middleware – integration', () => {
     it('should handle malformed JSON payload', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': validApiKey,
           'content-type': 'application/json',
@@ -42,7 +42,7 @@ describe('Input Validation Middleware – integration', () => {
     it('should handle empty payload when JSON expected', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': validApiKey,
           'content-type': 'application/json',
@@ -58,7 +58,7 @@ describe('Input Validation Middleware – integration', () => {
     it('should handle null payload when JSON expected', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': validApiKey,
           'content-type': 'application/json',
@@ -76,7 +76,7 @@ describe('Input Validation Middleware – integration', () => {
     it('should handle missing required fields in user creation', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': validApiKey,
         },
@@ -92,7 +92,7 @@ describe('Input Validation Middleware – integration', () => {
     it('should handle missing provider field', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': validApiKey,
         },
@@ -111,7 +111,7 @@ describe('Input Validation Middleware – integration', () => {
     it('should handle missing providerUserId field', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': validApiKey,
         },
@@ -132,7 +132,7 @@ describe('Input Validation Middleware – integration', () => {
     it('should handle invalid provider type', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': validApiKey,
         },
@@ -151,7 +151,7 @@ describe('Input Validation Middleware – integration', () => {
     it('should handle invalid username format', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': validApiKey,
         },
@@ -174,7 +174,7 @@ describe('Input Validation Middleware – integration', () => {
 
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': validApiKey,
         },
@@ -208,7 +208,7 @@ describe('Input Validation Middleware – integration', () => {
 
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': validApiKey,
         },
@@ -225,7 +225,7 @@ describe('Input Validation Middleware – integration', () => {
     it('should handle missing userId in chat request', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/chat',
+        url: '/api/bot/chat',
         headers: {
           'x-api-key': validApiKey,
         },
@@ -243,7 +243,7 @@ describe('Input Validation Middleware – integration', () => {
     it('should handle missing message in chat request', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/chat',
+        url: '/api/bot/chat',
         headers: {
           'x-api-key': validApiKey,
         },
@@ -261,7 +261,7 @@ describe('Input Validation Middleware – integration', () => {
     it('should handle empty message strings', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/chat',
+        url: '/api/bot/chat',
         headers: {
           'x-api-key': validApiKey,
         },
@@ -280,7 +280,7 @@ describe('Input Validation Middleware – integration', () => {
     it('should provide consistent error message format', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': validApiKey,
         },
@@ -302,7 +302,7 @@ describe('Input Validation Middleware – integration', () => {
     it('should include field information in validation errors', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': validApiKey,
         },

@@ -12,4 +12,8 @@ declare module 'fastify' {
       conversationGraph: ICompiledConversationGraph;
     };
   }
+
+  interface FastifyRequest {
+    telegramUserId?: string;
+  }
 }

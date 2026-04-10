@@ -3,11 +3,6 @@ import fp from 'fastify-plugin';
 
 import { apiKeyPreHandler } from '@app/middlewares/api-key';
 
-/**
- * Security plugin: applies API key guard to all routes in this context.
- * Since this plugin is registered under /api prefix, it only affects /api routes.
- */
-
 function shouldSkipSecurityCheck(request: FastifyRequest): boolean {
   return request.method === 'OPTIONS';
 }
@@ -22,6 +17,6 @@ export default fp(
     });
   },
   {
-    name: 'security',
+    name: 'bot-security',
   },
 );

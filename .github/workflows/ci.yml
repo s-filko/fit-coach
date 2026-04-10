@@ -34,6 +34,7 @@ jobs:
             'DB_PASSWORD=postgres' \
             'DB_NAME=fitcoach_test' \
             'BOT_API_KEY=ci-key' \
+            'TELEGRAM_TOKEN=ci-test-token' \
             'LLM_API_KEY=ci-key' \
             'LLM_MODEL=mock' \
             'LLM_TEMPERATURE=0.7' \

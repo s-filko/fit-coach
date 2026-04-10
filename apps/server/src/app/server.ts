@@ -4,19 +4,26 @@ import Fastify, { FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
 
 import { registerErrorHandler } from '@app/middlewares/error';
+import appProfilePlugin from '@app/plugins/app-profile.plugin';
+import appSecurityPlugin from '@app/plugins/app-security.plugin';
+import botSecurityPlugin from '@app/plugins/bot-security.plugin';
 import chatRoutesPlugin from '@app/plugins/chat-routes.plugin';
 import docsPlugin from '@app/plugins/docs.plugin';
 import { healthPlugin } from '@app/plugins/health.plugin';
-import securityPlugin from '@app/plugins/security.plugin';
 import { testPlugin } from '@app/plugins/test.plugin';
 import userRoutesPlugin from '@app/plugins/user-routes.plugin';
 
 import { loadConfig } from '@config/index';
 
-async function registerApiRoutes(instance: FastifyInstance): Promise<void> {
-  await instance.register(securityPlugin);
+async function registerBotRoutes(instance: FastifyInstance): Promise<void> {
+  await instance.register(botSecurityPlugin);
   await instance.register(userRoutesPlugin);
   await instance.register(chatRoutesPlugin);
+}
+
+async function registerAppRoutes(instance: FastifyInstance): Promise<void> {
+  await instance.register(appSecurityPlugin);
+  await instance.register(appProfilePlugin);
 }
 
 async function registerCorePlugins(app: FastifyInstance): Promise<void> {
@@ -27,12 +34,10 @@ async function registerCorePlugins(app: FastifyInstance): Promise<void> {
   registerErrorHandler(app);
   app.register(healthPlugin);
 
-  // Register test plugin only in test environment
   if (config.NODE_ENV === 'test') {
     app.register(testPlugin);
   }
 
-  // Swagger/OpenAPI - register with encapsulate: false to see routes from other contexts
   app.register(docsPlugin);
 }
 
@@ -48,6 +53,7 @@ export function buildServer(): FastifyInstance {
           'req.headers.authorization',
           'req.headers.cookie',
           'req.headers["x-api-key"]',
+          'req.headers["x-init-data"]',
           '*.password',
           '*.apiKey',
           '*.token',
@@ -62,11 +68,10 @@ export function buildServer(): FastifyInstance {
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
-  // Register core plugins
   void registerCorePlugins(app);
 
-  // API routes with security
-  app.register(registerApiRoutes, { prefix: '/api' });
+  app.register(registerBotRoutes, { prefix: '/api/bot' });
+  app.register(registerAppRoutes, { prefix: '/api/app' });
 
   return app;
 }

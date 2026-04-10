@@ -35,7 +35,7 @@ async function registerOrGetUser(msg: TelegramBot.Message) {
         throw new Error('Cannot determine user information');
     }
 
-    const userResponse = await api.post('/api/user', {
+    const userResponse = await api.post('/api/bot/user', {
         provider: 'telegram',
         providerUserId: String(msg.from.id),
         username: msg.from.username || undefined,
@@ -75,7 +75,7 @@ export function registerBotHandlers(bot: TelegramBot) {
             try {
                 await bot.sendChatAction(chatId, 'typing');
                 const user = await registerOrGetUser(msg);
-                await api.post('/api/chat/clear-context', { userId: user.id });
+                await api.post('/api/bot/chat/clear-context', { userId: user.id });
                 await bot.sendMessage(chatId, '🧹 Context cleared. Starting fresh!');
             } catch (error) {
                 log.error({ err: error }, '/clear_context failed');
@@ -92,7 +92,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                 const user = await registerOrGetUser(msg);
 
                 // Send initial message to get personalized greeting from LLM
-                const chatResponse = await api.post('/api/chat', {
+                const chatResponse = await api.post('/api/bot/chat', {
                     userId: user.id,
                     message: 'hi',
                 });
@@ -132,7 +132,7 @@ export function registerBotHandlers(bot: TelegramBot) {
             const user = await registerOrGetUser(msg);
 
             // Send message to LLM chat API
-            const chatResponse = await api.post('/api/chat', {
+            const chatResponse = await api.post('/api/bot/chat', {
                 userId: user.id,
                 message: userText,
             });

@@ -20,6 +20,7 @@ const EnvSchema = z.object({
   DB_PASSWORD: z.string(),
   DB_NAME: z.string(),
   BOT_API_KEY: z.string().min(1),
+  TELEGRAM_TOKEN: z.string().min(1),
   // LLM Configuration — any OpenAI-compatible API (OpenAI, OpenRouter, Groq, Together, Azure, etc.)
   LLM_API_KEY: z.string().min(1),
   LLM_API_URL: z

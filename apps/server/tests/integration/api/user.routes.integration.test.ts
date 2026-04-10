@@ -3,7 +3,7 @@ import { db } from '../../../src/infra/db/drizzle';
 import { getGlobalContainer, registerInfraServices } from '../../../src/main/register-infra-services';
 import { createTestApiKey, createTestUserData } from '../../shared/test-factories';
 
-describe('POST /api/user – integration', () => {
+describe('POST /api/bot/user – integration', () => {
   let app: Awaited<ReturnType<typeof buildServer>>;
   let tx: any; // Transaction context
 
@@ -42,7 +42,7 @@ describe('POST /api/user – integration', () => {
 
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: { 'x-api-key': validKey },
         payload,
       });
@@ -63,7 +63,7 @@ describe('POST /api/user – integration', () => {
       // First request
       const res1 = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: { 'x-api-key': validKey },
         payload,
       });
@@ -73,7 +73,7 @@ describe('POST /api/user – integration', () => {
       // Second request with same data
       const res2 = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: { 'x-api-key': validKey },
         payload,
       });
@@ -90,13 +90,13 @@ describe('POST /api/user – integration', () => {
 
       const res1 = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: { 'x-api-key': validKey },
         payload: payload1,
       });
       const res2 = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: { 'x-api-key': validKey },
         payload: payload2,
       });
@@ -113,7 +113,7 @@ describe('POST /api/user – integration', () => {
 
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: { 'x-api-key': validKey },
         payload: {}, // Missing required fields
       });
@@ -132,7 +132,7 @@ describe('POST /api/user – integration', () => {
   });
 });
 
-describe('GET /api/user/{id} – integration', () => {
+describe('GET /api/bot/user/{id} – integration', () => {
   let app: Awaited<ReturnType<typeof buildServer>>;
   let tx: any;
 
@@ -171,7 +171,7 @@ describe('GET /api/user/{id} – integration', () => {
 
     const createRes = await app.inject({
       method: 'POST',
-      url: '/api/user',
+      url: '/api/bot/user',
       headers: { 'x-api-key': validKey },
       payload: createPayload,
     });
@@ -181,7 +181,7 @@ describe('GET /api/user/{id} – integration', () => {
     // Then get the user
     const getRes = await app.inject({
       method: 'GET',
-      url: `/api/user/${userId}`,
+      url: `/api/bot/user/${userId}`,
       headers: { 'x-api-key': validKey },
     });
 
@@ -202,7 +202,7 @@ describe('GET /api/user/{id} – integration', () => {
 
     const res = await app.inject({
       method: 'GET',
-      url: `/api/user/${nonExistentId}`,
+      url: `/api/bot/user/${nonExistentId}`,
       headers: { 'x-api-key': validKey },
     });
 

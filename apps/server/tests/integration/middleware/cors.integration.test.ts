@@ -45,7 +45,7 @@ describe('CORS Middleware – integration', () => {
 
   describe('OPTIONS preflight requests', () => {
     it('should handle OPTIONS requests appropriately', async () => {
-      const endpoints = ['/api/user', '/api/chat'];
+      const endpoints = ['/api/bot/user', '/api/bot/chat'];
 
       for (const url of endpoints) {
         const res = await app.inject({
@@ -61,7 +61,7 @@ describe('CORS Middleware – integration', () => {
     it('should include CORS headers in OPTIONS responses when configured', async () => {
       const res = await app.inject({
         method: 'OPTIONS',
-        url: '/api/user',
+        url: '/api/bot/user',
       });
 
       // CORS headers may or may not be present depending on configuration
@@ -74,7 +74,7 @@ describe('CORS Middleware – integration', () => {
     it('should allow common HTTP methods when CORS is configured', async () => {
       const res = await app.inject({
         method: 'OPTIONS',
-        url: '/api/user',
+        url: '/api/bot/user',
       });
 
       const allowedMethods = res.headers['access-control-allow-methods'];
@@ -89,7 +89,7 @@ describe('CORS Middleware – integration', () => {
     it('should allow common headers when CORS is configured', async () => {
       const res = await app.inject({
         method: 'OPTIONS',
-        url: '/api/user',
+        url: '/api/bot/user',
       });
 
       const allowedHeaders = res.headers['access-control-allow-headers'];
@@ -126,7 +126,7 @@ describe('CORS Middleware – integration', () => {
     it('should handle validation error responses appropriately', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: {
           'x-api-key': 'test-api-key-for-validation',
         },
@@ -140,7 +140,7 @@ describe('CORS Middleware – integration', () => {
 
   describe('CORS configuration consistency', () => {
     it('should have consistent behavior across all endpoints', async () => {
-      const endpoints = ['/health', '/docs/json', '/api/user', '/api/chat'];
+      const endpoints = ['/health', '/docs/json', '/api/bot/user', '/api/bot/chat'];
 
       const responses: any[] = [];
 

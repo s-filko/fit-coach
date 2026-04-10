@@ -24,7 +24,7 @@ const stubGraph = {
   }),
 };
 
-describe('POST /api/chat – integration', () => {
+describe('POST /api/bot/chat – integration', () => {
   let app: Awaited<ReturnType<typeof buildServer>>;
 
   beforeAll(async () => {
@@ -64,7 +64,7 @@ describe('POST /api/chat – integration', () => {
 
       const res = await app.inject({
         method: 'POST',
-        url: '/api/chat',
+        url: '/api/bot/chat',
         headers: { 'x-api-key': validKey },
         payload,
       });
@@ -83,7 +83,7 @@ describe('POST /api/chat – integration', () => {
 
       await app.inject({
         method: 'POST',
-        url: '/api/chat',
+        url: '/api/bot/chat',
         headers: { 'x-api-key': validKey },
         payload,
       });
@@ -107,7 +107,7 @@ describe('POST /api/chat – integration', () => {
 
       const res = await app.inject({
         method: 'POST',
-        url: '/api/chat',
+        url: '/api/bot/chat',
         headers: { 'x-api-key': createTestApiKey() },
         payload: { userId: 'u1', message: 'hi' },
       });
@@ -121,7 +121,7 @@ describe('POST /api/chat – integration', () => {
     it('should return 400 when required fields are missing', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/chat',
+        url: '/api/bot/chat',
         headers: { 'x-api-key': createTestApiKey() },
         payload: {},
       });
@@ -135,7 +135,7 @@ describe('POST /api/chat – integration', () => {
 
       const res = await app.inject({
         method: 'POST',
-        url: '/api/chat',
+        url: '/api/bot/chat',
         headers: { 'x-api-key': createTestApiKey() },
         payload: { userId: 'u1', message: 'hi' },
       });
@@ -149,7 +149,7 @@ describe('POST /api/chat – integration', () => {
     it('should reject empty message', async () => {
       const res = await app.inject({
         method: 'POST',
-        url: '/api/chat',
+        url: '/api/bot/chat',
         headers: { 'x-api-key': createTestApiKey() },
         payload: { userId: 'test-user', message: '' },
       });
