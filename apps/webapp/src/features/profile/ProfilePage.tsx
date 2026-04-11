@@ -1,13 +1,10 @@
-import { List, Section, Cell, Placeholder, Switch, Spinner } from '@telegram-apps/telegram-ui';
-import { Dumbbell, Moon } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { List, Placeholder, Spinner } from '@telegram-apps/telegram-ui';
+import { Dumbbell, User, Ruler, Weight, Target, TrendingUp, Calendar } from 'lucide-react';
 
-import { useTheme } from '@/App';
 import { useProfile } from '@/shared/hooks/useProfile';
-
-const GENDER_LABELS: Record<string, string> = {
-  male: 'Мужской',
-  female: 'Женский',
-};
+import glass from '@/shared/ui/glass.module.css';
+import styles from './ProfilePage.module.css';
 
 function formatValue(value: string | number | null | undefined, suffix?: string): string {
   if (value == null || value === '') return 'Не указан';
@@ -16,7 +13,24 @@ function formatValue(value: string | number | null | undefined, suffix?: string)
 
 export function ProfilePage() {
   const { profile, loading, error } = useProfile();
-  const { appearance, toggle } = useTheme();
+  const [expanded, setExpanded] = useState(false);
+  const labelRef = useRef<HTMLDivElement>(null);
+  const [pillWidth, setPillWidth] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (labelRef.current) {
+      setPillWidth(labelRef.current.offsetWidth + 24);
+    }
+  }, [profile]);
+
+  const closeOnScroll = useCallback(() => setExpanded(false), []);
+
+  useEffect(() => {
+    if (expanded) {
+      window.addEventListener('scroll', closeOnScroll, { passive: true });
+      return () => window.removeEventListener('scroll', closeOnScroll);
+    }
+  }, [expanded, closeOnScroll]);
 
   if (loading) {
     return (
@@ -38,34 +52,62 @@ export function ProfilePage() {
     ? `${profile.firstName ?? ''} ${profile.lastName ?? ''}`.trim() || profile.username || 'Профиль'
     : 'Профиль';
 
+  const bgClasses = [
+    styles.pillBg,
+    glass.surface,
+    expanded && styles.expanded,
+    expanded && glass.surfaceExpanded,
+  ].filter(Boolean).join(' ');
+
   return (
     <List>
+      <div ref={labelRef} className={styles.pillLabel} onClick={() => setExpanded((v) => !v)}>
+        <User size={14} strokeWidth={2} />
+        {displayName}
+      </div>
+      <div
+        className={bgClasses}
+        style={{ maxWidth: expanded ? 'calc(100vw - 40px)' : pillWidth ?? 80 }}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <div className={styles.pillSpacer} />
+        <div className={styles.pillDetails}>
+          <div className={styles.detailSection}>
+            <div className={styles.statsRow}>
+              <div className={styles.statItem}>
+                <Ruler size={16} strokeWidth={1.5} />
+                <span className={styles.statValue}>{profile?.height ?? '—'}</span>
+                <span className={styles.statUnit}>Рост, см</span>
+              </div>
+              <div className={styles.statItem}>
+                <Weight size={16} strokeWidth={1.5} />
+                <span className={styles.statValue}>{profile?.weight ?? '—'}</span>
+                <span className={styles.statUnit}>Вес, кг</span>
+              </div>
+              <div className={styles.statItem}>
+                <Calendar size={16} strokeWidth={1.5} />
+                <span className={styles.statValue}>{profile?.age ?? '—'}</span>
+                <span className={styles.statUnit}>Возраст</span>
+              </div>
+            </div>
+          </div>
+          <div className={styles.detailSection}>
+            <div className={styles.infoRow}>
+              <span className={styles.infoLabel}><TrendingUp size={12} strokeWidth={1.5} />Уровень</span>
+              <span className={styles.infoValue}>{formatValue(profile?.fitnessLevel)}</span>
+            </div>
+            <div className={styles.infoRow}>
+              <span className={styles.infoLabel}><Target size={12} strokeWidth={1.5} />Цель</span>
+              <span className={styles.infoValue}>{formatValue(profile?.fitnessGoal)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <Placeholder header="Fit Coach" description={displayName}>
         <Dumbbell size={64} strokeWidth={1.5} />
       </Placeholder>
 
-      <Section header="Основные данные">
-        <Cell subtitle={profile?.gender ? (GENDER_LABELS[profile.gender] ?? profile.gender) : 'Не указан'}>
-          Пол
-        </Cell>
-        <Cell subtitle={formatValue(profile?.age)}>Возраст</Cell>
-        <Cell subtitle={formatValue(profile?.height, 'см')}>Рост</Cell>
-        <Cell subtitle={formatValue(profile?.weight, 'кг')}>Вес</Cell>
-      </Section>
-
-      <Section header="Тренировки">
-        <Cell subtitle={formatValue(profile?.fitnessGoal)}>Цель</Cell>
-        <Cell subtitle={formatValue(profile?.fitnessLevel)}>Уровень</Cell>
-      </Section>
-
-      <Section header="Настройки">
-        <Cell
-          before={<Moon size={20} />}
-          after={<Switch checked={appearance === 'dark'} onChange={toggle} />}
-        >
-          Тёмная тема
-        </Cell>
-      </Section>
     </List>
   );
 }

@@ -1,0 +1,123 @@
+.pillLabel {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 11;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--tg-theme-text-color, #ffffff);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pillBg {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateZ(0);
+  z-index: 10;
+  padding: 0 12px;
+  color: var(--tg-theme-text-color, #ffffff);
+  font-size: 13px;
+  cursor: pointer;
+  will-change: transform;
+  transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              border-radius 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              top 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              backdrop-filter 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              -webkit-backdrop-filter 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  height: 30px;
+  width: 100vw;
+  max-width: 80px;
+}
+
+/* pillLabel height (30px) + top shift on expand (16px) + gap (10px) */
+.pillSpacer {
+  height: 56px;
+  flex-shrink: 0;
+}
+
+.expanded {
+  top: calc(env(safe-area-inset-top, 0px) + 2px);
+  height: 320px;
+  max-width: 100%;
+}
+
+.pillDetails {
+  padding: 14px 4px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  color: var(--tg-theme-text-color, #ffffff);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.expanded .pillDetails {
+  opacity: 1;
+  transition: opacity 0.5s ease 0.3s;
+}
+
+/* --- profile content --- */
+
+.statsRow {
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+}
+
+.statItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.statValue {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+
+.statUnit {
+  font-size: 11px;
+  color: var(--tg-theme-hint-color, #aaaaaa);
+}
+
+.detailSection {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.infoRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.infoLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--tg-theme-hint-color, #aaaaaa);
+}
+
+.infoValue {
+  font-size: 16px;
+  font-weight: 500;
+}

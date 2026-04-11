@@ -1,9 +1,8 @@
 import { useLocation, useNavigate, Outlet } from 'react-router';
 import { Tabbar, FixedLayout } from '@telegram-apps/telegram-ui';
-import { User, ClipboardList, Dumbbell, History, Search } from 'lucide-react';
+import { ClipboardList, Dumbbell, History, Search } from 'lucide-react';
 
 const tabs = [
-  { path: '/', label: 'Профиль', Icon: User },
   { path: '/plan', label: 'План', Icon: ClipboardList },
   { path: '/session', label: 'Тренировка', Icon: Dumbbell },
   { path: '/history', label: 'История', Icon: History },
@@ -20,7 +19,7 @@ export function Layout() {
   const navigate = useNavigate();
 
   return (
-    <div style={{ paddingBottom: 80 }}>
+    <div style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 46px)', paddingBottom: 80 }}>
       <Outlet />
 
       <FixedLayout style={{ zIndex: 10, padding: 0 }}>

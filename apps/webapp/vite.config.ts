@@ -28,6 +28,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    host: true,
+    allowedHosts: ['filko-mac-ct.taildb75eb.ts.net'],
     proxy: {
       '/api': 'http://localhost:3000',
     },

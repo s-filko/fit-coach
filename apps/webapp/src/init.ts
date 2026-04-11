@@ -2,6 +2,7 @@ import {
   init as sdkInit,
   backButton,
   miniApp,
+  themeParams,
   viewport,
   swipeBehavior,
   setDebug,
@@ -16,6 +17,13 @@ export function initTelegramSdk(debug: boolean): void {
 
   miniApp.mount();
   backButton.mount();
+
+  try {
+    themeParams.mount();
+    themeParams.bindCssVars();
+  } catch {
+    // themeParams may fail outside Telegram WebView
+  }
 
   try {
     viewport.mount();
