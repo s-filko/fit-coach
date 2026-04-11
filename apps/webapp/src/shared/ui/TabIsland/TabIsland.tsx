@@ -1,5 +1,4 @@
-/* @refresh reset — imperative DOM animation requires full re-mount on HMR */
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import styles from './TabIsland.module.css';
 
@@ -22,34 +21,30 @@ const DURATION_PER_PX = 1.2;
 const DURATION_MIN_MS = 350;
 const DURATION_MAX_MS = 550;
 
-const INDICATOR_REST_INSET = '6px';
+const REST_INSET = '6px';
 
-const BULGE_PEAK_INSET = -14;        // px — how far indicator extends beyond island
-const BULGE_SETTLE_INSET = -6;       // px — intermediate settle point (70% keyframe)
-const BULGE_DURATION_RATIO = 0.9;    // bulge runs slightly shorter than horizontal move
+const BULGE_PEAK_INSET = '-14px';
+const BULGE_SETTLE_INSET = '-6px';
+const BULGE_DURATION_RATIO = 0.9;
 
-const LENS_ON_AT = 0.3;              // fraction of duration
+const LENS_ON_AT = 0.3;
 const LENS_OFF_AT = 0.7;
 
 const MOVE_EASING = 'cubic-bezier(0.4, 0, 0.15, 1)';
+const BREATHE_DURATION_MS = 450;
 
-/* indicator appearance at each keyframe */
 const IND_REST_BG = 'rgba(255,255,255,0.08)';
 const IND_REST_BORDER = '1px solid rgba(255,255,255,0.06)';
 const IND_PEAK_BG = 'rgba(0,0,0,0.08)';
 const IND_PEAK_BORDER = '1.5px solid rgba(255,255,255,0.1)';
 const IND_SETTLE_BG = 'rgba(0,0,0,0.04)';
 const IND_SETTLE_BORDER = '1px solid rgba(255,255,255,0.08)';
-const IND_PEAK_BLUR = '2px';
-const IND_SETTLE_BLUR = '1px';
 
 /* ── helpers ── */
 
-function getActiveIndex(tabs: readonly TabDef[], activePath: string): number {
+function getActiveIndex(tabs: readonly TabDef[], path: string): number {
   return tabs.findIndex((t) =>
-    t.path === '/'
-      ? activePath === '/'
-      : activePath === t.path || activePath.startsWith(`${t.path}/`),
+    t.path === '/' ? path === '/' : path === t.path || path.startsWith(`${t.path}/`),
   );
 }
 
@@ -67,16 +62,6 @@ function placeIndicator(el: HTMLElement, left: number, width: number) {
   el.style.display = 'block';
 }
 
-function resetEffects(el: HTMLElement) {
-  el.style.transition = 'none';
-  el.style.top = '';
-  el.style.bottom = '';
-  el.style.background = '';
-  el.style.border = '';
-  el.style.backdropFilter = '';
-  (el.style as any).webkitBackdropFilter = '';
-}
-
 function calcDuration(fromLeft: number, toLeft: number): number {
   const dist = Math.abs(toLeft - fromLeft);
   return Math.min(DURATION_MAX_MS, Math.max(DURATION_MIN_MS, DURATION_BASE_MS + dist * DURATION_PER_PX));
@@ -89,13 +74,15 @@ export function TabIsland({ tabs, activePath, onNavigate }: TabIslandProps) {
   const navRef = useRef<HTMLElement>(null);
   const indRef = useRef<HTMLDivElement>(null);
   const prevIdx = useRef(-1);
-  const timers = useRef<number[]>([]);
+  const anims = useRef<Animation[]>([]);
+  const lensTimers = useRef<number[]>([]);
   const activeIdx = getActiveIndex(tabs, activePath);
-  const [breathing, setBreathing] = useState(false);
 
-  const clearTimers = useCallback(() => {
-    timers.current.forEach(clearTimeout);
-    timers.current = [];
+  const cancelRunning = useCallback(() => {
+    anims.current.forEach((a) => a.cancel());
+    anims.current = [];
+    lensTimers.current.forEach(clearTimeout);
+    lensTimers.current = [];
   }, []);
 
   useEffect(() => {
@@ -120,62 +107,60 @@ export function TabIsland({ tabs, activePath, onNavigate }: TabIslandProps) {
 
     if (!navRef.current || !wrapRef.current || !indRef.current) return;
     const el = indRef.current;
+    const nav = navRef.current;
 
     if (prev < 0 || activeIdx < 0) {
-      const pos = getTabRect(navRef.current, wrapRef.current, activeIdx);
+      const pos = getTabRect(nav, wrapRef.current, activeIdx);
       if (pos) placeIndicator(el, pos.left, pos.width);
       return;
     }
     if (prev === activeIdx) return;
 
-    const from = getTabRect(navRef.current, wrapRef.current, prev);
-    const to = getTabRect(navRef.current, wrapRef.current, activeIdx);
+    const from = getTabRect(nav, wrapRef.current, prev);
+    const to = getTabRect(nav, wrapRef.current, activeIdx);
     if (!from || !to) return;
 
-    clearTimers();
-    resetEffects(el);
+    cancelRunning();
     placeIndicator(el, from.left, from.width);
-    void el.offsetHeight; // force reflow so placeIndicator values are committed
 
-    setBreathing(true);
-
-    const targetTab = navRef.current.children[activeIdx] as HTMLElement;
+    const targetTab = nav.children[activeIdx] as HTMLElement;
     const dur = calcDuration(from.left, to.left);
-    const moveId = `mv-${Date.now()}`;
-    const bulgeId = `bg-${Date.now()}`;
+    const bulgeDur = dur * BULGE_DURATION_RATIO;
 
     /*
-     * Two independent @keyframes run in parallel:
-     *  - moveId:  horizontal slide (left, width) — fast-start easing
-     *  - bulgeId: vertical bulge (top, bottom, background, border, blur) — ease-in-out
-     * This keeps horizontal motion and vertical "breathing" decoupled.
+     * Two independent animations run in parallel via Web Animations API:
+     *  - moveAnim:  horizontal slide (left, width)
+     *  - bulgeAnim: vertical bulge (top, bottom, background, border)
+     * Decoupled easings keep horizontal motion and vertical "breathing" independent.
      */
-    const sheet = document.createElement('style');
-    sheet.textContent = `
-      @keyframes ${moveId} {
-        0%   { left: ${from.left}px; width: ${from.width}px; }
-        100% { left: ${to.left}px;   width: ${to.width}px; }
-      }
-      @keyframes ${bulgeId} {
-        0%   { top: ${INDICATOR_REST_INSET}; bottom: ${INDICATOR_REST_INSET};
-               background: ${IND_REST_BG}; border: ${IND_REST_BORDER};
-               backdrop-filter: blur(0); -webkit-backdrop-filter: blur(0); }
-        35%  { top: ${BULGE_PEAK_INSET}px; bottom: ${BULGE_PEAK_INSET}px;
-               background: ${IND_PEAK_BG}; border: ${IND_PEAK_BORDER};
-               backdrop-filter: blur(${IND_PEAK_BLUR}); -webkit-backdrop-filter: blur(${IND_PEAK_BLUR}); }
-        70%  { top: ${BULGE_SETTLE_INSET}px; bottom: ${BULGE_SETTLE_INSET}px;
-               background: ${IND_SETTLE_BG}; border: ${IND_SETTLE_BORDER};
-               backdrop-filter: blur(${IND_SETTLE_BLUR}); -webkit-backdrop-filter: blur(${IND_SETTLE_BLUR}); }
-        100% { top: ${INDICATOR_REST_INSET}; bottom: ${INDICATOR_REST_INSET};
-               background: ${IND_REST_BG}; border: ${IND_REST_BORDER};
-               backdrop-filter: blur(0); -webkit-backdrop-filter: blur(0); }
-      }`;
-    document.head.appendChild(sheet);
+    const moveAnim = el.animate(
+      [
+        { left: `${from.left}px`, width: `${from.width}px` },
+        { left: `${to.left}px`, width: `${to.width}px` },
+      ],
+      { duration: dur, easing: MOVE_EASING, fill: 'forwards' },
+    );
 
-    el.style.animation = [
-      `${moveId} ${dur}ms ${MOVE_EASING} forwards`,
-      `${bulgeId} ${dur * BULGE_DURATION_RATIO}ms ease-in-out forwards`,
-    ].join(', ');
+    const bulgeAnim = el.animate(
+      [
+        { top: REST_INSET, bottom: REST_INSET, background: IND_REST_BG, border: IND_REST_BORDER, offset: 0 },
+        { top: BULGE_PEAK_INSET, bottom: BULGE_PEAK_INSET, background: IND_PEAK_BG, border: IND_PEAK_BORDER, offset: 0.35 },
+        { top: BULGE_SETTLE_INSET, bottom: BULGE_SETTLE_INSET, background: IND_SETTLE_BG, border: IND_SETTLE_BORDER, offset: 0.7 },
+        { top: REST_INSET, bottom: REST_INSET, background: IND_REST_BG, border: IND_REST_BORDER, offset: 1 },
+      ],
+      { duration: bulgeDur, easing: 'ease-in-out', fill: 'forwards' },
+    );
+
+    const breatheAnim = nav.animate(
+      [
+        { transform: 'scale(1)' },
+        { transform: 'scale(1.015)' },
+        { transform: 'scale(1)' },
+      ],
+      { duration: BREATHE_DURATION_MS, easing: 'ease-in-out' },
+    );
+
+    anims.current = [moveAnim, bulgeAnim, breatheAnim];
 
     const tLensOn = window.setTimeout(() => {
       if (targetTab) targetTab.classList.add(styles.tabLens);
@@ -185,21 +170,25 @@ export function TabIsland({ tabs, activePath, onNavigate }: TabIslandProps) {
       if (targetTab) targetTab.classList.remove(styles.tabLens);
     }, dur * LENS_OFF_AT);
 
-    const tCleanup = window.setTimeout(() => {
-      el.style.animation = '';
-      resetEffects(el);
-      placeIndicator(el, to.left, to.width);
-      setBreathing(false);
-      sheet.remove();
-    }, dur + 20);
+    lensTimers.current = [tLensOn, tLensOff];
 
-    timers.current = [tLensOn, tLensOff, tCleanup];
-    return () => clearTimers();
-  }, [activeIdx, clearTimers]);
+    moveAnim.onfinish = () => {
+      moveAnim.cancel();
+      bulgeAnim.cancel();
+      placeIndicator(el, to.left, to.width);
+      el.style.top = '';
+      el.style.bottom = '';
+      el.style.background = '';
+      el.style.border = '';
+      anims.current = [];
+    };
+
+    return () => cancelRunning();
+  }, [activeIdx, cancelRunning]);
 
   return (
     <div ref={wrapRef} className={styles.wrapper}>
-      <nav ref={navRef} className={`${styles.island} ${breathing ? styles.islandBreathe : ''}`}>
+      <nav ref={navRef} className={styles.island}>
         {tabs.map((tab) => {
           const active = tabs[activeIdx] === tab;
           return (

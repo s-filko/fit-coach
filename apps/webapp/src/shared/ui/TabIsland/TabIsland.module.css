@@ -30,16 +30,6 @@
   pointer-events: none;
 }
 
-.islandBreathe {
-  animation: breathe 0.45s ease-in-out;
-}
-
-@keyframes breathe {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.015); }
-  100% { transform: scale(1); }
-}
-
 .tab {
   position: relative;
   display: flex;
