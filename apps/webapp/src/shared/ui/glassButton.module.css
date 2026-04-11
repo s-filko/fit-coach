@@ -1,0 +1,45 @@
+.glassButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 36px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  background: rgba(100, 100, 100, 0.25);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  -webkit-backdrop-filter: blur(6px) brightness(.8);
+  backdrop-filter: blur(6px) brightness(.8);
+  color: var(--tg-theme-button-text-color, #ffffff);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.glassButton:active {
+  transform: scale(0.95);
+  transition: transform 0.1s ease;
+}
+
+.flash {
+  animation: glassFlash 0.35s ease-out;
+}
+
+@keyframes glassFlash {
+  0% {
+    background: rgba(160, 210, 240, 0.2);
+    box-shadow: 0 0 12px rgba(120, 200, 255, 0.15), inset 0 0 6px rgba(180, 230, 255, 0.1);
+    border-color: rgba(150, 220, 255, 0.25);
+  }
+  100% {
+    background: rgba(100, 100, 100, 0.25);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+}

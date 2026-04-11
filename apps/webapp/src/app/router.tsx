@@ -11,7 +11,7 @@ export const router = createBrowserRouter(
     {
       Component: Layout,
       children: [
-        { index: true, element: <Navigate to="/plan" replace /> },
+        { index: true, element: <Navigate to="/session" replace /> },
         { path: 'plan', Component: PlanPage },
         { path: 'history', Component: HistoryPage },
         { path: 'history/:id', Component: HistoryPage },
