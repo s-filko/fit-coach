@@ -1,33 +1,32 @@
-import { useRef } from 'react';
+import type { PointerEvent } from 'react';
 import { Play } from 'lucide-react';
 import { hapticImpact } from '@/shared/lib/haptic';
 import btn from '@/shared/ui/glassButton.module.css';
 import styles from './SessionPage.module.css';
 
+function spawnRipple(e: PointerEvent<HTMLButtonElement>) {
+  hapticImpact();
+  const el = e.currentTarget;
+  const rect = el.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height);
+  const x = e.clientX - rect.left - size / 2;
+  const y = e.clientY - rect.top - size / 2;
+  const circle = document.createElement('span');
+  circle.className = btn.ripple;
+  circle.style.width = circle.style.height = `${size}px`;
+  circle.style.left = `${x}px`;
+  circle.style.top = `${y}px`;
+  el.appendChild(circle);
+  circle.addEventListener('animationend', () => circle.remove(), { once: true });
+}
+
 export function SessionPage() {
-  const btnRef = useRef<HTMLButtonElement>(null);
-
-  const handlePointerDown = () => {
-    hapticImpact();
-  };
-
-  const handleClick = () => {
-    const el = btnRef.current;
-    if (!el) return;
-    el.classList.remove(btn.flash);
-    void el.offsetHeight;
-    el.classList.add(btn.flash);
-    el.addEventListener('animationend', () => el.classList.remove(btn.flash), { once: true });
-  };
-
   return (
     <div className={styles.container}>
       <button
-        ref={btnRef}
         className={btn.glassButton}
         type="button"
-        onPointerDown={handlePointerDown}
-        onClick={handleClick}
+        onPointerDown={spawnRipple}
       >
         <Play size={20} strokeWidth={2.5} />
         <span>Начать тренировку</span>
