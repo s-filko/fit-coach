@@ -1,2 +1,2 @@
 export { TabIsland } from './TabIsland';
-export type { TabDef } from './TabIsland';
+export type { TabIslandItem, TabIslandProps } from './TabIsland';

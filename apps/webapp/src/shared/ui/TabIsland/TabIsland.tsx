@@ -2,16 +2,16 @@ import { useRef, useEffect, useCallback } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import styles from './TabIsland.module.css';
 
-export interface TabDef {
-  path: string;
+export interface TabIslandItem {
+  id: string;
   label: string;
   Icon: LucideIcon;
 }
 
-interface TabIslandProps {
-  tabs: readonly TabDef[];
-  activePath: string;
-  onNavigate: (path: string) => void;
+export interface TabIslandProps {
+  items: readonly TabIslandItem[];
+  activeId: string;
+  onSelect: (id: string) => void;
 }
 
 /* ── animation tuning ── */
@@ -42,15 +42,9 @@ const IND_PEAK_BORDER = '1.5px solid rgba(255,255,255,0.1)';
 const IND_SETTLE_BG = 'rgba(0,0,0,0.04)';
 const IND_SETTLE_BORDER = '1px solid rgba(255,255,255,0.08)';
 
-const DRAG_DEAD_ZONE = 5; // px — movement below this is treated as a tap
+const DRAG_DEAD_ZONE = 5;
 
 /* ── helpers ── */
-
-function getActiveIndex(tabs: readonly TabDef[], path: string): number {
-  return tabs.findIndex((t) =>
-    t.path === '/' ? path === '/' : path === t.path || path.startsWith(`${t.path}/`),
-  );
-}
 
 function getTabRect(navEl: HTMLElement, wrapEl: HTMLElement, idx: number) {
   const tabEl = navEl.children[idx] as HTMLElement | undefined;
@@ -115,7 +109,7 @@ interface DragState {
 
 /* ── component ── */
 
-export function TabIsland({ tabs, activePath, onNavigate }: TabIslandProps) {
+export function TabIsland({ items, activeId, onSelect }: TabIslandProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const indRef = useRef<HTMLDivElement>(null);
@@ -123,7 +117,7 @@ export function TabIsland({ tabs, activePath, onNavigate }: TabIslandProps) {
   const anims = useRef<Animation[]>([]);
   const lensTimers = useRef<number[]>([]);
   const dragRef = useRef<DragState | null>(null);
-  const activeIdx = getActiveIndex(tabs, activePath);
+  const activeIdx = items.findIndex((item) => item.id === activeId);
 
   const cancelRunning = useCallback(() => {
     anims.current.forEach((a) => a.cancel());
@@ -175,7 +169,7 @@ export function TabIsland({ tabs, activePath, onNavigate }: TabIslandProps) {
       return;
     }
     if (prev === activeIdx) return;
-    if (dragRef.current) return; // drag handles its own animation
+    if (dragRef.current) return;
 
     const from = getTabRect(nav, wrapRef.current, prev);
     const to = getTabRect(nav, wrapRef.current, activeIdx);
@@ -252,7 +246,6 @@ export function TabIsland({ tabs, activePath, onNavigate }: TabIslandProps) {
     function onPointerDown(e: PointerEvent) {
       if (dragRef.current) return;
 
-      // Hit-test: check if pointer landed on the indicator area
       const indRect = el!.getBoundingClientRect();
       if (
         e.clientX < indRect.left || e.clientX > indRect.right ||
@@ -297,7 +290,6 @@ export function TabIsland({ tabs, activePath, onNavigate }: TabIslandProps) {
       const newLeft = Math.min(drag.maxLeft, Math.max(drag.minLeft, drag.startLeft + deltaX));
       el!.style.left = `${newLeft}px`;
 
-      // Bulge based on displacement — reaches max at 1 tab distance
       const currentCenter = newLeft + drag.indWidth / 2;
       const homeCenter = drag.tabGeo[drag.homeIdx].center;
       const homeIdx = drag.homeIdx;
@@ -312,7 +304,6 @@ export function TabIsland({ tabs, activePath, onNavigate }: TabIslandProps) {
       el!.style.top = `${inset}px`;
       el!.style.bottom = `${inset}px`;
 
-      // Interpolate background/border/blur
       const bgAlpha = t * 0.08;
       el!.style.background = t > 0.05
         ? `rgba(0,0,0,${bgAlpha.toFixed(3)})`
@@ -320,12 +311,10 @@ export function TabIsland({ tabs, activePath, onNavigate }: TabIslandProps) {
       el!.style.border = t > 0.1 ? IND_PEAK_BORDER : IND_REST_BORDER;
       const blur = `blur(${(t * 2).toFixed(1)}px)`;
       el!.style.backdropFilter = blur;
-      (el.style as any).webkitBackdropFilter = blur;
+      (el!.style as any).webkitBackdropFilter = blur;
 
-      // Breathe — island scales with displacement
       nav!.style.transform = `scale(${1 + t * 0.015})`;
 
-      // Lens on nearest tab
       const nearIdx = findNearestTab(drag.tabGeo, currentCenter);
       if (nearIdx !== drag.currentLensIdx) {
         if (drag.currentLensIdx >= 0 && nav) {
@@ -346,17 +335,15 @@ export function TabIsland({ tabs, activePath, onNavigate }: TabIslandProps) {
 
       clearAllLens();
 
-      // Reset bulge styles
       el!.style.top = '';
       el!.style.bottom = '';
       el!.style.background = '';
       el!.style.border = '';
       el!.style.backdropFilter = '';
-      (el.style as any).webkitBackdropFilter = '';
+      (el!.style as any).webkitBackdropFilter = '';
       nav!.style.transform = '';
 
       if (drag.totalMoved < DRAG_DEAD_ZONE) {
-        // Treat as tap — do nothing, let onClick handle it
         dragRef.current = null;
         return;
       }
@@ -368,13 +355,11 @@ export function TabIsland({ tabs, activePath, onNavigate }: TabIslandProps) {
       dragRef.current = null;
 
       if (nearIdx !== activeIdx) {
-        // Snap indicator to nearest position, then navigate (which triggers WAAPI animation)
         const target = drag.tabGeo[nearIdx];
         placeIndicator(el!, target.left, target.width);
-        prevIdx.current = nearIdx; // prevent double animation
-        onNavigate(tabs[nearIdx].path);
+        prevIdx.current = nearIdx;
+        onSelect(items[nearIdx].id);
       } else {
-        // Snap back to home with a spring animation
         const home = drag.tabGeo[drag.homeIdx];
         const snapAnim = el!.animate(
           [
@@ -401,23 +386,23 @@ export function TabIsland({ tabs, activePath, onNavigate }: TabIslandProps) {
       wrap.removeEventListener('pointerup', onPointerUp);
       wrap.removeEventListener('pointercancel', onPointerUp);
     };
-  }, [activeIdx, tabs, onNavigate, cancelRunning, clearAllLens]);
+  }, [activeIdx, items, onSelect, cancelRunning, clearAllLens]);
 
   return (
     <div ref={wrapRef} className={styles.wrapper}>
       <nav ref={navRef} className={styles.island}>
-        {tabs.map((tab) => {
-          const active = tabs[activeIdx] === tab;
+        {items.map((item) => {
+          const active = items[activeIdx] === item;
           return (
             <div
-              key={tab.path}
+              key={item.id}
               className={`${styles.tab} ${active ? styles.active : ''}`}
-              onClick={() => onNavigate(tab.path)}
+              onClick={() => onSelect(item.id)}
               role="tab"
               aria-selected={active}
             >
-              <tab.Icon size={24} strokeWidth={1.8} />
-              <span className={styles.label}>{tab.label}</span>
+              <item.Icon size={24} strokeWidth={1.8} />
+              <span className={styles.label}>{item.label}</span>
             </div>
           );
         })}
