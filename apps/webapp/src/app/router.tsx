@@ -1,7 +1,6 @@
-import { createBrowserRouter } from 'react-router';
+import { createBrowserRouter, Navigate } from 'react-router';
 
 import { Layout } from './Layout';
-import { ProfilePage } from '@/features/profile/ProfilePage';
 import { PlanPage } from '@/features/plan/PlanPage';
 import { HistoryPage } from '@/features/history/HistoryPage';
 import { SessionPage } from '@/features/session/SessionPage';
@@ -12,7 +11,7 @@ export const router = createBrowserRouter(
     {
       Component: Layout,
       children: [
-        { index: true, Component: ProfilePage },
+        { index: true, element: <Navigate to="/plan" replace /> },
         { path: 'plan', Component: PlanPage },
         { path: 'history', Component: HistoryPage },
         { path: 'history/:id', Component: HistoryPage },
