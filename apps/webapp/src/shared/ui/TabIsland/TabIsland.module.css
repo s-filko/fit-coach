@@ -5,6 +5,7 @@
   transform: translateX(-50%);
   z-index: 50;
   overflow: visible;
+  touch-action: none;
 }
 
 .island {
@@ -19,7 +20,8 @@
   overflow: visible;
 }
 
-/* Indicator lives outside <nav> (sibling) to avoid backdrop-filter clipping */
+/* Indicator lives outside <nav> (sibling) to avoid backdrop-filter clipping.
+   pointer-events toggled to "auto" by JS during drag. */
 .indicator {
   position: absolute;
   top: 6px;
@@ -28,6 +30,7 @@
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.06);
   pointer-events: none;
+  touch-action: none;
 }
 
 .tab {
