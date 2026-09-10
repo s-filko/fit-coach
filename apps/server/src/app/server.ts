@@ -4,8 +4,10 @@ import Fastify, { FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
 
 import { registerErrorHandler } from '@app/middlewares/error';
+import appPlanPlugin from '@app/plugins/app-plan.plugin';
 import appProfilePlugin from '@app/plugins/app-profile.plugin';
 import appSecurityPlugin from '@app/plugins/app-security.plugin';
+import appSessionPlugin from '@app/plugins/app-session.plugin';
 import botSecurityPlugin from '@app/plugins/bot-security.plugin';
 import chatRoutesPlugin from '@app/plugins/chat-routes.plugin';
 import docsPlugin from '@app/plugins/docs.plugin';
@@ -24,6 +26,8 @@ async function registerBotRoutes(instance: FastifyInstance): Promise<void> {
 async function registerAppRoutes(instance: FastifyInstance): Promise<void> {
   await instance.register(appSecurityPlugin);
   await instance.register(appProfilePlugin);
+  await instance.register(appPlanPlugin);
+  await instance.register(appSessionPlugin);
 }
 
 async function registerCorePlugins(app: FastifyInstance): Promise<void> {

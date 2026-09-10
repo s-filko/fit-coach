@@ -8,6 +8,7 @@ import type {
   SessionRecommendation,
   SessionSet,
   SetData,
+  WorkoutPlan,
   WorkoutSession,
   WorkoutSessionWithDetails,
 } from '@domain/training/types';
@@ -68,12 +69,21 @@ export interface UpdateSetResult {
 // --- Service Interfaces ---
 
 export interface ITrainingService {
+  getActivePlan(userId: string): Promise<WorkoutPlan | null>;
+  createPlanFromPrompt(
+    userId: string,
+    params: { goal: string; daysPerWeek: number; equipment?: string },
+  ): Promise<WorkoutPlan>;
   getNextSessionRecommendation(userId: string): Promise<SessionRecommendation>;
+  recommendForSession(sessionId: string, userId: string, comment?: string): Promise<SessionRecommendation>;
+  updateSessionPlan(sessionId: string, exercises: SessionRecommendation['exercises']): Promise<WorkoutSession>;
   startSession(userId: string, dto: CreateSessionDto): Promise<WorkoutSession>;
+  beginSession(sessionId: string): Promise<WorkoutSession>;
   addExerciseToSession(sessionId: string, dto: CreateSessionExerciseDto): Promise<SessionExercise>;
   logSet(exerciseId: string, dto: CreateSessionSetDto): Promise<SessionSet>;
   completeSession(sessionId: string, durationMinutes?: number, completedAt?: Date): Promise<WorkoutSession>;
   skipSession(sessionId: string): Promise<WorkoutSession>;
+  getActiveSession(userId: string): Promise<WorkoutSessionWithDetails | null>;
   getTrainingHistory(userId: string, limit?: number): Promise<WorkoutSessionWithDetails[]>;
   getSessionDetails(sessionId: string): Promise<WorkoutSessionWithDetails | null>;
 

@@ -150,6 +150,124 @@ User identity is extracted from the signed initData — no userId in request bod
 ```
 - 401 `{ error: { message: string } }` — missing or invalid initData
 
+### 4.2 Get Active Session
+- GET `/api/app/session/active`
+- Returns the active workout session (status `in_progress` or `planning`) with exercises and sets, or `null`
+- Response 200:
+```ts
+{ data: WorkoutSessionWithDetails | null }
+```
+- 401 `{ error: { message: string } }`
+
+### 4.3 Start Session
+- POST `/api/app/session/start`
+- Creates a new workout session in `planning` status
+- Response 200:
+```ts
+{ data: WorkoutSession }
+```
+- 401 `{ error: { message: string } }`
+- 409 `{ error: { message: string } }` — active session already exists
+
+### 4.4 Begin Session
+- POST `/api/app/session/:id/begin`
+- Transitions session from `planning` → `in_progress` (sets `startedAt`)
+- Response 200:
+```ts
+{ data: WorkoutSession }
+```
+- 401, 403, 404, 409
+
+### 4.5 Complete Session
+- POST `/api/app/session/:id/complete`
+- Completes the workout session, auto-completes in-progress exercises
+- Response 200:
+```ts
+{ data: WorkoutSession }
+```
+- 401, 403, 404
+
+### 4.6 Skip Session
+- POST `/api/app/session/:id/skip`
+- Skips the workout session
+- Response 200:
+```ts
+{ data: WorkoutSession }
+```
+- 401, 403, 404
+
+### 4.7 Get Session Details
+- GET `/api/app/session/:id`
+- Returns session with exercises and sets
+- Response 200:
+```ts
+{ data: WorkoutSessionWithDetails }
+```
+- 401, 403, 404
+
+### 4.8 Add/Switch Exercise
+- POST `/api/app/session/:id/exercise`
+- Request body:
+```ts
+{ exerciseId?: string, exerciseName?: string }
+```
+- Auto-completes previous in-progress exercise when switching
+- Response 200:
+```ts
+{ data: { exercise: SessionExercise, autoCompleted?: AutoCompletedExercise } }
+```
+- 401, 403, 404
+
+### 4.9 Log Set
+- POST `/api/app/session/:id/set`
+- Request body:
+```ts
+{
+  exerciseId?: string,
+  exerciseName?: string,
+  setData: SetData,        // discriminated union by type
+  rpe?: number,            // 1-10
+  feedback?: string,
+}
+```
+- Response 200:
+```ts
+{ data: { set: SessionSet, setNumber: number, autoCompleted?: AutoCompletedExercise } }
+```
+- 401, 403, 404
+
+### 4.10 Training History
+- GET `/api/app/session/history?limit=10`
+- Query: `limit` (1–50, default 10)
+- Response 200:
+```ts
+{ data: WorkoutSessionWithDetails[] }
+```
+- 401
+
+### Shared Types (Session API)
+```ts
+type SessionStatus = 'planning' | 'in_progress' | 'completed' | 'skipped';
+
+interface WorkoutSession {
+  id: string, userId: string, planId?: string, sessionKey?: string,
+  status: SessionStatus, startedAt?: string, completedAt?: string,
+  durationMinutes?: number, createdAt: string, updatedAt: string,
+}
+
+interface WorkoutSessionWithDetails extends WorkoutSession {
+  exercises: SessionExerciseWithDetails[],
+}
+
+type SetData =
+  | { type: 'strength', reps: number, weight?: number, weightUnit?: 'kg'|'lbs', restSeconds?: number }
+  | { type: 'cardio_distance', distance: number, distanceUnit: string, duration: number, ... }
+  | { type: 'cardio_duration', duration: number, intensity?: string, ... }
+  | { type: 'functional_reps', reps: number, ... }
+  | { type: 'isometric', duration: number, ... }
+  | { type: 'interval', workDuration: number, restDuration: number, rounds?: number }
+```
+
 ## 5. Debug Endpoints (Development Only)
 
 ### 5.1 Get LLM Debug Info
