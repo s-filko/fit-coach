@@ -18,6 +18,10 @@ This repository follows a strict docs‑first workflow. Start here to navigate d
   - ADR-0003: Config layer with Zod validation
   - ADR-0004: User profile and context storage model
   - ADR-0005: Conversation context with sliding window
+  - ADR-0007 … ADR-0012: see `docs/adr/`
+  - ADR-0013: LLM core target architecture (graph/state/memory/prompts/errors) — **start here for the LLM stack**
+- **LLM Core Refactor Plan**: `docs/LLM_CORE_REFACTOR_PLAN.md` - Phased path from current code to ADR-0013 (P0–P7, acceptance criteria, rollback)
+- **Prompt Eval Framework**: `docs/PROMPT_EVAL_FRAMEWORK.md` - Datasets, rubrics, LLM-as-judge, CI gates, promptVersion traceability
 - **Domain Specs**: `docs/domain/` - Domain rules and invariants
   - `user.spec.md` - User domain rules
   - `ai.spec.md` - AI/LLM domain rules

@@ -306,6 +306,10 @@ Each phase subgraph runs a tool-calling loop:
 - **ADR-0007**: LangGraph migration — IN PROGRESS (Steps 0–6 done; see `docs/ADR-0007-IMPLEMENTATION-PLAN.md`)
 - **ADR-0008**: Centralized logging with Grafana/Loki
 - **ADR-0009**: User long-term memory — passive fact extraction per conversation turn, persistent `user_facts` table, injected into all phase prompts (PROPOSED)
+- **ADR-0010**: Conversation thread summarization (PROPOSED)
+- **ADR-0011**: Training tool execution hardening (PROPOSED, partially implemented)
+- **ADR-0012**: Exercise catalog vector search
+- **ADR-0013**: LLM core target architecture — messages-channel memory, episode compaction, versioned prompts, `Command` from tools, typed error model (PROPOSED — see `docs/LLM_CORE_REFACTOR_PLAN.md`, `docs/PROMPT_EVAL_FRAMEWORK.md`)
 
 ## Docs-first Workflow (mandatory)
 All changes go through docs before code:
