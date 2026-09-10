@@ -796,6 +796,60 @@ workout_sessions: no new in_progress session
 
 ---
 
+## BUG-012 — Bot polling dies silently on persistent Telegram errors; container stays "Up"
+
+**Status:** Open
+**Severity:** High
+**Found during:** Dev environment revival 2026-09-09 (incident window 2026-08-08/09)
+**Component:** `apps/bot/index.ts`
+
+### Description
+
+During a Telegram-side outage (repeated `429 Too Many Requests`, then `502 Bad Gateway`, then `EFATAL: read ECONNRESET`), the node-telegram-bot-api polling loop stops permanently. The Node process itself stays alive, so the Docker container reports `Up` and the `restart: unless-stopped` policy never fires. The bot silently stops consuming updates — it "reads but never replies" — and pending messages accumulate in Telegram's queue.
+
+Observed in production-like conditions: container `fitcoach-dev-bot` showed `Up 4 months`, last log line `EFATAL` from 2026-08-09, one pending update stuck in queue for a month.
+
+### Root cause
+
+`apps/bot/index.ts` creates the bot with `{ polling: true }` and registers no `polling_error` handling beyond the library's default console error. NTBA does not restart polling after a fatal error (`EFATAL`), and nothing exits the process, so the orchestrator has no signal to restart it.
+
+### Flow
+
+```
+Telegram outage (429s → 502s)
+  → NTBA polling_error events logged
+  → ECONNRESET → EFATAL → polling loop dead
+  → Node process stays alive (handlers registered, no timers running)
+  → Docker container status: Up (healthy-looking)
+  → Bot consumes no updates; user messages queue in Telegram
+  → No error visible anywhere until someone checks docker logs history
+```
+
+### Log evidence
+
+```
+2026-08-08T01:10:51Z error: [polling_error] {"code":"ETELEGRAM","message":"ETELEGRAM: 502 Bad Gateway"}  (×many)
+2026-08-09T19:53:55Z error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+<silence for a month; container still "Up">
+getWebhookInfo → pending_update_count: 1
+```
+
+### Impact
+
+- Bot silently dead for weeks; looks healthy to any monitoring based on container status
+- Manual detection only (user notices no replies)
+- Recovery requires manual `docker restart` — no self-healing
+
+### Fix plan (proposed, not implemented)
+
+In `apps/bot/index.ts`, add a watchdog: count consecutive `polling_error` events via `bot.on('polling_error', ...)`; on N consecutive fatal errors (e.g. 10) or any `EFATAL` with no successful poll recovery within a window, call `process.exit(1)`. Docker's restart policy then revives the bot. Optionally emit a final structured log line (`AUDIT: bot exiting due to polling failure`) for observability.
+
+### Regression test
+
+Simulate Telegram API failures (e.g. network policy drop or mock returning 502/connection reset) — bot process must exit within the configured window and be restarted by Docker; container eventually returns to normal polling when Telegram recovers.
+
+---
+
 <!-- Template for new bugs:
 
 ## BUG-XXX — Short title
