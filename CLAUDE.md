@@ -67,3 +67,10 @@ curl https://fitcoach-dev.filko.dev/health   # → 200
 
 - Respond in Russian (user preference)
 - Docs in this repo are English-only; unique IDs (INV-*, BR-*, S-*, AC-*) — see `docs/DOCUMENTATION_GUIDE.md`
+
+## Spec-Driven Development (Superpowers)
+
+- Process methodology: Superpowers plugin (brainstorming → writing-plans → TDD execution → verification/review). Design docs go to `docs/superpowers/specs/`, implementation plans to `docs/superpowers/plans/`.
+- Durable specs (ADRs, domain/feature specs, API_SPEC, refactor master plan) stay in `docs/` per the docs-first workflow — they are the law; superpowers artifacts are working documents.
+- Every plan task must reference the AC-#### it implements and its verification command. Never silently edit durable specs — escalate to the owner.
+- Full contract: `docs/SUPERPOWERS_INTEGRATION.md`
