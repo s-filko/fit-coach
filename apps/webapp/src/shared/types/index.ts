@@ -13,11 +13,37 @@ export interface User {
   timezone?: string;
 }
 
+export interface SessionTemplateExercise {
+  exerciseId: string;
+  exerciseName: string;
+  targetSets: number;
+  targetReps: string;
+  targetWeight?: number;
+  restSeconds: number;
+  notes?: string;
+}
+
+export interface SessionTemplate {
+  key: string;
+  name: string;
+  focus: string;
+  estimatedDuration: number;
+  exercises: SessionTemplateExercise[];
+}
+
+export interface WorkoutPlanJson {
+  goal: string;
+  trainingStyle: string;
+  targetMuscleGroups: string[];
+  sessionTemplates: SessionTemplate[];
+  progressionRules: string[];
+}
+
 export interface WorkoutPlan {
   id: string;
   name: string;
   status: 'draft' | 'active' | 'archived';
-  planJson: unknown;
+  planJson: WorkoutPlanJson;
   createdAt: string;
 }
 
@@ -29,6 +55,7 @@ export interface WorkoutSession {
   startedAt?: string;
   completedAt?: string;
   durationMinutes?: number;
+  sessionPlanJson?: SessionRecommendation | null;
   exercises: SessionExercise[];
 }
 
@@ -49,6 +76,26 @@ export interface SessionSet {
   rpe?: number;
   setData: Record<string, unknown>;
   completedAt?: string;
+}
+
+export interface RecommendedExercise {
+  exerciseId: string;
+  exerciseName?: string;
+  targetSets: number;
+  targetReps: string;
+  targetWeight?: number;
+  restSeconds: number;
+  notes?: string;
+}
+
+export interface SessionRecommendation {
+  sessionKey: string;
+  sessionName: string;
+  reasoning: string;
+  exercises: RecommendedExercise[];
+  estimatedDuration: number;
+  warnings?: string[];
+  modifications?: string[];
 }
 
 export interface Exercise {
