@@ -17,5 +17,8 @@
       "Bash(lsof:*)",
       "Bash(pgrep:*)"
     ]
-  }
+  },
+  "disabledMcpjsonServers": [
+    "supabase"
+  ]
 }
