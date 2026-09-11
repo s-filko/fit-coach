@@ -62,6 +62,30 @@ absent from `schema.ts`, and must be excluded from every schema comparison.
 defaults and FK details were not diffed. A full `pg_dump --schema-only` comparison is the
 first task of the plan, and may extend the catch-up migration below.
 
+### 2.1 Full dump comparison (measured 2026-09-11)
+
+Method: `pg_dump --schema-only --no-owner --no-privileges` from both live databases,
+checkpoint objects excluded, plus a semantic comparison (sorted `information_schema.columns`,
+`pg_indexes`, `pg_constraint` + `pg_get_constraintdef`, `pg_enum` aggregates) of
+dev vs a probe database generated from `schema.ts`.
+
+**Result: F3 was complete for schema objects.** Every column, index, constraint and enum
+difference between prod and dev/schema.ts is in the F3 set; the FK
+`exercises_user_id_users_id_fk` and index `idx_exercises_embedding` follow from F3's
+missing columns. Enums are identical on both sides (confirms F5).
+
+Two new facts extend the design:
+
+| # | Finding | Impact on the plan |
+|---|---|---|
+| N1 | **prod has no `vector` and no `pgcrypto` extension** (only `plpgsql`); dev has both. `pgcrypto` is not referenced anywhere in the repo — it is a manual artifact in dev; `vector` is created by the entrypoint at container start, which has never succeeded against the prod DB. | The baseline must **not** create extensions (it reproduces prod). The catch-up migrations must create `vector` (required by `embedding`) and `pgcrypto` (to keep AC-1's comparison exact), before the embedding column is added. |
+| N2 | **dev's column ordering differs from `schema.ts` ordering.** dev was built by `push`, which appends new columns (`exercises.id` uuid, `exercise_id` uuids, `users.timezone`, `embedding`) at the end of their tables; a fresh migration chain emits them in `schema.ts` declaration order. | A raw `pg_dump` diff between a chain-migrated database and dev can never be empty. **AC-1 (and every chain verification in the plan) is checked semantically** — sorted columns/indexes/constraints/enums as above — not by raw `pg_dump` diff. Column order is not semantically meaningful in PostgreSQL. |
+
+Probe-database check (Step 3 of task 1): a fresh migration generated from `schema.ts`
+applied to an empty database matches dev **exactly** on the semantic comparison —
+dev has not drifted from `schema.ts`. The only raw-dump differences were N1 (`pgcrypto`),
+checkpoint tables, and N2 (column ordering).
+
 ## 3. Decisions
 
 **D1 — Baseline describes prod, not `schema.ts`.** The squashed `0000_baseline`
