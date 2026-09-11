@@ -1,15 +1,15 @@
 ---
-name: plan-review
-description: Use before close-out of any plan — the mandatory review phase. Dispatches four independent review subagents (architecture, duplication, correctness, documentation currency) over the branch diff and its plan, then records the verdict in the plan file. Blocking findings prevent Status: done. Also use when the owner asks to review a branch against its plan.
+name: close-out-review
+description: Use before close-out of any plan — the mandatory review phase. Dispatches four independent review subagents (architecture, duplication, correctness, documentation currency) over the branch diff and its plan, then records the verdict in the plan file and logs what it noticed about itself. Blocking findings prevent Status: done. Also use when the owner asks to review a branch against its plan.
 ---
 
-# Plan review — the mandatory phase
+# Close-out review — the mandatory phase
 
 Runs between `verification-before-completion` and `finishing-a-development-branch`.
 `Status: done` is not set until this phase records `clean`
 (`docs/SUPERPOWERS_INTEGRATION.md`, Rules of engagement).
 
-**Announce at start:** "Using plan-review to run the four-zone review."
+**Announce at start:** "Using close-out-review to run the four-zone review."
 
 ## Step 1 — Collect the scope
 
