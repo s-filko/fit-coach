@@ -79,7 +79,10 @@ else
 fi
 export STAMP_THROUGH
 
-MIGRATE_IMAGE=$(docker compose -f "$COMPOSE_FILE" -p "$PROJECT" images -q server)
+# `docker compose build` tags the built image <project>-<service>:latest; use that,
+# NOT `docker compose images -q server` — the latter resolves the image of the
+# *running* (old) container, which lacks files added in this deploy.
+MIGRATE_IMAGE="${PROJECT}-server:latest"
 export MIGRATE_IMAGE
 
 echo "==> Applying migrations (stamp through ${STAMP_THROUGH})"
