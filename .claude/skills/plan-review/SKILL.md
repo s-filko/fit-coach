@@ -71,3 +71,25 @@ Show the owner the full list, blocking findings first.
   classifies before writing. They are not fixed on this branch.
 
 Write the artifact only as described in the next section.
+
+## Step 5 — Write the artifact
+
+Two records, both in the plan file under review. This is the only file this skill writes.
+
+**On `clean`** — add the header line beneath `- After:`:
+
+```
+- Review: YYYY-MM-DD | clean | R1,R2,R3,R4
+```
+
+Today's date, the verdict, the zones that ran. Keep the format exactly: it is parsed.
+
+**On `blocked`** — write **no header line**. Its absence is what "not reviewed / not
+passed" looks like; there is no third value to encode (spec section 5).
+
+**In both cases** — append a `## Review` section at the end of the plan: every blocking
+finding and how it was closed, every advisory finding with the backlog entry it became.
+
+After a `blocked` review is fixed and re-run, update the same section rather than adding a
+second one — working documents are edited in place
+(`SUPERPOWERS_INTEGRATION.md`, Division of roles).
