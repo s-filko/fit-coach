@@ -12,13 +12,13 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-11 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan (branch: `dev`, last commit 2026-09-11)
+— none —
 
 **Planned**
 — none —
 
 **Done**
-— none —
+- `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
 
 **Close-out debt (merged but plan not done)**
 — none —
@@ -36,13 +36,13 @@ _Generated 2026-09-11 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 ## Next (dispatch order)
 
-1. **HB-01** — migrations replace `drizzle-kit push` in all environments. Hard precondition
-   for refactor P0. Planned: `superpowers/plans/migration-discipline.md`
-   (design: `superpowers/specs/2026-09-11-migration-discipline-design.md`).
-   Not started (entrypoint still runs `drizzle-kit push --force`).
-   **HB-02** (production Docker image) split out into its own plan, sequenced after it.
-2. **Refactor P0** — safety net and measurement (`AC-1301`–`AC-1304`).
-3. Then P1 → P2 → P3 → P4/P5 → P6 → P7 per the master plan phase map.
+1. **Refactor P0** — safety net and measurement (`AC-1301`–`AC-1304`). Its hard
+   precondition (HB-01: no `drizzle-kit push` anywhere) is now met
+   (`superpowers/plans/migration-discipline.md` is done).
+2. Then P1 → P2 → P3 → P4/P5 → P6 → P7 per the master plan phase map.
+3. **HB-02** (production Docker image) — its own plan, sequenced after HB-01;
+   note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
+   in that script's plan).
 
 ## Blocked / waiting on owner
 

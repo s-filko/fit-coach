@@ -44,6 +44,10 @@ Items below are **not** in the master plan and stay here.
   `up -d`; remove push from the entrypoint; delete push-based npm scripts for durable envs.
 - AC: no code path calls `drizzle-kit push` outside local scratch DBs; fresh deploy and
   upgrade both apply only `drizzle/` migrations.
+- **Shipped 2026-09-11** — plan `superpowers/plans/migration-discipline.md` (done);
+  migration chain squashed to `0000_baseline` (prod state) + `0001` catch-up,
+  stamp script + migrate step wired into `deploy/deploy.sh`, CI guard added,
+  `push`/`ensureSchema` removed. **HB-02 remains open.**
 
 ### HB-02 — Production Docker image
 - Server image runs from source via tsx with all devDependencies
