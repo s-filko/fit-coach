@@ -50,6 +50,18 @@ Rules:
   LLM-mediated — do not reintroduce a hard timeout. Verify first with
   `SELECT count(*) FROM workout_sessions WHERE status='planning' AND created_at < now() - interval '1 day'`.
   Source: FEAT-0010 tracker review (2026-09-11).
+- [ ] `plan-review` and superpowers' final whole-branch review both sweep the same diff —
+  two full review passes per plan, neither deduplicated against the other in
+  `SUPERPOWERS_INTEGRATION.md` or the design spec. Decide whether the final review narrows
+  to what the four zones do not cover, or whether it is dropped for plans that ran the phase.
+  Source: plan-review first live run, R2 (2026-09-12).
+- [ ] `zones/r3-correctness.md` carries a "describe/it names carry BR/AC references" bullet
+  that is inert on markdown-only diffs yet reads as a checklist item to satisfy on every run.
+  Scope it to code-bearing diffs. Source: plan-review first live run, R3 (2026-09-12).
+- [ ] `.claude/skills/plan-review/SKILL.md` will hold a sixth responsibility once the
+  `state.mjs` review gate (design spec section 7) lands; consider splitting orchestration
+  from artifact-writing at that point, not before.
+  Source: plan-review first live run, R1 (2026-09-12).
 
 ## Wishes
 
