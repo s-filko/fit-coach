@@ -338,7 +338,7 @@ Run:
 grep -n "single parallel batch\|Never dispatch a fifth\|Relay verbatim\|blocked. if at least one" .claude/skills/plan-review/SKILL.md
 ```
 
-Expected: four matches — the rules behind `AC-1402`, `AC-1405`, `AC-1406` and spec D6 are
+Expected: four matches — the rules behind `AC-1402`, `AC-1405` and spec D6 are
 each present as an instruction, not an aside.
 
 - [ ] **Step 4: Verify the demotion rule is stated as an action**
