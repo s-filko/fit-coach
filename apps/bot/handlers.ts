@@ -35,7 +35,7 @@ async function registerOrGetUser(msg: TelegramBot.Message) {
         throw new Error('Cannot determine user information');
     }
 
-    const userResponse = await api.post('/api/user', {
+    const userResponse = await api.post('/api/bot/user', {
         provider: 'telegram',
         providerUserId: String(msg.from.id),
         username: msg.from.username || undefined,
@@ -71,6 +71,19 @@ export function registerBotHandlers(bot: TelegramBot) {
             return;
         }
 
+        if (userText === '/clear_context') {
+            try {
+                await bot.sendChatAction(chatId, 'typing');
+                const user = await registerOrGetUser(msg);
+                await api.post('/api/bot/chat/clear-context', { userId: user.id });
+                await bot.sendMessage(chatId, '🧹 Context cleared. Starting fresh!');
+            } catch (error) {
+                log.error({ err: error }, '/clear_context failed');
+                await bot.sendMessage(chatId, 'Sorry, failed to clear context. Please try again.');
+            }
+            return;
+        }
+
         if (userText === '/start') {
             try {
                 await bot.sendChatAction(chatId, 'typing');
@@ -79,7 +92,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                 const user = await registerOrGetUser(msg);
 
                 // Send initial message to get personalized greeting from LLM
-                const chatResponse = await api.post('/api/chat', {
+                const chatResponse = await api.post('/api/bot/chat', {
                     userId: user.id,
                     message: 'hi',
                 });
@@ -88,6 +101,11 @@ export function registerBotHandlers(bot: TelegramBot) {
                 if (typeof aiResponse !== 'string') {
                     log.error({ responseData: chatResponse.data }, 'invalid AI response on /start');
                     throw new Error('Invalid response from AI service');
+                }
+
+                if (!aiResponse.trim()) {
+                    log.warn({ chatId, username: msg.from?.username }, 'LLM returned empty response on /start, suppressing');
+                    return;
                 }
 
                 await sendHtml(bot, chatId, aiResponse);
@@ -114,7 +132,7 @@ export function registerBotHandlers(bot: TelegramBot) {
             const user = await registerOrGetUser(msg);
 
             // Send message to LLM chat API
-            const chatResponse = await api.post('/api/chat', {
+            const chatResponse = await api.post('/api/bot/chat', {
                 userId: user.id,
                 message: userText,
             });
@@ -123,6 +141,11 @@ export function registerBotHandlers(bot: TelegramBot) {
             if (typeof aiResponse !== 'string') {
                 log.error({ responseData: chatResponse.data }, 'invalid AI response');
                 throw new Error('Invalid response from AI service');
+            }
+
+            if (!aiResponse.trim()) {
+                log.warn({ chatId, username: msg.from?.username, userText }, 'LLM returned empty response, suppressing');
+                return;
             }
 
             await sendHtml(bot, chatId, aiResponse);

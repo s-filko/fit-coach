@@ -18,6 +18,7 @@ export default fp(
         components: {
           securitySchemes: {
             ApiKeyAuth: { type: 'apiKey', in: 'header', name: 'X-Api-Key' },
+            InitDataAuth: { type: 'apiKey', in: 'header', name: 'X-Init-Data' },
           },
         },
       },

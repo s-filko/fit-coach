@@ -5,43 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1756802083216,
-      "tag": "0000_familiar_stark_industries",
+      "when": 1789140131017,
+      "tag": "0000_baseline",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1770697402346,
-      "tag": "0001_special_thunderball",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1770700529605,
-      "tag": "0002_adorable_captain_universe",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1770853038644,
-      "tag": "0003_wandering_colleen_wing",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1770956619092,
-      "tag": "0004_rare_microbe",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1770956639268,
-      "tag": "0005_modern_mach_iv",
+      "when": 1789140333491,
+      "tag": "0001_adr0012_and_timezone",
       "breakpoints": true
     }
   ]

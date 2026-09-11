@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { AIMessage, HumanMessage, mergeMessageRuns, SystemMessage } from '@langchain/core/messages';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
 import { ToolNode, toolsCondition } from '@langchain/langgraph/prebuilt';
 
@@ -11,6 +11,7 @@ import { User } from '@domain/user/services/user.service';
 import { buildRegistrationSystemPrompt } from '@infra/ai/graph/nodes/registration.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildRegistrationTools } from '@infra/ai/graph/tools/registration.tools';
+import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
 
 export interface RegistrationSubgraphDeps {
@@ -39,7 +40,10 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
    */
   const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
 
-  const tools = buildRegistrationTools({ userService, pendingTransitions });
+  const tools = [
+    ...buildRegistrationTools({ userService, pendingTransitions }),
+    buildSaveTimezoneTool({ userService }),
+  ];
   const toolNode = new ToolNode(tools);
   const model = getModel().bindTools(tools);
 
@@ -57,12 +61,12 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
     // Including them lets the LLM see tool results and stop calling tools.
     const inFlightMessages = state.messages ?? [];
 
-    const llmMessages = [
+    const llmMessages = mergeMessageRuns([
       new SystemMessage(systemPrompt),
       ...history.map(m => (m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content))),
       new HumanMessage(userMessage),
       ...inFlightMessages,
-    ];
+    ]);
 
     const response = await model.invoke(llmMessages, {
       configurable: { userId },

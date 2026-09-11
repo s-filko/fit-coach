@@ -42,6 +42,7 @@ function mapRowToUser(row: UserRow): User {
     firstName: row.firstName ?? null,
     lastName: row.lastName ?? null,
     languageCode: row.languageCode ?? null,
+    timezone: row.timezone ?? null,
     profileStatus: row.profileStatus ?? 'registration',
     fitnessLevel: row.fitnessLevel ?? null,
     age: row.age ?? null,
@@ -72,6 +73,7 @@ function createUserData(input: CreateUserInput) {
     height: null,
     weight: null,
     fitnessGoal: null,
+    timezone: null,
     // Set default values
     profileStatus: 'registration',
     fitnessLevel: null,
@@ -94,6 +96,7 @@ function createUpdateData(updates: Partial<User>): Record<string, unknown> {
 
   const updateableFields: (keyof User)[] = [
     'firstName',
+    'timezone',
     'profileStatus',
     'fitnessLevel',
     'age',
@@ -155,6 +158,7 @@ export class DrizzleUserRepository implements UserRepository {
       firstName: data.firstName ?? null,
       lastName: data.lastName ?? null,
       languageCode: data.languageCode ?? null,
+      timezone: null,
       profileStatus: 'registration',
       fitnessLevel: null,
       age: null,

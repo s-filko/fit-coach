@@ -18,8 +18,7 @@ import { z } from 'zod';
  */
 export const trainingIntentTypes = {
   logSet: 'log_set',
-  nextExercise: 'next_exercise',
-  skipExercise: 'skip_exercise',
+  completeCurrentExercise: 'complete_current_exercise',
   finishTraining: 'finish_training',
   requestAdvice: 'request_advice',
   modifySession: 'modify_session',
@@ -112,7 +111,7 @@ export const LogSetIntentSchema = z
     type: z.literal(trainingIntentTypes.logSet),
     // REQUIRED: ID of the exercise being logged (from session plan).
     // Must be provided whenever the exercise can be matched to the plan.
-    exerciseId: z.number().int().positive().optional(),
+    exerciseId: z.string().uuid().optional(),
     // Exercise name — required only for truly off-plan exercises with no matching ID.
     exerciseName: z.string().optional(),
     setData: SetDataSchema,
@@ -127,25 +126,14 @@ export const LogSetIntentSchema = z
 
 export type LogSetIntent = z.infer<typeof LogSetIntentSchema>;
 
-// --- Next Exercise Intent ---
+// --- Complete Exercise Intent ---
 
-export const NextExerciseIntentSchema = z.object({
-  type: z.literal(trainingIntentTypes.nextExercise),
-  // Optional reason for moving to next exercise
+export const CompleteExerciseIntentSchema = z.object({
+  type: z.literal(trainingIntentTypes.completeCurrentExercise),
   reason: z.string().optional(),
 });
 
-export type NextExerciseIntent = z.infer<typeof NextExerciseIntentSchema>;
-
-// --- Skip Exercise Intent ---
-
-export const SkipExerciseIntentSchema = z.object({
-  type: z.literal(trainingIntentTypes.skipExercise),
-  // Reason for skipping
-  reason: z.string().optional(),
-});
-
-export type SkipExerciseIntent = z.infer<typeof SkipExerciseIntentSchema>;
+export type CompleteExerciseIntent = z.infer<typeof CompleteExerciseIntentSchema>;
 
 // --- Finish Training Intent ---
 
@@ -190,8 +178,7 @@ export type JustChatIntent = z.infer<typeof JustChatIntentSchema>;
 
 export const TrainingIntentSchema = z.discriminatedUnion('type', [
   LogSetIntentSchema,
-  NextExerciseIntentSchema,
-  SkipExerciseIntentSchema,
+  CompleteExerciseIntentSchema,
   FinishTrainingIntentSchema,
   RequestAdviceIntentSchema,
   ModifySessionIntentSchema,
@@ -309,7 +296,7 @@ export function parseTrainingResponse(jsonString: string): LLMTrainingResponse {
  * {
  *   "message": "Moving to the next exercise!",
  *   "intent": {
- *     "type": "next_exercise"
+ *     "type": "complete_current_exercise"
  *   }
  * }
  *

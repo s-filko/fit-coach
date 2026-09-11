@@ -1,15 +1,15 @@
 import type { SessionPlanningContextData } from '@domain/training/services/session-planning-context.builder';
-import type { ExerciseWithMuscles, WorkoutSessionWithDetails } from '@domain/training/types';
+import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import type { User } from '@domain/user/services/user.service';
 
+import { composeDirectives } from '@infra/ai/graph/prompt-directives';
+import { calendarDaysAgo, formatInUserTz, humanTimeAgo } from '@shared/date-utils';
+
 /* eslint-disable max-len */
-export function buildSessionPlanningSystemPrompt(
-  user: User | null,
-  context: SessionPlanningContextData,
-  exercises: ExerciseWithMuscles[],
-): string {
+export function buildSessionPlanningSystemPrompt(user: User | null, context: SessionPlanningContextData): string {
   const now = new Date();
-  const dateOnly = now.toISOString().split('T')[0] ?? '';
+  const tz = user?.timezone;
+  const { dateOnly } = formatInUserTz(now, tz);
 
   // === CLIENT PROFILE ===
   const profileSection = user
@@ -30,52 +30,17 @@ export function buildSessionPlanningSystemPrompt(
     : 'No active workout plan. The user should create a plan first (use chat to navigate to plan creation).';
 
   // === RECENT TRAINING HISTORY ===
-  const historySection = buildHistorySection(context.recentSessions, now);
+  const historySection = buildHistorySection(context.recentSessions, now, tz);
 
   // === RECOVERY TIMELINE ===
-  const recoverySection = buildRecoverySection(context.recentSessions, now);
-
-  // === AVAILABLE EXERCISES ===
-  const byCategory = exercises.reduce<Record<string, ExerciseWithMuscles[]>>((acc, ex) => {
-    const cat = ex.category ?? 'other';
-    if (!acc[cat]) {
-      acc[cat] = [];
-    }
-    acc[cat].push(ex);
-    return acc;
-  }, {});
-
-  const exercisesSection = Object.entries(byCategory)
-    .map(([category, exs]) => {
-      const name = category.charAt(0).toUpperCase() + category.slice(1);
-      const list = exs
-        .map(ex => {
-          const primary = ex.muscleGroups
-            .filter(m => m.involvement === 'primary')
-            .map(m => m.muscleGroup)
-            .join(', ');
-          const secondary = ex.muscleGroups
-            .filter(m => m.involvement === 'secondary')
-            .map(m => m.muscleGroup)
-            .join(', ');
-          const muscles = [primary && `Primary: ${primary}`, secondary && `Secondary: ${secondary}`]
-            .filter(Boolean)
-            .join(' | ');
-          return `- ${ex.name} (ID: ${ex.id}, Equip: ${ex.equipment ?? 'none'}${muscles ? `, ${muscles}` : ''})`;
-        })
-        .join('\n');
-      return `### ${name}\n${list}`;
-    })
-    .join('\n\n');
+  const recoverySection = buildRecoverySection(context.recentSessions, now, tz);
 
   const daysSince =
     context.daysSinceLastWorkout !== null
       ? `${context.daysSinceLastWorkout} days since last workout`
       : 'No previous workouts';
 
-  return `You are FitCoach — a professional fitness trainer helping a client plan their next training session.
-
-Current Date: ${dateOnly}
+  return `Current Date: ${dateOnly}
 ${daysSince}
 
 === CLIENT PROFILE ===
@@ -94,10 +59,6 @@ ${historySection}
 
 ${recoverySection}
 
-=== AVAILABLE EXERCISES (${exercises.length} total) ===
-
-${exercisesSection}
-
 === YOUR TASK ===
 
 Follow this sequence:
@@ -109,8 +70,9 @@ a) For each session template, look at its exercises and identify the primary mus
 b) Cross-reference with the RECOVERY TIMELINE to find when those muscle groups were last trained.
 c) Rank templates by how long their primary muscles have been resting — longest gap = highest priority candidate.
 d) If the top candidate has primary muscles trained <2 days ago, move to the next.
-e) If multiple templates are equally recovered, apply GOAL PRIORITY: choose the one that best serves the client's fitnessGoal. Example: goal "V-silhouette / wide shoulders" → prefer Upper Body template over Lower Body when recovery is equal.
-f) Commit to ONE recommended template with clear reasoning (recovery gap, goal relevance).
+e) NEGLECT OVERRIDE: If a template's primary muscles have not been trained for 10+ days, that template gets TOP PRIORITY regardless of fitness goal. Long neglect causes muscle loss and imbalance — address it first. If the client has concerns (soreness, injury, joint issues after a long break), adapt intensity (reduce weights, add warm-up sets) but still recommend that template.
+f) If multiple templates are equally recovered AND none triggers the neglect override, apply GOAL PRIORITY: choose the one that best serves the client's fitnessGoal. Example: goal "V-silhouette / wide shoulders" → prefer Upper Body template over Lower Body when recovery is equal.
+g) Commit to ONE recommended template with clear reasoning (recovery gap, neglect risk, goal relevance).
 
 --- STEP 2: ASK ONE SMART QUESTION ---
 
@@ -121,16 +83,22 @@ Before proposing any plan, ask exactly ONE personalized question. Make it specif
 
 Do NOT ask multiple questions. Do NOT propose the plan yet. Wait for the client's answer.
 
---- STEP 3: PROPOSE THE PLAN ---
+--- STEP 3: SEARCH AND PROPOSE THE PLAN ---
 
-After the client responds, propose the session with:
-1. Brief reasoning — why this template today: gap since last done, recovery status, and how it serves their goal.
-2. The exercise list with IDs, sets, reps, rest times.
-3. A short closing invite: "Want to swap anything or shall we go?"
+After the client responds:
+1. Use search_exercises to find suitable exercises for the session (by muscle group, equipment).
+   Apply equipment filter if context is clear (e.g. client trains at home → equipment="bodyweight").
+   You may call search_exercises multiple times in a single turn for different muscle groups.
+   Once you have results with IDs, do NOT re-search the same muscle group — reuse the IDs from this conversation history.
+2. Propose the session with:
+   - Brief reasoning — why this template today: gap since last done, recovery status, goal relevance.
+   - The exercise list with IDs from search results, sets, reps, rest times.
+   - A short closing invite: "Want to swap anything or shall we go?"
 
 --- STEP 4: REFINE ---
 
-Adjust the plan if the client requests changes (different exercises, shorter duration, skip something). Always keep exact numeric exercise IDs.
+Adjust the plan if the client requests changes (different exercises, shorter duration, skip something).
+Use search_exercises ONLY if you need exercises not yet found in this conversation. Always keep exact exercise UUIDs.
 
 --- STEP 5: START or CANCEL ---
 
@@ -139,12 +107,29 @@ Adjust the plan if the client requests changes (different exercises, shorter dur
 
 If no active plan exists → tell the client they need a workout plan first and call \`request_transition({ toPhase: 'chat' })\`.
 
-=== FORMATTING ===
+=== TOOLS ===
 
-Use Telegram HTML for all responses: <b>bold</b> for exercise names and key data, <i>italic</i> for tips or secondary info.
-Do NOT use Markdown asterisks (**bold**), underscores (_italic_), or any other Markdown syntax.
-Respond in the user's language (detected from their messages). Never use Russian or any other language unless the user writes in it.
-Respond with natural text only. Do NOT include JSON in your response.`;
+- search_exercises: search exercise catalog by meaning. Call when you need exercises not yet in conversation history.
+  Examples: query="chest compound barbell", muscleGroup="chest", equipment="barbell".
+  Returns exercises with IDs — IDs are valid for the entire conversation, no need to re-fetch.
+- start_training_session: call ONLY when user explicitly approves the final plan. Do NOT re-search before calling.
+- request_transition: call with toPhase="chat" ONLY when user explicitly cancels.
+
+CRITICAL: NEVER write JSON in your message text. NEVER output raw JSON blocks, action objects, or structured data in the message. ALL actions MUST be performed through tool calls only. Your message text must be plain conversational language only.
+ANTI-PATTERN example — Bad: "{ action: 'start_training_session', args: { ... } }". Good: call the start_training_session tool directly. JSON in message text is a critical bug.
+
+--- OFF-TOPIC GUARD ---
+
+If the user's message is NOT about session planning (choosing a workout, exercises, sets, reps, weights, scheduling, recovery, or starting/cancelling a session):
+1. Ask ONE short contextual question to clarify whether they want to stop planning.
+   Keep it natural and tied to the current context. Examples:
+   - "good night" → "Спокойной ночи! Тренировку на сегодня откладываем?"
+   - non-fitness question → "Понял! Планирование сессии ставим на паузу?"
+   - "thanks, bye" → "Удачи! Сессию оставляем на потом?"
+2. If the user confirms leaving OR their next message is still not about session planning → call \`request_transition({ toPhase: 'chat', reason: 'off_topic' })\`.
+3. If the user says they want to continue planning → stay and proceed normally.
+
+${composeDirectives(user)}`;
 }
 
 function buildActivePlanSection(
@@ -159,7 +144,7 @@ function buildActivePlanSection(
           focus: string;
           estimatedDuration: number;
           exercises: Array<{
-            exerciseId: number;
+            exerciseId: string;
             exerciseName: string;
             targetSets: number;
             targetReps: string;
@@ -198,7 +183,7 @@ function buildActivePlanSection(
   return lines.join('\n');
 }
 
-function buildHistorySection(sessions: WorkoutSessionWithDetails[], now: Date): string {
+function buildHistorySection(sessions: WorkoutSessionWithDetails[], now: Date, tz?: string | null): string {
   if (sessions.length === 0) {
     return 'No training history yet. This will be the first session.';
   }
@@ -206,9 +191,7 @@ function buildHistorySection(sessions: WorkoutSessionWithDetails[], now: Date): 
   return sessions
     .map((session, idx) => {
       const sessionDate = new Date(session.startedAt ?? session.createdAt);
-      const daysAgo = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24));
-      const hoursAgo = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60));
-      const timeAgo = daysAgo > 0 ? `${daysAgo}d ago` : `${hoursAgo}h ago`;
+      const timeAgo = humanTimeAgo(sessionDate, now, tz);
 
       const exerciseList = session.exercises
         .map(ex => {
@@ -233,18 +216,18 @@ function buildHistorySection(sessions: WorkoutSessionWithDetails[], now: Date): 
     .join('\n\n');
 }
 
-function buildRecoverySection(sessions: WorkoutSessionWithDetails[], now: Date): string {
-  const lastTrainedByMuscle = new Map<string, number>();
+function buildRecoverySection(sessions: WorkoutSessionWithDetails[], now: Date, tz?: string | null): string {
+  const lastTrainedByMuscle = new Map<string, { daysAgo: number; date: Date }>();
 
   for (const session of sessions) {
     const sessionDate = new Date(session.startedAt ?? session.createdAt);
-    const daysAgo = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24));
+    const daysAgo = calendarDaysAgo(sessionDate, now, tz);
 
     for (const ex of session.exercises) {
       for (const mg of (ex.exercise as { muscleGroups?: Array<{ muscleGroup: string }> }).muscleGroups ?? []) {
         const existing = lastTrainedByMuscle.get(mg.muscleGroup);
-        if (existing === undefined || daysAgo < existing) {
-          lastTrainedByMuscle.set(mg.muscleGroup, daysAgo);
+        if (!existing || daysAgo < existing.daysAgo) {
+          lastTrainedByMuscle.set(mg.muscleGroup, { daysAgo, date: sessionDate });
         }
       }
     }
@@ -255,19 +238,12 @@ function buildRecoverySection(sessions: WorkoutSessionWithDetails[], now: Date):
   }
 
   return Array.from(lastTrainedByMuscle.entries())
-    .sort((a, b) => a[1] - b[1])
-    .map(([muscle, daysAgo]) => {
-      let status: string;
-      if (daysAgo === 0) {
-        status = '⚠ trained today';
-      } else if (daysAgo === 1) {
-        status = '⚠ trained yesterday';
-      } else if (daysAgo <= 2) {
-        status = `${daysAgo}d ago — may still be sore`;
-      } else {
-        status = `${daysAgo}d ago — likely recovered`;
-      }
-      return `- ${muscle}: ${status}`;
+    .sort((a, b) => a[1].daysAgo - b[1].daysAgo)
+    .map(([muscle, { daysAgo, date }]) => {
+      const when = humanTimeAgo(date, now, tz);
+      const warn = daysAgo <= 2 ? '⚠ ' : '';
+      const note = daysAgo <= 2 ? ' — may still be sore' : ' — likely recovered';
+      return `- ${muscle}: ${warn}${when}${note}`;
     })
     .join('\n');
 }

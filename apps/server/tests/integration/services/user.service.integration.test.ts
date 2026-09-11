@@ -17,13 +17,13 @@ describe('UserService – integration', () => {
   let userService: UserService;
   let repository: DrizzleUserRepository;
 
-  beforeAll(async() => {
+  beforeAll(async () => {
     repository = new DrizzleUserRepository();
     userService = new UserService(repository);
   });
 
   describe('updateProfileData - real database operations', () => {
-    it('should update user profile data in real database', async() => {
+    it('should update user profile data in real database', async () => {
       // Arrange: Create a real user in database
       const userData = createTestUserData({
         username: 'profile_update_test',
@@ -52,7 +52,7 @@ describe('UserService – integration', () => {
       expect(fetchedUser!.height).toBe(180);
     });
 
-    it('should return null when updating non-existent user', async() => {
+    it('should return null when updating non-existent user', async () => {
       // Arrange: Use non-existent user ID
       const nonExistentId = '00000000-0000-0000-0000-000000000000';
 
@@ -63,7 +63,7 @@ describe('UserService – integration', () => {
       expect(result).toBeNull();
     });
 
-    it('should handle empty profile data updates', async() => {
+    it('should handle empty profile data updates', async () => {
       // Arrange: Create real user with initial profile data
       const userData = createTestUserData({
         username: 'empty_update_test',
@@ -91,7 +91,7 @@ describe('UserService – integration', () => {
       expect(result!.weight).toBe(70); // Original weight should remain
     });
 
-    it('should handle partial profile updates correctly', async() => {
+    it('should handle partial profile updates correctly', async () => {
       // Arrange: Create user with basic data
       const userData = createTestUserData({
         username: 'partial_update_test',
@@ -120,7 +120,7 @@ describe('UserService – integration', () => {
   });
 
   describe('getUser - real database operations', () => {
-    it('should retrieve user from real database', async() => {
+    it('should retrieve user from real database', async () => {
       // Arrange: Create real user
       const userData = createTestUserData({
         username: 'get_user_test',
@@ -151,7 +151,7 @@ describe('UserService – integration', () => {
       expect(retrievedUser!.height).toBe(175);
     });
 
-    it('should return null when user does not exist', async() => {
+    it('should return null when user does not exist', async () => {
       // Arrange: Use non-existent ID
       const nonExistentId = '99999999-9999-9999-9999-999999999999';
 
@@ -164,7 +164,7 @@ describe('UserService – integration', () => {
   });
 
   describe('upsertUser - real database operations', () => {
-    it('should return existing user if found by provider', async() => {
+    it('should return existing user if found by provider', async () => {
       // Arrange: Create user first using upsertUser
       const userData = {
         provider: 'telegram' as const,
@@ -188,7 +188,7 @@ describe('UserService – integration', () => {
       expect(result.username).toBe('upsert_existing_test');
     });
 
-    it('should create new user if not found by provider', async() => {
+    it('should create new user if not found by provider', async () => {
       // Arrange: Use unique provider data
       const upsertData = {
         provider: 'telegram' as const,
@@ -209,7 +209,7 @@ describe('UserService – integration', () => {
       expect(fetchedUser!.username).toBe(upsertData.username);
     });
 
-    it('should handle multiple providers correctly', async() => {
+    it('should handle multiple providers correctly', async () => {
       // Arrange: Create users with different providers
       const telegramUser = createTestUserData({
         provider: 'telegram',
@@ -244,7 +244,7 @@ describe('UserService – integration', () => {
   });
 
   describe('service-repository integration', () => {
-    it('should handle complex workflow: create -> update -> retrieve', async() => {
+    it('should handle complex workflow: create -> update -> retrieve', async () => {
       // Arrange: Create user
       const userData = createTestUserData({
         username: 'workflow_test',
@@ -272,7 +272,7 @@ describe('UserService – integration', () => {
       expect(freshUser!.profileStatus).toBe('complete');
     });
 
-    it('should handle concurrent operations correctly', async() => {
+    it('should handle concurrent operations correctly', async () => {
       // Arrange: Create user
       const userData = createTestUserData({
         username: 'concurrent_test',

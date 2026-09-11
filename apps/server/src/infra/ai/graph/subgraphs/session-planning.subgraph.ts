@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { AIMessage, HumanMessage, mergeMessageRuns, SystemMessage } from '@langchain/core/messages';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
-import { ToolNode, toolsCondition } from '@langchain/langgraph/prebuilt';
+import { toolsCondition } from '@langchain/langgraph/prebuilt';
 
 import { type ConversationStateType, type TransitionRequest } from '@domain/conversation/graph/conversation.state';
 import { IConversationContextService } from '@domain/conversation/ports';
 import type {
+  IEmbeddingService,
   IExerciseRepository,
   ITrainingService,
   IWorkoutPlanRepository,
@@ -15,15 +16,19 @@ import { SessionPlanningContextBuilder } from '@domain/training/services/session
 import type { IUserService } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
 
+import { buildDedupToolNode } from '@infra/ai/graph/dedup-tool-node';
+import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
 import { buildSessionPlanningSystemPrompt } from '@infra/ai/graph/nodes/session-planning.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildSessionPlanningTools } from '@infra/ai/graph/tools/session-planning.tools';
+import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
 
 export interface SessionPlanningSubgraphDeps {
   userService: IUserService;
   contextService: IConversationContextService;
   exerciseRepository: IExerciseRepository;
+  embeddingService: IEmbeddingService;
   workoutPlanRepository: IWorkoutPlanRepository;
   workoutSessionRepository: IWorkoutSessionRepository;
   trainingService: ITrainingService;
@@ -47,6 +52,7 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
     userService,
     contextService,
     exerciseRepository,
+    embeddingService,
     workoutPlanRepository,
     workoutSessionRepository,
     trainingService,
@@ -62,43 +68,46 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
 
   const contextBuilder = new SessionPlanningContextBuilder(workoutPlanRepository, workoutSessionRepository);
 
-  const tools = buildSessionPlanningTools({
+  const phaseTools = buildSessionPlanningTools({
     trainingService,
     workoutPlanRepository,
+    exerciseRepository,
+    embeddingService,
     pendingTransitions,
     pendingActiveSessionIds,
   });
-  const toolNode = new ToolNode(tools);
+  const tools = [...phaseTools, buildSaveTimezoneTool({ userService })];
+  const dedupToolNode = buildDedupToolNode(tools);
   const model = getModel().bindTools(tools);
 
   const agentNode = async (state: SessionPlanningSubgraphStateType) => {
     const { userId, user, userMessage } = state;
 
     // Load all context data in parallel
-    const [history, context, exercises, freshUser] = await Promise.all([
+    const [history, context, freshUser, previousSummary] = await Promise.all([
       contextService.getMessagesForPrompt(userId, 'session_planning'),
       contextBuilder.buildContext(userId),
-      exerciseRepository.findAllWithMuscles(),
       userService.getUser(userId),
+      contextService.getLatestSummary(userId),
     ]);
 
-    const systemPrompt = buildSessionPlanningSystemPrompt(freshUser ?? user, context, exercises);
+    const systemPrompt = buildSessionPlanningSystemPrompt(freshUser ?? user, context);
 
-    // state.messages holds AIMessage(tool_calls) + ToolMessages from the current turn.
-    // These are NOT in DB history yet (persist runs after subgraph finishes).
-    // Including them lets the LLM see tool results and stop calling tools.
     const inFlightMessages = state.messages ?? [];
 
-    const llmMessages = [
+    const summaryMessages = previousSummary
+      ? [new SystemMessage(`CONTEXT FROM PREVIOUS CONVERSATION:\n${previousSummary}`)]
+      : [];
+
+    const llmMessages = mergeMessageRuns([
       new SystemMessage(systemPrompt),
+      ...summaryMessages,
       ...history.map(m => (m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content))),
       new HumanMessage(userMessage),
       ...inFlightMessages,
-    ];
+    ]);
 
-    const response = await model.invoke(llmMessages, {
-      configurable: { userId },
-    });
+    const response = await invokeWithRetry(model, llmMessages, userId);
 
     return { messages: [response] };
   };
@@ -134,7 +143,7 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
 
   const graph = new StateGraph(SessionPlanningSubgraphState)
     .addNode('agent', agentNode)
-    .addNode('tools', toolNode)
+    .addNode('tools', dedupToolNode)
     .addNode('extract', extractNode)
     .addEdge(START, 'agent')
     .addConditionalEdges('agent', toolsCondition, { tools: 'tools', [END]: 'extract' })

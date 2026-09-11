@@ -6,7 +6,7 @@ import { ConversationPhase } from '@domain/conversation/ports/conversation-conte
  * Zod schema for recommended exercise in session plan
  */
 export const RecommendedExerciseSchema = z.object({
-  exerciseId: z.number().int().positive(),
+  exerciseId: z.string().uuid(),
   exerciseName: z.string().min(1).optional(),
   targetSets: z.number().int().positive(),
   targetReps: z.string().min(1), // e.g., '8-10', '12-15'
@@ -123,7 +123,7 @@ export function parseSessionPlanningResponse(
  *     "reasoning": "Last trained upper body 3 days ago. Good recovery time. You're feeling energetic.",
  *     "exercises": [
  *       {
- *         "exerciseId": 1,
+ *         "exerciseId": "<exercise-uuid>",
  *         "exerciseName": "Barbell Bench Press",
  *         "targetSets": 3,
  *         "targetReps": "8-10",
@@ -147,7 +147,7 @@ export function parseSessionPlanningResponse(
  *     "reasoning": "Good recovery, ready for upper body",
  *     "exercises": [
  *       {
- *         "exerciseId": 1,
+ *         "exerciseId": "<exercise-uuid>",
  *         "exerciseName": "Barbell Bench Press",
  *         "targetSets": 3,
  *         "targetReps": "8-10",

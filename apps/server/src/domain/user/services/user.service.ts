@@ -4,6 +4,7 @@ export interface User {
   firstName?: string | null;
   lastName?: string | null;
   languageCode?: string | null;
+  timezone?: string | null;
   profileStatus?: string | null;
   fitnessLevel?: string | null;
   // Profile data fields - allow null for clearing data

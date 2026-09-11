@@ -15,6 +15,7 @@ import {
   timestamp,
   unique,
   uuid,
+  vector,
 } from 'drizzle-orm/pg-core';
 
 // Enums for conversation_turns
@@ -35,6 +36,7 @@ export const users = pgTable('users', {
   firstName: text('first_name'),
   lastName: text('last_name'),
   languageCode: text('language_code'),
+  timezone: text('timezone'),
   // Profile data
   gender: text('gender'),
   age: integer('age'), // Stored as integer, rounded from user input
@@ -166,7 +168,7 @@ export const workoutPlans = pgTable(
 export const exercises = pgTable(
   'exercises',
   {
-    id: serial('id').primaryKey(),
+    id: uuid('id').primaryKey(),
     name: text('name').notNull().unique(),
     category: text('category').notNull(),
     equipment: text('equipment').notNull(),
@@ -178,19 +180,28 @@ export const exercises = pgTable(
     requiresSpotter: boolean('requires_spotter').default(false),
     imageUrl: text('image_url'),
     videoUrl: text('video_url'),
+    // ADR-0012: semantic embedding for vector search (all-MiniLM-L6-v2, 384 dims)
+    // Composite text: name + category + equipment + muscles + complexity + description
+    // Nullable: populated by seed; new exercises populated on insert
+    embedding: vector('embedding', { dimensions: 384 }),
+    // ADR-0012: nullable userId for future personal exercises (user-specific exercises)
+    // NULL = global exercise visible to all users
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   table => ({
     categoryIdx: index('idx_exercises_category').on(table.category),
     energyCostIdx: index('idx_exercises_energy_cost').on(table.energyCost),
     typeIdx: index('idx_exercises_type').on(table.exerciseType),
+    // HNSW index for fast approximate nearest neighbor search (cosine similarity)
+    embeddingIdx: index('idx_exercises_embedding').using('hnsw', table.embedding.op('vector_cosine_ops')),
   }),
 );
 
 export const exerciseMuscleGroups = pgTable(
   'exercise_muscle_groups',
   {
-    exerciseId: integer('exercise_id')
+    exerciseId: uuid('exercise_id')
       .references(() => exercises.id, { onDelete: 'cascade' })
       .notNull(),
     muscleGroup: muscleGroupEnum('muscle_group').notNull(),
@@ -242,7 +253,7 @@ export const sessionExercises = pgTable(
     sessionId: uuid('session_id')
       .references(() => workoutSessions.id, { onDelete: 'cascade' })
       .notNull(),
-    exerciseId: integer('exercise_id')
+    exerciseId: uuid('exercise_id')
       .references(() => exercises.id)
       .notNull(),
     orderIndex: integer('order_index').notNull(),

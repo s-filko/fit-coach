@@ -65,7 +65,7 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     // Get exercise IDs to fetch muscle groups
     const exerciseIdsForMuscles = sessionExercisesList
       .map(se => se.exercises?.id)
-      .filter((id): id is number => id !== undefined);
+      .filter((id): id is string => id !== undefined);
 
     // Get muscle groups for all exercises
     const muscleGroupsList =

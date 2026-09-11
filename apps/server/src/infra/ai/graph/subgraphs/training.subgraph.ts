@@ -5,24 +5,117 @@ import { toolsCondition } from '@langchain/langgraph/prebuilt';
 
 import { type ConversationStateType, type TransitionRequest } from '@domain/conversation/graph/conversation.state';
 import { IConversationContextService } from '@domain/conversation/ports';
-import type { ITrainingService, IWorkoutSessionRepository } from '@domain/training/ports';
+import type {
+  IEmbeddingService,
+  IExerciseRepository,
+  ITrainingService,
+  IWorkoutSessionRepository,
+} from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
 
+import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
 import { buildTrainingSystemPrompt } from '@infra/ai/graph/nodes/training.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildTrainingTools, LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '@infra/ai/graph/tools/training.tools';
+import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
 
 import { createLogger } from '@shared/logger';
 
 const log = createLogger('training-subgraph');
 
+// ---------------------------------------------------------------------------
+// ADR-0011 Fix 1.1: Deterministic tool call ordering
+//
+// Exported as pure functions so they can be unit-tested in isolation without
+// instantiating the full subgraph.
+// ---------------------------------------------------------------------------
+
+/** Execution priority for training tools. Lower number = runs first. */
+const TOOL_PRIORITY: Record<string, number> = {
+  search_exercises: 0,
+  log_set: 1,
+  complete_current_exercise: 2,
+  delete_last_sets: 3,
+  update_last_set: 3,
+  finish_training: 4,
+};
+
+interface ToolCallLike {
+  name: string;
+  args: Record<string, unknown>;
+  id?: string;
+}
+
+/**
+ * Sorts tool calls by execution priority, then by the `order` field within log_set calls.
+ * Unknown tools are assigned the lowest priority (treated as last).
+ */
+export function sortToolCallsByPriority<T extends ToolCallLike>(calls: T[]): T[] {
+  return [...calls].sort((a, b) => {
+    const pa = TOOL_PRIORITY[a.name] ?? 99;
+    const pb = TOOL_PRIORITY[b.name] ?? 99;
+    if (pa !== pb) {
+      return pa - pb;
+    }
+    // Within same priority (both log_set), sort by the `order` field
+    if (a.name === 'log_set' && b.name === 'log_set') {
+      return ((a.args as { order?: number }).order ?? 999) - ((b.args as { order?: number }).order ?? 999);
+    }
+    return 0;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// ADR-0011 Fix 1.2: Batch deduplication validation for log_set calls
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the IDs of all log_set calls that have identical arguments (excluding
+ * the `order` field) within the same batch. If any two calls are identical,
+ * ALL of them are returned so the entire duplicate group is rejected.
+ *
+ * Calls with different `order` values are treated as intentionally distinct.
+ */
+export function findDuplicateLogSets<T extends ToolCallLike>(calls: T[]): string[] {
+  const logSetCalls = calls.filter(c => c.name === 'log_set');
+  if (logSetCalls.length < 2) {
+    return [];
+  }
+
+  // Fingerprint: all args including `order` — calls with different order values
+  // are treated as intentionally distinct (the LLM explicitly ordered them).
+  const fingerprint = (call: T): string => {
+    return JSON.stringify(call.args, Object.keys(call.args).sort());
+  };
+
+  // Group call IDs by fingerprint
+  const groups = new Map<string, string[]>();
+  for (const call of logSetCalls) {
+    const key = fingerprint(call);
+    const group = groups.get(key) ?? [];
+    group.push(call.id ?? '');
+    groups.set(key, group);
+  }
+
+  // Collect IDs from groups that have more than one member
+  const duplicateIds: string[] = [];
+  for (const ids of groups.values()) {
+    if (ids.length > 1) {
+      duplicateIds.push(...ids);
+    }
+  }
+  return duplicateIds;
+}
+
 export interface TrainingSubgraphDeps {
   userService: IUserService;
   trainingService: ITrainingService;
   workoutSessionRepo: IWorkoutSessionRepository;
   contextService: IConversationContextService;
+  exerciseRepository: IExerciseRepository;
+  embeddingService: IEmbeddingService;
 }
 
 const TrainingSubgraphState = Annotation.Root({
@@ -67,7 +160,8 @@ function buildToolResultsInjection(toolMessages: ToolMessage[]): string {
 }
 
 export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
-  const { userService, trainingService, workoutSessionRepo, contextService } = deps;
+  const { userService, trainingService, workoutSessionRepo, contextService, exerciseRepository, embeddingService } =
+    deps;
 
   /**
    * Per-user maps: tools set entries by userId, extractNode/agentNode reads and deletes them.
@@ -79,57 +173,90 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
    */
   const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
   const currentSessionIds = new PendingRefMap<string | null>();
-  const tools = buildTrainingTools({ trainingService, pendingTransitions, currentSessionIds });
+  const tools = [
+    ...buildTrainingTools({
+      trainingService,
+      exerciseRepository,
+      embeddingService,
+      pendingTransitions,
+      currentSessionIds,
+    }),
+    buildSaveTimezoneTool({ userService }),
+  ];
   const toolMap = Object.fromEntries(tools.map(t => [t.name, t]));
-  const model = getModel().bindTools(tools);
+  const baseModel = getModel();
 
   /**
-   * Executes tool calls sequentially, sorted by the optional `order` field on log_set calls.
-   * This replaces the prebuilt ToolNode (which uses Promise.all) to guarantee that when
-   * multiple log_set calls are made in one LLM response, they run in the declared order —
-   * ensuring correct set_number assignment and preserving semantic distinction between sets
-   * (e.g. warmup → main → finishing).
+   * Executes tool calls sequentially, sorted by priority then by the optional `order`
+   * field on log_set calls (ADR-0011 Fix 1.1 + Fix 1.2).
+   *
+   * Priority map guarantees log_set always runs before any exercise transition,
+   * which in turn runs before corrections, which run before finish_training.
+   * Within log_set calls, the `order` field determines execution sequence.
+   *
+   * Duplicate log_set calls with identical arguments are rejected before execution
+   * and returned as LLM_ERROR ToolMessages so the LLM can self-correct.
    */
+  type InvokableTool = {
+    invoke: (args: Record<string, unknown>, config: { configurable: Record<string, unknown> }) => Promise<unknown>;
+  };
+
+  async function invokeTool(call: ToolCallLike, userId: string): Promise<ToolMessage> {
+    const targetTool = toolMap[call.name];
+    if (!targetTool) {
+      return new ToolMessage({ tool_call_id: call.id ?? '', content: `Unknown tool: ${call.name}`, status: 'error' });
+    }
+    try {
+      const result = await (targetTool as InvokableTool).invoke(call.args, { configurable: { userId } });
+      return new ToolMessage({ tool_call_id: call.id ?? '', content: String(result) });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.warn({ userId, tool: call.name, err: message, args: call.args }, 'Tool invocation failed');
+      return new ToolMessage({
+        tool_call_id: call.id ?? '',
+        content: `${LLM_ERROR_PREFIX} ${message}`,
+        status: 'error',
+      });
+    }
+  }
+
   const sequentialToolNode = async (state: TrainingSubgraphStateType) => {
     const { messages, userId } = state;
     const lastMessage = messages[messages.length - 1] as AIMessage;
     const toolCalls = lastMessage.tool_calls ?? [];
 
-    const sorted = [...toolCalls].sort((a, b) => {
-      if (a.name !== 'log_set' || b.name !== 'log_set') {
-        return 0;
-      }
-      return ((a.args as { order?: number }).order ?? 999) - ((b.args as { order?: number }).order ?? 999);
-    });
+    const sorted = sortToolCallsByPriority(toolCalls);
 
+    const duplicateIds = findDuplicateLogSets(sorted);
     const toolMessages: ToolMessage[] = [];
-    for (const call of sorted) {
-      const targetTool = toolMap[call.name];
-      if (!targetTool) {
-        toolMessages.push(
-          new ToolMessage({
-            tool_call_id: call.id ?? '',
-            content: `Unknown tool: ${call.name}`,
-            status: 'error',
-          }),
-        );
-        continue;
-      }
-      // eslint-disable-next-line no-await-in-loop
-      const result = await (
-        targetTool as {
-          invoke: (
-            args: Record<string, unknown>,
-            config: { configurable: Record<string, unknown> },
-          ) => Promise<unknown>;
+
+    if (duplicateIds.length > 0) {
+      log.warn({ userId, duplicateIds }, 'Duplicate log_set calls detected in batch — rejecting all duplicates');
+      for (const call of sorted) {
+        if (duplicateIds.includes(call.id ?? '')) {
+          toolMessages.push(
+            new ToolMessage({
+              tool_call_id: call.id ?? '',
+              content:
+                `${LLM_ERROR_PREFIX} Duplicate log_set calls detected: two or more calls have identical arguments ` +
+                'in the same response. To log multiple identical sets, add a unique order field to each call ' +
+                '(order=1, order=2). To log a single set, send only one log_set call.',
+              status: 'error',
+            }),
+          );
         }
-      ).invoke(call.args as Record<string, unknown>, { configurable: { userId } });
-      toolMessages.push(
-        new ToolMessage({
-          tool_call_id: call.id ?? '',
-          content: String(result),
-        }),
-      );
+      }
+      const nonDuplicateCalls = sorted.filter(c => !duplicateIds.includes(c.id ?? ''));
+      for (const call of nonDuplicateCalls) {
+        // eslint-disable-next-line no-await-in-loop
+        toolMessages.push(await invokeTool(call, userId));
+      }
+      return { messages: toolMessages };
+    }
+
+    for (const call of sorted) {
+      // eslint-disable-next-line no-await-in-loop
+      toolMessages.push(await invokeTool(call, userId));
     }
 
     return { messages: toolMessages };
@@ -163,7 +290,7 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
         };
       }
 
-      // Count all tool errors: our LLM_ERROR prefix OR ToolNode error status (e.g. Zod validation)
+      // Count all tool errors: our LLM_ERROR prefix OR ToolMessage error status (e.g. Zod validation)
       const toolErrors = inFlightMessages.filter((m): m is ToolMessage => {
         if (m instanceof ToolMessage) {
           const content = typeof m.content === 'string' ? m.content : '';
@@ -193,10 +320,11 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
       // Update per-user map so tool handlers get the correct sessionId for this user's turn
       currentSessionIds.set(userId, activeSessionId);
 
-      const [history, session, freshUser] = await Promise.all([
+      const [history, session, freshUser, previousSummary] = await Promise.all([
         contextService.getMessagesForPrompt(userId, 'training'),
         trainingService.getSessionDetails(activeSessionId),
         userService.getUser(userId),
+        contextService.getLatestSummary(userId),
       ]);
 
       if (!session) {
@@ -211,9 +339,25 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
 
       const systemPrompt = buildTrainingSystemPrompt(freshUser ?? user, session, previousSession);
 
-      // Build tool results summary injection — only when there are ToolMessages in flight.
-      // This gives the LLM a guaranteed factual statement to reference in its response,
-      // preventing hallucinated "I logged..." confirmations.
+      // Dynamic tool filtering (BUG-008 Plan A):
+      // Remove tools that should not be available given the current session state.
+      const currentExercise = session.exercises.find(ex => ex.status === 'in_progress');
+      const currentSetsCount = currentExercise?.sets.length ?? 0;
+
+      const availableTools = tools.filter(t => {
+        if ((t.name === 'delete_last_sets' || t.name === 'update_last_set') && currentSetsCount === 0) {
+          return false;
+        }
+        return true;
+      });
+
+      if (availableTools.length < tools.length) {
+        const removed = tools.filter(t => !availableTools.includes(t)).map(t => t.name);
+        log.debug({ userId, sessionId: activeSessionId, removed }, 'Dynamic tools: restricted unavailable tools');
+      }
+
+      const model = baseModel.bindTools(availableTools);
+
       const toolMessages = inFlightMessages.filter((m): m is ToolMessage => m instanceof ToolMessage);
       const toolResultsInjection = toolMessages.length > 0 ? buildToolResultsInjection(toolMessages) : null;
 
@@ -222,8 +366,13 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
           ? history.map(m => `[${m.role === 'user' ? 'USER' : 'TRAINER'}]: ${m.content}`).join('\n\n')
           : 'No prior conversation.';
 
+      const summaryBlock = previousSummary
+        ? [new SystemMessage(`CONTEXT FROM PREVIOUS CONVERSATION:\n${previousSummary}`)]
+        : [];
+
       const llmMessages = [
         new SystemMessage(systemPrompt),
+        ...summaryBlock,
         new SystemMessage(
           '=== CONVERSATION HISTORY (memory only — do NOT act on past messages) ===\n\n' +
             `${historyBlock}\n\n` +
@@ -234,13 +383,15 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
         ...(toolResultsInjection ? [new SystemMessage(toolResultsInjection)] : []),
       ];
 
-      const response = await model.invoke(llmMessages, { configurable: { userId } });
+      const response = await invokeWithRetry(model, llmMessages, userId);
 
-      const hasToolCalls =
-        Array.isArray((response as { tool_calls?: unknown[] }).tool_calls) &&
-        (response as { tool_calls: unknown[] }).tool_calls.length > 0;
       log.debug(
-        { userId, sessionId: activeSessionId, hasToolCalls, contentType: typeof response.content },
+        {
+          userId,
+          sessionId: activeSessionId,
+          hasToolCalls: Array.isArray(response.tool_calls) && response.tool_calls.length > 0,
+          contentType: typeof response.content,
+        },
         'LLM response',
       );
 

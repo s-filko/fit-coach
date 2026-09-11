@@ -10,14 +10,16 @@
 
 import { AIMessage, ToolMessage } from '@langchain/core/messages';
 
-import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
 import type {
+  IEmbeddingService,
   IExerciseRepository,
   ITrainingService,
   IWorkoutPlanRepository,
   IWorkoutSessionRepository,
 } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
+
+import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
 
 const BASE_USER = {
   id: 'u1',
@@ -35,7 +37,9 @@ const MINIMAL_SESSION_PLAN = {
   sessionKey: 'upper_a',
   sessionName: 'Upper A',
   reasoning: 'Good recovery',
-  exercises: [{ exerciseId: 1, targetSets: 3, targetReps: '8-10', restSeconds: 90 }],
+  exercises: [
+    { exerciseId: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95', targetSets: 3, targetReps: '8-10', restSeconds: 90 },
+  ],
   estimatedDuration: 60,
 };
 
@@ -52,13 +56,22 @@ const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> =>
   ({
     findById: jest.fn(),
     findByIdWithMuscles: jest.fn(),
-    findByIds: jest.fn(),
+    // Return any requested IDs so exerciseId validation always passes in subgraph tests
+    findByIds: jest.fn().mockImplementation(async (ids: string[]) => ids.map(id => ({ id }))),
     findByIdsWithMuscles: jest.fn().mockResolvedValue([]),
     findByMuscleGroup: jest.fn(),
-    search: jest.fn(),
+    search: jest.fn().mockResolvedValue([]),
     findAll: jest.fn().mockResolvedValue([]),
     findAllWithMuscles: jest.fn().mockResolvedValue([]),
+    searchByEmbedding: jest.fn().mockResolvedValue([]),
+    updateEmbedding: jest.fn(),
   }) as unknown as jest.Mocked<IExerciseRepository>;
+
+const makeEmbeddingService = (): jest.Mocked<IEmbeddingService> =>
+  ({
+    embed: jest.fn().mockResolvedValue(new Array(384).fill(0)),
+    embedBatch: jest.fn().mockResolvedValue([]),
+  }) as unknown as jest.Mocked<IEmbeddingService>;
 
 const makeWorkoutPlanRepo = (): jest.Mocked<IWorkoutPlanRepository> =>
   ({
@@ -95,8 +108,6 @@ const makeTrainingService = (sessionId = 'session-1'): jest.Mocked<ITrainingServ
     getNextSessionRecommendation: jest.fn(),
     addExerciseToSession: jest.fn(),
     logSet: jest.fn(),
-    startNextExercise: jest.fn(),
-    skipCurrentExercise: jest.fn(),
     completeCurrentExercise: jest.fn(),
     ensureCurrentExercise: jest.fn(),
   }) as unknown as jest.Mocked<ITrainingService>;
@@ -120,6 +131,7 @@ describe('session-planning.subgraph — text response (no tools)', () => {
       userService: makeUserService(),
       contextService: new InMemoryConversationContextService(),
       exerciseRepository: makeExerciseRepository(),
+      embeddingService: makeEmbeddingService(),
       workoutPlanRepository: makeWorkoutPlanRepo(),
       workoutSessionRepository: makeWorkoutSessionRepo(),
       trainingService: makeTrainingService(),
@@ -171,6 +183,7 @@ describe('session-planning.subgraph — start_training_session tool', () => {
       userService: makeUserService(),
       contextService: new InMemoryConversationContextService(),
       exerciseRepository: makeExerciseRepository(),
+      embeddingService: makeEmbeddingService(),
       workoutPlanRepository: makeWorkoutPlanRepo(),
       workoutSessionRepository: makeWorkoutSessionRepo(),
       trainingService: makeTrainingService('session-abc'),
@@ -221,6 +234,7 @@ describe('session-planning.subgraph — tool-calling loop (recursion prevention)
       userService: makeUserService(),
       contextService: new InMemoryConversationContextService(),
       exerciseRepository: makeExerciseRepository(),
+      embeddingService: makeEmbeddingService(),
       workoutPlanRepository: makeWorkoutPlanRepo(),
       workoutSessionRepository: makeWorkoutSessionRepo(),
       trainingService: makeTrainingService(),
@@ -270,6 +284,7 @@ describe('session-planning.subgraph — tool-calling loop (recursion prevention)
       userService: makeUserService(),
       contextService: new InMemoryConversationContextService(),
       exerciseRepository: makeExerciseRepository(),
+      embeddingService: makeEmbeddingService(),
       workoutPlanRepository: makeWorkoutPlanRepo(),
       workoutSessionRepository: makeWorkoutSessionRepo(),
       trainingService: makeTrainingService(),

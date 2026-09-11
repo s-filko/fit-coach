@@ -59,7 +59,7 @@ export const RecoveryGuidelinesSchema = z.object({
 
 // Exercise in session template
 export const SessionTemplateExerciseSchema = z.object({
-  exerciseId: z.number().int().positive(),
+  exerciseId: z.string().uuid(),
   exerciseName: z.string().min(1).optional(),
   energyCost: EnergyCostSchema,
   targetSets: z.number().int().min(1).max(10),

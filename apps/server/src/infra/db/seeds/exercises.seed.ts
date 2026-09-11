@@ -1,5 +1,7 @@
 import type { MuscleGroup } from '@domain/training/types';
 
+import { sql } from 'drizzle-orm';
+
 import { db } from '@infra/db/drizzle';
 import { exerciseMuscleGroups, exercises } from '@infra/db/schema';
 
@@ -8,6 +10,7 @@ import { createLogger } from '@shared/logger';
 const log = createLogger('seed');
 
 interface ExerciseSeed {
+  id: string;
   name: string;
   category: 'compound' | 'isolation' | 'cardio' | 'functional' | 'mobility';
   equipment: 'barbell' | 'dumbbell' | 'bodyweight' | 'machine' | 'cable' | 'none';
@@ -26,6 +29,7 @@ interface ExerciseSeed {
 const exerciseSeeds: ExerciseSeed[] = [
   // --- COMPOUND STRENGTH EXERCISES ---
   {
+    id: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
     name: 'Barbell Bench Press',
     category: 'compound',
     equipment: 'barbell',
@@ -42,6 +46,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '3818f94a-0543-4241-83b4-6840d06a4e6a',
     name: 'Barbell Back Squat',
     category: 'compound',
     equipment: 'barbell',
@@ -60,6 +65,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '8254e97e-ed01-40c8-8a45-0318fe4bd4b5',
     name: 'Conventional Deadlift',
     category: 'compound',
     equipment: 'barbell',
@@ -81,6 +87,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '1deb3f5d-ba04-4861-896c-fa7a3a1076d6',
     name: 'Barbell Overhead Press',
     category: 'compound',
     equipment: 'barbell',
@@ -99,6 +106,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '913cf87b-7223-4b8b-b9f3-4222d3f37346',
     name: 'Barbell Row',
     category: 'compound',
     equipment: 'barbell',
@@ -118,6 +126,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '8c88ebce-f5df-4d33-afdb-0b096a0dd7a8',
     name: 'Pull-ups',
     category: 'compound',
     equipment: 'bodyweight',
@@ -136,6 +145,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'b35875a4-6af8-4f95-af8a-7290ed5b7f27',
     name: 'Dips',
     category: 'compound',
     equipment: 'bodyweight',
@@ -152,6 +162,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '298ad0af-5a8a-4b30-99e6-34ed57450b2d',
     name: 'Barbell Hip Thrust',
     category: 'compound',
     equipment: 'barbell',
@@ -168,6 +179,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'd9401ef5-d348-4b26-9d6b-c6e9c26b7dcd',
     name: 'Romanian Deadlift',
     category: 'compound',
     equipment: 'barbell',
@@ -189,6 +201,7 @@ const exerciseSeeds: ExerciseSeed[] = [
 
   // --- ISOLATION STRENGTH EXERCISES ---
   {
+    id: '49a72042-2807-4d32-b2e6-eab284987f55',
     name: 'Dumbbell Bicep Curl',
     category: 'isolation',
     equipment: 'dumbbell',
@@ -204,6 +217,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '646df5e1-0d1a-435a-8d58-9bdd74cecbd4',
     name: 'Tricep Pushdown',
     category: 'isolation',
     equipment: 'cable',
@@ -216,6 +230,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     muscleGroups: [{ muscle: 'triceps', involvement: 'primary' }],
   },
   {
+    id: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
     name: 'Leg Extension',
     category: 'isolation',
     equipment: 'machine',
@@ -228,6 +243,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     muscleGroups: [{ muscle: 'quads', involvement: 'primary' }],
   },
   {
+    id: 'f1313aac-b726-4714-9901-8847df831e3e',
     name: 'Leg Curl',
     category: 'isolation',
     equipment: 'machine',
@@ -240,6 +256,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     muscleGroups: [{ muscle: 'hamstrings', involvement: 'primary' }],
   },
   {
+    id: 'ae3ff97c-d4ae-478a-84e9-f8805d2d9ff5',
     name: 'Lateral Raise',
     category: 'isolation',
     equipment: 'dumbbell',
@@ -255,6 +272,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '9b39b2e2-6a32-4756-acbd-223d6c7e564b',
     name: 'Cable Fly',
     category: 'isolation',
     equipment: 'cable',
@@ -272,6 +290,7 @@ const exerciseSeeds: ExerciseSeed[] = [
 
   // --- COMPOUND DUMBBELL EXERCISES ---
   {
+    id: '464ece02-5473-43d8-b267-2712c2e43d03',
     name: 'Dumbbell Row',
     category: 'compound',
     equipment: 'dumbbell',
@@ -291,6 +310,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'f80b36e2-3191-46b2-bf23-7d1c0609611d',
     name: 'Bulgarian Split Squat',
     category: 'compound',
     equipment: 'dumbbell',
@@ -309,6 +329,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '565141bf-2723-4888-8ccb-9c386c1562b3',
     name: 'Dumbbell Lunges',
     category: 'compound',
     equipment: 'dumbbell',
@@ -329,6 +350,7 @@ const exerciseSeeds: ExerciseSeed[] = [
 
   // --- MACHINE / CABLE BACK EXERCISES ---
   {
+    id: '72a9dca7-495c-4c64-b47d-369e98612a33',
     name: 'Chest-Supported Row, Narrow Grip',
     category: 'compound',
     equipment: 'machine',
@@ -346,6 +368,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'ab42e1ff-6f32-4557-af53-0d0c46d1c74e',
     name: 'Chest-Supported Row, Wide Grip',
     category: 'compound',
     equipment: 'machine',
@@ -363,6 +386,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '67876573-0d23-4eff-8267-771a20ecb7f4',
     name: 'Cable Seated Row, Close Grip',
     category: 'compound',
     equipment: 'cable',
@@ -381,6 +405,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'a1f0725e-6d88-4bff-950c-59de4602b9e0',
     name: 'Cable Seated Row, Wide Grip',
     category: 'compound',
     equipment: 'cable',
@@ -399,6 +424,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'a0b565c8-0648-44a4-8b01-b0cb5045e795',
     name: 'Lat Pulldown',
     category: 'compound',
     equipment: 'cable',
@@ -416,6 +442,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '74c8100f-6a9f-4d74-be1a-86068a612bd9',
     name: 'Cable Pullover',
     category: 'isolation',
     equipment: 'cable',
@@ -432,6 +459,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'ec7494e3-1d22-4b6f-9570-972c6d769a13',
     name: 'Assisted Pull-ups (Gravitron)',
     category: 'compound',
     equipment: 'machine',
@@ -452,6 +480,7 @@ const exerciseSeeds: ExerciseSeed[] = [
 
   // --- MACHINE / DUMBBELL SHOULDER EXERCISES ---
   {
+    id: 'f63e6a3e-dbed-4106-9498-ee6493cb61c0',
     name: 'Machine Shoulder Press',
     category: 'compound',
     equipment: 'machine',
@@ -468,6 +497,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'd0639e5f-1a0a-480d-a266-4289e263d5cd',
     name: 'Lateral Raise Machine',
     category: 'isolation',
     equipment: 'machine',
@@ -483,6 +513,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'cd12e75e-2219-4c77-bad5-3fc9450c0285',
     name: 'Reverse Pec Deck Fly',
     category: 'isolation',
     equipment: 'machine',
@@ -498,6 +529,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'b6301c27-322b-44f4-a38b-a357c9ae3e12',
     name: 'Face Pull',
     category: 'isolation',
     equipment: 'cable',
@@ -513,6 +545,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '146130a9-5b87-4a20-937f-3c8682003054',
     name: 'Dumbbell Shrugs',
     category: 'isolation',
     equipment: 'dumbbell',
@@ -528,6 +561,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '8e6513e5-8d57-4d73-bec9-1fb40993b43e',
     name: 'Smith Machine Shrugs',
     category: 'isolation',
     equipment: 'machine',
@@ -545,6 +579,7 @@ const exerciseSeeds: ExerciseSeed[] = [
 
   // --- MACHINE / DUMBBELL CHEST EXERCISES ---
   {
+    id: 'c0081717-7131-41ce-ad58-94dd67aa4bbd',
     name: 'Pec Deck Fly',
     category: 'isolation',
     equipment: 'machine',
@@ -560,6 +595,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '95521942-a892-4d78-b368-5307e9fc6c3a',
     name: 'Machine Chest Press',
     category: 'compound',
     equipment: 'machine',
@@ -576,6 +612,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'e333f061-4962-4f22-93f7-fc8fec948669',
     name: 'Incline Machine Chest Press',
     category: 'compound',
     equipment: 'machine',
@@ -592,6 +629,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'ac7b2fd7-6753-4fb3-ac44-28a7baa7b949',
     name: 'Dumbbell Bench Press',
     category: 'compound',
     equipment: 'dumbbell',
@@ -608,6 +646,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '3189b8e3-f655-49be-9a5c-b45e32e3e0f5',
     name: 'Incline Dumbbell Press',
     category: 'compound',
     equipment: 'dumbbell',
@@ -626,6 +665,7 @@ const exerciseSeeds: ExerciseSeed[] = [
 
   // --- CABLE / MACHINE TRICEP EXERCISES ---
   {
+    id: '8e55966f-a8c3-4252-80d2-e5a6feb85b96',
     name: 'Cable Tricep Pushdown, Straight Bar',
     category: 'isolation',
     equipment: 'cable',
@@ -638,6 +678,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     muscleGroups: [{ muscle: 'triceps', involvement: 'primary' }],
   },
   {
+    id: 'cd9855ab-84c7-4948-bb07-de99d6cf3ae4',
     name: 'Cable Overhead Tricep Extension',
     category: 'isolation',
     equipment: 'cable',
@@ -652,6 +693,7 @@ const exerciseSeeds: ExerciseSeed[] = [
 
   // --- MACHINE / CABLE BICEP EXERCISES ---
   {
+    id: '5779e648-6c8f-45ef-aec7-e69019a74252',
     name: 'Hammer Strength Bicep Curl',
     category: 'isolation',
     equipment: 'machine',
@@ -667,6 +709,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '6289bc3f-da6e-4d9f-87f8-28c83b63c6ea',
     name: 'Cable Hammer Curl',
     category: 'isolation',
     equipment: 'cable',
@@ -684,6 +727,7 @@ const exerciseSeeds: ExerciseSeed[] = [
 
   // --- LEG MACHINE EXERCISES ---
   {
+    id: 'cc37dd85-2c51-4ebc-9a18-8c7b83e6aa11',
     name: 'Vertical Leg Press',
     category: 'compound',
     equipment: 'machine',
@@ -701,6 +745,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '0bdcece7-7811-4f14-a0f0-cc41e61b13c8',
     name: 'Horizontal Leg Press',
     category: 'compound',
     equipment: 'machine',
@@ -718,6 +763,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '54c33ada-e13c-470a-b55f-200965acfdd8',
     name: 'Calf Press on Leg Press Machine',
     category: 'isolation',
     equipment: 'machine',
@@ -730,6 +776,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     muscleGroups: [{ muscle: 'calves', involvement: 'primary' }],
   },
   {
+    id: 'f6ae6288-f8eb-479c-bc29-6ccb7473eff3',
     name: 'Hack Squat Machine',
     category: 'compound',
     equipment: 'machine',
@@ -747,6 +794,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '3d19e0fd-7dad-458e-9d24-036898964666',
     name: 'Standing Calf Raise Machine',
     category: 'isolation',
     equipment: 'machine',
@@ -759,6 +807,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     muscleGroups: [{ muscle: 'calves', involvement: 'primary' }],
   },
   {
+    id: '696c97ab-bdfc-4bb3-bc7d-5d3bae8b9289',
     name: 'Seated Calf Raise Machine',
     category: 'isolation',
     equipment: 'machine',
@@ -773,6 +822,7 @@ const exerciseSeeds: ExerciseSeed[] = [
 
   // --- CORE / POSTERIOR CHAIN / FUNCTIONAL ---
   {
+    id: '3cf83260-4148-4ef2-8de0-534c3bbb263f',
     name: 'Hyperextension',
     category: 'compound',
     equipment: 'bodyweight',
@@ -789,6 +839,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'a7e5618a-e621-4c42-916b-1d4053a9cbb8',
     name: 'Hanging Leg Raise',
     category: 'functional',
     equipment: 'bodyweight',
@@ -805,6 +856,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '87755f64-2dab-43c6-a2a1-54852046e886',
     name: 'Cable Crunch',
     category: 'isolation',
     equipment: 'cable',
@@ -820,6 +872,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '7e788a8a-90ed-4dab-af6c-cadcc5c968c5',
     name: 'Ab Coaster',
     category: 'functional',
     equipment: 'machine',
@@ -837,6 +890,7 @@ const exerciseSeeds: ExerciseSeed[] = [
 
   // --- CARDIO EXERCISES ---
   {
+    id: 'a8658a5d-d2eb-4aeb-a179-92ed8cc2c27e',
     name: 'Treadmill',
     category: 'cardio',
     equipment: 'machine',
@@ -852,6 +906,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '8262cce4-023f-415e-81de-871678f96488',
     name: 'Elliptical Trainer',
     category: 'cardio',
     equipment: 'machine',
@@ -869,6 +924,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'da89020e-f54a-4573-b70b-764833ae761a',
     name: 'Running',
     category: 'cardio',
     equipment: 'none',
@@ -884,6 +940,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'f36dc067-0f4f-4fc0-8075-0d4fc873ba01',
     name: 'Cycling',
     category: 'cardio',
     equipment: 'machine',
@@ -900,6 +957,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'bf6a2f9e-efe9-4b39-b4d1-0dd5126f5c5f',
     name: 'Rowing Machine',
     category: 'cardio',
     equipment: 'machine',
@@ -919,6 +977,7 @@ const exerciseSeeds: ExerciseSeed[] = [
 
   // --- FUNCTIONAL EXERCISES ---
   {
+    id: '37df486c-cf2f-4320-bbb6-9f7482d0c6af',
     name: 'Burpees',
     category: 'functional',
     equipment: 'bodyweight',
@@ -934,6 +993,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: 'bf68fdc0-6596-47bd-9cb8-6ff58ae7998c',
     name: 'Box Jumps',
     category: 'functional',
     equipment: 'bodyweight',
@@ -950,6 +1010,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '08b9f0f0-7a02-46cc-b0aa-559f653d94c1',
     name: 'Plank',
     category: 'functional',
     equipment: 'bodyweight',
@@ -968,6 +1029,7 @@ const exerciseSeeds: ExerciseSeed[] = [
     ],
   },
   {
+    id: '4a46d68a-c009-4d98-bb73-af4edc7df116',
     name: 'Jump Rope',
     category: 'functional',
     equipment: 'none',
@@ -983,16 +1045,33 @@ const exerciseSeeds: ExerciseSeed[] = [
       { muscle: 'forearms', involvement: 'secondary' },
     ],
   },
+  {
+    id: '869708aa-31f1-4920-af1c-63f0056de3bf',
+    name: 'Dumbbell Hammer Curl',
+    category: 'isolation',
+    equipment: 'dumbbell',
+    exerciseType: 'strength',
+    description: 'Neutral grip dumbbell curl targeting brachialis and brachioradialis',
+    energyCost: 'low',
+    complexity: 'beginner',
+    typicalDurationMinutes: 6,
+    requiresSpotter: false,
+    muscleGroups: [
+      { muscle: 'biceps', involvement: 'primary' },
+      { muscle: 'forearms', involvement: 'primary' },
+    ],
+  },
 ];
 
 export async function seedExercises() {
   log.info({ count: exerciseSeeds.length }, 'seeding exercises');
 
   for (const seed of exerciseSeeds) {
-    // Insert exercise
-    const [exercise] = await db
+    // Insert with fixed UUID — ON CONFLICT (id) DO UPDATE keeps name canonical
+    const [upserted] = await db
       .insert(exercises)
       .values({
+        id: seed.id,
         name: seed.name,
         category: seed.category,
         equipment: seed.equipment,
@@ -1003,27 +1082,27 @@ export async function seedExercises() {
         typicalDurationMinutes: seed.typicalDurationMinutes,
         requiresSpotter: seed.requiresSpotter,
       })
-      .onConflictDoNothing()
+      .onConflictDoUpdate({
+        target: exercises.id,
+        set: { name: sql`EXCLUDED.name` },
+      })
       .returning();
 
-    if (!exercise) {
-      log.debug({ name: seed.name }, 'exercise already exists, skipping');
-      continue;
-    }
+    const exerciseId = upserted.id;
 
-    // Insert muscle group mappings
+    // Always upsert muscle group mappings (idempotent)
     for (const mg of seed.muscleGroups) {
       await db
         .insert(exerciseMuscleGroups)
         .values({
-          exerciseId: exercise.id,
+          exerciseId,
           muscleGroup: mg.muscle,
           involvement: mg.involvement,
         })
         .onConflictDoNothing();
     }
 
-    log.debug({ name: seed.name, category: seed.category }, 'exercise seeded');
+    log.debug({ id: exerciseId, name: seed.name, category: seed.category }, 'exercise seeded');
   }
 
   log.info({ count: exerciseSeeds.length }, 'exercises seeded successfully');

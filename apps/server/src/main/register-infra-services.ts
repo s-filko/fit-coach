@@ -12,12 +12,8 @@ export function getGlobalContainer(): Container {
  * Registers all infrastructure service implementations in the DI container
  * This function should be called from the bootstrap process
  */
-export async function registerInfraServices(
-  container: Container = getGlobalContainer(),
-  opts?: { ensureDb?: boolean },
-): Promise<Container> {
+export async function registerInfraServices(container: Container = getGlobalContainer()): Promise<Container> {
   // Lazy load all dependencies to avoid circular imports and config loading issues
-  const { ensureSchema } = await import('@infra/db/init');
   const { DrizzleUserRepository } = await import('@infra/db/repositories/user.repository');
   const { PromptService } = await import('@domain/user/services/prompt.service');
   const { UserService } = await import('@domain/user/services/user.service');
@@ -35,6 +31,7 @@ export async function registerInfraServices(
   const { SessionExerciseRepository } = await import('@infra/db/repositories/session-exercise.repository');
   const { SessionSetRepository } = await import('@infra/db/repositories/session-set.repository');
   const {
+    EMBEDDING_SERVICE_TOKEN,
     EXERCISE_REPOSITORY_TOKEN,
     SESSION_EXERCISE_REPOSITORY_TOKEN,
     SESSION_SET_REPOSITORY_TOKEN,
@@ -43,14 +40,10 @@ export async function registerInfraServices(
     WORKOUT_SESSION_REPOSITORY_TOKEN,
   } = await import('@domain/training/ports');
 
-  // Optionally ensure database schema with error handling (integration/dev only)
-  if (opts?.ensureDb) {
-    try {
-      await ensureSchema();
-    } catch (err) {
-      throw new Error(`Failed to ensure database schema: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
+  // Embedding service — loaded lazily, warm-up triggered below after all registrations
+  const { EmbeddingService } = await import('@infra/ai/embedding.service');
+  const embeddingService = new EmbeddingService();
+  container.register(EMBEDDING_SERVICE_TOKEN, embeddingService);
 
   // Register infrastructure implementations
   container.register(CONVERSATION_CONTEXT_SERVICE_TOKEN, new DrizzleConversationContextService());
@@ -81,6 +74,7 @@ export async function registerInfraServices(
         c.get(SESSION_SET_REPOSITORY_TOKEN),
         c.get(USER_REPOSITORY_TOKEN),
         c.get(LLM_SERVICE_TOKEN),
+        c.get(EMBEDDING_SERVICE_TOKEN),
       ),
   );
 
@@ -100,11 +94,15 @@ export async function registerInfraServices(
       workoutPlanRepo: container.get(WORKOUT_PLAN_REPOSITORY_TOKEN),
       workoutSessionRepo: container.get(WORKOUT_SESSION_REPOSITORY_TOKEN),
       exerciseRepository: container.get(EXERCISE_REPOSITORY_TOKEN),
+      embeddingService: container.get(EMBEDDING_SERVICE_TOKEN),
       userService: container.get(USER_SERVICE_TOKEN),
       contextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN),
       checkpointer,
     }),
   );
+
+  // Kick off model warm-up in background — do not await so server starts immediately
+  void embeddingService.warmUp();
 
   return container;
 }

@@ -32,10 +32,9 @@ export function buildChatTools(deps: ChatToolsDeps) {
   const { userService, pendingTransitions } = deps;
 
   const updateProfile = tool(
-    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
     async (input, config) => {
       // configurable is typed as Record<string, unknown> in LangChain
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
         return 'Error: could not identify user. Please try again.';
@@ -72,7 +71,6 @@ export function buildChatTools(deps: ChatToolsDeps) {
   );
 
   const requestTransition = tool(
-    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
     async (input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       pendingTransitions.set(userId, {

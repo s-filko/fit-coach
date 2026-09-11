@@ -55,7 +55,7 @@ export type Involvement = 'primary' | 'secondary';
 // --- Exercise Catalog ---
 
 export interface Exercise {
-  id: number;
+  id: string;
   name: string;
   category: 'compound' | 'isolation' | 'cardio' | 'functional' | 'mobility';
   equipment: 'barbell' | 'dumbbell' | 'bodyweight' | 'machine' | 'cable' | 'none';
@@ -71,7 +71,7 @@ export interface Exercise {
 }
 
 export interface ExerciseMuscleGroup {
-  exerciseId: number;
+  exerciseId: string;
   muscleGroup: MuscleGroup;
   involvement: Involvement;
 }
@@ -95,7 +95,7 @@ export interface RecoveryGuidelines {
 }
 
 export interface SessionTemplateExercise {
-  exerciseId: number;
+  exerciseId: string;
   exerciseName: string;
   energyCost: EnergyCost;
   targetSets: number;
@@ -170,7 +170,7 @@ export interface WorkoutSession {
 export interface SessionExercise {
   id: string;
   sessionId: string;
-  exerciseId: number;
+  exerciseId: string;
   orderIndex: number;
   status: SessionExerciseStatus;
   targetSets: number | null;
@@ -202,6 +202,7 @@ export type CardioDistanceSetData = {
   distance: number;
   distanceUnit: 'km' | 'miles' | 'meters';
   duration: number; // seconds
+  inclinePct?: number;
   pace?: number; // min/km or min/mile
   restSeconds?: number;
 };
@@ -254,7 +255,7 @@ export interface SessionSet {
 // --- Session Recommendation ---
 
 export interface RecommendedExercise {
-  exerciseId: number;
+  exerciseId: string;
   exerciseName?: string;
   targetSets: number;
   targetReps: string;
@@ -293,7 +294,7 @@ export interface CreateSessionDto {
 }
 
 export interface CreateSessionExerciseDto {
-  exerciseId: number;
+  exerciseId: string;
   orderIndex: number;
   targetSets?: number;
   targetReps?: string;
@@ -304,6 +305,7 @@ export interface CreateSessionSetDto {
   setData: SetData;
   rpe?: number;
   userFeedback?: string;
+  createdAt?: Date;
 }
 
 // --- Training History ---

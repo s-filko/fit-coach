@@ -22,8 +22,8 @@ services:
 
   server:
     build:
-      context: ../apps/server
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: apps/server/Dockerfile
       args:
         GIT_SHA: ${GIT_SHA:-unknown}
         APP_VERSION: ${APP_VERSION:-0.0.0}
@@ -69,6 +69,28 @@ services:
     depends_on:
       server:
         condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # One-shot migration runner (HB-01): reuses the just-built server image,
+  # stamps the baseline where history is missing, then applies drizzle/ migrations.
+  migrate:
+    image: ${MIGRATE_IMAGE}
+    container_name: fitcoach-${DEPLOY_ENV}-migrate
+    env_file:
+      - ../.env.${DEPLOY_ENV}
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles:
+      - migrate
+    command: ["sh", "-c", "npx tsx scripts/stamp-baseline.ts --through ${STAMP_THROUGH} && npx drizzle-kit migrate"]
     logging:
       driver: json-file
       options:

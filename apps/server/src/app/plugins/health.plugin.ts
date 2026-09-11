@@ -7,10 +7,10 @@ import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 export async function healthPlugin(fastify: FastifyInstance, options: FastifyPluginOptions): Promise<void> {
   fastify.get('/health', async () => ({
     status: 'ok',
-    version: process.env.APP_VERSION || 'local',
-    commit: process.env.APP_GIT_SHA || 'dev',
-    buildTime: process.env.APP_BUILD_TIME || null,
-    env: process.env.NODE_ENV || 'unknown',
+    version: process.env.APP_VERSION ?? 'local',
+    commit: process.env.APP_GIT_SHA ?? 'dev',
+    buildTime: process.env.APP_BUILD_TIME ?? null,
+    env: process.env.NODE_ENV ?? 'unknown',
     uptime: Math.floor(process.uptime()),
   }));
 

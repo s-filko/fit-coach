@@ -2,18 +2,8 @@
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import { User } from '@domain/user/services/user.service';
 
-const MS_PER_DAY = 1000 * 60 * 60 * 24;
-
-function formatSessionAge(date: Date): string {
-  const daysAgo = Math.floor((Date.now() - date.getTime()) / MS_PER_DAY);
-  if (daysAgo === 0) {
-    return 'today';
-  }
-  if (daysAgo === 1) {
-    return 'yesterday';
-  }
-  return `${daysAgo} days ago`;
-}
+import { composeDirectives } from '@infra/ai/graph/prompt-directives';
+import { humanTimeAgo } from '@shared/date-utils';
 
 /**
  * Builds the system prompt for the chat phase.
@@ -24,6 +14,7 @@ export function buildChatSystemPrompt(
   user: User | null,
   hasActivePlan: boolean,
   recentSessions: WorkoutSessionWithDetails[] = [],
+  lastMessageTime: Date | null = null,
 ): string {
   const profile = [
     user?.age && `Age: ${user.age}`,
@@ -45,7 +36,7 @@ export function buildChatSystemPrompt(
       ? recentSessions
           .map(s => {
             const date = s.completedAt ?? s.startedAt ?? s.createdAt;
-            const when = formatSessionAge(new Date(date));
+            const when = humanTimeAgo(new Date(date), new Date(), user?.timezone);
             const exercises = s.exercises.map(ex => `${ex.exercise.name} (${ex.sets.length} sets)`).join(', ');
             return `- ${s.sessionKey ?? 'session'} — ${when}, ${s.durationMinutes ?? '?'} min: ${exercises || 'no exercises logged'}`;
           })
@@ -53,38 +44,36 @@ export function buildChatSystemPrompt(
       : 'No recent sessions.';
 
   const clientName = user?.firstName ?? null;
-  const langInstruction = user?.languageCode
-    ? `USER LANGUAGE (from Telegram): '${user.languageCode}'. Always respond in this language.`
-    : 'Respond in the same language the user writes in.';
 
   const planRule = hasActivePlan
     ? 'When the user wants to train/start a workout/plan today\'s session, IMMEDIATELY call request_transition({ toPhase: "session_planning" }). Do NOT give workout advice directly from chat.'
     : 'Suggest creating a workout plan if user wants to train. Call request_transition({ toPhase: "plan_creation" }) when user agrees.';
 
-  return `Your name is FitCoach. You are a professional fitness coach and personal trainer.
-You are NOT an AI assistant — you are a real fitness coach. Always stay in character.
-
-CLIENT NAME: ${clientName ?? 'not provided'}
+  return `CLIENT NAME: ${clientName ?? 'not provided'}
 CLIENT PROFILE: ${profile || 'Not available'}
 WORKOUT PLAN STATUS: ${planStatus}
 RECENT TRAINING HISTORY (last 5 sessions):
 ${recentSessionsSection}
 
-${langInstruction}
-
 RULES:
-1. IDENTITY: You are FitCoach. Never mention AI, language models, or tech companies.
-2. SCOPE: Only discuss fitness, training, nutrition, health, wellness. Redirect anything else.
-3. PERSONALIZATION: Consider the client profile when giving advice.
-4. STYLE: Brief, motivating, conversational. Telegram HTML: <b>bold</b>, <i>italic</i>. No Markdown. Minimal emoji.
-5. PROACTIVE: On "hi"/"hello" — greet by name and suggest something fitness-related.
-6. WORKOUT PLAN: ${planRule}
+1. SCOPE: Only discuss fitness, training, nutrition, health, wellness. Redirect anything else.
+2. PERSONALIZATION: Consider the client profile when giving advice.
+3. STYLE: Brief, motivating, conversational. Minimal emoji.
+4. PROACTIVE: On "hi"/"hello" — greet and suggest something fitness-related.
+5. WORKOUT PLAN: ${planRule}
 
 TOOLS (use when needed):
 - update_profile: when user wants to change their name, age, gender, weight, height, fitness level, or goal.
 - request_transition toPhase="plan_creation": when user explicitly wants to create a workout plan.
 - request_transition toPhase="session_planning": when user wants to train today / start a session / plan a workout.
   ALWAYS use this tool — never describe workouts yourself from chat.
+  ANTI-PATTERN: announcing a transition in text WITHOUT calling request_transition.
+  Text alone does not trigger a transition — only the tool call does.
+  Always call the tool; your text accompanies the call, not replaces it.
 
-Respond with natural text only. Do NOT include JSON in your response.`;
+IMPORTANT: You do NOT have log_set or any set-logging capability. You CANNOT save workout sets.
+NEVER write "✅", "logged", "saved", "recorded" about sets.
+If the user reports a set, transition to training or tell them to start a session first.
+
+${composeDirectives(user, { lastMessageTime })}`;
 }

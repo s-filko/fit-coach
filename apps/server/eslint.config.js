@@ -85,7 +85,7 @@ export default tseslint.config(
       'camelcase': ['error', { properties: 'never' }],
       'max-len': ['error', { code: 120, ignoreUrls: true, ignoreStrings: true }],
       'no-multiple-empty-lines': ['error', { max: 1 }],
-      'quotes': ['error', 'single'],
+      'quotes': ['error', 'single', { avoidEscape: true }],
       'semi': ['error', 'always'],
       'comma-dangle': ['error', 'always-multiline'],
       'curly': ['error', 'all'],

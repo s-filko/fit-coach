@@ -32,8 +32,6 @@ const makeDeps = (): ConversationGraphDeps => ({
     addExerciseToSession: jest.fn(),
     logSet: jest.fn(),
     skipSession: jest.fn(),
-    startNextExercise: jest.fn(),
-    skipCurrentExercise: jest.fn(),
     completeCurrentExercise: jest.fn(),
     ensureCurrentExercise: jest.fn(),
   } as unknown as ITrainingService,
@@ -60,10 +58,16 @@ const makeDeps = (): ConversationGraphDeps => ({
     findByIdsWithMuscles: jest.fn().mockResolvedValue([]),
     findById: jest.fn(),
     findByIdWithMuscles: jest.fn(),
-    findByIds: jest.fn(),
+    findByIds: jest.fn().mockResolvedValue([]),
     findByMuscleGroup: jest.fn(),
-    search: jest.fn(),
+    search: jest.fn().mockResolvedValue([]),
+    searchByEmbedding: jest.fn().mockResolvedValue([]),
+    updateEmbedding: jest.fn(),
   } as unknown as IExerciseRepository,
+  embeddingService: {
+    embed: jest.fn().mockResolvedValue(new Array(384).fill(0)),
+    embedBatch: jest.fn().mockResolvedValue([]),
+  },
   userService: {
     getUser: jest.fn().mockResolvedValue({
       id: 'u1',
@@ -167,10 +171,11 @@ describe('ConversationGraph', () => {
       expect(result.responseMessage).not.toBe('Mocked LLM response');
     });
 
-    it('session idle timeout: router completes session, uses Command(goto=persist)', async () => {
+    it('session idle but in_progress: router passes through to training subgraph (stale handled by finish_training)', async () => {
       const deps = makeDeps();
 
-      // Session is in_progress but idle for > 2 hours
+      // Session is in_progress but idle for > 2 hours — router does NOT auto-close
+      // Stale detection is handled inside the training subgraph via finish_training tool
       const twoHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
       (deps.trainingService.getSessionDetails as jest.Mock).mockResolvedValue({
         id: 'session-2',
@@ -178,6 +183,7 @@ describe('ConversationGraph', () => {
         lastActivityAt: twoHoursAgo,
         updatedAt: twoHoursAgo,
         createdAt: twoHoursAgo,
+        exercises: [],
       });
 
       const graph = buildConversationGraph(deps);
@@ -187,14 +193,11 @@ describe('ConversationGraph', () => {
         { configurable: { thread_id: 'u1-timeout-idle' } },
       );
 
-      // completeSession should have been called
-      expect(deps.trainingService.completeSession).toHaveBeenCalledWith('session-2');
+      // Router should NOT have called completeSession — it's the training subgraph's responsibility
+      expect(deps.trainingService.completeSession).not.toHaveBeenCalled();
 
-      // Router bypassed the training subgraph
-      expect(result.responseMessage).toContain('inactivity');
-      expect(result.phase).toBe('chat');
-      expect(result.activeSessionId).toBeNull();
-      expect(result.responseMessage).not.toBe('Mocked LLM response');
+      // Session remains in training phase — LLM handles the stale context
+      expect(result.phase).toBe('training');
     });
   });
 
@@ -257,7 +260,7 @@ describe('ConversationGraph', () => {
                         reasoning: 'test',
                         exercises: [
                           {
-                            exerciseId: 1,
+                            exerciseId: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
                             exerciseName: 'Bench Press',
                             targetSets: 3,
                             targetReps: '8-10',

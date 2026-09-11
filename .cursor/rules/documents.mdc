@@ -16,6 +16,8 @@ alwaysApply: true
 - Config (env schema): `apps/server/src/infra/config/index.ts`
 - Server Bootstrap: `apps/server/src/app/bootstrap.ts`
 - Routes & Plugins: `apps/server/src/app/**`
+- CI/CD & Deploy: `docs/CICD.md`
+- VPS Setup: `deploy/VPS_SETUP.md`
 
 Notes
 - This file must remain a pointer-only index; keep all authoritative content in the docs above.

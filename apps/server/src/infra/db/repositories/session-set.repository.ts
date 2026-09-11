@@ -23,6 +23,7 @@ export class SessionSetRepository implements ISessionSetRepository {
         setData: set.setData,
         rpe: set.rpe ?? null,
         userFeedback: set.userFeedback ?? null,
+        ...(set.createdAt && { createdAt: set.createdAt }),
       })
       .returning();
 
@@ -65,5 +66,9 @@ export class SessionSetRepository implements ISessionSetRepository {
       ...updated,
       setData: updated.setData as SessionSet['setData'],
     };
+  }
+
+  async deleteById(setId: string): Promise<void> {
+    await db.delete(sessionSets).where(eq(sessionSets.id, setId));
   }
 }

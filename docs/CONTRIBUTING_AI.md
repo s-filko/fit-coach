@@ -28,6 +28,26 @@ If any instruction here conflicts with the above docs, update this file to match
 3) Tests (follow `apps/server/TESTING.md`): unit for domain logic, integration for routes/repositories.
 4) Logging and unified error handling respected; Swagger updated by schemas.
 
+## Execution Methodology (Superpowers)
+
+Read `docs/STATE.md` first in any working session — it is the orientation point
+(in progress / next / scope). Multi-step work follows the Superpowers skills: `brainstorming` → `writing-plans` →
+`executing-plans` with `test-driven-development` → `verification-before-completion` →
+code review. The division of roles and conflict rules are defined in
+`docs/SUPERPOWERS_INTEGRATION.md` — short version:
+
+- Process artifacts (design docs, implementation plans) live in `docs/superpowers/`;
+  durable specs stay in `docs/` per this guide and always win on content.
+- Every implementation-plan task cites the AC-#### (or refactor-phase criterion) it
+  implements and its verification command.
+- If a durable spec turns out to be wrong during execution, escalate to the owner —
+  never edit it silently.
+- Plan status, task lifecycle and delivery rules: `SUPERPOWERS_INTEGRATION.md` § Task
+  lifecycle; run `node scripts/state.mjs --check` before finishing. Ideas/findings
+  outside current scope go through the `backlog` skill (classify first, write after).
+- The disabled project-scope `superpowers@claude-plugins-official` copy must remain
+  disabled; the active version is user-scope from `superpowers-marketplace`.
+
 ## Documentation System (Rules)
 - English only. One concept = one term (no synonyms).
 - Docs‑first is mandatory. Every PR includes updated docs.

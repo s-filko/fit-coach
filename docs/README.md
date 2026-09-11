@@ -8,7 +8,8 @@ This repository follows a strict docs‑first workflow. Start here to navigate d
 - **Architecture**: `docs/ARCHITECTURE.md` - Single source of truth for system architecture
 - **Database Setup**: `docs/DB_SETUP.md` - PostgreSQL setup and schema documentation
 - **Product Vision**: `docs/PRODUCT_VISION.md` - Product narrative (no technical details)
-- **TODOs**: `docs/TODO.md` - Current tasks and completed work
+- **Project State**: `docs/STATE.md` - Orientation point: in progress / next / scope (read first)
+- **Backlog**: `docs/BACKLOG.md` - Permanent parking lot for unplanned ideas/findings/wishes
 
 ## Technical References
 
@@ -18,10 +19,14 @@ This repository follows a strict docs‑first workflow. Start here to navigate d
   - ADR-0003: Config layer with Zod validation
   - ADR-0004: User profile and context storage model
   - ADR-0005: Conversation context with sliding window
+  - ADR-0007 … ADR-0012: see `docs/adr/`
+  - ADR-0013: LLM core target architecture (graph/state/memory/prompts/errors) — **start here for the LLM stack**
+- **LLM Core Refactor Plan**: `docs/LLM_CORE_REFACTOR_PLAN.md` - Phased path from current code to ADR-0013 (P0–P7, acceptance criteria, rollback)
+- **Prompt Eval Framework**: `docs/PROMPT_EVAL_FRAMEWORK.md` - Datasets, rubrics, LLM-as-judge, CI gates, promptVersion traceability
 - **Domain Specs**: `docs/domain/` - Domain rules and invariants
   - `user.spec.md` - User domain rules
   - `ai.spec.md` - AI/LLM domain rules
-  - `conversation.spec.md` - Conversation context rules ✨ NEW
+  - `conversation.spec.md` - Conversation context rules
   - `training.spec.md` - Training domain rules (planned)
 
 ## Feature Documentation
@@ -29,8 +34,8 @@ This repository follows a strict docs‑first workflow. Start here to navigate d
 - **Feature Specs**: `docs/features/` - Detailed feature specifications
   - **FEAT-0001**: User upsert
   - **FEAT-0002**: User retrieval
-  - **FEAT-0003**: AI Chat (updated with conversation context) ✨ UPDATED
-  - **FEAT-0006**: Registration data collection (unified JSON mode) ✨ UPDATED
+  - **FEAT-0003**: AI Chat (updated with conversation context)
+  - **FEAT-0006**: Registration data collection (unified JSON mode)
   - **FEAT-0007**: Registration quick setup
   - **FEAT-0008**: Training plan generation (planned)
   - **FEAT-0009**: Conversation context architecture
@@ -38,12 +43,12 @@ This repository follows a strict docs‑first workflow. Start here to navigate d
 ## Implementation Guides
 
 - **Conversation Context**: `docs/CONVERSATION_CONTEXT_ARCHITECTURE.md` - Implementation details
-- **Plan Creation Phase**: `docs/PLAN_CREATION_PHASE.md` - Workout plan creation flow ✨ NEW
 - **MVP Training Session**: `docs/MVP_TRAINING_SESSION_MANAGEMENT.md` - Original MVP plan
-- **Implementation Plan**: `docs/IMPLEMENTATION_PLAN.md` - Step-by-step progress tracking
+- **Manual Test Plan**: `docs/MANUAL_TEST_PLAN.md` - Scenario source for eval datasets
 - **Testing Rules**: `docs/TESTING.md` (→ `apps/server/TESTING.md`)
 - **Contribution Guide for AI**: `docs/CONTRIBUTING_AI.md`
 - **Documentation Guide**: `docs/DOCUMENTATION_GUIDE.md`
+- **Superpowers Integration**: `docs/SUPERPOWERS_INTEGRATION.md` - SDD contract: status layer, task lifecycle, backlog
 
 ## Templates
 
@@ -52,29 +57,12 @@ This repository follows a strict docs‑first workflow. Start here to navigate d
 ## AI Reading Order
 
 For AI assistants working on this codebase:
-1. **Feature Spec** (`docs/features/FEAT-*.md`) - What needs to be built
-2. **Domain Spec** (`docs/domain/*.spec.md`) - Business rules and invariants
-3. **API Spec** (`docs/API_SPEC.md`) - External contracts
-4. **Architecture** (`docs/ARCHITECTURE.md`) - System design and structure
-5. **ADRs** (`docs/adr/*.md`) - Design decisions and rationale
-
-## Recent Updates
-
-### 2026-02-13
-- ✅ **Plan Creation Phase**: New conversation phase for creating long-term workout plans
-- ✅ **Workout Plan Schema**: Structured plan with templates, recovery rules, and progression
-- ✅ **Exercise Catalog Integration**: LLM uses real exercises from database
-- ✅ **Phase Transition Validation**: Enforces plan existence before session planning
-- ✅ **Registration Flow Update**: Now transitions to plan_creation instead of session_planning
-
-### 2025-01
-- ✅ **Unified Registration**: Single LLM call with JSON mode (FEAT-0006)
-- ✅ **Conversation Context**: Persistent dialogue history with sliding window (FEAT-0009)
-- ✅ **Phase-based Routing**: Automatic service selection in chat endpoint (FEAT-0003)
-- ✅ **LLM Integration**: OpenAI-compatible API abstraction with debug support
-- ✅ **Fastify Migration**: Complete migration from Express to Fastify
-- ✅ **Database Schema**: Added conversation_turns table for context storage
-- ✅ **Debug Endpoints**: Development tools for monitoring LLM requests
+1. **Project State** (`docs/STATE.md`) - Where the project is right now; read first
+2. **Feature Spec** (`docs/features/FEAT-*.md`) - What needs to be built
+3. **Domain Spec** (`docs/domain/*.spec.md`) - Business rules and invariants
+4. **API Spec** (`docs/API_SPEC.md`) - External contracts
+5. **Architecture** (`docs/ARCHITECTURE.md`) - System design and structure
+6. **ADRs** (`docs/adr/*.md`) - Design decisions and rationale
 
 ## Quick Links
 
@@ -82,4 +70,5 @@ For AI assistants working on this codebase:
 - [Database Setup](DB_SETUP.md)
 - [API Documentation](API_SPEC.md)
 - [Architecture Overview](ARCHITECTURE.md)
-- [Current TODOs](TODO.md)
+- [Project State](STATE.md)
+- [Backlog](BACKLOG.md)

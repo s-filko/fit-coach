@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { AIMessage, HumanMessage, mergeMessageRuns, SystemMessage } from '@langchain/core/messages';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
 import { ToolNode, toolsCondition } from '@langchain/langgraph/prebuilt';
 
@@ -12,6 +12,7 @@ import { User } from '@domain/user/services/user.service';
 import { buildChatSystemPrompt } from '@infra/ai/graph/nodes/chat.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildChatTools } from '@infra/ai/graph/tools/chat.tools';
+import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
 
 export interface ChatSubgraphDeps {
@@ -43,32 +44,36 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
    */
   const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
 
-  const tools = buildChatTools({ userService, pendingTransitions });
+  const tools = [...buildChatTools({ userService, pendingTransitions }), buildSaveTimezoneTool({ userService })];
   const toolNode = new ToolNode(tools);
   const model = getModel().bindTools(tools);
 
   const agentNode = async (state: ChatSubgraphStateType) => {
     const { userId, user, userMessage } = state;
 
-    const [history, activePlan, recentSessions] = await Promise.all([
+    const [history, activePlan, recentSessions, previousSummary, lastMessageTime] = await Promise.all([
       contextService.getMessagesForPrompt(userId, 'chat'),
       workoutPlanRepo.findActiveByUserId(userId),
       workoutSessionRepo.findRecentByUserIdWithDetails(userId, 5),
+      contextService.getLatestSummary(userId),
+      contextService.getLastUserMessageTime(userId),
     ]);
 
-    const systemPrompt = buildChatSystemPrompt(user, !!activePlan, recentSessions);
+    const systemPrompt = buildChatSystemPrompt(user, !!activePlan, recentSessions, lastMessageTime);
 
-    // state.messages holds AIMessage(tool_calls) + ToolMessages from the current turn.
-    // These are NOT in DB history yet (persist runs after subgraph finishes).
-    // Including them lets the LLM see tool results and stop calling tools.
     const inFlightMessages = state.messages ?? [];
 
-    const llmMessages = [
+    const summaryMessages = previousSummary
+      ? [new SystemMessage(`CONTEXT FROM PREVIOUS CONVERSATION:\n${previousSummary}`)]
+      : [];
+
+    const llmMessages = mergeMessageRuns([
       new SystemMessage(systemPrompt),
+      ...summaryMessages,
       ...history.map(m => (m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content))),
       new HumanMessage(userMessage),
       ...inFlightMessages,
-    ];
+    ]);
 
     const response = await model.invoke(llmMessages, {
       configurable: { userId },

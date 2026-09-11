@@ -3,15 +3,15 @@ import { db } from '../../../src/infra/db/drizzle';
 import { getGlobalContainer, registerInfraServices } from '../../../src/main/register-infra-services';
 import { createTestApiKey, createTestUserData } from '../../shared/test-factories';
 
-describe('POST /api/user – integration', () => {
+describe('POST /api/bot/user – integration', () => {
   let app: Awaited<ReturnType<typeof buildServer>>;
   let tx: any; // Transaction context
 
-  beforeAll(async() => {
+  beforeAll(async () => {
     const container = getGlobalContainer();
     await registerInfraServices(container);
-           app = buildServer();
-    
+    app = buildServer();
+
     // Decorate app with services for tests
     const { USER_SERVICE_TOKEN } = await import('../../../src/domain/user/ports');
     const { CONVERSATION_CONTEXT_SERVICE_TOKEN } = await import('../../../src/domain/conversation/ports');
@@ -24,11 +24,11 @@ describe('POST /api/user – integration', () => {
       trainingService: container.get(TRAINING_SERVICE_TOKEN) as any,
       conversationGraph: container.get(CONVERSATION_GRAPH_TOKEN) as any,
     });
-    
+
     await app.ready();
   });
 
-  afterAll(async() => {
+  afterAll(async () => {
     await app.close();
   });
 
@@ -36,13 +36,13 @@ describe('POST /api/user – integration', () => {
   // Data cleanup is handled by the test data factories with unique IDs
 
   describe('successful user creation', () => {
-    it('should create new user and return user id', async() => {
+    it('should create new user and return user id', async () => {
       const payload = createTestUserData();
       const validKey = createTestApiKey();
 
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: { 'x-api-key': validKey },
         payload,
       });
@@ -56,14 +56,14 @@ describe('POST /api/user – integration', () => {
       expect(json.data.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     });
 
-    it('should return same user id for same provider account (upsert behavior)', async() => {
+    it('should return same user id for same provider account (upsert behavior)', async () => {
       const payload = createTestUserData();
       const validKey = createTestApiKey();
 
       // First request
       const res1 = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: { 'x-api-key': validKey },
         payload,
       });
@@ -73,7 +73,7 @@ describe('POST /api/user – integration', () => {
       // Second request with same data
       const res2 = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: { 'x-api-key': validKey },
         payload,
       });
@@ -83,20 +83,20 @@ describe('POST /api/user – integration', () => {
       expect(id2).toBe(id1);
     });
 
-    it('should create user with different providers independently', async() => {
+    it('should create user with different providers independently', async () => {
       const payload1 = createTestUserData({ provider: 'telegram' });
       const payload2 = createTestUserData({ provider: 'discord' });
       const validKey = createTestApiKey();
 
       const res1 = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: { 'x-api-key': validKey },
         payload: payload1,
       });
       const res2 = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: { 'x-api-key': validKey },
         payload: payload2,
       });
@@ -108,12 +108,12 @@ describe('POST /api/user – integration', () => {
   });
 
   describe('error handling', () => {
-    it('should handle missing required fields with proper validation error', async() => {
+    it('should handle missing required fields with proper validation error', async () => {
       const validKey = createTestApiKey();
 
       const res = await app.inject({
         method: 'POST',
-        url: '/api/user',
+        url: '/api/bot/user',
         headers: { 'x-api-key': validKey },
         payload: {}, // Missing required fields
       });
@@ -129,19 +129,18 @@ describe('POST /api/user – integration', () => {
       // Should mention missing required fields
       expect(json.error.message.toLowerCase()).toMatch(/provider|provideruserid|required/);
     });
-
   });
 });
 
-describe('GET /api/user/{id} – integration', () => {
+describe('GET /api/bot/user/{id} – integration', () => {
   let app: Awaited<ReturnType<typeof buildServer>>;
   let tx: any;
 
-  beforeAll(async() => {
+  beforeAll(async () => {
     const container = getGlobalContainer();
     await registerInfraServices(container);
-           app = buildServer();
-    
+    app = buildServer();
+
     // Decorate app with services for tests
     const { USER_SERVICE_TOKEN } = await import('../../../src/domain/user/ports');
     const { CONVERSATION_CONTEXT_SERVICE_TOKEN } = await import('../../../src/domain/conversation/ports');
@@ -154,25 +153,25 @@ describe('GET /api/user/{id} – integration', () => {
       trainingService: container.get(TRAINING_SERVICE_TOKEN) as any,
       conversationGraph: container.get(CONVERSATION_GRAPH_TOKEN) as any,
     });
-    
+
     await app.ready();
   });
 
-  afterAll(async() => {
+  afterAll(async () => {
     await app.close();
   });
 
   // Note: For API integration tests, we don't use transactions as they test the full stack
   // Data cleanup is handled by the test data factories with unique IDs
 
-  it('should return user data when user exists', async() => {
+  it('should return user data when user exists', async () => {
     // First create a user
     const createPayload = createTestUserData();
     const validKey = createTestApiKey();
 
     const createRes = await app.inject({
       method: 'POST',
-      url: '/api/user',
+      url: '/api/bot/user',
       headers: { 'x-api-key': validKey },
       payload: createPayload,
     });
@@ -182,7 +181,7 @@ describe('GET /api/user/{id} – integration', () => {
     // Then get the user
     const getRes = await app.inject({
       method: 'GET',
-      url: `/api/user/${userId}`,
+      url: `/api/bot/user/${userId}`,
       headers: { 'x-api-key': validKey },
     });
 
@@ -197,13 +196,13 @@ describe('GET /api/user/{id} – integration', () => {
     });
   });
 
-  it('should return 404 when user does not exist', async() => {
+  it('should return 404 when user does not exist', async () => {
     const validKey = createTestApiKey();
     const nonExistentId = '00000000-0000-0000-0000-000000000000';
 
     const res = await app.inject({
       method: 'GET',
-      url: `/api/user/${nonExistentId}`,
+      url: `/api/bot/user/${nonExistentId}`,
       headers: { 'x-api-key': validKey },
     });
 
@@ -217,5 +216,4 @@ describe('GET /api/user/{id} – integration', () => {
       },
     });
   });
-
 });

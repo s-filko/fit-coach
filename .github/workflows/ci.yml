@@ -6,7 +6,7 @@ on:
   workflow_call:
 
 jobs:
-  check:
+  check-server:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -22,6 +22,15 @@ jobs:
 
       - run: npm ci
 
+      - name: Guard against drizzle-kit push
+        working-directory: .
+        run: |
+          if grep -rn "drizzle-kit push\|drizzle:push" apps/server deploy docker-compose.yml --exclude-dir=node_modules; then
+            echo "::error::drizzle-kit push is forbidden (HB-01) — use migrations"
+            exit 1
+          fi
+          echo "OK: no drizzle-kit push call sites"
+
       - name: Create test env
         run: |
           printf '%s\n' \
@@ -34,6 +43,7 @@ jobs:
             'DB_PASSWORD=postgres' \
             'DB_NAME=fitcoach_test' \
             'BOT_API_KEY=ci-key' \
+            'TELEGRAM_TOKEN=ci-test-token' \
             'LLM_API_KEY=ci-key' \
             'LLM_MODEL=mock' \
             'LLM_TEMPERATURE=0.7' \
@@ -50,3 +60,22 @@ jobs:
 
       - name: Unit tests
         run: npm run test:unit
+
+  check-webapp:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/webapp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: apps/webapp/package-lock.json
+
+      - run: npm ci
+
+      - name: Type check & build
+        run: npm run build

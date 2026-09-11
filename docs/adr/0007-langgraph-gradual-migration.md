@@ -14,7 +14,7 @@ The current conversation phase management in `ChatService` has architectural lim
 
 1. **JSON parsing bug**: `chat` phase sets `jsonMode: false` (line 77 of `chat.service.ts`), but `parseLLMResponse()` on line 139 tries to parse the LLM's plain-text response as JSON. This crashes with `"Unexpected token 'О', "Отлично, с"... is not valid JSON"`.
 
-2. **Training intent naming mismatch** (discovered 2026-02-15): The training system prompt (`training.prompt.ts`) instructs the LLM to use **camelCase** intent types (`logSet`, `nextExercise`, `finishTraining`, etc.), but the Zod schema (`training-intent.types.ts`) expects **snake_case** (`log_set`, `next_exercise`, `finish_training`, etc.). This causes two failure modes:
+2. **Training intent naming mismatch** (discovered 2026-02-15): The training system prompt (`training.prompt.ts`) instructs the LLM to use **camelCase** intent types (`logSet`, `nextExercise`, `finishTraining`, etc.), but the Zod schema (`training-intent.types.ts`) expects **snake_case** (`log_set`, `complete_current_exercise`, `finish_training`, etc.). This causes two failure modes:
    - When LLM **includes** intent: `TrainingIntentSchema` (discriminated union on `type`) rejects the camelCase value → `parseTrainingResponse()` throws `"Invalid training response format"` → **500 error to user**.
    - When LLM **omits** intent (field is `.optional()`): validation passes silently → `executeTrainingIntent()` is never called → **data not saved to DB, but user sees "Recorded!"** (silent data loss).
    - Combined effect: training phase cannot save any data regardless of LLM behavior.
@@ -122,7 +122,7 @@ Tools are closures created per-subgraph invocation. They write state updates to 
 | Chat | `update_profile`, `request_transition` |
 | Plan Creation | `save_workout_plan`, `request_transition` |
 | Session Planning | `start_training_session`, `request_transition` |
-| Training | `log_set`, `next_exercise`, `skip_exercise`, `finish_training` |
+| Training | `log_set`, `complete_current_exercise`, `finish_training` |
 
 ---
 
@@ -150,7 +150,7 @@ This is a prerequisite because it fixes the production bug and validates that al
 
 Three files must be changed together:
 
-1. **`training.prompt.ts`** — Fix all intent type examples from camelCase to snake_case (`logSet` → `log_set`, `nextExercise` → `next_exercise`, etc.) to match the Zod schema.
+1. **`training.prompt.ts`** — Fix all intent type examples from camelCase to snake_case (`logSet` → `log_set`, `nextExercise` → `complete_current_exercise`, etc.) to match the Zod schema.
 
 2. **`training-intent.types.ts`** — Make `intent` field **required** in `LLMTrainingResponseSchema`:
    ```typescript
@@ -264,8 +264,8 @@ This is the most complex migration step.
 **What changes:**
 - 7 training intents become LangChain tools:
   - `log_set` — logs a completed set
-  - `next_exercise` — completes current exercise, starts next
-  - `skip_exercise` — skips current exercise
+  - `complete_current_exercise` — completes current exercise, starts next
+  -  — skips current exercise
   - `finish_training` — completes the session
   - `request_advice` — no DB action, just conversation
   - `modify_session` — no DB action, just conversation

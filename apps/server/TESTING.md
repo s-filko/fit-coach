@@ -159,7 +159,7 @@ it('should call repository with correct args', async () => {
 ```ts
 // Example: API error handling test
 it('should return unified error format', async () => {
-  const res = await app.inject({ method: 'POST', url: '/api/chat', payload: {} });
+  const res = await app.inject({ method: 'POST', url: '/api/bot/chat', payload: {} });
   expect(res.statusCode).toBe(400);
   const json = res.json();
   expect(json).toEqual({ error: { message: expect.any(String) } });
@@ -291,13 +291,13 @@ it('should return unified error format', async () => {
 ### ❌ WRONG: Testing middleware in every API endpoint
 ```ts
 // AVOID: This pattern creates 10+ duplicate tests
-describe('POST /api/users', () => {
+describe('POST /api/bot/users', () => {
   it('should return 401 when x-api-key missing', ...)  // DUPLICATE
   it('should return 403 when x-api-key invalid', ...)  // DUPLICATE
   it('should create user when valid', ...)
 })
 
-describe('POST /api/chat', () => {
+describe('POST /api/bot/chat', () => {
   it('should return 401 when x-api-key missing', ...)  // DUPLICATE
   it('should return 403 when x-api-key invalid', ...)  // DUPLICATE
   it('should process message when valid', ...)
@@ -314,12 +314,12 @@ describe('API Key Middleware – integration', () => {
 })
 
 // API endpoint tests (only business logic)
-describe('POST /api/users – integration', () => {
+describe('POST /api/bot/users – integration', () => {
   it('should create user with valid data', ...)
   it('should handle duplicate user creation', ...)
 })
 
-describe('POST /api/chat – integration', () => {
+describe('POST /api/bot/chat – integration', () => {
   it('should process message with valid user', ...)
   it('should handle invalid message format', ...)
 })
@@ -485,7 +485,7 @@ describe('UserService.updateProfileData - integration error handling', () => {
 // All comments in code are in English
 import { buildServer } from '@/app/server';
 
-describe('POST /api/chat – integration', () => {
+describe('POST /api/bot/chat – integration', () => {
   let app: ReturnType<typeof buildServer>;
   beforeAll(async () => {
     app = buildServer();
@@ -494,7 +494,7 @@ describe('POST /api/chat – integration', () => {
   afterAll(async () => { await app.close(); });
 
   it('should return 400 when body is invalid', async () => {
-    const res = await app.inject({ method: 'POST', url: '/api/chat', payload: {} });
+    const res = await app.inject({ method: 'POST', url: '/api/bot/chat', payload: {} });
     expect(res.statusCode).toBe(400);
     expect(res.headers['content-type']).toContain('application/json');
     const json = res.json();
@@ -540,7 +540,7 @@ describe('User Registration Journey - E2E', () => {
     // Step 2: User updates profile
     res = await app.inject({
       method: 'PUT',
-      url: `/api/users/${user.id}/profile`,
+      url: `/api/bot/users/${user.id}/profile`,
       payload: {
         age: 25,
         gender: 'female',
@@ -555,7 +555,7 @@ describe('User Registration Journey - E2E', () => {
     // Step 3: Verify profile is complete
     res = await app.inject({
       method: 'GET',
-      url: `/api/users/${user.id}/profile`
+      url: `/api/bot/users/${user.id}/profile`
     });
     expect(res.statusCode).toBe(200);
     const profile = res.json();
@@ -564,7 +564,7 @@ describe('User Registration Journey - E2E', () => {
     // Step 4: User can now use chat feature
     res = await app.inject({
       method: 'POST',
-      url: '/api/chat',
+      url: '/api/bot/chat',
       payload: {
         userId: user.id,
         message: 'Hello, I want to start my fitness journey!'
@@ -591,7 +591,7 @@ describe('User Registration Journey - E2E', () => {
     // Try to chat without complete profile
     res = await app.inject({
       method: 'POST',
-      url: '/api/chat',
+      url: '/api/bot/chat',
       payload: {
         userId: user.id,
         message: 'Hello!'
@@ -714,6 +714,95 @@ tests/integration/api/*.integration.test.ts  # Only business logic
 - **After:** ~80-90 tests with clear separation of concerns
 - **Coverage:** Maintained or improved
 - **Maintenance:** Significantly reduced
+
+---
+
+## 19) Manual Smoke Testing (curl)
+
+Use these commands to verify the running dev server after code changes.
+The server must already be running (`lsof -i :3000` to check).
+
+### Prerequisites
+- Dev server running on port 3000
+- API key: value of `BOT_API_KEY` from `apps/server/.env` (default: `dev-key`)
+- A valid `userId` from the `users` table
+
+### 19.1) Health Check (no auth required)
+```bash
+curl -s http://localhost:3000/health
+# Expected: {"status":"ok", ...}
+```
+
+### 19.2) Chat — Basic Greeting (complete profile user)
+```bash
+curl -s -X POST http://localhost:3000/api/bot/chat \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: dev-key" \
+  -d '{"userId": "<USER_ID>", "message": "привет"}'
+# Expected 200: {"data":{"content":"...", "timestamp":"..."}}
+# Verify: response is a greeting, not a stale answer from previous context.
+```
+
+### 19.3) Chat — Follow-up Message (context continuity)
+```bash
+curl -s -X POST http://localhost:3000/api/bot/chat \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: dev-key" \
+  -d '{"userId": "<USER_ID>", "message": "как дела?"}'
+# Expected 200: response references the previous greeting and maintains context.
+```
+
+### 19.4) Registration Flow (registration-status user)
+```bash
+curl -s -X POST http://localhost:3000/api/bot/chat \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: dev-key" \
+  -d '{"userId": "<REG_USER_ID>", "message": "привет"}'
+# Expected 200: bot starts collecting profile data (asks for age, gender, etc.)
+```
+
+### 19.5) Bot Auth Validation
+```bash
+# Missing key — expect 401
+curl -s -X POST http://localhost:3000/api/bot/chat \
+  -H "Content-Type: application/json" \
+  -d '{"userId": "any", "message": "test"}'
+
+# Wrong key — expect 403
+curl -s -X POST http://localhost:3000/api/bot/chat \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: wrong-key" \
+  -d '{"userId": "any", "message": "test"}'
+```
+
+### 19.6) Mini App — Profile (initData auth)
+```bash
+# In dev mode HMAC is skipped, only user JSON is parsed
+curl -s http://localhost:3000/api/app/profile \
+  -H 'X-Init-Data: user=%7B%22id%22%3A1%2C%22first_name%22%3A%22Dev%22%2C%22username%22%3A%22devuser%22%7D&auth_date=1234567890&hash=mock'
+# Expected 200: {"data":{"id":"...","username":"devuser",...}}
+
+# Missing header — expect 401
+curl -s http://localhost:3000/api/app/profile
+# Expected 401: {"error":{"message":"Missing X-Init-Data"}}
+```
+
+### 19.7) Verify Logs (after any manual test)
+```bash
+# One-shot read, NEVER use tail -f
+tail -n 50 logs/server.log | cat
+# Check for: no ERROR/WARN entries, correct status codes, reasonable response times.
+```
+
+### What to Watch For
+- **Stale context**: Bot responds to an old question instead of the current message.
+  This was caused by broken message alternation in `conversation_turns` (consecutive
+  same-role rows). Fixed by applying `mergeMessageRuns` from `@langchain/core/messages`
+  in all subgraphs before `model.invoke`.
+- **Phase leaking**: Bot references data from a different phase (e.g., training data
+  shown during chat). Check that `getMessagesForPrompt` filters correctly.
+- **Slow responses**: Typical LLM response time is 2-8 seconds. Anything > 15 seconds
+  suggests a timeout or retry loop.
 
 ---
 
