@@ -13,7 +13,7 @@ Documentation is the AI agent's context: near-correct duplicate variants of the 
 content cause the model to blend them into wrong output. Therefore:
 - One current, unambiguous version of everything. Stale content is rewritten or deleted
   immediately — never kept beside its replacement.
-- Ordering/precedence between documents comes from `STATE.md`, not from filenames or dates.
+- Ordering/precedence between documents comes from `STATE.md`, not from filenames.
 - History is kept only where it is the point of the document: ADRs, IDs, decision
   records. Everything else relies on git.
 

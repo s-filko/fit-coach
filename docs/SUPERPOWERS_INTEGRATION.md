@@ -6,19 +6,34 @@ documentation system (spec governance) work together without conflicts. It compl
 the durable-docs rules (IDs, locations, English-only) win on **content**, Superpowers
 skills win on **process**.
 
+**Extensions, never contradictions.** This repo adds layers on top of Superpowers (the
+Status layer, `STATE.md`, the backlog skill, the mandatory review phase); it does not
+rewrite the plugin. Plugin files live in a versioned cache and are never edited — a change
+there is lost on upgrade and invisible to git. Where this contract states something the
+plugin does not, it extends it and is read first (the plugin's own rule: user instructions
+take precedence over skills). Where both speak, this contract follows the plugin unless an
+override is written down below, with its reason. Defaults adopted as-is need no note.
+
+**Overrides in force:**
+
+- Plan filenames are `<task-slug>.md`, not the plugin's `YYYY-MM-DD-<feature-name>.md`.
+  The slug is the task ID: it names the branch (`plan/<slug>`), appears in the PR title,
+  is referenced by `- After:`, and is parsed by `scripts/state.mjs`. A date would break
+  that chain. Spec filenames keep the plugin default (dated).
+
 ## Division of roles
 
 | Layer | Owner | Contents | Lifetime |
 |---|---|---|---|
 | Durable specs | Repo docs system (`docs/`) | ADRs, domain specs, feature specs (FEAT-####), API_SPEC, `LLM_CORE_REFACTOR_PLAN.md`, `PROMPT_EVAL_FRAMEWORK.md`; IDs INV/BR/S/AC | Long-lived, versioned, the law |
-| Process artifacts | Superpowers | `docs/superpowers/specs/<topic>-design.md` (brainstorm output), `docs/superpowers/plans/<task-slug>.md` (implementation plans; stable slugs, no dates) | Working documents, edited in place |
+| Process artifacts | Superpowers | `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` (brainstorm output, per `superpowers:brainstorming`), `docs/superpowers/plans/<task-slug>.md` (implementation plans) | Working documents, edited in place |
 
 `docs/superpowers/**` is a recognized process-artifact area: files there are working
 documents, not sources of truth. **Working documents are edited in place.** When a
 design or plan is superseded, it is rewritten or deleted immediately — never kept
 alongside its replacement: near-correct duplicate variants pollute the agent's context
 and degrade output quality. Ordering/precedence between documents comes from
-`docs/STATE.md` (priority/dispatch order), never from filenames or dates. History
+`docs/STATE.md` (priority/dispatch order), never from filenames. History
 that matters (decisions, not drafts) lives in the durable layer — ADRs and specs with
 IDs; file history is git's job.
 
