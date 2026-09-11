@@ -83,6 +83,10 @@ idea
    documentation included: a durable spec that has drifted from the code actively misleads
    the next agent. Blocking findings are fixed; advisory findings leave the branch for
    `docs/BACKLOG.md`. Review precedes close-out, and close-out precedes merge.
+   Findings about the phase *itself* — a misleading prompt, a gap between zones, a rule that
+   should block but is written down nowhere — are `meta`: they change no verdict and go to
+   `docs/REVIEW_FINDINGS.md`, which the owner triages periodically. Owner-raised ideas keep
+   going to `docs/BACKLOG.md` via the `backlog` skill; the two streams stay separate.
 
 ## Status layer
 

@@ -61,6 +61,10 @@ re-dispatch that zone alone.
 
 **Verdict:** `blocked` if at least one blocking finding is open, `clean` otherwise.
 
+5. **Set aside `meta` findings.** A finding marked `meta` is about the review phase itself,
+   not about the diff. It takes no part in the verdict and blocks nothing; it is filed in
+   Step 6.
+
 ## Step 4 — Report and route
 
 Show the owner the full list, blocking findings first.
@@ -74,7 +78,8 @@ Write the artifact only as described in the next section.
 
 ## Step 5 — Write the artifact
 
-Two records, both in the plan file under review. This is the only file this skill writes.
+Two records, both in the plan file under review. This skill writes no code and no durable
+spec — only the plan under review, and `docs/REVIEW_FINDINGS.md` in Step 6.
 
 **On `clean`** — add the header line beneath `- After:`:
 
@@ -95,3 +100,16 @@ second one, and replace any existing `- Review:` line rather than adding a secon
 carries exactly one header line and one `## Review` section, however many times it is
 reviewed. Working documents are edited in place
 (`SUPERPOWERS_INTEGRATION.md`, Division of roles).
+
+## Step 6 — File what the phase learned about itself
+
+If any zone returned `meta` findings, append them to `docs/REVIEW_FINDINGS.md` in one block —
+you are the only writer of that file; zones never touch it. Put each under the matching
+heading: `## Prompt defects`, `## Blind spots`, or `## Rule candidates`. One line each, in the
+zone's own words, with the plan slug and the date. Replace a section's `(none)` placeholder
+the first time it receives an entry.
+
+These are observations, not work: do not act on them in this run, and never edit a zone prompt
+mid-review. The owner triages the log periodically.
+
+If no zone returned a `meta` finding, leave the file alone.
