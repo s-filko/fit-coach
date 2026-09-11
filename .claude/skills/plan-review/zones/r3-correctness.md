@@ -29,7 +29,9 @@ Check:
   `docs/CONTRIBUTING_AI.md`.
 - **Verification commands were run.** The plan states a verification command per task.
   Confirm it was actually executed with output — not judged by reading. If the evidence
-  is absent, that is blocking.
+  is absent, that is blocking — cite
+  `SUPERPOWERS_INTEGRATION.md` Rules of engagement rule 2 ("A task without a verification
+  path is not done"), which is what makes it blocking rather than advisory.
 - **Thin-test zones** get heightened attention, because tests there are weak by nature:
   `drizzle/` migrations, `deploy/deploy.sh`, env handling, `docker-compose.yml`.
 

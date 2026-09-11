@@ -54,7 +54,7 @@ re-dispatch that zone alone.
 1. **Relay verbatim.** Each finding keeps the wording its subagent used. Their reports are
    invisible to the owner; paraphrase is where findings get quietly softened (spec D6).
 2. **Demote unevidenced findings.** A `blocking` finding without both `file:line` and a
-   named rule becomes `advisory`. State that you demoted it and why.
+   named rule becomes `advisory`. State that you demoted it and why (spec D4).
 3. **Deduplicate.** The same line may surface in two zones — keep one entry, list both
    zones.
 4. **Order.** Blocking first, then advisory; within each, R1 → R2 → R3 → R4.

@@ -34,7 +34,10 @@
 - Test: manual run, commands given in the steps
 
 **Interfaces:**
-- Produces: the skill name `plan-review`, invocable as `/plan-review`; the scope contract every zone prompt consumes — `DIFF` (branch vs `merge-base` with `dev`), `PLAN_PATH`, `SPEC_PATH`.
+- Produces: the skill name `plan-review`, invocable as `/plan-review`; the scope the zone
+  prompts are given — the branch diff against `merge-base` with `dev`, the plan file, and
+  the spec it references. The orchestrator passes these in the dispatch message; they are
+  not named variables in the skill text.
 
 - [x] **Step 1: Write the frontmatter and the scope-collection section**
 
@@ -106,7 +109,7 @@ git commit -m "feat(review): plan-review skill skeleton with scope collection"
 - Test: greps given in the steps
 
 **Interfaces:**
-- Consumes: the scope contract from Task 1 (`DIFF`, `PLAN_PATH`, `SPEC_PATH`).
+- Consumes: the scope from Task 1 — the branch diff, the plan file, and the spec.
 - Produces: four prompt files, each ending in the same finding format the orchestrator parses in Task 3:
   `SEVERITY | ZONE | file:line | rule | finding` where `SEVERITY` is `blocking` or `advisory` and `ZONE` is `R1`–`R4`.
 
