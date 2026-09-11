@@ -411,8 +411,9 @@ Run:
 grep -n "On .clean.\|On .blocked.\|no header line" .claude/skills/plan-review/SKILL.md
 ```
 
-Expected: three matches — the skill states both branches and the absence rule explicitly.
-This is `AC-1406`.
+Expected: two matching lines — the `On clean` and `On blocked` paragraphs; the "no header line"
+rule sits on the second of them, so grep counts two lines, not three. Both branches and the
+absence rule must be present. This is `AC-1406`.
 
 - [ ] **Step 3: Confirm the format is parseable**
 
