@@ -1,8 +1,9 @@
 # Review Self-Improvement Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/review-self-improvement
 - After: mandatory-plan-review
+- Review: 2026-09-12 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -137,11 +138,11 @@ Expected: the rule mentions the log; `state check: OK`. This is `AC-1414`.
 
 ### Task 6: Review and close out
 
-- [ ] **Step 1: Run `/plan-review` against this branch.** The phase reviews an extension of itself — a second smoke test, not an independent review. Say so in the artifact.
+- [x] **Step 1: Run `/plan-review` against this branch.** The phase reviews an extension of itself — a second smoke test, not an independent review. Say so in the artifact.
 
-- [ ] **Step 2: Fix every blocking finding; file advisories per AC-1407.**
+- [x] **Step 2: Fix every blocking finding; file advisories per AC-1407.**
 
-- [ ] **Step 3: Close out** — tick the boxes, set `Status: done`, `node scripts/state.mjs --write`, verify `--check` is OK, commit.
+- [x] **Step 3: Close out** — tick the boxes, set `Status: done`, `node scripts/state.mjs --write`, verify `--check` is OK, commit.
 
 ## Acceptance criteria
 
@@ -152,3 +153,35 @@ IDs continue the `AC-14xx` block opened by `mandatory-plan-review.md`.
 - **AC-1412** `SKILL.md` has six steps, and no longer claims the plan is the only file it writes.
 - **AC-1413** Every log entry carries a `[×N]` count and a `Runs:` line.
 - **AC-1414** Contract rule 7 routes `meta` findings to the log and keeps the two streams separate; `node scripts/state.mjs --check` is green.
+
+## Review
+
+Reviewed 2026-09-12 by the `plan-review` phase — four zones over the branch diff against
+`merge-base` with `dev`. Verdict: **clean**, after two blocking findings were fixed. Second
+smoke test rather than an independent review: the phase reviewed an extension of itself.
+
+**Blocking findings — both real, both fixed:**
+
+- *R4: spec section 5 is stale* — it said the phase writes "two records, both in the plan
+  file", which stopped being true the moment Step 6 shipped. The plan claimed to extend that
+  section "rather than revise" it but never touched it, so a reader of the spec alone was told
+  something false. Fixed: section 5 now carries a forward-pointer to this plan.
+- *R4: a backlog entry's premise had expired* — it deferred splitting `SKILL.md` until "a sixth
+  responsibility once the state.mjs gate lands", while this branch gave it a sixth step without
+  that gate. Fixed: the entry now describes what is actually true, at ×2.
+
+**Advisory — acted on rather than deferred:**
+
+- *R2: the log's rules were a near-duplicate of the backlog's* — same intake bar, same ordering
+  clause, same two-exits rule, maintained independently, which `DOCUMENTATION_GUIDE.md`
+  ("Context hygiene") warns about by name. Fixed here rather than parked, since the drift it
+  warns about starts the moment the second copy exists: the log now defers to the backlog for
+  shared discipline and states only the two rules that genuinely differ.
+- *R1: `SKILL.md` now owns two artifact-writing responsibilities.* Parked in the backlog, where
+  it belongs — the split is worth doing once the `state.mjs` gate lands, not before.
+
+**`meta` findings filed in `docs/REVIEW_FINDINGS.md`** — the first real use of Step 6. R3's
+observation that its test-naming and thin-test-zone checks are inert on markdown-only diffs
+merged with the existing entry and rose to ×2, which is exactly the signal the counter exists
+for. R4 contributed a new rule candidate. R2's candidate was resolved by the advisory fix above
+and not filed.

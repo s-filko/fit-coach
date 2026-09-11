@@ -135,6 +135,11 @@ code moved — documentation rot). Different faults, different zones.
 
 Two records, both in the plan file, both in git.
 
+> Extended 2026-09-12 by `docs/superpowers/plans/review-self-improvement.md`: the phase also
+> writes `docs/REVIEW_FINDINGS.md`, a log of what it notices about itself. Those `meta`
+> findings take no part in the verdict, so the two records below remain the artifact of a
+> review; the log is a third file the skill writes.
+
 **Header line**, alongside `- Status:` / `- Branch:` / `- After:`:
 
 ```

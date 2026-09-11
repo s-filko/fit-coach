@@ -55,10 +55,11 @@ Rules:
   `SUPERPOWERS_INTEGRATION.md` or the design spec. Decide whether the final review narrows
   to what the four zones do not cover, or whether it is dropped for plans that ran the phase.
   Source: plan-review first live run, R2 (2026-09-12).
-- [ ] `.claude/skills/plan-review/SKILL.md` will hold a sixth responsibility once the
-  `state.mjs` review gate (design spec section 7) lands; consider splitting orchestration
-  from artifact-writing at that point, not before.
-  Source: plan-review first live run, R1 (2026-09-12).
+- [ ] `.claude/skills/plan-review/SKILL.md` now carries two artifact-writing responsibilities
+  (Step 5 writes the plan, Step 6 the self-observation log) and will gain a third once the
+  `state.mjs` review gate (design spec section 7) lands. Consider splitting orchestration from
+  artifact-writing then, not before.
+  Source: plan-review live runs, R1 (2026-09-12, ×2).
 
 ## Wishes
 

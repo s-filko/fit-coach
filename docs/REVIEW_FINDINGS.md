@@ -8,19 +8,18 @@ about the reviewed code go to the plan's `## Review` section, and owner-raised i
 Written by the orchestrator after a run, in one block. Zones only report; they never write
 here. A `meta` finding never affects a verdict and never blocks a merge.
 
-Rules:
-- **Intake is cheap**: one line = what was noticed + which runs saw it. Judgment comes at
-  triage, not at intake.
+Rules: intake discipline follows `docs/BACKLOG.md` — cheap intake, no sediment, entries leave
+only by being acted on or dropped, and the agent removes nothing without owner approval. Two
+rules differ here, and they are the reason this is a separate file:
+
 - **Repeats are the signal.** Before adding, read the section and decide whether an existing
   entry describes the same thing in different words. If it does, raise its count and append
   the run — do not open a second line. When unsure, treat them as separate: a false merge
-  hides a finding, a false split only adds noise.
-- **Order = count**, highest first. What keeps recurring rises to the top on its own; a
-  finding seen three times across unrelated branches is systemic, not incidental.
-- **Two exits only**: *act on it* (the entry leaves — a prompt edit, a backlog entry, a
-  durable rule) or *drop it* (delete; git keeps the history). Nothing lingers as sediment.
-- Reviewed periodically by the owner. The agent adds entries; it removes them only with
-  owner approval.
+  hides a finding, a false split only adds noise. In the backlog a repeat means the owner
+  forgot they had already filed it, so there it is deduplicated rather than counted; here a
+  repeat is evidence that the blindness is systemic.
+- **Order = count**, highest first — not priority. What keeps recurring rises to the top on
+  its own; a finding seen three times across unrelated branches is not incidental.
 
 Entry format:
 
@@ -34,9 +33,10 @@ Entry format:
 Wording in a zone prompt or in `SKILL.md` that misleads, contradicts the severity contract,
 or is inert for the kind of diff under review.
 
-- [×1] R3's "describe/it names carry BR/AC references" bullet is inert on markdown-only diffs
-  yet reads as a checklist item to satisfy on every run. Scope it to code-bearing diffs.
-  Runs: mandatory-plan-review (2026-09-12).
+- [×2] R3's "describe/it names carry BR/AC references" bullet — and its thin-test-zone list
+  (`drizzle/`, `deploy.sh`, `docker-compose.yml`) — are inert on markdown-only diffs yet read
+  as checklist items to satisfy on every run. Scope both to code-bearing diffs.
+  Runs: mandatory-plan-review (2026-09-12), review-self-improvement (2026-09-12).
 
 ## Blind spots
 
@@ -57,6 +57,11 @@ backs it. Each entry names the proposed wording and where it would live
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
 
+- [×1] When a plan claims to extend a spec section "rather than revise" it, nothing requires
+  the spec to gain a forward-pointer — so the spec can be left stating something the code no
+  longer does. Proposed rule for `SUPERPOWERS_INTEGRATION.md` rule 3: an extension claim must
+  be backed by a pointer in the extended section, or it is a documentation gap.
+  Runs: review-self-improvement (2026-09-12).
 - [×1] Resolved 2026-09-12: YAGNI and DRY are now recorded in `CONTRIBUTING_AI.md`,
   "Principles & Boundaries", so R2 blocks on complexity and on duplication. Kept as the worked
   example of how a rule candidate graduates; drop it once a second entry replaces it.
