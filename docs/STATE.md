@@ -12,10 +12,10 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-11 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-— none —
+- `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan (branch: `plan/mandatory-plan-review`, last commit 2026-09-12)
 
 **Planned**
-- `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
+— none —
 
 **Done**
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
