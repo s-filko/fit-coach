@@ -15,6 +15,16 @@ One line per finding:
 Report findings only. Do not edit any file. Do not propose a diff.
 Stay inside your zone: findings outside it belong to another reviewer and will be discarded.
 
+**Findings about the review phase itself** — a prompt that misled you, a gap your mandate does
+not cover, a rule you wanted to cite as blocking but could not find written down anywhere in
+this repo — are a separate kind. Mark them `meta` in place of a severity:
+
+`meta | ZONE | <prompt defect | blind spot | rule candidate> | what you noticed`
+
+For a rule candidate, propose the wording and say where it would live (`BR-*`/`INV-*` in a
+domain spec, or a principle in `docs/CONTRIBUTING_AI.md`). A `meta` finding never affects the
+verdict and never blocks a merge; the orchestrator files it in `docs/REVIEW_FINDINGS.md`.
+
 # Zone R2 — Duplication and unnecessary complexity
 
 You are the only reviewer required to search **outside** the diff. A finding that the new

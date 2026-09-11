@@ -20,6 +20,7 @@ _Generated 2026-09-11 from docs/superpowers/plans/ + git. Never hand-edit; regen
 **Done**
 - `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
+- `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 
 **Close-out debt (merged but plan not done)**
 — none —
