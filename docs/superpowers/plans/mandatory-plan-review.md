@@ -1,8 +1,9 @@
 # Mandatory Plan Review Implementation Plan
 
-- Status: planned
-- Branch:
+- Status: done
+- Branch: plan/mandatory-plan-review
 - After:
+- Review: 2026-09-12 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -33,9 +34,12 @@
 - Test: manual run, commands given in the steps
 
 **Interfaces:**
-- Produces: the skill name `plan-review`, invocable as `/plan-review`; the scope contract every zone prompt consumes — `DIFF` (branch vs `merge-base` with `dev`), `PLAN_PATH`, `SPEC_PATH`.
+- Produces: the skill name `plan-review`, invocable as `/plan-review`; the scope the zone
+  prompts are given — the branch diff against `merge-base` with `dev`, the plan file, and
+  the spec it references. The orchestrator passes these in the dispatch message; they are
+  not named variables in the skill text.
 
-- [ ] **Step 1: Write the frontmatter and the scope-collection section**
+- [x] **Step 1: Write the frontmatter and the scope-collection section**
 
 Create `.claude/skills/plan-review/SKILL.md`. Match the frontmatter shape of `.claude/skills/backlog/SKILL.md` (`name` + `description`, no other keys):
 
@@ -74,19 +78,19 @@ verification path, so zones R3 and R4 have nothing to check against. Stop and sa
 Produce no verdict, dispatch no subagents, write nothing.
 ```
 
-- [ ] **Step 2: Verify the skill is discoverable**
+- [x] **Step 2: Verify the skill is discoverable**
 
 Run: `ls .claude/skills/plan-review/SKILL.md && head -4 .claude/skills/plan-review/SKILL.md`
 Expected: the file exists and the frontmatter shows `name: plan-review`.
 
-- [ ] **Step 3: Verify the hard stop by hand**
+- [x] **Step 3: Verify the hard stop by hand**
 
 From a branch with no matching plan (e.g. a scratch branch `git switch -c scratch/no-plan`),
 read the skill and confirm the instruction reached is the hard stop, not a dispatch.
 Then: `git switch - && git branch -D scratch/no-plan`.
 Expected: the skill's text leads to the stop message. This is `AC-1403`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add .claude/skills/plan-review/SKILL.md
@@ -105,11 +109,11 @@ git commit -m "feat(review): plan-review skill skeleton with scope collection"
 - Test: greps given in the steps
 
 **Interfaces:**
-- Consumes: the scope contract from Task 1 (`DIFF`, `PLAN_PATH`, `SPEC_PATH`).
+- Consumes: the scope from Task 1 — the branch diff, the plan file, and the spec.
 - Produces: four prompt files, each ending in the same finding format the orchestrator parses in Task 3:
   `SEVERITY | ZONE | file:line | rule | finding` where `SEVERITY` is `blocking` or `advisory` and `ZONE` is `R1`–`R4`.
 
-- [ ] **Step 1: Write the shared finding contract into each zone file**
+- [x] **Step 1: Write the shared finding contract into each zone file**
 
 Every zone file opens with this block, verbatim — the orchestrator relies on it and each
 subagent sees only its own file (spec D4, D6):
@@ -133,7 +137,7 @@ Report findings only. Do not edit any file. Do not propose a diff.
 Stay inside your zone: findings outside it belong to another reviewer and will be discarded.
 ```
 
-- [ ] **Step 2: Write `zones/r1-architecture.md`**
+- [x] **Step 2: Write `zones/r1-architecture.md`**
 
 After the shared block, the zone body:
 
@@ -161,7 +165,7 @@ engagement, rule 3. Cite the spec file and the rule.
 Out of zone: duplication (R2), logic bugs (R3), doc currency (R4).
 ```
 
-- [ ] **Step 3: Write `zones/r2-duplication.md`**
+- [x] **Step 3: Write `zones/r2-duplication.md`**
 
 ```markdown
 # Zone R2 — Duplication and unnecessary complexity
@@ -185,12 +189,14 @@ Check:
 - **A layer that adds no value** — pass-through that only forwards arguments.
 - **A flag where two functions belong** — a boolean parameter that splits the body in two.
 
-YAGNI is the rule you cite for the last three.
+YAGNI is the rule you cite for the last three, and DRY for duplication — both are recorded
+in `docs/CONTRIBUTING_AI.md`, "Principles & Boundaries", so both satisfy the blocking test
+above. Cite that section by name, and for duplication cite both sites as `file:line`.
 
 Out of zone: overall architecture and layer boundaries (R1), logic bugs (R3), docs (R4).
 ```
 
-- [ ] **Step 4: Write `zones/r3-correctness.md`**
+- [x] **Step 4: Write `zones/r3-correctness.md`**
 
 ```markdown
 # Zone R3 — Correctness and proof
@@ -214,7 +220,7 @@ Check:
 Out of zone: architecture (R1), duplication (R2), doc currency (R4).
 ```
 
-- [ ] **Step 5: Write `zones/r4-documentation.md`**
+- [x] **Step 5: Write `zones/r4-documentation.md`**
 
 ```markdown
 # Zone R4 — Documentation and spec currency
@@ -249,7 +255,7 @@ code moved. If the diff edits a durable spec, that is R1's finding, not yours.
 Out of zone: architecture (R1), duplication (R2), logic bugs (R3).
 ```
 
-- [ ] **Step 6: Verify all four exist and share the contract**
+- [x] **Step 6: Verify all four exist and share the contract**
 
 Run:
 
@@ -262,7 +268,7 @@ grep -c "Out of zone" .claude/skills/plan-review/zones/*.md
 Expected: `4`, `4`, and each file reporting `1`. The last one guards against zone bleed
 (spec risk R-4).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add .claude/skills/plan-review/zones/
@@ -281,7 +287,7 @@ git commit -m "feat(review): four zone prompts with shared finding contract"
 - Consumes: the scope contract (Task 1) and the four zone files (Task 2).
 - Produces: the verdict values `clean` / `blocked` that Task 4 writes into the plan.
 
-- [ ] **Step 1: Append the dispatch section**
+- [x] **Step 1: Append the dispatch section**
 
 ```markdown
 ## Step 2 — Dispatch the four zones
@@ -295,7 +301,7 @@ For each of `zones/r1-architecture.md`, `zones/r2-duplication.md`,
 
 - the zone file's full text as the instructions,
 - the diff command from Step 1 so the subagent collects the diff itself,
-- `PLAN_PATH` and `SPEC_PATH` to read,
+- the path of the plan file and of the spec it references, to read,
 - nothing about the other zones, and no findings from anyone else.
 
 Never dispatch a fifth agent, never run a zone twice, never substitute your own reading
@@ -303,7 +309,7 @@ for a zone that failed — if a subagent returns nothing usable, say so in the s
 re-dispatch that zone alone.
 ```
 
-- [ ] **Step 2: Append the merge and verdict section**
+- [x] **Step 2: Append the merge and verdict section**
 
 ```markdown
 ## Step 3 — Merge and classify
@@ -330,7 +336,7 @@ Show the owner the full list, blocking findings first.
 Write the artifact only as described in the next section.
 ```
 
-- [ ] **Step 3: Verify the dispatch rules are unambiguous**
+- [x] **Step 3: Verify the dispatch rules are unambiguous**
 
 Run:
 
@@ -338,10 +344,10 @@ Run:
 grep -n "single parallel batch\|Never dispatch a fifth\|Relay verbatim\|blocked. if at least one" .claude/skills/plan-review/SKILL.md
 ```
 
-Expected: four matches — the rules behind `AC-1402`, `AC-1405`, `AC-1406` and spec D6 are
+Expected: four matches — the rules behind `AC-1402`, `AC-1405` and spec D6 are
 each present as an instruction, not an aside.
 
-- [ ] **Step 4: Verify the demotion rule is stated as an action**
+- [x] **Step 4: Verify the demotion rule is stated as an action**
 
 The evidence rule appears in two places and must be actionable in both: the zone prompts
 define it, the orchestrator enforces it.
@@ -357,7 +363,7 @@ Expected: each zone file reports `1`, and the orchestrator has the demotion step
 these are `AC-1404` — a finding claimed as blocking without `file:line` plus a named rule
 is reclassified, not argued about.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .claude/skills/plan-review/SKILL.md
@@ -377,7 +383,7 @@ git commit -m "feat(review): parallel dispatch, verdict logic and routing"
 - Produces: the `- Review:` header line and the `## Review` section — the format a future
   `state.mjs` gate will parse (spec section 7).
 
-- [ ] **Step 1: Append the artifact section**
+- [x] **Step 1: Append the artifact section**
 
 ```markdown
 ## Step 5 — Write the artifact
@@ -403,7 +409,7 @@ second one — working documents are edited in place
 (`SUPERPOWERS_INTEGRATION.md`, Division of roles).
 ```
 
-- [ ] **Step 2: Verify the two branches are distinct**
+- [x] **Step 2: Verify the two branches are distinct**
 
 Run:
 
@@ -411,10 +417,11 @@ Run:
 grep -n "On .clean.\|On .blocked.\|no header line" .claude/skills/plan-review/SKILL.md
 ```
 
-Expected: three matches — the skill states both branches and the absence rule explicitly.
-This is `AC-1406`.
+Expected: two matching lines — the `On clean` and `On blocked` paragraphs; the "no header line"
+rule sits on the second of them, so grep counts two lines, not three. Both branches and the
+absence rule must be present. This is `AC-1406`.
 
-- [ ] **Step 3: Confirm the format is parseable**
+- [x] **Step 3: Confirm the format is parseable**
 
 Run this against the line the skill prescribes, to prove a future gate can read it:
 
@@ -425,7 +432,7 @@ echo "- Review: 2026-09-12 | clean | R1,R2,R3,R4" | \
 
 Expected: `PARSEABLE`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add .claude/skills/plan-review/SKILL.md
@@ -447,7 +454,7 @@ git commit -m "feat(review): record the verdict in the plan file"
 This is a **durable doc**. The owner approved these four changes in the spec, section 6.
 Make exactly those; anything further needs a fresh ask (contract rule 3).
 
-- [ ] **Step 1: Add the phase to the workflow block**
+- [x] **Step 1: Add the phase to the workflow block**
 
 In the ```` ``` ```` block under `## Workflow (one change)`, replace this line:
 
@@ -465,7 +472,7 @@ with:
       │                          as technique. Records `- Review:` in the plan.
 ```
 
-- [ ] **Step 2: Add the blocking rule to Rules of engagement**
+- [x] **Step 2: Add the blocking rule to Rules of engagement**
 
 Append as a new numbered rule (it becomes rule 7, after the existing six):
 
@@ -477,7 +484,7 @@ Append as a new numbered rule (it becomes rule 7, after the existing six):
    `docs/BACKLOG.md`. Review precedes close-out, and close-out precedes merge.
 ```
 
-- [ ] **Step 3: Document the line in the Status layer table**
+- [x] **Step 3: Document the line in the Status layer table**
 
 In the "Where status lives" table, add a row directly beneath the `- Status:` row:
 
@@ -485,7 +492,7 @@ In the "Where status lives" table, add a row directly beneath the `- Status:` ro
 | Plan header line `- Review: <date> \| clean \| <zones>` | the review phase passed (written only on a clean verdict; its absence means not reviewed) | plan-review skill |
 ```
 
-- [ ] **Step 4: Verify the three edits landed**
+- [x] **Step 4: Verify the three edits landed**
 
 Run:
 
@@ -498,7 +505,7 @@ node scripts/state.mjs --check
 
 Expected: one match each, then `state check: OK`. This is `AC-1409`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/SUPERPOWERS_INTEGRATION.md
@@ -517,7 +524,7 @@ The first subject is this plan's own branch. Note the limit honestly: the skill 
 its own implementation is a smoke test of the machinery, not an independent review. Say so
 in the summary.
 
-- [ ] **Step 1: Run the skill against this branch**
+- [x] **Step 1: Run the skill against this branch**
 
 Invoke `/plan-review`. Confirm as it runs:
 
@@ -525,20 +532,20 @@ Invoke `/plan-review`. Confirm as it runs:
 - each reported findings in the `SEVERITY | ZONE | file:line | rule | finding` format,
 - no subagent edited a file (`AC-1408`).
 
-- [ ] **Step 2: Check the working tree was untouched**
+- [x] **Step 2: Check the working tree was untouched**
 
 Run: `git status --short`
 Expected: only `docs/superpowers/plans/mandatory-plan-review.md` modified, if anything.
 Any other modified file means the reviewer edited code — a violation of `AC-1408`; stop and
 report it.
 
-- [ ] **Step 3: Route the findings**
+- [x] **Step 3: Route the findings**
 
 Fix every blocking finding, re-run the skill, repeat until the verdict is `clean`. File
 advisory findings in `docs/BACKLOG.md` via the `backlog` skill (`AC-1407`) — do not fix
 them here.
 
-- [ ] **Step 4: Confirm the artifact**
+- [x] **Step 4: Confirm the artifact**
 
 Run:
 
@@ -550,7 +557,7 @@ grep -n '^## Review' docs/superpowers/plans/mandatory-plan-review.md
 Expected: the header line present with `clean`, and a `## Review` section listing what was
 found. This is `AC-1406`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/superpowers/plans/mandatory-plan-review.md
@@ -561,22 +568,22 @@ git commit -m "docs(review): record the first plan-review verdict"
 
 ### Task 7: Close out
 
-- [ ] **Step 1: Tick every checkbox in this plan** that is genuinely done.
+- [x] **Step 1: Tick every checkbox in this plan** that is genuinely done.
 
-- [ ] **Step 2: Set the status**
+- [x] **Step 2: Set the status**
 
 Set `- Status: done` and `- Branch: <branch>` in this plan's header.
 
-- [ ] **Step 3: Regenerate STATE.md**
+- [x] **Step 3: Regenerate STATE.md**
 
 Run: `node scripts/state.mjs --write`
 
-- [ ] **Step 4: Verify the gate**
+- [x] **Step 4: Verify the gate**
 
 Run: `node scripts/state.mjs --check`
 Expected: `state check: OK`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/superpowers/plans/mandatory-plan-review.md docs/STATE.md
@@ -585,3 +592,35 @@ git commit -m "docs: close out mandatory-plan-review"
 
 Close-out happens **before** merge (`SUPERPOWERS_INTEGRATION.md`, Status layer). Then hand
 over to `superpowers:finishing-a-development-branch`.
+
+## Review
+
+Reviewed 2026-09-12 by the `plan-review` phase — four zones over the branch diff against
+`merge-base` with `dev`. Verdict: **clean**. This first run is a smoke test of the machinery:
+the skill reviewed its own implementation, so it carries none of the independence the phase
+exists to provide.
+
+**Blocking findings: none open.**
+
+Three were raised by R3 and adjudicated:
+
+- *`- Review:` is still the template placeholder* (plan:390) — **rejected, factually wrong.**
+  That line sits inside a fenced code block as the format example in Task 4's instructions.
+  No header line existed outside the fence, which is exactly what the design prescribes for a
+  review that has not yet passed (spec section 5: absence is the signal).
+- *AC-1401/1402/1408 unproven — Task 6 has no executed evidence* — **accepted, then resolved
+  by this run.** True when the diff was cut; the proving run had not finished. R3 noticed this
+  itself. Verified: the skill ran, four zone subagents were dispatched in one parallel batch
+  each seeing only its own zone file, and `git status --short` was empty after all four
+  returned (AC-1408).
+- *AC-1406 never exercised end-to-end* — **resolved by writing this artifact.**
+
+**Advisory findings — not fixed on this branch, routed to `docs/BACKLOG.md`:**
+
+- R2: the phase runs a second full review pass over the same diff that
+  `subagent-driven-development`'s final whole-branch review already covers. Neither plan nor
+  spec deduplicates them.
+- R3: the zone prompt's "describe/it names carry BR/AC references" bullet is inert on
+  markdown-only diffs and reads as a checklist item to satisfy regardless.
+- R1: `SKILL.md` may warrant splitting orchestration from artifact-writing once the
+  `scripts/state.mjs` gate (spec section 7) is added.
