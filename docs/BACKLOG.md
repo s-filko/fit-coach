@@ -50,16 +50,16 @@ Rules:
   LLM-mediated — do not reintroduce a hard timeout. Verify first with
   `SELECT count(*) FROM workout_sessions WHERE status='planning' AND created_at < now() - interval '1 day'`.
   Source: FEAT-0010 tracker review (2026-09-11).
-- [ ] `plan-review` and superpowers' final whole-branch review both sweep the same diff —
+- [ ] `close-out-review` and superpowers' final whole-branch review both sweep the same diff —
   two full review passes per plan, neither deduplicated against the other in
   `SUPERPOWERS_INTEGRATION.md` or the design spec. Decide whether the final review narrows
   to what the four zones do not cover, or whether it is dropped for plans that ran the phase.
-  Source: plan-review first live run, R2 (2026-09-12).
-- [ ] `.claude/skills/plan-review/SKILL.md` now carries two artifact-writing responsibilities
+  Source: close-out-review first live run, R2 (2026-09-12).
+- [ ] `.claude/skills/close-out-review/SKILL.md` now carries two artifact-writing responsibilities
   (Step 5 writes the plan, Step 6 the self-observation log) and will gain a third once the
   `state.mjs` review gate (design spec section 7) lands. Consider splitting orchestration from
   artifact-writing then, not before.
-  Source: plan-review live runs, R1 (2026-09-12, ×2).
+  Source: close-out-review live runs, R1 (2026-09-12, ×2).
 
 ## Wishes
 

@@ -1,6 +1,6 @@
 # Review Phase — Self-Observation Log
 
-What the `plan-review` phase notices about **itself**: prompts that mislead, gaps between
+What the `close-out-review` phase notices about **itself**: prompts that mislead, gaps between
 zones, rules it wanted to cite but could not. Not about any branch under review — findings
 about the reviewed code go to the plan's `## Review` section, and owner-raised ideas go to
 `docs/BACKLOG.md`.

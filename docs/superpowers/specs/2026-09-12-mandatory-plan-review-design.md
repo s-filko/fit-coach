@@ -1,4 +1,8 @@
-# Design — Mandatory plan review phase
+# Design — Mandatory close-out review phase
+
+> Named `plan-review` when this spec was written; renamed to `close-out-review` on
+> 2026-09-12 because the phase reviews an implementation, not a plan. Paths and identifiers
+> below use the current name; the plan slugs that implemented it keep their original spelling.
 
 Add a non-skippable review phase between verification and close-out, executed by a
 project-specific orchestrator skill that dispatches four independent review subagents.
@@ -157,14 +161,14 @@ and no third state has to be encoded.
 
 ## 6. Contract changes (`docs/SUPERPOWERS_INTEGRATION.md`)
 
-1. **Workflow diagram** — a mandatory `plan-review` phase between
+1. **Workflow diagram** — a mandatory `close-out-review` phase between
    `verification-before-completion` and `finishing-a-development-branch`.
 2. **Rules of engagement** — a new rule: `Status: done` is not set until `- Review:`
    records `clean`. Review precedes close-out; close-out precedes merge.
 3. **Status layer** — `- Review:` documented beside `- Status:` in the "Where status
    lives" table, with its format and its write condition.
 4. **Existing review skills are subordinated.** `requesting/receiving-code-review`
-   remain, as techniques used inside the phase; `plan-review` is the phase itself.
+   remain, as techniques used inside the phase; `close-out-review` is the phase itself.
 
 ## 7. Known limitation of contractual enforcement (D7)
 
@@ -182,8 +186,8 @@ already carry the line.
 IDs use the free `AC-14xx` block (per-initiative numbering, as `AC-13xx` is the LLM core
 refactor's). `AC-0001`-`AC-0009` are taken by `docs/features/`.
 
-1. **AC-1401 — Skill exists and is invocable.** `.claude/skills/plan-review/SKILL.md`
-   exists; `/plan-review` on a branch with a plan produces a verdict.
+1. **AC-1401 — Skill exists and is invocable.** `.claude/skills/close-out-review/SKILL.md`
+   exists; `/close-out-review` on a branch with a plan produces a verdict.
 2. **AC-1402 — Four subagents, parallel, isolated.** One invocation dispatches exactly
    four review subagents in a single parallel batch; no subagent's prompt contains another's
    findings.

@@ -5,6 +5,10 @@
 - After: mandatory-plan-review
 - Review: 2026-09-12 | clean | R1,R2,R3,R4
 
+> **Renamed since:** the phase and its skill were called `plan-review` while this plan ran;
+> they became `close-out-review` on 2026-09-12 (`.claude/skills/close-out-review/`). Paths
+> below are as they were at the time. This plan's own slug is unchanged — it is a task ID.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give the `plan-review` phase a way to record what it learns about itself, so a blind spot found once is not rediscovered from scratch every run.
