@@ -6,11 +6,12 @@ COPY apps/webapp/ ./
 RUN npx tsc --noEmit && npx vite build --outDir dist
 
 FROM node:22-slim
-RUN apt-get update && apt-get install -y --no-install-recommends expect postgresql-client wget && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client wget && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY apps/server/package.json apps/server/package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY apps/server/src ./src
+COPY apps/server/scripts ./scripts
 COPY apps/server/public ./public
 COPY --from=webapp-build /webapp/dist ./public/webapp
 COPY apps/server/tsconfig.json ./

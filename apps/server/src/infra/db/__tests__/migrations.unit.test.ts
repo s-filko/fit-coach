@@ -14,7 +14,9 @@ describe('migration folder', () => {
   });
 
   it('has one sql file per journal entry and no orphans', () => {
-    const sqlFiles = readdirSync(drizzleDir).filter(f => f.endsWith('.sql')).sort();
+    const sqlFiles = readdirSync(drizzleDir)
+      .filter(f => f.endsWith('.sql'))
+      .sort();
     expect(sqlFiles).toEqual(journal.entries.map(e => `${e.tag}.sql`).sort());
   });
 

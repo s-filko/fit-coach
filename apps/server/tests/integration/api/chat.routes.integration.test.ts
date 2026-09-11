@@ -29,7 +29,7 @@ describe('POST /api/bot/chat – integration', () => {
 
   beforeAll(async () => {
     const container = getGlobalContainer();
-    await registerInfraServices(container, { ensureDb: false });
+    await registerInfraServices(container);
     app = buildServer();
 
     const { CONVERSATION_CONTEXT_SERVICE_TOKEN: ctxToken } = await import('../../../src/domain/conversation/ports');

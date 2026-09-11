@@ -11,7 +11,7 @@ describe('Server Basic Functionality – integration', () => {
 
   beforeAll(async () => {
     const container = getGlobalContainer();
-    await registerInfraServices(container, { ensureDb: false });
+    await registerInfraServices(container);
 
     app = buildServer();
 

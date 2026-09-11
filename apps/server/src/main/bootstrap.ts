@@ -64,7 +64,7 @@ export async function bootstrap(): Promise<void> {
 
   // Register implementations (no DB side effects here)
   try {
-    await registerInfraServices(container, { ensureDb: false });
+    await registerInfraServices(container);
     app.log.info('Infrastructure services registered successfully');
   } catch (err) {
     app.log.error({ err }, 'Failed to register infrastructure services');

@@ -22,7 +22,7 @@ services:
     working_dir: /app
     volumes:
       - ./apps/server:/app
-    command: npx drizzle-kit push --config=drizzle.config.ts
+    command: npx drizzle-kit migrate --config=drizzle.config.ts
     environment:
       NODE_ENV: development
       DB_HOST: db

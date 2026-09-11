@@ -11,9 +11,8 @@ describe('DrizzleUserRepository – integration', () => {
   let tx: any; // Transaction context for test isolation
 
   beforeAll(async () => {
-    // Ensure database schema is initialized using lazy loading
-    const { ensureSchema } = await import('../../../src/infra/db/init');
-    await ensureSchema();
+    // Schema is managed by migrations (drizzle/); integration tests assume the
+    // test database has been migrated (RUN_DB_TESTS setup applies drizzle/*.sql).
     repository = new DrizzleUserRepository();
   });
 

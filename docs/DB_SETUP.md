@@ -65,7 +65,7 @@ From the `apps/server` directory:
 
 ```bash
 cd apps/server
-npm run drizzle:push
+npm run db:local:migrate   # applies drizzle/ migrations to the local database
 npm run dev
 ```
 
@@ -141,9 +141,10 @@ CREATE INDEX idx_conversation_turns_user_phase_created
 
 ### Schema Management
 
-- **Migrations**: Managed by Drizzle Kit
-- **Schema push**: `npm run drizzle:push` (dev/test)
-- **Schema generate**: `npm run drizzle:generate` (production migrations)
+- **Migrations**: Managed by Drizzle Kit — the only mechanism that changes the schema
+- **Schema generate**: `npm run drizzle:generate` (create a migration from `schema.ts` changes)
+- **Apply locally**: `npm run db:local:migrate`
+- **Durable environments** (dev/prod): migrations are applied only by `deploy/deploy.sh`
 - **Schema location**: `apps/server/src/infra/db/schema.ts`
 
 ### Indexes

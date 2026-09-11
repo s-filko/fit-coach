@@ -16,10 +16,7 @@ describe('stamp-baseline', () => {
       ],
     };
     expect(migrationsThrough(journal, '0000_baseline').map(e => e.tag)).toEqual(['0000_baseline']);
-    expect(migrationsThrough(journal, '0001_catchup').map(e => e.tag)).toEqual([
-      '0000_baseline',
-      '0001_catchup',
-    ]);
+    expect(migrationsThrough(journal, '0001_catchup').map(e => e.tag)).toEqual(['0000_baseline', '0001_catchup']);
   });
 
   it('throws when the requested tag is not in the journal', () => {
