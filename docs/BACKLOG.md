@@ -53,4 +53,9 @@ Rules:
 
 ## Wishes
 
-(none)
+- [ ] Replace the `§` section sign across `docs/` — owner dislikes the notation; use
+      "section N" or named references instead. Touches 10 files, including durable specs
+      (`DOCUMENTATION_GUIDE.md`, `adr/0013-llm-core-target-architecture.md`,
+      `CONTRIBUTING_AI.md`) and `STATE.md`. The 2026-09-12 mandatory-plan-review spec is
+      already written without it; this covers the pre-existing files. Source: spec review
+      (2026-09-12).
