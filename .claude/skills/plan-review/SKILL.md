@@ -91,5 +91,7 @@ passed" looks like; there is no third value to encode (spec section 5).
 finding and how it was closed, every advisory finding with the backlog entry it became.
 
 After a `blocked` review is fixed and re-run, update the same section rather than adding a
-second one — working documents are edited in place
+second one, and replace any existing `- Review:` line rather than adding a second — a plan
+carries exactly one header line and one `## Review` section, however many times it is
+reviewed. Working documents are edited in place
 (`SUPERPOWERS_INTEGRATION.md`, Division of roles).
