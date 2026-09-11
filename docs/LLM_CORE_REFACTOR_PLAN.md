@@ -192,6 +192,8 @@ Acceptance criteria
 
 Rollback condition: any of AC-1361..1363 below target after one prompt iteration — revert the corresponding item only (the three items are independent PRs).
 
+Notes: the item 2 prompt version bump also folds in a carried-over rule (TODO review, 2026-09-11): after every logged set the response must contain a concrete next-set recommendation (weight or rep target), never a bare confirmation — today the prompt requires this only conditionally (RPE ≥ 8 / reported difficulty).
+
 ---
 
 ## P7 — Docs reconciliation and CI gate
