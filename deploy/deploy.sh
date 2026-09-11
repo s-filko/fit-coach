@@ -67,6 +67,24 @@ export GIT_SHA APP_VERSION BUILD_TIME
 echo "==> Building images (v${APP_VERSION} commit: ${GIT_SHA})"
 docker compose -f "$COMPOSE_FILE" -p "$PROJECT" build
 
+# --- Apply database migrations (before starting new containers) ---
+# dev already matches schema.ts, so it is stamped through the whole chain;
+# prod is stamped at the baseline only, so the catch-up migrations really run.
+# Both steps are idempotent: once history exists the stamp is a no-op and
+# migrate applies only genuinely new files.
+if [ "$DEPLOY_ENV" = "prod" ]; then
+  STAMP_THROUGH="0000_baseline"
+else
+  STAMP_THROUGH=$(node -e "const j=require('./apps/server/drizzle/meta/_journal.json');console.log(j.entries[j.entries.length-1].tag)")
+fi
+export STAMP_THROUGH
+
+MIGRATE_IMAGE=$(docker compose -f "$COMPOSE_FILE" -p "$PROJECT" images -q server)
+export MIGRATE_IMAGE
+
+echo "==> Applying migrations (stamp through ${STAMP_THROUGH})"
+docker compose -f "$COMPOSE_FILE" -p "$PROJECT" --profile migrate run --rm migrate
+
 echo "==> Starting services"
 docker compose -f "$COMPOSE_FILE" -p "$PROJECT" up -d
 
