@@ -15,7 +15,7 @@ _Generated 2026-09-11 from docs/superpowers/plans/ + git. Never hand-edit; regen
 — none —
 
 **Planned**
-— none —
+- `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
 
 **Done**
 — none —
@@ -36,9 +36,11 @@ _Generated 2026-09-11 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 ## Next (dispatch order)
 
-1. **HB-01 + HB-02** ops PR — replace `drizzle-kit push` on container start with real
-   `drizzle/` migrations in all environments + production Docker image. Hard precondition
-   for refactor P0. Not started (entrypoint still runs `drizzle-kit push --force`).
+1. **HB-01** — migrations replace `drizzle-kit push` in all environments. Hard precondition
+   for refactor P0. Planned: `superpowers/plans/migration-discipline.md`
+   (design: `superpowers/specs/2026-09-11-migration-discipline-design.md`).
+   Not started (entrypoint still runs `drizzle-kit push --force`).
+   **HB-02** (production Docker image) split out into its own plan, sequenced after it.
 2. **Refactor P0** — safety net and measurement (`AC-1301`–`AC-1304`).
 3. Then P1 → P2 → P3 → P4/P5 → P6 → P7 per the master plan phase map.
 
