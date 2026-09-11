@@ -22,6 +22,15 @@ jobs:
 
       - run: npm ci
 
+      - name: Guard against drizzle-kit push
+        working-directory: .
+        run: |
+          if grep -rn "drizzle-kit push\|drizzle:push" apps/server deploy docker-compose.yml --exclude-dir=node_modules; then
+            echo "::error::drizzle-kit push is forbidden (HB-01) — use migrations"
+            exit 1
+          fi
+          echo "OK: no drizzle-kit push call sites"
+
       - name: Create test env
         run: |
           printf '%s\n' \
