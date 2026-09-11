@@ -189,7 +189,9 @@ Check:
 - **A layer that adds no value** — pass-through that only forwards arguments.
 - **A flag where two functions belong** — a boolean parameter that splits the body in two.
 
-YAGNI is the rule you cite for the last three.
+YAGNI is the rule you cite for the last three, and DRY for duplication — both are recorded
+in `docs/CONTRIBUTING_AI.md`, "Principles & Boundaries", so both satisfy the blocking test
+above. Cite that section by name, and for duplication cite both sites as `file:line`.
 
 Out of zone: overall architecture and layer boundaries (R1), logic bugs (R3), docs (R4).
 ```

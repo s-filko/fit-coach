@@ -16,6 +16,11 @@ If any instruction here conflicts with the above docs, update this file to match
 - DB access only via repositories in infra; domain and app never import Drizzle directly.
 - Docs‑first: update `docs/API_SPEC.md` and, if needed, `ARCHITECTURE.md`/ADR before writing code.
 - Do not restructure folders beyond the migration plan in `ARCHITECTURE.md`.
+- YAGNI: build what the current task needs. No abstraction with a single call site, no
+  pass-through layer, no boolean flag standing in for two functions — speculative structure
+  is removed, not kept "for later".
+- DRY: no copy-paste, and no reinvention of what the repo already has. Search for an existing
+  helper before adding one.
 - **Interface Organization**: Organize interfaces by functional areas in `domain/*/ports/` with modular files (repository.ports.ts, service.ports.ts, etc.). Keep files under 50 lines.
 
 ## Docs‑First Workflow (Checklist)
