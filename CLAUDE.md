@@ -72,7 +72,8 @@ curl https://fitcoach-dev.filko.dev/health   # → 200
 
 - **Read `docs/STATE.md` first** in any working session — it is the single orientation point (in progress / next / scope). Update it on every status change; never hand-edit its AUTO block (`node scripts/state.mjs --write`).
 - Run `node scripts/state.mjs --check` before finishing a task or closing a PR — it fails on close-out debt (merged but plan not `done`) and stale STATE.
-- Plan files carry a `- Status: planned | in progress | done` header line; `Status: done` is set as close-out **before** merge (see Status layer in the contract).
+- Plan files carry a `- Status: planned | in progress | done` header line; `Status: done` is set as close-out **before** merge (see Status layer in the contract). Task identity = plan slug; hard deps via `- After: <slug>`; PR titles must contain the slug.
+- Ideas/findings outside current scope → use the `backlog` skill (classify before writing into `docs/BACKLOG.md`).
 - Process methodology: Superpowers plugin (brainstorming → writing-plans → TDD execution → verification/review). Design docs go to `docs/superpowers/specs/`, implementation plans to `docs/superpowers/plans/`.
 - Durable specs (ADRs, domain/feature specs, API_SPEC, refactor master plan) stay in `docs/` per the docs-first workflow — they are the law; superpowers artifacts are working documents.
 - Every plan task must reference the AC-#### it implements and its verification command. Never silently edit durable specs — escalate to the owner.

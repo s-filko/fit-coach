@@ -30,7 +30,8 @@ If any instruction here conflicts with the above docs, update this file to match
 
 ## Execution Methodology (Superpowers)
 
-Multi-step work follows the Superpowers skills: `brainstorming` → `writing-plans` →
+Read `docs/STATE.md` first in any working session — it is the orientation point
+(in progress / next / scope). Multi-step work follows the Superpowers skills: `brainstorming` → `writing-plans` →
 `executing-plans` with `test-driven-development` → `verification-before-completion` →
 code review. The division of roles and conflict rules are defined in
 `docs/SUPERPOWERS_INTEGRATION.md` — short version:
@@ -41,6 +42,9 @@ code review. The division of roles and conflict rules are defined in
   implements and its verification command.
 - If a durable spec turns out to be wrong during execution, escalate to the owner —
   never edit it silently.
+- Plan status, task lifecycle and delivery rules: `SUPERPOWERS_INTEGRATION.md` § Task
+  lifecycle; run `node scripts/state.mjs --check` before finishing. Ideas/findings
+  outside current scope go through the `backlog` skill (classify first, write after).
 - The disabled project-scope `superpowers@claude-plugins-official` copy must remain
   disabled; the active version is user-scope from `superpowers-marketplace`.
 

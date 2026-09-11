@@ -52,3 +52,6 @@ apps/server/node_modules/.package-lock.json
 
 ### One-time migration scripts — DO NOT COMMIT
 apps/server/scripts/migrate-to-uuid.ts
+
+# Superpowers SDD runtime workspaces (ledger etc.)
+.superpowers/
