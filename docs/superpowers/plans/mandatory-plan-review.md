@@ -299,7 +299,7 @@ For each of `zones/r1-architecture.md`, `zones/r2-duplication.md`,
 
 - the zone file's full text as the instructions,
 - the diff command from Step 1 so the subagent collects the diff itself,
-- `PLAN_PATH` and `SPEC_PATH` to read,
+- the path of the plan file and of the spec it references, to read,
 - nothing about the other zones, and no findings from anyone else.
 
 Never dispatch a fifth agent, never run a zone twice, never substitute your own reading
