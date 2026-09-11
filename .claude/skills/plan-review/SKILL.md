@@ -103,11 +103,19 @@ reviewed. Working documents are edited in place
 
 ## Step 6 — File what the phase learned about itself
 
-If any zone returned `meta` findings, append them to `docs/REVIEW_FINDINGS.md` in one block —
-you are the only writer of that file; zones never touch it. Put each under the matching
-heading: `## Prompt defects`, `## Blind spots`, or `## Rule candidates`. One line each, in the
-zone's own words, with the plan slug and the date. Replace a section's `(none)` placeholder
-the first time it receives an entry.
+If any zone returned `meta` findings, file them in `docs/REVIEW_FINDINGS.md` in one block —
+you are the only writer of that file; zones never touch it.
+
+**Read the target section first.** For each finding, decide whether an entry already there
+describes the same thing in different words — across earlier runs, and between zones in this
+one, since two zones can notice the same gap from different sides. If it does, raise that
+entry's `[×N]` count and append this run to its `Runs:` line instead of opening a second line.
+When you are unsure, treat them as separate: a false merge hides a finding, a false split only
+adds noise.
+
+Put each new entry under the matching heading — `## Prompt defects`, `## Blind spots`, or
+`## Rule candidates` — in the zone's own words, and keep every section ordered by count,
+highest first. Replace a section's `(none)` placeholder the first time it receives an entry.
 
 These are observations, not work: do not act on them in this run, and never edit a zone prompt
 mid-review. The owner triages the log periodically.
