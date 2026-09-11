@@ -15,7 +15,7 @@ _Generated 2026-09-11 from docs/superpowers/plans/ + git. Never hand-edit; regen
 — none —
 
 **Planned**
-— none —
+- `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
 
 **Done**
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
