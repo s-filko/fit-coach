@@ -51,9 +51,11 @@ One line per entry, in the chosen section:
 
 ## Step 3 — Maintain (on review/triage/promote requests)
 
-- **Promote**: when an entry becomes planned (a superpowers plan exists for it, or it
-  lands in a spec/BUG), DELETE it from the backlog — its truth now lives elsewhere.
-  Link the new location in the PR/plan that promoted it, not in this file.
+- **Promote**: when an entry becomes planned, a plan file is created
+  (`docs/superpowers/plans/<slug>.md`, `Status: planned`, `- After:` if it depends on
+  another plan) and the entry is DELETED from the backlog — its truth now lives in
+  the plan. The task's ID from now on is the slug; PR titles must contain it.
+  If it lands in a spec or BUG instead, same rule: delete the entry here.
 - **Drop**: stale or rejected entries are deleted outright (git keeps history).
   Never strike through, never keep "maybe later" sediment.
 - The agent never adds, reorders, promotes, or drops entries without owner approval.

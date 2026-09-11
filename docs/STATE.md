@@ -51,5 +51,7 @@ _Generated 2026-09-11 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 - Owner rule: refactor phase execution uses Superpowers plans
   (`docs/superpowers/plans/`) with `Status:` header lines tracked here.
+- Task identity = plan slug; hard dependencies via `- After: <slug>` header lines;
+  dispatch rules and lifecycle: `SUPERPOWERS_INTEGRATION.md` § Task lifecycle & sequencing.
 - Statuses live only in plan headers and this file — durable specs
   (`LLM_CORE_REFACTOR_PLAN.md` etc.) stay forward-looking and never carry progress markers.

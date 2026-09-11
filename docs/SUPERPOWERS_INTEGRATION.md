@@ -99,6 +99,88 @@ and `STATE.md` are the cross-session truth that survives. Close-out settles both
    durable docs stay forward-looking; phase progress surfaces only in `STATE.md`.
 5. The AUTO block in `STATE.md` (between the markers) is never hand-edited.
 
+## Task lifecycle & sequencing
+
+### Identity
+
+- **Task ID = the plan's slug** (`docs/superpowers/plans/<slug>.md`). No numeric task
+  namespace; the filesystem is the uniqueness registry, slugs are never reused.
+- The ID is assigned at **promotion** (backlog → plan), not at intake — most backlog
+  entries die unnumbered.
+- Branch convention: `plan/<slug>`. Commit messages reference the slug when useful.
+- **PR title must contain the slug** — it is the anchor that lets the state script
+  find merge facts even under squash-merge (where the merge commit carries the PR
+  title, not the branch name).
+
+### Sequencing
+
+Three scoping levels:
+1. **Initiative** — phases with Scope / Not in scope / Depends on / AC-13xx
+   (`LLM_CORE_REFACTOR_PLAN.md`). Each phase leaves `dev` deployable; one phase is
+   never merged inside another phase's PR.
+2. **Task** — a plan is the unit of "pick up → finish → deliver": ideally
+   **one plan = one PR**, bounded by the ACs its tasks cite. A task without a
+   verification path is not done.
+3. **Order** — `docs/STATE.md` *Next* is the dispatch authority. After a phase is
+   carved into plans, *Next* lists the concrete slugs, top = pick this one.
+
+Hard dependency is an explicit header line in the plan: `- After: <slug>` (do not
+start until that plan is `done`). Soft preference is never written into plans — it
+lives only in *Next*'s ordering.
+
+**Dispatch rules:** a new task does not start while (a) close-out debt exists, or
+(b) its `After:` target is not `done`. Enforced by agent discipline (`--check`
+covers git facts, not dependencies — the agent checks `After:` itself).
+
+### Delivering ("done means delivered")
+
+Full delivery of one task: `merge to dev → deploy.sh dev → AC verification →
+close-out recorded`. Some ACs require the live dev environment (e.g. AC-1304);
+since close-out lands before merge, those resolve as follows:
+
+- **Code close-out happens before merge** (checkboxes, `Status: done`, regen).
+- **ACs that need live dev are the entry ticket of the next task**: verified as the
+  first step of the following plan, or by a dedicated micro-task
+  (`<slug>-verify-on-dev`). The next phase's `Depends on` reads as *including*
+  that verification.
+
+### Edge cases
+
+- **Cancelled task**: delete the branch/worktree first, then the plan file — an
+  abandoned task leaves no corpse in `plans/`.
+- **Partial completion**: no "half-done". Either finish, or split — the completed
+  part closes out, the remainder becomes a new plan (or returns to the backlog).
+- **Merged without close-out** (human pressed merge early): `--check` flags the
+  debt; clear it with a post-factum close-out commit on `dev` (status + regen).
+  Debt is cleared, never ignored.
+- **Blocked mid-execution**: status stays `in progress`; the task moves to
+  `STATE.md` *Blocked / waiting on owner* so the board does not lie.
+- **Wrong order discovered**: fix `After:` and *Next* in place (working documents),
+  with the owner aware.
+- **Urgent out-of-turn task**: insert at the top of *Next*; two parallel `in
+  progress` tasks are fine unless they share an `After:` target.
+
+### Carving a phase into tasks
+
+The `superpowers:writing-plans` step for a phase produces the slugs and *Next* is
+immediately rewritten from phase-level to the concrete slug sequence.
+
+### Checkable outcomes
+
+- Every plan task defines its **checks** — concrete statements of what will be
+  verified to conclude the task is ready — **before implementation starts**.
+  Implementation is designed to be checkable.
+- **A task with zero checks is a planning failure**: redesign or split it, don't
+  execute it.
+- Each check names how it is verified: an automated test, the prompt-eval fleet
+  (`RUN_LLM_EVALS=1 npm run evals`), a deterministic command (`grep`/SQL/curl), or
+  manual observation on dev. The method vocabulary is worked out in practice and
+  codified here after the first real plan.
+- Close-out is a final checklist pass: every check is closed **with its result**
+  (what was done, what the check showed). `Status: done` requires every check
+  closed — an unticked check means not done, no exceptions. TDD (test-first for
+  code) remains the implementation-level law per `superpowers:test-driven-development`.
+
 ## Backlog
 
 `docs/BACKLOG.md` is the project's **permanent parking lot**: ideas, findings, and
