@@ -117,7 +117,7 @@ code review. The division of roles and conflict rules are defined in
 3) Domain & App:
    - Update types and service logic: `apps/server/src/domain/user/services/user.service.ts:1`.
    - Update service interfaces in `apps/server/src/domain/user/ports/service.ports.ts` if needed.
-   - Update registration/profile parsing logic: `apps/server/src/domain/user/services/registration.service.ts:1`, `apps/server/src/domain/user/services/profile-parser.service.ts:1`.
+   - Update profile-field validation: `apps/server/src/domain/user/services/registration.validation.ts:1`.
    - Adjust Zod schemas in routes that expose these fields.
 4) Tests:
    - Unit tests for parsing/validation and domain logic.
@@ -126,14 +126,11 @@ code review. The division of roles and conflict rules are defined in
 ### Adjust Registration Flow / Prompts
 1) Spec the interaction in `docs/API_SPEC.md:1` (if API changes), or ADR for behavioral changes.
    - Update Feature Spec (scenarios and AC) with BR references.
-2) Update prompt building and messages:
-   - `apps/server/src/domain/user/services/prompt.service.ts:1`
-   - `apps/server/src/domain/user/services/messages.ts:1`
-   - Update prompt interface in `apps/server/src/domain/user/ports/prompt.ports.ts` if needed.
-3) Update profile parser and registration orchestrator:
-   - `apps/server/src/domain/user/services/profile-parser.service.ts:1`
-   - `apps/server/src/domain/user/services/registration.service.ts:1`
-   - Update service interfaces in `apps/server/src/domain/user/ports/service.ports.ts` if needed.
+2) Update registration prompt wording and flow (graph-driven since the prompt-service removal):
+   - `apps/server/src/infra/ai/graph/nodes/registration.node.ts:1` (system prompt)
+   - `apps/server/src/infra/ai/graph/tools/registration.tools.ts:1` (save_profile_fields / complete_registration tools)
+3) Update profile-field validation:
+   - `apps/server/src/domain/user/services/registration.validation.ts:1`
 4) Keep error format and logging consistent; add/adjust tests accordingly.
 
 ### Integrate Conversation Context into a Flow

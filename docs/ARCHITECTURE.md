@@ -53,6 +53,11 @@ apps/server/src/
         index.ts               # Re-exports
     training/
       ports/                   # Training domain interfaces
+      services/
+        prompts/
+          session-recommendation.prompt.ts   # Next-session recommendation prompt (survivor of the P0 prompt deletion; LLMService-only path)
+      types.ts                 # Training DTOs (SessionSet.setData inferred from set-data.types.ts Zod)
+      set-data.types.ts        # Zod schemas for set_data — single source of truth for the SetData union
 
   infra/                        # Integrations + drivers
     db/
@@ -91,6 +96,7 @@ apps/server/src/
           session-planning.tools.ts     # start_training_session, search_exercises, request_transition
           search-exercises.tool.ts      # search_exercises — vector search via EmbeddingService
     conversation/
+      conversation-context.service.ts          # InMemoryConversationContextService (test double)
       drizzle-conversation-context.service.ts   # IConversationContextService impl (2-method, DB-backed)
       drizzle-conversation-run.service.ts       # IConversationRunService impl — writes conversation_runs
     di/
@@ -139,7 +145,7 @@ Notes:
 - See `apps/server/eslint.config.js:1` for rules. Violations fail lint.
 
 ## Dependency Injection
-- DI tokens and port interfaces live in `domain/*/ports/` with modular organization (or a neutral `shared/core` if порт общий по доменам).
+- DI tokens and port interfaces live in `domain/*/ports/` with modular organization (or a neutral `shared/core` if a port is shared across domains).
 - **DI tokens are declared as `unique symbol` next to their corresponding port interfaces** in the same file (e.g., `USER_SERVICE_TOKEN` alongside `IUserService`).
 - Port implementations are located in `infra/*` and registered in the composition root.
 - App / controllers and routes depend only on ports and tokens, NOT on implementations.

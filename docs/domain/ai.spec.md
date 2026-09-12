@@ -22,4 +22,4 @@ Ports
 
 Rules:
 - One file per domain (≤ 50 lines).
-- Matches apps/server/src/domain/ai/ports.ts.
+- Matches apps/server/src/domain/ai/ports.ts; ChatMsg lives in `apps/server/src/domain/ai/types.ts` (temporary home until refactor P1/P4 per ADR-0013).
