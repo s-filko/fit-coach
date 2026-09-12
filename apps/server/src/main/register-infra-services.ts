@@ -85,6 +85,9 @@ export async function registerInfraServices(container: Container = getGlobalCont
   await checkpointer.setup();
 
   const { buildConversationGraph, CONVERSATION_GRAPH_TOKEN } = await import('@infra/ai/graph/conversation.graph');
+  const { CONVERSATION_RUN_SERVICE_TOKEN } = await import('@domain/conversation/ports');
+  const { DrizzleConversationRunService } = await import('@infra/conversation/drizzle-conversation-run.service');
+  container.register(CONVERSATION_RUN_SERVICE_TOKEN, new DrizzleConversationRunService());
   container.register(
     CONVERSATION_GRAPH_TOKEN,
     buildConversationGraph({
@@ -95,6 +98,7 @@ export async function registerInfraServices(container: Container = getGlobalCont
       embeddingService: container.get(EMBEDDING_SERVICE_TOKEN),
       userService: container.get(USER_SERVICE_TOKEN),
       contextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN),
+      runService: container.get(CONVERSATION_RUN_SERVICE_TOKEN),
       checkpointer,
     }),
   );
