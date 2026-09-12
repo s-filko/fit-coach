@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { AIMessage, HumanMessage, mergeMessageRuns, SystemMessage } from '@langchain/core/messages';
+import type { RunnableConfig } from '@langchain/core/runnables';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
 import { ToolNode, toolsCondition } from '@langchain/langgraph/prebuilt';
 
@@ -48,7 +49,7 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
   const toolNode = new ToolNode(tools);
   const model = getModel().bindTools(tools);
 
-  const agentNode = async (state: ChatSubgraphStateType) => {
+  const agentNode = async (state: ChatSubgraphStateType, config: RunnableConfig) => {
     const { userId, user, userMessage } = state;
 
     const [history, activePlan, recentSessions, previousSummary, lastMessageTime] = await Promise.all([
@@ -75,9 +76,9 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
       ...inFlightMessages,
     ]);
 
-    const response = await model.invoke(llmMessages, {
-      configurable: { userId },
-    });
+    // Pass the node's LangGraph config through so the LLM callback handler sees
+    // configurable.runId (run metrics) and configurable.userId (debug logs).
+    const response = await model.invoke(llmMessages, config);
 
     return { messages: [response] };
   };

@@ -1,5 +1,5 @@
 import { type AIMessage, type BaseMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
-import type { Runnable } from '@langchain/core/runnables';
+import type { Runnable, RunnableConfig } from '@langchain/core/runnables';
 
 import { createLogger } from '@shared/logger';
 
@@ -52,18 +52,20 @@ function withPostToolNudge(messages: BaseMessage[]): BaseMessage[] {
 export async function invokeWithRetry(
   model: InvokableModel,
   messages: BaseMessage[],
-  userId: string,
+  config: RunnableConfig,
 ): Promise<AIMessage> {
+  const userId = config.configurable?.['userId'] as string | undefined;
   const postTool = endsWithToolMessage(messages);
   const firstMessages = postTool ? withPostToolNudge(messages) : messages;
 
-  const response = await model.invoke(firstMessages, { configurable: { userId } });
+  // The caller's config carries configurable.runId — the run metrics bridge keys on it.
+  const response = await model.invoke(firstMessages, config);
 
   if (isEmptyAIResponse(response)) {
     log.warn({ userId }, 'LLM returned empty response — retrying once');
     // On retry always include the nudge regardless of message structure
     const retryMessages = postTool ? firstMessages : withPostToolNudge(messages);
-    return model.invoke(retryMessages, { configurable: { userId } });
+    return model.invoke(retryMessages, config);
   }
 
   return response;

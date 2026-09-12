@@ -1,3 +1,4 @@
+import type { RunnableConfig } from '@langchain/core/runnables';
 import { Command } from '@langchain/langgraph';
 
 import { ConversationStateType } from '@domain/conversation/graph/conversation.state';
@@ -20,7 +21,10 @@ export interface RouterNodeDeps {
 export function buildRouterNode(deps: RouterNodeDeps) {
   const { userService, trainingService, contextService } = deps;
 
-  return async function routerNode(state: ConversationStateType): Promise<Partial<ConversationStateType> | Command> {
+  return async function routerNode(
+    state: ConversationStateType,
+    config: RunnableConfig,
+  ): Promise<Partial<ConversationStateType> | Command> {
     const { userId } = state;
 
     // Always reset requestedTransition to prevent stale blocked transitions
@@ -49,7 +53,7 @@ export function buildRouterNode(deps: RouterNodeDeps) {
           { userId, sessionId: state.activeSessionId, status: session?.status },
           'Session ended — returning to chat',
         );
-        generatePhaseSummary(contextService, userId, 'training').catch(err =>
+        generatePhaseSummary(contextService, userId, 'training', config).catch(err =>
           log.error({ err, userId }, 'Background phase summary (training→chat) failed'),
         );
         return new Command({

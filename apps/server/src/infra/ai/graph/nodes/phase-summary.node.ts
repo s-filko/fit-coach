@@ -1,3 +1,4 @@
+import type { RunnableConfig } from '@langchain/core/runnables';
 import { ChatOpenAI } from '@langchain/openai';
 
 import type { ConversationPhase, IConversationContextService } from '@domain/conversation/ports';
@@ -22,6 +23,7 @@ export async function generatePhaseSummary(
   contextService: IConversationContextService,
   userId: string,
   phase: ConversationPhase,
+  config?: RunnableConfig,
 ): Promise<void> {
   try {
     const [history, previousSummary] = await Promise.all([
@@ -40,10 +42,14 @@ export async function generatePhaseSummary(
     const userPrompt = `${previousContext}\nCONVERSATION (phase: ${phase}):\n${conversationText}\n\nWrite a brief summary:`;
 
     const model: ChatOpenAI = getModel();
-    const response = await model.invoke([
-      { role: 'system', content: SUMMARY_SYSTEM_PROMPT },
-      { role: 'user', content: userPrompt },
-    ]);
+    // config carries configurable.runId — pass it so summary tokens land in the run's metrics
+    const response = await model.invoke(
+      [
+        { role: 'system', content: SUMMARY_SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt },
+      ],
+      config,
+    );
 
     const summary =
       typeof response.content === 'string'
