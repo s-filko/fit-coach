@@ -1,4 +1,4 @@
-import { ChatMsg } from '@domain/user/ports';
+import { ChatMsg } from '@domain/ai/types';
 
 export type ConversationPhase = 'registration' | 'chat' | 'plan_creation' | 'session_planning' | 'training';
 

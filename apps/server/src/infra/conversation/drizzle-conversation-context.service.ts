@@ -1,7 +1,7 @@
 import { and, desc, eq, gt } from 'drizzle-orm';
 
 import { ConversationPhase, GetMessagesOptions, IConversationContextService } from '@domain/conversation/ports';
-import { ChatMsg } from '@domain/user/ports';
+import { ChatMsg } from '@domain/ai/types';
 
 const DEFAULT_MAX_TURNS = 20;
 export const CONTEXT_RESET_MARKER = '__context_reset__';
