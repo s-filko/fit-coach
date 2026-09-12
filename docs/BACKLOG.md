@@ -50,6 +50,40 @@ Rules:
   LLM-mediated — do not reintroduce a hard timeout. Verify first with
   `SELECT count(*) FROM workout_sessions WHERE status='planning' AND created_at < now() - interval '1 day'`.
   Source: FEAT-0010 tracker review (2026-09-11).
+- [ ] A pure-deletion plan can pass its own acceptance checks while removing behaviour proof:
+  AC-1302 is `type-check && lint && test:unit`, none of which can prove the DI container still
+  resolves after a registration is dropped (`register-infra-services.ts` is exercised only by
+  integration tests, gated behind `RUN_DB_TESTS=1`). R3 verified it manually by invoking
+  `registerInfraServices()` against `.env.test`. Consider: deletion plans touching DI name
+  `npm run test:integration` in their verification line.
+  Source: close-out-review, R3 (2026-09-12).
+- [ ] `ARCHITECTURE.md:129` claims "Backward Compatibility: Main `ports.ts` re-exports from
+  modular structure", false for every domain — neither `domain/user/ports.ts` nor
+  `domain/training/ports.ts` exists; the modular `ports/` directory with an `index.ts` barrel is
+  the only structure. One-line fix, no owner downstream.
+  Source: close-out-review re-run, R4 (2026-09-12).
+- [ ] `docs/features/FEAT-0006-registration-data-collection.md` is marked `Status: ✅ Implemented`
+  while describing `PromptService.buildUnifiedRegistrationPrompt(user)` as the live mechanism
+  (:20, :38, :77, :83-84, :324, :346, :348). The method was a stub returning `''` before it was
+  deleted in refactor-p0-dead-code. P7 scope item 1 names FEAT-0003 but not FEAT-0006, so this
+  file has no downstream owner.
+  Source: close-out-review, R4 (2026-09-12).
+- [ ] `docs/CHAT_PHASE_JSON_FIX.md` is a one-off fix note describing edits to a `prompt.service.ts`
+  that no longer exists. It is a root-level `docs/` file governed by no document type in
+  `DOCUMENTATION_GUIDE` § Structure and owned by no phase — archive it to `docs/archive/`
+  alongside `CONVERSATION_CONTEXT_ARCHITECTURE.md` when P7 runs, or delete it sooner.
+  Source: close-out-review, R4 (2026-09-12).
+- [ ] `SessionRecommendation` / `RecommendedExercise` (hand-written interfaces in
+  `domain/training/types.ts:269,~255`) duplicate `SessionRecommendationSchema` /
+  `RecommendedExerciseSchema` (Zod, `domain/training/session-planning.types.ts:33,6`) and must be
+  kept in sync by hand. `z.infer` from the schemas would collapse each pair.
+  Source: close-out-review, R2 (2026-09-12).
+- [ ] The lenient-parse rule for session-planning phase transitions is now recorded nowhere: the
+  deleted `parseSessionPlanningResponse` stripped an invalid `phaseTransition` and returned the
+  rest rather than losing the user-facing message (flagged via `droppedPhaseTransition`).
+  Deleting it was correct — it was dead code — but if P2/P4 reintroduce structured
+  phase-transition parsing, the same edge case has to be rediscovered.
+  Source: close-out-review, R3 (2026-09-12).
 - [ ] `close-out-review` and superpowers' final whole-branch review both sweep the same diff —
   two full review passes per plan, neither deduplicated against the other in
   `SUPERPOWERS_INTEGRATION.md` or the design spec. Decide whether the final review narrows
