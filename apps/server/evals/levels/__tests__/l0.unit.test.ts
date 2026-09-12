@@ -1,4 +1,4 @@
-import { FORBIDDEN_STRINGS, checkRenderedPrompt } from '../l0';
+import { FORBIDDEN_STRINGS, FORBIDDEN_STRING_ALLOWLIST, checkRenderedPrompt } from '../l0';
 
 describe('L0 static checks', () => {
   it('flags a prompt containing "undefined"', () => {
@@ -25,25 +25,23 @@ describe('L0 static checks', () => {
     expect(budget?.passed).toBe(false);
   });
 
-  it('does not flag the forbidden words used as ordinary prose', () => {
-    // The real training prompt contains "may execute in undefined sequence".
-    // L0 looks for rendering holes, not for English words.
-    const results = checkRenderedPrompt(
-      'training',
-      'complete-profile',
-      'Sets without order may execute in undefined sequence.',
-    );
+  it('lists every forbidden string the spec names', () => {
+    expect(FORBIDDEN_STRINGS).toEqual(expect.arrayContaining(['undefined', 'null', '[object Object]', 'NaN']));
+  });
+
+  it('passes the allowlisted prose phrase from the training prompt', () => {
+    const [allowed] = FORBIDDEN_STRING_ALLOWLIST;
+    const results = checkRenderedPrompt('training', 'complete-profile', `RULE 7. ${allowed}.`);
     const forbidden = results.find(r => r.check === 'no-forbidden-strings');
     expect(forbidden?.passed).toBe(true);
   });
 
-  it('flags a forbidden token in a value position', () => {
-    const results = checkRenderedPrompt('chat', 'complete-profile', 'Weight: null kg');
+  it('still flags prose that is not in the allowlist verbatim', () => {
+    // A near-miss of the allowlisted phrase must NOT inherit its exemption:
+    // the allowlist is literal, so anything else containing a forbidden token fails.
+    const results = checkRenderedPrompt('training', 'complete-profile', 'Sets may run in undefined order.');
     const forbidden = results.find(r => r.check === 'no-forbidden-strings');
     expect(forbidden?.passed).toBe(false);
-  });
-
-  it('lists every forbidden string the spec names', () => {
-    expect(FORBIDDEN_STRINGS).toEqual(expect.arrayContaining(['undefined', 'null', '[object Object]', 'NaN']));
+    expect(forbidden?.detail).toContain('undefined');
   });
 });

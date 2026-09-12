@@ -676,10 +676,21 @@ Open the PR and wait for `check-server`. Expected: the "Eval L0" step appears an
   structurally-complete ones rather than passing the persona through directly.
 - **Fixture user types** — the drafted `FixtureUserSchema` typed `height`/`weight` as strings; the
   production `User` type has them as numbers. The schema follows the real type.
-- **Forbidden-string check refined** — a plain `includes` flagged the training prompt's legitimate
-  English prose ("may execute in undefined sequence"). Since §4.1 forbids editing prompt wording,
-  the check now requires a value-position lead-in or a value-shaped trailer, so it detects template
-  holes rather than English words. Two extra unit tests pin both directions.
+- **Forbidden-string check: strict scan plus an explicit allowlist (owner ruling).** A plain
+  `includes` flagged all three training fixtures on the training prompt's RULE 7, which contains
+  the ordinary English phrase "Sets without order may execute in undefined sequence" — prose, not a
+  template hole. §4.1 forbids editing prompt wording, and this is not a budget miscalibration, so
+  neither of the plan's escape hatches applied. The owner ruled against a pattern-based
+  "value position" heuristic: the check keeps the spec's strict `rendered.includes(token)`, and
+  `FORBIDDEN_STRING_ALLOWLIST` holds exact literal phrases that are stripped from the text before
+  scanning. Seeded with that one phrase only. Any new occurrence of a forbidden token still fails,
+  including a near-miss of the allowlisted phrase — pinned by a unit test. `training.node.ts` is
+  untouched. The proper fix is P2's structural check, which validates substituted values rather
+  than scanning the rendered string.
+- **Token headroom recorded.** `PHASE_TOKEN_BUDGET` values are unchanged; a comment above them now
+  records the measured min-max across the three fixtures as a recalibration baseline:
+  registration 935-969, chat 1006-1046, plan_creation 1378-1385, session_planning 2199-2215,
+  training 3391-3396.
 - **`evals` npm script** — `tsx --env-file=.env` fails in CI, which writes `.env.test` only.
   Per Task 4 Step 2's fallback the script is plain `tsx evals/run.ts`; L0 needs no env at all.
 

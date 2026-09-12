@@ -11,37 +11,41 @@ import type { EvalFixture } from '../schema/case.schema';
 export const FORBIDDEN_STRINGS = ['undefined', 'null', '[object Object]', 'NaN'];
 
 /**
- * A forbidden token is a defect only when it lands where a *value* should be —
- * a template hole. The same words appear as ordinary English in real prompt
- * copy (the training prompt says "may execute in undefined sequence"), and
- * flagging those would force prompt edits to satisfy the harness, which §4.1
- * explicitly does not want.
+ * Literal phrases where a forbidden token is ordinary English prose rather than
+ * a template hole. Exact strings only — no patterns — so the check stays dumb
+ * and predictable: a NEW occurrence of a forbidden token still fails, including
+ * a second, similar-looking phrase that is not listed here verbatim.
  *
- * Value position = immediately after ':' / '=' / '(' / '[' / '<b>'-style markup,
- * or immediately followed by a unit or list separator. '[object Object]' is
- * never prose, so it is always a hit.
+ * The proper fix is P2's structural check, which validates the values actually
+ * substituted into a prompt instead of scanning the whole rendered string. This
+ * allowlist is the stopgap until then.
  */
-const VALUE_POSITION = String.raw`(?:^|[:=(\[,>|]\s*|\s-\s)`;
-const VALUE_TRAILER = String.raw`(?:\s*(?:$|[,;)\]<|]|\s(?:kg|cm|min|years?|sets?|reps?)\b))`;
+export const FORBIDDEN_STRING_ALLOWLIST = [
+  // src/infra/ai/graph/nodes/training.node.ts:94 — RULE 7 of the training prompt.
+  // "undefined" here is English ("in undefined sequence"), not an unrendered value.
+  'Sets without order may execute in undefined sequence',
+];
 
 function findForbiddenHits(rendered: string): string[] {
-  return FORBIDDEN_STRINGS.filter(token => {
-    if (token === '[object Object]') {
-      return rendered.includes(token);
-    }
-    // A hit needs either a value-position lead-in or a value-shaped trailer.
-    // Requiring both would miss "age is undefined years"; requiring neither
-    // would flag "may execute in undefined sequence".
-    const leadIn = new RegExp(`${VALUE_POSITION}${token}\\b`, 'm');
-    const trailer = new RegExp(`\\b${token}\\b${VALUE_TRAILER}`, 'm');
-    return leadIn.test(rendered) || trailer.test(rendered);
-  });
+  let scannable = rendered;
+  for (const phrase of FORBIDDEN_STRING_ALLOWLIST) {
+    scannable = scannable.split(phrase).join('');
+  }
+  return FORBIDDEN_STRINGS.filter(token => scannable.includes(token));
 }
 
 /**
  * Per-phase system-prompt budget in estimated tokens. P2 replaces these with
  * PhaseSpec.budget.system; until then they are a ceiling generous enough to
  * pass today's prompts and tight enough to catch runaway growth.
+ *
+ * Measured headroom at the time these were set (min-max across the three
+ * fixtures), as a baseline for any future recalibration:
+ *   registration      935-969    (budget  4000)
+ *   chat             1006-1046   (budget  4000)
+ *   plan_creation    1378-1385   (budget  8000)
+ *   session_planning 2199-2215   (budget 12000)
+ *   training         3391-3396   (budget  8000)
  */
 export const PHASE_TOKEN_BUDGET: Record<string, number> = {
   registration: 4000,
