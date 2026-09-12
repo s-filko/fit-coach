@@ -47,7 +47,7 @@ The table and columns come first: everything downstream writes to them.
 - Consumes: nothing.
 - Produces: `conversationRuns` with columns `id, runId, userId, phaseIn, phaseOut, trigger, client, model, promptVersions, tokensIn, tokensOut, latencyMs, toolCalls, transition, outcome, budgetReport, createdAt`; and `conversationTurns.runId / .kind / .payload`. Tasks 4 and 5 insert into these; Task 6 reads them.
 
-- [ ] **Step 1: Write the failing schema test**
+- [x] **Step 1: Write the failing schema test**
 
 Create `apps/server/src/infra/db/__tests__/conversation-runs.schema.unit.test.ts`:
 
@@ -96,12 +96,12 @@ describe('conversation_runs schema (ADR-0013 §8)', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- conversation-runs.schema`
 Expected: FAIL — `conversationRuns` is not exported from `@infra/db/schema`.
 
-- [ ] **Step 3: Add the enums, table and columns to `schema.ts`**
+- [x] **Step 3: Add the enums, table and columns to `schema.ts`**
 
 In `apps/server/src/infra/db/schema.ts`, next to the existing conversation enums (around `:24-31`), add:
 
@@ -164,17 +164,17 @@ export const conversationRuns = pgTable(
 );
 ```
 
-- [ ] **Step 4: Run the test to confirm it passes**
+- [x] **Step 4: Run the test to confirm it passes**
 
 Run: `npm run test:unit -- conversation-runs.schema`
 Expected: PASS, all three assertions.
 
-- [ ] **Step 5: Generate the migration**
+- [x] **Step 5: Generate the migration**
 
 Run: `npm run drizzle:generate`
 Expected: a new `drizzle/0002_*.sql` appears with `CREATE TYPE`, `CREATE TABLE conversation_runs`, and `ALTER TABLE conversation_turns ADD COLUMN` statements. Rename the file to `0002_conversation_runs.sql` only if drizzle-kit's generated name is unhelpful — if you rename, update `drizzle/meta/_journal.json` to match.
 
-- [ ] **Step 6: Hand-add the `kind` backfill to the migration**
+- [x] **Step 6: Hand-add the `kind` backfill to the migration**
 
 Existing rows get `kind` from `role` (master plan P0 Notes). Append to the generated SQL file, after the `ADD COLUMN` statements:
 
@@ -188,7 +188,7 @@ UPDATE "conversation_turns" SET "kind" = CASE
 END;
 ```
 
-- [ ] **Step 7: Apply it locally and inspect the result**
+- [x] **Step 7: Apply it locally and inspect the result**
 
 ```bash
 npm run db:local:up
@@ -199,7 +199,7 @@ docker exec fitcoach-db psql -U postgres -d fitcoach_dev -c "SELECT role, kind, 
 
 Expected: the table exists with all seventeen columns; every existing turn has a `kind` matching its `role` (no NULLs, no `human` rows whose role is `assistant`).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/infra/db/schema.ts src/infra/db/__tests__/conversation-runs.schema.unit.test.ts drizzle/
@@ -220,7 +220,7 @@ The run id is born in the route and must reach `persist.node.ts`. It travels two
 - Consumes: nothing.
 - Produces: `ConversationStateType.runId: string` (empty string default), and `configurable.runId` on every graph invoke. Tasks 3 and 4 read both.
 
-- [ ] **Step 1: Write the failing state test**
+- [x] **Step 1: Write the failing state test**
 
 Create `apps/server/src/domain/conversation/graph/__tests__/conversation.state.unit.test.ts` (or append to it if the file exists):
 
@@ -236,12 +236,12 @@ describe('ConversationState runId channel', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- conversation.state`
 Expected: FAIL — `spec['runId']` is undefined.
 
-- [ ] **Step 3: Add the channel**
+- [x] **Step 3: Add the channel**
 
 In `apps/server/src/domain/conversation/graph/conversation.state.ts`, add inside `Annotation.Root({ … })`, after `userId`:
 
@@ -252,12 +252,12 @@ In `apps/server/src/domain/conversation/graph/conversation.state.ts`, add inside
   }),
 ```
 
-- [ ] **Step 4: Run the test to confirm it passes**
+- [x] **Step 4: Run the test to confirm it passes**
 
 Run: `npm run test:unit -- conversation.state`
 Expected: PASS.
 
-- [ ] **Step 5: Generate and pass the id from the route**
+- [x] **Step 5: Generate and pass the id from the route**
 
 In `apps/server/src/app/routes/chat.routes.ts`, add at the top of the file:
 
@@ -278,12 +278,12 @@ In the `/chat` handler, replace the `invoke` call:
 
 The latency clock is started here too, by a `startRun(runId)` line added in Task 3 Step 5a — `run-metrics.ts` does not exist yet at this point in the sequence.
 
-- [ ] **Step 6: Check nothing broke**
+- [x] **Step 6: Check nothing broke**
 
 Run: `npm run type-check && npm run test:unit`
 Expected: exit 0. The existing chat route integration test uses a stub graph that ignores extra input fields, so it still passes.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/domain/conversation/graph/conversation.state.ts src/domain/conversation/graph/__tests__/conversation.state.unit.test.ts src/app/routes/chat.routes.ts
@@ -325,7 +325,7 @@ export function resolveCallRun(llmRunId: string): string | undefined;
 
 Task 4's persist node calls `drainRunMetrics`.
 
-- [ ] **Step 1: Write the failing accumulator test**
+- [x] **Step 1: Write the failing accumulator test**
 
 Create `apps/server/src/infra/ai/__tests__/run-metrics.unit.test.ts`:
 
@@ -427,12 +427,12 @@ describe('run metrics accumulator', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- run-metrics`
 Expected: FAIL — module `@infra/ai/run-metrics` not found.
 
-- [ ] **Step 3: Implement the accumulator**
+- [x] **Step 3: Implement the accumulator**
 
 Create `apps/server/src/infra/ai/run-metrics.ts`:
 
@@ -559,12 +559,12 @@ export function drainRunMetrics(runId: string): RunMetrics {
 }
 ```
 
-- [ ] **Step 4: Run the test to confirm it passes**
+- [x] **Step 4: Run the test to confirm it passes**
 
 Run: `npm run test:unit -- run-metrics`
 Expected: PASS, all eight cases — including the two binding cases, which are the regression guard for the concurrency defect described in Step 5.
 
-- [ ] **Step 5: Feed the accumulator from `LLMLogHandler`**
+- [x] **Step 5: Feed the accumulator from `LLMLogHandler`**
 
 In `apps/server/src/infra/ai/model.factory.ts`, add the import:
 
@@ -621,7 +621,7 @@ Replace `handleLLMEnd` with (note it now takes LangChain's `runId` as its second
 
 **Do not** move the response text to `info` — `LOGGING_GUIDE.md` forbids LLM response content above `debug`.
 
-- [ ] **Step 5a: Start the latency clock in the route**
+- [x] **Step 5a: Start the latency clock in the route**
 
 `latencyMs` must cover the whole run, not just the model calls: P5.2 calibrates Fastify's
 `requestTimeout` against the observed p95 of `conversation_runs.latency_ms`, and AC-1351
@@ -641,12 +641,12 @@ and call it immediately after the id is generated (Task 2, Step 5):
         startRun(runId);
 ```
 
-- [ ] **Step 6: Check the wiring compiles and nothing regressed**
+- [x] **Step 6: Check the wiring compiles and nothing regressed**
 
 Run: `npm run type-check && npm run test:unit`
 Expected: exit 0.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/infra/ai/run-metrics.ts src/infra/ai/__tests__/run-metrics.unit.test.ts src/infra/ai/model.factory.ts
@@ -695,7 +695,7 @@ export interface IConversationRunService {
 
 Task 5's integration test asserts against a row written through this port; Task 6's export script reads the same table.
 
-- [ ] **Step 1: Write the failing persist-node test**
+- [x] **Step 1: Write the failing persist-node test**
 
 Create `apps/server/src/infra/ai/graph/nodes/__tests__/persist.node.unit.test.ts`:
 
@@ -767,12 +767,12 @@ describe('persist node run logging', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- persist.node`
 Expected: FAIL — `buildPersistNode` takes one argument and never calls `recordRun`.
 
-- [ ] **Step 3: Define the port**
+- [x] **Step 3: Define the port**
 
 Create `apps/server/src/domain/conversation/ports/conversation-run.ports.ts`:
 
@@ -810,7 +810,7 @@ Add to `apps/server/src/domain/conversation/ports/index.ts`:
 export * from './conversation-run.ports';
 ```
 
-- [ ] **Step 4: Implement the persist node change**
+- [x] **Step 4: Implement the persist node change**
 
 Replace the body of `apps/server/src/infra/ai/graph/nodes/persist.node.ts`:
 
@@ -879,12 +879,12 @@ export function buildPersistNode(contextService: IConversationContextService, ru
 
 Note `toolCalls: null` — tool-call capture arrives with P3's shared tool executor; the column exists now so the shape is stable.
 
-- [ ] **Step 5: Run the test to confirm it passes**
+- [x] **Step 5: Run the test to confirm it passes**
 
 Run: `npm run test:unit -- persist.node`
 Expected: PASS, all four cases.
 
-- [ ] **Step 6: Write the failing repository test**
+- [x] **Step 6: Write the failing repository test**
 
 Create `apps/server/src/infra/conversation/__tests__/conversation-run.service.unit.test.ts`:
 
@@ -933,12 +933,12 @@ describe('DrizzleConversationRunService', () => {
 });
 ```
 
-- [ ] **Step 7: Run it to confirm it fails**
+- [x] **Step 7: Run it to confirm it fails**
 
 Run: `npm run test:unit -- conversation-run.service`
 Expected: FAIL — module not found.
 
-- [ ] **Step 8: Implement the repository**
+- [x] **Step 8: Implement the repository**
 
 Create `apps/server/src/infra/conversation/drizzle-conversation-run.service.ts`:
 
@@ -970,12 +970,12 @@ export class DrizzleConversationRunService implements IConversationRunService {
 }
 ```
 
-- [ ] **Step 9: Run the test to confirm it passes**
+- [x] **Step 9: Run the test to confirm it passes**
 
 Run: `npm run test:unit -- conversation-run.service`
 Expected: PASS.
 
-- [ ] **Step 10: Wire the service through the graph deps and DI**
+- [x] **Step 10: Wire the service through the graph deps and DI**
 
 In `apps/server/src/infra/ai/graph/conversation.graph.ts`: add `IConversationRunService` to the `@domain/conversation/ports` import, add `runService: IConversationRunService;` to `ConversationGraphDeps`, destructure it in `buildGraph`, and change the persist-node construction to `buildPersistNode(contextService, runService)`.
 
@@ -989,12 +989,12 @@ In `apps/server/src/main/register-infra-services.ts`, before the graph registrat
 
 and add `runService: container.get(CONVERSATION_RUN_SERVICE_TOKEN)` to the object passed to `buildConversationGraph`.
 
-- [ ] **Step 11: Run every check**
+- [x] **Step 11: Run every check**
 
 Run: `npm run type-check && npm run lint && npm run test:unit`
 Expected: exit 0 on all three.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add -A
@@ -1015,7 +1015,7 @@ AC-1301 names its own verification: an integration test where the stub graph is 
 - Consumes: everything from Tasks 1–4.
 - Produces: the AC-1301 evidence.
 
-- [ ] **Step 1: Widen the checkpointer type**
+- [x] **Step 1: Widen the checkpointer type**
 
 In `apps/server/src/infra/ai/graph/conversation.graph.ts`, replace the `PostgresSaver` import with:
 
@@ -1028,7 +1028,7 @@ and change the deps field to `checkpointer: BaseCheckpointSaver;`. `PostgresSave
 Run: `npm run type-check`
 Expected: exit 0.
 
-- [ ] **Step 2: Write the failing integration test**
+- [x] **Step 2: Write the failing integration test**
 
 Create `apps/server/tests/integration/api/chat-run-log.integration.test.ts`:
 
@@ -1118,24 +1118,24 @@ describe('conversation run log — AC-1301', () => {
 
 If the graph's router demands repository methods this stub does not provide, add the missing method to the relevant stub object returning an empty/null value — do **not** weaken the assertions.
 
-- [ ] **Step 3: Run it to confirm it fails for the right reason**
+- [x] **Step 3: Run it to confirm it fails for the right reason**
 
 Run: `npm run test:integration -- chat-run-log`
 Expected: FAIL. Confirm the failure is an assertion (`recorded` empty or a field null), not a module-resolution error. A resolution error means the mock path is wrong — fix that first.
 
-- [ ] **Step 4: Make it pass**
+- [x] **Step 4: Make it pass**
 
 The production code from Tasks 1–4 should already satisfy this. If it does not, fix the production code (not the test) until the assertions hold. Re-run:
 
 Run: `npm run test:integration -- chat-run-log`
 Expected: PASS.
 
-- [ ] **Step 5: Run the whole suite**
+- [x] **Step 5: Run the whole suite**
 
 Run: `npm run type-check && npm run lint && npm run test:unit && npm run test:integration`
 Expected: exit 0 on all four.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -1155,7 +1155,7 @@ AC-1304 is a live check: a five-message registration flow produces five run rows
 - Consumes: the deployed result of Tasks 1–5.
 - Produces: the AC-1304 evidence for close-out.
 
-- [ ] **Step 1: Push the branch and deploy to dev**
+- [x] **Step 1: Push the branch and deploy to dev**
 
 ```bash
 git push origin HEAD
@@ -1169,7 +1169,7 @@ ssh filko.dev "cd /srv/docker/fitcoach && ./deploy/deploy.sh dev"
 
 Expected: the migration step applies `0002_conversation_runs`, containers start, health check passes.
 
-- [ ] **Step 2: Confirm the migration landed**
+- [x] **Step 2: Confirm the migration landed**
 
 ```bash
 ssh filko.dev "docker exec fitcoach-dev-db psql -U fitcoach_dev -d fitcoach_dev -c '\d conversation_runs'"
@@ -1177,11 +1177,17 @@ ssh filko.dev "docker exec fitcoach-dev-db psql -U fitcoach_dev -d fitcoach_dev 
 
 Expected: the table with all seventeen columns.
 
-- [ ] **Step 3: Run five messages through the dev bot**
+- [x] **Step 3: Run five messages through the dev bot**
 
 In Telegram, send five messages to `@MyFitAiCoachDevBot` (a registration flow: greeting, then name/age/height/weight answers). Wait for a reply to each.
 
-- [ ] **Step 4: Count the rows and the tokens**
+> **Deviation (owner-approved, 2026-09-12):** two messages instead of five. The
+> owner declined to send five; two rows already demonstrate every property the AC
+> guards — exactly one row per request, per-run drain isolation (the second row
+> carries its own tokens, not the first run's), non-zero token counts, and a real
+> model id. Both verification rounds below used two messages.
+
+- [x] **Step 4: Count the rows and the tokens**
 
 ```bash
 ssh filko.dev "docker exec fitcoach-dev-db psql -U fitcoach_dev -d fitcoach_dev -c \"SELECT run_id, phase_in, model, tokens_in, tokens_out, latency_ms, outcome FROM conversation_runs ORDER BY created_at DESC LIMIT 5;\""
@@ -1189,7 +1195,28 @@ ssh filko.dev "docker exec fitcoach-dev-db psql -U fitcoach_dev -d fitcoach_dev 
 
 Expected: five rows; every `tokens_in` and `tokens_out` greater than zero; `latency_ms` populated; `outcome = 'ok'`. Paste the output into the PR description — this is the AC-1304 evidence.
 
-- [ ] **Step 5: Check the rollback condition**
+**Measured (dev, 2026-09-12):**
+
+```
+run_id                              | phase_in | model        | tokens_in | tokens_out | latency_ms | outcome | created_at
+443aa652-623f-4166-9406-663739a1879b | chat     | z-ai/glm-5.3 |      5233 |        910 |      19873 | ok      | 13:55:39
+a2d2c418-1037-4238-a440-039b5caf8e4e | chat     | z-ai/glm-5.3 |      5516 |       1102 |      24826 | ok      | 14:02:40
+```
+
+Two earlier rounds (6 rows at 09:42–09:46) recorded `model='unknown'`, tokens 0 —
+two defects were found and fixed live during this task:
+
+1. every model call site built a fresh config `{ configurable: { userId } }`,
+   dropping the graph config (PR #4);
+2. LangChain strips `configurable` from the options a callback handler receives
+   (`runnables/base.js` `_separateRunnableConfigFromCallOptions` deletes it), so
+   the handler never could read it — `runId`/`userId` now travel via config
+   `metadata`, the channel LangChain inherits into nested runs (PR #5). The
+   pre-existing `userId` debug logging had been silently broken the same way.
+
+Those 6 zero-token rows are real pre-fix data left in the dev DB on purpose.
+
+- [x] **Step 5: Check the rollback condition**
 
 The master plan's rollback trigger for P0 item 2: run-row writes adding more than 100 ms p95 to `/api/bot/chat`, or any 5xx.
 
@@ -1199,7 +1226,12 @@ ssh filko.dev "docker logs fitcoach-dev-server --tail 200 | grep -i 'Conversatio
 
 Expected: `Conversation run recorded` info lines carrying `runId`, `phase`, `promptVersions`, `tokensIn`, `tokensOut`, `latencyMs`; no 5xx; no `Failed to record conversation run`. Compare a few `latencyMs` values against the `responseTime` Fastify logs for the same requests — if the gap exceeds 100 ms consistently, stop and report before merging.
 
-- [ ] **Step 6: Record the evidence and commit**
+**Measured:** run-row overhead over the Fastify `responseTime` of the same
+requests: ~23 ms (19896 vs 19873) and ~16 ms (24842 vs 24826) — far below the
+100 ms p95 rollback trigger. Zero 5xx and zero `Failed to record` in the 4 h
+window around the check. INFO lines present at both run timestamps.
+
+- [x] **Step 6: Record the evidence and commit**
 
 Add the row count and a representative token/latency pair to this plan under this task, then:
 
