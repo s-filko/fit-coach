@@ -306,19 +306,36 @@ plan's own verification steps:
 
 ## Review
 
-Close-out review run 2026-09-12, four zones (R1, R2, R3, R4). **Verdict: blocked** —
+Close-out review run 2026-09-12, four zones (R1, R2, R3, R4). **First verdict: blocked** —
 three blocking findings, all from R4, all the same class: the deletion removed seven
-files and the living documentation layer still presents them as current. No `- Review:`
-header line is written while the verdict stands.
+files and the living documentation layer still presents them as current. All three were
+fixed on this branch at the owner's instruction and the phase was re-run; see the re-run
+verdict at the end of this section.
+
+The advisories below were **not** fixed here — each names a downstream owner (mostly P7)
+or is pre-existing and untouched by this diff.
 
 ### Blocking
 
 1. `blocking | R4 | apps/server/src/domain/user/services/README-parser.md:18 | DOCUMENTATION_GUIDE.md § Context hygiene ("Stale content is rewritten or deleted immediately") | The diff deletes domain/user/services/prompt.service.ts, but this in-tree doc still instructs import { FieldDefinition, UniversalParseRequest } from './prompt.service' — a sibling file in the very directory the diff emptied, now pointing at a nonexistent module (it also references profile-parser.service.ts, already gone). It is the only non-docs/ doc rot the diff creates, sits in the deletion's own blast radius, and no later phase owns it (P7's item 1 enumerates docs/** only).`
-   — Status: open.
+   — **Closed** (commit following the review): the file was **deleted**, not repaired. Its
+   whole subject — `ProfileParserService`, `parseUniversal`, `UniversalParseRequest`,
+   `FieldDefinition` — has zero references anywhere in `apps/server`; that API was removed by
+   the earlier "unified registration + chat architecture" refactor, and `profile-parser.service.ts`
+   with it. The document described a superseded design end to end, and this plan's deletion of
+   `prompt.service.ts` only made the dangling import visible. Registration field extraction now
+   lives in `infra/ai/graph/tools/registration.tools.ts` with validators in
+   `domain/user/services/registration.validation.ts`.
 2. `blocking | R4 | docs/ARCHITECTURE.md:41 | DOCUMENTATION_GUIDE.md § Document Types & Rules + AI Execution Order (ARCHITECTURE.md is architectural truth, step 4 of the execution order) | The module-layout tree still lists prompt.ports.ts and (line 44) prompt.service.ts as live files under domain/user/, each carrying a TODO: remove after Step 9 marker. Both files are deleted by this diff, so the canonical layout diagram now describes a directory that does not exist. P7 scope item 1 covers ARCHITECTURE.md's "Conversation Context" and "LLM Integration" sections and the module layout, but P7 depends on P4/P6 — the tree misleads every agent for six phases, and the fix here is deleting two lines.`
-   — Status: open.
+   — **Closed**: both lines removed from the module-layout tree. Two further inaccuracies in
+   the same block were corrected while there: `registration.validation.ts` was shown under a
+   `validation/` subdirectory that does not exist (it lives in `services/`), and `domain/ai/`
+   was missing `types.ts`, added by this plan. The `ports.ts` TODO marker was re-worded from
+   "after Step 9" (a step numbering no longer in use) to "in refactor P1", which is where
+   `LLM_CORE_REFACTOR_PLAN.md` actually retires it.
 3. `blocking | R4 | docs/ARCHITECTURE.md:128 | DOCUMENTATION_GUIDE.md § Context hygiene | The "Interface Organization Principles" section prescribes prompt.ports.ts - Specialized utility contracts as a required member of the domain/*/ports/ modular structure. This is a live prescriptive rule (not a historical record), so after the deletion it instructs the next agent to recreate the file this plan removed.`
-   — Status: open.
+   — **Closed**: the `prompt.ports.ts` bullet removed from the prescriptive list, so the rule
+   no longer instructs the next agent to recreate the deleted file.
 
 ### Advisory
 
