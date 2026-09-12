@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { AIMessage, HumanMessage, mergeMessageRuns, SystemMessage } from '@langchain/core/messages';
+import type { RunnableConfig } from '@langchain/core/runnables';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
 import { toolsCondition } from '@langchain/langgraph/prebuilt';
 
@@ -80,7 +81,7 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
   const dedupToolNode = buildDedupToolNode(tools);
   const model = getModel().bindTools(tools);
 
-  const agentNode = async (state: SessionPlanningSubgraphStateType) => {
+  const agentNode = async (state: SessionPlanningSubgraphStateType, config: RunnableConfig) => {
     const { userId, user, userMessage } = state;
 
     // Load all context data in parallel
@@ -107,7 +108,7 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
       ...inFlightMessages,
     ]);
 
-    const response = await invokeWithRetry(model, llmMessages, userId);
+    const response = await invokeWithRetry(model, llmMessages, config);
 
     return { messages: [response] };
   };

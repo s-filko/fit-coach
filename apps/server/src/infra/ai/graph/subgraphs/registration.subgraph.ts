@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { AIMessage, HumanMessage, mergeMessageRuns, SystemMessage } from '@langchain/core/messages';
+import type { RunnableConfig } from '@langchain/core/runnables';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
 import { ToolNode, toolsCondition } from '@langchain/langgraph/prebuilt';
 
@@ -47,7 +48,7 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
   const toolNode = new ToolNode(tools);
   const model = getModel().bindTools(tools);
 
-  const agentNode = async (state: RegistrationSubgraphStateType) => {
+  const agentNode = async (state: RegistrationSubgraphStateType, config: RunnableConfig) => {
     const { userId, user, userMessage } = state;
 
     const history = await contextService.getMessagesForPrompt(userId, 'registration');
@@ -68,9 +69,9 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
       ...inFlightMessages,
     ]);
 
-    const response = await model.invoke(llmMessages, {
-      configurable: { userId },
-    });
+    // Pass the node's LangGraph config through so the LLM callback handler sees
+    // configurable.runId (run metrics) and configurable.userId (debug logs).
+    const response = await model.invoke(llmMessages, config);
 
     return { messages: [response] };
   };

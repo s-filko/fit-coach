@@ -1,3 +1,4 @@
+import type { RunnableConfig } from '@langchain/core/runnables';
 import { Command, END, START, StateGraph } from '@langchain/langgraph';
 import type { BaseCheckpointSaver } from '@langchain/langgraph';
 
@@ -89,7 +90,10 @@ function buildGraph(deps: ConversationGraphDeps) {
     embeddingService,
   });
 
-  const transitionGuardNode = async (state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
+  const transitionGuardNode = async (
+    state: ConversationStateType,
+    config: RunnableConfig,
+  ): Promise<Partial<ConversationStateType>> => {
     const { requestedTransition, phase, userId } = state;
     if (!requestedTransition) {
       return {};
@@ -119,7 +123,7 @@ function buildGraph(deps: ConversationGraphDeps) {
     // Generate summary of the outgoing phase in background — does not block the transition.
     // Risk: if user sends next message before summary completes, that message won't see the summary.
     // Acceptable tradeoff: summary usually finishes in 5-10s, typical user think-time is longer.
-    generatePhaseSummary(contextService, userId, phase).catch(err =>
+    generatePhaseSummary(contextService, userId, phase, config).catch(err =>
       log.error({ err, userId, phase }, 'Background phase summary failed'),
     );
 
@@ -159,8 +163,8 @@ function buildGraph(deps: ConversationGraphDeps) {
   // Wrap routerNode to always emit a Command so that routing is driven by the node
   // itself rather than a separate conditional edge.  Timeout paths use goto='persist'
   // to short-circuit subgraph execution; all other paths use goto=state.phase.
-  const routerNodeWithCommand = async (state: ConversationStateType) => {
-    const result = await routerNode(state);
+  const routerNodeWithCommand = async (state: ConversationStateType, config: RunnableConfig) => {
+    const result = await routerNode(state, config);
     if (result instanceof Command) {
       return result;
     }

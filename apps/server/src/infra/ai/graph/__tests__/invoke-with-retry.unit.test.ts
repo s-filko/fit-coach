@@ -20,7 +20,9 @@ describe('invokeWithRetry', () => {
   describe('normal (no ToolMessage at end)', () => {
     it('returns response immediately when content is non-empty', async () => {
       const model = makeModel([new AIMessage('Hello!')]);
-      const result = await invokeWithRetry(model as never, [new HumanMessage('hi')], 'user-1');
+      const result = await invokeWithRetry(model as never, [new HumanMessage('hi')], {
+        configurable: { userId: 'user-1' },
+      });
 
       expect(result.content).toBe('Hello!');
       expect(model.invoke).toHaveBeenCalledTimes(1);
@@ -28,7 +30,9 @@ describe('invokeWithRetry', () => {
 
     it('retries when LLM returns empty string with no tool calls', async () => {
       const model = makeModel([new AIMessage({ content: '' }), new AIMessage('Here is your plan!')]);
-      const result = await invokeWithRetry(model as never, [new HumanMessage('hi')], 'user-1');
+      const result = await invokeWithRetry(model as never, [new HumanMessage('hi')], {
+        configurable: { userId: 'user-1' },
+      });
 
       expect(result.content).toBe('Here is your plan!');
       expect(model.invoke).toHaveBeenCalledTimes(2);
@@ -40,7 +44,9 @@ describe('invokeWithRetry', () => {
         tool_calls: [{ name: 'search_exercises', args: { query: 'chest' }, id: 'tc-1', type: 'tool_call' }],
       });
       const model = makeModel([withTools]);
-      const result = await invokeWithRetry(model as never, [new HumanMessage('hi')], 'user-1');
+      const result = await invokeWithRetry(model as never, [new HumanMessage('hi')], {
+        configurable: { userId: 'user-1' },
+      });
 
       expect(result.tool_calls).toHaveLength(1);
       expect(model.invoke).toHaveBeenCalledTimes(1);
@@ -49,7 +55,7 @@ describe('invokeWithRetry', () => {
     it('does NOT inject nudge when last message is not ToolMessage', async () => {
       const model = makeModel([new AIMessage('Hi')]);
       const messages = [new HumanMessage('hi')];
-      await invokeWithRetry(model as never, messages, 'user-1');
+      await invokeWithRetry(model as never, messages, { configurable: { userId: 'user-1' } });
 
       const firstCallMessages = model.invoke.mock.calls[0][0] as unknown[];
       expect(hasNudgeSystemMessage(firstCallMessages)).toBe(false);
@@ -66,7 +72,7 @@ describe('invokeWithRetry', () => {
 
     it('injects nudge SystemMessage before ToolMessage on first invoke', async () => {
       const model = makeModel([new AIMessage('Plan saved, congrats!')]);
-      await invokeWithRetry(model as never, messages, 'user-1');
+      await invokeWithRetry(model as never, messages, { configurable: { userId: 'user-1' } });
 
       const firstCallMessages = model.invoke.mock.calls[0][0] as unknown[];
       expect(hasNudgeSystemMessage(firstCallMessages)).toBe(true);
@@ -75,7 +81,7 @@ describe('invokeWithRetry', () => {
 
     it('nudge is placed before the ToolMessage, not at the end', async () => {
       const model = makeModel([new AIMessage('Done!')]);
-      await invokeWithRetry(model as never, messages, 'user-1');
+      await invokeWithRetry(model as never, messages, { configurable: { userId: 'user-1' } });
 
       const sent = model.invoke.mock.calls[0][0] as unknown[];
       const nudgeIdx = sent.findIndex(
@@ -88,7 +94,7 @@ describe('invokeWithRetry', () => {
 
     it('retries with nudge when LLM still returns empty', async () => {
       const model = makeModel([new AIMessage({ content: '' }), new AIMessage('Done!')]);
-      const result = await invokeWithRetry(model as never, messages, 'user-1');
+      const result = await invokeWithRetry(model as never, messages, { configurable: { userId: 'user-1' } });
 
       expect(result.content).toBe('Done!');
       expect(model.invoke).toHaveBeenCalledTimes(2);

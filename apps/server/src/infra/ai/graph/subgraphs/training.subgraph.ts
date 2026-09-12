@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
+import type { RunnableConfig } from '@langchain/core/runnables';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
 import { toolsCondition } from '@langchain/langgraph/prebuilt';
 
@@ -262,7 +263,7 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
     return { messages: toolMessages };
   };
 
-  const agentNode = async (state: TrainingSubgraphStateType) => {
+  const agentNode = async (state: TrainingSubgraphStateType, config: RunnableConfig) => {
     const { userId, user, userMessage, activeSessionId } = state;
 
     try {
@@ -383,7 +384,7 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
         ...(toolResultsInjection ? [new SystemMessage(toolResultsInjection)] : []),
       ];
 
-      const response = await invokeWithRetry(model, llmMessages, userId);
+      const response = await invokeWithRetry(model, llmMessages, config);
 
       log.debug(
         {
