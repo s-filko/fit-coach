@@ -64,26 +64,24 @@ export class LLMLogHandler extends BaseCallbackHandler {
     const humanMsgs = flat.filter(m => m._getType() === 'human');
     const lastHuman = humanMsgs[humanMsgs.length - 1];
     const options = extraParams?.['options'] as Record<string, unknown> | undefined;
+    const invocationParams = extraParams?.['invocation_params'] as Record<string, unknown> | undefined;
     // LangChain strips `configurable` from the options a callback sees
     // (runnables/base.js `_separateRunnableConfigFromCallOptions` deletes it), so
     // runId/userId travel via config metadata — inherited by every nested model call.
     const userId = metadata?.['userId'] as string | undefined;
     const runId = metadata?.['runId'] as string | undefined;
-    const invocationModel =
-      ((extraParams?.['invocation_params'] as Record<string, unknown> | undefined)?.['model'] as string | undefined) ??
-      config.LLM_MODEL;
+    const invocationModel = (invocationParams?.['model'] as string | undefined) ?? config.LLM_MODEL;
     if (runId) {
       startLlmCall(runId, invocationModel);
       bindCallToRun(llmRunId, runId);
     }
 
     if (isDebug) {
-      const invocationParams = extraParams?.['invocation_params'] as Record<string, unknown> | undefined;
       const tools = options?.['tools'] as unknown[] | undefined;
 
       const openaiMessages = flat.map(messageToOpenAI);
       const replayPayload: Record<string, unknown> = {
-        model: invocationParams?.['model'] ?? config.LLM_MODEL,
+        model: invocationModel,
         messages: openaiMessages,
         temperature: invocationParams?.['temperature'] ?? config.LLM_TEMPERATURE,
       };

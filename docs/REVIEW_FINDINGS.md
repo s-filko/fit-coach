@@ -64,6 +64,12 @@ or is inert for the kind of diff under review.
 What fell between the zones — a real problem no zone's mandate covered, usually surfaced by
 a wider reader (the final whole-branch review) or noticed after the fact.
 
+- [×1] `npm run test:integration` exits 134 (libc++abi abort in onnxruntime teardown, likely a
+  corrupt local all-MiniLM-L6-v2 cache) after all 118 tests pass — the verification command
+  fails by exit code in this worktree despite a green suite. Pre-existing and environmental,
+  but it means exit codes cannot be treated blindly as the verification gate; a zone or
+  executor that checks `$?` alone would report a failure the suite output contradicts.
+  Runs: refactor-p0-run-log re-run (2026-09-12).
 - [×2] The plan's normative step code and Architecture prose are not reconciled against the
   shipped implementation by any zone: this run's plan still showed the `configurable`-channel
   handler that live verification had proved dead (fixed only in the Task 6 deviation prose),

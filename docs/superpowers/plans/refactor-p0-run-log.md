@@ -1,8 +1,9 @@
 # Refactor P0 — Run Log Implementation Plan
 
-- Status: planned
+- Status: done
 - Branch: plan/refactor-p0-run-log
 - After: refactor-p0-dead-code
+- Review: 2026-09-12 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -19,7 +20,7 @@
 
 **Spec:** `docs/LLM_CORE_REFACTOR_PLAN.md` § "P0 — Safety net and measurement", scope items 1–3. Schema: `docs/adr/0013-llm-core-target-architecture.md` §8. Logging rules: `docs/LOGGING_GUIDE.md`.
 
-**Acceptance criteria:** AC-1301 (one run row per `POST /api/bot/chat`, verified by integration test with a `MemorySaver` graph and mocked model), and the run-log half of AC-1304 (verified in Task 7).
+**Acceptance criteria:** AC-1301 (one run row per `POST /api/bot/chat`, verified by integration test with a `MemorySaver` graph and mocked model), and the run-log half of AC-1304 (verified in Task 6).
 
 ## Global Constraints
 
@@ -1254,46 +1255,35 @@ Follow `superpowers:finishing-a-development-branch`. Before merge: run the `clos
 
 ## Review
 
-**2026-09-12 — verdict: blocked** (R1, R2, R3, R4; no `- Review:` header line until a clean
-re-run). Blocking findings, verbatim from the zones:
+**2026-09-12 — first run: blocked; re-run after fix commit `1b32a796`: clean (R1, R2, R3, R4).**
+Header line above records the final verdict.
 
-1. **OPEN** — `blocking | R2 | apps/server/src/app/routes/chat.routes.ts:90 | YAGNI
-   (docs/CONTRIBUTING_AI.md "Principles & Boundaries") | configurable.runId has zero readers
-   anywhere in the repo — the LLM callback channel is metadata (model.factory.ts:62-64,
-   admitted by the adjacent comment at chat.routes.ts:91-92) and the persist node reads
-   state.runId (persist.node.ts:22); it is a leftover of the plan's superseded Task-2 design
-   ("the route... passes the id through configurable"), and four comments still credit it as
-   the working metrics channel (chat.subgraph.ts:79-80, registration.subgraph.ts:72-73,
-   invoke-with-retry.ts:61, phase-summary.node.ts:45), contradicting model.factory.ts:61-64
-   and re-teaching the exact configurable bug that had to be fixed live on dev (plan Task 6,
-   defect 2)`
-2. **OPEN** — `blocking | R4 | docs/LLM_CORE_REFACTOR_PLAN.md:40 | SUPERPOWERS_INTEGRATION.md
-   Rule 7 (docs reconcile) | P0 scope item 3 still says the "LLMLogHandler info line gains
-   runId, phase, promptVersions, tokens, latencyMs", but the shipped code gives LLMLogHandler
-   no info line at all (debug only, model.factory.ts:96-128) — the info line was implemented
-   in persist.node.ts ("Conversation run recorded"). Also :39 claims tokens come "from
-   response_metadata.tokenUsage"; the code reads llmOutput.tokenUsage (model.factory.ts:117)`
-3. **OPEN** — `blocking | R4 | docs/domain/conversation.spec.md:40 | DOCUMENTATION_GUIDE
-   ("Domain Spec … must reflect existing ports") | the Ports section lists only
-   IConversationContextService; the diff adds IConversationRunService
-   (CONVERSATION_RUN_SERVICE_TOKEN, recordRun) in conversation-run.ports.ts, unreflected`
-4. **OPEN** — `blocking | R4 | docs/DB_SETUP.md:118 | DOCUMENTATION_GUIDE ("Every PR must
-   include updated docs") | "Core Tables" still shows conversation_turns without
-   run_id/kind/payload and contains no conversation_runs table, although migration
-   0002_conversation_runs.sql shipped in this diff`
-5. **OPEN** — `blocking | R4 | docs/ARCHITECTURE.md:74 | ARCHITECTURE.md rule 8 +
-   DOCUMENTATION_GUIDE docs-first | the living doc layer misses the run-log structure: no
-   run-metrics.ts, no conversation-run.ports.ts, no drizzle-conversation-run.service.ts in
-   the file tree; persist.node described as "appendTurn" only (:74); the DB storage line
-   (:259) lists the old conversation_turns column set and no conversation_runs`
+Blocking findings from the first run, and how each was closed in `1b32a796`
+(owner instructed "fix all findings" — durable-spec edits below are discharged escalation,
+verified one-to-one against this section by the re-run):
 
-Advisory findings (to be filed in `docs/BACKLOG.md` via the `backlog` skill, owner approval
-pending): R1 ×4 (trigger/client hardcoded below the port; non-null `model` forcing the
-`'unknown'` sentinel; model.factory.ts carrying four concerns; route owning the run-metrics
-lifecycle), R2 ×2 (promptVersions literal duplicated in persist.node; hand-rolled
-contextService stub vs InMemoryConversationContextService), R3 ×7 (AC-1301 wording vs
-no-row-on-error paths and hardcoded outcome='ok'; post-drain background-summary orphan
-accumulator; acceptance test satisfied by the 'unknown' fallback; missing AC/BR ids in test
-names; untested kind backfill; AC-1304 5→2 deviation wording), R4 ×3 (ADR-0013 §8 emitter
-wording + undocumented LangChain metadata constraint; LOGGING_GUIDE stale info-line
-catalog; plan-vs-BACKLOG deploy-record contradiction).
+1. **CLOSED** — R2, `configurable.runId` dead channel + four crediting comments: `runId`
+   removed from the route's `configurable` (thread_id/userId stay — tools read them); all
+   four comments rewritten to credit `metadata`; re-run grep confirms zero remaining readers.
+2. **CLOSED** — R4, `LLM_CORE_REFACTOR_PLAN.md` P0 items 2–3: now describe the `metadata`
+   channel (with the LangChain configurable-stripping constraint), `llmOutput.tokenUsage`,
+   and the persist-node info line; AC-1304 gained the owner-approved 5→2 deviation note.
+3. **CLOSED** — R4, `conversation.spec.md` Ports: `IConversationRunService` added.
+4. **CLOSED** — R4, `DB_SETUP.md` Core Tables: run_id/kind/payload + full `conversation_runs`
+   DDL (re-run verified column-by-column against the migration).
+5. **CLOSED** — R4, `ARCHITECTURE.md`: llm-log-handler.ts, run-metrics.ts,
+   conversation-run.ports.ts, drizzle-conversation-run.service.ts added to the tree;
+   persist-node description and the DB storage line updated.
+
+Advisories fixed on this branch: LLMLogHandler split into its own file; phase-summary no
+longer re-binds the drained run (orphan leak); persist node builds promptVersions once;
+AC-1301 integration test feeds the accumulator and asserts real model/tokens (no longer
+passing on the `'unknown'` fallback); AC ids in test names; ADR-0013 §8 implementation
+note; LOGGING_GUIDE info catalog; plan Task 6 deploy-record correction; Task 7→6 typo.
+
+Advisories filed in `docs/BACKLOG.md`: trigger/client below the port; non-null `model`
+forcing the `'unknown'` sentinel; run rows invisible on failed runs (outcome hardcoded
+`'ok'`); untested `kind` backfill migration; route owning the run-metrics lifecycle;
+run-metrics binding contract prose-duplicated across five sites with an implicit opt-out
+convention; import-time `loadConfig()` snapshot in llm-log-handler; missing regression test
+for the phase-summary spread ordering.
