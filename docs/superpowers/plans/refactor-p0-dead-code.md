@@ -41,7 +41,7 @@
 - Consumes: nothing.
 - Produces: `export interface ChatMsg { role: 'system' | 'user' | 'assistant'; content: string }` from `@domain/ai/types`. Task 2 relies on this being the only remaining reference path to `ChatMsg`.
 
-- [ ] **Step 1: Create the new home for `ChatMsg`**
+- [x] **Step 1: Create the new home for `ChatMsg`**
 
 Create `apps/server/src/domain/ai/types.ts`:
 
@@ -57,7 +57,7 @@ export interface ChatMsg {
 }
 ```
 
-- [ ] **Step 2: Point the three consumers at the new module**
+- [x] **Step 2: Point the three consumers at the new module**
 
 In `apps/server/src/domain/conversation/ports/conversation-context.ports.ts`, replace the first line:
 
@@ -77,17 +77,17 @@ In `apps/server/src/infra/ai/llm.service.ts`, replace the `ChatMsg` import line:
 import { ChatMsg } from '@domain/ai/types';
 ```
 
-- [ ] **Step 3: Verify nothing still imports `ChatMsg` from the old path**
+- [x] **Step 3: Verify nothing still imports `ChatMsg` from the old path**
 
 Run: `grep -rn "ChatMsg" src --include="*.ts" | grep -v "@domain/ai/types" | grep -v "domain/ai/types.ts"`
 Expected: only the *usages* of the type (e.g. `Promise<ChatMsg[]>`), no `from '@domain/user/ports'` import lines.
 
-- [ ] **Step 4: Type-check**
+- [x] **Step 4: Type-check**
 
 Run: `npm run type-check`
 Expected: exit 0. (`prompt.ports.ts` still exists and still exports `ChatMsg`; nothing imports it from there any more.)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/domain/ai/types.ts src/domain/conversation/ports/conversation-context.ports.ts src/infra/conversation/drizzle-conversation-context.service.ts src/infra/ai/llm.service.ts
@@ -115,12 +115,12 @@ With `ChatMsg` relocated, `prompt.ports.ts` holds only `IPromptService`, `PROMPT
 - Consumes: `@domain/ai/types`'s `ChatMsg` from Task 1 — nothing here may re-introduce an import from `@domain/user/ports` for it.
 - Produces: an absence. Task 3 asserts that absence with greps.
 
-- [ ] **Step 1: Confirm the builders are genuinely unreferenced outside the doomed set**
+- [x] **Step 1: Confirm the builders are genuinely unreferenced outside the doomed set**
 
 Run: `grep -rn "services/prompts/\|buildPlanCreationPrompt\|buildSessionPlanningPrompt\|buildTrainingPrompt\|buildUnifiedRegistrationPrompt\|buildChatSystemPrompt" src --include="*.ts"`
 Expected: hits only inside the files listed for deletion, **plus** `src/infra/ai/graph/nodes/chat.node.ts` and its subgraph/test, which define and use their *own* `buildChatSystemPrompt`. That infra one is live — do not delete it. If any other file references the `@domain/user/services/prompts/*` modules, stop and report: the premise of this task is wrong.
 
-- [ ] **Step 2: Delete the files**
+- [x] **Step 2: Delete the files**
 
 ```bash
 git rm src/domain/user/services/prompt.service.ts \
@@ -133,7 +133,7 @@ git rm src/domain/user/services/prompt.service.ts \
 rmdir src/domain/user/services/prompts 2>/dev/null || true
 ```
 
-- [ ] **Step 3: Drop the re-export from the ports barrel**
+- [x] **Step 3: Drop the re-export from the ports barrel**
 
 In `apps/server/src/domain/user/ports/index.ts`, remove this line:
 
@@ -149,7 +149,7 @@ export * from './repository.ports';
 export * from './service.ports';
 ```
 
-- [ ] **Step 4: Unregister the service from the DI container**
+- [x] **Step 4: Unregister the service from the DI container**
 
 In `apps/server/src/main/register-infra-services.ts`:
 
@@ -177,12 +177,12 @@ Remove the registration line:
   container.register(PROMPT_SERVICE_TOKEN, new PromptService());
 ```
 
-- [ ] **Step 5: Type-check and lint**
+- [x] **Step 5: Type-check and lint**
 
 Run: `npm run type-check && npm run lint`
 Expected: exit 0 on both. A failure here means a consumer was missed — fix the consumer, do not restore the file.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -203,12 +203,12 @@ git commit -m "refactor(user): delete zero-consumer PromptService, its ports and
 - Consumes: nothing.
 - Produces: nothing. Purely subtractive.
 
-- [ ] **Step 1: Find every reference, including tests**
+- [x] **Step 1: Find every reference, including tests**
 
 Run: `grep -rn "parseSessionPlanningResponse\|SessionPlanningLLMResponseSchema\|SessionPlanningLLMResponse" src tests --include="*.ts"`
 Expected: hits inside `src/domain/training/session-planning.types.ts` only, possibly plus a test file. Note each one. If a production file outside that module uses them, stop and report.
 
-- [ ] **Step 2: Remove the three exports**
+- [x] **Step 2: Remove the three exports**
 
 In `apps/server/src/domain/training/session-planning.types.ts`, delete:
 - the `export const SessionPlanningLLMResponseSchema = z.object({ … });` declaration,
@@ -217,16 +217,16 @@ In `apps/server/src/domain/training/session-planning.types.ts`, delete:
 
 If `z` (from `zod`) becomes unused in the file after this, remove its import too; if other schemas in the file still use it, keep it.
 
-- [ ] **Step 3: Remove the parser's tests**
+- [x] **Step 3: Remove the parser's tests**
 
 Delete the `describe`/`it` blocks found in Step 1 that exercise `parseSessionPlanningResponse`. If that leaves a test file with no tests, `git rm` the file.
 
-- [ ] **Step 4: Run the checks**
+- [x] **Step 4: Run the checks**
 
 Run: `npm run type-check && npm run lint && npm run test:unit`
 Expected: all three exit 0, with no test suite reporting zero tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -246,22 +246,22 @@ AC-1302 is a grep plus three green checks. This task runs them as written in the
 - Consumes: the deletions from Tasks 2 and 3.
 - Produces: the verified AC-1302 evidence quoted in the PR description.
 
-- [ ] **Step 1: Run the AC-1302 grep**
+- [x] **Step 1: Run the AC-1302 grep**
 
 Run: `grep -rn "PromptService\|training-intent.types\|plan-creation.types" src`
 Expected: **no output** (exit code 1). Any hit is a failure — chase it down before continuing.
 
-- [ ] **Step 2: Run the three AC-1302 checks**
+- [x] **Step 2: Run the three AC-1302 checks**
 
 Run: `npm run type-check && npm run lint && npm run test:unit`
 Expected: all three exit 0. Copy the unit-test summary line (suites/tests passed) into the PR description.
 
-- [ ] **Step 3: Confirm the P1-owned code is still standing**
+- [x] **Step 3: Confirm the P1-owned code is still standing**
 
 Run: `grep -rn "LLMService\|LLM_SERVICE_TOKEN" src | head`
 Expected: hits in `src/infra/ai/llm.service.ts`, `src/domain/ai/ports.ts` and `src/main/register-infra-services.ts`. **Their presence is correct** — P1 deletes them. An empty result means this plan overreached.
 
-- [ ] **Step 4: Commit the ticked plan**
+- [x] **Step 4: Commit the ticked plan**
 
 ```bash
 git add docs/superpowers/plans/refactor-p0-dead-code.md
@@ -269,6 +269,40 @@ git commit -m "docs(plan): tick refactor-p0-dead-code steps"
 ```
 
 ---
+
+## Execution notes
+
+Two places where the code differed from the plan's survey, both found by the
+plan's own verification steps:
+
+1. **`ChatMsg` had six consumers, not three.** Task 1 listed
+   `conversation-context.ports.ts`, `drizzle-conversation-context.service.ts` and
+   `llm.service.ts`; the grep in Step 3 also turned up
+   `infra/conversation/conversation-context.service.ts` (the in-memory test double),
+   `domain/ai/ports.ts` and `domain/training/services/training.service.ts`. All six
+   now import from `@domain/ai/types`. In `training.service.ts` the import was a
+   combined `import type { ChatMsg, UserRepository }`, so it was split rather than
+   rewritten.
+
+2. **`SessionPlanningPhaseTransitionSchema` died with the parser.** Task 3 named
+   three exports; that fourth one was used only by
+   `SessionPlanningLLMResponseSchema`, so removing the parser left it with no
+   consumer. It was removed too, along with the trailing comment block documenting
+   the parser's JSON examples and the now-unused `ConversationPhase` import.
+   `RecommendedExerciseSchema` and `SessionRecommendationSchema` were kept —
+   `infra/ai/graph/tools/session-planning.tools.ts` imports both.
+
+## AC-1302 evidence
+
+- `grep -rn "PromptService\|training-intent.types\|plan-creation.types" src` → no output (exit 1).
+- `npm run type-check` → exit 0.
+- `npm run lint` → 12 problems, **0 errors**, 12 warnings (all pre-existing on `dev`:
+  magic numbers in `config/index.ts` and `date-utils.ts`, function length in
+  `register-infra-services.ts`).
+- `npm run test:unit` → Test Suites: 27 passed, 27 total; Tests: 240 passed, 240 total.
+  Identical to the pre-change baseline on `dev`.
+- `grep -rn "LLMService\|LLM_SERVICE_TOKEN" src` → still present in `infra/ai/llm.service.ts`,
+  `domain/ai/ports.ts`, `main/register-infra-services.ts`, `app/test/setup.ts`, as P1 requires.
 
 ## Close-out
 
