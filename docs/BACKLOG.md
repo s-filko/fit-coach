@@ -32,6 +32,22 @@ Rules:
 
 ## Findings
 
+- [ ] L0 eval checks named by `PROMPT_EVAL_FRAMEWORK.md` §4.1 but not implemented in the
+  P0 harness: section presence, version discipline, message-catalog completeness. All three
+  need artefacts P0 does not build — a PhaseSpec/section contract (P2) and prompt version
+  identifiers (§6, baseline plan) — so L0 ships only the three checks that need nothing but a
+  rendered string. Source: close-out-review, R4 (2026-09-13).
+- [ ] Replace the L0 forbidden-string allowlist with P2's structural check: validate the values
+  actually substituted into a prompt instead of scanning the whole rendered string, which
+  cannot distinguish an unrendered `undefined` from the word "undefined" in prose. The exact-
+  phrase `FORBIDDEN_STRING_ALLOWLIST` (evals/levels/l0.ts) is the owner-approved stopgap and
+  should be deleted when the structural check lands. Source: close-out-review, R4 (2026-09-13).
+- [ ] `apps/server/evals/` is invisible to lint: the `lint` script is scoped to `src/**/*.ts`
+  and `eslint.config.js` declares no `evals/` boundary element or rule override, so
+  `npx eslint evals/` reports 8 errors (`no-console` in the reporter, `no-restricted-imports`
+  on relative imports the tree cannot avoid — tsconfig `paths` map only under `baseUrl: src`).
+  Needs an `evals/` override plus a decision on whether the lint script should cover it.
+  Source: close-out-review, R1 + execution (2026-09-13).
 - [ ] The run-metrics binding contract ("run identity travels via config metadata because
   LangChain strips configurable from callback options") is prose-duplicated across five
   sites (chat.routes.ts, chat.subgraph.ts, registration.subgraph.ts, invoke-with-retry.ts,

@@ -693,6 +693,17 @@ Open the PR and wait for `check-server`. Expected: the "Eval L0" step appears an
   training 3391-3396.
 - **`evals` npm script** — `tsx --env-file=.env` fails in CI, which writes `.env.test` only.
   Per Task 4 Step 2's fallback the script is plain `tsx evals/run.ts`; L0 needs no env at all.
+- **Section presence is NOT implemented.** This plan's Architecture line commits L0 to "section
+  presence, token budget and forbidden strings", and three checks shipped per case:
+  `renders-non-empty`, `no-forbidden-strings`, `within-token-budget`. There is deliberately no
+  section-presence assertion: no PhaseSpec or declared section contract exists yet — P2 introduces
+  it — so there is nothing to assert presence *against*. Asserting against section headings scraped
+  from today's prompt text would pin the current wording rather than a contract, and would break on
+  any legitimate prompt edit. The check belongs with P2's PhaseSpec, not here.
+- **Version discipline and message-catalog completeness (§4.1) are also out of scope here.** Both
+  presuppose artefacts P0 has not built: prompt version identifiers (§6's `promptVersion`, which the
+  baseline plan introduces) and a message catalogue. L0 as shipped covers the three checks that need
+  nothing beyond a rendered string. The remaining §4.1 checks are tracked in `docs/BACKLOG.md`.
 
 ## Close-out
 
