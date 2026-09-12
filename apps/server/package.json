@@ -15,7 +15,7 @@
     "test:watch": "NODE_ENV=test jest --watch",
     "test:watch:unit": "NODE_ENV=test jest --testMatch='**/__tests__/**/*.unit.test.ts' --testMatch='**/src/**/*.unit.test.ts' --watch",
     "test:watch:integration": "RUN_DB_TESTS=1 NODE_ENV=test jest --testMatch='**/tests/integration/**/*.integration.test.ts' --watch",
-    "evals": "tsx --env-file=.env evals/run.ts",
+    "evals": "tsx evals/run.ts",
     "run-server": "node dist/index.js",
     "dev": "mkdir -p ../../logs && tsx watch --env-file=.env src/index.ts 2>&1 | tee -a ../../logs/server.log",
     "db:local:up": "docker compose -f ../../docker-compose.yml up -d db",

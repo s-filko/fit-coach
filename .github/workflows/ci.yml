@@ -61,6 +61,9 @@ jobs:
       - name: Unit tests
         run: npm run test:unit
 
+      - name: Eval L0 (static prompt checks)
+        run: npm run evals -- --level L0
+
   check-webapp:
     runs-on: ubuntu-latest
     defaults:

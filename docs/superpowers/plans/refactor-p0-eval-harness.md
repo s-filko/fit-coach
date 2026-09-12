@@ -1,7 +1,7 @@
 # Refactor P0 — Eval Harness (L0) Implementation Plan
 
 - Status: planned
-- Branch:
+- Branch: plan/refactor-p0-eval-harness
 - After: refactor-p0-run-log
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -58,7 +58,7 @@ export function exitCodeFor(report: LevelReport): number;
 
 Tasks 2 and 3 produce `CheckResult[]`; the L1 plan reuses all three modules unchanged.
 
-- [ ] **Step 1: Write the failing token-estimator test**
+- [x] **Step 1: Write the failing token-estimator test**
 
 Create `apps/server/evals/lib/__tests__/token-estimator.unit.test.ts`:
 
@@ -83,12 +83,12 @@ describe('estimateTokens', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- token-estimator`
 Expected: FAIL — module not found (and, until Step 6, the file may not even be collected; that also counts as a failing state).
 
-- [ ] **Step 3: Implement the estimator**
+- [x] **Step 3: Implement the estimator**
 
 Create `apps/server/evals/lib/token-estimator.ts`:
 
@@ -110,7 +110,7 @@ export function estimateTokens(text: string): number {
 }
 ```
 
-- [ ] **Step 4: Write the reporter**
+- [x] **Step 4: Write the reporter**
 
 Create `apps/server/evals/lib/reporter.ts`:
 
@@ -149,7 +149,7 @@ export function exitCodeFor(report: LevelReport): number {
 }
 ```
 
-- [ ] **Step 5: Write the runner skeleton**
+- [x] **Step 5: Write the runner skeleton**
 
 Create `apps/server/evals/run.ts`:
 
@@ -186,7 +186,7 @@ void main();
 
 This imports `./levels/l0`, which Task 3 creates — the runner will not execute until then. That is expected: Step 7 only checks that the estimator's test passes.
 
-- [ ] **Step 6: Add the script and widen tsconfig/jest**
+- [x] **Step 6: Add the script and widen tsconfig/jest**
 
 In `apps/server/package.json`, add to `scripts`:
 
@@ -206,12 +206,12 @@ In `apps/server/jest.config.cjs`, change `roots` to:
   roots: ['<rootDir>/src', '<rootDir>/tests', '<rootDir>/evals'],
 ```
 
-- [ ] **Step 7: Run the estimator test to confirm it passes**
+- [x] **Step 7: Run the estimator test to confirm it passes**
 
 Run: `npm run test:unit -- token-estimator`
 Expected: PASS, all three cases.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add evals/ package.json tsconfig.json jest.config.cjs
@@ -232,7 +232,7 @@ The case schema is the contract every dataset obeys and every later level reads.
 - Consumes: nothing.
 - Produces: `EvalCaseSchema` (Zod) and `export type EvalCase = z.infer<typeof EvalCaseSchema>`, plus `parseCases(jsonl: string): EvalCase[]`. The dataset plan writes `.jsonl` files that this parses; the L1 plan reads `case.expect`.
 
-- [ ] **Step 1: Write the failing schema test**
+- [x] **Step 1: Write the failing schema test**
 
 Create `apps/server/evals/schema/__tests__/case.schema.unit.test.ts`:
 
@@ -279,12 +279,12 @@ describe('EvalCaseSchema', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- case.schema`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement the schema**
+- [x] **Step 3: Implement the schema**
 
 Create `apps/server/evals/schema/case.schema.ts`:
 
@@ -387,12 +387,12 @@ export function parseCases(jsonl: string): EvalCase[] {
 }
 ```
 
-- [ ] **Step 4: Run the test to confirm it passes**
+- [x] **Step 4: Run the test to confirm it passes**
 
 Run: `npm run test:unit -- case.schema`
 Expected: PASS, all six cases.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add evals/schema/
@@ -414,12 +414,12 @@ L0 renders each phase's real system prompt against three fixtures and inspects t
 - Consumes: `estimateTokens` and `CheckResult` (Task 1); the production prompt builders in `src/infra/ai/graph/nodes/*.node.ts`.
 - Produces: `export async function runL0(phase: string): Promise<CheckResult[]>` — the function `evals/run.ts` already imports.
 
-- [ ] **Step 1: Inventory the real prompt builders**
+- [x] **Step 1: Inventory the real prompt builders**
 
 Run: `grep -rn "^export function build.*Prompt\|^export function build.*SystemPrompt" src/infra/ai/graph/nodes/*.ts`
 Expected: one exported builder per phase. Note each exact name and its parameter list — Step 4 calls them with real arguments, and guessing a signature here produces a plan-shaped failure rather than a check.
 
-- [ ] **Step 2: Write the three fixture personas**
+- [x] **Step 2: Write the three fixture personas**
 
 Create `apps/server/evals/fixtures/personas.ts`:
 
@@ -460,7 +460,7 @@ export const ALL_FIXTURES: Array<{ name: string; fixture: EvalFixture }> = [
 ];
 ```
 
-- [ ] **Step 3: Write the failing L0 test**
+- [x] **Step 3: Write the failing L0 test**
 
 Create `apps/server/evals/levels/__tests__/l0.unit.test.ts`:
 
@@ -498,12 +498,12 @@ describe('L0 static checks', () => {
 });
 ```
 
-- [ ] **Step 4: Run it to confirm it fails**
+- [x] **Step 4: Run it to confirm it fails**
 
 Run: `npm run test:unit -- l0`
 Expected: FAIL — module `../l0` not found.
 
-- [ ] **Step 5: Implement L0**
+- [x] **Step 5: Implement L0**
 
 Create `apps/server/evals/levels/l0.ts`. Replace the `renderPrompt` switch arms with the **actual** builder names and signatures found in Step 1 — the names below are the shape, not a guess to be shipped unchecked:
 
@@ -600,19 +600,19 @@ export async function runL0(phaseArg: string): Promise<CheckResult[]> {
 
 The `@infra/*` alias must resolve under `tsx`. If it does not, add `tsconfig-paths` to the `evals` script or use a relative import — verify in Step 7 rather than assuming.
 
-- [ ] **Step 6: Run the unit test to confirm it passes**
+- [x] **Step 6: Run the unit test to confirm it passes**
 
 Run: `npm run test:unit -- l0`
 Expected: PASS, all five cases.
 
-- [ ] **Step 7: Run the real thing (AC-1303, L0 half)**
+- [x] **Step 7: Run the real thing (AC-1303, L0 half)**
 
 Run: `npm run evals -- --level L0`
 Expected: exit 0, with a line like `L0: 15/15 checks passed, 0 failed` (five phases × three fixtures × three checks, once every arm is wired).
 
 If a **real** prompt fails a check, do not edit the prompt. Record the failure in `docs/BACKLOG.md` via the `backlog` skill, and — only if the failure is a genuine budget miscalibration rather than a prompt defect — adjust that phase's entry in `PHASE_TOKEN_BUDGET` with a comment saying what it was measured at.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add evals/
@@ -632,7 +632,7 @@ An offline check that nobody runs is not a safety net. L0 costs seconds and no t
 - Consumes: the `evals` npm script (Task 1) and `runL0` (Task 3).
 - Produces: a required-check failure whenever a prompt renders with a hole or blows its budget.
 
-- [ ] **Step 1: Add the CI step**
+- [x] **Step 1: Add the CI step**
 
 In `.github/workflows/ci.yml`, after the "Unit tests" step in the `check-server` job:
 
@@ -643,17 +643,17 @@ In `.github/workflows/ci.yml`, after the "Unit tests" step in the `check-server`
 
 The job already writes `.env.test` with `LLM_MODEL=mock` and a dummy `LLM_API_KEY`; L0 makes no network call, so those placeholders are enough.
 
-- [ ] **Step 2: Verify the script works with only CI's env**
+- [x] **Step 2: Verify the script works with only CI's env**
 
 Run: `NODE_ENV=test npm run evals -- --level L0`
 Expected: exit 0. If the run fails because `--env-file=.env` is missing in CI, change the npm script to `tsx evals/run.ts` and load env only where a later level needs it.
 
-- [ ] **Step 3: Confirm the drizzle guard still passes**
+- [x] **Step 3: Confirm the drizzle guard still passes**
 
 Run (from the repo root): `grep -rn "drizzle-kit push\|drizzle:push" apps/server deploy docker-compose.yml --exclude-dir=node_modules`
 Expected: no output. The CI guard fails the build on any hit, and `evals/` is inside `apps/server`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add ../../.github/workflows/ci.yml
@@ -665,6 +665,23 @@ git commit -m "ci: run eval L0 static prompt checks on every PR"
 Open the PR and wait for `check-server`. Expected: the "Eval L0" step appears and passes. Paste its output line into the PR description.
 
 ---
+
+## Execution notes (deviations from the drafted plan)
+
+- **Builders found (Task 3 Step 1)** — one exported builder per phase, all in `src/infra/ai/graph/nodes/`:
+  `buildRegistrationSystemPrompt(user)`, `buildChatSystemPrompt(user, hasActivePlan, recentSessions, lastMessageTime)`,
+  `buildPlanCreationSystemPrompt(user)`, `buildSessionPlanningSystemPrompt(user, context)`,
+  `buildTrainingSystemPrompt(user, session, previousSession)`. The last two need real
+  `SessionPlanningContextData` / `WorkoutSessionWithDetails` objects, so `l0.ts` builds minimal
+  structurally-complete ones rather than passing the persona through directly.
+- **Fixture user types** — the drafted `FixtureUserSchema` typed `height`/`weight` as strings; the
+  production `User` type has them as numbers. The schema follows the real type.
+- **Forbidden-string check refined** — a plain `includes` flagged the training prompt's legitimate
+  English prose ("may execute in undefined sequence"). Since §4.1 forbids editing prompt wording,
+  the check now requires a value-position lead-in or a value-shaped trailer, so it detects template
+  holes rather than English words. Two extra unit tests pin both directions.
+- **`evals` npm script** — `tsx --env-file=.env` fails in CI, which writes `.env.test` only.
+  Per Task 4 Step 2's fallback the script is plain `tsx evals/run.ts`; L0 needs no env at all.
 
 ## Close-out
 
