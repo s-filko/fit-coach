@@ -28,7 +28,8 @@ import type {
   WorkoutSession,
   WorkoutSessionWithDetails,
 } from '@domain/training/types';
-import type { ChatMsg, UserRepository } from '@domain/user/ports';
+import type { ChatMsg } from '@domain/ai/types';
+import type { UserRepository } from '@domain/user/ports';
 
 import { buildSessionRecommendationPrompt } from './prompts/session-recommendation.prompt';
 
