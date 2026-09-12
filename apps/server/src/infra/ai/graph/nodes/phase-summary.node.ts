@@ -42,13 +42,16 @@ export async function generatePhaseSummary(
     const userPrompt = `${previousContext}\nCONVERSATION (phase: ${phase}):\n${conversationText}\n\nWrite a brief summary:`;
 
     const model: ChatOpenAI = getModel();
-    // config carries configurable.runId — pass it so summary tokens land in the run's metrics
+    // The summary runs fire-and-forget after the transition, usually AFTER persist has
+    // drained the run's metrics — so it must NOT carry the run's runId in metadata,
+    // or handleChatModelStart would re-open an accumulator nobody drains (capped leak).
+    // A minimal metadata with userId keeps debug logging without binding to the run.
     const response = await model.invoke(
       [
         { role: 'system', content: SUMMARY_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
-      config,
+      { ...config, metadata: { userId, ...config?.metadata, runId: undefined } },
     );
 
     const summary =

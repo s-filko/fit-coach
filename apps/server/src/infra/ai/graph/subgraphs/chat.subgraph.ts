@@ -77,7 +77,8 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
     ]);
 
     // Pass the node's LangGraph config through so the LLM callback handler sees
-    // configurable.runId (run metrics) and configurable.userId (debug logs).
+    // metadata.runId (run metrics) and metadata.userId (debug logs) — metadata is
+    // inherited from the route's invoke config; configurable never reaches handlers.
     const response = await model.invoke(llmMessages, config);
 
     return { messages: [response] };

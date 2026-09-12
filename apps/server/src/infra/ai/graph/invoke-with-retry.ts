@@ -58,7 +58,8 @@ export async function invokeWithRetry(
   const postTool = endsWithToolMessage(messages);
   const firstMessages = postTool ? withPostToolNudge(messages) : messages;
 
-  // The caller's config carries configurable.runId — the run metrics bridge keys on it.
+  // The caller's config carries metadata.runId (inherited from the route) — the run
+  // metrics bridge in the LLM callback handler keys on it.
   const response = await model.invoke(firstMessages, config);
 
   if (isEmptyAIResponse(response)) {

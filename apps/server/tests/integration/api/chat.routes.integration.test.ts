@@ -94,7 +94,6 @@ describe('POST /api/bot/chat – integration', () => {
           configurable: {
             thread_id: 'user-123',
             userId: 'user-123',
-            runId: expect.any(String),
           },
           metadata: {
             runId: expect.any(String),

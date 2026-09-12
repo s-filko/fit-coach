@@ -49,6 +49,7 @@ apps/server/src/
         conversation.state.ts  # LangGraph ConversationState (Annotation.Root)
       ports/
         conversation-context.ports.ts  # IConversationContextService (2-method: appendTurn + getMessagesForPrompt)
+        conversation-run.ports.ts      # IConversationRunService — one run row per conversation run (ADR-0013 §8)
         index.ts               # Re-exports
     training/
       ports/                   # Training domain interfaces
@@ -63,6 +64,8 @@ apps/server/src/
         workout-plan.repository.ts
     ai/
       model.factory.ts          # Shared ChatOpenAI factory (getModel())
+      llm-log-handler.ts        # LLM boundary callback: debug replay + run-metrics bridge (metadata.runId)
+      run-metrics.ts            # Per-run model/token/latency accumulator, drained by persist.node (ADR-0013 §8)
       embedding.service.ts      # Local all-MiniLM-L6-v2 via @huggingface/transformers (ONNX)
       embedding-text.util.ts    # buildEmbeddingText() — composite text for exercise embeddings
       graph/
@@ -71,7 +74,7 @@ apps/server/src/
         invoke-with-retry.ts    # Retry wrapper for empty LLM responses after tool calls
         nodes/
           router.node.ts             # Phase determination, session timeout, user loading
-          persist.node.ts            # appendTurn to conversation_turns
+          persist.node.ts            # appendTurn to conversation_turns + one conversation_runs row per run (P0 run log; moves to commit node in P3)
           chat.node.ts               # buildChatSystemPrompt()
           registration.node.ts       # buildRegistrationSystemPrompt()
           plan-creation.node.ts      # buildPlanCreationSystemPrompt()
@@ -89,6 +92,7 @@ apps/server/src/
           search-exercises.tool.ts      # search_exercises — vector search via EmbeddingService
     conversation/
       drizzle-conversation-context.service.ts   # IConversationContextService impl (2-method, DB-backed)
+      drizzle-conversation-run.service.ts       # IConversationRunService impl — writes conversation_runs
     di/
       container.ts              # DI container with factory support + lazy initialization
     config/
@@ -256,7 +260,7 @@ These rules are for any AI assistant working in this repo:
 - Module layout: `domain/conversation/ports/conversation-context.ports.ts`; `infra/conversation/drizzle-conversation-context.service.ts`.
 - **ADR-0005**: original patterns (partially superseded by checkpointer for state management).
 - No breaking change to API: `POST /api/chat` contract unchanged [AC-0110].
-- **Database storage**: `conversation_turns` table with (userId, phase, role, content, createdAt); `langgraph_checkpoints` table (managed by PostgresSaver).
+- **Database storage**: `conversation_turns` table with (userId, phase, role, content, runId, kind, payload, createdAt); `conversation_runs` table — one row per run with model/tokens/latency/outcome (ADR-0013 §8, written by persist.node.ts); `langgraph_checkpoints` table (managed by PostgresSaver).
 
 ## LLM Integration
 **Implementation**: `src/infra/ai/model.factory.ts`

@@ -22,6 +22,8 @@ export function buildPersistNode(contextService: IConversationContextService, ru
     }
 
     const metrics = drainRunMetrics(runId);
+    // P0 placeholder — P2 makes prompt versions real (plan Global Constraints)
+    const promptVersions: Record<string, string> = { [`phase.${phase}`]: 'v0', directives: 'v0' };
     try {
       await runService.recordRun({
         runId,
@@ -29,7 +31,7 @@ export function buildPersistNode(contextService: IConversationContextService, ru
         phaseIn: phase,
         phaseOut: requestedTransition?.toPhase ?? null,
         model: metrics.model ?? 'unknown',
-        promptVersions: { [`phase.${phase}`]: 'v0', directives: 'v0' },
+        promptVersions,
         tokensIn: metrics.tokensIn,
         tokensOut: metrics.tokensOut,
         latencyMs: metrics.latencyMs,
@@ -42,7 +44,7 @@ export function buildPersistNode(contextService: IConversationContextService, ru
           runId,
           phase,
           model: metrics.model,
-          promptVersions: { [`phase.${phase}`]: 'v0', directives: 'v0' },
+          promptVersions,
           tokensIn: metrics.tokensIn,
           tokensOut: metrics.tokensOut,
           latencyMs: metrics.latencyMs,

@@ -18,13 +18,13 @@ _Generated 2026-09-12 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p0-eval-baseline.md` — Refactor P0 — Remaining Datasets and v0 Baseline Implementation Plan
 - `refactor-p0-eval-harness.md` — Refactor P0 — Eval Harness (L0) Implementation Plan
 - `refactor-p0-eval-l1-chat-training.md` — Refactor P0 — L1 Runner and Chat/Training Datasets Implementation Plan
-- `refactor-p0-run-log.md` — Refactor P0 — Run Log Implementation Plan
 - `refactor-p0-transcript-export.md` — Refactor P0 — Transcript Export Implementation Plan
 
 **Done**
 - `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
 - `refactor-p0-dead-code.md` — Refactor P0 — Dead Code Removal Implementation Plan
+- `refactor-p0-run-log.md` — Refactor P0 — Run Log Implementation Plan
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 
 **Close-out debt (merged but plan not done)**

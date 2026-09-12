@@ -32,6 +32,48 @@ Rules:
 
 ## Findings
 
+- [ ] The run-metrics binding contract ("run identity travels via config metadata because
+  LangChain strips configurable from callback options") is prose-duplicated across five
+  sites (chat.routes.ts, chat.subgraph.ts, registration.subgraph.ts, invoke-with-retry.ts,
+  llm-log-handler.ts) and the drain opt-out is an implicit one-node convention
+  (`runId: undefined` spread in phase-summary.node.ts) — any future invoke site threading
+  the graph config without replicating the opt-out silently re-opens a drained accumulator.
+  Fix: run-metrics.ts owns the contract (canonical explanation + refuse to re-open a drained
+  run, or an unbound-metadata builder); other sites carry one-line pointers.
+  Source: close-out-review re-run, R1+R2 (2026-09-12).
+- [ ] `llm-log-handler.ts` reads `loadConfig()` at module scope, freezing `isDebug` and the
+  model-name fallback at import time (import order couples to config availability); an
+  in-function lazy read keeps the module side-effect-free. Code moved verbatim from
+  model.factory.ts, so the smell predates this branch. Source: close-out-review re-run,
+  R1 (2026-09-12).
+- [ ] The phase-summary orphan-accumulator fix (`runId: undefined` spread ordering) has no
+  regression test — nothing pins the spread order the fix depends on; a future reorder would
+  silently re-open drained runs. Mechanism was verified live via `ensureConfig` during review.
+  Source: close-out-review re-run, R3 (2026-09-12).
+- [ ] `DrizzleConversationRunService` invents `trigger`/`client` below the port:
+  `ConversationRunRecord` has no fields for them, so the implementation hardcodes
+  `trigger: 'user_message'`, `client: 'telegram'` (drizzle-conversation-run.service.ts:13-14)
+  — data that silently becomes wrong when ADR-0013's anticipated `client: 'webapp'`
+  arrives. Fields belong on the port. Source: close-out-review, R1 (2026-09-12).
+- [ ] `ConversationRunRecord.model` is non-null while its only producer legitimately
+  yields null, forcing the persist node to fabricate the `'unknown'` sentinel
+  (persist.node.ts) — a magic string inside a typed non-null field. Proper fix makes
+  the port `string | null` + a DB-level default, which is a migration; P3's commit
+  node will re-touch this write anyway. Source: close-out-review, R1 (2026-09-12).
+- [ ] Run rows are invisible for failed runs: persist.node writes only on
+  `responseMessage`, and `outcome` is hardcoded `'ok'`, so the enum's
+  `llm_unavailable`/`core_error`/`budget_exhausted` are unreachable and AC-1301's
+  "exactly one row per POST" is untrue on error/timeout paths. Needs an owner ruling
+  (AC wording vs plan) and belongs with P3's commit node. Source: close-out-review,
+  R3 (2026-09-12).
+- [ ] The hand-added `kind` backfill in `drizzle/0002_conversation_runs.sql` has no
+  automated test — its only evidence is a one-off psql check. Consider an integration
+  test that applies migrations to a scratch DB and asserts role→kind mapping.
+  Source: close-out-review, R3 (2026-09-12).
+- [ ] The chat route owns the run-metrics lifecycle (generate runId, call `startRun`
+  against an infra singleton) on top of HTTP handling; ADR-0013 §11 targets
+  `chat.routes.ts → ConversationService`, and this is extra surface P3 must unwind.
+  Source: close-out-review, R1 (2026-09-12).
 - [ ] `deploy.sh` cannot deploy a feature branch: branch is hardcoded per env
   (`deploy.sh:6` — dev → `dev`, prod → `main`), so a plan branch pushed for
   pre-merge live verification (like refactor-p0-run-log's AC-1304) silently

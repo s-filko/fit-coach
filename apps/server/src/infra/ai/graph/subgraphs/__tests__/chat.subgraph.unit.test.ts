@@ -20,7 +20,7 @@ const BASE_USER = {
   profileStatus: 'complete' as const,
 };
 
-describe('chat.subgraph — run metrics config wiring', () => {
+describe('chat.subgraph — run metrics config wiring (AC-1304)', () => {
   beforeEach(() => {
     jest.resetModules();
   });
@@ -54,7 +54,7 @@ describe('chat.subgraph — run metrics config wiring', () => {
       { userId: 'u1', userMessage: 'привет', user: BASE_USER as never },
       {
         recursionLimit: 10,
-        configurable: { thread_id: 'u1', userId: 'u1', runId: 'run-abc' },
+        configurable: { thread_id: 'u1', userId: 'u1' },
         // the route also puts runId/userId into metadata — the only channel that
         // survives into LLM callback handlers
         metadata: { runId: 'run-abc', userId: 'u1' },
@@ -65,7 +65,6 @@ describe('chat.subgraph — run metrics config wiring', () => {
     for (const config of invokeConfigs) {
       expect(config).toEqual(
         expect.objectContaining({
-          configurable: expect.objectContaining({ runId: 'run-abc', userId: 'u1' }),
           metadata: expect.objectContaining({ runId: 'run-abc', userId: 'u1' }),
         }),
       );

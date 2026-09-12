@@ -14,7 +14,7 @@ const baseState = (overrides: Partial<ConversationStateType> = {}): Conversation
     ...overrides,
   }) as ConversationStateType;
 
-describe('persist node run logging', () => {
+describe('persist node run logging (AC-1301)', () => {
   const contextService = { appendTurn: jest.fn().mockResolvedValue(undefined) };
 
   beforeEach(() => jest.clearAllMocks());
