@@ -1,14 +1,19 @@
 # Refactor P0 — Run Log Implementation Plan
 
 - Status: planned
-- Branch:
+- Branch: plan/refactor-p0-run-log
 - After: refactor-p0-dead-code
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Record one durable row per conversation run — phase, model, latency, tokens, tool calls, outcome — so later refactor phases can be measured instead of guessed at.
 
-**Architecture:** A new `conversation_runs` table plus three columns on `conversation_turns`, shipped as one Drizzle migration. The route generates a `runId` and passes it through `configurable`; the graph carries it in a new state channel; `persist.node.ts` writes the row (its temporary home — P3 moves this into a `commit` node). Token counts and latency are collected by a small per-run accumulator that the existing `LLMLogHandler` feeds, keyed by `runId` — the handler already receives `configurable`, so no new plumbing reaches the model call sites. Failure to write a run row must never break a user response: the write is wrapped exactly like the existing turn persistence.
+**Architecture:** A new `conversation_runs` table plus three columns on `conversation_turns`, shipped as one Drizzle migration. The route generates a `runId`, starts the run's latency clock, and passes the id through `configurable`; the graph carries it in a new state channel; `persist.node.ts` writes the row (its temporary home — P3 moves this into a `commit` node). Token counts are collected by a small per-run accumulator that the existing `LLMLogHandler` feeds, keyed by `runId` — the handler already receives `configurable`, so no new plumbing reaches the model call sites. Because one `LLMLogHandler` instance serves the whole process, the bridge between the handler's start and end callbacks is keyed on LangChain's per-call run id rather than on any shared "most recent id" state (Task 3, Step 5). Failure to write a run row must never break a user response: the write is wrapped exactly like the existing turn persistence.
+
+**Corrections applied before execution (2026-09-12), owner-approved:** three defects were found in this plan while reviewing it against the code and ADR-0013, and fixed here rather than carried into the branch or parked as debt.
+1. The metrics bridge used a module-level `lastRunId`, which races across concurrent users and would have corrupted the very numbers P1–P7 are measured by (rationale in Task 3, Step 5; regression tests in Step 1).
+2. `latencyMs` was measured from the first LLM call, not from the request — understating the end-to-end latency that P5.2 calibrates `requestTimeout` against and that AC-1351's windows rely on (Task 3, Step 5a).
+3. `toolCalls` omitted `argsHash`, diverging from the ADR-0013 section 8 shape `[{name, argsHash, outcomeKind}]`; P0 still writes `null`, but the type now matches the ADR so P3 need not change the contract.
 
 **Tech Stack:** Drizzle ORM + drizzle-kit (generate/migrate), PostgreSQL 16, LangGraph (`StateGraph`, `Annotation`, `MemorySaver` in tests), LangChain callbacks (`BaseCallbackHandler`), Fastify, Jest + ts-jest, pino.
 
@@ -271,6 +276,8 @@ In the `/chat` handler, replace the `invoke` call:
         );
 ```
 
+The latency clock is started here too, by a `startRun(runId)` line added in Task 3 Step 5a — `run-metrics.ts` does not exist yet at this point in the sequence.
+
 - [ ] **Step 6: Check nothing broke**
 
 Run: `npm run type-check && npm run test:unit`
@@ -295,7 +302,7 @@ Latency and token counts are only visible at the model boundary. `LLMLogHandler`
 - Modify: `apps/server/src/infra/ai/model.factory.ts:41-101` (`LLMLogHandler`: record start time, tokens, model; emit the new `info` line)
 
 **Interfaces:**
-- Consumes: `configurable.runId` from Task 2.
+- Consumes: `configurable.runId` from Task 2, and `startRun(runId)` called by the route (Task 2, Step 5) so `latencyMs` measures the whole run.
 - Produces:
 
 ```typescript
@@ -306,9 +313,14 @@ export interface RunMetrics {
   latencyMs: number;
   llmCalls: number;
 }
+/** Opens the run and starts the latency clock. Called by the route, before the graph runs. */
+export function startRun(runId: string): void;
 export function startLlmCall(runId: string, model: string): void;
 export function finishLlmCall(runId: string, tokensIn: number, tokensOut: number): void;
 export function drainRunMetrics(runId: string): RunMetrics;
+/** Maps LangChain's per-call run id to our conversation runId (see Step 5). */
+export function bindCallToRun(llmRunId: string, runId: string): void;
+export function resolveCallRun(llmRunId: string): string | undefined;
 ```
 
 Task 4's persist node calls `drainRunMetrics`.
@@ -318,7 +330,14 @@ Task 4's persist node calls `drainRunMetrics`.
 Create `apps/server/src/infra/ai/__tests__/run-metrics.unit.test.ts`:
 
 ```typescript
-import { drainRunMetrics, finishLlmCall, startLlmCall } from '@infra/ai/run-metrics';
+import {
+  bindCallToRun,
+  drainRunMetrics,
+  finishLlmCall,
+  resolveCallRun,
+  startLlmCall,
+  startRun,
+} from '@infra/ai/run-metrics';
 
 describe('run metrics accumulator', () => {
   it('sums tokens and counts calls across several LLM calls in one run', () => {
@@ -361,6 +380,50 @@ describe('run metrics accumulator', () => {
     expect(() => finishLlmCall('', 1, 1)).not.toThrow();
     expect(drainRunMetrics('').llmCalls).toBe(0);
   });
+
+  it('measures latency from startRun, not from the first LLM call', async () => {
+    startRun('run-timed');
+    await new Promise(resolve => setTimeout(resolve, 30));
+    startLlmCall('run-timed', 'model');
+    finishLlmCall('run-timed', 1, 1);
+
+    // The clock starts at startRun, so the 30 ms before any model call counts.
+    expect(drainRunMetrics('run-timed').latencyMs).toBeGreaterThanOrEqual(25);
+  });
+
+  it('startRun opens a run that records no calls of its own', () => {
+    startRun('run-empty');
+    const metrics = drainRunMetrics('run-empty');
+    expect(metrics.llmCalls).toBe(0);
+    expect(metrics.model).toBeNull();
+  });
+
+  describe('call-to-run binding (no shared "last id" state)', () => {
+    it('attributes interleaved concurrent calls to the right runs', () => {
+      // The failure mode this replaces: start(A), start(B), end(A) must not
+      // credit A's tokens to B. See Step 5 for why a module-level id breaks.
+      startRun('run-A');
+      startRun('run-B');
+      startLlmCall('run-A', 'model');
+      bindCallToRun('lc-call-1', 'run-A');
+      startLlmCall('run-B', 'model');
+      bindCallToRun('lc-call-2', 'run-B');
+
+      finishLlmCall(resolveCallRun('lc-call-1') as string, 100, 10);
+      finishLlmCall(resolveCallRun('lc-call-2') as string, 7, 3);
+
+      expect(drainRunMetrics('run-A').tokensIn).toBe(100);
+      expect(drainRunMetrics('run-B').tokensIn).toBe(7);
+    });
+
+    it('drops the binding on read and ignores unknown or empty call ids', () => {
+      bindCallToRun('lc-call-3', 'run-C');
+      expect(resolveCallRun('lc-call-3')).toBe('run-C');
+      expect(resolveCallRun('lc-call-3')).toBeUndefined();
+      expect(resolveCallRun('never-bound')).toBeUndefined();
+      expect(() => bindCallToRun('', 'run-C')).not.toThrow();
+    });
+  });
 });
 ```
 
@@ -379,10 +442,17 @@ Create `apps/server/src/infra/ai/run-metrics.ts`:
  * run is persisted (P0, ADR-0013 §8). Temporary home: P3 moves this into the
  * `commit` node's run context.
  *
- * Entries are dropped by `drainRunMetrics`. A run that errors before persisting
- * leaves an entry behind, so the map is capped — see MAX_TRACKED_RUNS.
+ * `latencyMs` is wall time from `startRun` (called by the route, before the graph
+ * runs) to the drain, so it is the end-to-end run latency P5.2 calibrates
+ * `requestTimeout` against — not just the time spent inside model calls.
+ *
+ * Two maps, both capped: `runs` is keyed by our conversation runId and normally
+ * dropped by `drainRunMetrics`; `callRuns` bridges LangChain's per-call run id to
+ * ours between `handleChatModelStart` and `handleLLMEnd` and is dropped on read.
+ * A run or call that errors before that leaves an entry behind, hence the caps.
  */
 const MAX_TRACKED_RUNS = 500;
+const MAX_TRACKED_CALLS = 500;
 
 export interface RunMetrics {
   model: string | null;
@@ -401,31 +471,51 @@ interface RunAccumulator {
 }
 
 const runs = new Map<string, RunAccumulator>();
+const callRuns = new Map<string, string>();
 
 const EMPTY: RunMetrics = { model: null, tokensIn: 0, tokensOut: 0, latencyMs: 0, llmCalls: 0 };
 
-function evictOldestIfFull(): void {
-  if (runs.size < MAX_TRACKED_RUNS) {
+function evictOldest(map: Map<string, unknown>, cap: number): void {
+  if (map.size < cap) {
     return;
   }
-  const oldest = runs.keys().next();
+  const oldest = map.keys().next();
   if (!oldest.done) {
-    runs.delete(oldest.value);
+    map.delete(oldest.value);
   }
+}
+
+function openRun(runId: string): RunAccumulator {
+  const existing = runs.get(runId);
+  if (existing) {
+    return existing;
+  }
+  evictOldest(runs, MAX_TRACKED_RUNS);
+  const acc: RunAccumulator = {
+    model: null,
+    tokensIn: 0,
+    tokensOut: 0,
+    startedAt: Date.now(),
+    llmCalls: 0,
+  };
+  runs.set(runId, acc);
+  return acc;
+}
+
+export function startRun(runId: string): void {
+  if (!runId) {
+    return;
+  }
+  openRun(runId);
 }
 
 export function startLlmCall(runId: string, model: string): void {
   if (!runId) {
     return;
   }
-  const existing = runs.get(runId);
-  if (existing) {
-    existing.llmCalls += 1;
-    existing.model = model;
-    return;
-  }
-  evictOldestIfFull();
-  runs.set(runId, { model, tokensIn: 0, tokensOut: 0, startedAt: Date.now(), llmCalls: 1 });
+  const acc = openRun(runId);
+  acc.llmCalls += 1;
+  acc.model = model;
 }
 
 export function finishLlmCall(runId: string, tokensIn: number, tokensOut: number): void {
@@ -435,6 +525,22 @@ export function finishLlmCall(runId: string, tokensIn: number, tokensOut: number
   }
   acc.tokensIn += tokensIn;
   acc.tokensOut += tokensOut;
+}
+
+export function bindCallToRun(llmRunId: string, runId: string): void {
+  if (!llmRunId || !runId) {
+    return;
+  }
+  evictOldest(callRuns, MAX_TRACKED_CALLS);
+  callRuns.set(llmRunId, runId);
+}
+
+export function resolveCallRun(llmRunId: string): string | undefined {
+  const runId = callRuns.get(llmRunId);
+  if (runId !== undefined) {
+    callRuns.delete(llmRunId);
+  }
+  return runId;
 }
 
 export function drainRunMetrics(runId: string): RunMetrics {
@@ -456,15 +562,21 @@ export function drainRunMetrics(runId: string): RunMetrics {
 - [ ] **Step 4: Run the test to confirm it passes**
 
 Run: `npm run test:unit -- run-metrics`
-Expected: PASS, all four cases.
+Expected: PASS, all eight cases — including the two binding cases, which are the regression guard for the concurrency defect described in Step 5.
 
 - [ ] **Step 5: Feed the accumulator from `LLMLogHandler`**
 
 In `apps/server/src/infra/ai/model.factory.ts`, add the import:
 
 ```typescript
-import { finishLlmCall, startLlmCall } from '@infra/ai/run-metrics';
+import { bindCallToRun, finishLlmCall, resolveCallRun, startLlmCall } from '@infra/ai/run-metrics';
 ```
+
+Rename the discarded third parameter of `handleChatModelStart` from `_runId` to `llmRunId` so the call id is usable.
+
+**Why not a `lastRunId` module variable** (the original form of this step, corrected 2026-09-12 before execution): `getModel()` caches the model in a module-level `_model` and constructs `new LLMLogHandler()` exactly once per process (`model.factory.ts:106-129`), so one handler instance serves every concurrent request. A module-level "id of the most recent start" is therefore shared process-wide, and with two users in flight — `start(A)`, `start(B)`, `end(A)` — the tokens of A's call are attributed to run B. This is not rare under load, and P5's per-`userId` mutex does **not** fix it: D-12 serialises one thread, while AC-1351 explicitly keeps different users concurrent. Since run rows are the measurement base for P1–P7, silently mixed token counts are worse than missing ones.
+
+The fix keys the bridge on LangChain's own per-call run id, which both callbacks receive — `handleChatModelStart(llm, messages, runId, …)` and `handleLLMEnd(output, runId, …)` (verified in `@langchain/core/dist/callbacks/base.d.ts:67,72`). No state is shared between calls.
 
 In `handleChatModelStart`, right after the existing `userId` extraction line, add:
 
@@ -475,23 +587,27 @@ In `handleChatModelStart`, right after the existing `userId` extraction line, ad
       config.LLM_MODEL;
     if (runId) {
       startLlmCall(runId, invocationModel);
-      lastRunId = runId;
+      bindCallToRun(llmRunId, runId);
     }
 ```
 
-Add a module-level `let lastRunId: string | undefined;` immediately above `class LLMLogHandler` — `handleLLMEnd` does not receive `extraParams`, so the run id it belongs to is the one the most recent `handleChatModelStart` recorded. Calls are sequential within a run.
+`bindCallToRun` / `resolveCallRun` are two more exports of `run-metrics.ts` (implemented in Step 3) that map LangChain's per-call id to our conversation `runId` and drop the entry on read.
 
-Replace `handleLLMEnd` with:
+Replace `handleLLMEnd` with (note it now takes LangChain's `runId` as its second parameter):
 
 ```typescript
-  handleLLMEnd(output: {
-    generations: Array<Array<{ text: string }>>;
-    llmOutput?: { tokenUsage?: { promptTokens?: number; completionTokens?: number } };
-  }): void {
+  handleLLMEnd(
+    output: {
+      generations: Array<Array<{ text: string }>>;
+      llmOutput?: { tokenUsage?: { promptTokens?: number; completionTokens?: number } };
+    },
+    llmRunId: string,
+  ): void {
     const text = output.generations?.[0]?.[0]?.text;
     const usage = output.llmOutput?.tokenUsage;
-    if (lastRunId) {
-      finishLlmCall(lastRunId, usage?.promptTokens ?? 0, usage?.completionTokens ?? 0);
+    const runId = resolveCallRun(llmRunId);
+    if (runId) {
+      finishLlmCall(runId, usage?.promptTokens ?? 0, usage?.completionTokens ?? 0);
     }
     log.debug(
       {
@@ -504,6 +620,26 @@ Replace `handleLLMEnd` with:
 ```
 
 **Do not** move the response text to `info` — `LOGGING_GUIDE.md` forbids LLM response content above `debug`.
+
+- [ ] **Step 5a: Start the latency clock in the route**
+
+`latencyMs` must cover the whole run, not just the model calls: P5.2 calibrates Fastify's
+`requestTimeout` against the observed p95 of `conversation_runs.latency_ms`, and AC-1351
+compares `[created_at, created_at + latency]` windows. Measuring from the first LLM call
+would understate both.
+
+In `apps/server/src/app/routes/chat.routes.ts`, add the import:
+
+```typescript
+import { startRun } from '@infra/ai/run-metrics';
+```
+
+and call it immediately after the id is generated (Task 2, Step 5):
+
+```typescript
+        const runId = randomUUID();
+        startRun(runId);
+```
 
 - [ ] **Step 6: Check the wiring compiles and nothing regressed**
 
@@ -547,7 +683,7 @@ export interface ConversationRunRecord {
   tokensIn: number | null;
   tokensOut: number | null;
   latencyMs: number;
-  toolCalls: Array<{ name: string; outcomeKind: string }> | null;
+  toolCalls: Array<{ name: string; argsHash: string; outcomeKind: string }> | null;
   transition: { toPhase: string; reason?: string } | null;
   outcome: 'ok' | 'llm_unavailable' | 'core_error' | 'budget_exhausted';
 }
@@ -656,7 +792,7 @@ export interface ConversationRunRecord {
   tokensIn: number | null;
   tokensOut: number | null;
   latencyMs: number;
-  toolCalls: Array<{ name: string; outcomeKind: string }> | null;
+  toolCalls: Array<{ name: string; argsHash: string; outcomeKind: string }> | null;
   transition: { toPhase: string; reason?: string } | null;
   outcome: ConversationRunOutcome;
 }
