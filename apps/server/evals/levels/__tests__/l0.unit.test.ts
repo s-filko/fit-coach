@@ -1,6 +1,6 @@
 import { FORBIDDEN_STRINGS, FORBIDDEN_STRING_ALLOWLIST, checkRenderedPrompt } from '../l0';
 
-describe('L0 static checks', () => {
+describe('L0 static checks (AC-1303 L0 half, PROMPT_EVAL_FRAMEWORK §4.1)', () => {
   it('flags a prompt containing "undefined"', () => {
     const results = checkRenderedPrompt('chat', 'empty-profile', 'Your age is undefined years.');
     const forbidden = results.find(r => r.check === 'no-forbidden-strings');
@@ -25,7 +25,7 @@ describe('L0 static checks', () => {
     expect(budget?.passed).toBe(false);
   });
 
-  it('lists every forbidden string the spec names', () => {
+  it('lists every forbidden string §4.1 names', () => {
     expect(FORBIDDEN_STRINGS).toEqual(expect.arrayContaining(['undefined', 'null', '[object Object]', 'NaN']));
   });
 

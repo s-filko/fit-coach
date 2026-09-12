@@ -174,6 +174,15 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   run's R1, which had to reconstruct legitimacy from commit timestamps (escalation record at
   13:49 preceding the edit at 14:15) — confirming the gap is systemic, not incidental.
   Runs: refactor-p0-dead-code (2026-09-12, re-run), refactor-p0-dead-code (2026-09-12, third run).
+- [×1] The AC/BR-in-test-name convention is real (confirmed by training.subgraph.unit.test.ts
+  precedent) but is not written down anywhere central — CONTRIBUTING_AI.md states it in prose
+  ("IDs must appear... in tests") while apps/server/TESTING.md, the doc CONTRIBUTING_AI.md defers
+  to for "test rules and structure," shows zero examples of it and CONTRIBUTING_AI.md's own
+  precedence clause says TESTING.md should win on conflict. Recommend TESTING.md §2 (Naming and
+  Structure) add an explicit example/rule: "when a test covers a BR-*/AC-*/ADR-* item, name the
+  describe/it block to include that ID," removing the ambiguity that made me have to search actual
+  test files to confirm the norm rather than reading one authoritative line.
+  Runs: refactor-p0-eval-harness (2026-09-13).
 - [×1] When a plan claims to extend a spec section "rather than revise" it, nothing requires
   the spec to gain a forward-pointer — so the spec can be left stating something the code no
   longer does. Proposed rule for `SUPERPOWERS_INTEGRATION.md` rule 3: an extension claim must

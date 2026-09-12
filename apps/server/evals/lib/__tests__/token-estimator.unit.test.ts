@@ -1,6 +1,6 @@
 import { estimateTokens } from '../token-estimator';
 
-describe('estimateTokens', () => {
+describe('estimateTokens (AC-1303 L0 — shared token estimator)', () => {
   it('is chars/4 with a 1.15 safety factor, rounded up', () => {
     // 40 chars → 10 * 1.15 = 11.5 → 12
     expect(estimateTokens('a'.repeat(40))).toBe(12);

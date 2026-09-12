@@ -1,6 +1,9 @@
 import type { EvalFixture } from '../schema/case.schema';
 
-/** Three fixtures every L0 check renders against — §4.1: empty, complete, active session. */
+/**
+ * Three fixtures every L0 check renders against — §4.1: empty, complete, active session.
+ * BR-EVAL-003: hand-written personas only, no real user data.
+ */
 export const EMPTY_PROFILE: EvalFixture = {
   user: { languageCode: 'ru', timezone: 'Europe/Berlin', firstName: 'Тест', registrationCompleted: false },
   hasActivePlan: false,

@@ -1,8 +1,9 @@
 # Refactor P0 — Eval Harness (L0) Implementation Plan
 
-- Status: planned
+- Status: done
 - Branch: plan/refactor-p0-eval-harness
 - After: refactor-p0-run-log
+- Review: 2026-09-13 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -660,7 +661,7 @@ git add ../../.github/workflows/ci.yml
 git commit -m "ci: run eval L0 static prompt checks on every PR"
 ```
 
-- [ ] **Step 5: Confirm the gate fires on the PR**
+- [x] **Step 5: Confirm the gate fires on the PR**
 
 Open the PR and wait for `check-server`. Expected: the "Eval L0" step appears and passes. Paste its output line into the PR description.
 
@@ -708,3 +709,39 @@ Open the PR and wait for `check-server`. Expected: the "Eval L0" step appears an
 ## Close-out
 
 Follow `superpowers:finishing-a-development-branch`. Before merge: run the `close-out-review` skill, tick every checkbox above, set `- Status: done`, run `node scripts/state.mjs --write` from the repo root, and commit. `node scripts/state.mjs --check` must pass.
+
+## Review
+
+Four-zone close-out review, 2026-09-13, run on a different model than the implementation.
+Initial verdict **blocked** (3 blocking findings in R3); re-verified **clean** after the fixes below.
+
+### Blocking findings (all closed)
+
+- `blocking | R3 | apps/server/evals/lib/__tests__/token-estimator.unit.test.ts:3 | docs/CONTRIBUTING_AI.md "ID Conventions" ("IDs must appear in docs, code comments... and tests") | describe/it names carry no AC-1303/BR-EVAL reference; codebase precedent (src/infra/ai/graph/subgraphs/__tests__/training.subgraph.unit.test.ts:35, "ADR-0011 Fix 1.1") shows this ID-in-test-name convention is actually followed elsewhere, not just aspirational`
+  **Closed:** describe renamed to `estimateTokens (AC-1303 L0 — shared token estimator)`.
+- `blocking | R3 | apps/server/evals/schema/__tests__/case.schema.unit.test.ts:12 | docs/CONTRIBUTING_AI.md "ID Conventions" | EvalCaseSchema tests cover BR-EVAL-relevant shape (case immutability field ` + '`deprecated`' + `, phase enum) but cite no BR-EVAL-00x or AC-1303 anywhere in describe/it text`
+  **Closed:** describe renamed to `EvalCaseSchema (AC-1303, PROMPT_EVAL_FRAMEWORK §3 case schema)`; the `deprecated` test now cites BR-EVAL-001.
+- `blocking | R3 | apps/server/evals/levels/__tests__/l0.unit.test.ts:3 | docs/CONTRIBUTING_AI.md "ID Conventions" | L0 checks test the AC-1303 L0 half directly (forbidden strings, token budget, allowlist) with zero ID references in test names`
+  **Closed:** describe renamed to `L0 static checks (AC-1303 L0 half, PROMPT_EVAL_FRAMEWORK §4.1)`. `personas.ts` also now cites BR-EVAL-003 for the no-real-user-data rule.
+
+Re-verification after the fixes: 16 eval tests pass, `npm run evals -- --level L0` → 45/45, type-check clean.
+
+### Advisory findings
+
+Filed in `docs/BACKLOG.md` → Findings:
+- §4.1's unimplemented L0 checks — section presence, version discipline, message-catalog completeness (R3, R4).
+- Replace the forbidden-string allowlist with P2's structural check (R4).
+- `evals/` is outside the lint script's scope and has no eslint override — 8 errors invisible to CI (R1).
+
+Not filed, recorded here only:
+- R1: `evals/` has no tsconfig path alias for its own internals, so relative imports are unavoidable inside the tree. Same root cause as the lint entry above.
+- R1: `FORBIDDEN_STRING_ALLOWLIST` shares a file with the check engine — not a violation at one entry; covered by the structural-check backlog entry.
+- R2: `buildFixtureSession` is a third copy of a `WorkoutSessionWithDetails` literal (also in two pre-existing test files); a shared fixture builder would remove all three. Pre-dates this branch.
+- R2: `argValue` in `run.ts` is a minimal hand-rolled flag parser — YAGNI watch-item, no existing utility duplicates it.
+- R3: `toUser` / `buildFixtureSession` / `buildSessionPlanningContext` have no direct unit test, only indirect coverage via `runL0`.
+- R3: `run.ts` does not document behaviour on an unknown `--phase` (verified: one failure per fixture, exit 1 — correct, undocumented).
+
+### Recommendation to the owner (not actioned — durable spec)
+
+R4 notes `PROMPT_EVAL_FRAMEWORK.md` §4.1 does not describe the allowlist mechanism now shipped.
+Recommend the owner add it to §4.1. Not edited here: durable specs are owner-only.

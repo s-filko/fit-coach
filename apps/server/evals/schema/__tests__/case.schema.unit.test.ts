@@ -9,7 +9,7 @@ const minimalCase = {
   expect: { tools: { must: ['request_transition'] } },
 };
 
-describe('EvalCaseSchema', () => {
+describe('EvalCaseSchema (AC-1303, PROMPT_EVAL_FRAMEWORK §3 case schema)', () => {
   it('accepts a minimal case', () => {
     expect(() => EvalCaseSchema.parse(minimalCase)).not.toThrow();
   });
@@ -23,7 +23,7 @@ describe('EvalCaseSchema', () => {
     expect(() => EvalCaseSchema.parse(noId)).toThrow();
   });
 
-  it('defaults deprecated to false', () => {
+  it('defaults deprecated to false (BR-EVAL-001 case immutability marker)', () => {
     expect(EvalCaseSchema.parse(minimalCase).deprecated).toBe(false);
   });
 
