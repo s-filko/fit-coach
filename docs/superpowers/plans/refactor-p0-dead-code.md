@@ -304,6 +304,43 @@ plan's own verification steps:
 - `grep -rn "LLMService\|LLM_SERVICE_TOKEN" src` → still present in `infra/ai/llm.service.ts`,
   `domain/ai/ports.ts`, `main/register-infra-services.ts`, `app/test/setup.ts`, as P1 requires.
 
+## Review
+
+Close-out review run 2026-09-12, four zones (R1, R2, R3, R4). **Verdict: blocked** —
+three blocking findings, all from R4, all the same class: the deletion removed seven
+files and the living documentation layer still presents them as current. No `- Review:`
+header line is written while the verdict stands.
+
+### Blocking
+
+1. `blocking | R4 | apps/server/src/domain/user/services/README-parser.md:18 | DOCUMENTATION_GUIDE.md § Context hygiene ("Stale content is rewritten or deleted immediately") | The diff deletes domain/user/services/prompt.service.ts, but this in-tree doc still instructs import { FieldDefinition, UniversalParseRequest } from './prompt.service' — a sibling file in the very directory the diff emptied, now pointing at a nonexistent module (it also references profile-parser.service.ts, already gone). It is the only non-docs/ doc rot the diff creates, sits in the deletion's own blast radius, and no later phase owns it (P7's item 1 enumerates docs/** only).`
+   — Status: open.
+2. `blocking | R4 | docs/ARCHITECTURE.md:41 | DOCUMENTATION_GUIDE.md § Document Types & Rules + AI Execution Order (ARCHITECTURE.md is architectural truth, step 4 of the execution order) | The module-layout tree still lists prompt.ports.ts and (line 44) prompt.service.ts as live files under domain/user/, each carrying a TODO: remove after Step 9 marker. Both files are deleted by this diff, so the canonical layout diagram now describes a directory that does not exist. P7 scope item 1 covers ARCHITECTURE.md's "Conversation Context" and "LLM Integration" sections and the module layout, but P7 depends on P4/P6 — the tree misleads every agent for six phases, and the fix here is deleting two lines.`
+   — Status: open.
+3. `blocking | R4 | docs/ARCHITECTURE.md:128 | DOCUMENTATION_GUIDE.md § Context hygiene | The "Interface Organization Principles" section prescribes prompt.ports.ts - Specialized utility contracts as a required member of the domain/*/ports/ modular structure. This is a live prescriptive rule (not a historical record), so after the deletion it instructs the next agent to recreate the file this plan removed.`
+   — Status: open.
+
+### Advisory
+
+None were fixed on this branch; each is offered to `docs/BACKLOG.md` via the `backlog` skill.
+
+- `advisory | R2 | apps/server/src/domain/ai/types.ts:6 + apps/server/src/domain/ai/ports.ts:1 | YAGNI (docs/CONTRIBUTING_AI.md, "Principles & Boundaries") | New 9-line module holding a single 4-line interface, imported by ports.ts sitting next to it; domain/ai/ports.ts is 13 lines and the two could be one file under the 50-line ports rule. Not blocking: the master plan (docs/LLM_CORE_REFACTOR_PLAN.md P0 item 4) explicitly prescribes "move ChatMsg to domain/ai temporarily", and ADR-0013:307 rewrites ports.ts without ChatMsg in P1 — a separate file is the cheaper seam for that deletion.`
+- `advisory | R2 | apps/server/src/infra/conversation/conversation-context.service.ts:6,34 | DRY (docs/CONTRIBUTING_AI.md, "Principles & Boundaries") | The in-memory double declares Array<{ role: 'user' | 'assistant'; content: string }> inline and then casts it as ChatMsg[] at line 34, reinventing the ChatMsg shape it imports on line 2. Pre-existing; this branch only retargeted the import. ADR-0013:309 slates the whole class for deletion, so it should not be fixed here.`
+- `advisory | R2 | apps/server/src/domain/training/types.ts:269 + apps/server/src/domain/training/session-planning.types.ts:33 | DRY (docs/CONTRIBUTING_AI.md, "Principles & Boundaries") | SessionRecommendation (hand-written interface) and SessionRecommendationSchema (Zod) define the same shape in two places and must be kept in sync by hand; same for RecommendedExercise (types.ts:~255) vs RecommendedExerciseSchema (session-planning.types.ts:6). z.infer from the schema would collapse them. Pre-existing and untouched by the diff.`
+- `advisory | R3 | apps/server/src/main/register-infra-services.ts:48 | — | The only runtime-behaviour change in the diff (dropping a DI registration) is covered by no check in AC-1302: type-check/lint/test:unit cannot prove the container still resolves, and the integration suite that loads this module is gated behind RUN_DB_TESTS=1. I verified it manually by invoking registerInfraServices() against .env.test (passes), but the plan's evidence set does not include that proof. A pure-deletion plan touching DI would benefit from npm run test:integration in its verification line.`
+- `advisory | R3 | apps/server/src/domain/training/session-planning.types.ts:43 | — | parseSessionPlanningResponse carried non-trivial, untested error-path logic (the "strip an invalid phaseTransition rather than lose the user-facing message" fallback and its droppedPhaseTransition flag). Deleting it is correct — it was dead — but that lenient-parse behaviour is a design decision now recorded nowhere. If P2/P4 reintroduce structured phase-transition parsing, the same edge case will have to be rediscovered.`
+- `advisory | R4 | docs/CONTRIBUTING_AI.md:130 | — | The "Adjust Registration Flow / Prompts" recipe tells the agent to edit domain/user/services/prompt.service.ts:1 and domain/user/ports/prompt.ports.ts (also listed at :178 in the Tokens and Ports reference). P7 scope item 3 explicitly reopens CONTRIBUTING_AI.md, so this file has a named owner downstream; the stale paths are a real hazard but not this branch's to fix.`
+- `advisory | R4 | docs/features/FEAT-0006-registration-data-collection.md:20 | — | Marked Status: ✅ Implemented while describing PromptService.buildUnifiedRegistrationPrompt(user) as the live registration prompt mechanism (also :38, :77, :83-84, :324, :346, :348). The method was already a stub returning '' before this diff, so the spec was drifting before the branch; the deletion only makes it unambiguous. FEAT-0003:354/357 has the same rot in its service-dependency tree. P7 item 1 names FEAT-0003 but not FEAT-0006.`
+- `advisory | R4 | docs/CONVERSATION_CONTEXT_ARCHITECTURE.md:58 | — | Says "ChatMsg already exists in domain/user/ports (prompt.ports.ts) — reuse it or re-export from a shared place". The diff performs exactly the "shared place" the sentence recommends (@domain/ai/types), so the doc now records the open question rather than the answer. P7 item 1 archives this whole file to docs/archive/, which is why this is not blocking.`
+- `advisory | R4 | docs/CHAT_PHASE_JSON_FIX.md:32 | — | A one-off fix note describing edits to prompt.service.ts buildChatSystemPrompt(), now a file that does not exist. It is a root-level docs/ file governed by no document type in DOCUMENTATION_GUIDE § Structure and owned by no phase — a candidate for docs/archive/ alongside CONVERSATION_CONTEXT_ARCHITECTURE.md in P7.`
+
+### Zones reporting clean
+
+R1 (architecture), R2 (duplication), R3 (correctness) each returned no blocking findings.
+R3 re-executed every AC-1302 check independently and confirmed the plan's recorded numbers,
+additionally verifying that the test file set is byte-identical between base and HEAD — so
+240/240 is a like-for-like baseline, not a count preserved by deleting tests.
+
 ## Close-out
 
 Follow `superpowers:finishing-a-development-branch`. Before merge: run the `close-out-review` skill, tick every checkbox above, set `- Status: done` in this file's header, run `node scripts/state.mjs --write` from the repo root, and commit. `node scripts/state.mjs --check` must pass.
