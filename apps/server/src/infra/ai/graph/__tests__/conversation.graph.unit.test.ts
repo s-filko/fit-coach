@@ -80,6 +80,7 @@ const makeDeps = (): ConversationGraphDeps => ({
     upsertUser: jest.fn(),
   } as unknown as IUserService,
   contextService: new InMemoryConversationContextService(),
+  runService: { recordRun: jest.fn().mockResolvedValue(undefined) },
   checkpointer: new MemorySaver() as unknown as InstanceType<
     typeof import('@langchain/langgraph-checkpoint-postgres').PostgresSaver
   >,

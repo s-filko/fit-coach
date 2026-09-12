@@ -1,0 +1,825 @@
+# Refactor P0 — L1 Runner and Chat/Training Datasets Implementation Plan
+
+- Status: planned
+- Branch:
+- After: refactor-p0-eval-harness
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Make the eval harness actually run the graph against a real model, and prove it on the two phases where documented bugs give us real material — chat and training.
+
+**Architecture:** L1 builds the production conversation graph with `MemorySaver`, repositories stubbed from the case's `fixture`, and the real model behind `RUN_LLM_EVALS=1`. Tools are wrapped so their side effects are *recorded* rather than executed — the harness needs to know `log_set` was called, not to write a set. Each case runs `n` times (default 3) and passes if at least ⌈n/2⌉ samples pass, because a temperature-bearing model is not deterministic. This plan writes the four chat/training datasets whose expected behaviour is already documented in BUGS.md; the remaining three phases follow in `refactor-p0-eval-l1-remaining-phases`.
+
+**Tech Stack:** LangGraph (`MemorySaver`, compiled graph), LangChain tool wrapping, tsx, Zod, OpenRouter (BYOK) via the existing `model.factory.ts`.
+
+**Spec:** `docs/PROMPT_EVAL_FRAMEWORK.md` §3 (datasets), §4.2 (L1 checks, sampling). Master plan: `docs/LLM_CORE_REFACTOR_PLAN.md` § P0 scope item 5. Bug sources: `docs/BUGS.md` BUG-006, BUG-008, BUG-009, BUG-011.
+
+**Acceptance criteria:** the L1 machinery half of AC-1303 (`RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase chat` runs against dev keys). Baselines are written in the follow-up plan, once all five phases have datasets.
+
+## Global Constraints
+
+- **L1 never runs without `RUN_LLM_EVALS=1`.** Without the flag the runner reports "skipped" and exits 0, so CI never spends tokens or fails on a model outage.
+- **L1 never touches the database.** Repositories are in-memory stubs built from the case fixture; tool side effects are recorded, not performed.
+- **Minimum ten cases per phase in P0** (master plan P0 item 5). `PROMPT_EVAL_FRAMEWORK.md` BR-EVAL-004's thirty per phase is the eventual target, reached as later phases add cases — P0 deliberately ships the smaller set that makes a baseline possible. Note this in the dataset README so the gap does not read as an unmet AC.
+- **Every case is tagged with its source** — the BUGS.md id, or `MANUAL_TEST_PLAN` plus scenario number.
+- **Fixtures contain no real user data** (BR-EVAL-003).
+- **No prompt wording changes.** A case that fails against today's prompts is a *recorded baseline failure*, not a reason to edit a prompt — the whole point is to measure the starting point. Record such failures; do not fix them here.
+- Verification commands run from `apps/server/`. LLM runs need `LLM_API_KEY` in `apps/server/.env`.
+- Commit messages carry no attribution lines.
+
+---
+
+### Task 1: Build the fixture-driven repository stubs
+
+Every L1 case needs a world: a user, maybe a plan, maybe an active session. One module turns a `fixture` into the dependency object `buildConversationGraph` expects.
+
+**Files:**
+- Create: `apps/server/evals/lib/build-stub-deps.ts`
+- Create: `apps/server/evals/lib/__tests__/build-stub-deps.unit.test.ts`
+
+**Interfaces:**
+- Consumes: `EvalFixture` from `evals/schema/case.schema.ts`; `ConversationGraphDeps` from `@infra/ai/graph/conversation.graph`.
+- Produces:
+
+```typescript
+export interface RecordedToolCall { name: string; args: Record<string, unknown>; outcomeKind: 'recorded' }
+export interface StubWorld { deps: ConversationGraphDeps; recordedRuns: ConversationRunRecord[] }
+export function buildStubDeps(fixture: EvalFixture): StubWorld;
+```
+
+Task 2's runner consumes `buildStubDeps`; Task 3's checks read `recordedRuns`.
+
+- [ ] **Step 1: Write the failing stub test**
+
+Create `apps/server/evals/lib/__tests__/build-stub-deps.unit.test.ts`:
+
+```typescript
+import { buildStubDeps } from '../build-stub-deps';
+import { COMPLETE_PROFILE, EMPTY_PROFILE } from '../../fixtures/personas';
+
+describe('buildStubDeps', () => {
+  it('returns a user matching the fixture', async () => {
+    const { deps } = buildStubDeps(COMPLETE_PROFILE);
+    const user = await deps.userService.getUserById('any-id');
+    expect(user?.fitnessGoal).toBe('strength');
+    expect(user?.languageCode).toBe('ru');
+  });
+
+  it('reports an active plan only when the fixture says so', async () => {
+    const withPlan = buildStubDeps(COMPLETE_PROFILE);
+    const withoutPlan = buildStubDeps(EMPTY_PROFILE);
+    expect(await withPlan.deps.workoutPlanRepo.getActivePlan('u')).not.toBeNull();
+    expect(await withoutPlan.deps.workoutPlanRepo.getActivePlan('u')).toBeNull();
+  });
+
+  it('collects run records instead of writing them', async () => {
+    const world = buildStubDeps(COMPLETE_PROFILE);
+    await world.deps.runService.recordRun({
+      runId: 'r1',
+      userId: 'u1',
+      phaseIn: 'chat',
+      phaseOut: null,
+      model: 'm',
+      promptVersions: {},
+      tokensIn: 1,
+      tokensOut: 1,
+      latencyMs: 1,
+      toolCalls: null,
+      transition: null,
+      outcome: 'ok',
+    });
+    expect(world.recordedRuns).toHaveLength(1);
+  });
+
+  it('persists no conversation turns', async () => {
+    const { deps } = buildStubDeps(COMPLETE_PROFILE);
+    await expect(deps.contextService.appendTurn('u', 'chat', 'a', 'b')).resolves.toBeUndefined();
+    expect(await deps.contextService.getMessagesForPrompt('u', 'chat')).toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 2: Run it to confirm it fails**
+
+Run: `npm run test:unit -- build-stub-deps`
+Expected: FAIL — module not found.
+
+- [ ] **Step 3: Implement the stub builder**
+
+Create `apps/server/evals/lib/build-stub-deps.ts`. Start from the stub objects in `tests/integration/api/chat-run-log.integration.test.ts` (written in `refactor-p0-run-log` Task 5) so the two agree on which repository methods the graph actually calls:
+
+```typescript
+import { MemorySaver } from '@langchain/langgraph';
+
+import type { ConversationRunRecord } from '@domain/conversation/ports';
+import type { ConversationGraphDeps } from '@infra/ai/graph/conversation.graph';
+
+import type { EvalFixture } from '../schema/case.schema';
+
+export interface StubWorld {
+  deps: ConversationGraphDeps;
+  recordedRuns: ConversationRunRecord[];
+}
+
+export function buildStubDeps(fixture: EvalFixture): StubWorld {
+  const recordedRuns: ConversationRunRecord[] = [];
+  const userId = '22222222-2222-4222-8222-222222222222';
+
+  const user = { id: userId, ...fixture.user };
+  const activePlan = fixture.hasActivePlan ? (fixture.plan ?? { id: 'plan-1', name: 'Test plan' }) : null;
+
+  const deps = {
+    userService: {
+      getUserById: async () => user,
+      updateUser: async () => user,
+    },
+    trainingService: {},
+    workoutPlanRepo: {
+      getActivePlan: async () => activePlan,
+    },
+    workoutSessionRepo: {
+      getRecentSessions: async () => (fixture.sessions ?? []),
+      getActiveSession: async () => (fixture.activeSession ?? null),
+    },
+    exerciseRepository: {
+      searchByEmbedding: async () => [],
+      findByIds: async () => [],
+    },
+    embeddingService: {
+      embed: async () => new Array(1536).fill(0),
+    },
+    contextService: {
+      appendTurn: async () => undefined,
+      getMessagesForPrompt: async () => [],
+      insertContextReset: async () => undefined,
+      insertPhaseSummary: async () => undefined,
+      getLatestSummary: async () => null,
+      getLastUserMessageTime: async () => null,
+    },
+    runService: {
+      recordRun: async (record: ConversationRunRecord) => {
+        recordedRuns.push(record);
+      },
+    },
+    checkpointer: new MemorySaver(),
+  } as unknown as ConversationGraphDeps;
+
+  return { deps, recordedRuns };
+}
+```
+
+If the graph calls a repository method this object lacks, the L1 run throws and Task 2's runner reports it as a `runs-without-throwing` failure — add the missing method there, returning an empty value, rather than loosening a check.
+
+- [ ] **Step 4: Run the test to confirm it passes**
+
+Run: `npm run test:unit -- build-stub-deps`
+Expected: PASS, all four cases.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add evals/lib/build-stub-deps.ts evals/lib/__tests__/build-stub-deps.unit.test.ts
+git commit -m "feat(evals): build fixture-driven graph dependencies for L1"
+```
+
+---
+
+### Task 2: Run one case through the real graph and capture what happened
+
+The observation layer: invoke the graph, record every tool call and the final text, without asserting anything yet.
+
+**Files:**
+- Create: `apps/server/evals/lib/run-case.ts`
+- Create: `apps/server/evals/lib/__tests__/run-case.unit.test.ts`
+
+**Interfaces:**
+- Consumes: `buildStubDeps` (Task 1), `EvalCase` (harness plan Task 2).
+- Produces:
+
+```typescript
+export interface CaseObservation {
+  text: string;
+  toolCalls: Array<{ name: string; args: Record<string, unknown> }>;
+  transition: string | null;
+  outcome: string;
+  threw: string | null;
+}
+export async function runCase(testCase: EvalCase): Promise<CaseObservation>;
+```
+
+Task 3's assertions consume `CaseObservation`.
+
+- [ ] **Step 1: Write the failing observation test**
+
+The test runs against a mocked model so it stays offline. Create `apps/server/evals/lib/__tests__/run-case.unit.test.ts`:
+
+```typescript
+import { runCase } from '../run-case';
+import type { EvalCase } from '../../schema/case.schema';
+
+jest.mock('@infra/ai/model.factory', () => {
+  const { AIMessage } = jest.requireActual('@langchain/core/messages');
+  const invoke = jest.fn().mockResolvedValue(new AIMessage('Мок-ответ тренера'));
+  return { getModel: () => ({ invoke, bindTools: () => ({ invoke }) }) };
+});
+
+const testCase: EvalCase = {
+  id: 'CH-TEST',
+  phase: 'chat',
+  tags: [],
+  deprecated: false,
+  fixture: { user: { languageCode: 'ru', timezone: 'Europe/Berlin' }, hasActivePlan: true },
+  input: { text: 'привет' },
+  expect: {},
+};
+
+describe('runCase', () => {
+  it('returns the final assistant text', async () => {
+    const observation = await runCase(testCase);
+    expect(observation.text).toContain('Мок-ответ');
+    expect(observation.threw).toBeNull();
+  });
+
+  it('reports an empty tool-call list when the model called none', async () => {
+    const observation = await runCase(testCase);
+    expect(observation.toolCalls).toEqual([]);
+    expect(observation.transition).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 2: Run it to confirm it fails**
+
+Run: `npm run test:unit -- run-case`
+Expected: FAIL — module not found.
+
+- [ ] **Step 3: Implement the case runner**
+
+Create `apps/server/evals/lib/run-case.ts`:
+
+```typescript
+import { randomUUID } from 'node:crypto';
+
+import { buildConversationGraph } from '@infra/ai/graph/conversation.graph';
+
+import type { EvalCase } from '../schema/case.schema';
+import { buildStubDeps } from './build-stub-deps';
+
+export interface CaseObservation {
+  text: string;
+  toolCalls: Array<{ name: string; args: Record<string, unknown> }>;
+  transition: string | null;
+  outcome: string;
+  threw: string | null;
+}
+
+const EMPTY_OBSERVATION: CaseObservation = {
+  text: '',
+  toolCalls: [],
+  transition: null,
+  outcome: 'core_error',
+  threw: null,
+};
+
+export async function runCase(testCase: EvalCase): Promise<CaseObservation> {
+  const { deps, recordedRuns } = buildStubDeps(testCase.fixture);
+  const graph = buildConversationGraph(deps);
+  const userId = '22222222-2222-4222-8222-222222222222';
+  const runId = randomUUID();
+
+  try {
+    const result = await graph.invoke(
+      { userId, userMessage: testCase.input.text, runId, phase: testCase.state?.phase ?? testCase.phase },
+      { configurable: { thread_id: `${testCase.id}-${runId}`, userId, runId }, recursionLimit: 50 },
+    );
+
+    const run = recordedRuns[0];
+    return {
+      text: String(result.responseMessage ?? ''),
+      toolCalls: (run?.toolCalls ?? []).map(tc => ({ name: tc.name, args: {} })),
+      transition: result.requestedTransition?.toPhase ?? null,
+      outcome: run?.outcome ?? 'ok',
+      threw: null,
+    };
+  } catch (err) {
+    return { ...EMPTY_OBSERVATION, threw: err instanceof Error ? err.message : String(err) };
+  }
+}
+```
+
+**Known gap:** `conversation_runs.toolCalls` is `null` in P0 (the run-log plan leaves tool-call capture to P3's shared executor), so `observation.toolCalls` is empty until Step 4 fills it.
+
+- [ ] **Step 4: Capture tool calls by inspecting the graph's messages**
+
+Tool assertions are the core of L1, so they cannot wait for P3. Extend `runCase` to read the tool calls out of the checkpoint instead of the run row: after `invoke`, fetch the final state and walk its messages.
+
+```typescript
+    const snapshot = await graph.getState({ configurable: { thread_id: `${testCase.id}-${runId}` } });
+    const messages = (snapshot.values?.messages ?? []) as Array<{
+      tool_calls?: Array<{ name: string; args: Record<string, unknown> }>;
+    }>;
+    const toolCalls = messages.flatMap(m => m.tool_calls ?? []).map(tc => ({ name: tc.name, args: tc.args ?? {} }));
+```
+
+Use `toolCalls` in the returned observation. If the parent graph's state does not expose subgraph messages (P3 changes this), fall back to wrapping each tool with a recording proxy in `buildStubDeps` and returning the recorded list — whichever works, verify it in Step 6 against a case that provably calls `request_transition`.
+
+- [ ] **Step 5: Run the unit test to confirm it passes**
+
+Run: `npm run test:unit -- run-case`
+Expected: PASS, both cases.
+
+- [ ] **Step 6: Verify tool capture against the real model**
+
+Run: `RUN_LLM_EVALS=1 npx tsx --env-file=.env -e "import('./evals/lib/run-case').then(async m => console.log(await m.runCase({id:'SMOKE',phase:'chat',tags:[],deprecated:false,fixture:{user:{languageCode:'ru',timezone:'Europe/Berlin'},hasActivePlan:true},input:{text:'давай потренируемся сегодня'},expect:{}})))"`
+Expected: the observation prints with `toolCalls` containing `request_transition` (that is BUG-011's documented intended behaviour). If `toolCalls` is empty while the text announces a hand-off, the capture in Step 4 is wrong — fix it before continuing; every tool assertion in this plan depends on it.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add evals/lib/run-case.ts evals/lib/__tests__/run-case.unit.test.ts
+git commit -m "feat(evals): run a single eval case through the real graph and observe it"
+```
+
+---
+
+### Task 3: Implement the L1 assertions and sampling
+
+The judging layer: turn a `CaseObservation` plus a case's `expect` block into named `CheckResult`s, and run each case `n` times.
+
+**Files:**
+- Create: `apps/server/evals/levels/l1.ts`
+- Create: `apps/server/evals/levels/__tests__/l1.unit.test.ts`
+- Modify: `apps/server/evals/run.ts` (accept `--level L1`, `--samples`, and the `RUN_LLM_EVALS` gate)
+
+**Interfaces:**
+- Consumes: `runCase` (Task 2), `CheckResult` (harness plan).
+- Produces: `export function assertCase(testCase: EvalCase, observation: CaseObservation): CheckResult[]` and `export async function runL1(phase: string, samples: number): Promise<CheckResult[]>`.
+
+- [ ] **Step 1: Write the failing assertion test**
+
+Create `apps/server/evals/levels/__tests__/l1.unit.test.ts`:
+
+```typescript
+import { assertCase } from '../l1';
+import type { EvalCase } from '../../schema/case.schema';
+import type { CaseObservation } from '../../lib/run-case';
+
+const base: EvalCase = {
+  id: 'CH-0001',
+  phase: 'chat',
+  tags: [],
+  deprecated: false,
+  fixture: { user: { languageCode: 'ru', timezone: 'Europe/Berlin' } },
+  input: { text: 'давай потренируемся' },
+  expect: {},
+};
+
+const observed = (overrides: Partial<CaseObservation> = {}): CaseObservation => ({
+  text: 'Идём в планирование тренировки',
+  toolCalls: [{ name: 'request_transition', args: { toPhase: 'session_planning' } }],
+  transition: 'session_planning',
+  outcome: 'ok',
+  threw: null,
+  ...overrides,
+});
+
+describe('assertCase', () => {
+  it('passes when a required tool was called', () => {
+    const results = assertCase({ ...base, expect: { tools: { must: ['request_transition'] } } }, observed());
+    expect(results.find(r => r.check === 'tools.must:request_transition')?.passed).toBe(true);
+  });
+
+  it('fails when a required tool was not called', () => {
+    const results = assertCase(
+      { ...base, expect: { tools: { must: ['request_transition'] } } },
+      observed({ toolCalls: [] }),
+    );
+    expect(results.find(r => r.check === 'tools.must:request_transition')?.passed).toBe(false);
+  });
+
+  it('fails when a forbidden tool was called', () => {
+    const results = assertCase(
+      { ...base, expect: { tools: { mustNot: ['log_set'] } } },
+      observed({ toolCalls: [{ name: 'log_set', args: {} }] }),
+    );
+    expect(results.find(r => r.check === 'tools.mustNot:log_set')?.passed).toBe(false);
+  });
+
+  it('fails on forbidden text — the false-confirmation gate', () => {
+    const results = assertCase(
+      { ...base, expect: { text: { mustNotMatch: ['(?i)записал|logged'] } } },
+      observed({ text: 'Записал твой подход!' }),
+    );
+    expect(results.find(r => r.check.startsWith('text.mustNotMatch'))?.passed).toBe(false);
+  });
+
+  it('checks the committed transition', () => {
+    const results = assertCase({ ...base, expect: { transition: null } }, observed());
+    expect(results.find(r => r.check === 'transition')?.passed).toBe(false);
+  });
+
+  it('fails everything when the run threw', () => {
+    const results = assertCase({ ...base, expect: { tools: { must: ['x'] } } }, observed({ threw: 'boom' }));
+    expect(results.some(r => r.check === 'runs-without-throwing' && !r.passed)).toBe(true);
+  });
+
+  it('flags Latin script when the case expects Russian', () => {
+    const results = assertCase(
+      { ...base, expect: { text: { language: 'ru' } } },
+      observed({ text: 'Let us go to session planning' }),
+    );
+    expect(results.find(r => r.check === 'text.language')?.passed).toBe(false);
+  });
+
+  it('rejects markdown bold — Telegram HTML only', () => {
+    const results = assertCase(
+      { ...base, expect: { text: { format: 'telegram_html' } } },
+      observed({ text: 'Готово **жирным**' }),
+    );
+    expect(results.find(r => r.check === 'text.format')?.passed).toBe(false);
+  });
+});
+```
+
+- [ ] **Step 2: Run it to confirm it fails**
+
+Run: `npm run test:unit -- l1`
+Expected: FAIL — module not found.
+
+- [ ] **Step 3: Implement the assertions**
+
+Create `apps/server/evals/levels/l1.ts`:
+
+```typescript
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import type { CheckResult } from '../lib/reporter';
+import { runCase, type CaseObservation } from '../lib/run-case';
+import { parseCases, type EvalCase } from '../schema/case.schema';
+
+const DATASETS_DIR = join(import.meta.dirname, '..', 'datasets');
+
+function cyrillicRatio(text: string): number {
+  const letters = text.match(/\p{L}/gu) ?? [];
+  if (letters.length === 0) {
+    return 0;
+  }
+  const cyrillic = letters.filter(ch => /[Ѐ-ӿ]/.test(ch)).length;
+  return cyrillic / letters.length;
+}
+
+export function assertCase(testCase: EvalCase, observation: CaseObservation): CheckResult[] {
+  const results: CheckResult[] = [];
+  const add = (check: string, passed: boolean, detail?: string): void => {
+    results.push({ case: testCase.id, check, passed, detail });
+  };
+
+  if (observation.threw) {
+    add('runs-without-throwing', false, observation.threw);
+    return results;
+  }
+  add('runs-without-throwing', true);
+
+  const called = observation.toolCalls.map(tc => tc.name);
+
+  for (const tool of testCase.expect.tools?.must ?? []) {
+    add(`tools.must:${tool}`, called.includes(tool), called.length ? `called: ${called.join(', ')}` : 'no tool calls');
+  }
+  for (const tool of testCase.expect.tools?.mustNot ?? []) {
+    add(`tools.mustNot:${tool}`, !called.includes(tool), called.includes(tool) ? `${tool} was called` : undefined);
+  }
+  for (const [tool, expectedArgs] of Object.entries(testCase.expect.tools?.args ?? {})) {
+    const call = observation.toolCalls.find(tc => tc.name === tool);
+    const matches =
+      call !== undefined &&
+      Object.entries(expectedArgs as Record<string, unknown>).every(([k, v]) => call.args[k] === v);
+    add(`tools.args:${tool}`, matches, call ? `got ${JSON.stringify(call.args)}` : `${tool} not called`);
+  }
+
+  if (testCase.expect.transition !== undefined) {
+    add(
+      'transition',
+      observation.transition === testCase.expect.transition,
+      `expected ${String(testCase.expect.transition)}, got ${String(observation.transition)}`,
+    );
+  }
+
+  const text = testCase.expect.text;
+  if (text) {
+    for (const pattern of text.mustMatch ?? []) {
+      add(`text.mustMatch:${pattern}`, new RegExp(pattern).test(observation.text));
+    }
+    for (const pattern of text.mustNotMatch ?? []) {
+      const hit = new RegExp(pattern).test(observation.text);
+      add(`text.mustNotMatch:${pattern}`, !hit, hit ? observation.text.slice(0, 120) : undefined);
+    }
+    if (text.language === 'ru') {
+      const ratio = cyrillicRatio(observation.text);
+      add('text.language', ratio >= 0.5, `cyrillic ratio ${ratio.toFixed(2)}`);
+    }
+    if (text.format === 'telegram_html') {
+      const bad = /\*\*|(?<!\w)_[^_]+_(?!\w)|^#{1,6}\s/m.test(observation.text);
+      add('text.format', !bad, bad ? 'markdown syntax in a Telegram HTML reply' : undefined);
+    }
+    if (text.maxChars !== undefined) {
+      add('text.maxChars', observation.text.length <= text.maxChars, `${observation.text.length} chars`);
+    }
+    add('text.no-raw-uuid', !/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(observation.text));
+  }
+
+  return results;
+}
+
+function loadCases(phase: string): EvalCase[] {
+  const phases = phase === 'all' ? readdirSync(DATASETS_DIR) : [phase];
+  const cases: EvalCase[] = [];
+  for (const p of phases) {
+    let files: string[];
+    try {
+      files = readdirSync(join(DATASETS_DIR, p)).filter(f => f.endsWith('.jsonl'));
+    } catch {
+      continue;
+    }
+    for (const file of files) {
+      cases.push(...parseCases(readFileSync(join(DATASETS_DIR, p, file), 'utf8')));
+    }
+  }
+  return cases.filter(c => !c.deprecated);
+}
+
+/** A case passes if at least ceil(n/2) samples pass (§4.2). */
+export async function runL1(phase: string, samples: number): Promise<CheckResult[]> {
+  const cases = loadCases(phase);
+  const results: CheckResult[] = [];
+
+  for (const testCase of cases) {
+    const perSample: CheckResult[][] = [];
+    for (let i = 0; i < samples; i += 1) {
+      perSample.push(assertCase(testCase, await runCase(testCase)));
+    }
+
+    const checkNames = [...new Set(perSample.flat().map(r => r.check))];
+    for (const check of checkNames) {
+      const passes = perSample.filter(sample => sample.find(r => r.check === check)?.passed).length;
+      const threshold = Math.ceil(samples / 2);
+      results.push({
+        case: testCase.id,
+        check,
+        passed: passes >= threshold,
+        detail: `${passes}/${samples} samples passed`,
+      });
+    }
+  }
+
+  return results;
+}
+```
+
+- [ ] **Step 4: Run the assertion test to confirm it passes**
+
+Run: `npm run test:unit -- l1`
+Expected: PASS, all eight cases.
+
+- [ ] **Step 5: Wire L1 into the runner behind the flag**
+
+In `apps/server/evals/run.ts`, replace the `if (level !== 'L0')` guard with:
+
+```typescript
+  const samples = Number(argValue('--samples', '3'));
+
+  let results;
+  if (level === 'L0') {
+    results = await runL0(phase);
+  } else if (level === 'L1') {
+    if (process.env['RUN_LLM_EVALS'] !== '1') {
+      console.log('L1 skipped: set RUN_LLM_EVALS=1 to run evals against a real model.');
+      process.exit(0);
+    }
+    const { runL1 } = await import('./levels/l1');
+    results = await runL1(phase, samples);
+  } else {
+    console.error(`Level ${level} is not implemented yet (P0 ships L0 and L1).`);
+    process.exit(2);
+  }
+```
+
+- [ ] **Step 6: Confirm the gate works both ways**
+
+Run: `npm run evals -- --level L1 --phase chat`
+Expected: prints the skip message, exit 0 (no datasets exist yet, and no tokens are spent).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add evals/levels/l1.ts evals/levels/__tests__/l1.unit.test.ts evals/run.ts
+git commit -m "feat(evals): implement L1 assertions, sampling and the RUN_LLM_EVALS gate"
+```
+
+---
+
+### Task 4: Write the chat datasets (BUG-011, BUG-009)
+
+Chat is where two documented failures live: the bot refuses to hand off to training (BUG-011), and the bot claims it logged a set it cannot log (BUG-009).
+
+**Files:**
+- Create: `apps/server/evals/datasets/chat/transitions.jsonl` (≥6 cases, tagged `BUG-011`)
+- Create: `apps/server/evals/datasets/chat/no-set-logging.jsonl` (≥4 cases, tagged `BUG-009`)
+- Create: `apps/server/evals/datasets/README.md`
+
+**Interfaces:**
+- Consumes: `EvalCaseSchema` (harness plan Task 2).
+- Produces: the `chat` half of the ten-cases-per-phase P0 minimum.
+
+- [ ] **Step 1: Re-read the two bugs before writing a single case**
+
+Run: `sed -n '/## BUG-009/,/## BUG-010/p' ../../docs/BUGS.md` and `sed -n '/## BUG-011/,/## BUG-012/p' ../../docs/BUGS.md`
+Note for each: the user message that triggered it, what the bot wrongly did, and what it should have done. Cases must encode *that* behaviour, not a paraphrase.
+
+- [ ] **Step 2: Write the transitions dataset**
+
+Create `apps/server/evals/datasets/chat/transitions.jsonl`, one JSON object per line. Three "should transition" cases, three "should NOT transition" — a dataset of only positive cases measures nothing, because a bot that always transitions would score 100%.
+
+```jsonl
+{"id":"CH-0001","phase":"chat","tags":["transition","BUG-011"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"давай потренируемся сегодня"},"expect":{"tools":{"must":["request_transition"],"args":{"request_transition":{"toPhase":"session_planning"}}},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0002","phase":"chat","tags":["transition","BUG-011"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"го качаться"},"expect":{"tools":{"must":["request_transition"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0003","phase":"chat","tags":["transition","BUG-011"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":false},"input":{"text":"хочу начать тренироваться, составь мне программу"},"expect":{"tools":{"must":["request_transition"],"args":{"request_transition":{"toPhase":"plan_creation"}}},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0004","phase":"chat","tags":["transition","negative"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"сколько белка нужно есть в день?"},"expect":{"tools":{"mustNot":["request_transition"]},"transition":null,"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0005","phase":"chat","tags":["transition","negative"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"вчера хорошо потренировался, спина болит"},"expect":{"tools":{"mustNot":["request_transition"]},"transition":null,"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0006","phase":"chat","tags":["transition","negative","off-topic"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"какая погода завтра в Берлине?"},"expect":{"tools":{"mustNot":["request_transition"]},"transition":null,"text":{"language":"ru","format":"telegram_html","maxChars":400}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+```
+
+- [ ] **Step 3: Write the no-set-logging dataset**
+
+Create `apps/server/evals/datasets/chat/no-set-logging.jsonl`. This is the truthfulness gate: in chat the bot has no `log_set` tool at all, so any claim of having recorded something is a lie.
+
+```jsonl
+{"id":"CH-0007","phase":"chat","tags":["truthfulness","BUG-009"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"сделал жим лёжа 80 на 8"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"mustNotMatch":["(?i)записал|сохранил|logged|saved|✅"],"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0008","phase":"chat","tags":["truthfulness","BUG-009"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"запиши мне 3 подхода приседа по 100 кг"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"mustNotMatch":["(?i)записал|сохранил|logged|saved|✅"],"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0009","phase":"chat","tags":["truthfulness","BUG-009"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"отметь что я сегодня пробежал 5 км"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"mustNotMatch":["(?i)записал|сохранил|отметил|logged|saved|✅"],"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0010","phase":"chat","tags":["truthfulness","BUG-009","mixed"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"жим 80х8 сделал, и подскажи как улучшить технику"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"mustNotMatch":["(?i)записал|сохранил|logged|saved|✅"],"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+```
+
+- [ ] **Step 4: Write the dataset README**
+
+Create `apps/server/evals/datasets/README.md`:
+
+```markdown
+# Eval datasets
+
+One JSONL file per dataset, one case per line, validated by `evals/schema/case.schema.ts`
+(schema: `docs/PROMPT_EVAL_FRAMEWORK.md` §3).
+
+## Case count
+
+P0 ships **at least 10 cases per phase** (`LLM_CORE_REFACTOR_PLAN.md` § P0 item 5) — enough
+to record a `v0` baseline. `PROMPT_EVAL_FRAMEWORK.md` BR-EVAL-004's target of 30 per phase
+(≥10 should-act, ≥10 should-not-act, ≥10 adversarial) is reached incrementally as later
+refactor phases add cases. The gap is deliberate, not an unmet acceptance criterion.
+
+## Rules
+
+- BR-EVAL-001: a case is immutable once a baseline references it. Fix by adding a new case
+  and setting `"deprecated": true` on the old one.
+- BR-EVAL-002: every BUGS.md entry of class "LLM did the wrong thing" gets at least one case
+  tagged with its id before it is marked Fixed.
+- BR-EVAL-003: fixtures contain no real user data.
+
+## Datasets
+
+| File | Cases | Source |
+|---|---|---|
+| `chat/transitions.jsonl` | CH-0001..CH-0006 | BUG-011 |
+| `chat/no-set-logging.jsonl` | CH-0007..CH-0010 | BUG-009 |
+| `training/set-logging.jsonl` | TR-0001..TR-0006 | BUG-008, ADR-0011 |
+| `training/no-false-confirmation.jsonl` | TR-0007..TR-0010 | BUG-006, BUG-009 |
+```
+
+- [ ] **Step 5: Validate every case parses**
+
+Run: `npx tsx -e "import {parseCases} from './evals/schema/case.schema'; import {readFileSync} from 'node:fs'; for (const f of ['chat/transitions','chat/no-set-logging']) { const c = parseCases(readFileSync('./evals/datasets/'+f+'.jsonl','utf8')); console.log(f, c.length, 'cases OK'); }"`
+Expected: `chat/transitions 6 cases OK` and `chat/no-set-logging 4 cases OK`. A parse error names the line — fix the JSON, do not loosen the schema.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add evals/datasets/
+git commit -m "feat(evals): add chat transition and no-set-logging datasets (BUG-011, BUG-009)"
+```
+
+---
+
+### Task 5: Write the training datasets (BUG-008, BUG-006)
+
+Training is where the bot both invents sets the user never did (BUG-008) and confirms work that no tool performed (BUG-006/009).
+
+**Files:**
+- Create: `apps/server/evals/datasets/training/set-logging.jsonl` (≥6 cases)
+- Create: `apps/server/evals/datasets/training/no-false-confirmation.jsonl` (≥4 cases)
+
+**Interfaces:**
+- Consumes: the same schema.
+- Produces: the `training` half of the P0 minimum.
+
+- [ ] **Step 1: Re-read the two bugs and the logging patterns**
+
+Run: `sed -n '/## BUG-008/,/## BUG-009/p' ../../docs/BUGS.md` and `sed -n '/## BUG-006/,/## BUG-007/p' ../../docs/BUGS.md`
+Also skim `docs/MANUAL_TEST_PLAN.md` scenario 3 (§3.3–3.6) for the real phrasings users log sets with, including the bulk-logging message in §3.4. Cases should use those phrasings.
+
+- [ ] **Step 2: Write the set-logging dataset**
+
+Create `apps/server/evals/datasets/training/set-logging.jsonl`. The fixture carries an active session, and `state.phase` is `training`. Three cases where a set *must* be logged, three where it must not.
+
+```jsonl
+{"id":"TR-0001","phase":"training","tags":["log_set","MANUAL_TEST_PLAN-3.3"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"80 на 8"},"expect":{"tools":{"must":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0002","phase":"training","tags":["log_set","bulk","MANUAL_TEST_PLAN-3.4"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"сделал ещё два подхода: 80 на 7 и 80 на 6"},"expect":{"tools":{"must":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0003","phase":"training","tags":["log_set"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"85х5 готово"},"expect":{"tools":{"must":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0004","phase":"training","tags":["log_set","negative","BUG-008"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"а сколько отдыхать между подходами?"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0005","phase":"training","tags":["log_set","negative","BUG-008"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"тяжело идёт сегодня, устал"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0006","phase":"training","tags":["log_set","negative","BUG-008","adversarial"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"в прошлый раз я делал 80 на 8, сегодня так же смогу?"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+```
+
+`TR-0006` is the BUG-008 shape exactly: past-tense numbers that are context, not a log request.
+
+- [ ] **Step 3: Write the no-false-confirmation dataset**
+
+Create `apps/server/evals/datasets/training/no-false-confirmation.jsonl`. These assert on *text*: the bot may not claim a result it did not obtain, and may not end a session unasked.
+
+```jsonl
+{"id":"TR-0007","phase":"training","tags":["truthfulness","BUG-006"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"что дальше по плану?"},"expect":{"tools":{"mustNot":["finish_training","log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0008","phase":"training","tags":["truthfulness","BUG-006"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"спина немного ноет, это нормально?"},"expect":{"tools":{"mustNot":["finish_training"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0009","phase":"training","tags":["truthfulness","BUG-009"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"расскажи про технику жима"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"mustNotMatch":["(?i)записал|сохранил|logged|saved"],"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0010","phase":"training","tags":["truthfulness","BUG-006","adversarial"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"всё, я устал"},"expect":{"tools":{"mustNot":["finish_training"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+```
+
+`TR-0010` encodes BUG-006's rule directly: "я устал" is not an explicit request to end the session, and `finish_training` is irreversible.
+
+- [ ] **Step 4: Validate the cases parse**
+
+Run: `npx tsx -e "import {parseCases} from './evals/schema/case.schema'; import {readFileSync} from 'node:fs'; for (const f of ['training/set-logging','training/no-false-confirmation']) { const c = parseCases(readFileSync('./evals/datasets/'+f+'.jsonl','utf8')); console.log(f, c.length, 'cases OK'); }"`
+Expected: `training/set-logging 6 cases OK` and `training/no-false-confirmation 4 cases OK`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add evals/datasets/training/
+git commit -m "feat(evals): add training set-logging and no-false-confirmation datasets (BUG-008, BUG-006)"
+```
+
+---
+
+### Task 6: Run L1 against the real model and record what the current prompts do
+
+The first real measurement. Its output is information, not a pass/fail gate — today's prompts are known to carry the bugs these cases encode.
+
+**Files:**
+- Modify: this plan file (record the measured pass rates under Step 3)
+- Create: `apps/server/evals/reports/.gitignore` (ignore ad-hoc report output)
+
+**Interfaces:**
+- Consumes: everything above.
+- Produces: the AC-1303 L1-machinery evidence, and the numbers the baseline plan will turn into `v0`.
+
+- [ ] **Step 1: Confirm the key is live before spending anything**
+
+Run: `curl -s https://openrouter.ai/api/v1/key -H "Authorization: Bearer $(grep '^LLM_API_KEY=' .env | cut -d= -f2-)" | head -c 400`
+Expected: a JSON body with the key's limits. A 401 means the key is stale — stop and report rather than debugging inside an eval run.
+
+- [ ] **Step 2: Run one phase with one sample first**
+
+Run: `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase chat --samples 1`
+Expected: ten cases execute, each producing check lines. Failures are fine; what must not happen is every case reporting `runs-without-throwing: false` — that means the harness is broken, not the prompts. Fix the harness before continuing.
+
+- [ ] **Step 3: Run both phases at the default sampling**
+
+Run: `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase chat --samples 3`
+Run: `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase training --samples 3`
+Expected: a summary line per run. Record both summary lines and the per-case failures in this plan file under this task, and note which failures correspond to which BUGS.md id — that mapping is the useful output of the whole plan.
+
+- [ ] **Step 4: Add the reports gitignore**
+
+Create `apps/server/evals/reports/.gitignore`:
+
+```gitignore
+*
+!.gitignore
+```
+
+Baselines are committed (by the follow-up plan, under `evals/baselines/`); ad-hoc report output is not.
+
+- [ ] **Step 5: File any harness gaps found, without fixing prompts**
+
+If a case failed because the *harness* could not observe something (a tool call invisible to `runCase`, a phase the stubs cannot reach), fix the harness. If it failed because the model behaved badly, leave it: use the `backlog` skill to record anything that is a new finding rather than a known BUGS.md entry.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add docs/superpowers/plans/refactor-p0-eval-l1-chat-training.md evals/reports/.gitignore
+git commit -m "docs(evals): record the first L1 measurement of chat and training prompts"
+```
+
+---
+
+## Close-out
+
+Follow `superpowers:finishing-a-development-branch`. Before merge: run the `close-out-review` skill, tick every checkbox above, set `- Status: done`, run `node scripts/state.mjs --write` from the repo root, and commit. `node scripts/state.mjs --check` must pass.

@@ -1,4 +1,4 @@
-import { ChatMsg } from '@domain/user/ports';
+import { ChatMsg } from '@domain/ai/types';
 
 import type { Logger } from '@shared/logger';
 

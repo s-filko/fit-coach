@@ -13,6 +13,10 @@ export const ConversationState = Annotation.Root({
     reducer: (_, v) => v,
     default: () => '',
   }),
+  runId: Annotation<string>({
+    reducer: (_, v) => v,
+    default: () => '',
+  }),
   phase: Annotation<ConversationPhase>({
     reducer: (_, v) => v,
     default: () => 'registration' as ConversationPhase,

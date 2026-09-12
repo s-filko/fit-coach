@@ -15,6 +15,13 @@
       "when": 1789140333491,
       "tag": "0001_adr0012_and_timezone",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789202393647,
+      "tag": "0002_conversation_runs",
+      "breakpoints": true
     }
   ]
 }

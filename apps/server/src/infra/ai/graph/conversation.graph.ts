@@ -1,8 +1,8 @@
 import { Command, END, START, StateGraph } from '@langchain/langgraph';
-import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
+import type { BaseCheckpointSaver } from '@langchain/langgraph';
 
 import { ConversationState, ConversationStateType } from '@domain/conversation/graph/conversation.state';
-import { IConversationContextService } from '@domain/conversation/ports';
+import { IConversationContextService, IConversationRunService } from '@domain/conversation/ports';
 import type {
   IEmbeddingService,
   IExerciseRepository,
@@ -35,7 +35,8 @@ export interface ConversationGraphDeps {
   embeddingService: IEmbeddingService;
   userService: IUserService;
   contextService: IConversationContextService;
-  checkpointer: PostgresSaver;
+  runService: IConversationRunService;
+  checkpointer: BaseCheckpointSaver;
 }
 
 function routeAfterPersist(state: ConversationStateType): string {
@@ -51,6 +52,7 @@ function buildGraph(deps: ConversationGraphDeps) {
     userService,
     trainingService,
     contextService,
+    runService,
     workoutPlanRepo,
     workoutSessionRepo,
     exerciseRepository,
@@ -59,7 +61,7 @@ function buildGraph(deps: ConversationGraphDeps) {
   } = deps;
 
   const routerNode = buildRouterNode({ userService, trainingService, contextService });
-  const persistNode = buildPersistNode(contextService);
+  const persistNode = buildPersistNode(contextService, runService);
   const chatSubgraph = buildChatSubgraph({ userService, workoutPlanRepo, workoutSessionRepo, contextService });
   const registrationSubgraph = buildRegistrationSubgraph({ userService, contextService });
   const planCreationSubgraph = buildPlanCreationSubgraph({

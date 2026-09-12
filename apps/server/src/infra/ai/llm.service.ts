@@ -2,7 +2,7 @@ import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages
 import { ChatOpenAI } from '@langchain/openai';
 
 import { LLMService as ILLMService } from '@domain/ai/ports';
-import { ChatMsg } from '@domain/user/ports';
+import { ChatMsg } from '@domain/ai/types';
 
 import { loadConfig } from '@config/index';
 

@@ -1,13 +1,14 @@
 import { ConversationStateType } from '@domain/conversation/graph/conversation.state';
-import { IConversationContextService } from '@domain/conversation/ports';
+import { IConversationContextService, IConversationRunService } from '@domain/conversation/ports';
 
+import { drainRunMetrics } from '@infra/ai/run-metrics';
 import { createLogger } from '@shared/logger';
 
 const log = createLogger('persist-node');
 
-export function buildPersistNode(contextService: IConversationContextService) {
+export function buildPersistNode(contextService: IConversationContextService, runService: IConversationRunService) {
   return async function persistNode(state: ConversationStateType): Promise<Partial<ConversationStateType>> {
-    const { userId, phase, userMessage, responseMessage } = state;
+    const { userId, phase, userMessage, responseMessage, runId, requestedTransition } = state;
 
     if (!userMessage || !responseMessage) {
       return {};
@@ -18,6 +19,40 @@ export function buildPersistNode(contextService: IConversationContextService) {
     } catch (err) {
       // Analytics failure must not break user response
       log.warn({ err, userId, phase }, 'Failed to persist conversation turn — continuing');
+    }
+
+    const metrics = drainRunMetrics(runId);
+    try {
+      await runService.recordRun({
+        runId,
+        userId,
+        phaseIn: phase,
+        phaseOut: requestedTransition?.toPhase ?? null,
+        model: metrics.model ?? 'unknown',
+        promptVersions: { [`phase.${phase}`]: 'v0', directives: 'v0' },
+        tokensIn: metrics.tokensIn,
+        tokensOut: metrics.tokensOut,
+        latencyMs: metrics.latencyMs,
+        toolCalls: null,
+        transition: requestedTransition ? { toPhase: requestedTransition.toPhase } : null,
+        outcome: 'ok',
+      });
+      log.info(
+        {
+          runId,
+          phase,
+          model: metrics.model,
+          promptVersions: { [`phase.${phase}`]: 'v0', directives: 'v0' },
+          tokensIn: metrics.tokensIn,
+          tokensOut: metrics.tokensOut,
+          latencyMs: metrics.latencyMs,
+          llmCalls: metrics.llmCalls,
+        },
+        'Conversation run recorded',
+      );
+    } catch (err) {
+      // Run logging is observability — never break the user response
+      log.warn({ err, userId, phase, runId }, 'Failed to record conversation run — continuing');
     }
 
     return {};

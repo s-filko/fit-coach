@@ -38,14 +38,12 @@ apps/server/src/
         index.ts               # Re-exports for convenience
         repository.ports.ts    # Data access contracts
         service.ports.ts       # Business logic contracts
-        prompt.ports.ts        # Specialized utility contracts (TODO: remove after Step 9)
       services/
         user.service.ts        # User CRUD operations
-        prompt.service.ts      # Dynamic system prompt generation (TODO: remove after Step 9)
-      validation/
         registration.validation.ts # Zod validators for registration fields (reused in tools)
     ai/
-      ports.ts                 # ILLMService interface (TODO: remove after Step 9)
+      ports.ts                 # ILLMService interface (TODO: remove in refactor P1)
+      types.ts                 # ChatMsg (temporary home; retired in refactor P1/P4 per ADR-0013)
     conversation/
       graph/
         conversation.state.ts  # LangGraph ConversationState (Annotation.Root)
@@ -125,7 +123,6 @@ Notes:
 - **Modular Structure**: Use `domain/*/ports/` directory with specialized files:
   - `repository.ports.ts` - Data access contracts
   - `service.ports.ts` - Business logic contracts  
-  - `prompt.ports.ts` - Specialized utility contracts
   - `index.ts` - Re-exports for convenience
 - **File Size Limits**: Keep interface files under 50 lines for readability
 - **Single Responsibility**: Each file handles one functional area

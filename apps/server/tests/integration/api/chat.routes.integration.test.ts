@@ -89,8 +89,15 @@ describe('POST /api/bot/chat – integration', () => {
       });
 
       expect(stubGraph.invoke).toHaveBeenCalledWith(
-        { userId: 'user-123', userMessage: 'Hello coach!' },
-        { configurable: { thread_id: 'user-123', userId: 'user-123' }, recursionLimit: 25 },
+        expect.objectContaining({ userId: 'user-123', userMessage: 'Hello coach!', runId: expect.any(String) }),
+        {
+          configurable: {
+            thread_id: 'user-123',
+            userId: 'user-123',
+            runId: expect.any(String),
+          },
+          recursionLimit: 50,
+        },
       );
     });
 
