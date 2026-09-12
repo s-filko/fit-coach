@@ -1,6 +1,6 @@
 # Refactor P0 — Dead Code Removal Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/refactor-p0-dead-code
 - After:
 - Review: 2026-09-12 | clean | R1,R2,R3,R4
