@@ -5,6 +5,8 @@ import { ChatOpenAI } from '@langchain/openai';
 
 import { loadConfig } from '@config/index';
 
+import { bindCallToRun, finishLlmCall, resolveCallRun, startLlmCall } from '@infra/ai/run-metrics';
+
 import { createLogger } from '@shared/logger';
 
 const log = createLogger('llm');
@@ -44,7 +46,7 @@ class LLMLogHandler extends BaseCallbackHandler {
   handleChatModelStart(
     _llm: Serialized,
     messages: BaseMessage[][],
-    _runId: string,
+    llmRunId: string,
     _parentRunId?: string,
     extraParams?: Record<string, unknown>,
   ): void {
@@ -54,6 +56,14 @@ class LLMLogHandler extends BaseCallbackHandler {
     const lastHuman = humanMsgs[humanMsgs.length - 1];
     const options = extraParams?.['options'] as Record<string, unknown> | undefined;
     const userId = (options?.['configurable'] as Record<string, unknown>)?.['userId'] as string | undefined;
+    const runId = (options?.['configurable'] as Record<string, unknown>)?.['runId'] as string | undefined;
+    const invocationModel =
+      ((extraParams?.['invocation_params'] as Record<string, unknown> | undefined)?.['model'] as string | undefined) ??
+      config.LLM_MODEL;
+    if (runId) {
+      startLlmCall(runId, invocationModel);
+      bindCallToRun(llmRunId, runId);
+    }
 
     if (isDebug) {
       const invocationParams = extraParams?.['invocation_params'] as Record<string, unknown> | undefined;
@@ -91,8 +101,19 @@ class LLMLogHandler extends BaseCallbackHandler {
     }
   }
 
-  handleLLMEnd(output: { generations: Array<Array<{ text: string }>> }): void {
+  handleLLMEnd(
+    output: {
+      generations: Array<Array<{ text: string }>>;
+      llmOutput?: { tokenUsage?: { promptTokens?: number; completionTokens?: number } };
+    },
+    llmRunId: string,
+  ): void {
     const text = output.generations?.[0]?.[0]?.text;
+    const usage = output.llmOutput?.tokenUsage;
+    const runId = resolveCallRun(llmRunId);
+    if (runId) {
+      finishLlmCall(runId, usage?.promptTokens ?? 0, usage?.completionTokens ?? 0);
+    }
     log.debug(
       {
         responseLength: text?.length ?? 0,

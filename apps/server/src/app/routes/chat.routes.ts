@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { startRun } from '@infra/ai/run-metrics';
+
 const chatMessageBody = z
   .object({
     userId: z.string().min(1).describe('User ID'),
@@ -80,6 +82,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         const { userId, message } = req.body as { userId: string; message: string };
 
         const runId = randomUUID();
+        startRun(runId);
 
         const result = await app.services.conversationGraph.invoke(
           { userId, userMessage: message, runId },
