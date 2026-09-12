@@ -15,6 +15,7 @@ _Generated 2026-09-12 from docs/superpowers/plans/ + git. Never hand-edit; regen
 — none —
 
 **Planned**
+- `ports-layout-consistency.md` — Ports Layout Consistency Implementation Plan
 - `refactor-p0-eval-baseline.md` — Refactor P0 — Remaining Datasets and v0 Baseline Implementation Plan
 - `refactor-p0-eval-harness.md` — Refactor P0 — Eval Harness (L0) Implementation Plan
 - `refactor-p0-eval-l1-chat-training.md` — Refactor P0 — L1 Runner and Chat/Training Datasets Implementation Plan
@@ -44,12 +45,16 @@ _Generated 2026-09-12 from docs/superpowers/plans/ + git. Never hand-edit; regen
 ## Next (dispatch order)
 
 1. **Refactor P0** — safety net and measurement (`AC-1301`–`AC-1304`), decomposed into six
-   plans executed in `- After:` order. `refactor-p0-dead-code` is done (scope item 4);
-   next is **`refactor-p0-run-log`** (scope items 1–3, AC-1301), then
-   `refactor-p0-eval-harness` → `refactor-p0-eval-l1-chat-training` →
-   `refactor-p0-eval-baseline` → `refactor-p0-transcript-export`, which closes P0.
+   plans executed in `- After:` order. `refactor-p0-dead-code` (scope item 4) and
+   `refactor-p0-run-log` (scope items 1–3, AC-1301) are done; next is
+   **`refactor-p0-eval-harness`** (L0 half of AC-1303), then
+   `refactor-p0-eval-l1-chat-training` → `refactor-p0-eval-baseline` →
+   `refactor-p0-transcript-export`, which closes P0.
 2. Then P1 → P2 → P3 → P4/P5 → P6 → P7 per the master plan phase map.
-3. **HB-02** (production Docker image) — its own plan, sequenced after HB-01;
+3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
+   the code aligned to it, ESLint keeping it that way. Independent of the P0 chain;
+   can run alongside it.
+4. **HB-02** (production Docker image) — its own plan, sequenced after HB-01;
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
@@ -57,16 +62,9 @@ _Generated 2026-09-12 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 - Nothing blocked right now. OQ-3 (judge profile) has a recommended default
   (Gemini 3 Flash PAYG) that P0's eval harness will assume until ruled otherwise.
-- **ADR-0002 divergence, awaiting an owner call** (raised by the `refactor-p0-dead-code`
-  close-out review, not blocking any plan): `refactor-p0-dead-code` removed the
-  `prompt.ports.ts` bullet from `ARCHITECTURE.md`'s prescriptive "Interface Organization
-  Principles", but ADR-0002 — which `ARCHITECTURE.md:298` names as that rule's source —
-  still prescribes the same four-file structure including `prompt.ports.ts` in its Decision
-  section (`:32`, `:40`). One rule, two statements, now divergent. The branch deliberately
-  did not touch the ADR: durable decisions change through the owner
-  (`SUPERPOWERS_INTEGRATION.md` rule 3). Options: amend ADR-0002's Decision section, or
-  supersede it, or rule that its Decision section is historical and only `ARCHITECTURE.md`
-  is live.
+- ADR-0002 divergence **resolved 2026-09-13** by owner call: ADR-0002's Decision section
+  is historical context; the live interface-layout rule is `ARCHITECTURE.md`
+  § Interface Organization Principles. Both files now say so.
 
 ## Notes
 

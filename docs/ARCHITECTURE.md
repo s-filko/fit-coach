@@ -129,6 +129,10 @@ Notes:
 5) Transport DTOs live in `app/*` (schemas), domain types in `domain/*`, and DB models in `infra/db/schema`.
 
 ### Interface Organization Principles
+
+This section is the live rule. ADR-0002 records the original decision to split the
+monolithic `ports.ts`; its Decision section is historical context, not a current spec.
+
 - **Separation by Functional Areas**: Organize interfaces by responsibility, not by type
 - **Modular Structure**: Use `domain/*/ports/` directory with specialized files:
   - `repository.ports.ts` - Data access contracts

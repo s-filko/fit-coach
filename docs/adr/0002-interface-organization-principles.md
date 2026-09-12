@@ -1,5 +1,12 @@
 # ADR 0002: Interface Organization Principles
 
+- Status: Accepted — **Decision section is historical.** The live, prescriptive rule is
+  `docs/ARCHITECTURE.md` § Interface Organization Principles. This ADR records why the
+  monolithic `ports.ts` was split; it is not the current file-layout specification.
+  In particular the `prompt.ports.ts` file named below was never introduced, and
+  per-domain file names (e.g. `conversation-run.ports.ts`, `embedding.ports.ts`) follow
+  the *principle* of separation by functional area rather than the fixed triple below.
+
 ## Context
 
 The project was experiencing issues with interface organization where all domain interfaces were stored in a single `ports.ts` file. This led to several problems:
