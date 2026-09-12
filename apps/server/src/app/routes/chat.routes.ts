@@ -86,7 +86,13 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
         const result = await app.services.conversationGraph.invoke(
           { userId, userMessage: message, runId },
-          { configurable: { thread_id: userId, userId, runId }, recursionLimit: 50 },
+          {
+            configurable: { thread_id: userId, userId, runId },
+            // metadata is the only channel that survives into LLM callback handlers
+            // (configurable is stripped by LangChain) — it is inherited by nested runs
+            metadata: { runId, userId },
+            recursionLimit: 50,
+          },
         );
 
         return reply.send({
