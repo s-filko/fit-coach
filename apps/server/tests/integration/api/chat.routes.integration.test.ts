@@ -96,6 +96,10 @@ describe('POST /api/bot/chat – integration', () => {
             userId: 'user-123',
             runId: expect.any(String),
           },
+          metadata: {
+            runId: expect.any(String),
+            userId: 'user-123',
+          },
           recursionLimit: 50,
         },
       );

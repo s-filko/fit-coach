@@ -40,7 +40,7 @@ function messageToOpenAI(msg: BaseMessage): OpenAIMessage {
   return base;
 }
 
-class LLMLogHandler extends BaseCallbackHandler {
+export class LLMLogHandler extends BaseCallbackHandler {
   name = 'LLMLogHandler';
 
   handleChatModelStart(
@@ -49,14 +49,19 @@ class LLMLogHandler extends BaseCallbackHandler {
     llmRunId: string,
     _parentRunId?: string,
     extraParams?: Record<string, unknown>,
+    _tags?: string[],
+    metadata?: Record<string, unknown>,
   ): void {
     const flat = messages[0] ?? [];
     const system = flat.find(m => m._getType() === 'system');
     const humanMsgs = flat.filter(m => m._getType() === 'human');
     const lastHuman = humanMsgs[humanMsgs.length - 1];
     const options = extraParams?.['options'] as Record<string, unknown> | undefined;
-    const userId = (options?.['configurable'] as Record<string, unknown>)?.['userId'] as string | undefined;
-    const runId = (options?.['configurable'] as Record<string, unknown>)?.['runId'] as string | undefined;
+    // LangChain strips `configurable` from the options a callback sees
+    // (runnables/base.js `_separateRunnableConfigFromCallOptions` deletes it), so
+    // runId/userId travel via config metadata — inherited by every nested model call.
+    const userId = metadata?.['userId'] as string | undefined;
+    const runId = metadata?.['runId'] as string | undefined;
     const invocationModel =
       ((extraParams?.['invocation_params'] as Record<string, unknown> | undefined)?.['model'] as string | undefined) ??
       config.LLM_MODEL;
