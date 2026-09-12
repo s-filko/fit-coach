@@ -7,7 +7,7 @@ import {
   startRun,
 } from '@infra/ai/run-metrics';
 
-describe('run metrics accumulator', () => {
+describe('run metrics accumulator (ADR-0013 §8, AC-1301)', () => {
   it('sums tokens and counts calls across several LLM calls in one run', () => {
     startLlmCall('run-1', 'z-ai/glm-5.3');
     finishLlmCall('run-1', 100, 20);

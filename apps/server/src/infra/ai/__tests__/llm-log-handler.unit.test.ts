@@ -11,7 +11,7 @@
  */
 
 import { drainRunMetrics, startRun } from '@infra/ai/run-metrics';
-import { LLMLogHandler } from '@infra/ai/model.factory';
+import { LLMLogHandler } from '@infra/ai/llm-log-handler';
 
 describe('LLMLogHandler — run metrics binding via metadata', () => {
   it('binds the conversation runId and records model/tokens when metadata carries runId', () => {

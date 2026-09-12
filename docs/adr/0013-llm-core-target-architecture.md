@@ -322,6 +322,8 @@ Rejected: keeping `LLMService` "until the mini-app redesign" — it is the only 
 
 The LLM `info` log line carries `runId, phase, promptVersions, model, tokens, latencyMs`; the full replay payload stays at `debug` (BUG-003 behaviour preserved). LangSmith/OTel tracing is optional and not required by this ADR.
 
+P0 implementation note (2026-09-12): the `info` line ("Conversation run recorded") is emitted by the persist node next to the row write — the module boundary keeps the LLM callback `debug`-only while feeding the run-metrics accumulator. Constraint discovered during execution: LangChain strips `configurable` from the options callback handlers receive (`runnables/base.js` deletes it from callOptions), so run identity must travel via config `metadata`, which is inherited by nested runs — P3's run context must not assume `configurable` reaches callbacks.
+
 INV-LLM-007: A run is reproducible offline from `(conversation_runs.prompt_versions, the run's input messages from conversation_turns, the domain snapshot referenced by the eval fixture)`. This is what makes the eval framework possible.
 
 ---

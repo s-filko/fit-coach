@@ -45,6 +45,10 @@ Ports
 	- reset(userId, phase, options?): void [BR-CONV-005]
 	- summarize(userId, phase): void [BR-CONV-006]
 	- startNewPhase(userId, fromPhase, toPhase, systemNote, options?): void [BR-CONV-005]
+	- IConversationRunService (CONVERSATION_RUN_SERVICE_TOKEN) — records one row per
+	  conversation run (ADR-0013 §8): recordRun(record: ConversationRunRecord): void
+	  [implemented by DrizzleConversationRunService; P0's temporary write site is
+	  persist.node.ts until P3's commit node]
 
 Rules:
 - One file per domain (<=50 lines).

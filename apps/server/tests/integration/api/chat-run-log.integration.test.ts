@@ -1,5 +1,7 @@
 import { MemorySaver } from '@langchain/langgraph';
 
+import { InMemoryConversationContextService } from '../../../src/infra/conversation/conversation-context.service';
+import { finishLlmCall, startLlmCall, startRun } from '../../../src/infra/ai/run-metrics';
 import { buildConversationGraph } from '../../../src/infra/ai/graph/conversation.graph';
 import type { ConversationRunRecord } from '../../../src/domain/conversation/ports';
 
@@ -18,15 +20,6 @@ describe('conversation run log — AC-1301', () => {
     recordRun: async (record: ConversationRunRecord) => {
       recorded.push(record);
     },
-  };
-
-  const contextService = {
-    appendTurn: async () => undefined,
-    getMessagesForPrompt: async () => [],
-    insertContextReset: async () => undefined,
-    insertPhaseSummary: async () => undefined,
-    getLatestSummary: async () => null,
-    getLastUserMessageTime: async () => null,
   };
 
   const userService = {
@@ -69,7 +62,7 @@ describe('conversation run log — AC-1301', () => {
       } as never,
       exerciseRepository: {} as never,
       embeddingService: {} as never,
-      contextService: contextService as never,
+      contextService: new InMemoryConversationContextService(),
       runService: runService as never,
       checkpointer: new MemorySaver(),
     });
@@ -77,16 +70,27 @@ describe('conversation run log — AC-1301', () => {
     const userId = '22222222-2222-4222-8222-222222222222';
     const runId = '11111111-1111-4111-8111-111111111111';
 
+    // The route normally does this (startRun) and the LLM callback handler fills
+    // the accumulator (startLlmCall/finishLlmCall). The mocked model bypasses the
+    // real handler, so feed the accumulator directly — this keeps the assertion
+    // below from passing on the persist node's `?? 'unknown'` fallback, which is
+    // exactly how the zero-token defect on dev went unnoticed.
+    startRun(runId);
+    startLlmCall(runId, 'z-ai/glm-5.3');
+    finishLlmCall(runId, 120, 40);
+
     await graph.invoke(
       { userId, userMessage: 'привет', runId },
-      { configurable: { thread_id: userId, userId, runId }, recursionLimit: 50 },
+      { configurable: { thread_id: userId, userId }, metadata: { runId, userId }, recursionLimit: 50 },
     );
 
     expect(recorded).toHaveLength(1);
     const [row] = recorded;
     expect(row.runId).toBe(runId);
     expect(row.phaseIn).toBeTruthy();
-    expect(row.model).toBeTruthy();
+    expect(row.model).toBe('z-ai/glm-5.3');
+    expect(row.tokensIn).toBe(120);
+    expect(row.tokensOut).toBe(40);
     expect(row.latencyMs).not.toBeNull();
     expect(row.outcome).toBe('ok');
   });

@@ -36,8 +36,8 @@ Estimated size is intentionally omitted; each phase is 1–4 PRs.
 
 Scope
 1. DB: add `conversation_runs` table and `run_id`, `kind`, `payload` columns on `conversation_turns` (ADR-0013 §8). Drizzle migration via `drizzle:generate`; **never** `drizzle:push` blindly (CLAUDE.md).
-2. Stamp every run: generate `runId` in `chat.routes.ts`, pass in `configurable`, write one `conversation_runs` row in `persist.node.ts` (temporary home until P3 `commit`). Fields available today: phase, model, latency, tokens (from `response_metadata.tokenUsage` via the callback handler), tool call names from subgraph messages, outcome. `prompt_versions` = `{ 'phase.<name>': 'v0', 'directives': 'v0' }` until P2.
-3. `LLMLogHandler` `info` line gains `runId, phase, promptVersions, tokens, latencyMs` (keep replay payload at `debug`).
+2. Stamp every run: generate `runId` in `chat.routes.ts`, pass it via config `metadata` (LangChain strips `configurable` from the options callback handlers receive, so `metadata` — which is inherited by nested runs — is the only channel that reaches the handler; discovered during P0 execution), write one `conversation_runs` row in `persist.node.ts` (temporary home until P3 `commit`). Fields available today: phase, model, latency, tokens (from `llmOutput.tokenUsage` via the callback handler), tool call names from subgraph messages, outcome. `prompt_versions` = `{ 'phase.<name>': 'v0', 'directives': 'v0' }` until P2.
+3. The run's `info` log line (`runId, phase, promptVersions, tokens, latencyMs` — "Conversation run recorded") is emitted by `persist.node.ts` next to the row write; `LLMLogHandler` stays `debug`-only (replay payload) and feeds the run-metrics accumulator.
 4. Delete zero-consumer code: `domain/user/services/prompt.service.ts`, `domain/user/ports/prompt.ports.ts` (move `ChatMsg` to `domain/ai` temporarily), `domain/user/services/prompts/*`, `domain/training/training-intent.types.ts`, `domain/training/plan-creation.types.ts`, `parseSessionPlanningResponse` + `SessionPlanningLLMResponseSchema`, `PROMPT_SERVICE_TOKEN` registration. Keep `LLMService` until P1.
 5. Eval harness skeleton under `apps/server/evals/` (runner, dataset schema, L0 static checks, L1 deterministic checks with a real model behind `RUN_LLM_EVALS=1`), and the first golden datasets (≥10 cases per phase) written from `docs/MANUAL_TEST_PLAN.md` scenarios and BUGS.md regressions (BUG-006, -008, -009, -011). Record a **baseline** for the current prompts (`promptVersions v0`). See eval spec §3–§5.
 6. Transcript export script: `npm run evals:export -- --since <date>` dumps runs+turns to JSONL for dataset curation (PII fields redacted per LOGGING_GUIDE "Forbidden data").
@@ -50,7 +50,7 @@ Acceptance criteria
 - AC-1301 Every `POST /api/bot/chat` produces exactly one `conversation_runs` row with non-null `run_id, phase_in, model, latency_ms, outcome`; verified by integration test with the stub graph replaced by a `MemorySaver` graph and mocked model.
 - AC-1302 `npm run type-check && npm run lint && npm run test:unit` pass with the dead code removed; `grep -r "PromptService\|training-intent.types\|plan-creation.types" apps/server/src` returns nothing.
 - AC-1303 `npm run evals -- --level L0` passes offline; `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all` runs against dev keys and writes `evals/baselines/v0/*.json`.
-- AC-1304 Deployed to dev; a manual 5-message registration flow shows 5 run rows with token counts > 0.
+- AC-1304 Deployed to dev; a manual 5-message registration flow shows 5 run rows with token counts > 0. (Verified 2026-09-12 with 2 messages / 2 rows — owner-approved deviation; two rows demonstrate one-row-per-request, drain isolation, and non-zero tokens. See `docs/superpowers/plans/refactor-p0-run-log.md` Task 6.)
 
 Rollback condition: run-row writes add > 100 ms p95 to `/api/bot/chat` (measure from `latency_ms` vs Fastify `responseTime`) or cause any 5xx — revert item 2 only; keep the rest.
 

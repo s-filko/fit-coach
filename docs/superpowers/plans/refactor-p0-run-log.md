@@ -1167,6 +1167,12 @@ Then (the deploy script does `git reset --hard origin/<branch>`, so the push mus
 ssh filko.dev "cd /srv/docker/fitcoach && ./deploy/deploy.sh dev"
 ```
 
+> **Execution correction (option A):** this step's assumption was wrong — `deploy.sh:6`
+> hardcodes the branch per env (`dev` → branch `dev`), so the command above deployed
+> `origin/dev` (old code) while reporting success. The branch actually reached dev via
+> merge-first: PRs #3/#4/#5 into `dev`, then `./deploy/deploy.sh dev`. Filed as a backlog
+> finding (deploy.sh cannot deploy a feature branch).
+
 Expected: the migration step applies `0002_conversation_runs`, containers start, health check passes.
 
 - [x] **Step 2: Confirm the migration landed**
