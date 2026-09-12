@@ -1,5 +1,5 @@
 import { Command, END, START, StateGraph } from '@langchain/langgraph';
-import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
+import type { BaseCheckpointSaver } from '@langchain/langgraph';
 
 import { ConversationState, ConversationStateType } from '@domain/conversation/graph/conversation.state';
 import { IConversationContextService, IConversationRunService } from '@domain/conversation/ports';
@@ -36,7 +36,7 @@ export interface ConversationGraphDeps {
   userService: IUserService;
   contextService: IConversationContextService;
   runService: IConversationRunService;
-  checkpointer: PostgresSaver;
+  checkpointer: BaseCheckpointSaver;
 }
 
 function routeAfterPersist(state: ConversationStateType): string {
