@@ -46,6 +46,14 @@ or is inert for the kind of diff under review.
   branch, when the removed code duplicated something that survives, diff the two copies and
   confirm the survivor is not the poorer one."
   Runs: refactor-p0-dead-code (2026-09-12).
+- [×1] R4's brief says "If the diff edits a durable spec, that is R1's finding, not yours" —
+  but ARCHITECTURE.md is itself listed in DOCUMENTATION_GUIDE § AI Execution Order step 4 as
+  architectural truth, and the fix diff edits it. R4 judged the edit to be living-layout
+  maintenance (the fix R4 itself demanded) rather than a silent law change, so it kept the
+  finding. The R1/R4 boundary as written does not distinguish "durable spec's generated/living
+  layout block" from "durable spec's normative rules", and on this branch the fix commit
+  touched both kinds of block in one file.
+  Runs: refactor-p0-dead-code (2026-09-12, re-run).
 
 ## Blind spots
 
@@ -73,6 +81,21 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   SUPERPOWERS_INTEGRATION.md § Rules of engagement saying that absence-shaped ACs are verified
   by re-execution of their stated command rather than by a test would remove the ambiguity.
   Runs: refactor-p0-dead-code (2026-09-12).
+- [×1] Re-running a zone after a fix commit gives the reviewer no defined baseline. The prompt
+  supplied the original base SHA, so R1's diff spanned the whole branch and re-reviewed five
+  commits already cleared by the first run, while the actual new material was one commit.
+  There is no instruction on whether a re-run re-opens settled ground (and may reach a
+  different verdict on unchanged code than the first run did) or reviews only the delta since
+  the previous verdict. Suggested addition to the close-out-review skill: a re-run states both
+  SHAs — the original base for context and the previous verdict's HEAD as the review boundary
+  — and re-reports a prior-run finding only if the fix commit changed the code it cited.
+  Runs: refactor-p0-dead-code (2026-09-12, re-run).
+- [×1] The re-run mandate asked R4 to verify three closures plus "any new documentation rot the
+  fix introduced", but gave no instruction on the previous run's advisories. A fix commit can
+  silently alter or resolve an advisory line, which would change what should reach
+  `docs/BACKLOG.md`. R4 re-verified all eight by grep on its own initiative; a re-run brief
+  should state explicitly whether prior advisories are in scope.
+  Runs: refactor-p0-dead-code (2026-09-12, re-run).
 
 ## Rule candidates
 
@@ -88,6 +111,28 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   longer does. Proposed rule for `SUPERPOWERS_INTEGRATION.md` rule 3: an extension claim must
   be backed by a pointer in the extended section, or it is a documentation gap.
   Runs: review-self-improvement (2026-09-12).
+- [×1] R1's "always blocking" rule treats any `docs/` edit outside `docs/superpowers/` as
+  blocking unless escalated, but gives the reviewer no positive test for what a *discharged*
+  escalation looks like in the diff. Judging the fix commit required evidence that lives
+  outside the diff entirely — the owner's instruction, in a conversation the reviewer cannot
+  see — and the only in-repo trace is prose in the plan's `## Review` section. Proposed wording
+  for `SUPERPOWERS_INTEGRATION.md` rule 3: "A durable-spec edit made on an execution branch is
+  legitimate only when the plan's `## Review` (or `## Execution notes`) section records, before
+  the edit's commit, the finding that prompted it and the owner's instruction to fix; the commit
+  message references that record. A reviewer treats such an edit as discharged escalation, not a
+  silent edit. An edit with no such record is blocking regardless of how correct it is." This
+  makes the distinction auditable from the branch alone.
+  Runs: refactor-p0-dead-code (2026-09-12, re-run).
+- [×1] ADR-0002 is the case the "forward-looking scope list" candidate below does not cover.
+  That candidate handles a durable spec listing work to be done; this is a durable spec stating
+  a live prescriptive rule that the code has now outgrown, where the same rule is also mirrored
+  in ARCHITECTURE.md. Fixing one and not the other is a divergence R4 must flag but cannot
+  resolve, and R1 sees no violation because the branch did not touch the spec. Proposed
+  principle for `docs/CONTRIBUTING_AI.md`: "When a prescriptive rule is stated in both
+  ARCHITECTURE.md and its source ADR, a change that narrows the rule in ARCHITECTURE.md must be
+  accompanied by an owner-approved ADR amendment or a backlog entry naming the divergence; a
+  reviewer flags the unamended ADR as advisory, never blocking."
+  Runs: refactor-p0-dead-code (2026-09-12, re-run).
 - [×1] ADRs are historical decision records ("History is kept only where it is the point of
   the document", DOCUMENTATION_GUIDE:17), so ADR-0002 and ADR-0007 describing `PromptService`
   and `training-intent.types.ts` in the present tense is correct-by-design and R4 did not flag

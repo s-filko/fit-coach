@@ -1,8 +1,9 @@
 # Refactor P0 — Dead Code Removal Implementation Plan
 
-- Status: planned
-- Branch:
+- Status: in progress
+- Branch: plan/refactor-p0-dead-code
 - After:
+- Review: 2026-09-12 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -350,6 +351,30 @@ None were fixed on this branch; each is offered to `docs/BACKLOG.md` via the `ba
 - `advisory | R4 | docs/features/FEAT-0006-registration-data-collection.md:20 | — | Marked Status: ✅ Implemented while describing PromptService.buildUnifiedRegistrationPrompt(user) as the live registration prompt mechanism (also :38, :77, :83-84, :324, :346, :348). The method was already a stub returning '' before this diff, so the spec was drifting before the branch; the deletion only makes it unambiguous. FEAT-0003:354/357 has the same rot in its service-dependency tree. P7 item 1 names FEAT-0003 but not FEAT-0006.`
 - `advisory | R4 | docs/CONVERSATION_CONTEXT_ARCHITECTURE.md:58 | — | Says "ChatMsg already exists in domain/user/ports (prompt.ports.ts) — reuse it or re-export from a shared place". The diff performs exactly the "shared place" the sentence recommends (@domain/ai/types), so the doc now records the open question rather than the answer. P7 item 1 archives this whole file to docs/archive/, which is why this is not blocking.`
 - `advisory | R4 | docs/CHAT_PHASE_JSON_FIX.md:32 | — | A one-off fix note describing edits to prompt.service.ts buildChatSystemPrompt(), now a file that does not exist. It is a root-level docs/ file governed by no document type in DOCUMENTATION_GUIDE § Structure and owned by no phase — a candidate for docs/archive/ alongside CONVERSATION_CONTEXT_ARCHITECTURE.md in P7.`
+
+### Advisories raised by the re-run
+
+- `advisory | R4 | docs/adr/0002-interface-organization-principles.md:32,40,107 | — | The fix removed prompt.ports.ts from ARCHITECTURE.md's prescriptive Interface Organization Principles, but ADR-0002 — the ADR that ARCHITECTURE.md:298 names as the source of that very rule — still prescribes the identical four-file structure including prompt.ports.ts in its Decision section (:32 tree, :40 organization principles). The two statements of one rule have now diverged. ADR-0002's "Implementation Status" block (:107) recording the historical four-file layout is correct-by-design per DOCUMENTATION_GUIDE:17; the Decision section at :32/:40 is the forward-looking half and is the divergent part. Not blocking: ADR-0002 is a durable spec, and editing it is R1's territory and the owner's call per SUPERPOWERS_INTEGRATION rule 3 (escalation, never silent edits) — the branch was right not to touch it.`
+- `advisory | R4 | docs/ARCHITECTURE.md:129 | — | The surviving "Backward Compatibility: Main ports.ts re-exports from modular structure" bullet in the same edited list is now false for every domain: neither domain/user/ports.ts nor domain/training/ports.ts exists — the modular ports/ directory with an index.ts barrel is the only structure. Pre-existing (not introduced by this diff), and the fix commit narrowed the list without inheriting responsibility for the untouched sibling bullet.`
+
+### Re-run verdict
+
+Zones R1 and R4 were re-run after the fix commit (`7b34e937`); R2 and R3 were not, as the fix
+touched no code they read. **Verdict: clean.**
+
+- R4 confirmed all three blocking findings closed, verified against the filesystem rather than
+  against the closure claims: the deleted doc's entire subject API has zero references in
+  `apps/server`; every path remaining in the module tree resolves; the prescriptive list now
+  names exactly the three files that exist. It re-confirmed the eight earlier advisories are
+  still present and were not silently altered by the fix.
+- R1 judged the `docs/ARCHITECTURE.md` edit a legitimate discharged escalation rather than a
+  silent durable-spec edit, on all three tests of `SUPERPOWERS_INTEGRATION.md` rule 3: the
+  finding was surfaced to the owner and fixed on their instruction, the change is recorded in
+  the open in a purpose-titled commit and in this section, and no `AC-`/`BR-`/`INV-`/`S-` ID
+  was touched. It added the substantive point that leaving the deleted files listed would have
+  put `ARCHITECTURE.md` in contradiction with `LLM_CORE_REFACTOR_PLAN.md` P0 item 4 and
+  ADR-0013, both of which ordered the deletion — so refusing the reconciliation would itself
+  have been the violation.
 
 ### Zones reporting clean
 
