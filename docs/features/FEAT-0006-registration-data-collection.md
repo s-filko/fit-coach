@@ -112,7 +112,7 @@ generateWithSystemPrompt(
 - Metrics tracking
 
 #### Validation
-**Location**: `apps/server/src/domain/user/validation/registration.validation.ts`
+**Location**: `apps/server/src/domain/user/services/registration.validation.ts`
 
 **Validators**:
 ```typescript

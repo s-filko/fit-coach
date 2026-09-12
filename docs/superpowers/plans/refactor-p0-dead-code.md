@@ -293,6 +293,18 @@ plan's own verification steps:
    `RecommendedExerciseSchema` and `SessionRecommendationSchema` were kept —
    `infra/ai/graph/tools/session-planning.tools.ts` imports both.
 
+3. **Task 3 Step 3 ("Remove the parser's tests") was a no-op, disclosed late.** A
+   git grep over the base commit's test trees shows no test ever referenced
+   `parseSessionPlanningResponse` — the step was ticked `[x]` on this branch
+   without a deletion occurring. The effect is the same absence, but the tick was
+   indistinguishable from a performed step until the third review run flagged it
+   (2026-09-12).
+
+4. **Task 4 Step 4's commit message was a superset of the prescribed one.** The
+   plan prescribed "docs(plan): tick refactor-p0-dead-code steps"; the landed
+   commit is `339ed98f` "docs(plan): tick refactor-p0-dead-code steps and record
+   AC-1302 evidence" — a benign widening that better describes the content.
+
 ## AC-1302 evidence
 
 - `grep -rn "PromptService\|training-intent.types\|plan-creation.types" src` → no output (exit 1).
@@ -382,6 +394,62 @@ R1 (architecture), R2 (duplication), R3 (correctness) each returned no blocking 
 R3 re-executed every AC-1302 check independently and confirmed the plan's recorded numbers,
 additionally verifying that the test file set is byte-identical between base and HEAD — so
 240/240 is a like-for-like baseline, not a count preserved by deleting tests.
+
+### Third run — independent full-branch re-validation (2026-09-12)
+
+Requested by the owner as a validation of the review itself: four fresh cold-context zones over
+the **whole branch** diff (`3a5d67cd..b4319fae`, all nine commits — the code deletions *and* the
+review artifacts, the `docs/ARCHITECTURE.md` fix commit, the backlog filing and the STATE update),
+with no knowledge of the verdicts above. **Verdict: clean** — no blocking findings in any zone.
+All three original blocking findings were re-verified closed against the filesystem, not against
+the closure claims. Nine advisories are new material the earlier runs did not surface; all are
+offered to `docs/BACKLOG.md` and none are fixed here.
+
+New advisories (verbatim from the zone that raised them):
+
+- `advisory | R1 | apps/server/src/domain/training/services/training.service.ts:31,73 | — | The diff split a combined import so this domain service now pulls ChatMsg from @domain/ai/types while still holding an LLMService constructor dependency and four LLM methods. Dependency direction is legal (both sides are domain), but a training-domain service depending on a chat-transport type is a boundary the target architecture removes: ADR-0013 §7 deletes LLMService and all four methods in P1. The branch correctly left it standing per its own Global Constraints; noting it so the seam is not mistaken for the intended shape.`
+- `advisory | R2 | apps/server/src/domain/training/set-data.types.ts:66 + apps/server/src/domain/training/types.ts:236 | DRY (docs/CONTRIBUTING_AI.md, "Principles & Boundaries") | The same six-variant set-data discriminated union is declared twice: as Zod (set-data.types.ts:7-73, six per-type schemas + SetDataSchema) and hand-written (types.ts:192-243, six type aliases + SetData). z.infer<typeof SetDataSchema> would collapse them; the pair already drifted once — the copy this branch deleted was missing inclinePct, which is how the drift became visible. Pre-existing, not introduced by this diff; only surfaced by the deletion of the third copy.`
+- `advisory | R2 | apps/server/src/domain/training/set-data.types.ts:16,18,73 | YAGNI (docs/CONTRIBUTING_AI.md, "Principles & Boundaries") | SetDataType, setDataTypeValues, SetDataInput and all six per-type schemas are now zero-consumer exports — training.tools.ts:13 imports only SetDataSchema. setDataTypeValues had its last consumer in the deleted prompts/training.prompt.ts:174. Verified pre-existing for SetDataInput/per-type schemas (already orphaned at base 3a5d67cd); setDataTypeValues/SetDataType were live at base and are orphaned *by this branch*. Same dead-export class the plan was chartered to remove, in the file immediately adjacent to the one it deleted, but not named in the plan's file list or in ADR-0013:309.`
+- `advisory | R2 | docs/BACKLOG.md:53 + docs/superpowers/plans/refactor-p0-dead-code.md:345 | DRY (docs/CONTRIBUTING_AI.md, "Principles & Boundaries") | All six advisories the branch filed are stored twice in near-identical prose — once in the plan's ## Review § Advisory, once in docs/BACKLOG.md — with no ID linking the pair, so they must be kept in sync or diverge. SUPERPOWERS_INTEGRATION.md:84 ("advisory findings leave the branch for docs/BACKLOG.md") and Backlog rule 1 ("Duplicates are context pollution") suggest the backlog should be the single home and the plan should reference it, but neither states that the plan's own record is the copy to drop — so this is advisory, not blocking.`
+- `advisory | R3 | docs/superpowers/plans/refactor-p0-dead-code.md:221 | — | Task 3 Step 3 ("Remove the parser's tests") is ticked [x], but git grep over the base commit's test trees shows no test ever referenced parseSessionPlanningResponse — the step was a no-op. The Execution notes disclose two other survey/reality divergences but not this one, so a ticked box implies a deletion that did not occur. Harmless here (the effect is the same absence), but a ticked no-op step is indistinguishable from a performed one at review time.`
+- `advisory | R3 | docs/superpowers/plans/refactor-p0-dead-code.md:269 | — | Task 4 Step 4 prescribes the commit message "docs(plan): tick refactor-p0-dead-code steps"; the commit that landed is 339ed98f "docs(plan): tick refactor-p0-dead-code steps and record AC-1302 evidence". A benign superset that better describes the content, and no rule requires literal commit-message fidelity — noted only because the plan states the string verbatim.`
+- `advisory | R4 | docs/ARCHITECTURE.md:44 | — | The fix commit corrected registration.validation.ts's location in the module tree (moving it out of the nonexistent validation/ subdirectory), but docs/features/FEAT-0006-registration-data-collection.md:115 still gives its **Location** as apps/server/src/domain/user/validation/registration.validation.ts. One statement of the same fact was fixed on this branch, the other left behind — a fresh divergence the fix introduced. Actual path: domain/user/services/registration.validation.ts.`
+- `advisory | R4 | docs/ARCHITECTURE.md:38-55 | — | The fix added domain/ai/types.ts to the module tree and removed three deleted files, but the tree still omits two live siblings in the same edited region: domain/training/services/prompts/session-recommendation.prompt.ts (a surviving services/prompts/ directory in the very domain the diff emptied of prompts — a reader of both the tree and the plan would conclude all services/prompts/ are gone) and infra/conversation/conversation-context.service.ts. Pre-existing omissions, not introduced here.`
+- `advisory | R4 | docs/ARCHITECTURE.md:138 | DOCUMENTATION_GUIDE.md § Principles ("English only") + root CLAUDE.md | The Dependency Injection section contains Russian text: "(or a neutral shared/core if порт общий по доменам)". Pre-existing and outside the diff's hunks, so not this branch's violation — but it is in the file the branch edited and is a hard rule in two places.`
+- `advisory | R4 | docs/domain/ai.spec.md:4,26 | — | The spec's Terms section defines ChatMsg as an AI-domain term and its closing rule asserts "Matches apps/server/src/domain/ai/ports.ts", but this diff moved ChatMsg into a *new* sibling module domain/ai/types.ts that the spec never mentions. The diff added a file to the domain/ai domain and did not touch the domain spec that governs it — a gap, not just pre-existing drift (the Ports method list at :19-23 was already stale before the branch). DOCUMENTATION_GUIDE § Domain Spec requires the spec to "reflect existing ports in apps/server/src/domain/*/ports/*.ts". Not blocking: P7 scope item 1 explicitly owns "Rewrite docs/domain/conversation.spec.md and docs/domain/ai.spec.md against the new ports", and AC-1371 gates it — this file has a named downstream owner.`
+- `advisory | R4 | docs/CONTRIBUTING_AI.md:120,134,138 | — | Beyond the prompt.service.ts/prompt.ports.ts rot already filed, the same two recipes point at domain/user/services/registration.service.ts, profile-parser.service.ts and messages.ts — none of which exist either (src/domain/user/services/ now holds only user.service.ts, registration.validation.ts and __tests__/). So the "Adjust Registration Flow / Prompts" recipe is 100% dead paths, not partially. This diff only widened an already-dead recipe; P7 item 3 reopens CONTRIBUTING_AI.md.`
+
+What the third run confirmed rather than newly found:
+
+- **R1** reached the durable-spec question independently and resolved it in the branch's favour
+  from the branch alone, reconstructing legitimacy from commit ordering: the escalation record
+  (`eaee55a6`) precedes the `ARCHITECTURE.md` edit (`7b34e937`), the fix commit is purpose-titled
+  and cites the findings it closes, and no `AC-`/`BR-`/`INV-`/`S-` ID was touched. It added that
+  leaving the deleted files in the tree would have contradicted `LLM_CORE_REFACTOR_PLAN.md` P0
+  item 4 and ADR-0013 §7, which ordered the deletion — so refusing the reconciliation would have
+  been the violation. It also verified no new `@infra`/`@app` import exists under `domain/**`.
+- **R2** found the branch net-positive on DRY: deleting `training-intent.types.ts` removed a
+  duplicate `setDataTypes`/`SetDataSchema` block shadowing the live `set-data.types.ts`, and the
+  survivor is the *richer* copy (the deleted `CardioDistanceSetDataSchema` lacked `inclinePct`).
+- **R3** re-executed every AC-1302 command and reproduced every recorded figure exactly (both
+  greps empty/exit 1, `type-check` exit 0, lint 12 problems/0 errors, 27 suites/240 tests,
+  `LLMService` still standing, `state.mjs --check` OK). It strengthened the earlier finding: not
+  only is the test file set byte-identical between base and HEAD, **no test at base referenced any
+  deleted module**, so 240/240 cannot have been preserved by deleting coverage. It also closed
+  the DI gap its own advisory names by writing a throwaway probe — `registerInfraServices()` resolves
+  without throwing after the `PROMPT_SERVICE_TOKEN` removal — then removing it.
+- **R4** re-verified all three blocking closures against the filesystem: `README-parser.md` gone
+  and its subject API at zero references in `apps/server`; `prompt.ports.ts`/`prompt.service.ts`
+  absent from both disk and the module tree; the prescriptive Interface Organization list naming
+  exactly the three files that exist. Layer discipline passes: STATE.md's AUTO block regenerates
+  byte-identically, no status markers leaked into durable specs, no new IDs minted.
+
+**Follow-up (same day, owner-approved):** the orphans and the doc rot were fixed on
+`plan/dead-code-third-run-fixes` — set-data.types.ts exports de-orphaned, the hand-written union
+collapsed into `z.infer<typeof SetDataSchema>`, FEAT-0006/ARCHITECTURE/CONTRIBUTING_AI paths
+corrected, ARCHITECTURE tree gaps and the Russian line fixed, ai.spec.md ChatMsg location noted,
+and the two plan divergences disclosed in Execution notes above. The advisory-dual-storage
+question stayed a rule candidate; the training.service ChatMsg seam stays with P1.
 
 ## Close-out
 

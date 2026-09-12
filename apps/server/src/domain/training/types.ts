@@ -1,5 +1,9 @@
 // Training domain types
 
+import type { z } from 'zod';
+
+import type { SetDataSchema } from './set-data.types';
+
 // --- User Profile (subset for training context) ---
 
 export interface UserProfile {
@@ -188,58 +192,9 @@ export interface SessionExerciseWithDetails extends SessionExercise {
 
 // --- Session Set ---
 
-// Discriminated union for set_data based on exercise_type
-export type StrengthSetData = {
-  type: 'strength';
-  reps: number;
-  weight?: number;
-  weightUnit?: 'kg' | 'lbs';
-  restSeconds?: number;
-};
-
-export type CardioDistanceSetData = {
-  type: 'cardio_distance';
-  distance: number;
-  distanceUnit: 'km' | 'miles' | 'meters';
-  duration: number; // seconds
-  inclinePct?: number;
-  pace?: number; // min/km or min/mile
-  restSeconds?: number;
-};
-
-export type CardioDurationSetData = {
-  type: 'cardio_duration';
-  duration: number; // seconds
-  intensity?: 'low' | 'moderate' | 'high';
-  restSeconds?: number;
-};
-
-export type FunctionalRepsSetData = {
-  type: 'functional_reps';
-  reps: number;
-  restSeconds?: number;
-};
-
-export type IsometricSetData = {
-  type: 'isometric';
-  duration: number; // seconds
-  restSeconds?: number;
-};
-
-export type IntervalSetData = {
-  type: 'interval';
-  workDuration: number; // seconds
-  restDuration: number; // seconds
-  rounds?: number;
-};
-
-export type SetData =
-  | StrengthSetData
-  | CardioDistanceSetData
-  | CardioDurationSetData
-  | FunctionalRepsSetData
-  | IsometricSetData
-  | IntervalSetData;
+// Set data shape is owned by the Zod schemas in set-data.types.ts; the type is
+// inferred from them so the two cannot drift (they had, over inclinePct).
+export type SetData = z.infer<typeof SetDataSchema>;
 
 export interface SessionSet {
   id: string;
