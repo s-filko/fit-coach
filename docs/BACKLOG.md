@@ -32,6 +32,22 @@ Rules:
 
 ## Findings
 
+- [ ] `deploy.sh` cannot deploy a feature branch: branch is hardcoded per env
+  (`deploy.sh:6` — dev → `dev`, prod → `main`), so a plan branch pushed for
+  pre-merge live verification (like refactor-p0-run-log's AC-1304) silently
+  deploys `origin/dev` instead — deploy reports OK while the new code never
+  ships. Teach the script a branch override (e.g. `deploy.sh dev
+  plan/refactor-p0-run-log`) or define the merge-first flow as the contract.
+  Source: refactor-p0-run-log Task 6 blocked mid-execution (2026-09-12).
+- [ ] Superpowers plugin skills do not load in worktree sessions: project
+  `.claude/skills/` reach the worktree (committed in git), but the user-scope
+  `superpowers@superpowers-marketplace` plugin (enabled in `~/.claude/settings.json`)
+  did not surface its skills in a session started from
+  `.worktrees/refactor-p0-run-log`, so plans requiring `superpowers:executing-plans`
+  had to be driven by reading SKILL.md from the plugin cache on disk. Diagnose
+  (`/plugin`, `/doctor` in a worktree session); durable fix if systematic — vendor
+  the skills into the repo so any clone/worktree is self-contained.
+  Source: refactor-p0-run-log session start (2026-09-12).
 - [ ] No anomaly guard before logging: `log_set` accepts any weight/reps (e.g.
   27.5 kg after three 10 kg sets) with no confirm-first rule and no kg/reps
   unit-confusion check (`training.service.ts` `logSetWithContext` does zero
