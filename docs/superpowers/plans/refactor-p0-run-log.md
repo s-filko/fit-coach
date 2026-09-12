@@ -1245,3 +1245,49 @@ git commit -m "docs(plan): record AC-1304 dev verification for the run log"
 ## Close-out
 
 Follow `superpowers:finishing-a-development-branch`. Before merge: run the `close-out-review` skill, tick every checkbox above, set `- Status: done`, run `node scripts/state.mjs --write` from the repo root, and commit. `node scripts/state.mjs --check` must pass.
+
+## Review
+
+**2026-09-12 — verdict: blocked** (R1, R2, R3, R4; no `- Review:` header line until a clean
+re-run). Blocking findings, verbatim from the zones:
+
+1. **OPEN** — `blocking | R2 | apps/server/src/app/routes/chat.routes.ts:90 | YAGNI
+   (docs/CONTRIBUTING_AI.md "Principles & Boundaries") | configurable.runId has zero readers
+   anywhere in the repo — the LLM callback channel is metadata (model.factory.ts:62-64,
+   admitted by the adjacent comment at chat.routes.ts:91-92) and the persist node reads
+   state.runId (persist.node.ts:22); it is a leftover of the plan's superseded Task-2 design
+   ("the route... passes the id through configurable"), and four comments still credit it as
+   the working metrics channel (chat.subgraph.ts:79-80, registration.subgraph.ts:72-73,
+   invoke-with-retry.ts:61, phase-summary.node.ts:45), contradicting model.factory.ts:61-64
+   and re-teaching the exact configurable bug that had to be fixed live on dev (plan Task 6,
+   defect 2)`
+2. **OPEN** — `blocking | R4 | docs/LLM_CORE_REFACTOR_PLAN.md:40 | SUPERPOWERS_INTEGRATION.md
+   Rule 7 (docs reconcile) | P0 scope item 3 still says the "LLMLogHandler info line gains
+   runId, phase, promptVersions, tokens, latencyMs", but the shipped code gives LLMLogHandler
+   no info line at all (debug only, model.factory.ts:96-128) — the info line was implemented
+   in persist.node.ts ("Conversation run recorded"). Also :39 claims tokens come "from
+   response_metadata.tokenUsage"; the code reads llmOutput.tokenUsage (model.factory.ts:117)`
+3. **OPEN** — `blocking | R4 | docs/domain/conversation.spec.md:40 | DOCUMENTATION_GUIDE
+   ("Domain Spec … must reflect existing ports") | the Ports section lists only
+   IConversationContextService; the diff adds IConversationRunService
+   (CONVERSATION_RUN_SERVICE_TOKEN, recordRun) in conversation-run.ports.ts, unreflected`
+4. **OPEN** — `blocking | R4 | docs/DB_SETUP.md:118 | DOCUMENTATION_GUIDE ("Every PR must
+   include updated docs") | "Core Tables" still shows conversation_turns without
+   run_id/kind/payload and contains no conversation_runs table, although migration
+   0002_conversation_runs.sql shipped in this diff`
+5. **OPEN** — `blocking | R4 | docs/ARCHITECTURE.md:74 | ARCHITECTURE.md rule 8 +
+   DOCUMENTATION_GUIDE docs-first | the living doc layer misses the run-log structure: no
+   run-metrics.ts, no conversation-run.ports.ts, no drizzle-conversation-run.service.ts in
+   the file tree; persist.node described as "appendTurn" only (:74); the DB storage line
+   (:259) lists the old conversation_turns column set and no conversation_runs`
+
+Advisory findings (to be filed in `docs/BACKLOG.md` via the `backlog` skill, owner approval
+pending): R1 ×4 (trigger/client hardcoded below the port; non-null `model` forcing the
+`'unknown'` sentinel; model.factory.ts carrying four concerns; route owning the run-metrics
+lifecycle), R2 ×2 (promptVersions literal duplicated in persist.node; hand-rolled
+contextService stub vs InMemoryConversationContextService), R3 ×7 (AC-1301 wording vs
+no-row-on-error paths and hardcoded outcome='ok'; post-drain background-summary orphan
+accumulator; acceptance test satisfied by the 'unknown' fallback; missing AC/BR ids in test
+names; untested kind backfill; AC-1304 5→2 deviation wording), R4 ×3 (ADR-0013 §8 emitter
+wording + undocumented LangChain metadata constraint; LOGGING_GUIDE stale info-line
+catalog; plan-vs-BACKLOG deploy-record contradiction).

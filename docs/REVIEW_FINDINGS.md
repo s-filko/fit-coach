@@ -33,6 +33,10 @@ Entry format:
 Wording in a zone prompt or in `SKILL.md` that misleads, contradicts the severity contract,
 or is inert for the kind of diff under review.
 
+- [×1] R2's brief makes any YAGNI/DRY hit blocking-eligible purely by naming the rule, with no
+  severity gradient — a one-key dead object literal and a real architectural flaw land in the
+  same blocking bucket, so the severity call is unanchored judgment.
+  Runs: refactor-p0-run-log (2026-09-12).
 - [×2] R3's "describe/it names carry BR/AC references" bullet — and its thin-test-zone list
   (`drizzle/`, `deploy.sh`, `docker-compose.yml`) — are inert on markdown-only diffs yet read
   as checklist items to satisfy on every run. Scope both to code-bearing diffs.
@@ -60,6 +64,12 @@ or is inert for the kind of diff under review.
 What fell between the zones — a real problem no zone's mandate covered, usually surfaced by
 a wider reader (the final whole-branch review) or noticed after the fact.
 
+- [×2] The plan's normative step code and Architecture prose are not reconciled against the
+  shipped implementation by any zone: this run's plan still showed the `configurable`-channel
+  handler that live verification had proved dead (fixed only in the Task 6 deviation prose),
+  so a future agent re-executing the plan text verbatim would reintroduce the zero-token bug.
+  No zone's mandate covers "plan step-code vs shipped code" consistency.
+  Runs: refactor-p0-run-log (2026-09-12, R1+R2).
 - [×2] A zone prompt contradicting the shared severity contract falls between all four zones:
   it is not architecture, duplication, correctness, or docs. The wider final review caught it
   twice in one run (R2's YAGNI citation, R3's verification-evidence citation). Nothing in the
@@ -163,6 +173,19 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   it. A file in domain/ or infra/ whose path is absent from the target layout in the governing
   ADR and which carries no such comment is treated as an unplanned addition."
   Runs: refactor-p0-dead-code (2026-09-12).
+- [×1] The plan's per-task verification commands are evidenced only by ticked checkboxes;
+  Task 6 was the only task with pasted command output. Proposed rule for
+  `SUPERPOWERS_INTEGRATION.md` close-out: a plan records one line of actual command output
+  (e.g. the Jest suite summary) per task, so R3's "verification was run" check reads evidence
+  instead of trusting ticks.
+  Runs: refactor-p0-run-log (2026-09-12).
+- [×1] `SUPERPOWERS_INTEGRATION.md` enumerates durable specs (ADRs, domain/feature specs,
+  API_SPEC, LLM_CORE_REFACTOR_PLAN, PROMPT_EVAL_FRAMEWORK) — DB_SETUP.md and ARCHITECTURE.md
+  are not on the list, so their currency is enforced only by DOCUMENTATION_GUIDE prose; this
+  run's four blocking R4 findings all accumulated in exactly that gap. Proposed: add both
+  files to the enumerated list (or a "living layer" companion list with the same reconcile
+  duty).
+  Runs: refactor-p0-run-log (2026-09-12).
 - [×1] Resolved 2026-09-12: YAGNI and DRY are now recorded in `CONTRIBUTING_AI.md`,
   "Principles & Boundaries", so R2 blocks on complexity and on duplication. Kept as the worked
   example of how a rule candidate graduates; drop it once a second entry replaces it.
