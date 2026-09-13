@@ -1,0 +1,107 @@
+import { randomUUID } from 'node:crypto';
+
+import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
+
+import { buildConversationGraph } from '@infra/ai/graph/conversation.graph';
+
+import type { EvalCase } from '../schema/case.schema';
+import { buildStubDeps } from './build-stub-deps';
+
+export interface CaseObservation {
+  text: string;
+  toolCalls: Array<{ name: string; args: Record<string, unknown> }>;
+  transition: string | null;
+  outcome: string;
+  threw: string | null;
+}
+
+interface ObservedToolCall {
+  name: string;
+  args: Record<string, unknown>;
+}
+
+/**
+ * Records every tool invocation of one eval run.
+ *
+ * Why a callback and not graph state: the parent graph has no `messages` channel
+ * (conversation.state.ts) and subgraph messages do not survive the run, so there is
+ * nothing to read afterwards. Callbacks observe the calls as they happen.
+ */
+export class ToolRecorder extends BaseCallbackHandler {
+  name = 'EvalToolRecorder';
+  readonly calls: ObservedToolCall[] = [];
+
+  /**
+   * Signature verified empirically against the installed @langchain/core (2026-09-13):
+   *   - `serialized` does NOT carry the tool name. It is `{ lc, type, id }` where
+   *     `id` is ['langchain','tools','DynamicStructuredTool'] — the class, not the tool.
+   *     Reading `serialized.name` yields undefined and `id.at(-1)` yields
+   *     'DynamicStructuredTool' for every tool, which would break every tools.must check.
+   *   - The real tool name arrives as the 7th parameter, `runName` ('request_transition').
+   *   - `input` is a JSON string of the tool arguments.
+   * Keep the unused middle parameters: they are positional and cannot be skipped.
+   */
+  handleToolStart(
+    _serialized: unknown,
+    input: string,
+    _runId: string,
+    _parentRunId?: string,
+    _tags?: string[],
+    _metadata?: Record<string, unknown>,
+    runName?: string,
+  ): void {
+    let args: Record<string, unknown> = {};
+    try {
+      const parsed: unknown = JSON.parse(input);
+      if (typeof parsed === 'object' && parsed !== null) {
+        args = parsed as Record<string, unknown>;
+      }
+    } catch {
+      args = { raw: input };
+    }
+    this.calls.push({ name: runName ?? 'unknown', args });
+  }
+}
+
+const EMPTY_OBSERVATION: CaseObservation = {
+  text: '',
+  toolCalls: [],
+  transition: null,
+  outcome: 'core_error',
+  threw: null,
+};
+
+export async function runCase(testCase: EvalCase): Promise<CaseObservation> {
+  const { deps, recordedRuns } = buildStubDeps(testCase.fixture);
+  const graph = buildConversationGraph(deps);
+  const userId = '22222222-2222-4222-8222-222222222222';
+  const runId = randomUUID();
+  const recorder = new ToolRecorder();
+
+  try {
+    const result = await graph.invoke(
+      { userId, userMessage: testCase.input.text, runId, phase: testCase.state?.phase ?? testCase.phase },
+      {
+        configurable: { thread_id: `${testCase.id}-${runId}`, userId, runId },
+        callbacks: [recorder],
+        recursionLimit: 50,
+      },
+    );
+
+    return {
+      text: String(result.responseMessage ?? ''),
+      toolCalls: recorder.calls,
+      // `requestedTransition` is consumed by transition_guard before END
+      // (conversation.graph.ts sets `requestedTransition: null` alongside `phase: toPhase`),
+      // so the final graph state can never carry it. The persist node records the
+      // requested transition into the run row before the guard acts — read it there.
+      // Verified against the real model 2026-09-13: run row says toPhase=session_planning
+      // while the final state's requestedTransition is null.
+      transition: recordedRuns[0]?.transition?.toPhase ?? null,
+      outcome: recordedRuns[0]?.outcome ?? 'ok',
+      threw: null,
+    };
+  } catch (err) {
+    return { ...EMPTY_OBSERVATION, threw: err instanceof Error ? err.message : String(err) };
+  }
+}
