@@ -17,7 +17,6 @@ _Generated 2026-09-13 from docs/superpowers/plans/ + git. Never hand-edit; regen
 **Planned**
 - `ports-layout-consistency.md` — Ports Layout Consistency Implementation Plan
 - `refactor-p0-eval-baseline.md` — Refactor P0 — Remaining Datasets and v0 Baseline Implementation Plan
-- `refactor-p0-eval-l1-chat-training.md` — Refactor P0 — L1 Runner and Chat/Training Datasets Implementation Plan
 - `refactor-p0-transcript-export.md` — Refactor P0 — Transcript Export Implementation Plan
 - `refactor-p1-legacy-llm-retirement.md` — Refactor P1 — Legacy LLM Path Retirement Implementation Plan
 - `refactor-p2-prompt-modules.md` — Refactor P2 — Prompt Modules Implementation Plan
@@ -27,6 +26,7 @@ _Generated 2026-09-13 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
 - `refactor-p0-dead-code.md` — Refactor P0 — Dead Code Removal Implementation Plan
 - `refactor-p0-eval-harness.md` — Refactor P0 — Eval Harness (L0) Implementation Plan
+- `refactor-p0-eval-l1-chat-training.md` — Refactor P0 — L1 Runner and Chat/Training Datasets Implementation Plan
 - `refactor-p0-run-log.md` — Refactor P0 — Run Log Implementation Plan
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 

@@ -1,7 +1,7 @@
 # Refactor P0 — L1 Runner and Chat/Training Datasets Implementation Plan
 
-- Status: planned
-- Branch:
+- Status: done
+- Branch: plan/refactor-p0-eval-l1-chat-training
 - After: refactor-p0-eval-harness
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -17,6 +17,12 @@
 **Acceptance criteria:** the L1 machinery half of AC-1303 (`RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase chat` runs against dev keys). Baselines are written in the follow-up plan, once all five phases have datasets.
 
 > **Pre-execution note (2026-09-13).** Four defects were found and fixed in this plan before dispatch, each verified against the code rather than assumed: stub method names (`getUser`, `findActiveByUserId` — not `getUserById`/`getActivePlan`); `trainingService` needs `getSessionDetails` or every training case throws before reaching the model; `import.meta.dirname` does not compile under ts-jest here; fixture `height`/`weight`/`age` are numbers, not strings. The tool-capture mechanism was also replaced: the parent graph has no `messages` channel, so reading tool calls from graph state yields nothing — a callback handler is used instead, and its exact shape is verified in Task 2 Step 4.
+
+> **Post-execution corrections (2026-09-13).** Two deviations from the plan's verbatim code, both verified necessary during execution and confirmed at review:
+> 1. **Transition source (Task 2 Step 4).** `run-case.ts` reads `transition` from `recordedRuns[0].transition.toPhase`, not from `result.requestedTransition` as the plan specified. Reason: `transition_guard` sets `requestedTransition: null` (alongside `phase: toPhase`) before END (`conversation.graph.ts`), so the final graph state can never carry it — the plan's own Step 6 expectation was unsatisfiable as written. The persist node records the requested transition into the run row before the guard acts. Semantics: the observed transition is the *request* (pre-guard), which is what L1 prompt assertions intend. Covered by a unit test (mocked model scripted to call `request_transition`, asserting `observation.transition === 'session_planning'`).
+> 2. **`compilePattern` in `l1.ts` (Task 3).** The plan's `new RegExp(pattern)` throws `SyntaxError: Invalid group` on the PCRE-style `(?i)` prefixes that the plan's own test and datasets use (Node 22). `l1.ts` translates a leading `(?i)` into the RegExp `i` flag; tests and datasets stay verbatim.
+>
+> Additionally, Task 6 found the L1 runner unreachable without three harness fixes (evals script loads `.env`; `runCase` forwards `state.activeSessionId`; `build-stub-deps` materializes a full mid-workout session and training-service mutations) — without them every training case fell back to chat with 0 LLM calls. The recorded measurement depends on the fixed harness (`01df11e5`); the baseline plan must pin that commit for comparability.
 
 ## Global Constraints
 
@@ -51,7 +57,7 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld;
 
 Task 2's runner consumes `buildStubDeps`; Task 3's checks read `recordedRuns`.
 
-- [ ] **Step 1: Write the failing stub test**
+- [x] **Step 1: Write the failing stub test**
 
 Create `apps/server/evals/lib/__tests__/build-stub-deps.unit.test.ts`:
 
@@ -106,12 +112,12 @@ describe('buildStubDeps', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- build-stub-deps`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement the stub builder**
+- [x] **Step 3: Implement the stub builder**
 
 Create `apps/server/evals/lib/build-stub-deps.ts`. Start from the stub objects in `tests/integration/api/chat-run-log.integration.test.ts` (written in `refactor-p0-run-log` Task 5) so the two agree on which repository methods the graph actually calls:
 
@@ -193,12 +199,12 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
 
 If the graph calls a repository method this object lacks, the L1 run throws and Task 2's runner reports it as a `runs-without-throwing` failure — add the missing method there, returning an empty value, rather than loosening a check.
 
-- [ ] **Step 4: Run the test to confirm it passes**
+- [x] **Step 4: Run the test to confirm it passes**
 
 Run: `npm run test:unit -- build-stub-deps`
 Expected: PASS, all four cases.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add evals/lib/build-stub-deps.ts evals/lib/__tests__/build-stub-deps.unit.test.ts
@@ -232,7 +238,7 @@ export async function runCase(testCase: EvalCase): Promise<CaseObservation>;
 
 Task 3's assertions consume `CaseObservation`.
 
-- [ ] **Step 1: Write the failing observation test**
+- [x] **Step 1: Write the failing observation test**
 
 The test runs against a mocked model so it stays offline. Create `apps/server/evals/lib/__tests__/run-case.unit.test.ts`:
 
@@ -290,12 +296,12 @@ describe('ToolRecorder — the tool name comes from runName, not from serialized
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- run-case`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement the case runner**
+- [x] **Step 3: Implement the case runner**
 
 Create `apps/server/evals/lib/run-case.ts`:
 
@@ -351,7 +357,7 @@ export async function runCase(testCase: EvalCase): Promise<CaseObservation> {
 
 **Known gap:** `conversation_runs.toolCalls` is `null` in P0 (the run-log plan leaves tool-call capture to P3's shared executor), so `observation.toolCalls` is empty until Step 4 fills it.
 
-- [ ] **Step 4: Capture tool calls with a callback handler**
+- [x] **Step 4: Capture tool calls with a callback handler**
 
 Tool assertions are the core of L1, so they cannot wait for P3. **Do not try to read them from the graph state.** Verified on 2026-09-13: the parent graph's `ConversationState` (`src/domain/conversation/graph/conversation.state.ts:11-43`) has **no `messages` channel** — it holds only `userId, runId, phase, userMessage, responseMessage, user, activeSessionId, requestedTransition`. Each subgraph declares its own `messages` and is compiled without a checkpointer, so `graph.getState()` returns a snapshot with no messages in it and the flatMap would always yield `[]`. This is exactly ADR-0013 §1.1, and P4 is what changes it.
 
@@ -442,12 +448,12 @@ Then build the observation from `recorder.calls` rather than from the run row:
 
 `transition` still comes from the graph result, which is correct: `requestedTransition` **is** a parent-state channel, and it is what the transition guard acts on.
 
-- [ ] **Step 5: Run the unit test to confirm it passes**
+- [x] **Step 5: Run the unit test to confirm it passes**
 
 Run: `npm run test:unit -- run-case`
 Expected: PASS, both cases.
 
-- [ ] **Step 6: Verify tool capture against the real model**
+- [x] **Step 6: Verify tool capture against the real model**
 
 This step exists because every tool assertion in the plan depends on Step 4 working. Run from `apps/server/`:
 
@@ -462,7 +468,7 @@ Two distinct failure modes, do not confuse them:
 - **`toolCalls` empty while the text announces a hand-off.** The capture is broken. Fix it here; do not proceed.
 - **`toolCalls` empty and the text does not announce anything.** The model simply did not call the tool. That is a real prompt finding (exactly BUG-011), not a harness bug — re-run once to rule out sampling, then continue: measuring that is the point of this plan.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add evals/lib/run-case.ts evals/lib/__tests__/run-case.unit.test.ts
@@ -484,7 +490,7 @@ The judging layer: turn a `CaseObservation` plus a case's `expect` block into na
 - Consumes: `runCase` (Task 2), `CheckResult` (harness plan).
 - Produces: `export function assertCase(testCase: EvalCase, observation: CaseObservation): CheckResult[]` and `export async function runL1(phase: string, samples: number): Promise<CheckResult[]>`.
 
-- [ ] **Step 1: Write the failing assertion test**
+- [x] **Step 1: Write the failing assertion test**
 
 Create `apps/server/evals/levels/__tests__/l1.unit.test.ts`:
 
@@ -570,12 +576,12 @@ describe('assertCase', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- l1`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement the assertions**
+- [x] **Step 3: Implement the assertions**
 
 Create `apps/server/evals/levels/l1.ts`:
 
@@ -711,12 +717,12 @@ export async function runL1(phase: string, samples: number): Promise<CheckResult
 }
 ```
 
-- [ ] **Step 4: Run the assertion test to confirm it passes**
+- [x] **Step 4: Run the assertion test to confirm it passes**
 
 Run: `npm run test:unit -- l1`
 Expected: PASS, all eight cases.
 
-- [ ] **Step 5: Wire L1 into the runner behind the flag**
+- [x] **Step 5: Wire L1 into the runner behind the flag**
 
 In `apps/server/evals/run.ts`, replace the `if (level !== 'L0')` guard with:
 
@@ -739,12 +745,12 @@ In `apps/server/evals/run.ts`, replace the `if (level !== 'L0')` guard with:
   }
 ```
 
-- [ ] **Step 6: Confirm the gate works both ways**
+- [x] **Step 6: Confirm the gate works both ways**
 
 Run: `npm run evals -- --level L1 --phase chat`
 Expected: prints the skip message, exit 0 (no datasets exist yet, and no tokens are spent).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add evals/levels/l1.ts evals/levels/__tests__/l1.unit.test.ts evals/run.ts
@@ -766,12 +772,12 @@ Chat is where two documented failures live: the bot refuses to hand off to train
 - Consumes: `EvalCaseSchema` (harness plan Task 2).
 - Produces: the `chat` half of the ten-cases-per-phase P0 minimum.
 
-- [ ] **Step 1: Re-read the two bugs before writing a single case**
+- [x] **Step 1: Re-read the two bugs before writing a single case**
 
 Run: `sed -n '/## BUG-009/,/## BUG-010/p' ../../docs/BUGS.md` and `sed -n '/## BUG-011/,/## BUG-012/p' ../../docs/BUGS.md`
 Note for each: the user message that triggered it, what the bot wrongly did, and what it should have done. Cases must encode *that* behaviour, not a paraphrase.
 
-- [ ] **Step 2: Write the transitions dataset**
+- [x] **Step 2: Write the transitions dataset**
 
 Create `apps/server/evals/datasets/chat/transitions.jsonl`, one JSON object per line. Three "should transition" cases, three "should NOT transition" — a dataset of only positive cases measures nothing, because a bot that always transitions would score 100%.
 
@@ -786,7 +792,7 @@ Create `apps/server/evals/datasets/chat/transitions.jsonl`, one JSON object per 
 {"id":"CH-0006","phase":"chat","tags":["transition","negative","off-topic"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"какая погода завтра в Берлине?"},"expect":{"tools":{"mustNot":["request_transition"]},"transition":null,"text":{"language":"ru","format":"telegram_html","maxChars":400}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
 ```
 
-- [ ] **Step 3: Write the no-set-logging dataset**
+- [x] **Step 3: Write the no-set-logging dataset**
 
 Create `apps/server/evals/datasets/chat/no-set-logging.jsonl`. This is the truthfulness gate: in chat the bot has no `log_set` tool at all, so any claim of having recorded something is a lie.
 
@@ -797,7 +803,7 @@ Create `apps/server/evals/datasets/chat/no-set-logging.jsonl`. This is the truth
 {"id":"CH-0010","phase":"chat","tags":["truthfulness","BUG-009","mixed"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"жим 80х8 сделал, и подскажи как улучшить технику"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"mustNotMatch":["(?i)записал|сохранил|logged|saved|✅"],"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
 ```
 
-- [ ] **Step 4: Write the dataset README**
+- [x] **Step 4: Write the dataset README**
 
 Create `apps/server/evals/datasets/README.md`:
 
@@ -832,12 +838,12 @@ refactor phases add cases. The gap is deliberate, not an unmet acceptance criter
 | `training/no-false-confirmation.jsonl` | TR-0007..TR-0010 | BUG-006, BUG-009 |
 ```
 
-- [ ] **Step 5: Validate every case parses**
+- [x] **Step 5: Validate every case parses**
 
 Run: `npx tsx -e "import {parseCases} from './evals/schema/case.schema'; import {readFileSync} from 'node:fs'; for (const f of ['chat/transitions','chat/no-set-logging']) { const c = parseCases(readFileSync('./evals/datasets/'+f+'.jsonl','utf8')); console.log(f, c.length, 'cases OK'); }"`
 Expected: `chat/transitions 6 cases OK` and `chat/no-set-logging 4 cases OK`. A parse error names the line — fix the JSON, do not loosen the schema.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add evals/datasets/
@@ -858,12 +864,12 @@ Training is where the bot both invents sets the user never did (BUG-008) and con
 - Consumes: the same schema.
 - Produces: the `training` half of the P0 minimum.
 
-- [ ] **Step 1: Re-read the two bugs and the logging patterns**
+- [x] **Step 1: Re-read the two bugs and the logging patterns**
 
 Run: `sed -n '/## BUG-008/,/## BUG-009/p' ../../docs/BUGS.md` and `sed -n '/## BUG-006/,/## BUG-007/p' ../../docs/BUGS.md`
 Also skim `docs/MANUAL_TEST_PLAN.md` scenario 3 (§3.3–3.6) for the real phrasings users log sets with, including the bulk-logging message in §3.4. Cases should use those phrasings.
 
-- [ ] **Step 2: Write the set-logging dataset**
+- [x] **Step 2: Write the set-logging dataset**
 
 Create `apps/server/evals/datasets/training/set-logging.jsonl`. The fixture carries an active session, and `state.phase` is `training`. Three cases where a set *must* be logged, three where it must not.
 
@@ -878,7 +884,7 @@ Create `apps/server/evals/datasets/training/set-logging.jsonl`. The fixture carr
 
 `TR-0006` is the BUG-008 shape exactly: past-tense numbers that are context, not a log request.
 
-- [ ] **Step 3: Write the no-false-confirmation dataset**
+- [x] **Step 3: Write the no-false-confirmation dataset**
 
 Create `apps/server/evals/datasets/training/no-false-confirmation.jsonl`. These assert on *text*: the bot may not claim a result it did not obtain, and may not end a session unasked.
 
@@ -891,12 +897,12 @@ Create `apps/server/evals/datasets/training/no-false-confirmation.jsonl`. These 
 
 `TR-0010` encodes BUG-006's rule directly: "я устал" is not an explicit request to end the session, and `finish_training` is irreversible.
 
-- [ ] **Step 4: Validate the cases parse**
+- [x] **Step 4: Validate the cases parse**
 
 Run: `npx tsx -e "import {parseCases} from './evals/schema/case.schema'; import {readFileSync} from 'node:fs'; for (const f of ['training/set-logging','training/no-false-confirmation']) { const c = parseCases(readFileSync('./evals/datasets/'+f+'.jsonl','utf8')); console.log(f, c.length, 'cases OK'); }"`
 Expected: `training/set-logging 6 cases OK` and `training/no-false-confirmation 4 cases OK`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add evals/datasets/training/
@@ -917,17 +923,17 @@ The first real measurement. Its output is information, not a pass/fail gate — 
 - Consumes: everything above.
 - Produces: the AC-1303 L1-machinery evidence, and the numbers the baseline plan will turn into `v0`.
 
-- [ ] **Step 1: Confirm the key is live before spending anything**
+- [x] **Step 1: Confirm the key is live before spending anything**
 
 Run: `curl -s https://openrouter.ai/api/v1/key -H "Authorization: Bearer $(grep '^LLM_API_KEY=' .env | cut -d= -f2-)" | head -c 400`
 Expected: a JSON body with the key's limits. A 401 means the key is stale — stop and report rather than debugging inside an eval run.
 
-- [ ] **Step 2: Run one phase with one sample first**
+- [x] **Step 2: Run one phase with one sample first**
 
 Run: `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase chat --samples 1`
 Expected: ten cases execute, each producing check lines. Failures are fine; what must not happen is every case reporting `runs-without-throwing: false` — that means the harness is broken, not the prompts. Fix the harness before continuing.
 
-- [ ] **Step 3: Run both phases at the default sampling**
+- [x] **Step 3: Run both phases at the default sampling**
 
 Run: `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase chat --samples 3`
 Run: `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase training --samples 3`
@@ -942,16 +948,26 @@ L1 training: 51/52 checks passed, 1 failed
 
 Per-case failure and BUG mapping:
 
-| Case | Check | Result | BUGS.md |
-|---|---|---|---|
-| TR-0010 | `tools.mustNot:finish_training` | 1/3 samples passed — model called `finish_training` on «всё, я устал» (fatigue report, not explicit finish intent; prompt rule 7 says ask first) | BUG-006 |
+| Case | Check | Result | BUGS.md | Reading |
+|---|---|---|---|---|
+| TR-0010 | `tools.mustNot:finish_training` | 1/3 samples passed — model called `finish_training` on «всё, я устал» (fatigue report, not explicit finish intent; prompt rule 7 says ask first) | BUG-006 — **Status: Fixed (Phase 1)** | **Regression of a closed bug.** Not a neutral baseline observation: the Phase 1 fix (fallback removal / prompt rule) does not hold at temperature > 0. 2 of 3 samples finished an irreversible session unasked. |
 
-Zero failures on CH-0001..0010: the current chat prompt already carries the BUG-011 anti-pattern rule (transition tool vs text) and the BUG-009 anti-hallucination rule, and the model complied in all 30 chat samples — both are latent in chat at n=3, not reproducing. Likewise TR-0001..0009 passed: set logging fires on set data, questions/comments/adversarial "last time I did…" (TR-0006) do not trigger `log_set`, and no false ✅ confirmations appeared (BUG-009).
+Interpretation against BUGS.md statuses:
+
+- **BUG-006 (Fixed) — regression, the main finding.** TR-0010 above. The eval harness is now the standing regression detector for it; P2 prompt work must clear TR-0010 at 3/3 before this can be considered re-fixed.
+- **BUG-008, BUG-009 (both Fixed) — hold.** TR-0001..0009 and CH-0007..0010 passed; passing closed bugs is the expected state (these datasets now function as regression guards), not news.
+- **BUG-001 (Fixed) — regression pattern, benign manifestation.** 4 tool-call rounds (TR-0001 ×3, TR-0003 ×1) returned an empty first-round assistant text alongside the `log_set` call — the exact BUG-001 pattern (tool-only response with no text). It stays "benign" **only** because the original harm does not occur: the multi-round agent loop recovers, the final user-facing message is non-empty, no Telegram 400 is possible (the original failure mode). The pattern itself is back at the model level, which means the Phase 1 prompt rule does not fully bind — flagged below as an owner question.
+- **BUG-011 (Open) — not reproduced; explicitly NOT proof of correctness.** Zero failures on 30 chat samples at n=3 only shows the model complied with the current transition rules under these fixtures. An Open bug needs its documented real-world trigger conditions reproduced (or the entry closed by owner decision) before "fixed" can be claimed; n=3 × 10 synthetic cases is not that evidence.
+
+Questions for the owner (BUGS.md is a durable spec — statuses deliberately not changed here):
+
+1. BUG-006: reopen (regression) or keep Fixed and track via the TR-0010 dataset + baseline deltas?
+2. BUG-001: reopen as "pattern recurs, harm contained", or file a note that the Phase 1 fix is prompt-only and partial?
+3. BYOK billing: eval traffic to `z-ai/glm-5.3` appears to have been billed to OpenRouter credits (~$0.52 over ~135 calls, `byok_usage` flat) — contradicts the documented BYOK exemption. Dev/prod VPS traffic shares the account, so the owner should verify routing on the OpenRouter dashboard before anything is filed.
 
 Sub-threshold observations (passed at n=3 but seen failing in individual samples — baseline-relevant):
 
-- TR-0009 `text.format` failed in a 1-sample run (markdown `**bold**` in a Telegram HTML reply) and passed 2/3 in the full run — intermittent markdown leakage; no BUGS.md id covers Telegram formatting.
-- BUG-001 pattern observed on tool-call rounds: 4 samples (TR-0001 ×3, TR-0003 ×1) returned an empty first-round assistant text alongside the `log_set` call; benign here because the multi-round agent loop recovers and the final user-facing message is non-empty.
+- TR-0009 `text.format` failed in a 1-sample run (markdown `**bold**` in a Telegram HTML reply) and passed 2/3 in the full run — intermittent markdown leakage; **filed as BUG-013** during close-out.
 
 Harness gaps found during the run and fixed (no prompt or dataset files touched):
 
@@ -959,7 +975,7 @@ Harness gaps found during the run and fixed (no prompt or dataset files touched)
 2. `runCase` did not forward `state.activeSessionId`, so every training case hit the router's «Training phase without activeSessionId — falling back to chat» and never reached the model (10/10 cases with 0 LLM calls). Now forwarded (`apps/server/evals/lib/run-case.ts`).
 3. The stub `trainingService` returned the raw fixture `{id, sessionKey}` — `buildWorkoutOverview` threw `Cannot read properties of undefined (reading 'map')` before the model was reached, and the mutation methods (`logSetWithContext`, `completeCurrentExercise`, `completeSession`, `deleteLastSets`, `updateLastSet`) were missing, which would have error-looped every tool call into the LLM_ERROR retry budget. `build-stub-deps` now materializes a full mid-workout "Upper A" session (3-exercise plan, bench press in_progress with 1 logged set; fixture keys win) and implements the mutations in memory (`apps/server/evals/lib/build-stub-deps.ts`). All 33 eval-harness unit tests pass after the fixes.
 
-- [ ] **Step 4: Add the reports gitignore**
+- [x] **Step 4: Add the reports gitignore**
 
 Create `apps/server/evals/reports/.gitignore`:
 
@@ -970,11 +986,11 @@ Create `apps/server/evals/reports/.gitignore`:
 
 Baselines are committed (by the follow-up plan, under `evals/baselines/`); ad-hoc report output is not.
 
-- [ ] **Step 5: File any harness gaps found, without fixing prompts**
+- [x] **Step 5: File any harness gaps found, without fixing prompts**
 
 If a case failed because the *harness* could not observe something (a tool call invisible to `runCase`, a phase the stubs cannot reach), fix the harness. If it failed because the model behaved badly, leave it: use the `backlog` skill to record anything that is a new finding rather than a known BUGS.md entry.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add docs/superpowers/plans/refactor-p0-eval-l1-chat-training.md evals/reports/.gitignore
