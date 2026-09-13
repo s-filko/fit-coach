@@ -80,7 +80,15 @@ export async function runCase(testCase: EvalCase): Promise<CaseObservation> {
 
   try {
     const result = await graph.invoke(
-      { userId, userMessage: testCase.input.text, runId, phase: testCase.state?.phase ?? testCase.phase },
+      {
+        userId,
+        userMessage: testCase.input.text,
+        runId,
+        phase: testCase.state?.phase ?? testCase.phase,
+        // The router falls back to chat when phase === 'training' without an
+        // activeSessionId (router.node.ts), so every training case must carry it.
+        activeSessionId: testCase.state?.activeSessionId ?? null,
+      },
       {
         configurable: { thread_id: `${testCase.id}-${runId}`, userId, runId },
         callbacks: [recorder],
