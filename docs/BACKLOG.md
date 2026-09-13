@@ -44,10 +44,15 @@ Rules:
   should be deleted when the structural check lands. Source: close-out-review, R4 (2026-09-13).
 - [ ] `apps/server/evals/` is invisible to lint: the `lint` script is scoped to `src/**/*.ts`
   and `eslint.config.js` declares no `evals/` boundary element or rule override, so
-  `npx eslint evals/` reports 8 errors (`no-console` in the reporter, `no-restricted-imports`
-  on relative imports the tree cannot avoid — tsconfig `paths` map only under `baseUrl: src`).
-  Needs an `evals/` override plus a decision on whether the lint script should cover it.
-  Source: close-out-review, R1 + execution (2026-09-13).
+  `npx eslint evals/` reports 15 errors (update from 8 after the eval-L1 branch grew the tree;
+  auto-fixable import-order/sort/destructuring issues were fixed in place 2026-09-13). All
+  15 remaining are structural: `no-restricted-imports` on relative imports the tree cannot
+  avoid — tsconfig `paths` map only under `baseUrl: src`, no alias exists for `evals/` —
+  plus `boundaries/no-unknown` warnings because the boundaries plugin does not know the tree,
+  and complexity/magic-number warnings on plan-verbatim harness code (e.g. `assertCase`).
+  Also `format:check` (prettier) has the same blind spot. Needs an `evals/` override (or an
+  `@evals/*` alias decision) plus a decision on whether lint/format scripts should cover it.
+  Source: close-out-review, R1 + execution (2026-09-13); updated by eval-L1 review (2026-09-13).
 - [ ] The run-metrics binding contract ("run identity travels via config metadata because
   LangChain strips configurable from callback options") is prose-duplicated across five
   sites (chat.routes.ts, chat.subgraph.ts, registration.subgraph.ts, invoke-with-retry.ts,
