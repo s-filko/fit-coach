@@ -8,13 +8,15 @@
 
 **Goal:** Make the eval harness actually run the graph against a real model, and prove it on the two phases where documented bugs give us real material — chat and training.
 
-**Architecture:** L1 builds the production conversation graph with `MemorySaver`, repositories stubbed from the case's `fixture`, and the real model behind `RUN_LLM_EVALS=1`. Tools are wrapped so their side effects are *recorded* rather than executed — the harness needs to know `log_set` was called, not to write a set. Each case runs `n` times (default 3) and passes if at least ⌈n/2⌉ samples pass, because a temperature-bearing model is not deterministic. This plan writes the four chat/training datasets whose expected behaviour is already documented in BUGS.md; the remaining three phases follow in `refactor-p0-eval-l1-remaining-phases`.
+**Architecture:** L1 builds the production conversation graph with `MemorySaver`, repositories stubbed from the case's `fixture`, and the real model behind `RUN_LLM_EVALS=1`. Tool calls are observed through a LangChain callback handler and their side effects land in in-memory stubs — the harness needs to know `log_set` was called, not to write a set. Each case runs `n` times (default 3) and passes if at least ⌈n/2⌉ samples pass, because a temperature-bearing model is not deterministic. This plan writes the four chat/training datasets whose expected behaviour is already documented in BUGS.md; the remaining three phases follow in `refactor-p0-eval-l1-remaining-phases`.
 
 **Tech Stack:** LangGraph (`MemorySaver`, compiled graph), LangChain tool wrapping, tsx, Zod, OpenRouter (BYOK) via the existing `model.factory.ts`.
 
 **Spec:** `docs/PROMPT_EVAL_FRAMEWORK.md` §3 (datasets), §4.2 (L1 checks, sampling). Master plan: `docs/LLM_CORE_REFACTOR_PLAN.md` § P0 scope item 5. Bug sources: `docs/BUGS.md` BUG-006, BUG-008, BUG-009, BUG-011.
 
 **Acceptance criteria:** the L1 machinery half of AC-1303 (`RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase chat` runs against dev keys). Baselines are written in the follow-up plan, once all five phases have datasets.
+
+> **Pre-execution note (2026-09-13).** Four defects were found and fixed in this plan before dispatch, each verified against the code rather than assumed: stub method names (`getUser`, `findActiveByUserId` — not `getUserById`/`getActivePlan`); `trainingService` needs `getSessionDetails` or every training case throws before reaching the model; `import.meta.dirname` does not compile under ts-jest here; fixture `height`/`weight`/`age` are numbers, not strings. The tool-capture mechanism was also replaced: the parent graph has no `messages` channel, so reading tool calls from graph state yields nothing — a callback handler is used instead, and its exact shape is verified in Task 2 Step 4.
 
 ## Global Constraints
 
@@ -60,7 +62,7 @@ import { COMPLETE_PROFILE, EMPTY_PROFILE } from '../../fixtures/personas';
 describe('buildStubDeps', () => {
   it('returns a user matching the fixture', async () => {
     const { deps } = buildStubDeps(COMPLETE_PROFILE);
-    const user = await deps.userService.getUserById('any-id');
+    const user = await deps.userService.getUser('any-id');
     expect(user?.fitnessGoal).toBe('strength');
     expect(user?.languageCode).toBe('ru');
   });
@@ -68,8 +70,13 @@ describe('buildStubDeps', () => {
   it('reports an active plan only when the fixture says so', async () => {
     const withPlan = buildStubDeps(COMPLETE_PROFILE);
     const withoutPlan = buildStubDeps(EMPTY_PROFILE);
-    expect(await withPlan.deps.workoutPlanRepo.getActivePlan('u')).not.toBeNull();
-    expect(await withoutPlan.deps.workoutPlanRepo.getActivePlan('u')).toBeNull();
+    expect(await withPlan.deps.workoutPlanRepo.findActiveByUserId('u')).not.toBeNull();
+    expect(await withoutPlan.deps.workoutPlanRepo.findActiveByUserId('u')).toBeNull();
+  });
+
+  it('answers getSessionDetails so the training router does not throw', async () => {
+    const { deps } = buildStubDeps(COMPLETE_PROFILE);
+    await expect(deps.trainingService.getSessionDetails('s1')).resolves.toBeDefined();
   });
 
   it('collects run records instead of writing them', async () => {
@@ -129,17 +136,33 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
   const activePlan = fixture.hasActivePlan ? (fixture.plan ?? { id: 'plan-1', name: 'Test plan' }) : null;
 
   const deps = {
+    // IUserService — the port's method is getUser(id), not getUserById.
+    // Verified against src/domain/user/ports/service.ports.ts:5-11.
     userService: {
-      getUserById: async () => user,
-      updateUser: async () => user,
+      upsertUser: async () => user,
+      getUser: async () => user,
+      updateProfileData: async () => user,
+      isRegistrationComplete: () => fixture.user.registrationCompleted === true,
+      needsRegistration: () => fixture.user.registrationCompleted !== true,
     },
-    trainingService: {},
-    workoutPlanRepo: {
+    // ITrainingService — the router calls getSessionDetails on every training-phase run
+    // (router.node.ts:47) and the training subgraph calls it again (training.subgraph.ts:326).
+    // An empty object here throws before the model is ever reached.
+    trainingService: {
+      getSessionDetails: async () => (fixture.activeSession ?? null),
+      getActiveSession: async () => (fixture.activeSession ?? null),
       getActivePlan: async () => activePlan,
+      getTrainingHistory: async () => (fixture.sessions ?? []),
+    },
+    workoutPlanRepo: {
+      // Real method name — chat.subgraph.ts:57, session-planning builder.
+      findActiveByUserId: async () => activePlan,
     },
     workoutSessionRepo: {
-      getRecentSessions: async () => (fixture.sessions ?? []),
-      getActiveSession: async () => (fixture.activeSession ?? null),
+      // Real names — chat.subgraph.ts:58, training.subgraph.ts:338.
+      findRecentByUserIdWithDetails: async () => (fixture.sessions ?? []),
+      findRecentByUserId: async () => (fixture.sessions ?? []),
+      findLastCompletedByUserAndKey: async () => null,
     },
     exerciseRepository: {
       searchByEmbedding: async () => [],
@@ -246,6 +269,25 @@ describe('runCase', () => {
     expect(observation.transition).toBeNull();
   });
 });
+
+describe('ToolRecorder — the tool name comes from runName, not from serialized', () => {
+  it('records the tool name and parsed args', async () => {
+    const { tool } = await import('@langchain/core/tools');
+    const { z } = await import('zod');
+    const { ToolRecorder } = await import('../run-case');
+
+    const recorder = new ToolRecorder();
+    const t = tool(async () => 'ok', {
+      name: 'request_transition',
+      description: 'test',
+      schema: z.object({ toPhase: z.string() }),
+    });
+
+    await t.invoke({ toPhase: 'session_planning' }, { callbacks: [recorder] });
+
+    expect(recorder.calls).toEqual([{ name: 'request_transition', args: { toPhase: 'session_planning' } }]);
+  });
+});
 ```
 
 - [ ] **Step 2: Run it to confirm it fails**
@@ -309,19 +351,96 @@ export async function runCase(testCase: EvalCase): Promise<CaseObservation> {
 
 **Known gap:** `conversation_runs.toolCalls` is `null` in P0 (the run-log plan leaves tool-call capture to P3's shared executor), so `observation.toolCalls` is empty until Step 4 fills it.
 
-- [ ] **Step 4: Capture tool calls by inspecting the graph's messages**
+- [ ] **Step 4: Capture tool calls with a callback handler**
 
-Tool assertions are the core of L1, so they cannot wait for P3. Extend `runCase` to read the tool calls out of the checkpoint instead of the run row: after `invoke`, fetch the final state and walk its messages.
+Tool assertions are the core of L1, so they cannot wait for P3. **Do not try to read them from the graph state.** Verified on 2026-09-13: the parent graph's `ConversationState` (`src/domain/conversation/graph/conversation.state.ts:11-43`) has **no `messages` channel** — it holds only `userId, runId, phase, userMessage, responseMessage, user, activeSessionId, requestedTransition`. Each subgraph declares its own `messages` and is compiled without a checkpointer, so `graph.getState()` returns a snapshot with no messages in it and the flatMap would always yield `[]`. This is exactly ADR-0013 §1.1, and P4 is what changes it.
+
+`conversation_runs.toolCalls` is no help either: the run-log plan leaves it `null` until P3's shared executor.
+
+The mechanism that does work today is a LangChain callback handler passed per invocation. `handleToolStart` fires for every tool the model actually calls, in every subgraph, regardless of how state is wired — the same channel `LLMLogHandler` already uses for model calls (`src/infra/ai/llm-log-handler.ts:50`).
+
+Add to `apps/server/evals/lib/run-case.ts`:
 
 ```typescript
-    const snapshot = await graph.getState({ configurable: { thread_id: `${testCase.id}-${runId}` } });
-    const messages = (snapshot.values?.messages ?? []) as Array<{
-      tool_calls?: Array<{ name: string; args: Record<string, unknown> }>;
-    }>;
-    const toolCalls = messages.flatMap(m => m.tool_calls ?? []).map(tc => ({ name: tc.name, args: tc.args ?? {} }));
+import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
+
+interface ObservedToolCall {
+  name: string;
+  args: Record<string, unknown>;
+}
+
+/**
+ * Records every tool invocation of one eval run.
+ *
+ * Why a callback and not graph state: the parent graph has no `messages` channel
+ * (conversation.state.ts) and subgraph messages do not survive the run, so there is
+ * nothing to read afterwards. Callbacks observe the calls as they happen.
+ */
+export class ToolRecorder extends BaseCallbackHandler {
+  name = 'EvalToolRecorder';
+  readonly calls: ObservedToolCall[] = [];
+
+  /**
+   * Signature verified empirically against the installed @langchain/core (2026-09-13):
+   *   - `serialized` does NOT carry the tool name. It is `{ lc, type, id }` where
+   *     `id` is ['langchain','tools','DynamicStructuredTool'] — the class, not the tool.
+   *     Reading `serialized.name` yields undefined and `id.at(-1)` yields
+   *     'DynamicStructuredTool' for every tool, which would break every tools.must check.
+   *   - The real tool name arrives as the 7th parameter, `runName` ('request_transition').
+   *   - `input` is a JSON string of the tool arguments.
+   * Keep the unused middle parameters: they are positional and cannot be skipped.
+   */
+  handleToolStart(
+    _serialized: unknown,
+    input: string,
+    _runId: string,
+    _parentRunId?: string,
+    _tags?: string[],
+    _metadata?: Record<string, unknown>,
+    runName?: string,
+  ): void {
+    let args: Record<string, unknown> = {};
+    try {
+      const parsed: unknown = JSON.parse(input);
+      if (typeof parsed === 'object' && parsed !== null) {
+        args = parsed as Record<string, unknown>;
+      }
+    } catch {
+      args = { raw: input };
+    }
+    this.calls.push({ name: runName ?? 'unknown', args });
+  }
+}
 ```
 
-Use `toolCalls` in the returned observation. If the parent graph's state does not expose subgraph messages (P3 changes this), fall back to wrapping each tool with a recording proxy in `buildStubDeps` and returning the recorded list — whichever works, verify it in Step 6 against a case that provably calls `request_transition`.
+Pass one instance per run through the invoke config, and read it afterwards:
+
+```typescript
+  const recorder = new ToolRecorder();
+
+  const result = await graph.invoke(
+    { userId, userMessage: testCase.input.text, runId, phase: testCase.state?.phase ?? testCase.phase },
+    {
+      configurable: { thread_id: `${testCase.id}-${runId}`, userId, runId },
+      callbacks: [recorder],
+      recursionLimit: 50,
+    },
+  );
+```
+
+Then build the observation from `recorder.calls` rather than from the run row:
+
+```typescript
+    return {
+      text: String(result.responseMessage ?? ''),
+      toolCalls: recorder.calls,
+      transition: result.requestedTransition?.toPhase ?? null,
+      outcome: recordedRuns[0]?.outcome ?? 'ok',
+      threw: null,
+    };
+```
+
+`transition` still comes from the graph result, which is correct: `requestedTransition` **is** a parent-state channel, and it is what the transition guard acts on.
 
 - [ ] **Step 5: Run the unit test to confirm it passes**
 
@@ -330,8 +449,18 @@ Expected: PASS, both cases.
 
 - [ ] **Step 6: Verify tool capture against the real model**
 
-Run: `RUN_LLM_EVALS=1 npx tsx --env-file=.env -e "import('./evals/lib/run-case').then(async m => console.log(await m.runCase({id:'SMOKE',phase:'chat',tags:[],deprecated:false,fixture:{user:{languageCode:'ru',timezone:'Europe/Berlin'},hasActivePlan:true},input:{text:'давай потренируемся сегодня'},expect:{}})))"`
-Expected: the observation prints with `toolCalls` containing `request_transition` (that is BUG-011's documented intended behaviour). If `toolCalls` is empty while the text announces a hand-off, the capture in Step 4 is wrong — fix it before continuing; every tool assertion in this plan depends on it.
+This step exists because every tool assertion in the plan depends on Step 4 working. Run from `apps/server/`:
+
+```bash
+RUN_LLM_EVALS=1 npx tsx --env-file=.env -e "import('./evals/lib/run-case').then(async m => console.log(JSON.stringify(await m.runCase({id:'SMOKE',phase:'chat',tags:[],deprecated:false,fixture:{user:{languageCode:'ru',timezone:'Europe/Berlin',registrationCompleted:true},hasActivePlan:true},input:{text:'давай потренируемся сегодня'},expect:{}}), null, 2)))"
+```
+
+Expected: `toolCalls` contains `request_transition` with `args.toPhase === 'session_planning'` — BUG-011's documented intended behaviour — and `transition` is `session_planning`.
+
+Two distinct failure modes, do not confuse them:
+
+- **`toolCalls` empty while the text announces a hand-off.** The capture is broken. Fix it here; do not proceed.
+- **`toolCalls` empty and the text does not announce anything.** The model simply did not call the tool. That is a real prompt finding (exactly BUG-011), not a harness bug — re-run once to rule out sampling, then continue: measuring that is the point of this plan.
 
 - [ ] **Step 7: Commit**
 
@@ -458,7 +587,13 @@ import type { CheckResult } from '../lib/reporter';
 import { runCase, type CaseObservation } from '../lib/run-case';
 import { parseCases, type EvalCase } from '../schema/case.schema';
 
-const DATASETS_DIR = join(import.meta.dirname, '..', 'datasets');
+/**
+ * Resolved from process.cwd() rather than import.meta.dirname: this module is loaded
+ * both by tsx (ESM, where import.meta exists) and by ts-jest (CommonJS, where it does
+ * not compile). Every verification command in this repo runs from apps/server/, and
+ * jest.config.cjs sets the same rootDir, so cwd is apps/server in both cases.
+ */
+const DATASETS_DIR = join(process.cwd(), 'evals', 'datasets');
 
 function cyrillicRatio(text: string): number {
   const letters = text.match(/\p{L}/gu) ?? [];
@@ -640,13 +775,15 @@ Note for each: the user message that triggered it, what the bot wrongly did, and
 
 Create `apps/server/evals/datasets/chat/transitions.jsonl`, one JSON object per line. Three "should transition" cases, three "should NOT transition" — a dataset of only positive cases measures nothing, because a bot that always transitions would score 100%.
 
+**Types matter:** `height`, `weight` and `age` are **numbers** in `FixtureUserSchema` (`evals/schema/case.schema.ts:16-21`), not strings — the schema mirrors the production `User` type. A quoted `"182"` is rejected by Step 5's validation.
+
 ```jsonl
-{"id":"CH-0001","phase":"chat","tags":["transition","BUG-011"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"давай потренируемся сегодня"},"expect":{"tools":{"must":["request_transition"],"args":{"request_transition":{"toPhase":"session_planning"}}},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
-{"id":"CH-0002","phase":"chat","tags":["transition","BUG-011"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"го качаться"},"expect":{"tools":{"must":["request_transition"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
-{"id":"CH-0003","phase":"chat","tags":["transition","BUG-011"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":false},"input":{"text":"хочу начать тренироваться, составь мне программу"},"expect":{"tools":{"must":["request_transition"],"args":{"request_transition":{"toPhase":"plan_creation"}}},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
-{"id":"CH-0004","phase":"chat","tags":["transition","negative"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"сколько белка нужно есть в день?"},"expect":{"tools":{"mustNot":["request_transition"]},"transition":null,"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
-{"id":"CH-0005","phase":"chat","tags":["transition","negative"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"вчера хорошо потренировался, спина болит"},"expect":{"tools":{"mustNot":["request_transition"]},"transition":null,"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
-{"id":"CH-0006","phase":"chat","tags":["transition","negative","off-topic"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"какая погода завтра в Берлине?"},"expect":{"tools":{"mustNot":["request_transition"]},"transition":null,"text":{"language":"ru","format":"telegram_html","maxChars":400}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0001","phase":"chat","tags":["transition","BUG-011"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"давай потренируемся сегодня"},"expect":{"tools":{"must":["request_transition"],"args":{"request_transition":{"toPhase":"session_planning"}}},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0002","phase":"chat","tags":["transition","BUG-011"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"го качаться"},"expect":{"tools":{"must":["request_transition"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0003","phase":"chat","tags":["transition","BUG-011"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":false},"input":{"text":"хочу начать тренироваться, составь мне программу"},"expect":{"tools":{"must":["request_transition"],"args":{"request_transition":{"toPhase":"plan_creation"}}},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0004","phase":"chat","tags":["transition","negative"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"сколько белка нужно есть в день?"},"expect":{"tools":{"mustNot":["request_transition"]},"transition":null,"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0005","phase":"chat","tags":["transition","negative"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"вчера хорошо потренировался, спина болит"},"expect":{"tools":{"mustNot":["request_transition"]},"transition":null,"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0006","phase":"chat","tags":["transition","negative","off-topic"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"какая погода завтра в Берлине?"},"expect":{"tools":{"mustNot":["request_transition"]},"transition":null,"text":{"language":"ru","format":"telegram_html","maxChars":400}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
 ```
 
 - [ ] **Step 3: Write the no-set-logging dataset**
@@ -654,10 +791,10 @@ Create `apps/server/evals/datasets/chat/transitions.jsonl`, one JSON object per 
 Create `apps/server/evals/datasets/chat/no-set-logging.jsonl`. This is the truthfulness gate: in chat the bot has no `log_set` tool at all, so any claim of having recorded something is a lie.
 
 ```jsonl
-{"id":"CH-0007","phase":"chat","tags":["truthfulness","BUG-009"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"сделал жим лёжа 80 на 8"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"mustNotMatch":["(?i)записал|сохранил|logged|saved|✅"],"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
-{"id":"CH-0008","phase":"chat","tags":["truthfulness","BUG-009"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"запиши мне 3 подхода приседа по 100 кг"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"mustNotMatch":["(?i)записал|сохранил|logged|saved|✅"],"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
-{"id":"CH-0009","phase":"chat","tags":["truthfulness","BUG-009"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"отметь что я сегодня пробежал 5 км"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"mustNotMatch":["(?i)записал|сохранил|отметил|logged|saved|✅"],"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
-{"id":"CH-0010","phase":"chat","tags":["truthfulness","BUG-009","mixed"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"жим 80х8 сделал, и подскажи как улучшить технику"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"mustNotMatch":["(?i)записал|сохранил|logged|saved|✅"],"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0007","phase":"chat","tags":["truthfulness","BUG-009"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"сделал жим лёжа 80 на 8"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"mustNotMatch":["(?i)записал|сохранил|logged|saved|✅"],"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0008","phase":"chat","tags":["truthfulness","BUG-009"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"запиши мне 3 подхода приседа по 100 кг"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"mustNotMatch":["(?i)записал|сохранил|logged|saved|✅"],"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0009","phase":"chat","tags":["truthfulness","BUG-009"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"отметь что я сегодня пробежал 5 км"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"mustNotMatch":["(?i)записал|сохранил|отметил|logged|saved|✅"],"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"CH-0010","phase":"chat","tags":["truthfulness","BUG-009","mixed"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true},"input":{"text":"жим 80х8 сделал, и подскажи как улучшить технику"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"mustNotMatch":["(?i)записал|сохранил|logged|saved|✅"],"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
 ```
 
 - [ ] **Step 4: Write the dataset README**
@@ -731,12 +868,12 @@ Also skim `docs/MANUAL_TEST_PLAN.md` scenario 3 (§3.3–3.6) for the real phras
 Create `apps/server/evals/datasets/training/set-logging.jsonl`. The fixture carries an active session, and `state.phase` is `training`. Three cases where a set *must* be logged, three where it must not.
 
 ```jsonl
-{"id":"TR-0001","phase":"training","tags":["log_set","MANUAL_TEST_PLAN-3.3"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"80 на 8"},"expect":{"tools":{"must":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
-{"id":"TR-0002","phase":"training","tags":["log_set","bulk","MANUAL_TEST_PLAN-3.4"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"сделал ещё два подхода: 80 на 7 и 80 на 6"},"expect":{"tools":{"must":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
-{"id":"TR-0003","phase":"training","tags":["log_set"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"85х5 готово"},"expect":{"tools":{"must":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
-{"id":"TR-0004","phase":"training","tags":["log_set","negative","BUG-008"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"а сколько отдыхать между подходами?"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
-{"id":"TR-0005","phase":"training","tags":["log_set","negative","BUG-008"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"тяжело идёт сегодня, устал"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
-{"id":"TR-0006","phase":"training","tags":["log_set","negative","BUG-008","adversarial"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"в прошлый раз я делал 80 на 8, сегодня так же смогу?"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0001","phase":"training","tags":["log_set","MANUAL_TEST_PLAN-3.3"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"80 на 8"},"expect":{"tools":{"must":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0002","phase":"training","tags":["log_set","bulk","MANUAL_TEST_PLAN-3.4"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"сделал ещё два подхода: 80 на 7 и 80 на 6"},"expect":{"tools":{"must":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0003","phase":"training","tags":["log_set"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"85х5 готово"},"expect":{"tools":{"must":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0004","phase":"training","tags":["log_set","negative","BUG-008"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"а сколько отдыхать между подходами?"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0005","phase":"training","tags":["log_set","negative","BUG-008"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"тяжело идёт сегодня, устал"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0006","phase":"training","tags":["log_set","negative","BUG-008","adversarial"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"в прошлый раз я делал 80 на 8, сегодня так же смогу?"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
 ```
 
 `TR-0006` is the BUG-008 shape exactly: past-tense numbers that are context, not a log request.
@@ -746,10 +883,10 @@ Create `apps/server/evals/datasets/training/set-logging.jsonl`. The fixture carr
 Create `apps/server/evals/datasets/training/no-false-confirmation.jsonl`. These assert on *text*: the bot may not claim a result it did not obtain, and may not end a session unasked.
 
 ```jsonl
-{"id":"TR-0007","phase":"training","tags":["truthfulness","BUG-006"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"что дальше по плану?"},"expect":{"tools":{"mustNot":["finish_training","log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
-{"id":"TR-0008","phase":"training","tags":["truthfulness","BUG-006"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"спина немного ноет, это нормально?"},"expect":{"tools":{"mustNot":["finish_training"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
-{"id":"TR-0009","phase":"training","tags":["truthfulness","BUG-009"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"расскажи про технику жима"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"mustNotMatch":["(?i)записал|сохранил|logged|saved"],"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
-{"id":"TR-0010","phase":"training","tags":["truthfulness","BUG-006","adversarial"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":"182","weight":"84.5","fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"всё, я устал"},"expect":{"tools":{"mustNot":["finish_training"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0007","phase":"training","tags":["truthfulness","BUG-006"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"что дальше по плану?"},"expect":{"tools":{"mustNot":["finish_training","log_set"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0008","phase":"training","tags":["truthfulness","BUG-006"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"спина немного ноет, это нормально?"},"expect":{"tools":{"mustNot":["finish_training"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0009","phase":"training","tags":["truthfulness","BUG-009"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"расскажи про технику жима"},"expect":{"tools":{"mustNot":["log_set"]},"text":{"mustNotMatch":["(?i)записал|сохранил|logged|saved"],"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
+{"id":"TR-0010","phase":"training","tags":["truthfulness","BUG-006","adversarial"],"fixture":{"user":{"languageCode":"ru","timezone":"Europe/Berlin","firstName":"Тест","age":34,"gender":"male","height":182,"weight":84.5,"fitnessLevel":"intermediate","fitnessGoal":"strength","registrationCompleted":true},"hasActivePlan":true,"activeSession":{"id":"session-1","sessionKey":"Upper A"}},"state":{"phase":"training","activeSessionId":"session-1","messages":[]},"input":{"text":"всё, я устал"},"expect":{"tools":{"mustNot":["finish_training"]},"text":{"language":"ru","format":"telegram_html"}},"provenance":{"addedBy":"owner","date":"2026-09-12"}}
 ```
 
 `TR-0010` encodes BUG-006's rule directly: "я устал" is not an explicit request to end the session, and `finish_training` is irreversible.
