@@ -933,6 +933,32 @@ Run: `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase chat --samples 3`
 Run: `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase training --samples 3`
 Expected: a summary line per run. Record both summary lines and the per-case failures in this plan file under this task, and note which failures correspond to which BUGS.md id — that mapping is the useful output of the whole plan.
 
+**Measured 2026-09-13** (`z-ai/glm-5.3` via OpenRouter BYOK, 3 samples/case, ⌈n/2⌉ pass threshold):
+
+```
+L1 chat:     60/60 checks passed, 0 failed
+L1 training: 51/52 checks passed, 1 failed
+```
+
+Per-case failure and BUG mapping:
+
+| Case | Check | Result | BUGS.md |
+|---|---|---|---|
+| TR-0010 | `tools.mustNot:finish_training` | 1/3 samples passed — model called `finish_training` on «всё, я устал» (fatigue report, not explicit finish intent; prompt rule 7 says ask first) | BUG-006 |
+
+Zero failures on CH-0001..0010: the current chat prompt already carries the BUG-011 anti-pattern rule (transition tool vs text) and the BUG-009 anti-hallucination rule, and the model complied in all 30 chat samples — both are latent in chat at n=3, not reproducing. Likewise TR-0001..0009 passed: set logging fires on set data, questions/comments/adversarial "last time I did…" (TR-0006) do not trigger `log_set`, and no false ✅ confirmations appeared (BUG-009).
+
+Sub-threshold observations (passed at n=3 but seen failing in individual samples — baseline-relevant):
+
+- TR-0009 `text.format` failed in a 1-sample run (markdown `**bold**` in a Telegram HTML reply) and passed 2/3 in the full run — intermittent markdown leakage; no BUGS.md id covers Telegram formatting.
+- BUG-001 pattern observed on tool-call rounds: 4 samples (TR-0001 ×3, TR-0003 ×1) returned an empty first-round assistant text alongside the `log_set` call; benign here because the multi-round agent loop recovers and the final user-facing message is non-empty.
+
+Harness gaps found during the run and fixed (no prompt or dataset files touched):
+
+1. `npm run evals` did not load `.env` — importing L1 pulls in `loadConfig`, which threw on missing env vars before any case ran. The script now uses `tsx --env-file-if-exists=.env` (`apps/server/package.json`); L0 in CI (no `.env`) is unaffected, verified `npm run evals -- --level L0` → 45/45.
+2. `runCase` did not forward `state.activeSessionId`, so every training case hit the router's «Training phase without activeSessionId — falling back to chat» and never reached the model (10/10 cases with 0 LLM calls). Now forwarded (`apps/server/evals/lib/run-case.ts`).
+3. The stub `trainingService` returned the raw fixture `{id, sessionKey}` — `buildWorkoutOverview` threw `Cannot read properties of undefined (reading 'map')` before the model was reached, and the mutation methods (`logSetWithContext`, `completeCurrentExercise`, `completeSession`, `deleteLastSets`, `updateLastSet`) were missing, which would have error-looped every tool call into the LLM_ERROR retry budget. `build-stub-deps` now materializes a full mid-workout "Upper A" session (3-exercise plan, bench press in_progress with 1 logged set; fixture keys win) and implements the mutations in memory (`apps/server/evals/lib/build-stub-deps.ts`). All 33 eval-harness unit tests pass after the fixes.
+
 - [ ] **Step 4: Add the reports gitignore**
 
 Create `apps/server/evals/reports/.gitignore`:
