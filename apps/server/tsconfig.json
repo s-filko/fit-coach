@@ -19,6 +19,6 @@
       "@config/*": ["config/*"]
     }
   },
-  "include": ["src/**/*", "tests/**/*", "drizzle.config.ts"],
+  "include": ["src/**/*", "tests/**/*", "evals/**/*", "drizzle.config.ts"],
   "exclude": ["node_modules", "dist", "src/infra/db/scripts"]
 }

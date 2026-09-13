@@ -1,8 +1,9 @@
 # Refactor P0 — Eval Harness (L0) Implementation Plan
 
-- Status: planned
-- Branch:
+- Status: done
+- Branch: plan/refactor-p0-eval-harness
 - After: refactor-p0-run-log
+- Review: 2026-09-13 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -58,7 +59,7 @@ export function exitCodeFor(report: LevelReport): number;
 
 Tasks 2 and 3 produce `CheckResult[]`; the L1 plan reuses all three modules unchanged.
 
-- [ ] **Step 1: Write the failing token-estimator test**
+- [x] **Step 1: Write the failing token-estimator test**
 
 Create `apps/server/evals/lib/__tests__/token-estimator.unit.test.ts`:
 
@@ -83,12 +84,12 @@ describe('estimateTokens', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- token-estimator`
 Expected: FAIL — module not found (and, until Step 6, the file may not even be collected; that also counts as a failing state).
 
-- [ ] **Step 3: Implement the estimator**
+- [x] **Step 3: Implement the estimator**
 
 Create `apps/server/evals/lib/token-estimator.ts`:
 
@@ -110,7 +111,7 @@ export function estimateTokens(text: string): number {
 }
 ```
 
-- [ ] **Step 4: Write the reporter**
+- [x] **Step 4: Write the reporter**
 
 Create `apps/server/evals/lib/reporter.ts`:
 
@@ -149,7 +150,7 @@ export function exitCodeFor(report: LevelReport): number {
 }
 ```
 
-- [ ] **Step 5: Write the runner skeleton**
+- [x] **Step 5: Write the runner skeleton**
 
 Create `apps/server/evals/run.ts`:
 
@@ -186,7 +187,7 @@ void main();
 
 This imports `./levels/l0`, which Task 3 creates — the runner will not execute until then. That is expected: Step 7 only checks that the estimator's test passes.
 
-- [ ] **Step 6: Add the script and widen tsconfig/jest**
+- [x] **Step 6: Add the script and widen tsconfig/jest**
 
 In `apps/server/package.json`, add to `scripts`:
 
@@ -206,12 +207,12 @@ In `apps/server/jest.config.cjs`, change `roots` to:
   roots: ['<rootDir>/src', '<rootDir>/tests', '<rootDir>/evals'],
 ```
 
-- [ ] **Step 7: Run the estimator test to confirm it passes**
+- [x] **Step 7: Run the estimator test to confirm it passes**
 
 Run: `npm run test:unit -- token-estimator`
 Expected: PASS, all three cases.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add evals/ package.json tsconfig.json jest.config.cjs
@@ -232,7 +233,7 @@ The case schema is the contract every dataset obeys and every later level reads.
 - Consumes: nothing.
 - Produces: `EvalCaseSchema` (Zod) and `export type EvalCase = z.infer<typeof EvalCaseSchema>`, plus `parseCases(jsonl: string): EvalCase[]`. The dataset plan writes `.jsonl` files that this parses; the L1 plan reads `case.expect`.
 
-- [ ] **Step 1: Write the failing schema test**
+- [x] **Step 1: Write the failing schema test**
 
 Create `apps/server/evals/schema/__tests__/case.schema.unit.test.ts`:
 
@@ -279,12 +280,12 @@ describe('EvalCaseSchema', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- case.schema`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement the schema**
+- [x] **Step 3: Implement the schema**
 
 Create `apps/server/evals/schema/case.schema.ts`:
 
@@ -387,12 +388,12 @@ export function parseCases(jsonl: string): EvalCase[] {
 }
 ```
 
-- [ ] **Step 4: Run the test to confirm it passes**
+- [x] **Step 4: Run the test to confirm it passes**
 
 Run: `npm run test:unit -- case.schema`
 Expected: PASS, all six cases.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add evals/schema/
@@ -414,12 +415,12 @@ L0 renders each phase's real system prompt against three fixtures and inspects t
 - Consumes: `estimateTokens` and `CheckResult` (Task 1); the production prompt builders in `src/infra/ai/graph/nodes/*.node.ts`.
 - Produces: `export async function runL0(phase: string): Promise<CheckResult[]>` — the function `evals/run.ts` already imports.
 
-- [ ] **Step 1: Inventory the real prompt builders**
+- [x] **Step 1: Inventory the real prompt builders**
 
 Run: `grep -rn "^export function build.*Prompt\|^export function build.*SystemPrompt" src/infra/ai/graph/nodes/*.ts`
 Expected: one exported builder per phase. Note each exact name and its parameter list — Step 4 calls them with real arguments, and guessing a signature here produces a plan-shaped failure rather than a check.
 
-- [ ] **Step 2: Write the three fixture personas**
+- [x] **Step 2: Write the three fixture personas**
 
 Create `apps/server/evals/fixtures/personas.ts`:
 
@@ -460,7 +461,7 @@ export const ALL_FIXTURES: Array<{ name: string; fixture: EvalFixture }> = [
 ];
 ```
 
-- [ ] **Step 3: Write the failing L0 test**
+- [x] **Step 3: Write the failing L0 test**
 
 Create `apps/server/evals/levels/__tests__/l0.unit.test.ts`:
 
@@ -498,12 +499,12 @@ describe('L0 static checks', () => {
 });
 ```
 
-- [ ] **Step 4: Run it to confirm it fails**
+- [x] **Step 4: Run it to confirm it fails**
 
 Run: `npm run test:unit -- l0`
 Expected: FAIL — module `../l0` not found.
 
-- [ ] **Step 5: Implement L0**
+- [x] **Step 5: Implement L0**
 
 Create `apps/server/evals/levels/l0.ts`. Replace the `renderPrompt` switch arms with the **actual** builder names and signatures found in Step 1 — the names below are the shape, not a guess to be shipped unchecked:
 
@@ -600,19 +601,19 @@ export async function runL0(phaseArg: string): Promise<CheckResult[]> {
 
 The `@infra/*` alias must resolve under `tsx`. If it does not, add `tsconfig-paths` to the `evals` script or use a relative import — verify in Step 7 rather than assuming.
 
-- [ ] **Step 6: Run the unit test to confirm it passes**
+- [x] **Step 6: Run the unit test to confirm it passes**
 
 Run: `npm run test:unit -- l0`
 Expected: PASS, all five cases.
 
-- [ ] **Step 7: Run the real thing (AC-1303, L0 half)**
+- [x] **Step 7: Run the real thing (AC-1303, L0 half)**
 
 Run: `npm run evals -- --level L0`
 Expected: exit 0, with a line like `L0: 15/15 checks passed, 0 failed` (five phases × three fixtures × three checks, once every arm is wired).
 
 If a **real** prompt fails a check, do not edit the prompt. Record the failure in `docs/BACKLOG.md` via the `backlog` skill, and — only if the failure is a genuine budget miscalibration rather than a prompt defect — adjust that phase's entry in `PHASE_TOKEN_BUDGET` with a comment saying what it was measured at.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add evals/
@@ -632,7 +633,7 @@ An offline check that nobody runs is not a safety net. L0 costs seconds and no t
 - Consumes: the `evals` npm script (Task 1) and `runL0` (Task 3).
 - Produces: a required-check failure whenever a prompt renders with a hole or blows its budget.
 
-- [ ] **Step 1: Add the CI step**
+- [x] **Step 1: Add the CI step**
 
 In `.github/workflows/ci.yml`, after the "Unit tests" step in the `check-server` job:
 
@@ -643,29 +644,104 @@ In `.github/workflows/ci.yml`, after the "Unit tests" step in the `check-server`
 
 The job already writes `.env.test` with `LLM_MODEL=mock` and a dummy `LLM_API_KEY`; L0 makes no network call, so those placeholders are enough.
 
-- [ ] **Step 2: Verify the script works with only CI's env**
+- [x] **Step 2: Verify the script works with only CI's env**
 
 Run: `NODE_ENV=test npm run evals -- --level L0`
 Expected: exit 0. If the run fails because `--env-file=.env` is missing in CI, change the npm script to `tsx evals/run.ts` and load env only where a later level needs it.
 
-- [ ] **Step 3: Confirm the drizzle guard still passes**
+- [x] **Step 3: Confirm the drizzle guard still passes**
 
 Run (from the repo root): `grep -rn "drizzle-kit push\|drizzle:push" apps/server deploy docker-compose.yml --exclude-dir=node_modules`
 Expected: no output. The CI guard fails the build on any hit, and `evals/` is inside `apps/server`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add ../../.github/workflows/ci.yml
 git commit -m "ci: run eval L0 static prompt checks on every PR"
 ```
 
-- [ ] **Step 5: Confirm the gate fires on the PR**
+- [x] **Step 5: Confirm the gate fires on the PR**
 
 Open the PR and wait for `check-server`. Expected: the "Eval L0" step appears and passes. Paste its output line into the PR description.
 
 ---
 
+## Execution notes (deviations from the drafted plan)
+
+- **Builders found (Task 3 Step 1)** — one exported builder per phase, all in `src/infra/ai/graph/nodes/`:
+  `buildRegistrationSystemPrompt(user)`, `buildChatSystemPrompt(user, hasActivePlan, recentSessions, lastMessageTime)`,
+  `buildPlanCreationSystemPrompt(user)`, `buildSessionPlanningSystemPrompt(user, context)`,
+  `buildTrainingSystemPrompt(user, session, previousSession)`. The last two need real
+  `SessionPlanningContextData` / `WorkoutSessionWithDetails` objects, so `l0.ts` builds minimal
+  structurally-complete ones rather than passing the persona through directly.
+- **Fixture user types** — the drafted `FixtureUserSchema` typed `height`/`weight` as strings; the
+  production `User` type has them as numbers. The schema follows the real type.
+- **Forbidden-string check: strict scan plus an explicit allowlist (owner ruling).** A plain
+  `includes` flagged all three training fixtures on the training prompt's RULE 7, which contains
+  the ordinary English phrase "Sets without order may execute in undefined sequence" — prose, not a
+  template hole. §4.1 forbids editing prompt wording, and this is not a budget miscalibration, so
+  neither of the plan's escape hatches applied. The owner ruled against a pattern-based
+  "value position" heuristic: the check keeps the spec's strict `rendered.includes(token)`, and
+  `FORBIDDEN_STRING_ALLOWLIST` holds exact literal phrases that are stripped from the text before
+  scanning. Seeded with that one phrase only. Any new occurrence of a forbidden token still fails,
+  including a near-miss of the allowlisted phrase — pinned by a unit test. `training.node.ts` is
+  untouched. The proper fix is P2's structural check, which validates substituted values rather
+  than scanning the rendered string.
+- **Token headroom recorded.** `PHASE_TOKEN_BUDGET` values are unchanged; a comment above them now
+  records the measured min-max across the three fixtures as a recalibration baseline:
+  registration 935-969, chat 1006-1046, plan_creation 1378-1385, session_planning 2199-2215,
+  training 3391-3396.
+- **`evals` npm script** — `tsx --env-file=.env` fails in CI, which writes `.env.test` only.
+  Per Task 4 Step 2's fallback the script is plain `tsx evals/run.ts`; L0 needs no env at all.
+- **Section presence is NOT implemented.** This plan's Architecture line commits L0 to "section
+  presence, token budget and forbidden strings", and three checks shipped per case:
+  `renders-non-empty`, `no-forbidden-strings`, `within-token-budget`. There is deliberately no
+  section-presence assertion: no PhaseSpec or declared section contract exists yet — P2 introduces
+  it — so there is nothing to assert presence *against*. Asserting against section headings scraped
+  from today's prompt text would pin the current wording rather than a contract, and would break on
+  any legitimate prompt edit. The check belongs with P2's PhaseSpec, not here.
+- **Version discipline and message-catalog completeness (§4.1) are also out of scope here.** Both
+  presuppose artefacts P0 has not built: prompt version identifiers (§6's `promptVersion`, which the
+  baseline plan introduces) and a message catalogue. L0 as shipped covers the three checks that need
+  nothing beyond a rendered string. The remaining §4.1 checks are tracked in `docs/BACKLOG.md`.
+
 ## Close-out
 
 Follow `superpowers:finishing-a-development-branch`. Before merge: run the `close-out-review` skill, tick every checkbox above, set `- Status: done`, run `node scripts/state.mjs --write` from the repo root, and commit. `node scripts/state.mjs --check` must pass.
+
+## Review
+
+Four-zone close-out review, 2026-09-13, run on a different model than the implementation.
+Initial verdict **blocked** (3 blocking findings in R3); re-verified **clean** after the fixes below.
+
+### Blocking findings (all closed)
+
+- `blocking | R3 | apps/server/evals/lib/__tests__/token-estimator.unit.test.ts:3 | docs/CONTRIBUTING_AI.md "ID Conventions" ("IDs must appear in docs, code comments... and tests") | describe/it names carry no AC-1303/BR-EVAL reference; codebase precedent (src/infra/ai/graph/subgraphs/__tests__/training.subgraph.unit.test.ts:35, "ADR-0011 Fix 1.1") shows this ID-in-test-name convention is actually followed elsewhere, not just aspirational`
+  **Closed:** describe renamed to `estimateTokens (AC-1303 L0 — shared token estimator)`.
+- `blocking | R3 | apps/server/evals/schema/__tests__/case.schema.unit.test.ts:12 | docs/CONTRIBUTING_AI.md "ID Conventions" | EvalCaseSchema tests cover BR-EVAL-relevant shape (case immutability field ` + '`deprecated`' + `, phase enum) but cite no BR-EVAL-00x or AC-1303 anywhere in describe/it text`
+  **Closed:** describe renamed to `EvalCaseSchema (AC-1303, PROMPT_EVAL_FRAMEWORK §3 case schema)`; the `deprecated` test now cites BR-EVAL-001.
+- `blocking | R3 | apps/server/evals/levels/__tests__/l0.unit.test.ts:3 | docs/CONTRIBUTING_AI.md "ID Conventions" | L0 checks test the AC-1303 L0 half directly (forbidden strings, token budget, allowlist) with zero ID references in test names`
+  **Closed:** describe renamed to `L0 static checks (AC-1303 L0 half, PROMPT_EVAL_FRAMEWORK §4.1)`. `personas.ts` also now cites BR-EVAL-003 for the no-real-user-data rule.
+
+Re-verification after the fixes: 16 eval tests pass, `npm run evals -- --level L0` → 45/45, type-check clean.
+
+### Advisory findings
+
+Filed in `docs/BACKLOG.md` → Findings:
+- §4.1's unimplemented L0 checks — section presence, version discipline, message-catalog completeness (R3, R4).
+- Replace the forbidden-string allowlist with P2's structural check (R4).
+- `evals/` is outside the lint script's scope and has no eslint override — 8 errors invisible to CI (R1).
+
+Not filed, recorded here only:
+- R1: `evals/` has no tsconfig path alias for its own internals, so relative imports are unavoidable inside the tree. Same root cause as the lint entry above.
+- R1: `FORBIDDEN_STRING_ALLOWLIST` shares a file with the check engine — not a violation at one entry; covered by the structural-check backlog entry.
+- R2: `buildFixtureSession` is a third copy of a `WorkoutSessionWithDetails` literal (also in two pre-existing test files); a shared fixture builder would remove all three. Pre-dates this branch.
+- R2: `argValue` in `run.ts` is a minimal hand-rolled flag parser — YAGNI watch-item, no existing utility duplicates it.
+- R3: `toUser` / `buildFixtureSession` / `buildSessionPlanningContext` have no direct unit test, only indirect coverage via `runL0`.
+- R3: `run.ts` does not document behaviour on an unknown `--phase` (verified: one failure per fixture, exit 1 — correct, undocumented).
+
+### Recommendation to the owner (not actioned — durable spec)
+
+R4 notes `PROMPT_EVAL_FRAMEWORK.md` §4.1 does not describe the allowlist mechanism now shipped.
+Recommend the owner add it to §4.1. Not edited here: durable specs are owner-only.
