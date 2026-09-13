@@ -59,7 +59,7 @@ curl https://fitcoach-dev.filko.dev/health   # → 200
 
 ## Local development
 
-- `docker compose up -d db` (root compose, Postgres on :5432, data in `data/local/postgres`)
+- `docker compose up -d db` (root compose, Postgres on :5432, data in `data/local/postgres`). **Run it from the repo root only** — the volume path is relative, so starting it inside a worktree creates a second empty cluster there and the container stays bound to it; check with `docker inspect fitcoach-db --format '{{range .Mounts}}{{.Source}}{{end}}'` (see `docs/DB_SETUP.md` § 2)
 - `cd apps/server && npm run dev` → http://localhost:3000 (logs tee'd to `logs/server.log`)
 - `cd apps/webapp && npm run dev` → http://localhost:5173/public/webapp/ (vite, base path `/public/webapp/`)
 - **Schema changes go through migrations only** (HB-01, 2026-09-11): `npm run drizzle:generate` to create a migration from `schema.ts`, `npm run db:local:migrate` to apply locally; durable envs migrate via `deploy.sh`. `drizzle-kit push` is removed and blocked by CI. The `checkpoints*` tables are LangGraph runtime storage, absent from `schema.ts` — never add them to migrations
