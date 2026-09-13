@@ -1,6 +1,6 @@
-import { assertCase } from '../l1';
-import type { EvalCase } from '../../schema/case.schema';
 import type { CaseObservation } from '../../lib/run-case';
+import type { EvalCase } from '../../schema/case.schema';
+import { assertCase } from '../l1';
 
 const base: EvalCase = {
   id: 'CH-0001',

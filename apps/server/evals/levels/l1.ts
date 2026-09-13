@@ -2,8 +2,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { CheckResult } from '../lib/reporter';
-import { runCase, type CaseObservation } from '../lib/run-case';
-import { parseCases, type EvalCase } from '../schema/case.schema';
+import { type CaseObservation, runCase } from '../lib/run-case';
+import { type EvalCase, parseCases } from '../schema/case.schema';
 
 /**
  * Resolved from process.cwd() rather than import.meta.dirname: this module is loaded
@@ -67,7 +67,7 @@ export function assertCase(testCase: EvalCase, observation: CaseObservation): Ch
     );
   }
 
-  const text = testCase.expect.text;
+  const { text } = testCase.expect;
   if (text) {
     for (const pattern of text.mustMatch ?? []) {
       add(`text.mustMatch:${pattern}`, compilePattern(pattern).test(observation.text));

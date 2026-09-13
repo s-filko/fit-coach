@@ -1,10 +1,18 @@
-import { runCase } from '../run-case';
+import { AIMessage } from '@langchain/core/messages';
+
+import * as modelFactory from '@infra/ai/model.factory';
+
 import type { EvalCase } from '../../schema/case.schema';
+import { runCase } from '../run-case';
 
 jest.mock('@infra/ai/model.factory', () => {
-  const { AIMessage } = jest.requireActual('@langchain/core/messages');
-  const invoke = jest.fn().mockResolvedValue(new AIMessage('Мок-ответ тренера'));
-  return { getModel: () => ({ invoke, bindTools: () => ({ invoke }) }) };
+  const { AIMessage: MockAIMessage } = jest.requireActual('@langchain/core/messages');
+  // Scripted replies for tests that need tool-call rounds; falls back to plain text.
+  const queue: unknown[] = [];
+  const fallback = new MockAIMessage('Мок-ответ тренера');
+  const invoke = jest.fn().mockImplementation(async () => (queue.length ? queue.shift() : fallback));
+  const model = { invoke, bindTools: () => ({ invoke }) };
+  return { getModel: () => model, __mockQueue: queue };
 });
 
 const testCase: EvalCase = {
@@ -12,7 +20,12 @@ const testCase: EvalCase = {
   phase: 'chat',
   tags: [],
   deprecated: false,
-  fixture: { user: { languageCode: 'ru', timezone: 'Europe/Berlin' }, hasActivePlan: true },
+  // registrationCompleted: true — otherwise the router sends the case to the
+  // registration phase, whose toolset has no request_transition.
+  fixture: {
+    user: { languageCode: 'ru', timezone: 'Europe/Berlin', registrationCompleted: true },
+    hasActivePlan: true,
+  },
   input: { text: 'привет' },
   expect: {},
 };
@@ -28,6 +41,29 @@ describe('runCase', () => {
     const observation = await runCase(testCase);
     expect(observation.toolCalls).toEqual([]);
     expect(observation.transition).toBeNull();
+  });
+
+  it('reports a non-null transition from the recorded run row when the model calls request_transition', async () => {
+    // The transition must come from recordedRuns[0].transition, not from the final
+    // graph state: transition_guard nulls requestedTransition before END
+    // (conversation.graph.ts), so result.requestedTransition is always null here.
+    const queue = (modelFactory as unknown as { __mockQueue: unknown[] }).__mockQueue;
+    queue.push(
+      new AIMessage({
+        content: '',
+        tool_calls: [{ name: 'request_transition', args: { toPhase: 'session_planning' }, id: 'call_1' }],
+      }),
+      new AIMessage('Идём планировать тренировку'),
+    );
+
+    try {
+      const observation = await runCase(testCase);
+      expect(observation.transition).toBe('session_planning');
+      expect(observation.toolCalls.some(tc => tc.name === 'request_transition')).toBe(true);
+      expect(observation.threw).toBeNull();
+    } finally {
+      queue.length = 0;
+    }
   });
 });
 

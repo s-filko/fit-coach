@@ -5,6 +5,7 @@ import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import { buildConversationGraph } from '@infra/ai/graph/conversation.graph';
 
 import type { EvalCase } from '../schema/case.schema';
+
 import { buildStubDeps } from './build-stub-deps';
 
 export interface CaseObservation {

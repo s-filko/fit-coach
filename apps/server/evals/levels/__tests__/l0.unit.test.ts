@@ -1,4 +1,4 @@
-import { FORBIDDEN_STRINGS, FORBIDDEN_STRING_ALLOWLIST, checkRenderedPrompt } from '../l0';
+import { checkRenderedPrompt, FORBIDDEN_STRING_ALLOWLIST, FORBIDDEN_STRINGS } from '../l0';
 
 describe('L0 static checks (AC-1303 L0 half, PROMPT_EVAL_FRAMEWORK §4.1)', () => {
   it('flags a prompt containing "undefined"', () => {
