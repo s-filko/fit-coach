@@ -331,10 +331,14 @@ No "previous session" block. `previousSession` parameter removed from prompt bui
 
 ## BUG-006 — LLM calls `finish_training` without user intent (fallback after removed error)
 
-**Status:** Fixed (Phase 1)  
+**Status:** Open — regression found 2026-09-13 (was Fixed in Phase 1)  
 **Severity:** Critical  
 **Found during:** Manual test run 2026-03-12, real training session  
 **Component:** `apps/server/src/infra/ai/graph/nodes/training.node.ts`, `apps/server/src/infra/ai/graph/tools/training.tools.ts`
+
+### Regression (2026-09-13)
+
+The first L1 eval measurement (`z-ai/glm-5.3`, 3 samples/case) reproduced the bug: on «всё, я устал» (fatigue report, not an explicit finish request) the model called `finish_training` in 2 of 3 samples — case TR-0010, `tools.mustNot:finish_training` failed (1/3 passed, threshold ⌈n/2⌉). `AUDIT: training session finished` entries in the eval log confirm real tool executions. The Phase 1 fix (fallback removal + prompt rule "ask before finishing") does not hold at temperature > 0. Standing regression detector: dataset TR-0010 (`apps/server/evals/datasets/training/no-false-confirmation.jsonl`, tagged BUG-006) — per BR-EVAL-002 this case already satisfies the tagged-case requirement. Record: `docs/superpowers/plans/refactor-p0-eval-l1-chat-training.md` (Task 6 measurement).
 
 ### Description
 
