@@ -274,6 +274,7 @@ export default tseslint.config(
       '*.js',
       '*.d.ts',
       'jest.config.cjs',
+      'src/infra/db/scripts/',
     ],
   }
 );
