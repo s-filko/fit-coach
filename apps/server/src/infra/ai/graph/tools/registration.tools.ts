@@ -39,9 +39,7 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
   const { userService, pendingTransitions } = deps;
 
   const saveProfileFields = tool(
-     
-    async(input, config) => {
-       
+    async (input, config) => {
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
         return 'Error: could not identify user. Please try again.';
@@ -87,9 +85,7 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
   );
 
   const completeRegistration = tool(
-     
-    async(input, config) => {
-       
+    async (input, config) => {
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
         return 'Error: could not identify user. Please try again.';

@@ -57,7 +57,7 @@ export function buildPlanCreationSubgraph(deps: PlanCreationSubgraphDeps) {
   const dedupToolNode = buildDedupToolNode(tools);
   const model = getModel().bindTools(tools);
 
-  const agentNode = async(state: PlanCreationSubgraphStateType, config: RunnableConfig) => {
+  const agentNode = async (state: PlanCreationSubgraphStateType, config: RunnableConfig) => {
     const { userId, user, userMessage } = state;
 
     const [history, freshUser, previousSummary] = await Promise.all([
@@ -87,7 +87,7 @@ export function buildPlanCreationSubgraph(deps: PlanCreationSubgraphDeps) {
     return { messages: [response] };
   };
 
-  const extractNode = async(state: PlanCreationSubgraphStateType): Promise<Partial<ConversationStateType>> => {
+  const extractNode = async (state: PlanCreationSubgraphStateType): Promise<Partial<ConversationStateType>> => {
     const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
     const text =
       typeof lastMessage.content === 'string'

@@ -125,7 +125,7 @@ export default tseslint.config(
       // Style rules
       'array-bracket-spacing': ['error', 'never'],
       'object-curly-spacing': ['error', 'always'],
-      'space-before-function-paren': ['warn', 'never'],
+      'space-before-function-paren': ['warn', { anonymous: 'never', named: 'never', asyncArrow: 'always' }],
 
       // Stricter existing rules
       'max-depth': ['warn', 4],

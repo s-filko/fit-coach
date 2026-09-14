@@ -89,7 +89,7 @@ function buildGraph(deps: ConversationGraphDeps) {
     embeddingService,
   });
 
-  const transitionGuardNode = async(
+  const transitionGuardNode = async (
     state: ConversationStateType,
     config: RunnableConfig,
   ): Promise<Partial<ConversationStateType>> => {
@@ -129,7 +129,7 @@ function buildGraph(deps: ConversationGraphDeps) {
     return { phase: toPhase, requestedTransition: null };
   };
 
-  const cleanupNode = async(state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
+  const cleanupNode = async (state: ConversationStateType): Promise<Partial<ConversationStateType>> => {
     const updates: Partial<ConversationStateType> = {};
 
     if (state.activeSessionId && state.phase === 'training') {
@@ -162,7 +162,7 @@ function buildGraph(deps: ConversationGraphDeps) {
   // Wrap routerNode to always emit a Command so that routing is driven by the node
   // itself rather than a separate conditional edge.  Timeout paths use goto='persist'
   // to short-circuit subgraph execution; all other paths use goto=state.phase.
-  const routerNodeWithCommand = async(state: ConversationStateType, config: RunnableConfig) => {
+  const routerNodeWithCommand = async (state: ConversationStateType, config: RunnableConfig) => {
     const result = await routerNode(state, config);
     if (result instanceof Command) {
       return result;

@@ -20,7 +20,7 @@ describe('persist node run logging (AC-1301)', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  it('records exactly one run row per invocation', async() => {
+  it('records exactly one run row per invocation', async () => {
     const runService = { recordRun: jest.fn().mockResolvedValue(undefined) };
     const node = buildPersistNode(contextService as never, runService as never);
 
@@ -36,7 +36,7 @@ describe('persist node run logging (AC-1301)', () => {
     expect(record.promptVersions).toEqual({ 'phase.chat': 'v0', directives: 'v0' });
   });
 
-  it('records the requested transition as phase_out', async() => {
+  it('records the requested transition as phase_out', async () => {
     const runService = { recordRun: jest.fn().mockResolvedValue(undefined) };
     const node = buildPersistNode(contextService as never, runService as never);
 
@@ -47,7 +47,7 @@ describe('persist node run logging (AC-1301)', () => {
     expect(record.transition).toEqual({ toPhase: 'session_planning' });
   });
 
-  it('still returns normally when the run write throws', async() => {
+  it('still returns normally when the run write throws', async () => {
     const runService = { recordRun: jest.fn().mockRejectedValue(new Error('db down')) };
     const node = buildPersistNode(contextService as never, runService as never);
 
@@ -55,7 +55,7 @@ describe('persist node run logging (AC-1301)', () => {
     expect(contextService.appendTurn).toHaveBeenCalled();
   });
 
-  it('writes no run row when there is no response to persist', async() => {
+  it('writes no run row when there is no response to persist', async () => {
     const runService = { recordRun: jest.fn().mockResolvedValue(undefined) };
     const node = buildPersistNode(contextService as never, runService as never);
 

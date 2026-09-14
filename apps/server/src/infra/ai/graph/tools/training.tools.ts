@@ -79,7 +79,7 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
   const searchExercises = buildSearchExercisesTool({ embeddingService, exerciseRepository });
 
   const logSet = tool(
-    async(input, config) => {
+    async (input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       const sessionId = currentSessionIds.get(userId) ?? null;
       if (!sessionId) {
@@ -245,7 +245,7 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
   );
 
   const completeCurrentExercise = tool(
-    async(_input, config) => {
+    async (_input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       const sessionId = currentSessionIds.get(userId) ?? null;
       if (!sessionId) {
@@ -287,7 +287,7 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
   );
 
   const finishTraining = tool(
-    async(input, config) => {
+    async (input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       const sessionId = currentSessionIds.get(userId) ?? null;
       if (!sessionId) {
@@ -354,7 +354,7 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
   // -------------------------------------------------------------------------
 
   const deleteLastSets = tool(
-    async(input, config) => {
+    async (input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       const sessionId = currentSessionIds.get(userId) ?? null;
       if (!sessionId) {
@@ -404,7 +404,7 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
   );
 
   const updateLastSet = tool(
-    async(input, config) => {
+    async (input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       const sessionId = currentSessionIds.get(userId) ?? null;
       if (!sessionId) {

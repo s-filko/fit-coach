@@ -221,7 +221,7 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
     }
   }
 
-  const sequentialToolNode = async(state: TrainingSubgraphStateType) => {
+  const sequentialToolNode = async (state: TrainingSubgraphStateType) => {
     const { messages, userId } = state;
     const lastMessage = messages[messages.length - 1] as AIMessage;
     const toolCalls = lastMessage.tool_calls ?? [];
@@ -249,21 +249,19 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
       }
       const nonDuplicateCalls = sorted.filter(c => !duplicateIds.includes(c.id ?? ''));
       for (const call of nonDuplicateCalls) {
-         
         toolMessages.push(await invokeTool(call, userId));
       }
       return { messages: toolMessages };
     }
 
     for (const call of sorted) {
-       
       toolMessages.push(await invokeTool(call, userId));
     }
 
     return { messages: toolMessages };
   };
 
-  const agentNode = async(state: TrainingSubgraphStateType, config: RunnableConfig) => {
+  const agentNode = async (state: TrainingSubgraphStateType, config: RunnableConfig) => {
     const { userId, user, userMessage, activeSessionId } = state;
 
     try {
@@ -405,7 +403,7 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
     }
   };
 
-  const extractNode = async(state: TrainingSubgraphStateType): Promise<Partial<ConversationStateType>> => {
+  const extractNode = async (state: TrainingSubgraphStateType): Promise<Partial<ConversationStateType>> => {
     const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
     const text =
       typeof lastMessage.content === 'string'

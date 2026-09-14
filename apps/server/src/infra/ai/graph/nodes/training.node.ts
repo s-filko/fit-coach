@@ -247,7 +247,9 @@ function formatSetData(setData: WorkoutSessionWithDetails['exercises'][number]['
     case 'cardio_distance': {
       const durStr = setData.duration > 0 ? `${Math.round(setData.duration / 60)}min` : '?min';
       const parts: string[] = [`${setData.distance}${setData.distanceUnit}`, durStr];
-      if (setData.inclinePct != null) {parts.push(`${setData.inclinePct}% incline`);}
+      if (setData.inclinePct != null) {
+        parts.push(`${setData.inclinePct}% incline`);
+      }
       return parts.join(' ');
     }
     case 'cardio_duration':

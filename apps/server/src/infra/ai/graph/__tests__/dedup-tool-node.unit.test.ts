@@ -19,7 +19,7 @@ function makeState(toolCalls: ReturnType<typeof makeToolCall>[]) {
 }
 
 describe('buildDedupToolNode', () => {
-  it('executes a single search_exercises call normally', async() => {
+  it('executes a single search_exercises call normally', async () => {
     const invoke = jest.fn().mockResolvedValue('Found 5 exercises: ...');
     const tools = [makeFakeTool('search_exercises', invoke)] as never[];
     const node = buildDedupToolNode(tools);
@@ -32,7 +32,7 @@ describe('buildDedupToolNode', () => {
     expect((result.messages[0] as ToolMessage).content).toBe('Found 5 exercises: ...');
   });
 
-  it('deduplicates identical search_exercises calls — invokes only once', async() => {
+  it('deduplicates identical search_exercises calls — invokes only once', async () => {
     const invoke = jest.fn().mockResolvedValue('Found 3 exercises: ...');
     const tools = [makeFakeTool('search_exercises', invoke)] as never[];
     const node = buildDedupToolNode(tools);
@@ -56,7 +56,7 @@ describe('buildDedupToolNode', () => {
     expect((result.messages[2] as ToolMessage).tool_call_id).toBe('id-3');
   });
 
-  it('treats different query params as distinct calls', async() => {
+  it('treats different query params as distinct calls', async () => {
     const invoke = jest.fn().mockResolvedValueOnce('chest results').mockResolvedValueOnce('legs results');
     const tools = [makeFakeTool('search_exercises', invoke)] as never[];
     const node = buildDedupToolNode(tools);
@@ -73,7 +73,7 @@ describe('buildDedupToolNode', () => {
     expect((result.messages[1] as ToolMessage).content).toBe('legs results');
   });
 
-  it('treats different filters on same query as distinct calls', async() => {
+  it('treats different filters on same query as distinct calls', async () => {
     const invoke = jest.fn().mockResolvedValue('results');
     const tools = [makeFakeTool('search_exercises', invoke)] as never[];
     const node = buildDedupToolNode(tools);
@@ -88,7 +88,7 @@ describe('buildDedupToolNode', () => {
     expect(invoke).toHaveBeenCalledTimes(2);
   });
 
-  it('deduplicates case-insensitively and trims query whitespace', async() => {
+  it('deduplicates case-insensitively and trims query whitespace', async () => {
     const invoke = jest.fn().mockResolvedValue('results');
     const tools = [makeFakeTool('search_exercises', invoke)] as never[];
     const node = buildDedupToolNode(tools);
@@ -103,7 +103,7 @@ describe('buildDedupToolNode', () => {
     expect(invoke).toHaveBeenCalledTimes(1);
   });
 
-  it('passes non-search_exercises tools through without dedup', async() => {
+  it('passes non-search_exercises tools through without dedup', async () => {
     const searchInvoke = jest.fn().mockResolvedValue('exercises');
     const saveInvoke = jest.fn().mockResolvedValue('Workout plan saved successfully!');
     const tools = [
@@ -124,7 +124,7 @@ describe('buildDedupToolNode', () => {
     expect(result.messages).toHaveLength(2);
   });
 
-  it('returns error ToolMessage for unknown tools', async() => {
+  it('returns error ToolMessage for unknown tools', async () => {
     const tools = [] as never[];
     const node = buildDedupToolNode(tools);
 
@@ -135,7 +135,7 @@ describe('buildDedupToolNode', () => {
     expect((result.messages[0] as ToolMessage).status).toBe('error');
   });
 
-  it('returns error ToolMessage when tool throws', async() => {
+  it('returns error ToolMessage when tool throws', async () => {
     const invoke = jest.fn().mockRejectedValue(new Error('DB connection failed'));
     const tools = [makeFakeTool('search_exercises', invoke)] as never[];
     const node = buildDedupToolNode(tools);

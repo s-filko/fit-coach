@@ -17,7 +17,7 @@ export function buildSaveTimezoneTool(deps: TimezoneToolDeps) {
   const { userService } = deps;
 
   return tool(
-    async(input, config) => {
+    async (input, config) => {
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
         return 'Error: could not identify user. Please try again.';

@@ -8,7 +8,7 @@ import fp from 'fastify-plugin';
 import { jsonSchemaTransform } from 'fastify-type-provider-zod';
 
 export default fp(
-  async(app: FastifyInstance): Promise<void> => {
+  async (app: FastifyInstance): Promise<void> => {
     // Swagger/OpenAPI
     await app.register(swagger, {
       mode: 'dynamic',

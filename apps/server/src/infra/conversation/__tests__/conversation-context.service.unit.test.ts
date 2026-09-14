@@ -8,12 +8,12 @@ describe('InMemoryConversationContextService', () => {
   });
 
   describe('appendTurn + getMessagesForPrompt', () => {
-    it('returns empty array before any turns', async() => {
+    it('returns empty array before any turns', async () => {
       const messages = await service.getMessagesForPrompt('u1', 'chat');
       expect(messages).toHaveLength(0);
     });
 
-    it('returns user+assistant turns after appendTurn', async() => {
+    it('returns user+assistant turns after appendTurn', async () => {
       await service.appendTurn('u1', 'chat', 'hello', 'hi there');
 
       const messages = await service.getMessagesForPrompt('u1', 'chat');
@@ -22,7 +22,7 @@ describe('InMemoryConversationContextService', () => {
       expect(messages[1]).toEqual({ role: 'assistant', content: 'hi there' });
     });
 
-    it('appends multiple turns in chronological order', async() => {
+    it('appends multiple turns in chronological order', async () => {
       await service.appendTurn('u1', 'chat', 'first', 'resp-first');
       await service.appendTurn('u1', 'chat', 'second', 'resp-second');
 
@@ -32,7 +32,7 @@ describe('InMemoryConversationContextService', () => {
       expect(messages[3].content).toBe('resp-second');
     });
 
-    it('keeps independent userId+phase buckets', async() => {
+    it('keeps independent userId+phase buckets', async () => {
       await service.appendTurn('u1', 'registration', 'reg-msg', 'reg-resp');
       await service.appendTurn('u1', 'chat', 'chat-msg', 'chat-resp');
       await service.appendTurn('u2', 'chat', 'u2-msg', 'u2-resp');
@@ -42,7 +42,7 @@ describe('InMemoryConversationContextService', () => {
       expect(await service.getMessagesForPrompt('u2', 'chat')).toHaveLength(2);
     });
 
-    it('applies sliding window via maxTurns option', async() => {
+    it('applies sliding window via maxTurns option', async () => {
       for (let i = 0; i < 5; i++) {
         await service.appendTurn('u1', 'chat', `msg-${i}`, `resp-${i}`);
       }

@@ -45,7 +45,7 @@ const buildTools = (
   buildChatTools({ userService, pendingTransitions }) as unknown as [InvokableTool, InvokableTool];
 
 describe('chat.tools — update_profile', () => {
-  it('returns a plain string, never a Command object', async() => {
+  it('returns a plain string, never a Command object', async () => {
     const [updateProfile] = buildTools(makeUserService(), makePendingTransitions());
 
     const result = await updateProfile.invoke({ age: 30 }, makeConfig());
@@ -54,7 +54,7 @@ describe('chat.tools — update_profile', () => {
     expect(result as object).not.toHaveProperty('lc_direct_tool_output');
   });
 
-  it('calls updateProfileData with the provided fields', async() => {
+  it('calls updateProfileData with the provided fields', async () => {
     const userService = makeUserService();
     const [updateProfile] = buildTools(userService, makePendingTransitions());
 
@@ -69,7 +69,7 @@ describe('chat.tools — update_profile', () => {
     );
   });
 
-  it('returns "Profile updated:" confirmation string', async() => {
+  it('returns "Profile updated:" confirmation string', async () => {
     const [updateProfile] = buildTools(makeUserService(), makePendingTransitions());
 
     const result = await updateProfile.invoke({ age: 30 }, makeConfig());
@@ -77,7 +77,7 @@ describe('chat.tools — update_profile', () => {
     expect(result as string).toContain('Profile updated:');
   });
 
-  it('returns error string when userId is missing from configurable', async() => {
+  it('returns error string when userId is missing from configurable', async () => {
     const [updateProfile] = buildTools(makeUserService(), makePendingTransitions());
 
     const result = await updateProfile.invoke({ age: 30 }, { configurable: {} });
@@ -85,7 +85,7 @@ describe('chat.tools — update_profile', () => {
     expect(result as string).toContain('Error: could not identify user');
   });
 
-  it('returns error string when updateProfileData returns null', async() => {
+  it('returns error string when updateProfileData returns null', async () => {
     const userService = makeUserService();
     (userService.updateProfileData as jest.Mock).mockResolvedValue(null);
     const [updateProfile] = buildTools(userService, makePendingTransitions());
@@ -95,7 +95,7 @@ describe('chat.tools — update_profile', () => {
     expect(result as string).toContain('Failed to update profile');
   });
 
-  it('does NOT touch pendingTransitions', async() => {
+  it('does NOT touch pendingTransitions', async () => {
     const pendingTransitions = makePendingTransitions();
     const [updateProfile] = buildTools(makeUserService(), pendingTransitions);
 
@@ -106,7 +106,7 @@ describe('chat.tools — update_profile', () => {
 });
 
 describe('chat.tools — request_transition', () => {
-  it('returns a plain string, never a Command object', async() => {
+  it('returns a plain string, never a Command object', async () => {
     const [, requestTransition] = buildTools(makeUserService(), makePendingTransitions());
 
     const result = await requestTransition.invoke({ toPhase: 'plan_creation' }, makeConfig());
@@ -115,7 +115,7 @@ describe('chat.tools — request_transition', () => {
     expect(result as object).not.toHaveProperty('lc_direct_tool_output');
   });
 
-  it('sets pendingTransitions entry for userId with correct toPhase', async() => {
+  it('sets pendingTransitions entry for userId with correct toPhase', async () => {
     const pendingTransitions = makePendingTransitions();
     const [, requestTransition] = buildTools(makeUserService(), pendingTransitions);
 
@@ -125,7 +125,7 @@ describe('chat.tools — request_transition', () => {
     expect(pendingTransitions.get('u1')?.toPhase).toBe('plan_creation');
   });
 
-  it('sets pendingTransitions entry with optional reason', async() => {
+  it('sets pendingTransitions entry with optional reason', async () => {
     const pendingTransitions = makePendingTransitions();
     const [, requestTransition] = buildTools(makeUserService(), pendingTransitions);
 
@@ -134,7 +134,7 @@ describe('chat.tools — request_transition', () => {
     expect(pendingTransitions.get('u1')?.reason).toBe('user wants workout');
   });
 
-  it('returns confirmation string mentioning the target phase', async() => {
+  it('returns confirmation string mentioning the target phase', async () => {
     const [, requestTransition] = buildTools(makeUserService(), makePendingTransitions());
 
     const result = await requestTransition.invoke({ toPhase: 'session_planning' }, makeConfig());
@@ -142,7 +142,7 @@ describe('chat.tools — request_transition', () => {
     expect(result as string).toContain('session_planning');
   });
 
-  it('does NOT call userService', async() => {
+  it('does NOT call userService', async () => {
     const userService = makeUserService();
     const [, requestTransition] = buildTools(userService, makePendingTransitions());
 
@@ -152,7 +152,7 @@ describe('chat.tools — request_transition', () => {
     expect(userService.getUser).not.toHaveBeenCalled();
   });
 
-  it('isolates entries by userId — two users do not overwrite each other', async() => {
+  it('isolates entries by userId — two users do not overwrite each other', async () => {
     const pendingTransitions = makePendingTransitions();
     const [, requestTransition] = buildTools(makeUserService(), pendingTransitions);
 

@@ -69,10 +69,10 @@ describe('plan-creation.subgraph — tool-calling loop', () => {
     jest.resetModules();
   });
 
-  it('includes ToolMessage from current turn in the prompt for the second LLM call', async() => {
+  it('includes ToolMessage from current turn in the prompt for the second LLM call', async () => {
     const capturedMessages: unknown[][] = [];
 
-    const mockInvoke = jest.fn().mockImplementation(async(messages: unknown[]) => {
+    const mockInvoke = jest.fn().mockImplementation(async (messages: unknown[]) => {
       capturedMessages.push([...messages]);
       if (capturedMessages.length === 1) {
         return new AIMessage({
@@ -118,10 +118,10 @@ describe('plan-creation.subgraph — tool-calling loop', () => {
     expect(hasToolMessage).toBe(true);
   });
 
-  it('includes the AIMessage with tool_calls in the prompt for the second LLM call', async() => {
+  it('includes the AIMessage with tool_calls in the prompt for the second LLM call', async () => {
     const capturedMessages: unknown[][] = [];
 
-    const mockInvoke = jest.fn().mockImplementation(async(messages: unknown[]) => {
+    const mockInvoke = jest.fn().mockImplementation(async (messages: unknown[]) => {
       capturedMessages.push([...messages]);
       if (capturedMessages.length === 1) {
         return new AIMessage({

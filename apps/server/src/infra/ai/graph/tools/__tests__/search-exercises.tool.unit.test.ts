@@ -59,7 +59,7 @@ describe('search_exercises tool', () => {
     expect(tool.name).toBe('search_exercises');
   });
 
-  it('calls embeddingService.embed with the query', async() => {
+  it('calls embeddingService.embed with the query', async () => {
     const embeddingService = makeEmbeddingService();
     const tool = buildSearchExercisesTool({
       embeddingService,
@@ -71,7 +71,7 @@ describe('search_exercises tool', () => {
     expect(embeddingService.embed).toHaveBeenCalledWith('chest compound barbell');
   });
 
-  it('calls exerciseRepository.searchByEmbedding with the embedding vector', async() => {
+  it('calls exerciseRepository.searchByEmbedding with the embedding vector', async () => {
     const embeddingService = makeEmbeddingService();
     const exerciseRepository = makeExerciseRepository();
     const vector = new Array(384).fill(0.1);
@@ -84,7 +84,7 @@ describe('search_exercises tool', () => {
     expect(exerciseRepository.searchByEmbedding).toHaveBeenCalledWith(vector, expect.objectContaining({ limit: 5 }));
   });
 
-  it('passes category filter to searchByEmbedding', async() => {
+  it('passes category filter to searchByEmbedding', async () => {
     const exerciseRepository = makeExerciseRepository();
     const tool = buildSearchExercisesTool({
       embeddingService: makeEmbeddingService(),
@@ -99,7 +99,7 @@ describe('search_exercises tool', () => {
     );
   });
 
-  it('passes equipment filter to searchByEmbedding', async() => {
+  it('passes equipment filter to searchByEmbedding', async () => {
     const exerciseRepository = makeExerciseRepository();
     const tool = buildSearchExercisesTool({
       embeddingService: makeEmbeddingService(),
@@ -114,7 +114,7 @@ describe('search_exercises tool', () => {
     );
   });
 
-  it('returns exercise list as string with IDs and muscle groups', async() => {
+  it('returns exercise list as string with IDs and muscle groups', async () => {
     const exerciseRepository = makeExerciseRepository();
     exerciseRepository.searchByEmbedding.mockResolvedValue([makeExerciseWithMuscles()]);
 
@@ -130,7 +130,7 @@ describe('search_exercises tool', () => {
     expect(result).toContain('chest');
   });
 
-  it('returns "no exercises found" message when results are empty', async() => {
+  it('returns "no exercises found" message when results are empty', async () => {
     const exerciseRepository = makeExerciseRepository();
     exerciseRepository.searchByEmbedding.mockResolvedValue([]);
 
@@ -144,7 +144,7 @@ describe('search_exercises tool', () => {
     expect(result).toContain('No exercises found');
   });
 
-  it('returns error string when embeddingService.embed throws', async() => {
+  it('returns error string when embeddingService.embed throws', async () => {
     const embeddingService = makeEmbeddingService();
     embeddingService.embed.mockRejectedValue(new Error('Model not loaded'));
 

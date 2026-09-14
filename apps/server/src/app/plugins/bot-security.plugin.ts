@@ -8,8 +8,8 @@ function shouldSkipSecurityCheck(request: FastifyRequest): boolean {
 }
 
 export default fp(
-  async(app: FastifyInstance): Promise<void> => {
-    app.addHook('preHandler', async(request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+  async (app: FastifyInstance): Promise<void> => {
+    app.addHook('preHandler', async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
       if (shouldSkipSecurityCheck(request)) {
         return;
       }

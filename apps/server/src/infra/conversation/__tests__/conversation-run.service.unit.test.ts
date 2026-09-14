@@ -25,7 +25,7 @@ const record: ConversationRunRecord = {
 describe('DrizzleConversationRunService (AC-1301)', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('inserts one row carrying every AC-1301 field', async() => {
+  it('inserts one row carrying every AC-1301 field', async () => {
     await new DrizzleConversationRunService().recordRun(record);
 
     expect(values).toHaveBeenCalledTimes(1);

@@ -120,7 +120,7 @@ const buildTools = (
 };
 
 describe('plan-creation.tools — save_workout_plan', () => {
-  it('returns a plain string, never a Command object', async() => {
+  it('returns a plain string, never a Command object', async () => {
     const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
 
     const result = await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig());
@@ -129,7 +129,7 @@ describe('plan-creation.tools — save_workout_plan', () => {
     expect(result as object).not.toHaveProperty('lc_direct_tool_output');
   });
 
-  it('calls workoutPlanRepository.create with correct userId and plan data', async() => {
+  it('calls workoutPlanRepository.create with correct userId and plan data', async () => {
     const repo = makeWorkoutPlanRepo();
     const { saveWorkoutPlan } = buildTools(repo, makePendingTransitions());
 
@@ -148,7 +148,7 @@ describe('plan-creation.tools — save_workout_plan', () => {
     );
   });
 
-  it('sets pendingTransitions entry for userId to chat after saving the plan', async() => {
+  it('sets pendingTransitions entry for userId to chat after saving the plan', async () => {
     const pendingTransitions = makePendingTransitions();
     const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
 
@@ -159,7 +159,7 @@ describe('plan-creation.tools — save_workout_plan', () => {
     expect(pendingTransitions.get('u1')?.reason).toBe('plan_creation_complete');
   });
 
-  it('returns success string', async() => {
+  it('returns success string', async () => {
     const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
 
     const result = await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig());
@@ -167,7 +167,7 @@ describe('plan-creation.tools — save_workout_plan', () => {
     expect(result as string).toContain('Plan saved');
   });
 
-  it('returns error string when userId is missing from configurable', async() => {
+  it('returns error string when userId is missing from configurable', async () => {
     const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
 
     const result = await saveWorkoutPlan.invoke(MINIMAL_PLAN, { configurable: {} });
@@ -175,7 +175,7 @@ describe('plan-creation.tools — save_workout_plan', () => {
     expect(result as string).toContain('Error: could not identify user');
   });
 
-  it('does NOT call create when userId is missing', async() => {
+  it('does NOT call create when userId is missing', async () => {
     const repo = makeWorkoutPlanRepo();
     const { saveWorkoutPlan } = buildTools(repo, makePendingTransitions());
 
@@ -184,7 +184,7 @@ describe('plan-creation.tools — save_workout_plan', () => {
     expect(repo.create).not.toHaveBeenCalled();
   });
 
-  it('does NOT set pendingTransitions when userId is missing', async() => {
+  it('does NOT set pendingTransitions when userId is missing', async () => {
     const pendingTransitions = makePendingTransitions();
     const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
 
@@ -195,7 +195,7 @@ describe('plan-creation.tools — save_workout_plan', () => {
 });
 
 describe('plan-creation.tools — request_transition', () => {
-  it('returns a plain string, never a Command object', async() => {
+  it('returns a plain string, never a Command object', async () => {
     const { requestTransition } = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
 
     const result = await requestTransition.invoke({ toPhase: 'chat' }, makeConfig());
@@ -204,7 +204,7 @@ describe('plan-creation.tools — request_transition', () => {
     expect(result as object).not.toHaveProperty('lc_direct_tool_output');
   });
 
-  it('sets pendingTransitions entry for userId with toPhase=chat', async() => {
+  it('sets pendingTransitions entry for userId with toPhase=chat', async () => {
     const pendingTransitions = makePendingTransitions();
     const { requestTransition } = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
 
@@ -214,7 +214,7 @@ describe('plan-creation.tools — request_transition', () => {
     expect(pendingTransitions.get('u1')?.toPhase).toBe('chat');
   });
 
-  it('sets optional reason in pendingTransitions entry', async() => {
+  it('sets optional reason in pendingTransitions entry', async () => {
     const pendingTransitions = makePendingTransitions();
     const { requestTransition } = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
 
@@ -223,7 +223,7 @@ describe('plan-creation.tools — request_transition', () => {
     expect(pendingTransitions.get('u1')?.reason).toBe('user cancelled');
   });
 
-  it('returns confirmation string mentioning the target phase', async() => {
+  it('returns confirmation string mentioning the target phase', async () => {
     const { requestTransition } = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
 
     const result = await requestTransition.invoke({ toPhase: 'chat' }, makeConfig());
@@ -231,7 +231,7 @@ describe('plan-creation.tools — request_transition', () => {
     expect(result as string).toContain('chat');
   });
 
-  it('does NOT call workoutPlanRepository', async() => {
+  it('does NOT call workoutPlanRepository', async () => {
     const repo = makeWorkoutPlanRepo();
     const { requestTransition } = buildTools(repo, makePendingTransitions());
 
@@ -240,7 +240,7 @@ describe('plan-creation.tools — request_transition', () => {
     expect(repo.create).not.toHaveBeenCalled();
   });
 
-  it('isolates entries by userId — two users do not overwrite each other', async() => {
+  it('isolates entries by userId — two users do not overwrite each other', async () => {
     const pendingTransitions = makePendingTransitions();
     const { requestTransition } = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
 

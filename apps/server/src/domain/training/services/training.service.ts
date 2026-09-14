@@ -191,8 +191,12 @@ Return JSON with this structure:
 
   async recommendForSession(sessionId: string, userId: string, comment?: string): Promise<SessionRecommendation> {
     const session = await this.sessionRepo.findById(sessionId);
-    if (!session) {throw new Error('Session not found');}
-    if (session.userId !== userId) {throw new Error('Access denied');}
+    if (!session) {
+      throw new Error('Session not found');
+    }
+    if (session.userId !== userId) {
+      throw new Error('Access denied');
+    }
 
     let recommendation: SessionRecommendation;
     const hasPlan = !!(await this.workoutPlanRepo.findActiveByUserId(userId));
@@ -223,7 +227,9 @@ Return JSON with this structure:
 
   async updateSessionPlan(sessionId: string, exercises: SessionRecommendation['exercises']): Promise<WorkoutSession> {
     const session = await this.sessionRepo.findById(sessionId);
-    if (!session) {throw new Error('Session not found');}
+    if (!session) {
+      throw new Error('Session not found');
+    }
 
     const currentPlan = (session.sessionPlanJson ?? {}) as SessionRecommendation;
     const updatedPlan: SessionRecommendation = {
@@ -437,7 +443,9 @@ Return JSON with this structure:
 
     // Check in_progress first, then planning
     const inProgress = await this.sessionRepo.findActiveByUserId(userId);
-    if (inProgress) {return this.sessionRepo.findByIdWithDetails(inProgress.id);}
+    if (inProgress) {
+      return this.sessionRepo.findByIdWithDetails(inProgress.id);
+    }
 
     const recent = await this.sessionRepo.findRecentByUserIdWithDetails(userId, 1);
     const planning = recent.find(s => s.status === 'planning');
@@ -532,7 +540,6 @@ Return JSON with this structure:
     }
 
     for (const s of setsToDelete) {
-       
       await this.sessionSetRepo.deleteById(s.id);
     }
 
@@ -621,7 +628,9 @@ Return JSON with this structure:
 
   private async generateFreeformRecommendation(userId: string): Promise<SessionRecommendation> {
     const userEntity = await this.userRepo.getById(userId);
-    if (!userEntity) {throw new Error('User not found');}
+    if (!userEntity) {
+      throw new Error('User not found');
+    }
 
     const recentSessions = await this.sessionRepo.findRecentByUserIdWithDetails(userId, 5);
 
