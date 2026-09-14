@@ -1,5 +1,8 @@
 # Lint Glob Fix Implementation Plan
 
+- Status: in progress
+- Branch: plan/lint-glob-fix
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make `npm run lint` (in `apps/server`) actually check all 137 `.ts` files under `src/` instead of the 7 it silently checks today, and get it to a clean pass (0 errors) at the new, true scope.
