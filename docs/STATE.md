@@ -21,6 +21,7 @@ _Generated 2026-09-14 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p2-prompt-modules.md` — Refactor P2 — Prompt Modules Implementation Plan
 
 **Done**
+- `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
 - `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
 - `ports-layout-consistency.md` — Ports Layout Consistency Implementation Plan
