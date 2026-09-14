@@ -18,6 +18,15 @@ Rules:
 
 ## Ideas
 
+- [ ] Connector layer on top of P1's `LlmGateway`: profiles become full connectors —
+  each carries its own `API_URL` + `API_KEY` (provider/token pair), so the app talks to
+  any provider through one interface with per-task routing (strong model for content,
+  cheap model for validations — already half-built by `LLM_PROFILE_*`), plus failover
+  chains between connectors (e.g. zai-subscription → google-payg → openrouter) and a
+  managed connector set instead of one global `LLM_API_URL`/`LLM_API_KEY`. Extends
+  ADR-0013/P1; do not start before P1's gateway lands. Motivation includes the verified
+  fact that the Z.AI subscription is only usable via a direct endpoint OpenRouter BYOK
+  cannot reach (2026-09-13). Source: owner wish (2026-09-14).
 - [ ] Grafana dashboards + alert rules built on `conversation_runs` (after refactor
   P0 ships the table): LLM latency p95 per phase, `outcome='llm_unavailable'` rate,
   budget-exhausted count, token usage over time. Source: ADR-0008 implementation
