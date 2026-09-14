@@ -50,7 +50,8 @@ export class InMemoryConversationContextService implements IConversationContextS
     return this.summaries.get(userId) ?? null;
   }
 
-  async getLastUserMessageTime(_userId: string): Promise<Date | null> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- interface param, unused by this in-memory test stub
+  async getLastUserMessageTime(userId: string): Promise<Date | null> {
     return null;
   }
 }

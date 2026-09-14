@@ -1,6 +1,5 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
-import { Command, END, START, StateGraph } from '@langchain/langgraph';
-import type { BaseCheckpointSaver } from '@langchain/langgraph';
+import { type BaseCheckpointSaver, Command, END, START, StateGraph } from '@langchain/langgraph';
 
 import { ConversationState, ConversationStateType } from '@domain/conversation/graph/conversation.state';
 import { IConversationContextService, IConversationRunService } from '@domain/conversation/ports';
