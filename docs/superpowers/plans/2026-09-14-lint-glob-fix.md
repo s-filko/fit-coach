@@ -1,7 +1,8 @@
 # Lint Glob Fix Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/lint-glob-fix
+- Review: 2026-09-14 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -588,3 +589,19 @@ git commit -m "docs(backlog): promote lint-glob finding — fixed by plan/lint-g
 - [x] Run: `cd apps/server && npm test` → expect same pass/fail as session start
 - [x] Run: `cd apps/server && npx tsc --noEmit` → expect no errors
 - [x] Run: `cd apps/server && npm run lint 2>&1 | tail -3` → expect `0 errors`, warning count roughly 395 (down from 650, unchanged since Task 2)
+
+## Review
+
+Verdict: **clean**. All four zones (R1 architecture, R2 duplication, R3 correctness, R4 documentation) returned no blocking findings.
+
+**Advisory findings** (not fixed on this branch; filed to `docs/BACKLOG.md`):
+
+1. `apps/server/src/app/routes/chat.routes.ts:8` (R1, ADR-0013 §8) — the app→infra suppression on the `run-metrics.ts` import is a pre-existing boundary violation newly made visible by this branch's glob fix, handled correctly (scoped, dated, cross-referenced to the run-metrics backlog finding) rather than architecturally unsound.
+2. `apps/server/src/infra/db/stamp-baseline.ts:43,51,60` (R2, DRY) — the `{ n: number }` pg-query row-shape generic is duplicated 3× in one file with no shared type alias; low value, not worth a dedicated task.
+3. `docs/ARCHITECTURE.md:169,184-188,199` (R4, gap) — its "enforced by ESLint" / "Violations fail lint" claims for the ports-index rule and import boundaries became true only as of this branch (lint previously covered 7 of 137 files); no durable doc records that transition.
+4. Plan `Status:` header (R4, gap) — flagged only because it still read `in progress` mid-review; resolved by this review's own `Status: done` transition below.
+
+**Meta findings** (about the review phase itself; filed to `docs/REVIEW_FINDINGS.md`, do not affect verdict):
+
+- R1: `docs/adr/0013-llm-core-target-architecture.md` names the `domain/**` → `@langchain/*` boundary explicitly but not the app→infra boundary that `chat.routes.ts` crosses — a named rule for that edge would give future R1 reviews something citable either way.
+- R3: this plan carries no `AC-####` references (it promotes a backlog finding, not a phase-spec task), so the "every AC has a test" check does not apply — noted as an expected non-finding, not a gap.
