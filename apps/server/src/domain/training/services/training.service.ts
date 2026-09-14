@@ -1,5 +1,9 @@
 import type { LLMService } from '@domain/ai/ports';
 import type {
+  AutoCompletedExercise,
+  CompletedSetDetail,
+  DeletedSetsResult,
+  EnsureExerciseResult,
   IEmbeddingService,
   IExerciseRepository,
   ISessionExerciseRepository,
@@ -7,14 +11,8 @@ import type {
   ITrainingService,
   IWorkoutPlanRepository,
   IWorkoutSessionRepository,
-} from '@domain/training/ports';
-import type {
-  AutoCompletedExercise,
-  CompletedSetDetail,
-  DeletedSetsResult,
-  EnsureExerciseResult,
   UpdateSetResult,
-} from '@domain/training/ports/service.ports';
+} from '@domain/training/ports';
 import type {
   CreateSessionDto,
   CreateSessionExerciseDto,
