@@ -26,3 +26,5 @@ refactor phases add cases. The gap is deliberate, not an unmet acceptance criter
 | `chat/no-set-logging.jsonl` | CH-0007..CH-0010 | BUG-009 |
 | `training/set-logging.jsonl` | TR-0001..TR-0006 | BUG-008, ADR-0011 |
 | `training/no-false-confirmation.jsonl` | TR-0007..TR-0010 | BUG-006, BUG-009 |
+| `registration/field-extraction.jsonl` | RG-0001..RG-0006 | MANUAL_TEST_PLAN-1.2 |
+| `registration/no-premature-complete.jsonl` | RG-0007..RG-0010 | BUG-009 class |
