@@ -49,7 +49,7 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
   const toolNode = new ToolNode(tools);
   const model = getModel().bindTools(tools);
 
-  const agentNode = async (state: ChatSubgraphStateType, config: RunnableConfig) => {
+  const agentNode = async(state: ChatSubgraphStateType, config: RunnableConfig) => {
     const { userId, user, userMessage } = state;
 
     const [history, activePlan, recentSessions, previousSummary, lastMessageTime] = await Promise.all([
@@ -84,7 +84,7 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
     return { messages: [response] };
   };
 
-  const extractNode = async (state: ChatSubgraphStateType): Promise<Partial<ConversationStateType>> => {
+  const extractNode = async(state: ChatSubgraphStateType): Promise<Partial<ConversationStateType>> => {
     const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
     const text =
       typeof lastMessage.content === 'string'

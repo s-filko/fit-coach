@@ -25,9 +25,9 @@ describe('chat.subgraph — run metrics config wiring (AC-1304)', () => {
     jest.resetModules();
   });
 
-  it('passes the invoking config (with runId) to every model.invoke call', async () => {
+  it('passes the invoking config (with runId) to every model.invoke call', async() => {
     const invokeConfigs: unknown[] = [];
-    const mockInvoke = jest.fn().mockImplementation(async (_messages: unknown[], config?: unknown) => {
+    const mockInvoke = jest.fn().mockImplementation(async(_messages: unknown[], config?: unknown) => {
       invokeConfigs.push(config);
       return new AIMessage({ content: 'Ответ готов.', tool_calls: [] });
     });

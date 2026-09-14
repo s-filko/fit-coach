@@ -35,7 +35,7 @@ export async function registerAppProfileRoutes(app: FastifyInstance): Promise<vo
         },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       const userId = req.telegramUserId;
       if (!userId) {
         return reply.code(HTTP_UNAUTHORIZED).send({ error: { message: 'Not authenticated' } });

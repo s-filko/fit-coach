@@ -32,7 +32,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       try {
         const { userId } = req.body as { userId: string };
 
@@ -77,7 +77,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       try {
         const { userId, message } = req.body as { userId: string; message: string };
 

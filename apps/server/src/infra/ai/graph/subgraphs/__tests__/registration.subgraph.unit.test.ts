@@ -18,8 +18,9 @@
 
 import { AIMessage, ToolMessage } from '@langchain/core/messages';
 
-import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
 import type { IUserService } from '@domain/user/ports';
+
+import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
 
 const BASE_USER = {
   id: 'u1',
@@ -55,10 +56,10 @@ describe('registration.subgraph — tool-calling loop', () => {
    * (no ToolMessage) → this assertion fails.
    * With the fix: ToolMessage is present in the second call → passes.
    */
-  it('includes ToolMessage from current turn in the prompt for the second LLM call', async () => {
+  it('includes ToolMessage from current turn in the prompt for the second LLM call', async() => {
     const capturedMessages: unknown[][] = [];
 
-    const mockInvoke = jest.fn().mockImplementation(async (messages: unknown[]) => {
+    const mockInvoke = jest.fn().mockImplementation(async(messages: unknown[]) => {
       capturedMessages.push([...messages]);
       if (capturedMessages.length === 1) {
         return new AIMessage({
@@ -109,10 +110,10 @@ describe('registration.subgraph — tool-calling loop', () => {
    * with tool_calls is also included in the second call's messages,
    * so the LLM has context of what it requested and what was returned.
    */
-  it('includes the AIMessage with tool_calls in the prompt for the second LLM call', async () => {
+  it('includes the AIMessage with tool_calls in the prompt for the second LLM call', async() => {
     const capturedMessages: unknown[][] = [];
 
-    const mockInvoke = jest.fn().mockImplementation(async (messages: unknown[]) => {
+    const mockInvoke = jest.fn().mockImplementation(async(messages: unknown[]) => {
       capturedMessages.push([...messages]);
       if (capturedMessages.length === 1) {
         return new AIMessage({

@@ -17,13 +17,13 @@ import type {
   IWorkoutPlanRepository,
   IWorkoutSessionRepository,
 } from '@domain/training/ports';
+import { TrainingService } from '@domain/training/services/training.service';
 import type {
   SessionExercise,
   SessionExerciseWithDetails,
   SessionSet,
   WorkoutSessionWithDetails,
 } from '@domain/training/types';
-import { TrainingService } from '@domain/training/services/training.service';
 
 // ---------------------------------------------------------------------------
 // Factories
@@ -153,7 +153,7 @@ function createMocks() {
 // ---------------------------------------------------------------------------
 
 describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR-0011 Fix 1.3)', () => {
-  it('should auto-complete current exercise (with sets) when switching to a different exerciseId', async () => {
+  it('should auto-complete current exercise (with sets) when switching to a different exerciseId', async() => {
     const { trainingService, mockSessionRepo, mockSessionExerciseRepo } = createMocks();
 
     const exerciseA = makeExerciseWithDetails({
@@ -203,7 +203,7 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
 
     mockSessionRepo.findByIdWithDetails.mockResolvedValue(makeSession([exerciseA, exerciseB]));
     mockSessionExerciseRepo.update.mockImplementation(
-      async (id, updates) =>
+      async(id, updates) =>
         ({
           ...(id === 'se-A' ? exerciseA : exerciseB),
           ...updates,
@@ -216,7 +216,7 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
     expect(mockSessionExerciseRepo.update).toHaveBeenCalledWith('se-A', { status: 'completed' });
   });
 
-  it('should auto-skip current exercise (with 0 sets) when switching', async () => {
+  it('should auto-skip current exercise (with 0 sets) when switching', async() => {
     const { trainingService, mockSessionRepo, mockSessionExerciseRepo } = createMocks();
 
     const exerciseA = makeExerciseWithDetails({
@@ -234,7 +234,7 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
 
     mockSessionRepo.findByIdWithDetails.mockResolvedValue(makeSession([exerciseA, exerciseB]));
     mockSessionExerciseRepo.update.mockImplementation(
-      async (id, updates) =>
+      async(id, updates) =>
         ({
           ...(id === 'se-A' ? exerciseA : exerciseB),
           ...updates,
@@ -247,7 +247,7 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
     expect(mockSessionExerciseRepo.update).toHaveBeenCalledWith('se-A', { status: 'skipped' });
   });
 
-  it('should return autoCompleted metadata when switching exercises', async () => {
+  it('should return autoCompleted metadata when switching exercises', async() => {
     const { trainingService, mockSessionRepo, mockSessionExerciseRepo } = createMocks();
 
     const exerciseA = makeExerciseWithDetails({
@@ -269,7 +269,7 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
 
     mockSessionRepo.findByIdWithDetails.mockResolvedValue(makeSession([exerciseA, exerciseB]));
     mockSessionExerciseRepo.update.mockImplementation(
-      async (id, updates) =>
+      async(id, updates) =>
         ({
           ...(id === 'se-A' ? exerciseA : exerciseB),
           ...updates,
@@ -291,7 +291,7 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
     expect((ac.sets as unknown[]).length).toBe(3);
   });
 
-  it('should NOT auto-complete when exerciseId matches current in_progress exercise', async () => {
+  it('should NOT auto-complete when exerciseId matches current in_progress exercise', async() => {
     const { trainingService, mockSessionRepo, mockSessionExerciseRepo } = createMocks();
 
     const exerciseA = makeExerciseWithDetails({
@@ -320,7 +320,7 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
 // ---------------------------------------------------------------------------
 
 describe('TrainingService.completeSession — closes in_progress exercises (BUG-012)', () => {
-  it('should complete all in_progress exercises before closing the session', async () => {
+  it('should complete all in_progress exercises before closing the session', async() => {
     const { trainingService, mockSessionRepo, mockSessionExerciseRepo } = createMocks();
 
     const session = {
@@ -346,7 +346,7 @@ describe('TrainingService.completeSession — closes in_progress exercises (BUG-
     expect(mockSessionRepo.complete).toHaveBeenCalled();
   });
 
-  it('should not call update when no exercises are in_progress', async () => {
+  it('should not call update when no exercises are in_progress', async() => {
     const { trainingService, mockSessionRepo, mockSessionExerciseRepo } = createMocks();
 
     const session = {

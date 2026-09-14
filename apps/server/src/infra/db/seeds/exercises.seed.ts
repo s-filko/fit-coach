@@ -1,6 +1,6 @@
-import type { MuscleGroup } from '@domain/training/types';
-
 import { sql } from 'drizzle-orm';
+
+import type { MuscleGroup } from '@domain/training/types';
 
 import { db } from '@infra/db/drizzle';
 import { exerciseMuscleGroups, exercises } from '@infra/db/schema';

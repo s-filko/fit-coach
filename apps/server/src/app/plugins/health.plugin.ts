@@ -5,7 +5,7 @@ import { FastifyInstance, FastifyPluginOptions } from 'fastify';
  * Provides basic health checks and debug information
  */
 export async function healthPlugin(fastify: FastifyInstance, options: FastifyPluginOptions): Promise<void> {
-  fastify.get('/health', async () => ({
+  fastify.get('/health', async() => ({
     status: 'ok',
     version: process.env.APP_VERSION ?? 'local',
     commit: process.env.APP_GIT_SHA ?? 'dev',
@@ -15,7 +15,7 @@ export async function healthPlugin(fastify: FastifyInstance, options: FastifyPlu
   }));
 
   // Debug endpoint (redirects to debug page)
-  fastify.get('/debug', async (request, reply) => {
+  fastify.get('/debug', async(request, reply) => {
     return reply.redirect('/public/llm-debug.html');
   });
 

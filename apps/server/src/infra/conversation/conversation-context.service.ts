@@ -1,5 +1,5 @@
-import { ConversationPhase, GetMessagesOptions, IConversationContextService } from '@domain/conversation/ports';
 import { ChatMsg } from '@domain/ai/types';
+import { ConversationPhase, GetMessagesOptions, IConversationContextService } from '@domain/conversation/ports';
 
 // TODO: remove — in-memory implementation kept only for tests; real impl is DrizzleConversationContextService
 export class InMemoryConversationContextService implements IConversationContextService {

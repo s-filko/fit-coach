@@ -65,7 +65,7 @@ async function requireSessionOwnership(
   sessionId: string,
 ) {
   const userId = await requireUserId(req, reply);
-  if (!userId) return null;
+  if (!userId) {return null;}
 
   const session = await app.services.trainingService.getSessionDetails(sessionId);
   if (!session) {
@@ -90,9 +90,9 @@ export async function registerAppSessionRoutes(app: FastifyInstance): Promise<vo
         response: { 401: errorResponse },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       const userId = await requireUserId(req, reply);
-      if (!userId) return;
+      if (!userId) {return;}
 
       const active = await app.services.trainingService.getActiveSession(userId);
       return reply.send({ data: active ?? null });
@@ -109,9 +109,9 @@ export async function registerAppSessionRoutes(app: FastifyInstance): Promise<vo
         response: { 401: errorResponse, 409: errorResponse },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       const userId = await requireUserId(req, reply);
-      if (!userId) return;
+      if (!userId) {return;}
 
       try {
         const session = await app.services.trainingService.startSession(userId, {
@@ -138,10 +138,10 @@ export async function registerAppSessionRoutes(app: FastifyInstance): Promise<vo
         response: { 401: errorResponse, 403: errorResponse, 404: errorResponse },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       const { id } = req.params as { id: string };
       const result = await requireSessionOwnership(app, req, reply, id);
-      if (!result) return;
+      if (!result) {return;}
 
       const updated = await app.services.trainingService.beginSession(id);
       return reply.send({ data: updated });
@@ -159,10 +159,10 @@ export async function registerAppSessionRoutes(app: FastifyInstance): Promise<vo
         response: { 401: errorResponse, 403: errorResponse, 404: errorResponse },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       const { id } = req.params as { id: string };
       const result = await requireSessionOwnership(app, req, reply, id);
-      if (!result) return;
+      if (!result) {return;}
 
       const completed = await app.services.trainingService.completeSession(id);
       return reply.send({ data: completed });
@@ -180,10 +180,10 @@ export async function registerAppSessionRoutes(app: FastifyInstance): Promise<vo
         response: { 401: errorResponse, 403: errorResponse, 404: errorResponse },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       const { id } = req.params as { id: string };
       const result = await requireSessionOwnership(app, req, reply, id);
-      if (!result) return;
+      if (!result) {return;}
 
       const skipped = await app.services.trainingService.skipSession(id);
       return reply.send({ data: skipped });
@@ -201,10 +201,10 @@ export async function registerAppSessionRoutes(app: FastifyInstance): Promise<vo
         response: { 401: errorResponse, 403: errorResponse, 404: errorResponse },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       const { id } = req.params as { id: string };
       const result = await requireSessionOwnership(app, req, reply, id);
-      if (!result) return;
+      if (!result) {return;}
 
       return reply.send({ data: result.session });
     },
@@ -225,10 +225,10 @@ export async function registerAppSessionRoutes(app: FastifyInstance): Promise<vo
         response: { 401: errorResponse, 403: errorResponse, 404: errorResponse },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       const { id } = req.params as { id: string };
       const result = await requireSessionOwnership(app, req, reply, id);
-      if (!result) return;
+      if (!result) {return;}
 
       const body = req.body as { exerciseId?: string; exerciseName?: string };
       const exerciseResult = await app.services.trainingService.ensureCurrentExercise(id, {
@@ -257,10 +257,10 @@ export async function registerAppSessionRoutes(app: FastifyInstance): Promise<vo
         response: { 401: errorResponse, 403: errorResponse, 404: errorResponse },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       const { id } = req.params as { id: string };
       const result = await requireSessionOwnership(app, req, reply, id);
-      if (!result) return;
+      if (!result) {return;}
 
       const body = req.body as {
         exerciseId?: string;
@@ -296,10 +296,10 @@ export async function registerAppSessionRoutes(app: FastifyInstance): Promise<vo
         response: { 401: errorResponse, 403: errorResponse, 404: errorResponse },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       const { id } = req.params as { id: string };
       const result = await requireSessionOwnership(app, req, reply, id);
-      if (!result) return;
+      if (!result) {return;}
 
       const body = (req.body as { comment?: string } | undefined) ?? {};
       const recommendation = await app.services.trainingService.recommendForSession(id, result.userId, body.comment);
@@ -331,10 +331,10 @@ export async function registerAppSessionRoutes(app: FastifyInstance): Promise<vo
         response: { 401: errorResponse, 403: errorResponse, 404: errorResponse },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       const { id } = req.params as { id: string };
       const result = await requireSessionOwnership(app, req, reply, id);
-      if (!result) return;
+      if (!result) {return;}
 
       const body = req.body as {
         exercises: Array<{
@@ -365,9 +365,9 @@ export async function registerAppSessionRoutes(app: FastifyInstance): Promise<vo
         response: { 401: errorResponse },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       const userId = await requireUserId(req, reply);
-      if (!userId) return;
+      if (!userId) {return;}
 
       const query = req.query as { limit: number };
       const history = await app.services.trainingService.getTrainingHistory(userId, query.limit);

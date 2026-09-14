@@ -1,5 +1,6 @@
-import { DrizzleConversationRunService } from '@infra/conversation/drizzle-conversation-run.service';
 import type { ConversationRunRecord } from '@domain/conversation/ports';
+
+import { DrizzleConversationRunService } from '@infra/conversation/drizzle-conversation-run.service';
 
 const values = jest.fn().mockResolvedValue(undefined);
 const insert = jest.fn((..._args: unknown[]) => ({ values }));
@@ -24,7 +25,7 @@ const record: ConversationRunRecord = {
 describe('DrizzleConversationRunService (AC-1301)', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('inserts one row carrying every AC-1301 field', async () => {
+  it('inserts one row carrying every AC-1301 field', async() => {
     await new DrizzleConversationRunService().recordRun(record);
 
     expect(values).toHaveBeenCalledTimes(1);

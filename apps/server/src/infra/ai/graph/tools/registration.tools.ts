@@ -39,9 +39,9 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
   const { userService, pendingTransitions } = deps;
 
   const saveProfileFields = tool(
-    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async (input, config) => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+     
+    async(input, config) => {
+       
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
         return 'Error: could not identify user. Please try again.';
@@ -87,9 +87,9 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
   );
 
   const completeRegistration = tool(
-    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-    async (input, config) => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+     
+    async(input, config) => {
+       
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
         return 'Error: could not identify user. Please try again.';

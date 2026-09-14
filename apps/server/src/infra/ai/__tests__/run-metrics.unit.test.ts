@@ -49,7 +49,7 @@ describe('run metrics accumulator (ADR-0013 §8, AC-1301)', () => {
     expect(drainRunMetrics('').llmCalls).toBe(0);
   });
 
-  it('measures latency from startRun, not from the first LLM call', async () => {
+  it('measures latency from startRun, not from the first LLM call', async() => {
     startRun('run-timed');
     await new Promise(resolve => setTimeout(resolve, 30));
     startLlmCall('run-timed', 'model');

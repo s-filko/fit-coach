@@ -15,7 +15,7 @@ export async function registerAppPlanRoutes(app: FastifyInstance): Promise<void>
         response: { 401: errorResponse },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       const userId = req.telegramUserId;
       if (!userId) {
         return reply.code(HTTP_UNAUTHORIZED).send({ error: { message: 'Not authenticated' } });
@@ -40,7 +40,7 @@ export async function registerAppPlanRoutes(app: FastifyInstance): Promise<void>
         response: { 401: errorResponse },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       const userId = req.telegramUserId;
       if (!userId) {
         return reply.code(HTTP_UNAUTHORIZED).send({ error: { message: 'Not authenticated' } });

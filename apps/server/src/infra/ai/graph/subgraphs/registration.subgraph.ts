@@ -48,7 +48,7 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
   const toolNode = new ToolNode(tools);
   const model = getModel().bindTools(tools);
 
-  const agentNode = async (state: RegistrationSubgraphStateType, config: RunnableConfig) => {
+  const agentNode = async(state: RegistrationSubgraphStateType, config: RunnableConfig) => {
     const { userId, user, userMessage } = state;
 
     const history = await contextService.getMessagesForPrompt(userId, 'registration');
@@ -77,7 +77,7 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
     return { messages: [response] };
   };
 
-  const extractNode = async (state: RegistrationSubgraphStateType): Promise<Partial<ConversationStateType>> => {
+  const extractNode = async(state: RegistrationSubgraphStateType): Promise<Partial<ConversationStateType>> => {
     const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
     const text =
       typeof lastMessage.content === 'string'

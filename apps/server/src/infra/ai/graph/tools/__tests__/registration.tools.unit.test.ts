@@ -46,7 +46,7 @@ const buildTools = (
   buildRegistrationTools({ userService, pendingTransitions }) as unknown as [InvokableTool, InvokableTool];
 
 describe('registration.tools — save_profile_fields', () => {
-  it('returns a plain string, never a Command object', async () => {
+  it('returns a plain string, never a Command object', async() => {
     const [saveProfileFields] = buildTools(makeUserService(), makePendingTransitions());
 
     const result = await saveProfileFields.invoke({ age: 28, gender: 'male' }, makeConfig());
@@ -56,7 +56,7 @@ describe('registration.tools — save_profile_fields', () => {
     expect(result as object).not.toHaveProperty('lc_direct_tool_output');
   });
 
-  it('calls updateProfileData with validated fields', async () => {
+  it('calls updateProfileData with validated fields', async() => {
     const userService = makeUserService();
     const [saveProfileFields] = buildTools(userService, makePendingTransitions());
 
@@ -72,7 +72,7 @@ describe('registration.tools — save_profile_fields', () => {
     );
   });
 
-  it('returns "Saved:" confirmation with field names', async () => {
+  it('returns "Saved:" confirmation with field names', async() => {
     const [saveProfileFields] = buildTools(makeUserService(), makePendingTransitions());
 
     const result = await saveProfileFields.invoke({ age: 28 }, makeConfig());
@@ -80,7 +80,7 @@ describe('registration.tools — save_profile_fields', () => {
     expect(result as string).toContain('Saved:');
   });
 
-  it('returns error string when userId is missing from configurable', async () => {
+  it('returns error string when userId is missing from configurable', async() => {
     const [saveProfileFields] = buildTools(makeUserService(), makePendingTransitions());
 
     const result = await saveProfileFields.invoke({ age: 28 }, { configurable: {} });
@@ -88,7 +88,7 @@ describe('registration.tools — save_profile_fields', () => {
     expect(result as string).toContain('Error: could not identify user');
   });
 
-  it('returns "No valid fields" when input is empty', async () => {
+  it('returns "No valid fields" when input is empty', async() => {
     const [saveProfileFields] = buildTools(makeUserService(), makePendingTransitions());
 
     const result = await saveProfileFields.invoke({}, makeConfig());
@@ -96,7 +96,7 @@ describe('registration.tools — save_profile_fields', () => {
     expect(result as string).toContain('No valid fields to save');
   });
 
-  it('does NOT touch pendingTransitions', async () => {
+  it('does NOT touch pendingTransitions', async() => {
     const pendingTransitions = makePendingTransitions();
     const [saveProfileFields] = buildTools(makeUserService(), pendingTransitions);
 
@@ -105,7 +105,7 @@ describe('registration.tools — save_profile_fields', () => {
     expect(pendingTransitions.size).toBe(0);
   });
 
-  it('saves firstName when explicitly provided', async () => {
+  it('saves firstName when explicitly provided', async() => {
     const userService = makeUserService();
     const [saveProfileFields] = buildTools(userService, makePendingTransitions());
 
@@ -121,7 +121,7 @@ describe('registration.tools — save_profile_fields', () => {
 });
 
 describe('registration.tools — complete_registration', () => {
-  it('returns a plain string, never a Command object', async () => {
+  it('returns a plain string, never a Command object', async() => {
     const [, completeRegistration] = buildTools(makeUserService(), makePendingTransitions());
 
     const result = await completeRegistration.invoke({ toPhase: 'chat' }, makeConfig());
@@ -130,7 +130,7 @@ describe('registration.tools — complete_registration', () => {
     expect(result as object).not.toHaveProperty('lc_direct_tool_output');
   });
 
-  it('sets pendingTransitions entry with correct toPhase when all fields present', async () => {
+  it('sets pendingTransitions entry with correct toPhase when all fields present', async() => {
     const pendingTransitions = makePendingTransitions();
     const [, completeRegistration] = buildTools(makeUserService(), pendingTransitions);
 
@@ -141,7 +141,7 @@ describe('registration.tools — complete_registration', () => {
     expect(pendingTransitions.get('u1')?.reason).toBe('registration_complete');
   });
 
-  it('returns success string and marks profileStatus complete', async () => {
+  it('returns success string and marks profileStatus complete', async() => {
     const userService = makeUserService();
     const [, completeRegistration] = buildTools(userService, makePendingTransitions());
 
@@ -151,7 +151,7 @@ describe('registration.tools — complete_registration', () => {
     expect(userService.updateProfileData).toHaveBeenCalledWith('u1', { profileStatus: 'complete' });
   });
 
-  it('blocks completion and lists missing fields when profile is incomplete', async () => {
+  it('blocks completion and lists missing fields when profile is incomplete', async() => {
     const userService = makeUserService({ fitnessGoal: undefined, weight: undefined });
     (userService.getUser as jest.Mock).mockResolvedValue({ ...FULL_USER, fitnessGoal: null, weight: null });
     const pendingTransitions = makePendingTransitions();
@@ -165,7 +165,7 @@ describe('registration.tools — complete_registration', () => {
     expect(userService.updateProfileData).not.toHaveBeenCalled();
   });
 
-  it('returns error string when userId is missing from configurable', async () => {
+  it('returns error string when userId is missing from configurable', async() => {
     const pendingTransitions = makePendingTransitions();
     const [, completeRegistration] = buildTools(makeUserService(), pendingTransitions);
 
@@ -175,7 +175,7 @@ describe('registration.tools — complete_registration', () => {
     expect(pendingTransitions.size).toBe(0);
   });
 
-  it('returns error string when user not found in DB', async () => {
+  it('returns error string when user not found in DB', async() => {
     const userService = makeUserService();
     (userService.getUser as jest.Mock).mockResolvedValue(null);
     const pendingTransitions = makePendingTransitions();

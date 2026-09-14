@@ -27,7 +27,7 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
         },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       const user = await app.services.userService.upsertUser(
         req.body as {
           provider: string;
@@ -57,7 +57,7 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
         },
       },
     },
-    async (req, reply) => {
+    async(req, reply) => {
       const { id } = req.params as { id: string };
       const user = await app.services.userService.getUser(id);
       if (!user) {

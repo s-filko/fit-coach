@@ -81,7 +81,7 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
   const dedupToolNode = buildDedupToolNode(tools);
   const model = getModel().bindTools(tools);
 
-  const agentNode = async (state: SessionPlanningSubgraphStateType, config: RunnableConfig) => {
+  const agentNode = async(state: SessionPlanningSubgraphStateType, config: RunnableConfig) => {
     const { userId, user, userMessage } = state;
 
     // Load all context data in parallel
@@ -113,7 +113,7 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
     return { messages: [response] };
   };
 
-  const extractNode = async (state: SessionPlanningSubgraphStateType): Promise<Partial<ConversationStateType>> => {
+  const extractNode = async(state: SessionPlanningSubgraphStateType): Promise<Partial<ConversationStateType>> => {
     const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
     const text =
       typeof lastMessage.content === 'string'

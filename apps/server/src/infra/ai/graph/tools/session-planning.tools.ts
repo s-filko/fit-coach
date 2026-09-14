@@ -53,7 +53,7 @@ export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
   const searchExercises = buildSearchExercisesTool({ embeddingService, exerciseRepository });
 
   const startTrainingSession = tool(
-    async (input, config) => {
+    async(input, config) => {
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
         return 'Error: could not identify user. Please try again.';
@@ -119,7 +119,7 @@ export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
   );
 
   const requestTransition = tool(
-    async (input, config) => {
+    async(input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
       pendingTransitions.set(userId, {
         toPhase: input.toPhase as ConversationPhase,

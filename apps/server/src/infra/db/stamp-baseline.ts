@@ -20,7 +20,7 @@ export function hashMigration(sql: string): string {
 
 export function migrationsThrough(journal: Journal, tag: string): JournalEntry[] {
   const idx = journal.entries.findIndex(e => e.tag === tag);
-  if (idx === -1) throw new Error(`Migration tag not found in journal: ${tag}`);
+  if (idx === -1) {throw new Error(`Migration tag not found in journal: ${tag}`);}
   return journal.entries.slice(0, idx + 1);
 }
 

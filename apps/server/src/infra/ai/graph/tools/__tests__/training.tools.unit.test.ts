@@ -4,7 +4,7 @@ import type { TransitionRequest } from '@domain/conversation/graph/conversation.
 import type { IEmbeddingService, IExerciseRepository, ITrainingService } from '@domain/training/ports';
 import type { SessionSet, WorkoutSession, WorkoutSessionWithDetails } from '@domain/training/types';
 
-import { LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX, buildTrainingTools } from '../training.tools';
+import { buildTrainingTools, LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '../training.tools';
 
 type InvokableTool = {
   name: string;
@@ -74,7 +74,7 @@ const makeDeps = (trainingService: jest.Mocked<ITrainingService>, sessionId: str
 
 describe('buildTrainingTools', () => {
   describe('log_set', () => {
-    it('calls logSetWithContext with flat fields converted to setData object', async () => {
+    it('calls logSetWithContext with flat fields converted to setData object', async() => {
       const trainingService = makeTrainingService();
       const mockSet: SessionSet = {
         id: 'set-1',
@@ -112,7 +112,7 @@ describe('buildTrainingTools', () => {
       expect(result).toContain('10 reps @ 80 kg');
     });
 
-    it('returns SYSTEM_ERROR when no sessionId is set for the user', async () => {
+    it('returns SYSTEM_ERROR when no sessionId is set for the user', async() => {
       const trainingService = makeTrainingService();
 
       const { byName } = makeDeps(trainingService, null);
@@ -128,7 +128,7 @@ describe('buildTrainingTools', () => {
       expect(trainingService.logSetWithContext).not.toHaveBeenCalled();
     });
 
-    it('ignores order field — does not pass it to logSetWithContext', async () => {
+    it('ignores order field — does not pass it to logSetWithContext', async() => {
       const trainingService = makeTrainingService();
       const mockSet: SessionSet = {
         id: 'set-1',
@@ -160,7 +160,7 @@ describe('buildTrainingTools', () => {
       );
     });
 
-    it('returns LLM_ERROR when logSetWithContext throws', async () => {
+    it('returns LLM_ERROR when logSetWithContext throws', async() => {
       const trainingService = makeTrainingService();
       trainingService.logSetWithContext.mockRejectedValue(new Error('Exercise not found'));
 
@@ -193,7 +193,7 @@ describe('buildTrainingTools', () => {
       targetWeight: null,
     };
 
-    it('calls completeCurrentExercise and returns full exercise summary', async () => {
+    it('calls completeCurrentExercise and returns full exercise summary', async() => {
       const trainingService = makeTrainingService();
       trainingService.completeCurrentExercise.mockResolvedValue(mockSummary);
 
@@ -209,7 +209,7 @@ describe('buildTrainingTools', () => {
       expect(result).toContain('3/3 sets');
     });
 
-    it('returns SYSTEM_ERROR when no sessionId is set for the user', async () => {
+    it('returns SYSTEM_ERROR when no sessionId is set for the user', async() => {
       const trainingService = makeTrainingService();
 
       const { byName } = makeDeps(trainingService, null);
@@ -219,7 +219,7 @@ describe('buildTrainingTools', () => {
       expect(trainingService.completeCurrentExercise).not.toHaveBeenCalled();
     });
 
-    it('returns LLM_ERROR when completeCurrentExercise throws', async () => {
+    it('returns LLM_ERROR when completeCurrentExercise throws', async() => {
       const trainingService = makeTrainingService();
       trainingService.completeCurrentExercise.mockRejectedValue(new Error('No exercise in progress'));
 
@@ -232,7 +232,7 @@ describe('buildTrainingTools', () => {
   });
 
   describe('finish_training', () => {
-    it('calls completeSession, sets pendingTransitions entry, returns summary', async () => {
+    it('calls completeSession, sets pendingTransitions entry, returns summary', async() => {
       const trainingService = makeTrainingService();
       const mockSession: WorkoutSessionWithDetails = {
         id: 'session-1',
@@ -263,7 +263,7 @@ describe('buildTrainingTools', () => {
       expect(result).toContain('Great session!');
     });
 
-    it('returns SYSTEM_ERROR when no sessionId is set for the user', async () => {
+    it('returns SYSTEM_ERROR when no sessionId is set for the user', async() => {
       const trainingService = makeTrainingService();
 
       const { byName } = makeDeps(trainingService, null);
@@ -273,7 +273,7 @@ describe('buildTrainingTools', () => {
       expect(trainingService.completeSession).not.toHaveBeenCalled();
     });
 
-    it('returns LLM_ERROR when completeSession throws', async () => {
+    it('returns LLM_ERROR when completeSession throws', async() => {
       const trainingService = makeTrainingService();
       trainingService.completeSession.mockRejectedValue(new Error('Session not found'));
 
@@ -284,7 +284,7 @@ describe('buildTrainingTools', () => {
       expect(result).toContain('Session not found');
     });
 
-    it('isolates pendingTransitions by userId — two users do not overwrite each other', async () => {
+    it('isolates pendingTransitions by userId — two users do not overwrite each other', async() => {
       const trainingService = makeTrainingService();
       const mockSession: WorkoutSessionWithDetails = {
         id: 'session-1',
@@ -333,7 +333,7 @@ describe('buildTrainingTools', () => {
   // -------------------------------------------------------------------------
 
   describe('log_set — auto-complete notice (ADR-0011 Fix 1.3)', () => {
-    it('should include auto-complete notice when exercise switches', async () => {
+    it('should include auto-complete notice when exercise switches', async() => {
       const trainingService = makeTrainingService();
       const mockSet: SessionSet = {
         id: 'set-1',
@@ -376,7 +376,7 @@ describe('buildTrainingTools', () => {
       expect(result).toContain('Set 2');
     });
 
-    it('should NOT include auto-complete notice when no switch occurred', async () => {
+    it('should NOT include auto-complete notice when no switch occurred', async() => {
       const trainingService = makeTrainingService();
       const mockSet: SessionSet = {
         id: 'set-1',
@@ -458,7 +458,7 @@ describe('buildTrainingTools', () => {
   // -------------------------------------------------------------------------
 
   describe('P3 incident replay — correction misclassified as new set', () => {
-    it('(before fix) calling log_set twice produces two DB writes — no way to undo', async () => {
+    it('(before fix) calling log_set twice produces two DB writes — no way to undo', async() => {
       // Simulate what happened: LLM called log_set on "first set" message
       // and again when user "corrected" — both succeed, both write to DB.
       // This test documents the current (broken) behavior — it passes today
@@ -498,7 +498,7 @@ describe('buildTrainingTools', () => {
       expect(trainingService.logSetWithContext).toHaveBeenCalledTimes(2);
     });
 
-    it('(after fix) LLM can call delete_last_sets to correct without adding phantom', async () => {
+    it('(after fix) LLM can call delete_last_sets to correct without adding phantom', async() => {
       // After fix: delete_last_sets tool exists.
       // LLM receives correction intent → calls delete_last_sets, NOT log_set again.
       // Verifies the structural fix: the tool must be available for LLM to use it.
@@ -518,7 +518,7 @@ describe('buildTrainingTools', () => {
       expect(hasDeleteTool).toBe(true);
     });
 
-    it('(after fix) LLM can call update_last_set to fix wrong weight without adding phantom', async () => {
+    it('(after fix) LLM can call update_last_set to fix wrong weight without adding phantom', async() => {
       // Scenario: user reported "10 reps at 80kg" but meant "10 reps at 70kg"
       // Before fix: no update tool → LLM adds another log_set with corrected weight
       //             → original wrong set stays + new set added = phantom

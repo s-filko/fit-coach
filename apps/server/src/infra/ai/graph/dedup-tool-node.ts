@@ -50,7 +50,7 @@ export function buildDedupToolNode(tools: StructuredToolInterface[]) {
     }
   }
 
-  return async (state: { messages: BaseMessage[]; userId: string }) => {
+  return async(state: { messages: BaseMessage[]; userId: string }) => {
     const { userId } = state;
     const lastMessage = state.messages[state.messages.length - 1] as AIMessage | undefined;
     if (!lastMessage || !('tool_calls' in lastMessage)) {
@@ -71,13 +71,13 @@ export function buildDedupToolNode(tools: StructuredToolInterface[]) {
           log.debug({ userId, query: String(call.args['query'] ?? '') }, 'search_exercises dedup hit — reusing result');
           toolMessages.push(new ToolMessage({ tool_call_id: call.id ?? '', content: cached }));
         } else {
-          // eslint-disable-next-line no-await-in-loop
+           
           const msg = await invokeTool(call, userId);
           searchCache.set(key, msg.content as string);
           toolMessages.push(msg);
         }
       } else {
-        // eslint-disable-next-line no-await-in-loop
+         
         toolMessages.push(await invokeTool(call, userId));
       }
     }

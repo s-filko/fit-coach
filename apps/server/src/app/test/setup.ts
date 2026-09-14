@@ -161,6 +161,6 @@ export async function setupTestDI(): Promise<void> {
   }
 }
 
-beforeAll(async () => {
+beforeAll(async() => {
   await setupTestDI();
 });

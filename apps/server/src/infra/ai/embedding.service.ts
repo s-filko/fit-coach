@@ -31,7 +31,7 @@ export class EmbeddingService implements IEmbeddingService {
       return;
     }
 
-    this.initPromise = (async () => {
+    this.initPromise = (async() => {
       log.info({ model: MODEL_ID }, 'Loading embedding model (first use)');
       const start = Date.now();
       const { pipeline } = await import('@huggingface/transformers');

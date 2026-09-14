@@ -91,7 +91,7 @@ describe('ConversationGraph', () => {
     expect(() => buildConversationGraph(makeDeps())).not.toThrow();
   });
 
-  it('routes to chat subgraph and returns responseMessage', async () => {
+  it('routes to chat subgraph and returns responseMessage', async() => {
     const graph = buildConversationGraph(makeDeps());
 
     const result = await graph.invoke(
@@ -104,7 +104,7 @@ describe('ConversationGraph', () => {
     expect(result.phase).toBe('chat');
   });
 
-  it('router loads user and sets phase from profile', async () => {
+  it('router loads user and sets phase from profile', async() => {
     const deps = makeDeps();
     const graph = buildConversationGraph(deps);
 
@@ -119,7 +119,7 @@ describe('ConversationGraph', () => {
     expect(result.phase).toBe('chat');
   });
 
-  it('routes unregistered user to registration subgraph', async () => {
+  it('routes unregistered user to registration subgraph', async() => {
     const deps = makeDeps();
     // Override: user is NOT registered → stays in registration
     (deps.userService.isRegistrationComplete as jest.Mock).mockReturnValue(false);
@@ -141,7 +141,7 @@ describe('ConversationGraph', () => {
   });
 
   describe('session timeout routing', () => {
-    it('session ended: router uses Command(goto=persist) — LLM subgraph is NOT invoked', async () => {
+    it('session ended: router uses Command(goto=persist) — LLM subgraph is NOT invoked', async() => {
       const deps = makeDeps();
 
       // Simulate: user is in training phase with an active session that has already ended
@@ -172,7 +172,7 @@ describe('ConversationGraph', () => {
       expect(result.responseMessage).not.toBe('Mocked LLM response');
     });
 
-    it('session idle but in_progress: router passes through to training subgraph (stale handled by finish_training)', async () => {
+    it('session idle but in_progress: router passes through to training subgraph (stale handled by finish_training)', async() => {
       const deps = makeDeps();
 
       // Session is in_progress but idle for > 2 hours — router does NOT auto-close
@@ -203,7 +203,7 @@ describe('ConversationGraph', () => {
   });
 
   describe('session_planning subgraph routing', () => {
-    it('routes to session_planning subgraph and returns LLM response', async () => {
+    it('routes to session_planning subgraph and returns LLM response', async() => {
       const deps = makeDeps();
       const graph = buildConversationGraph(deps);
 
@@ -219,7 +219,7 @@ describe('ConversationGraph', () => {
   });
 
   describe('training phase guards', () => {
-    it('router falls back to chat when phase=training but activeSessionId is null', async () => {
+    it('router falls back to chat when phase=training but activeSessionId is null', async() => {
       const deps = makeDeps();
       const graph = buildConversationGraph(deps);
 
@@ -235,7 +235,7 @@ describe('ConversationGraph', () => {
       expect(result.responseMessage).toContain('could not be resumed');
     });
 
-    it('transitionGuard blocks session_planning→training when activeSessionId is missing', async () => {
+    it('transitionGuard blocks session_planning→training when activeSessionId is missing', async() => {
       // Mock LLM to call request_transition with toPhase=training via a tool call
       // that writes pendingTransition directly. We simulate this by having the LLM
       // call start_training_session which would normally set activeSessionId, but here
@@ -245,7 +245,7 @@ describe('ConversationGraph', () => {
       jest.mock('@infra/ai/model.factory', () => ({
         getModel: () => ({
           bindTools: () => ({
-            invoke: jest.fn().mockImplementation(async () => {
+            invoke: jest.fn().mockImplementation(async() => {
               callCount++;
               if (callCount === 1) {
                 // First call in session_planning: call start_training_session

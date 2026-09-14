@@ -1,6 +1,7 @@
 import type { User } from '@domain/user/services/user.service';
 
 import { composeDirectives } from '@infra/ai/graph/prompt-directives';
+
 import { formatInUserTz } from '@shared/date-utils';
 
 export function buildPlanCreationSystemPrompt(user: User | null): string {

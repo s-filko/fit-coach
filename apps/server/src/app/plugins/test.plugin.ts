@@ -9,9 +9,9 @@ import { User } from '@domain/user/services/user.service';
 export async function testPlugin(fastify: FastifyInstance): Promise<void> {
   fastify.log.info('Test plugin registered');
 
-  fastify.get('/test', async () => ({ message: 'Server is working' }));
+  fastify.get('/test', async() => ({ message: 'Server is working' }));
 
-  fastify.get('/test-config', async () => {
+  fastify.get('/test-config', async() => {
     const { loadConfig } = await import('@config/index');
     const config = loadConfig();
     return {
@@ -20,7 +20,7 @@ export async function testPlugin(fastify: FastifyInstance): Promise<void> {
     };
   });
 
-  fastify.get('/test-di', async () => ({
+  fastify.get('/test-di', async() => ({
     message: 'DI is working',
     hasUserService: !!fastify.services.userService,
     hasConversationGraph: !!fastify.services.conversationGraph,

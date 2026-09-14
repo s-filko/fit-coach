@@ -10,8 +10,8 @@
  * run and reaches the handler as the 7th argument of handleChatModelStart.
  */
 
-import { drainRunMetrics, startRun } from '@infra/ai/run-metrics';
 import { LLMLogHandler } from '@infra/ai/llm-log-handler';
+import { drainRunMetrics, startRun } from '@infra/ai/run-metrics';
 
 describe('LLMLogHandler — run metrics binding via metadata (AC-1301, ADR-0013 §8)', () => {
   it('binds the conversation runId and records model/tokens when metadata carries runId', () => {

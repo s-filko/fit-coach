@@ -3,6 +3,7 @@ import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import type { User } from '@domain/user/services/user.service';
 
 import { composeDirectives } from '@infra/ai/graph/prompt-directives';
+
 import { calendarDaysAgo, formatInUserTz, humanTimeAgo } from '@shared/date-utils';
 
 /* eslint-disable max-len */
