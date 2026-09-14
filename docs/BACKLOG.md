@@ -18,6 +18,15 @@ Rules:
 
 ## Ideas
 
+- [ ] Connector layer on top of P1's `LlmGateway`: profiles become full connectors —
+  each carries its own `API_URL` + `API_KEY` (provider/token pair), so the app talks to
+  any provider through one interface with per-task routing (strong model for content,
+  cheap model for validations — already half-built by `LLM_PROFILE_*`), plus failover
+  chains between connectors (e.g. zai-subscription → google-payg → openrouter) and a
+  managed connector set instead of one global `LLM_API_URL`/`LLM_API_KEY`. Extends
+  ADR-0013/P1; do not start before P1's gateway lands. Motivation includes the verified
+  fact that the Z.AI subscription is only usable via a direct endpoint OpenRouter BYOK
+  cannot reach (2026-09-13). Source: owner wish (2026-09-14).
 - [ ] Grafana dashboards + alert rules built on `conversation_runs` (after refactor
   P0 ships the table): LLM latency p95 per phase, `outcome='llm_unavailable'` rate,
   budget-exhausted count, token usage over time. Source: ADR-0008 implementation
@@ -44,10 +53,15 @@ Rules:
   should be deleted when the structural check lands. Source: close-out-review, R4 (2026-09-13).
 - [ ] `apps/server/evals/` is invisible to lint: the `lint` script is scoped to `src/**/*.ts`
   and `eslint.config.js` declares no `evals/` boundary element or rule override, so
-  `npx eslint evals/` reports 8 errors (`no-console` in the reporter, `no-restricted-imports`
-  on relative imports the tree cannot avoid — tsconfig `paths` map only under `baseUrl: src`).
-  Needs an `evals/` override plus a decision on whether the lint script should cover it.
-  Source: close-out-review, R1 + execution (2026-09-13).
+  `npx eslint evals/` reports 15 errors (update from 8 after the eval-L1 branch grew the tree;
+  auto-fixable import-order/sort/destructuring issues were fixed in place 2026-09-13). All
+  15 remaining are structural: `no-restricted-imports` on relative imports the tree cannot
+  avoid — tsconfig `paths` map only under `baseUrl: src`, no alias exists for `evals/` —
+  plus `boundaries/no-unknown` warnings because the boundaries plugin does not know the tree,
+  and complexity/magic-number warnings on plan-verbatim harness code (e.g. `assertCase`).
+  Also `format:check` (prettier) has the same blind spot. Needs an `evals/` override (or an
+  `@evals/*` alias decision) plus a decision on whether lint/format scripts should cover it.
+  Source: close-out-review, R1 + execution (2026-09-13); updated by eval-L1 review (2026-09-13).
 - [ ] The run-metrics binding contract ("run identity travels via config metadata because
   LangChain strips configurable from callback options") is prose-duplicated across five
   sites (chat.routes.ts, chat.subgraph.ts, registration.subgraph.ts, invoke-with-retry.ts,

@@ -15,7 +15,22 @@ If you do not see `Cannot connect to the Docker daemon`, you can proceed.
 
 ## 2. Start the database
 
-From the project root:
+**Always from the project root.** The db service mounts its data directory with a
+*relative* path (`./data/local/postgres` in the root `docker-compose.yml`), so the
+cluster is created relative to wherever you ran the command. Starting it from a git
+worktree (or any subdirectory) silently creates a *second, empty* cluster there —
+`data/local/postgres` under that worktree — and the container keeps that path until it
+is recreated. Symptoms: `fitcoach_dev` appears to have lost its data, or a stray
+`.worktrees/<slug>/data/local/postgres` directory turns up that nobody can explain.
+Verify what the running container is actually bound to with:
+
+```bash
+docker inspect fitcoach-db --format '{{range .Mounts}}{{.Source}}{{end}}'
+```
+
+If that path is not `<repo root>/data/local/postgres`, recreate the container from the
+repo root (`docker compose up -d --force-recreate db`) after checking which of the two
+directories holds the data you want to keep.
 
 ```bash
 docker compose up -d db

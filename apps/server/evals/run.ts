@@ -14,12 +14,22 @@ async function main(): Promise<void> {
   const level = argValue('--level', 'L0').toUpperCase();
   const phase = argValue('--phase', 'all');
 
-  if (level !== 'L0') {
-    console.error(`Level ${level} is not implemented yet (P0 ships L0; L1 follows).`);
+  const samples = Number(argValue('--samples', '3'));
+
+  let results;
+  if (level === 'L0') {
+    results = await runL0(phase);
+  } else if (level === 'L1') {
+    if (process.env['RUN_LLM_EVALS'] !== '1') {
+      console.log('L1 skipped: set RUN_LLM_EVALS=1 to run evals against a real model.');
+      process.exit(0);
+    }
+    const { runL1 } = await import('./levels/l1');
+    results = await runL1(phase, samples);
+  } else {
+    console.error(`Level ${level} is not implemented yet (P0 ships L0 and L1).`);
     process.exit(2);
   }
-
-  const results = await runL0(phase);
   const report = buildReport(level, results);
   printReport(report);
   process.exit(exitCodeFor(report));

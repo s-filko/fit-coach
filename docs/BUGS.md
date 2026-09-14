@@ -850,6 +850,51 @@ Simulate Telegram API failures (e.g. network policy drop or mock returning 502/c
 
 ---
 
+## BUG-013 — Training LLM intermittently leaks markdown (**bold**, headers) into Telegram HTML replies
+
+**Status:** Open
+**Severity:** Medium
+**Found during:** First L1 eval measurement 2026-09-13, case TR-0009 (`apps/server/evals/datasets/training/no-false-confirmation.jsonl`)
+**Component:** `apps/server/src/infra/ai/graph/subgraphs/training.subgraph.ts` (training prompt), model output formatting
+
+### Description
+
+Asked «расскажи про технику жима» in the training phase, the model intermittently answers in markdown — observed `**Техника жима лёжа со штангой:**`, `**1. Исходное положение**` — instead of the Telegram HTML the product requires. Telegram renders the asterisks as literal text, degrading readability. No crash, no data corruption.
+
+Intermittent: in a 1-sample L1 run the deterministic `text.format` check failed; in the 3-sample run 2 of 3 replies complied (sub-threshold pass). Sampled with `z-ai/glm-5.3`.
+
+### Root cause
+
+Model behavior: the Telegram-HTML-only directive in the training prompt is not strong enough to bind at temperature > 0 — the model defaults to markdown for structured technique explanations. Known-pattern gap: no existing BUG-001..012 entry covers output formatting.
+
+### Flow
+
+```
+User asks for an exercise technique explanation
+  → training LLM composes a multi-part structured answer
+  → emits markdown emphasis (**bold**, numbered bold headers)
+  → Telegram renders literal asterisks instead of formatting
+```
+
+### Log evidence
+
+L1 eval run 2026-09-13, case TR-0009, sample observation: reply text contains `**Техника жима лёжа со штангой:**` → `text.format: telegram_html` check FAIL. Recorded in `docs/superpowers/plans/refactor-p0-eval-l1-chat-training.md` (Task 6 measurement).
+
+### Impact
+
+- Degraded readability of technique/guidance answers in Telegram (literal `**` in user-facing text)
+- Intermittent — passes most of the time, so manual testing easily misses it
+
+### Fix plan (proposed, not implemented)
+
+Prompt-side: strengthen the Telegram-HTML directive for long structured replies in the training prompt (P2 prompt modules is the natural vehicle). Consider a deterministic post-check (regex gate on `**`/`##`) in the eval harness — already exists as `text.format` in L1.
+
+### Regression test
+
+L1 case TR-0009 already exercises this behavior (`text.format: telegram_html`). Per BR-EVAL-002, tag the dataset case with `BUG-013` before this entry is marked Fixed. Fix is verified when TR-0009 passes `text.format` at 3/3 samples.
+
+---
+
 <!-- Template for new bugs:
 
 ## BUG-XXX — Short title
