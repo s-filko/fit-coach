@@ -6,7 +6,6 @@ import { composeDirectives } from '@infra/ai/graph/prompt-directives';
 
 import { calendarDaysAgo, formatInUserTz, humanTimeAgo } from '@shared/date-utils';
 
-/* eslint-disable max-len */
 export function buildSessionPlanningSystemPrompt(user: User | null, context: SessionPlanningContextData): string {
   const now = new Date();
   const tz = user?.timezone;

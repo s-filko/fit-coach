@@ -1,4 +1,3 @@
-/* eslint-disable max-len */
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import type { User } from '@domain/user/services/user.service';
 
