@@ -41,16 +41,6 @@ Rules:
 
 ## Findings
 
-- [ ] **`npm run lint` inspects ~5% of `src/`**: the script is `eslint src/**/*.ts` unquoted,
-  and npm runs scripts through `sh`, where `**` collapses to `*` — the glob expands to exactly
-  7 depth-2 files (`app/server.ts`, `config/index.ts`, `main/bootstrap.ts`,
-  `main/register-infra-services.ts`, `shared/{date-utils,errors,logger}.ts`) out of 137 `.ts`
-  files. Quoting it (`'src/**/*.ts'`) surfaces 61 errors / 650 warnings. Consequences already
-  observed: the pre-commit hook and CI prove nothing about most changes, and the ports-index
-  ESLint rule added by `ports-layout-consistency` (ARCHITECTURE.md rule 4, "enforced by
-  ESLint") is enforced by no command the project runs. Fix the glob and clear the fallout as
-  one task; related but distinct from the `evals/` lint-scoping entry below. Source:
-  close-out-review R1/R3 + owner-verified measurement (2026-09-14).
 - [ ] **Decompose `ITrainingService` (19 methods) by role**: rule-3 review (ARCHITECTURE.md,
   recorded as a standing exception) found one contract serving two different consumers —
   HTTP routes (`plan.routes.ts`, `session.routes.ts`) and LLM tools
