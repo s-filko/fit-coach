@@ -41,6 +41,31 @@ Rules:
 
 ## Findings
 
+- [ ] **`npm run lint` inspects ~5% of `src/`**: the script is `eslint src/**/*.ts` unquoted,
+  and npm runs scripts through `sh`, where `**` collapses to `*` — the glob expands to exactly
+  7 depth-2 files (`app/server.ts`, `config/index.ts`, `main/bootstrap.ts`,
+  `main/register-infra-services.ts`, `shared/{date-utils,errors,logger}.ts`) out of 137 `.ts`
+  files. Quoting it (`'src/**/*.ts'`) surfaces 61 errors / 650 warnings. Consequences already
+  observed: the pre-commit hook and CI prove nothing about most changes, and the ports-index
+  ESLint rule added by `ports-layout-consistency` (ARCHITECTURE.md rule 4, "enforced by
+  ESLint") is enforced by no command the project runs. Fix the glob and clear the fallout as
+  one task; related but distinct from the `evals/` lint-scoping entry below. Source:
+  close-out-review R1/R3 + owner-verified measurement (2026-09-14).
+- [ ] **Decompose `ITrainingService` (19 methods) by role**: rule-3 review (ARCHITECTURE.md,
+  recorded as a standing exception) found one contract serving two different consumers —
+  HTTP routes (`plan.routes.ts`, `session.routes.ts`) and LLM tools
+  (`infra/ai/graph/tools/*`) — with correction commands (`deleteLastSets`, `updateLastSet`)
+  used only by the latter. Natural split: planning / session lifecycle / execution-and-
+  correction. Touches the 680-line `training.service.ts` (8 constructor dependencies,
+  including the `LLMService` P1 retires) plus DI registration and every consumer, so it needs
+  its own plan; sequence it with P1. Source: close-out-review R1 + rule-3 review (2026-09-14).
+- [ ] **Three unused `ITrainingService` methods**: `getNextSessionRecommendation`,
+  `addExerciseToSession` and `logSet` have zero call sites in `apps/server` — the latter two
+  are superseded by `logSetWithContext` (11 call sites) and `ensureCurrentExercise` (9).
+  Deleting them removes ~29 lines of contract plus their implementations. **Before deleting,
+  check `apps/webapp` and `apps/bot`** — the measurement covered `apps/server` only. Kept out
+  of `ports-layout-consistency`, whose Global Constraints forbid behavioural change. Source:
+  rule-3 review (2026-09-14).
 - [ ] L0 eval checks named by `PROMPT_EVAL_FRAMEWORK.md` §4.1 but not implemented in the
   P0 harness: section presence, version discipline, message-catalog completeness. All three
   need artefacts P0 does not build — a PhaseSpec/section contract (P2) and prompt version

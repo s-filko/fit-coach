@@ -50,6 +50,16 @@ or is inert for the kind of diff under review.
   deleted prompt builder), and nothing directs the reviewer to check the survivor for exports
   the deletion just killed.
   Runs: refactor-p0-dead-code (2026-09-12), refactor-p0-dead-code (2026-09-12, third run).
+- [×1] Zone briefs named the plan file on `dev` but not the prepared branch worktree, so
+  per-file tooling silently failed against the working tree ("No files matching the pattern")
+  until the reviewer discovered `../fit_coach-<slug>/` on its own. R3 independently noted the
+  inverse half: the brief directs reading the plan's *claimed* verification output, which on
+  this run was materially wrong in the executor's favour (it called a branch-introduced lint
+  error "pre-existing" and framed the glob defect as cosmetic rather than as the invalidation
+  of its own evidence). A reviewer who honoured "verification was run, output pasted" by
+  reading would have passed three blocking findings. Briefs should name the worktree path and
+  say that claimed output is a claim, not evidence.
+  Runs: ports-layout-consistency (2026-09-14).
 - [×2] R4's brief says "If the diff edits a durable spec, that is R1's finding, not yours" —
   but ARCHITECTURE.md is itself listed in DOCUMENTATION_GUIDE § AI Execution Order step 4 as
   architectural truth, and the fix diff edits it. R4 judged the edit to be living-layout
@@ -59,8 +69,12 @@ or is inert for the kind of diff under review.
   touched both kinds of block in one file. Third run, independently: R4 could not tell whether
   *incompleteness* of that ARCHITECTURE.md edit (a sibling doc left contradicting the corrected
   tree) was its finding or R1's, and kept it on the grounds that it is staleness left behind
-  rather than law silently changed.
-  Runs: refactor-p0-dead-code (2026-09-12, re-run), refactor-p0-dead-code (2026-09-12, third run).
+  rather than law silently changed. Third occurrence, same seam from a new angle: this diff
+  *edited* ARCHITECTURE.md's rule section (R1's territory) while leaving other parts of the
+  same file — the module tree and the DI "Import Strategy" line — contradicting the new rules.
+  R4 read those unedited parts as in-zone staleness; the boundary as written does not assign a
+  file that is partly edited and partly left behind.
+  Runs: refactor-p0-dead-code (2026-09-12, re-run), refactor-p0-dead-code (2026-09-12, third run), ports-layout-consistency (2026-09-14).
 - [×1] R3's brief asserted that "the current checkout is dev with the branch already merged, so
   HEAD reflects the post-change state", and R3 ran all verification against HEAD rather than the
   branch tip under review. Here the two differ by one merge commit that touches nothing R3 reads,
@@ -144,6 +158,26 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   retiring phase), which R1 accepted — but with no rule to cite in either direction, a stricter
   reviewer could have called the same file a boundary blur.
   Runs: refactor-p0-dead-code (2026-09-12, third run).
+- [×1] A zone told to "read for shape" systematically misses violations that a broken
+  verification command conceals. R1's decisive facts on two blocking findings were only
+  discoverable by *running* eslint against the branch worktree: the diff reads clean, and
+  `npm run lint` passes because its unquoted glob lints 7 of 137 files. R3 reached the same
+  conclusion from its own side — a verification command counts as evidence only for files it
+  demonstrably reads. The skill should say a zone may execute the repo's own lint/type-check
+  against the branch tree, and that a passing verification command itself requires verification.
+  Runs: ports-layout-consistency (2026-09-14).
+- [×1] A type-only refactor plan with no `AC-####` ids slips through R3's "every AC has a test"
+  check by having no ACs to check — this plan states four prose clauses instead, and defines no
+  tests. `SUPERPOWERS_INTEGRATION.md` rule 2 requires plan tasks to cite the AC they implement;
+  nothing catches a plan that cites none. R1 noticed the same absence and flagged it as outside
+  its zone, so the gap is visible to reviewers but owned by none.
+  Runs: ports-layout-consistency (2026-09-14).
+- [×1] R2 has no rule for duplication that is *pre-existing and untouched by the branch* but
+  which the branch's own rename broke: the eval stub's comment anchoring a hand-mirrored domain
+  type cited `service.ports.ts`, a filename this diff renamed. R2 reported it advisory on the
+  reading that severity is earned by the diff's own defects, while noting a reviewer could
+  equally argue the rename obliges this branch to fix the citation it broke.
+  Runs: ports-layout-consistency (2026-09-14).
 - [×1] `npm run test:integration` exits 134 (libc++abi abort in onnxruntime teardown, likely a
   corrupt local all-MiniLM-L6-v2 cache) after all 118 tests pass — the verification command
   fails by exit code in this worktree despite a green suite. Pre-existing and environmental,
@@ -227,7 +261,14 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   during a phased refactor must carry a header comment naming the ADR/plan phase that retires
   it. A file in domain/ or infra/ whose path is absent from the target layout in the governing
   ADR and which carries no such comment is treated as an unplanned addition."
-  Runs: refactor-p0-dead-code (2026-09-12).
+  Second occurrence, sharpened: here a *layout* rule and a *dependency* invariant gave opposite
+  instructions for one file, and nothing said which wins — obeying rule 1 moved a LangChain-typed
+  contract into the domain's clean port surface. Proposed clause on rule 1 in `ARCHITECTURE.md`
+  § Interface Organization Principles: "A contract that cannot yet satisfy the domain's dependency
+  invariants (e.g. INV-CONV-004) is not relocated into `ports/` merely to satisfy rule 1; it stays
+  where it is, annotated with the ADR that will retire it." Adopted on this branch (2026-09-14);
+  kept here because the general form — layout rule versus invariant — will recur.
+  Runs: refactor-p0-dead-code (2026-09-12), ports-layout-consistency (2026-09-14).
 - [×1] Nothing requires a plan's ticked checkbox to correspond to an action actually taken when
   the step turns out to be vacuous: this plan's Task 3 Step 3 ("Remove the parser's tests") is
   ticked, but no test at base ever referenced the parser, so the step was a no-op — and the
@@ -248,7 +289,14 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   grep the repo for that path and correct or backlog every other occurrence in the same commit. A
   fix that leaves a sibling statement of the same fact uncorrected has created a divergence, and a
   reviewer flags it as blocking on the fix commit."
-  Runs: refactor-p0-dead-code (2026-09-12, third run).
+  Second occurrence, the rename variant: three of R4's four blocking findings on this branch
+  were one failure mode — the diff renamed files and the durable docs citing those paths were
+  not swept. Proposed wording, for the same `CONTRIBUTING_AI.md` § Docs-First Workflow: "When a
+  change renames, moves, or deletes a file that durable docs cite by path, `grep -rn
+  '<old-basename>' docs/` and update every hit in the same change; a stale path in a durable doc
+  is a defect, not a leftover." This makes the sweep a checkable close-out step rather than
+  reviewer judgement.
+  Runs: refactor-p0-dead-code (2026-09-12, third run), ports-layout-consistency (2026-09-14).
 - [×1] Nothing in the repo says an advisory recorded in a plan's `## Review` section must not also
   be copied into `docs/BACKLOG.md` verbatim — this branch stores all six of its advisories twice
   in near-identical prose with no ID linking the pair, so the two copies must be kept in sync or
@@ -258,6 +306,23 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   places creates two copies that drift." This would make the finding blocking-or-clean instead of
   ambiguous.
   Runs: refactor-p0-dead-code (2026-09-12, third run).
+- [×1] Nothing requires a verification command to be *proven to cover the changed files*, so a
+  plan can cite a command that reads none of them and report it green. Both defects found here
+  are of that shape: `npm run lint`'s unquoted glob reaches 7 of 137 files, and
+  `npm run test:unit`'s `--testMatch` patterns never load `tests/unit/**`, the location of the
+  only test the branch modified. Proposed principle for `docs/CONTRIBUTING_AI.md` (Testing):
+  "A verification command counts as evidence only for files it demonstrably reads. Before citing
+  `npm run lint` or `npm run test:unit` as a task's verification, confirm the changed files appear
+  in its file list (`--listTests` for jest, explicit paths for eslint). Shell-glob scripts are
+  presumed not to recurse." This would have caught both at execution time rather than at review.
+  Runs: ports-layout-consistency (2026-09-14).
+- [×1] No rule forbids hand-mirroring a domain type in test/eval fixtures instead of importing
+  it, which is why the strongest duplication R2 found could only be advisory. Proposed wording for
+  `docs/CONTRIBUTING_AI.md` § Principles & Boundaries: "Test and eval fixtures import the domain
+  type they stand in for; they never restate its field list. When a fixture must build a
+  structural stub, it is typed against the port (`satisfies`/`: T`) so drift fails type-check
+  rather than silently diverging." That would make this class machine-detectable.
+  Runs: ports-layout-consistency (2026-09-14).
 - [×1] The plan's per-task verification commands are evidenced only by ticked checkboxes;
   Task 6 was the only task with pasted command output. Proposed rule for
   `SUPERPOWERS_INTEGRATION.md` close-out: a plan records one line of actual command output
