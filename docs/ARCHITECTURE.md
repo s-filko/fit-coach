@@ -130,17 +130,24 @@ Notes:
 
 ### Interface Organization Principles
 
-This section is the live rule. ADR-0002 records the original decision to split the
-monolithic `ports.ts`; its Decision section is historical context, not a current spec.
+This section is the single source of this rule. ADR-0002 records why the monolithic
+`ports.ts` was split; its Decision section is historical and is not the current spec.
 
-- **Separation by Functional Areas**: Organize interfaces by responsibility, not by type
-- **Modular Structure**: Use `domain/*/ports/` directory with specialized files:
-  - `repository.ports.ts` - Data access contracts
-  - `service.ports.ts` - Business logic contracts  
-  - `index.ts` - Re-exports for convenience
-- **File Size Limits**: Keep interface files under 50 lines for readability
-- **Single Responsibility**: Each file handles one functional area
-- **Backward Compatibility**: Main `ports.ts` re-exports from modular structure
+1. **Location.** Every domain port lives in `domain/<domain>/ports/`. No port file
+   exists outside that directory — including sub-packages such as `graph/`.
+2. **Naming by contract, not by layer.** A file name answers "a contract for what":
+   `embedding.ports.ts`, `conversation-run.ports.ts`, `workout-plan.ports.ts`.
+   Layer names (`repository.ports.ts`, `service.ports.ts`) are allowed only while a
+   domain has exactly one such contract; once there are several, split by meaning.
+3. **Size.** A port file stays under 50 lines. Outgrowing that is the signal that it
+   holds more than one contract — split it per rule 2.
+4. **One entry point.** Every `ports/` directory has an `index.ts` re-exporting its
+   files, and imports always address the directory (`@domain/training/ports`).
+   Importing a file past `index.ts` is forbidden and is enforced by ESLint.
+5. **No flat `ports.ts`.** A single contract still gets a directory with an `index.ts`.
+
+Known exception: `domain/ai/ports.ts` is scheduled for removal in refactor P1
+(`ARCHITECTURE.md` § LLM layer) and is deliberately left flat until then.
 
 ### Enforced by ESLint (import boundaries)
 - Domain (`src/domain/**`): cannot import `@app/*`, `**/app/**`, `@infra/*`, `**/infra/**`.
