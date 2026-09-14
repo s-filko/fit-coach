@@ -122,7 +122,7 @@ function buildGraph(deps: ConversationGraphDeps) {
     // Generate summary of the outgoing phase in background — does not block the transition.
     // Risk: if user sends next message before summary completes, that message won't see the summary.
     // Acceptable tradeoff: summary usually finishes in 5-10s, typical user think-time is longer.
-    generatePhaseSummary(contextService, userId, phase, config).catch(err =>
+    generatePhaseSummary(contextService, userId, phase, config).catch((err: unknown) =>
       log.error({ err, userId, phase }, 'Background phase summary failed'),
     );
 
