@@ -270,6 +270,20 @@ Expected: all clean.
 
 ---
 
+## Execution notes
+
+- Task 4 / Task 6 Step 1: `src/domain/training/ports/training-service.ports.ts` measures **129 lines** —
+  over the 50-line rule 3. Whether `ITrainingService` (16 methods) itself should be decomposed is an
+  open owner design question; the file was deliberately not split further. Owner-pending exception.
+- Task 5 Step 2: rule 4 fires (verified by temporarily importing `@domain/training/ports/exercise.ports`):
+  `error '@domain/training/ports/exercise.ports' import is restricted from being used by a pattern. Import ports through the directory index (@domain/<domain>/ports), not a file inside it — ARCHITECTURE.md § Interface Organization Principles rule 4  no-restricted-imports`
+- Task 5 discovery: the `lint` script (`eslint src/**/*.ts`, unquoted) relies on shell globbing where
+  `**` collapses to `*` — `npm run lint` only checks `src/<dir>/<file>.ts` (two levels). Quoting the glob
+  surfaces ~352 pre-existing errors repo-wide (including `../graph/conversation.state` in
+  `conversation-graph.ports.ts` — the Task 3 import — against the pre-existing `../**` restriction).
+  Left as-is; fixing the script is an owner decision. Rule 4 is enforced on any file eslint actually
+  lints (per-file runs, IDE, and once the glob is fixed).
+
 ## Close-out
 
 Follow `superpowers:finishing-a-development-branch`. Before merge: run the `close-out-review`
