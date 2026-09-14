@@ -94,8 +94,14 @@ Rules:
   (`runId: undefined` spread in phase-summary.node.ts) — any future invoke site threading
   the graph config without replicating the opt-out silently re-opens a drained accumulator.
   Fix: run-metrics.ts owns the contract (canonical explanation + refuse to re-open a drained
-  run, or an unbound-metadata builder); other sites carry one-line pointers.
-  Source: close-out-review re-run, R1+R2 (2026-09-12).
+  run, or an unbound-metadata builder); other sites carry one-line pointers. Update
+  (2026-09-14): `chat.routes.ts`'s import of `startRun` from this file is an app→infra
+  `boundaries/element-types` violation, made visible (not introduced) when `lint-glob-fix`
+  fixed lint's scope — currently suppressed with a scoped `eslint-disable` citing this entry.
+  Whatever fix lands here should also resolve that suppression (e.g. by moving `startRun`
+  behind a domain port, or by the P3 relocation already noted above).
+  Source: close-out-review re-run, R1+R2 (2026-09-12); updated by lint-glob-fix close-out
+  review, R1 (2026-09-14).
 - [ ] `llm-log-handler.ts` reads `loadConfig()` at module scope, freezing `isDebug` and the
   model-name fallback at import time (import order couples to config availability); an
   in-function lazy read keeps the module side-effect-free. Code moved verbatim from
@@ -207,6 +213,16 @@ Rules:
   `state.mjs` review gate (design spec section 7) lands. Consider splitting orchestration from
   artifact-writing then, not before.
   Source: close-out-review live runs, R1 (2026-09-12, ×2).
+- [ ] `stamp-baseline.ts`'s three `client.query<...>` calls repeat the `{ n: number }` row-shape
+  generic inline (lines ~43, 51, 60) instead of a shared `type CountRow = { n: number }` —
+  minor DRY cleanup, not worth its own task. Source: `lint-glob-fix` close-out review, R2
+  (2026-09-14).
+- [ ] `docs/ARCHITECTURE.md`'s "enforced by ESLint" / "Violations fail lint" claims (around the
+  ports-index rule and import-boundary rules) became true only once `lint-glob-fix` fixed
+  `npm run lint`'s glob to actually scan all of `src/` (previously 7 of 137 files) — nothing in
+  a durable doc records that the enforcement was newly activated on 2026-09-14; the claim
+  itself needs no correction, only a note of when it started being true. Source: `lint-glob-fix`
+  close-out review, R4 (2026-09-14).
 
 ## Wishes
 
