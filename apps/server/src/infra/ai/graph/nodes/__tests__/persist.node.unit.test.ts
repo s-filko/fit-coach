@@ -27,7 +27,7 @@ describe('persist node run logging (AC-1301)', () => {
     await node(baseState());
 
     expect(runService.recordRun).toHaveBeenCalledTimes(1);
-    const record = runService.recordRun.mock.calls[0][0];
+    const [[record]] = runService.recordRun.mock.calls;
     expect(record.runId).toBe('run-1');
     expect(record.userId).toBe('user-1');
     expect(record.phaseIn).toBe('chat');
@@ -42,7 +42,7 @@ describe('persist node run logging (AC-1301)', () => {
 
     await node(baseState({ requestedTransition: { toPhase: 'session_planning' } }));
 
-    const record = runService.recordRun.mock.calls[0][0];
+    const [[record]] = runService.recordRun.mock.calls;
     expect(record.phaseOut).toBe('session_planning');
     expect(record.transition).toEqual({ toPhase: 'session_planning' });
   });
