@@ -1,4 +1,4 @@
-// Training service interfaces
+// Training service port
 
 import type {
   CreateSessionDto,
@@ -66,7 +66,7 @@ export interface UpdateSetResult {
   after: Pick<SessionSet, 'setData' | 'rpe' | 'userFeedback'>;
 }
 
-// --- Service Interfaces ---
+// --- Service Interface ---
 
 export interface ITrainingService {
   getActivePlan(userId: string): Promise<WorkoutPlan | null>;

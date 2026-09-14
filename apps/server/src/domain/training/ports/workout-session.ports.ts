@@ -1,78 +1,22 @@
-// Training repository interfaces
+// Workout session repository ports
 
 import type {
   CreateSessionDto,
   CreateSessionExerciseDto,
   CreateSessionSetDto,
-  CreateWorkoutPlanDto,
-  Exercise,
-  ExerciseWithMuscles,
-  MuscleGroup,
   SessionExercise,
   SessionSet,
-  WorkoutPlan,
   WorkoutSession,
   WorkoutSessionWithDetails,
 } from '@domain/training/types';
 
 // --- DI Tokens ---
 
-export const WORKOUT_PLAN_REPOSITORY_TOKEN = Symbol('WorkoutPlanRepository');
-export const EXERCISE_REPOSITORY_TOKEN = Symbol('ExerciseRepository');
 export const WORKOUT_SESSION_REPOSITORY_TOKEN = Symbol('WorkoutSessionRepository');
 export const SESSION_EXERCISE_REPOSITORY_TOKEN = Symbol('SessionExerciseRepository');
 export const SESSION_SET_REPOSITORY_TOKEN = Symbol('SessionSetRepository');
 
 // --- Repository Interfaces ---
-
-export interface IWorkoutPlanRepository {
-  create(userId: string, plan: CreateWorkoutPlanDto): Promise<WorkoutPlan>;
-  findById(planId: string): Promise<WorkoutPlan | null>;
-  findActiveByUserId(userId: string): Promise<WorkoutPlan | null>;
-  findByUserId(userId: string, status?: string): Promise<WorkoutPlan[]>;
-  update(planId: string, updates: Partial<WorkoutPlan>): Promise<WorkoutPlan>;
-  archive(planId: string): Promise<void>;
-}
-
-export interface ExerciseSearchFilters {
-  category?: string;
-  equipment?: string;
-  muscleGroup?: MuscleGroup;
-}
-
-export interface IExerciseRepository {
-  findById(id: string): Promise<Exercise | null>;
-  findByIdWithMuscles(id: string): Promise<ExerciseWithMuscles | null>;
-  findByIds(ids: string[]): Promise<Exercise[]>;
-  findByIdsWithMuscles(ids: string[]): Promise<ExerciseWithMuscles[]>;
-  findByMuscleGroup(muscleGroup: MuscleGroup, primaryOnly?: boolean): Promise<ExerciseWithMuscles[]>;
-  search(query: string, limit?: number): Promise<Exercise[]>;
-  findAll(filters?: {
-    category?: string;
-    equipment?: string;
-    energyCost?: string;
-    complexity?: string;
-  }): Promise<Exercise[]>;
-  findAllWithMuscles(filters?: {
-    category?: string;
-    equipment?: string;
-    energyCost?: string;
-    complexity?: string;
-  }): Promise<ExerciseWithMuscles[]>;
-  /**
-   * Vector similarity search using cosine distance on the embedding column.
-   * Applies optional SQL filters before ranking by similarity.
-   * Returns exercises with muscles, sorted by descending similarity score.
-   */
-  searchByEmbedding(
-    queryVector: number[],
-    opts?: { limit?: number; filters?: ExerciseSearchFilters },
-  ): Promise<ExerciseWithMuscles[]>;
-  /**
-   * Store the computed embedding for an exercise.
-   */
-  updateEmbedding(exerciseId: string, embedding: number[]): Promise<void>;
-}
 
 export interface IWorkoutSessionRepository {
   create(userId: string, session: CreateSessionDto): Promise<WorkoutSession>;

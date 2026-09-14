@@ -1,6 +1,6 @@
 import { describe, expect, it, jest } from '@jest/globals';
 
-import type { IWorkoutPlanRepository, IWorkoutSessionRepository } from '@domain/training/ports/repository.ports';
+import type { IWorkoutPlanRepository, IWorkoutSessionRepository } from '@domain/training/ports';
 import { SessionPlanningContextBuilder } from '@domain/training/services/session-planning-context.builder';
 import type { WorkoutPlan, WorkoutSessionWithDetails } from '@domain/training/types';
 
