@@ -35,11 +35,10 @@ curl https://fitcoach-dev.filko.dev/health   # → 200
 
 ## LLM
 
-- Provider: OpenRouter (`https://openrouter.ai/api/v1/`) with **BYOK**. Attached provider keys:
-  - **Z.AI — subscription** (paid subscription)
-  - **Google AI Studio — prepaid PAYG** (pay-as-you-go)
-- Current model (dev, since 2026-09-09): `z-ai/glm-5.3` (flagship; `z-ai/glm-5.3-flash` = cheaper variant). Prod still on `google/gemini-3-flash-preview`
-- BYOK requests don't burn OpenRouter credits (`is_byok: true` in usage); check with `curl https://openrouter.ai/api/v1/key -H "Authorization: Bearer <key>"`
+- **Dev (since 2026-09-14): direct Z.AI** `https://api.z.ai/api/coding/paas/v4/` with the **Z.AI subscription token** (the same subscription that powers Claude Code), model `glm-5.3`. Zero per-token cost; quota shared with Claude Code sessions; token rotates on subscription renewal.
+- **Z.AI subscription is unusable through OpenRouter** (verified 2026-09-13): it only authorizes the coding endpoint, OpenRouter BYOK calls the standard one — GLM via OpenRouter is billed to credits at list price (`is_byok: false`). Keep this in mind before switching back.
+- **Prod: OpenRouter** (`https://openrouter.ai/api/v1/`) with Google AI Studio PAYG BYOK — that BYOK **does** work (`is_byok: true`), model `google/gemini-3-flash-preview`.
+- Check per-request BYOK via `usage.is_byok` in a completion response, not via `curl /key` alone (byok_usage lags and missed the 09-09 mis-annotation).
 - Alternative keys/models are commented in local `apps/server/.env` with status annotations
 - Deployed API routes: `/api/bot/user`, `/api/bot/chat` (with `/bot` prefix, both dev and prod since 2026-09-11); auth header `X-Api-Key: <BOT_API_KEY>`
 
