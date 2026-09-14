@@ -34,10 +34,10 @@ apps/server/src/
 
   domain/                       # Business logic (framework-agnostic)
     user/
-      ports/                    # Modular interface organization
+      ports/                    # One directory per domain; entry point is index.ts
         index.ts               # Re-exports for convenience
-        repository.ports.ts    # Data access contracts
-        service.ports.ts       # Business logic contracts
+        repository.ports.ts    # Data access contracts (layer name allowed: one such contract)
+        service.ports.ts       # Business logic contracts (layer name allowed: one such contract)
       services/
         user.service.ts        # User CRUD operations
         registration.validation.ts # Zod validators for registration fields (reused in tools)
@@ -52,7 +52,13 @@ apps/server/src/
         conversation-run.ports.ts      # IConversationRunService — one run row per conversation run (ADR-0013 §8)
         index.ts               # Re-exports
     training/
-      ports/                   # Training domain interfaces
+      ports/                   # Named by contract (rule 2)
+        index.ts               # Re-exports
+        embedding.ports.ts     # IEmbeddingService
+        exercise.ports.ts      # IExerciseRepository, ExerciseSearchFilters
+        workout-plan.ports.ts  # IWorkoutPlanRepository
+        workout-session.ports.ts   # Session / session-exercise / session-set repositories
+        training-service.ports.ts  # ITrainingService + result types (standing exception, rule 3)
       services/
         prompts/
           session-recommendation.prompt.ts   # Next-session recommendation prompt (survivor of the P0 prompt deletion; LLMService-only path)
@@ -135,19 +141,45 @@ This section is the single source of this rule. ADR-0002 records why the monolit
 
 1. **Location.** Every domain port lives in `domain/<domain>/ports/`. No port file
    exists outside that directory — including sub-packages such as `graph/`.
+   **Exception, and its limit:** a contract that cannot yet satisfy the domain's
+   dependency invariants is *not* relocated into `ports/` merely to satisfy this rule —
+   the move would plant the violation in the surface reserved for clean contracts. It
+   stays where it is, and the exception names the ADR or task that retires it. An
+   exception without a named closing task is not allowed.
 2. **Naming by contract, not by layer.** A file name answers "a contract for what":
    `embedding.ports.ts`, `conversation-run.ports.ts`, `workout-plan.ports.ts`.
    Layer names (`repository.ports.ts`, `service.ports.ts`) are allowed only while a
    domain has exactly one such contract; once there are several, split by meaning.
-3. **Size.** A port file stays under 50 lines. Outgrowing that is the signal that it
-   holds more than one contract — split it per rule 2.
+3. **Size is a signal, not a limit.** A port file holds one contract. Exceeding the
+   guide figures — an interface over ~7 methods, or a file over ~80 lines — does **not**
+   block on its own; it obliges a review, whose outcome is recorded next to the port:
+   - *Is all of it used?* A method with no call sites is dead code — delete it, do not
+     carry it along.
+   - *Is it all in the right place?* If the methods fall into groups called by different
+     consumers, several APIs share one contract — separate them.
+   - *One reason to change?* Groups with different reasons to change are different
+     contracts.
+
+   The review ends in exactly one of three outcomes: remove what is unused, split the
+   contract, or record a justified exception naming the task or ADR that closes it.
+   Silently exceeding the guide is not allowed; neither is splitting a file mechanically
+   to satisfy a counter.
 4. **One entry point.** Every `ports/` directory has an `index.ts` re-exporting its
    files, and imports always address the directory (`@domain/training/ports`).
    Importing a file past `index.ts` is forbidden and is enforced by ESLint.
 5. **No flat `ports.ts`.** A single contract still gets a directory with an `index.ts`.
 
-Known exception: `domain/ai/ports.ts` is scheduled for removal in refactor P1
-(`ARCHITECTURE.md` § LLM layer) and is deliberately left flat until then.
+Standing exceptions (each names the task that closes it):
+
+- `domain/ai/ports.ts` — scheduled for removal in refactor P1 (§ LLM layer); left flat
+  until then (rule 5).
+- `domain/conversation/graph/conversation.graph.ports.ts` — carries LangChain types and
+  stays in `graph/` until **ADR-0013 D-13** relocates them to `infra/ai` (INV-CONV-004).
+  Moving it into `ports/` would place LangChain types in the domain's clean port surface
+  and re-export them to every consumer of `@domain/conversation/ports` (rule 1).
+- `training/ports/training-service.ports.ts` — `ITrainingService`, 19 methods. Rule 3
+  review done: three unused methods and a split by consumer were identified;
+  decomposition by role is tracked in `docs/BACKLOG.md` (rule 3).
 
 ### Enforced by ESLint (import boundaries)
 - Domain (`src/domain/**`): cannot import `@app/*`, `**/app/**`, `@infra/*`, `**/infra/**`.
@@ -162,7 +194,9 @@ Known exception: `domain/ai/ports.ts` is scheduled for removal in refactor P1
 - App / controllers and routes depend only on ports and tokens, NOT on implementations.
 - Request‑scoped dependencies are used only when transactions are needed; singletons by default.
 - **Composition Root = `src/main/**`**: dependency assembly (implementation registration, container, config, and server startup) is performed in `src/main/**`. App layer does not import or resolve implementations from the container.
-- **Import Strategy**: for domain contracts, use `domain/*/ports/index.ts` or specific port files.
+- **Import Strategy**: import domain contracts through the ports directory
+  (`@domain/<domain>/ports`), never a file inside it — § Interface Organization
+  Principles rule 4, enforced by ESLint.
 
 ### DI Container Implementation
 - Container (`src/infra/di/container.ts`) supports both direct instance registration and factory-based lazy initialization.

@@ -1,6 +1,6 @@
 import { RunnableConfig } from '@langchain/core/runnables';
 
-import { ConversationStateType } from '../graph/conversation.state';
+import { ConversationStateType } from './conversation.state';
 
 export interface ICompiledConversationGraph {
   invoke(

@@ -5,7 +5,8 @@ import { FastifyInstance } from 'fastify';
 
 import { buildServer } from '@app/server';
 
-import { ICompiledConversationGraph, IConversationContextService } from '@domain/conversation/ports';
+import type { ICompiledConversationGraph } from '@domain/conversation/graph/conversation.graph.ports';
+import { IConversationContextService } from '@domain/conversation/ports';
 import { ITrainingService } from '@domain/training/ports';
 import { IUserService } from '@domain/user/ports';
 
