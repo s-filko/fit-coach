@@ -1,4 +1,5 @@
 import type { UserProfile, WorkoutPlan, WorkoutSessionWithDetails } from '@domain/training/types';
+
 import { calendarDaysAgo, formatInUserTz, humanTimeAgo } from '@shared/date-utils';
 
 export async function buildSessionRecommendationPrompt(

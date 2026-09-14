@@ -8,9 +8,10 @@
 
 import { AIMessage, ToolMessage } from '@langchain/core/messages';
 
-import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
 import type { IEmbeddingService, IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
+
+import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
 
 const BASE_USER = {
   id: 'u1',

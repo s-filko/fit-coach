@@ -17,13 +17,13 @@ import type {
   IWorkoutPlanRepository,
   IWorkoutSessionRepository,
 } from '@domain/training/ports';
+import { TrainingService } from '@domain/training/services/training.service';
 import type {
   SessionExercise,
   SessionExerciseWithDetails,
   SessionSet,
   WorkoutSessionWithDetails,
 } from '@domain/training/types';
-import { TrainingService } from '@domain/training/services/training.service';
 
 // ---------------------------------------------------------------------------
 // Factories

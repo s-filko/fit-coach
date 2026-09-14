@@ -10,9 +10,9 @@ import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import type { Serialized } from '@langchain/core/load/serializable';
 import type { BaseMessage } from '@langchain/core/messages';
 
-import { loadConfig } from '@config/index';
-
 import { bindCallToRun, finishLlmCall, resolveCallRun, startLlmCall } from '@infra/ai/run-metrics';
+
+import { loadConfig } from '@config/index';
 
 import { createLogger } from '@shared/logger';
 

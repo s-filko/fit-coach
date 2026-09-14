@@ -18,8 +18,8 @@ import type { User } from '@domain/user/services/user.service';
 import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
 import { buildTrainingSystemPrompt } from '@infra/ai/graph/nodes/training.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
-import { buildTrainingTools, LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '@infra/ai/graph/tools/training.tools';
 import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
+import { buildTrainingTools, LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '@infra/ai/graph/tools/training.tools';
 import { getModel } from '@infra/ai/model.factory';
 
 import { createLogger } from '@shared/logger';
@@ -249,14 +249,12 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
       }
       const nonDuplicateCalls = sorted.filter(c => !duplicateIds.includes(c.id ?? ''));
       for (const call of nonDuplicateCalls) {
-        // eslint-disable-next-line no-await-in-loop
         toolMessages.push(await invokeTool(call, userId));
       }
       return { messages: toolMessages };
     }
 
     for (const call of sorted) {
-      // eslint-disable-next-line no-await-in-loop
       toolMessages.push(await invokeTool(call, userId));
     }
 

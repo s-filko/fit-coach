@@ -1,5 +1,6 @@
-import { DrizzleConversationRunService } from '@infra/conversation/drizzle-conversation-run.service';
 import type { ConversationRunRecord } from '@domain/conversation/ports';
+
+import { DrizzleConversationRunService } from '@infra/conversation/drizzle-conversation-run.service';
 
 const values = jest.fn().mockResolvedValue(undefined);
 const insert = jest.fn((..._args: unknown[]) => ({ values }));

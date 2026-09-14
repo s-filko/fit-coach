@@ -1,5 +1,5 @@
-import { ConversationPhase, GetMessagesOptions, IConversationContextService } from '@domain/conversation/ports';
 import { ChatMsg } from '@domain/ai/types';
+import { ConversationPhase, GetMessagesOptions, IConversationContextService } from '@domain/conversation/ports';
 
 // TODO: remove — in-memory implementation kept only for tests; real impl is DrizzleConversationContextService
 export class InMemoryConversationContextService implements IConversationContextService {
@@ -50,7 +50,8 @@ export class InMemoryConversationContextService implements IConversationContextS
     return this.summaries.get(userId) ?? null;
   }
 
-  async getLastUserMessageTime(_userId: string): Promise<Date | null> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- interface param, unused by this in-memory test stub
+  async getLastUserMessageTime(userId: string): Promise<Date | null> {
     return null;
   }
 }

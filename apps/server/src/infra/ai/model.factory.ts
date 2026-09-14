@@ -1,8 +1,8 @@
 import { ChatOpenAI } from '@langchain/openai';
 
-import { loadConfig } from '@config/index';
-
 import { LLMLogHandler } from '@infra/ai/llm-log-handler';
+
+import { loadConfig } from '@config/index';
 
 let _model: ChatOpenAI | null = null;
 

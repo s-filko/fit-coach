@@ -3,6 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+// run-metrics.ts is a documented-temporary infra module (see its file header:
+// "Temporary home: P3 moves this into the commit node's run context"); tracked separately
+// in docs/BACKLOG.md Findings ("The run-metrics binding contract...")
+// eslint-disable-next-line boundaries/element-types -- documented-temporary module, see context above
 import { startRun } from '@infra/ai/run-metrics';
 
 const chatMessageBody = z

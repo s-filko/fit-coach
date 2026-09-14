@@ -166,12 +166,15 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   demonstrably reads. The skill should say a zone may execute the repo's own lint/type-check
   against the branch tree, and that a passing verification command itself requires verification.
   Runs: ports-layout-consistency (2026-09-14).
-- [×1] A type-only refactor plan with no `AC-####` ids slips through R3's "every AC has a test"
+- [×2] A type-only refactor plan with no `AC-####` ids slips through R3's "every AC has a test"
   check by having no ACs to check — this plan states four prose clauses instead, and defines no
   tests. `SUPERPOWERS_INTEGRATION.md` rule 2 requires plan tasks to cite the AC they implement;
   nothing catches a plan that cites none. R1 noticed the same absence and flagged it as outside
-  its zone, so the gap is visible to reviewers but owned by none.
-  Runs: ports-layout-consistency (2026-09-14).
+  its zone, so the gap is visible to reviewers but owned by none. Second occurrence: a promoted
+  backlog-finding plan (not a phase-spec task) also carries no ACs by design — R3 correctly
+  treated the absence as inapplicable rather than a gap, but the zone brief still gives no
+  explicit instruction for this plan shape, so the correct call was judgment, not guidance.
+  Runs: ports-layout-consistency (2026-09-14), lint-glob-fix (2026-09-14).
 - [×1] R2 has no rule for duplication that is *pre-existing and untouched by the branch* but
   which the branch's own rename broke: the eval stub's comment anchoring a hand-mirrored domain
   type cited `service.ports.ts`, a filename this diff renamed. R2 reported it advisory on the
@@ -194,6 +197,17 @@ backs it. Each entry names the proposed wording and where it would live
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
 
+- [×1] `docs/adr/0013-llm-core-target-architecture.md` §11 names the `domain/** →
+  @langchain/*` boundary as an explicit invariant, but not the app→infra boundary that
+  `eslint.config.js`'s `boundaries/element-types` rule also enforces (`app` may only import
+  `domain, shared, config`). When a diff suppresses a violation of that second boundary with a
+  documented `eslint-disable`, R1 has no ADR-citable rule to hang either a `blocking` or a
+  confident `advisory` verdict on for that specific edge — it fell back to judging the
+  suppression's shape (scoped, dated, cross-referenced) rather than citing a named invariant.
+  Proposed: add the app→infra edge to ADR-0013 §11 (or a new `INV-ARCH-###` in
+  `ARCHITECTURE.md`) alongside the existing domain/langchain one, so future R1 reviews of an
+  app-layer file importing infra have a rule to cite in either direction.
+  Runs: lint-glob-fix (2026-09-14).
 - [×2] R1's "always blocking" rule treats any `docs/` edit outside `docs/superpowers/` as
   blocking unless escalated, but gives the reviewer no positive test for what a *discharged*
   escalation looks like in the diff. Judging the fix commit required evidence that lives

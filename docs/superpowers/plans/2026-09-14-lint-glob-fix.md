@@ -1,5 +1,9 @@
 # Lint Glob Fix Implementation Plan
 
+- Status: done
+- Branch: plan/lint-glob-fix
+- Review: 2026-09-14 | clean | R1,R2,R3,R4
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make `npm run lint` (in `apps/server`) actually check all 137 `.ts` files under `src/` instead of the 7 it silently checks today, and get it to a clean pass (0 errors) at the new, true scope.
@@ -31,12 +35,12 @@
 - Consumes: nothing (first task)
 - Produces: `npm run lint` now expands to all `src/**/*.ts` files; `src/infra/db/scripts/**` is excluded from linting (mirrors its `tsconfig.json` `exclude` entry) so it no longer throws a type-aware-parser error.
 
-- [ ] **Step 1: Confirm current (broken) scope**
+- [x] **Step 1: Confirm current (broken) scope**
 
 Run: `cd apps/server && npm run lint 2>&1 | tail -5`
 Expected output ends with something like `7 problems` or a small number — confirms the glob is currently under-matching (today's baseline: 0 errors, a handful of warnings, only 7 files touched).
 
-- [ ] **Step 2: Quote the globs in package.json**
+- [x] **Step 2: Quote the globs in package.json**
 
 In `apps/server/package.json`, change:
 
@@ -52,7 +56,7 @@ to:
     "lint:fix": "eslint 'src/**/*.ts' --fix",
 ```
 
-- [ ] **Step 3: Exclude `src/infra/db/scripts/` in eslint.config.js**
+- [x] **Step 3: Exclude `src/infra/db/scripts/` in eslint.config.js**
 
 `src/infra/db/scripts/` is deliberately excluded from `tsconfig.json`'s `include` (see `apps/server/tsconfig.json:23`, `"exclude": ["node_modules", "dist", "src/infra/db/scripts"]`) — these are three standalone maintenance scripts, not part of the built app. ESLint's type-aware parser (`parserOptions.project: true`) throws a parse error on any file outside the TS project, so it must be excluded from lint too, matching tsconfig's existing intent.
 
@@ -89,12 +93,12 @@ to:
 );
 ```
 
-- [ ] **Step 4: Verify the new scope and count**
+- [x] **Step 4: Verify the new scope and count**
 
 Run: `cd apps/server && npm run lint 2>&1 | tail -5`
 Expected: `✖ 711 problems (61 errors, 650 warnings)` (or close to it — a handful may drift if other work landed since this plan was written; the important thing is it's now in the hundreds, not single digits, and the 3 `src/infra/db/scripts/*.ts` parse errors are gone).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/server/package.json apps/server/eslint.config.js
@@ -112,27 +116,27 @@ git commit -m "fix(lint): quote lint globs so npm actually expands src/**/*.ts"
 - Consumes: Task 1's now-correct lint scope
 - Produces: error count drops from 61 to ~22 (the remainder Task 3+ fix by hand); warning count drops from 650 to ~395
 
-- [ ] **Step 1: Run the autofixer**
+- [x] **Step 1: Run the autofixer**
 
 Run: `cd apps/server && npm run lint:fix`
 This will still exit non-zero (unfixable errors remain) — that's expected, don't treat a non-zero exit as failure here.
 
-- [ ] **Step 2: Review the diff for anything unexpected**
+- [x] **Step 2: Review the diff for anything unexpected**
 
 Run: `cd apps/server && git diff --stat src/`
 Expected: many files touched (~69), all mechanical (import reordering, brace insertion, spacing). Skim `git diff src/` for anything that looks like a semantic change rather than a style fix — `eslint --fix` should never change runtime behavior, but confirm no accidental match (e.g. `prefer-destructuring` autofix is not in this run's autofix set, so no destructuring changes should appear).
 
-- [ ] **Step 3: Run the test suite to confirm no behavior changed**
+- [x] **Step 3: Run the test suite to confirm no behavior changed**
 
 Run: `cd apps/server && npm test`
 Expected: same pass/fail state as before Task 1 (no new failures introduced by the reformatting).
 
-- [ ] **Step 4: Verify new counts**
+- [x] **Step 4: Verify new counts**
 
 Run: `cd apps/server && npm run lint 2>&1 | tail -3`
 Expected: `✖ 420 problems (25 errors, 395 warnings)` or close — confirms the mechanical fixes landed and ~36 fewer errors, ~255 fewer warnings remain than Task 1's baseline.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A apps/server/src
@@ -152,16 +156,16 @@ git commit -m "style(lint): apply eslint --fix for the newly-linted src/ tree"
 - Consumes: Task 2's reduced error set
 - Produces: 3 fewer errors (schema.ts unused import, conversation-context.service.ts unused param, conversation.graph.ts duplicate import)
 
-- [ ] **Step 1: Remove the unused `serial` import in schema.ts**
+- [x] **Step 1: Remove the unused `serial` import in schema.ts**
 
 In `apps/server/src/infra/db/schema.ts`, the `drizzle-orm/pg-core` import list includes `serial`, which has no usages in the file. Remove it from the import list (keep the rest of the multi-line import as-is, just delete the `serial,` line).
 
-- [ ] **Step 2: Verify no other usage before deleting**
+- [x] **Step 2: Verify no other usage before deleting**
 
 Run: `cd apps/server && grep -n '\bserial(' src/infra/db/schema.ts`
 Expected: no output (confirms it's genuinely unused, not just unused by that exact token match).
 
-- [ ] **Step 3: Handle the unused `_userId` param in conversation-context.service.ts**
+- [x] **Step 3: Handle the unused `_userId` param in conversation-context.service.ts**
 
 `InMemoryConversationContextService` (marked `// TODO: remove — in-memory implementation kept only for tests` at the top of the file) implements `IConversationContextService.getLastUserMessageTime(userId: string)`, but the in-memory stub never uses the parameter. The project's `no-unused-vars` config deliberately forbids the underscore-prefix escape hatch in production code (`argsIgnorePattern: '(^$)'` in `eslint.config.js`), so add a scoped disable instead of renaming.
 
@@ -182,7 +186,7 @@ to:
   }
 ```
 
-- [ ] **Step 4: Merge the duplicate `@langchain/langgraph` import in conversation.graph.ts**
+- [x] **Step 4: Merge the duplicate `@langchain/langgraph` import in conversation.graph.ts**
 
 In `apps/server/src/infra/ai/graph/conversation.graph.ts`, lines 2-3 currently read:
 
@@ -197,17 +201,17 @@ Merge into a single import statement (keep `type` scoped to just the type-only m
 import { Command, END, START, StateGraph, type BaseCheckpointSaver } from '@langchain/langgraph';
 ```
 
-- [ ] **Step 5: Verify the file still type-checks**
+- [x] **Step 5: Verify the file still type-checks**
 
 Run: `cd apps/server && npx tsc --noEmit`
 Expected: no new errors introduced by the import merge.
 
-- [ ] **Step 6: Verify error count dropped by 3**
+- [x] **Step 6: Verify error count dropped by 3**
 
 Run: `cd apps/server && npm run lint 2>&1 | tail -3`
 Expected: error count down to ~22 from Task 2's ~25.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/server/src/infra/db/schema.ts apps/server/src/infra/conversation/conversation-context.service.ts apps/server/src/infra/ai/graph/conversation.graph.ts
@@ -226,7 +230,7 @@ git commit -m "fix(lint): remove unused imports/params, merge duplicate langgrap
 - Consumes: Task 3's reduced error set
 - Produces: 2 fewer errors; both catch callbacks now type their caught value as `unknown` instead of implicit `any`
 
-- [ ] **Step 1: Locate and fix conversation.graph.ts**
+- [x] **Step 1: Locate and fix conversation.graph.ts**
 
 Run: `cd apps/server && grep -n 'generatePhaseSummary(contextService, userId, phase, config).catch' src/infra/ai/graph/conversation.graph.ts`
 
@@ -246,7 +250,7 @@ to:
     );
 ```
 
-- [ ] **Step 2: Locate and fix router.node.ts**
+- [x] **Step 2: Locate and fix router.node.ts**
 
 Run: `cd apps/server && grep -n "generatePhaseSummary(contextService, userId, 'training', config).catch" src/infra/ai/graph/nodes/router.node.ts`
 
@@ -266,17 +270,17 @@ to:
         );
 ```
 
-- [ ] **Step 3: Verify logger accepts `unknown` in the metadata object**
+- [x] **Step 3: Verify logger accepts `unknown` in the metadata object**
 
 Run: `cd apps/server && npx tsc --noEmit`
 Expected: no new type errors. `log.error(meta, msg)` takes an arbitrary metadata object (pino-style), so a field typed `unknown` inside it is fine.
 
-- [ ] **Step 4: Verify error count dropped by 2**
+- [x] **Step 4: Verify error count dropped by 2**
 
 Run: `cd apps/server && npm run lint 2>&1 | tail -3`
 Expected: error count down to ~20.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/server/src/infra/ai/graph/conversation.graph.ts apps/server/src/infra/ai/graph/nodes/router.node.ts
@@ -294,7 +298,7 @@ git commit -m "fix(lint): type catch(err) as unknown to satisfy no-unsafe-assign
 - Consumes: Task 4's reduced error set
 - Produces: 2 fewer errors
 
-- [ ] **Step 1: Locate both flagged lines**
+- [x] **Step 1: Locate both flagged lines**
 
 Run: `cd apps/server && grep -n 'mock.calls\[0\]\[0\]' src/infra/ai/graph/nodes/__tests__/persist.node.unit.test.ts`
 
@@ -310,17 +314,17 @@ Both are of the form:
     const [[record]] = runService.recordRun.mock.calls;
 ```
 
-- [ ] **Step 2: Run the affected test file**
+- [x] **Step 2: Run the affected test file**
 
 Run: `cd apps/server && npx jest src/infra/ai/graph/nodes/__tests__/persist.node.unit.test.ts`
 Expected: all tests in the file still pass — `record` still refers to the same first-call-first-arg object.
 
-- [ ] **Step 3: Verify error count dropped by 2**
+- [x] **Step 3: Verify error count dropped by 2**
 
 Run: `cd apps/server && npm run lint 2>&1 | tail -3`
 Expected: error count down to ~18.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add apps/server/src/infra/ai/graph/nodes/__tests__/persist.node.unit.test.ts
@@ -343,13 +347,13 @@ git commit -m "fix(lint): destructure mock.calls access instead of index chainin
 
 All 7 flagged lines are either LLM prompt content (template literals whose exact text is behavior-sensitive — see Global Constraints) or a long single-line string. Do not reflow or rewrap any of them — that changes the string's content/whitespace. Add a scoped disable comment on the line immediately before each flagged line instead.
 
-- [ ] **Step 1: Re-run lint to get exact current line numbers**
+- [x] **Step 1: Re-run lint to get exact current line numbers**
 
 Line numbers shift after Tasks 2-5's edits. Get fresh locations:
 
 Run: `cd apps/server && npm run lint 2>&1 | grep -B1 "max-len"`
 
-- [ ] **Step 2: Add `eslint-disable-next-line max-len` above each of the 7 flagged lines**
+- [x] **Step 2: Add `eslint-disable-next-line max-len` above each of the 7 flagged lines**
 
 For each location found in Step 1, insert the comment line directly above the offending line, matching the file's existing indentation. Example for `timezone.tool.ts`:
 
@@ -362,22 +366,22 @@ For each location found in Step 1, insert the comment line directly above the of
 
 Apply the same pattern (disable comment + short reason referencing "prompt content" or "message text, not reflowable") to the other 6 lines in `session-recommendation.prompt.ts`, `training.service.ts` (×3), and `phase-summary.node.ts` (×2).
 
-- [ ] **Step 3: Confirm no string content changed**
+- [x] **Step 3: Confirm no string content changed**
 
 Run: `cd apps/server && git diff src/domain/training/services/prompts/session-recommendation.prompt.ts src/domain/training/services/training.service.ts src/infra/ai/graph/nodes/phase-summary.node.ts src/infra/ai/graph/tools/timezone.tool.ts`
 Expected: every diff hunk adds exactly one comment line, zero changes inside string literals.
 
-- [ ] **Step 4: Run the test suite**
+- [x] **Step 4: Run the test suite**
 
 Run: `cd apps/server && npm test`
 Expected: same pass/fail state as before this task (prompt strings are byte-identical).
 
-- [ ] **Step 5: Verify error count dropped by 7**
+- [x] **Step 5: Verify error count dropped by 7**
 
 Run: `cd apps/server && npm run lint 2>&1 | tail -3`
 Expected: error count down to ~11.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/server/src/domain/training/services/prompts/session-recommendation.prompt.ts apps/server/src/domain/training/services/training.service.ts apps/server/src/infra/ai/graph/nodes/phase-summary.node.ts apps/server/src/infra/ai/graph/tools/timezone.tool.ts
@@ -395,11 +399,11 @@ git commit -m "fix(lint): suppress max-len on prompt-content and message-text li
 - Consumes: Task 6's reduced error set
 - Produces: 7 fewer errors (4 `no-unsafe-member-access`, 3 `no-console`) — this is the last file with errors, bringing the count to 0
 
-- [ ] **Step 1: Read the current state of the function**
+- [x] **Step 1: Read the current state of the function**
 
 Run: `cd apps/server && grep -n "client.query\|console\." src/infra/db/stamp-baseline.ts`
 
-- [ ] **Step 2: Add generic row types to the two untyped `client.query` calls**
+- [x] **Step 2: Add generic row types to the two untyped `client.query` calls**
 
 `pg`'s `Client.query<T>` accepts a generic for the result row shape. Find:
 
@@ -455,7 +459,7 @@ Change to:
 
 This removes all 4 `no-unsafe-member-access` errors: `existing.rows[0].present`, `count.rows[0].n` (×2), `tables.rows[0].n` are now typed instead of `any`.
 
-- [ ] **Step 3: Suppress `no-console` on the 3 flagged lines**
+- [x] **Step 3: Suppress `no-console` on the 3 flagged lines**
 
 This file is a CLI migration-stamping script (invoked by `scripts/stamp-baseline.ts`, outside `src/`) — console output is its intended UX, not a stray debug statement, and it's the only file in `src/` using `console`. Add a scoped disable above each of the 3 `console.log` calls, e.g.:
 
@@ -466,22 +470,22 @@ This file is a CLI migration-stamping script (invoked by `scripts/stamp-baseline
 
 Apply the same pattern to the other two `console.log` calls in the file (the "Empty database — skipping stamp" line and the "Stamped N migration(s)" line).
 
-- [ ] **Step 4: Run the file's unit test**
+- [x] **Step 4: Run the file's unit test**
 
 Run: `cd apps/server && npx jest src/infra/db/__tests__/stamp-baseline.unit.test.ts`
 Expected: passes (this test covers `hashMigration`/`migrationsThrough`, not the DB-touching `stampBaseline` function, so the type changes shouldn't affect it — but confirm).
 
-- [ ] **Step 5: Type-check**
+- [x] **Step 5: Type-check**
 
 Run: `cd apps/server && npx tsc --noEmit`
 Expected: no new errors.
 
-- [ ] **Step 6: Verify error count dropped to 4 (only the boundaries violation left)**
+- [x] **Step 6: Verify error count dropped to 4 (only the boundaries violation left)**
 
 Run: `cd apps/server && npm run lint 2>&1 | tail -3`
 Expected: `✖ ... problems (1 errors, ... warnings)` — only the `chat.routes.ts` boundaries violation remains (Task 8).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/server/src/infra/db/stamp-baseline.ts
@@ -499,7 +503,7 @@ git commit -m "fix(lint): type pg query results, suppress no-console in CLI stam
 - Consumes: Task 7's reduced error set (down to 1)
 - Produces: 0 errors remaining — `npm run lint` exits 0 for errors
 
-- [ ] **Step 1: Confirm the violation and its architectural context**
+- [x] **Step 1: Confirm the violation and its architectural context**
 
 Run: `cd apps/server && grep -n "startRun" src/app/routes/chat.routes.ts src/infra/ai/run-metrics.ts | head -5`
 
@@ -507,7 +511,7 @@ Run: `cd apps/server && grep -n "startRun" src/app/routes/chat.routes.ts src/inf
 
 `run-metrics.ts`'s own file header says: *"Temporary home: P3 moves this into the `commit` node's run context"* — it is already documented as a known-temporary module slated for relocation in a future refactor phase. There is a separate, already-recorded backlog finding about this file's contract being duplicated across call sites (`docs/BACKLOG.md` Findings, "The run-metrics binding contract..."). Per this plan's Global Constraints, do not design a new port to fix this now — that decision belongs to whoever picks up the P3/run-metrics backlog item, not to a lint-glob fix.
 
-- [ ] **Step 2: Add a scoped, documented suppression**
+- [x] **Step 2: Add a scoped, documented suppression**
 
 In `apps/server/src/app/routes/chat.routes.ts`, change:
 
@@ -522,22 +526,22 @@ to:
 import { startRun } from '@infra/ai/run-metrics';
 ```
 
-- [ ] **Step 3: Verify this is the only remaining error**
+- [x] **Step 3: Verify this is the only remaining error**
 
 Run: `cd apps/server && npm run lint 2>&1 | tail -5`
 Expected: `✖ NNN problems (0 errors, ~395 warnings)` — exit code reflects errors only (eslint's default exit-on-error behavior means `npm run lint` should now exit 0, since only warnings remain).
 
-- [ ] **Step 4: Confirm exit code is 0**
+- [x] **Step 4: Confirm exit code is 0**
 
 Run: `cd apps/server && npm run lint; echo "exit: $?"`
 Expected: `exit: 0`
 
-- [ ] **Step 5: Run full test suite one more time**
+- [x] **Step 5: Run full test suite one more time**
 
 Run: `cd apps/server && npm test`
 Expected: same pass/fail state as the pre-Task-1 baseline — no behavior changed anywhere in this plan, only lint scope and suppressions.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/server/src/app/routes/chat.routes.ts
@@ -555,21 +559,21 @@ git commit -m "fix(lint): suppress boundaries violation on documented-temporary 
 - Consumes: Task 8's clean lint state (0 errors)
 - Produces: backlog reflects the promoted item is done; the plan itself is the durable record now
 
-- [ ] **Step 1: Delete the promoted Findings entry**
+- [x] **Step 1: Delete the promoted Findings entry**
 
 In `docs/BACKLOG.md`, delete the entry starting `- [ ] **\`npm run lint\` inspects ~5% of \`src/\`**:` (currently lines 44-53) — per the backlog skill's promotion rule, a promoted entry's truth now lives in this plan, not the backlog.
 
-- [ ] **Step 2: Confirm the separate `evals/` lint-scoping entry is untouched**
+- [x] **Step 2: Confirm the separate `evals/` lint-scoping entry is untouched**
 
 Run: `cd /Users/filko/WebstormProjects/fit_coach && grep -n "evals/ is invisible to lint" docs/BACKLOG.md`
 Expected: still present — that entry (currently lines ~79-89) covers `apps/server/evals/`, a distinct gap this plan does not address (it only fixes `src/**/*.ts` scoping). Do not delete or modify it.
 
-- [ ] **Step 3: Confirm no other backlog entry references the now-fixed 61-errors/650-warnings numbers as current state**
+- [x] **Step 3: Confirm no other backlog entry references the now-fixed 61-errors/650-warnings numbers as current state**
 
 Run: `cd /Users/filko/WebstormProjects/fit_coach && grep -n "61 errors\|650 warnings" docs/BACKLOG.md`
 Expected: no output (the only reference was the entry just deleted).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd /Users/filko/WebstormProjects/fit_coach
@@ -581,7 +585,23 @@ git commit -m "docs(backlog): promote lint-glob finding — fixed by plan/lint-g
 
 ## Final Verification
 
-- [ ] Run: `cd apps/server && npm run lint; echo "exit: $?"` → expect `exit: 0`
-- [ ] Run: `cd apps/server && npm test` → expect same pass/fail as session start
-- [ ] Run: `cd apps/server && npx tsc --noEmit` → expect no errors
-- [ ] Run: `cd apps/server && npm run lint 2>&1 | tail -3` → expect `0 errors`, warning count roughly 395 (down from 650, unchanged since Task 2)
+- [x] Run: `cd apps/server && npm run lint; echo "exit: $?"` → expect `exit: 0`
+- [x] Run: `cd apps/server && npm test` → expect same pass/fail as session start
+- [x] Run: `cd apps/server && npx tsc --noEmit` → expect no errors
+- [x] Run: `cd apps/server && npm run lint 2>&1 | tail -3` → expect `0 errors`, warning count roughly 395 (down from 650, unchanged since Task 2)
+
+## Review
+
+Verdict: **clean**. All four zones (R1 architecture, R2 duplication, R3 correctness, R4 documentation) returned no blocking findings.
+
+**Advisory findings** (not fixed on this branch; filed to `docs/BACKLOG.md`):
+
+1. `apps/server/src/app/routes/chat.routes.ts:8` (R1, ADR-0013 §8) — the app→infra suppression on the `run-metrics.ts` import is a pre-existing boundary violation newly made visible by this branch's glob fix, handled correctly (scoped, dated, cross-referenced to the run-metrics backlog finding) rather than architecturally unsound.
+2. `apps/server/src/infra/db/stamp-baseline.ts:43,51,60` (R2, DRY) — the `{ n: number }` pg-query row-shape generic is duplicated 3× in one file with no shared type alias; low value, not worth a dedicated task.
+3. `docs/ARCHITECTURE.md:169,184-188,199` (R4, gap) — its "enforced by ESLint" / "Violations fail lint" claims for the ports-index rule and import boundaries became true only as of this branch (lint previously covered 7 of 137 files); no durable doc records that transition.
+4. Plan `Status:` header (R4, gap) — flagged only because it still read `in progress` mid-review; resolved by this review's own `Status: done` transition below.
+
+**Meta findings** (about the review phase itself; filed to `docs/REVIEW_FINDINGS.md`, do not affect verdict):
+
+- R1: `docs/adr/0013-llm-core-target-architecture.md` names the `domain/**` → `@langchain/*` boundary explicitly but not the app→infra boundary that `chat.routes.ts` crosses — a named rule for that edge would give future R1 reviews something citable either way.
+- R3: this plan carries no `AC-####` references (it promotes a backlog finding, not a phase-spec task), so the "every AC has a test" check does not apply — noted as an expected non-finding, not a gap.
