@@ -1,6 +1,6 @@
 # Ports Layout Consistency Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/ports-layout-consistency
 - After: refactor-p0-eval-harness
 
