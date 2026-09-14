@@ -157,7 +157,13 @@ export default tseslint.config(
         'no-restricted-imports': ['error', {
           patterns: [
             { group: ['../**'], message: 'Use aliases instead of parent relative imports' },
-            { group: ['@main/**'], message: 'Do not import main from other layers' }
+            { group: ['@main/**'], message: 'Do not import main from other layers' },
+            {
+              group: ['@domain/*/ports/*', '**/domain/*/ports/*'],
+              message:
+                'Import ports through the directory index (@domain/<domain>/ports), not a file inside it — ' +
+                'ARCHITECTURE.md § Interface Organization Principles rule 4.',
+            },
           ]
         }],
       
