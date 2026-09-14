@@ -21,7 +21,7 @@ If any instruction here conflicts with the above docs, update this file to match
   is removed, not kept "for later".
 - DRY: no copy-paste, and no reinvention of what the repo already has. Search for an existing
   helper before adding one.
-- **Interface Organization**: Organize interfaces by functional areas in `domain/*/ports/` with modular files (repository.ports.ts, service.ports.ts, etc.). Keep files under 50 lines.
+- **Interface Organization**: ports live in `domain/*/ports/`, are named by contract (not by layer), and are imported only through the directory's `index.ts`. Size is a signal that a file may hold more than one contract and obliges review, not a hard limit. See `ARCHITECTURE.md` § Interface Organization Principles — the single source of this rule.
 
 ## Docs‑First Workflow (Checklist)
 1) Update `docs/API_SPEC.md` (routes, Zod‑like schemas, responses, security). If architecture changes, add/edit ADR under `docs/adr/*` and/or `ARCHITECTURE.md`.
@@ -172,7 +172,6 @@ code review. The division of roles and conflict rules are defined in
 - User domain tokens: `apps/server/src/domain/user/ports/` (modular structure)
   - Repository ports: `apps/server/src/domain/user/ports/repository.ports.ts`
   - Service ports: `apps/server/src/domain/user/ports/service.ports.ts`
-  - Prompt ports: `apps/server/src/domain/user/ports/prompt.ports.ts`
   - Convenience imports: `apps/server/src/domain/user/ports/index.ts`
 - Conversation context:
   - Token and port: `apps/server/src/domain/conversation/ports/conversation-context.ports.ts`
