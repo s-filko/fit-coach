@@ -71,11 +71,11 @@ Verification: `--baseline compare` (or JSON inspection) shows the new numbers; s
 - Modify: `docs/PROMPT_EVAL_FRAMEWORK.md` (durable spec — the exact edits are enumerated below, nothing else)
 
 **Steps — each corresponds to an executor finding; make the spec describe what IS (after Task 1), marking deferrals explicitly:**
-- [ ] §3 schema block: seeding is expressed via `state.messages` consumed by the harness's stubbed context service (now true after Task 1); remove `state.episodeSummaries` and nested `fixture.user.profile` (not in the implemented schema — flat user fields); note `tool_call`/`tool_result` roles are accepted but not seedable pre-P4.
-- [ ] §4.2: replace the `graph.updateState` seeding claim with the actual mechanism (stub `getMessagesForPrompt`); replace the `EVAL_MODEL` claim with "model comes from the app config; the baseline JSON pins what was used".
-- [ ] §4.1: mark the three unimplemented L0 checks (section presence, git-diff version discipline, message-catalog completeness) as deferred — cross-reference the existing backlog entries rather than promising them here.
-- [ ] §4.2 named checks: mark `no_redundant_search` and the structural checks (`outcome`, `budgetReport`, orphan ToolMessage) as not-yet-implemented deferrals.
-- [ ] §6: correct the baseline layout to the implemented `evals/baselines/<version>/<phase>.json` and amend "never written by a PR" with the bootstrap/re-freeze exception (recorded once, before first compare use).
+- [x] §3 schema block: seeding is expressed via `state.messages` consumed by the harness's stubbed context service (now true after Task 1); remove `state.episodeSummaries` and nested `fixture.user.profile` (not in the implemented schema — flat user fields); note `tool_call`/`tool_result` roles are accepted but not seedable pre-P4.
+- [x] §4.2: replace the `graph.updateState` seeding claim with the actual mechanism (stub `getMessagesForPrompt`); replace the `EVAL_MODEL` claim with "model comes from the app config; the baseline JSON pins what was used".
+- [x] §4.1: mark the three unimplemented L0 checks (section presence, git-diff version discipline, message-catalog completeness) as deferred — cross-reference the existing backlog entries rather than promising them here.
+- [x] §4.2 named checks: mark `no_redundant_search` and the structural checks (`outcome`, `budgetReport`, orphan ToolMessage) as not-yet-implemented deferrals.
+- [x] §6: correct the baseline layout to the implemented `evals/baselines/<version>/<phase>.json` and amend "never written by a PR" with the bootstrap/re-freeze exception (recorded once, before first compare use).
 - [ ] Commit: `docs(eval-framework): reconcile spec with implemented harness (findings A-E)`
 
 Verification: every edit maps 1:1 to a finding; no new promises added.

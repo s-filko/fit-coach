@@ -50,14 +50,13 @@ Case schema (`evals/schema/case.schema.ts`, Zod):
   id: 'CH-0007',                       // stable; referenced by baselines and PRs
   phase: 'chat',
   tags: ['transition', 'BUG-011'],
-  fixture: {                           // domain snapshot loaded into mocked repos
-    user: { languageCode: 'ru', timezone: 'Europe/Berlin', profile: {...} },
+  fixture: {                           // domain snapshot loaded into the stub world
+    user: { languageCode: 'ru', timezone: 'Europe/Berlin', age?, gender?, height?, weight?, fitnessLevel?, fitnessGoal?, registrationCompleted? },
     plan?: {...}, sessions?: [...], activeSession?: {...}, facts?: [...]
   },
   state: {                             // checkpoint seed: episode memory going in
     phase: 'chat', activeSessionId: null,
-    messages: [ {role:'human', text:'...'}, {role:'ai', text:'...'}, {role:'tool_call',...}, ... ],
-    episodeSummaries: [...]
+    messages: [ {role:'human', text:'...'}, {role:'ai', text:'...'}, ... ]
   },
   input: { text: 'Upper A давай' },    // the user turn under test
   expect: {
@@ -70,6 +69,8 @@ Case schema (`evals/schema/case.schema.ts`, Zod):
   provenance: { runId?: 'uuid', addedBy: 'owner', date: '2026-09-10' }
 }
 ```
+
+Seeding mechanism: `state.messages` is consumed by the harness's stubbed context service — `buildStubDeps` returns the mapped entries (`human → user`, `ai → assistant`) from `getMessagesForPrompt`, the same call every subgraph already uses for episode history. `tool_call`/`tool_result` roles are accepted by the schema but are **not seedable pre-P4**: the production context service stores user/assistant turns only, so those entries are skipped.
 
 Rules
 - BR-EVAL-001 A case is immutable once referenced by a baseline; fix by adding a new case and deprecating the old (`deprecated: true`).
@@ -84,13 +85,13 @@ Initial datasets to write in P0 (from existing material): `chat/transitions` (BU
 ## 4. Deterministic checks (L0, L1)
 
 ### 4.1 L0 — static
-- Render every current prompt module with three fixtures; assert required sections present, total estimated tokens ≤ `PhaseSpec.budget.system`.
-- Forbidden strings in rendered prompts: `undefined`, `null`, `[object Object]`, `NaN`.
-- Version discipline: if a `prompts/**` file changed in the diff, its `version` string changed too (git diff based).
-- Message catalog completeness: every catalog key exists in `en` and `ru`.
+- Render every current prompt module with three fixtures; assert a non-empty render and total estimated tokens ≤ the per-phase budget (`PHASE_TOKEN_BUDGET` in `evals/levels/l0.ts` until PhaseSpec lands). Section presence is **deferred** — it needs a section contract; see the L0 deferred-checks entry in `docs/BACKLOG.md`.
+- Forbidden strings in rendered prompts: `undefined`, `null`, `[object Object]`, `NaN` (with an exact-phrase allowlist stopgap; see `FORBIDDEN_STRING_ALLOWLIST`).
+- Version discipline: if a `prompts/**` file changed in the diff, its `version` string changed too (git diff based) — **deferred**, needs prompt version identifiers; see `docs/BACKLOG.md`.
+- Message catalog completeness: every catalog key exists in `en` and `ru` — **deferred**; see `docs/BACKLOG.md`.
 
 ### 4.2 L1 — behavioural, single turn
-Harness: build the real compiled graph with `MemorySaver`, mocked repositories seeded from `fixture`, the real `LlmGateway` (coach model pinned by `EVAL_MODEL`, temperature as in prod), tools with **recording** side effects (no DB). Seed state via `graph.updateState`. Run `input`. Collect: tool calls (name, args, outcome kind), committed transition, final text, `draft`, `budgetReport`.
+Harness: build the real compiled graph with `MemorySaver`, a stub world of services/repos seeded from `fixture` (`evals/lib/build-stub-deps.ts`), the real model from the app config (the baseline JSON pins what was used), temperature as in prod, tools with **recording** side effects (no DB). Episode memory is seeded through the stub context service: the case's `state.messages` are returned by `getMessagesForPrompt`. Run `input`. Collect: tool calls (name, args, outcome kind), committed transition, final text, `draft`, `budgetReport`.
 
 Assertions (each is a named check reported separately):
 - `tools.must` / `tools.mustNot` / `tools.args` (subset match on args; ids validated against fixture catalog).
@@ -98,8 +99,8 @@ Assertions (each is a named check reported separately):
 - `text.mustNotMatch` — the truthfulness gate: e.g. training cases with no `log_set` outcome assert no `(✅|logged|saved|записал|сохранил)`; chat asserts no set confirmations at all; any phase asserts no raw UUIDs and no JSON braces in user text.
 - `text.language` — detect script/lang with a small heuristic (Cyrillic ratio) or a tiny classifier; `text.format` — Telegram HTML only: no `**`, no `_x_`, only allowed tags; `maxChars`.
 - `draft` invariants (after P6): all exercise IDs exist, sets/reps within catalog-type constraints, no exercise conflicting with a `physical_constraint` fact.
-- `no_redundant_search`: same `search_exercises` args not repeated within the case's state + run.
-- Structural: run `outcome === 'ok'`, `budgetReport.history ≤ budget.history`, no orphan tool messages.
+- `no_redundant_search`: same `search_exercises` args not repeated within the case's state + run — **not yet implemented** (deferred).
+- Structural: run `outcome === 'ok'`, `budgetReport.history ≤ budget.history`, no orphan tool messages — **not yet implemented** (deferred).
 
 Sampling: each case runs `n` times (default 3; `n=5` for gating datasets); a case passes if ≥ ⌈n/2⌉ samples pass; the report shows per-check pass rates and the flakiest cases.
 
@@ -165,7 +166,7 @@ Scores: 5 = fully meets anchor; 3 = partially; 1 = violates. Criteria marked **(
 ## 6. Versioning — how promptVersions tie logs → evals → changes
 
 - Every run stores `prompt_versions` (ADR-0013 §8). Every eval report stores the same map plus `coachModel`, `judgeModel`, `judgeVersion`, `datasetHash`, `n`, and git SHA.
-- Baselines: `evals/baselines/<phase>/<promptVersion>.json` — per-check and per-criterion aggregates for the current `dev` prompts. A baseline is (re)written only by the nightly job on `dev` after a merge that changed prompts, never by a PR.
+- Baselines: `evals/baselines/<version>/<phase>.json` — per-check and per-criterion aggregates for the current `dev` prompts. A baseline is (re)written only by the nightly job on `dev` after a merge that changed prompts, never by a PR — with one recorded exception: the bootstrap/re-freeze of v0 (2026-09-15, on the seeded harness), performed before v0's first `--baseline compare` use and recorded in `evals/baselines/v0/README.md`.
 - Reproducing a production complaint: find `run_id` in logs → `conversation_runs` gives `prompt_versions` and the input turns → `evals:case-from-run <runId>` creates a case skeleton with the exact state/fixture → add expectations → the case joins the dataset with `provenance.runId`.
 - Rollback of a prompt = re-pointing `phases/<phase>/index.ts` to the previous version file; the report for that version already exists.
 
