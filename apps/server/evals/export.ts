@@ -9,7 +9,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { fetchRunsSince } from './lib/export-query';
-import { pseudonymise, redactText, redactUser } from './lib/redact';
+import { buildDraftCase } from './lib/draft-case';
 
 function argValue(flag: string, fallback: string): string {
   const index = process.argv.indexOf(flag);
@@ -45,36 +45,12 @@ async function main(): Promise<void> {
       continue;
     }
     const user = usersById.get(run.userId) ?? {};
-    const firstName = (user['firstName'] as string | null) ?? null;
-
-    const humanTurns = run.turns.filter(t => t.kind === 'human');
-    const input = humanTurns[humanTurns.length - 1];
-    if (!input) {
+    const draft = buildDraftCase(run, user);
+    if (!draft) {
       skippedEmpty += 1;
       continue;
     }
-
-    lines.push(
-      JSON.stringify({
-        id: `DRAFT-${run.runId?.slice(0, 8) ?? 'unknown'}`,
-        phase: run.phase,
-        tags: ['exported', 'needs-review'],
-        fixture: { user: redactUser(user) },
-        state: {
-          phase: run.phase,
-          messages: run.turns
-            .slice(0, -1)
-            .map(t => ({ role: t.kind === 'human' ? 'human' : 'ai', text: redactText(t.content, firstName) })),
-        },
-        input: { text: redactText(input.content, firstName) },
-        expect: {},
-        provenance: {
-          runId: run.runId ?? undefined,
-          addedBy: pseudonymise(run.userId),
-          date: run.createdAt.toISOString().slice(0, 10),
-        },
-      }),
-    );
+    lines.push(JSON.stringify(draft));
   }
 
   const outDir = join(import.meta.dirname, 'exports');

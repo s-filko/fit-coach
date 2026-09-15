@@ -31,6 +31,10 @@ describe('redactText', () => {
     expect(redactText('мой номер +49 170 1234567', null)).toContain('[PHONE]');
   });
 
+  it('removes raw UUIDs from text', () => {
+    expect(redactText('сессия 3f2a1b8c-9d4e-4f5a-8b6c-1d2e3f4a5b6c открыта', null)).toBe('сессия [ID] открыта');
+  });
+
   it('keeps training numbers intact', () => {
     expect(redactText('жим 80 на 8', null)).toBe('жим 80 на 8');
   });
