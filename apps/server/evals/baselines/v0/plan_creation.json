@@ -2,7 +2,7 @@
   "version": "v0",
   "model": "glm-5.3",
   "samples": 3,
-  "recordedAt": "2026-09-14T14:36:31.637Z",
+  "recordedAt": "2026-09-15T09:46:48.144Z",
   "entries": [
     {
       "case": "PC-0001",
@@ -103,8 +103,8 @@
     {
       "case": "PC-0004",
       "check": "tools.must:search_exercises",
-      "passed": false,
-      "detail": "0/3 samples passed"
+      "passed": true,
+      "detail": "3/3 samples passed"
     },
     {
       "case": "PC-0004",
@@ -176,7 +176,7 @@
       "case": "PC-0006",
       "check": "text.format",
       "passed": true,
-      "detail": "3/3 samples passed"
+      "detail": "2/3 samples passed"
     },
     {
       "case": "PC-0006",
@@ -236,7 +236,7 @@
       "case": "PC-0008",
       "check": "text.format",
       "passed": true,
-      "detail": "2/3 samples passed"
+      "detail": "3/3 samples passed"
     },
     {
       "case": "PC-0008",

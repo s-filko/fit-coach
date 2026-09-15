@@ -49,9 +49,19 @@ Task 1 implements AC: seeding correctness. Verification: the two unit tests abov
 - Modify: the baseline commit-note/README documenting the re-freeze: harness commit of this branch, direct-Z.AI route, 3 samples, ⌈n/2⌉, and the immutability exception (first freeze never used by a compare)
 
 **Steps:**
-- [ ] `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --baseline write` (exact command per the runner's implemented flags; if write targets a different path than `baselines/v0/`, adjust so v0 is overwritten, not duplicated).
-- [ ] Record the before/after delta of the three previously-failing cases (PC-0004, PC-0007, SP-0005) and any newly appearing failures in the plan file under this task — that diff is the point of the whole fix.
+- [x] `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --baseline write` (exact command per the runner's implemented flags; if write targets a different path than `baselines/v0/`, adjust so v0 is overwritten, not duplicated). Executed as five per-phase runs (`--phase <phase> --baseline write`) — the write path targets `baselines/v0/<phase>.json` directly, so v0 was overwritten in place; per-phase runs bound memory and checkpoint each file.
+- [x] Record the before/after delta of the three previously-failing cases (PC-0004, PC-0007, SP-0005) and any newly appearing failures in the plan file under this task — that diff is the point of the whole fix.
 - [ ] Commit: `feat(evals): re-freeze v0 baseline on the seeded harness`
+
+**Before/after delta (2026-09-15, seeded harness commit `2049f0f3`, direct Z.AI `glm-5.3`, 3 samples, ⌈n/2⌉ gate):**
+
+| Check | Before (blind harness) | After (seeded harness) |
+|---|---|---|
+| PC-0004 `tools.must:search_exercises` | FAIL 0/3 | **PASS 3/3** |
+| PC-0007 `tools.must:save_workout_plan` | FAIL 0/3 | FAIL 0/3 (unchanged) |
+| SP-0005 `tools.must:start_training_session` | FAIL 0/3 | FAIL **1/3** (improved, still below the ⌈3/2⌉=2 gate) |
+
+Phase summaries after re-freeze: registration 52/52, chat 60/60, plan_creation 50/51, session_planning 51/52, training 52/52. **No newly appearing failures** — the only failing checks are the two residual ones above, both genuine prompt-behaviour gaps the model still exhibits with its episode memory present.
 
 Verification: `--baseline compare` (or JSON inspection) shows the new numbers; summary lines recorded in this plan file.
 
