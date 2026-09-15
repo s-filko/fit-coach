@@ -12,10 +12,9 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-15 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-— none —
+- `refactor-p1-legacy-llm-retirement.md` — Refactor P1 — Legacy LLM Path Retirement Implementation Plan (branch: `plan/refactor-p1-legacy-llm-retirement`, last commit 2026-09-16)
 
 **Planned**
-- `refactor-p1-legacy-llm-retirement.md` — Refactor P1 — Legacy LLM Path Retirement Implementation Plan
 - `refactor-p2-prompt-modules.md` — Refactor P2 — Prompt Modules Implementation Plan
 
 **Done**

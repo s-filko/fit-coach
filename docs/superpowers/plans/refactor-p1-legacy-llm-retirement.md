@@ -1,6 +1,6 @@
 # Refactor P1 — Legacy LLM Path Retirement Implementation Plan
 
-- Status: planned
+- Status: in progress
 - Branch: plan/refactor-p1-legacy-llm-retirement
 - After: refactor-p0-transcript-export
 
