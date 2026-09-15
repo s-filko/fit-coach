@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { type LlmProfileOverride, parseLlmProfiles } from './llm-profiles';
+
 /**
  * Environment variables schema (config layer).
  *
@@ -41,7 +43,7 @@ const EnvSchema = z.object({
     .pipe(z.number().min(0).max(2)),
 });
 
-export type Env = z.infer<typeof EnvSchema> & { PORT: number };
+export type Env = z.infer<typeof EnvSchema> & { PORT: number; LLM_PROFILES: Record<string, LlmProfileOverride> };
 
 export function loadConfig(): Env {
   const parsed = EnvSchema.safeParse(process.env);
@@ -52,6 +54,6 @@ export function loadConfig(): Env {
         'Please ensure all required environment variables are set in your .env file.',
     );
   }
-  const data = parsed.data as Env;
-  return { ...data, PORT: data.PORT } as Env;
+  const data = parsed.data as Omit<Env, 'LLM_PROFILES'>;
+  return { ...data, PORT: data.PORT, LLM_PROFILES: parseLlmProfiles(process.env) } as Env;
 }
