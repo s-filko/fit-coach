@@ -35,7 +35,7 @@ curl https://fitcoach-dev.filko.dev/health   # → 200
 
 ## LLM
 
-- **Dev (since 2026-09-14): direct Z.AI** `https://api.z.ai/api/coding/paas/v4/` with the **Z.AI subscription token** (the same subscription that powers Claude Code), model `glm-5.3`. Zero per-token cost; quota shared with Claude Code sessions; token rotates on subscription renewal.
+- **Dev (since 2026-09-14): direct Z.AI** `https://api.z.ai/api/coding/paas/v4/` with the **Z.AI subscription token** (the same subscription that powers Claude Code), model `glm-5.3`. Zero per-token cost; quota shared with Claude Code sessions.
 - **Z.AI subscription is unusable through OpenRouter** (verified 2026-09-13): it only authorizes the coding endpoint, OpenRouter BYOK calls the standard one — GLM via OpenRouter is billed to credits at list price (`is_byok: false`). Keep this in mind before switching back.
 - **Prod: OpenRouter** (`https://openrouter.ai/api/v1/`) with Google AI Studio PAYG BYOK — that BYOK **does** work (`is_byok: true`), model `google/gemini-3-flash-preview`.
 - Check per-request BYOK via `usage.is_byok` in a completion response, not via `curl /key` alone (byok_usage lags and missed the 09-09 mis-annotation).
