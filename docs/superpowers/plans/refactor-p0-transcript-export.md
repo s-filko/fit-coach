@@ -49,7 +49,7 @@ export function redactUser(user: Record<string, unknown>): RedactedUser;
 
 Task 3's exporter calls all three.
 
-- [ ] **Step 1: Write the failing redaction test**
+- [x] **Step 1: Write the failing redaction test**
 
 Create `apps/server/evals/lib/__tests__/redact.unit.test.ts`:
 
@@ -115,12 +115,12 @@ describe('redactUser', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- redact`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement redaction**
+- [x] **Step 3: Implement redaction**
 
 Create `apps/server/evals/lib/redact.ts`:
 
@@ -184,12 +184,12 @@ export function redactUser(user: Record<string, unknown>): RedactedUser {
 
 The allowlist is the important choice: when a later phase adds a column to `users`, it is excluded until someone deliberately adds it here.
 
-- [ ] **Step 4: Run the test to confirm it passes**
+- [x] **Step 4: Run the test to confirm it passes**
 
 Run: `npm run test:unit -- redact`
 Expected: PASS, all ten cases. If the phone pattern also eats `жим 80 на 8`, tighten it until both that case and the phone case pass — training numbers surviving is not optional, they are the content.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add evals/lib/redact.ts evals/lib/__tests__/redact.unit.test.ts
@@ -224,7 +224,7 @@ export async function fetchRunsSince(since: Date, limit: number): Promise<Export
 
 Task 3 turns these into draft cases.
 
-- [ ] **Step 1: Write the failing query test**
+- [x] **Step 1: Write the failing query test**
 
 The test mocks Drizzle so it stays offline. Create `apps/server/evals/lib/__tests__/export-query.unit.test.ts`:
 
@@ -271,12 +271,12 @@ describe('fetchRunsSince', () => {
 
 If mocking Drizzle's builder chain proves brittle, replace this unit test with a `RUN_DB_TESTS=1` integration test that seeds two turns and one run against the local database — the grouping logic is what must be covered, by whichever route is less fragile.
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- export-query`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement the query**
+- [x] **Step 3: Implement the query**
 
 Create `apps/server/evals/lib/export-query.ts`:
 
@@ -348,12 +348,12 @@ Turns written before the run-log migration have `run_id = NULL` and are excluded
 
 > **Post-execution correction (2026-09-15, orchestrator ruling):** the paragraph above is superseded by measured dev data — all 742 turns on dev (runs 2026-09-12..09-14) carry `run_id = NULL`, because production `appendTurn` never threads `runId` at all (filed separately as BUG-016; fixing `src/` is out of scope here). A `run_id`-only join can never match real data, so `fetchRunsSince` gained a fallback join: for runs with no `run_id`-linked turns, select the user's turns with `created_at` inside the run's own time window — `[run.createdAt − run.latencyMs, run.createdAt]`, no invented precision. Explicit `run_id` links take precedence when present. Both paths are unit-tested in `export-query.unit.test.ts`.
 
-- [ ] **Step 4: Run the test to confirm it passes**
+- [x] **Step 4: Run the test to confirm it passes**
 
 Run: `npm run test:unit -- export-query`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add evals/lib/export-query.ts evals/lib/__tests__/export-query.unit.test.ts
@@ -375,7 +375,7 @@ The CLI that joins the two previous tasks and emits draft cases.
 - Consumes: `fetchRunsSince`, `pseudonymise`, `redactText`, `redactUser`.
 - Produces: `evals/exports/<date>.jsonl`, one draft case per run.
 
-- [ ] **Step 1: Add the gitignore first**
+- [x] **Step 1: Add the gitignore first**
 
 Create `apps/server/evals/exports/.gitignore`:
 
@@ -386,7 +386,7 @@ Create `apps/server/evals/exports/.gitignore`:
 
 Exported material is redacted but still derived from real users; it stays out of git regardless.
 
-- [ ] **Step 2: Write the script**
+- [x] **Step 2: Write the script**
 
 Create `apps/server/evals/export.ts`:
 
@@ -484,7 +484,7 @@ void main();
 
 Note `state.messages` maps every non-human turn to `ai` — P0's `kind` column does not yet distinguish tool calls from assistant text in `conversation_turns`. That is a known approximation; P3's richer turn kinds improve it.
 
-- [ ] **Step 3: Add the npm script**
+- [x] **Step 3: Add the npm script**
 
 In `apps/server/package.json`:
 
@@ -492,7 +492,7 @@ In `apps/server/package.json`:
     "evals:export": "tsx --env-file=.env evals/export.ts",
 ```
 
-- [ ] **Step 4: Check the argument handling without a database**
+- [x] **Step 4: Check the argument handling without a database**
 
 Run: `npm run evals:export`
 Expected: the usage line and exit 2 — it must fail on a missing `--since` before it ever opens a connection.
@@ -500,7 +500,7 @@ Expected: the usage line and exit 2 — it must fail on a missing `--since` befo
 Run: `npm run evals:export -- --since not-a-date`
 Expected: `Not a date: not-a-date` and exit 2.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add evals/export.ts evals/exports/.gitignore package.json
@@ -520,12 +520,12 @@ Redaction that has only ever been tested against invented strings is not yet tru
 - Consumes: the deployed run log on dev (`refactor-p0-run-log` Task 6).
 - Produces: the evidence that the export is safe to use.
 
-- [ ] **Step 1: Confirm dev has run rows to export**
+- [x] **Step 1: Confirm dev has run rows to export**
 
 Run: `ssh filko.dev "docker exec fitcoach-dev-db psql -U fitcoach_dev -d fitcoach_dev -c 'SELECT count(*) FROM conversation_runs;'"`
 Expected: a non-zero count. If it is zero, send a few messages to `@MyFitAiCoachDevBot` first — there is nothing to verify against otherwise.
 
-- [ ] **Step 2: Export from dev**
+- [x] **Step 2: Export from dev**
 
 The script runs locally against the dev database. Either point `.env`'s `DB_*` at dev for one run, or run it on the VPS inside the server container — whichever matches how other one-off scripts are run in this repo. Then:
 
@@ -544,11 +544,13 @@ Open the produced file and read it. Check every one of these:
 Run: `grep -ciE "[[:alpha:]]+@[[:alpha:]]+\.|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}" evals/exports/*.jsonl`
 Expected: `0`. Any hit is a redaction defect — fix `redact.ts`, add the missing case to its unit test, and re-export.
 
-- [ ] **Step 4: Record the counts**
+- [x] **Step 4: Record the counts**
 
 Write into this plan under this task: how many runs were exported, how many were skipped, and the result of the Step 3 grep.
 
-- [ ] **Step 5: Curate one real case end to end**
+> **Verification record (2026-09-15):** live export run by the orchestrator against the dev database: **16 runs exported, 0 skipped**; every turn arrived via the fallback window join (all `run_id` NULL — BUG-016). The Step 3 grep found **one defect**: `provenance.runId` carried the raw run UUID on every record. Fix (orchestrator ruling): `runId` dropped from the export output entirely, a UUID scrub added to `redactText`, and a unit test added asserting no raw UUID survives anywhere in a draft record; the post-fix grep is expected to return 0, confirmation pending the orchestrator's re-export. Curation (Step 5) surfaced two further Step 3 gate violations, both fixed with unit tests: `input.text` held the assistant reply instead of the last human turn (`kind` sits at its column default `'human'` on all production rows — same root-cause family as BUG-016; selection now keys on `role = 'user'`), and a surname survived beside a redacted first name (`redactText` now also takes `lastName`). First curated case: `CH-0011` in `evals/datasets/chat/transitions.jsonl`, from draft `DRAFT-0cafd868` (2026-09-12), `mustNot: request_transition`.
+
+- [x] **Step 5: Curate one real case end to end**
 
 Take one draft record, add an `expect` block to it by hand, move it into the appropriate dataset with a proper id and `"deprecated": false`, and validate:
 
@@ -557,7 +559,7 @@ Expected: the count including the new case.
 
 **Do not** regenerate the `v0` baseline to include it. A baseline is frozen; a case added after it simply has no baseline entry, and `compareToBaseline` reports it under `added`. That is the designed behaviour.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add docs/superpowers/plans/refactor-p0-transcript-export.md evals/datasets/
