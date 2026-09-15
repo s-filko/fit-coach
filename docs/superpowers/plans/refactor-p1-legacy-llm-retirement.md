@@ -55,7 +55,7 @@ The master plan and ADR-0013 §12 mark "nobody uses them in prod" as an [ASSUMPT
 - Deterministic: request counts for `POST /api/app/plan` and `POST /api/app/session/*/recommend` on prod over the last 30 days, from server logs.
 - Manual observation: the webapp's `PlanningView` auto-calls the recommend endpoint when a session has no plan (`apps/webapp/src/features/session/PlanningView.tsx:37-41`) and re-fires after each failure — fixed by Task 6 of this plan, not deferred.
 
-- [ ] **Step 1: Count prod requests in the server's own request log (pino, 30 days)**
+- [x] **Step 1: Count prod requests in the server's own request log (pino, 30 days)**
 
 Run from your machine:
 
@@ -65,7 +65,7 @@ ssh filko.dev "docker logs fitcoach-prod-server --since 720h 2>&1 | grep -E '\"m
 
 Expected: a number. `0` means no traffic in the retention window. If the container was recreated less recently than 30 days (`docker inspect -f '{{.State.StartedAt}}' fitcoach-prod-server`), say so in the record — the window is then shorter than 30 days.
 
-- [ ] **Step 2: Cross-check the reverse proxy access log**
+- [x] **Step 2: Cross-check the reverse proxy access log**
 
 Nginx Proxy Manager on the VPS keeps per-host access logs in its data volume. Locate and count:
 
@@ -81,7 +81,7 @@ ssh filko.dev "zcat -f /srv/docker/nginx-proxy-manager/data/logs/proxy-host-N_ac
 
 If the NPM container or path differs, adapt the path; record what was actually inspected.
 
-- [ ] **Step 3: Record the result in this plan**
+- [x] **Step 3: Record the result in this plan**
 
 Fill in:
 
@@ -97,11 +97,11 @@ Fill in:
 - Ruling: proceed | STOP (traffic found → surfaced to owner on <date>)
 ```
 
-- [ ] **Step 4: Gate**
+- [x] **Step 4: Gate**
 
 If any count is greater than zero: stop, set `STATE.md` *Blocked / waiting on owner* with the numbers, do not continue to Task 2. If all counts are zero: continue.
 
-- [ ] **Step 5: Commit the record**
+- [x] **Step 5: Commit the record**
 
 ```bash
 git add docs/superpowers/plans/refactor-p1-legacy-llm-retirement.md
@@ -140,7 +140,7 @@ export function resetModelCacheForTests(): void;
 
 Task 3's gateway calls `getModel(opts.profile)`.
 
-- [ ] **Step 1: Write the failing profile-parser test**
+- [x] **Step 1: Write the failing profile-parser test**
 
 Create `apps/server/src/config/__tests__/llm-profiles.unit.test.ts`:
 
@@ -175,12 +175,12 @@ describe('parseLlmProfiles (AC-1314 — optional per-profile overrides)', () => 
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- llm-profiles`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement the parser**
+- [x] **Step 3: Implement the parser**
 
 Create `apps/server/src/config/llm-profiles.ts`:
 
@@ -228,12 +228,12 @@ export function parseLlmProfiles(env: NodeJS.ProcessEnv): Record<string, LlmProf
 }
 ```
 
-- [ ] **Step 4: Run the parser test**
+- [x] **Step 4: Run the parser test**
 
 Run: `npm run test:unit -- llm-profiles`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Expose profiles from `loadConfig()`**
+- [x] **Step 5: Expose profiles from `loadConfig()`**
 
 In `apps/server/src/config/index.ts`:
 
@@ -255,7 +255,7 @@ export function loadConfig(): Env {
 Run: `npm run type-check`
 Expected: clean.
 
-- [ ] **Step 6: Write the failing model-factory test (AC-1314)**
+- [x] **Step 6: Write the failing model-factory test (AC-1314)**
 
 Create `apps/server/src/infra/ai/__tests__/model.factory.unit.test.ts`:
 
@@ -295,12 +295,12 @@ describe('getModel(profile) (AC-1314 — no LLM_PROFILE_* means identical to def
 });
 ```
 
-- [ ] **Step 7: Run it to confirm it fails**
+- [x] **Step 7: Run it to confirm it fails**
 
 Run: `npm run test:unit -- model.factory`
 Expected: FAIL — `resetModelCacheForTests` is not exported / `getModel` ignores its argument.
 
-- [ ] **Step 8: Implement profiles in the factory**
+- [x] **Step 8: Implement profiles in the factory**
 
 Replace the body of `apps/server/src/infra/ai/model.factory.ts`:
 
@@ -345,12 +345,12 @@ export function resetModelCacheForTests(): void {
 }
 ```
 
-- [ ] **Step 9: Run the factory test and the whole unit suite**
+- [x] **Step 9: Run the factory test and the whole unit suite**
 
 Run: `npm run test:unit -- model.factory` then `npm run test:unit`
 Expected: PASS; no other test changes behaviour (every existing caller uses `getModel()` with no argument).
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/config/llm-profiles.ts src/config/__tests__/llm-profiles.unit.test.ts src/config/index.ts src/infra/ai/model.factory.ts src/infra/ai/__tests__/model.factory.unit.test.ts
