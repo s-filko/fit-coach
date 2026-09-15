@@ -107,7 +107,7 @@ Training session management enables users to:
 ## API Mapping
 
 - **POST /api/chat** → All training interactions (no separate endpoints)
-  - User: "What should I do today?" → AI → TrainingService.getNextSessionRecommendation()
+  - User: "What should I do today?" → AI → session_planning phase [BR-TRAINING-003; the mini-app REST endpoint was retired 2026-09, ADR-0013 OQ-1]
   - User: "Let's start" → AI → TrainingService.startSession()
   - User: "Did 10 reps with 50kg" → AI → TrainingService.logSet()
   - User: "Finished" → AI → TrainingService.completeSession()

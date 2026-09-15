@@ -41,18 +41,20 @@ Rules:
 
 ## Findings
 
-- [ ] **Decompose `ITrainingService` (19 methods) by role**: rule-3 review (ARCHITECTURE.md,
+- [ ] **Decompose `ITrainingService` (16 methods) by role**: rule-3 review (ARCHITECTURE.md,
   recorded as a standing exception) found one contract serving two different consumers —
   HTTP routes (`plan.routes.ts`, `session.routes.ts`) and LLM tools
   (`infra/ai/graph/tools/*`) — with correction commands (`deleteLastSets`, `updateLastSet`)
   used only by the latter. Natural split: planning / session lifecycle / execution-and-
-  correction. Touches the 680-line `training.service.ts` (8 constructor dependencies,
-  including the `LLMService` P1 retires) plus DI registration and every consumer, so it needs
-  its own plan; sequence it with P1. Source: close-out-review R1 + rule-3 review (2026-09-14).
-- [ ] **Three unused `ITrainingService` methods**: `getNextSessionRecommendation`,
-  `addExerciseToSession` and `logSet` have zero call sites in `apps/server` — the latter two
-  are superseded by `logSetWithContext` (11 call sites) and `ensureCurrentExercise` (9).
-  Deleting them removes ~29 lines of contract plus their implementations. **Before deleting,
+  correction. Touches the `training.service.ts` (7 constructor dependencies; the four legacy
+  LLM methods and the `LLMService` dependency were deleted by refactor P1, 2026-09) plus DI
+  registration and every consumer, so it needs its own plan; sequence it with P1.
+  Source: close-out-review R1 + rule-3 review (2026-09-14); counts reconciled 2026-09-16.
+- [ ] **Two unused `ITrainingService` methods**: `addExerciseToSession` and `logSet` have
+  zero call sites in `apps/server` — both are superseded by `logSetWithContext` (11 call
+  sites) and `ensureCurrentExercise` (9). (A third, `getNextSessionRecommendation`, was
+  deleted by refactor P1, 2026-09.) Deleting them removes their contract lines plus their
+  implementations. **Before deleting,
   check `apps/webapp` and `apps/bot`** — the measurement covered `apps/server` only. Kept out
   of `ports-layout-consistency`, whose Global Constraints forbid behavioural change. Source:
   rule-3 review (2026-09-14).

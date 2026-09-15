@@ -168,7 +168,7 @@ code review. The division of roles and conflict rules are defined in
 
 ### Tokens and Ports (examples)
 - AI:
-  - LLM service token and port: `apps/server/src/domain/ai/ports.ts:1`
+  - LLM gateway token and port: `apps/server/src/domain/ai/ports/llm.gateway.ports.ts`
 - User domain tokens: `apps/server/src/domain/user/ports/` (modular structure)
   - Repository ports: `apps/server/src/domain/user/ports/repository.ports.ts`
   - Service ports: `apps/server/src/domain/user/ports/service.ports.ts`
