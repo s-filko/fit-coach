@@ -12,7 +12,7 @@ jest.mock('@infra/ai/model.factory', () => {
   const fallback = new MockAIMessage('Мок-ответ тренера');
   const invoke = jest.fn().mockImplementation(async () => (queue.length ? queue.shift() : fallback));
   const model = { invoke, bindTools: () => ({ invoke }) };
-  return { getModel: () => model, __mockQueue: queue };
+  return { getModel: () => model, __mockQueue: queue, __mockInvoke: invoke };
 });
 
 const testCase: EvalCase = {
@@ -41,6 +41,37 @@ describe('runCase', () => {
     const observation = await runCase(testCase);
     expect(observation.toolCalls).toEqual([]);
     expect(observation.transition).toBeNull();
+  });
+
+  it('passes seeded episode turns to the model before the current user message', async () => {
+    const { __mockInvoke: invoke } = modelFactory as unknown as { __mockInvoke: jest.Mock };
+    const seededCase: EvalCase = {
+      ...testCase,
+      id: 'CH-SEED',
+      state: {
+        phase: 'chat',
+        activeSessionId: null,
+        messages: [
+          { role: 'human', text: 'сделал 80 на 8' },
+          { role: 'ai', text: 'Принято!' },
+        ],
+      },
+    };
+
+    invoke.mockClear();
+    const observation = await runCase(seededCase);
+
+    expect(observation.threw).toBeNull();
+    expect(invoke).toHaveBeenCalled();
+    // First model call = the agent node's llmMessages: [System, ...seeded history, HumanMessage(userMessage)]
+    const llmMessages = invoke.mock.calls[0][0] as Array<{ content: unknown }>;
+    const texts = llmMessages.map(m => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)));
+    const seeded = texts.findIndex(t => t.includes('сделал 80 на 8'));
+    const accepted = texts.findIndex(t => t.includes('Принято!'));
+    const current = texts.findIndex(t => t.includes('привет'));
+    expect(seeded).toBeGreaterThanOrEqual(0);
+    expect(accepted).toBeGreaterThan(seeded);
+    expect(current).toBeGreaterThan(accepted);
   });
 
   it('reports a non-null transition from the recorded run row when the model calls request_transition', async () => {
