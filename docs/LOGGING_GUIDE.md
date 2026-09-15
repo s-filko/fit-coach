@@ -311,8 +311,10 @@ INFO  reqId=req-42  request completed                 statusCode=200 responseTim
 
 The graph path's per-run `info` event is "Conversation run recorded" (persist node) —
 it carries runId, phase, model, promptVersions, tokensIn/Out, latencyMs, llmCalls.
-"LLM call completed" appears only on the legacy `llm.service.ts` path; LLM request/
-response content itself stays at `debug` (BUG-003 replay behaviour).
+The legacy `llm.service.ts` path (and its "LLM call completed" event) was deleted in
+refactor P1 (2026-09); non-graph LLM calls now go through `infra/ai/llm.gateway.ts`,
+which emits an `LLM gateway call` `info` event (profile, runId/jobId, latencyMs, kind).
+LLM request/response content itself stays at `debug` (BUG-003 replay behaviour).
 
 ---
 
