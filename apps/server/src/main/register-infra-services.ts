@@ -49,11 +49,6 @@ export async function registerInfraServices(container: Container = getGlobalCont
   container.register(USER_REPOSITORY_TOKEN, new DrizzleUserRepository());
   container.registerFactory(USER_SERVICE_TOKEN, c => new UserService(c.get(USER_REPOSITORY_TOKEN)));
 
-  // TODO: remove LLMService — the legacy path, retired by refactor P1 (deleted in Task 5)
-  const { LLMService } = await import('@infra/ai/llm.service');
-  const { LLM_SERVICE_TOKEN } = await import('@domain/ai/ports');
-  container.register(LLM_SERVICE_TOKEN, new LLMService());
-
   const { OpenAiLlmGateway } = await import('@infra/ai/llm.gateway');
   const { LLM_GATEWAY_TOKEN } = await import('@domain/ai/ports');
   container.register(LLM_GATEWAY_TOKEN, new OpenAiLlmGateway());

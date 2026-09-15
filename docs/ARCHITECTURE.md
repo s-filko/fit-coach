@@ -42,7 +42,9 @@ apps/server/src/
         user.service.ts        # User CRUD operations
         registration.validation.ts # Zod validators for registration fields (reused in tools)
     ai/
-      ports.ts                 # ILLMService interface (TODO: remove in refactor P1)
+      ports/
+        llm.gateway.ports.ts   # LlmGateway (chat, structured) — ADR-0013 §7; the only LLM port
+        index.ts
       types.ts                 # ChatMsg (temporary home; retired in refactor P1/P4 per ADR-0013)
     conversation/
       graph/
@@ -60,8 +62,6 @@ apps/server/src/
         workout-session.ports.ts   # Session / session-exercise / session-set repositories
         training-service.ports.ts  # ITrainingService + result types (standing exception, rule 3)
       services/
-        prompts/
-          session-recommendation.prompt.ts   # Next-session recommendation prompt (survivor of the P0 prompt deletion; LLMService-only path)
       types.ts                 # Training DTOs (SessionSet.setData inferred from set-data.types.ts Zod)
       set-data.types.ts        # Zod schemas for set_data — single source of truth for the SetData union
 
