@@ -12,7 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-15 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `refactor-p0-eval-baseline.md` — Refactor P0 — Remaining Datasets and v0 Baseline Implementation Plan (branch: `plan/refactor-p0-eval-baseline`, last commit 2026-09-15)
+— none —
 
 **Planned**
 - `refactor-p0-transcript-export.md` — Refactor P0 — Transcript Export Implementation Plan
@@ -25,6 +25,7 @@ _Generated 2026-09-15 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
 - `ports-layout-consistency.md` — Ports Layout Consistency Implementation Plan
 - `refactor-p0-dead-code.md` — Refactor P0 — Dead Code Removal Implementation Plan
+- `refactor-p0-eval-baseline.md` — Refactor P0 — Remaining Datasets and v0 Baseline Implementation Plan
 - `refactor-p0-eval-harness.md` — Refactor P0 — Eval Harness (L0) Implementation Plan
 - `refactor-p0-eval-l1-chat-training.md` — Refactor P0 — L1 Runner and Chat/Training Datasets Implementation Plan
 - `refactor-p0-run-log.md` — Refactor P0 — Run Log Implementation Plan

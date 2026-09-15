@@ -1,7 +1,7 @@
 # Refactor P0 — Remaining Datasets and v0 Baseline Implementation Plan
 
-- Status: planned
-- Branch:
+- Status: done
+- Branch: plan/refactor-p0-eval-baseline
 - After: refactor-p0-eval-l1-chat-training
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
