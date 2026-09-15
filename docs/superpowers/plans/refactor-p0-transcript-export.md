@@ -1,6 +1,6 @@
 # Refactor P0 — Transcript Export Implementation Plan
 
-- Status: planned
+- Status: done
 - Branch: plan/refactor-p0-transcript-export
 - After: refactor-p0-eval-baseline
 
@@ -532,7 +532,7 @@ The script runs locally against the dev database. Either point `.env`'s `DB_*` a
 Run: `npm run evals:export -- --since 2026-09-01 --limit 50`
 Expected: the summary line with a non-zero count and a path.
 
-- [ ] **Step 3: Inspect the output for leaks — the actual gate**
+- [x] **Step 3: Inspect the output for leaks — the actual gate** (final gate 2026-09-15 after re-export: **0 matches**; eyeball pass: no names/contacts, training content intact, provenance pseudonyms OK)
 
 Open the produced file and read it. Check every one of these:
 - no first names, surnames or usernames anywhere,
@@ -579,7 +579,7 @@ Every P0 scope item now has a merged plan. This task confirms that as a fact rat
 - Consumes: the five preceding P0 plans.
 - Produces: an orientation point that says P1 is next.
 
-- [ ] **Step 1: Confirm every P0 acceptance criterion has evidence**
+- [x] **Step 1: Confirm every P0 acceptance criterion has evidence**
 
 Walk `docs/LLM_CORE_REFACTOR_PLAN.md` § P0 and check each:
 - AC-1301 — the integration test in `tests/integration/api/chat-run-log.integration.test.ts` passes.
@@ -589,23 +589,23 @@ Walk `docs/LLM_CORE_REFACTOR_PLAN.md` § P0 and check each:
 
 Any criterion without evidence means P0 is not done — say so and stop, rather than closing it.
 
-- [ ] **Step 2: Re-read the P0 rollback condition**
+- [x] **Step 2: Re-read the P0 rollback condition**
 
 The master plan's P0 rollback trigger is run-row writes adding over 100 ms p95 to `/api/bot/chat`, or any 5xx. Check current dev behaviour:
 
 Run: `ssh filko.dev "docker logs fitcoach-dev-server --tail 300 | grep -c 'Failed to record conversation run'"`
 Expected: `0`. A non-zero count means the run log is failing silently in production and P0 has a defect to fix before it closes.
 
-- [ ] **Step 3: Update the hand-written part of STATE.md**
+- [x] **Step 3: Update the hand-written part of STATE.md**
 
 In `docs/STATE.md` § "Next (dispatch order)", replace the P0 entry with P1 as the head of the queue, and note in § Scope that P0 is complete with the baseline at `evals/baselines/v0/`. Do not touch the AUTO block.
 
-- [ ] **Step 4: Regenerate and check**
+- [x] **Step 4: Regenerate and check**
 
 Run (from the repo root): `node scripts/state.mjs --write && node scripts/state.mjs --check`
 Expected: the AUTO block lists all six P0 plans as done; `--check` passes with no close-out debt.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/STATE.md
