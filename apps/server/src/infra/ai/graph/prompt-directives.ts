@@ -1,4 +1,5 @@
 import type { User } from '@domain/user/services/user.service';
+
 import { calendarDaysAgo } from '@shared/date-utils';
 
 export function identityDirective(): string {
@@ -83,15 +84,21 @@ export function toolReplyDirective(): string {
  * (in the user's timezone) and at least 4 hours have passed since the last message.
  */
 export function greetingDirective(user: User | null, lastMessageTime: Date | null): string | null {
-  if (!lastMessageTime) return null;
+  if (!lastMessageTime) {
+    return null;
+  }
 
   const now = new Date();
   const tz = user?.timezone;
   const daysSinceLastMsg = calendarDaysAgo(lastMessageTime, now, tz);
-  if (daysSinceLastMsg < 1) return null;
+  if (daysSinceLastMsg < 1) {
+    return null;
+  }
 
   const hoursSince = (now.getTime() - lastMessageTime.getTime()) / (1000 * 60 * 60);
-  if (hoursSince < 4) return null;
+  if (hoursSince < 4) {
+    return null;
+  }
 
   return [
     "GREETING: This is the user's first message today (new day since last activity).",

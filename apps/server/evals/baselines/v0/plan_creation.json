@@ -1,0 +1,314 @@
+{
+  "version": "v0",
+  "model": "glm-5.3",
+  "samples": 3,
+  "recordedAt": "2026-09-14T14:36:31.637Z",
+  "entries": [
+    {
+      "case": "PC-0001",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0001",
+      "check": "tools.mustNot:save_workout_plan",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0001",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0001",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0001",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0002",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0002",
+      "check": "tools.mustNot:save_workout_plan",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0002",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0002",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0002",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0003",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0003",
+      "check": "tools.mustNot:save_workout_plan",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0003",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0003",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0003",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0004",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0004",
+      "check": "tools.must:search_exercises",
+      "passed": false,
+      "detail": "0/3 samples passed"
+    },
+    {
+      "case": "PC-0004",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0004",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0004",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0005",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0005",
+      "check": "text.mustNotMatch:\\{|\\}",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0005",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0005",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0005",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0006",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0006",
+      "check": "tools.mustNot:save_workout_plan",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0006",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0006",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0006",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0007",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0007",
+      "check": "tools.must:save_workout_plan",
+      "passed": false,
+      "detail": "0/3 samples passed"
+    },
+    {
+      "case": "PC-0007",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0007",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0007",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0008",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0008",
+      "check": "text.mustNotMatch:(?i)штанг|тренажёр|тренажер",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0008",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0008",
+      "check": "text.format",
+      "passed": true,
+      "detail": "2/3 samples passed"
+    },
+    {
+      "case": "PC-0008",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0009",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0009",
+      "check": "tools.mustNot:save_workout_plan",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0009",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0009",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0009",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0010",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0010",
+      "check": "tools.mustNot:save_workout_plan",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0010",
+      "check": "text.mustNotMatch:(?i)да, сохранил|уже сохранил",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0010",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0010",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "PC-0010",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    }
+  ]
+}

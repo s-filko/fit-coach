@@ -1,8 +1,8 @@
-/* eslint-disable max-len */
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import type { User } from '@domain/user/services/user.service';
 
 import { composeDirectives } from '@infra/ai/graph/prompt-directives';
+
 import { humanTimeAgo } from '@shared/date-utils';
 
 const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
@@ -247,7 +247,9 @@ function formatSetData(setData: WorkoutSessionWithDetails['exercises'][number]['
     case 'cardio_distance': {
       const durStr = setData.duration > 0 ? `${Math.round(setData.duration / 60)}min` : '?min';
       const parts: string[] = [`${setData.distance}${setData.distanceUnit}`, durStr];
-      if (setData.inclinePct != null) parts.push(`${setData.inclinePct}% incline`);
+      if (setData.inclinePct != null) {
+        parts.push(`${setData.inclinePct}% incline`);
+      }
       return parts.join(' ');
     }
     case 'cardio_duration':

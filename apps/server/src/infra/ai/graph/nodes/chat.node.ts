@@ -3,6 +3,7 @@ import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import { User } from '@domain/user/services/user.service';
 
 import { composeDirectives } from '@infra/ai/graph/prompt-directives';
+
 import { humanTimeAgo } from '@shared/date-utils';
 
 /**

@@ -4,7 +4,7 @@ import type { TransitionRequest } from '@domain/conversation/graph/conversation.
 import type { IEmbeddingService, IExerciseRepository, ITrainingService } from '@domain/training/ports';
 import type { SessionSet, WorkoutSession, WorkoutSessionWithDetails } from '@domain/training/types';
 
-import { LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX, buildTrainingTools } from '../training.tools';
+import { buildTrainingTools, LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '../training.tools';
 
 type InvokableTool = {
   name: string;

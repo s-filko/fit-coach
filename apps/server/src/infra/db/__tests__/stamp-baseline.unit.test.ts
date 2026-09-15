@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 
-import { hashMigration, migrationsThrough, type Journal } from '../stamp-baseline';
+import { hashMigration, type Journal, migrationsThrough } from '../stamp-baseline';
 
 describe('stamp-baseline', () => {
   it('hashes migration contents with sha256, matching drizzle', () => {

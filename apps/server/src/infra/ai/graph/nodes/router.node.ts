@@ -53,7 +53,7 @@ export function buildRouterNode(deps: RouterNodeDeps) {
           { userId, sessionId: state.activeSessionId, status: session?.status },
           'Session ended — returning to chat',
         );
-        generatePhaseSummary(contextService, userId, 'training', config).catch(err =>
+        generatePhaseSummary(contextService, userId, 'training', config).catch((err: unknown) =>
           log.error({ err, userId }, 'Background phase summary (training→chat) failed'),
         );
         return new Command({

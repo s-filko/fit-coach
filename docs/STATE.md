@@ -9,7 +9,7 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-09-14 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-09-15 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
 — none —
@@ -21,6 +21,7 @@ _Generated 2026-09-14 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p2-prompt-modules.md` — Refactor P2 — Prompt Modules Implementation Plan
 
 **Done**
+- `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
 - `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
 - `ports-layout-consistency.md` — Ports Layout Consistency Implementation Plan

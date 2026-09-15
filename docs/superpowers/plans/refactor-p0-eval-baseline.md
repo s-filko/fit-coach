@@ -424,6 +424,28 @@ The measurement that P0 exists for. Five phases, fifty cases, three samples each
 - Consumes: every dataset and the baseline writer.
 - Produces: the committed `v0` baseline — the reference for AC-1322 and every later phase.
 
+**Recorded v0 results (2026-09-14, model `glm-5.3`, 3 samples, majority ≥2/3 per check):**
+
+| Phase | Passing | Failing checks |
+|---|---|---|
+| registration | 52/52 (100%) | — |
+| chat | 60/60 (100%) | — |
+| plan_creation | 49/51 | `PC-0004 tools.must:search_exercises` 0/3; `PC-0007 tools.must:save_workout_plan` 0/3 |
+| session_planning | 51/52 | `SP-0005 tools.must:start_training_session` 0/3 |
+| training | 52/52 (100%) | — |
+| **total** | **264/267 (98.9%)** | |
+
+All three failures are the same shape: the model replies with text (often re-greeting or
+re-stating the plan) and never issues the required tool call — verified for PC-0004 by a
+direct probe (`threw: no`, `toolCalls: []`), so these are prompt behaviour recorded as
+failing, not harness gaps. No `runs-without-throwing` failure occurred in any phase.
+
+**Observed flakiness (noise floor for AC-1322):** a fresh 3-sample chat re-run against v0
+compared clean — 0 regressions, 0 improvements, 0 missing, 0 new checks. Single-sample
+churn is real but absorbed by the majority vote: the 1-sample dry run failed 8 checks
+(including RG-0002/RG-0005/CH-0006 maxChars and TR-0008/TR-0010) of which only 3 survived
+at 3 samples. The ±2-point band therefore has ample headroom at the check level.
+
 - [ ] **Step 1: Run L0 across everything first**
 
 Run: `npm run evals -- --level L0`

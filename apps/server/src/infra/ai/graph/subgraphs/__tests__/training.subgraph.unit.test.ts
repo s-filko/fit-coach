@@ -12,7 +12,7 @@
  * GREEN after: extracting sort + dedup logic into exported pure functions.
  */
 
-import { sortToolCallsByPriority, findDuplicateLogSets } from '../training.subgraph';
+import { findDuplicateLogSets, sortToolCallsByPriority } from '../training.subgraph';
 
 interface ToolCallStub {
   name: string;

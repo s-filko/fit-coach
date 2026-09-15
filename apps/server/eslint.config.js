@@ -83,7 +83,7 @@ export default tseslint.config(
         enforceConst: true
       }],
       'camelcase': ['error', { properties: 'never' }],
-      'max-len': ['error', { code: 120, ignoreUrls: true, ignoreStrings: true }],
+      'max-len': ['error', { code: 120, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }],
       'no-multiple-empty-lines': ['error', { max: 1 }],
       'quotes': ['error', 'single', { avoidEscape: true }],
       'semi': ['error', 'always'],
@@ -125,7 +125,7 @@ export default tseslint.config(
       // Style rules
       'array-bracket-spacing': ['error', 'never'],
       'object-curly-spacing': ['error', 'always'],
-      'space-before-function-paren': ['warn', 'never'],
+      'space-before-function-paren': ['warn', { anonymous: 'never', named: 'never', asyncArrow: 'always' }],
 
       // Stricter existing rules
       'max-depth': ['warn', 4],
@@ -274,6 +274,7 @@ export default tseslint.config(
       '*.js',
       '*.d.ts',
       'jest.config.cjs',
+      'src/infra/db/scripts/',
     ],
   }
 );
