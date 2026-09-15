@@ -922,7 +922,7 @@ Master plan P1 item 4.
 - AC-1311: `grep -rn "jsonMode\|json_object\|LLMService" src` → empty.
 - AC-1313: exactly one `new ChatOpenAI(` in `src/`, pinned by a unit test so it cannot regress silently.
 
-- [ ] **Step 1: Write the failing AC-1313 guard test**
+- [x] **Step 1: Write the failing AC-1313 guard test**
 
 Create `apps/server/src/infra/ai/__tests__/single-model-site.unit.test.ts`:
 
@@ -943,12 +943,12 @@ describe('ChatOpenAI construction sites (AC-1313)', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- single-model-site`
 Expected: FAIL — two files listed (`infra/ai/llm.service.ts` and `infra/ai/model.factory.ts`).
 
-- [ ] **Step 3: Delete the service, the old port file and the registrations**
+- [x] **Step 3: Delete the service, the old port file and the registrations**
 
 ```bash
 git rm src/infra/ai/llm.service.ts src/domain/ai/ports.ts
@@ -958,7 +958,7 @@ In `apps/server/src/main/register-infra-services.ts` delete lines 52-55 (the `//
 
 In `apps/server/src/app/test/setup.ts` delete the block at lines 155-157 (`if (!c.has(LLM_SERVICE_TOKEN)) { c.register(LLM_SERVICE_TOKEN, new LLMService()); }`) and the corresponding `LLMService` / `LLM_SERVICE_TOKEN` imports at the top of the file.
 
-- [ ] **Step 4: Verify AC-1311 and AC-1313**
+- [x] **Step 4: Verify AC-1311 and AC-1313**
 
 Run:
 
@@ -969,7 +969,7 @@ grep -rn "jsonMode\|json_object\|LLMService" src
 
 Expected: all green; grep prints nothing; `single-model-site` test passes.
 
-- [ ] **Step 5: Reconcile `docs/ARCHITECTURE.md`**
+- [x] **Step 5: Reconcile `docs/ARCHITECTURE.md`**
 
 Line 45: replace `ports.ts                 # ILLMService interface (TODO: remove in refactor P1)` with:
 
@@ -983,7 +983,7 @@ Line 58: delete the `session-recommendation.prompt.ts` entry (and the `prompts/`
 
 `docs/domain/ai.spec.md` still documents `LLMService` methods that never existed (ADR-0013 §1.8); it is rewritten in P7 (AC-1371). Do not edit it here — record in the close-out that it is stale and P7-owned.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A src/infra/ai src/domain/ai src/main/register-infra-services.ts src/app/test/setup.ts ../../docs/ARCHITECTURE.md
