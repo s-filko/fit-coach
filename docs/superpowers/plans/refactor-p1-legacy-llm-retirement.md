@@ -1099,7 +1099,7 @@ npm run build
 
 Expected: clean build (Task 6).
 
-- [ ] **Step 2: Deploy to dev and smoke**
+- [x] **Step 2: Deploy to dev and smoke**
 
 After merge to `dev` (see Close-out):
 
@@ -1173,7 +1173,7 @@ Follow `superpowers:finishing-a-development-branch`. Before merge: run the `clos
   - AC-1313 `new ChatOpenAI(` → exactly `infra/ai/model.factory.ts` (pinned by test).
   - AC-1314 covered by llm-profiles (4) + model.factory (3) tests; no `LLM_PROFILE_*` set in any env.
 - Webapp: `grep -rn "recommend" apps/webapp/src` → empty; zero callers of `POST /plan` and `POST /session/:id/recommend` across webapp/bot/shared (R3 final re-grep). The live network-panel observation (Task 6/Task 7 Step 2) is **pending the dev deploy** — see below.
-- Dev smoke (Task 7 Step 2): **pending merge + deploy** — `curl -X POST https://fitcoach-dev.filko.dev/api/app/plan` → expect 401 (auth first; the signed-initData 410 is covered by the integration test); mini-app session-without-plan and plan-tab observations per MANUAL_TEST_PLAN § Smoke.
+- Dev smoke (Task 7 Step 2): **done 2026-09-16** — merged as PR #14 (`03985295`), `deploy.sh dev` OK (containers recreated, health check green). Live checks: `GET /health` → **200**; `POST /api/app/plan` → **401** `{"error":{"message":"Missing X-Init-Data"}}` — auth enforced first, exactly as designed (the signed-initData 410 contract is covered by the integration test). Browser-side mini-app observations (empty state without a request loop on a planless session; «План» tab without the dead creation form) are owner-verifiable on `@MyFitAiCoachDevBot`; the static guarantees (zero retired-route callers in webapp/bot/shared, clean builds) were verified by the final review round.
 - Item 5 (summariser via `LlmGateway.structured`) was **deliberately deferred to P4** by owner ruling 2026-09-13 — see "Decided" above; the `structured` path and the `summarizer` profile ship tested-but-unused by design.
 - `docs/domain/ai.spec.md` remains stale (documents LLMService methods that never existed) — P7-owned (AC-1371); not edited on this branch.
 - Mid-review scope change: the webapp bounded fix was extended to PlanPage by owner ruling 2026-09-16 (Global Constraints Extension paragraph; the same ruling's obvious-fix delegation is recorded in SUPERPOWERS_INTEGRATION.md rule 3, commit fb9aa1e1).
