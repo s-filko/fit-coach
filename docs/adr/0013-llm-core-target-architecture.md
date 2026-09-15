@@ -304,7 +304,7 @@ The empty-response nudge (`invokeWithRetry`) becomes part of the shared agent no
 
 ## 7. LLM access and the legacy path (D-10)
 
-- `domain/ai/ports.ts` is rewritten as `LlmGateway { chat(input, opts): AIMessage; structured<T>(schema, input, opts): T }` — no `ChatMsg`, no `jsonMode`. Implementation in `infra/ai/llm.gateway.ts` over `getModel(profile)`; `structured` uses `withStructuredOutput` (available in `@langchain/openai` 1.x) with one retry on schema failure.
+- The LLM access port is `LlmGateway { chat(messages, opts): { content }; structured<T>(schema, messages, opts): T }` in `domain/ai/ports/llm.gateway.ports.ts`. **Amendment (2026-09-16, shipped in P1):** the port speaks the domain's own `ChatMsg` and returns plain data — not the LangChain `AIMessage` this section originally worded it with — because the domain-purity invariant (§11, D-13 / INV-CONV-004) forbids `@langchain/*` in `domain/**`; the infra implementation (`infra/ai/llm.gateway.ts` over `getModel(profile)`) does the `ChatMsg`→LangChain conversion and flattens the response to text. No `jsonMode`. `structured` uses `withStructuredOutput` (available in `@langchain/openai` 1.x) with one retry on schema failure.
 - `getModel(profile)`: profiles from config `LLM_MODEL`, `LLM_TEMPERATURE` (defaults) with optional `LLM_PROFILE_<NAME>_MODEL/_TEMPERATURE/_MAX_TOKENS` overrides. Rationale: the summariser and the judge want low temperature and possibly a cheaper model; training may want a different one than plan creation; today one singleton at `maxTokens: 4096` serves everything (`model.factory.ts:117-125`).
 - Delete now (zero consumers): `PromptService`, `IPromptService`/`PROMPT_SERVICE_TOKEN`, `domain/user/services/prompts/*`, `training-intent.types.ts`, `plan-creation.types.ts`, `parseSessionPlanningResponse` and `SessionPlanningLLMResponseSchema`, `InMemoryConversationContextService` (after tests are moved to the new port).
 - `LLMService` and the four `TrainingService` LLM methods (`createPlanFromPrompt`, `getNextSessionRecommendation`, `recommendForSession`, `generateFreeformRecommendation`): **delete, do not migrate** (OQ-1, answered). `POST /api/app/plan` and `POST /api/app/session/:id/recommend` return `410 { error: { code: 'RETIRED' } }`. Rationale: the mini-app is a state visualization and control surface, not a conversational client (§9) — plan generation is a bot conversation, and "what do I do today" in the UI is deterministic (next session from the saved plan). Precondition before shipping the 410s: check prod access logs for `POST /api/app/*` over the last weeks (usage is [ASSUMPTION]-none, not log-verified); real traffic is surfaced to the owner, not retired silently.
@@ -367,7 +367,7 @@ The mini-app is **not a conversational client**. It has no chat history and will
 ```
 domain/conversation/    phases.ts (ConversationPhase), transitions.ts (matrix + guards), ports/
                         (ConversationRunPort: run(input) → RunResult; TranscriptPort; SummaryPort)
-domain/ai/              llm.gateway.ports.ts (LlmGateway), prompt-context.types.ts
+domain/ai/              ports/ (llm.gateway.ports.ts: LlmGateway), prompt-context.types.ts
 domain/user|training/   unchanged services; + user-facts service/port (ADR-0009)
 infra/ai/graph/         conversation.graph.ts (topology), phase-subgraph.factory.ts, tool-executor.ts,
                         nodes/{prepare,route,commit,compact}.ts, state.ts (annotations + contextSchema)
