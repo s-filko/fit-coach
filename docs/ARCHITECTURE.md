@@ -74,7 +74,8 @@ apps/server/src/
         exercise.repository.ts  # Includes searchByEmbedding() for vector search
         workout-plan.repository.ts
     ai/
-      model.factory.ts          # Shared ChatOpenAI factory (getModel())
+      model.factory.ts          # Single ChatOpenAI construction site (getModel(profile), AC-1313)
+      llm.gateway.ts            # OpenAiLlmGateway — LlmGateway port implementation (ADR-0013 §7 D-10)
       llm-log-handler.ts        # LLM boundary callback: debug replay + run-metrics bridge (metadata.runId)
       run-metrics.ts            # Per-run model/token/latency accumulator, drained by persist.node (ADR-0013 §8)
       embedding.service.ts      # Local all-MiniLM-L6-v2 via @huggingface/transformers (ONNX)
@@ -171,15 +172,13 @@ This section is the single source of this rule. ADR-0002 records why the monolit
 
 Standing exceptions (each names the task that closes it):
 
-- `domain/ai/ports.ts` — scheduled for removal in refactor P1 (§ LLM layer); left flat
-  until then (rule 5).
 - `domain/conversation/graph/conversation.graph.ports.ts` — carries LangChain types and
   stays in `graph/` until **ADR-0013 D-13** relocates them to `infra/ai` (INV-CONV-004).
   Moving it into `ports/` would place LangChain types in the domain's clean port surface
   and re-export them to every consumer of `@domain/conversation/ports` (rule 1).
-- `training/ports/training-service.ports.ts` — `ITrainingService`, 19 methods. Rule 3
-  review done: three unused methods and a split by consumer were identified;
-  decomposition by role is tracked in `docs/BACKLOG.md` (rule 3).
+- `training/ports/training-service.ports.ts` — `ITrainingService`, 16 methods (four legacy
+  LLM methods deleted in refactor P1). Rule 3 review done: two unused methods and a split
+  by consumer were identified; decomposition by role is tracked in `docs/BACKLOG.md` (rule 3).
 
 ### Enforced by ESLint (import boundaries)
 - Domain (`src/domain/**`): cannot import `@app/*`, `**/app/**`, `@infra/*`, `**/infra/**`.
