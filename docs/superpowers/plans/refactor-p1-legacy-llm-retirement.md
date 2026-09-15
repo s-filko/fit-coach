@@ -1010,7 +1010,7 @@ The only mini-app edit this plan makes, and it exists to prevent a defect the 41
 
 **Design note:** the exercise list itself is unaffected. `PlanningView` renders `plan.exercises` and edits them through `onUpdatePlan` (`PATCH /session/:id/plan`), which is **not** retired. What disappears is only the AI auto-fill and the "adjust by comment" box. A session started from the mini-app now shows the empty state until the plan arrives from the bot conversation — which is exactly the product intent recorded in ADR-0013 §9.
 
-- [ ] **Step 1: Delete the auto-recommend effect**
+- [x] **Step 1: Delete the auto-recommend effect**
 
 In `apps/webapp/src/features/session/PlanningView.tsx` remove:
 
@@ -1022,7 +1022,7 @@ In `apps/webapp/src/features/session/PlanningView.tsx` remove:
   }, [plan, recommending, onRecommend]);
 ```
 
-- [ ] **Step 2: Remove the recommend-driven UI and props**
+- [x] **Step 2: Remove the recommend-driven UI and props**
 
 Remove `recommending` and `onRecommend` from `PlanningViewProps` and from the destructured parameter list. Delete `handleUpdateComment`, the `comment` state, and the textarea/button block that calls it. Delete the `if (recommending && !plan)` spinner branch — with no auto-call there is nothing to wait for.
 
@@ -1041,15 +1041,15 @@ Replace the empty state so it states the real situation instead of implying a fa
 
 Drop the now-unused `Spinner` import (and `useEffect` if nothing else uses it — `PlanningView` still has the `plan?.exercises` effect, so it stays).
 
-- [ ] **Step 3: Remove `recommend` from the session hook**
+- [x] **Step 3: Remove `recommend` from the session hook**
 
 In `apps/webapp/src/shared/hooks/useSession.ts` delete the `recommend` callback (`:70-87`), the `recommending` state (`:28`), the two interface members (`:13-15`), and both from the returned object (`:121`). `plan`, `setPlan` and `updatePlan` all stay — `plan` is still populated from the loaded session.
 
-- [ ] **Step 4: Update the call site**
+- [x] **Step 4: Update the call site**
 
 In `apps/webapp/src/features/session/SessionPage.tsx` stop destructuring `recommend, recommending` (`:30`) and stop passing them to `PlanningView` (`:80-81`).
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run from `apps/webapp/`:
 
@@ -1065,7 +1065,7 @@ grep -rn "recommend" apps/webapp/src
 
 Expected: no output.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/webapp/src
