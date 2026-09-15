@@ -1,6 +1,6 @@
 # Refactor P0 — Harness Episode Seeding and v0 Re-freeze Implementation Plan
 
-- Status: planned
+- Status: done
 - Branch: plan/refactor-p0-eval-harness-seeding
 - After: refactor-p0-eval-baseline
 
@@ -34,11 +34,11 @@
 - Modify/extend: `apps/server/evals/lib/__tests__/build-stub-deps.unit.test.ts` and `run-case.unit.test.ts`
 
 **Steps:**
-- [ ] Failing test: `buildStubDeps` with `state.messages = [{role:'human',text:'сделал 80 на 8'},{role:'ai',text:'Принято!'}]` → `deps.contextService.getMessagesForPrompt(...)` resolves to `[{role:'user',...},{role:'assistant',...}]`; a `tool_call` entry is skipped, not thrown on.
-- [ ] Failing test in `run-case.unit.test.ts`: with the scripted mock model, assert the messages array the model receives contains the seeded turn(s) before the current `userMessage` (spy on the mock `invoke`'s argument).
-- [ ] Implement both changes (signature: `buildStubDeps(fixture, messages?)` or take the whole case — executor's choice, keep it minimal).
-- [ ] `npm run test:unit -- build-stub-deps run-case` green; full suite green.
-- [ ] Commit: `fix(evals): seed case state.messages into the episode memory the model sees`
+- [x] Failing test: `buildStubDeps` with `state.messages = [{role:'human',text:'сделал 80 на 8'},{role:'ai',text:'Принято!'}]` → `deps.contextService.getMessagesForPrompt(...)` resolves to `[{role:'user',...},{role:'assistant',...}]`; a `tool_call` entry is skipped, not thrown on.
+- [x] Failing test in `run-case.unit.test.ts`: with the scripted mock model, assert the messages array the model receives contains the seeded turn(s) before the current `userMessage` (spy on the mock `invoke`'s argument).
+- [x] Implement both changes (signature: `buildStubDeps(fixture, messages?)` or take the whole case — executor's choice, keep it minimal).
+- [x] `npm run test:unit -- build-stub-deps run-case` green; full suite green.
+- [x] Commit: `fix(evals): seed case state.messages into the episode memory the model sees`
 
 Task 1 implements AC: seeding correctness. Verification: the two unit tests above.
 
@@ -51,7 +51,7 @@ Task 1 implements AC: seeding correctness. Verification: the two unit tests abov
 **Steps:**
 - [x] `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --baseline write` (exact command per the runner's implemented flags; if write targets a different path than `baselines/v0/`, adjust so v0 is overwritten, not duplicated). Executed as five per-phase runs (`--phase <phase> --baseline write`) — the write path targets `baselines/v0/<phase>.json` directly, so v0 was overwritten in place; per-phase runs bound memory and checkpoint each file.
 - [x] Record the before/after delta of the three previously-failing cases (PC-0004, PC-0007, SP-0005) and any newly appearing failures in the plan file under this task — that diff is the point of the whole fix.
-- [ ] Commit: `feat(evals): re-freeze v0 baseline on the seeded harness`
+- [x] Commit: `feat(evals): re-freeze v0 baseline on the seeded harness`
 
 **Before/after delta (2026-09-15, seeded harness commit `2049f0f3`, direct Z.AI `glm-5.3`, 3 samples, ⌈n/2⌉ gate):**
 
@@ -76,7 +76,7 @@ Verification: `--baseline compare` (or JSON inspection) shows the new numbers; s
 - [x] §4.1: mark the three unimplemented L0 checks (section presence, git-diff version discipline, message-catalog completeness) as deferred — cross-reference the existing backlog entries rather than promising them here.
 - [x] §4.2 named checks: mark `no_redundant_search` and the structural checks (`outcome`, `budgetReport`, orphan ToolMessage) as not-yet-implemented deferrals.
 - [x] §6: correct the baseline layout to the implemented `evals/baselines/<version>/<phase>.json` and amend "never written by a PR" with the bootstrap/re-freeze exception (recorded once, before first compare use).
-- [ ] Commit: `docs(eval-framework): reconcile spec with implemented harness (findings A-E)`
+- [x] Commit: `docs(eval-framework): reconcile spec with implemented harness (findings A-E)`
 
 Verification: every edit maps 1:1 to a finding; no new promises added.
 
