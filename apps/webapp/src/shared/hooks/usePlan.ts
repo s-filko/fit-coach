@@ -1,27 +1,18 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { apiRequest } from '@/shared/api/client';
 import type { WorkoutPlan } from '@/shared/types';
-
-interface CreatePlanParams {
-  goal: string;
-  daysPerWeek: number;
-  equipment?: string;
-}
 
 interface UsePlanResult {
   plan: WorkoutPlan | null;
   loading: boolean;
   error: string | null;
-  createPlan: (params: CreatePlanParams) => Promise<void>;
-  creating: boolean;
 }
 
 export function usePlan(): UsePlanResult {
   const [plan, setPlan] = useState<WorkoutPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,21 +33,5 @@ export function usePlan(): UsePlanResult {
     };
   }, []);
 
-  const createPlan = useCallback(async (params: CreatePlanParams) => {
-    setCreating(true);
-    setError(null);
-    try {
-      const created = await apiRequest<WorkoutPlan>('/plan', {
-        method: 'POST',
-        body: params,
-      });
-      setPlan(created);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to create plan');
-    } finally {
-      setCreating(false);
-    }
-  }, []);
-
-  return { plan, loading, error, createPlan, creating };
+  return { plan, loading, error };
 }
