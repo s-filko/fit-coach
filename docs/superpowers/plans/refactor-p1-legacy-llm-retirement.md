@@ -1140,7 +1140,19 @@ Record in the close-out that item 5 was deliberately not implemented and why, so
 
 ## OQ-1 verification (Task 1)
 
-_(filled in by Task 1)_
+- Date: 2026-09-16
+- Server log window: 2026-09-11 → 2026-09-16 (container started 2026-09-11 — window is 5 days, shorter than 30)
+- POST /api/app/plan: 0; POST /api/app/session/:id/recommend: 0 (pino log, `docker logs fitcoach-prod-server --since 720h`)
+- NPM access log inspected: `/srv/docker/nginx-proxy-manager/data_npm/logs/proxy-host-14_access.log*`
+  (VPS layout differs from Khadas: NPM data is `data_npm/`; host 14 = fitcoach.filko.dev, found by scanning
+  all `proxy-host-*_access.log` for the domain; 10581 entries, window 2026-08-17 → 2026-09-15 — full 30 days);
+  counts: 0/0. Note: the log line format puts the domain between method and path
+  (`POST https fitcoach.filko.dev "/api/..."`), so the grep matches `POST <scheme> <host> "<path>"`.
+  The entire log is scanner noise (`.env`, `.git/HEAD` probes); there is no `/api/app/*` traffic at all,
+  on any endpoint. The NPM fallback log was also checked: 0/0.
+- Webapp impact: PlanningView auto-calls recommend when a session has no plan and re-fires on each
+  failure; Task 6 of this plan removes the auto-call so the 410 cannot be polled in a loop.
+- Ruling: proceed
 
 ## Close-out
 
