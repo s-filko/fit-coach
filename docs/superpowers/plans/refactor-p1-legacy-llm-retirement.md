@@ -393,7 +393,7 @@ export const LLM_GATEWAY_TOKEN: unique symbol;
 export class OpenAiLlmGateway implements LlmGateway
 ```
 
-- [ ] **Step 1: Write the port**
+- [x] **Step 1: Write the port**
 
 Create `apps/server/src/domain/ai/ports/llm.gateway.ports.ts`:
 
@@ -434,7 +434,7 @@ Create `apps/server/src/domain/ai/ports/index.ts`:
 export * from './llm.gateway.ports';
 ```
 
-- [ ] **Step 2: Write the failing gateway test**
+- [x] **Step 2: Write the failing gateway test**
 
 Create `apps/server/src/infra/ai/__tests__/llm.gateway.unit.test.ts`:
 
@@ -531,12 +531,12 @@ describe('OpenAiLlmGateway (ADR-0013 §7 D-10, AC-1311 — the single non-graph 
 });
 ```
 
-- [ ] **Step 3: Run it to confirm it fails**
+- [x] **Step 3: Run it to confirm it fails**
 
 Run: `npm run test:unit -- llm.gateway`
 Expected: FAIL — module not found.
 
-- [ ] **Step 4: Implement the gateway**
+- [x] **Step 4: Implement the gateway**
 
 Create `apps/server/src/infra/ai/llm.gateway.ts`:
 
@@ -623,12 +623,12 @@ export class OpenAiLlmGateway implements LlmGateway {
 }
 ```
 
-- [ ] **Step 5: Run the gateway test**
+- [x] **Step 5: Run the gateway test**
 
 Run: `npm run test:unit -- llm.gateway`
 Expected: PASS (6 tests).
 
-- [ ] **Step 6: Register the gateway in DI**
+- [x] **Step 6: Register the gateway in DI**
 
 In `apps/server/src/main/register-infra-services.ts`, directly after the existing `LLMService` registration (lines 52-55, removed in Task 5):
 
@@ -643,7 +643,7 @@ Note: until Task 5 deletes `domain/ai/ports.ts`, `@domain/ai/ports` resolves to 
 Run: `npm run type-check && npm run lint`
 Expected: clean.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/domain/ai/ports/ src/infra/ai/llm.gateway.ts src/infra/ai/__tests__/llm.gateway.unit.test.ts src/main/register-infra-services.ts
