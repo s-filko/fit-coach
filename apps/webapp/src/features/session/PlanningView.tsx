@@ -9,21 +9,16 @@ import styles from './PlanningView.module.css';
 
 interface PlanningViewProps {
   plan: SessionRecommendation | null;
-  recommending: boolean;
-  onRecommend: (comment?: string) => Promise<void>;
   onUpdatePlan: (exercises: RecommendedExercise[]) => Promise<void>;
   onBegin: () => Promise<void>;
 }
 
 export function PlanningView({
   plan,
-  recommending,
-  onRecommend,
   onUpdatePlan,
   onBegin,
 }: PlanningViewProps) {
   const [exercises, setExercises] = useState<RecommendedExercise[]>([]);
-  const [comment, setComment] = useState('');
   const [beginning, setBeginning] = useState(false);
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
@@ -33,12 +28,6 @@ export function PlanningView({
       setExercises(plan.exercises);
     }
   }, [plan]);
-
-  useEffect(() => {
-    if (!plan && !recommending) {
-      void onRecommend();
-    }
-  }, [plan, recommending, onRecommend]);
 
   const handleDelete = useCallback((index: number) => {
     const updated = exercises.filter((_, i) => i !== index);
@@ -73,12 +62,6 @@ export function PlanningView({
     void onUpdatePlan(updated);
   }, [exercises, onUpdatePlan]);
 
-  const handleUpdateComment = useCallback(async () => {
-    if (!comment.trim()) return;
-    await onRecommend(comment);
-    setComment('');
-  }, [comment, onRecommend]);
-
   const handleBegin = useCallback(async () => {
     setBeginning(true);
     hapticImpact('heavy');
@@ -89,20 +72,11 @@ export function PlanningView({
     }
   }, [onBegin]);
 
-  if (recommending && !plan) {
-    return (
-      <div className={styles.loadingContainer}>
-        <Spinner size="m" />
-        <p className={styles.loadingText}>AI подбирает упражнения...</p>
-      </div>
-    );
-  }
-
   if (!plan || exercises.length === 0) {
     return (
       <div className={styles.loadingContainer}>
         <Dumbbell size={48} strokeWidth={1.5} />
-        <p className={styles.loadingText}>Не удалось загрузить план</p>
+        <p className={styles.loadingText}>Плана на эту тренировку пока нет. Попроси тренера в чате составить её.</p>
       </div>
     );
   }
@@ -143,24 +117,6 @@ export function PlanningView({
             isDragOver={dragOverItem.current === i}
           />
         ))}
-      </div>
-
-      <div className={styles.commentSection}>
-        <textarea
-          className={styles.commentInput}
-          placeholder="Пожелания к плану..."
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          rows={2}
-        />
-        <button
-          type="button"
-          className={styles.updateBtn}
-          disabled={!comment.trim() || recommending}
-          onClick={() => void handleUpdateComment()}
-        >
-          {recommending ? <Spinner size="s" /> : 'Обновить план'}
-        </button>
       </div>
 
       <div className={styles.footer}>
