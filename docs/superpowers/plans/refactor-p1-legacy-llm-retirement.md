@@ -674,7 +674,7 @@ Master plan P1 item 3; AC-1312. This is the task that removes prompts L1–L6 fr
 
 **Design note — order of checks on the retired routes:** initData auth (`preHandler`, 401) runs first as today; the retired handler then returns 410 **without** touching the database. The previous ownership lookup (`requireSessionOwnership` → 403/404) is not performed for a dead endpoint: a retired route must not read session rows. Consequently the recommend route answers 410 for any well-formed `:id` once the caller is authenticated.
 
-- [ ] **Step 1: Write the signed-initData test helper**
+- [x] **Step 1: Write the signed-initData test helper**
 
 Create `apps/server/tests/helpers/init-data.ts`:
 
@@ -711,7 +711,7 @@ export function buildSignedInitData(
 }
 ```
 
-- [ ] **Step 2: Write the failing integration test (AC-1312)**
+- [x] **Step 2: Write the failing integration test (AC-1312)**
 
 Create `apps/server/tests/integration/api/app-retired-endpoints.integration.test.ts`:
 
@@ -783,12 +783,12 @@ describeIfDb('Retired mini-app LLM endpoints (AC-1312, ADR-0013 OQ-1)', () => {
 });
 ```
 
-- [ ] **Step 3: Run it to confirm it fails**
+- [x] **Step 3: Run it to confirm it fails**
 
 Run: `npm run test:integration -- app-retired-endpoints`
 Expected: the two 410 tests FAIL (today: 200 with an LLM call attempt, or a thrown error); the 401 tests pass already.
 
-- [ ] **Step 4: Retire `POST /plan`**
+- [x] **Step 4: Retire `POST /plan`**
 
 In `apps/server/src/app/routes/app/plan.routes.ts` replace the `app.post('/plan', …)` block (lines 29-54) with:
 
@@ -817,7 +817,7 @@ const retiredResponse = z.object({ error: z.object({ code: z.literal('RETIRED') 
 
 (`HTTP_GONE` and `retiredResponse` go next to the existing `HTTP_UNAUTHORIZED`/`errorResponse` constants at the top of the file.)
 
-- [ ] **Step 5: Retire `POST /session/:id/recommend`**
+- [x] **Step 5: Retire `POST /session/:id/recommend`**
 
 In `apps/server/src/app/routes/app/session.routes.ts` replace the recommend route (lines 282-308) with:
 
@@ -844,12 +844,12 @@ In `apps/server/src/app/routes/app/session.routes.ts` replace the recommend rout
 
 Add `const HTTP_GONE = 410;` and `const retiredResponse = z.object({ error: z.object({ code: z.literal('RETIRED') }) });` beside this file's existing constants.
 
-- [ ] **Step 6: Run the integration test**
+- [x] **Step 6: Run the integration test**
 
 Run: `npm run test:integration -- app-retired-endpoints`
 Expected: PASS (4 tests).
 
-- [ ] **Step 7: Delete the four service methods, the legacy prompt file and the `llmService` dependency**
+- [x] **Step 7: Delete the four service methods, the legacy prompt file and the `llmService` dependency**
 
 In `apps/server/src/domain/training/services/training.service.ts`:
 - delete `createPlanFromPrompt` (lines 81-149), `getNextSessionRecommendation` (151-192), `recommendForSession` (194-224), `generateFreeformRecommendation` (624-676);
@@ -868,7 +868,7 @@ In `apps/server/src/main/register-infra-services.ts` remove `c.get(LLM_SERVICE_T
 
 In `apps/server/tests/integration/services/training.service.integration.test.ts` remove `import { LLMService } from '@infra/ai/llm.service';` (line 3) and the `new LLMService(),` constructor argument (line 48).
 
-- [ ] **Step 8: Verify the tree compiles and the grep half of AC-1312 holds**
+- [x] **Step 8: Verify the tree compiles and the grep half of AC-1312 holds**
 
 Run:
 
@@ -879,7 +879,7 @@ grep -rn "recommendForSession\|createPlanFromPrompt\|getNextSessionRecommendatio
 
 Expected: type-check/lint/unit clean; grep prints nothing.
 
-- [ ] **Step 9: Mark both endpoints retired in `docs/API_SPEC.md`**
+- [x] **Step 9: Mark both endpoints retired in `docs/API_SPEC.md`**
 
 Append to § 4 (after 4.10 "Training History"):
 
@@ -897,7 +897,7 @@ Append to § 4 (after 4.10 "Training History"):
 - 401 `{ error: { message: string } }` — missing or invalid initData
 ```
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add -A src/app/routes/app src/domain/training src/main/register-infra-services.ts tests/helpers/init-data.ts tests/integration ../../docs/API_SPEC.md
