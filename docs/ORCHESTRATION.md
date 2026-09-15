@@ -112,6 +112,11 @@ executor works with the built-in file, search, and Bash tools.
 Delete the worktree when the plan is merged or cancelled:
 `git worktree remove "../fit_coach-$SLUG"`.
 
+**Full post-close-out cleanup** (owner-ruled 2026-09-16): after merge (or cancellation),
+the orchestrator removes the worktree, deletes the local `plan/<slug>` branch, and deletes
+the remote branch. This is part of close-out and needs no owner approval beyond the merge
+itself.
+
 **Never delegate into a worktree holding the orchestrator's uncommitted work.** The
 executor commits as the plan's steps require, and a bare `git commit` sweeps in whatever
 the orchestrator left staged — on the first trial run this put an orchestrator revert
