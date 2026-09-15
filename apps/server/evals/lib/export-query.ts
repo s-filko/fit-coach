@@ -1,4 +1,4 @@
-import { and, asc, gte, isNotNull } from 'drizzle-orm';
+import { and, asc, eq, gte, isNotNull, lte } from 'drizzle-orm';
 
 export interface ExportedRun {
   runId: string | null;
@@ -20,6 +20,7 @@ export async function fetchRunsSince(since: Date, limit: number): Promise<Export
       phaseIn: conversationRuns.phaseIn,
       model: conversationRuns.model,
       createdAt: conversationRuns.createdAt,
+      latencyMs: conversationRuns.latencyMs,
     })
     .from(conversationRuns)
     .where(gte(conversationRuns.createdAt, since))
@@ -50,12 +51,42 @@ export async function fetchRunsSince(since: Date, limit: number): Promise<Export
     byRun.set(turn.runId, bucket);
   }
 
-  return runs.map(run => ({
-    runId: run.runId,
-    userId: run.userId,
-    phase: run.phaseIn,
-    createdAt: run.createdAt,
-    model: run.model,
-    turns: byRun.get(run.runId) ?? [],
-  }));
+  const out: ExportedRun[] = [];
+  for (const run of runs) {
+    let runTurns = byRun.get(run.runId);
+    if (!runTurns || runTurns.length === 0) {
+      // Fallback join (post-execution correction 2026-09-15): production appendTurn
+      // does not thread runId (BUG-016), so all turns may carry run_id = NULL.
+      // Window-join the user's turns using the run's own timestamps —
+      // [createdAt − latencyMs, createdAt] — without inventing precision.
+      const start = new Date(run.createdAt.getTime() - run.latencyMs);
+      const end = run.createdAt;
+      const windowed = await db
+        .select({
+          role: conversationTurns.role,
+          kind: conversationTurns.kind,
+          content: conversationTurns.content,
+          createdAt: conversationTurns.createdAt,
+        })
+        .from(conversationTurns)
+        .where(
+          and(
+            eq(conversationTurns.userId, run.userId),
+            gte(conversationTurns.createdAt, start),
+            lte(conversationTurns.createdAt, end),
+          ),
+        )
+        .orderBy(asc(conversationTurns.createdAt));
+      runTurns = windowed.map(t => ({ role: t.role, kind: t.kind, content: t.content, createdAt: t.createdAt }));
+    }
+    out.push({
+      runId: run.runId,
+      userId: run.userId,
+      phase: run.phaseIn,
+      createdAt: run.createdAt,
+      model: run.model,
+      turns: runTurns,
+    });
+  }
+  return out;
 }

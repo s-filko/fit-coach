@@ -1,7 +1,7 @@
 # Refactor P0 — Transcript Export Implementation Plan
 
 - Status: planned
-- Branch:
+- Branch: plan/refactor-p0-transcript-export
 - After: refactor-p0-eval-baseline
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -345,6 +345,8 @@ export async function fetchRunsSince(since: Date, limit: number): Promise<Export
 ```
 
 Turns written before the run-log migration have `run_id = NULL` and are excluded by the `isNotNull` filter. That is deliberate: a turn with no run has no phase-in/model context and cannot become a faithful case. Task 4 reports how many such rows were skipped so the loss is visible rather than silent.
+
+> **Post-execution correction (2026-09-15, orchestrator ruling):** the paragraph above is superseded by measured dev data — all 742 turns on dev (runs 2026-09-12..09-14) carry `run_id = NULL`, because production `appendTurn` never threads `runId` at all (filed separately as BUG-016; fixing `src/` is out of scope here). A `run_id`-only join can never match real data, so `fetchRunsSince` gained a fallback join: for runs with no `run_id`-linked turns, select the user's turns with `created_at` inside the run's own time window — `[run.createdAt − run.latencyMs, run.createdAt]`, no invented precision. Explicit `run_id` links take precedence when present. Both paths are unit-tested in `export-query.unit.test.ts`.
 
 - [ ] **Step 4: Run the test to confirm it passes**
 
