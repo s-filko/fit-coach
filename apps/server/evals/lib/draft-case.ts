@@ -9,8 +9,11 @@ import { pseudonymise, redactText, redactUser } from './redact';
  */
 export function buildDraftCase(run: ExportedRun, user: Record<string, unknown>): Record<string, unknown> | null {
   const firstName = (user['firstName'] as string | null) ?? null;
+  const lastName = (user['lastName'] as string | null) ?? null;
 
-  const humanTurns = run.turns.filter(t => t.kind === 'human');
+  // `kind` is unreliable on production data (appendTurn leaves it at the column
+  // default 'human' — same root cause as BUG-016); `role` is the discriminator.
+  const humanTurns = run.turns.filter(t => t.role === 'user');
   const input = humanTurns[humanTurns.length - 1];
   if (!input) {
     return null;
@@ -28,9 +31,9 @@ export function buildDraftCase(run: ExportedRun, user: Record<string, unknown>):
       phase: run.phase,
       messages: run.turns
         .slice(0, inputIndex)
-        .map(t => ({ role: t.kind === 'human' ? 'human' : 'ai', text: redactText(t.content, firstName) })),
+        .map(t => ({ role: t.role === 'user' ? 'human' : 'ai', text: redactText(t.content, firstName, lastName) })),
     },
-    input: { text: redactText(input.content, firstName) },
+    input: { text: redactText(input.content, firstName, lastName) },
     expect: {},
     provenance: {
       addedBy: pseudonymise(run.userId),

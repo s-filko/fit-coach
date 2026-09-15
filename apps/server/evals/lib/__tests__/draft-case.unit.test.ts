@@ -12,13 +12,15 @@ const run: ExportedRun = {
   createdAt: new Date('2026-09-14T10:00:00Z'),
   model: 'glm-5.3',
   turns: [
-    { role: 'user', kind: 'human', content: 'привет, Иван', createdAt: new Date('2026-09-14T09:59:58Z') },
-    { role: 'assistant', kind: 'ai', content: `сессия ${RUN_UUID} открыта`, createdAt: new Date('2026-09-14T09:59:59Z') },
+    // Real dev-data shape (BUG-016 kin): kind defaults to 'human' on every row,
+    // role is the reliable human/assistant discriminator.
+    { role: 'user', kind: 'human', content: 'привет, Иван Петров', createdAt: new Date('2026-09-14T09:59:58Z') },
+    { role: 'assistant', kind: 'human', content: `сессия ${RUN_UUID} открыта`, createdAt: new Date('2026-09-14T09:59:59Z') },
     { role: 'user', kind: 'human', content: 'жим 80 на 8', createdAt: new Date('2026-09-14T10:00:00Z') },
   ],
 };
 
-const user = { id: RAW_USER_ID, firstName: 'Иван', languageCode: 'ru', timezone: 'Europe/Berlin' };
+const user = { id: RAW_USER_ID, firstName: 'Иван', lastName: 'Петров', languageCode: 'ru', timezone: 'Europe/Berlin' };
 
 describe('buildDraftCase', () => {
   it('leaks no raw UUID or user id anywhere in the record', () => {
@@ -30,18 +32,20 @@ describe('buildDraftCase', () => {
     expect((record as Record<string, unknown>)['provenance']).not.toHaveProperty('runId');
   });
 
-  it('takes the last human turn as input and everything before it as state', () => {
+  it('takes the last user-role turn as input and everything before it as state', () => {
     const record = buildDraftCase(run, user) as {
       input: { text: string };
       state: { messages: Array<{ role: string; text: string }> };
     };
     expect(record.input.text).toBe('жим 80 на 8');
     expect(record.state.messages).toHaveLength(2);
-    expect(record.state.messages[0]?.text).toBe('привет, [NAME]');
+    expect(record.state.messages[0]?.text).toBe('привет, [NAME] [NAME]');
+    expect(record.state.messages[0]?.role).toBe('human');
     expect(record.state.messages[1]?.text).toContain('[ID]');
+    expect(record.state.messages[1]?.role).toBe('ai');
   });
 
-  it('returns null when the run has no human turn', () => {
+  it('returns null when the run has no user-role turn', () => {
     const aiOnly: ExportedRun = {
       ...run,
       turns: [run.turns[1] ?? { role: 'assistant', kind: 'ai', content: 'x', createdAt: new Date() }],

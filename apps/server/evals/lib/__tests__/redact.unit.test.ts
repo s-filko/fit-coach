@@ -23,6 +23,10 @@ describe('redactText', () => {
     expect(redactText('привет сергей', 'Сергей')).toBe('привет [NAME]');
   });
 
+  it('replaces the user surname when given', () => {
+    expect(redactText('Иван Петров, привет!', 'Иван', 'Петров')).toBe('[NAME] [NAME], привет!');
+  });
+
   it('removes email addresses', () => {
     expect(redactText('пиши на a.b@example.com', null)).toBe('пиши на [EMAIL]');
   });
