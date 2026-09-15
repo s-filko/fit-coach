@@ -49,7 +49,7 @@ export async function registerInfraServices(container: Container = getGlobalCont
   container.register(USER_REPOSITORY_TOKEN, new DrizzleUserRepository());
   container.registerFactory(USER_SERVICE_TOKEN, c => new UserService(c.get(USER_REPOSITORY_TOKEN)));
 
-  // TODO: remove LLMService when TrainingService.getNextSessionRecommendation is migrated to graph
+  // TODO: remove LLMService — the legacy path, retired by refactor P1 (deleted in Task 5)
   const { LLMService } = await import('@infra/ai/llm.service');
   const { LLM_SERVICE_TOKEN } = await import('@domain/ai/ports');
   container.register(LLM_SERVICE_TOKEN, new LLMService());
@@ -75,7 +75,6 @@ export async function registerInfraServices(container: Container = getGlobalCont
         c.get(SESSION_EXERCISE_REPOSITORY_TOKEN),
         c.get(SESSION_SET_REPOSITORY_TOKEN),
         c.get(USER_REPOSITORY_TOKEN),
-        c.get(LLM_SERVICE_TOKEN),
         c.get(EMBEDDING_SERVICE_TOKEN),
       ),
   );

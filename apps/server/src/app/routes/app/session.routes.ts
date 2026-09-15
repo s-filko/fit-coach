@@ -5,8 +5,10 @@ const HTTP_UNAUTHORIZED = 401;
 const HTTP_FORBIDDEN = 403;
 const HTTP_NOT_FOUND = 404;
 const HTTP_CONFLICT = 409;
+const HTTP_GONE = 410;
 
 const errorResponse = z.object({ error: z.object({ message: z.string() }) });
+const retiredResponse = z.object({ error: z.object({ code: z.literal('RETIRED') }) });
 
 const sessionSetDataSchema = z.discriminatedUnion('type', [
   z.object({
@@ -298,32 +300,22 @@ export async function registerAppSessionRoutes(app: FastifyInstance): Promise<vo
     },
   );
 
-  // POST /session/:id/recommend — AI generates/updates session plan
+  // Retired — ADR-0013 §7 / OQ-1. Auth still runs (preHandler); no session lookup for a dead route.
   app.post(
     '/session/:id/recommend',
     {
       schema: {
-        summary: 'Generate AI workout recommendation for session',
+        summary: 'Retired: AI session recommendation moved to the bot conversation (ADR-0013 OQ-1)',
         security: [{ InitDataAuth: [] }],
         params: z.object({ id: z.string().uuid() }),
-        body: z
-          .object({
-            comment: z.string().optional(),
-          })
-          .nullish(),
-        response: { 401: errorResponse, 403: errorResponse, 404: errorResponse },
+        response: { 401: errorResponse, 410: retiredResponse },
       },
     },
     async (req, reply) => {
-      const { id } = req.params as { id: string };
-      const result = await requireSessionOwnership(app, req, reply, id);
-      if (!result) {
-        return;
+      if (!req.telegramUserId) {
+        return reply.code(HTTP_UNAUTHORIZED).send({ error: { message: 'Not authenticated' } });
       }
-
-      const body = (req.body as { comment?: string } | undefined) ?? {};
-      const recommendation = await app.services.trainingService.recommendForSession(id, result.userId, body.comment);
-      return reply.send({ data: recommendation });
+      return reply.code(HTTP_GONE).send({ error: { code: 'RETIRED' } });
     },
   );
 

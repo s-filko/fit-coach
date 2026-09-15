@@ -245,6 +245,18 @@ User identity is extracted from the signed initData — no userId in request bod
 ```
 - 401
 
+### 4.11 Create Plan via AI — RETIRED
+- POST `/api/app/plan`
+- Retired 2026-09 (ADR-0013 §7, OQ-1): plan generation is a bot conversation (plan_creation phase).
+- Response 410 `{ error: { code: 'RETIRED' } }` for any authenticated caller
+- 401 `{ error: { message: string } }` — missing or invalid initData (auth still enforced first)
+
+### 4.12 Session Recommendation via AI — RETIRED
+- POST `/api/app/session/:id/recommend`
+- Retired 2026-09 (ADR-0013 §7, OQ-1): "what do I do today" is the bot's session_planning phase.
+- Response 410 `{ error: { code: 'RETIRED' } }` for any authenticated caller; the session is not read
+- 401 `{ error: { message: string } }` — missing or invalid initData
+
 ### Shared Types (Session API)
 ```ts
 type SessionStatus = 'planning' | 'in_progress' | 'completed' | 'skipped';

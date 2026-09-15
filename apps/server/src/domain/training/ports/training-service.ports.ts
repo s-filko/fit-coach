@@ -70,12 +70,6 @@ export interface UpdateSetResult {
 
 export interface ITrainingService {
   getActivePlan(userId: string): Promise<WorkoutPlan | null>;
-  createPlanFromPrompt(
-    userId: string,
-    params: { goal: string; daysPerWeek: number; equipment?: string },
-  ): Promise<WorkoutPlan>;
-  getNextSessionRecommendation(userId: string): Promise<SessionRecommendation>;
-  recommendForSession(sessionId: string, userId: string, comment?: string): Promise<SessionRecommendation>;
   updateSessionPlan(sessionId: string, exercises: SessionRecommendation['exercises']): Promise<WorkoutSession>;
   startSession(userId: string, dto: CreateSessionDto): Promise<WorkoutSession>;
   beginSession(sessionId: string): Promise<WorkoutSession>;
