@@ -1,7 +1,7 @@
 # Refactor P1 — Legacy LLM Path Retirement Implementation Plan
 
 - Status: planned
-- Branch:
+- Branch: plan/refactor-p1-legacy-llm-retirement
 - After: refactor-p0-transcript-export
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
