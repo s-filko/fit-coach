@@ -41,21 +41,68 @@ Rules:
 
 ## Findings
 
-- [ ] **Decompose `ITrainingService` (19 methods) by role**: rule-3 review (ARCHITECTURE.md,
+- [ ] **Decompose `ITrainingService` (16 methods) by role**: rule-3 review (ARCHITECTURE.md,
   recorded as a standing exception) found one contract serving two different consumers —
   HTTP routes (`plan.routes.ts`, `session.routes.ts`) and LLM tools
   (`infra/ai/graph/tools/*`) — with correction commands (`deleteLastSets`, `updateLastSet`)
   used only by the latter. Natural split: planning / session lifecycle / execution-and-
-  correction. Touches the 680-line `training.service.ts` (8 constructor dependencies,
-  including the `LLMService` P1 retires) plus DI registration and every consumer, so it needs
-  its own plan; sequence it with P1. Source: close-out-review R1 + rule-3 review (2026-09-14).
-- [ ] **Three unused `ITrainingService` methods**: `getNextSessionRecommendation`,
-  `addExerciseToSession` and `logSet` have zero call sites in `apps/server` — the latter two
-  are superseded by `logSetWithContext` (11 call sites) and `ensureCurrentExercise` (9).
-  Deleting them removes ~29 lines of contract plus their implementations. **Before deleting,
+  correction. Touches the `training.service.ts` (7 constructor dependencies; the four legacy
+  LLM methods and the `LLMService` dependency were deleted by refactor P1, 2026-09) plus DI
+  registration and every consumer, so it needs its own plan; sequence it with P1.
+  Source: close-out-review R1 + rule-3 review (2026-09-14); counts reconciled 2026-09-16.
+- [ ] **Two unused `ITrainingService` methods**: `addExerciseToSession` and `logSet` have
+  zero call sites in `apps/server` — both are superseded by `logSetWithContext` (11 call
+  sites) and `ensureCurrentExercise` (9). (A third, `getNextSessionRecommendation`, was
+  deleted by refactor P1, 2026-09.) Deleting them removes their contract lines plus their
+  implementations. **Before deleting,
   check `apps/webapp` and `apps/bot`** — the measurement covered `apps/server` only. Kept out
   of `ports-layout-consistency`, whose Global Constraints forbid behavioural change. Source:
   rule-3 review (2026-09-14).
+- [ ] **Consolidate the LLM text/mapping helpers when P2/P3 rewrite the subgraphs**:
+  `textOf()` (llm.gateway.ts) is the 7th copy of the content-block flattening inlined in
+  six graph files, and `toLangChain()` duplicates the ChatMsg→LangChain role mapping
+  inlined in five subgraphs. The gateway versions are the canonical home; the inline
+  copies should import them as the subgraphs are rewritten. Source: refactor-P1
+  close-out review R2 (2026-09-16).
+- [ ] **Webapp guard test for retired routes**: "webapp never POSTs a retired endpoint" is
+  pinned only by plan greps — mirror `legacy-path-retired.unit.test.ts` for
+  `apps/webapp/src` (grep apiRequest calls for POST `/plan` and `/session/:id/recommend`)
+  so the frozen surface cannot silently reintroduce them. Source: refactor-P1 close-out
+  review R3 (2026-09-16).
+- [ ] **P1 test-coverage gaps**: parseLlmProfiles boundary values untested (temperature
+  edges 0/2, rejections −1/2.1/hex; maxTokens 0); gateway `structured()` retry path for
+  `OutputParserException` untested (only ZodError is); model.factory test mutates
+  LLM_PROFILE_* env without afterEach restore; AC-1314 maxTokens-default equivalence
+  unasserted. Source: refactor-P1 close-out review R3 (2026-09-16).
+- [ ] **Share the grep-guard scaffolding** between `single-model-site.unit.test.ts` and
+  `legacy-path-retired.unit.test.ts` (execFileSync-grep + path mapping duplicated; both
+  new in P1) — a tests/helpers helper, as done for buildSignedInitData. Also fix the
+  `--exclude-dir=__tests__` blind spot by building search literals via concatenation
+  where possible. Source: refactor-P1 close-out review R2/R3 (2026-09-16).
+- [ ] **Document the P1 config surface**: `config/llm-profiles.ts` missing from the
+  ARCHITECTURE.md module layout's `config/` entry; optional
+  `LLM_PROFILE_<NAME>_{MODEL,TEMPERATURE,MAX_TOKENS}` absent from the env section and
+  `apps/server/.env.example`. Source: refactor-P1 close-out review R4 (2026-09-16).
+- [ ] **ARCHITECTURE.md:48 ChatMsg hedge** ("retired in refactor P1/P4") — P1 shipped
+  with ChatMsg untouched; resolve the hedge to P4-only when P4's plan touches the file.
+  Source: refactor-P1 close-out review R4 (2026-09-16).
+- [ ] **Registration-era feature specs reference the deleted `LLMService`**:
+  FEAT-0004:23 and FEAT-0005:30 (generateResponse never existed; no named downstream
+  owner — P7 names only FEAT-0003). Extend the existing FEAT-0006 entry below with its
+  LLMService mentions (lines 40, 96-97, 326, 347-348). Source: refactor-P1 close-out
+  review R4 (2026-09-16).
+- [ ] **API_SPEC §5 debug endpoints are dead copy**: GET `/api/debug/llm` and
+  POST `/api/debug/llm/clear` have no routes in apps/server (pre-existing drift, made
+  permanent by P1 deleting the service that could have implemented them) — remove or
+  implement. Source: refactor-P1 close-out review R4 (2026-09-16).
+- [ ] **Prune the archival docs cluster**: MVP_TRAINING_SESSION_MANAGEMENT.md (draft
+  posing as a durable spec, references a prompt path that never existed),
+  PLAN-implementation.md (executed TODOs reading as live debt), BUGS.md Fixed sections
+  citing line numbers in deleted files. Source: refactor-P1 close-out review R4
+  (2026-09-16).
+- [ ] **Inline `setNumericField`** in llm-profiles.ts (one call site; the field parameter
+  splits the body in two — the plan's own snippet had the branches inline). Source:
+  refactor-P1 close-out review R2 (2026-09-16).
 - [ ] L0 eval checks named by `PROMPT_EVAL_FRAMEWORK.md` §4.1 but not implemented in the
   P0 harness: section presence, version discipline, message-catalog completeness. All three
   need artefacts P0 does not build — a PhaseSpec/section contract (P2) and prompt version

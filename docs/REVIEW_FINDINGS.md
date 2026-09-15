@@ -92,8 +92,23 @@ or is inert for the kind of diff under review.
   Runs: refactor-p0-dead-code (2026-09-12, third run).
 - [×1] R2's brief makes any YAGNI/DRY hit blocking-eligible purely by naming the rule, with no
   severity gradient — a one-key dead object literal and a real architectural flaw land in the
-  same blocking bucket, so the severity call is unanchored judgment.
-  Runs: refactor-p0-run-log (2026-09-12).
+  same blocking bucket, so the severity call is unanchored judgment. Second occurrence, the
+  scope-deadlock variant: R2's zone prompt states DRY "satisfies the blocking test", but a
+  duplication whose only clean fix touches files the plan explicitly freezes would deadlock
+  the close-out against the plan's own constraints — blocking-eligibility needs an escape
+  hatch ("duplication is blocking only when an in-branch fix exists that does not violate
+  the plan's scope constraints").
+  Runs: refactor-p0-run-log (2026-09-12), refactor-p1-legacy-llm-retirement (2026-09-16).
+
+- [×1] A plan's Files list named `domain/training/ports/service.ports.ts` where the tree has
+  `training-service.ports.ts` — the executor coped, but a plan-writing phase that does not
+  verify cited paths against the tree turns every such reference into executor guesswork that
+  review must then re-verify.
+  Runs: refactor-p1-legacy-llm-retirement (2026-09-16).
+- [×1] The orchestrator's re-review brief asserted the diff touches no env handling, while
+  Task 2 is env parsing by design — zone briefs written from memory of the plan rather than
+  from its file list inject errors the zone must notice and route to meta on its own.
+  Runs: refactor-p1-legacy-llm-retirement (2026-09-16).
 
 ## Blind spots
 
@@ -188,6 +203,11 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   executor that checks `$?` alone would report a failure the suite output contradicts.
   Runs: refactor-p0-run-log re-run (2026-09-12).
 
+- [×1] A known-and-accepted carve-out (FEAT-0003's stale LLMService diagram is P7-owned)
+  lives only in the master plan's phase map; the review brief's known-and-accepted list is
+  assembled ad hoc each round, so the same carve-out must be re-derived or gets re-flagged.
+  Runs: refactor-p1-legacy-llm-retirement (2026-09-16).
+
 ## Rule candidates
 
 A finding a zone wanted to raise as blocking but could not, because no rule in this repo
@@ -220,8 +240,13 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   silent edit. An edit with no such record is blocking regardless of how correct it is." This
   makes the distinction auditable from the branch alone. Independently re-derived by the third
   run's R1, which had to reconstruct legitimacy from commit timestamps (escalation record at
-  13:49 preceding the edit at 14:15) — confirming the gap is systemic, not incidental.
-  Runs: refactor-p0-dead-code (2026-09-12, re-run), refactor-p0-dead-code (2026-09-12, third run).
+  13:49 preceding the edit at 14:15) — confirming the gap is systemic, not incidental. Third
+  run, the standing-delegation variant: the owner delegated an obvious-fix class mid-review and
+  it was recorded as a paragraph in rule 3 of SUPERPOWERS_INTEGRATION.md — edited by the very
+  branch it authorizes, so a future reader cannot distinguish an owner ruling from
+  self-authorization until the branch merges. Same proposal, same fix: the ruling and its
+  provenance must be auditable from the branch (plan record + commit), not from a conversation.
+  Runs: refactor-p0-dead-code (2026-09-12, re-run), refactor-p0-dead-code (2026-09-12, third run), refactor-p1-legacy-llm-retirement (2026-09-16).
 - [×1] The AC/BR-in-test-name convention is real (confirmed by training.subgraph.unit.test.ts
   precedent) but is not written down anywhere central — CONTRIBUTING_AI.md states it in prose
   ("IDs must appear... in tests") while apps/server/TESTING.md, the doc CONTRIBUTING_AI.md defers
@@ -294,7 +319,7 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   specifically, where 'removed the tests' and 'there were no tests' have identical end states but
   very different implications for coverage.
   Runs: refactor-p0-dead-code (2026-09-12, third run).
-- [×1] A doc-rot fix can legitimately manufacture new doc rot, and no rule makes that blocking.
+- [×2] A doc-rot fix can legitimately manufacture new doc rot, and no rule makes that blocking.
   This branch's fix commit corrected `registration.validation.ts`'s location in ARCHITECTURE.md's
   module tree but left `FEAT-0006:115` stating the old `validation/` path — a divergence created
   *by the fix*. DOCUMENTATION_GUIDE § Context hygiene ("One current, unambiguous version of
@@ -309,8 +334,13 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   change renames, moves, or deletes a file that durable docs cite by path, `grep -rn
   '<old-basename>' docs/` and update every hit in the same change; a stale path in a durable doc
   is a defect, not a leftover." This makes the sweep a checkable close-out step rather than
-  reviewer judgement.
-  Runs: refactor-p0-dead-code (2026-09-12, third run), ports-layout-consistency (2026-09-14).
+  reviewer judgement. Third run, both halves at once: a deletion branch's reconciliation commit
+  fixed exactly the named findings in exactly the named files instead of re-running the class
+  sweep — the next review round found two more same-class hits (LOGGING_GUIDE, CONTRIBUTING_AI)
+  that a class grep over the deleted identifiers would have caught in the same commit; and the
+  R4-round-1 meta ("a task that deletes a file must grep all durable docs for the deleted
+  identifiers, not just the lines the plan names") was itself the missing written rule.
+  Runs: refactor-p0-dead-code (2026-09-12, third run), ports-layout-consistency (2026-09-14), refactor-p1-legacy-llm-retirement (2026-09-16).
 - [×1] Nothing in the repo says an advisory recorded in a plan's `## Review` section must not also
   be copied into `docs/BACKLOG.md` verbatim — this branch stores all six of its advisories twice
   in near-identical prose with no ID linking the pair, so the two copies must be kept in sync or
@@ -354,3 +384,30 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   "Principles & Boundaries", so R2 blocks on complexity and on duplication. Kept as the worked
   example of how a rule candidate graduates; drop it once a second entry replaces it.
   Runs: mandatory-plan-review (2026-09-12).
+- [×1] Plans that "lift" a helper into `tests/helpers/` should also instruct deleting or
+  importing-over the source copy — this run's executor faithfully created the duplicate the
+  plan text prescribed. Proposed plan-writing rule (SUPERPOWERS_INTEGRATION § writing-plans or
+  the skill): a lift step names the source copy's fate.
+  Runs: refactor-p1-legacy-llm-retirement (2026-09-16).
+- [×1] The English-only rule does not state whether quoted data is exempt, yet durable specs
+  necessarily contain Russian eval/user-message strings and UI copy inside code blocks; each
+  review decides the prose-vs-quoted-data boundary ad hoc. Proposed clarification in root
+  CLAUDE.md / CONTRIBUTING_AI.md language rules.
+  Runs: refactor-p1-legacy-llm-retirement (2026-09-16).
+- [×1] A PROPOSED-status ADR can internally conflict (ADR-0013 §7's "AIMessage, no ChatMsg"
+  port wording vs its own D-13/§11/INV-CONV-004), forcing the plan to adjudicate the ADR
+  against itself. Proposed convention for CONTRIBUTING_AI.md (ADRs): PROPOSED ADRs may carry a
+  dated errata note when a later section contradicts an earlier one, so executors cite the
+  errata instead of re-deriving the adjudication.
+  Runs: refactor-p1-legacy-llm-retirement (2026-09-16).
+- [×1] Endpoint-retiring plans should require a caller inventory cross-check — grep every
+  `apiRequest`/fetch method+path in all client apps against the server route table — not a
+  per-feature keyword grep; the keyword approach ("recommend") is exactly how a POST /plan
+  caller survived the analysis and cost a review round. Proposed for the writing-plans skill
+  or CONTRIBUTING_AI.md (process).
+  Runs: refactor-p1-legacy-llm-retirement (2026-09-16).
+- [×1] Positive result worth codifying: mid-review scope changes handled as an "Extension"
+  paragraph in the plan's Global Constraints (ruling + scope + limits, committed before the
+  fix) made the fix testable and the review decisive — propose it as the standard mechanism
+  for owner-ruling scope extensions during plan execution.
+  Runs: refactor-p1-legacy-llm-retirement (2026-09-16).

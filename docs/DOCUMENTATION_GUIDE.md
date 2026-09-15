@@ -58,7 +58,7 @@ IDs must appear in docs, code comments (JSDoc near ports/services), and tests (d
 
 ## Domain Spec
 - One file per domain (≤ 50 lines).
-- Must reflect existing ports in `apps/server/src/domain/*/ports/*.ts` (or `ports.ts`).
+- Must reflect existing ports in `apps/server/src/domain/*/ports/*.ts`.
 - Format:
   - Domain
   - Terms (single‑line definitions)

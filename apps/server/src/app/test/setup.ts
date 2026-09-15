@@ -2,11 +2,9 @@ import path from 'path';
 
 import dotenv from 'dotenv';
 
-import { LLM_SERVICE_TOKEN } from '@domain/ai/ports';
 import { USER_REPOSITORY_TOKEN, USER_SERVICE_TOKEN } from '@domain/user/ports';
 import { ParsedProfileData, User, UserService } from '@domain/user/services/user.service';
 
-import { LLMService } from '@infra/ai/llm.service';
 import { DrizzleUserRepository } from '@infra/db/repositories/user.repository';
 import { Container } from '@infra/di/container';
 
@@ -152,10 +150,6 @@ export async function setupTestDI(): Promise<void> {
     if (!c.has(USER_SERVICE_TOKEN)) {
       c.registerFactory(USER_SERVICE_TOKEN, c => new UserService(c.get(USER_REPOSITORY_TOKEN)));
     }
-    if (!c.has(LLM_SERVICE_TOKEN)) {
-      c.register(LLM_SERVICE_TOKEN, new LLMService());
-    }
-
     // Close the pool to avoid connection leaks
     await pool.end();
   }

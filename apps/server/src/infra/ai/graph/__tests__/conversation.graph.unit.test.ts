@@ -28,7 +28,6 @@ const makeDeps = (): ConversationGraphDeps => ({
     getSessionDetails: jest.fn().mockResolvedValue(null),
     completeSession: jest.fn().mockResolvedValue({}),
     startSession: jest.fn().mockResolvedValue({ id: 'session-1' }),
-    getNextSessionRecommendation: jest.fn(),
     addExerciseToSession: jest.fn(),
     logSet: jest.fn(),
     skipSession: jest.fn(),

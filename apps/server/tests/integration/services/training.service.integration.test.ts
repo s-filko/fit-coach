@@ -1,6 +1,5 @@
 import { TrainingService } from '@domain/training/services/training.service';
 
-import { LLMService } from '@infra/ai/llm.service';
 import { ExerciseRepository } from '@infra/db/repositories/exercise.repository';
 import { SessionExerciseRepository } from '@infra/db/repositories/session-exercise.repository';
 import { SessionSetRepository } from '@infra/db/repositories/session-set.repository';
@@ -45,7 +44,6 @@ describe('TrainingService – integration (ADR-0011)', () => {
       sessionExerciseRepo,
       sessionSetRepo,
       userRepo,
-      new LLMService(),
     );
 
     // Resolve exercise IDs from seed data (inserted in global test setup)

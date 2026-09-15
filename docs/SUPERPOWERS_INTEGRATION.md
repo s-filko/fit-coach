@@ -73,7 +73,14 @@ idea
    and the command that verifies it. A task without a verification path is not done.
 3. **Escalation, never silent edits.** If execution reveals a durable spec is wrong, the
    agent stops and surfaces the conflict to the owner. Durable specs change through the
-   owner, in the open, with IDs preserved.
+   owner, in the open, with IDs preserved. Owner delegation (2026-09-16): *obvious* errors
+   with no behavior-change consequence — factual reconciliation of a durable spec with
+   already-approved code (stale pointers, wrong counts, references to deleted files),
+   test-only fixes, dead-reference cleanup — may be fixed without a prior owner decision;
+   the session classifies each finding and states the class when reporting. Still
+   owner-level without exception: anything that changes runtime behavior, anything that
+   changes what a durable rule *means* (not merely what it points at), product-scope
+   calls, trade-offs the plan does not settle, and push/merge/deploy.
 4. **TDD conventions.** Tests follow `apps/server/TESTING.md`; `describe/it` names keep
    BR/AC references per CONTRIBUTING_AI. Superpowers red-green-refactor discipline
    applies inside those conventions.

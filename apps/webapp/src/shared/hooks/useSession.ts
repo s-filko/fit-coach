@@ -10,9 +10,6 @@ interface UseSessionResult {
   /** Create a new session in 'planning' status */
   startSession: () => Promise<void>;
   starting: boolean;
-  /** Ask AI for a workout recommendation (optionally with user comment) */
-  recommend: (comment?: string) => Promise<void>;
-  recommending: boolean;
   plan: SessionRecommendation | null;
   /** Save reordered/edited exercises list to the session */
   updatePlan: (exercises: RecommendedExercise[]) => Promise<void>;
@@ -25,7 +22,6 @@ export function useSession(): UseSessionResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
-  const [recommending, setRecommending] = useState(false);
   const [plan, setPlan] = useState<SessionRecommendation | null>(null);
 
   useEffect(() => {
@@ -67,26 +63,6 @@ export function useSession(): UseSessionResult {
     }
   }, []);
 
-  const recommend = useCallback(async (comment?: string) => {
-    if (!session) return;
-    setRecommending(true);
-    setError(null);
-    try {
-      const rec = await apiRequest<SessionRecommendation>(
-        `/session/${session.id}/recommend`,
-        {
-          method: 'POST',
-          body: comment ? { comment } : {},
-        },
-      );
-      setPlan(rec);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to get recommendation');
-    } finally {
-      setRecommending(false);
-    }
-  }, [session]);
-
   const updatePlan = useCallback(async (exercises: RecommendedExercise[]) => {
     if (!session) return;
     setError(null);
@@ -118,7 +94,7 @@ export function useSession(): UseSessionResult {
   return {
     session, loading, error,
     startSession, starting,
-    recommend, recommending, plan,
+    plan,
     updatePlan, beginSession,
   };
 }

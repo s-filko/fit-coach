@@ -2,8 +2,10 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 const HTTP_UNAUTHORIZED = 401;
+const HTTP_GONE = 410;
 
 const errorResponse = z.object({ error: z.object({ message: z.string() }) });
+const retiredResponse = z.object({ error: z.object({ code: z.literal('RETIRED') }) });
 
 export async function registerAppPlanRoutes(app: FastifyInstance): Promise<void> {
   app.get(
@@ -26,29 +28,21 @@ export async function registerAppPlanRoutes(app: FastifyInstance): Promise<void>
     },
   );
 
+  // Retired — ADR-0013 §7 / OQ-1: plan generation is a bot conversation, not a mini-app call.
   app.post(
     '/plan',
     {
       schema: {
-        summary: 'Create a new workout plan via AI',
+        summary: 'Retired: AI plan generation moved to the bot conversation (ADR-0013 OQ-1)',
         security: [{ InitDataAuth: [] }],
-        body: z.object({
-          goal: z.string().min(1),
-          daysPerWeek: z.number().min(1).max(7),
-          equipment: z.string().optional(),
-        }),
-        response: { 401: errorResponse },
+        response: { 401: errorResponse, 410: retiredResponse },
       },
     },
     async (req, reply) => {
-      const userId = req.telegramUserId;
-      if (!userId) {
+      if (!req.telegramUserId) {
         return reply.code(HTTP_UNAUTHORIZED).send({ error: { message: 'Not authenticated' } });
       }
-
-      const body = req.body as { goal: string; daysPerWeek: number; equipment?: string };
-      const plan = await app.services.trainingService.createPlanFromPrompt(userId, body);
-      return reply.send({ data: plan });
+      return reply.code(HTTP_GONE).send({ error: { code: 'RETIRED' } });
     },
   );
 }

@@ -1,8 +1,9 @@
 # Refactor P1 — Legacy LLM Path Retirement Implementation Plan
 
-- Status: planned
-- Branch:
+- Status: done
+- Branch: plan/refactor-p1-legacy-llm-retirement
 - After: refactor-p0-transcript-export
+- Review: 2026-09-16 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -26,6 +27,7 @@
 - **No new required env vars.** `LLM_PROFILE_<NAME>_{MODEL,TEMPERATURE,MAX_TOKENS}` are optional overrides; an env with none of them behaves exactly as today (AC-1314).
 - **Run-metrics contract** (see `src/infra/ai/run-metrics.ts` and the backlog finding on it): a call bound to a conversation run passes `runId` in `metadata`; a job call (no run) must pass `runId: undefined` explicitly so a drained accumulator is never re-opened. The gateway is the one place that encodes this for non-graph callers.
 - **Mini-app is frozen except for one bounded fix (owner ruling, 2026-09-13).** `apps/webapp` is a frozen product surface, but shipping the 410 without touching it would leave a **request loop**, not merely an error state: `PlanningView`'s effect re-fires on every `recommending` transition while `plan` stays null (`PlanningView.tsx:37-41`), so a retired endpoint would be polled indefinitely by every client opening a session without a plan. Task 6 therefore makes the minimum change that stops the loop and shows an honest message. No redesign, no new screens, no new endpoints.
+- **Extension (owner ruling, 2026-09-16):** the close-out review (R3) found a second caller the original analysis missed — `PlanPage`'s creation form POSTs `/plan` via `usePlan.createPlan`, so after the 410 every user without a plan would see a raw "Request failed: 410" on the routed «План» tab. The owner extended the bounded-fix ruling to it: remove the creation form and `createPlan` from the hook, show a plan-from-chat empty state. Plan display (GET `/plan`) is untouched. Same limits: removal only, no redesign, no new endpoints.
 - Verification commands run from `apps/server/` unless stated otherwise.
 - Commit messages carry no attribution lines.
 
@@ -55,7 +57,7 @@ The master plan and ADR-0013 §12 mark "nobody uses them in prod" as an [ASSUMPT
 - Deterministic: request counts for `POST /api/app/plan` and `POST /api/app/session/*/recommend` on prod over the last 30 days, from server logs.
 - Manual observation: the webapp's `PlanningView` auto-calls the recommend endpoint when a session has no plan (`apps/webapp/src/features/session/PlanningView.tsx:37-41`) and re-fires after each failure — fixed by Task 6 of this plan, not deferred.
 
-- [ ] **Step 1: Count prod requests in the server's own request log (pino, 30 days)**
+- [x] **Step 1: Count prod requests in the server's own request log (pino, 30 days)**
 
 Run from your machine:
 
@@ -65,7 +67,7 @@ ssh filko.dev "docker logs fitcoach-prod-server --since 720h 2>&1 | grep -E '\"m
 
 Expected: a number. `0` means no traffic in the retention window. If the container was recreated less recently than 30 days (`docker inspect -f '{{.State.StartedAt}}' fitcoach-prod-server`), say so in the record — the window is then shorter than 30 days.
 
-- [ ] **Step 2: Cross-check the reverse proxy access log**
+- [x] **Step 2: Cross-check the reverse proxy access log**
 
 Nginx Proxy Manager on the VPS keeps per-host access logs in its data volume. Locate and count:
 
@@ -81,7 +83,7 @@ ssh filko.dev "zcat -f /srv/docker/nginx-proxy-manager/data/logs/proxy-host-N_ac
 
 If the NPM container or path differs, adapt the path; record what was actually inspected.
 
-- [ ] **Step 3: Record the result in this plan**
+- [x] **Step 3: Record the result in this plan**
 
 Fill in:
 
@@ -97,11 +99,11 @@ Fill in:
 - Ruling: proceed | STOP (traffic found → surfaced to owner on <date>)
 ```
 
-- [ ] **Step 4: Gate**
+- [x] **Step 4: Gate**
 
 If any count is greater than zero: stop, set `STATE.md` *Blocked / waiting on owner* with the numbers, do not continue to Task 2. If all counts are zero: continue.
 
-- [ ] **Step 5: Commit the record**
+- [x] **Step 5: Commit the record**
 
 ```bash
 git add docs/superpowers/plans/refactor-p1-legacy-llm-retirement.md
@@ -140,7 +142,7 @@ export function resetModelCacheForTests(): void;
 
 Task 3's gateway calls `getModel(opts.profile)`.
 
-- [ ] **Step 1: Write the failing profile-parser test**
+- [x] **Step 1: Write the failing profile-parser test**
 
 Create `apps/server/src/config/__tests__/llm-profiles.unit.test.ts`:
 
@@ -175,12 +177,12 @@ describe('parseLlmProfiles (AC-1314 — optional per-profile overrides)', () => 
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- llm-profiles`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement the parser**
+- [x] **Step 3: Implement the parser**
 
 Create `apps/server/src/config/llm-profiles.ts`:
 
@@ -228,12 +230,12 @@ export function parseLlmProfiles(env: NodeJS.ProcessEnv): Record<string, LlmProf
 }
 ```
 
-- [ ] **Step 4: Run the parser test**
+- [x] **Step 4: Run the parser test**
 
 Run: `npm run test:unit -- llm-profiles`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Expose profiles from `loadConfig()`**
+- [x] **Step 5: Expose profiles from `loadConfig()`**
 
 In `apps/server/src/config/index.ts`:
 
@@ -255,7 +257,7 @@ export function loadConfig(): Env {
 Run: `npm run type-check`
 Expected: clean.
 
-- [ ] **Step 6: Write the failing model-factory test (AC-1314)**
+- [x] **Step 6: Write the failing model-factory test (AC-1314)**
 
 Create `apps/server/src/infra/ai/__tests__/model.factory.unit.test.ts`:
 
@@ -295,12 +297,12 @@ describe('getModel(profile) (AC-1314 — no LLM_PROFILE_* means identical to def
 });
 ```
 
-- [ ] **Step 7: Run it to confirm it fails**
+- [x] **Step 7: Run it to confirm it fails**
 
 Run: `npm run test:unit -- model.factory`
 Expected: FAIL — `resetModelCacheForTests` is not exported / `getModel` ignores its argument.
 
-- [ ] **Step 8: Implement profiles in the factory**
+- [x] **Step 8: Implement profiles in the factory**
 
 Replace the body of `apps/server/src/infra/ai/model.factory.ts`:
 
@@ -345,12 +347,12 @@ export function resetModelCacheForTests(): void {
 }
 ```
 
-- [ ] **Step 9: Run the factory test and the whole unit suite**
+- [x] **Step 9: Run the factory test and the whole unit suite**
 
 Run: `npm run test:unit -- model.factory` then `npm run test:unit`
 Expected: PASS; no other test changes behaviour (every existing caller uses `getModel()` with no argument).
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/config/llm-profiles.ts src/config/__tests__/llm-profiles.unit.test.ts src/config/index.ts src/infra/ai/model.factory.ts src/infra/ai/__tests__/model.factory.unit.test.ts
@@ -393,7 +395,7 @@ export const LLM_GATEWAY_TOKEN: unique symbol;
 export class OpenAiLlmGateway implements LlmGateway
 ```
 
-- [ ] **Step 1: Write the port**
+- [x] **Step 1: Write the port**
 
 Create `apps/server/src/domain/ai/ports/llm.gateway.ports.ts`:
 
@@ -434,7 +436,7 @@ Create `apps/server/src/domain/ai/ports/index.ts`:
 export * from './llm.gateway.ports';
 ```
 
-- [ ] **Step 2: Write the failing gateway test**
+- [x] **Step 2: Write the failing gateway test**
 
 Create `apps/server/src/infra/ai/__tests__/llm.gateway.unit.test.ts`:
 
@@ -531,12 +533,12 @@ describe('OpenAiLlmGateway (ADR-0013 §7 D-10, AC-1311 — the single non-graph 
 });
 ```
 
-- [ ] **Step 3: Run it to confirm it fails**
+- [x] **Step 3: Run it to confirm it fails**
 
 Run: `npm run test:unit -- llm.gateway`
 Expected: FAIL — module not found.
 
-- [ ] **Step 4: Implement the gateway**
+- [x] **Step 4: Implement the gateway**
 
 Create `apps/server/src/infra/ai/llm.gateway.ts`:
 
@@ -623,12 +625,12 @@ export class OpenAiLlmGateway implements LlmGateway {
 }
 ```
 
-- [ ] **Step 5: Run the gateway test**
+- [x] **Step 5: Run the gateway test**
 
 Run: `npm run test:unit -- llm.gateway`
 Expected: PASS (6 tests).
 
-- [ ] **Step 6: Register the gateway in DI**
+- [x] **Step 6: Register the gateway in DI**
 
 In `apps/server/src/main/register-infra-services.ts`, directly after the existing `LLMService` registration (lines 52-55, removed in Task 5):
 
@@ -643,7 +645,7 @@ Note: until Task 5 deletes `domain/ai/ports.ts`, `@domain/ai/ports` resolves to 
 Run: `npm run type-check && npm run lint`
 Expected: clean.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/domain/ai/ports/ src/infra/ai/llm.gateway.ts src/infra/ai/__tests__/llm.gateway.unit.test.ts src/main/register-infra-services.ts
@@ -674,7 +676,7 @@ Master plan P1 item 3; AC-1312. This is the task that removes prompts L1–L6 fr
 
 **Design note — order of checks on the retired routes:** initData auth (`preHandler`, 401) runs first as today; the retired handler then returns 410 **without** touching the database. The previous ownership lookup (`requireSessionOwnership` → 403/404) is not performed for a dead endpoint: a retired route must not read session rows. Consequently the recommend route answers 410 for any well-formed `:id` once the caller is authenticated.
 
-- [ ] **Step 1: Write the signed-initData test helper**
+- [x] **Step 1: Write the signed-initData test helper**
 
 Create `apps/server/tests/helpers/init-data.ts`:
 
@@ -711,7 +713,7 @@ export function buildSignedInitData(
 }
 ```
 
-- [ ] **Step 2: Write the failing integration test (AC-1312)**
+- [x] **Step 2: Write the failing integration test (AC-1312)**
 
 Create `apps/server/tests/integration/api/app-retired-endpoints.integration.test.ts`:
 
@@ -783,12 +785,12 @@ describeIfDb('Retired mini-app LLM endpoints (AC-1312, ADR-0013 OQ-1)', () => {
 });
 ```
 
-- [ ] **Step 3: Run it to confirm it fails**
+- [x] **Step 3: Run it to confirm it fails**
 
 Run: `npm run test:integration -- app-retired-endpoints`
 Expected: the two 410 tests FAIL (today: 200 with an LLM call attempt, or a thrown error); the 401 tests pass already.
 
-- [ ] **Step 4: Retire `POST /plan`**
+- [x] **Step 4: Retire `POST /plan`**
 
 In `apps/server/src/app/routes/app/plan.routes.ts` replace the `app.post('/plan', …)` block (lines 29-54) with:
 
@@ -817,7 +819,7 @@ const retiredResponse = z.object({ error: z.object({ code: z.literal('RETIRED') 
 
 (`HTTP_GONE` and `retiredResponse` go next to the existing `HTTP_UNAUTHORIZED`/`errorResponse` constants at the top of the file.)
 
-- [ ] **Step 5: Retire `POST /session/:id/recommend`**
+- [x] **Step 5: Retire `POST /session/:id/recommend`**
 
 In `apps/server/src/app/routes/app/session.routes.ts` replace the recommend route (lines 282-308) with:
 
@@ -844,12 +846,12 @@ In `apps/server/src/app/routes/app/session.routes.ts` replace the recommend rout
 
 Add `const HTTP_GONE = 410;` and `const retiredResponse = z.object({ error: z.object({ code: z.literal('RETIRED') }) });` beside this file's existing constants.
 
-- [ ] **Step 6: Run the integration test**
+- [x] **Step 6: Run the integration test**
 
 Run: `npm run test:integration -- app-retired-endpoints`
 Expected: PASS (4 tests).
 
-- [ ] **Step 7: Delete the four service methods, the legacy prompt file and the `llmService` dependency**
+- [x] **Step 7: Delete the four service methods, the legacy prompt file and the `llmService` dependency**
 
 In `apps/server/src/domain/training/services/training.service.ts`:
 - delete `createPlanFromPrompt` (lines 81-149), `getNextSessionRecommendation` (151-192), `recommendForSession` (194-224), `generateFreeformRecommendation` (624-676);
@@ -868,7 +870,7 @@ In `apps/server/src/main/register-infra-services.ts` remove `c.get(LLM_SERVICE_T
 
 In `apps/server/tests/integration/services/training.service.integration.test.ts` remove `import { LLMService } from '@infra/ai/llm.service';` (line 3) and the `new LLMService(),` constructor argument (line 48).
 
-- [ ] **Step 8: Verify the tree compiles and the grep half of AC-1312 holds**
+- [x] **Step 8: Verify the tree compiles and the grep half of AC-1312 holds**
 
 Run:
 
@@ -879,7 +881,7 @@ grep -rn "recommendForSession\|createPlanFromPrompt\|getNextSessionRecommendatio
 
 Expected: type-check/lint/unit clean; grep prints nothing.
 
-- [ ] **Step 9: Mark both endpoints retired in `docs/API_SPEC.md`**
+- [x] **Step 9: Mark both endpoints retired in `docs/API_SPEC.md`**
 
 Append to § 4 (after 4.10 "Training History"):
 
@@ -897,7 +899,7 @@ Append to § 4 (after 4.10 "Training History"):
 - 401 `{ error: { message: string } }` — missing or invalid initData
 ```
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add -A src/app/routes/app src/domain/training src/main/register-infra-services.ts tests/helpers/init-data.ts tests/integration ../../docs/API_SPEC.md
@@ -922,7 +924,7 @@ Master plan P1 item 4.
 - AC-1311: `grep -rn "jsonMode\|json_object\|LLMService" src` → empty.
 - AC-1313: exactly one `new ChatOpenAI(` in `src/`, pinned by a unit test so it cannot regress silently.
 
-- [ ] **Step 1: Write the failing AC-1313 guard test**
+- [x] **Step 1: Write the failing AC-1313 guard test**
 
 Create `apps/server/src/infra/ai/__tests__/single-model-site.unit.test.ts`:
 
@@ -943,12 +945,12 @@ describe('ChatOpenAI construction sites (AC-1313)', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- single-model-site`
 Expected: FAIL — two files listed (`infra/ai/llm.service.ts` and `infra/ai/model.factory.ts`).
 
-- [ ] **Step 3: Delete the service, the old port file and the registrations**
+- [x] **Step 3: Delete the service, the old port file and the registrations**
 
 ```bash
 git rm src/infra/ai/llm.service.ts src/domain/ai/ports.ts
@@ -958,7 +960,7 @@ In `apps/server/src/main/register-infra-services.ts` delete lines 52-55 (the `//
 
 In `apps/server/src/app/test/setup.ts` delete the block at lines 155-157 (`if (!c.has(LLM_SERVICE_TOKEN)) { c.register(LLM_SERVICE_TOKEN, new LLMService()); }`) and the corresponding `LLMService` / `LLM_SERVICE_TOKEN` imports at the top of the file.
 
-- [ ] **Step 4: Verify AC-1311 and AC-1313**
+- [x] **Step 4: Verify AC-1311 and AC-1313**
 
 Run:
 
@@ -969,7 +971,7 @@ grep -rn "jsonMode\|json_object\|LLMService" src
 
 Expected: all green; grep prints nothing; `single-model-site` test passes.
 
-- [ ] **Step 5: Reconcile `docs/ARCHITECTURE.md`**
+- [x] **Step 5: Reconcile `docs/ARCHITECTURE.md`**
 
 Line 45: replace `ports.ts                 # ILLMService interface (TODO: remove in refactor P1)` with:
 
@@ -983,7 +985,7 @@ Line 58: delete the `session-recommendation.prompt.ts` entry (and the `prompts/`
 
 `docs/domain/ai.spec.md` still documents `LLMService` methods that never existed (ADR-0013 §1.8); it is rewritten in P7 (AC-1371). Do not edit it here — record in the close-out that it is stale and P7-owned.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A src/infra/ai src/domain/ai src/main/register-infra-services.ts src/app/test/setup.ts ../../docs/ARCHITECTURE.md
@@ -1010,7 +1012,7 @@ The only mini-app edit this plan makes, and it exists to prevent a defect the 41
 
 **Design note:** the exercise list itself is unaffected. `PlanningView` renders `plan.exercises` and edits them through `onUpdatePlan` (`PATCH /session/:id/plan`), which is **not** retired. What disappears is only the AI auto-fill and the "adjust by comment" box. A session started from the mini-app now shows the empty state until the plan arrives from the bot conversation — which is exactly the product intent recorded in ADR-0013 §9.
 
-- [ ] **Step 1: Delete the auto-recommend effect**
+- [x] **Step 1: Delete the auto-recommend effect**
 
 In `apps/webapp/src/features/session/PlanningView.tsx` remove:
 
@@ -1022,7 +1024,7 @@ In `apps/webapp/src/features/session/PlanningView.tsx` remove:
   }, [plan, recommending, onRecommend]);
 ```
 
-- [ ] **Step 2: Remove the recommend-driven UI and props**
+- [x] **Step 2: Remove the recommend-driven UI and props**
 
 Remove `recommending` and `onRecommend` from `PlanningViewProps` and from the destructured parameter list. Delete `handleUpdateComment`, the `comment` state, and the textarea/button block that calls it. Delete the `if (recommending && !plan)` spinner branch — with no auto-call there is nothing to wait for.
 
@@ -1041,15 +1043,15 @@ Replace the empty state so it states the real situation instead of implying a fa
 
 Drop the now-unused `Spinner` import (and `useEffect` if nothing else uses it — `PlanningView` still has the `plan?.exercises` effect, so it stays).
 
-- [ ] **Step 3: Remove `recommend` from the session hook**
+- [x] **Step 3: Remove `recommend` from the session hook**
 
 In `apps/webapp/src/shared/hooks/useSession.ts` delete the `recommend` callback (`:70-87`), the `recommending` state (`:28`), the two interface members (`:13-15`), and both from the returned object (`:121`). `plan`, `setPlan` and `updatePlan` all stay — `plan` is still populated from the loaded session.
 
-- [ ] **Step 4: Update the call site**
+- [x] **Step 4: Update the call site**
 
 In `apps/webapp/src/features/session/SessionPage.tsx` stop destructuring `recommend, recommending` (`:30`) and stop passing them to `PlanningView` (`:80-81`).
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run from `apps/webapp/`:
 
@@ -1065,7 +1067,7 @@ grep -rn "recommend" apps/webapp/src
 
 Expected: no output.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/webapp/src
@@ -1078,7 +1080,7 @@ git commit -m "fix(webapp): stop auto-calling the retired recommend endpoint; sh
 
 Cross-phase rules: every PR runs `check-all` + unit tests; from P2 on also `evals L0` — run it here anyway, it is free and proves the graph prompts are untouched.
 
-- [ ] **Step 1: Full local verification**
+- [x] **Step 1: Full local verification**
 
 Run:
 
@@ -1116,7 +1118,7 @@ Expected: `401` (auth first; a signed initData is needed for the 410, which the 
 
 Finally open the dev mini-app, start a session with no plan, and watch the browser network panel: the empty state must render once and **no** request to `/session/:id/recommend` may appear (Task 6).
 
-- [ ] **Step 3: Record results in this plan's close-out**
+- [x] **Step 3: Record results in this plan's close-out**
 
 ---
 
@@ -1140,12 +1142,70 @@ Record in the close-out that item 5 was deliberately not implemented and why, so
 
 ## OQ-1 verification (Task 1)
 
-_(filled in by Task 1)_
+- Date: 2026-09-16
+- Server log window: 2026-09-11 → 2026-09-16 (container started 2026-09-11 — window is 5 days, shorter than 30)
+- POST /api/app/plan: 0; POST /api/app/session/:id/recommend: 0 (pino log, `docker logs fitcoach-prod-server --since 720h`)
+- NPM access log inspected: `/srv/docker/nginx-proxy-manager/data_npm/logs/proxy-host-14_access.log*`
+  (VPS layout differs from Khadas: NPM data is `data_npm/`; host 14 = fitcoach.filko.dev, found by scanning
+  all `proxy-host-*_access.log` for the domain; 10581 entries, window 2026-08-17 → 2026-09-15 — full 30 days);
+  counts: 0/0. Note: the log line format puts the domain between method and path
+  (`POST https fitcoach.filko.dev "/api/..."`), so the grep matches `POST <scheme> <host> "<path>"`.
+  The entire log is scanner noise (`.env`, `.git/HEAD` probes); there is no `/api/app/*` traffic at all,
+  on any endpoint. The NPM fallback log was also checked: 0/0.
+- Webapp impact: PlanningView auto-calls recommend when a session has no plan and re-fires on each
+  failure; Task 6 of this plan removes the auto-call so the 410 cannot be polled in a loop.
+- Ruling: proceed
 
 ## Close-out
 
 Follow `superpowers:finishing-a-development-branch`. Before merge: run the `close-out-review` skill, tick every checkbox above, close every check with its result, set `- Status: done`, run `node scripts/state.mjs --write` from the repo root, and commit. `node scripts/state.mjs --check` must pass. Record here: the L0 report line, the four AC grep outputs, the `apps/webapp` build result and the zero-recommend-request observation from Task 6, the dev smoke result, the note that item 5 (summariser) was deliberately deferred to P4, and the note that `docs/domain/ai.spec.md` remains stale until P7.
 
+### Close-out record (2026-09-16)
+
+- Task 7 Step 1 verification (executor runs, independently re-grepped by review zone R3):
+  - `npm run test:unit` → 361 passed / 0 failed (50 suites, includes the new llm-profiles, model.factory, llm.gateway, single-model-site, legacy-path-retired and retired-endpoints tests).
+  - `npm run evals -- --level L0` → **L0: 45/45 checks passed, 0 failed** — identical to the dev baseline; graph phase prompts byte-untouched (plumbing-phase invariant held).
+  - `RUN_DB_TESTS=1 npm run test:integration` → 122/122 passed (incl. retired-endpoints 4/4; the post-summary `libc++abi` teardown line is pre-existing noise, seen on earlier branches).
+  - `npm run check-all` → lint 0 errors, prettier clean, tsc clean. `apps/webapp` `npm run build` → clean (re-verified after 583bc4b8).
+- AC grep outputs (final, from the review zones' independent re-runs):
+  - AC-1311 `grep -rn "jsonMode\|json_object\|LLMService" apps/server/src` → **empty** (guard test pins it).
+  - AC-1312 four-method grep → **empty**; API_SPEC §4.11/4.12 present as RETIRED.
+  - AC-1313 `new ChatOpenAI(` → exactly `infra/ai/model.factory.ts` (pinned by test).
+  - AC-1314 covered by llm-profiles (4) + model.factory (3) tests; no `LLM_PROFILE_*` set in any env.
+- Webapp: `grep -rn "recommend" apps/webapp/src` → empty; zero callers of `POST /plan` and `POST /session/:id/recommend` across webapp/bot/shared (R3 final re-grep). The live network-panel observation (Task 6/Task 7 Step 2) is **pending the dev deploy** — see below.
+- Dev smoke (Task 7 Step 2): **pending merge + deploy** — `curl -X POST https://fitcoach-dev.filko.dev/api/app/plan` → expect 401 (auth first; the signed-initData 410 is covered by the integration test); mini-app session-without-plan and plan-tab observations per MANUAL_TEST_PLAN § Smoke.
+- Item 5 (summariser via `LlmGateway.structured`) was **deliberately deferred to P4** by owner ruling 2026-09-13 — see "Decided" above; the `structured` path and the `summarizer` profile ship tested-but-unused by design.
+- `docs/domain/ai.spec.md` remains stale (documents LLMService methods that never existed) — P7-owned (AC-1371); not edited on this branch.
+- Mid-review scope change: the webapp bounded fix was extended to PlanPage by owner ruling 2026-09-16 (Global Constraints Extension paragraph; the same ruling's obvious-fix delegation is recorded in SUPERPOWERS_INTEGRATION.md rule 3, commit fb9aa1e1).
+
 ## Review
 
-_(recorded by close-out-review)_
+Three rounds: initial run blocked (6 findings) → fixes → re-review blocked on newly surfaced findings (4, then 2) → final clean. R1/R2 were clean from the second round (at d1848df0); the commits after that were docs-only plus a removal-only webapp fix outside their zones, so their verdicts stand. R3/R4 were re-reviewed against the final tree (583bc4b8 / 997469a9).
+
+### Blocking findings and how each closed
+
+Round 1:
+1. R2 · DRY · `tests/helpers/init-data.ts` copy-paste of the middleware test's signing builder → closed in d1848df0 (unit test imports the shared helper; repo-wide signer sweep confirmed no other copies).
+2. R3 · AC-1311 unpinned → closed in d1848df0 (`legacy-path-retired.unit.test.ts` guard; concatenated literals avoid self-match).
+3. R4 · BR-TRAINING-003 listed the deleted `getNextSessionRecommendation` in `training.spec.md` → owner ruled 2026-09-16: the rule lives in the bot path; pointer swapped, method line removed (fb9aa1e1).
+4. R4 · ARCHITECTURE.md standing-exceptions register entry for the deleted `domain/ai/ports.ts` → removed (fb9aa1e1).
+5. R4 · register's "ITrainingService, 19 methods" / three unused → corrected to 16 (independently counted) / two (fb9aa1e1).
+6. R4 · `infra/ai/llm.gateway.ts` missing from the module layout the branch itself edited → added (fb9aa1e1).
+
+Round 2:
+7. R4 · BACKLOG.md entry stale on all three rule-3 facts (19 methods, three unused, LLMService ctor dep) → reconciled (016d2eac).
+8. R4 · CONTRIBUTING_AI.md:171 pointed at the deleted `ports.ts` → repointed (016d2eac).
+9. R4 · FEAT-0010:110 mapped the flow through the deleted method → remapped to session_planning (016d2eac).
+10. R3 · **PlanPage still POSTed the retired `/plan`** (caller the plan's analysis missed) → owner ruled 2026-09-16 (Extension paragraph, 4fe0718f); creation form and `createPlan` removed, plan-from-chat empty state (583bc4b8). R3's final round verified zero retired-route callers across webapp/bot/shared.
+
+Round 3:
+11. R4 · LOGGING_GUIDE.md:314 described the deleted `llm.service.ts` path in present tense and did not document gateway logging → rewritten (997469a9).
+12. R4 · CONTRIBUTING_AI.md:147 walkthrough called `llmService.generateResponse` → gateway call (997469a9).
+
+### Advisory findings
+
+13 filed in `docs/BACKLOG.md` (Findings section, all sourced "refactor-P1 close-out review", 2026-09-16): textOf/toLangChain consolidation for P2/P3; webapp retired-route guard test; P1 test-coverage gaps (parser boundaries, OutputParserException retry, env restore, maxTokens equivalence); grep-guard scaffolding sharing + `__tests__` blind spot; P1 config surface documentation (ARCHITECTURE layout/env + .env.example); ARCHITECTURE.md ChatMsg P1/P4 hedge → P4; FEAT-0004/0005/0006 stale LLMService references; API_SPEC §5 dead debug endpoints; archival docs cluster pruning; setNumericField inlining. Two advisories were fixed in-branch as obvious one-line reconciliations under the 2026-09-16 delegation (API_SPEC §4.12 "well-formed UUID" qualifier; DOCUMENTATION_GUIDE `ports.ts` variant removed). ADR-0013 §7/§11 wording reconciliation is **owner/P7 scope** (surfaced to the owner in the close-out report; deliberately not backloged).
+
+### Meta findings
+
+7 new entries + 3 counted-up entries in `docs/REVIEW_FINDINGS.md`, including the class-sweep rule candidate (third occurrence) and the positive "Extension paragraph" mechanism.

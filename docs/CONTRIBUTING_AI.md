@@ -144,7 +144,7 @@ code review. The division of roles and conflict rules are defined in
    - Determine phase from user state (e.g. profileStatus -> 'registration' or 'chat').
    - Load: `ctx = await conversationContextService.getContext(userId, phase)` [BR-CONV-001].
    - Build: `history = conversationContextService.getMessagesForPrompt(ctx, {maxTurns: 20})` [BR-CONV-003].
-   - Call LLM: `llmService.generateResponse([...history, {role:'user', content: message}])`.
+   - Call LLM: `llmGateway.chat([...history, {role:'user', content: message}], {runId})`.
    - Persist: `await conversationContextService.appendTurn(userId, phase, message, response)` [BR-CONV-002].
    - On phase change: `await conversationContextService.startNewPhase(userId, oldPhase, newPhase, systemNote)` [BR-CONV-005].
 4) Tests:
@@ -168,7 +168,7 @@ code review. The division of roles and conflict rules are defined in
 
 ### Tokens and Ports (examples)
 - AI:
-  - LLM service token and port: `apps/server/src/domain/ai/ports.ts:1`
+  - LLM gateway token and port: `apps/server/src/domain/ai/ports/llm.gateway.ports.ts`
 - User domain tokens: `apps/server/src/domain/user/ports/` (modular structure)
   - Repository ports: `apps/server/src/domain/user/ports/repository.ports.ts`
   - Service ports: `apps/server/src/domain/user/ports/service.ports.ts`

@@ -39,7 +39,6 @@ const makeTrainingService = (sessionId = 'session-1'): jest.Mocked<ITrainingServ
     completeSession: jest.fn(),
     skipSession: jest.fn(),
     getTrainingHistory: jest.fn(),
-    getNextSessionRecommendation: jest.fn(),
     addExerciseToSession: jest.fn(),
     logSet: jest.fn(),
     completeCurrentExercise: jest.fn(),
