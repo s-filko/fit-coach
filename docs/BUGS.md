@@ -941,6 +941,32 @@ Detector case SP-0005 (`tools.must:start_training_session`) is in the baseline. 
 
 ---
 
+## BUG-016 — `conversation_turns.run_id` is never written: runs and turns cannot be linked
+
+**Status:** Open
+**Severity:** Medium
+**Found during:** transcript-export verification 2026-09-15 (Task 4 of `refactor-p0-transcript-export`)
+**Component:** `apps/server/src/infra/ai/graph/nodes/persist.node.ts`, `src/domain/conversation/ports/conversation-context.ports.ts`, `src/infra/conversation/` (appendTurn path)
+
+### Description
+
+The run-log schema gives `conversation_turns` a `run_id` column, but no code path ever populates it: `appendTurn(userId, phase, userContent, assistantContent)` takes no runId, and `persist.node` (which holds one in state) never passes it. Verified on dev 2026-09-15: 742 turns, 0 with non-NULL `run_id`, while 16 runs were logged 09-12..09-14 over the same conversations.
+
+### Impact
+
+- Transcript export must fall back to a time-window join (implemented in `evals/lib/export-query.ts`, prefers explicit run_id when present) — approximate attribution instead of exact.
+- Any future per-run analysis (L2 judge input, replay, cost attribution per conversation) inherits the same approximation.
+
+### Fix plan (proposed, for P1/P3 where the persist layer is reworked)
+
+Thread `runId` through `appendTurn` → drizzle implementation → persist.node call site. Column already exists; no migration needed. Existing unlinked rows stay unlinked (the export fallback covers them).
+
+### Regression test
+
+After the fix: a message through the graph writes a `conversation_turns` row with non-NULL `run_id` equal to the logged run's id (integration test with the same stub pattern as the run-log suite).
+
+---
+
 <!-- Template for new bugs:
 
 ## BUG-XXX — Short title
