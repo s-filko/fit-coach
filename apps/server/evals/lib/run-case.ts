@@ -73,7 +73,7 @@ const EMPTY_OBSERVATION: CaseObservation = {
 };
 
 export async function runCase(testCase: EvalCase): Promise<CaseObservation> {
-  const { deps, recordedRuns } = buildStubDeps(testCase.fixture);
+  const { deps, recordedRuns } = buildStubDeps(testCase.fixture, testCase.state?.messages);
   const graph = buildConversationGraph(deps);
   const userId = '22222222-2222-4222-8222-222222222222';
   const runId = randomUUID();

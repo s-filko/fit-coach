@@ -26,6 +26,7 @@ _Generated 2026-09-15 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `ports-layout-consistency.md` — Ports Layout Consistency Implementation Plan
 - `refactor-p0-dead-code.md` — Refactor P0 — Dead Code Removal Implementation Plan
 - `refactor-p0-eval-baseline.md` — Refactor P0 — Remaining Datasets and v0 Baseline Implementation Plan
+- `refactor-p0-eval-harness-seeding.md` — Refactor P0 — Harness Episode Seeding and v0 Re-freeze Implementation Plan
 - `refactor-p0-eval-harness.md` — Refactor P0 — Eval Harness (L0) Implementation Plan
 - `refactor-p0-eval-l1-chat-training.md` — Refactor P0 — L1 Runner and Chat/Training Datasets Implementation Plan
 - `refactor-p0-run-log.md` — Refactor P0 — Run Log Implementation Plan

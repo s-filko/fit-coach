@@ -2,7 +2,7 @@
   "version": "v0",
   "model": "glm-5.3",
   "samples": 3,
-  "recordedAt": "2026-09-14T14:36:31.638Z",
+  "recordedAt": "2026-09-15T10:07:53.153Z",
   "entries": [
     {
       "case": "TR-0007",
@@ -98,7 +98,7 @@
       "case": "TR-0009",
       "check": "text.format",
       "passed": true,
-      "detail": "3/3 samples passed"
+      "detail": "2/3 samples passed"
     },
     {
       "case": "TR-0009",
