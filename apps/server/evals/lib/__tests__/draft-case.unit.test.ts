@@ -1,0 +1,55 @@
+import { buildDraftCase } from '../draft-case';
+import type { ExportedRun } from '../export-query';
+
+const RUN_UUID = '3f2a1b8c-9d4e-4f5a-8b6c-1d2e3f4a5b6c';
+const RAW_USER_ID = '11111111-2222-4333-8444-555555555555';
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+const run: ExportedRun = {
+  runId: RUN_UUID,
+  userId: RAW_USER_ID,
+  phase: 'chat',
+  createdAt: new Date('2026-09-14T10:00:00Z'),
+  model: 'glm-5.3',
+  turns: [
+    // Real dev-data shape (BUG-016 kin): kind defaults to 'human' on every row,
+    // role is the reliable human/assistant discriminator.
+    { role: 'user', kind: 'human', content: 'привет, Иван Петров', createdAt: new Date('2026-09-14T09:59:58Z') },
+    { role: 'assistant', kind: 'human', content: `сессия ${RUN_UUID} открыта`, createdAt: new Date('2026-09-14T09:59:59Z') },
+    { role: 'user', kind: 'human', content: 'жим 80 на 8', createdAt: new Date('2026-09-14T10:00:00Z') },
+  ],
+};
+
+const user = { id: RAW_USER_ID, firstName: 'Иван', lastName: 'Петров', languageCode: 'ru', timezone: 'Europe/Berlin' };
+
+describe('buildDraftCase', () => {
+  it('leaks no raw UUID or user id anywhere in the record', () => {
+    const record = buildDraftCase(run, user);
+    const serialized = JSON.stringify(record);
+    expect(serialized).not.toContain(RUN_UUID);
+    expect(serialized).not.toContain(RAW_USER_ID);
+    expect(serialized).not.toMatch(UUID_RE);
+    expect((record as Record<string, unknown>)['provenance']).not.toHaveProperty('runId');
+  });
+
+  it('takes the last user-role turn as input and everything before it as state', () => {
+    const record = buildDraftCase(run, user) as {
+      input: { text: string };
+      state: { messages: Array<{ role: string; text: string }> };
+    };
+    expect(record.input.text).toBe('жим 80 на 8');
+    expect(record.state.messages).toHaveLength(2);
+    expect(record.state.messages[0]?.text).toBe('привет, [NAME] [NAME]');
+    expect(record.state.messages[0]?.role).toBe('human');
+    expect(record.state.messages[1]?.text).toContain('[ID]');
+    expect(record.state.messages[1]?.role).toBe('ai');
+  });
+
+  it('returns null when the run has no user-role turn', () => {
+    const aiOnly: ExportedRun = {
+      ...run,
+      turns: [run.turns[1] ?? { role: 'assistant', kind: 'ai', content: 'x', createdAt: new Date() }],
+    };
+    expect(buildDraftCase(aiOnly, user)).toBeNull();
+  });
+});

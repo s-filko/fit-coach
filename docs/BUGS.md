@@ -899,6 +899,74 @@ L1 case TR-0009 already exercises this behavior (`text.format: telegram_html`). 
 
 ---
 
+## BUG-014 — Plan-creation LLM never calls `save_workout_plan` despite explicit user approval
+
+**Status:** Open
+**Severity:** High
+**Found during:** v0 baseline re-freeze 2026-09-15, case PC-0007 (`apps/server/evals/datasets/plan_creation/`)
+**Component:** `apps/server/src/infra/ai/graph/subgraphs/plan-creation.subgraph.ts` (plan-creation prompt)
+
+### Description
+
+With the full prerequisite exchange and the user's explicit approval turn present in episode memory, the model still never calls `save_workout_plan` (0/3 samples on the seeded harness; was also 0/3 on the blind harness — the seeding fix did not change it, confirming it is prompt behaviour, not harness blindness). The proposed plan stays a draft; the user's plan is never persisted.
+
+### Root cause
+
+Presumed prompt-side: the plan-creation prompt's save-approval directive does not bind (PC-5 rubric anchor "saves only after explicit approval" — the model neither saves after approval nor reliably proposes the save step). Diagnosis belongs to P2's prompt modules work; not fixing it now to avoid prompt churn before the v0 comparison chain is in place.
+
+### Regression test
+
+Detector case PC-0007 (`tools.must:save_workout_plan`) already exists in the baseline. Per BR-EVAL-001 the baselined case is immutable — before this bug is marked Fixed, add a fresh case tagged `BUG-014` (BR-EVAL-002) and pass it at 3/3.
+
+---
+
+## BUG-015 — Session-planning LLM skips `start_training_session` on explicit confirmation (flaky)
+
+**Status:** Open
+**Severity:** Medium
+**Found during:** v0 baseline re-freeze 2026-09-15, case SP-0005 (`apps/server/evals/datasets/session_planning/`)
+**Component:** `apps/server/src/infra/ai/graph/subgraphs/session-planning.subgraph.ts` (session-planning prompt)
+
+### Description
+
+With the proposal turn and the user's explicit confirmation in episode memory, the model calls `start_training_session` in only 1/3 samples (gate ⌈3/2⌉ = 2). Improved from 0/3 on the blind harness — partially a memory-visibility artefact, but the residual failure is real prompt behaviour at temperature > 0.
+
+### Root cause
+
+Presumed prompt-side: the "start only on explicit approval" directive over-generalises to confirmation turns. Diagnosis belongs to P2; not fixed now (prompt churn before the comparison chain is running would pollute the before/after signal).
+
+### Regression test
+
+Detector case SP-0005 (`tools.must:start_training_session`) is in the baseline. Per BR-EVAL-001/002: add a fresh case tagged `BUG-015` before marking Fixed; pass at 3/3.
+
+---
+
+## BUG-016 — `conversation_turns.run_id` is never written: runs and turns cannot be linked
+
+**Status:** Open
+**Severity:** Medium
+**Found during:** transcript-export verification 2026-09-15 (Task 4 of `refactor-p0-transcript-export`)
+**Component:** `apps/server/src/infra/ai/graph/nodes/persist.node.ts`, `src/domain/conversation/ports/conversation-context.ports.ts`, `src/infra/conversation/` (appendTurn path)
+
+### Description
+
+The run-log schema gives `conversation_turns` a `run_id` column, but no code path ever populates it: `appendTurn(userId, phase, userContent, assistantContent)` takes no runId, and `persist.node` (which holds one in state) never passes it. Verified on dev 2026-09-15: 742 turns, 0 with non-NULL `run_id`, while 16 runs were logged 09-12..09-14 over the same conversations.
+
+### Impact
+
+- Transcript export must fall back to a time-window join (implemented in `evals/lib/export-query.ts`, prefers explicit run_id when present) — approximate attribution instead of exact.
+- Any future per-run analysis (L2 judge input, replay, cost attribution per conversation) inherits the same approximation.
+
+### Fix plan (proposed, for P1/P3 where the persist layer is reworked)
+
+Thread `runId` through `appendTurn` → drizzle implementation → persist.node call site. Column already exists; no migration needed. Existing unlinked rows stay unlinked (the export fallback covers them).
+
+### Regression test
+
+After the fix: a message through the graph writes a `conversation_turns` row with non-NULL `run_id` equal to the logged run's id (integration test with the same stub pattern as the run-log suite).
+
+---
+
 <!-- Template for new bugs:
 
 ## BUG-XXX — Short title

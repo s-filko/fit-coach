@@ -22,7 +22,7 @@ refactor phases add cases. The gap is deliberate, not an unmet acceptance criter
 
 | File | Cases | Source |
 |---|---|---|
-| `chat/transitions.jsonl` | CH-0001..CH-0006 | BUG-011 |
+| `chat/transitions.jsonl` | CH-0001..CH-0011 | BUG-011; CH-0011 curated from an exported run |
 | `chat/no-set-logging.jsonl` | CH-0007..CH-0010 | BUG-009 |
 | `training/set-logging.jsonl` | TR-0001..TR-0006 | BUG-008, ADR-0011 |
 | `training/no-false-confirmation.jsonl` | TR-0007..TR-0010 | BUG-006, BUG-009 |
