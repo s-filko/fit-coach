@@ -1078,7 +1078,7 @@ git commit -m "fix(webapp): stop auto-calling the retired recommend endpoint; sh
 
 Cross-phase rules: every PR runs `check-all` + unit tests; from P2 on also `evals L0` — run it here anyway, it is free and proves the graph prompts are untouched.
 
-- [ ] **Step 1: Full local verification**
+- [x] **Step 1: Full local verification**
 
 Run:
 
