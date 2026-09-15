@@ -54,6 +54,10 @@ export async function registerInfraServices(container: Container = getGlobalCont
   const { LLM_SERVICE_TOKEN } = await import('@domain/ai/ports');
   container.register(LLM_SERVICE_TOKEN, new LLMService());
 
+  const { OpenAiLlmGateway } = await import('@infra/ai/llm.gateway');
+  const { LLM_GATEWAY_TOKEN } = await import('@domain/ai/ports');
+  container.register(LLM_GATEWAY_TOKEN, new OpenAiLlmGateway());
+
   // Training repositories
   container.register(EXERCISE_REPOSITORY_TOKEN, new ExerciseRepository());
   container.register(WORKOUT_PLAN_REPOSITORY_TOKEN, new WorkoutPlanRepository());
