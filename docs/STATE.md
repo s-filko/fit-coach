@@ -12,10 +12,9 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-15 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-— none —
+- `refactor-p0-eval-baseline.md` — Refactor P0 — Remaining Datasets and v0 Baseline Implementation Plan (branch: `plan/refactor-p0-eval-baseline`, last commit 2026-09-15)
 
 **Planned**
-- `refactor-p0-eval-baseline.md` — Refactor P0 — Remaining Datasets and v0 Baseline Implementation Plan
 - `refactor-p0-transcript-export.md` — Refactor P0 — Transcript Export Implementation Plan
 - `refactor-p1-legacy-llm-retirement.md` — Refactor P1 — Legacy LLM Path Retirement Implementation Plan
 - `refactor-p2-prompt-modules.md` — Refactor P2 — Prompt Modules Implementation Plan
