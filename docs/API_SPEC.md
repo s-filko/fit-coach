@@ -254,7 +254,7 @@ User identity is extracted from the signed initData — no userId in request bod
 ### 4.12 Session Recommendation via AI — RETIRED
 - POST `/api/app/session/:id/recommend`
 - Retired 2026-09 (ADR-0013 §7, OQ-1): "what do I do today" is the bot's session_planning phase.
-- Response 410 `{ error: { code: 'RETIRED' } }` for any authenticated caller; the session is not read
+- Response 410 `{ error: { code: 'RETIRED' } }` for any authenticated caller with a well-formed UUID `:id` (non-UUID ids fail schema validation with 400 first); the session is not read
 - 401 `{ error: { message: string } }` — missing or invalid initData
 
 ### Shared Types (Session API)

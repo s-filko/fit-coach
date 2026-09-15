@@ -1,8 +1,9 @@
 # Refactor P1 — Legacy LLM Path Retirement Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/refactor-p1-legacy-llm-retirement
 - After: refactor-p0-transcript-export
+- Review: 2026-09-16 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -1117,7 +1118,7 @@ Expected: `401` (auth first; a signed initData is needed for the 410, which the 
 
 Finally open the dev mini-app, start a session with no plan, and watch the browser network panel: the empty state must render once and **no** request to `/session/:id/recommend` may appear (Task 6).
 
-- [ ] **Step 3: Record results in this plan's close-out**
+- [x] **Step 3: Record results in this plan's close-out**
 
 ---
 
@@ -1159,6 +1160,52 @@ Record in the close-out that item 5 was deliberately not implemented and why, so
 
 Follow `superpowers:finishing-a-development-branch`. Before merge: run the `close-out-review` skill, tick every checkbox above, close every check with its result, set `- Status: done`, run `node scripts/state.mjs --write` from the repo root, and commit. `node scripts/state.mjs --check` must pass. Record here: the L0 report line, the four AC grep outputs, the `apps/webapp` build result and the zero-recommend-request observation from Task 6, the dev smoke result, the note that item 5 (summariser) was deliberately deferred to P4, and the note that `docs/domain/ai.spec.md` remains stale until P7.
 
+### Close-out record (2026-09-16)
+
+- Task 7 Step 1 verification (executor runs, independently re-grepped by review zone R3):
+  - `npm run test:unit` → 361 passed / 0 failed (50 suites, includes the new llm-profiles, model.factory, llm.gateway, single-model-site, legacy-path-retired and retired-endpoints tests).
+  - `npm run evals -- --level L0` → **L0: 45/45 checks passed, 0 failed** — identical to the dev baseline; graph phase prompts byte-untouched (plumbing-phase invariant held).
+  - `RUN_DB_TESTS=1 npm run test:integration` → 122/122 passed (incl. retired-endpoints 4/4; the post-summary `libc++abi` teardown line is pre-existing noise, seen on earlier branches).
+  - `npm run check-all` → lint 0 errors, prettier clean, tsc clean. `apps/webapp` `npm run build` → clean (re-verified after 583bc4b8).
+- AC grep outputs (final, from the review zones' independent re-runs):
+  - AC-1311 `grep -rn "jsonMode\|json_object\|LLMService" apps/server/src` → **empty** (guard test pins it).
+  - AC-1312 four-method grep → **empty**; API_SPEC §4.11/4.12 present as RETIRED.
+  - AC-1313 `new ChatOpenAI(` → exactly `infra/ai/model.factory.ts` (pinned by test).
+  - AC-1314 covered by llm-profiles (4) + model.factory (3) tests; no `LLM_PROFILE_*` set in any env.
+- Webapp: `grep -rn "recommend" apps/webapp/src` → empty; zero callers of `POST /plan` and `POST /session/:id/recommend` across webapp/bot/shared (R3 final re-grep). The live network-panel observation (Task 6/Task 7 Step 2) is **pending the dev deploy** — see below.
+- Dev smoke (Task 7 Step 2): **pending merge + deploy** — `curl -X POST https://fitcoach-dev.filko.dev/api/app/plan` → expect 401 (auth first; the signed-initData 410 is covered by the integration test); mini-app session-without-plan and plan-tab observations per MANUAL_TEST_PLAN § Smoke.
+- Item 5 (summariser via `LlmGateway.structured`) was **deliberately deferred to P4** by owner ruling 2026-09-13 — see "Decided" above; the `structured` path and the `summarizer` profile ship tested-but-unused by design.
+- `docs/domain/ai.spec.md` remains stale (documents LLMService methods that never existed) — P7-owned (AC-1371); not edited on this branch.
+- Mid-review scope change: the webapp bounded fix was extended to PlanPage by owner ruling 2026-09-16 (Global Constraints Extension paragraph; the same ruling's obvious-fix delegation is recorded in SUPERPOWERS_INTEGRATION.md rule 3, commit fb9aa1e1).
+
 ## Review
 
-_(recorded by close-out-review)_
+Three rounds: initial run blocked (6 findings) → fixes → re-review blocked on newly surfaced findings (4, then 2) → final clean. R1/R2 were clean from the second round (at d1848df0); the commits after that were docs-only plus a removal-only webapp fix outside their zones, so their verdicts stand. R3/R4 were re-reviewed against the final tree (583bc4b8 / 997469a9).
+
+### Blocking findings and how each closed
+
+Round 1:
+1. R2 · DRY · `tests/helpers/init-data.ts` copy-paste of the middleware test's signing builder → closed in d1848df0 (unit test imports the shared helper; repo-wide signer sweep confirmed no other copies).
+2. R3 · AC-1311 unpinned → closed in d1848df0 (`legacy-path-retired.unit.test.ts` guard; concatenated literals avoid self-match).
+3. R4 · BR-TRAINING-003 listed the deleted `getNextSessionRecommendation` in `training.spec.md` → owner ruled 2026-09-16: the rule lives in the bot path; pointer swapped, method line removed (fb9aa1e1).
+4. R4 · ARCHITECTURE.md standing-exceptions register entry for the deleted `domain/ai/ports.ts` → removed (fb9aa1e1).
+5. R4 · register's "ITrainingService, 19 methods" / three unused → corrected to 16 (independently counted) / two (fb9aa1e1).
+6. R4 · `infra/ai/llm.gateway.ts` missing from the module layout the branch itself edited → added (fb9aa1e1).
+
+Round 2:
+7. R4 · BACKLOG.md entry stale on all three rule-3 facts (19 methods, three unused, LLMService ctor dep) → reconciled (016d2eac).
+8. R4 · CONTRIBUTING_AI.md:171 pointed at the deleted `ports.ts` → repointed (016d2eac).
+9. R4 · FEAT-0010:110 mapped the flow through the deleted method → remapped to session_planning (016d2eac).
+10. R3 · **PlanPage still POSTed the retired `/plan`** (caller the plan's analysis missed) → owner ruled 2026-09-16 (Extension paragraph, 4fe0718f); creation form and `createPlan` removed, plan-from-chat empty state (583bc4b8). R3's final round verified zero retired-route callers across webapp/bot/shared.
+
+Round 3:
+11. R4 · LOGGING_GUIDE.md:314 described the deleted `llm.service.ts` path in present tense and did not document gateway logging → rewritten (997469a9).
+12. R4 · CONTRIBUTING_AI.md:147 walkthrough called `llmService.generateResponse` → gateway call (997469a9).
+
+### Advisory findings
+
+13 filed in `docs/BACKLOG.md` (Findings section, all sourced "refactor-P1 close-out review", 2026-09-16): textOf/toLangChain consolidation for P2/P3; webapp retired-route guard test; P1 test-coverage gaps (parser boundaries, OutputParserException retry, env restore, maxTokens equivalence); grep-guard scaffolding sharing + `__tests__` blind spot; P1 config surface documentation (ARCHITECTURE layout/env + .env.example); ARCHITECTURE.md ChatMsg P1/P4 hedge → P4; FEAT-0004/0005/0006 stale LLMService references; API_SPEC §5 dead debug endpoints; archival docs cluster pruning; setNumericField inlining. Two advisories were fixed in-branch as obvious one-line reconciliations under the 2026-09-16 delegation (API_SPEC §4.12 "well-formed UUID" qualifier; DOCUMENTATION_GUIDE `ports.ts` variant removed). ADR-0013 §7/§11 wording reconciliation is **owner/P7 scope** (surfaced to the owner in the close-out report; deliberately not backloged).
+
+### Meta findings
+
+7 new entries + 3 counted-up entries in `docs/REVIEW_FINDINGS.md`, including the class-sweep rule candidate (third occurrence) and the positive "Extension paragraph" mechanism.
