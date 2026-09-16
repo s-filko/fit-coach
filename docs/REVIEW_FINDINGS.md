@@ -33,6 +33,12 @@ Entry format:
 Wording in a zone prompt or in `SKILL.md` that misleads, contradicts the severity contract,
 or is inert for the kind of diff under review.
 
+- [×1] A plan's predicted evidence counts were wrong where the close-out asks the executor to
+  record actuals: Task 1 Step 4 predicted "24 snapshots … 6 blocks" but the suite has 23
+  (five block `it`s, not six), and the close-out instruction says to record the snapshot
+  count — so the recorded number must be re-derived, not copied from the plan's prose.
+  Runs: refactor-p2-prompt-modules (2026-09-16).
+
 - [×2] R3's "describe/it names carry BR/AC references" bullet — and its thin-test-zone list
   (`drizzle/`, `deploy.sh`, `docker-compose.yml`) — are inert on markdown-only diffs yet read
   as checklist items to satisfy on every run. Scope both to code-bearing diffs.
@@ -114,6 +120,12 @@ or is inert for the kind of diff under review.
 
 What fell between the zones — a real problem no zone's mandate covered, usually surfaced by
 a wider reader (the final whole-branch review) or noticed after the fact.
+
+- [×1] R2's mandate excludes plan-sanctioned shapes, which by design left YAGNI coverage over
+  the new `prompts/` tree thin: the repeating ~10-line render-context literal across the five
+  subgraphs is plan-prescribed and owned by refactor-p2-context-assembler, so it was not
+  filed — but nothing tracks that the exclusion was exercised, only that it existed.
+  Runs: refactor-p2-prompt-modules (2026-09-16).
 
 - [×2] A zone prompt contradicting the shared severity contract falls between all four zones:
   it is not architecture, duplication, correctness, or docs. The wider final review caught it
@@ -200,8 +212,13 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   corrupt local all-MiniLM-L6-v2 cache) after all 118 tests pass — the verification command
   fails by exit code in this worktree despite a green suite. Pre-existing and environmental,
   but it means exit codes cannot be treated blindly as the verification gate; a zone or
-  executor that checks `$?` alone would report a failure the suite output contradicts.
-  Runs: refactor-p0-run-log re-run (2026-09-12).
+  executor that checks `$?` alone would report a failure the suite output contradicts. Second
+  occurrence, on the plain unit run this time: `npx jest --ci` also exits 134 after an
+  all-green summary (proven pre-existing by re-running the base commit in a temp worktree),
+  and the orchestrator's known-acceptable-artifacts list covered only the integration variant
+  — a reviewer re-running the stated verification command hit a non-zero exit and faced a
+  false blocking call.
+  Runs: refactor-p0-run-log re-run (2026-09-12), refactor-p2-prompt-modules (2026-09-16).
 
 - [×1] A known-and-accepted carve-out (FEAT-0003's stale LLMService diagram is P7-owned)
   lives only in the master plan's phase map; the review brief's known-and-accepted list is
@@ -259,8 +276,12 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
 - [×1] When a plan claims to extend a spec section "rather than revise" it, nothing requires
   the spec to gain a forward-pointer — so the spec can be left stating something the code no
   longer does. Proposed rule for `SUPERPOWERS_INTEGRATION.md` rule 3: an extension claim must
-  be backed by a pointer in the extended section, or it is a documentation gap.
-  Runs: review-self-improvement (2026-09-12).
+  be backed by a pointer in the extended section, or it is a documentation gap. Second
+  occurrence, the deferred-check variant: a plan that *ships* a spec's deferred check
+  (PROMPT_EVAL_FRAMEWORK §4.1 "section presence is deferred") falsifies the deferring
+  sentence in the same branch, yet its docs-reconciliation file list named only the docs it
+  intended to touch — nothing makes the plan own the spec sentence it invalidated.
+  Runs: review-self-improvement (2026-09-12), refactor-p2-prompt-modules (2026-09-16).
 - [×1] ADR-0002 is the case the "forward-looking scope list" candidate below does not cover.
   That candidate handles a durable spec listing work to be done; this is a durable spec stating
   a live prescriptive rule that the code has now outgrown, where the same rule is also mirrored
@@ -400,6 +421,13 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   dated errata note when a later section contradicts an earlier one, so executors cite the
   errata instead of re-deriving the adjudication.
   Runs: refactor-p1-legacy-llm-retirement (2026-09-16).
+- [×1] The close-out checklist (plan "Close-out" section) runs `state.mjs --write` but never
+  mentions reconciling the hand-written STATE.md "Next" items the plan invalidated — here the
+  P2 item still claimed the fixed detector cases PC-0007/SP-0005 "must clear at 3/3 as part of
+  the prompt rework" although the plan's zero-wording-change constraint makes that impossible
+  and the AC-1322 result records the opposite. Proposed standing close-out step: after
+  `--write`, read every hand-written STATE.md claim the plan's outcome falsified and fix it.
+  Runs: refactor-p2-prompt-modules (2026-09-16).
 - [×1] Endpoint-retiring plans should require a caller inventory cross-check — grep every
   `apiRequest`/fetch method+path in all client apps against the server route table — not a
   per-feature keyword grep; the keyword approach ("recommend") is exactly how a POST /plan
