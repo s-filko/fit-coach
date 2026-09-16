@@ -193,18 +193,20 @@ export function attachBudgetReport(runId: string, report: BudgetReport): void;  
 export interface RunMetrics { …; budgetReport: BudgetReport | null; assemblies: number }
 ```
 
-- [ ] **Step 1: Failing tests first**
+- [x] **Step 1: Failing tests first**
 
 `run-metrics.unit.test.ts`: (a) `attachBudgetReport` on an unknown runId opens the run (same as `startLlmCall` does) so evals — which never call `startRun` — still get a report; (b) two attaches → drain returns the second report with `assemblies: 2`; (c) drain without attach → `budgetReport: null, assemblies: 0`; (d) empty runId is a no-op.
 `persist.node.unit.test.ts`: after `attachBudgetReport('run-1', report)`, `recordRun` receives `budgetReport` equal to the report **with `assemblies` set** (persist merges `metrics.assemblies` into the report it records); without an attach, `budgetReport: null`. The existing "records exactly one run row" test keeps passing.
 
-- [ ] **Step 2: Implement**
+- [x] **Step 2: Implement**
 
 `persist.node.ts` records `budgetReport: metrics.budgetReport ? { ...metrics.budgetReport, assemblies: metrics.assemblies } : null` and adds `budgetReport` to the `'Conversation run recorded'` info line (numbers only — nothing from LOGGING_GUIDE's forbidden list). `drizzle-conversation-run.service.ts` maps `budgetReport: record.budgetReport`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 `feat(runs): budgetReport on ConversationRunRecord, run-metrics and the persist node (AC-1323 plumbing)`
+
+> **Task 3 result (2026-09-17):** `BudgetReport` declared next to `ConversationRunRecord` in the ports file (barrel is `export *`, no change needed); `ConversationRunRecord.budgetReport: BudgetReport | null` is required, so the two test-side record literals gained the field (`conversation-run.service.unit.test.ts` also asserts the drizzle mapping and a `null` pass-through; `build-stub-deps.unit.test.ts` got `budgetReport: null`). New tests: 4 in `run-metrics.unit.test.ts` (open-on-unknown-runId, last-attach-wins + `assemblies: 2`, drain-without-attach, empty-runId no-op) and 2 in `persist.node.unit.test.ts` (report recorded with `assemblies` merged in on a dedicated `runId` so no state leaks across tests; `null` without an attach). TDD confirmed: suites failed before the implementation. Verification: the plan's jest command → 7 suites / 43 tests green; `npm run type-check` clean; `npm run lint` → 0 errors (403 pre-existing warnings); `npx jest --ci evals/snapshots` → 39 tests / 38 snapshots green; `git status apps/server/drizzle` clean (no new migration). Full pre-commit hook suite: 56 suites / 418 tests green. The Drizzle-mapping assertion went to the existing `conversation-run.service.unit.test.ts` (the schema test already listed `budgetReport` as a column, as the plan expected).
 
 **Verification:** `npx jest --ci src/infra/ai/__tests__/run-metrics.unit.test.ts src/infra/ai/graph/nodes src/infra/db`; `npm run type-check`; `npm run lint`. AC-1323 (the storage and log half).
 
