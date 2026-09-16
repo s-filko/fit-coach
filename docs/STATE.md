@@ -12,7 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-16 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-— none —
+- `refactor-p2-prompt-modules.md` — Refactor P2 — Prompt Modules Implementation Plan (branch: `plan/refactor-p2-prompt-modules`, last commit 2026-09-16)
 
 **Planned**
 — none —
@@ -33,7 +33,7 @@ _Generated 2026-09-16 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 
 **Close-out debt (merged but plan not done)**
-- `refactor-p2-prompt-modules.md` — merged into `dev`
+— none —
 <!-- AUTO:status END -->
 
 ## Scope now
