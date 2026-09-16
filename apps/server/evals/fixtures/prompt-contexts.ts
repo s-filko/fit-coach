@@ -57,3 +57,50 @@ export function buildSessionPlanningContext(fixture: EvalFixture, now: Date): Se
     daysSinceLastWorkout: fixture.activeSession ? 0 : null,
   };
 }
+
+/** Chat renders with a yesterday last-message so the greeting directive fires in L0. */
+const CHAT_LAST_MESSAGE_TIME = new Date('2026-09-12T08:00:00.000Z');
+
+/**
+ * The fixture context for every module in the prompt registry, all at FIXED_NOW.
+ * Unknown module ids throw — a registry entry without a fixture context is a bug.
+ */
+export function contextsForModule(moduleId: string, fixture: EvalFixture): unknown {
+  const user = toUser(fixture);
+  const base = {
+    now: FIXED_NOW,
+    timezone: user.timezone ?? null,
+    client: 'telegram' as const,
+    user,
+    lastMessageTime: null,
+  };
+
+  switch (moduleId) {
+    case 'phase.registration':
+    case 'phase.plan_creation':
+      return base;
+    case 'phase.chat':
+      return {
+        ...base,
+        lastMessageTime: CHAT_LAST_MESSAGE_TIME,
+        hasActivePlan: fixture.hasActivePlan ?? false,
+        recentSessions: [],
+      };
+    case 'phase.session_planning':
+      return { ...base, context: buildSessionPlanningContext(fixture, FIXED_NOW) };
+    case 'phase.training':
+      return { ...base, session: buildFixtureSession(fixture, FIXED_NOW), previousSession: null };
+    case 'summarizer':
+      return { phase: 'training', previousSummary: FIXTURE_SUMMARY, history: FIXTURE_HISTORY };
+    case 'block.tool_results':
+      return { results: FIXTURE_TOOL_RESULTS };
+    case 'block.history_frame':
+      return { history: FIXTURE_HISTORY };
+    case 'block.summary_frame':
+      return { previousSummary: FIXTURE_SUMMARY };
+    case 'block.post_tool_nudge':
+      return {};
+    default:
+      throw new Error(`No fixture context wired for prompt module ${moduleId}`);
+  }
+}

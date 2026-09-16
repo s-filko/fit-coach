@@ -104,10 +104,10 @@ Rules:
   splits the body in two — the plan's own snippet had the branches inline). Source:
   refactor-P1 close-out review R2 (2026-09-16).
 - [ ] L0 eval checks named by `PROMPT_EVAL_FRAMEWORK.md` §4.1 but not implemented in the
-  P0 harness: section presence, version discipline, message-catalog completeness. All three
-  need artefacts P0 does not build — a PhaseSpec/section contract (P2) and prompt version
-  identifiers (§6, baseline plan) — so L0 ships only the three checks that need nothing but a
-  rendered string. Source: close-out-review, R4 (2026-09-13).
+  P0 harness: version discipline, message-catalog completeness (section presence shipped
+  in refactor-p2-prompt-modules). Both need artefacts the harness does not build yet —
+  prompt version identifiers (§6, baseline plan) and the P3 message catalog. Source:
+  close-out-review, R4 (2026-09-13).
 - [ ] Replace the L0 forbidden-string allowlist with P2's structural check: validate the values
   actually substituted into a prompt instead of scanning the whole rendered string, which
   cannot distinguish an unrendered `undefined` from the word "undefined" in prose. The exact-

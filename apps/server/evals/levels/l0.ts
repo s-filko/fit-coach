@@ -1,8 +1,11 @@
+import { PHASE_PROMPTS, STANDALONE_PROMPTS } from '@infra/ai/prompts';
+import { compose } from '@infra/ai/prompts/compose';
+import type { PromptModule } from '@infra/ai/prompts/types';
+
 import { ALL_FIXTURES } from '../fixtures/personas';
-import { FIXED_NOW, buildFixtureSession, buildSessionPlanningContext, toUser } from '../fixtures/prompt-contexts';
+import { contextsForModule } from '../fixtures/prompt-contexts';
 import type { CheckResult } from '../lib/reporter';
 import { estimateTokens } from '../lib/token-estimator';
-import type { EvalFixture } from '../schema/case.schema';
 
 /** §4.1: rendered prompts may not contain these. */
 export const FORBIDDEN_STRINGS = ['undefined', 'null', '[object Object]', 'NaN'];
@@ -13,7 +16,7 @@ export const FORBIDDEN_STRINGS = ['undefined', 'null', '[object Object]', 'NaN']
  * and predictable: a NEW occurrence of a forbidden token still fails, including
  * a second, similar-looking phrase that is not listed here verbatim.
  *
- * The proper fix is P2's structural check, which validates the values actually
+ * The proper fix is the structural check, which validates the values actually
  * substituted into a prompt instead of scanning the whole rendered string. This
  * allowlist is the stopgap until then.
  */
@@ -32,30 +35,34 @@ function findForbiddenHits(rendered: string): string[] {
 }
 
 /**
- * Per-phase system-prompt budget in estimated tokens. P2 replaces these with
+ * Per-module prompt budget in estimated tokens, keyed by registry module id.
+ * Blocks fall through to the default (they are tiny). P4 replaces these with
  * PhaseSpec.budget.system; until then they are a ceiling generous enough to
  * pass today's prompts and tight enough to catch runaway growth.
  *
  * Measured headroom at the time these were set (min-max across the three
  * fixtures), as a baseline for any future recalibration:
- *   registration      935-969    (budget  4000)
- *   chat             1006-1046   (budget  4000)
- *   plan_creation    1378-1385   (budget  8000)
- *   session_planning 2199-2215   (budget 12000)
- *   training         3391-3396   (budget  8000)
+ *   phase.registration      935-969    (budget  4000)
+ *   phase.chat             1079-1119   (budget  4000)
+ *   phase.plan_creation    1378-1385   (budget  8000)
+ *   phase.session_planning 2199-2216   (budget 12000)
+ *   phase.training         3391-3396   (budget  8000)
+ *   summarizer               248       (budget  2000)
+ *   block.*                  34-119    (default  8000)
  */
-export const PHASE_TOKEN_BUDGET: Record<string, number> = {
-  registration: 4000,
-  chat: 4000,
-  plan_creation: 8000,
-  session_planning: 12000,
-  training: 8000,
+export const PROMPT_TOKEN_BUDGET: Record<string, number> = {
+  'phase.registration': 4000,
+  'phase.chat': 4000,
+  'phase.plan_creation': 8000,
+  'phase.session_planning': 12000,
+  'phase.training': 8000,
+  summarizer: 2000,
 };
 
 export const EVAL_PHASES = ['registration', 'chat', 'plan_creation', 'session_planning', 'training'];
 
-export function checkRenderedPrompt(phase: string, fixtureName: string, rendered: string): CheckResult[] {
-  const caseName = `${phase}/${fixtureName}`;
+export function checkRenderedPrompt(moduleId: string, fixtureName: string, rendered: string): CheckResult[] {
+  const caseName = `${moduleId}/${fixtureName}`;
   const results: CheckResult[] = [];
 
   results.push({
@@ -74,7 +81,7 @@ export function checkRenderedPrompt(phase: string, fixtureName: string, rendered
   });
 
   const tokens = estimateTokens(rendered);
-  const budget = PHASE_TOKEN_BUDGET[phase] ?? 8000;
+  const budget = PROMPT_TOKEN_BUDGET[moduleId] ?? 8000;
   results.push({
     case: caseName,
     check: 'within-token-budget',
@@ -85,101 +92,55 @@ export function checkRenderedPrompt(phase: string, fixtureName: string, rendered
   return results;
 }
 
-/**
- * Maps a fixture persona onto the production `User` domain type, builds fixture
- * sessions and context data — all shared with the snapshot suite via
- * evals/fixtures/prompt-contexts.ts.
- */
+/** §4.1 section presence: every id in the module's section contract must be rendered. */
+export function checkSections(
+  moduleId: string,
+  fixtureName: string,
+  renderedIds: string[],
+  requiredIds: readonly string[],
+): CheckResult[] {
+  const missing = requiredIds.filter(id => !renderedIds.includes(id));
+  return [
+    {
+      case: `${moduleId}/${fixtureName}`,
+      check: 'required-sections-present',
+      passed: missing.length === 0,
+      detail: missing.length ? `missing sections: ${missing.join(', ')}` : undefined,
+    },
+  ];
+}
 
-async function renderPrompt(phase: string, fixture: EvalFixture): Promise<string> {
-  const user = toUser(fixture);
-  switch (phase) {
-    case 'registration': {
-      const { compose } = await import('@infra/ai/prompts/compose');
-      const { REGISTRATION_PROMPT } = await import('@infra/ai/prompts/phases/registration');
-      return compose(
-        REGISTRATION_PROMPT.current.render({
-          now: FIXED_NOW,
-          timezone: user.timezone ?? null,
-          client: 'telegram',
-          user,
-          lastMessageTime: null,
-        }),
-      );
-    }
-    case 'chat': {
-      const { compose } = await import('@infra/ai/prompts/compose');
-      const { CHAT_PROMPT } = await import('@infra/ai/prompts/phases/chat');
-      return compose(
-        CHAT_PROMPT.current.render({
-          now: FIXED_NOW,
-          timezone: user.timezone ?? null,
-          client: 'telegram',
-          user,
-          lastMessageTime: null,
-          hasActivePlan: fixture.hasActivePlan ?? false,
-          recentSessions: [],
-        }),
-      );
-    }
-    case 'plan_creation': {
-      const { compose } = await import('@infra/ai/prompts/compose');
-      const { PLAN_CREATION_PROMPT } = await import('@infra/ai/prompts/phases/plan_creation');
-      return compose(
-        PLAN_CREATION_PROMPT.current.render({
-          now: FIXED_NOW,
-          timezone: user.timezone ?? null,
-          client: 'telegram',
-          user,
-          lastMessageTime: null,
-        }),
-      );
-    }
-    case 'session_planning': {
-      const { compose } = await import('@infra/ai/prompts/compose');
-      const { SESSION_PLANNING_PROMPT } = await import('@infra/ai/prompts/phases/session_planning');
-      return compose(
-        SESSION_PLANNING_PROMPT.current.render({
-          now: FIXED_NOW,
-          timezone: user.timezone ?? null,
-          client: 'telegram',
-          user,
-          lastMessageTime: null,
-          context: buildSessionPlanningContext(fixture, FIXED_NOW),
-        }),
-      );
-    }
-    case 'training': {
-      const { compose } = await import('@infra/ai/prompts/compose');
-      const { TRAINING_PROMPT } = await import('@infra/ai/prompts/phases/training');
-      return compose(
-        TRAINING_PROMPT.current.render({
-          now: FIXED_NOW,
-          timezone: user.timezone ?? null,
-          client: 'telegram',
-          user,
-          lastMessageTime: null,
-          session: buildFixtureSession(fixture, FIXED_NOW),
-          previousSession: null,
-        }),
-      );
-    }
-    default:
-      throw new Error(`No L0 renderer wired for phase ${phase}`);
-  }
+interface Target {
+  module: PromptModule<unknown>;
+  requiredSections: readonly string[];
+}
+
+function targets(phaseArg: string): Target[] {
+  const phases = Object.entries(PHASE_PROMPTS)
+    .filter(([phase]) => phaseArg === 'all' || phase === phaseArg)
+    .map(([, { entry }]) => ({ module: entry.current, requiredSections: entry.requiredSections }));
+  const standalone =
+    phaseArg === 'all'
+      ? STANDALONE_PROMPTS.map(module => ({
+          module,
+          requiredSections: module.render(contextsForModule(module.id, ALL_FIXTURES[0]!.fixture)).map(s => s.id),
+        }))
+      : [];
+  return [...phases, ...standalone];
 }
 
 export async function runL0(phaseArg: string): Promise<CheckResult[]> {
-  const phases = phaseArg === 'all' ? EVAL_PHASES : [phaseArg];
   const results: CheckResult[] = [];
 
-  for (const phase of phases) {
+  for (const { module, requiredSections } of targets(phaseArg)) {
     for (const { name, fixture } of ALL_FIXTURES) {
       try {
-        results.push(...checkRenderedPrompt(phase, name, await renderPrompt(phase, fixture)));
+        const sections = module.render(contextsForModule(module.id, fixture));
+        results.push(...checkRenderedPrompt(module.id, name, compose(sections)));
+        results.push(...checkSections(module.id, name, sections.map(s => s.id), requiredSections));
       } catch (err) {
         results.push({
-          case: `${phase}/${name}`,
+          case: `${module.id}/${name}`,
           check: 'renders-without-throwing',
           passed: false,
           detail: err instanceof Error ? err.message : String(err),

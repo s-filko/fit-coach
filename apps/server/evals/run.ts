@@ -19,22 +19,27 @@ async function main(): Promise<void> {
 
   // Results per phase, so --baseline writes one file per phase even with --phase all
   // (a later single-phase compare needs a single-phase baseline file).
-  const phases = phase === 'all' ? EVAL_PHASES : [phase];
   const perPhaseResults = new Map<string, CheckResult[]>();
 
-  for (const p of phases) {
-    if (level === 'L0') {
-      perPhaseResults.set(p, await runL0(p));
-    } else if (level === 'L1') {
-      if (process.env['RUN_LLM_EVALS'] !== '1') {
-        console.log('L1 skipped: set RUN_LLM_EVALS=1 to run evals against a real model.');
-        process.exit(0);
+  if (level === 'L0') {
+    // L0 iterates the prompt registry itself — runL0('all') covers phase modules
+    // AND standalone modules (summarizer, blocks); a specific phase renders just
+    // that phase's module.
+    perPhaseResults.set(phase, await runL0(phase));
+  } else {
+    const phases = phase === 'all' ? EVAL_PHASES : [phase];
+    for (const p of phases) {
+      if (level === 'L1') {
+        if (process.env['RUN_LLM_EVALS'] !== '1') {
+          console.log('L1 skipped: set RUN_LLM_EVALS=1 to run evals against a real model.');
+          process.exit(0);
+        }
+        const { runL1 } = await import('./levels/l1');
+        perPhaseResults.set(p, await runL1(p, samples));
+      } else {
+        console.error(`Level ${level} is not implemented yet (P0 ships L0 and L1).`);
+        process.exit(2);
       }
-      const { runL1 } = await import('./levels/l1');
-      perPhaseResults.set(p, await runL1(p, samples));
-    } else {
-      console.error(`Level ${level} is not implemented yet (P0 ships L0 and L1).`);
-      process.exit(2);
     }
   }
 
