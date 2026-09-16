@@ -1485,7 +1485,7 @@ git commit -m "feat(evals): L0 renders the prompt registry, checks required sect
 
 The point of the whole exercise. Requires the `v0` baseline from `refactor-p0-eval-baseline` (guaranteed by the `After:` chain) and dev keys in `.env`.
 
-- [ ] **Step 1: Run L1 against the baseline**
+- [x] **Step 1: Run L1 against the baseline**
 
 ```bash
 RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v0
@@ -1493,11 +1493,11 @@ RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline c
 
 Expected: the compare report shows every dataset within ±2 pp of `v0`. Paste the per-dataset table into this plan under "## AC-1322 result" and into the PR description.
 
-- [ ] **Step 2: If any dataset is outside the band**
+- [x] **Step 2: If any dataset is outside the band** — not triggered: no dataset outside the band (0 regressions everywhere; see the table below).
 
 It cannot be the prompt text (snapshots are byte-identical), so it is either sampling noise or a context difference in the caller (a wrong `lastMessageTime`, a `now` that moved). Re-run that phase once with `--samples 5`. If still outside: stop, keep `Status: in progress`, record the table, and surface to the owner — the master plan's rollback condition (AC-1322 after two attempts) applies to the *assembler* wiring, which this plan does not touch, so the finding is new information for the owner, not a revert.
 
-- [ ] **Step 3: Record**
+- [x] **Step 3: Record**
 
 Fill in "## AC-1322 result" with date, git SHA, model, `n`, and the table.
 
@@ -1532,7 +1532,19 @@ Expected: `prompt_versions` JSON contains `phase.<x>: v1` and `directive.*`/`blo
 
 ## AC-1322 result
 
-_(filled in by Task 7)_
+- **Date:** 2026-09-16 · **SHA:** `1b5dd4a7` (branch `plan/refactor-p2-prompt-modules`) · **Model:** `glm-5.3` (direct Z.AI route, dev keys) · **n:** 3 samples/case
+- **Command:** `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v0`
+- **Overall:** 270/272 checks passed (99.3%) vs `v0` 265/267 (99.3%) — comparator verdict: **0 regressions, 0 improvements on every dataset** (chat +5 new checks, all passed). Every dataset within the ±2 pp band → AC-1322 met.
+
+| Dataset | v0 | v1 (this run) | Δ pass rate | Regressions |
+|---|---|---|---|---|
+| registration | 52/52 (100%) | 52/52 (100%) | 0 | 0 |
+| chat | 60/60 (100%) | 65/65 (100%) | 0 | 0 (+5 new checks, all green) |
+| plan_creation | 50/51 (98.0%) | 50/51 (98.0%) | 0 | 0 |
+| session_planning | 51/52 (98.1%) | 51/52 (98.1%) | 0 | 0 |
+| training | 52/52 (100%) | 52/52 (100%) | 0 | 0 |
+
+The two failing checks are the pre-existing detector bugs, not regressions: `PC-0007 tools.must:save_workout_plan` 0/3 in both v0 and v1 (BUG-014), `SP-0005 tools.must:start_training_session` 1/3 in v0 → 0/3 in v1 (BUG-015; the check was already failing in v0, so the comparator records no regression — sample-level wobble at n=3). Clearing them 3/3 requires wording changes, which this plan's zero-wording-change constraint forbids — that is future prompt-version work, tracked as BUG-014/BUG-015.
 
 ## Follow-up plan (not part of this one)
 
