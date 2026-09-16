@@ -924,7 +924,7 @@ export interface SummarizerContext { phase: ConversationPhase; previousSummary: 
 export const SUMMARIZER_V1: PromptModule<SummarizerContext>;             // id 'summarizer'; sections 'system' and 'user'
 ```
 
-- [ ] **Step 1: Write the four block modules**
+- [x] **Step 1: Write the four block modules**
 
 `apps/server/src/infra/ai/prompts/blocks/tool-results.v1.ts` — text from `training.subgraph.ts:142-161`, classification stays in the subgraph:
 
@@ -1047,7 +1047,7 @@ export function renderBlock<TCtx>(module: PromptModule<TCtx>, ctx: TCtx): string
 }
 ```
 
-- [ ] **Step 2: Write the summariser module**
+- [x] **Step 2: Write the summariser module**
 
 `apps/server/src/infra/ai/prompts/summarizer/v1.ts` — both strings from `phase-summary.node.ts` verbatim:
 
@@ -1096,7 +1096,7 @@ If a previous summary is provided, incorporate its key points and add new inform
 
 `summarizer/index.ts`: `export { SUMMARIZER_V1 as SUMMARIZER_PROMPT, type SummarizerContext } from './v1';`
 
-- [ ] **Step 3: Retarget the nine non-phase snapshot tests**
+- [x] **Step 3: Retarget the nine non-phase snapshot tests**
 
 In `prompt-snapshots.unit.test.ts` replace the summariser/block `it` bodies with module renders (same test names):
 - `summarizer / system` → `sectionText(SUMMARIZER_PROMPT.render({ phase: 'training', previousSummary: FIXTURE_SUMMARY, history: FIXTURE_HISTORY }), 'system')`
@@ -1110,7 +1110,7 @@ In `prompt-snapshots.unit.test.ts` replace the summariser/block `it` bodies with
 Run: `npm run test:unit -- prompt-snapshots --ci`
 Expected: PASS (24/24 against the Task 1 files).
 
-- [ ] **Step 4: Switch the callers**
+- [x] **Step 4: Switch the callers**
 
 `training.subgraph.ts`:
 - `buildToolResultsInjection(toolMessages)` body becomes: classify each `ToolMessage` exactly as today (`status === 'error' || startsWith(LLM_ERROR_PREFIX) || startsWith(SYSTEM_ERROR_PREFIX)`), strip the prefixes as today, then `return renderBlock(TOOL_RESULTS_V1, { results })`. Keep the function (and its export) — it is now protocol logic + one render.
@@ -1135,7 +1135,7 @@ Expected: PASS (24/24 against the Task 1 files).
 
 (`history` here is the `ChatMsg[]` from `getMessagesForPrompt` — its `role` union includes `'system'`; map it to the module's `{ role: 'user' | 'assistant' }` by filtering `m.role !== 'system'` exactly as the old `conversationText` mapping implied (it treated everything non-user as Assistant — keep that: `role: m.role === 'user' ? 'user' : 'assistant'`).)
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `npm run type-check && npm run lint && npm run test:unit -- --ci && npm run evals -- --level L0`
 Expected: green.
