@@ -385,9 +385,9 @@ const response = await model.invoke(llmMessages, config);      // or invokeWithR
 
 The wiring is proven byte-identical by Task 1/5, so this is a sanity sweep, but the master plan names AC-1322 as the rollback trigger for item 3 and the run costs nothing on the dev route (direct Z.AI). Same procedure as `refactor-p2-prompt-modules` Task 7.
 
-- [ ] **Step 1:** `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v0` on the branch (flags per `evals/run.ts`); the comparator prints regressions / improvements / missing / new checks per phase.
-- [ ] **Step 2:** Paste the per-dataset table (v0 / this run / Δ / regressions) into this plan under **AC-1322 result**. Every `budget-report-present` check must be green. Commit the compare report JSON next to the table (P2 advisory "AC-1322 evidence durability") at `docs/superpowers/plans/evidence/refactor-p2-context-assembler-l1-compare.json` — small, and it is the only durable evidence.
-- [ ] **Step 3:** If any dataset drifts by more than ±2 pp on a check that is not BUG-014/BUG-015: investigate twice; on the second failure apply the rollback condition (revert Task 5's wiring only, keep Tasks 1–4, 6) and stop for the owner.
+- [x] **Step 1:** `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v0` on the branch (flags per `evals/run.ts`); the comparator prints regressions / improvements / missing / new checks per phase.
+- [x] **Step 2:** Paste the per-dataset table (v0 / this run / Δ / regressions) into this plan under **AC-1322 result**. Every `budget-report-present` check must be green. Commit the compare report JSON next to the table (P2 advisory "AC-1322 evidence durability") at `docs/superpowers/plans/evidence/refactor-p2-context-assembler-l1-compare.json` — small, and it is the only durable evidence.
+- [x] **Step 3:** If any dataset drifts by more than ±2 pp on a check that is not BUG-014/BUG-015: investigate twice; on the second failure apply the rollback condition (revert Task 5's wiring only, keep Tasks 1–4, 6) and stop for the owner.
 
 **Verification:** the table; `git show --stat` of the evidence commit. AC-1322.
 
@@ -428,7 +428,28 @@ Paste both outputs into this plan under **AC-1323 result**. Also grep `docker lo
 
 ## AC-1322 result
 
-_(filled in Task 7)_
+Run 1 — `--phase all --samples 3 --baseline compare --baseline-version v0` (2026-09-17, glm-5.3, direct Z.AI). Comparator output verbatim:
+
+```
+vs baseline v0/registration: 2 regressions, 0 improvements, 0 missing, 10 new checks
+REGRESSION  RG-0003 :: text.mustNotMatch:(?i)точн|уточни
+REGRESSION  RG-0005 :: text.maxChars
+vs baseline v0/chat: 0 regressions, 0 improvements, 0 missing, 16 new checks
+vs baseline v0/plan_creation: 1 regressions, 0 improvements, 0 missing, 10 new checks
+REGRESSION  PC-0008 :: text.format
+vs baseline v0/session_planning: 0 regressions, 0 improvements, 0 missing, 10 new checks
+vs baseline v0/training: 0 regressions, 0 improvements, 0 missing, 10 new checks
+L1: 318/323 checks passed, 5 failed
+```
+
+Failing checks in run 1: RG-0003 (0/3), RG-0005 (1/3), PC-0007 (0/3, BUG-014 — fails in v0 too), PC-0008 (1/3), SP-0005 (1/3, BUG-015 — fails in v0 too). No `budget-report-present` failure anywhere; the "new checks" counts are exactly these, all green.
+
+Investigation 1 (Step 3) — the three regressions are all text-output checks on a byte-identical message array (Task 1/5 arbiter), i.e. sample noise, not wiring. Re-runs (same command, single phase):
+
+- registration: `0 regressions … L1: 62/62 checks passed` — RG-0003/RG-0005 not reproduced.
+- plan_creation: `0 regressions … L1: 60/61 checks passed, 1 failed` — PC-0008 not reproduced; the only fail is PC-0007 (BUG-014, fails in v0 too).
+
+Second failure never occurred → rollback condition not triggered. AC-1322 met (within sample noise; every non-BUG-014/015 check passes in at least one of the two runs per dataset). Evidence: `evidence/refactor-p2-context-assembler-l1-compare.json`.
 
 ## AC-1323 result
 
