@@ -5,7 +5,7 @@ import type { PromptModule } from '@infra/ai/prompts/types';
 import { ALL_FIXTURES } from '../fixtures/personas';
 import { contextsForModule } from '../fixtures/prompt-contexts';
 import type { CheckResult } from '../lib/reporter';
-import { estimateTokens } from '../lib/token-estimator';
+import { estimateTokens } from '@infra/ai/context/token-estimator';
 
 /** §4.1: rendered prompts may not contain these. */
 export const FORBIDDEN_STRINGS = ['undefined', 'null', '[object Object]', 'NaN'];

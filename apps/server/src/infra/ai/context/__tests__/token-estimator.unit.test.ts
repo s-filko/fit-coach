@@ -1,4 +1,4 @@
-import { estimateTokens } from '../token-estimator';
+import { TOKEN_ESTIMATOR_ID, estimateTokens } from '../token-estimator';
 
 describe('estimateTokens (AC-1303 L0 — shared token estimator)', () => {
   it('is chars/4 with a 1.15 safety factor, rounded up', () => {
@@ -14,5 +14,11 @@ describe('estimateTokens (AC-1303 L0 — shared token estimator)', () => {
     const latin = estimateTokens('a'.repeat(100));
     const cyrillic = estimateTokens('я'.repeat(100));
     expect(cyrillic).toBeGreaterThanOrEqual(latin);
+  });
+
+  it('stamps its formula id', () => {
+    // A BudgetReport row must say which formula produced it; changing the
+    // formula means changing the id.
+    expect(TOKEN_ESTIMATOR_ID).toBe('chars4x1.15');
   });
 });
