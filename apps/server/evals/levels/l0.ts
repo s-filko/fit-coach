@@ -136,8 +136,18 @@ async function renderPrompt(phase: string, fixture: EvalFixture): Promise<string
       );
     }
     case 'session_planning': {
-      const { buildSessionPlanningSystemPrompt } = await import('@infra/ai/graph/nodes/session-planning.node');
-      return buildSessionPlanningSystemPrompt(user, buildSessionPlanningContext(fixture, FIXED_NOW));
+      const { compose } = await import('@infra/ai/prompts/compose');
+      const { SESSION_PLANNING_PROMPT } = await import('@infra/ai/prompts/phases/session_planning');
+      return compose(
+        SESSION_PLANNING_PROMPT.current.render({
+          now: FIXED_NOW,
+          timezone: user.timezone ?? null,
+          client: 'telegram',
+          user,
+          lastMessageTime: null,
+          context: buildSessionPlanningContext(fixture, FIXED_NOW),
+        }),
+      );
     }
     case 'training': {
       const { buildTrainingSystemPrompt } = await import('@infra/ai/graph/nodes/training.node');
