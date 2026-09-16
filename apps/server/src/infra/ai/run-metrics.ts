@@ -12,6 +12,8 @@
  * ours between `handleChatModelStart` and `handleLLMEnd` and is dropped on read.
  * A run or call that errors before that leaves an entry behind, hence the caps.
  */
+import type { BudgetReport } from '@domain/conversation/ports';
+
 const MAX_TRACKED_RUNS = 500;
 const MAX_TRACKED_CALLS = 500;
 
@@ -21,6 +23,8 @@ export interface RunMetrics {
   tokensOut: number;
   latencyMs: number;
   llmCalls: number;
+  budgetReport: BudgetReport | null;
+  assemblies: number;
 }
 
 interface RunAccumulator {
@@ -29,12 +33,22 @@ interface RunAccumulator {
   tokensOut: number;
   startedAt: number;
   llmCalls: number;
+  budgetReport: BudgetReport | null;
+  assemblies: number;
 }
 
 const runs = new Map<string, RunAccumulator>();
 const callRuns = new Map<string, string>();
 
-const EMPTY: RunMetrics = { model: null, tokensIn: 0, tokensOut: 0, latencyMs: 0, llmCalls: 0 };
+const EMPTY: RunMetrics = {
+  model: null,
+  tokensIn: 0,
+  tokensOut: 0,
+  latencyMs: 0,
+  llmCalls: 0,
+  budgetReport: null,
+  assemblies: 0,
+};
 
 function evictOldest(map: Map<string, unknown>, cap: number): void {
   if (map.size < cap) {
@@ -58,6 +72,8 @@ function openRun(runId: string): RunAccumulator {
     tokensOut: 0,
     startedAt: Date.now(),
     llmCalls: 0,
+    budgetReport: null,
+    assemblies: 0,
   };
   runs.set(runId, acc);
   return acc;
@@ -88,6 +104,21 @@ export function finishLlmCall(runId: string, tokensIn: number, tokensOut: number
   acc.tokensOut += tokensOut;
 }
 
+/**
+ * Records one context assembly's report for the run (AC-1323). Last one wins
+ * (D-B: the last assembly is the largest context of a run); `assemblies`
+ * counts every attach so queries can separate single-call runs from tool
+ * loops. An unknown runId opens the run — evals never call `startRun`.
+ */
+export function attachBudgetReport(runId: string, report: BudgetReport): void {
+  if (!runId) {
+    return;
+  }
+  const acc = openRun(runId);
+  acc.budgetReport = report;
+  acc.assemblies += 1;
+}
+
 export function bindCallToRun(llmRunId: string, runId: string): void {
   if (!llmRunId || !runId) {
     return;
@@ -116,5 +147,7 @@ export function drainRunMetrics(runId: string): RunMetrics {
     tokensOut: acc.tokensOut,
     latencyMs: Date.now() - acc.startedAt,
     llmCalls: acc.llmCalls,
+    budgetReport: acc.budgetReport,
+    assemblies: acc.assemblies,
   };
 }

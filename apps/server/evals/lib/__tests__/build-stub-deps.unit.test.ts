@@ -36,6 +36,7 @@ describe('buildStubDeps', () => {
       toolCalls: null,
       transition: null,
       outcome: 'ok',
+      budgetReport: null,
     });
     expect(world.recordedRuns).toHaveLength(1);
   });

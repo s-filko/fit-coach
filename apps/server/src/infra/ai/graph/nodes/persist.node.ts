@@ -25,6 +25,7 @@ export function buildPersistNode(contextService: IConversationContextService, ru
 
     const metrics = drainRunMetrics(runId);
     const promptVersions = promptVersionsForPhase(phase);
+    const budgetReport = metrics.budgetReport ? { ...metrics.budgetReport, assemblies: metrics.assemblies } : null;
     try {
       await runService.recordRun({
         runId,
@@ -39,6 +40,7 @@ export function buildPersistNode(contextService: IConversationContextService, ru
         toolCalls: null,
         transition: requestedTransition ? { toPhase: requestedTransition.toPhase } : null,
         outcome: 'ok',
+        budgetReport,
       });
       log.info(
         {
@@ -50,6 +52,7 @@ export function buildPersistNode(contextService: IConversationContextService, ru
           tokensOut: metrics.tokensOut,
           latencyMs: metrics.latencyMs,
           llmCalls: metrics.llmCalls,
+          budgetReport,
         },
         'Conversation run recorded',
       );
