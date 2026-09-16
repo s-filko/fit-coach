@@ -129,17 +129,19 @@ export const TOKEN_ESTIMATOR_ID = 'chars4x1.15';   // stamped into every BudgetR
 export function estimateTokens(text: string): number;
 ```
 
-- [ ] **Step 1: Move the file and its test; add `TOKEN_ESTIMATOR_ID`**
+- [x] **Step 1: Move the file and its test; add `TOKEN_ESTIMATOR_ID`**
 
 Update the header comment: it is now the single implementation the assembler and the eval stack share (drop "from P2 … keep the two in step" — there is one). Add one test: `TOKEN_ESTIMATOR_ID` equals `'chars4x1.15'` (a report row must say which formula produced it; changing the formula means changing the id).
 
-- [ ] **Step 2: Repoint importers and delete the old copy**
+- [x] **Step 2: Repoint importers and delete the old copy**
 
 `grep -rn "lib/token-estimator" evals src` → empty after the change.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 `refactor(ai): move the token estimator into src/infra/ai/context (single implementation)`
+
+> **Task 2 result (2026-09-17):** estimator + test moved verbatim to `src/infra/ai/context/`, header rewritten (one implementation, no "keep the two in step"), `TOKEN_ESTIMATOR_ID = 'chars4x1.15'` added with its own test. `l0.ts` repointed to `@infra/ai/context/token-estimator`; old files deleted; `grep -rn "lib/token-estimator" evals src` → empty. Verification: `npm run type-check` clean; `npx jest --ci evals src/infra/ai/context` → 13 suites / 103 tests green; `npx jest --ci evals/snapshots` → 39 tests / 38 snapshots green; `npm run evals -- --level L0` → 120/120 before and after the move.
 
 **Verification:** `npm run type-check`; `npx jest --ci evals src/infra/ai/context`; `npm run evals -- --level L0` still reports the same check count as before the move (L0 uses the estimator for `within-token-budget`). AC: master plan P2 item 3 ("single implementation, unit-tested").
 
