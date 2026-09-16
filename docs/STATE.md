@@ -12,7 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-16 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `refactor-p2-context-assembler.md` — Refactor P2 — Context Assembler Implementation Plan (branch: `plan/refactor-p2-context-assembler`, last commit 2026-09-17)
+— none —
 
 **Planned**
 — none —
@@ -30,6 +30,7 @@ _Generated 2026-09-16 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p0-run-log.md` — Refactor P0 — Run Log Implementation Plan
 - `refactor-p0-transcript-export.md` — Refactor P0 — Transcript Export Implementation Plan
 - `refactor-p1-legacy-llm-retirement.md` — Refactor P1 — Legacy LLM Path Retirement Implementation Plan
+- `refactor-p2-context-assembler.md` — Refactor P2 — Context Assembler Implementation Plan
 - `refactor-p2-prompt-modules.md` — Refactor P2 — Prompt Modules Implementation Plan
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 

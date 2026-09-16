@@ -1,6 +1,6 @@
 # Refactor P2 — Context Assembler Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/refactor-p2-context-assembler
 - After: refactor-p2-prompt-modules
 - Review: 2026-09-17 | clean | R1,R2,R3,R4
