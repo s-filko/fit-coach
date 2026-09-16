@@ -77,7 +77,7 @@ export const FIXTURE_SUMMARY: string;                // one hand-written previou
 export const FIXTURE_TOOL_RESULTS: Array<{ ok: boolean; content: string }>; // one ok, one failed
 ```
 
-- [ ] **Step 1: Create the fixture-context module**
+- [x] **Step 1: Create the fixture-context module**
 
 Create `apps/server/evals/fixtures/prompt-contexts.ts` — move the three helpers out of `evals/levels/l0.ts` (lines 96-141) and add the constants:
 
@@ -145,11 +145,11 @@ export function buildSessionPlanningContext(fixture: EvalFixture, now: Date): Se
 
 In `evals/levels/l0.ts` delete the three local helpers and import them from the new module; pass `FIXED_NOW` where a `now` argument is now required. Until Task 3 replaces the old builders, L0 still renders them with real time (they call `new Date()` internally) — exactly as today. L0 becomes time-stable in Task 6 when it renders modules with `ctx.now = FIXED_NOW`. Only the snapshot suite (Jest) needs fake timers, and it gets them in Step 3.
 
-- [ ] **Step 2: Export `buildToolResultsInjection`**
+- [x] **Step 2: Export `buildToolResultsInjection`**
 
 In `apps/server/src/infra/ai/graph/subgraphs/training.subgraph.ts:142` change `function buildToolResultsInjection` to `export function buildToolResultsInjection`. Nothing else.
 
-- [ ] **Step 3: Write the snapshot suite against the old code**
+- [x] **Step 3: Write the snapshot suite against the old code**
 
 Create `apps/server/evals/snapshots/__tests__/prompt-snapshots.unit.test.ts`:
 
@@ -280,7 +280,7 @@ If a previous summary is provided, incorporate its key points and add new inform
 });
 ```
 
-- [ ] **Step 4: Generate the snapshots once, then verify with `--ci`**
+- [x] **Step 4: Generate the snapshots once, then verify with `--ci`**
 
 Run:
 
@@ -291,12 +291,12 @@ npm run test:unit -- prompt-snapshots --ci
 
 Expected: first run writes `__snapshots__/prompt-snapshots.unit.test.ts.snap` (24 snapshots: 15 phase × fixture, 3 summariser, 6 blocks); second run passes with `--ci`. Open the `.snap` file and confirm the chat snapshots contain the greeting directive (fake time is a new day after `LAST_MESSAGE_YESTERDAY`) and no `undefined`/`NaN`.
 
-- [ ] **Step 5: Run L0 and the full unit suite to prove nothing moved yet**
+- [x] **Step 5: Run L0 and the full unit suite to prove nothing moved yet**
 
 Run: `npm run evals -- --level L0 && npm run test:unit`
 Expected: L0 45/45 unchanged; unit suite green.
 
-- [ ] **Step 6: Commit the frozen truth**
+- [x] **Step 6: Commit the frozen truth**
 
 ```bash
 git add evals/fixtures/prompt-contexts.ts evals/levels/l0.ts evals/snapshots src/infra/ai/graph/subgraphs/training.subgraph.ts
@@ -347,7 +347,7 @@ export const DIRECTIVES_WITHOUT_IDENTITY_V1: readonly DirectiveModule[];  // tra
 
 Order in `DEFAULT_DIRECTIVES_V1` is today's `composeDirectives` order (`prompt-directives.ts:109-128`): identity, greeting, language, timezone, name-usage, formatting, time-reference, output, tool-reply. `greeting` renders `null` when not applicable — `renderDirectives` drops nulls, which is exactly what `parts.push` skipping did.
 
-- [ ] **Step 1: Write the failing compose test**
+- [x] **Step 1: Write the failing compose test**
 
 Create `apps/server/src/infra/ai/prompts/__tests__/compose.unit.test.ts`:
 
@@ -385,12 +385,12 @@ describe('compose (ADR-0013 §5.2, BR-LLM-007 — deterministic composition)', (
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- prompts/__tests__/compose`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Write the types and compose**
+- [x] **Step 3: Write the types and compose**
 
 Create `apps/server/src/domain/ai/prompt-context.types.ts`:
 
@@ -475,12 +475,12 @@ export function promptVersionsOf(module: PromptModule<unknown>): Record<string, 
 }
 ```
 
-- [ ] **Step 4: Run the compose test**
+- [x] **Step 4: Run the compose test**
 
 Run: `npm run test:unit -- prompts/__tests__/compose`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Write the failing directive tests**
+- [x] **Step 5: Write the failing directive tests**
 
 Create `apps/server/src/infra/ai/prompts/directives/__tests__/directives.v1.unit.test.ts` — the semantic assertions from `src/infra/ai/graph/__tests__/prompt-directives.unit.test.ts` re-targeted at modules, plus the greeting time rule now driven by `ctx.now`:
 
@@ -558,12 +558,12 @@ describe('directive modules v1 (ADR-0013 §5, BR-LLM-007 — pure, versioned dir
 });
 ```
 
-- [ ] **Step 6: Run it to confirm it fails**
+- [x] **Step 6: Run it to confirm it fails**
 
 Run: `npm run test:unit -- directives.v1`
 Expected: FAIL — module not found.
 
-- [ ] **Step 7: Write the nine directive modules, verbatim text**
+- [x] **Step 7: Write the nine directive modules, verbatim text**
 
 Each file takes its text from `src/infra/ai/graph/prompt-directives.ts` **unchanged**. Two examples define the pattern; the other seven follow it exactly (ids as listed in Step 5's order test).
 
@@ -660,12 +660,12 @@ export const DIRECTIVES_WITHOUT_IDENTITY_V1: readonly DirectiveModule[] = DEFAUL
 
 (`DirectiveModule` is imported from `../types`.)
 
-- [ ] **Step 8: Run the directive tests and the whole unit suite**
+- [x] **Step 8: Run the directive tests and the whole unit suite**
 
 Run: `npm run test:unit -- directives.v1 && npm run test:unit && npm run type-check && npm run lint`
 Expected: green. `graph/prompt-directives.ts` still exists and is still used — nothing switched yet.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/domain/ai/prompt-context.types.ts src/infra/ai/prompts
