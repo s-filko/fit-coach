@@ -18,7 +18,7 @@ export const FORBIDDEN_STRINGS = ['undefined', 'null', '[object Object]', 'NaN']
  * allowlist is the stopgap until then.
  */
 export const FORBIDDEN_STRING_ALLOWLIST = [
-  // src/infra/ai/graph/nodes/training.node.ts:94 — RULE 7 of the training prompt.
+  // src/infra/ai/prompts/phases/training/v1.ts RULES_TEXT — RULE 7 of the training prompt.
   // "undefined" here is English ("in undefined sequence"), not an unrendered value.
   'Sets without order may execute in undefined sequence',
 ];
@@ -150,8 +150,19 @@ async function renderPrompt(phase: string, fixture: EvalFixture): Promise<string
       );
     }
     case 'training': {
-      const { buildTrainingSystemPrompt } = await import('@infra/ai/graph/nodes/training.node');
-      return buildTrainingSystemPrompt(user, buildFixtureSession(fixture, FIXED_NOW), null);
+      const { compose } = await import('@infra/ai/prompts/compose');
+      const { TRAINING_PROMPT } = await import('@infra/ai/prompts/phases/training');
+      return compose(
+        TRAINING_PROMPT.current.render({
+          now: FIXED_NOW,
+          timezone: user.timezone ?? null,
+          client: 'telegram',
+          user,
+          lastMessageTime: null,
+          session: buildFixtureSession(fixture, FIXED_NOW),
+          previousSession: null,
+        }),
+      );
     }
     default:
       throw new Error(`No L0 renderer wired for phase ${phase}`);

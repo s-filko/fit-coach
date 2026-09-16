@@ -16,11 +16,12 @@ import type { IUserService } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
 
 import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
-import { buildTrainingSystemPrompt } from '@infra/ai/graph/nodes/training.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { buildTrainingTools, LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '@infra/ai/graph/tools/training.tools';
 import { getModel } from '@infra/ai/model.factory';
+import { compose } from '@infra/ai/prompts/compose';
+import { TRAINING_PROMPT } from '@infra/ai/prompts/phases/training';
 
 import { createLogger } from '@shared/logger';
 
@@ -336,7 +337,18 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
         ? await workoutSessionRepo.findLastCompletedByUserAndKey(userId, session.sessionKey)
         : null;
 
-      const systemPrompt = buildTrainingSystemPrompt(freshUser ?? user, session, previousSession);
+      const promptUser = freshUser ?? user;
+      const systemPrompt = compose(
+        TRAINING_PROMPT.current.render({
+          now: new Date(),
+          timezone: promptUser?.timezone ?? null,
+          client: 'telegram',
+          user: promptUser,
+          lastMessageTime: null,
+          session,
+          previousSession,
+        }),
+      );
 
       // Dynamic tool filtering (BUG-008 Plan A):
       // Remove tools that should not be available given the current session state.
