@@ -12,7 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-16 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `refactor-p2-prompt-modules.md` — Refactor P2 — Prompt Modules Implementation Plan (branch: `plan/refactor-p2-prompt-modules`, last commit 2026-09-16)
+— none —
 
 **Planned**
 — none —
@@ -30,6 +30,7 @@ _Generated 2026-09-16 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p0-run-log.md` — Refactor P0 — Run Log Implementation Plan
 - `refactor-p0-transcript-export.md` — Refactor P0 — Transcript Export Implementation Plan
 - `refactor-p1-legacy-llm-retirement.md` — Refactor P1 — Legacy LLM Path Retirement Implementation Plan
+- `refactor-p2-prompt-modules.md` — Refactor P2 — Prompt Modules Implementation Plan
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 
 **Close-out debt (merged but plan not done)**
@@ -54,12 +55,13 @@ _Generated 2026-09-16 from docs/superpowers/plans/ + git. Never hand-edit; regen
 1. **Refactor P2** — `refactor-p2-prompt-modules` (items 1, 2, 4, 5; AC-1321,
    AC-1322, AC-1324) carries the full inventory of model-facing text (11 rows: 5 phase
    prompts, 9 directives, summariser, 4 injected blocks) so nothing stays outside the L0
-   grid. Decided 2026-09-13: `prompts/blocks/` is an **accepted** extension of the
-   ADR-0013 §5.1 layout, to be folded into the ADR by P7. Then
-   `refactor-p2-context-assembler` (item 3, AC-1323) — plan file to be written once the
-   registry shapes are merged. **P2 is the first consumer of the v0 baseline**
-   (`--baseline compare`, ±2 pp band) — the fixed detector cases PC-0007/SP-0005
-   (BUG-014/015) must clear at 3/3 as part of the prompt rework.
+   grid. **P2 complete (2026-09-16)**: prompt modules merged, AC-1322 met with 0 regressions
+   vs the v0 baseline. The detector cases PC-0007/SP-0005 (BUG-014/015) remain failing in
+   both v0 and v1 — clearing them needs wording changes, which P2's zero-wording-change
+   constraint forbids; that is future prompt-version work (new vN modules per
+   PROMPT_EVAL_FRAMEWORK §8), not a refactor task. Next:
+   `refactor-p2-context-assembler` (item 3, AC-1323) — plan file to be written against the
+   merged registry shapes.
 2. Then P3 → P4/P5 → P6 → P7 per the master plan phase map.
 3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
    the code aligned to it, ESLint keeping it that way. Independent of the P0 chain;

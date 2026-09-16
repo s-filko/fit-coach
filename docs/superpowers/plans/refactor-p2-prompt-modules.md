@@ -1,8 +1,9 @@
 # Refactor P2 — Prompt Modules Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/refactor-p2-prompt-modules
 - After: refactor-p1-legacy-llm-retirement
+- Review: 2026-09-16 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -1556,7 +1557,7 @@ Follow `superpowers:finishing-a-development-branch`. Before merge: run the `clos
 
 ## Review
 
-**2026-09-16 — verdict: blocked** (zones R1, R2, R3, R4; base `c2848077`).
+**2026-09-16 — verdict: clean** (zones R1, R2, R3, R4; base `c2848077`). Round 1 verdict was **blocked** on two findings; fix commit `8b6c8f3a` closed both, and R2/R4 re-runs (delta `78561363..8b6c8f3a`) confirmed closure with no new findings.
 
 **Blocking (open):**
 
@@ -1566,3 +1567,11 @@ Follow `superpowers:finishing-a-development-branch`. Before merge: run the `clos
 **Advisory (16, to be filed in `docs/BACKLOG.md`):** R1 ×3 (User type imported from a service module; registry `blocks` arrays must not survive AC-1323; ESLint/grep rails cover only existing infra dirs); R2 ×5 (11-line profile block duplicated plan_creation/session_planning; role-narrowing lambda duplicated phase-summary/training.subgraph; magic timestamp duplicated snapshot-test/fixtures; sixth copy of test user factory; `Section.required` written but never read); R3 ×7 (silent-empty `--phase` filter; tautological standalone requiredSections; stale/previousSession branches moved untested; chat v1 describe lacks BR/AC id; AC-1322 evidence durability — report JSON not committed; 134-backlog entry should cover the unit run too; rail-bite proof not recorded). Verbatim texts live in the review transcripts; the backlog entries carry the substance.
 
 R1 verdict: no blocking (prompts/ tree well-shaped, dependencies inward, sanctioned shapes honored). R3 verdict: no blocking (all ACs covered — AC-1321 23 snapshots green, AC-1322 table judged sufficient, AC-1324 grep empty and structural; full suite 516 green, L0 120/120 and 12/12 reproduced; unit-run exit 134 proven pre-existing at base).
+
+**Blocking closures (fix commit `8b6c8f3a`, re-run verdicts):**
+1. R2 — closed: all five phase modules now render `renderDirectives(this.directives, ctx)`; the `directives:` field is the single source for both rendering and persisted versions (BR-LLM-008); no leftover imports; snapshots 23/23 prove byte-identical behavior.
+2. R4 — closed: PROMPT_EVAL_FRAMEWORK.md §4.1 now states section presence is implemented, references `PROMPT_TOKEN_BUDGET` (module-id keys) and `checkSections`, consistent with the BACKLOG entry on both sides.
+
+**Advisories:** 16 from round 1 + 1 minor from the R4 re-run (path shorthand `evals/levels/l0.ts` — pre-existing style) — all filed in `docs/BACKLOG.md` (see the P2 review entries batch, 2026-09-16).
+
+**Close-out note for P7 (AC-1371):** `prompts/blocks/` is an **accepted extension** of the ADR-0013 §5.1 layout (owner ruling 2026-09-13) — fold it into the ADR's tree at the P7 docs reconciliation instead of treating it as drift.
