@@ -77,7 +77,7 @@ apps/server/src/
       model.factory.ts          # Single ChatOpenAI construction site (getModel(profile), AC-1313)
       llm.gateway.ts            # OpenAiLlmGateway — LlmGateway port implementation (ADR-0013 §7 D-10)
       llm-log-handler.ts        # LLM boundary callback: debug replay + run-metrics bridge (metadata.runId)
-      run-metrics.ts            # Per-run model/token/latency accumulator, drained by persist.node (ADR-0013 §8)
+      run-metrics.ts            # Per-run model/token/latency/budgetReport accumulator, drained by persist.node (ADR-0013 §8)
       embedding.service.ts      # Local all-MiniLM-L6-v2 via @huggingface/transformers (ONNX)
       embedding-text.util.ts    # buildEmbeddingText() — composite text for exercise embeddings
       graph/

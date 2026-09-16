@@ -3,6 +3,7 @@
 - Status: in progress
 - Branch: plan/refactor-p2-context-assembler
 - After: refactor-p2-prompt-modules
+- Review: 2026-09-17 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -463,3 +464,17 @@ _(filled in Task 8)_
 
 - P3 (`refactor-p3-*`): `PhaseSpec` takes over rendering and data loading; the assembler's `AssembleInput` shrinks to `(phaseSpec, state, ctx)` per ADR-0013 §3.4; `attachBudgetReport`/run-metrics fold into the `commit` node and run context; the post-tool nudge moves into the shared agent node and enters the report.
 - P4: `PhaseSpec.budget`, `trimMessages`, INV-LLM-004 resolution order; `budget-report-present` becomes `budgetReport.history ≤ budget.history`.
+
+## Review
+
+Verdict: **clean** (2026-09-17, zones R1–R4; R4 re-run after one fix commit).
+
+**Blocking (1, closed):**
+- R4 `docs/ARCHITECTURE.md:106` — registry line still said "PHASE_PROMPTS (+ blocks per phase)" after this branch replaced `blocks` with `layout` + `blocksForLayout` (ARCHITECTURE.md was missing from Task 8 Step 4's reconcile list). Closed in commit `d55c70aa` (registry line, training annotation, `context/` tree entry); R4 re-run verified all three closures against code and found no new rot of the class. One same-class advisory it did find (run-metrics annotation incomplete) was fixed in the same pass.
+
+**Advisory (12 → 8 filed in `docs/BACKLOG.md` under "refactor-p2-context-assembler close-out review batch (2026-09-17)"):**
+- R2 ×4: `messageText` trio + boundary under-count; `toFrameRow` twin; history mapper vs `toLangChain`; BudgetReport test fixtures ×4 (with inconsistent estimator id in the l1 fixture).
+- R3 ×5 → 4 entries: `history_frame` double ternary + cast; `budget-report-present` false positive on agent-less runs; run-metrics orphan accumulators; AC-1323 missing from new eval test names.
+- R1 ×2 and R4 re-run ×1 **not filed** — the two R1 advisories (context→graph import in `tool-results.ts`, `postToolNudge` as declarative dead weight) are exactly plan decisions D-E/D-D with removal scheduled in P3; the R4 re-run's `PLAN-training-phase-fix.md:224` advisory names a closed forensic plan (historical mention, R4 itself called it defensible).
+
+**Meta (2)** filed in `docs/REVIEW_FINDINGS.md`: AC-1322 noise-protection rule candidate (Blind spots, ×1); docs-reconcile-by-name vs mechanical grep sweep (Rule candidates, raised to ×4).

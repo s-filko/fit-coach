@@ -121,6 +121,14 @@ or is inert for the kind of diff under review.
 What fell between the zones — a real problem no zone's mandate covered, usually surfaced by
 a wider reader (the final whole-branch review) or noticed after the fact.
 
+- [×1] AC-1322's "within ±2 pp of v0" was proven loosely: run 1 exceeded the threshold on
+  three checks and the criterion was closed by "did not reproduce on re-run" (n=3, fresh
+  samples each run). The plan's Step 3 protocol authorises exactly this, and the evidence JSON
+  honestly notes it is hand-assembled from console output (the comparator writes no
+  machine-readable report). Rule candidate: when noise is suspected, require either two full
+  runs with a computed delta or a larger n before declaring "within ±2 pp".
+  Runs: refactor-p2-context-assembler (2026-09-17).
+
 - [×1] R2's mandate excludes plan-sanctioned shapes, which by design left YAGNI coverage over
   the new `prompts/` tree thin: the repeating ~10-line render-context literal across the five
   subgraphs is plan-prescribed and owned by refactor-p2-context-assembler, so it was not
@@ -362,6 +370,12 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   R4-round-1 meta ("a task that deletes a file must grep all durable docs for the deleted
   identifiers, not just the lines the plan names") was itself the missing written rule.
   Runs: refactor-p0-dead-code (2026-09-12, third run), ports-layout-consistency (2026-09-14), refactor-p1-legacy-llm-retirement (2026-09-16).
+  Fourth occurrence, the replace variant: a plan's docs-reconcile step enumerated the files to
+  fix by name and missed a bystander durable doc (ARCHITECTURE.md still describing the registry
+  as "PHASE_PROMPTS (+ blocks per phase)" after the branch replaced `blocks` with
+  `layout`+`blocksForLayout`) — R4's meta proposes the same mechanical cure: a pre-close-out
+  grep sweep over docs/ for the names the diff moved, not a hand-written file list.
+  Runs: refactor-p2-context-assembler (2026-09-17).
 - [×1] Nothing in the repo says an advisory recorded in a plan's `## Review` section must not also
   be copied into `docs/BACKLOG.md` verbatim — this branch stores all six of its advisories twice
   in near-identical prose with no ID linking the pair, so the two copies must be kept in sync or

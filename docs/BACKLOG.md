@@ -269,6 +269,43 @@ Rules:
   itself needs no correction, only a note of when it started being true. Source: `lint-glob-fix`
   close-out review, R4 (2026-09-14).
 
+refactor-p2-context-assembler close-out review batch (2026-09-17):
+
+- [ ] **`messageText` content-stringify trio + boundary under-count**: the
+  `typeof m.content === 'string' ? … : JSON.stringify(m.content)` expression now lives in
+  `context/assemble-context.ts:56`, `context/tool-results.ts:18` and
+  `evals/lib/__tests__/run-case.unit.test.ts:68` — one shared helper in `context/` would give
+  it one home; also `messageText` concatenates content and `JSON.stringify(tool_calls)` with
+  no separator, so adjacent texts merge and slightly under-count tokens at the boundary
+  (report numbers only). Source: review R2/R3.
+- [ ] **`toFrameRow` twin**: assemble-context.ts:51 = phase-summary.node.ts:34, two identical
+  role-narrowing mappings — the plan ruled the summariser's copy stays for now, but nothing
+  schedules the unification. Source: review R2.
+- [ ] **History mapper duplicates `toLangChain`**: the interleaved-history mapping in
+  assemble-context.ts:83 reinvents `toLangChain` (llm.gateway.ts:13, which also handles
+  `system`); unify when P3's PhaseSpec touches this code. Source: review R2.
+- [ ] **BudgetReport test fixtures ×4**: hand-written literals in
+  persist.node.unit.test.ts:75, conversation-run.service.unit.test.ts:24,
+  run-metrics.unit.test.ts:14, l1.unit.test.ts:18 — and the l1 fixture stamps estimator id
+  `'chars/4'` instead of `TOKEN_ESTIMATOR_ID` (`'chars4x1.15'`); one shared fixture keeps them
+  in step. Source: review R2.
+- [ ] **`history_frame` double ternary**: assemble-context.ts:97 builds the message via a
+  second ternary over the same condition that produced the text, non-nullness papered over by
+  an `as string` cast — if the conditions diverge, a silent `SystemMessage(undefined)`
+  results; compute text and message in one branch. Source: review R3.
+- [ ] **`budget-report-present` false positive on agent-less eval runs**: the check fails for
+  any eval run that completes without an agent model call (router short-circuit,
+  `outcome: 'llm_unavailable'` without throwing); no such case exists today — guard it when
+  one appears. Source: review R3.
+- [ ] **run-metrics orphan accumulators**: `attachBudgetReport` on an unknown runId opens a
+  full accumulator; a foreign runId from metadata creates an orphan entry counting against
+  MAX_TRACKED_RUNS=500 and can evict a live run's metrics (persist then records
+  budget_report = NULL silently). Eviction is inherited P0 behaviour; attach adds the entry
+  point. Source: review R3.
+- [ ] **AC id missing from new eval test names**: the `budget-report-present` its
+  (l1.unit.test.ts:80, run-case.unit.test.ts:77) carry no AC-1323 reference, unlike the
+  other new suites — grep-based AC tracing breaks. Source: review R3.
+
 P2 close-out review batch (refactor-p2-prompt-modules, 2026-09-16):
 
 - [ ] **Extend the inline-prompt rails to `infra/ai/messages`**: the ESLint config globs
