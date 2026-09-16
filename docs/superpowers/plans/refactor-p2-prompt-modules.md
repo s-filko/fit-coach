@@ -1521,7 +1521,7 @@ npm run check-all && npm run test:unit -- --ci && npm run evals -- --level L0
 RUN_DB_TESTS=1 npm run test:integration
 ```
 
-- [ ] **Step 4: Deploy to dev and smoke**
+- [x] **Step 4: Deploy to dev and smoke** — deployed 2026-09-16 (PR #15 merge `92611c10`, `deploy.sh dev` OK, health `200`). Smoke via the dev API: new user `p2-smoke-001` → registration phase answered in Russian with profile questions, as expected. DB check `conversation_runs` (latest run, 2026-09-16 14:32 UTC): `prompt_versions` = `{"phase.registration":"v1", directive.* ×9 = "v1"}` — real versions, no `v0`.
 
 After merge: `ssh filko.dev "cd /srv/docker/fitcoach && ./deploy/deploy.sh dev"`, health `200`, the `MANUAL_TEST_PLAN.md` § Smoke list on `@MyFitAiCoachDevBot`, then confirm real versions are recorded:
 
