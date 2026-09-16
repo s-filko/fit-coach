@@ -62,11 +62,11 @@ export const ASSEMBLY_SCENARIOS: readonly AssemblyScenario[];
 export function serializeForSnapshot(messages: BaseMessage[]): Array<{ type: string; content: unknown; tool_calls?: unknown; tool_call_id?: string; status?: string }>;
 ```
 
-- [ ] **Step 1: Write the scenario fixtures**
+- [x] **Step 1: Write the scenario fixtures**
 
 `IN_FLIGHT_POST_TOOL` uses hand-written content (BR-EVAL-003). The error `ToolMessage` content starts with `LLM_ERROR_PREFIX` from `@infra/ai/graph/tools/training.tools` so training's `buildToolResultsInjection` exercises its `ok: false` branch — exactly one error, so training's `LLM_ERROR_RETRY_BUDGET` (1) is **not** exceeded and the model is still invoked. `serializeForSnapshot` maps each message to `{ type: m._getType(), content: m.content }` plus `tool_calls` (AI messages with calls), `tool_call_id` and `status` (tool messages) — enough to make any reorder, merge or content drift visible.
 
-- [ ] **Step 2: Write the harness test**
+- [x] **Step 2: Write the harness test**
 
 `message-assembly.unit.test.ts`:
 
@@ -99,11 +99,13 @@ Invoke each subgraph with `{ userId, userMessage: 'Привет, что сего
 
 Expected: 15 snapshots (5 phases × 3 scenarios). Registration's `with-summary` snapshot must equal its `plain` snapshot (registration ignores the summary) — assert that explicitly in one extra `it`, it is the cheapest proof the harness sees real differences.
 
-- [ ] **Step 3: Generate and freeze**
+- [x] **Step 3: Generate and freeze**
 
 Run `npx jest evals/snapshots/__tests__/message-assembly.unit.test.ts` once **without** `--ci` to write the `.snap`, then `npx jest --ci evals/snapshots` to prove it is stable. Open the `.snap` and eyeball: training's `post-tool` snapshot ends with a `system` message starting `=== TOOL EXECUTION RESULTS ===` preceded by a `system` nudge (`IMPORTANT: All tool calls are complete`) inserted **before the last tool message** (that is `invokeWithRetry`'s placement); chat's `with-summary` has two consecutive system messages merged into one by `mergeMessageRuns` (one `system` entry whose content contains both the prompt and `CONTEXT FROM PREVIOUS CONVERSATION:`); training's `with-summary` has them **unmerged** (two `system` entries). If any of these three is not what the snapshot shows, the harness is wrong — fix the harness, not the expectation.
 
-- [ ] **Step 4: Commit**
+> **Task 1 result (2026-09-17):** 15 snapshots written, `--ci` stable (39 tests / 38 snapshots in `evals/snapshots` green). Eyeball checks: chat `with-summary` merged (one `system` containing prompt + `CONTEXT FROM PREVIOUS CONVERSATION:`) ✓; training `with-summary` unmerged (prompt / summary frame / history frame as three separate `system` entries) ✓; training `post-tool` — **no nudge, and this is today's real behaviour**, not a harness bug: training appends the tool-results `SystemMessage` *after* the in-flight messages, so `invokeWithRetry`'s `endsWithToolMessage` (last message of the array) sees a system message and skips the nudge. The nudge-before-last-tool placement is observable in the plan_creation / session_planning `post-tool` snapshots (`system > human > ai > tool > system > tool`). Task 5 must reproduce exactly this.
+
+- [x] **Step 4: Commit**
 
 `test(evals): freeze per-phase message assembly before the context assembler (15 snapshots)`
 
