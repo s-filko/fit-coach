@@ -251,7 +251,7 @@ export interface AssembledContext { messages: BaseMessage[]; budgetReport: Budge
 export function assembleContext(input: AssembleInput): AssembledContext;   // pure
 ```
 
-- [ ] **Step 1: Failing tests first — one per layout rule**
+- [x] **Step 1: Failing tests first — one per layout rule**
 
 `assemble-context.unit.test.ts` (describe names carry `ADR-0013 §3.4 / AC-1323`):
 1. `chat, no summary, empty history` → `[system, human]`; report `summary: 0`, `historyTurns: 0`, `messages: 2`.
@@ -264,7 +264,7 @@ export function assembleContext(input: AssembleInput): AssembledContext;   // pu
 8. `estimator` is `TOKEN_ESTIMATOR_ID`; `messages` counts the returned array's length.
 9. Purity: the same input twice gives deep-equal output; the function does not touch `Date` (`jest.spyOn(global, 'Date')` not called — or simply the grep rail in Task 6).
 
-- [ ] **Step 2: Implement the assembler**
+- [x] **Step 2: Implement the assembler**
 
 Order is fixed and identical to today's five `agentNode`s:
 
@@ -287,11 +287,11 @@ const messages = layout.mergeRuns ? mergeMessageRuns(ordered) : ordered;
 
 Report: `estimateTokens` over each part's text **before** merging (`messageText(m)` = string content as is, array content `JSON.stringify`ed, plus `JSON.stringify(tool_calls)` for AI messages that carry calls); `messages: messages.length`; `historyTurns: input.history.length`. `toFrameRow` is the role-narrowing lambda from today's `training.subgraph.ts:378` — it now has exactly one home here (the same lambda in `phase-summary.node.ts:34` is the summariser's own input mapping and stays; the BACKLOG duplication note is closed for the assembly side only — say so in the close-out).
 
-- [ ] **Step 3: Move `buildToolResultsInjection` → `context/tool-results.ts` as `renderToolResults`**
+- [x] **Step 3: Move `buildToolResultsInjection` → `context/tool-results.ts` as `renderToolResults`**
 
 Same body; imports `LLM_ERROR_PREFIX`/`SYSTEM_ERROR_PREFIX` from `@infra/ai/graph/tools/training.tools` and `TOOL_RESULTS_V1`/`renderBlock` from the prompts tree. Remove it from `training.subgraph.ts`; repoint any importer. `grep -rn buildToolResultsInjection src evals` → empty.
 
-- [ ] **Step 4: Registry — `layout` replaces `blocks`**
+- [x] **Step 4: Registry — `layout` replaces `blocks`**
 
 ```typescript
 export const PHASE_PROMPTS: Record<ConversationPhase, PhaseRegistryEntry> = {
@@ -307,9 +307,11 @@ export const PHASE_PROMPTS: Record<ConversationPhase, PhaseRegistryEntry> = {
 
 Registry test additions: a table test that `blocksForLayout(PHASE_PROMPTS[p].layout).map(b => b.id)` equals the five arrays as they are today (write the expected arrays literally, from the pre-change file). Keep every existing assertion untouched.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 `feat(ai): context assembler with per-phase layouts and budgetReport (ADR-0013 §3.4, reporting half)`
+
+> **Task 4 result (2026-09-17):** TDD confirmed — both new suites failed before the implementation (missing modules/exports). `assembleContext` implemented in `src/infra/ai/context/assemble-context.ts` (pure; fixed order per the plan's snippet; report estimated per part before merging, `messages` counted after `mergeMessageRuns`, before the nudge); `renderToolResults` moved verbatim to `src/infra/ai/context/tool-results.ts` (still imports the error prefixes from `graph/tools/training.tools`, P3 removes that); registry: `blocks` → `layout: PhaseLayout` with the D-D transitional JSDoc, `blocksForLayout` derives the block list, `promptVersionsForPhase` uses it — its existing test assertions untouched and green (the D-D arbiter). `training.subgraph.ts` imports `renderToolResults` from the new home and calls it in place; no wiring beyond that (Task 5). The evals fixture comment that named the old helper was updated so `grep -rn buildToolResultsInjection src evals` → empty. Table test pins all five derived id arrays against the literals from the pre-change registry — exact match. The 9 Step-1 cases plus one extra (layout provenance from `PHASE_PROMPTS`) pass; the only test-side fix during the run was case 2's `expected` missing the trailing human message (test bug, not implementation). `evals/levels/l0.ts` reads no `.blocks` (grep empty — no change needed). The Date grep rail is clean; the file's own JSDoc was reworded so it does not literally contain the grepped snippets. Verification from `apps/server/`: `npx jest --ci src/infra/ai/context src/infra/ai/prompts` → 6 suites / 39 tests green; `npm run type-check` clean; `npm run lint` → 0 errors (413 pre-existing warnings); `npx jest --ci evals/snapshots` → 39 tests / 38 snapshots green, nothing written or obsolete (nothing wired yet); `npm run evals -- --level L0` → 120/120 unchanged. Pre-commit hook (lint, format:check, type-check, full unit suite) green on the commit.
 
 **Verification:** `npx jest --ci src/infra/ai/context src/infra/ai/prompts`; `npm run type-check`; `npm run lint`. The Task 1 snapshots are still green because nothing is wired yet (`npx jest --ci evals/snapshots`). AC: master plan P2 item 3 (assembler exists, reports, does not trim).
 
