@@ -1,7 +1,7 @@
 # Refactor P2 — Context Assembler Implementation Plan
 
 - Status: planned
-- Branch:
+- Branch: plan/refactor-p2-context-assembler
 - After: refactor-p2-prompt-modules
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
