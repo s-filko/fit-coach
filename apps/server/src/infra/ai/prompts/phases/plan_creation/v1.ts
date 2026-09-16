@@ -84,7 +84,7 @@ export const PLAN_CREATION_V1: PromptModule<PlanCreationPromptContext> = {
       { id: 'conversation_flow', required: true, text: FLOW_TEXT },
       { id: 'rules', required: true, text: RULES_TEXT },
       { id: 'tools', required: true, text: TOOLS_TEXT },
-      ...renderDirectives(DEFAULT_DIRECTIVES_V1, ctx),
+      ...renderDirectives(this.directives, ctx),
     ];
   },
 };

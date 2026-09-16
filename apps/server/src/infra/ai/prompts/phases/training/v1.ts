@@ -146,7 +146,7 @@ export const TRAINING_V1: PromptModule<TrainingPromptContext> = {
       { id: 'task', required: true, text: TASK_TEXT },
       { id: 'tools', required: true, text: TOOLS_TEXT },
       { id: 'rules', required: true, text: RULES_TEXT },
-      ...renderDirectives(DIRECTIVES_WITHOUT_IDENTITY_V1, ctx),
+      ...renderDirectives(this.directives, ctx),
     );
 
     return sections;

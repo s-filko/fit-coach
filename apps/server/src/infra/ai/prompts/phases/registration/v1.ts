@@ -93,7 +93,7 @@ ${
       { id: 'missing', required: true, text: missingSection },
       { id: 'behavior_rules', required: true, text: behaviorRules },
       { id: 'tools', required: true, text: toolsText },
-      ...renderDirectives(DEFAULT_DIRECTIVES_V1, ctx),
+      ...renderDirectives(this.directives, ctx),
     ];
   },
 };

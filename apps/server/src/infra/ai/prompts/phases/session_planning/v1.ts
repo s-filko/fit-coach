@@ -250,7 +250,7 @@ export const SESSION_PLANNING_V1: PromptModule<SessionPlanningPromptContext> = {
       },
       { id: 'task', required: true, text: TASK_TEXT },
       { id: 'tools', required: true, text: TOOLS_TEXT },
-      ...renderDirectives(DEFAULT_DIRECTIVES_V1, ctx),
+      ...renderDirectives(this.directives, ctx),
     ];
   },
 };

@@ -84,7 +84,7 @@ ${recentSessionsSection}`;
       { id: 'rules', required: true, text: `${RULES_TEXT}${planRule}` },
       { id: 'tools', required: true, text: TOOLS_TEXT },
       { id: 'no_set_logging', required: true, text: NO_SET_LOGGING_TEXT },
-      ...renderDirectives(DEFAULT_DIRECTIVES_V1, ctx),
+      ...renderDirectives(this.directives, ctx),
     ];
   },
 };
