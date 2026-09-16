@@ -1,4 +1,6 @@
-import { PHASE_PROMPTS, STANDALONE_PROMPTS, promptVersionsForPhase } from '..';
+import type { ConversationPhase } from '@domain/conversation/ports';
+
+import { PHASE_PROMPTS, STANDALONE_PROMPTS, blocksForLayout, promptVersionsForPhase } from '..';
 
 describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVersions)', () => {
   it('has an entry for every conversation phase', () => {
@@ -23,6 +25,21 @@ describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVer
 
   it('promptVersionsForPhase(registration) has no blocks', () => {
     expect(Object.keys(promptVersionsForPhase('registration')).some(k => k.startsWith('block.'))).toBe(false);
+  });
+
+  it('blocksForLayout reproduces the five pre-assembler blocks arrays verbatim', () => {
+    // Written literally from the pre-Task-4 registry (the single source of
+    // truth for what each phase injects, now derived from the layout).
+    const expected: Record<ConversationPhase, readonly string[]> = {
+      registration: [],
+      chat: ['block.summary_frame'],
+      plan_creation: ['block.summary_frame', 'block.post_tool_nudge'],
+      session_planning: ['block.summary_frame', 'block.post_tool_nudge'],
+      training: ['block.summary_frame', 'block.history_frame', 'block.tool_results', 'block.post_tool_nudge'],
+    };
+    for (const phase of Object.keys(PHASE_PROMPTS) as ConversationPhase[]) {
+      expect(blocksForLayout(PHASE_PROMPTS[phase].layout).map(b => b.id)).toEqual(expected[phase]);
+    }
   });
 
   it('every module id in the registry is unique', () => {

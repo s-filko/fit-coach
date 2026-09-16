@@ -17,7 +17,7 @@ export const ASSEMBLY_SCENARIOS: readonly AssemblyScenario[] = ['plain', 'with-s
  *
  * Composition: one AIMessage carrying two tool calls (save_timezone + log_set),
  * one successful ToolMessage and one errored ToolMessage whose content starts
- * with LLM_ERROR_PREFIX — so training's `buildToolResultsInjection` exercises
+ * with LLM_ERROR_PREFIX — so training's tool-results block (`renderToolResults`) exercises
  * its `ok: false` branch. Exactly one error: training's LLM_ERROR_RETRY_BUDGET
  * is 1, so the error count does NOT exceed the budget and the model is still
  * invoked (a second error would short-circuit the agent before any LLM call).
