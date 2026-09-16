@@ -19,11 +19,13 @@ import type { User } from '@domain/user/services/user.service';
 
 import { buildDedupToolNode } from '@infra/ai/graph/dedup-tool-node';
 import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
-import { buildSessionPlanningSystemPrompt } from '@infra/ai/graph/nodes/session-planning.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildSessionPlanningTools } from '@infra/ai/graph/tools/session-planning.tools';
 import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
+import { renderBlock, SUMMARY_FRAME_V1 } from '@infra/ai/prompts/blocks';
+import { compose } from '@infra/ai/prompts/compose';
+import { SESSION_PLANNING_PROMPT } from '@infra/ai/prompts/phases/session_planning';
 
 export interface SessionPlanningSubgraphDeps {
   userService: IUserService;
@@ -92,12 +94,22 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
       contextService.getLatestSummary(userId),
     ]);
 
-    const systemPrompt = buildSessionPlanningSystemPrompt(freshUser ?? user, context);
+    const promptUser = freshUser ?? user;
+    const systemPrompt = compose(
+      SESSION_PLANNING_PROMPT.current.render({
+        now: new Date(),
+        timezone: promptUser?.timezone ?? null,
+        client: 'telegram',
+        user: promptUser,
+        lastMessageTime: null,
+        context,
+      }),
+    );
 
     const inFlightMessages = state.messages ?? [];
 
     const summaryMessages = previousSummary
-      ? [new SystemMessage(`CONTEXT FROM PREVIOUS CONVERSATION:\n${previousSummary}`)]
+      ? [new SystemMessage(renderBlock(SUMMARY_FRAME_V1, { previousSummary }))]
       : [];
 
     const llmMessages = mergeMessageRuns([

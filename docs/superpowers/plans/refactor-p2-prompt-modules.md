@@ -1,8 +1,9 @@
 # Refactor P2 — Prompt Modules Implementation Plan
 
-- Status: planned
-- Branch:
+- Status: done
+- Branch: plan/refactor-p2-prompt-modules
 - After: refactor-p1-legacy-llm-retirement
+- Review: 2026-09-16 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -77,7 +78,7 @@ export const FIXTURE_SUMMARY: string;                // one hand-written previou
 export const FIXTURE_TOOL_RESULTS: Array<{ ok: boolean; content: string }>; // one ok, one failed
 ```
 
-- [ ] **Step 1: Create the fixture-context module**
+- [x] **Step 1: Create the fixture-context module**
 
 Create `apps/server/evals/fixtures/prompt-contexts.ts` — move the three helpers out of `evals/levels/l0.ts` (lines 96-141) and add the constants:
 
@@ -145,11 +146,11 @@ export function buildSessionPlanningContext(fixture: EvalFixture, now: Date): Se
 
 In `evals/levels/l0.ts` delete the three local helpers and import them from the new module; pass `FIXED_NOW` where a `now` argument is now required. Until Task 3 replaces the old builders, L0 still renders them with real time (they call `new Date()` internally) — exactly as today. L0 becomes time-stable in Task 6 when it renders modules with `ctx.now = FIXED_NOW`. Only the snapshot suite (Jest) needs fake timers, and it gets them in Step 3.
 
-- [ ] **Step 2: Export `buildToolResultsInjection`**
+- [x] **Step 2: Export `buildToolResultsInjection`**
 
 In `apps/server/src/infra/ai/graph/subgraphs/training.subgraph.ts:142` change `function buildToolResultsInjection` to `export function buildToolResultsInjection`. Nothing else.
 
-- [ ] **Step 3: Write the snapshot suite against the old code**
+- [x] **Step 3: Write the snapshot suite against the old code**
 
 Create `apps/server/evals/snapshots/__tests__/prompt-snapshots.unit.test.ts`:
 
@@ -280,7 +281,7 @@ If a previous summary is provided, incorporate its key points and add new inform
 });
 ```
 
-- [ ] **Step 4: Generate the snapshots once, then verify with `--ci`**
+- [x] **Step 4: Generate the snapshots once, then verify with `--ci`**
 
 Run:
 
@@ -291,12 +292,12 @@ npm run test:unit -- prompt-snapshots --ci
 
 Expected: first run writes `__snapshots__/prompt-snapshots.unit.test.ts.snap` (24 snapshots: 15 phase × fixture, 3 summariser, 6 blocks); second run passes with `--ci`. Open the `.snap` file and confirm the chat snapshots contain the greeting directive (fake time is a new day after `LAST_MESSAGE_YESTERDAY`) and no `undefined`/`NaN`.
 
-- [ ] **Step 5: Run L0 and the full unit suite to prove nothing moved yet**
+- [x] **Step 5: Run L0 and the full unit suite to prove nothing moved yet**
 
 Run: `npm run evals -- --level L0 && npm run test:unit`
 Expected: L0 45/45 unchanged; unit suite green.
 
-- [ ] **Step 6: Commit the frozen truth**
+- [x] **Step 6: Commit the frozen truth**
 
 ```bash
 git add evals/fixtures/prompt-contexts.ts evals/levels/l0.ts evals/snapshots src/infra/ai/graph/subgraphs/training.subgraph.ts
@@ -347,7 +348,7 @@ export const DIRECTIVES_WITHOUT_IDENTITY_V1: readonly DirectiveModule[];  // tra
 
 Order in `DEFAULT_DIRECTIVES_V1` is today's `composeDirectives` order (`prompt-directives.ts:109-128`): identity, greeting, language, timezone, name-usage, formatting, time-reference, output, tool-reply. `greeting` renders `null` when not applicable — `renderDirectives` drops nulls, which is exactly what `parts.push` skipping did.
 
-- [ ] **Step 1: Write the failing compose test**
+- [x] **Step 1: Write the failing compose test**
 
 Create `apps/server/src/infra/ai/prompts/__tests__/compose.unit.test.ts`:
 
@@ -385,12 +386,12 @@ describe('compose (ADR-0013 §5.2, BR-LLM-007 — deterministic composition)', (
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- prompts/__tests__/compose`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Write the types and compose**
+- [x] **Step 3: Write the types and compose**
 
 Create `apps/server/src/domain/ai/prompt-context.types.ts`:
 
@@ -475,12 +476,12 @@ export function promptVersionsOf(module: PromptModule<unknown>): Record<string, 
 }
 ```
 
-- [ ] **Step 4: Run the compose test**
+- [x] **Step 4: Run the compose test**
 
 Run: `npm run test:unit -- prompts/__tests__/compose`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Write the failing directive tests**
+- [x] **Step 5: Write the failing directive tests**
 
 Create `apps/server/src/infra/ai/prompts/directives/__tests__/directives.v1.unit.test.ts` — the semantic assertions from `src/infra/ai/graph/__tests__/prompt-directives.unit.test.ts` re-targeted at modules, plus the greeting time rule now driven by `ctx.now`:
 
@@ -558,12 +559,12 @@ describe('directive modules v1 (ADR-0013 §5, BR-LLM-007 — pure, versioned dir
 });
 ```
 
-- [ ] **Step 6: Run it to confirm it fails**
+- [x] **Step 6: Run it to confirm it fails**
 
 Run: `npm run test:unit -- directives.v1`
 Expected: FAIL — module not found.
 
-- [ ] **Step 7: Write the nine directive modules, verbatim text**
+- [x] **Step 7: Write the nine directive modules, verbatim text**
 
 Each file takes its text from `src/infra/ai/graph/prompt-directives.ts` **unchanged**. Two examples define the pattern; the other seven follow it exactly (ids as listed in Step 5's order test).
 
@@ -660,12 +661,12 @@ export const DIRECTIVES_WITHOUT_IDENTITY_V1: readonly DirectiveModule[] = DEFAUL
 
 (`DirectiveModule` is imported from `../types`.)
 
-- [ ] **Step 8: Run the directive tests and the whole unit suite**
+- [x] **Step 8: Run the directive tests and the whole unit suite**
 
 Run: `npm run test:unit -- directives.v1 && npm run test:unit && npm run type-check && npm run lint`
 Expected: green. `graph/prompt-directives.ts` still exists and is still used — nothing switched yet.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/domain/ai/prompt-context.types.ts src/infra/ai/prompts
@@ -718,7 +719,7 @@ Directive placement: every phase template ended with `\n\n${composeDirectives(..
 
 `now` handling (AC-1324): `formatInUserTz(new Date(), …)` → `formatInUserTz(ctx.now, …)`; `const now = new Date()` → `const { now } = ctx`; chat's `humanTimeAgo(new Date(date), new Date(), tz)` → `humanTimeAgo(new Date(date), ctx.now, tz)`. `SESSION_TIMEOUT_MS` and the age computation in training stay, computed from `ctx.now`.
 
-- [ ] **Step 1: plan_creation — write the module**
+- [x] **Step 1: plan_creation — write the module**
 
 Create `apps/server/src/infra/ai/prompts/phases/plan_creation/v1.ts` by moving the body of `buildPlanCreationSystemPrompt` (`nodes/plan-creation.node.ts:6-77`) into `render`, split at its five `===` headers:
 
@@ -790,7 +791,7 @@ export interface PhasePromptEntry<TCtx> {
 }
 ```
 
-- [ ] **Step 2: plan_creation — retarget the snapshot test and prove identity**
+- [x] **Step 2: plan_creation — retarget the snapshot test and prove identity**
 
 In `prompt-snapshots.unit.test.ts` replace the plan_creation `it` body:
 
@@ -806,7 +807,7 @@ In `prompt-snapshots.unit.test.ts` replace the plan_creation `it` body:
 Run: `npm run test:unit -- prompt-snapshots --ci`
 Expected: PASS — the module reproduces the frozen bytes. If it fails, fix the section split (never the snapshot).
 
-- [ ] **Step 3: plan_creation — switch the subgraph**
+- [x] **Step 3: plan_creation — switch the subgraph**
 
 In `apps/server/src/infra/ai/graph/subgraphs/plan-creation.subgraph.ts:69` replace
 
@@ -831,7 +832,7 @@ with
 
 Imports: `compose` from `@infra/ai/prompts/compose`, `PLAN_CREATION_PROMPT` from `@infra/ai/prompts/phases/plan_creation`; remove the `plan-creation.node` import. `new Date()` now lives in the caller — that is the point of AC-1324.
 
-- [ ] **Step 4: plan_creation — delete the old builder and commit**
+- [x] **Step 4: plan_creation — delete the old builder and commit**
 
 ```bash
 git rm src/infra/ai/graph/nodes/plan-creation.node.ts
@@ -845,11 +846,11 @@ git add -A src/infra/ai evals
 git commit -m "refactor(prompts): move plan_creation system prompt to phases/plan_creation/v1 (byte-identical)"
 ```
 
-- [ ] **Step 5: registration — same cycle**
+- [x] **Step 5: registration — same cycle**
 
 Module `phases/registration/v1.ts`: body of `buildRegistrationSystemPrompt` (`nodes/registration.node.ts:16-85`) with sections `name_context`, `collected`, `missing`, `behavior_rules` (from `BEHAVIOR RULES:` through the conditional 6/7/8 block — keep the conditional inside this one section: the template literal inserts `\n6.` immediately after `5. …valid.\n`, which produces a blank line the split rule must not cut), `tools`, then directives. `PROFILE_FIELDS`, `FIELD_LABELS`/`FIELD_HINTS` imports move with it. `requiredSections: ['name_context', 'collected', 'missing', 'behavior_rules', 'tools', 'directive.identity', 'directive.tool-reply']`. Switch `registration.subgraph.ts:58`; retarget the snapshot `it` (`lastMessageTime: null`); `--ci` green; L0 case rewired; delete `nodes/registration.node.ts`; commit `refactor(prompts): move registration system prompt to phases/registration/v1 (byte-identical)`.
 
-- [ ] **Step 6: chat — same cycle plus test migration**
+- [x] **Step 6: chat — same cycle plus test migration**
 
 Module `phases/chat/v1.ts`: body of `buildChatSystemPrompt` (`nodes/chat.node.ts:13-79`). Context adds `hasActivePlan`, `recentSessions`; `humanTimeAgo(new Date(date), ctx.now, user?.timezone)`. Sections: `context` (`CLIENT NAME:` … recent sessions list), `rules` (`RULES:` …5.), `tools` (`TOOLS (use when needed):` …), `no_set_logging` (`IMPORTANT: You do NOT have log_set…`), then directives (chat passes `lastMessageTime` through — the subgraph sets `lastMessageTime` from `contextService.getLastUserMessageTime`). `requiredSections: ['context', 'rules', 'tools', 'no_set_logging', 'directive.identity', 'directive.tool-reply']` — `no_set_logging` is the BUG-009 guard; L0 will now fail any v2 that drops it.
 
@@ -864,13 +865,13 @@ Move the seven assertions of `nodes/__tests__/chat.node.unit.test.ts` to `prompt
 
 Switch `chat.subgraph.ts:63` (context: `now: new Date()`, `lastMessageTime`, `hasActivePlan: !!activePlan`, `recentSessions`); snapshot `--ci`; L0 case; delete `nodes/chat.node.ts` and its old test; commit `refactor(prompts): move chat system prompt to phases/chat/v1 (byte-identical)`.
 
-- [ ] **Step 7: session_planning — same cycle**
+- [x] **Step 7: session_planning — same cycle**
 
 Module `phases/session_planning/v1.ts`: body of `buildSessionPlanningSystemPrompt` (`nodes/session-planning.node.ts:9-133`; the helper functions below line 133 in that file move too). Context adds `context: SessionPlanningContextData`; `const now = ctx.now`. Sections at the six headers: `client_profile`, `active_plan`, `recent_history`, `recovery_timeline`, `task`, `tools`, then directives. `requiredSections`: all six + `directive.identity`, `directive.tool-reply`. Switch `session-planning.subgraph.ts:95`; snapshot; L0; delete; commit.
 
 Record in the PR description the session_planning prompt size from the L0 token line (master plan P2 note: "measure the session-planning system prompt size here … it sets P4's budget defaults").
 
-- [ ] **Step 8: training — same cycle, no identity directive**
+- [x] **Step 8: training — same cycle, no identity directive**
 
 Module `phases/training/v1.ts`: body of `buildTrainingSystemPrompt` (`nodes/training.node.ts:10-115`) plus its private helpers (`buildWorkoutOverview`, `buildPreviousSessionSection`, `formatSetData`, `formatDuration`, `buildStaleSessionSection`) moved into the same file (or a sibling `v1.helpers.ts` if the file exceeds the lint line limit). `directives: DIRECTIVES_WITHOUT_IDENTITY_V1` (today: `includeIdentity: false`). Context adds `session`, `previousSession`; `const now = ctx.now`. Sections: `client`, `workout_overview`, `stale_session` (`required: false`), `previous_session` (`required: false`), `tools`, `rules` (RULE 0…), then directives — verify against the snapshot that the conditional sections' surrounding newlines match; fold if not. `requiredSections: ['client', 'workout_overview', 'tools', 'rules', 'directive.tool-reply']`.
 
@@ -878,7 +879,7 @@ The L0 `FORBIDDEN_STRING_ALLOWLIST` comment cites `training.node.ts:94`; update 
 
 Switch `training.subgraph.ts:341`; snapshot; L0; delete `nodes/training.node.ts`; commit.
 
-- [ ] **Step 9: Delete `prompt-directives.ts` and verify AC-1324**
+- [x] **Step 9: Delete `prompt-directives.ts` and verify AC-1324**
 
 ```bash
 git rm src/infra/ai/graph/prompt-directives.ts src/infra/ai/graph/__tests__/prompt-directives.unit.test.ts
@@ -924,7 +925,7 @@ export interface SummarizerContext { phase: ConversationPhase; previousSummary: 
 export const SUMMARIZER_V1: PromptModule<SummarizerContext>;             // id 'summarizer'; sections 'system' and 'user'
 ```
 
-- [ ] **Step 1: Write the four block modules**
+- [x] **Step 1: Write the four block modules**
 
 `apps/server/src/infra/ai/prompts/blocks/tool-results.v1.ts` — text from `training.subgraph.ts:142-161`, classification stays in the subgraph:
 
@@ -1047,7 +1048,7 @@ export function renderBlock<TCtx>(module: PromptModule<TCtx>, ctx: TCtx): string
 }
 ```
 
-- [ ] **Step 2: Write the summariser module**
+- [x] **Step 2: Write the summariser module**
 
 `apps/server/src/infra/ai/prompts/summarizer/v1.ts` — both strings from `phase-summary.node.ts` verbatim:
 
@@ -1096,7 +1097,7 @@ If a previous summary is provided, incorporate its key points and add new inform
 
 `summarizer/index.ts`: `export { SUMMARIZER_V1 as SUMMARIZER_PROMPT, type SummarizerContext } from './v1';`
 
-- [ ] **Step 3: Retarget the nine non-phase snapshot tests**
+- [x] **Step 3: Retarget the nine non-phase snapshot tests**
 
 In `prompt-snapshots.unit.test.ts` replace the summariser/block `it` bodies with module renders (same test names):
 - `summarizer / system` → `sectionText(SUMMARIZER_PROMPT.render({ phase: 'training', previousSummary: FIXTURE_SUMMARY, history: FIXTURE_HISTORY }), 'system')`
@@ -1110,7 +1111,7 @@ In `prompt-snapshots.unit.test.ts` replace the summariser/block `it` bodies with
 Run: `npm run test:unit -- prompt-snapshots --ci`
 Expected: PASS (24/24 against the Task 1 files).
 
-- [ ] **Step 4: Switch the callers**
+- [x] **Step 4: Switch the callers**
 
 `training.subgraph.ts`:
 - `buildToolResultsInjection(toolMessages)` body becomes: classify each `ToolMessage` exactly as today (`status === 'error' || startsWith(LLM_ERROR_PREFIX) || startsWith(SYSTEM_ERROR_PREFIX)`), strip the prefixes as today, then `return renderBlock(TOOL_RESULTS_V1, { results })`. Keep the function (and its export) — it is now protocol logic + one render.
@@ -1135,7 +1136,7 @@ Expected: PASS (24/24 against the Task 1 files).
 
 (`history` here is the `ChatMsg[]` from `getMessagesForPrompt` — its `role` union includes `'system'`; map it to the module's `{ role: 'user' | 'assistant' }` by filtering `m.role !== 'system'` exactly as the old `conversationText` mapping implied (it treated everything non-user as Assistant — keep that: `role: m.role === 'user' ? 'user' : 'assistant'`).)
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `npm run type-check && npm run lint && npm run test:unit -- --ci && npm run evals -- --level L0`
 Expected: green.
@@ -1170,7 +1171,7 @@ export function promptVersionsForPhase(phase: ConversationPhase): Record<string,
 
 Blocks per phase, from today's assembly code: chat → `[SUMMARY_FRAME_V1]`; registration → `[]`; plan_creation → `[SUMMARY_FRAME_V1, POST_TOOL_NUDGE_V1]`; session_planning → `[SUMMARY_FRAME_V1, POST_TOOL_NUDGE_V1]`; training → `[SUMMARY_FRAME_V1, HISTORY_FRAME_V1, TOOL_RESULTS_V1, POST_TOOL_NUDGE_V1]`.
 
-- [ ] **Step 1: Write the failing registry test**
+- [x] **Step 1: Write the failing registry test**
 
 ```typescript
 import { PHASE_PROMPTS, STANDALONE_PROMPTS, promptVersionsForPhase } from '..';
@@ -1204,12 +1205,12 @@ describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVer
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- prompts/__tests__/registry`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Write the registry**
+- [x] **Step 3: Write the registry**
 
 `apps/server/src/infra/ai/prompts/index.ts`:
 
@@ -1260,7 +1261,7 @@ export function promptVersionsForPhase(phase: ConversationPhase): Record<string,
 }
 ```
 
-- [ ] **Step 4: Stamp real versions in `persist`**
+- [x] **Step 4: Stamp real versions in `persist`**
 
 In `persist.node.ts:26` replace the placeholder with `const promptVersions = promptVersionsForPhase(phase);` (import from `@infra/ai/prompts`; delete the "P0 placeholder" comment). In `persist.node.unit.test.ts:35` replace the `v0` expectation with:
 
@@ -1268,7 +1269,7 @@ In `persist.node.ts:26` replace the placeholder with `const promptVersions = pro
     expect(record.promptVersions).toMatchObject({ 'phase.chat': 'v1', 'directive.identity': 'v1', 'block.summary_frame': 'v1' });
 ```
 
-- [ ] **Step 5: Run and commit**
+- [x] **Step 5: Run and commit**
 
 Run: `npm run test:unit -- --ci && npm run type-check && npm run lint`
 Expected: green.
@@ -1303,7 +1304,7 @@ export function contextsForModule(moduleId: string, fixture: EvalFixture): unkno
 // block.summary_frame → { previousSummary: FIXTURE_SUMMARY }; block.post_tool_nudge → {}
 ```
 
-- [ ] **Step 1: Write the failing L0 tests**
+- [x] **Step 1: Write the failing L0 tests**
 
 Add to `evals/levels/__tests__/l0.unit.test.ts`:
 
@@ -1327,12 +1328,12 @@ Add to `evals/levels/__tests__/l0.unit.test.ts`:
 
 (`checkSections(moduleId, fixtureName, renderedIds, requiredIds): CheckResult[]` is the new pure check; `runL0` keeps its signature but `--phase` now filters by module id prefix: `chat` → `phase.chat`, `all` → everything.)
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 Run: `npm run test:unit -- l0.unit`
 Expected: FAIL — `checkSections` not exported; `summarizer/...` case absent.
 
-- [ ] **Step 3: Rewrite `renderPrompt`/`runL0` over the registry**
+- [x] **Step 3: Rewrite `renderPrompt`/`runL0` over the registry**
 
 In `evals/levels/l0.ts`:
 
@@ -1385,12 +1386,12 @@ export async function runL0(phaseArg: string): Promise<CheckResult[]> {
 
 `PHASE_TOKEN_BUDGET` keys become module ids (`'phase.chat': 4000`, …) plus `'summarizer': 2000` and `'block.*'` fall through to the default `8000` (they are tiny). Update the headroom comment with the measured numbers from this run. `checkRenderedPrompt(moduleId, …)` reads the budget by module id.
 
-- [ ] **Step 4: Run L0 and its tests**
+- [x] **Step 4: Run L0 and its tests**
 
 Run: `npm run test:unit -- l0.unit && npm run evals -- --level L0 && npm run evals -- --level L0 --phase chat`
 Expected: tests green; full L0 reports 10 modules × 3 fixtures × 4 checks = 120 checks, all passed; `--phase chat` reports 12.
 
-- [ ] **Step 5: Add the ESLint rail**
+- [x] **Step 5: Add the ESLint rail**
 
 In `apps/server/eslint.config.js` add a config object after the main `src/**` block:
 
@@ -1421,7 +1422,7 @@ In `apps/server/eslint.config.js` add a config object after the main `src/**` bl
 Run: `npm run lint`
 Expected: clean (Task 4 removed every offender). Prove the rail bites: temporarily add `new SystemMessage('x')` to `chat.subgraph.ts`, run `npm run lint`, expect the error, revert.
 
-- [ ] **Step 6: Add the grep test (belt and braces — catches string concatenation the selector misses)**
+- [x] **Step 6: Add the grep test (belt and braces — catches string concatenation the selector misses)**
 
 Create `apps/server/evals/levels/__tests__/no-inline-prompts.unit.test.ts`:
 
@@ -1461,7 +1462,7 @@ describe('no inline prompt text outside src/infra/ai/prompts (ADR-0013 §5, BR-L
 Run: `npm run test:unit -- no-inline-prompts`
 Expected: PASS.
 
-- [ ] **Step 7: Inventory completion check and commit**
+- [x] **Step 7: Inventory completion check and commit**
 
 Run:
 
@@ -1485,7 +1486,7 @@ git commit -m "feat(evals): L0 renders the prompt registry, checks required sect
 
 The point of the whole exercise. Requires the `v0` baseline from `refactor-p0-eval-baseline` (guaranteed by the `After:` chain) and dev keys in `.env`.
 
-- [ ] **Step 1: Run L1 against the baseline**
+- [x] **Step 1: Run L1 against the baseline**
 
 ```bash
 RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v0
@@ -1493,11 +1494,11 @@ RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline c
 
 Expected: the compare report shows every dataset within ±2 pp of `v0`. Paste the per-dataset table into this plan under "## AC-1322 result" and into the PR description.
 
-- [ ] **Step 2: If any dataset is outside the band**
+- [x] **Step 2: If any dataset is outside the band** — not triggered: no dataset outside the band (0 regressions everywhere; see the table below).
 
 It cannot be the prompt text (snapshots are byte-identical), so it is either sampling noise or a context difference in the caller (a wrong `lastMessageTime`, a `now` that moved). Re-run that phase once with `--samples 5`. If still outside: stop, keep `Status: in progress`, record the table, and surface to the owner — the master plan's rollback condition (AC-1322 after two attempts) applies to the *assembler* wiring, which this plan does not touch, so the finding is new information for the owner, not a revert.
 
-- [ ] **Step 3: Record**
+- [x] **Step 3: Record**
 
 Fill in "## AC-1322 result" with date, git SHA, model, `n`, and the table.
 
@@ -1505,15 +1506,15 @@ Fill in "## AC-1322 result" with date, git SHA, model, `n`, and the table.
 
 ### Task 8: Docs reconcile and close-out
 
-- [ ] **Step 1: `docs/ARCHITECTURE.md` module layout**
+- [x] **Step 1: `docs/ARCHITECTURE.md` module layout**
 
 Under `infra/ai/` (around line 48-60) add the `prompts/` tree exactly as it now exists (`directives/`, `phases/<phase>/{v1.ts,index.ts}`, `blocks/`, `summarizer/`, `compose.ts`, `types.ts`, `index.ts`) and remove the `nodes/*.node.ts` prompt-builder entries and `prompt-directives.ts`.
 
-- [ ] **Step 2: `docs/CONTRIBUTING_AI.md` § "Adjust Registration Flow / Prompts"**
+- [x] **Step 2: `docs/CONTRIBUTING_AI.md` § "Adjust Registration Flow / Prompts"**
 
 Replace the path `apps/server/src/infra/ai/graph/nodes/registration.node.ts:1 (system prompt)` with `apps/server/src/infra/ai/prompts/phases/registration/vN.ts` and add one sentence: "Prompt changes follow `docs/PROMPT_EVAL_FRAMEWORK.md` §8 (new version file, keep the old one, run L1 for the phase) — recommended from P2, mandatory after P7."
 
-- [ ] **Step 3: Full verification**
+- [x] **Step 3: Full verification**
 
 ```bash
 npm run check-all && npm run test:unit -- --ci && npm run evals -- --level L0
@@ -1532,7 +1533,19 @@ Expected: `prompt_versions` JSON contains `phase.<x>: v1` and `directive.*`/`blo
 
 ## AC-1322 result
 
-_(filled in by Task 7)_
+- **Date:** 2026-09-16 · **SHA:** `1b5dd4a7` (branch `plan/refactor-p2-prompt-modules`) · **Model:** `glm-5.3` (direct Z.AI route, dev keys) · **n:** 3 samples/case
+- **Command:** `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v0`
+- **Overall:** 270/272 checks passed (99.3%) vs `v0` 265/267 (99.3%) — comparator verdict: **0 regressions, 0 improvements on every dataset** (chat +5 new checks, all passed). Every dataset within the ±2 pp band → AC-1322 met.
+
+| Dataset | v0 | v1 (this run) | Δ pass rate | Regressions |
+|---|---|---|---|---|
+| registration | 52/52 (100%) | 52/52 (100%) | 0 | 0 |
+| chat | 60/60 (100%) | 65/65 (100%) | 0 | 0 (+5 new checks, all green) |
+| plan_creation | 50/51 (98.0%) | 50/51 (98.0%) | 0 | 0 |
+| session_planning | 51/52 (98.1%) | 51/52 (98.1%) | 0 | 0 |
+| training | 52/52 (100%) | 52/52 (100%) | 0 | 0 |
+
+The two failing checks are the pre-existing detector bugs, not regressions: `PC-0007 tools.must:save_workout_plan` 0/3 in both v0 and v1 (BUG-014), `SP-0005 tools.must:start_training_session` 1/3 in v0 → 0/3 in v1 (BUG-015; the check was already failing in v0, so the comparator records no regression — sample-level wobble at n=3). Clearing them 3/3 requires wording changes, which this plan's zero-wording-change constraint forbids — that is future prompt-version work, tracked as BUG-014/BUG-015.
 
 ## Follow-up plan (not part of this one)
 
@@ -1544,4 +1557,21 @@ Follow `superpowers:finishing-a-development-branch`. Before merge: run the `clos
 
 ## Review
 
-_(recorded by close-out-review)_
+**2026-09-16 — verdict: clean** (zones R1, R2, R3, R4; base `c2848077`). Round 1 verdict was **blocked** on two findings; fix commit `8b6c8f3a` closed both, and R2/R4 re-runs (delta `78561363..8b6c8f3a`) confirmed closure with no new findings.
+
+**Blocking (open):**
+
+1. `blocking | R2 | apps/server/src/infra/ai/prompts/phases/chat/v1.ts:39,87 | DRY (docs/CONTRIBUTING_AI.md, "Principles & Boundaries")` — Each phase module states its directive list twice: the `directives:` field (the only input to promptVersionsOf → BR-LLM-008, persisted to conversation_runs.prompt_versions) and the constant hard-coded inside `render` (what is actually rendered). Same in all five modules: plan_creation/v1.ts:63,87; session_planning/v1.ts:204,253; training/v1.ts:99,149 (DIRECTIVES_WITHOUT_IDENTITY_V1); registration/v1.ts:41,96. The plan (Task 3 preamble) prescribed `renderDirectives(this.directives, ctx)` — the self-consistent shape; the implementation deviated. A future v2 edit touching only one reference silently makes the rendered prompt and the stamped versions disagree; tests do not catch it (snapshots pin render, registry tests pin only the field). Fix is mechanical, behavior-neutral.
+2. `blocking | R4 | docs/PROMPT_EVAL_FRAMEWORK.md:88 | stale durable spec — docs must not describe what the code no longer does` — §4.1 still says "Section presence is **deferred** — it needs a section contract; see the L0 deferred-checks entry in docs/BACKLOG.md", but this branch shipped section presence (Task 6, L0 `required-sections-present` check) and edited the very BACKLOG entry it points at — the spec now contradicts both the code and its own cross-reference. The plan's Task 8 file list sanctioned only ARCHITECTURE.md and CONTRIBUTING_AI.md and nobody owned §4.1; one-sentence fix, covered by the pre-approved doc-reconciliation bucket.
+
+**Advisory (16, to be filed in `docs/BACKLOG.md`):** R1 ×3 (User type imported from a service module; registry `blocks` arrays must not survive AC-1323; ESLint/grep rails cover only existing infra dirs); R2 ×5 (11-line profile block duplicated plan_creation/session_planning; role-narrowing lambda duplicated phase-summary/training.subgraph; magic timestamp duplicated snapshot-test/fixtures; sixth copy of test user factory; `Section.required` written but never read); R3 ×7 (silent-empty `--phase` filter; tautological standalone requiredSections; stale/previousSession branches moved untested; chat v1 describe lacks BR/AC id; AC-1322 evidence durability — report JSON not committed; 134-backlog entry should cover the unit run too; rail-bite proof not recorded). Verbatim texts live in the review transcripts; the backlog entries carry the substance.
+
+R1 verdict: no blocking (prompts/ tree well-shaped, dependencies inward, sanctioned shapes honored). R3 verdict: no blocking (all ACs covered — AC-1321 23 snapshots green, AC-1322 table judged sufficient, AC-1324 grep empty and structural; full suite 516 green, L0 120/120 and 12/12 reproduced; unit-run exit 134 proven pre-existing at base).
+
+**Blocking closures (fix commit `8b6c8f3a`, re-run verdicts):**
+1. R2 — closed: all five phase modules now render `renderDirectives(this.directives, ctx)`; the `directives:` field is the single source for both rendering and persisted versions (BR-LLM-008); no leftover imports; snapshots 23/23 prove byte-identical behavior.
+2. R4 — closed: PROMPT_EVAL_FRAMEWORK.md §4.1 now states section presence is implemented, references `PROMPT_TOKEN_BUDGET` (module-id keys) and `checkSections`, consistent with the BACKLOG entry on both sides.
+
+**Advisories:** 16 from round 1 + 1 minor from the R4 re-run (path shorthand `evals/levels/l0.ts` — pre-existing style) — all filed in `docs/BACKLOG.md` (see the P2 review entries batch, 2026-09-16).
+
+**Close-out note for P7 (AC-1371):** `prompts/blocks/` is an **accepted extension** of the ADR-0013 §5.1 layout (owner ruling 2026-09-13) — fold it into the ADR's tree at the P7 docs reconciliation instead of treating it as drift.

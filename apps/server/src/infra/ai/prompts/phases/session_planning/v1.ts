@@ -1,65 +1,17 @@
 import type { SessionPlanningContextData } from '@domain/training/services/session-planning-context.builder';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
-import type { User } from '@domain/user/services/user.service';
 
-import { composeDirectives } from '@infra/ai/graph/prompt-directives';
+import { renderDirectives } from '@infra/ai/prompts/compose';
+import { DEFAULT_DIRECTIVES_V1 } from '@infra/ai/prompts/directives';
+import type { DirectiveContext, PromptModule, Section } from '@infra/ai/prompts/types';
 
 import { calendarDaysAgo, formatInUserTz, humanTimeAgo } from '@shared/date-utils';
 
-export function buildSessionPlanningSystemPrompt(user: User | null, context: SessionPlanningContextData): string {
-  const now = new Date();
-  const tz = user?.timezone;
-  const { dateOnly } = formatInUserTz(now, tz);
+export interface SessionPlanningPromptContext extends DirectiveContext {
+  context: SessionPlanningContextData;
+}
 
-  // === CLIENT PROFILE ===
-  const profileSection = user
-    ? [
-        `Name: ${user.firstName ?? 'Unknown'}`,
-        `Age: ${user.age ?? '?'}`,
-        `Gender: ${user.gender ?? '?'}`,
-        `Height: ${user.height ?? '?'} cm`,
-        `Weight: ${user.weight ?? '?'} kg`,
-        `Fitness Level: ${user.fitnessLevel ?? '?'}`,
-        `Fitness Goal: ${user.fitnessGoal ?? '?'}`,
-      ].join('\n')
-    : 'Profile not loaded.';
-
-  // === ACTIVE WORKOUT PLAN ===
-  const planSection = context.activePlan
-    ? buildActivePlanSection(context.activePlan.name, context.activePlan.planJson)
-    : 'No active workout plan. The user should create a plan first (use chat to navigate to plan creation).';
-
-  // === RECENT TRAINING HISTORY ===
-  const historySection = buildHistorySection(context.recentSessions, now, tz);
-
-  // === RECOVERY TIMELINE ===
-  const recoverySection = buildRecoverySection(context.recentSessions, now, tz);
-
-  const daysSince =
-    context.daysSinceLastWorkout !== null
-      ? `${context.daysSinceLastWorkout} days since last workout`
-      : 'No previous workouts';
-
-  return `Current Date: ${dateOnly}
-${daysSince}
-
-=== CLIENT PROFILE ===
-
-${profileSection}
-
-=== ACTIVE WORKOUT PLAN ===
-
-${planSection}
-
-=== RECENT TRAINING HISTORY (last sessions) ===
-
-${historySection}
-
-=== RECOVERY TIMELINE (muscle groups) ===
-
-${recoverySection}
-
-=== YOUR TASK ===
+const TASK_TEXT = `=== YOUR TASK ===
 
 Follow this sequence:
 
@@ -105,9 +57,9 @@ Use search_exercises ONLY if you need exercises not yet found in this conversati
 - When the client explicitly approves the final plan → call \`start_training_session\` with the complete plan. Never call it before confirmation.
 - If the client decides not to train today → call \`request_transition({ toPhase: 'chat' })\`.
 
-If no active plan exists → tell the client they need a workout plan first and call \`request_transition({ toPhase: 'chat' })\`.
+If no active plan exists → tell the client they need a workout plan first and call \`request_transition({ toPhase: 'chat' })\`.`;
 
-=== TOOLS ===
+const TOOLS_TEXT = `=== TOOLS ===
 
 - search_exercises: search exercise catalog by meaning. Call when you need exercises not yet in conversation history.
   Examples: query="chest compound barbell", muscleGroup="chest", equipment="barbell".
@@ -127,10 +79,7 @@ If the user's message is NOT about session planning (choosing a workout, exercis
    - non-fitness question → "Понял! Планирование сессии ставим на паузу?"
    - "thanks, bye" → "Удачи! Сессию оставляем на потом?"
 2. If the user confirms leaving OR their next message is still not about session planning → call \`request_transition({ toPhase: 'chat', reason: 'off_topic' })\`.
-3. If the user says they want to continue planning → stay and proceed normally.
-
-${composeDirectives(user)}`;
-}
+3. If the user says they want to continue planning → stay and proceed normally.`;
 
 function buildActivePlanSection(
   name: string,
@@ -247,3 +196,61 @@ function buildRecoverySection(sessions: WorkoutSessionWithDetails[], now: Date, 
     })
     .join('\n');
 }
+
+/** Moved verbatim from graph/nodes/session-planning.node.ts (P2, AC-1321 — snapshot-arbitered). */
+export const SESSION_PLANNING_V1: PromptModule<SessionPlanningPromptContext> = {
+  id: 'phase.session_planning',
+  version: 'v1',
+  directives: DEFAULT_DIRECTIVES_V1,
+  render(ctx: SessionPlanningPromptContext): Section[] {
+    const { user } = ctx;
+    const { context } = ctx;
+    const { now } = ctx;
+    const tz = user?.timezone;
+    const { dateOnly } = formatInUserTz(now, tz);
+
+    const profileSection = user
+      ? [
+          `Name: ${user.firstName ?? 'Unknown'}`,
+          `Age: ${user.age ?? '?'}`,
+          `Gender: ${user.gender ?? '?'}`,
+          `Height: ${user.height ?? '?'} cm`,
+          `Weight: ${user.weight ?? '?'} kg`,
+          `Fitness Level: ${user.fitnessLevel ?? '?'}`,
+          `Fitness Goal: ${user.fitnessGoal ?? '?'}`,
+        ].join('\n')
+      : 'Profile not loaded.';
+
+    const planSection = context.activePlan
+      ? buildActivePlanSection(context.activePlan.name, context.activePlan.planJson)
+      : 'No active workout plan. The user should create a plan first (use chat to navigate to plan creation).';
+
+    const historySection = buildHistorySection(context.recentSessions, now, tz);
+
+    const recoverySection = buildRecoverySection(context.recentSessions, now, tz);
+
+    const daysSince =
+      context.daysSinceLastWorkout !== null
+        ? `${context.daysSinceLastWorkout} days since last workout`
+        : 'No previous workouts';
+
+    return [
+      { id: 'date', required: true, text: `Current Date: ${dateOnly}\n${daysSince}` },
+      { id: 'client_profile', required: true, text: `=== CLIENT PROFILE ===\n\n${profileSection}` },
+      { id: 'active_plan', required: true, text: `=== ACTIVE WORKOUT PLAN ===\n\n${planSection}` },
+      {
+        id: 'recent_history',
+        required: true,
+        text: `=== RECENT TRAINING HISTORY (last sessions) ===\n\n${historySection}`,
+      },
+      {
+        id: 'recovery_timeline',
+        required: true,
+        text: `=== RECOVERY TIMELINE (muscle groups) ===\n\n${recoverySection}`,
+      },
+      { id: 'task', required: true, text: TASK_TEXT },
+      { id: 'tools', required: true, text: TOOLS_TEXT },
+      ...renderDirectives(this.directives, ctx),
+    ];
+  },
+};

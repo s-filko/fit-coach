@@ -87,21 +87,45 @@ apps/server/src/
         nodes/
           router.node.ts             # Phase determination, session timeout, user loading
           persist.node.ts            # appendTurn to conversation_turns + one conversation_runs row per run (P0 run log; moves to commit node in P3)
-          chat.node.ts               # buildChatSystemPrompt()
-          registration.node.ts       # buildRegistrationSystemPrompt()
-          plan-creation.node.ts      # buildPlanCreationSystemPrompt()
-          session-planning.node.ts   # buildSessionPlanningSystemPrompt() with context
+          phase-summary.node.ts      # End-of-phase summarisation (renders prompts/summarizer)
         subgraphs/
           chat.subgraph.ts              # agent + ToolNode + extractNode
           registration.subgraph.ts      # agent + ToolNode + extractNode
           plan-creation.subgraph.ts     # agent + dedupToolNode + extractNode
           session-planning.subgraph.ts  # agent + dedupToolNode + extractNode + activeSessionId
+          training.subgraph.ts          # agent + ToolNode + extractNode + tool-results/history injection
         tools/
           chat.tools.ts                 # update_profile, request_transition
           registration.tools.ts         # save_profile_fields, complete_registration
           plan-creation.tools.ts        # save_workout_plan, search_exercises, request_transition
           session-planning.tools.ts     # start_training_session, search_exercises, request_transition
           search-exercises.tool.ts      # search_exercises — vector search via EmbeddingService
+      prompts/                       # Versioned prompt modules — every model-facing string (ADR-0013 §5)
+        types.ts                     # Section, DirectiveModule, PromptModule<TCtx>, PhasePromptEntry
+        compose.ts                   # renderDirectives, compose (join '\n\n'), sectionText, promptVersionsOf
+        index.ts                     # Registry: PHASE_PROMPTS (+ blocks per phase), STANDALONE_PROMPTS, promptVersionsForPhase
+        directives/                  # The nine directives, one versioned module each
+          identity.v1.ts             #   FitCoach persona
+          greeting.v1.ts             #   new-day greeting (driven by ctx.now, not the clock)
+          language.v1.ts             #   reply language
+          timezone.v1.ts             #   user timezone
+          name-usage.v1.ts           #   name usage rules
+          formatting.telegram.v1.ts  #   Telegram formatting (per ctx.client)
+          time-reference.v1.ts       #   workout time reference
+          output.v1.ts               #   plain-text output
+          tool-reply.v1.ts           #   reply after every tool call + index.ts (DEFAULT_DIRECTIVES_V1 order)
+        phases/                      # Phase system prompts — text identical to the pre-P2 builders
+          registration/v1.ts         #   + index.ts (PhasePromptEntry, requiredSections)
+          chat/v1.ts                 #   context/rules/tools/no_set_logging (BUG-009 guard)
+          plan_creation/v1.ts        #
+          session_planning/v1.ts     #
+          training/v1.ts             #   + v1.helpers.ts; DIRECTIVES_WITHOUT_IDENTITY_V1
+        blocks/                      # Injected fragments that are neither phase prompt nor directive
+          tool-results.v1.ts         #   === TOOL EXECUTION RESULTS === block (BUG-006/BUG-009 guard)
+          history-frame.v1.ts        #   training system-block history frame
+          summary-frame.v1.ts        #   CONTEXT FROM PREVIOUS CONVERSATION wrapper
+          post-tool-nudge.v1.ts      #   invoke-with-retry post-tool nudge
+        summarizer/v1.ts             # End-of-phase summariser (system + user sections)
     conversation/
       conversation-context.service.ts          # InMemoryConversationContextService (test double)
       drizzle-conversation-context.service.ts   # IConversationContextService impl (2-method, DB-backed)

@@ -221,6 +221,27 @@ export default tseslint.config(
       }],
     },
   },
+  // ADR-0013 §5 / BR-LLM-009: model-facing text lives in prompts/ modules, never inline in graph code.
+  {
+    files: ['src/infra/ai/graph/**/*.ts', 'src/infra/ai/*.ts'],
+    ignores: ['**/__tests__/**'],
+    rules: {
+      'no-restricted-syntax': ['error',
+        {
+          selector: "NewExpression[callee.name='SystemMessage'] > Literal.arguments",
+          message: 'Inline system prompt text. Render it from a module in src/infra/ai/prompts/ (ADR-0013 §5).',
+        },
+        {
+          selector: "NewExpression[callee.name='SystemMessage'] > TemplateLiteral.arguments",
+          message: 'Inline system prompt text. Render it from a module in src/infra/ai/prompts/ (ADR-0013 §5).',
+        },
+        {
+          selector: "Property[key.name='role'][value.value='system'] ~ Property[key.name='content'] > :matches(Literal, TemplateLiteral)",
+          message: 'Inline system prompt text. Render it from a module in src/infra/ai/prompts/ (ADR-0013 §5).',
+        },
+      ],
+    },
+  },
   // Relaxed rules for test files
   {
     files: ['**/__tests__/**/*.ts', '**/*.test.ts', '**/*.spec.ts', '**/tests/**/*.ts', '**/test/**/*.ts'],

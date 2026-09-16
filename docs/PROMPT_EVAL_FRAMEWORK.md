@@ -85,7 +85,7 @@ Initial datasets to write in P0 (from existing material): `chat/transitions` (BU
 ## 4. Deterministic checks (L0, L1)
 
 ### 4.1 L0 — static
-- Render every current prompt module with three fixtures; assert a non-empty render and total estimated tokens ≤ the per-phase budget (`PHASE_TOKEN_BUDGET` in `evals/levels/l0.ts` until PhaseSpec lands). Section presence is **deferred** — it needs a section contract; see the L0 deferred-checks entry in `docs/BACKLOG.md`.
+- Render every current prompt module with three fixtures; assert a non-empty render and total estimated tokens ≤ the module's budget (`PROMPT_TOKEN_BUDGET`, keyed by module id, in `evals/levels/l0.ts` until PhaseSpec lands). Section presence is **implemented** (shipped in `refactor-p2-prompt-modules`): every required section id of the phase contract (`requiredSections` in the module's `index.ts`) must appear in the rendered output (`checkSections` in `evals/levels/l0.ts`, per ADR-0013 §5.2 `Section`).
 - Forbidden strings in rendered prompts: `undefined`, `null`, `[object Object]`, `NaN` (with an exact-phrase allowlist stopgap; see `FORBIDDEN_STRING_ALLOWLIST`).
 - Version discipline: if a `prompts/**` file changed in the diff, its `version` string changed too (git diff based) — **deferred**, needs prompt version identifiers; see `docs/BACKLOG.md`.
 - Message catalog completeness: every catalog key exists in `en` and `ru` — **deferred**; see `docs/BACKLOG.md`.

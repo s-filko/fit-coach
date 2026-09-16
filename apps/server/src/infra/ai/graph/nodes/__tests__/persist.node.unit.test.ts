@@ -33,7 +33,11 @@ describe('persist node run logging (AC-1301)', () => {
     expect(record.phaseIn).toBe('chat');
     expect(record.outcome).toBe('ok');
     expect(record.latencyMs).toBeGreaterThanOrEqual(0);
-    expect(record.promptVersions).toEqual({ 'phase.chat': 'v0', directives: 'v0' });
+    expect(record.promptVersions).toMatchObject({
+      'phase.chat': 'v1',
+      'directive.identity': 'v1',
+      'block.summary_frame': 'v1',
+    });
   });
 
   it('records the requested transition as phase_out', async () => {

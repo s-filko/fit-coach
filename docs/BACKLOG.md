@@ -103,11 +103,19 @@ Rules:
 - [ ] **Inline `setNumericField`** in llm-profiles.ts (one call site; the field parameter
   splits the body in two — the plan's own snippet had the branches inline). Source:
   refactor-P1 close-out review R2 (2026-09-16).
+- [ ] **Integration runner exits 134 after an all-green run**: `RUN_DB_TESTS=1
+  npm run test:integration` (apps/server) crashes in jest global teardown
+  (`src/app/test/teardown.ts`, DB-pool close) with libc++ `mutex lock failed` AFTER
+  printing 122/122 passed — the non-zero exit can fail CI/cleanup even when tests pass.
+  The plain unit run (`npx jest --ci`) crashes identically after an all-green summary —
+  proven pre-existing at the base commit by the P2 review (temp worktree, same crash).
+  Reproduced on clean `dev`, pre-existing, not a P2 regression. Source: refactor-P2
+  Task 8 verification + close-out review R3 (2026-09-16).
 - [ ] L0 eval checks named by `PROMPT_EVAL_FRAMEWORK.md` §4.1 but not implemented in the
-  P0 harness: section presence, version discipline, message-catalog completeness. All three
-  need artefacts P0 does not build — a PhaseSpec/section contract (P2) and prompt version
-  identifiers (§6, baseline plan) — so L0 ships only the three checks that need nothing but a
-  rendered string. Source: close-out-review, R4 (2026-09-13).
+  P0 harness: version discipline, message-catalog completeness (section presence shipped
+  in refactor-p2-prompt-modules). Both need artefacts the harness does not build yet —
+  prompt version identifiers (§6, baseline plan) and the P3 message catalog. Source:
+  close-out-review, R4 (2026-09-13).
 - [ ] Replace the L0 forbidden-string allowlist with P2's structural check: validate the values
   actually substituted into a prompt instead of scanning the whole rendered string, which
   cannot distinguish an unrendered `undefined` from the word "undefined" in prose. The exact-
@@ -260,6 +268,60 @@ Rules:
   a durable doc records that the enforcement was newly activated on 2026-09-14; the claim
   itself needs no correction, only a note of when it started being true. Source: `lint-glob-fix`
   close-out review, R4 (2026-09-14).
+
+P2 close-out review batch (refactor-p2-prompt-modules, 2026-09-16):
+
+- [ ] **Registry `blocks` arrays must not survive AC-1323**: `prompts/index.ts` per-phase
+  `blocks` duplicate message-assembly knowledge that independently lives in the five
+  subgraphs (e.g. chat.subgraph still injects `SUMMARY_FRAME_V1` directly) — two sources of
+  truth for "which blocks a phase injects" can drift until refactor-p2-context-assembler
+  consumes the registry; plan-sanctioned transitional shape. Source: P2 review R1.
+- [ ] **Extend the inline-prompt rails to future infra dirs**: the ESLint config globs and
+  the grep test's `graphDir` police only `src/infra/ai/graph/**` + `src/infra/ai/*.ts`;
+  `infra/ai/context/` and `infra/ai/messages/` (ADR-0013 §11) would escape both rails once
+  created. Source: P2 review R1.
+- [ ] **`User` type imported from a service module**: `prompts/types.ts` (and
+  registration/chat/training v1) import `User` from `@domain/user/services/user.service`
+  rather than a dedicated domain type module — type-only so the dependency still points
+  inward, but the prompt layer couples to a service file's module graph. Source: P2 review R1.
+- [ ] **Untested conditional branches in `phases/training/v1`**: `stale_session` /
+  `previousSession` render branches moved verbatim but no snapshot exercises them (fixtures
+  are never stale; previousSession always null) — add a snapshot with a stale fixture and a
+  previousSession to pin those bytes. Source: P2 review R3.
+- [ ] **L0 `--phase` filter fails silently on unknown values**: `runL0` with a typo returns
+  zero targets and reports "0/0 checks passed" exit 0, where the pre-refactor code threw
+  "No L0 renderer wired" — restore the hard error for unknown filters. Source: P2 review R3.
+- [ ] **Standalone modules' section-presence check is tautological**: their
+  `requiredSections` are computed by rendering fixture[0] itself, so a future version
+  dropping a section everywhere still passes; phase modules are unaffected. Fix alongside
+  the rails/assembler work. Source: P2 review R3.
+- [ ] **`Section.required` is written but never read**: every module sets it; L0 reads
+  `PhasePromptEntry.requiredSections` instead. Drop the field or wire the check to it in P4.
+  Source: P2 review R2.
+- [ ] **Small P2 duplications**: 11-line profile block + `=== CLIENT PROFILE ===` wrapper in
+  plan_creation/v1.ts:68 = session_planning/v1.ts:212 (moved verbatim; pairs with
+  context-assembler); role-narrowing lambda in phase-summary.node.ts:34 =
+  training.subgraph.ts:378; magic timestamp 2026-09-12T08:00Z duplicated between
+  prompt-snapshots.unit.test.ts:32 and prompt-contexts.ts:62 (must stay in sync for
+  AC-1321/L0 agreement — export one constant); chat v1 test `makeUser` is the sixth copy of
+  the test user factory. Source: P2 review R2.
+- [ ] **AC-1322 evidence durability**: evals/reports/ is gitignored, so the plan's pasted
+  table is the only surviving evidence of the v1-vs-v0 comparison — commit the compare
+  report JSON (or cite it) on future baseline comparisons. Source: P2 review R3.
+- [ ] **Record rail-bite proofs**: Task 6 Step 5's "prove the ESLint rail bites" (temp
+  inline prompt → lint error → revert) left no recorded evidence — paste the one-line lint
+  error into the plan when a plan asks for a bite proof. Source: P2 review R3.
+- [ ] **chat v1 describe lacks BR/AC id**: `phases/chat/__tests__/v1.unit.test.ts` names
+  ADR-0013 §5 and BUG-009 but no BR-/AC- id unlike every other new suite (plan-prescribed
+  name). Source: P2 review R3.
+- [ ] **Stale pointers to deleted prompt builders** (fold into the P7 docs sweep):
+  MANUAL_TEST_PLAN.md:633 (training.node.ts), FEAT-0003:96-98 + FEAT-0008:31 (builder
+  functions as live prompt homes), BACKLOG.md warmup-sets entry (training.node.ts:145,205 —
+  wording now in prompts/phases/training/v1*.ts), PLAN-training-phase-fix.md:174,214,
+  PLAN-dual-llm-training.md:152, PLAN-muscle-centric-history.md:166-187,
+  PLAN-implementation.md:49-83, PLAN-retrospective-subgraph.md:58-80,
+  LLM_CORE_REFACTOR_PLAN.md:87, ADR-0007:137,232, ADR-0010:196, ADR-0012:246-247,288,470-471.
+  Source: P2 review R4.
 
 ## Wishes
 

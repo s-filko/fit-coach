@@ -9,11 +9,12 @@ import { IConversationContextService } from '@domain/conversation/ports';
 import type { IUserService } from '@domain/user/ports';
 import { User } from '@domain/user/services/user.service';
 
-import { buildRegistrationSystemPrompt } from '@infra/ai/graph/nodes/registration.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildRegistrationTools } from '@infra/ai/graph/tools/registration.tools';
 import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
+import { compose } from '@infra/ai/prompts/compose';
+import { REGISTRATION_PROMPT } from '@infra/ai/prompts/phases/registration';
 
 export interface RegistrationSubgraphDeps {
   userService: IUserService;
@@ -55,7 +56,16 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
 
     // Fetch fresh user before each LLM call so the prompt reflects tool-saved fields
     const freshUser = await userService.getUser(userId);
-    const systemPrompt = buildRegistrationSystemPrompt(freshUser ?? user);
+    const promptUser = freshUser ?? user;
+    const systemPrompt = compose(
+      REGISTRATION_PROMPT.current.render({
+        now: new Date(),
+        timezone: promptUser?.timezone ?? null,
+        client: 'telegram',
+        user: promptUser,
+        lastMessageTime: null,
+      }),
+    );
 
     // state.messages holds AIMessage(tool_calls) + ToolMessages from the current turn.
     // These are NOT in DB history yet (persist runs after subgraph finishes).

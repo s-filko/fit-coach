@@ -1,6 +1,7 @@
 import { ConversationStateType } from '@domain/conversation/graph/conversation.state';
 import { IConversationContextService, IConversationRunService } from '@domain/conversation/ports';
 
+import { promptVersionsForPhase } from '@infra/ai/prompts';
 import { drainRunMetrics } from '@infra/ai/run-metrics';
 
 import { createLogger } from '@shared/logger';
@@ -23,8 +24,7 @@ export function buildPersistNode(contextService: IConversationContextService, ru
     }
 
     const metrics = drainRunMetrics(runId);
-    // P0 placeholder — P2 makes prompt versions real (plan Global Constraints)
-    const promptVersions: Record<string, string> = { [`phase.${phase}`]: 'v0', directives: 'v0' };
+    const promptVersions = promptVersionsForPhase(phase);
     try {
       await runService.recordRun({
         runId,
