@@ -338,14 +338,16 @@ attachBudgetReport(config.metadata?.['runId'] as string, budgetReport);
 const response = await model.invoke(llmMessages, config);      // or invokeWithRetry(model, llmMessages, config) — unchanged per phase
 ```
 
-- [ ] **Step 1: Registration and chat** (direct `model.invoke`; registration passes no summary and does not add a `getLatestSummary` call — it never had one)
-- [ ] **Step 2: Plan creation and session planning** (`invokeWithRetry`)
-- [ ] **Step 3: Training** — the tool-results block and history frame are now the assembler's; delete the local `summaryBlock`, `toolResultsInjection`, the `HISTORY_FRAME_V1` render and the `llmMessages` literal. Keep everything else (`LLM_ERROR_RETRY_BUDGET` logic, dynamic tool filtering, `currentSessionIds`, error `AIMessage`s) exactly where it is.
-- [ ] **Step 4: Remove the dead imports** — `SystemMessage`, `HumanMessage`, `mergeMessageRuns`, `renderBlock`, block modules, from every subgraph where nothing else uses them (`AIMessage` stays where `extractNode` or the error paths use it). `grep -rn "renderBlock\|SUMMARY_FRAME_V1\|HISTORY_FRAME_V1\|TOOL_RESULTS_V1\|mergeMessageRuns" src/infra/ai/graph/subgraphs` → empty.
-- [ ] **Step 5: Run the arbiter** — `npx jest --ci evals/snapshots/__tests__/message-assembly.unit.test.ts` → 15/15 with **no** snapshot written or obsolete. Any mismatch is a wiring bug: diff the snapshot output, fix the subgraph or the layout, never the `.snap`.
-- [ ] **Step 6: Commit**
+- [x] **Step 1: Registration and chat** (direct `model.invoke`; registration passes no summary and does not add a `getLatestSummary` call — it never had one)
+- [x] **Step 2: Plan creation and session planning** (`invokeWithRetry`)
+- [x] **Step 3: Training** — the tool-results block and history frame are now the assembler's; delete the local `summaryBlock`, `toolResultsInjection`, the `HISTORY_FRAME_V1` render and the `llmMessages` literal. Keep everything else (`LLM_ERROR_RETRY_BUDGET` logic, dynamic tool filtering, `currentSessionIds`, error `AIMessage`s) exactly where it is.
+- [x] **Step 4: Remove the dead imports** — `SystemMessage`, `HumanMessage`, `mergeMessageRuns`, `renderBlock`, block modules, from every subgraph where nothing else uses them (`AIMessage` stays where `extractNode` or the error paths use it). `grep -rn "renderBlock\|SUMMARY_FRAME_V1\|HISTORY_FRAME_V1\|TOOL_RESULTS_V1\|mergeMessageRuns" src/infra/ai/graph/subgraphs` → empty.
+- [x] **Step 5: Run the arbiter** — `npx jest --ci evals/snapshots/__tests__/message-assembly.unit.test.ts` → 15/15 with **no** snapshot written or obsolete. Any mismatch is a wiring bug: diff the snapshot output, fix the subgraph or the layout, never the `.snap`.
+- [x] **Step 6: Commit**
 
 `refactor(graph): every phase agentNode assembles its context through assembleContext (byte-identical, 15 snapshots)`
+
+> **Task 5 result (2026-09-17):** all five agentNodes now build their array via `assembleContext` and call `attachBudgetReport(config.metadata?.['runId'] as string, budgetReport)` — the same `metadata.runId` channel the llm-log-handler reads. Invocation style unchanged per phase: registration/chat direct `model.invoke`, plan_creation/session_planning/training `invokeWithRetry`. Registration passes no `previousSummary`; training's local `summaryBlock`, `toolResultsInjection`, the `HISTORY_FRAME_V1` render, the `llmMessages` literal and the `renderToolResults` import are gone — `LLM_ERROR_RETRY_BUDGET`, dynamic tool filtering, `currentSessionIds` and the error `AIMessage`s untouched. Dead imports removed (each subgraph now imports only `AIMessage`, plus `ToolMessage` in training); the Step-4 grep is empty; first lint run flagged 5 `import/order` errors on the new imports (auto-fix moved them after the prompts imports), final lint 0 errors / 413 pre-existing warnings. The arbiter passed first try: 15/15 assembly snapshots, 16/16 tests in the suite, nothing written, nothing obsolete — training `post-tool` still ends on the tool-results system block with no nudge (today's real behaviour, preserved). Verification: `npx jest --ci evals/snapshots src/infra/ai/graph` → 18 suites / 179 tests / 38 snapshots green; `npm run type-check` clean. Commit: `0658f1ae`.
 
 **Verification:** `npx jest --ci evals/snapshots src/infra/ai/graph` (15 assembly + 23 prompt snapshots + subgraph tests green); `npm run type-check`; `npm run lint`; the grep above is empty. AC: this plan's byte-identity arbiter; AC-1323 (every phase agent now attaches a report).
 
