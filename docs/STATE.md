@@ -12,10 +12,10 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-16 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-— none —
+- `refactor-p2-context-assembler.md` — Refactor P2 — Context Assembler Implementation Plan (branch: `plan/refactor-p2-context-assembler`, last commit 2026-09-17)
 
 **Planned**
-- `refactor-p2-context-assembler.md` — Refactor P2 — Context Assembler Implementation Plan
+— none —
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
