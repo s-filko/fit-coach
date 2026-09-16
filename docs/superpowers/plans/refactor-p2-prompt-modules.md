@@ -1,7 +1,7 @@
 # Refactor P2 — Prompt Modules Implementation Plan
 
-- Status: planned
-- Branch:
+- Status: in progress
+- Branch: plan/refactor-p2-prompt-modules
 - After: refactor-p1-legacy-llm-retirement
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

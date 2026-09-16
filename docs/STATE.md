@@ -9,13 +9,13 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-09-15 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-09-16 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
 — none —
 
 **Planned**
-- `refactor-p2-prompt-modules.md` — Refactor P2 — Prompt Modules Implementation Plan
+— none —
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
@@ -33,7 +33,7 @@ _Generated 2026-09-15 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 
 **Close-out debt (merged but plan not done)**
-— none —
+- `refactor-p2-prompt-modules.md` — merged into `dev`
 <!-- AUTO:status END -->
 
 ## Scope now
@@ -42,7 +42,8 @@ _Generated 2026-09-15 from docs/superpowers/plans/ + git. Never hand-edit; regen
   (phases P0–P7, acceptance criteria `AC-13xx`), target architecture `docs/adr/0013-llm-core-target-architecture.md`,
   quality gate `PROMPT_EVAL_FRAMEWORK.md`. **P0 is complete (2026-09-15)**: all six plans
   merged; the `v0` baseline is frozen at `evals/baselines/v0/` (seeded-harness re-freeze,
-  direct-Z.AI route). P1 is written and next.
+  direct-Z.AI route). **P1 is complete (2026-09-16)**: legacy LLM path retired, merged via PR #14,
+  deployed to dev. **P2 (`refactor-p2-prompt-modules`) is in progress.**
 - **Architecture/hygiene backlog** — `PLAN-architecture-refactor-backlog.md` (`HB-##` items).
 - **Global backlog** — `BACKLOG.md`: permanent parking lot of unplanned ideas/findings/
   wishes; top entries are candidates for *Next* below (intake via the `backlog` skill).
@@ -50,13 +51,7 @@ _Generated 2026-09-15 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 ## Next (dispatch order)
 
-1. **Refactor P1** — `refactor-p1-legacy-llm-retirement` (AC-1311–AC-1314): `LlmGateway`
-   + model profiles, delete `LLMService` and the four `TrainingService` LLM methods whose
-   prompts are fused into service code, `410` on both mini-app LLM endpoints (OQ-1 log check
-   is its Task 1 gate), plus one bounded `apps/webapp` fix so the retired endpoint is not
-   polled in a loop. Decided 2026-09-13: master plan P1 item 5 (summariser→`structured`)
-   is **deferred to P4**; the gateway's `structured` path ships tested but unused.
-2. **Refactor P2** — two plans. `refactor-p2-prompt-modules` (items 1, 2, 4, 5; AC-1321,
+1. **Refactor P2** — `refactor-p2-prompt-modules` (items 1, 2, 4, 5; AC-1321,
    AC-1322, AC-1324) carries the full inventory of model-facing text (11 rows: 5 phase
    prompts, 9 directives, summariser, 4 injected blocks) so nothing stays outside the L0
    grid. Decided 2026-09-13: `prompts/blocks/` is an **accepted** extension of the
@@ -65,11 +60,11 @@ _Generated 2026-09-15 from docs/superpowers/plans/ + git. Never hand-edit; regen
    registry shapes are merged. **P2 is the first consumer of the v0 baseline**
    (`--baseline compare`, ±2 pp band) — the fixed detector cases PC-0007/SP-0005
    (BUG-014/015) must clear at 3/3 as part of the prompt rework.
-3. Then P3 → P4/P5 → P6 → P7 per the master plan phase map.
-4. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
+2. Then P3 → P4/P5 → P6 → P7 per the master plan phase map.
+3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
    the code aligned to it, ESLint keeping it that way. Independent of the P0 chain;
    can run alongside it.
-5. **HB-02** (production Docker image) — its own plan, sequenced after HB-01;
+4. **HB-02** (production Docker image) — its own plan, sequenced after HB-01;
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
