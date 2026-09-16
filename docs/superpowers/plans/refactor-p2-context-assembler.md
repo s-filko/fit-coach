@@ -362,12 +362,20 @@ const response = await model.invoke(llmMessages, config);      // or invokeWithR
 - Modify: `apps/server/evals/levels/l1.ts` (structural check `budget-report-present`)
 - Tests: `evals/levels/__tests__/l1.unit.test.ts`, `evals/lib/__tests__/run-case.unit.test.ts`
 
-- [ ] **Step 1: Extend both rails to `infra/ai/context`** (closes the P2 advisory "Extend the inline-prompt rails to future infra dirs" for this directory; `infra/ai/messages` is P3's). Prove the ESLint rail bites: temporarily add `new SystemMessage('x')` to `assemble-context.ts`, run `npm run lint`, **paste the one-line error into this plan under Task 6 results**, revert. (P2 advisory: "Record rail-bite proofs".)
-- [ ] **Step 2: `run-case.ts`** — `CaseObservation.budgetReport: BudgetReport | null` from `recordedRuns[0]?.budgetReport ?? null`. The invoke config gains `metadata: { runId, userId }`; without it `config.metadata.runId` is undefined in evals and no report is attached (the LLM callback handler has the same blind spot today — this also makes eval run rows carry model/tokens like production).
-- [ ] **Step 3: `l1.ts`** — new check `budget-report-present`: passes when `observation.budgetReport !== null && observation.budgetReport.total > 0`; skipped (not added) when `observation.threw` (the existing early return). This is §4.2's "Collect … `budgetReport`" made true; the `budgetReport.history ≤ budget.history` structural check stays deferred (no budgets until P4) — leave the spec sentence as is except for the collection part (Task 8).
-- [ ] **Step 4: Commit**
+- [x] **Step 1: Extend both rails to `infra/ai/context`** (closes the P2 advisory "Extend the inline-prompt rails to future infra dirs" for this directory; `infra/ai/messages` is P3's). Prove the ESLint rail bites: temporarily add `new SystemMessage('x')` to `assemble-context.ts`, run `npm run lint`, **paste the one-line error into this plan under Task 6 results**, revert. (P2 advisory: "Record rail-bite proofs".)
+- [x] **Step 2: `run-case.ts`** — `CaseObservation.budgetReport: BudgetReport | null` from `recordedRuns[0]?.budgetReport ?? null`. The invoke config gains `metadata: { runId, userId }`; without it `config.metadata.runId` is undefined in evals and no report is attached (the LLM callback handler has the same blind spot today — this also makes eval run rows carry model/tokens like production).
+- [x] **Step 3: `l1.ts`** — new check `budget-report-present`: passes when `observation.budgetReport !== null && observation.budgetReport.total > 0`; skipped (not added) when `observation.threw` (the existing early return). This is §4.2's "Collect … `budgetReport`" made true; the `budgetReport.history ≤ budget.history` structural check stays deferred (no budgets until P4) — leave the spec sentence as is except for the collection part (Task 8).
+- [x] **Step 4: Commit**
 
 `test(evals): budgetReport in L1 observations; inline-prompt rails cover infra/ai/context`
+
+**Task 6 result (2026-09-17):** both rails now cover `src/infra/ai/context/**` — the eslint.config.js `no-restricted-syntax` files array gained `'src/infra/ai/context/**/*.ts'`, and `no-inline-prompts.unit.test.ts` greps `graph/` **and** `context/`. Rail-bite proof (temporary `new SystemMessage('x')` in `assemble-context.ts`, then reverted):
+
+```
+  93:23  error    Inline system prompt text. Render it from a module in src/infra/ai/prompts/ (ADR-0013 §5)  no-restricted-syntax
+```
+
+`run-case.ts` reads `budgetReport: recordedRuns[0]?.budgetReport ?? null` into `CaseObservation` and passes `metadata: { runId, userId }` in the graph invoke config — the same `config.metadata?.['runId']` channel the agentNode uses to `attachBudgetReport`, so eval run rows now carry a report (and model/tokens) like production. L1 gained the structural check `budget-report-present` (passes iff `budgetReport !== null && budgetReport.total > 0`; not added on the `threw` early return); the `budgetReport.history ≤ budget.history` check stays deferred to P4 per the plan. TDD: both test suites failed to compile first (no `budgetReport` on `CaseObservation`), then green. Verification: `npm run lint` → 0 errors / 413 pre-existing warnings; `npx jest --ci evals` → 12 suites / 105 tests / 38 snapshots green; `npx jest --ci evals/snapshots` → 39 tests / 38 snapshots; `npm run evals -- --level L0` → 120/120 unchanged. Commit: `991f9e98`.
 
 **Verification:** `npm run lint` (with the bite proof recorded); `npx jest --ci evals`; `npm run evals -- --level L0` unchanged counts. AC-1323 (L1 side: every eval run carries a report).
 
