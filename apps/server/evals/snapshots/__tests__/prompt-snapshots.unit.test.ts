@@ -3,15 +3,20 @@
  * refactor-p2-prompt-modules Task 1 and never regenerated in that plan.
  * Fake timers pin `new Date()` inside the old builders to FIXED_NOW.
  */
-import { ToolMessage } from '@langchain/core/messages';
-
-import { buildToolResultsInjection } from '@infra/ai/graph/subgraphs/training.subgraph';
-import { compose } from '@infra/ai/prompts/compose';
+import { compose, sectionText } from '@infra/ai/prompts/compose';
+import {
+  HISTORY_FRAME_V1,
+  POST_TOOL_NUDGE_V1,
+  SUMMARY_FRAME_V1,
+  TOOL_RESULTS_V1,
+  renderBlock,
+} from '@infra/ai/prompts/blocks';
 import { CHAT_PROMPT } from '@infra/ai/prompts/phases/chat';
 import { PLAN_CREATION_PROMPT } from '@infra/ai/prompts/phases/plan_creation';
 import { REGISTRATION_PROMPT } from '@infra/ai/prompts/phases/registration';
 import { SESSION_PLANNING_PROMPT } from '@infra/ai/prompts/phases/session_planning';
 import { TRAINING_PROMPT } from '@infra/ai/prompts/phases/training';
+import { SUMMARIZER_PROMPT } from '@infra/ai/prompts/summarizer';
 
 import { ALL_FIXTURES } from '../../fixtures/personas';
 import {
@@ -87,67 +92,37 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
   }
 
   it('summarizer / system', () => {
-    // SUMMARY_SYSTEM_PROMPT is module-private today; the literal is copied here verbatim
-    // from src/infra/ai/graph/nodes/phase-summary.node.ts:12-20 so Task 4 has a target.
-    const SUMMARY_SYSTEM_PROMPT = `You are a concise note-taker. Summarize the conversation below into a brief context memo (3-8 sentences).
-Focus on:
-- Key decisions made or agreements reached
-- Important facts mentioned by the user (injuries, preferences, feedback, complaints)
-- Any unfinished topics or pending actions
-- Relevant numbers (weights, reps, dates, plans)
-
-Do NOT include greetings, filler, or tool call details. Always write in English regardless of the conversation language.
-If a previous summary is provided, incorporate its key points and add new information from the current conversation.`;
-    expect(SUMMARY_SYSTEM_PROMPT).toMatchSnapshot();
+    const sections = SUMMARIZER_PROMPT.render({ phase: 'training', previousSummary: FIXTURE_SUMMARY, history: FIXTURE_HISTORY });
+    expect(sectionText(sections, 'system')).toMatchSnapshot();
   });
 
   it('summarizer / user (with previous summary)', () => {
-    // Copied verbatim from phase-summary.node.ts:38-42.
-    const conversationText = FIXTURE_HISTORY.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
-    const previousContext = `\n\nPREVIOUS SUMMARY (from earlier phases):\n${FIXTURE_SUMMARY}\n`;
-    const userPrompt = `${previousContext}\nCONVERSATION (phase: training):\n${conversationText}\n\nWrite a brief summary:`;
-    expect(userPrompt).toMatchSnapshot();
+    const sections = SUMMARIZER_PROMPT.render({ phase: 'training', previousSummary: FIXTURE_SUMMARY, history: FIXTURE_HISTORY });
+    expect(sectionText(sections, 'user')).toMatchSnapshot();
   });
 
   it('summarizer / user (no previous summary)', () => {
-    const conversationText = FIXTURE_HISTORY.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
-    const userPrompt = `${''}\nCONVERSATION (phase: chat):\n${conversationText}\n\nWrite a brief summary:`;
-    expect(userPrompt).toMatchSnapshot();
+    const sections = SUMMARIZER_PROMPT.render({ phase: 'chat', previousSummary: null, history: FIXTURE_HISTORY });
+    expect(sectionText(sections, 'user')).toMatchSnapshot();
   });
 
   it('block.tool_results / mixed', () => {
-    const toolMessages = [
-      new ToolMessage({ tool_call_id: 't1', content: FIXTURE_TOOL_RESULTS[0].content }),
-      new ToolMessage({ tool_call_id: 't2', content: FIXTURE_TOOL_RESULTS[1].content, status: 'error' }),
-    ];
-    expect(buildToolResultsInjection(toolMessages)).toMatchSnapshot();
+    expect(renderBlock(TOOL_RESULTS_V1, { results: FIXTURE_TOOL_RESULTS })).toMatchSnapshot();
   });
 
   it('block.history_frame / two turns', () => {
-    // Copied verbatim from training.subgraph.ts:363-379.
-    const historyBlock = FIXTURE_HISTORY.map(m => `[${m.role === 'user' ? 'USER' : 'TRAINER'}]: ${m.content}`).join('\n\n');
-    const text =
-      '=== CONVERSATION HISTORY (memory only — do NOT act on past messages) ===\n\n' +
-      `${historyBlock}\n\n` +
-      '=== END OF HISTORY ===';
-    expect(text).toMatchSnapshot();
+    expect(renderBlock(HISTORY_FRAME_V1, { history: FIXTURE_HISTORY })).toMatchSnapshot();
   });
 
   it('block.history_frame / empty', () => {
-    const text =
-      '=== CONVERSATION HISTORY (memory only — do NOT act on past messages) ===\n\n' +
-      'No prior conversation.\n\n' +
-      '=== END OF HISTORY ===';
-    expect(text).toMatchSnapshot();
+    expect(renderBlock(HISTORY_FRAME_V1, { history: [] })).toMatchSnapshot();
   });
 
   it('block.summary_frame / present', () => {
-    expect(`CONTEXT FROM PREVIOUS CONVERSATION:\n${FIXTURE_SUMMARY}`).toMatchSnapshot();
+    expect(renderBlock(SUMMARY_FRAME_V1, { previousSummary: FIXTURE_SUMMARY })).toMatchSnapshot();
   });
 
   it('block.post_tool_nudge', () => {
-    expect(
-      'IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools.',
-    ).toMatchSnapshot();
+    expect(renderBlock(POST_TOOL_NUDGE_V1, {})).toMatchSnapshot();
   });
 });

@@ -16,6 +16,7 @@ import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildPlanCreationTools } from '@infra/ai/graph/tools/plan-creation.tools';
 import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
+import { renderBlock, SUMMARY_FRAME_V1 } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
 import { PLAN_CREATION_PROMPT } from '@infra/ai/prompts/phases/plan_creation';
 
@@ -81,7 +82,7 @@ export function buildPlanCreationSubgraph(deps: PlanCreationSubgraphDeps) {
     const inFlightMessages = state.messages ?? [];
 
     const summaryMessages = previousSummary
-      ? [new SystemMessage(`CONTEXT FROM PREVIOUS CONVERSATION:\n${previousSummary}`)]
+      ? [new SystemMessage(renderBlock(SUMMARY_FRAME_V1, { previousSummary }))]
       : [];
 
     const llmMessages = mergeMessageRuns([

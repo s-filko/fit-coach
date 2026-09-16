@@ -20,6 +20,7 @@ import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { buildTrainingTools, LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '@infra/ai/graph/tools/training.tools';
 import { getModel } from '@infra/ai/model.factory';
+import { HISTORY_FRAME_V1, renderBlock, SUMMARY_FRAME_V1, TOOL_RESULTS_V1 } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
 import { TRAINING_PROMPT } from '@infra/ai/prompts/phases/training';
 
@@ -141,24 +142,16 @@ const LLM_ERROR_RETRY_BUDGET = 1;
  * "I logged..." confirmations when no tool was actually called.
  */
 export function buildToolResultsInjection(toolMessages: ToolMessage[]): string {
-  const lines = toolMessages.map(m => {
+  const results = toolMessages.map(m => {
     const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
     const isError =
       m.status === 'error' || content.startsWith(LLM_ERROR_PREFIX) || content.startsWith(SYSTEM_ERROR_PREFIX);
     return isError
-      ? `• ❌ NOT SAVED — ${content.replace(LLM_ERROR_PREFIX, '').replace(SYSTEM_ERROR_PREFIX, '').trim()}`
-      : `• ✅ SAVED — ${content}`;
+      ? { ok: false as const, content: content.replace(LLM_ERROR_PREFIX, '').replace(SYSTEM_ERROR_PREFIX, '').trim() }
+      : { ok: true as const, content };
   });
 
-  return [
-    '=== TOOL EXECUTION RESULTS ===',
-    ...lines,
-    '',
-    'Your response MUST start by reporting each result above to the user.',
-    'For each ✅ SAVED line: tell the user the set was recorded with exact numbers.',
-    'For each ❌ NOT SAVED line: tell the user the set was NOT recorded and ask them to retry.',
-    'Do NOT invent or assume any result not listed here.',
-  ].join('\n');
+  return renderBlock(TOOL_RESULTS_V1, { results });
 }
 
 export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
@@ -372,22 +365,20 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
       const toolMessages = inFlightMessages.filter((m): m is ToolMessage => m instanceof ToolMessage);
       const toolResultsInjection = toolMessages.length > 0 ? buildToolResultsInjection(toolMessages) : null;
 
-      const historyBlock =
-        history.length > 0
-          ? history.map(m => `[${m.role === 'user' ? 'USER' : 'TRAINER'}]: ${m.content}`).join('\n\n')
-          : 'No prior conversation.';
-
       const summaryBlock = previousSummary
-        ? [new SystemMessage(`CONTEXT FROM PREVIOUS CONVERSATION:\n${previousSummary}`)]
+        ? [new SystemMessage(renderBlock(SUMMARY_FRAME_V1, { previousSummary }))]
         : [];
 
       const llmMessages = [
         new SystemMessage(systemPrompt),
         ...summaryBlock,
         new SystemMessage(
-          '=== CONVERSATION HISTORY (memory only — do NOT act on past messages) ===\n\n' +
-            `${historyBlock}\n\n` +
-            '=== END OF HISTORY ===',
+          renderBlock(HISTORY_FRAME_V1, {
+            history: history.map(m => ({
+              role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
+              content: m.content,
+            })),
+          }),
         ),
         new HumanMessage(userMessage),
         ...inFlightMessages,

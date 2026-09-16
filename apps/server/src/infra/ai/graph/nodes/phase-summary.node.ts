@@ -4,20 +4,12 @@ import { ChatOpenAI } from '@langchain/openai';
 import type { ConversationPhase, IConversationContextService } from '@domain/conversation/ports';
 
 import { getModel } from '@infra/ai/model.factory';
+import { sectionText } from '@infra/ai/prompts/compose';
+import { SUMMARIZER_PROMPT } from '@infra/ai/prompts/summarizer';
 
 import { createLogger } from '@shared/logger';
 
 const log = createLogger('phase-summary');
-
-const SUMMARY_SYSTEM_PROMPT = `You are a concise note-taker. Summarize the conversation below into a brief context memo (3-8 sentences).
-Focus on:
-- Key decisions made or agreements reached
-- Important facts mentioned by the user (injuries, preferences, feedback, complaints)
-- Any unfinished topics or pending actions
-- Relevant numbers (weights, reps, dates, plans)
-
-Do NOT include greetings, filler, or tool call details. Always write in English regardless of the conversation language.
-If a previous summary is provided, incorporate its key points and add new information from the current conversation.`;
 
 export async function generatePhaseSummary(
   contextService: IConversationContextService,
@@ -35,11 +27,14 @@ export async function generatePhaseSummary(
       return;
     }
 
-    const conversationText = history.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
-
-    const previousContext = previousSummary ? `\n\nPREVIOUS SUMMARY (from earlier phases):\n${previousSummary}\n` : '';
-
-    const userPrompt = `${previousContext}\nCONVERSATION (phase: ${phase}):\n${conversationText}\n\nWrite a brief summary:`;
+    const sections = SUMMARIZER_PROMPT.render({
+      phase,
+      previousSummary,
+      history: history.map(m => ({
+        role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
+        content: m.content,
+      })),
+    });
 
     const model: ChatOpenAI = getModel();
     // The summary runs fire-and-forget after the transition, usually AFTER persist has
@@ -48,8 +43,8 @@ export async function generatePhaseSummary(
     // A minimal metadata with userId keeps debug logging without binding to the run.
     const response = await model.invoke(
       [
-        { role: 'system', content: SUMMARY_SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
+        { role: 'system', content: sectionText(sections, 'system') },
+        { role: 'user', content: sectionText(sections, 'user') },
       ],
       { ...config, metadata: { userId, ...config?.metadata, runId: undefined } },
     );

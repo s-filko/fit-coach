@@ -14,6 +14,7 @@ import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildChatTools } from '@infra/ai/graph/tools/chat.tools';
 import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
+import { renderBlock, SUMMARY_FRAME_V1 } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
 import { CHAT_PROMPT } from '@infra/ai/prompts/phases/chat';
 
@@ -76,7 +77,7 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
     const inFlightMessages = state.messages ?? [];
 
     const summaryMessages = previousSummary
-      ? [new SystemMessage(`CONTEXT FROM PREVIOUS CONVERSATION:\n${previousSummary}`)]
+      ? [new SystemMessage(renderBlock(SUMMARY_FRAME_V1, { previousSummary }))]
       : [];
 
     const llmMessages = mergeMessageRuns([

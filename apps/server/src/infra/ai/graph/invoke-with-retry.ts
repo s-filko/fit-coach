@@ -1,6 +1,8 @@
 import { type AIMessage, type BaseMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import type { Runnable, RunnableConfig } from '@langchain/core/runnables';
 
+import { POST_TOOL_NUDGE_V1, renderBlock } from '@infra/ai/prompts/blocks';
+
 import { createLogger } from '@shared/logger';
 
 const log = createLogger('invoke-with-retry');
@@ -26,9 +28,7 @@ function endsWithToolMessage(messages: BaseMessage[]): boolean {
  * Inserted as SystemMessage (not HumanMessage) to avoid the model echoing it.
  */
 function withPostToolNudge(messages: BaseMessage[]): BaseMessage[] {
-  const nudge = new SystemMessage(
-    'IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools.',
-  );
+  const nudge = new SystemMessage(renderBlock(POST_TOOL_NUDGE_V1, {}));
   let lastToolIdx = -1;
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i] instanceof ToolMessage) {
