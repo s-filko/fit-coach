@@ -718,7 +718,7 @@ Directive placement: every phase template ended with `\n\n${composeDirectives(..
 
 `now` handling (AC-1324): `formatInUserTz(new Date(), …)` → `formatInUserTz(ctx.now, …)`; `const now = new Date()` → `const { now } = ctx`; chat's `humanTimeAgo(new Date(date), new Date(), tz)` → `humanTimeAgo(new Date(date), ctx.now, tz)`. `SESSION_TIMEOUT_MS` and the age computation in training stay, computed from `ctx.now`.
 
-- [ ] **Step 1: plan_creation — write the module**
+- [x] **Step 1: plan_creation — write the module**
 
 Create `apps/server/src/infra/ai/prompts/phases/plan_creation/v1.ts` by moving the body of `buildPlanCreationSystemPrompt` (`nodes/plan-creation.node.ts:6-77`) into `render`, split at its five `===` headers:
 
@@ -790,7 +790,7 @@ export interface PhasePromptEntry<TCtx> {
 }
 ```
 
-- [ ] **Step 2: plan_creation — retarget the snapshot test and prove identity**
+- [x] **Step 2: plan_creation — retarget the snapshot test and prove identity**
 
 In `prompt-snapshots.unit.test.ts` replace the plan_creation `it` body:
 
@@ -806,7 +806,7 @@ In `prompt-snapshots.unit.test.ts` replace the plan_creation `it` body:
 Run: `npm run test:unit -- prompt-snapshots --ci`
 Expected: PASS — the module reproduces the frozen bytes. If it fails, fix the section split (never the snapshot).
 
-- [ ] **Step 3: plan_creation — switch the subgraph**
+- [x] **Step 3: plan_creation — switch the subgraph**
 
 In `apps/server/src/infra/ai/graph/subgraphs/plan-creation.subgraph.ts:69` replace
 
@@ -831,7 +831,7 @@ with
 
 Imports: `compose` from `@infra/ai/prompts/compose`, `PLAN_CREATION_PROMPT` from `@infra/ai/prompts/phases/plan_creation`; remove the `plan-creation.node` import. `new Date()` now lives in the caller — that is the point of AC-1324.
 
-- [ ] **Step 4: plan_creation — delete the old builder and commit**
+- [x] **Step 4: plan_creation — delete the old builder and commit**
 
 ```bash
 git rm src/infra/ai/graph/nodes/plan-creation.node.ts
@@ -845,11 +845,11 @@ git add -A src/infra/ai evals
 git commit -m "refactor(prompts): move plan_creation system prompt to phases/plan_creation/v1 (byte-identical)"
 ```
 
-- [ ] **Step 5: registration — same cycle**
+- [x] **Step 5: registration — same cycle**
 
 Module `phases/registration/v1.ts`: body of `buildRegistrationSystemPrompt` (`nodes/registration.node.ts:16-85`) with sections `name_context`, `collected`, `missing`, `behavior_rules` (from `BEHAVIOR RULES:` through the conditional 6/7/8 block — keep the conditional inside this one section: the template literal inserts `\n6.` immediately after `5. …valid.\n`, which produces a blank line the split rule must not cut), `tools`, then directives. `PROFILE_FIELDS`, `FIELD_LABELS`/`FIELD_HINTS` imports move with it. `requiredSections: ['name_context', 'collected', 'missing', 'behavior_rules', 'tools', 'directive.identity', 'directive.tool-reply']`. Switch `registration.subgraph.ts:58`; retarget the snapshot `it` (`lastMessageTime: null`); `--ci` green; L0 case rewired; delete `nodes/registration.node.ts`; commit `refactor(prompts): move registration system prompt to phases/registration/v1 (byte-identical)`.
 
-- [ ] **Step 6: chat — same cycle plus test migration**
+- [x] **Step 6: chat — same cycle plus test migration**
 
 Module `phases/chat/v1.ts`: body of `buildChatSystemPrompt` (`nodes/chat.node.ts:13-79`). Context adds `hasActivePlan`, `recentSessions`; `humanTimeAgo(new Date(date), ctx.now, user?.timezone)`. Sections: `context` (`CLIENT NAME:` … recent sessions list), `rules` (`RULES:` …5.), `tools` (`TOOLS (use when needed):` …), `no_set_logging` (`IMPORTANT: You do NOT have log_set…`), then directives (chat passes `lastMessageTime` through — the subgraph sets `lastMessageTime` from `contextService.getLastUserMessageTime`). `requiredSections: ['context', 'rules', 'tools', 'no_set_logging', 'directive.identity', 'directive.tool-reply']` — `no_set_logging` is the BUG-009 guard; L0 will now fail any v2 that drops it.
 
@@ -864,13 +864,13 @@ Move the seven assertions of `nodes/__tests__/chat.node.unit.test.ts` to `prompt
 
 Switch `chat.subgraph.ts:63` (context: `now: new Date()`, `lastMessageTime`, `hasActivePlan: !!activePlan`, `recentSessions`); snapshot `--ci`; L0 case; delete `nodes/chat.node.ts` and its old test; commit `refactor(prompts): move chat system prompt to phases/chat/v1 (byte-identical)`.
 
-- [ ] **Step 7: session_planning — same cycle**
+- [x] **Step 7: session_planning — same cycle**
 
 Module `phases/session_planning/v1.ts`: body of `buildSessionPlanningSystemPrompt` (`nodes/session-planning.node.ts:9-133`; the helper functions below line 133 in that file move too). Context adds `context: SessionPlanningContextData`; `const now = ctx.now`. Sections at the six headers: `client_profile`, `active_plan`, `recent_history`, `recovery_timeline`, `task`, `tools`, then directives. `requiredSections`: all six + `directive.identity`, `directive.tool-reply`. Switch `session-planning.subgraph.ts:95`; snapshot; L0; delete; commit.
 
 Record in the PR description the session_planning prompt size from the L0 token line (master plan P2 note: "measure the session-planning system prompt size here … it sets P4's budget defaults").
 
-- [ ] **Step 8: training — same cycle, no identity directive**
+- [x] **Step 8: training — same cycle, no identity directive**
 
 Module `phases/training/v1.ts`: body of `buildTrainingSystemPrompt` (`nodes/training.node.ts:10-115`) plus its private helpers (`buildWorkoutOverview`, `buildPreviousSessionSection`, `formatSetData`, `formatDuration`, `buildStaleSessionSection`) moved into the same file (or a sibling `v1.helpers.ts` if the file exceeds the lint line limit). `directives: DIRECTIVES_WITHOUT_IDENTITY_V1` (today: `includeIdentity: false`). Context adds `session`, `previousSession`; `const now = ctx.now`. Sections: `client`, `workout_overview`, `stale_session` (`required: false`), `previous_session` (`required: false`), `tools`, `rules` (RULE 0…), then directives — verify against the snapshot that the conditional sections' surrounding newlines match; fold if not. `requiredSections: ['client', 'workout_overview', 'tools', 'rules', 'directive.tool-reply']`.
 
@@ -878,7 +878,7 @@ The L0 `FORBIDDEN_STRING_ALLOWLIST` comment cites `training.node.ts:94`; update 
 
 Switch `training.subgraph.ts:341`; snapshot; L0; delete `nodes/training.node.ts`; commit.
 
-- [ ] **Step 9: Delete `prompt-directives.ts` and verify AC-1324**
+- [x] **Step 9: Delete `prompt-directives.ts` and verify AC-1324**
 
 ```bash
 git rm src/infra/ai/graph/prompt-directives.ts src/infra/ai/graph/__tests__/prompt-directives.unit.test.ts
