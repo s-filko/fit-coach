@@ -1170,7 +1170,7 @@ export function promptVersionsForPhase(phase: ConversationPhase): Record<string,
 
 Blocks per phase, from today's assembly code: chat → `[SUMMARY_FRAME_V1]`; registration → `[]`; plan_creation → `[SUMMARY_FRAME_V1, POST_TOOL_NUDGE_V1]`; session_planning → `[SUMMARY_FRAME_V1, POST_TOOL_NUDGE_V1]`; training → `[SUMMARY_FRAME_V1, HISTORY_FRAME_V1, TOOL_RESULTS_V1, POST_TOOL_NUDGE_V1]`.
 
-- [ ] **Step 1: Write the failing registry test**
+- [x] **Step 1: Write the failing registry test**
 
 ```typescript
 import { PHASE_PROMPTS, STANDALONE_PROMPTS, promptVersionsForPhase } from '..';
@@ -1204,12 +1204,12 @@ describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVer
 });
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `npm run test:unit -- prompts/__tests__/registry`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Write the registry**
+- [x] **Step 3: Write the registry**
 
 `apps/server/src/infra/ai/prompts/index.ts`:
 
@@ -1260,7 +1260,7 @@ export function promptVersionsForPhase(phase: ConversationPhase): Record<string,
 }
 ```
 
-- [ ] **Step 4: Stamp real versions in `persist`**
+- [x] **Step 4: Stamp real versions in `persist`**
 
 In `persist.node.ts:26` replace the placeholder with `const promptVersions = promptVersionsForPhase(phase);` (import from `@infra/ai/prompts`; delete the "P0 placeholder" comment). In `persist.node.unit.test.ts:35` replace the `v0` expectation with:
 
@@ -1268,7 +1268,7 @@ In `persist.node.ts:26` replace the placeholder with `const promptVersions = pro
     expect(record.promptVersions).toMatchObject({ 'phase.chat': 'v1', 'directive.identity': 'v1', 'block.summary_frame': 'v1' });
 ```
 
-- [ ] **Step 5: Run and commit**
+- [x] **Step 5: Run and commit**
 
 Run: `npm run test:unit -- --ci && npm run type-check && npm run lint`
 Expected: green.
@@ -1303,7 +1303,7 @@ export function contextsForModule(moduleId: string, fixture: EvalFixture): unkno
 // block.summary_frame → { previousSummary: FIXTURE_SUMMARY }; block.post_tool_nudge → {}
 ```
 
-- [ ] **Step 1: Write the failing L0 tests**
+- [x] **Step 1: Write the failing L0 tests**
 
 Add to `evals/levels/__tests__/l0.unit.test.ts`:
 
@@ -1327,12 +1327,12 @@ Add to `evals/levels/__tests__/l0.unit.test.ts`:
 
 (`checkSections(moduleId, fixtureName, renderedIds, requiredIds): CheckResult[]` is the new pure check; `runL0` keeps its signature but `--phase` now filters by module id prefix: `chat` → `phase.chat`, `all` → everything.)
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 Run: `npm run test:unit -- l0.unit`
 Expected: FAIL — `checkSections` not exported; `summarizer/...` case absent.
 
-- [ ] **Step 3: Rewrite `renderPrompt`/`runL0` over the registry**
+- [x] **Step 3: Rewrite `renderPrompt`/`runL0` over the registry**
 
 In `evals/levels/l0.ts`:
 
@@ -1385,12 +1385,12 @@ export async function runL0(phaseArg: string): Promise<CheckResult[]> {
 
 `PHASE_TOKEN_BUDGET` keys become module ids (`'phase.chat': 4000`, …) plus `'summarizer': 2000` and `'block.*'` fall through to the default `8000` (they are tiny). Update the headroom comment with the measured numbers from this run. `checkRenderedPrompt(moduleId, …)` reads the budget by module id.
 
-- [ ] **Step 4: Run L0 and its tests**
+- [x] **Step 4: Run L0 and its tests**
 
 Run: `npm run test:unit -- l0.unit && npm run evals -- --level L0 && npm run evals -- --level L0 --phase chat`
 Expected: tests green; full L0 reports 10 modules × 3 fixtures × 4 checks = 120 checks, all passed; `--phase chat` reports 12.
 
-- [ ] **Step 5: Add the ESLint rail**
+- [x] **Step 5: Add the ESLint rail**
 
 In `apps/server/eslint.config.js` add a config object after the main `src/**` block:
 
@@ -1421,7 +1421,7 @@ In `apps/server/eslint.config.js` add a config object after the main `src/**` bl
 Run: `npm run lint`
 Expected: clean (Task 4 removed every offender). Prove the rail bites: temporarily add `new SystemMessage('x')` to `chat.subgraph.ts`, run `npm run lint`, expect the error, revert.
 
-- [ ] **Step 6: Add the grep test (belt and braces — catches string concatenation the selector misses)**
+- [x] **Step 6: Add the grep test (belt and braces — catches string concatenation the selector misses)**
 
 Create `apps/server/evals/levels/__tests__/no-inline-prompts.unit.test.ts`:
 
@@ -1461,7 +1461,7 @@ describe('no inline prompt text outside src/infra/ai/prompts (ADR-0013 §5, BR-L
 Run: `npm run test:unit -- no-inline-prompts`
 Expected: PASS.
 
-- [ ] **Step 7: Inventory completion check and commit**
+- [x] **Step 7: Inventory completion check and commit**
 
 Run:
 
