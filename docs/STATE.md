@@ -15,7 +15,7 @@ _Generated 2026-09-16 from docs/superpowers/plans/ + git. Never hand-edit; regen
 — none —
 
 **Planned**
-— none —
+- `refactor-p2-context-assembler.md` — Refactor P2 — Context Assembler Implementation Plan
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
@@ -61,8 +61,14 @@ _Generated 2026-09-16 from docs/superpowers/plans/ + git. Never hand-edit; regen
    both v0 and v1 — clearing them needs wording changes, which P2's zero-wording-change
    constraint forbids; that is future prompt-version work (new vN modules per
    PROMPT_EVAL_FRAMEWORK §8), not a refactor task. Next:
-   `refactor-p2-context-assembler` (item 3, AC-1323) — plan file to be written against the
-   merged registry shapes.
+   `refactor-p2-context-assembler` (item 3, AC-1323) — **plan written 2026-09-16**
+   (`docs/superpowers/plans/refactor-p2-context-assembler.md`, `After:
+   refactor-p2-prompt-modules`): one assembler + per-phase layouts on the registry,
+   `budgetReport` on every run row, token estimator moved into `src`; byte-identity
+   guarded by 15 message-assembly snapshots captured before the wiring. Its "Decisions
+   taken by this plan" table lists five calls the durable specs do not settle (report
+   transport via run-metrics, last-assembly-wins, rendered-string input, layout replaces
+   `blocks`, tool-results helper moves) — owner may overrule before dispatch.
 2. Then P3 → P4/P5 → P6 → P7 per the master plan phase map.
 3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
    the code aligned to it, ESLint keeping it that way. Independent of the P0 chain;
@@ -79,6 +85,20 @@ _Generated 2026-09-16 from docs/superpowers/plans/ + git. Never hand-edit; regen
   input: summariser→`structured` deferred to P4; `prompts/blocks/` accepted as an
   ADR-0013 §5.1 layout extension; the `PlanningView` auto-recommend call is removed as
   part of P1 (the mini-app stays frozen otherwise).
+- **Memory model decisions by the owner, 2026-09-17** (to be folded into ADR-0013 at P4/P6
+  planning; the ADR text is not yet amended):
+  - One chat across the app; phases differ only by prompt, tool set (phase tools + shared
+    tools) and context loaders. No per-phase message layouts survive P4.
+  - Episode summaries are produced at compaction (phase transition, inactivity gap, budget
+    overflow); summaries are independent per episode, not rolling; facts (weights, reps,
+    session state) never come from a summary, only from domain tables.
+  - **Long-term user facts are extracted only at summarisation**, from the summariser's
+    structured output, via an idempotent upsert with a confirmation counter. Until an
+    episode is compacted the fact lives in the `messages` channel and needs no table.
+    Consequence: the P6 `remember_fact` tool (ADR-0013 D-14) is dropped; `user_facts` stays.
+  - Phase transition is a typed in-process event raised by `commit` (compaction, session
+    activation/close, run log consume it); a per-user run mutex (D-12) guards double-sends.
+  - Trivially short episodes are trimmed without a summary (threshold to be set in P4).
 - ADR-0002 divergence **resolved 2026-09-13** by owner call: ADR-0002's Decision section
   is historical context; the live interface-layout rule is `ARCHITECTURE.md`
   § Interface Organization Principles. Both files now say so.
