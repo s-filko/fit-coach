@@ -103,6 +103,12 @@ Rules:
 - [ ] **Inline `setNumericField`** in llm-profiles.ts (one call site; the field parameter
   splits the body in two — the plan's own snippet had the branches inline). Source:
   refactor-P1 close-out review R2 (2026-09-16).
+- [ ] **Integration runner exits 134 after an all-green run**: `RUN_DB_TESTS=1
+  npm run test:integration` (apps/server) crashes in jest global teardown
+  (`src/app/test/teardown.ts`, DB-pool close) with libc++ `mutex lock failed` AFTER
+  printing 122/122 passed — the non-zero exit can fail CI/cleanup even when tests pass.
+  Reproduced on clean `dev`, pre-existing, not a P2 regression. Source: refactor-P2
+  Task 8 verification (2026-09-16).
 - [ ] L0 eval checks named by `PROMPT_EVAL_FRAMEWORK.md` §4.1 but not implemented in the
   P0 harness: version discipline, message-catalog completeness (section presence shipped
   in refactor-p2-prompt-modules). Both need artefacts the harness does not build yet —
