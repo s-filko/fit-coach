@@ -95,8 +95,17 @@ async function renderPrompt(phase: string, fixture: EvalFixture): Promise<string
   const user = toUser(fixture);
   switch (phase) {
     case 'registration': {
-      const { buildRegistrationSystemPrompt } = await import('@infra/ai/graph/nodes/registration.node');
-      return buildRegistrationSystemPrompt(user);
+      const { compose } = await import('@infra/ai/prompts/compose');
+      const { REGISTRATION_PROMPT } = await import('@infra/ai/prompts/phases/registration');
+      return compose(
+        REGISTRATION_PROMPT.current.render({
+          now: FIXED_NOW,
+          timezone: user.timezone ?? null,
+          client: 'telegram',
+          user,
+          lastMessageTime: null,
+        }),
+      );
     }
     case 'chat': {
       const { buildChatSystemPrompt } = await import('@infra/ai/graph/nodes/chat.node');
