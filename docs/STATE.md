@@ -44,7 +44,8 @@ _Generated 2026-09-16 from docs/superpowers/plans/ + git. Never hand-edit; regen
   quality gate `PROMPT_EVAL_FRAMEWORK.md`. **P0 is complete (2026-09-15)**: all six plans
   merged; the `v0` baseline is frozen at `evals/baselines/v0/` (seeded-harness re-freeze,
   direct-Z.AI route). **P1 is complete (2026-09-16)**: legacy LLM path retired, merged via PR #14,
-  deployed to dev. **P2 (`refactor-p2-prompt-modules`) is in progress.**
+  deployed to dev. **P2 (`refactor-p2-prompt-modules`) is complete (2026-09-16)**: all
+  model-facing text lives in versioned prompt modules, review clean.
 - **Architecture/hygiene backlog** — `PLAN-architecture-refactor-backlog.md` (`HB-##` items).
 - **Global backlog** — `BACKLOG.md`: permanent parking lot of unplanned ideas/findings/
   wishes; top entries are candidates for *Next* below (intake via the `backlog` skill).
