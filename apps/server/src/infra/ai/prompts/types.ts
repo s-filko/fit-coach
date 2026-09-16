@@ -28,3 +28,9 @@ export interface PromptModule<TCtx> {
   /** Pure (BR-LLM-007): no I/O, no Date.now(). */
   render(ctx: TCtx): Section[];
 }
+
+/** The phase's current module plus its section contract (L0 required-sections check). */
+export interface PhasePromptEntry<TCtx> {
+  current: PromptModule<TCtx>;
+  requiredSections: readonly string[];
+}

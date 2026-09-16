@@ -12,11 +12,12 @@ import type { User } from '@domain/user/services/user.service';
 
 import { buildDedupToolNode } from '@infra/ai/graph/dedup-tool-node';
 import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
-import { buildPlanCreationSystemPrompt } from '@infra/ai/graph/nodes/plan-creation.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildPlanCreationTools } from '@infra/ai/graph/tools/plan-creation.tools';
 import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
+import { compose } from '@infra/ai/prompts/compose';
+import { PLAN_CREATION_PROMPT } from '@infra/ai/prompts/phases/plan_creation';
 
 export interface PlanCreationSubgraphDeps {
   userService: IUserService;
@@ -66,7 +67,16 @@ export function buildPlanCreationSubgraph(deps: PlanCreationSubgraphDeps) {
       contextService.getLatestSummary(userId),
     ]);
 
-    const systemPrompt = buildPlanCreationSystemPrompt(freshUser ?? user);
+    const promptUser = freshUser ?? user;
+    const systemPrompt = compose(
+      PLAN_CREATION_PROMPT.current.render({
+        now: new Date(),
+        timezone: promptUser?.timezone ?? null,
+        client: 'telegram',
+        user: promptUser,
+        lastMessageTime: null,
+      }),
+    );
 
     const inFlightMessages = state.messages ?? [];
 

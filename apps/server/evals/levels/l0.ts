@@ -103,8 +103,17 @@ async function renderPrompt(phase: string, fixture: EvalFixture): Promise<string
       return buildChatSystemPrompt(user, fixture.hasActivePlan ?? false, [], null);
     }
     case 'plan_creation': {
-      const { buildPlanCreationSystemPrompt } = await import('@infra/ai/graph/nodes/plan-creation.node');
-      return buildPlanCreationSystemPrompt(user);
+      const { compose } = await import('@infra/ai/prompts/compose');
+      const { PLAN_CREATION_PROMPT } = await import('@infra/ai/prompts/phases/plan_creation');
+      return compose(
+        PLAN_CREATION_PROMPT.current.render({
+          now: FIXED_NOW,
+          timezone: user.timezone ?? null,
+          client: 'telegram',
+          user,
+          lastMessageTime: null,
+        }),
+      );
     }
     case 'session_planning': {
       const { buildSessionPlanningSystemPrompt } = await import('@infra/ai/graph/nodes/session-planning.node');
