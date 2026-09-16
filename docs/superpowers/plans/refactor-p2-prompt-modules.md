@@ -1505,15 +1505,15 @@ Fill in "## AC-1322 result" with date, git SHA, model, `n`, and the table.
 
 ### Task 8: Docs reconcile and close-out
 
-- [ ] **Step 1: `docs/ARCHITECTURE.md` module layout**
+- [x] **Step 1: `docs/ARCHITECTURE.md` module layout**
 
 Under `infra/ai/` (around line 48-60) add the `prompts/` tree exactly as it now exists (`directives/`, `phases/<phase>/{v1.ts,index.ts}`, `blocks/`, `summarizer/`, `compose.ts`, `types.ts`, `index.ts`) and remove the `nodes/*.node.ts` prompt-builder entries and `prompt-directives.ts`.
 
-- [ ] **Step 2: `docs/CONTRIBUTING_AI.md` § "Adjust Registration Flow / Prompts"**
+- [x] **Step 2: `docs/CONTRIBUTING_AI.md` § "Adjust Registration Flow / Prompts"**
 
 Replace the path `apps/server/src/infra/ai/graph/nodes/registration.node.ts:1 (system prompt)` with `apps/server/src/infra/ai/prompts/phases/registration/vN.ts` and add one sentence: "Prompt changes follow `docs/PROMPT_EVAL_FRAMEWORK.md` §8 (new version file, keep the old one, run L1 for the phase) — recommended from P2, mandatory after P7."
 
-- [ ] **Step 3: Full verification**
+- [x] **Step 3: Full verification**
 
 ```bash
 npm run check-all && npm run test:unit -- --ci && npm run evals -- --level L0
