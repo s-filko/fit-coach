@@ -1,8 +1,5 @@
-import type { SessionPlanningContextData } from '@domain/training/services/session-planning-context.builder';
-import type { WorkoutSessionWithDetails } from '@domain/training/types';
-import type { User } from '@domain/user/services/user.service';
-
 import { ALL_FIXTURES } from '../fixtures/personas';
+import { FIXED_NOW, buildFixtureSession, buildSessionPlanningContext, toUser } from '../fixtures/prompt-contexts';
 import type { CheckResult } from '../lib/reporter';
 import { estimateTokens } from '../lib/token-estimator';
 import type { EvalFixture } from '../schema/case.schema';
@@ -89,52 +86,10 @@ export function checkRenderedPrompt(phase: string, fixtureName: string, rendered
 }
 
 /**
- * Maps a fixture persona onto the production `User` domain type. The fixture
- * schema deliberately mirrors it, so this is a narrowing, not a translation.
+ * Maps a fixture persona onto the production `User` domain type, builds fixture
+ * sessions and context data — all shared with the snapshot suite via
+ * evals/fixtures/prompt-contexts.ts.
  */
-function toUser(fixture: EvalFixture): User {
-  const { registrationCompleted, ...profile } = fixture.user;
-  return {
-    id: 'eval-user-1',
-    profileStatus: registrationCompleted === true ? 'complete' : 'collecting',
-    ...profile,
-  };
-}
-
-/**
- * A minimal but structurally complete `WorkoutSessionWithDetails`, needed by
- * buildTrainingSystemPrompt. Dates are fixed so the rendered prompt is stable
- * except for relative-time phrasing.
- */
-function buildFixtureSession(fixture: EvalFixture): WorkoutSessionWithDetails {
-  const now = new Date();
-  const active = fixture.activeSession as { id?: string; sessionKey?: string } | undefined;
-  return {
-    id: active?.id ?? 'eval-session-1',
-    userId: 'eval-user-1',
-    planId: 'eval-plan-1',
-    sessionKey: active?.sessionKey ?? 'Upper A',
-    status: 'in_progress',
-    startedAt: now,
-    completedAt: null,
-    durationMinutes: null,
-    userContextJson: null,
-    sessionPlanJson: null,
-    lastActivityAt: now,
-    autoCloseReason: null,
-    createdAt: now,
-    updatedAt: now,
-    exercises: [],
-  };
-}
-
-function buildSessionPlanningContext(fixture: EvalFixture): SessionPlanningContextData {
-  return {
-    activePlan: null,
-    recentSessions: fixture.activeSession ? [buildFixtureSession(fixture)] : [],
-    daysSinceLastWorkout: fixture.activeSession ? 0 : null,
-  };
-}
 
 async function renderPrompt(phase: string, fixture: EvalFixture): Promise<string> {
   const user = toUser(fixture);
@@ -153,11 +108,11 @@ async function renderPrompt(phase: string, fixture: EvalFixture): Promise<string
     }
     case 'session_planning': {
       const { buildSessionPlanningSystemPrompt } = await import('@infra/ai/graph/nodes/session-planning.node');
-      return buildSessionPlanningSystemPrompt(user, buildSessionPlanningContext(fixture));
+      return buildSessionPlanningSystemPrompt(user, buildSessionPlanningContext(fixture, FIXED_NOW));
     }
     case 'training': {
       const { buildTrainingSystemPrompt } = await import('@infra/ai/graph/nodes/training.node');
-      return buildTrainingSystemPrompt(user, buildFixtureSession(fixture), null);
+      return buildTrainingSystemPrompt(user, buildFixtureSession(fixture, FIXED_NOW), null);
     }
     default:
       throw new Error(`No L0 renderer wired for phase ${phase}`);

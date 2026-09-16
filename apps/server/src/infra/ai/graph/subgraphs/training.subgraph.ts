@@ -139,7 +139,7 @@ const LLM_ERROR_RETRY_BUDGET = 1;
  * a factual, structured source to cite in its reply — preventing hallucinated
  * "I logged..." confirmations when no tool was actually called.
  */
-function buildToolResultsInjection(toolMessages: ToolMessage[]): string {
+export function buildToolResultsInjection(toolMessages: ToolMessage[]): string {
   const lines = toolMessages.map(m => {
     const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
     const isError =
