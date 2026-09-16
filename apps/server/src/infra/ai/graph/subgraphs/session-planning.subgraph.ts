@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import { AIMessage, HumanMessage, mergeMessageRuns, SystemMessage } from '@langchain/core/messages';
+import { AIMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
 import { toolsCondition } from '@langchain/langgraph/prebuilt';
@@ -17,15 +17,16 @@ import { SessionPlanningContextBuilder } from '@domain/training/services/session
 import type { IUserService } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
 
+import { assembleContext } from '@infra/ai/context/assemble-context';
 import { buildDedupToolNode } from '@infra/ai/graph/dedup-tool-node';
 import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildSessionPlanningTools } from '@infra/ai/graph/tools/session-planning.tools';
 import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
-import { renderBlock, SUMMARY_FRAME_V1 } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
 import { SESSION_PLANNING_PROMPT } from '@infra/ai/prompts/phases/session_planning';
+import { attachBudgetReport } from '@infra/ai/run-metrics';
 
 export interface SessionPlanningSubgraphDeps {
   userService: IUserService;
@@ -106,19 +107,15 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
       }),
     );
 
-    const inFlightMessages = state.messages ?? [];
-
-    const summaryMessages = previousSummary
-      ? [new SystemMessage(renderBlock(SUMMARY_FRAME_V1, { previousSummary }))]
-      : [];
-
-    const llmMessages = mergeMessageRuns([
-      new SystemMessage(systemPrompt),
-      ...summaryMessages,
-      ...history.map(m => (m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content))),
-      new HumanMessage(userMessage),
-      ...inFlightMessages,
-    ]);
+    const { messages: llmMessages, budgetReport } = assembleContext({
+      phase: 'session_planning',
+      systemPrompt,
+      previousSummary,
+      history,
+      userMessage,
+      inFlight: state.messages ?? [],
+    });
+    attachBudgetReport(config.metadata?.['runId'] as string, budgetReport);
 
     const response = await invokeWithRetry(model, llmMessages, config);
 

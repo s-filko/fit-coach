@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import { AIMessage, HumanMessage, mergeMessageRuns, SystemMessage } from '@langchain/core/messages';
+import { AIMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
 import { ToolNode, toolsCondition } from '@langchain/langgraph/prebuilt';
@@ -9,12 +9,14 @@ import { IConversationContextService } from '@domain/conversation/ports';
 import type { IUserService } from '@domain/user/ports';
 import { User } from '@domain/user/services/user.service';
 
+import { assembleContext } from '@infra/ai/context/assemble-context';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildRegistrationTools } from '@infra/ai/graph/tools/registration.tools';
 import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
 import { compose } from '@infra/ai/prompts/compose';
 import { REGISTRATION_PROMPT } from '@infra/ai/prompts/phases/registration';
+import { attachBudgetReport } from '@infra/ai/run-metrics';
 
 export interface RegistrationSubgraphDeps {
   userService: IUserService;
@@ -70,14 +72,14 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
     // state.messages holds AIMessage(tool_calls) + ToolMessages from the current turn.
     // These are NOT in DB history yet (persist runs after subgraph finishes).
     // Including them lets the LLM see tool results and stop calling tools.
-    const inFlightMessages = state.messages ?? [];
-
-    const llmMessages = mergeMessageRuns([
-      new SystemMessage(systemPrompt),
-      ...history.map(m => (m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content))),
-      new HumanMessage(userMessage),
-      ...inFlightMessages,
-    ]);
+    const { messages: llmMessages, budgetReport } = assembleContext({
+      phase: 'registration',
+      systemPrompt,
+      history,
+      userMessage,
+      inFlight: state.messages ?? [],
+    });
+    attachBudgetReport(config.metadata?.['runId'] as string, budgetReport);
 
     // Pass the node's LangGraph config through so the LLM callback handler sees
     // metadata.runId (run metrics) and metadata.userId (debug logs) — metadata is

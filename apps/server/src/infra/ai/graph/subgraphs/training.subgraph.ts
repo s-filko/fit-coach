@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessage, ToolMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
 import { toolsCondition } from '@langchain/langgraph/prebuilt';
@@ -15,15 +15,15 @@ import type {
 import type { IUserService } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
 
-import { renderToolResults } from '@infra/ai/context/tool-results';
+import { assembleContext } from '@infra/ai/context/assemble-context';
 import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { buildTrainingTools, LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '@infra/ai/graph/tools/training.tools';
 import { getModel } from '@infra/ai/model.factory';
-import { HISTORY_FRAME_V1, renderBlock, SUMMARY_FRAME_V1 } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
 import { TRAINING_PROMPT } from '@infra/ai/prompts/phases/training';
+import { attachBudgetReport } from '@infra/ai/run-metrics';
 
 import { createLogger } from '@shared/logger';
 
@@ -345,28 +345,15 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
 
       const model = baseModel.bindTools(availableTools);
 
-      const toolMessages = inFlightMessages.filter((m): m is ToolMessage => m instanceof ToolMessage);
-      const toolResultsInjection = toolMessages.length > 0 ? renderToolResults(toolMessages) : null;
-
-      const summaryBlock = previousSummary
-        ? [new SystemMessage(renderBlock(SUMMARY_FRAME_V1, { previousSummary }))]
-        : [];
-
-      const llmMessages = [
-        new SystemMessage(systemPrompt),
-        ...summaryBlock,
-        new SystemMessage(
-          renderBlock(HISTORY_FRAME_V1, {
-            history: history.map(m => ({
-              role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
-              content: m.content,
-            })),
-          }),
-        ),
-        new HumanMessage(userMessage),
-        ...inFlightMessages,
-        ...(toolResultsInjection ? [new SystemMessage(toolResultsInjection)] : []),
-      ];
+      const { messages: llmMessages, budgetReport } = assembleContext({
+        phase: 'training',
+        systemPrompt,
+        previousSummary,
+        history,
+        userMessage,
+        inFlight: inFlightMessages,
+      });
+      attachBudgetReport(config.metadata?.['runId'] as string, budgetReport);
 
       const response = await invokeWithRetry(model, llmMessages, config);
 
