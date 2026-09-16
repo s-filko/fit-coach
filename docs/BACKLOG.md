@@ -271,15 +271,11 @@ Rules:
 
 P2 close-out review batch (refactor-p2-prompt-modules, 2026-09-16):
 
-- [ ] **Registry `blocks` arrays must not survive AC-1323**: `prompts/index.ts` per-phase
-  `blocks` duplicate message-assembly knowledge that independently lives in the five
-  subgraphs (e.g. chat.subgraph still injects `SUMMARY_FRAME_V1` directly) — two sources of
-  truth for "which blocks a phase injects" can drift until refactor-p2-context-assembler
-  consumes the registry; plan-sanctioned transitional shape. Source: P2 review R1.
-- [ ] **Extend the inline-prompt rails to future infra dirs**: the ESLint config globs and
-  the grep test's `graphDir` police only `src/infra/ai/graph/**` + `src/infra/ai/*.ts`;
-  `infra/ai/context/` and `infra/ai/messages/` (ADR-0013 §11) would escape both rails once
-  created. Source: P2 review R1.
+- [ ] **Extend the inline-prompt rails to `infra/ai/messages`**: the ESLint config globs
+  and the grep test now police `src/infra/ai/graph/**` + `src/infra/ai/*.ts` +
+  `src/infra/ai/context/**` (covered by refactor-p2-context-assembler, 2026-09-17);
+  `infra/ai/messages/` (ADR-0013 §11) would still escape both rails once created — cover
+  it when P3 creates the directory. Source: P2 review R1.
 - [ ] **`User` type imported from a service module**: `prompts/types.ts` (and
   registration/chat/training v1) import `User` from `@domain/user/services/user.service`
   rather than a dedicated domain type module — type-only so the dependency still points
@@ -300,8 +296,7 @@ P2 close-out review batch (refactor-p2-prompt-modules, 2026-09-16):
   Source: P2 review R2.
 - [ ] **Small P2 duplications**: 11-line profile block + `=== CLIENT PROFILE ===` wrapper in
   plan_creation/v1.ts:68 = session_planning/v1.ts:212 (moved verbatim; pairs with
-  context-assembler); role-narrowing lambda in phase-summary.node.ts:34 =
-  training.subgraph.ts:378; magic timestamp 2026-09-12T08:00Z duplicated between
+  context-assembler); magic timestamp 2026-09-12T08:00Z duplicated between
   prompt-snapshots.unit.test.ts:32 and prompt-contexts.ts:62 (must stay in sync for
   AC-1321/L0 agreement — export one constant); chat v1 test `makeUser` is the sixth copy of
   the test user factory. Source: P2 review R2.

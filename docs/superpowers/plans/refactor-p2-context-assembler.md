@@ -415,7 +415,7 @@ WHERE created_at > now() - interval '1 hour' AND budget_report IS NULL AND model
 Paste both outputs into this plan under **AC-1323 result**. Also grep `docker logs fitcoach-dev-server` for one `Conversation run recorded` line and confirm it carries `budgetReport`.
 
 - [ ] **Step 3: The ADR-0013 §3.4 measurement** (master plan P2 Notes): record `avg_system` and the max for `session_planning` and `training` from the query above under **§3.4 measurement**, next to the L0 fixture numbers (`session_planning` fixtures render at 2199–2216 estimated tokens per `evals/levels/l0.ts`; the hypothesis is 6–10k with a real plan). This number sets P4's budget defaults — write it where P4's planner will look: this plan and the PR description.
-- [ ] **Step 4: Docs reconcile** (pre-approved factual bucket; anything else → owner):
+- [x] **Step 4: Docs reconcile** (pre-approved factual bucket; anything else → owner):
   - `docs/PROMPT_EVAL_FRAMEWORK.md` §4.2: "Collect: … `budgetReport`" is now true; the structural bullet becomes "`budget-report-present` implemented; `budgetReport.history ≤ budget.history` and orphan-tool-message checks still deferred (budgets are P4)".
   - `docs/CONTRIBUTING_AI.md` ("where prompts live" pointers around line 130): add the assembler — "message order and token accounting: `src/infra/ai/context/assemble-context.ts`; per-phase layout on `src/infra/ai/prompts/index.ts`".
   - `docs/BACKLOG.md`: tick/close "Registry `blocks` arrays must not survive AC-1323" and, for the `infra/ai/context` part, "Extend the inline-prompt rails to future infra dirs" (leave the `infra/ai/messages` part open, P3); note on "Small P2 duplications" that the role-narrowing lambda now has one home on the assembly side.

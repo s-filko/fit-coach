@@ -130,6 +130,7 @@ code review. The division of roles and conflict rules are defined in
    - `apps/server/src/infra/ai/prompts/phases/registration/vN.ts` (system prompt module)
    - Prompt changes follow `docs/PROMPT_EVAL_FRAMEWORK.md` §8 (new version file, keep the old one, run L1 for the phase) — recommended from P2, mandatory after P7.
    - `apps/server/src/infra/ai/graph/tools/registration.tools.ts:1` (save_profile_fields / complete_registration tools)
+   - Message order and token accounting: `apps/server/src/infra/ai/context/assemble-context.ts` (the context assembler); per-phase layout on `apps/server/src/infra/ai/prompts/index.ts`.
 3) Update profile-field validation:
    - `apps/server/src/domain/user/services/registration.validation.ts:1`
 4) Keep error format and logging consistent; add/adjust tests accordingly.
