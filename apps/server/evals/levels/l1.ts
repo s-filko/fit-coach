@@ -43,6 +43,14 @@ export function assertCase(testCase: EvalCase, observation: CaseObservation): Ch
   }
   add('runs-without-throwing', true);
 
+  // ADR-0013 §3.4 reporting half, §4.2 "Collect … budgetReport": every agent-backed
+  // run must have attached its context budget report (positive estimated total).
+  add(
+    'budget-report-present',
+    observation.budgetReport !== null && observation.budgetReport.total > 0,
+    observation.budgetReport ? `total ${observation.budgetReport.total}` : 'no budget report attached',
+  );
+
   const called = observation.toolCalls.map(tc => tc.name);
 
   for (const tool of testCase.expect.tools?.must ?? []) {

@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 
+import type { BudgetReport } from '@domain/conversation/ports';
+
 import { buildConversationGraph } from '@infra/ai/graph/conversation.graph';
 
 import type { EvalCase } from '../schema/case.schema';
@@ -14,6 +16,7 @@ export interface CaseObservation {
   transition: string | null;
   outcome: string;
   threw: string | null;
+  budgetReport: BudgetReport | null;
 }
 
 interface ObservedToolCall {
@@ -70,6 +73,7 @@ const EMPTY_OBSERVATION: CaseObservation = {
   transition: null,
   outcome: 'core_error',
   threw: null,
+  budgetReport: null,
 };
 
 export async function runCase(testCase: EvalCase): Promise<CaseObservation> {
@@ -92,6 +96,10 @@ export async function runCase(testCase: EvalCase): Promise<CaseObservation> {
       },
       {
         configurable: { thread_id: `${testCase.id}-${runId}`, userId, runId },
+        // Same channel production uses: the agentNode reads config.metadata?.['runId']
+        // to attach the context budget report (ADR-0013 §3.4). Without it the report
+        // is never attached in evals.
+        metadata: { runId, userId },
         callbacks: [recorder],
         recursionLimit: 50,
       },
@@ -109,6 +117,7 @@ export async function runCase(testCase: EvalCase): Promise<CaseObservation> {
       transition: recordedRuns[0]?.transition?.toPhase ?? null,
       outcome: recordedRuns[0]?.outcome ?? 'ok',
       threw: null,
+      budgetReport: recordedRuns[0]?.budgetReport ?? null,
     };
   } catch (err) {
     return { ...EMPTY_OBSERVATION, threw: err instanceof Error ? err.message : String(err) };

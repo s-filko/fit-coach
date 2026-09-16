@@ -1,3 +1,5 @@
+import type { BudgetReport } from '@domain/conversation/ports';
+
 import type { CaseObservation } from '../../lib/run-case';
 import type { EvalCase } from '../../schema/case.schema';
 import { assertCase } from '../l1';
@@ -12,12 +14,26 @@ const base: EvalCase = {
   expect: {},
 };
 
+const budgetReport: BudgetReport = {
+  estimator: 'chars/4',
+  system: 500,
+  summary: 0,
+  history: 100,
+  user: 20,
+  inFlight: 0,
+  toolResults: 0,
+  total: 620,
+  messages: 3,
+  historyTurns: 1,
+};
+
 const observed = (overrides: Partial<CaseObservation> = {}): CaseObservation => ({
   text: 'Идём в планирование тренировки',
   toolCalls: [{ name: 'request_transition', args: { toPhase: 'session_planning' } }],
   transition: 'session_planning',
   outcome: 'ok',
   threw: null,
+  budgetReport: null,
   ...overrides,
 });
 
@@ -59,6 +75,29 @@ describe('assertCase', () => {
   it('fails everything when the run threw', () => {
     const results = assertCase({ ...base, expect: { tools: { must: ['x'] } } }, observed({ threw: 'boom' }));
     expect(results.some(r => r.check === 'runs-without-throwing' && !r.passed)).toBe(true);
+  });
+
+  it('passes budget-report-present when the observation carries a report with a positive total', () => {
+    const results = assertCase({ ...base, expect: {} }, observed({ budgetReport }));
+    expect(results.find(r => r.check === 'budget-report-present')?.passed).toBe(true);
+  });
+
+  it('fails budget-report-present when no report was attached', () => {
+    const results = assertCase({ ...base, expect: {} }, observed({ budgetReport: null }));
+    expect(results.find(r => r.check === 'budget-report-present')?.passed).toBe(false);
+  });
+
+  it('fails budget-report-present when the report total is zero', () => {
+    const results = assertCase({ ...base, expect: {} }, observed({ budgetReport: { ...budgetReport, total: 0 } }));
+    expect(results.find(r => r.check === 'budget-report-present')?.passed).toBe(false);
+  });
+
+  it('does not add budget-report-present when the run threw', () => {
+    const results = assertCase(
+      { ...base, expect: { tools: { must: ['x'] } } },
+      observed({ threw: 'boom', budgetReport: null }),
+    );
+    expect(results.some(r => r.check === 'budget-report-present')).toBe(false);
   });
 
   it('flags Latin script when the case expects Russian', () => {
