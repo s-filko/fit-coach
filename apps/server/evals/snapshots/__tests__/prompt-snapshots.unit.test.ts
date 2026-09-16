@@ -5,11 +5,11 @@
  */
 import { ToolMessage } from '@langchain/core/messages';
 
-import { buildChatSystemPrompt } from '@infra/ai/graph/nodes/chat.node';
 import { buildSessionPlanningSystemPrompt } from '@infra/ai/graph/nodes/session-planning.node';
 import { buildTrainingSystemPrompt } from '@infra/ai/graph/nodes/training.node';
 import { buildToolResultsInjection } from '@infra/ai/graph/subgraphs/training.subgraph';
 import { compose } from '@infra/ai/prompts/compose';
+import { CHAT_PROMPT } from '@infra/ai/prompts/phases/chat';
 import { PLAN_CREATION_PROMPT } from '@infra/ai/prompts/phases/plan_creation';
 import { REGISTRATION_PROMPT } from '@infra/ai/prompts/phases/registration';
 
@@ -43,7 +43,16 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
     });
 
     it(`phase.chat / ${name}`, () => {
-      expect(buildChatSystemPrompt(user, fixture.hasActivePlan ?? false, [], LAST_MESSAGE_YESTERDAY)).toMatchSnapshot();
+      const ctx = {
+        now: FIXED_NOW,
+        timezone: user.timezone ?? null,
+        client: 'telegram' as const,
+        user,
+        lastMessageTime: LAST_MESSAGE_YESTERDAY,
+        hasActivePlan: fixture.hasActivePlan ?? false,
+        recentSessions: [],
+      };
+      expect(compose(CHAT_PROMPT.current.render(ctx))).toMatchSnapshot();
     });
 
     it(`phase.plan_creation / ${name}`, () => {

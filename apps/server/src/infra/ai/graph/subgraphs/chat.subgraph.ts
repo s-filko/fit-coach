@@ -10,11 +10,12 @@ import type { IWorkoutPlanRepository, IWorkoutSessionRepository } from '@domain/
 import type { IUserService } from '@domain/user/ports';
 import { User } from '@domain/user/services/user.service';
 
-import { buildChatSystemPrompt } from '@infra/ai/graph/nodes/chat.node';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildChatTools } from '@infra/ai/graph/tools/chat.tools';
 import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
+import { compose } from '@infra/ai/prompts/compose';
+import { CHAT_PROMPT } from '@infra/ai/prompts/phases/chat';
 
 export interface ChatSubgraphDeps {
   userService: IUserService;
@@ -60,7 +61,17 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
       contextService.getLastUserMessageTime(userId),
     ]);
 
-    const systemPrompt = buildChatSystemPrompt(user, !!activePlan, recentSessions, lastMessageTime);
+    const systemPrompt = compose(
+      CHAT_PROMPT.current.render({
+        now: new Date(),
+        timezone: user?.timezone ?? null,
+        client: 'telegram',
+        user,
+        lastMessageTime,
+        hasActivePlan: !!activePlan,
+        recentSessions,
+      }),
+    );
 
     const inFlightMessages = state.messages ?? [];
 
