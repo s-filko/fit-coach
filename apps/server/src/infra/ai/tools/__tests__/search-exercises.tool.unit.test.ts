@@ -1,9 +1,9 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
 
+import type { ToolReturn } from '@domain/conversation/tool-outcome';
 import type { IEmbeddingService, IExerciseRepository } from '@domain/training/ports';
 import type { ExerciseWithMuscles } from '@domain/training/types';
 
-import type { ToolReturn } from '@domain/conversation/tool-outcome';
 import { toToolMessage } from '@infra/ai/tools/outcome';
 
 import { buildSearchExercisesTool } from '../search-exercises.tool';

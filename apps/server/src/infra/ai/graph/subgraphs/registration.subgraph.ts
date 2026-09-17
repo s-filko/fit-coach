@@ -12,12 +12,11 @@ import { User } from '@domain/user/services/user.service';
 import { assembleContext } from '@infra/ai/context/assemble-context';
 import { afterTools, buildToolExecutor } from '@infra/ai/graph/tool-executor';
 import { NO_POLICY } from '@infra/ai/graph/tool-policy';
-import { buildRegistrationTools } from '@infra/ai/graph/tools/registration.tools';
-import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
 import { compose } from '@infra/ai/prompts/compose';
 import { REGISTRATION_PROMPT } from '@infra/ai/prompts/phases/registration';
 import { attachBudgetReport } from '@infra/ai/run-metrics';
+import { buildCompleteRegistrationTool, buildSaveProfileFieldsTool, buildSharedTools } from '@infra/ai/tools';
 
 export interface RegistrationSubgraphDeps {
   userService: IUserService;
@@ -38,7 +37,11 @@ type RegistrationSubgraphStateType = typeof RegistrationSubgraphState.State;
 export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
   const { userService, contextService } = deps;
 
-  const tools = [...buildRegistrationTools({ userService }), buildSaveTimezoneTool({ userService })];
+  const tools = [
+    buildSaveProfileFieldsTool({ userService }),
+    buildCompleteRegistrationTool({ userService }),
+    ...buildSharedTools({ userService }),
+  ];
   const toolNode = buildToolExecutor(tools, NO_POLICY);
   const model = getModel().bindTools(tools);
 

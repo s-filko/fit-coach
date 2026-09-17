@@ -7,12 +7,21 @@
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import { toJsonSchema } from '@langchain/core/utils/json_schema';
 
-import { buildChatTools } from '@infra/ai/graph/tools/chat.tools';
-import { buildPlanCreationTools } from '@infra/ai/graph/tools/plan-creation.tools';
-import { buildRegistrationTools } from '@infra/ai/graph/tools/registration.tools';
-import { buildSessionPlanningTools } from '@infra/ai/graph/tools/session-planning.tools';
-import { buildTrainingTools } from '@infra/ai/graph/tools/training.tools';
-import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
+import {
+  buildCompleteCurrentExerciseTool,
+  buildCompleteRegistrationTool,
+  buildDeleteLastSetsTool,
+  buildFinishTrainingTool,
+  buildLogSetTool,
+  buildRequestTransitionTool,
+  buildSaveProfileFieldsTool,
+  buildSaveWorkoutPlanTool,
+  buildSearchExercisesTool,
+  buildSharedTools,
+  buildStartTrainingSessionTool,
+  buildUpdateLastSetTool,
+  buildUpdateProfileTool,
+} from '@infra/ai/tools';
 
 import { COMPLETE_PROFILE } from '../../fixtures/personas';
 import { buildStubDeps } from '../../lib/build-stub-deps';
@@ -27,44 +36,59 @@ type PhaseName = 'registration' | 'chat' | 'plan_creation' | 'session_planning' 
  */
 function phaseTools(phase: PhaseName): StructuredToolInterface[] {
   const { deps } = buildStubDeps(COMPLETE_PROFILE);
+  const shared = () => buildSharedTools({ userService: deps.userService });
   switch (phase) {
     case 'registration':
       return [
-        ...buildRegistrationTools({ userService: deps.userService }),
-        buildSaveTimezoneTool({ userService: deps.userService }),
+        buildSaveProfileFieldsTool({ userService: deps.userService }),
+        buildCompleteRegistrationTool({ userService: deps.userService }),
+        ...shared(),
       ];
     case 'chat':
       return [
-        ...buildChatTools({ userService: deps.userService }),
-        buildSaveTimezoneTool({ userService: deps.userService }),
+        buildUpdateProfileTool({ userService: deps.userService }),
+        buildRequestTransitionTool('chat'),
+        ...shared(),
       ];
     case 'plan_creation':
       return [
-        ...buildPlanCreationTools({
+        buildSearchExercisesTool({
+          embeddingService: deps.embeddingService,
+          exerciseRepository: deps.exerciseRepository,
+        }),
+        buildSaveWorkoutPlanTool({
           workoutPlanRepository: deps.workoutPlanRepo,
           exerciseRepository: deps.exerciseRepository,
-          embeddingService: deps.embeddingService,
         }),
-        buildSaveTimezoneTool({ userService: deps.userService }),
+        buildRequestTransitionTool('plan_creation'),
+        ...shared(),
       ];
     case 'session_planning':
       return [
-        ...buildSessionPlanningTools({
+        buildSearchExercisesTool({
+          embeddingService: deps.embeddingService,
+          exerciseRepository: deps.exerciseRepository,
+        }),
+        buildStartTrainingSessionTool({
           trainingService: deps.trainingService,
           workoutPlanRepository: deps.workoutPlanRepo,
           exerciseRepository: deps.exerciseRepository,
-          embeddingService: deps.embeddingService,
         }),
-        buildSaveTimezoneTool({ userService: deps.userService }),
+        buildRequestTransitionTool('session_planning'),
+        ...shared(),
       ];
     case 'training':
       return [
-        ...buildTrainingTools({
-          trainingService: deps.trainingService,
-          exerciseRepository: deps.exerciseRepository,
+        buildSearchExercisesTool({
           embeddingService: deps.embeddingService,
+          exerciseRepository: deps.exerciseRepository,
         }),
-        buildSaveTimezoneTool({ userService: deps.userService }),
+        buildLogSetTool({ trainingService: deps.trainingService }),
+        buildCompleteCurrentExerciseTool({ trainingService: deps.trainingService }),
+        buildFinishTrainingTool({ trainingService: deps.trainingService }),
+        buildDeleteLastSetsTool({ trainingService: deps.trainingService }),
+        buildUpdateLastSetTool({ trainingService: deps.trainingService }),
+        ...shared(),
       ];
   }
 }

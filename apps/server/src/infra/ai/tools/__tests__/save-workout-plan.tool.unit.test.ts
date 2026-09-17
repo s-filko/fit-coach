@@ -1,10 +1,11 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
 
 import { isToolReturnWithUpdate, type ToolReturn } from '@domain/conversation/tool-outcome';
-import type { IEmbeddingService, IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
+import type { IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
+
 import { toToolMessage } from '@infra/ai/tools/outcome';
 
-import { buildPlanCreationTools } from '../plan-creation.tools';
+import { buildSaveWorkoutPlanTool } from '../save-workout-plan.tool';
 
 // StructuredTool has overloaded .invoke() signatures that TS cannot unify in tests.
 type InvokableTool = {
@@ -102,26 +103,15 @@ const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> =>
     search: jest.fn(),
   }) as unknown as jest.Mocked<IExerciseRepository>;
 
-const makeEmbeddingService = (): jest.Mocked<IEmbeddingService> =>
-  ({
-    embed: jest.fn().mockResolvedValue(new Array(384).fill(0)),
-    embedBatch: jest.fn().mockResolvedValue([]),
-  }) as unknown as jest.Mocked<IEmbeddingService>;
-
-const buildTools = (
-  workoutPlanRepository: jest.Mocked<IWorkoutPlanRepository>,
-  exerciseRepository?: jest.Mocked<IExerciseRepository>,
-) => {
-  const tools = buildPlanCreationTools({
+const buildTools = (workoutPlanRepository: jest.Mocked<IWorkoutPlanRepository>) => {
+  const saveWorkoutPlan = buildSaveWorkoutPlanTool({
     workoutPlanRepository,
-    exerciseRepository: exerciseRepository ?? makeExerciseRepository(),
-    embeddingService: makeEmbeddingService(),
-  }) as unknown as InvokableTool[];
-  const byName = (name: string) => tools.find((t: { name?: string }) => (t as { name?: string }).name === name)!;
-  return { byName, saveWorkoutPlan: byName('save_workout_plan'), requestTransition: byName('request_transition') };
+    exerciseRepository: makeExerciseRepository(),
+  }) as unknown as InvokableTool;
+  return { saveWorkoutPlan };
 };
 
-describe('plan-creation.tools — save_workout_plan', () => {
+describe('save-workout-plan.tool — save_workout_plan', () => {
   it('returns a ToolReturn with update, never a Command object', async () => {
     const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo());
 
@@ -192,68 +182,5 @@ describe('plan-creation.tools — save_workout_plan', () => {
     const result = (await saveWorkoutPlan.invoke(MINIMAL_PLAN, { configurable: {} })) as ToolReturn;
 
     expect(isToolReturnWithUpdate(result)).toBe(false);
-  });
-});
-
-describe('plan-creation.tools — request_transition', () => {
-  it('returns a ToolReturn with update, never a Command object', async () => {
-    const { requestTransition } = buildTools(makeWorkoutPlanRepo());
-
-    const result = (await requestTransition.invoke({ toPhase: 'chat' }, makeConfig())) as ToolReturn;
-
-    expect(result as object).not.toHaveProperty('lc_direct_tool_output');
-    expect(isToolReturnWithUpdate(result)).toBe(true);
-  });
-
-  it('requests pendingTransition with toPhase=chat', async () => {
-    const { requestTransition } = buildTools(makeWorkoutPlanRepo());
-
-    const result = (await requestTransition.invoke({ toPhase: 'chat' }, makeConfig('u1'))) as ToolReturn;
-
-    expect(isToolReturnWithUpdate(result) ? result.update.pendingTransition?.toPhase : undefined).toBe('chat');
-  });
-
-  it('requests pendingTransition with optional reason', async () => {
-    const { requestTransition } = buildTools(makeWorkoutPlanRepo());
-
-    const result = (await requestTransition.invoke(
-      { toPhase: 'chat', reason: 'user cancelled' },
-      makeConfig('u1'),
-    )) as ToolReturn;
-
-    expect(isToolReturnWithUpdate(result) ? result.update.pendingTransition?.reason : undefined).toBe('user cancelled');
-  });
-
-  it('returns confirmation string mentioning the target phase', async () => {
-    const { requestTransition } = buildTools(makeWorkoutPlanRepo());
-
-    const result = (await requestTransition.invoke({ toPhase: 'chat' }, makeConfig())) as ToolReturn;
-
-    expect(renderedContent(result)).toContain('chat');
-  });
-
-  it('does NOT call workoutPlanRepository', async () => {
-    const repo = makeWorkoutPlanRepo();
-    const { requestTransition } = buildTools(repo);
-
-    await requestTransition.invoke({ toPhase: 'chat' }, makeConfig());
-
-    expect(repo.create).not.toHaveBeenCalled();
-  });
-
-  it('each invocation requests its own transition — two users do not overwrite each other', async () => {
-    const { requestTransition } = buildTools(makeWorkoutPlanRepo());
-
-    const a = (await requestTransition.invoke(
-      { toPhase: 'chat', reason: 'A cancelled' },
-      makeConfig('userA'),
-    )) as ToolReturn;
-    const b = (await requestTransition.invoke(
-      { toPhase: 'chat', reason: 'B cancelled' },
-      makeConfig('userB'),
-    )) as ToolReturn;
-
-    expect(isToolReturnWithUpdate(a) ? a.update.pendingTransition?.reason : undefined).toBe('A cancelled');
-    expect(isToolReturnWithUpdate(b) ? b.update.pendingTransition?.reason : undefined).toBe('B cancelled');
   });
 });

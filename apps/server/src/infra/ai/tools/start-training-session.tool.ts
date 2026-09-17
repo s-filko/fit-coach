@@ -1,23 +1,14 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { tool } from '@langchain/core/tools';
-import { z } from 'zod';
 
 import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
-import type {
-  IEmbeddingService,
-  IExerciseRepository,
-  ITrainingService,
-  IWorkoutPlanRepository,
-} from '@domain/training/ports';
-import { RecommendedExerciseSchema, SessionRecommendationSchema } from '@domain/training/session-planning.types';
+import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
+import { SessionRecommendationSchema } from '@domain/training/session-planning.types';
 
-import { buildSearchExercisesTool } from '@infra/ai/graph/tools/search-exercises.tool';
-
-export interface SessionPlanningToolsDeps {
+export interface StartTrainingSessionToolDeps {
   trainingService: ITrainingService;
   workoutPlanRepository: IWorkoutPlanRepository;
   exerciseRepository: IExerciseRepository;
-  embeddingService: IEmbeddingService;
 }
 
 const START_TRAINING_SESSION_DESCRIPTION = [
@@ -27,19 +18,10 @@ const START_TRAINING_SESSION_DESCRIPTION = [
   'Include the complete session plan as arguments — it will be stored with the session.',
 ].join(' ');
 
-const REQUEST_TRANSITION_DESCRIPTION = [
-  'Request a phase transition.',
-  'Use "chat" if the user explicitly cancels session planning and wants to go back to chat.',
-].join(' ');
+export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps) {
+  const { trainingService, workoutPlanRepository, exerciseRepository } = deps;
 
-// Re-export schema for use in tests
-export { RecommendedExerciseSchema, SessionRecommendationSchema };
-
-export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
-  const { trainingService, workoutPlanRepository, exerciseRepository, embeddingService } = deps;
-  const searchExercises = buildSearchExercisesTool({ embeddingService, exerciseRepository });
-
-  const startTrainingSession = tool(
+  return tool(
     async (input, config) => {
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
@@ -111,28 +93,4 @@ export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
       schema: SessionRecommendationSchema,
     },
   );
-
-  const requestTransition = tool(
-    async input => ({
-      outcome: ok(
-        `Transition to ${input.toPhase} registered. Write a brief closing message to the user in their language.`,
-      ),
-      update: {
-        pendingTransition: {
-          toPhase: input.toPhase,
-          reason: input.reason ?? 'user_cancelled',
-        },
-      },
-    }),
-    {
-      name: 'request_transition',
-      description: REQUEST_TRANSITION_DESCRIPTION,
-      schema: z.object({
-        toPhase: z.enum(['chat']).describe('Target phase'),
-        reason: z.string().optional().describe('Brief reason for the transition'),
-      }),
-    },
-  );
-
-  return [searchExercises, startTrainingSession, requestTransition];
 }

@@ -21,12 +21,16 @@ import { assembleContext } from '@infra/ai/context/assemble-context';
 import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
 import { afterTools, buildToolExecutor } from '@infra/ai/graph/tool-executor';
 import { type ToolPolicy } from '@infra/ai/graph/tool-policy';
-import { buildSessionPlanningTools } from '@infra/ai/graph/tools/session-planning.tools';
-import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
 import { compose } from '@infra/ai/prompts/compose';
 import { SESSION_PLANNING_PROMPT } from '@infra/ai/prompts/phases/session_planning';
 import { attachBudgetReport } from '@infra/ai/run-metrics';
+import {
+  buildRequestTransitionTool,
+  buildSearchExercisesTool,
+  buildSharedTools,
+  buildStartTrainingSessionTool,
+} from '@infra/ai/tools';
 
 export interface SessionPlanningSubgraphDeps {
   userService: IUserService;
@@ -64,13 +68,12 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
 
   const contextBuilder = new SessionPlanningContextBuilder(workoutPlanRepository, workoutSessionRepository);
 
-  const phaseTools = buildSessionPlanningTools({
-    trainingService,
-    workoutPlanRepository,
-    exerciseRepository,
-    embeddingService,
-  });
-  const tools = [...phaseTools, buildSaveTimezoneTool({ userService })];
+  const phaseTools = [
+    buildSearchExercisesTool({ embeddingService, exerciseRepository }),
+    buildStartTrainingSessionTool({ trainingService, workoutPlanRepository, exerciseRepository }),
+    buildRequestTransitionTool('session_planning'),
+  ];
+  const tools = [...phaseTools, ...buildSharedTools({ userService })];
   // search_exercises dedup runs once per identical args in a batch (was buildDedupToolNode)
   const policy: ToolPolicy = { perTurnDedup: ['search_exercises'], llmErrorBudget: Infinity };
   const toolExecutor = buildToolExecutor(tools, policy);

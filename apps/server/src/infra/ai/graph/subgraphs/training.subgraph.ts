@@ -19,12 +19,19 @@ import { assembleContext } from '@infra/ai/context/assemble-context';
 import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
 import { afterTools, buildToolExecutor } from '@infra/ai/graph/tool-executor';
 import { type ToolPolicy, TRAINING_TOOL_PRIORITY } from '@infra/ai/graph/tool-policy';
-import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
-import { buildTrainingTools } from '@infra/ai/graph/tools/training.tools';
 import { getModel } from '@infra/ai/model.factory';
 import { compose } from '@infra/ai/prompts/compose';
 import { TRAINING_PROMPT } from '@infra/ai/prompts/phases/training';
 import { attachBudgetReport } from '@infra/ai/run-metrics';
+import {
+  buildCompleteCurrentExerciseTool,
+  buildDeleteLastSetsTool,
+  buildFinishTrainingTool,
+  buildLogSetTool,
+  buildSearchExercisesTool,
+  buildSharedTools,
+  buildUpdateLastSetTool,
+} from '@infra/ai/tools';
 
 import { createLogger } from '@shared/logger';
 
@@ -61,12 +68,13 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
     deps;
 
   const tools = [
-    ...buildTrainingTools({
-      trainingService,
-      exerciseRepository,
-      embeddingService,
-    }),
-    buildSaveTimezoneTool({ userService }),
+    buildSearchExercisesTool({ embeddingService, exerciseRepository }),
+    buildLogSetTool({ trainingService }),
+    buildCompleteCurrentExerciseTool({ trainingService }),
+    buildFinishTrainingTool({ trainingService }),
+    buildDeleteLastSetsTool({ trainingService }),
+    buildUpdateLastSetTool({ trainingService }),
+    ...buildSharedTools({ userService }),
   ];
 
   /**

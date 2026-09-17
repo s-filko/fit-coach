@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { ok, userError } from '@domain/conversation/tool-outcome';
 import type { IUserService } from '@domain/user/ports';
 
-export interface ChatToolsDeps {
+export interface UpdateProfileToolDeps {
   userService: IUserService;
 }
 
@@ -15,18 +15,11 @@ const UPDATE_PROFILE_DESCRIPTION = [
   'Only include fields the user actually mentioned.',
 ].join(' ');
 
-const REQUEST_TRANSITION_DESCRIPTION = [
-  'Request a phase transition to another part of the app.',
-  'Use "plan_creation" when user wants to create or update their workout plan.',
-  'Use "session_planning" when user wants to plan or start a workout session.',
-  'Do NOT call this for casual fitness questions — just respond with text.',
-].join(' ');
-
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-export function buildChatTools(deps: ChatToolsDeps) {
+export function buildUpdateProfileTool(deps: UpdateProfileToolDeps) {
   const { userService } = deps;
 
-  const updateProfile = tool(
+  return tool(
     async (input, config) => {
       // configurable is typed as Record<string, unknown> in LangChain
 
@@ -64,26 +57,4 @@ export function buildChatTools(deps: ChatToolsDeps) {
       }),
     },
   );
-
-  const requestTransition = tool(
-    async input => ({
-      outcome: ok(`Transition to ${input.toPhase} requested.`),
-      update: {
-        pendingTransition: {
-          toPhase: input.toPhase,
-          reason: input.reason,
-        },
-      },
-    }),
-    {
-      name: 'request_transition',
-      description: REQUEST_TRANSITION_DESCRIPTION,
-      schema: z.object({
-        toPhase: z.enum(['plan_creation', 'session_planning']).describe('Target phase'),
-        reason: z.string().optional().describe('Brief reason for the transition'),
-      }),
-    },
-  );
-
-  return [updateProfile, requestTransition];
 }

@@ -3,15 +3,12 @@ import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
 import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
-import type { IEmbeddingService, IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
+import type { IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
 import type { MuscleGroup } from '@domain/training/types';
 
-import { buildSearchExercisesTool } from '@infra/ai/graph/tools/search-exercises.tool';
-
-export interface PlanCreationToolsDeps {
+export interface SaveWorkoutPlanToolDeps {
   workoutPlanRepository: IWorkoutPlanRepository;
   exerciseRepository: IExerciseRepository;
-  embeddingService: IEmbeddingService;
 }
 
 const MUSCLE_GROUPS: [MuscleGroup, ...MuscleGroup[]] = [
@@ -84,16 +81,10 @@ const SAVE_WORKOUT_PLAN_DESCRIPTION = [
   'All fields (sessionTemplates, recoveryGuidelines, progressionRules) must be complete.',
 ].join(' ');
 
-const REQUEST_TRANSITION_DESCRIPTION = [
-  'Request a phase transition.',
-  'Use "chat" if the user explicitly cancels plan creation and wants to go back to chat.',
-].join(' ');
+export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
+  const { workoutPlanRepository, exerciseRepository } = deps;
 
-export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
-  const { workoutPlanRepository, exerciseRepository, embeddingService } = deps;
-  const searchExercises = buildSearchExercisesTool({ embeddingService, exerciseRepository });
-
-  const saveWorkoutPlan = tool(
+  return tool(
     async (input, config) => {
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
@@ -154,28 +145,4 @@ export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
       }),
     },
   );
-
-  const requestTransition = tool(
-    async input => ({
-      outcome: ok(
-        `Transition to ${input.toPhase} registered. Write a brief closing message to the user in their language.`,
-      ),
-      update: {
-        pendingTransition: {
-          toPhase: input.toPhase,
-          reason: input.reason ?? 'user_cancelled',
-        },
-      },
-    }),
-    {
-      name: 'request_transition',
-      description: REQUEST_TRANSITION_DESCRIPTION,
-      schema: z.object({
-        toPhase: z.enum(['chat']).describe('Target phase'),
-        reason: z.string().optional().describe('Brief reason for the transition'),
-      }),
-    },
-  );
-
-  return [searchExercises, saveWorkoutPlan, requestTransition];
 }

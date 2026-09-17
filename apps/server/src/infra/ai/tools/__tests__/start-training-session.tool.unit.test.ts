@@ -1,15 +1,11 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
 
 import { isToolReturnWithUpdate, type ToolReturn } from '@domain/conversation/tool-outcome';
-import type {
-  IEmbeddingService,
-  IExerciseRepository,
-  ITrainingService,
-  IWorkoutPlanRepository,
-} from '@domain/training/ports';
+import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
+
 import { toToolMessage } from '@infra/ai/tools/outcome';
 
-import { buildSessionPlanningTools } from '../session-planning.tools';
+import { buildStartTrainingSessionTool } from '../start-training-session.tool';
 
 // StructuredTool has overloaded .invoke() signatures that TS cannot unify in tests.
 type InvokableTool = {
@@ -79,31 +75,19 @@ const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> =>
     search: jest.fn(),
   }) as unknown as jest.Mocked<IExerciseRepository>;
 
-const makeEmbeddingService = (): jest.Mocked<IEmbeddingService> =>
-  ({
-    embed: jest.fn().mockResolvedValue(new Array(384).fill(0)),
-    embedBatch: jest.fn().mockResolvedValue([]),
-  }) as unknown as jest.Mocked<IEmbeddingService>;
-
 const buildTools = (
   trainingService: jest.Mocked<ITrainingService>,
   workoutPlanRepository: jest.Mocked<IWorkoutPlanRepository>,
 ) => {
-  const tools = buildSessionPlanningTools({
+  const startTrainingSession = buildStartTrainingSessionTool({
     trainingService,
     workoutPlanRepository,
     exerciseRepository: makeExerciseRepository(),
-    embeddingService: makeEmbeddingService(),
-  }) as unknown as InvokableTool[];
-  const byName = (name: string) => tools.find((t: { name?: string }) => (t as { name?: string }).name === name)!;
-  return {
-    byName,
-    startTrainingSession: byName('start_training_session'),
-    requestTransition: byName('request_transition'),
-  };
+  }) as unknown as InvokableTool;
+  return { startTrainingSession };
 };
 
-describe('session-planning.tools — start_training_session', () => {
+describe('start-training-session.tool — start_training_session', () => {
   it('returns a ToolReturn with update, never a Command object', async () => {
     const { startTrainingSession } = buildTools(makeTrainingService(), makeWorkoutPlanRepo());
 
@@ -206,7 +190,6 @@ describe('session-planning.tools — start_training_session', () => {
     workoutPlanRepo.findActiveByUserId.mockResolvedValue(null);
     const trainingService = makeTrainingService();
     const { startTrainingSession } = buildTools(trainingService, workoutPlanRepo);
-    void startTrainingSession;
 
     await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig());
 
@@ -228,53 +211,5 @@ describe('session-planning.tools — start_training_session', () => {
 
     expect(isToolReturnWithUpdate(a) ? a.update.activeSessionId : undefined).toBe('session-A');
     expect(isToolReturnWithUpdate(b) ? b.update.activeSessionId : undefined).toBe('session-B');
-  });
-});
-
-describe('session-planning.tools — request_transition', () => {
-  it('returns a ToolReturn with update, never a Command object', async () => {
-    const { requestTransition } = buildTools(makeTrainingService(), makeWorkoutPlanRepo());
-
-    const result = (await requestTransition.invoke({ toPhase: 'chat' }, makeConfig())) as ToolReturn;
-
-    expect(result as object).not.toHaveProperty('lc_direct_tool_output');
-    expect(isToolReturnWithUpdate(result)).toBe(true);
-  });
-
-  it('requests pendingTransition with toPhase=chat', async () => {
-    const { requestTransition } = buildTools(makeTrainingService(), makeWorkoutPlanRepo());
-
-    const result = (await requestTransition.invoke({ toPhase: 'chat' }, makeConfig('u1'))) as ToolReturn;
-
-    expect(isToolReturnWithUpdate(result) ? result.update.pendingTransition?.toPhase : undefined).toBe('chat');
-  });
-
-  it('requests pendingTransition with optional reason', async () => {
-    const { requestTransition } = buildTools(makeTrainingService(), makeWorkoutPlanRepo());
-
-    const result = (await requestTransition.invoke(
-      { toPhase: 'chat', reason: 'user cancelled' },
-      makeConfig('u1'),
-    )) as ToolReturn;
-
-    expect(isToolReturnWithUpdate(result) ? result.update.pendingTransition?.reason : undefined).toBe('user cancelled');
-  });
-
-  it('returns confirmation string mentioning the target phase', async () => {
-    const { requestTransition } = buildTools(makeTrainingService(), makeWorkoutPlanRepo());
-
-    const result = (await requestTransition.invoke({ toPhase: 'chat' }, makeConfig())) as ToolReturn;
-
-    expect(renderedContent(result)).toContain('chat');
-  });
-
-  it('does NOT touch trainingService and requests no activeSessionId', async () => {
-    const trainingService = makeTrainingService();
-    const { requestTransition } = buildTools(trainingService, makeWorkoutPlanRepo());
-
-    const result = (await requestTransition.invoke({ toPhase: 'chat' }, makeConfig())) as ToolReturn;
-
-    expect(trainingService.startSession).not.toHaveBeenCalled();
-    expect(isToolReturnWithUpdate(result) ? result.update.activeSessionId : undefined).toBeUndefined();
   });
 });

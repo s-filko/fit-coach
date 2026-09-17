@@ -13,12 +13,11 @@ import { User } from '@domain/user/services/user.service';
 import { assembleContext } from '@infra/ai/context/assemble-context';
 import { afterTools, buildToolExecutor } from '@infra/ai/graph/tool-executor';
 import { NO_POLICY } from '@infra/ai/graph/tool-policy';
-import { buildChatTools } from '@infra/ai/graph/tools/chat.tools';
-import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
 import { compose } from '@infra/ai/prompts/compose';
 import { CHAT_PROMPT } from '@infra/ai/prompts/phases/chat';
 import { attachBudgetReport } from '@infra/ai/run-metrics';
+import { buildRequestTransitionTool, buildSharedTools, buildUpdateProfileTool } from '@infra/ai/tools';
 
 export interface ChatSubgraphDeps {
   userService: IUserService;
@@ -42,7 +41,11 @@ type ChatSubgraphStateType = typeof ChatSubgraphState.State;
 export function buildChatSubgraph(deps: ChatSubgraphDeps) {
   const { userService, workoutPlanRepo, workoutSessionRepo, contextService } = deps;
 
-  const tools = [...buildChatTools({ userService }), buildSaveTimezoneTool({ userService })];
+  const tools = [
+    buildUpdateProfileTool({ userService }),
+    buildRequestTransitionTool('chat'),
+    ...buildSharedTools({ userService }),
+  ];
   const toolNode = buildToolExecutor(tools, NO_POLICY);
   const model = getModel().bindTools(tools);
 
