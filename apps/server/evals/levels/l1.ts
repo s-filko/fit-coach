@@ -1,8 +1,13 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { buildSearchKey } from '@infra/ai/graph/tool-policy';
+
+import { CostRecorder, type CostRecord } from '../lib/cost-ledger';
 import type { CheckResult } from '../lib/reporter';
 import { type CaseObservation, runCase } from '../lib/run-case';
+import { selectDatasetFiles } from '../lib/run-guard';
+import { seededSearchKeys } from '../lib/seeded-search-keys';
 import { type EvalCase, parseCases } from '../schema/case.schema';
 
 /**
@@ -67,6 +72,26 @@ export function assertCase(testCase: EvalCase, observation: CaseObservation): Ch
     add(`tools.args:${tool}`, matches, call ? `got ${JSON.stringify(call.args)}` : `${tool} not called`);
   }
 
+  // D-N (AC-1344): emitted only for cases that seed at least one search.
+  // Fails when the run re-issues a seeded search key or repeats one of its own.
+  const seededKeys = seededSearchKeys(testCase);
+  if (seededKeys.size > 0) {
+    const seenThisRun = new Set<string>();
+    let redundant: string | null = null;
+    for (const call of observation.toolCalls) {
+      if (call.name !== 'search_exercises') {
+        continue;
+      }
+      const key = buildSearchKey(call.args);
+      if (seededKeys.has(key) || seenThisRun.has(key)) {
+        redundant = key;
+        break;
+      }
+      seenThisRun.add(key);
+    }
+    add('no_redundant_search', redundant === null, redundant ? `repeated search key ${redundant}` : undefined);
+  }
+
   if (testCase.expect.transition !== undefined) {
     add(
       'transition',
@@ -101,13 +126,14 @@ export function assertCase(testCase: EvalCase, observation: CaseObservation): Ch
   return results;
 }
 
-function loadCases(phase: string): EvalCase[] {
+/** Loads a phase's cases; `dataset` (a file stem) narrows to `<dataset>.jsonl` (D-P). */
+export function loadCases(phase: string, dataset?: string): EvalCase[] {
   const phases = phase === 'all' ? readdirSync(DATASETS_DIR) : [phase];
   const cases: EvalCase[] = [];
   for (const p of phases) {
     let files: string[];
     try {
-      files = readdirSync(join(DATASETS_DIR, p)).filter(f => f.endsWith('.jsonl'));
+      files = selectDatasetFiles(readdirSync(join(DATASETS_DIR, p)), dataset);
     } catch {
       continue;
     }
@@ -118,16 +144,26 @@ function loadCases(phase: string): EvalCase[] {
   return cases.filter(c => !c.deprecated);
 }
 
-/** A case passes if at least ceil(n/2) samples pass (§4.2). */
-export async function runL1(phase: string, samples: number): Promise<CheckResult[]> {
-  const cases = loadCases(phase);
+/**
+ * A case passes if at least ceil(n/2) samples pass (§4.2). `onCost` receives
+ * each case's metered totals (D-Q) — the runner prints and ledgers them.
+ */
+export async function runL1(
+  phase: string,
+  samples: number,
+  dataset?: string,
+  onCost?: (caseId: string, record: CostRecord) => void,
+): Promise<CheckResult[]> {
+  const cases = loadCases(phase, dataset);
   const results: CheckResult[] = [];
 
   for (const testCase of cases) {
     const perSample: CheckResult[][] = [];
+    const cost = new CostRecorder();
     for (let i = 0; i < samples; i += 1) {
-      perSample.push(assertCase(testCase, await runCase(testCase)));
+      perSample.push(assertCase(testCase, await runCase(testCase, [cost])));
     }
+    onCost?.(testCase.id, cost.record());
 
     const checkNames = [...new Set(perSample.flat().map(r => r.check))];
     for (const check of checkNames) {

@@ -15,6 +15,8 @@ export interface Baseline {
   model: string;
   samples: number;
   recordedAt: string;
+  /** Dataset stem when the baseline was written with --dataset (D-P); absent = full run. */
+  dataset?: string;
   entries: BaselineEntry[];
 }
 
@@ -47,6 +49,7 @@ export function writeBaseline(
   model: string,
   samples: number,
   results: CheckResult[],
+  dataset?: string,
 ): string {
   const path = baselinePath(version, phase);
   mkdirSync(join(baselineDir(), version), { recursive: true });
@@ -55,6 +58,7 @@ export function writeBaseline(
     model,
     samples,
     recordedAt: new Date().toISOString(),
+    ...(dataset !== undefined ? { dataset } : {}),
     entries: results.map(r => ({ case: r.case, check: r.check, passed: r.passed, detail: r.detail })),
   };
   writeFileSync(path, `${JSON.stringify(baseline, null, 2)}\n`, 'utf8');
@@ -69,8 +73,21 @@ export function readBaseline(version: string, phase: string): Baseline {
   return JSON.parse(readFileSync(path, 'utf8')) as Baseline;
 }
 
-export function compareToBaseline(version: string, phase: string, results: CheckResult[]): BaselineDiff {
+export function compareToBaseline(
+  version: string,
+  phase: string,
+  results: CheckResult[],
+  dataset?: string,
+): BaselineDiff {
   const baseline = readBaseline(version, phase);
+  // D-P: a dataset-scoped baseline never compares against a full run and vice
+  // versa — the numbers answer different questions.
+  if ((baseline.dataset ?? '') !== (dataset ?? '')) {
+    const scope = (d?: string): string => d ?? 'full run';
+    throw new Error(
+      `baseline scope mismatch: ${version}/${phase} was written for ${scope(baseline.dataset)}, this run is ${scope(dataset)} — re-run with a matching --dataset`,
+    );
+  }
   const before = new Map(baseline.entries.map(e => [key(e), e]));
   const after = new Map(results.map(r => [key(r), r]));
 

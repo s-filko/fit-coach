@@ -77,7 +77,10 @@ const EMPTY_OBSERVATION: CaseObservation = {
   budgetReport: null,
 };
 
-export async function runCase(testCase: EvalCase): Promise<CaseObservation> {
+export async function runCase(
+  testCase: EvalCase,
+  extraCallbacks: BaseCallbackHandler[] = [],
+): Promise<CaseObservation> {
   const { deps, recordedRuns } = buildStubDeps(testCase.fixture, testCase.state?.messages);
   const graph = buildConversationGraph(deps);
   const userId = '22222222-2222-4222-8222-222222222222';
@@ -87,7 +90,7 @@ export async function runCase(testCase: EvalCase): Promise<CaseObservation> {
     graph,
     userService: deps.userService,
     runService: deps.runService,
-    extraCallbacks: [recorder],
+    extraCallbacks: [recorder, ...extraCallbacks],
   });
 
   try {

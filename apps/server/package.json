@@ -17,6 +17,7 @@
     "test:watch:integration": "RUN_DB_TESTS=1 NODE_ENV=test jest --testMatch='**/tests/integration/**/*.integration.test.ts' --watch",
     "evals": "tsx --env-file-if-exists=.env evals/run.ts",
     "evals:export": "tsx --env-file=.env evals/export.ts",
+    "evals:ledger": "tsx --env-file-if-exists=.env evals/ledger.ts",
     "run-server": "node dist/index.js",
     "dev": "mkdir -p ../../logs && tsx watch --env-file=.env src/index.ts 2>&1 | tee -a ../../logs/server.log",
     "db:local:up": "docker compose -f ../../docker-compose.yml up -d db",

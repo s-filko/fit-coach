@@ -47,9 +47,10 @@ describe('buildStubDeps', () => {
     const { deps } = buildStubDeps(EMPTY_PROFILE, [
       { role: 'human', text: 'сделал 80 на 8' },
       { role: 'ai', text: 'Принято!' },
-      // tool_call/tool_result cannot be expressed as ChatMsg pre-P4 — skipped, not thrown on
-      { role: 'tool_call', text: '{"tool":"log_set"}' },
-      { role: 'tool_result', text: 'ok' },
+      // tool_call/tool_result seeds are still skipped pre-P4 (Task 7 moves
+      // seeding into the messages channel) — not thrown on
+      { role: 'tool_call', name: 'log_set', args: { weight: 80, reps: 8 } },
+      { role: 'tool_result', text: 'ok', status: 'ok' },
     ]);
     await expect(deps.contextService.getMessagesForPrompt('u', 'chat')).resolves.toEqual([
       { role: 'user', content: 'сделал 80 на 8' },

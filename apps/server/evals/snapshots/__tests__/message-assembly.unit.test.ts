@@ -79,11 +79,14 @@ function buildSubgraph(phase: PhaseName, deps: ConversationGraphDeps): Invokable
  */
 async function captureInvocation(phase: PhaseCase, scenario: AssemblyScenario): Promise<BaseMessage[]> {
   __recorded.length = 0;
-  // buildStubDeps takes history as { role, text } — adapt FIXTURE_HISTORY inline.
-  const { deps } = buildStubDeps(
-    phase.fixture,
-    FIXTURE_HISTORY.map(h => ({ role: h.role, text: h.content })),
-  );
+  // History seeding — discovered 2026-09-18 (P4 Task 1): FIXTURE_HISTORY's
+  // user/assistant roles never matched buildStubDeps' human/ai filter, so every
+  // frozen snapshot below was captured with EMPTY history. Fixing the roles
+  // now would change the frozen snapshots outside a reviewed diff, so the
+  // harness keeps history empty; P4 Task 4 rewires seeding through the
+  // `messages` channel and Task 5's enumerated diff is where history rows
+  // appear.
+  const { deps } = buildStubDeps(phase.fixture, []);
   if (scenario === 'with-summary') {
     deps.contextService.getLatestSummary = async () => FIXTURE_SUMMARY;
   }
