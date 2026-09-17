@@ -396,8 +396,8 @@ The wiring is proven byte-identical by Task 1/5, so this is a sanity sweep, but 
 
 ### Task 8: Dev deploy, AC-1323 on real runs, the §3.4 measurement, docs reconcile, close-out (orchestrator)
 
-- [ ] **Step 1: Deploy to dev** (reserved action): push the branch, `./deploy/deploy.sh dev` on the VPS **from this branch** (or merge first per the owner's usual order — same as P2), then a manual smoke on `@MyFitAiCoachDevBot`: one registration-phase message on a fresh test user is not required; cover **chat, plan_creation, session_planning, training** at least once each (training needs a started session; the P2 smoke path is documented in that plan's close-out).
-- [ ] **Step 2: AC-1323 query on dev**:
+- [x] **Step 1: Deploy to dev** (reserved action): push the branch, `./deploy/deploy.sh dev` on the VPS **from this branch** (or merge first per the owner's usual order — same as P2), then a manual smoke on `@MyFitAiCoachDevBot`: one registration-phase message on a fresh test user is not required; cover **chat, plan_creation, session_planning, training** at least once each (training needs a started session; the P2 smoke path is documented in that plan's close-out).
+- [x] **Step 2: AC-1323 query on dev**:
 
 ```sql
 SELECT phase_in, count(*) AS runs,
@@ -415,13 +415,13 @@ WHERE created_at > now() - interval '1 hour' AND budget_report IS NULL AND model
 
 Paste both outputs into this plan under **AC-1323 result**. Also grep `docker logs fitcoach-dev-server` for one `Conversation run recorded` line and confirm it carries `budgetReport`.
 
-- [ ] **Step 3: The ADR-0013 §3.4 measurement** (master plan P2 Notes): record `avg_system` and the max for `session_planning` and `training` from the query above under **§3.4 measurement**, next to the L0 fixture numbers (`session_planning` fixtures render at 2199–2216 estimated tokens per `evals/levels/l0.ts`; the hypothesis is 6–10k with a real plan). This number sets P4's budget defaults — write it where P4's planner will look: this plan and the PR description.
+- [x] **Step 3: The ADR-0013 §3.4 measurement** (master plan P2 Notes): record `avg_system` and the max for `session_planning` and `training` from the query above under **§3.4 measurement**, next to the L0 fixture numbers (`session_planning` fixtures render at 2199–2216 estimated tokens per `evals/levels/l0.ts`; the hypothesis is 6–10k with a real plan). This number sets P4's budget defaults — write it where P4's planner will look: this plan and the PR description.
 - [x] **Step 4: Docs reconcile** (pre-approved factual bucket; anything else → owner):
   - `docs/PROMPT_EVAL_FRAMEWORK.md` §4.2: "Collect: … `budgetReport`" is now true; the structural bullet becomes "`budget-report-present` implemented; `budgetReport.history ≤ budget.history` and orphan-tool-message checks still deferred (budgets are P4)".
   - `docs/CONTRIBUTING_AI.md` ("where prompts live" pointers around line 130): add the assembler — "message order and token accounting: `src/infra/ai/context/assemble-context.ts`; per-phase layout on `src/infra/ai/prompts/index.ts`".
   - `docs/BACKLOG.md`: tick/close "Registry `blocks` arrays must not survive AC-1323" and, for the `infra/ai/context` part, "Extend the inline-prompt rails to future infra dirs" (leave the `infra/ai/messages` part open, P3); note on "Small P2 duplications" that the role-narrowing lambda now has one home on the assembly side.
   - `docs/LLM_CORE_REFACTOR_PLAN.md` and ADR-0013 stay forward-looking — no progress markers (STATE.md rule).
-- [ ] **Step 5: Close-out** — follow `superpowers:finishing-a-development-branch`: run the `close-out-review` skill (four zones), tick every checkbox above and close each with its result (15+23 snapshots, unit counts, lint bite proof, the AC-1322 table, both AC-1323 query outputs, the §3.4 numbers), set `- Status: done`, `node scripts/state.mjs --write` from the repo root, commit, merge. `node scripts/state.mjs --check` must pass. Update `docs/STATE.md` *Next*: P2 complete in full (items 1–5); next is P3.
+- [x] **Step 5: Close-out** — follow `superpowers:finishing-a-development-branch`: run the `close-out-review` skill (four zones), tick every checkbox above and close each with its result (15+23 snapshots, unit counts, lint bite proof, the AC-1322 table, both AC-1323 query outputs, the §3.4 numbers), set `- Status: done`, `node scripts/state.mjs --write` from the repo root, commit, merge. `node scripts/state.mjs --check` must pass. Update `docs/STATE.md` *Next*: P2 complete in full (items 1–5); next is P3.
 
 **Verification:** the pasted outputs; `node scripts/state.mjs --check` → OK. AC-1323 (dev half), master plan P2 Notes.
 
@@ -454,11 +454,34 @@ Second failure never occurred → rollback condition not triggered. AC-1322 met 
 
 ## AC-1323 result
 
-_(filled in Task 8)_
+Deployed to dev 2026-09-17: PR #16 merged (`e15d61c7`), `./deploy/deploy.sh dev` OK, health `200`.
+
+Smoke via the dev API (`X-Api-Key`, `POST /api/bot/chat`): fresh user `p2ca-smoke-001` walked registration → `plan_creation` (7 runs; `save_workout_plan` was never called by the model — live BUG-014, fails 0/3 in the v0 baseline too, so the flow stalled and session_planning/training were unreachable for that user). chat, session_planning and training were covered on the owner's existing dev user (`filko`, already in `chat` with a saved plan, owner-approved): one chat message, "start training" (created a session, transition `chat → session_planning`), one session_planning message, a logged set in training, then the session closed. AC-1323 query on dev (2026-09-17, window 2 h):
+
+```
+ phase_in     | runs | avg_total | avg_system | max_assemblies
+--------------+------+-----------+------------+----------------
+ registration |    3 |      1274 |        947 |              2
+ chat         |    2 |      5348 |       1399 |              2
+ plan_creation|    8 |      4060 |       1383 |              2
+ session_planning | 1 |      9257 |       3218 |              2
+ training     |    2 |      9139 |       3625 |              2
+
+ SELECT … WHERE budget_report IS NULL AND model <> 'unknown' → (0 rows)
+```
+
+`docker logs fitcoach-dev-server` — `Conversation run recorded` (persist-node) carries `budgetReport: { estimator: "chars4x1.15", system, summary, history, user, inFlight, toolResults, total, messages, historyTurns, assemblies }` on every line checked. **AC-1323 met.**
 
 ## §3.4 measurement
 
-_(filled in Task 8)_
+Master plan P2 Notes ("measure the session-planning system prompt size"), from the dev smoke above — estimated tokens (`chars4x1.15`), not provider counts; **tiny sample (n=1 session_planning, n=2 training)** — treat as a floor, not a mean:
+
+| phase | avg_system (est.) | max_system (est.) | L0 fixture (for scale) |
+|---|---|---|---|
+| session_planning | 3218 | 3218 | 2199–2216 |
+| training | 3625 | 3643 | — |
+
+The 6–10 k hypothesis for a real plan is **not** confirmed at these sample sizes: a real saved plan rendered session_planning at ~3.2 k estimated (≈2.2× the empty fixture), training at ~3.6 k. P4's budget defaults should start from these floors and re-measure with a larger sample (the query in AC-1323 result, window widened) before locking budgets. Also recorded in PR #16's description.
 
 ## Follow-up (not part of this plan)
 

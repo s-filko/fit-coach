@@ -9,7 +9,7 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-09-16 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-09-17 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
 — none —
@@ -45,8 +45,8 @@ _Generated 2026-09-16 from docs/superpowers/plans/ + git. Never hand-edit; regen
   quality gate `PROMPT_EVAL_FRAMEWORK.md`. **P0 is complete (2026-09-15)**: all six plans
   merged; the `v0` baseline is frozen at `evals/baselines/v0/` (seeded-harness re-freeze,
   direct-Z.AI route). **P1 is complete (2026-09-16)**: legacy LLM path retired, merged via PR #14,
-  deployed to dev. **P2 (`refactor-p2-prompt-modules`) is complete (2026-09-16)**: all
-  model-facing text lives in versioned prompt modules, review clean.
+  deployed to dev. **P2 is complete in full (2026-09-17)**: prompt modules (items 1, 2, 4, 5)
+  and the context assembler (item 3, PR #16, deployed to dev, AC-1323 met on live runs).
 - **Architecture/hygiene backlog** — `PLAN-architecture-refactor-backlog.md` (`HB-##` items).
 - **Global backlog** — `BACKLOG.md`: permanent parking lot of unplanned ideas/findings/
   wishes; top entries are candidates for *Next* below (intake via the `backlog` skill).
@@ -54,23 +54,21 @@ _Generated 2026-09-16 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 ## Next (dispatch order)
 
-1. **Refactor P2** — `refactor-p2-prompt-modules` (items 1, 2, 4, 5; AC-1321,
-   AC-1322, AC-1324) carries the full inventory of model-facing text (11 rows: 5 phase
-   prompts, 9 directives, summariser, 4 injected blocks) so nothing stays outside the L0
-   grid. **P2 complete (2026-09-16)**: prompt modules merged, AC-1322 met with 0 regressions
-   vs the v0 baseline. The detector cases PC-0007/SP-0005 (BUG-014/015) remain failing in
-   both v0 and v1 — clearing them needs wording changes, which P2's zero-wording-change
-   constraint forbids; that is future prompt-version work (new vN modules per
-   PROMPT_EVAL_FRAMEWORK §8), not a refactor task. Next:
-   `refactor-p2-context-assembler` (item 3, AC-1323) — **plan written 2026-09-16**
-   (`docs/superpowers/plans/refactor-p2-context-assembler.md`, `After:
-   refactor-p2-prompt-modules`): one assembler + per-phase layouts on the registry,
-   `budgetReport` on every run row, token estimator moved into `src`; byte-identity
-   guarded by 15 message-assembly snapshots captured before the wiring. Its "Decisions
-   taken by this plan" table lists five calls the durable specs do not settle (report
-   transport via run-metrics, last-assembly-wins, rendered-string input, layout replaces
-   `blocks`, tool-results helper moves) — owner may overrule before dispatch.
-2. Then P3 → P4/P5 → P6 → P7 per the master plan phase map.
+1. **Refactor P2 complete in full (2026-09-17)** — all five items merged:
+   `refactor-p2-prompt-modules` (items 1, 2, 4, 5; AC-1321/1322/1324) and
+   `refactor-p2-context-assembler` (item 3, AC-1323, merged via PR #16, deployed to dev).
+   One `assembleContext` + per-phase `PhaseLayout` on the registry; `budgetReport` on every
+   agent-backed run row and in the run log line; byte identity proven by 15 frozen
+   message-assembly snapshots; AC-1322 held (3 apparent text-check regressions were sample
+   noise — not reproduced on re-run). §3.4 first measurement on dev: session_planning
+   system ~3.2 k / training ~3.6 k estimated tokens (n=1/2 — floors, not means; re-measure
+   before P4 locks budgets). PC-0007/SP-0005 (BUG-014/015) still fail in both v0 and v1 —
+   wording work per PROMPT_EVAL_FRAMEWORK §8, not refactor scope (BUG-014 observed live in
+   the smoke: the model narrates a saved plan without calling `save_workout_plan`).
+   **Next: P3** (`refactor-p3-*`) — PhaseSpec takes over rendering/loading, commit node +
+   run context replace run-metrics and persist, the post-tool nudge moves into the shared
+   agent node and enters the report; see ADR-0013 §3.4 and the plan's Follow-up section.
+2. Then P4/P5 → P6 → P7 per the master plan phase map.
 3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
    the code aligned to it, ESLint keeping it that way. Independent of the P0 chain;
    can run alongside it.
