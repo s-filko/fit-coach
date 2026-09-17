@@ -11,7 +11,8 @@ export type MessageKey =
   | 'tool_error_budget_exhausted'
   | 'tool_system_error'
   | 'training_no_active_session'
-  | 'training_session_not_found';
+  | 'training_session_not_found'
+  | 'empty_reply';
 
 export type Lang = 'en' | 'ru';
 

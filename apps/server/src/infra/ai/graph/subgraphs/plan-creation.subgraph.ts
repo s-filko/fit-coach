@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import { AIMessage } from '@langchain/core/messages';
+import { AIMessage, mergeMessageRuns } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
 import { toolsCondition } from '@langchain/langgraph/prebuilt';
@@ -15,6 +15,7 @@ import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
 import { PLAN_CREATION_TOOL_POLICY } from '@infra/ai/graph/phases/plan-creation.spec';
 import { afterTools, buildToolExecutor } from '@infra/ai/graph/tool-executor';
 import { getModel } from '@infra/ai/model.factory';
+import { PHASE_PROMPTS } from '@infra/ai/prompts';
 import { compose } from '@infra/ai/prompts/compose';
 import { PLAN_CREATION_PROMPT } from '@infra/ai/prompts/phases/plan_creation';
 import { attachBudgetReport } from '@infra/ai/run-metrics';
@@ -78,14 +79,20 @@ export function buildPlanCreationSubgraph(deps: PlanCreationSubgraphDeps) {
       }),
     );
 
-    const { messages: llmMessages, budgetReport } = assembleContext({
-      phase: 'plan_creation',
-      systemPrompt,
-      previousSummary,
-      history,
-      userMessage,
-      inFlight: state.messages ?? [],
-    });
+    const { messages: assembled, budgetReport } = assembleContext(
+      {
+        systemPrompt,
+        previousSummary,
+        history,
+        userMessage,
+        inFlight: state.messages ?? [],
+      },
+      PHASE_PROMPTS['plan_creation'].layout,
+    );
+    // Transitional (deleted with these subgraphs in Task 3): today's merged system
+    // runs — the message-assembly snapshots stay byte-identical until Task 3
+    // re-points the harness at the shared agent node (ADR-0013 §3.4 unmerges).
+    const llmMessages = mergeMessageRuns(assembled);
     attachBudgetReport(config.metadata?.['runId'] as string, budgetReport);
 
     const response = await invokeWithRetry(model, llmMessages, config);

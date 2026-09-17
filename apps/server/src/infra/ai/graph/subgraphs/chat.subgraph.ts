@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import { AIMessage } from '@langchain/core/messages';
+import { AIMessage, mergeMessageRuns } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
 import { toolsCondition } from '@langchain/langgraph/prebuilt';
@@ -14,6 +14,7 @@ import { assembleContext } from '@infra/ai/context/assemble-context';
 import { CHAT_TOOL_POLICY } from '@infra/ai/graph/phases/chat.spec';
 import { afterTools, buildToolExecutor } from '@infra/ai/graph/tool-executor';
 import { getModel } from '@infra/ai/model.factory';
+import { PHASE_PROMPTS } from '@infra/ai/prompts';
 import { compose } from '@infra/ai/prompts/compose';
 import { CHAT_PROMPT } from '@infra/ai/prompts/phases/chat';
 import { attachBudgetReport } from '@infra/ai/run-metrics';
@@ -72,14 +73,20 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
       }),
     );
 
-    const { messages: llmMessages, budgetReport } = assembleContext({
-      phase: 'chat',
-      systemPrompt,
-      previousSummary,
-      history,
-      userMessage,
-      inFlight: state.messages ?? [],
-    });
+    const { messages: assembled, budgetReport } = assembleContext(
+      {
+        systemPrompt,
+        previousSummary,
+        history,
+        userMessage,
+        inFlight: state.messages ?? [],
+      },
+      PHASE_PROMPTS['chat'].layout,
+    );
+    // Transitional (deleted with these subgraphs in Task 3): today's merged system
+    // runs — the message-assembly snapshots stay byte-identical until Task 3
+    // re-points the harness at the shared agent node (ADR-0013 §3.4 unmerges).
+    const llmMessages = mergeMessageRuns(assembled);
     attachBudgetReport(config.metadata?.['runId'] as string, budgetReport);
 
     // Pass the node's LangGraph config through so the LLM callback handler sees

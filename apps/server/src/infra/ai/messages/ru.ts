@@ -13,4 +13,6 @@ export const ru: Record<MessageKey, string> = {
   // translations of the en guard literals (2026-09) — new user-facing text for the owner to review
   training_no_active_session: 'Нет активной тренировки. Сначала начни тренировку.',
   training_session_not_found: 'Тренировка не найдена. Возможно, она уже завершена.',
+  // new user-facing text (2026-09) — D-D empty-reply fallback, for the owner to review
+  empty_reply: 'Не получилось придумать ответ. Отправь сообщение ещё раз, пожалуйста.',
 };

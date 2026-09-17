@@ -1,5 +1,5 @@
-import type { BudgetReport } from '@domain/conversation/ports';
 import type { ConversationStateType } from '@domain/conversation/graph/conversation.state';
+import type { BudgetReport } from '@domain/conversation/ports';
 
 import { buildPersistNode } from '@infra/ai/graph/nodes/persist.node';
 import { attachBudgetReport } from '@infra/ai/run-metrics';

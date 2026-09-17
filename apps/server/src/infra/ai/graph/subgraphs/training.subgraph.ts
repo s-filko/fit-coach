@@ -20,6 +20,7 @@ import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
 import { buildTrainingToolPolicy } from '@infra/ai/graph/phases/training.spec';
 import { afterTools, buildToolExecutor } from '@infra/ai/graph/tool-executor';
 import { getModel } from '@infra/ai/model.factory';
+import { PHASE_PROMPTS } from '@infra/ai/prompts';
 import { compose } from '@infra/ai/prompts/compose';
 import { TRAINING_PROMPT } from '@infra/ai/prompts/phases/training';
 import { attachBudgetReport } from '@infra/ai/run-metrics';
@@ -134,14 +135,16 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
 
       const model = baseModel.bindTools(availableTools);
 
-      const { messages: llmMessages, budgetReport } = assembleContext({
-        phase: 'training',
-        systemPrompt,
-        previousSummary,
-        history,
-        userMessage,
-        inFlight: inFlightMessages,
-      });
+      const { messages: llmMessages, budgetReport } = assembleContext(
+        {
+          systemPrompt,
+          previousSummary,
+          history,
+          userMessage,
+          inFlight: inFlightMessages,
+        },
+        PHASE_PROMPTS.training.layout,
+      );
       attachBudgetReport(config.metadata?.['runId'] as string, budgetReport);
 
       const response = await invokeWithRetry(model, llmMessages, config);

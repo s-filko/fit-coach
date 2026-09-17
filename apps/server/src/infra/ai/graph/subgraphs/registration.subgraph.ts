@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import { AIMessage } from '@langchain/core/messages';
+import { AIMessage, mergeMessageRuns } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
 import { toolsCondition } from '@langchain/langgraph/prebuilt';
@@ -13,6 +13,7 @@ import { assembleContext } from '@infra/ai/context/assemble-context';
 import { REGISTRATION_TOOL_POLICY } from '@infra/ai/graph/phases/registration.spec';
 import { afterTools, buildToolExecutor } from '@infra/ai/graph/tool-executor';
 import { getModel } from '@infra/ai/model.factory';
+import { PHASE_PROMPTS } from '@infra/ai/prompts';
 import { compose } from '@infra/ai/prompts/compose';
 import { REGISTRATION_PROMPT } from '@infra/ai/prompts/phases/registration';
 import { attachBudgetReport } from '@infra/ai/run-metrics';
@@ -66,13 +67,19 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
     // state.messages holds AIMessage(tool_calls) + ToolMessages from the current turn.
     // These are NOT in DB history yet (persist runs after subgraph finishes).
     // Including them lets the LLM see tool results and stop calling tools.
-    const { messages: llmMessages, budgetReport } = assembleContext({
-      phase: 'registration',
-      systemPrompt,
-      history,
-      userMessage,
-      inFlight: state.messages ?? [],
-    });
+    const { messages: assembled, budgetReport } = assembleContext(
+      {
+        systemPrompt,
+        history,
+        userMessage,
+        inFlight: state.messages ?? [],
+      },
+      PHASE_PROMPTS['registration'].layout,
+    );
+    // Transitional (deleted with these subgraphs in Task 3): today's merged system
+    // runs — the message-assembly snapshots stay byte-identical until Task 3
+    // re-points the harness at the shared agent node (ADR-0013 §3.4 unmerges).
+    const llmMessages = mergeMessageRuns(assembled);
     attachBudgetReport(config.metadata?.['runId'] as string, budgetReport);
 
     // Pass the node's LangGraph config through so the LLM callback handler sees

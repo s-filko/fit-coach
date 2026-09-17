@@ -13,4 +13,6 @@ export const en: Record<MessageKey, string> = {
   // today's training.subgraph.ts guard literals, verbatim (refactor-p3-phase-spec Task 1, D-B)
   training_no_active_session: 'No active training session found. Please start a session first.',
   training_session_not_found: 'Training session not found. It may have already been completed.',
+  // new user-facing text (2026-09) — D-D empty-reply fallback, for the owner to review
+  empty_reply: "I couldn't come up with a reply. Please send your message again.",
 };

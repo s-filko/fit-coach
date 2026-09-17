@@ -1,14 +1,15 @@
 /**
  * Unit tests for the context assembler (ADR-0013 §3.4 / AC-1323,
- * refactor-p2-context-assembler Task 4). The assembler reports; it does not
- * trim. Message order must match today's five agentNodes exactly — the
- * Task 1 message-assembly snapshots are the byte-identity arbiter.
+ * refactor-p2-context-assembler Task 4; signature updated by
+ * refactor-p3-phase-spec Task 2 — the layout comes from the spec, runs are
+ * kept as separate SystemMessages). The assembler reports; it does not trim.
+ * The message-assembly snapshots are the byte-identity arbiter.
  */
-import { AIMessage, HumanMessage, mergeMessageRuns, SystemMessage, type BaseMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 
 import type { ChatMsg } from '@domain/ai/types';
 
-import { PHASE_PROMPTS } from '@infra/ai/prompts';
+import { type PhaseLayout, PHASE_PROMPTS } from '@infra/ai/prompts';
 import { renderBlock, SUMMARY_FRAME_V1 } from '@infra/ai/prompts/blocks';
 
 import { IN_FLIGHT_POST_TOOL } from '../../../../../evals/fixtures/assembly-scenarios';
@@ -19,9 +20,13 @@ const SYSTEM = 'SYSTEM PROMPT UNDER TEST';
 const SUMMARY = 'Previous conversation: the user trains bench press twice a week.';
 const USER_MESSAGE = 'Привет, что сегодня?';
 
+const CHAT_LAYOUT = PHASE_PROMPTS.chat.layout;
+const REGISTRATION_LAYOUT = PHASE_PROMPTS.registration.layout;
+const TRAINING_LAYOUT = PHASE_PROMPTS.training.layout;
+const PLAN_CREATION_LAYOUT = PHASE_PROMPTS.plan_creation.layout;
+
 function chatInput(overrides: Partial<AssembleInput> = {}): AssembleInput {
   return {
-    phase: 'chat',
     systemPrompt: SYSTEM,
     previousSummary: null,
     history: [],
@@ -44,7 +49,7 @@ function isType(m: BaseMessage, type: string): boolean {
 
 describe('assembleContext (ADR-0013 §3.4 / AC-1323)', () => {
   it('chat, no summary, empty history → [system, human]', () => {
-    const { messages, budgetReport } = assembleContext(chatInput());
+    const { messages, budgetReport } = assembleContext(chatInput(), CHAT_LAYOUT);
 
     expect(messages).toEqual([new SystemMessage(SYSTEM), new HumanMessage(USER_MESSAGE)]);
     expect(budgetReport.summary).toBe(0);
@@ -52,24 +57,23 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323)', () => {
     expect(budgetReport.messages).toBe(2);
   });
 
-  it('chat, with summary → the two system messages merge into one', () => {
-    const { messages, budgetReport } = assembleContext(chatInput({ previousSummary: SUMMARY }));
+  it('chat, with summary → the two system messages stay separate (ADR-0013 §3.4)', () => {
+    const { messages, budgetReport } = assembleContext(chatInput({ previousSummary: SUMMARY }), CHAT_LAYOUT);
 
-    const expected = [
-      ...mergeMessageRuns([
-        new SystemMessage(SYSTEM),
-        new SystemMessage(renderBlock(SUMMARY_FRAME_V1, { previousSummary: SUMMARY })),
-      ]),
+    const summaryText = renderBlock(SUMMARY_FRAME_V1, { previousSummary: SUMMARY });
+    expect(messages).toEqual([
+      new SystemMessage(SYSTEM),
+      new SystemMessage(summaryText),
       new HumanMessage(USER_MESSAGE),
-    ];
-    expect(messages).toEqual(expected);
-    expect(messages).toHaveLength(2); // merged system + human
-    expect(String(messages[0].content)).toContain('CONTEXT FROM PREVIOUS CONVERSATION:');
+    ]);
+    expect(budgetReport.messages).toBe(3);
+    expect(String(messages[0].content)).toBe(SYSTEM);
+    expect(String(messages[1].content)).toContain('CONTEXT FROM PREVIOUS CONVERSATION:');
     expect(budgetReport.summary).toBeGreaterThan(0);
   });
 
   it('registration, with summary → summary ignored', () => {
-    const { messages, budgetReport } = assembleContext(chatInput({ phase: 'registration', previousSummary: SUMMARY }));
+    const { messages, budgetReport } = assembleContext(chatInput({ previousSummary: SUMMARY }), REGISTRATION_LAYOUT);
 
     expect(budgetReport.summary).toBe(0);
     for (const m of messages) {
@@ -77,8 +81,8 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323)', () => {
     }
   });
 
-  it('training, with history → one history-frame system block, unmerged with the prompt', () => {
-    const { messages } = assembleContext(chatInput({ phase: 'training', history: historyFixture() }));
+  it('training, with history → one history-frame system block, separate from the prompt', () => {
+    const { messages } = assembleContext(chatInput({ history: historyFixture() }), TRAINING_LAYOUT);
 
     expect(messages.filter(m => isType(m, 'system'))).toHaveLength(2); // prompt + history frame
     expect(isType(messages[1], 'system')).toBe(true);
@@ -88,7 +92,7 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323)', () => {
   });
 
   it('training, post-tool in-flight → array ends with the tool-results system block', () => {
-    const { messages, budgetReport } = assembleContext(chatInput({ phase: 'training', inFlight: IN_FLIGHT_POST_TOOL }));
+    const { messages, budgetReport } = assembleContext(chatInput({ inFlight: IN_FLIGHT_POST_TOOL }), TRAINING_LAYOUT);
 
     const last = messages[messages.length - 1];
     expect(isType(last, 'system')).toBe(true);
@@ -98,7 +102,7 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323)', () => {
   });
 
   it('chat, post-tool in-flight → no tool-results block, in-flight appended after the human message', () => {
-    const { messages } = assembleContext(chatInput({ inFlight: IN_FLIGHT_POST_TOOL }));
+    const { messages } = assembleContext(chatInput({ inFlight: IN_FLIGHT_POST_TOOL }), CHAT_LAYOUT);
 
     expect(isType(messages[0], 'system')).toBe(true);
     expect(isType(messages[1], 'human')).toBe(true);
@@ -107,24 +111,22 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323)', () => {
   });
 
   it('total equals the sum of the six parts in every case', () => {
-    const cases: AssembleInput[] = [
-      chatInput(),
-      chatInput({ previousSummary: SUMMARY }),
-      chatInput({ phase: 'registration', previousSummary: SUMMARY }),
-      chatInput({ history: historyFixture() }),
-      chatInput({ phase: 'training', history: historyFixture() }),
-      chatInput({ inFlight: IN_FLIGHT_POST_TOOL }),
-      chatInput({
-        phase: 'training',
-        history: historyFixture(),
-        inFlight: IN_FLIGHT_POST_TOOL,
-        previousSummary: SUMMARY,
-      }),
-      chatInput({ phase: 'plan_creation', previousSummary: SUMMARY, inFlight: IN_FLIGHT_POST_TOOL }),
+    const cases: Array<{ input: AssembleInput; layout: PhaseLayout }> = [
+      { input: chatInput(), layout: CHAT_LAYOUT },
+      { input: chatInput({ previousSummary: SUMMARY }), layout: CHAT_LAYOUT },
+      { input: chatInput({ previousSummary: SUMMARY }), layout: REGISTRATION_LAYOUT },
+      { input: chatInput({ history: historyFixture() }), layout: CHAT_LAYOUT },
+      { input: chatInput({ history: historyFixture() }), layout: TRAINING_LAYOUT },
+      { input: chatInput({ inFlight: IN_FLIGHT_POST_TOOL }), layout: CHAT_LAYOUT },
+      {
+        input: chatInput({ history: historyFixture(), inFlight: IN_FLIGHT_POST_TOOL, previousSummary: SUMMARY }),
+        layout: TRAINING_LAYOUT,
+      },
+      { input: chatInput({ previousSummary: SUMMARY, inFlight: IN_FLIGHT_POST_TOOL }), layout: PLAN_CREATION_LAYOUT },
     ];
 
-    for (const input of cases) {
-      const { budgetReport: r } = assembleContext(input);
+    for (const { input, layout } of cases) {
+      const { budgetReport: r } = assembleContext(input, layout);
       expect(r.total).toBe(r.system + r.summary + r.history + r.user + r.inFlight + r.toolResults);
     }
   });
@@ -132,6 +134,7 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323)', () => {
   it('estimator is TOKEN_ESTIMATOR_ID; messages counts the returned array', () => {
     const { messages, budgetReport } = assembleContext(
       chatInput({ history: historyFixture(), inFlight: IN_FLIGHT_POST_TOOL }),
+      CHAT_LAYOUT,
     );
 
     expect(budgetReport.estimator).toBe(TOKEN_ESTIMATOR_ID);
@@ -141,14 +144,13 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323)', () => {
   it('pure: same input twice → deep-equal output, no Date use', () => {
     const dateSpy = jest.spyOn(global, 'Date');
     const input = chatInput({
-      phase: 'training',
       previousSummary: SUMMARY,
       history: historyFixture(),
       inFlight: IN_FLIGHT_POST_TOOL,
     });
 
-    const first = assembleContext(input);
-    const second = assembleContext(input);
+    const first = assembleContext(input, TRAINING_LAYOUT);
+    const second = assembleContext(input, TRAINING_LAYOUT);
 
     expect(first.messages).toEqual(second.messages);
     expect(first.budgetReport).toEqual(second.budgetReport);
@@ -156,14 +158,11 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323)', () => {
     dateSpy.mockRestore();
   });
 
-  it('layouts come from the registry (PHASE_PROMPTS[phase].layout drives the assembly)', () => {
+  it('layouts come from the caller (the spec hands PHASE_PROMPTS[phase].layout over)', () => {
     // registration has no summary frame and no tool-results block even with data present
     const registration = assembleContext(
-      chatInput({
-        phase: 'registration',
-        previousSummary: SUMMARY,
-        inFlight: IN_FLIGHT_POST_TOOL,
-      }),
+      chatInput({ previousSummary: SUMMARY, inFlight: IN_FLIGHT_POST_TOOL }),
+      REGISTRATION_LAYOUT,
     );
     expect(registration.budgetReport.summary).toBe(0);
     expect(registration.budgetReport.toolResults).toBe(0);

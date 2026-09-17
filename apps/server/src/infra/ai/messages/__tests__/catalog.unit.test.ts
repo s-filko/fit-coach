@@ -1,4 +1,4 @@
-import { type Lang, type MessageKey, langOf, t } from '../index';
+import { type Lang, langOf, type MessageKey, t } from '../index';
 
 /** Every key the catalog type declares, in both languages (D-F, D-B). */
 const ALL_KEYS: MessageKey[] = [
@@ -6,6 +6,7 @@ const ALL_KEYS: MessageKey[] = [
   'tool_system_error',
   'training_no_active_session',
   'training_session_not_found',
+  'empty_reply',
 ];
 
 describe('message catalog (refactor-p3-tool-executor Task 3)', () => {
