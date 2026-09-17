@@ -17,11 +17,8 @@ import { createLogger } from '@shared/logger';
 import { buildPersistNode } from './nodes/persist.node';
 import { generatePhaseSummary } from './nodes/phase-summary.node';
 import { buildRouterNode } from './nodes/router.node';
-import { buildChatSubgraph } from './subgraphs/chat.subgraph';
-import { buildPlanCreationSubgraph } from './subgraphs/plan-creation.subgraph';
-import { buildRegistrationSubgraph } from './subgraphs/registration.subgraph';
-import { buildSessionPlanningSubgraph } from './subgraphs/session-planning.subgraph';
-import { buildTrainingSubgraph } from './subgraphs/training.subgraph';
+import { buildPhaseSubgraph } from './phase-subgraph.factory';
+import { buildPhaseSpecs } from './phases';
 
 const log = createLogger('conversation-graph');
 
@@ -48,46 +45,10 @@ function routeAfterPersist(state: ConversationStateType): string {
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function buildGraph(deps: ConversationGraphDeps) {
-  const {
-    userService,
-    trainingService,
-    contextService,
-    runService,
-    workoutPlanRepo,
-    workoutSessionRepo,
-    exerciseRepository,
-    embeddingService,
-    checkpointer,
-  } = deps;
+  const { userService, trainingService, contextService, runService, workoutSessionRepo, checkpointer } = deps;
 
   const routerNode = buildRouterNode({ userService, trainingService, contextService });
   const persistNode = buildPersistNode(contextService, runService);
-  const chatSubgraph = buildChatSubgraph({ userService, workoutPlanRepo, workoutSessionRepo, contextService });
-  const registrationSubgraph = buildRegistrationSubgraph({ userService, contextService });
-  const planCreationSubgraph = buildPlanCreationSubgraph({
-    userService,
-    contextService,
-    exerciseRepository,
-    embeddingService,
-    workoutPlanRepository: workoutPlanRepo,
-  });
-  const sessionPlanningSubgraph = buildSessionPlanningSubgraph({
-    userService,
-    contextService,
-    exerciseRepository,
-    embeddingService,
-    workoutPlanRepository: workoutPlanRepo,
-    workoutSessionRepository: workoutSessionRepo,
-    trainingService,
-  });
-  const trainingSubgraph = buildTrainingSubgraph({
-    userService,
-    trainingService,
-    workoutSessionRepo,
-    contextService,
-    exerciseRepository,
-    embeddingService,
-  });
 
   const transitionGuardNode = async (
     state: ConversationStateType,
@@ -157,7 +118,9 @@ function buildGraph(deps: ConversationGraphDeps) {
 
   // Router always returns Command(goto=phase) so LangGraph uses it for routing.
   // 'ends' declares all possible destinations — required when node returns Command.
-  const routerEnds = ['registration', 'chat', 'plan_creation', 'session_planning', 'training', 'persist'];
+  // Derived from the specs: adding a phase extends the router with no edit (INV-LLM-005).
+  const specs = buildPhaseSpecs(deps);
+  const routerEnds = [...specs.map(s => s.name), 'persist'];
 
   // Wrap routerNode to always emit a Command so that routing is driven by the node
   // itself rather than a separate conditional edge.  Timeout paths use goto='persist'
@@ -170,29 +133,24 @@ function buildGraph(deps: ConversationGraphDeps) {
     return new Command({ goto: result.phase ?? state.phase, update: result });
   };
 
+  // The phases are data (INV-LLM-005): one node per spec, each straight into
+  // 'persist'. A new phase = a new spec in buildPhaseSpecs — no builder edit.
   const graph = new StateGraph(ConversationState)
     .addNode('router', routerNodeWithCommand, { ends: routerEnds })
-    .addNode('registration', registrationSubgraph)
-    .addNode('chat', chatSubgraph)
-    .addNode('plan_creation', planCreationSubgraph)
-    .addNode('session_planning', sessionPlanningSubgraph)
-    .addNode('training', trainingSubgraph)
     .addNode('persist', persistNode)
     .addNode('transition_guard', transitionGuardNode)
     .addNode('cleanup', cleanupNode)
 
     .addEdge(START, 'router')
-    .addEdge('registration', 'persist')
-    .addEdge('chat', 'persist')
-    .addEdge('plan_creation', 'persist')
-    .addEdge('session_planning', 'persist')
-    .addEdge('training', 'persist')
     .addConditionalEdges('persist', routeAfterPersist, {
       transition_guard: 'transition_guard',
       [END]: END,
     })
     .addEdge('transition_guard', 'cleanup')
     .addEdge('cleanup', END);
+  for (const spec of specs) {
+    graph.addNode(spec.name, buildPhaseSubgraph(spec, deps)).addEdge(spec.name, 'persist');
+  }
 
   return graph.compile({ checkpointer });
 }

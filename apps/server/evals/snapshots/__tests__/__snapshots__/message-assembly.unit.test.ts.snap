@@ -181,6 +181,10 @@ WRONG (tool call without text — this will break the app):
     "type": "tool",
   },
   {
+    "content": "IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools.",
+    "type": "system",
+  },
+  {
     "content": "LLM_ERROR: Invalid set data: exercise id not found in session",
     "status": "error",
     "tool_call_id": "call-2",
@@ -257,8 +261,11 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-CONTEXT FROM PREVIOUS CONVERSATION:
+  text: ""  ← empty, user sees nothing",
+    "type": "system",
+  },
+  {
+    "content": "CONTEXT FROM PREVIOUS CONVERSATION:
 User trains 3x/week, prefers upper/lower split, reported mild shoulder discomfort.",
     "type": "system",
   },
@@ -635,8 +642,11 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-CONTEXT FROM PREVIOUS CONVERSATION:
+  text: ""  ← empty, user sees nothing",
+    "type": "system",
+  },
+  {
+    "content": "CONTEXT FROM PREVIOUS CONVERSATION:
 User trains 3x/week, prefers upper/lower split, reported mild shoulder discomfort.",
     "type": "system",
   },
@@ -830,6 +840,10 @@ WRONG (tool call without text — this will break the app):
     "content": "Timezone saved: Europe/Berlin",
     "tool_call_id": "call-1",
     "type": "tool",
+  },
+  {
+    "content": "IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools.",
+    "type": "system",
   },
   {
     "content": "LLM_ERROR: Invalid set data: exercise id not found in session",
@@ -1391,8 +1405,11 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-CONTEXT FROM PREVIOUS CONVERSATION:
+  text: ""  ← empty, user sees nothing",
+    "type": "system",
+  },
+  {
+    "content": "CONTEXT FROM PREVIOUS CONVERSATION:
 User trains 3x/week, prefers upper/lower split, reported mild shoulder discomfort.",
     "type": "system",
   },

@@ -17,7 +17,7 @@ export interface BudgetReport {
   inFlight: number; // this run's AI tool-call messages and tool results
   toolResults: number; // training's tool-results block, 0 elsewhere
   total: number; // sum of the six above
-  messages: number; // messages in the array handed to the model (after mergeMessageRuns, before the nudge)
+  messages: number; // messages in the array handed to the model (before the post-tool nudge)
   historyTurns: number; // history messages loaded from the transcript
   assemblies?: number; // filled at persist: how many assemblies this run made (tool loops)
 }

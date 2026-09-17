@@ -1,17 +1,17 @@
 /**
- * Pre-wiring truth for refactor-p2-context-assembler. Captured from the OLD
- * subgraph agentNodes before infra/ai/context existed; never regenerated in
- * that plan. What the model receives is the arbiter of "no behaviour change".
+ * What the model receives is the arbiter of "no behaviour change". Captured
+ * from the OLD subgraph agentNodes before infra/ai/context existed
+ * (refactor-p2-context-assembler); regenerated ONCE in refactor-p3-phase-spec
+ * Task 3, when the harness re-pointed at the shared buildPhaseSubgraph factory
+ * (ADR-0013 §3.4 unmerged systems; §6 nudge for every phase). Since then it is
+ * never regenerated except by a reviewed, enumerated diff.
  */
 import { AIMessage, type BaseMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 
 import type { ConversationGraphDeps } from '@infra/ai/graph/conversation.graph';
-import { buildChatSubgraph } from '@infra/ai/graph/subgraphs/chat.subgraph';
-import { buildPlanCreationSubgraph } from '@infra/ai/graph/subgraphs/plan-creation.subgraph';
-import { buildRegistrationSubgraph } from '@infra/ai/graph/subgraphs/registration.subgraph';
-import { buildSessionPlanningSubgraph } from '@infra/ai/graph/subgraphs/session-planning.subgraph';
-import { buildTrainingSubgraph } from '@infra/ai/graph/subgraphs/training.subgraph';
+import { buildPhaseSubgraph } from '@infra/ai/graph/phase-subgraph.factory';
+import { buildPhaseSpecs } from '@infra/ai/graph/phases';
 import { getModel } from '@infra/ai/model.factory';
 
 import {
@@ -65,44 +65,11 @@ const PHASES: PhaseCase[] = [
 type InvokableSubgraph = { invoke(input: unknown, config?: unknown): Promise<unknown> };
 
 function buildSubgraph(phase: PhaseName, deps: ConversationGraphDeps): InvokableSubgraph {
-  switch (phase) {
-    case 'registration':
-      return buildRegistrationSubgraph({ userService: deps.userService, contextService: deps.contextService });
-    case 'chat':
-      return buildChatSubgraph({
-        userService: deps.userService,
-        workoutPlanRepo: deps.workoutPlanRepo,
-        workoutSessionRepo: deps.workoutSessionRepo,
-        contextService: deps.contextService,
-      });
-    case 'plan_creation':
-      return buildPlanCreationSubgraph({
-        userService: deps.userService,
-        contextService: deps.contextService,
-        exerciseRepository: deps.exerciseRepository,
-        embeddingService: deps.embeddingService,
-        workoutPlanRepository: deps.workoutPlanRepo,
-      });
-    case 'session_planning':
-      return buildSessionPlanningSubgraph({
-        userService: deps.userService,
-        contextService: deps.contextService,
-        exerciseRepository: deps.exerciseRepository,
-        embeddingService: deps.embeddingService,
-        workoutPlanRepository: deps.workoutPlanRepo,
-        workoutSessionRepository: deps.workoutSessionRepo,
-        trainingService: deps.trainingService,
-      });
-    case 'training':
-      return buildTrainingSubgraph({
-        userService: deps.userService,
-        trainingService: deps.trainingService,
-        workoutSessionRepo: deps.workoutSessionRepo,
-        contextService: deps.contextService,
-        exerciseRepository: deps.exerciseRepository,
-        embeddingService: deps.embeddingService,
-      });
+  const spec = buildPhaseSpecs(deps).find(s => s.name === phase);
+  if (!spec) {
+    throw new Error(`No PhaseSpec for ${phase}`);
   }
+  return buildPhaseSubgraph(spec, deps);
 }
 
 /**
@@ -117,7 +84,7 @@ async function captureInvocation(phase: PhaseCase, scenario: AssemblyScenario): 
     FIXTURE_HISTORY.map(h => ({ role: h.role, text: h.content })),
   );
   if (scenario === 'with-summary') {
-    deps.contextService.getLatestSummary = async() => FIXTURE_SUMMARY;
+    deps.contextService.getLatestSummary = async () => FIXTURE_SUMMARY;
   }
 
   const subgraph = buildSubgraph(phase.phase, deps);
@@ -150,7 +117,7 @@ describe('message assembly (pre-wiring truth, refactor-p2-context-assembler Task
 
   for (const phase of PHASES) {
     for (const scenario of ASSEMBLY_SCENARIOS) {
-      it(`${phase.phase} / ${scenario}`, async() => {
+      it(`${phase.phase} / ${scenario}`, async () => {
         const recorded = await captureInvocation(phase, scenario);
         expect(serializeForSnapshot(recorded)).toMatchSnapshot();
       });
@@ -160,7 +127,7 @@ describe('message assembly (pre-wiring truth, refactor-p2-context-assembler Task
   // Registration never loads the summary — its with-summary array must be
   // byte-identical to its plain one. Cheapest proof the harness sees real
   // differences between scenarios.
-  it('registration / with-summary equals plain (registration ignores the summary)', async() => {
+  it('registration / with-summary equals plain (registration ignores the summary)', async () => {
     const plain = await captureInvocation(PHASES[0], 'plain');
     const withSummary = await captureInvocation(PHASES[0], 'with-summary');
     expect(serializeForSnapshot(withSummary)).toEqual(serializeForSnapshot(plain));

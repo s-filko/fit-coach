@@ -22,6 +22,26 @@ jest.mock('@infra/ai/model.factory', () => ({
   }),
 }));
 
+// INV-LLM-005 harness: the real five specs plus a sixth — the graph must gain
+// the node with no builder change. The fake spec carries the fields the
+// factory touches at build time (tools/policy/layout); nothing ever routes to
+// it, so the missing prompt and loaders never matter.
+jest.mock('@infra/ai/graph/phases', () => {
+  const actual = jest.requireActual('@infra/ai/graph/phases');
+  return {
+    ...actual,
+    buildPhaseSpecs: (deps: ConversationGraphDeps) => [
+      ...actual.buildPhaseSpecs(deps),
+      {
+        name: 'zzz_test',
+        tools: [],
+        toolPolicy: { llmErrorBudget: Infinity },
+        layout: { summaryFrame: false, historyMode: 'interleaved', toolResultsFrame: false },
+      },
+    ],
+  };
+});
+
 const makeDeps = (): ConversationGraphDeps => ({
   trainingService: {
     getTrainingHistory: jest.fn().mockResolvedValue([]),
@@ -296,5 +316,16 @@ describe('ConversationGraph', () => {
       expect(result.phase).toBe('session_planning');
       expect(result.activeSessionId).toBeNull();
     });
+  });
+
+  it('INV-LLM-005: a sixth spec gains the graph node and its persist edge — no builder change', () => {
+    const graph = buildConversationGraph(makeDeps());
+    const drawable = graph.getGraph();
+
+    const nodeIds = Object.values(drawable.nodes).map(n => n.id);
+    expect(nodeIds).toContain('zzz_test');
+
+    const edge = [...drawable.edges].find(e => e.source === 'zzz_test');
+    expect(edge?.target).toBe('persist');
   });
 });
