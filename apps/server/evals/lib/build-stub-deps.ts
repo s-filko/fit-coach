@@ -14,6 +14,19 @@ export interface StubWorld {
   recordedRuns: ConversationRunRecord[];
 }
 
+/**
+ * The exercise-catalog UUIDs the stub session plan references. Hoisted so
+ * `exerciseRepository.findByIds` can resolve them — start_training_session
+ * validates every exerciseId against the catalog (session-planning.tools.ts)
+ * and rejects unknown ids with LLM_ERROR, so a session-start case (SPT-0001)
+ * needs a catalog that actually contains the proposed exercises.
+ */
+const CATALOG: ReadonlyMap<string, string> = new Map<string, string>([
+  ['11111111-1111-4111-8111-111111111111', 'Жим лёжа (штанга)'],
+  ['22222222-2222-4222-8222-222222222222', 'Тяга штанги в наклоне'],
+  ['33333333-3333-4333-8333-333333333333', 'Жим гантелей сидя'],
+]);
+
 /** Flat set record inside the stub session (what log_set appends). */
 interface StubSet {
   id: string;
@@ -132,7 +145,12 @@ export function buildStubDeps(fixture: EvalFixture, messages?: Array<{ role: str
     .map(m => ({ role: m.role === 'human' ? 'user' : 'assistant', content: m.text }));
 
   const user = { id: userId, ...fixture.user };
-  const activePlan = fixture.hasActivePlan ? (fixture.plan ?? { id: 'plan-1', name: 'Test plan' }) : null;
+  const activePlan = fixture.hasActivePlan
+    ? ({ id: 'plan-1', name: 'Test plan', ...((fixture.plan as Record<string, unknown>) ?? {}) } as {
+        id: string;
+        name: string;
+      })
+    : null;
   // Chat fixtures carry no activeSession — production would return null there,
   // and a synthetic in-progress session would change what the chat prompt sees.
   const session = fixture.activeSession ? buildTrainingSession(fixture.activeSession) : null;
@@ -157,6 +175,18 @@ export function buildStubDeps(fixture: EvalFixture, messages?: Array<{ role: str
       getActiveSession: async() => session,
       getActivePlan: async() => activePlan,
       getTrainingHistory: async() => (fixture.sessions ?? []),
+      // start_training_session (session-planning.tools.ts) resolves the active plan,
+      // creates the session and returns it; only `session.id` is read afterwards
+      // (propagated as activeSessionId). A fresh id so a started run never
+      // collides with the seeded mid-workout 'session-1'.
+      startSession: async() => ({
+        id: 'session-2',
+        userId,
+        planId: activePlan?.id ?? null,
+        sessionKey: 'Upper A',
+        status: 'in_progress',
+        exercises: [],
+      }),
       logSetWithContext: async(
         _sessionId: string,
         opts: { exerciseId?: string; exerciseName?: string; setData: StubSet['setData']; rpe?: number; feedback?: string },
@@ -281,7 +311,9 @@ export function buildStubDeps(fixture: EvalFixture, messages?: Array<{ role: str
     },
     exerciseRepository: {
       searchByEmbedding: async() => [],
-      findByIds: async() => [],
+      // Resolves the catalog UUIDs the stub plan proposes — see CATALOG above.
+      findByIds: async(ids: string[] = []) =>
+        ids.map(id => ({ id, name: CATALOG.get(id) ?? 'Exercise' })),
     },
     embeddingService: {
       embed: async() => new Array(1536).fill(0),

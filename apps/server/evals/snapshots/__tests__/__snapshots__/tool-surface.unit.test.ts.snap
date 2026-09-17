@@ -1,0 +1,1113 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) chat tool surface 1`] = `
+[
+  {
+    "description": "Update one or more fields of the user's fitness profile. Call this when the user explicitly tells you their name, age, gender, height, weight, fitness level, or goal — or when they want to change an existing value. Only include fields the user actually mentioned.",
+    "name": "update_profile",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "age": {
+          "description": "Age in years",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+        "firstName": {
+          "description": "Preferred name or nickname",
+          "type": "string",
+        },
+        "fitnessGoal": {
+          "description": "User fitness goal in their own words",
+          "type": "string",
+        },
+        "fitnessLevel": {
+          "description": "Self-assessed fitness level",
+          "enum": [
+            "beginner",
+            "intermediate",
+            "advanced",
+          ],
+          "type": "string",
+        },
+        "gender": {
+          "description": "Biological gender",
+          "enum": [
+            "male",
+            "female",
+          ],
+          "type": "string",
+        },
+        "height": {
+          "description": "Height in cm",
+          "type": "number",
+        },
+        "weight": {
+          "description": "Weight in kg",
+          "type": "number",
+        },
+      },
+      "type": "object",
+    },
+  },
+  {
+    "description": "Request a phase transition to another part of the app. Use "plan_creation" when user wants to create or update their workout plan. Use "session_planning" when user wants to plan or start a workout session. Do NOT call this for casual fitness questions — just respond with text.",
+    "name": "request_transition",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "description": "Brief reason for the transition",
+          "type": "string",
+        },
+        "toPhase": {
+          "description": "Target phase",
+          "enum": [
+            "plan_creation",
+            "session_planning",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "toPhase",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Save the user's timezone. Call when the user provides their city or timezone. Use IANA format, e.g. "Europe/Berlin", "America/New_York", "Asia/Tokyo".",
+    "name": "save_timezone",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "timezone": {
+          "description": "IANA timezone string, e.g. "Europe/Berlin"",
+          "type": "string",
+        },
+      },
+      "required": [
+        "timezone",
+      ],
+      "type": "object",
+    },
+  },
+]
+`;
+
+exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) plan_creation tool surface 1`] = `
+[
+  {
+    "description": "Search the exercise catalog using semantic (meaning-based) vector search. Use this tool whenever you need to find exercises — during plan creation, session planning, or training. The query should be a short English description of what you are looking for. Examples: "chest compound barbell press", "leg bodyweight squat beginner", "cardio low impact home". Apply filters (category, equipment, muscleGroup) when the context clearly constrains the search. You may call this tool multiple times in a single response to search for different muscle groups. Results include exercise IDs — always use these exact IDs when referencing exercises in other tools.",
+    "name": "search_exercises",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "description": "Filter by exercise category: compound, isolation, cardio, functional, mobility.",
+          "enum": [
+            "compound",
+            "isolation",
+            "cardio",
+            "functional",
+            "mobility",
+          ],
+          "type": "string",
+        },
+        "equipment": {
+          "description": "Filter by required equipment: barbell, dumbbell, bodyweight, machine, cable, none.",
+          "enum": [
+            "barbell",
+            "dumbbell",
+            "bodyweight",
+            "machine",
+            "cable",
+            "none",
+          ],
+          "type": "string",
+        },
+        "limit": {
+          "description": "Maximum number of results to return (default: 10, max: 20).",
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer",
+        },
+        "muscleGroup": {
+          "description": "Filter to exercises that involve this muscle group (primary or secondary).",
+          "enum": [
+            "chest",
+            "back_lats",
+            "back_traps",
+            "shoulders_front",
+            "shoulders_side",
+            "shoulders_rear",
+            "quads",
+            "hamstrings",
+            "glutes",
+            "calves",
+            "biceps",
+            "triceps",
+            "forearms",
+            "abs",
+            "lower_back",
+            "core",
+            "cardio_system",
+            "full_body",
+            "lower_body_endurance",
+            "core_stability",
+          ],
+          "type": "string",
+        },
+        "query": {
+          "description": "English description of the exercises you are looking for. E.g. "chest compound barbell".",
+          "type": "string",
+        },
+      },
+      "required": [
+        "query",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Save the user's approved workout plan to the database. Call this ONLY when the user has explicitly approved the complete plan. Do NOT call this during discussion, proposal, or refinement. All fields (sessionTemplates, recoveryGuidelines, progressionRules) must be complete.",
+    "name": "save_workout_plan",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "goal": {
+          "description": "Primary goal of the plan",
+          "type": "string",
+        },
+        "name": {
+          "description": "Plan name, e.g. "Upper-Lower Split — 4 days/week"",
+          "type": "string",
+        },
+        "progressionRules": {
+          "description": "Specific, actionable progression rules",
+          "items": {
+            "type": "string",
+          },
+          "minItems": 1,
+          "type": "array",
+        },
+        "recoveryGuidelines": {
+          "additionalProperties": false,
+          "properties": {
+            "cardio": {
+              "additionalProperties": false,
+              "properties": {
+                "maxRestDays": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer",
+                },
+                "minRestDays": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer",
+                },
+              },
+              "required": [
+                "minRestDays",
+                "maxRestDays",
+              ],
+              "type": "object",
+            },
+            "customRules": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "functional": {
+              "additionalProperties": false,
+              "properties": {
+                "maxRestDays": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer",
+                },
+                "minRestDays": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer",
+                },
+              },
+              "required": [
+                "minRestDays",
+                "maxRestDays",
+              ],
+              "type": "object",
+            },
+            "highIntensity": {
+              "additionalProperties": false,
+              "properties": {
+                "minRestDays": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer",
+                },
+              },
+              "required": [
+                "minRestDays",
+              ],
+              "type": "object",
+            },
+            "majorMuscleGroups": {
+              "additionalProperties": false,
+              "properties": {
+                "maxRestDays": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer",
+                },
+                "minRestDays": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer",
+                },
+              },
+              "required": [
+                "minRestDays",
+                "maxRestDays",
+              ],
+              "type": "object",
+            },
+            "smallMuscleGroups": {
+              "additionalProperties": false,
+              "properties": {
+                "maxRestDays": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer",
+                },
+                "minRestDays": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer",
+                },
+              },
+              "required": [
+                "minRestDays",
+                "maxRestDays",
+              ],
+              "type": "object",
+            },
+          },
+          "required": [
+            "majorMuscleGroups",
+            "smallMuscleGroups",
+            "highIntensity",
+            "customRules",
+          ],
+          "type": "object",
+        },
+        "sessionTemplates": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "energyCost": {
+                "enum": [
+                  "very_low",
+                  "low",
+                  "medium",
+                  "high",
+                  "very_high",
+                ],
+                "type": "string",
+              },
+              "estimatedDuration": {
+                "description": "Total session duration in minutes",
+                "maximum": 9007199254740991,
+                "minimum": 1,
+                "type": "integer",
+              },
+              "exercises": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "energyCost": {
+                      "enum": [
+                        "very_low",
+                        "low",
+                        "medium",
+                        "high",
+                        "very_high",
+                      ],
+                      "type": "string",
+                    },
+                    "estimatedDuration": {
+                      "description": "Estimated minutes for this exercise block",
+                      "maximum": 9007199254740991,
+                      "minimum": 1,
+                      "type": "integer",
+                    },
+                    "exerciseId": {
+                      "description": "Exact exercise UUID from the list",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string",
+                    },
+                    "exerciseName": {
+                      "description": "Exercise name in English",
+                      "type": "string",
+                    },
+                    "notes": {
+                      "type": "string",
+                    },
+                    "restSeconds": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "targetReps": {
+                      "description": "Rep range, e.g. "8-10" or "12"",
+                      "type": "string",
+                    },
+                    "targetSets": {
+                      "maximum": 9007199254740991,
+                      "minimum": 1,
+                      "type": "integer",
+                    },
+                    "targetWeight": {
+                      "description": "Starting weight in kg, if applicable",
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "exerciseId",
+                    "exerciseName",
+                    "energyCost",
+                    "targetSets",
+                    "targetReps",
+                    "restSeconds",
+                    "estimatedDuration",
+                  ],
+                  "type": "object",
+                },
+                "minItems": 1,
+                "type": "array",
+              },
+              "focus": {
+                "description": "Focus description, e.g. "Push: chest, shoulders, triceps"",
+                "type": "string",
+              },
+              "key": {
+                "description": "Unique session key, e.g. "upper_a", "lower_b", "full_body_1"",
+                "type": "string",
+              },
+              "name": {
+                "description": "Human-readable session name",
+                "type": "string",
+              },
+            },
+            "required": [
+              "key",
+              "name",
+              "focus",
+              "energyCost",
+              "estimatedDuration",
+              "exercises",
+            ],
+            "type": "object",
+          },
+          "maxItems": 7,
+          "minItems": 2,
+          "type": "array",
+        },
+        "targetMuscleGroups": {
+          "description": "Primary muscle groups targeted",
+          "items": {
+            "enum": [
+              "chest",
+              "back_lats",
+              "back_traps",
+              "shoulders_front",
+              "shoulders_side",
+              "shoulders_rear",
+              "quads",
+              "hamstrings",
+              "glutes",
+              "calves",
+              "biceps",
+              "triceps",
+              "forearms",
+              "abs",
+              "lower_back",
+              "core",
+              "cardio_system",
+              "full_body",
+              "lower_body_endurance",
+              "core_stability",
+            ],
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "trainingStyle": {
+          "description": "Training style, e.g. "Upper-Lower Split", "PPL"",
+          "type": "string",
+        },
+      },
+      "required": [
+        "name",
+        "goal",
+        "trainingStyle",
+        "targetMuscleGroups",
+        "recoveryGuidelines",
+        "sessionTemplates",
+        "progressionRules",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Request a phase transition. Use "chat" if the user explicitly cancels plan creation and wants to go back to chat.",
+    "name": "request_transition",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "description": "Brief reason for the transition",
+          "type": "string",
+        },
+        "toPhase": {
+          "description": "Target phase",
+          "enum": [
+            "chat",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "toPhase",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Save the user's timezone. Call when the user provides their city or timezone. Use IANA format, e.g. "Europe/Berlin", "America/New_York", "Asia/Tokyo".",
+    "name": "save_timezone",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "timezone": {
+          "description": "IANA timezone string, e.g. "Europe/Berlin"",
+          "type": "string",
+        },
+      },
+      "required": [
+        "timezone",
+      ],
+      "type": "object",
+    },
+  },
+]
+`;
+
+exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) registration tool surface 1`] = `
+[
+  {
+    "description": "Save one or more profile fields the user has provided. Extract and save age, gender, height (cm), weight (kg), fitness level, or goal from what the user said. Only include fields explicitly mentioned in this message. Can be called multiple times as the user provides info across the conversation.",
+    "name": "save_profile_fields",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "age": {
+          "description": "Age in years (10–120)",
+          "type": "number",
+        },
+        "firstName": {
+          "description": "Preferred name if user provides one",
+          "type": "string",
+        },
+        "fitnessGoal": {
+          "description": "Fitness goal in their own words",
+          "type": "string",
+        },
+        "fitnessLevel": {
+          "description": "Self-assessed fitness level",
+          "enum": [
+            "beginner",
+            "intermediate",
+            "advanced",
+          ],
+          "type": "string",
+        },
+        "gender": {
+          "description": "Biological gender",
+          "enum": [
+            "male",
+            "female",
+          ],
+          "type": "string",
+        },
+        "height": {
+          "description": "Height in cm (100–250)",
+          "type": "number",
+        },
+        "weight": {
+          "description": "Weight in kg (20–300)",
+          "type": "number",
+        },
+      },
+      "type": "object",
+    },
+  },
+  {
+    "description": "Mark registration as complete and transition the user to the next phase. Call this ONLY when all 6 profile fields are collected AND the user has explicitly confirmed the summary. The user must say something like "yes", "correct", "looks good", "ok", etc. Pass toPhase="plan_creation" if user wants to start training, "chat" if they want to ask questions first.",
+    "name": "complete_registration",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "toPhase": {
+          "description": "Next phase: "plan_creation" if user wants to build a plan, "chat" if they want to talk first",
+          "enum": [
+            "plan_creation",
+            "chat",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "toPhase",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Save the user's timezone. Call when the user provides their city or timezone. Use IANA format, e.g. "Europe/Berlin", "America/New_York", "Asia/Tokyo".",
+    "name": "save_timezone",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "timezone": {
+          "description": "IANA timezone string, e.g. "Europe/Berlin"",
+          "type": "string",
+        },
+      },
+      "required": [
+        "timezone",
+      ],
+      "type": "object",
+    },
+  },
+]
+`;
+
+exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) session_planning tool surface 1`] = `
+[
+  {
+    "description": "Search the exercise catalog using semantic (meaning-based) vector search. Use this tool whenever you need to find exercises — during plan creation, session planning, or training. The query should be a short English description of what you are looking for. Examples: "chest compound barbell press", "leg bodyweight squat beginner", "cardio low impact home". Apply filters (category, equipment, muscleGroup) when the context clearly constrains the search. You may call this tool multiple times in a single response to search for different muscle groups. Results include exercise IDs — always use these exact IDs when referencing exercises in other tools.",
+    "name": "search_exercises",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "description": "Filter by exercise category: compound, isolation, cardio, functional, mobility.",
+          "enum": [
+            "compound",
+            "isolation",
+            "cardio",
+            "functional",
+            "mobility",
+          ],
+          "type": "string",
+        },
+        "equipment": {
+          "description": "Filter by required equipment: barbell, dumbbell, bodyweight, machine, cable, none.",
+          "enum": [
+            "barbell",
+            "dumbbell",
+            "bodyweight",
+            "machine",
+            "cable",
+            "none",
+          ],
+          "type": "string",
+        },
+        "limit": {
+          "description": "Maximum number of results to return (default: 10, max: 20).",
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer",
+        },
+        "muscleGroup": {
+          "description": "Filter to exercises that involve this muscle group (primary or secondary).",
+          "enum": [
+            "chest",
+            "back_lats",
+            "back_traps",
+            "shoulders_front",
+            "shoulders_side",
+            "shoulders_rear",
+            "quads",
+            "hamstrings",
+            "glutes",
+            "calves",
+            "biceps",
+            "triceps",
+            "forearms",
+            "abs",
+            "lower_back",
+            "core",
+            "cardio_system",
+            "full_body",
+            "lower_body_endurance",
+            "core_stability",
+          ],
+          "type": "string",
+        },
+        "query": {
+          "description": "English description of the exercises you are looking for. E.g. "chest compound barbell".",
+          "type": "string",
+        },
+      },
+      "required": [
+        "query",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Create a training session with the approved workout plan and transition to the training phase. Call this ONLY when the user has explicitly approved the session plan and is ready to start. Do NOT call this during discussion, proposal, or plan refinement. Include the complete session plan as arguments — it will be stored with the session.",
+    "name": "start_training_session",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "estimatedDuration": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+        "exercises": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "exerciseId": {
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "type": "string",
+              },
+              "exerciseName": {
+                "minLength": 1,
+                "type": "string",
+              },
+              "imageUrl": {
+                "format": "uri",
+                "type": "string",
+              },
+              "notes": {
+                "type": "string",
+              },
+              "restSeconds": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer",
+              },
+              "targetReps": {
+                "minLength": 1,
+                "type": "string",
+              },
+              "targetSets": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer",
+              },
+              "targetWeight": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                  },
+                  {
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
+              "videoUrl": {
+                "format": "uri",
+                "type": "string",
+              },
+            },
+            "required": [
+              "exerciseId",
+              "targetSets",
+              "targetReps",
+              "restSeconds",
+            ],
+            "type": "object",
+          },
+          "minItems": 1,
+          "type": "array",
+        },
+        "modifications": {
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "reasoning": {
+          "minLength": 1,
+          "type": "string",
+        },
+        "sessionKey": {
+          "minLength": 1,
+          "type": "string",
+        },
+        "sessionName": {
+          "minLength": 1,
+          "type": "string",
+        },
+        "timeLimit": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+        "warnings": {
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "sessionKey",
+        "sessionName",
+        "reasoning",
+        "exercises",
+        "estimatedDuration",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Request a phase transition. Use "chat" if the user explicitly cancels session planning and wants to go back to chat.",
+    "name": "request_transition",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "description": "Brief reason for the transition",
+          "type": "string",
+        },
+        "toPhase": {
+          "description": "Target phase",
+          "enum": [
+            "chat",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "toPhase",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Save the user's timezone. Call when the user provides their city or timezone. Use IANA format, e.g. "Europe/Berlin", "America/New_York", "Asia/Tokyo".",
+    "name": "save_timezone",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "timezone": {
+          "description": "IANA timezone string, e.g. "Europe/Berlin"",
+          "type": "string",
+        },
+      },
+      "required": [
+        "timezone",
+      ],
+      "type": "object",
+    },
+  },
+]
+`;
+
+exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) training tool surface 1`] = `
+[
+  {
+    "description": "Search the exercise catalog using semantic (meaning-based) vector search. Use this tool whenever you need to find exercises — during plan creation, session planning, or training. The query should be a short English description of what you are looking for. Examples: "chest compound barbell press", "leg bodyweight squat beginner", "cardio low impact home". Apply filters (category, equipment, muscleGroup) when the context clearly constrains the search. You may call this tool multiple times in a single response to search for different muscle groups. Results include exercise IDs — always use these exact IDs when referencing exercises in other tools.",
+    "name": "search_exercises",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "description": "Filter by exercise category: compound, isolation, cardio, functional, mobility.",
+          "enum": [
+            "compound",
+            "isolation",
+            "cardio",
+            "functional",
+            "mobility",
+          ],
+          "type": "string",
+        },
+        "equipment": {
+          "description": "Filter by required equipment: barbell, dumbbell, bodyweight, machine, cable, none.",
+          "enum": [
+            "barbell",
+            "dumbbell",
+            "bodyweight",
+            "machine",
+            "cable",
+            "none",
+          ],
+          "type": "string",
+        },
+        "limit": {
+          "description": "Maximum number of results to return (default: 10, max: 20).",
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer",
+        },
+        "muscleGroup": {
+          "description": "Filter to exercises that involve this muscle group (primary or secondary).",
+          "enum": [
+            "chest",
+            "back_lats",
+            "back_traps",
+            "shoulders_front",
+            "shoulders_side",
+            "shoulders_rear",
+            "quads",
+            "hamstrings",
+            "glutes",
+            "calves",
+            "biceps",
+            "triceps",
+            "forearms",
+            "abs",
+            "lower_back",
+            "core",
+            "cardio_system",
+            "full_body",
+            "lower_body_endurance",
+            "core_stability",
+          ],
+          "type": "string",
+        },
+        "query": {
+          "description": "English description of the exercises you are looking for. E.g. "chest compound barbell".",
+          "type": "string",
+        },
+      },
+      "required": [
+        "query",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Log a completed set for the current exercise. Always provide exerciseId (from SESSION PLAN or exercise catalog). For strength/weighted exercises: provide reps and weight (in kg). For bodyweight exercises: provide reps only. For cardio duration (bike, elliptical): provide durationSeconds only. For cardio distance (treadmill, running): provide distanceKm. durationSeconds is optional — if unknown, log without it and ask the user. Optionally: inclinePct (treadmill only). setNumber is computed automatically — do NOT pass it. Call once per set. For multiple sets reported at once, call log_set multiple times.",
+    "name": "log_set",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "distanceKm": {
+          "description": "Distance in km — only for cardio_distance exercises (treadmill, running). Triggers cardio_distance set type when combined with durationSeconds.",
+          "exclusiveMinimum": 0,
+          "type": "number",
+        },
+        "durationSeconds": {
+          "description": "Duration in seconds — for cardio exercises.",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+        "exerciseId": {
+          "description": "Exercise UUID from the session plan. Preferred over exerciseName.",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "exerciseName": {
+          "description": "Exercise name — only if exerciseId is unknown.",
+          "type": "string",
+        },
+        "feedback": {
+          "description": "Any user comment about this set.",
+          "type": "string",
+        },
+        "inclinePct": {
+          "description": "Treadmill incline in percent (0–30). Only for treadmill. Do NOT use for strength exercises.",
+          "maximum": 30,
+          "minimum": 0,
+          "type": "number",
+        },
+        "order": {
+          "description": "Execution order when logging multiple sets in one response. First set = 1, second = 2, etc. Required when calling log_set more than once per response.",
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer",
+        },
+        "reps": {
+          "description": "Number of repetitions performed.",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+        "rpe": {
+          "description": "Rate of Perceived Exertion (1–10).",
+          "maximum": 10,
+          "minimum": 1,
+          "type": "number",
+        },
+        "weight": {
+          "description": "Weight used in kilograms (kg). Omit for bodyweight exercises.",
+          "exclusiveMinimum": 0,
+          "type": "number",
+        },
+      },
+      "type": "object",
+    },
+  },
+  {
+    "description": "Mark the current in-progress exercise as completed. Call ONLY when the user explicitly says they are done with this exercise ("next", "done with this", "moving on", "following exercise"). Do NOT call automatically after the planned number of sets — wait for the user.",
+    "name": "complete_current_exercise",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object",
+    },
+  },
+  {
+    "description": "Complete the training session and return to chat. Call when: (1) user confirms they are done training, OR (2) session is stale and user wants to move on. Do NOT call before explicit user confirmation or clear intent to start a new topic.",
+    "name": "finish_training",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "feedback": {
+          "description": "Optional session feedback from the user.",
+          "type": "string",
+        },
+      },
+      "type": "object",
+    },
+  },
+  {
+    "description": "Delete the last N logged sets for a given exercise in the current session. Use this when the user says a set was logged by mistake or wants to correct a logging error. Default count is 1 (deletes only the most recent set).",
+    "name": "delete_last_sets",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "description": "How many of the most recent sets to delete (default: 1)",
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer",
+        },
+        "exercise_id": {
+          "description": "The UUID of the exercise whose sets should be deleted",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+      },
+      "required": [
+        "exercise_id",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Correct the last logged set for a given exercise — update weight, reps, RPE, feedback, or cardio fields. Use this when the user says they entered wrong numbers, or to add missing duration to a cardio_distance set logged without time. Only provide the fields you want to change; others remain unchanged.",
+    "name": "update_last_set",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "distanceKm": {
+          "description": "Distance in km — use to correct distance on a cardio_distance set",
+          "exclusiveMinimum": 0,
+          "type": "number",
+        },
+        "durationSeconds": {
+          "description": "Duration in seconds — use to add missing time to a cardio_distance set",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+        "exercise_id": {
+          "description": "The UUID of the exercise whose last set should be updated",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "feedback": {
+          "description": "Updated feedback note from the user",
+          "type": "string",
+        },
+        "inclinePct": {
+          "description": "Treadmill incline in percent — use to add/correct incline on a cardio_distance set",
+          "maximum": 30,
+          "minimum": 0,
+          "type": "number",
+        },
+        "reps": {
+          "description": "New rep count (if correcting reps)",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+        "rpe": {
+          "description": "New RPE value (if correcting perceived exertion)",
+          "maximum": 10,
+          "minimum": 1,
+          "type": "number",
+        },
+        "weight": {
+          "description": "New weight in kg (if correcting weight)",
+          "type": "number",
+        },
+      },
+      "required": [
+        "exercise_id",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Save the user's timezone. Call when the user provides their city or timezone. Use IANA format, e.g. "Europe/Berlin", "America/New_York", "Asia/Tokyo".",
+    "name": "save_timezone",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "timezone": {
+          "description": "IANA timezone string, e.g. "Europe/Berlin"",
+          "type": "string",
+        },
+      },
+      "required": [
+        "timezone",
+      ],
+      "type": "object",
+    },
+  },
+]
+`;
