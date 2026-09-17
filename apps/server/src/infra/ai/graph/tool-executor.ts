@@ -153,7 +153,13 @@ export function buildToolExecutor(
       try {
         ret = await targetTool.invoke(call.args, toolConfig);
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        let message = err instanceof Error ? err.message : String(err);
+        // A schema rejection carries no recovery cue unless we add one: ids are
+        // UUIDs the model must copy verbatim from search_exercises results
+        // (dev-smoke 2026-09-17: the model invented exerciseIds and gave up).
+        if (message.includes('did not match expected schema')) {
+          message += `\nFix the arguments and call ${call.name} again: every id must be a UUID copied verbatim from the search_exercises results (the "ID:..." line), never invented or abbreviated.`;
+        }
         log.warn({ userId: ctx.userId, tool: call.name, err: message, args: call.args }, 'Tool invocation failed');
         newMessages.push(toToolMessage(llmError(message), call.id ?? ''));
         continue;

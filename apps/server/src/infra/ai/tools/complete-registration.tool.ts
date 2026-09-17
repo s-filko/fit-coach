@@ -5,6 +5,8 @@ import { ok, userError } from '@domain/conversation/tool-outcome';
 import type { IUserService } from '@domain/user/ports';
 import { FIELD_LABELS, type ProfileDataKey } from '@domain/user/services/registration.validation';
 
+import { userIdOf } from './format-exercise-summary';
+
 export interface CompleteRegistrationToolDeps {
   userService: IUserService;
 }
@@ -24,7 +26,7 @@ export function buildCompleteRegistrationTool(deps: CompleteRegistrationToolDeps
 
   return tool(
     async (input, config) => {
-      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
+      const userId = userIdOf(config);
       if (!userId) {
         return userError('Error: could not identify user. Please try again.');
       }

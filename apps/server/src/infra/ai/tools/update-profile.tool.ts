@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { ok, userError } from '@domain/conversation/tool-outcome';
 import type { IUserService } from '@domain/user/ports';
 
+import { userIdOf } from './format-exercise-summary';
+
 export interface UpdateProfileToolDeps {
   userService: IUserService;
 }
@@ -21,9 +23,7 @@ export function buildUpdateProfileTool(deps: UpdateProfileToolDeps) {
 
   return tool(
     async (input, config) => {
-      // configurable is typed as Record<string, unknown> in LangChain
-
-      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
+      const userId = userIdOf(config);
       if (!userId) {
         return userError('Error: could not identify user. Please try again.');
       }

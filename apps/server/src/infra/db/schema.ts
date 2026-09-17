@@ -124,7 +124,8 @@ export const conversationRuns = pgTable(
     phaseOut: conversationPhaseEnum('phase_out'),
     trigger: text('trigger').notNull().default('user_message'),
     client: text('client').notNull().default('telegram'),
-    model: text('model').notNull(),
+    // Nullable since 2026-09-18: failed runs before any model call record null (D-F remainder)
+    model: text('model'),
     promptVersions: jsonb('prompt_versions'),
     tokensIn: integer('tokens_in'),
     tokensOut: integer('tokens_out'),

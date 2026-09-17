@@ -17,7 +17,7 @@ import {
   buildSharedTools,
 } from '@infra/ai/tools';
 
-import type { ToolPolicy } from '../tool-policy';
+import { SEARCH_DEDUP_POLICY, type ToolPolicy } from '../tool-policy';
 
 /** What the plan_creation prompt renders beyond the directive base: nothing. */
 export interface PlanCreationData {
@@ -25,7 +25,7 @@ export interface PlanCreationData {
 }
 
 /** search_exercises dedup runs once per identical args in a batch (was buildDedupToolNode). */
-export const PLAN_CREATION_TOOL_POLICY: ToolPolicy = { perTurnDedup: ['search_exercises'], llmErrorBudget: Infinity };
+export const PLAN_CREATION_TOOL_POLICY: ToolPolicy = SEARCH_DEDUP_POLICY;
 
 export function buildPlanCreationSpec(deps: ConversationGraphDeps): PhaseSpec<PlanCreationData> {
   const { userService, exerciseRepository, embeddingService } = deps;

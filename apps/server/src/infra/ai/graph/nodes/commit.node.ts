@@ -24,10 +24,6 @@ import { createLogger } from '@shared/logger';
 
 const log = createLogger('commit-node');
 
-function messageText(m: BaseMessage): string {
-  return typeof m.content === 'string' ? m.content : textOf(m.content);
-}
-
 function collectToolCalls(messages: BaseMessage[]): Array<{ name: string; argsHash: string; outcomeKind: string }> {
   const result: Array<{ name: string; argsHash: string; outcomeKind: string }> = [];
   for (const m of messages) {
@@ -71,8 +67,8 @@ export function buildCommitNode(deps: CommitNodeDeps) {
     // 1. Persist the turn — analytics failure must not break the reply.
     const human = state.messages.find(m => m._getType() === 'human') as HumanMessage | undefined;
     const ai = [...state.messages].reverse().find(m => m._getType() === 'ai') as AIMessage | undefined;
-    const humanText = human !== undefined ? messageText(human) : '';
-    const aiText = ai !== undefined ? messageText(ai) : '';
+    const humanText = human !== undefined ? textOf(human.content) : '';
+    const aiText = ai !== undefined ? textOf(ai.content) : '';
     if (humanText && aiText) {
       try {
         await contextService.appendTurn(userId, phase, humanText, aiText);

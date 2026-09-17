@@ -54,6 +54,10 @@ export interface ToolPolicy {
 /** Phases with no training-only protections — today's four non-training subgraphs. */
 export const NO_POLICY: ToolPolicy = { llmErrorBudget: Infinity };
 
+/** The "search dedup" policy shared by plan_creation and session_planning:
+ * search_exercises runs once per identical args in a batch, no error cap. */
+export const SEARCH_DEDUP_POLICY: ToolPolicy = { perTurnDedup: ['search_exercises'], llmErrorBudget: Infinity };
+
 /** Execution priority for training tools. Lower number = runs first. (Moved from training.subgraph.ts.) */
 export const TRAINING_TOOL_PRIORITY: Record<string, number> = {
   search_exercises: 0,

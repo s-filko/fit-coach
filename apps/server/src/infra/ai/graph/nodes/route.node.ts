@@ -6,9 +6,8 @@ import { Command } from '@langchain/langgraph';
 
 import type { ConversationStateType } from '@infra/ai/graph/state';
 
-export function buildRouteNode(phaseNames: readonly string[]) {
+export function buildRouteNode() {
   return async function routeNode(state: ConversationStateType): Promise<Command<Partial<ConversationStateType>>> {
-    void phaseNames;
     return new Command({ goto: state.phase });
   };
 }

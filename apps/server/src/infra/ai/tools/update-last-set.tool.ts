@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import type { ITrainingService } from '@domain/training/ports';
 
-import { sessionIdOf } from '@infra/ai/tools/format-exercise-summary';
+import { sessionIdOf, userIdOf } from '@infra/ai/tools/format-exercise-summary';
 
 import { createLogger } from '@shared/logger';
 
@@ -20,7 +20,7 @@ export function buildUpdateLastSetTool(deps: UpdateLastSetToolDeps) {
 
   return tool(
     async (input, config) => {
-      const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
+      const userId = userIdOf(config) ?? '';
       const sessionId = sessionIdOf(config);
       if (!sessionId) {
         return systemError('No active training session found. Start a session first.');

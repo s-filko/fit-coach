@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import type { ITrainingService } from '@domain/training/ports';
 
-import { formatExerciseSummary, sessionIdOf } from '@infra/ai/tools/format-exercise-summary';
+import { formatExerciseSummary, sessionIdOf, userIdOf } from '@infra/ai/tools/format-exercise-summary';
 
 import { createLogger } from '@shared/logger';
 
@@ -20,7 +20,7 @@ export function buildCompleteCurrentExerciseTool(deps: CompleteCurrentExerciseTo
 
   return tool(
     async (_input, config) => {
-      const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
+      const userId = userIdOf(config) ?? '';
       const sessionId = sessionIdOf(config);
       if (!sessionId) {
         log.error({ userId }, 'complete_current_exercise called without active sessionId');

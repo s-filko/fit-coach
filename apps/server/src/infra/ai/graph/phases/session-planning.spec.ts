@@ -22,7 +22,7 @@ import {
   buildStartTrainingSessionTool,
 } from '@infra/ai/tools';
 
-import type { ToolPolicy } from '../tool-policy';
+import { SEARCH_DEDUP_POLICY, type ToolPolicy } from '../tool-policy';
 
 /** What the session_planning prompt renders beyond the directive base. */
 export interface SessionPlanningData {
@@ -30,11 +30,8 @@ export interface SessionPlanningData {
   lastMessageTime: Date | null;
 }
 
-/** search_exercises dedup runs once per identical args in a batch (was buildDedupToolNode). */
-export const SESSION_PLANNING_TOOL_POLICY: ToolPolicy = {
-  perTurnDedup: ['search_exercises'],
-  llmErrorBudget: Infinity,
-};
+/** The shared "search dedup" policy (see tool-policy.ts). */
+export const SESSION_PLANNING_TOOL_POLICY: ToolPolicy = SEARCH_DEDUP_POLICY;
 
 export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec<SessionPlanningData> {
   const { userService, exerciseRepository, embeddingService, trainingService } = deps;
