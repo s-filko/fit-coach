@@ -63,11 +63,11 @@ export class LLMLogHandler extends BaseCallbackHandler {
     const invocationParams = extraParams?.['invocation_params'] as Record<string, unknown> | undefined;
     // LangChain strips `configurable` from the options a callback sees
     // (runnables/base.js `_separateRunnableConfigFromCallOptions` deletes it), so
-    // runId/userId travel via config metadata — inherited by every nested model call.
+    // userId travels via config metadata — inherited by every nested model call.
+    // (runId left this handler with the P3 run-metrics move; the per-run
+    // collector's handler owns run identity now.)
     const userId = metadata?.['userId'] as string | undefined;
-    const runId = metadata?.['runId'] as string | undefined;
     const invocationModel = (invocationParams?.['model'] as string | undefined) ?? config.LLM_MODEL;
-    void runId;
 
     if (isDebug) {
       const tools = options?.['tools'] as unknown[] | undefined;
@@ -109,7 +109,7 @@ export class LLMLogHandler extends BaseCallbackHandler {
       generations: Array<Array<{ text: string }>>;
       llmOutput?: { tokenUsage?: { promptTokens?: number; completionTokens?: number } };
     },
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- positional callback signature
     _llmRunId: string,
   ): void {
     const text = output.generations?.[0]?.[0]?.text;

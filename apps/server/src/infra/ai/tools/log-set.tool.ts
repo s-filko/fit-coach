@@ -15,6 +15,8 @@ import {
 
 import { createLogger } from '@shared/logger';
 
+import { userIdOf } from './format-exercise-summary';
+
 const log = createLogger('training-tools');
 
 export interface LogSetToolDeps {
@@ -26,7 +28,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
 
   return tool(
     async (input, config) => {
-      const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
+      const userId = userIdOf(config) ?? '';
       const sessionId = sessionIdOf(config);
       if (!sessionId) {
         log.error({ userId }, 'log_set called without active sessionId');

@@ -15,7 +15,12 @@ const run: ExportedRun = {
     // Real dev-data shape (BUG-016 kin): kind defaults to 'human' on every row,
     // role is the reliable human/assistant discriminator.
     { role: 'user', kind: 'human', content: 'привет, Иван Петров', createdAt: new Date('2026-09-14T09:59:58Z') },
-    { role: 'assistant', kind: 'human', content: `сессия ${RUN_UUID} открыта`, createdAt: new Date('2026-09-14T09:59:59Z') },
+    {
+      role: 'assistant',
+      kind: 'human',
+      content: `сессия ${RUN_UUID} открыта`,
+      createdAt: new Date('2026-09-14T09:59:59Z'),
+    },
     { role: 'user', kind: 'human', content: 'жим 80 на 8', createdAt: new Date('2026-09-14T10:00:00Z') },
   ],
 };

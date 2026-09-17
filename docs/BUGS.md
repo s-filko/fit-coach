@@ -3,6 +3,9 @@
 > This file tracks bugs found during manual and automated testing.
 > Each entry must include: root cause, logs/DB evidence, impact, and fix status.
 > Do NOT close a bug without a confirmed fix and regression test.
+> **Component paths are as of the bug's time.** The 2026-09-17 refactor (P3) renamed the
+> graph layout (subgraphs → PhaseSpecs, router/persist → prepare/route/commit, tools split
+> per file under `infra/ai/tools/`) — see `docs/ARCHITECTURE.md` for the current tree.
 
 ---
 

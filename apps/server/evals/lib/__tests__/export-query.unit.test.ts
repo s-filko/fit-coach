@@ -10,17 +10,51 @@ const mockRunRows = [
   },
 ];
 const linkedTurnRows = [
-  { userId: 'u1', runId: 'r1', role: 'user', kind: 'human', content: 'привет', createdAt: new Date('2026-09-01T10:00:00Z') },
-  { userId: 'u1', runId: 'r1', role: 'assistant', kind: 'ai', content: 'здравствуй', createdAt: new Date('2026-09-01T10:00:04Z') },
+  {
+    userId: 'u1',
+    runId: 'r1',
+    role: 'user',
+    kind: 'human',
+    content: 'привет',
+    createdAt: new Date('2026-09-01T10:00:00Z'),
+  },
+  {
+    userId: 'u1',
+    runId: 'r1',
+    role: 'assistant',
+    kind: 'ai',
+    content: 'здравствуй',
+    createdAt: new Date('2026-09-01T10:00:04Z'),
+  },
 ];
 // BUG-016 shape: production appendTurn writes turns without run_id.
 // The fallback path must still attach them via the run's time window.
 const unlinkedTurnRows = [
-  { userId: 'u1', runId: null, role: 'user', kind: 'human', content: 'привет', createdAt: new Date('2026-09-01T10:00:01Z') },
-  { userId: 'u1', runId: null, role: 'assistant', kind: 'ai', content: 'здравствуй', createdAt: new Date('2026-09-01T10:00:04Z') },
+  {
+    userId: 'u1',
+    runId: null,
+    role: 'user',
+    kind: 'human',
+    content: 'привет',
+    createdAt: new Date('2026-09-01T10:00:01Z'),
+  },
+  {
+    userId: 'u1',
+    runId: null,
+    role: 'assistant',
+    kind: 'ai',
+    content: 'здравствуй',
+    createdAt: new Date('2026-09-01T10:00:04Z'),
+  },
 ];
-let mockTurnsRows: Array<{ userId: string; runId: string | null; role: string; kind: string; content: string; createdAt: Date }> =
-  linkedTurnRows;
+let mockTurnsRows: Array<{
+  userId: string;
+  runId: string | null;
+  role: string;
+  kind: string;
+  content: string;
+  createdAt: Date;
+}> = linkedTurnRows;
 
 jest.mock('@infra/db/drizzle', () => {
   const rowsFor = (table: unknown) =>

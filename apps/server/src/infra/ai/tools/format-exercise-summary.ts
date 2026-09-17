@@ -5,6 +5,12 @@ export const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 /** Retro-logged sets are offset from the last real activity by this much. */
 export const RETRO_SET_OFFSET_MS = 5 * 60 * 1000;
 
+/** Reads the user id the executor put into the tool config; null when absent. */
+export function userIdOf(config: { configurable?: Record<string, unknown> } | undefined): string | null {
+  const userId = config?.configurable?.['userId'];
+  return typeof userId === 'string' && userId ? userId : null;
+}
+
 /** Reads the current session id the executor put into the tool config. */
 export function sessionIdOf(config: { configurable?: Record<string, unknown> } | undefined): string | null {
   const sessionId = config?.configurable?.['activeSessionId'];

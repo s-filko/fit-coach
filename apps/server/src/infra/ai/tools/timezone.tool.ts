@@ -6,6 +6,8 @@ import type { IUserService } from '@domain/user/ports';
 
 import { isValidTimezone } from '@shared/date-utils';
 
+import { userIdOf } from './format-exercise-summary';
+
 export interface TimezoneToolDeps {
   userService: IUserService;
 }
@@ -19,7 +21,7 @@ export function buildSaveTimezoneTool(deps: TimezoneToolDeps) {
 
   return tool(
     async (input, config) => {
-      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
+      const userId = userIdOf(config);
       if (!userId) {
         return userError('Error: could not identify user. Please try again.');
       }

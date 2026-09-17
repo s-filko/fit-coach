@@ -43,7 +43,7 @@ function buildGraph(deps: ConversationGraphDeps) {
   // states to 'commit' (D-E); route fans out to the phase nodes; every phase
   // falls into commit. Adding a phase = adding a spec (INV-LLM-005).
   const prepareNode = buildPrepareNode({ userService, trainingService });
-  const routeNode = buildRouteNode(specs.map(s => s.name));
+  const routeNode = buildRouteNode();
   const commitNode = buildCommitNode({
     contextService,
     runService,
@@ -55,7 +55,7 @@ function buildGraph(deps: ConversationGraphDeps) {
 
   const graph = new StateGraph(ConversationState, RunContext)
     .addNode('prepare', prepareNode, { ends: ['route', 'commit'] })
-    .addNode('route', routeNode, { ends: [...specs.map(s => s.name), 'commit'] })
+    .addNode('route', routeNode, { ends: specs.map(s => s.name) })
     .addNode('commit', commitNode)
     .addEdge(START, 'prepare')
     .addEdge('commit', END);

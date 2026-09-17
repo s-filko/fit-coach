@@ -5,6 +5,8 @@ import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
 import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
 import { SessionRecommendationSchema } from '@domain/training/session-planning.types';
 
+import { userIdOf } from './format-exercise-summary';
+
 export interface StartTrainingSessionToolDeps {
   trainingService: ITrainingService;
   workoutPlanRepository: IWorkoutPlanRepository;
@@ -23,7 +25,7 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
 
   return tool(
     async (input, config) => {
-      const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
+      const userId = userIdOf(config);
       if (!userId) {
         return userError('Error: could not identify user. Please try again.');
       }

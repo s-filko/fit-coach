@@ -29,7 +29,7 @@ describe('conversation_runs schema (ADR-0013 §8)', () => {
   it('requires the fields AC-1301 asserts are non-null', () => {
     expect(conversationRuns.runId.notNull).toBe(true);
     expect(conversationRuns.phaseIn.notNull).toBe(true);
-    expect(conversationRuns.model.notNull).toBe(true);
+    // model is nullable since 2026-09-18: failed runs before any model call record null (D-F)
     expect(conversationRuns.latencyMs.notNull).toBe(true);
     expect(conversationRuns.outcome.notNull).toBe(true);
   });
