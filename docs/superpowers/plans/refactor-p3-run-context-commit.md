@@ -194,6 +194,14 @@ Adapter `run(input)`: `user = await userService.getUser(userId)` (missing → th
 
 ### Task 6: L1 compare, dev deploy and full smoke, AC evidence, docs reconcile, close-out (orchestrator)
 
+> **Owner decision 2026-09-17 (quota):** no further full L1 runs in P3 beyond the one
+> already-running tool-executor compare — the weekly Z.AI quota cannot absorb three
+> ~171-call compares. AC-1334 for this phase is satisfied by the byte-identity
+> snapshots + unit tests + the phase-end dev smoke; an optional scoped mini-L1
+> (transition datasets only, 1 sample, ~18 calls) may be run at the phase close-out
+> if the owner asks.
+
+
 - [ ] **Step 1: AC-1334** — `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v1`; evidence JSON `docs/superpowers/plans/evidence/refactor-p3-run-context-commit-l1-compare.json`; table pasted.
 - [ ] **Step 2: Deploy to dev; P3 phase-end smoke** (`docs/MANUAL_TEST_PLAN.md` scenarios 1–3 and 6 via the dev bot/API): registration on a fresh user, chat → session_planning → training with sets, corrections, `finish_training`. Queries pasted:
 

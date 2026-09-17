@@ -266,6 +266,14 @@ Per subgraph: `tools` node = `buildToolExecutor(tools, POLICY)` with
 
 ### Task 8: L1 compare, dev deploy, docs reconcile, close-out (orchestrator)
 
+> **Owner decision 2026-09-17 (quota):** no further full L1 runs in P3 beyond the one
+> already-running tool-executor compare — the weekly Z.AI quota cannot absorb three
+> ~171-call compares. AC-1334 for this phase is satisfied by the byte-identity
+> snapshots + unit tests + the phase-end dev smoke; an optional scoped mini-L1
+> (transition datasets only, 1 sample, ~18 calls) may be run at the phase close-out
+> if the owner asks.
+
+
 > **Steps 2, 4 deferred to the P3 phase close-out (owner decision 2026-09-17):**
 > the three P3 plans run as one phase; dev deploy, smoke, close-out-review,
 > `Status: done` and the PR merge happen once, at the end of P3 — not per plan.
