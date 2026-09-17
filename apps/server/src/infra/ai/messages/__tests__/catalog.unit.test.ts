@@ -1,7 +1,12 @@
 import { type Lang, type MessageKey, langOf, t } from '../index';
 
-/** Every key the catalog type declares, in both languages (D-F). */
-const ALL_KEYS: MessageKey[] = ['tool_error_budget_exhausted', 'tool_system_error'];
+/** Every key the catalog type declares, in both languages (D-F, D-B). */
+const ALL_KEYS: MessageKey[] = [
+  'tool_error_budget_exhausted',
+  'tool_system_error',
+  'training_no_active_session',
+  'training_session_not_found',
+];
 
 describe('message catalog (refactor-p3-tool-executor Task 3)', () => {
   it('langOf maps ru → ru and everything else → en', () => {

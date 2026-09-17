@@ -170,7 +170,6 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323)', () => {
 
     // the registry layout for training is the history_frame mode
     expect(PHASE_PROMPTS.training.layout.historyMode).toBe('history_frame');
-    expect(PHASE_PROMPTS.training.layout.mergeRuns).toBe(false);
-    expect(PHASE_PROMPTS.chat.layout.mergeRuns).toBe(true);
+    expect(PHASE_PROMPTS.chat.layout.historyMode).toBe('interleaved');
   });
 });

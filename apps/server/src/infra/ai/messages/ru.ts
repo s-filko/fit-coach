@@ -10,4 +10,7 @@ export const ru: Record<MessageKey, string> = {
     'Не удалось записать данные после нескольких попыток. Попробуй переформулировать: укажи упражнение, вес и количество повторений чётко.',
   tool_system_error:
     'Произошла техническая ошибка при сохранении данных тренировки. Пожалуйста, попробуй снова или обратись в поддержку.',
+  // translations of the en guard literals (2026-09) — new user-facing text for the owner to review
+  training_no_active_session: 'Нет активной тренировки. Сначала начни тренировку.',
+  training_session_not_found: 'Тренировка не найдена. Возможно, она уже завершена.',
 };

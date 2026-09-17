@@ -23,16 +23,23 @@ describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVer
     expect(Object.values(versions).every(v => v === 'v1')).toBe(true);
   });
 
-  it('promptVersionsForPhase(registration) has no blocks', () => {
-    expect(Object.keys(promptVersionsForPhase('registration')).some(k => k.startsWith('block.'))).toBe(false);
+  it('promptVersionsForPhase(registration) pins only the post-tool nudge block (reviewed change: the nudge now applies to every phase)', () => {
+    const keys = Object.keys(promptVersionsForPhase('registration')).filter(k => k.startsWith('block.'));
+    expect(keys).toEqual(['block.post_tool_nudge']);
+    expect(promptVersionsForPhase('registration')['block.post_tool_nudge']).toBe('v1');
   });
 
-  it('blocksForLayout reproduces the five pre-assembler blocks arrays verbatim', () => {
-    // Written literally from the pre-Task-4 registry (the single source of
-    // truth for what each phase injects, now derived from the layout).
+  it('promptVersionsForPhase(chat) gains block.post_tool_nudge (reviewed change)', () => {
+    const keys = Object.keys(promptVersionsForPhase('chat')).filter(k => k.startsWith('block.'));
+    expect(keys).toEqual(['block.summary_frame', 'block.post_tool_nudge']);
+  });
+
+  it('blocksForLayout matches the registry layouts, with the nudge block on every phase', () => {
+    // The layout-derived blocks per phase; blocksForLayout always appends the
+    // post-tool nudge (ADR-0013 §6 — one agent node, nudge everywhere).
     const expected: Record<ConversationPhase, readonly string[]> = {
-      registration: [],
-      chat: ['block.summary_frame'],
+      registration: ['block.post_tool_nudge'],
+      chat: ['block.summary_frame', 'block.post_tool_nudge'],
       plan_creation: ['block.summary_frame', 'block.post_tool_nudge'],
       session_planning: ['block.summary_frame', 'block.post_tool_nudge'],
       training: ['block.summary_frame', 'block.history_frame', 'block.tool_results', 'block.post_tool_nudge'],

@@ -10,8 +10,8 @@ import type { IUserService } from '@domain/user/ports';
 import { User } from '@domain/user/services/user.service';
 
 import { assembleContext } from '@infra/ai/context/assemble-context';
+import { REGISTRATION_TOOL_POLICY } from '@infra/ai/graph/phases/registration.spec';
 import { afterTools, buildToolExecutor } from '@infra/ai/graph/tool-executor';
-import { NO_POLICY } from '@infra/ai/graph/tool-policy';
 import { getModel } from '@infra/ai/model.factory';
 import { compose } from '@infra/ai/prompts/compose';
 import { REGISTRATION_PROMPT } from '@infra/ai/prompts/phases/registration';
@@ -42,7 +42,7 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
     buildCompleteRegistrationTool({ userService }),
     ...buildSharedTools({ userService }),
   ];
-  const toolNode = buildToolExecutor(tools, NO_POLICY);
+  const toolNode = buildToolExecutor(tools, REGISTRATION_TOOL_POLICY);
   const model = getModel().bindTools(tools);
 
   const agentNode = async (state: RegistrationSubgraphStateType, config: RunnableConfig) => {

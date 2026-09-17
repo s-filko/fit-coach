@@ -17,8 +17,8 @@ import type { User } from '@domain/user/services/user.service';
 
 import { assembleContext } from '@infra/ai/context/assemble-context';
 import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
+import { buildTrainingToolPolicy } from '@infra/ai/graph/phases/training.spec';
 import { afterTools, buildToolExecutor } from '@infra/ai/graph/tool-executor';
-import { type ToolPolicy, TRAINING_TOOL_PRIORITY } from '@infra/ai/graph/tool-policy';
 import { getModel } from '@infra/ai/model.factory';
 import { compose } from '@infra/ai/prompts/compose';
 import { TRAINING_PROMPT } from '@infra/ai/prompts/phases/training';
@@ -58,11 +58,6 @@ const TrainingSubgraphState = Annotation.Root({
 
 type TrainingSubgraphStateType = typeof TrainingSubgraphState.State;
 
-/** Mid-workout session shape the availability filter reads (BUG-008 Plan A). */
-interface SessionLike {
-  exercises?: Array<{ status?: string; sets?: unknown[] }>;
-}
-
 export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
   const { userService, trainingService, workoutSessionRepo, contextService, exerciseRepository, embeddingService } =
     deps;
@@ -77,25 +72,10 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
     ...buildSharedTools({ userService }),
   ];
 
-  /**
-   * Training protections (ADR-0011): priority ordering, log_set batch dedup,
-   * error budget 1, system-error stop (executor-wide) and dynamic tool
-   * filtering (BUG-008 Plan A) — the agent node calls `availability` with the
-   * session it just loaded.
-   */
-  const policy: ToolPolicy = {
-    ordering: TRAINING_TOOL_PRIORITY,
-    batchDedup: ['log_set'],
-    llmErrorBudget: 1,
-    availability: ({ session }) => {
-      const currentExercise = (session as SessionLike | null)?.exercises?.find(ex => ex.status === 'in_progress');
-      const currentSetsCount = currentExercise?.sets?.length ?? 0;
-      if (currentSetsCount !== 0) {
-        return null;
-      }
-      return tools.filter(t => t.name !== 'delete_last_sets' && t.name !== 'update_last_set').map(t => t.name);
-    },
-  };
+  // Training protections (ADR-0011): priority ordering, log_set batch dedup,
+  // error budget 1, system-error stop (executor-wide) and dynamic tool
+  // filtering (BUG-008 Plan A) — the policy now lives on the phase spec.
+  const policy = buildTrainingToolPolicy(tools);
 
   const toolExecutor = buildToolExecutor(tools, policy);
   const baseModel = getModel();
@@ -144,7 +124,7 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
 
       // Dynamic tool filtering (BUG-008 Plan A): tools the model may call given
       // the current session state; null = all. The policy owns the rule.
-      const availableNames = policy.availability?.({ session }) ?? null;
+      const availableNames = policy.availability?.({ data: { session } }) ?? null;
       const availableTools = availableNames === null ? tools : tools.filter(t => availableNames.includes(t.name));
 
       if (availableTools.length < tools.length) {

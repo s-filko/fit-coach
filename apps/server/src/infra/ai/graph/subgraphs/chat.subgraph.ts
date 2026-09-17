@@ -11,8 +11,8 @@ import type { IUserService } from '@domain/user/ports';
 import { User } from '@domain/user/services/user.service';
 
 import { assembleContext } from '@infra/ai/context/assemble-context';
+import { CHAT_TOOL_POLICY } from '@infra/ai/graph/phases/chat.spec';
 import { afterTools, buildToolExecutor } from '@infra/ai/graph/tool-executor';
-import { NO_POLICY } from '@infra/ai/graph/tool-policy';
 import { getModel } from '@infra/ai/model.factory';
 import { compose } from '@infra/ai/prompts/compose';
 import { CHAT_PROMPT } from '@infra/ai/prompts/phases/chat';
@@ -46,7 +46,7 @@ export function buildChatSubgraph(deps: ChatSubgraphDeps) {
     buildRequestTransitionTool('chat'),
     ...buildSharedTools({ userService }),
   ];
-  const toolNode = buildToolExecutor(tools, NO_POLICY);
+  const toolNode = buildToolExecutor(tools, CHAT_TOOL_POLICY);
   const model = getModel().bindTools(tools);
 
   const agentNode = async (state: ChatSubgraphStateType, config: RunnableConfig) => {

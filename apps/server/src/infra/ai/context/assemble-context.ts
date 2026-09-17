@@ -46,6 +46,21 @@ export interface AssembledContext {
   budgetReport: BudgetReport;
 }
 
+/**
+ * Transitional (removed with the shared agent node in refactor-p3-phase-spec
+ * Task 2, which drops merging entirely per ADR-0013 §3.4): today's per-phase
+ * merge decision — the same values the deleted `PhaseLayout.mergeRuns` flag
+ * carried — kept verbatim so the assembler's output stays byte-identical
+ * until the subgraphs are replaced.
+ */
+const LEGACY_MERGE_RUNS: Record<ConversationPhase, boolean> = {
+  registration: true,
+  chat: true,
+  plan_creation: true,
+  session_planning: true,
+  training: false,
+};
+
 /** The role-narrowing lambda from today's training.subgraph agentNode — one home on the assembly side. */
 function toFrameRow(m: ChatMsg): { role: 'user' | 'assistant'; content: string } {
   return { role: m.role === 'user' ? 'user' : 'assistant', content: m.content };
@@ -97,7 +112,7 @@ export function assembleContext(input: AssembleInput): AssembledContext {
     ...inFlight,
     ...(toolResultsText ? [new SystemMessage(toolResultsText)] : []),
   ];
-  const messages = layout.mergeRuns ? mergeMessageRuns(ordered) : ordered;
+  const messages = LEGACY_MERGE_RUNS[input.phase] ? mergeMessageRuns(ordered) : ordered;
 
   const budgetReport: BudgetReport = {
     estimator: TOKEN_ESTIMATOR_ID,

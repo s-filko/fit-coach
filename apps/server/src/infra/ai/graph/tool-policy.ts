@@ -14,12 +14,13 @@ export interface ToolCallLike {
 }
 
 /**
- * What the agent node hands `availability`: the session it just loaded.
- * Loosely typed — the policy lambda installed by the training subgraph
- * narrows it to the domain session shape.
+ * What the agent node hands `availability`: the phase's loaded render data
+ * (`PhaseSpec.loadContext`'s `data`; training reads its `session` field).
+ * Loosely typed — the policy lambda installed by the training spec narrows
+ * it to the domain shapes.
  */
 export interface AvailabilityInput {
-  session: unknown;
+  data: unknown;
 }
 
 export interface ToolPolicy {

@@ -19,8 +19,8 @@ import type { User } from '@domain/user/services/user.service';
 
 import { assembleContext } from '@infra/ai/context/assemble-context';
 import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
+import { SESSION_PLANNING_TOOL_POLICY } from '@infra/ai/graph/phases/session-planning.spec';
 import { afterTools, buildToolExecutor } from '@infra/ai/graph/tool-executor';
-import { type ToolPolicy } from '@infra/ai/graph/tool-policy';
 import { getModel } from '@infra/ai/model.factory';
 import { compose } from '@infra/ai/prompts/compose';
 import { SESSION_PLANNING_PROMPT } from '@infra/ai/prompts/phases/session_planning';
@@ -75,7 +75,7 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
   ];
   const tools = [...phaseTools, ...buildSharedTools({ userService })];
   // search_exercises dedup runs once per identical args in a batch (was buildDedupToolNode)
-  const policy: ToolPolicy = { perTurnDedup: ['search_exercises'], llmErrorBudget: Infinity };
+  const policy = SESSION_PLANNING_TOOL_POLICY;
   const toolExecutor = buildToolExecutor(tools, policy);
   const model = getModel().bindTools(tools);
 

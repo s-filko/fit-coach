@@ -3,11 +3,15 @@ import { ru } from './ru';
 
 /**
  * User-facing message catalog (ADR-0013 §11 `infra/ai/messages/`). Grows in
- * refactor-p3-run-context-commit (router replies, training guards); created
- * here with the executor's two keys (decision D-E) so the inline-prompt rails
- * cover the directory from the first commit.
+ * refactor-p3-run-context-commit (router replies); created here with the
+ * executor's two keys (decision D-E) and the training loader guards (D-B) so
+ * the inline-prompt rails cover the directory from the first commit.
  */
-export type MessageKey = 'tool_error_budget_exhausted' | 'tool_system_error';
+export type MessageKey =
+  | 'tool_error_budget_exhausted'
+  | 'tool_system_error'
+  | 'training_no_active_session'
+  | 'training_session_not_found';
 
 export type Lang = 'en' | 'ru';
 

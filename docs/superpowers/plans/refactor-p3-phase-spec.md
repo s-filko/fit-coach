@@ -1,6 +1,6 @@
 # Refactor P3 — PhaseSpec Factory and Shared Agent Node Implementation Plan
 
-- Status: planned
+- Status: in progress
 - Branch: plan/refactor-p3-phase-spec
 - After: refactor-p3-tool-executor
 
