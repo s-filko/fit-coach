@@ -13,10 +13,11 @@ _Generated 2026-09-17 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 **In progress**
 - `refactor-p3-phase-spec.md` — Refactor P3 — PhaseSpec Factory and Shared Agent Node Implementation Plan (branch: `plan/refactor-p3-phase-spec`, last commit 2026-09-17)
+- `refactor-p3-run-context-commit.md` — Refactor P3 — Run Context, Commit Node and Conversation Run Port Implementation Plan (branch: `plan/refactor-p3-run-context-commit`, last commit 2026-09-17)
 - `refactor-p3-tool-executor.md` — Refactor P3 — Shared Tool Executor Implementation Plan (branch: `plan/refactor-p3-tool-executor`, last commit 2026-09-17)
 
 **Planned**
-- `refactor-p3-run-context-commit.md` — Refactor P3 — Run Context, Commit Node and Conversation Run Port Implementation Plan
+— none —
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
