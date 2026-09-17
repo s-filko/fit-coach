@@ -18,9 +18,9 @@ import type { IUserService } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
 
 import { assembleContext } from '@infra/ai/context/assemble-context';
-import { buildDedupToolNode } from '@infra/ai/graph/dedup-tool-node';
 import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
-import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
+import { afterTools, buildToolExecutor } from '@infra/ai/graph/tool-executor';
+import { type ToolPolicy } from '@infra/ai/graph/tool-policy';
 import { buildSessionPlanningTools } from '@infra/ai/graph/tools/session-planning.tools';
 import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
@@ -62,14 +62,6 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
     trainingService,
   } = deps;
 
-  /**
-   * Per-user maps: tools set entries by userId, extractNode reads and deletes them.
-   * Maps keyed by userId are safe when the graph is a singleton shared across concurrent
-   * requests — single-value refs would cause a race condition between users.
-   */
-  const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
-  const pendingActiveSessionIds = new PendingRefMap<string | null>();
-
   const contextBuilder = new SessionPlanningContextBuilder(workoutPlanRepository, workoutSessionRepository);
 
   const phaseTools = buildSessionPlanningTools({
@@ -77,11 +69,11 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
     workoutPlanRepository,
     exerciseRepository,
     embeddingService,
-    pendingTransitions,
-    pendingActiveSessionIds,
   });
   const tools = [...phaseTools, buildSaveTimezoneTool({ userService })];
-  const dedupToolNode = buildDedupToolNode(tools);
+  // search_exercises dedup runs once per identical args in a batch (was buildDedupToolNode)
+  const policy: ToolPolicy = { perTurnDedup: ['search_exercises'], llmErrorBudget: Infinity };
+  const toolExecutor = buildToolExecutor(tools, policy);
   const model = getModel().bindTools(tools);
 
   const agentNode = async (state: SessionPlanningSubgraphStateType, config: RunnableConfig) => {
@@ -135,29 +127,21 @@ export function buildSessionPlanningSubgraph(deps: SessionPlanningSubgraphDeps) 
     // Read fresh user from DB to capture any profile changes during this turn
     const freshUser = state.userId ? await userService.getUser(state.userId).catch(() => null) : null;
 
-    // Consume both per-user map entries set by tools — read and delete atomically
-    const transition = pendingTransitions.get(state.userId) ?? null;
-    pendingTransitions.delete(state.userId);
-
-    const activeSessionId = pendingActiveSessionIds.get(state.userId) ?? null;
-    pendingActiveSessionIds.delete(state.userId);
-
+    // requestedTransition/activeSessionId arrive through the subgraph state
+    // from the tool executor
     return {
       responseMessage: text,
       user: freshUser ?? state.user,
-      requestedTransition: transition,
-      // Only update activeSessionId if start_training_session was called
-      ...(activeSessionId !== null ? { activeSessionId } : {}),
     };
   };
 
   const graph = new StateGraph(SessionPlanningSubgraphState)
     .addNode('agent', agentNode)
-    .addNode('tools', dedupToolNode)
+    .addNode('tools', toolExecutor)
     .addNode('extract', extractNode)
     .addEdge(START, 'agent')
     .addConditionalEdges('agent', toolsCondition, { tools: 'tools', [END]: 'extract' })
-    .addEdge('tools', 'agent')
+    .addConditionalEdges('tools', afterTools, { agent: 'agent', [END]: 'extract' })
     .addEdge('extract', END);
 
   return graph.compile();

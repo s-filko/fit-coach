@@ -2,8 +2,7 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
-import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
-import type { ConversationPhase } from '@domain/conversation/ports';
+import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import type {
   AutoCompletedExercise,
   IEmbeddingService,
@@ -12,9 +11,7 @@ import type {
 } from '@domain/training/ports';
 import { SetDataSchema } from '@domain/training/set-data.types';
 
-import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildSearchExercisesTool } from '@infra/ai/graph/tools/search-exercises.tool';
-import { LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '@infra/ai/tools/outcome';
 
 import { createLogger } from '@shared/logger';
 
@@ -53,39 +50,29 @@ function formatExerciseSummary(ex: AutoCompletedExercise): string {
   );
 }
 
-/**
- * Error prefixes for tool results: `LLM_ERROR` = incorrect LLM arguments
- * (agentNode allows 1 retry before giving up), `SYSTEM_ERROR` =
- * infrastructure/configuration issues (agentNode exits immediately without
- * retry).
- *
- * Both moved to infra/ai/tools/outcome (refactor-p3-tool-executor Task 3);
- * re-exported here until Task 5 deletes the file so the P2 fixtures keep
- * compiling.
- */
-export { LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX };
+/** Reads the current session id the executor put into the tool config. */
+function sessionIdOf(config: { configurable?: Record<string, unknown> } | undefined): string | null {
+  const sessionId = config?.configurable?.['activeSessionId'];
+  return typeof sessionId === 'string' && sessionId ? sessionId : null;
+}
 
 export interface TrainingToolsDeps {
   trainingService: ITrainingService;
   exerciseRepository: IExerciseRepository;
   embeddingService: IEmbeddingService;
-  /** Per-user map — finish_training sets entry by userId, extractNode deletes it */
-  pendingTransitions: IPendingRefMap<TransitionRequest | null>;
-  /** Per-user map — agentNode sets current sessionId by userId before each model.invoke */
-  currentSessionIds: IPendingRefMap<string | null>;
 }
 
 export function buildTrainingTools(deps: TrainingToolsDeps) {
-  const { trainingService, exerciseRepository, embeddingService, pendingTransitions, currentSessionIds } = deps;
+  const { trainingService, exerciseRepository, embeddingService } = deps;
   const searchExercises = buildSearchExercisesTool({ embeddingService, exerciseRepository });
 
   const logSet = tool(
     async (input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
-      const sessionId = currentSessionIds.get(userId) ?? null;
+      const sessionId = sessionIdOf(config);
       if (!sessionId) {
         log.error({ userId }, 'log_set called without active sessionId');
-        return `${SYSTEM_ERROR_PREFIX} No active training session found. Cannot log set.`;
+        return systemError('No active training session found. Cannot log set.');
       }
 
       // Build setData from flat fields — avoids LLM confusion with nested object schemas
@@ -113,7 +100,7 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
 
       const parsed = SetDataSchema.safeParse(setData);
       if (!parsed.success) {
-        return `${LLM_ERROR_PREFIX} Invalid set data: ${parsed.error.message}`;
+        return llmError(`Invalid set data: ${parsed.error.message}`);
       }
 
       try {
@@ -170,14 +157,14 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
 
         if (autoCompleted) {
           const prevSummary = formatExerciseSummary(autoCompleted);
-          return `${setConfirmation}\n\n${prevSummary}`;
+          return ok(`${setConfirmation}\n\n${prevSummary}`);
         }
 
-        return setConfirmation;
+        return ok(setConfirmation);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         log.error({ err, sessionId }, 'log_set failed');
-        return `${LLM_ERROR_PREFIX} ${message}`;
+        return llmError(message);
       }
     },
     {
@@ -248,10 +235,10 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
   const completeCurrentExercise = tool(
     async (_input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
-      const sessionId = currentSessionIds.get(userId) ?? null;
+      const sessionId = sessionIdOf(config);
       if (!sessionId) {
         log.error({ userId }, 'complete_current_exercise called without active sessionId');
-        return `${SYSTEM_ERROR_PREFIX} No active training session found. Cannot complete exercise.`;
+        return systemError('No active training session found. Cannot complete exercise.');
       }
 
       try {
@@ -268,11 +255,11 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
           'AUDIT: exercise completed',
         );
 
-        return formatExerciseSummary(summary);
+        return ok(formatExerciseSummary(summary));
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         log.error({ err, sessionId }, 'complete_current_exercise failed');
-        return `${LLM_ERROR_PREFIX} ${message}`;
+        return llmError(message);
       }
     },
     {
@@ -290,10 +277,10 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
   const finishTraining = tool(
     async (input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
-      const sessionId = currentSessionIds.get(userId) ?? null;
+      const sessionId = sessionIdOf(config);
       if (!sessionId) {
         log.error({ userId }, 'finish_training called without active sessionId');
-        return `${SYSTEM_ERROR_PREFIX} No active training session found. Cannot complete session.`;
+        return systemError('No active training session found. Cannot complete session.');
       }
 
       try {
@@ -306,11 +293,6 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
         const completedAt = isStale ? lastActivityDate : undefined;
         const session = await trainingService.completeSession(sessionId, undefined, completedAt);
         const duration = session.durationMinutes ?? 0;
-
-        pendingTransitions.set(userId, {
-          toPhase: 'chat' as ConversationPhase,
-          reason: 'training_completed',
-        });
 
         log.info(
           {
@@ -326,15 +308,25 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
         );
 
         const feedbackNote = input.feedback ? ` Feedback: "${input.feedback}".` : '';
-        return [
-          `Session completed in ${duration} min.${feedbackNote}`,
-          'Now congratulate the user in their language',
-          '— summarize the workout briefly and wish them recovery.',
-        ].join(' ');
+        return {
+          outcome: ok(
+            [
+              `Session completed in ${duration} min.${feedbackNote}`,
+              'Now congratulate the user in their language',
+              '— summarize the workout briefly and wish them recovery.',
+            ].join(' '),
+          ),
+          update: {
+            pendingTransition: {
+              toPhase: 'chat',
+              reason: 'training_completed',
+            },
+          },
+        };
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         log.error({ err, sessionId }, 'finish_training failed');
-        return `${LLM_ERROR_PREFIX} ${message}`;
+        return llmError(message);
       }
     },
     {
@@ -357,9 +349,9 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
   const deleteLastSets = tool(
     async (input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
-      const sessionId = currentSessionIds.get(userId) ?? null;
+      const sessionId = sessionIdOf(config);
       if (!sessionId) {
-        return `${SYSTEM_ERROR_PREFIX} No active training session found. Start a session first.`;
+        return systemError('No active training session found. Start a session first.');
       }
 
       const count = input.count ?? 1;
@@ -379,10 +371,10 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
           },
           'AUDIT: sets deleted',
         );
-        return `Deleted ${result.deletedSets.length} set(s) for exercise ${input.exercise_id}: ${deleted}.`;
+        return ok(`Deleted ${result.deletedSets.length} set(s) for exercise ${input.exercise_id}: ${deleted}.`);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        return `${LLM_ERROR_PREFIX} ${message}`;
+        return llmError(message);
       }
     },
     {
@@ -407,9 +399,9 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
   const updateLastSet = tool(
     async (input, config) => {
       const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
-      const sessionId = currentSessionIds.get(userId) ?? null;
+      const sessionId = sessionIdOf(config);
       if (!sessionId) {
-        return `${SYSTEM_ERROR_PREFIX} No active training session found. Start a session first.`;
+        return systemError('No active training session found. Start a session first.');
       }
 
       try {
@@ -436,14 +428,14 @@ export function buildTrainingTools(deps: TrainingToolsDeps) {
           },
           'AUDIT: set updated',
         );
-        return (
+        return ok(
           `Set ${result.setNumber} updated for exercise ${input.exercise_id}. ` +
-          `Before: ${beforeStr}${result.before.rpe != null ? ` RPE ${result.before.rpe}` : ''}. ` +
-          `After: ${afterStr}${result.after.rpe != null ? ` RPE ${result.after.rpe}` : ''}.`
+            `Before: ${beforeStr}${result.before.rpe != null ? ` RPE ${result.before.rpe}` : ''}. ` +
+            `After: ${afterStr}${result.after.rpe != null ? ` RPE ${result.after.rpe}` : ''}.`,
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        return `${LLM_ERROR_PREFIX} ${message}`;
+        return llmError(message);
       }
     },
     {

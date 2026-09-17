@@ -2,6 +2,7 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
+import { ok, userError } from '@domain/conversation/tool-outcome';
 import type { IEmbeddingService, IExerciseRepository } from '@domain/training/ports';
 import type { MuscleGroup } from '@domain/training/types';
 
@@ -68,7 +69,7 @@ export function buildSearchExercisesTool(deps: SearchExercisesToolDeps) {
         });
 
         if (results.length === 0) {
-          return 'No exercises found matching the search criteria. Try a broader query or remove filters.';
+          return userError('No exercises found matching the search criteria. Try a broader query or remove filters.');
         }
 
         const lines = results.map(ex => {
@@ -95,11 +96,11 @@ export function buildSearchExercisesTool(deps: SearchExercisesToolDeps) {
 
         log.debug({ query: input.query, count: results.length }, 'search_exercises completed');
 
-        return `Found ${results.length} exercises:\n${lines.join('\n')}`;
+        return ok(`Found ${results.length} exercises:\n${lines.join('\n')}`);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         log.error({ err, query: input.query }, 'search_exercises failed');
-        return `Error searching exercises: ${message}`;
+        return userError(`Error searching exercises: ${message}`);
       }
     },
     {

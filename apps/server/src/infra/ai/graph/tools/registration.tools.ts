@@ -1,8 +1,7 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
-import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
-import type { ConversationPhase } from '@domain/conversation/ports';
+import { ok, userError } from '@domain/conversation/tool-outcome';
 import type { IUserService } from '@domain/user/ports';
 import {
   FIELD_LABELS,
@@ -10,12 +9,8 @@ import {
   validateExtractedFields,
 } from '@domain/user/services/registration.validation';
 
-import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
-
 export interface RegistrationToolsDeps {
   userService: IUserService;
-  /** Per-user map — tools set entry by userId, extractNode deletes it */
-  pendingTransitions: IPendingRefMap<TransitionRequest | null>;
 }
 
 const REQUIRED_FIELDS: ProfileDataKey[] = ['age', 'gender', 'height', 'weight', 'fitnessLevel', 'fitnessGoal'];
@@ -36,13 +31,13 @@ const COMPLETE_REGISTRATION_DESCRIPTION = [
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function buildRegistrationTools(deps: RegistrationToolsDeps) {
-  const { userService, pendingTransitions } = deps;
+  const { userService } = deps;
 
   const saveProfileFields = tool(
     async (input, config) => {
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
-        return 'Error: could not identify user. Please try again.';
+        return userError('Error: could not identify user. Please try again.');
       }
 
       // Reuse strict validators from registration.validation.ts
@@ -55,7 +50,7 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
       }
 
       if (Object.keys(fieldsToSave).length === 0) {
-        return 'No valid fields to save. Please provide at least one profile field.';
+        return userError('No valid fields to save. Please provide at least one profile field.');
       }
 
       await userService.updateProfileData(userId, fieldsToSave);
@@ -64,7 +59,7 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
         .map(k => FIELD_LABELS[k as ProfileDataKey] ?? k)
         .join(', ');
 
-      return `Saved: ${saved}`;
+      return ok(`Saved: ${saved}`);
     },
     {
       name: 'save_profile_fields',
@@ -88,12 +83,12 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
     async (input, config) => {
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
-        return 'Error: could not identify user. Please try again.';
+        return userError('Error: could not identify user. Please try again.');
       }
 
       const currentUser = await userService.getUser(userId);
       if (!currentUser) {
-        return 'Error: user not found.';
+        return userError('Error: user not found.');
       }
 
       const missingFields = REQUIRED_FIELDS.filter(k => {
@@ -103,18 +98,23 @@ export function buildRegistrationTools(deps: RegistrationToolsDeps) {
 
       if (missingFields.length > 0) {
         const missing = missingFields.map(k => FIELD_LABELS[k]).join(', ');
-        return `Cannot complete registration — still missing: ${missing}. Please collect these fields first.`;
+        return userError(
+          `Cannot complete registration — still missing: ${missing}. Please collect these fields first.`,
+        );
       }
 
       await userService.updateProfileData(userId, { profileStatus: 'complete' });
 
-      // Signal transition — extractNode will read and delete this entry
-      pendingTransitions.set(userId, {
-        toPhase: input.toPhase as ConversationPhase,
-        reason: 'registration_complete',
-      });
-
-      return 'Registration complete! Profile saved successfully.';
+      // Signal transition — the executor propagates it as a state update
+      return {
+        outcome: ok('Registration complete! Profile saved successfully.'),
+        update: {
+          pendingTransition: {
+            toPhase: input.toPhase,
+            reason: 'registration_complete',
+          },
+        },
+      };
     },
     {
       name: 'complete_registration',

@@ -3,7 +3,15 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 import type { IEmbeddingService, IExerciseRepository } from '@domain/training/ports';
 import type { ExerciseWithMuscles } from '@domain/training/types';
 
+import type { ToolReturn } from '@domain/conversation/tool-outcome';
+import { toToolMessage } from '@infra/ai/tools/outcome';
+
 import { buildSearchExercisesTool } from '../search-exercises.tool';
+
+/** Renders a tool return exactly as the executor will (Task 5 contract). */
+function renderedContent(ret: ToolReturn): string {
+  return String(toToolMessage('outcome' in ret && 'update' in ret ? ret.outcome : ret, 'test-id').content);
+}
 
 type InvokableTool = {
   name: string;
@@ -123,7 +131,7 @@ describe('search_exercises tool', () => {
       exerciseRepository,
     }) as unknown as InvokableTool;
 
-    const result = (await tool.invoke({ query: 'bench press' })) as string;
+    const result = renderedContent((await tool.invoke({ query: 'bench press' })) as ToolReturn);
 
     expect(result).toContain('ID:c7b0899c-a0f9-47ca-a69d-4bcd531b0c95');
     expect(result).toContain('Barbell Bench Press');
@@ -139,7 +147,7 @@ describe('search_exercises tool', () => {
       exerciseRepository,
     }) as unknown as InvokableTool;
 
-    const result = (await tool.invoke({ query: 'nonexistent' })) as string;
+    const result = renderedContent((await tool.invoke({ query: 'nonexistent' })) as ToolReturn);
 
     expect(result).toContain('No exercises found');
   });
@@ -153,7 +161,7 @@ describe('search_exercises tool', () => {
       exerciseRepository: makeExerciseRepository(),
     }) as unknown as InvokableTool;
 
-    const result = (await tool.invoke({ query: 'chest' })) as string;
+    const result = renderedContent((await tool.invoke({ query: 'chest' })) as ToolReturn);
 
     expect(result).toContain('Error searching exercises');
     expect(result).toContain('Model not loaded');

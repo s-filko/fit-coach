@@ -2,7 +2,7 @@
 import { AIMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
-import { ToolNode, toolsCondition } from '@langchain/langgraph/prebuilt';
+import { toolsCondition } from '@langchain/langgraph/prebuilt';
 
 import { type ConversationStateType, type TransitionRequest } from '@domain/conversation/graph/conversation.state';
 import { IConversationContextService } from '@domain/conversation/ports';
@@ -10,7 +10,8 @@ import type { IUserService } from '@domain/user/ports';
 import { User } from '@domain/user/services/user.service';
 
 import { assembleContext } from '@infra/ai/context/assemble-context';
-import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
+import { afterTools, buildToolExecutor } from '@infra/ai/graph/tool-executor';
+import { NO_POLICY } from '@infra/ai/graph/tool-policy';
 import { buildRegistrationTools } from '@infra/ai/graph/tools/registration.tools';
 import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
@@ -37,18 +38,8 @@ type RegistrationSubgraphStateType = typeof RegistrationSubgraphState.State;
 export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
   const { userService, contextService } = deps;
 
-  /**
-   * Per-user map: tools set entry by userId, extractNode reads and deletes it.
-   * A Map keyed by userId is safe when the graph is a singleton shared across
-   * concurrent requests — single-value refs would cause a race condition.
-   */
-  const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
-
-  const tools = [
-    ...buildRegistrationTools({ userService, pendingTransitions }),
-    buildSaveTimezoneTool({ userService }),
-  ];
-  const toolNode = new ToolNode(tools);
+  const tools = [...buildRegistrationTools({ userService }), buildSaveTimezoneTool({ userService })];
+  const toolNode = buildToolExecutor(tools, NO_POLICY);
   const model = getModel().bindTools(tools);
 
   const agentNode = async (state: RegistrationSubgraphStateType, config: RunnableConfig) => {
@@ -102,14 +93,10 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
     // Read fresh user from DB to capture any fields saved by tools during this turn
     const freshUser = state.userId ? await userService.getUser(state.userId).catch(() => null) : null;
 
-    // Consume the pending transition set by complete_registration tool — read and delete atomically
-    const transition = pendingTransitions.get(state.userId) ?? null;
-    pendingTransitions.delete(state.userId);
-
+    // requestedTransition arrives through the subgraph state from the tool executor
     return {
       responseMessage: text,
       user: freshUser ?? state.user,
-      requestedTransition: transition,
     };
   };
 
@@ -119,7 +106,7 @@ export function buildRegistrationSubgraph(deps: RegistrationSubgraphDeps) {
     .addNode('extract', extractNode)
     .addEdge(START, 'agent')
     .addConditionalEdges('agent', toolsCondition, { tools: 'tools', [END]: 'extract' })
-    .addEdge('tools', 'agent')
+    .addConditionalEdges('tools', afterTools, { agent: 'agent', [END]: 'extract' })
     .addEdge('extract', END);
 
   return graph.compile();

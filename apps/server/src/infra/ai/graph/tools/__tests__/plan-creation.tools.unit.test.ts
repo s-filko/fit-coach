@@ -1,7 +1,8 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
 
-import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
+import { isToolReturnWithUpdate, type ToolReturn } from '@domain/conversation/tool-outcome';
 import type { IEmbeddingService, IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
+import { toToolMessage } from '@infra/ai/tools/outcome';
 
 import { buildPlanCreationTools } from '../plan-creation.tools';
 
@@ -10,6 +11,11 @@ type InvokableTool = {
   name: string;
   invoke: (input: Record<string, unknown>, config?: RunnableConfig) => Promise<unknown>;
 };
+
+/** Renders a tool return exactly as the executor will (Task 5 contract). */
+function renderedContent(ret: ToolReturn): string {
+  return String(toToolMessage(isToolReturnWithUpdate(ret) ? ret.outcome : ret, 'test-id').content);
+}
 
 const MINIMAL_PLAN = {
   name: 'Upper-Lower Split',
@@ -73,8 +79,6 @@ const makeWorkoutPlanRepo = (): jest.Mocked<IWorkoutPlanRepository> =>
     archive: jest.fn(),
   }) as unknown as jest.Mocked<IWorkoutPlanRepository>;
 
-const makePendingTransitions = (): Map<string, TransitionRequest | null> => new Map();
-
 const makeConfig = (userId = 'u1'): RunnableConfig => ({
   configurable: { userId, thread_id: userId },
 });
@@ -106,32 +110,30 @@ const makeEmbeddingService = (): jest.Mocked<IEmbeddingService> =>
 
 const buildTools = (
   workoutPlanRepository: jest.Mocked<IWorkoutPlanRepository>,
-  pendingTransitions: Map<string, TransitionRequest | null>,
   exerciseRepository?: jest.Mocked<IExerciseRepository>,
 ) => {
   const tools = buildPlanCreationTools({
     workoutPlanRepository,
     exerciseRepository: exerciseRepository ?? makeExerciseRepository(),
     embeddingService: makeEmbeddingService(),
-    pendingTransitions,
   }) as unknown as InvokableTool[];
   const byName = (name: string) => tools.find((t: { name?: string }) => (t as { name?: string }).name === name)!;
   return { byName, saveWorkoutPlan: byName('save_workout_plan'), requestTransition: byName('request_transition') };
 };
 
 describe('plan-creation.tools — save_workout_plan', () => {
-  it('returns a plain string, never a Command object', async () => {
-    const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
+  it('returns a ToolReturn with update, never a Command object', async () => {
+    const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo());
 
-    const result = await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig());
+    const result = (await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig())) as ToolReturn;
 
-    expect(typeof result).toBe('string');
     expect(result as object).not.toHaveProperty('lc_direct_tool_output');
+    expect(isToolReturnWithUpdate(result)).toBe(true);
   });
 
   it('calls workoutPlanRepository.create with correct userId and plan data', async () => {
     const repo = makeWorkoutPlanRepo();
-    const { saveWorkoutPlan } = buildTools(repo, makePendingTransitions());
+    const { saveWorkoutPlan } = buildTools(repo);
 
     await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig('u1'));
 
@@ -148,106 +150,110 @@ describe('plan-creation.tools — save_workout_plan', () => {
     );
   });
 
-  it('sets pendingTransitions entry for userId to chat after saving the plan', async () => {
-    const pendingTransitions = makePendingTransitions();
-    const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
+  it('requests pendingTransition to chat after saving the plan', async () => {
+    const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo());
 
-    await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig('u1'));
+    const result = (await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig('u1'))) as ToolReturn;
 
-    expect(pendingTransitions.get('u1')).not.toBeNull();
-    expect(pendingTransitions.get('u1')?.toPhase).toBe('chat');
-    expect(pendingTransitions.get('u1')?.reason).toBe('plan_creation_complete');
+    expect(isToolReturnWithUpdate(result) ? result.update.pendingTransition : undefined).toEqual({
+      toPhase: 'chat',
+      reason: 'plan_creation_complete',
+    });
   });
 
   it('returns success string', async () => {
-    const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
+    const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo());
 
-    const result = await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig());
+    const result = (await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig())) as ToolReturn;
 
-    expect(result as string).toContain('Plan saved');
+    expect(renderedContent(result)).toContain('Plan saved');
   });
 
   it('returns error string when userId is missing from configurable', async () => {
-    const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
+    const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo());
 
-    const result = await saveWorkoutPlan.invoke(MINIMAL_PLAN, { configurable: {} });
+    const result = (await saveWorkoutPlan.invoke(MINIMAL_PLAN, { configurable: {} })) as ToolReturn;
 
-    expect(result as string).toContain('Error: could not identify user');
+    expect(renderedContent(result)).toContain('Error: could not identify user');
   });
 
   it('does NOT call create when userId is missing', async () => {
     const repo = makeWorkoutPlanRepo();
-    const { saveWorkoutPlan } = buildTools(repo, makePendingTransitions());
+    const { saveWorkoutPlan } = buildTools(repo);
 
     await saveWorkoutPlan.invoke(MINIMAL_PLAN, { configurable: {} });
 
     expect(repo.create).not.toHaveBeenCalled();
   });
 
-  it('does NOT set pendingTransitions when userId is missing', async () => {
-    const pendingTransitions = makePendingTransitions();
-    const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
+  it('does NOT request a transition when userId is missing', async () => {
+    const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo());
 
-    await saveWorkoutPlan.invoke(MINIMAL_PLAN, { configurable: {} });
+    const result = (await saveWorkoutPlan.invoke(MINIMAL_PLAN, { configurable: {} })) as ToolReturn;
 
-    expect(pendingTransitions.size).toBe(0);
+    expect(isToolReturnWithUpdate(result)).toBe(false);
   });
 });
 
 describe('plan-creation.tools — request_transition', () => {
-  it('returns a plain string, never a Command object', async () => {
-    const { requestTransition } = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
+  it('returns a ToolReturn with update, never a Command object', async () => {
+    const { requestTransition } = buildTools(makeWorkoutPlanRepo());
 
-    const result = await requestTransition.invoke({ toPhase: 'chat' }, makeConfig());
+    const result = (await requestTransition.invoke({ toPhase: 'chat' }, makeConfig())) as ToolReturn;
 
-    expect(typeof result).toBe('string');
     expect(result as object).not.toHaveProperty('lc_direct_tool_output');
+    expect(isToolReturnWithUpdate(result)).toBe(true);
   });
 
-  it('sets pendingTransitions entry for userId with toPhase=chat', async () => {
-    const pendingTransitions = makePendingTransitions();
-    const { requestTransition } = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
+  it('requests pendingTransition with toPhase=chat', async () => {
+    const { requestTransition } = buildTools(makeWorkoutPlanRepo());
 
-    await requestTransition.invoke({ toPhase: 'chat' }, makeConfig('u1'));
+    const result = (await requestTransition.invoke({ toPhase: 'chat' }, makeConfig('u1'))) as ToolReturn;
 
-    expect(pendingTransitions.get('u1')).not.toBeNull();
-    expect(pendingTransitions.get('u1')?.toPhase).toBe('chat');
+    expect(isToolReturnWithUpdate(result) ? result.update.pendingTransition?.toPhase : undefined).toBe('chat');
   });
 
-  it('sets optional reason in pendingTransitions entry', async () => {
-    const pendingTransitions = makePendingTransitions();
-    const { requestTransition } = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
+  it('requests pendingTransition with optional reason', async () => {
+    const { requestTransition } = buildTools(makeWorkoutPlanRepo());
 
-    await requestTransition.invoke({ toPhase: 'chat', reason: 'user cancelled' }, makeConfig('u1'));
+    const result = (await requestTransition.invoke(
+      { toPhase: 'chat', reason: 'user cancelled' },
+      makeConfig('u1'),
+    )) as ToolReturn;
 
-    expect(pendingTransitions.get('u1')?.reason).toBe('user cancelled');
+    expect(isToolReturnWithUpdate(result) ? result.update.pendingTransition?.reason : undefined).toBe('user cancelled');
   });
 
   it('returns confirmation string mentioning the target phase', async () => {
-    const { requestTransition } = buildTools(makeWorkoutPlanRepo(), makePendingTransitions());
+    const { requestTransition } = buildTools(makeWorkoutPlanRepo());
 
-    const result = await requestTransition.invoke({ toPhase: 'chat' }, makeConfig());
+    const result = (await requestTransition.invoke({ toPhase: 'chat' }, makeConfig())) as ToolReturn;
 
-    expect(result as string).toContain('chat');
+    expect(renderedContent(result)).toContain('chat');
   });
 
   it('does NOT call workoutPlanRepository', async () => {
     const repo = makeWorkoutPlanRepo();
-    const { requestTransition } = buildTools(repo, makePendingTransitions());
+    const { requestTransition } = buildTools(repo);
 
     await requestTransition.invoke({ toPhase: 'chat' }, makeConfig());
 
     expect(repo.create).not.toHaveBeenCalled();
   });
 
-  it('isolates entries by userId — two users do not overwrite each other', async () => {
-    const pendingTransitions = makePendingTransitions();
-    const { requestTransition } = buildTools(makeWorkoutPlanRepo(), pendingTransitions);
+  it('each invocation requests its own transition — two users do not overwrite each other', async () => {
+    const { requestTransition } = buildTools(makeWorkoutPlanRepo());
 
-    await requestTransition.invoke({ toPhase: 'chat', reason: 'A cancelled' }, makeConfig('userA'));
-    await requestTransition.invoke({ toPhase: 'chat', reason: 'B cancelled' }, makeConfig('userB'));
+    const a = (await requestTransition.invoke(
+      { toPhase: 'chat', reason: 'A cancelled' },
+      makeConfig('userA'),
+    )) as ToolReturn;
+    const b = (await requestTransition.invoke(
+      { toPhase: 'chat', reason: 'B cancelled' },
+      makeConfig('userB'),
+    )) as ToolReturn;
 
-    expect(pendingTransitions.get('userA')?.reason).toBe('A cancelled');
-    expect(pendingTransitions.get('userB')?.reason).toBe('B cancelled');
+    expect(isToolReturnWithUpdate(a) ? a.update.pendingTransition?.reason : undefined).toBe('A cancelled');
+    expect(isToolReturnWithUpdate(b) ? b.update.pendingTransition?.reason : undefined).toBe('B cancelled');
   });
 });

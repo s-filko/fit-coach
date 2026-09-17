@@ -1,7 +1,8 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
 
-import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
+import { isToolReturnWithUpdate, type ToolReturn } from '@domain/conversation/tool-outcome';
 import type { IUserService } from '@domain/user/ports';
+import { toToolMessage } from '@infra/ai/tools/outcome';
 
 import { buildChatTools } from '../chat.tools';
 
@@ -10,6 +11,11 @@ import { buildChatTools } from '../chat.tools';
 type InvokableTool = {
   invoke: (input: Record<string, unknown>, config?: RunnableConfig) => Promise<unknown>;
 };
+
+/** Renders a tool return exactly as the executor will (Task 5 contract). */
+function renderedContent(ret: ToolReturn): string {
+  return String(toToolMessage(isToolReturnWithUpdate(ret) ? ret.outcome : ret, 'test-id').content);
+}
 
 const UPDATED_USER = {
   id: 'u1',
@@ -32,31 +38,25 @@ const makeUserService = (): jest.Mocked<IUserService> =>
     needsRegistration: jest.fn().mockReturnValue(false),
   }) as unknown as jest.Mocked<IUserService>;
 
-const makePendingTransitions = (): Map<string, TransitionRequest | null> => new Map();
-
 const makeConfig = (userId = 'u1'): RunnableConfig => ({
   configurable: { userId, thread_id: userId },
 });
 
-const buildTools = (
-  userService: jest.Mocked<IUserService>,
-  pendingTransitions: Map<string, TransitionRequest | null>,
-): [InvokableTool, InvokableTool] =>
-  buildChatTools({ userService, pendingTransitions }) as unknown as [InvokableTool, InvokableTool];
+const buildTools = (userService: jest.Mocked<IUserService>): [InvokableTool, InvokableTool] =>
+  buildChatTools({ userService }) as unknown as [InvokableTool, InvokableTool];
 
 describe('chat.tools — update_profile', () => {
-  it('returns a plain string, never a Command object', async () => {
-    const [updateProfile] = buildTools(makeUserService(), makePendingTransitions());
+  it('returns a ToolOutcome, never a Command object', async () => {
+    const [updateProfile] = buildTools(makeUserService());
 
-    const result = await updateProfile.invoke({ age: 30 }, makeConfig());
+    const result = (await updateProfile.invoke({ age: 30 }, makeConfig())) as ToolReturn;
 
-    expect(typeof result).toBe('string');
     expect(result as object).not.toHaveProperty('lc_direct_tool_output');
   });
 
   it('calls updateProfileData with the provided fields', async () => {
     const userService = makeUserService();
-    const [updateProfile] = buildTools(userService, makePendingTransitions());
+    const [updateProfile] = buildTools(userService);
 
     await updateProfile.invoke({ age: 30, weight: 85 }, makeConfig());
 
@@ -70,81 +70,82 @@ describe('chat.tools — update_profile', () => {
   });
 
   it('returns "Profile updated:" confirmation string', async () => {
-    const [updateProfile] = buildTools(makeUserService(), makePendingTransitions());
+    const [updateProfile] = buildTools(makeUserService());
 
-    const result = await updateProfile.invoke({ age: 30 }, makeConfig());
+    const result = (await updateProfile.invoke({ age: 30 }, makeConfig())) as ToolReturn;
 
-    expect(result as string).toContain('Profile updated:');
+    expect(renderedContent(result)).toContain('Profile updated:');
   });
 
   it('returns error string when userId is missing from configurable', async () => {
-    const [updateProfile] = buildTools(makeUserService(), makePendingTransitions());
+    const [updateProfile] = buildTools(makeUserService());
 
-    const result = await updateProfile.invoke({ age: 30 }, { configurable: {} });
+    const result = (await updateProfile.invoke({ age: 30 }, { configurable: {} })) as ToolReturn;
 
-    expect(result as string).toContain('Error: could not identify user');
+    expect(renderedContent(result)).toContain('Error: could not identify user');
   });
 
   it('returns error string when updateProfileData returns null', async () => {
     const userService = makeUserService();
     (userService.updateProfileData as jest.Mock).mockResolvedValue(null);
-    const [updateProfile] = buildTools(userService, makePendingTransitions());
+    const [updateProfile] = buildTools(userService);
 
-    const result = await updateProfile.invoke({ age: 30 }, makeConfig());
+    const result = (await updateProfile.invoke({ age: 30 }, makeConfig())) as ToolReturn;
 
-    expect(result as string).toContain('Failed to update profile');
+    expect(renderedContent(result)).toContain('Failed to update profile');
   });
 
-  it('does NOT touch pendingTransitions', async () => {
-    const pendingTransitions = makePendingTransitions();
-    const [updateProfile] = buildTools(makeUserService(), pendingTransitions);
+  it('carries no state update', async () => {
+    const [updateProfile] = buildTools(makeUserService());
 
-    await updateProfile.invoke({ age: 30 }, makeConfig());
+    const result = (await updateProfile.invoke({ age: 30 }, makeConfig())) as ToolReturn;
 
-    expect(pendingTransitions.size).toBe(0);
+    expect(isToolReturnWithUpdate(result)).toBe(false);
   });
 });
 
 describe('chat.tools — request_transition', () => {
-  it('returns a plain string, never a Command object', async () => {
-    const [, requestTransition] = buildTools(makeUserService(), makePendingTransitions());
+  it('returns a ToolReturn with update, never a Command object', async () => {
+    const [, requestTransition] = buildTools(makeUserService());
 
-    const result = await requestTransition.invoke({ toPhase: 'plan_creation' }, makeConfig());
+    const result = (await requestTransition.invoke({ toPhase: 'plan_creation' }, makeConfig())) as ToolReturn;
 
-    expect(typeof result).toBe('string');
     expect(result as object).not.toHaveProperty('lc_direct_tool_output');
+    expect(isToolReturnWithUpdate(result)).toBe(true);
   });
 
-  it('sets pendingTransitions entry for userId with correct toPhase', async () => {
-    const pendingTransitions = makePendingTransitions();
-    const [, requestTransition] = buildTools(makeUserService(), pendingTransitions);
+  it('requests pendingTransition with correct toPhase', async () => {
+    const [, requestTransition] = buildTools(makeUserService());
 
-    await requestTransition.invoke({ toPhase: 'plan_creation' }, makeConfig('u1'));
+    const result = (await requestTransition.invoke({ toPhase: 'plan_creation' }, makeConfig('u1'))) as ToolReturn;
 
-    expect(pendingTransitions.get('u1')).not.toBeNull();
-    expect(pendingTransitions.get('u1')?.toPhase).toBe('plan_creation');
+    expect(isToolReturnWithUpdate(result) ? result.update.pendingTransition?.toPhase : undefined).toBe('plan_creation');
   });
 
-  it('sets pendingTransitions entry with optional reason', async () => {
-    const pendingTransitions = makePendingTransitions();
-    const [, requestTransition] = buildTools(makeUserService(), pendingTransitions);
+  it('requests pendingTransition with optional reason', async () => {
+    const [, requestTransition] = buildTools(makeUserService());
 
-    await requestTransition.invoke({ toPhase: 'session_planning', reason: 'user wants workout' }, makeConfig('u1'));
+    const result = (await requestTransition.invoke(
+      { toPhase: 'session_planning', reason: 'user wants workout' },
+      makeConfig('u1'),
+    )) as ToolReturn;
 
-    expect(pendingTransitions.get('u1')?.reason).toBe('user wants workout');
+    expect(isToolReturnWithUpdate(result) ? result.update.pendingTransition?.reason : undefined).toBe(
+      'user wants workout',
+    );
   });
 
   it('returns confirmation string mentioning the target phase', async () => {
-    const [, requestTransition] = buildTools(makeUserService(), makePendingTransitions());
+    const [, requestTransition] = buildTools(makeUserService());
 
-    const result = await requestTransition.invoke({ toPhase: 'session_planning' }, makeConfig());
+    const result = (await requestTransition.invoke({ toPhase: 'session_planning' }, makeConfig())) as ToolReturn;
 
-    expect(result as string).toContain('session_planning');
+    expect(renderedContent(result)).toContain('session_planning');
   });
 
   it('does NOT call userService', async () => {
     const userService = makeUserService();
-    const [, requestTransition] = buildTools(userService, makePendingTransitions());
+    const [, requestTransition] = buildTools(userService);
 
     await requestTransition.invoke({ toPhase: 'plan_creation' }, makeConfig());
 
@@ -152,14 +153,17 @@ describe('chat.tools — request_transition', () => {
     expect(userService.getUser).not.toHaveBeenCalled();
   });
 
-  it('isolates entries by userId — two users do not overwrite each other', async () => {
-    const pendingTransitions = makePendingTransitions();
-    const [, requestTransition] = buildTools(makeUserService(), pendingTransitions);
+  it('keys the transition by the configurable userId, not a shared map', async () => {
+    // Two sequential invocations for different users each request their own
+    // transition — the per-user isolation now lives in the state update the
+    // executor applies per run, so the second call must not disturb the first
+    // tool's already-returned value.
+    const [, requestTransition] = buildTools(makeUserService());
 
-    await requestTransition.invoke({ toPhase: 'plan_creation' }, makeConfig('userA'));
-    await requestTransition.invoke({ toPhase: 'session_planning' }, makeConfig('userB'));
+    const a = (await requestTransition.invoke({ toPhase: 'plan_creation' }, makeConfig('userA'))) as ToolReturn;
+    const b = (await requestTransition.invoke({ toPhase: 'session_planning' }, makeConfig('userB'))) as ToolReturn;
 
-    expect(pendingTransitions.get('userA')?.toPhase).toBe('plan_creation');
-    expect(pendingTransitions.get('userB')?.toPhase).toBe('session_planning');
+    expect(isToolReturnWithUpdate(a) ? a.update.pendingTransition?.toPhase : undefined).toBe('plan_creation');
+    expect(isToolReturnWithUpdate(b) ? b.update.pendingTransition?.toPhase : undefined).toBe('session_planning');
   });
 });

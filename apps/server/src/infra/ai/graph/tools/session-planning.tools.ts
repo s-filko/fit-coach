@@ -2,8 +2,7 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
-import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
-import type { ConversationPhase } from '@domain/conversation/ports';
+import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
 import type {
   IEmbeddingService,
   IExerciseRepository,
@@ -12,7 +11,6 @@ import type {
 } from '@domain/training/ports';
 import { RecommendedExerciseSchema, SessionRecommendationSchema } from '@domain/training/session-planning.types';
 
-import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildSearchExercisesTool } from '@infra/ai/graph/tools/search-exercises.tool';
 
 export interface SessionPlanningToolsDeps {
@@ -20,10 +18,6 @@ export interface SessionPlanningToolsDeps {
   workoutPlanRepository: IWorkoutPlanRepository;
   exerciseRepository: IExerciseRepository;
   embeddingService: IEmbeddingService;
-  /** Per-user map — start_training_session sets entry by userId, extractNode deletes it */
-  pendingTransitions: IPendingRefMap<TransitionRequest | null>;
-  /** Per-user map — start_training_session sets session ID by userId, extractNode deletes it */
-  pendingActiveSessionIds: IPendingRefMap<string | null>;
 }
 
 const START_TRAINING_SESSION_DESCRIPTION = [
@@ -42,21 +36,14 @@ const REQUEST_TRANSITION_DESCRIPTION = [
 export { RecommendedExerciseSchema, SessionRecommendationSchema };
 
 export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
-  const {
-    trainingService,
-    workoutPlanRepository,
-    exerciseRepository,
-    embeddingService,
-    pendingTransitions,
-    pendingActiveSessionIds,
-  } = deps;
+  const { trainingService, workoutPlanRepository, exerciseRepository, embeddingService } = deps;
   const searchExercises = buildSearchExercisesTool({ embeddingService, exerciseRepository });
 
   const startTrainingSession = tool(
     async (input, config) => {
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
-        return 'Error: could not identify user. Please try again.';
+        return userError('Error: could not identify user. Please try again.');
       }
 
       // Validate all exerciseIds exist in DB before creating the session
@@ -67,7 +54,10 @@ export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
         const foundIds = new Set(found.map(e => e.id));
         const missing = uniqueIds.filter(id => !foundIds.has(id));
         if (missing.length > 0) {
-          return `LLM_ERROR: Invalid exerciseId(s): ${missing.join(', ')}. These IDs do not exist in the exercise catalog. Use search_exercises to find valid exercise IDs, then retry.`;
+          return llmError(
+            `Invalid exerciseId(s): ${missing.join(', ')}. These IDs do not exist in the exercise catalog. ` +
+              'Use search_exercises to find valid exercise IDs, then retry.',
+          );
         }
       }
 
@@ -91,24 +81,28 @@ export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
           },
         });
 
-        // Write to per-user maps — extractNode propagates to parent ConversationState
-        pendingActiveSessionIds.set(userId, session.id);
-        pendingTransitions.set(userId, {
-          toPhase: 'training' as ConversationPhase,
-          reason: 'session_planning_complete',
-        });
-
         const exerciseCount = input.exercises.length;
         const duration = input.estimatedDuration;
-        return [
-          `Session created (ID: ${session.id}).`,
-          `${exerciseCount} exercises, est. ${duration} min.`,
-          'Now write a brief energetic message to the user in their language',
-          '— confirm the session started and motivate them for the workout.',
-        ].join(' ');
+        return {
+          outcome: ok(
+            [
+              `Session created (ID: ${session.id}).`,
+              `${exerciseCount} exercises, est. ${duration} min.`,
+              'Now write a brief energetic message to the user in their language',
+              '— confirm the session started and motivate them for the workout.',
+            ].join(' '),
+          ),
+          update: {
+            pendingTransition: {
+              toPhase: 'training',
+              reason: 'session_planning_complete',
+            },
+            activeSessionId: session.id,
+          },
+        };
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
-        return `Error creating session: ${message}. Please try again.`;
+        return userError(`Error creating session: ${message}. Please try again.`);
       }
     },
     {
@@ -119,15 +113,17 @@ export function buildSessionPlanningTools(deps: SessionPlanningToolsDeps) {
   );
 
   const requestTransition = tool(
-    async (input, config) => {
-      const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
-      pendingTransitions.set(userId, {
-        toPhase: input.toPhase as ConversationPhase,
-        reason: input.reason ?? 'user_cancelled',
-      });
-
-      return `Transition to ${input.toPhase} registered. Write a brief closing message to the user in their language.`;
-    },
+    async input => ({
+      outcome: ok(
+        `Transition to ${input.toPhase} registered. Write a brief closing message to the user in their language.`,
+      ),
+      update: {
+        pendingTransition: {
+          toPhase: input.toPhase,
+          reason: input.reason ?? 'user_cancelled',
+        },
+      },
+    }),
     {
       name: 'request_transition',
       description: REQUEST_TRANSITION_DESCRIPTION,

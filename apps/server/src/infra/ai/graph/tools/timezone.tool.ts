@@ -1,6 +1,7 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
+import { ok, userError } from '@domain/conversation/tool-outcome';
 import type { IUserService } from '@domain/user/ports';
 
 import { isValidTimezone } from '@shared/date-utils';
@@ -20,15 +21,17 @@ export function buildSaveTimezoneTool(deps: TimezoneToolDeps) {
     async (input, config) => {
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
-        return 'Error: could not identify user. Please try again.';
+        return userError('Error: could not identify user. Please try again.');
       }
 
       if (!isValidTimezone(input.timezone)) {
-        return `Invalid timezone: "${input.timezone}". Please provide a valid IANA timezone like "Europe/Berlin" or "America/New_York".`;
+        return userError(
+          `Invalid timezone: "${input.timezone}". Please provide a valid IANA timezone like "Europe/Berlin" or "America/New_York".`,
+        );
       }
 
       await userService.updateProfileData(userId, { timezone: input.timezone });
-      return `Timezone saved: ${input.timezone}`;
+      return ok(`Timezone saved: ${input.timezone}`);
     },
     {
       name: 'save_timezone',

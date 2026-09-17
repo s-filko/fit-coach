@@ -11,9 +11,9 @@ import type { IUserService } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
 
 import { assembleContext } from '@infra/ai/context/assemble-context';
-import { buildDedupToolNode } from '@infra/ai/graph/dedup-tool-node';
 import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
-import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
+import { afterTools, buildToolExecutor } from '@infra/ai/graph/tool-executor';
+import { type ToolPolicy } from '@infra/ai/graph/tool-policy';
 import { buildPlanCreationTools } from '@infra/ai/graph/tools/plan-creation.tools';
 import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { getModel } from '@infra/ai/model.factory';
@@ -43,21 +43,15 @@ type PlanCreationSubgraphStateType = typeof PlanCreationSubgraphState.State;
 export function buildPlanCreationSubgraph(deps: PlanCreationSubgraphDeps) {
   const { userService, contextService, exerciseRepository, embeddingService, workoutPlanRepository } = deps;
 
-  /**
-   * Per-user map: tools set entry by userId, extractNode reads and deletes it.
-   * A Map keyed by userId is safe when the graph is a singleton shared across
-   * concurrent requests — single-value refs would cause a race condition.
-   */
-  const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
-
   const phaseTools = buildPlanCreationTools({
     workoutPlanRepository,
     exerciseRepository,
     embeddingService,
-    pendingTransitions,
   });
   const tools = [...phaseTools, buildSaveTimezoneTool({ userService })];
-  const dedupToolNode = buildDedupToolNode(tools);
+  // search_exercises dedup runs once per identical args in a batch (was buildDedupToolNode)
+  const policy: ToolPolicy = { perTurnDedup: ['search_exercises'], llmErrorBudget: Infinity };
+  const toolExecutor = buildToolExecutor(tools, policy);
   const model = getModel().bindTools(tools);
 
   const agentNode = async (state: PlanCreationSubgraphStateType, config: RunnableConfig) => {
@@ -108,24 +102,20 @@ export function buildPlanCreationSubgraph(deps: PlanCreationSubgraphDeps) {
     // Read fresh user from DB to capture any changes during this turn
     const freshUser = state.userId ? await userService.getUser(state.userId).catch(() => null) : null;
 
-    // Consume the pending transition set by tools — read and delete atomically
-    const transition = pendingTransitions.get(state.userId) ?? null;
-    pendingTransitions.delete(state.userId);
-
+    // requestedTransition arrives through the subgraph state from the tool executor
     return {
       responseMessage: text,
       user: freshUser ?? state.user,
-      requestedTransition: transition,
     };
   };
 
   const graph = new StateGraph(PlanCreationSubgraphState)
     .addNode('agent', agentNode)
-    .addNode('tools', dedupToolNode)
+    .addNode('tools', toolExecutor)
     .addNode('extract', extractNode)
     .addEdge(START, 'agent')
     .addConditionalEdges('agent', toolsCondition, { tools: 'tools', [END]: 'extract' })
-    .addEdge('tools', 'agent')
+    .addConditionalEdges('tools', afterTools, { agent: 'agent', [END]: 'extract' })
     .addEdge('extract', END);
 
   return graph.compile();

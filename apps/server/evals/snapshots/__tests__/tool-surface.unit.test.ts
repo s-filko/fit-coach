@@ -7,8 +7,6 @@
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import { toJsonSchema } from '@langchain/core/utils/json_schema';
 
-import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
-import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildChatTools } from '@infra/ai/graph/tools/chat.tools';
 import { buildPlanCreationTools } from '@infra/ai/graph/tools/plan-creation.tools';
 import { buildRegistrationTools } from '@infra/ai/graph/tools/registration.tools';
@@ -29,18 +27,15 @@ type PhaseName = 'registration' | 'chat' | 'plan_creation' | 'session_planning' 
  */
 function phaseTools(phase: PhaseName): StructuredToolInterface[] {
   const { deps } = buildStubDeps(COMPLETE_PROFILE);
-  const pendingTransitions = new PendingRefMap<TransitionRequest | null>();
-  const pendingActiveSessionIds = new PendingRefMap<string | null>();
-  const currentSessionIds = new PendingRefMap<string | null>();
   switch (phase) {
     case 'registration':
       return [
-        ...buildRegistrationTools({ userService: deps.userService, pendingTransitions }),
+        ...buildRegistrationTools({ userService: deps.userService }),
         buildSaveTimezoneTool({ userService: deps.userService }),
       ];
     case 'chat':
       return [
-        ...buildChatTools({ userService: deps.userService, pendingTransitions }),
+        ...buildChatTools({ userService: deps.userService }),
         buildSaveTimezoneTool({ userService: deps.userService }),
       ];
     case 'plan_creation':
@@ -49,7 +44,6 @@ function phaseTools(phase: PhaseName): StructuredToolInterface[] {
           workoutPlanRepository: deps.workoutPlanRepo,
           exerciseRepository: deps.exerciseRepository,
           embeddingService: deps.embeddingService,
-          pendingTransitions,
         }),
         buildSaveTimezoneTool({ userService: deps.userService }),
       ];
@@ -60,8 +54,6 @@ function phaseTools(phase: PhaseName): StructuredToolInterface[] {
           workoutPlanRepository: deps.workoutPlanRepo,
           exerciseRepository: deps.exerciseRepository,
           embeddingService: deps.embeddingService,
-          pendingTransitions,
-          pendingActiveSessionIds,
         }),
         buildSaveTimezoneTool({ userService: deps.userService }),
       ];
@@ -71,8 +63,6 @@ function phaseTools(phase: PhaseName): StructuredToolInterface[] {
           trainingService: deps.trainingService,
           exerciseRepository: deps.exerciseRepository,
           embeddingService: deps.embeddingService,
-          pendingTransitions,
-          currentSessionIds,
         }),
         buildSaveTimezoneTool({ userService: deps.userService }),
       ];

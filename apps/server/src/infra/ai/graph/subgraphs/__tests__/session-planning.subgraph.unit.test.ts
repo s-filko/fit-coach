@@ -2,7 +2,7 @@
  * Tests for session-planning.subgraph.ts
  *
  * Verifies:
- * 1. extractNode reads and deletes both pendingTransitions and pendingActiveSessionIds Map entries
+ * 1. requestedTransition/activeSessionId arrive through the subgraph state from the tool executor
  * 2. activeSessionId propagates to parent state when start_training_session is called
  * 3. LLM text response (no tool calls) produces responseMessage with no side effects
  * 4. Tool-calling loop includes in-flight messages in the second LLM call (prevents recursion bug)

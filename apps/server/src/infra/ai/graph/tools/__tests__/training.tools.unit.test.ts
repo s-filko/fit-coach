@@ -1,10 +1,16 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
 
-import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
+import { isToolReturnWithUpdate, type ToolReturn } from '@domain/conversation/tool-outcome';
 import type { IEmbeddingService, IExerciseRepository, ITrainingService } from '@domain/training/ports';
-import type { SessionSet, WorkoutSession, WorkoutSessionWithDetails } from '@domain/training/types';
+import type { SessionSet, WorkoutSessionWithDetails } from '@domain/training/types';
+import { LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX, toToolMessage } from '@infra/ai/tools/outcome';
 
-import { buildTrainingTools, LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '../training.tools';
+import { buildTrainingTools } from '../training.tools';
+
+/** Renders a tool return exactly as the executor will (Task 5 contract). */
+function renderedContent(ret: ToolReturn): string {
+  return String(toToolMessage(isToolReturnWithUpdate(ret) ? ret.outcome : ret, 'test-id').content);
+}
 
 type InvokableTool = {
   name: string;
@@ -30,8 +36,9 @@ const makeTrainingService = (): jest.Mocked<ITrainingService> =>
     logSetWithContext: jest.fn(),
   }) as unknown as jest.Mocked<ITrainingService>;
 
-const makeConfig = (userId = 'u1'): RunnableConfig => ({
-  configurable: { userId, thread_id: userId },
+/** The executor puts activeSessionId into configurable alongside userId. */
+const makeConfig = (userId = 'u1', sessionId: string | null = 'session-1'): RunnableConfig => ({
+  configurable: { userId, thread_id: userId, activeSessionId: sessionId },
 });
 
 const makeExerciseRepository = () =>
@@ -55,20 +62,14 @@ const makeEmbeddingService = () =>
   }) as unknown as IEmbeddingService;
 
 const makeDeps = (trainingService: jest.Mocked<ITrainingService>, sessionId: string | null = 'session-1') => {
-  const pendingTransitions = new Map<string, TransitionRequest | null>();
-  const currentSessionIds = new Map<string, string | null>();
-  if (sessionId !== null) {
-    currentSessionIds.set('u1', sessionId);
-  }
   const tools = buildTrainingTools({
     trainingService,
     exerciseRepository: makeExerciseRepository(),
     embeddingService: makeEmbeddingService(),
-    pendingTransitions,
-    currentSessionIds,
   });
   const byName = (name: string) => tools.find(t => t.name === name) as InvokableTool;
-  return { tools, byName, pendingTransitions, currentSessionIds };
+  const config = makeConfig('u1', sessionId);
+  return { tools, byName, config };
 };
 
 describe('buildTrainingTools', () => {
@@ -87,15 +88,15 @@ describe('buildTrainingTools', () => {
       };
       trainingService.logSetWithContext.mockResolvedValue({ set: mockSet, setNumber: 2 });
 
-      const { byName } = makeDeps(trainingService);
-      const result = await byName('log_set').invoke(
+      const { byName, config } = makeDeps(trainingService);
+      const result = (await byName('log_set').invoke(
         {
           exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
           ...FLAT_SET_INPUT,
           rpe: 8,
         },
-        makeConfig('u1'),
-      );
+        config,
+      )) as ToolReturn;
 
       expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
         'session-1',
@@ -107,23 +108,23 @@ describe('buildTrainingTools', () => {
           feedback: undefined,
         }),
       );
-      expect(result).toContain('Set 2 logged');
-      expect(result).toContain('10 reps @ 80 kg');
+      expect(renderedContent(result)).toContain('Set 2 logged');
+      expect(renderedContent(result)).toContain('10 reps @ 80 kg');
     });
 
     it('returns SYSTEM_ERROR when no sessionId is set for the user', async () => {
       const trainingService = makeTrainingService();
 
-      const { byName } = makeDeps(trainingService, null);
-      const result = await byName('log_set').invoke(
+      const { byName, config } = makeDeps(trainingService, null);
+      const result = (await byName('log_set').invoke(
         {
           exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
           ...FLAT_SET_INPUT,
         },
-        makeConfig('u1'),
-      );
+        config,
+      )) as ToolReturn;
 
-      expect(result).toContain(SYSTEM_ERROR_PREFIX);
+      expect(renderedContent(result)).toContain(SYSTEM_ERROR_PREFIX);
       expect(trainingService.logSetWithContext).not.toHaveBeenCalled();
     });
 
@@ -141,10 +142,10 @@ describe('buildTrainingTools', () => {
       };
       trainingService.logSetWithContext.mockResolvedValue({ set: mockSet, setNumber: 1 });
 
-      const { byName } = makeDeps(trainingService);
+      const { byName, config } = makeDeps(trainingService);
       await byName('log_set').invoke(
         { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', ...FLAT_SET_INPUT, order: 2 },
-        makeConfig('u1'),
+        config,
       );
 
       expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
@@ -163,17 +164,17 @@ describe('buildTrainingTools', () => {
       const trainingService = makeTrainingService();
       trainingService.logSetWithContext.mockRejectedValue(new Error('Exercise not found'));
 
-      const { byName } = makeDeps(trainingService);
-      const result = await byName('log_set').invoke(
+      const { byName, config } = makeDeps(trainingService);
+      const result = (await byName('log_set').invoke(
         {
           exerciseId: '00000000-0000-4000-8000-000000000063',
           ...FLAT_SET_INPUT,
         },
-        makeConfig('u1'),
-      );
+        config,
+      )) as ToolReturn;
 
-      expect(result).toContain(LLM_ERROR_PREFIX);
-      expect(result).toContain('Exercise not found');
+      expect(renderedContent(result)).toContain(LLM_ERROR_PREFIX);
+      expect(renderedContent(result)).toContain('Exercise not found');
     });
   });
 
@@ -196,25 +197,25 @@ describe('buildTrainingTools', () => {
       const trainingService = makeTrainingService();
       trainingService.completeCurrentExercise.mockResolvedValue(mockSummary);
 
-      const { byName } = makeDeps(trainingService);
-      const result = await byName('complete_current_exercise').invoke({}, makeConfig('u1'));
+      const { byName, config } = makeDeps(trainingService);
+      const result = (await byName('complete_current_exercise').invoke({}, config)) as ToolReturn;
 
       expect(trainingService.completeCurrentExercise).toHaveBeenCalledWith('session-1');
-      expect(result).toContain('Overhead Press');
-      expect(result).toContain('completed');
-      expect(result).toContain('Set 1');
-      expect(result).toContain('Set 2');
-      expect(result).toContain('Set 3');
-      expect(result).toContain('3/3 sets');
+      expect(renderedContent(result)).toContain('Overhead Press');
+      expect(renderedContent(result)).toContain('completed');
+      expect(renderedContent(result)).toContain('Set 1');
+      expect(renderedContent(result)).toContain('Set 2');
+      expect(renderedContent(result)).toContain('Set 3');
+      expect(renderedContent(result)).toContain('3/3 sets');
     });
 
     it('returns SYSTEM_ERROR when no sessionId is set for the user', async () => {
       const trainingService = makeTrainingService();
 
-      const { byName } = makeDeps(trainingService, null);
-      const result = await byName('complete_current_exercise').invoke({}, makeConfig('u1'));
+      const { byName, config } = makeDeps(trainingService, null);
+      const result = (await byName('complete_current_exercise').invoke({}, config)) as ToolReturn;
 
-      expect(result).toContain(SYSTEM_ERROR_PREFIX);
+      expect(renderedContent(result)).toContain(SYSTEM_ERROR_PREFIX);
       expect(trainingService.completeCurrentExercise).not.toHaveBeenCalled();
     });
 
@@ -222,16 +223,16 @@ describe('buildTrainingTools', () => {
       const trainingService = makeTrainingService();
       trainingService.completeCurrentExercise.mockRejectedValue(new Error('No exercise in progress'));
 
-      const { byName } = makeDeps(trainingService);
-      const result = await byName('complete_current_exercise').invoke({}, makeConfig('u1'));
+      const { byName, config } = makeDeps(trainingService);
+      const result = (await byName('complete_current_exercise').invoke({}, config)) as ToolReturn;
 
-      expect(result).toContain(LLM_ERROR_PREFIX);
-      expect(result).toContain('No exercise in progress');
+      expect(renderedContent(result)).toContain(LLM_ERROR_PREFIX);
+      expect(renderedContent(result)).toContain('No exercise in progress');
     });
   });
 
   describe('finish_training', () => {
-    it('calls completeSession, sets pendingTransitions entry, returns summary', async () => {
+    it('calls completeSession, requests the transition update, returns summary', async () => {
       const trainingService = makeTrainingService();
       const mockSession: WorkoutSessionWithDetails = {
         id: 'session-1',
@@ -253,22 +254,25 @@ describe('buildTrainingTools', () => {
       trainingService.completeSession.mockResolvedValue(mockSession);
       trainingService.getSessionDetails.mockResolvedValue(mockSession);
 
-      const { byName, pendingTransitions } = makeDeps(trainingService);
-      const result = await byName('finish_training').invoke({ feedback: 'Great session!' }, makeConfig('u1'));
+      const { byName, config } = makeDeps(trainingService);
+      const result = (await byName('finish_training').invoke({ feedback: 'Great session!' }, config)) as ToolReturn;
 
       expect(trainingService.completeSession).toHaveBeenCalledWith('session-1', undefined, undefined);
-      expect(pendingTransitions.get('u1')).toEqual({ toPhase: 'chat', reason: 'training_completed' });
-      expect(result).toContain('45 min');
-      expect(result).toContain('Great session!');
+      expect(isToolReturnWithUpdate(result) ? result.update.pendingTransition : undefined).toEqual({
+        toPhase: 'chat',
+        reason: 'training_completed',
+      });
+      expect(renderedContent(result)).toContain('45 min');
+      expect(renderedContent(result)).toContain('Great session!');
     });
 
     it('returns SYSTEM_ERROR when no sessionId is set for the user', async () => {
       const trainingService = makeTrainingService();
 
-      const { byName } = makeDeps(trainingService, null);
-      const result = await byName('finish_training').invoke({}, makeConfig('u1'));
+      const { byName, config } = makeDeps(trainingService, null);
+      const result = (await byName('finish_training').invoke({}, config)) as ToolReturn;
 
-      expect(result).toContain(SYSTEM_ERROR_PREFIX);
+      expect(renderedContent(result)).toContain(SYSTEM_ERROR_PREFIX);
       expect(trainingService.completeSession).not.toHaveBeenCalled();
     });
 
@@ -276,14 +280,14 @@ describe('buildTrainingTools', () => {
       const trainingService = makeTrainingService();
       trainingService.completeSession.mockRejectedValue(new Error('Session not found'));
 
-      const { byName } = makeDeps(trainingService);
-      const result = await byName('finish_training').invoke({}, makeConfig('u1'));
+      const { byName, config } = makeDeps(trainingService);
+      const result = (await byName('finish_training').invoke({}, config)) as ToolReturn;
 
-      expect(result).toContain(LLM_ERROR_PREFIX);
-      expect(result).toContain('Session not found');
+      expect(renderedContent(result)).toContain(LLM_ERROR_PREFIX);
+      expect(renderedContent(result)).toContain('Session not found');
     });
 
-    it('isolates pendingTransitions by userId — two users do not overwrite each other', async () => {
+    it('each run requests its own transition — two users do not overwrite each other', async () => {
       const trainingService = makeTrainingService();
       const mockSession: WorkoutSessionWithDetails = {
         id: 'session-1',
@@ -305,24 +309,26 @@ describe('buildTrainingTools', () => {
       trainingService.completeSession.mockResolvedValue(mockSession);
       trainingService.getSessionDetails.mockResolvedValue(mockSession);
 
-      const pendingTransitions = new Map<string, TransitionRequest | null>();
-      const currentSessionIds = new Map<string, string | null>();
-      currentSessionIds.set('userA', 'session-A');
-      currentSessionIds.set('userB', 'session-B');
       const tools = buildTrainingTools({
         trainingService,
         exerciseRepository: makeExerciseRepository(),
         embeddingService: makeEmbeddingService(),
-        pendingTransitions,
-        currentSessionIds,
       });
       const finishTraining = tools.find(t => t.name === 'finish_training') as InvokableTool;
 
-      await finishTraining.invoke({}, makeConfig('userA'));
-      await finishTraining.invoke({}, makeConfig('userB'));
+      // Each invocation carries its own session via configurable — the state
+      // update is requested per run, so users can never overwrite each other.
+      const a = (await finishTraining.invoke({}, makeConfig('userA', 'session-A'))) as ToolReturn;
+      const b = (await finishTraining.invoke({}, makeConfig('userB', 'session-B'))) as ToolReturn;
 
-      expect(pendingTransitions.get('userA')).toEqual({ toPhase: 'chat', reason: 'training_completed' });
-      expect(pendingTransitions.get('userB')).toEqual({ toPhase: 'chat', reason: 'training_completed' });
+      expect(isToolReturnWithUpdate(a) ? a.update.pendingTransition : undefined).toEqual({
+        toPhase: 'chat',
+        reason: 'training_completed',
+      });
+      expect(isToolReturnWithUpdate(b) ? b.update.pendingTransition : undefined).toEqual({
+        toPhase: 'chat',
+        reason: 'training_completed',
+      });
     });
   });
 
@@ -363,16 +369,16 @@ describe('buildTrainingTools', () => {
       };
       trainingService.logSetWithContext.mockResolvedValue(mockResult);
 
-      const { byName } = makeDeps(trainingService);
-      const result = await byName('log_set').invoke(
+      const { byName, config } = makeDeps(trainingService);
+      const result = (await byName('log_set').invoke(
         { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', ...FLAT_SET_INPUT },
-        makeConfig('u1'),
-      );
+        config,
+      )) as ToolReturn;
 
-      expect(result).toContain('Lateral Raise');
-      expect(result).toContain('completed');
-      expect(result).toContain('Set 1');
-      expect(result).toContain('Set 2');
+      expect(renderedContent(result)).toContain('Lateral Raise');
+      expect(renderedContent(result)).toContain('completed');
+      expect(renderedContent(result)).toContain('Set 1');
+      expect(renderedContent(result)).toContain('Set 2');
     });
 
     it('should NOT include auto-complete notice when no switch occurred', async () => {
@@ -389,14 +395,14 @@ describe('buildTrainingTools', () => {
       };
       trainingService.logSetWithContext.mockResolvedValue({ set: mockSet, setNumber: 2 });
 
-      const { byName } = makeDeps(trainingService);
-      const result = await byName('log_set').invoke(
+      const { byName, config } = makeDeps(trainingService);
+      const result = (await byName('log_set').invoke(
         { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', ...FLAT_SET_INPUT },
-        makeConfig('u1'),
-      );
+        config,
+      )) as ToolReturn;
 
-      expect(result).not.toContain('auto-completed');
-      expect(result).toContain('Set 2 logged');
+      expect(renderedContent(result)).not.toContain('auto-completed');
+      expect(renderedContent(result)).toContain('Set 2 logged');
     });
   });
 
@@ -479,19 +485,13 @@ describe('buildTrainingTools', () => {
         .mockResolvedValueOnce({ set: makeSet(1), setNumber: 1 })
         .mockResolvedValueOnce({ set: makeSet(2), setNumber: 2 });
 
-      const { byName } = makeDeps(trainingService);
+      const { byName, config } = makeDeps(trainingService);
 
       // Turn 1: user says "that was my first set" → LLM calls log_set
-      await byName('log_set').invoke(
-        { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', ...FLAT_SET_INPUT },
-        makeConfig('u1'),
-      );
+      await byName('log_set').invoke({ exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', ...FLAT_SET_INPUT }, config);
       // Turn 2: user says "no no, remove last one" → LLM has no delete tool,
       //         calls log_set again trying to "correct" by re-logging
-      await byName('log_set').invoke(
-        { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', ...FLAT_SET_INPUT },
-        makeConfig('u1'),
-      );
+      await byName('log_set').invoke({ exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', ...FLAT_SET_INPUT }, config);
 
       // Both calls succeed — 2 DB writes for what should have been 1 set
       expect(trainingService.logSetWithContext).toHaveBeenCalledTimes(2);

@@ -4,7 +4,7 @@
  */
 import { AIMessage, type BaseMessage, ToolMessage } from '@langchain/core/messages';
 
-import { LLM_ERROR_PREFIX } from '@infra/ai/graph/tools/training.tools';
+import { LLM_ERROR_PREFIX } from '@infra/ai/tools/outcome';
 
 /** The three scenarios each phase runs through the recording harness. */
 export type AssemblyScenario = 'plain' | 'with-summary' | 'post-tool';

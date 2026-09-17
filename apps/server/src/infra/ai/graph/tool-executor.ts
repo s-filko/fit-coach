@@ -69,9 +69,12 @@ export function buildToolExecutor(
 
   return async (state, config) => {
     const lang = langOf(state.user?.languageCode);
-    const lastMessage = state.messages[state.messages.length - 1];
+    // Duck-typed (_getType, not instanceof): jest.resetModules in subgraph tests
+    // re-evaluates @langchain/core and produces a second AIMessage class, which
+    // would make instanceof checks fail inside the executor.
+    const lastMessage = state.messages[state.messages.length - 1] as Partial<AIMessage> | undefined;
     const calls = (
-      lastMessage && lastMessage instanceof AIMessage && Array.isArray(lastMessage.tool_calls)
+      lastMessage && lastMessage._getType?.() === 'ai' && Array.isArray(lastMessage.tool_calls)
         ? lastMessage.tool_calls
         : []
     ) as ToolCallLike[];
@@ -203,6 +206,6 @@ function finish(newMessages: BaseMessage[], updates: ToolStateUpdate): ToolExecu
 
 /** Conditional edge after the executor: 'agent' normally, END when the executor appended a terminal AIMessage. */
 export function afterTools(state: { messages: BaseMessage[] }): 'agent' | typeof END {
-  const last = state.messages[state.messages.length - 1];
-  return last instanceof AIMessage ? END : 'agent';
+  const last = state.messages[state.messages.length - 1] as Partial<BaseMessage> | undefined;
+  return last?._getType?.() === 'ai' ? END : 'agent';
 }

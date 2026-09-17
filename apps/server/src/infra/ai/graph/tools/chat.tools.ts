@@ -1,16 +1,11 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
-import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
-import type { ConversationPhase } from '@domain/conversation/ports';
+import { ok, userError } from '@domain/conversation/tool-outcome';
 import type { IUserService } from '@domain/user/ports';
-
-import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
 
 export interface ChatToolsDeps {
   userService: IUserService;
-  /** Per-user map — request_transition tool sets entry by userId, extractNode deletes it */
-  pendingTransitions: IPendingRefMap<TransitionRequest | null>;
 }
 
 const UPDATE_PROFILE_DESCRIPTION = [
@@ -29,7 +24,7 @@ const REQUEST_TRANSITION_DESCRIPTION = [
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function buildChatTools(deps: ChatToolsDeps) {
-  const { userService, pendingTransitions } = deps;
+  const { userService } = deps;
 
   const updateProfile = tool(
     async (input, config) => {
@@ -37,12 +32,12 @@ export function buildChatTools(deps: ChatToolsDeps) {
 
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
-        return 'Error: could not identify user. Please try again.';
+        return userError('Error: could not identify user. Please try again.');
       }
 
       const updatedUser = await userService.updateProfileData(userId, input);
       if (!updatedUser) {
-        return 'Failed to update profile. Please try again.';
+        return userError('Failed to update profile. Please try again.');
       }
 
       const changed = Object.entries(input)
@@ -50,7 +45,7 @@ export function buildChatTools(deps: ChatToolsDeps) {
         .map(([k, v]) => `${k}: ${v}`)
         .join(', ');
 
-      return `Profile updated: ${changed}`;
+      return ok(`Profile updated: ${changed}`);
     },
     {
       name: 'update_profile',
@@ -71,15 +66,15 @@ export function buildChatTools(deps: ChatToolsDeps) {
   );
 
   const requestTransition = tool(
-    async (input, config) => {
-      const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
-      pendingTransitions.set(userId, {
-        toPhase: input.toPhase as ConversationPhase,
-        reason: input.reason,
-      });
-
-      return `Transition to ${input.toPhase} requested.`;
-    },
+    async input => ({
+      outcome: ok(`Transition to ${input.toPhase} requested.`),
+      update: {
+        pendingTransition: {
+          toPhase: input.toPhase,
+          reason: input.reason,
+        },
+      },
+    }),
     {
       name: 'request_transition',
       description: REQUEST_TRANSITION_DESCRIPTION,

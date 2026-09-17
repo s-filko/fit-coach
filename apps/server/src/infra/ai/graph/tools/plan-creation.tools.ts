@@ -2,20 +2,16 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
-import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
-import type { ConversationPhase } from '@domain/conversation/ports';
+import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
 import type { IEmbeddingService, IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
 import type { MuscleGroup } from '@domain/training/types';
 
-import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildSearchExercisesTool } from '@infra/ai/graph/tools/search-exercises.tool';
 
 export interface PlanCreationToolsDeps {
   workoutPlanRepository: IWorkoutPlanRepository;
   exerciseRepository: IExerciseRepository;
   embeddingService: IEmbeddingService;
-  /** Per-user map — tools set entry by userId, extractNode deletes it */
-  pendingTransitions: IPendingRefMap<TransitionRequest | null>;
 }
 
 const MUSCLE_GROUPS: [MuscleGroup, ...MuscleGroup[]] = [
@@ -94,14 +90,14 @@ const REQUEST_TRANSITION_DESCRIPTION = [
 ].join(' ');
 
 export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
-  const { workoutPlanRepository, exerciseRepository, embeddingService, pendingTransitions } = deps;
+  const { workoutPlanRepository, exerciseRepository, embeddingService } = deps;
   const searchExercises = buildSearchExercisesTool({ embeddingService, exerciseRepository });
 
   const saveWorkoutPlan = tool(
     async (input, config) => {
       const userId = (config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined;
       if (!userId) {
-        return 'Error: could not identify user. Please try again.';
+        return userError('Error: could not identify user. Please try again.');
       }
 
       // Validate all exerciseIds exist in DB before saving
@@ -112,7 +108,10 @@ export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
         const foundIds = new Set(found.map(e => e.id));
         const missing = uniqueIds.filter(id => !foundIds.has(id));
         if (missing.length > 0) {
-          return `LLM_ERROR: Invalid exerciseId(s): ${missing.join(', ')}. These IDs do not exist in the exercise catalog. Use search_exercises to find valid exercise IDs.`;
+          return llmError(
+            `Invalid exerciseId(s): ${missing.join(', ')}. These IDs do not exist in the exercise catalog. ` +
+              'Use search_exercises to find valid exercise IDs.',
+          );
         }
       }
 
@@ -129,12 +128,17 @@ export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
         status: 'active',
       });
 
-      pendingTransitions.set(userId, {
-        toPhase: 'chat' as ConversationPhase,
-        reason: 'plan_creation_complete',
-      });
-
-      return 'Plan saved. Now write a brief confirmation to the user in their language — congratulate them and say you are ready to start training.';
+      return {
+        outcome: ok(
+          'Plan saved. Now write a brief confirmation to the user in their language — congratulate them and say you are ready to start training.',
+        ),
+        update: {
+          pendingTransition: {
+            toPhase: 'chat',
+            reason: 'plan_creation_complete',
+          },
+        },
+      };
     },
     {
       name: 'save_workout_plan',
@@ -152,15 +156,17 @@ export function buildPlanCreationTools(deps: PlanCreationToolsDeps) {
   );
 
   const requestTransition = tool(
-    async (input, config) => {
-      const userId = ((config?.configurable as Record<string, unknown>)?.['userId'] as string | undefined) ?? '';
-      pendingTransitions.set(userId, {
-        toPhase: input.toPhase as ConversationPhase,
-        reason: input.reason ?? 'user_cancelled',
-      });
-
-      return `Transition to ${input.toPhase} registered. Write a brief closing message to the user in their language.`;
-    },
+    async input => ({
+      outcome: ok(
+        `Transition to ${input.toPhase} registered. Write a brief closing message to the user in their language.`,
+      ),
+      update: {
+        pendingTransition: {
+          toPhase: input.toPhase,
+          reason: input.reason ?? 'user_cancelled',
+        },
+      },
+    }),
     {
       name: 'request_transition',
       description: REQUEST_TRANSITION_DESCRIPTION,
