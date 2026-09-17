@@ -18,6 +18,8 @@ _Generated 2026-09-17 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p3-phase-spec.md` — Refactor P3 — PhaseSpec Factory and Shared Agent Node Implementation Plan
 - `refactor-p3-run-context-commit.md` — Refactor P3 — Run Context, Commit Node and Conversation Run Port Implementation Plan
 - `refactor-p3-tool-executor.md` — Refactor P3 — Shared Tool Executor Implementation Plan
+- `refactor-p4-context-budget.md` — Refactor P4 — Context Budget and Domain Blocks Implementation Plan
+- `refactor-p4-episode-memory.md` — Refactor P4 — Episode Memory Implementation Plan
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
@@ -75,8 +77,13 @@ _Generated 2026-09-17 from docs/superpowers/plans/ + git. Never hand-edit; regen
    context, prepare/route/commit, transition event + handlers, `ConversationRunPort`,
    failed runs recorded). Each plan's Decisions table lists owner-overridable calls; ADR-0013
    amendments are escalated in each close-out, never edited silently.
-2. Then P4/P5 → P6 → P7 per the master plan phase map. P4 is planned after P3 lands (its
-   inputs are P3's PhaseSpec/commit/event shapes and the §3.4 measurement).
+2. **P4 is planned as two chained plans (2026-09-17, owner asked to plan ahead of P3's
+   close-out)**: `refactor-p4-episode-memory` (messages persist across runs, synchronous
+   compaction, independent structured summaries, one layout for all phases) →
+   `refactor-p4-context-budget` (domain context blocks, INV-LLM-004 budget enforcement,
+   AC-1343 replay, checkpoint pruning). Both open with an orchestrator step that depends on
+   P3 having landed (freeze `v2`, re-measure §3.4); if P3's handler/loader shapes change
+   during execution, only those references need a touch. Then P5 (parallel to P4) → P6 → P7.
 3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
    the code aligned to it, ESLint keeping it that way. Independent of the P0 chain;
    can run alongside it.
