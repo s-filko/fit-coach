@@ -47,6 +47,7 @@ apps/server/src/
         index.ts
       types.ts                 # ChatMsg (temporary home; retired in refactor P1/P4 per ADR-0013)
     conversation/
+      tool-outcome.ts         # ToolOutcome/ToolReturn/ToolStateUpdate — pure tool contract (ADR-0013 §6; no runtime LangGraph)
       graph/
         conversation.state.ts  # LangGraph ConversationState (Annotation.Root)
       ports/
@@ -82,24 +83,31 @@ apps/server/src/
       embedding-text.util.ts    # buildEmbeddingText() — composite text for exercise embeddings
       graph/
         conversation.graph.ts   # Main StateGraph: router→phase→persist→guard→cleanup
-        dedup-tool-node.ts      # Per-turn deduplication of identical search_exercises calls
+        tool-executor.ts        # Shared tool executor: runs every phase's tool calls, serialises ToolOutcome v1, applies ToolStateUpdate (ADR-0013 §4.2/§4.4/§6)
+        tool-policy.ts          # ToolPolicy + pure helpers: ordering, batch dedup, search key (AC-1331/AC-1332)
         invoke-with-retry.ts    # Retry wrapper for empty LLM responses after tool calls
         nodes/
           router.node.ts             # Phase determination, session timeout, user loading
           persist.node.ts            # appendTurn to conversation_turns + one conversation_runs row per run (P0 run log; moves to commit node in P3)
           phase-summary.node.ts      # End-of-phase summarisation (renders prompts/summarizer)
         subgraphs/
-          chat.subgraph.ts              # agent + ToolNode + extractNode
-          registration.subgraph.ts      # agent + ToolNode + extractNode
-          plan-creation.subgraph.ts     # agent + dedupToolNode + extractNode
-          session-planning.subgraph.ts  # agent + dedupToolNode + extractNode + activeSessionId
-          training.subgraph.ts          # agent + ToolNode + extractNode + tool-error retry budget (assembly via assembleContext)
-        tools/
-          chat.tools.ts                 # update_profile, request_transition
-          registration.tools.ts         # save_profile_fields, complete_registration
-          plan-creation.tools.ts        # save_workout_plan, search_exercises, request_transition
-          session-planning.tools.ts     # start_training_session, search_exercises, request_transition
-          search-exercises.tool.ts      # search_exercises — vector search via EmbeddingService
+          chat.subgraph.ts              # agent + toolExecutor + extractNode (NO_POLICY)
+          registration.subgraph.ts      # agent + toolExecutor + extractNode (NO_POLICY)
+          plan-creation.subgraph.ts     # agent + toolExecutor + extractNode (search_exercises perTurnDedup)
+          session-planning.subgraph.ts  # agent + toolExecutor + extractNode + activeSessionId (search_exercises perTurnDedup)
+          training.subgraph.ts          # agent + toolExecutor + extractNode (ordering, log_set batchDedup, error budget 1, availability filter)
+      tools/                        # One file per tool (ADR-0013 §11); tools return ToolReturn, never touch LangGraph
+        outcome.ts                   # ToolOutcome serialisation v1: toToolMessage, outcomeKindOf, LLM/SYSTEM_ERROR prefixes
+        index.ts                     # buildSharedTools + per-tool builder re-exports
+        save-profile-fields.tool.ts / complete-registration.tool.ts
+        update-profile.tool.ts / request-transition.tool.ts
+        save-workout-plan.tool.ts / start-training-session.tool.ts
+        log-set.tool.ts / complete-current-exercise.tool.ts / finish-training.tool.ts
+        delete-last-sets.tool.ts / update-last-set.tool.ts
+        search-exercises.tool.ts / timezone.tool.ts
+        format-exercise-summary.ts   # Shared training summary helper + session constants
+      messages/                      # User-facing message catalog (ADR-0013 §11) — en/ru, language_code driven
+        catalog.ts / en.ts / ru.ts / index.ts
       context/                      # Context assembler — message order + token accounting (ADR-0013 §3.4)
         assemble-context.ts         # assembleContext() → { messages, budgetReport } (reporting half; budgets/trimming are P4)
         token-estimator.ts          # estimateTokens + TOKEN_ESTIMATOR_ID — the single estimator (app + eval stack)

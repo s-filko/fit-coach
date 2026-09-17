@@ -129,11 +129,17 @@ code review. The division of roles and conflict rules are defined in
 2) Update registration prompt wording and flow (graph-driven since the prompt-service removal):
    - `apps/server/src/infra/ai/prompts/phases/registration/vN.ts` (system prompt module)
    - Prompt changes follow `docs/PROMPT_EVAL_FRAMEWORK.md` §8 (new version file, keep the old one, run L1 for the phase) — recommended from P2, mandatory after P7.
-   - `apps/server/src/infra/ai/graph/tools/registration.tools.ts:1` (save_profile_fields / complete_registration tools)
+   - `apps/server/src/infra/ai/tools/save-profile-fields.tool.ts:1` and `complete-registration.tool.ts` (one file per tool, ADR-0013 §11)
    - Message order and token accounting: `apps/server/src/infra/ai/context/assemble-context.ts` (the context assembler); per-phase layout on `apps/server/src/infra/ai/prompts/index.ts`.
 3) Update profile-field validation:
    - `apps/server/src/domain/user/services/registration.validation.ts:1`
 4) Keep error format and logging consistent; add/adjust tests accordingly.
+
+### Add or Change a Tool
+1) Tool result contract: tools return `ToolReturn` (`ToolOutcome` or outcome + `ToolStateUpdate`) from `domain/conversation/tool-outcome.ts`; the shared executor (`infra/ai/graph/tool-executor.ts`) is the only place that turns a return into a `ToolMessage` — via `toToolMessage` v1 (`infra/ai/tools/outcome.ts`). Tools never import LangGraph.
+2) One file per tool under `infra/ai/tools/` (ADR-0013 §11); register per-phase tool lists in the phase's subgraph (`infra/ai/graph/subgraphs/`), policy knobs in `ToolPolicy` (`tool-policy.ts`).
+3) Tool-result strings are frozen per tool — changing a tool's rendered output is a `TOOL_OUTCOME_FORMAT_ID` bump, not a silent edit.
+4) User-facing strings (budget/system-error replies, router text) live in `infra/ai/messages/` (en/ru catalog), never inline.
 
 ### Integrate Conversation Context into a Flow
 1) Spec:
