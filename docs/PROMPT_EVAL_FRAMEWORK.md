@@ -197,10 +197,24 @@ Any `RUN_LLM_EVALS=1` run must be argued before launch, in writing, with:
 3. **Why nothing cheaper answers it** — scoped subset (e.g. transition datasets
    only, 18 calls), 1 sample instead of 3, or relying on snapshots.
 
-Defaults: plumbing changes proven byte-identical by snapshots get NO L1; full
-L1 runs happen at phase close-out or on explicit owner request; re-runs are
+Defaults: plumbing changes proven byte-identical by snapshots get NO L1; re-runs are
 scoped to the failing dataset only. Context: 2026-09-17, one freeze + one
-compare plus session overhead burned ~10% of the weekly Z.AI quota in hours.
+compare plus session overhead burned ~20% of the weekly Z.AI quota in hours and
+blocked development.
+
+**Hardened 2026-09-18 (owner rule):** a full L1 (all datasets, n ≥ 3) is never part of a
+plan task, a close-out or a background job. It runs only through the **red button**: a
+manual owner launch with `EVALS_FULL_RUN=1` in addition to `RUN_LLM_EVALS=1`; the runner
+prints the planned call count and refuses any run above `EVALS_CALL_CEILING` (default 30)
+without that flag. What a plan may run is a *minimal basic* check — one dataset
+(`--dataset <stem>`), `--samples 1`, single-digit call count — plus the dev smoke. Any
+larger verification is a separately planned budget item with its own owner decision.
+Every model-backed run is **metered**: the runner prints planned requests and an estimate
+(tokens, % of the weekly limit) before starting, records actual requests and tokens via a
+callback, snapshots the remaining quota before and after (Z.AI endpoint if one exists,
+otherwise `--quota-before` / `evals:ledger --after` entered from the dashboard), and
+appends the delta to the committed `apps/server/evals/COST_LEDGER.md`. Mechanism lands in
+`refactor-p4-episode-memory` Task 1.
 
 ## 8. Prompt change protocol (mandatory after P7; recommended from P2)
 

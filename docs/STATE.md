@@ -69,16 +69,28 @@ _Generated 2026-09-17 from docs/superpowers/plans/ + git. Never hand-edit; regen
    before P4 locks budgets). PC-0007/SP-0005 (BUG-014/015) still fail in both v0 and v1 —
    wording work per PROMPT_EVAL_FRAMEWORK §8, not refactor scope (BUG-014 observed live in
    the smoke: the model narrates a saved plan without calling `save_workout_plan`).
-   **P3 is planned as three chained plans (2026-09-17)**, dispatch in this order:
-   `refactor-p3-tool-executor` (ToolOutcome, shared executor, tools per file, catalog seed;
-   freezes the `v1` L1 baseline in its Task 2 before any code change) →
-   `refactor-p3-phase-spec` (PhaseSpec + `buildPhaseSubgraph`, shared agent node, nudge for
-   all phases, no run merging) → `refactor-p3-run-context-commit` (durable state vs run
-   context, prepare/route/commit, transition event + handlers, `ConversationRunPort`,
-   failed runs recorded). Each plan's Decisions table lists owner-overridable calls; ADR-0013
-   amendments are escalated in each close-out, never edited silently.
-2. Then P4/P5 → P6 → P7 per the master plan phase map. P4 is planned after P3 lands (its
-   inputs are P3's PhaseSpec/commit/event shapes and the §3.4 measurement).
+   **P3 is complete (2026-09-18)**: the three chained plans (`refactor-p3-tool-executor`,
+   `refactor-p3-phase-spec`, `refactor-p3-run-context-commit`) closed as one phase with a
+   clean four-zone review, deployed to dev at `bbab7b07`, plus the `fix/p3-tails` follow-up
+   (executor schema-rejection hint, nullable `model` column — migration `0003`). AC-1334's
+   L1 half was waived by the owner (quota); byte-identity snapshots + the dev smoke stand in.
+   Verified again 2026-09-18 on `6ea80646`: `check-all` clean, 491 unit tests green,
+   `state.mjs --check` OK.
+2. **P4 — dispatch `refactor-p4-episode-memory` first** (plan rewritten 2026-09-18 against
+   the shipped P3 code; executor brief in `plans/_refactor-p4-episode-memory.executor-prompt.md`).
+   **Eval budget rule (owner, 2026-09-18): code first, model runs only when budget is
+   left.** Nothing model-backed on the executor's path; one ≈10-call working-check run
+   after all code (Task 9 Step 1 — finds errors, does not score); the plan merges on unit /
+   integration / L0 + that run + dev smoke with AC-1344's statistics recorded as pending.
+   The two 5-call mini-runs (`v2` mini-freeze on the Task 1 commit; the compare) form the
+   budget-gated micro-task `refactor-p4-evals-verify`; the full `v2` freeze and the
+   AC-1344 sweep are red-button items (see Blocked below).
+   Before RUN 1: a glance at the plan's Decisions table (D-L config defaults, D-K `role`
+   derivation are the likeliest to be overruled). Then `refactor-p4-context-budget`
+   (`After:` the first; its Task 1 needs a day of dev traffic on episode memory; re-validate
+   it against the tree before dispatch). P5 may run in parallel with P4 per the master plan;
+   it is not planned yet.
+3. Then P6 → P7 per the master plan phase map.
 3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
    the code aligned to it, ESLint keeping it that way. Independent of the P0 chain;
    can run alongside it.
@@ -88,7 +100,16 @@ _Generated 2026-09-17 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 ## Blocked / waiting on owner
 
-- Nothing blocked right now. OQ-3 (judge profile) has a recommended default
+- **Red-button eval runs (owner-launched only, separate budget; not blocking any plan):**
+  (a) full `v2` baseline on post-P3 code — 62 cases × n=3 ≈ 186 calls — must run on the
+  `refactor-p4-episode-memory` Task 1 commit (before Task 3 lands) if it is ever to exist;
+  (b) full AC-1344 sweep after P4 episode memory merges (same size). The runner refuses
+  both without `EVALS_FULL_RUN=1` (guard lands in that plan's Task 1). Until (b) runs,
+  AC-1344's "±2 pp on other datasets" stays unmeasured and is recorded as such. Every
+  model-backed run (mini or red-button) is metered: requests, tokens, quota before/after,
+  delta and % of the weekly limit go into `apps/server/evals/COST_LEDGER.md` (mechanism =
+  that plan's Task 1; whether Z.AI exposes a quota endpoint is a spike there — unverified).
+- OQ-3 (judge profile) has a recommended default
   (Gemini 3 Flash PAYG) that P0's eval harness will assume until ruled otherwise.
 - Three P1/P2 questions were **decided by the owner on 2026-09-13** and need no further
   input: summariser→`structured` deferred to P4; `prompts/blocks/` accepted as an
