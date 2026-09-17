@@ -1,18 +1,16 @@
 /**
- * RED tests for ADR-0011 Phase 1: tool ordering and batch dedup.
- *
- * These tests import pure functions that will be extracted from sequentialToolNode.
- * Currently RED because the functions do not exist yet.
- *
- * WHY RED:
- *   sortToolCallsByPriority — not exported from training.subgraph.ts
- *   findDuplicateLogSets    — not exported from training.subgraph.ts
- *   → import error → all tests fail
- *
- * GREEN after: extracting sort + dedup logic into exported pure functions.
+ * ADR-0011 Phase 1 tests: tool ordering and batch dedup. Moved verbatim
+ * (same it names) from subgraphs/__tests__/training.subgraph.unit.test.ts to
+ * tool-policy.unit.test.ts by refactor-p3-tool-executor Task 4 — the pure
+ * helpers moved from training.subgraph.ts to tool-policy.ts.
  */
 
-import { findDuplicateLogSets, sortToolCallsByPriority } from '../training.subgraph';
+import {
+  batchDuplicateToolResult,
+  buildSearchKey,
+  findDuplicateLogSets,
+  sortToolCallsByPriority,
+} from '../tool-policy';
 
 interface ToolCallStub {
   name: string;
@@ -221,5 +219,31 @@ describe('findDuplicateLogSets (ADR-0011 Fix 1.2)', () => {
     expect(duplicateIds).toContain('a');
     expect(duplicateIds).toContain('b');
     expect(duplicateIds).toContain('c');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// refactor-p3-tool-executor Task 4 additions
+// ---------------------------------------------------------------------------
+
+describe('batchDuplicateToolResult', () => {
+  it('renders the log_set rejection byte-identically to training.subgraph.ts today', () => {
+    expect(batchDuplicateToolResult('log_set')).toBe(
+      'LLM_ERROR: Duplicate log_set calls detected: two or more calls have identical arguments ' +
+        'in the same response. To log multiple identical sets, add a unique order field to each call ' +
+        '(order=1, order=2). To log a single set, send only one log_set call.',
+    );
+  });
+});
+
+describe('buildSearchKey', () => {
+  it('keys identical queries the same regardless of case and whitespace', () => {
+    expect(buildSearchKey({ query: 'Chest Barbell' })).toBe(buildSearchKey({ query: '  chest barbell  ' }));
+  });
+
+  it('keys different filters distinctly', () => {
+    expect(buildSearchKey({ query: 'press', equipment: 'barbell' })).not.toBe(
+      buildSearchKey({ query: 'press', equipment: 'machine' }),
+    );
   });
 });
