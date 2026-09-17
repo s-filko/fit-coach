@@ -15,7 +15,9 @@ _Generated 2026-09-17 from docs/superpowers/plans/ + git. Never hand-edit; regen
 — none —
 
 **Planned**
-— none —
+- `refactor-p3-phase-spec.md` — Refactor P3 — PhaseSpec Factory and Shared Agent Node Implementation Plan
+- `refactor-p3-run-context-commit.md` — Refactor P3 — Run Context, Commit Node and Conversation Run Port Implementation Plan
+- `refactor-p3-tool-executor.md` — Refactor P3 — Shared Tool Executor Implementation Plan
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
@@ -65,10 +67,16 @@ _Generated 2026-09-17 from docs/superpowers/plans/ + git. Never hand-edit; regen
    before P4 locks budgets). PC-0007/SP-0005 (BUG-014/015) still fail in both v0 and v1 —
    wording work per PROMPT_EVAL_FRAMEWORK §8, not refactor scope (BUG-014 observed live in
    the smoke: the model narrates a saved plan without calling `save_workout_plan`).
-   **Next: P3** (`refactor-p3-*`) — PhaseSpec takes over rendering/loading, commit node +
-   run context replace run-metrics and persist, the post-tool nudge moves into the shared
-   agent node and enters the report; see ADR-0013 §3.4 and the plan's Follow-up section.
-2. Then P4/P5 → P6 → P7 per the master plan phase map.
+   **P3 is planned as three chained plans (2026-09-17)**, dispatch in this order:
+   `refactor-p3-tool-executor` (ToolOutcome, shared executor, tools per file, catalog seed;
+   freezes the `v1` L1 baseline in its Task 2 before any code change) →
+   `refactor-p3-phase-spec` (PhaseSpec + `buildPhaseSubgraph`, shared agent node, nudge for
+   all phases, no run merging) → `refactor-p3-run-context-commit` (durable state vs run
+   context, prepare/route/commit, transition event + handlers, `ConversationRunPort`,
+   failed runs recorded). Each plan's Decisions table lists owner-overridable calls; ADR-0013
+   amendments are escalated in each close-out, never edited silently.
+2. Then P4/P5 → P6 → P7 per the master plan phase map. P4 is planned after P3 lands (its
+   inputs are P3's PhaseSpec/commit/event shapes and the §3.4 measurement).
 3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
    the code aligned to it, ESLint keeping it that way. Independent of the P0 chain;
    can run alongside it.
