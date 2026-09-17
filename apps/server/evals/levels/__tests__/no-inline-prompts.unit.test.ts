@@ -3,10 +3,12 @@ import path from 'node:path';
 
 describe('no inline prompt text outside src/infra/ai/prompts (ADR-0013 §5, BR-LLM-009)', () => {
   // Same coverage as the eslint.config.js no-restricted-syntax override:
-  // graph/ and context/ today; infra/ai/messages is P3's.
+  // graph/, context/, messages/ and tools/ (the latter two since P3).
   const scanDirs = [
     path.resolve(__dirname, '../../../src/infra/ai/graph'),
     path.resolve(__dirname, '../../../src/infra/ai/context'),
+    path.resolve(__dirname, '../../../src/infra/ai/messages'),
+    path.resolve(__dirname, '../../../src/infra/ai/tools'),
   ];
 
   function grep(pattern: string): string[] {

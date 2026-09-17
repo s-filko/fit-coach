@@ -14,6 +14,7 @@ import { SetDataSchema } from '@domain/training/set-data.types';
 
 import type { IPendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildSearchExercisesTool } from '@infra/ai/graph/tools/search-exercises.tool';
+import { LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '@infra/ai/tools/outcome';
 
 import { createLogger } from '@shared/logger';
 
@@ -53,16 +54,16 @@ function formatExerciseSummary(ex: AutoCompletedExercise): string {
 }
 
 /**
- * Prefix for errors caused by infrastructure/configuration issues.
- * agentNode detects this prefix and exits immediately without retry.
+ * Error prefixes for tool results: `LLM_ERROR` = incorrect LLM arguments
+ * (agentNode allows 1 retry before giving up), `SYSTEM_ERROR` =
+ * infrastructure/configuration issues (agentNode exits immediately without
+ * retry).
+ *
+ * Both moved to infra/ai/tools/outcome (refactor-p3-tool-executor Task 3);
+ * re-exported here until Task 5 deletes the file so the P2 fixtures keep
+ * compiling.
  */
-export const SYSTEM_ERROR_PREFIX = 'SYSTEM_ERROR:';
-
-/**
- * Prefix for errors caused by incorrect LLM arguments.
- * agentNode allows 1 retry before giving up.
- */
-export const LLM_ERROR_PREFIX = 'LLM_ERROR:';
+export { LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX };
 
 export interface TrainingToolsDeps {
   trainingService: ITrainingService;

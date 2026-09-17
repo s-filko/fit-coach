@@ -223,7 +223,13 @@ export default tseslint.config(
   },
   // ADR-0013 §5 / BR-LLM-009: model-facing text lives in prompts/ modules, never inline in graph code.
   {
-    files: ['src/infra/ai/graph/**/*.ts', 'src/infra/ai/context/**/*.ts', 'src/infra/ai/*.ts'],
+    files: [
+      'src/infra/ai/graph/**/*.ts',
+      'src/infra/ai/context/**/*.ts',
+      'src/infra/ai/messages/**/*.ts',
+      'src/infra/ai/tools/**/*.ts',
+      'src/infra/ai/*.ts',
+    ],
     ignores: ['**/__tests__/**'],
     rules: {
       'no-restricted-syntax': ['error',
