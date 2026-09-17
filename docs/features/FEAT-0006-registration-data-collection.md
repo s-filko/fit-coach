@@ -14,6 +14,7 @@ As a new user, I want to complete registration through natural conversation in m
 ## Key Changes from v1.0
 
 ### What Changed
+
 - **Single LLM call** with JSON mode instead of multiple parsing steps
 - **Removed services**: ProfileParserService, data-transformers, messages.ts, registration.config.ts
 - **Centralized validation**: All field validators in `registration.validation.ts`
@@ -21,6 +22,7 @@ As a new user, I want to complete registration through natural conversation in m
 - **Incremental extraction**: Fields extracted and saved as they appear in conversation
 
 ### Current Implementation
+
 - `RegistrationService.processUserMessage()` - single entry point
 - JSON response schema: `{extracted_data, response, is_confirmed}`
 - Zod-based validation with centralized field validators
@@ -55,15 +57,17 @@ User Message → RegistrationService.processUserMessage()
 ### Components
 
 #### RegistrationService
+
 **Location**: `apps/server/src/domain/user/services/registration.service.ts`
 
 **Interface**:
+
 ```typescript
 interface IRegistrationService {
   processUserMessage(
     user: User,
     message: string,
-    historyMessages: ChatMsg[]
+    historyMessages: ChatMsg[],
   ): Promise<{
     updatedUser: User;
     response: string;
@@ -74,6 +78,7 @@ interface IRegistrationService {
 ```
 
 **Responsibilities**:
+
 - Build context-aware system prompt with PromptService
 - Call LLM with JSON mode enabled
 - Parse and validate JSON response
@@ -81,11 +86,13 @@ interface IRegistrationService {
 - Determine registration completion status
 
 #### PromptService
+
 **Location**: `apps/server/src/domain/user/services/prompt.service.ts`
 
 **Method**: `buildUnifiedRegistrationPrompt(user: User): string`
 
 **Responsibilities**:
+
 - Generate dynamic system prompt based on:
   - Already collected fields
   - Missing required fields
@@ -94,9 +101,11 @@ interface IRegistrationService {
 - Provide examples for field extraction
 
 #### LLMService
+
 **Location**: `apps/server/src/infra/ai/llm.service.ts`
 
 **Method**:
+
 ```typescript
 generateWithSystemPrompt(
   messages: ChatMsg[],
@@ -106,27 +115,31 @@ generateWithSystemPrompt(
 ```
 
 **Features**:
+
 - OpenAI-compatible API abstraction
 - JSON mode support (structured output)
 - Debug mode with request/response history
 - Metrics tracking
 
 #### Validation
+
 **Location**: `apps/server/src/domain/user/services/registration.validation.ts`
 
 **Validators**:
+
 ```typescript
 export const fieldValidators = {
   age: z.number().int().min(10).max(100),
-  gender: z.enum(['male', 'female']),
+  gender: z.enum(["male", "female"]),
   height: z.number().int().min(120).max(220), // cm
-  weight: z.number().int().min(30).max(200),  // kg
-  fitnessLevel: z.enum(['beginner', 'intermediate', 'advanced']),
+  weight: z.number().int().min(30).max(200), // kg
+  fitnessLevel: z.enum(["beginner", "intermediate", "advanced"]),
   fitnessGoal: z.string().min(1).max(100),
 };
 ```
 
 **Schema**: `registrationLLMResponseSchema`
+
 ```typescript
 {
   extracted_data: {
@@ -161,27 +174,30 @@ export const fieldValidators = {
 
 ### Required Fields (6)
 
-| Field | Type | Validation | Notes |
-|-------|------|------------|-------|
-| age | number | 10-100 | Calculated from dateOfBirth in full version |
-| gender | enum | 'male' \| 'female' | Normalized to English |
-| height | number | 120-220 cm | Metric units only |
-| weight | number | 30-200 kg | Metric units only |
-| fitnessLevel | enum | 'beginner' \| 'intermediate' \| 'advanced' | Experience level |
-| fitnessGoal | string | 1-100 chars | User's training objective |
+| Field        | Type   | Validation                                 | Notes                                       |
+| ------------ | ------ | ------------------------------------------ | ------------------------------------------- |
+| age          | number | 10-100                                     | Calculated from dateOfBirth in full version |
+| gender       | enum   | 'male' \| 'female'                         | Normalized to English                       |
+| height       | number | 120-220 cm                                 | Metric units only                           |
+| weight       | number | 30-200 kg                                  | Metric units only                           |
+| fitnessLevel | enum   | 'beginner' \| 'intermediate' \| 'advanced' | Experience level                            |
+| fitnessGoal  | string | 1-100 chars                                | User's training objective                   |
 
 ### Completion Criteria
+
 - All 6 fields must be present AND
 - User provides explicit confirmation (`is_confirmed: true`)
 
 ## Domain Rules
 
 ### Invariants
+
 - **INV-USER-001**: User uniqueness by (provider, providerUserId)
 - **INV-USER-002**: ProfileStatus starts as 'registration' on user creation
 - **INV-USER-003**: Registration fields required before status can change to 'complete'
 
 ### Business Rules
+
 - **BR-USER-005**: Never re-ask already captured fields
 - **BR-USER-008**: Extract missing fields opportunistically across conversation
 - **BR-USER-009**: Clarify ambiguous values before persisting
@@ -192,9 +208,11 @@ export const fieldValidators = {
 ## API Integration
 
 ### Endpoint
+
 `POST /api/chat`
 
 ### Request
+
 ```json
 {
   "userId": "uuid",
@@ -203,6 +221,7 @@ export const fieldValidators = {
 ```
 
 ### Response (during registration)
+
 ```json
 {
   "data": {
@@ -213,6 +232,7 @@ export const fieldValidators = {
 ```
 
 ### Response (registration complete)
+
 ```json
 {
   "data": {
@@ -226,13 +246,16 @@ export const fieldValidators = {
 ## Conversation Context Integration
 
 ### Phase Management
+
 - **Phase**: `'registration'`
 - **Context**: Loaded by (userId, phase)
 - **Sliding window**: Default 20 most recent turns
 - **Transition**: `registration` → `chat` with system note when complete
 
 ### Turn Storage
+
 Each interaction saves:
+
 ```typescript
 {
   userId: string,
@@ -247,36 +270,43 @@ Each interaction saves:
 ## Scenarios
 
 ### S-0025: No Re-asking Captured Fields
+
 **Given**: Age already captured
 **When**: User mentions age again
 **Then**: Bot acknowledges but doesn't re-ask age [BR-USER-005]
 
 ### S-0026: Batch Field Extraction
+
 **Given**: User provides multiple fields at once
 **When**: Parsed
 **Then**: All recognized fields stored, only missing ones requested [BR-USER-005]
 
 ### S-0029: Incomplete Data Prevents Transition
+
 **Given**: Not all required fields present
 **When**: At confirmation step
 **Then**: Bot asks for missing data, doesn't set profileStatus='complete' [INV-USER-003]
 
 ### S-0030: Explicit Confirmation Required
+
 **Given**: User sends confirmation ("yes", "confirm")
 **When**: All required fields present
 **Then**: profileStatus='complete', phase transitions to 'chat'
 
 ### S-0034: Cross-conversation Extraction
+
 **Given**: Registration in any phase
 **When**: Message contains missing profile fields
 **Then**: System extracts and persists immediately, doesn't re-ask [BR-USER-008]
 
 ### S-0036: Durability After Restart
+
 **Given**: Server restart during registration
 **When**: User continues
 **Then**: Previously captured fields remain, flow resumes correctly [BR-USER-010]
 
 ### S-0037: Last-Write-Wins
+
 **Given**: User changes previously provided data
 **When**: New value detected
 **Then**: Latest value overrides prior one, bot acknowledges update [BR-USER-012]
@@ -293,18 +323,22 @@ Each interaction saves:
 ## Testing
 
 ### Unit Tests
+
 **Location**: `apps/server/src/domain/user/services/__tests__/registration.service.unit.test.ts`
 
 **Coverage**:
+
 - JSON parsing and validation
 - Field extraction logic
 - Completion detection
 - Error handling
 
 ### Integration Tests
+
 **Location**: `tests/integration/registration.integration.test.ts`
 
 **Coverage**:
+
 - Full registration flow end-to-end
 - Multi-turn conversations
 - Field persistence
@@ -314,12 +348,14 @@ Each interaction saves:
 ## Migration Notes
 
 ### Removed Components
+
 - ❌ `profile-parser.service.ts` - Multi-step parsing logic
 - ❌ `data-transformers.ts` - Field transformation utilities
 - ❌ `messages.ts` - Static message templates
 - ❌ `registration.config.ts` - Old configuration approach
 
 ### Current Components
+
 - ✅ `registration.service.ts` - Unified registration service
 - ✅ `prompt.service.ts` - Dynamic prompt generation
 - ✅ `registration.validation.ts` - Centralized Zod validators
@@ -328,6 +364,7 @@ Each interaction saves:
 ## Configuration
 
 ### Environment Variables
+
 ```bash
 LLM_API_KEY=<api-key>          # Required
 LLM_MODEL=gpt-4-turbo          # Required
@@ -337,9 +374,11 @@ LLM_DEBUG=true                 # Optional (enables debug mode)
 ```
 
 ### DI Registration
+
 **Location**: `apps/server/src/main/register-infra-services.ts`
 
 **Order**:
+
 1. ConversationContextService
 2. UserRepository
 3. UserService
@@ -351,10 +390,12 @@ LLM_DEBUG=true                 # Optional (enables debug mode)
 ## Debug Support
 
 ### Debug Endpoints (Development Only)
+
 - `GET /api/debug/llm` - View request/response history and metrics
 - `POST /api/debug/llm/clear` - Clear debug history
 
 ### Metrics Tracked
+
 - Total requests
 - Total errors
 - Total tokens used
@@ -364,6 +405,7 @@ LLM_DEBUG=true                 # Optional (enables debug mode)
 ## Future Enhancements
 
 ### Planned (Post-MVP)
+
 - Extended profile fields (healthRestrictions, trainingLocation, equipment, availability)
 - Onboarding phase for optional extended questions
 - Multi-language prompt templates
@@ -371,6 +413,7 @@ LLM_DEBUG=true                 # Optional (enables debug mode)
 - Progress indicators for users
 
 ### Not Planned
+
 - Multiple confirmation steps (single confirmation at end)
 - Step-by-step wizard UI (conversational only)
 - Profile editing during registration (last-write-wins)

@@ -233,6 +233,14 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   assembled ad hoc each round, so the same carve-out must be re-derived or gets re-flagged.
   Runs: refactor-p1-legacy-llm-retirement (2026-09-16).
 
+- [×1] "Every AC has a test" has no procedure for promised test files that simply do not
+  exist while the task's broad jest command still passes: the adapter and commit/handler
+  test files listed in plan tasks were never written, the old persist.node tests were
+  deleted without re-homing, and the suite stayed green because nothing referenced them.
+  Proposed companion rule: a plan task's listed test files must exist at close-out, and
+  deleting old behavioural tests requires naming where each `it` moved.
+  Runs: refactor-p3-run-context-commit (2026-09-17).
+
 ## Rule candidates
 
 A finding a zone wanted to raise as blocking but could not, because no rule in this repo
@@ -453,3 +461,28 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   fix) made the fix testable and the review decisive — propose it as the standard mechanism
   for owner-ruling scope extensions during plan execution.
   Runs: refactor-p1-legacy-llm-retirement (2026-09-16).
+- [×1] A plan's Global Constraint said "run context is provided by the caller, never mutated
+  by nodes" while the same plan's decisions and the shipped code deliberately mutate the
+  metrics collector riding in run context (`ctx.metrics.attachBudgetReport`, `finalText`) —
+  intent clear from code, contradicted by the constraint's wording; a future reviewer citing
+  the constraint could raise the sanctioned accumulator as blocking. Proposed wording for the
+  ADR-0013 §3.2 amendment text (already on the escalate list): "run-context identity fields
+  (runId, userId, user, now, client, trigger) are caller-provided and immutable inside the
+  graph; the `metrics` collector is the one mutable accumulator, written only via its methods."
+  Runs: refactor-p3-run-context-commit (2026-09-17).
+- [×1] Ticked verification steps can claim evidence that does not exist ("table pasted" with
+  no table, a JSON path never written) and nothing makes the checkbox falsifiable. Proposed
+  wording for `SUPERPOWERS_INTEGRATION.md` rules of engagement: "A ticked verification step
+  must point at its evidence — pasted output in the plan or a file under
+  `docs/superpowers/plans/evidence/`; a checkbox whose stated evidence does not exist is not
+  done." Related to the ports-layout entry on claimed-vs-real output but distinct: that one
+  governs the reviewer's brief, this one the executor's checkbox.
+  Runs: refactor-p3-run-context-commit (2026-09-17).
+- [×1] A docs-reconcile task's checklist written from the author's memory left five durable
+  docs drifted (API_SPEC.md, three FEAT-* specs, BUGS.md/MANUAL_TEST_PLAN pointers) while
+  every enumerated step was ticked done. Proposed sentence for the factual-bucket definition
+  in `SUPERPOWERS_INTEGRATION.md` rule 3: a docs-reconcile step's file list must be derived
+  mechanically — for every file/symbol the branch deletes or moves, paste
+  `git grep -l -e <deleted-path-stem> -e <renamed-symbol> -- docs` into the plan and tick
+  items only against that list.
+  Runs: refactor-p3-run-context-commit (2026-09-17).

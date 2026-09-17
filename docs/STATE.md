@@ -12,9 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-17 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `refactor-p3-phase-spec.md` — Refactor P3 — PhaseSpec Factory and Shared Agent Node Implementation Plan (branch: `plan/refactor-p3-phase-spec`, last commit 2026-09-17)
-- `refactor-p3-run-context-commit.md` — Refactor P3 — Run Context, Commit Node and Conversation Run Port Implementation Plan (branch: `plan/refactor-p3-run-context-commit`, last commit 2026-09-17)
-- `refactor-p3-tool-executor.md` — Refactor P3 — Shared Tool Executor Implementation Plan (branch: `plan/refactor-p3-tool-executor`, last commit 2026-09-17)
+— none —
 
 **Planned**
 - `refactor-p4-context-budget.md` — Refactor P4 — Context Budget and Domain Blocks Implementation Plan
@@ -35,6 +33,9 @@ _Generated 2026-09-17 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p1-legacy-llm-retirement.md` — Refactor P1 — Legacy LLM Path Retirement Implementation Plan
 - `refactor-p2-context-assembler.md` — Refactor P2 — Context Assembler Implementation Plan
 - `refactor-p2-prompt-modules.md` — Refactor P2 — Prompt Modules Implementation Plan
+- `refactor-p3-phase-spec.md` — Refactor P3 — PhaseSpec Factory and Shared Agent Node Implementation Plan
+- `refactor-p3-run-context-commit.md` — Refactor P3 — Run Context, Commit Node and Conversation Run Port Implementation Plan
+- `refactor-p3-tool-executor.md` — Refactor P3 — Shared Tool Executor Implementation Plan
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 
 **Close-out debt (merged but plan not done)**

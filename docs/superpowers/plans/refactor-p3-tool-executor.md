@@ -1,8 +1,9 @@
 # Refactor P3 — Shared Tool Executor Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/refactor-p3-tool-executor
 - After: refactor-p2-context-assembler
+- Review: 2026-09-18 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -29,16 +30,16 @@
 
 ## Decisions taken by this plan (not settled by the durable specs — owner may overrule)
 
-| # | Decision | Alternative rejected | Why |
-|---|---|---|---|
+| #   | Decision                                                                                                                                                                                               | Alternative rejected                                                            | Why                                                                                                                                                                                                                                                                                                                                                                                  |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | D-A | Tools return `ToolReturn = ToolOutcome \| { outcome: ToolOutcome; update: ToolStateUpdate }`; the **executor** converts `update` into the node's state update (`pendingTransition`, `activeSessionId`) | Tools return LangGraph `Command({ update })` themselves (ADR-0013 §4.4 wording) | Same mechanism (a state update from a tool, D-05) with the LangGraph type kept out of tool bodies: tools stay pure adapters over domain services, testable without a graph; the executor is the one place that knows the state schema. ADR-0007 guardrail 2 is untouched. If the owner prefers literal `Command` returns, the executor's `isCommand` branch is a five-line addition. |
-| D-B | `ToolStateUpdate` is `{ pendingTransition?: TransitionRequest; activeSessionId?: string }` — the two facts tools change today | A generic `Partial<State>` | Two named fields are what the five subgraphs propagate through `extractNode` today; a generic partial would let a tool write `phase` directly and bypass the guard (`commit` decides — ADR §4.3). |
-| D-C | One error rendering for thrown tools: `LLM_ERROR: <message>`, `status: 'error'` | Keep three shapes (`Error:`, `LLM_ERROR:`, `ToolNode`'s text) | The shapes differ by accident of which node ran the tool; the model reads the prefix (training prompt rules reference `LLM_ERROR`). Gated by AC-1334. |
-| D-D | `system_error` ends the run with a catalog message (HTTP 200), as training does today; raising `ToolSystemError` → 500 `CORE_ERROR` (ADR §6) waits for P5, when the bot maps error codes | Raise now | Until P5 the bot cannot map codes, so a 500 today is a worse user experience than training's message. The executor already isolates the decision in one branch; P5 flips it. |
-| D-E | The message catalog (`infra/ai/messages/`) is created here with the executor's two keys; `refactor-p3-run-context-commit` adds the rest | Create the whole catalog in the last plan | The executor needs two user-facing strings now; creating the directory here lets the inline-prompt rails cover it from the first commit (BACKLOG: "Extend the inline-prompt rails to `infra/ai/messages`"). |
-| D-F | Catalog entries carry both `en` and `ru`; the existing literal keeps its original language byte-for-byte, the other language is a translation the owner reviews in the PR | Single-language entries | OQ-5: catalog driven by `language_code`, English fallback. A Russian user currently receives English router text; the translation is the intended behaviour, listed in the PR description as new text. |
-| D-G | Tools move to `infra/ai/tools/<tool>.ts` (one file per tool, ADR §11) in this plan's last task | Leave them in `graph/tools/<phase>.tools.ts` until the PhaseSpec plan | Every tool body is edited here anyway (return type, `configurable` contract); moving them in the same PR keeps one churn instead of two. Shared tools (`save_timezone`, `search_exercises`) are already tool-per-file. |
-| D-H | Dynamic availability (`training.subgraph.ts` "Dynamic tool filtering") becomes `toolPolicy.availability(input)` but is still called by the training agent node in this plan | Move it into the executor | Availability filters what the model may call (`bindTools`), which is the agent node's business; the shared agent node arrives in `refactor-p3-phase-spec`. The policy field exists now so that plan only moves the call. |
+| D-B | `ToolStateUpdate` is `{ pendingTransition?: TransitionRequest; activeSessionId?: string }` — the two facts tools change today                                                                          | A generic `Partial<State>`                                                      | Two named fields are what the five subgraphs propagate through `extractNode` today; a generic partial would let a tool write `phase` directly and bypass the guard (`commit` decides — ADR §4.3).                                                                                                                                                                                    |
+| D-C | One error rendering for thrown tools: `LLM_ERROR: <message>`, `status: 'error'`                                                                                                                        | Keep three shapes (`Error:`, `LLM_ERROR:`, `ToolNode`'s text)                   | The shapes differ by accident of which node ran the tool; the model reads the prefix (training prompt rules reference `LLM_ERROR`). Gated by AC-1334.                                                                                                                                                                                                                                |
+| D-D | `system_error` ends the run with a catalog message (HTTP 200), as training does today; raising `ToolSystemError` → 500 `CORE_ERROR` (ADR §6) waits for P5, when the bot maps error codes               | Raise now                                                                       | Until P5 the bot cannot map codes, so a 500 today is a worse user experience than training's message. The executor already isolates the decision in one branch; P5 flips it.                                                                                                                                                                                                         |
+| D-E | The message catalog (`infra/ai/messages/`) is created here with the executor's two keys; `refactor-p3-run-context-commit` adds the rest                                                                | Create the whole catalog in the last plan                                       | The executor needs two user-facing strings now; creating the directory here lets the inline-prompt rails cover it from the first commit (BACKLOG: "Extend the inline-prompt rails to `infra/ai/messages`").                                                                                                                                                                          |
+| D-F | Catalog entries carry both `en` and `ru`; the existing literal keeps its original language byte-for-byte, the other language is a translation the owner reviews in the PR                              | Single-language entries                                                         | OQ-5: catalog driven by `language_code`, English fallback. A Russian user currently receives English router text; the translation is the intended behaviour, listed in the PR description as new text.                                                                                                                                                                               |
+| D-G | Tools move to `infra/ai/tools/<tool>.ts` (one file per tool, ADR §11) in this plan's last task                                                                                                         | Leave them in `graph/tools/<phase>.tools.ts` until the PhaseSpec plan           | Every tool body is edited here anyway (return type, `configurable` contract); moving them in the same PR keeps one churn instead of two. Shared tools (`save_timezone`, `search_exercises`) are already tool-per-file.                                                                                                                                                               |
+| D-H | Dynamic availability (`training.subgraph.ts` "Dynamic tool filtering") becomes `toolPolicy.availability(input)` but is still called by the training agent node in this plan                            | Move it into the executor                                                       | Availability filters what the model may call (`bindTools`), which is the agent node's business; the shared agent node arrives in `refactor-p3-phase-spec`. The policy field exists now so that plan only moves the call.                                                                                                                                                             |
 
 ---
 
@@ -47,6 +48,7 @@
 Nothing is refactored until the model-facing tool surface is pinned from the **old** code and the transition datasets AC-1334 names exist.
 
 **Files:**
+
 - Create: `apps/server/evals/snapshots/__tests__/tool-surface.unit.test.ts`
 - Create: `apps/server/evals/snapshots/__tests__/__snapshots__/tool-surface.unit.test.ts.snap` (generated once, then frozen)
 - Create: `apps/server/evals/datasets/session_planning/transitions.jsonl`
@@ -61,11 +63,13 @@ For each phase, build the phase's tool list exactly as its subgraph does today (
 Follow the shape of `evals/datasets/chat/transitions.jsonl` (`parseCases` in `evals/schema/case.schema.ts` is the contract). Cases:
 
 `session_planning/transitions.jsonl` (fixture `COMPLETE_PROFILE` with an active plan; `state.phase: 'session_planning'`):
+
 - `SPT-0001` — `state.messages` seed: an assistant message proposing a concrete session (three exercises with valid catalog UUIDs from `evals/fixtures`), user input "Да, всё подходит, погнали" → `tools.must: ['start_training_session']`, `transition: 'training'`.
 - `SPT-0002` — user input "Давай не сегодня, вернёмся к этому позже" → `tools.must: ['request_transition']`, `tools.args: { request_transition: { toPhase: 'chat' } }`, `transition: 'chat'`, `tools.mustNot: ['start_training_session']`.
 - `SPT-0003` — user input "А сколько подходов в первом упражнении?" (a question during planning) → `tools.mustNot: ['start_training_session', 'request_transition']`, `transition: null`.
 
 `training/transitions.jsonl` (fixture `ACTIVE_SESSION`, `state.phase: 'training'`, `state.activeSessionId: 'session-1'`):
+
 - `TRT-0001` — "Всё, на сегодня закончил" → `tools.must: ['finish_training']`, `transition: 'chat'`.
 - `TRT-0002` — "Следующее упражнение" → `tools.must: ['complete_current_exercise']`, `tools.mustNot: ['finish_training']`, `transition: null`.
 - `TRT-0003` — "Записал 8 повторов на 80" → `tools.must: ['log_set']`, `tools.mustNot: ['finish_training']`, `transition: null`.
@@ -89,7 +93,7 @@ Tags: `['transition', 'AC-1334']`. `text.language: 'ru'` on all six.
 The master plan's AC-1334 compares against "the P2 baseline"; only `v0` (P0 code) exists. `v1` is the post-P2 code plus Task 1's datasets, frozen before any executor code lands.
 
 - [x] **Step 1:** On the branch at Task 1's commit: `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline write --baseline-version v1`. Record the model id printed (must be the dev route `glm-5.3`).
-- [x] **Step 2:** Eyeball `evals/baselines/v1/*.json`: the six new cases have results (a case that fails 0/3 in the baseline is fine — it is baseline truth, and the compare will show it — but a case that *throws* means the fixture is wrong; fix the dataset, re-freeze).
+- [x] **Step 2:** Eyeball `evals/baselines/v1/*.json`: the six new cases have results (a case that fails 0/3 in the baseline is fine — it is baseline truth, and the compare will show it — but a case that _throws_ means the fixture is wrong; fix the dataset, re-freeze).
 - [x] **Step 3:** Commit `evals/baselines/v1/` — `test(evals): freeze v1 baseline (post-P2 code, transition datasets)`. Update `evals/baselines/README.md` with the v1 row.
 
 **Verification:** five files under `evals/baselines/v1/`; README row. AC-1334 has its reference.
@@ -99,6 +103,7 @@ The master plan's AC-1334 compares against "the P2 baseline"; only `v0` (P0 code
 ### Task 3: `ToolOutcome`, serialisation v1, and the message catalog
 
 **Files:**
+
 - Create: `apps/server/src/domain/conversation/tool-outcome.ts`
 - Create: `apps/server/src/infra/ai/tools/outcome.ts`
 - Create: `apps/server/src/infra/ai/tools/__tests__/outcome.unit.test.ts`
@@ -155,6 +160,7 @@ export function t(key: MessageKey, lang: Lang): string;                   // en 
 ### Task 4: The shared tool executor
 
 **Files:**
+
 - Create: `apps/server/src/infra/ai/graph/tool-executor.ts`
 - Create: `apps/server/src/infra/ai/graph/tool-policy.ts` (pure helpers: ordering, batch dedup, search key)
 - Create: `apps/server/src/infra/ai/graph/__tests__/tool-executor.unit.test.ts`, `__tests__/tool-policy.unit.test.ts`
@@ -179,14 +185,31 @@ export interface ToolPolicy {
 export const NO_POLICY: ToolPolicy = { llmErrorBudget: Infinity };
 
 // tool-executor.ts
-export interface ToolExecutorState { messages: BaseMessage[]; userId: string; activeSessionId?: string | null; user?: { languageCode?: string | null } | null }
-export function buildToolExecutor(tools: StructuredToolInterface[], policy: ToolPolicy):
-  (state: ToolExecutorState, config: RunnableConfig) => Promise<{ messages: BaseMessage[]; requestedTransition?: TransitionRequest; activeSessionId?: string }>;
+export interface ToolExecutorState {
+  messages: BaseMessage[];
+  userId: string;
+  activeSessionId?: string | null;
+  user?: { languageCode?: string | null } | null;
+}
+export function buildToolExecutor(
+  tools: StructuredToolInterface[],
+  policy: ToolPolicy,
+): (
+  state: ToolExecutorState,
+  config: RunnableConfig,
+) => Promise<{
+  messages: BaseMessage[];
+  requestedTransition?: TransitionRequest;
+  activeSessionId?: string;
+}>;
 /** Conditional edge after the executor: 'agent' normally, END when the executor appended a terminal AIMessage. */
-export function afterTools(state: { messages: BaseMessage[] }): 'agent' | typeof END;
+export function afterTools(state: {
+  messages: BaseMessage[];
+}): "agent" | typeof END;
 ```
 
 Executor algorithm (one node, all phases):
+
 1. Take the last message's `tool_calls` (empty → `{ messages: [] }`).
 2. `sortToolCallsByPriority(calls, policy.ordering)`.
 3. Batch dedup: for names in `policy.batchDedup`, `findDuplicateLogSets`-style grouping (generalised by name; the training text for the rejection message moves verbatim into `tool-policy.ts` as `BATCH_DUPLICATE_MESSAGE(name)` — for `log_set` it must equal today's string exactly, the message-assembly training post-tool snapshot depends on nothing here but the tool unit tests do).
@@ -208,9 +231,11 @@ Executor algorithm (one node, all phases):
 ### Task 5: Tools return `ToolReturn` and read their context from `config.configurable`
 
 **Files:**
+
 - Modify: `apps/server/src/infra/ai/graph/tools/{registration,chat,plan-creation,session-planning,training}.tools.ts`, `timezone.tool.ts`, `search-exercises.tool.ts` and their `__tests__`
 
 Per tool (strings unchanged):
+
 - Return values wrap today's strings: success → `ok(text)`; the `Error: could not identify user…`/`Failed to update profile…`/`Cannot complete registration — still missing…`/`No valid fields to save…`/`Invalid timezone…`/`No exercises found…`/`Error creating session…`/`Error searching exercises…` strings → `userError(text)` (model relays them; not budget-counted — today they were not counted either, except in training where none of them occur); `LLM_ERROR: …` strings → `llmError(rest)`; `SYSTEM_ERROR: …` → `systemError(rest)`. Assert in each test that `toToolMessage(result).content` equals the old expected string — one helper in `evals/fixtures` or the test file: `renderedContent(ret) = toToolMessage(isToolReturnWithUpdate(ret) ? ret.outcome : ret, 'id').content`.
 - Transitions: `complete_registration`, `request_transition` (chat, plan_creation, session_planning), `save_workout_plan`, `finish_training` return `{ outcome, update: { pendingTransition: { toPhase, reason } } }` with today's `toPhase`/`reason` values; `start_training_session` adds `activeSessionId: session.id`.
 - `activeSessionId` for the five training tools comes from `config.configurable.activeSessionId` (the executor sets it); the `currentSessionIds` dep and the `pendingTransitions` dep disappear from every `*ToolsDeps` interface.
@@ -227,10 +252,12 @@ Per tool (strings unchanged):
 ### Task 6: Wire the executor into the five subgraphs; delete the maps
 
 **Files:**
+
 - Modify: the five `apps/server/src/infra/ai/graph/subgraphs/*.subgraph.ts` and their `__tests__`
 - Delete: `apps/server/src/infra/ai/graph/pending-ref-map.ts`, `dedup-tool-node.ts` and their tests
 
 Per subgraph: `tools` node = `buildToolExecutor(tools, POLICY)` with
+
 - registration, chat: `NO_POLICY`;
 - plan_creation, session_planning: `{ perTurnDedup: ['search_exercises'], llmErrorBudget: Infinity }`;
 - training: `{ ordering: TOOL_PRIORITY, batchDedup: ['log_set'], llmErrorBudget: 1, availability: ({ session }) => currentSetsCount === 0 ? tools minus delete_last_sets/update_last_set : null }` — the `TOOL_PRIORITY` map moves into `tool-policy.ts` as `TRAINING_TOOL_PRIORITY`.
@@ -251,6 +278,7 @@ Per subgraph: `tools` node = `buildToolExecutor(tools, POLICY)` with
 ### Task 7: One file per tool under `infra/ai/tools/`
 
 **Files:**
+
 - Move: `graph/tools/registration.tools.ts` → `tools/save-profile-fields.tool.ts`, `tools/complete-registration.tool.ts`; `chat.tools.ts` → `tools/update-profile.tool.ts`, `tools/request-transition.tool.ts` (one builder parameterised by the allowed targets and the reply text — the three phases' `request_transition` differ only in `toPhase` enum, description and return string; keep all three literal variants selectable so the tool-surface snapshot stays byte-identical); `plan-creation.tools.ts` → `tools/save-workout-plan.tool.ts`; `session-planning.tools.ts` → `tools/start-training-session.tool.ts`; `training.tools.ts` → `tools/log-set.tool.ts`, `complete-current-exercise.tool.ts`, `finish-training.tool.ts`, `delete-last-sets.tool.ts`, `update-last-set.tool.ts` (+ `tools/format-exercise-summary.ts` for the shared helper); `graph/tools/timezone.tool.ts`, `search-exercises.tool.ts` → `tools/`.
 - Create: `apps/server/src/infra/ai/tools/index.ts` exporting `buildSharedTools(deps)` (= `[save_timezone]`, the owner's "shared tools in every phase") and the per-tool builders.
 - Tests move alongside (`tools/__tests__/<tool>.unit.test.ts`), bodies unchanged.
@@ -273,25 +301,34 @@ Per subgraph: `tools` node = `buildToolExecutor(tools, POLICY)` with
 > (transition datasets only, 1 sample, ~18 calls) may be run at the phase close-out
 > if the owner asks.
 
-
 > **Steps 2, 4 deferred to the P3 phase close-out (owner decision 2026-09-17):**
 > the three P3 plans run as one phase; dev deploy, smoke, close-out-review,
 > `Status: done` and the PR merge happen once, at the end of P3 — not per plan.
 > Step 1 (L1 compare) and Step 3 (docs reconcile) are done in this branch.
 
 - [x] **Step 1: AC-1334** — run 2026-09-17, model glm-5.3, 365/370 checks. Per-dataset vs `v1`:
-  registration 96.8% (−3.2 pp), chat 100% (=), plan_creation 98.4% (=), session_planning 98.8% (=),
-  training 98.8% (=). Transitions ≥ baseline everywhere (TRT-0003 log_set 0/3 → 1/3, still below the
-  2/3 threshold on both sides — not a regression; PC-0007/SP-0005 fail in the baseline too). The
-  registration −3.2 pp is two 1/3-sample text-check flips (RG-0003 mustNotMatch точн|уточни, RG-0005
-  maxChars) on a byte-identical model-input surface — sample noise, not code; **no re-run** (owner quota
-  decision 2026-09-17). Evidence: `evidence/refactor-p3-tool-executor-l1-compare.json`. Original step text: — `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v1`; save the JSON to `docs/superpowers/plans/evidence/refactor-p3-tool-executor-l1-compare.json`; paste the per-dataset table. Pass: every dataset within ±2 pp; `chat/transitions`, `session_planning/transitions`, `training/transitions` ≥ baseline. Apparent regressions are re-run once (P2's sample-noise rule) before being treated as real.
-- [ ] **Step 2: Deploy to dev** (reserved): push, `./deploy/deploy.sh dev`, smoke via `POST /api/bot/chat` on the owner's dev user: one chat message with a transition request, one session-planning approval (creates a session, `activeSessionId` propagates — verify `SELECT phase, active_session … ` via the checkpoint or the next run's behaviour), a `log_set` in training, `finish_training`. Confirm `conversation_runs.transition` rows for each transition. Paste the query output.
+      registration 96.8% (−3.2 pp), chat 100% (=), plan_creation 98.4% (=), session_planning 98.8% (=),
+      training 98.8% (=). Transitions ≥ baseline everywhere (TRT-0003 log_set 0/3 → 1/3, still below the
+      2/3 threshold on both sides — not a regression; PC-0007/SP-0005 fail in the baseline too). The
+      registration −3.2 pp is two 1/3-sample text-check flips (RG-0003 mustNotMatch точн|уточни, RG-0005
+      maxChars) on a byte-identical model-input surface — sample noise, not code; **no re-run** (owner quota
+      decision 2026-09-17). Evidence: `evidence/refactor-p3-tool-executor-l1-compare.json`. Original step text: — `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v1`; save the JSON to `docs/superpowers/plans/evidence/refactor-p3-tool-executor-l1-compare.json`; paste the per-dataset table. Pass: every dataset within ±2 pp; `chat/transitions`, `session_planning/transitions`, `training/transitions` ≥ baseline. Apparent regressions are re-run once (P2's sample-noise rule) before being treated as real.
+- [x] **Step 2: Deploy to dev** — done at the phase close-out (dev @ `bbab7b07`, 2026-09-17):
+      fresh-user smoke via `POST /api/bot/user` + `POST /api/bot/chat`; the
+      `registration → plan_creation` transition is recorded in `conversation_runs.transition`
+      (evidence table in `refactor-p3-run-context-commit.md` Task 6 Step 2). The
+      session-planning/training items could not be reached (catalog data defect, pre-dating
+      P3 — invalid exercise UUIDs rejected by the tool schema); originally: one chat message with a transition request, one session-planning approval (creates a session, `activeSessionId` propagates — verify `SELECT phase, active_session … ` via the checkpoint or the next run's behaviour), a `log_set` in training, `finish_training`. Confirm `conversation_runs.transition` rows for each transition. Paste the query output.
 - [x] **Step 3: Docs reconcile** (factual bucket): `docs/ARCHITECTURE.md` file tree (`infra/ai/tools/`, `tool-executor.ts`, `tool-policy.ts`, `messages/`; `pending-ref-map`/`dedup-tool-node` gone); `docs/CONTRIBUTING_AI.md` ("tool result contract: `ToolOutcome` + `toToolMessage` v1; user-facing strings: `infra/ai/messages`"); `docs/BACKLOG.md` ticks: "Extend the inline-prompt rails to `infra/ai/messages`" (done), the P2 R1 advisory about `tool-results.ts` importing from `graph/` (closed), ADR-0011 tests note if any. ADR-0013 §4.4 wording ("return `Command({update})`") vs D-A → **escalate to the owner** with the amendment text; do not edit the ADR.
-  **ADR-0013 §4.4 amendment (Command({update}) vs D-A ToolStateUpdate) escalated
-  to the owner 2026-09-17; pending.** Implementation stays D-A until the owner
-  rules otherwise.
-- [ ] **Step 4: Close-out** — `close-out-review` (four zones), tick every checkbox with its result, `- Status: done`, `node scripts/state.mjs --write` from the repo root, commit, merge, worktree removed. `node scripts/state.mjs --check` OK. `docs/STATE.md` Next → `refactor-p3-phase-spec`.
+      **ADR-0013 §4.4 amendment (Command({update}) vs D-A ToolStateUpdate) escalated
+      to the owner 2026-09-17; pending.** Implementation stays D-A until the owner
+      rules otherwise.
+- [x] **Step 4: Close-out** — the three P3 plans closed as one phase (owner decision
+      2026-09-17): a single four-zone `close-out-review` over the whole phase diff
+      (2026-09-18; one blocking finding on this plan's surface — none; record in
+      `refactor-p3-run-context-commit.md` § Review). ADR-0013 §4.4 escalation resolved by the
+      owner-approved amendment (2026-09-18) — the ADR now records the D-A `ToolStateUpdate`
+      mechanism. `- Status: done` set 2026-09-18; STATE → P3 complete.
 
 **Verification:** the pasted L1 table and dev query outputs; `node scripts/state.mjs --check` → OK. AC-1331, AC-1332, AC-1334 (this plan's slice).
 

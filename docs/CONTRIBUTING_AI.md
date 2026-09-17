@@ -137,9 +137,14 @@ code review. The division of roles and conflict rules are defined in
 
 ### Add or Change a Tool
 1) Tool result contract: tools return `ToolReturn` (`ToolOutcome` or outcome + `ToolStateUpdate`) from `domain/conversation/tool-outcome.ts`; the shared executor (`infra/ai/graph/tool-executor.ts`) is the only place that turns a return into a `ToolMessage` — via `toToolMessage` v1 (`infra/ai/tools/outcome.ts`). Tools never import LangGraph.
-2) One file per tool under `infra/ai/tools/` (ADR-0013 §11); register per-phase tool lists in the phase's subgraph (`infra/ai/graph/subgraphs/`), policy knobs in `ToolPolicy` (`tool-policy.ts`).
+2) One file per tool under `infra/ai/tools/` (ADR-0013 §11); register per-phase tool lists in the phase's `PhaseSpec` (`infra/ai/graph/phases/*.spec.ts` — the factory `phase-subgraph.factory.ts` builds the subgraph), policy knobs in `ToolPolicy` (`tool-policy.ts`).
 3) Tool-result strings are frozen per tool — changing a tool's rendered output is a `TOOL_OUTCOME_FORMAT_ID` bump, not a silent edit.
 4) User-facing strings (budget/system-error replies, router text) live in `infra/ai/messages/` (en/ru catalog), never inline.
+
+### Run a Conversation (run context, run rows, transitions)
+1) Everything a run needs travels as **run context**, not durable state: the conversation-run adapter (`infra/ai/graph/conversation-run.adapter.ts`) loads the user, builds `RunContext` (runId, userId, user, now, client, trigger, a per-run `RunMetricsCollector`) and invokes the graph with it. `ConversationState` (`graph/state.ts`) holds only what must survive between runs: phase, activeSessionId, messages, pendingTransition (ADR-0013 §3.2). Nodes/tools read context via `ctxOf(config)`; run context is never checkpointed.
+2) **One run row per POST** (`conversation_runs`, ADR-0013 §8): the `commit` node records outcome `ok`; the adapter records failed runs (`llm_unavailable` for provider/network errors, `core_error` otherwise) before rethrowing. There is no other writer.
+3) **To add a transition side effect** (a new `TransitionHandler`): implement `(event: PhaseTransitionCommitted) => Promise<TransitionHandlerResult>` in `infra/ai/graph/handlers/` and append it to the `onTransition` list the commit node receives. Handlers run in order, awaited; one failing handler is logged at `error` and skipped, the reply never fails (BR-CONV-007 spirit). Transition legality itself lives in the domain (`domain/conversation/transitions.ts`, BR-CONV-015..018) — never re-check it in a handler.
 
 ### Integrate Conversation Context into a Flow
 1) Spec:

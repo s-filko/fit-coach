@@ -26,7 +26,7 @@ The codebase has been successfully migrated to Fastify. All Express dependencies
 apps/server/src/
   app/                          # HTTP transport (Fastify adapters)
     routes/                     # Route handlers (thin controllers)
-      chat.routes.ts            # ~20-line thin proxy to ConversationGraph
+      chat.routes.ts            # Thin proxy to ConversationRunPort (DI token CONVERSATION_RUN_PORT_TOKEN)
     plugins/                    # Fastify plugins (routes, security, docs)
     middlewares/                # Error, logging, validation hooks
     server.ts                   # Builds Fastify instance (plugins, hooks, routes)
@@ -48,11 +48,12 @@ apps/server/src/
       types.ts                 # ChatMsg (temporary home; retired in refactor P1/P4 per ADR-0013)
     conversation/
       tool-outcome.ts         # ToolOutcome/ToolReturn/ToolStateUpdate — pure tool contract (ADR-0013 §6; no runtime LangGraph)
-      graph/
-        conversation.state.ts  # LangGraph ConversationState (Annotation.Root)
+      phases.ts               # ConversationPhase — the five phases (ADR-0013 §11)
+      transitions.ts          # TRANSITION_MATRIX + evaluateTransition — pure domain rules (BR-CONV-015..018, ADR-0013 §4.3)
+      events.ts               # PhaseTransitionCommitted event + TransitionHandler type (ADR-0013 §4.3)
       ports/
         conversation-context.ports.ts  # IConversationContextService (2-method: appendTurn + getMessagesForPrompt)
-        conversation-run.ports.ts      # IConversationRunService — one run row per conversation run (ADR-0013 §8)
+        conversation-run.ports.ts      # IConversationRunService (run rows, §8) + ConversationRunPort (§11 — run the graph; token CONVERSATION_RUN_PORT_TOKEN)
         index.ts               # Re-exports
     training/
       ports/                   # Named by contract (rule 2)
@@ -77,25 +78,29 @@ apps/server/src/
     ai/
       model.factory.ts          # Single ChatOpenAI construction site (getModel(profile), AC-1313)
       llm.gateway.ts            # OpenAiLlmGateway — LlmGateway port implementation (ADR-0013 §7 D-10)
-      llm-log-handler.ts        # LLM boundary callback: debug replay + run-metrics bridge (metadata.runId)
-      run-metrics.ts            # Per-run model/token/latency/budgetReport accumulator, drained by persist.node (ADR-0013 §8)
+      llm-log-handler.ts        # LLM boundary callback: debug logging only (run metrics live in the per-run collector)
+      run-metrics.ts            # RunMetricsCollector — per-run instance carried in run context (ADR-0013 §8; no module state, AC-1331)
       embedding.service.ts      # Local all-MiniLM-L6-v2 via @huggingface/transformers (ONNX)
       embedding-text.util.ts    # buildEmbeddingText() — composite text for exercise embeddings
       graph/
-        conversation.graph.ts   # Main StateGraph: router→phase→persist→guard→cleanup
+        conversation.graph.ts   # Main StateGraph: prepare→route→<phase>→commit (ADR-0013 §4.1)
+        state.ts                # ConversationState (durable, checkpointed) + RunContext (caller-provided, never checkpointed) + ctxOf accessor (ADR-0013 §3.2)
+        phase-spec.ts           # PhaseSpec — one declarative spec per phase (INV-LLM-005)
+        phase-subgraph.factory.ts  # buildPhaseSubgraph(spec) — the single factory building every phase subgraph
+        phases/                 # The five PhaseSpecs: registration, chat, plan-creation, session-planning, training
+        conversation-run.adapter.ts  # ConversationRunPort adapter: loads the user, builds run context, records failed runs (D-F)
         tool-executor.ts        # Shared tool executor: runs every phase's tool calls, serialises ToolOutcome v1, applies ToolStateUpdate (ADR-0013 §4.2/§4.4/§6)
         tool-policy.ts          # ToolPolicy + pure helpers: ordering, batch dedup, search key (AC-1331/AC-1332)
-        invoke-with-retry.ts    # Retry wrapper for empty LLM responses after tool calls
         nodes/
-          router.node.ts             # Phase determination, session timeout, user loading
-          persist.node.ts            # appendTurn to conversation_turns + one conversation_runs row per run (P0 run log; moves to commit node in P3)
-          phase-summary.node.ts      # End-of-phase summarisation (renders prompts/summarizer)
-        subgraphs/
-          chat.subgraph.ts              # agent + toolExecutor + extractNode (NO_POLICY)
-          registration.subgraph.ts      # agent + toolExecutor + extractNode (NO_POLICY)
-          plan-creation.subgraph.ts     # agent + toolExecutor + extractNode (search_exercises perTurnDedup)
-          session-planning.subgraph.ts  # agent + toolExecutor + extractNode + activeSessionId (search_exercises perTurnDedup)
-          training.subgraph.ts          # agent + toolExecutor + extractNode (ordering, log_set batchDedup, error budget 1, availability filter)
+          agent.node.ts             # Shared agent node: system split, post-tool nudge, empty-reply retry (replaces the five subgraphs)
+          prepare.node.ts           # pendingTransition reset, training short-circuits → commit (D-E), registration↔chat sync
+          route.node.ts             # Phase dispatch to the subgraph factory
+          commit.node.ts            # appendTurn + run row + evaluateTransition + PhaseTransitionCommitted handlers + state clear (§4.1/§4.3)
+          finalize.node.ts          # Reply extraction — returns {} (the reply is the last AIMessage in state)
+          phase-summary.node.ts    # End-of-phase summary rendering (used by the legacy handler)
+        handlers/
+          session-lifecycle.handler.ts      # TransitionHandler: training session completion, activeSessionId clearing
+          legacy-phase-summary.handler.ts   # End-of-phase summary; P4 deletes it
       tools/                        # One file per tool (ADR-0013 §11); tools return ToolReturn, never touch LangGraph
         outcome.ts                   # ToolOutcome serialisation v1: toToolMessage, outcomeKindOf, LLM/SYSTEM_ERROR prefixes
         index.ts                     # buildSharedTools + per-tool builder re-exports
@@ -136,7 +141,7 @@ apps/server/src/
           tool-results.v1.ts         #   === TOOL EXECUTION RESULTS === block (BUG-006/BUG-009 guard)
           history-frame.v1.ts        #   training system-block history frame
           summary-frame.v1.ts        #   CONTEXT FROM PREVIOUS CONVERSATION wrapper
-          post-tool-nudge.v1.ts      #   invoke-with-retry post-tool nudge
+          post-tool-nudge.v1.ts      #   post-tool nudge (agent node retry)
         summarizer/v1.ts             # End-of-phase summariser (system + user sections)
     conversation/
       conversation-context.service.ts          # InMemoryConversationContextService (test double)
@@ -208,10 +213,6 @@ This section is the single source of this rule. ADR-0002 records why the monolit
 
 Standing exceptions (each names the task that closes it):
 
-- `domain/conversation/graph/conversation.graph.ports.ts` — carries LangChain types and
-  stays in `graph/` until **ADR-0013 D-13** relocates them to `infra/ai` (INV-CONV-004).
-  Moving it into `ports/` would place LangChain types in the domain's clean port surface
-  and re-export them to every consumer of `@domain/conversation/ports` (rule 1).
 - `training/ports/training-service.ports.ts` — `ITrainingService`, 16 methods (four legacy
   LLM methods deleted in refactor P1). Rule 3 review done: two unused methods and a split
   by consumer were identified; decomposition by role is tracked in `docs/BACKLOG.md` (rule 3).
@@ -341,12 +342,12 @@ These rules are for any AI assistant working in this repo:
 - Domain port: `IConversationContextService` (2 methods only):
   - `appendTurn(userId, phase, userMessage, assistantResponse): Promise<void>`
   - `getMessagesForPrompt(userId, phase, options?): Promise<ChatMsg[]>`
-- Each phase subgraph calls `getMessagesForPrompt()` to load history before building the LLM prompt. `persist.node.ts` calls `appendTurn()` after each response.
+- The agent node calls `getMessagesForPrompt()` to load history before building the LLM prompt. The `commit` node calls `appendTurn()` after the response.
 - **Sliding window** (default 20 turns) via `LIMIT` in SQL query [BR-CONV-003].
 - Module layout: `domain/conversation/ports/conversation-context.ports.ts`; `infra/conversation/drizzle-conversation-context.service.ts`.
 - **ADR-0005**: original patterns (partially superseded by checkpointer for state management).
 - No breaking change to API: `POST /api/chat` contract unchanged [AC-0110].
-- **Database storage**: `conversation_turns` table with (userId, phase, role, content, runId, kind, payload, createdAt); `conversation_runs` table — one row per run with model/tokens/latency/outcome (ADR-0013 §8, written by persist.node.ts); `langgraph_checkpoints` table (managed by PostgresSaver).
+- **Database storage**: `conversation_turns` table with (userId, phase, role, content, runId, kind, payload, createdAt); `conversation_runs` table — one row per run with model/tokens/latency/outcome (ADR-0013 §8, written by the commit node); `langgraph_checkpoints` table (managed by PostgresSaver).
 
 ## LLM Integration
 **Implementation**: `src/infra/ai/model.factory.ts`
@@ -431,7 +432,7 @@ Change control:
 - ✅ 275 passing tests (unit + integration)
 - ✅ OpenAPI documentation generation with Swagger UI
 - ✅ Security plugin with API key authentication for `/api/*` routes
-- ✅ LangGraph graph fully operational: router + persist nodes, checkpointer, chat/registration/plan_creation subgraphs
+- ✅ LangGraph graph fully operational: prepare/route/commit nodes, PhaseSpec factory subgraphs, checkpointer, transition event handlers
 - 🔄 LangGraph migration IN PROGRESS: training subgraph, full transition guard conditions pending (Steps 7–9); session_planning implemented (Step 6 ✓)
 
 ---

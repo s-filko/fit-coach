@@ -3,6 +3,13 @@
 **Status**: ✅ Implemented
 **Version**: 3.0 (LangGraph Architecture — tool calling, PostgreSQL checkpointer, subgraphs)
 
+> **Path note (2026-09-18, refactor P3):** this spec's implementation-detail sections name
+> pre-P3 files. Current homes: `nodes/router.node.ts` → `nodes/prepare.node.ts` +
+> `nodes/route.node.ts`; `subgraphs/*.subgraph.ts` → `phases/*.spec.ts` +
+> `phase-subgraph.factory.ts` (one shared `nodes/agent.node.ts`); `nodes/persist.node.ts`
+> → `nodes/commit.node.ts`; `graph/tools/*.tools.ts` → `infra/ai/tools/*.tool.ts`;
+> `extractNode` → `nodes/finalize.node.ts`. Behaviour descriptions remain valid.
+
 ## User Story
 
 As a user, I want to send messages and receive AI-generated responses through natural conversation, so that I can interact with my Fit Coach assistant for registration, training guidance, and fitness coaching.
@@ -61,59 +68,74 @@ Return { data: { content: responseMessage, timestamp } }
 ### Components
 
 #### Route Handler (thin proxy)
+
 **Location**: `apps/server/src/app/routes/chat.routes.ts`
 
 **Responsibilities** (~20 lines):
+
 - Validate request (API key, userId, message)
 - Verify user exists in DB
 - Call `graph.invoke()` with `{ userMessage, userId }` + configurable
 - Return `{ data: { content, timestamp } }`
 
 #### ConversationGraph
+
 **Location**: `apps/server/src/infra/ai/graph/conversation.graph.ts`
 
 **Responsibilities**:
+
 - Wire all nodes and subgraphs into a `StateGraph`
 - Configure PostgresSaver checkpointer
 - Export compiled graph
 
 #### Router Node
-**Location**: `apps/server/src/infra/ai/graph/nodes/router.node.ts`
+
+**Location**: `apps/server/src/infra/ai/graph/nodes/prepare.node.ts` + `route.node.ts` (see the path note above)
 
 **Responsibilities**:
+
 - Load user from DB
 - Determine phase for new threads from `profileStatus`
 - Auto-close timed-out training sessions
 - Reset stale `requestedTransition`
 
 #### Phase Subgraphs (implemented: registration, chat, plan_creation)
-**Location**: `apps/server/src/infra/ai/graph/subgraphs/`
+
+**Location**: `apps/server/src/infra/ai/graph/phases/` (PhaseSpecs; built by `phase-subgraph.factory.ts` — see the path note above)
 
 Each subgraph: `agentNode → toolsCondition → ToolNode → agentNode → extractNode`
 
 #### Phase Nodes (system prompt builders)
+
 **Location**: `apps/server/src/infra/ai/graph/nodes/`
+
 - `registration.node.ts` — `buildRegistrationSystemPrompt()`
 - `chat.node.ts` — `buildChatSystemPrompt()`
 - `plan-creation.node.ts` — `buildPlanCreationSystemPrompt()` (loads exercises with muscle groups)
 
 #### Phase Tools
+
 **Location**: `apps/server/src/infra/ai/graph/tools/`
+
 - `registration.tools.ts` — `save_profile_fields`, `complete_registration`
 - `chat.tools.ts` — `update_profile`, `request_transition`
 - `plan-creation.tools.ts` — `save_workout_plan`, `request_transition`
 
 #### Persist Node
-**Location**: `apps/server/src/infra/ai/graph/nodes/persist.node.ts`
+
+**Location**: `apps/server/src/infra/ai/graph/nodes/commit.node.ts` (see the path note above)
 
 **Responsibilities**:
+
 - `appendTurn()` to `conversation_turns` table after each response
 - Failure does not stop the response (try/catch + log)
 
 #### ConversationContextService (simplified)
+
 **Location**: `apps/server/src/infra/conversation/drizzle-conversation-context.service.ts`
 
 **2 methods only**:
+
 - `appendTurn(userId, phase, userMessage, assistantResponse)` — called by persist node
 - `getMessagesForPrompt(userId, phase, options?)` — called by each agentNode to load history
 
@@ -121,13 +143,13 @@ Each subgraph: `agentNode → toolsCondition → ToolNode → agentNode → extr
 
 ### Phase Management
 
-| Phase | Implemented | State Source | History Source |
-|-------|-------------|-------------|----------------|
-| Registration | ✅ | PostgresSaver checkpointer | `conversation_turns` |
-| Chat | ✅ | PostgresSaver checkpointer | `conversation_turns` |
-| Plan Creation | ✅ | PostgresSaver checkpointer | `conversation_turns` |
+| Phase            | Implemented       | State Source               | History Source       |
+| ---------------- | ----------------- | -------------------------- | -------------------- |
+| Registration     | ✅                | PostgresSaver checkpointer | `conversation_turns` |
+| Chat             | ✅                | PostgresSaver checkpointer | `conversation_turns` |
+| Plan Creation    | ✅                | PostgresSaver checkpointer | `conversation_turns` |
 | Session Planning | 🔄 pending Step 6 | PostgresSaver checkpointer | `conversation_turns` |
-| Training | 🔄 pending Step 7 | PostgresSaver checkpointer | `conversation_turns` |
+| Training         | 🔄 pending Step 7 | PostgresSaver checkpointer | `conversation_turns` |
 
 ### Sliding Window
 
@@ -141,6 +163,7 @@ Each subgraph: `agentNode → toolsCondition → ToolNode → agentNode → extr
 **Table**: `conversation_turns`
 
 **Schema**:
+
 ```sql
 CREATE TABLE conversation_turns (
   id UUID PRIMARY KEY,
@@ -156,6 +179,7 @@ CREATE INDEX idx_conversation_turns_user_phase_created
 ```
 
 **LangGraph checkpointer table** (managed by PostgresSaver, not manually):
+
 ```
 langgraph_checkpoints — stores serialized graph state per thread_id
 ```
@@ -163,6 +187,7 @@ langgraph_checkpoints — stores serialized graph state per thread_id
 ### Phase Transitions
 
 Phase transitions are managed by `requestedTransition` in graph state:
+
 1. Tool sets `pendingTransition.value = { toPhase: 'chat' }` (closure ref)
 2. `extractNode` reads ref and sets `state.requestedTransition`
 3. `persist.node.ts` writes conversation turn under **current phase** (before transition)
@@ -173,13 +198,16 @@ Phase transitions are managed by `requestedTransition` in graph state:
 ## API Specification
 
 ### Endpoint
+
 `POST /api/chat`
 
 ### Security
+
 - Requires `X-Api-Key` header
 - All `/api/*` routes protected
 
 ### Request
+
 ```typescript
 {
   userId: string,    // UUID
@@ -188,6 +216,7 @@ Phase transitions are managed by `requestedTransition` in graph state:
 ```
 
 ### Response (Success)
+
 ```typescript
 {
   data: {
@@ -199,6 +228,7 @@ Phase transitions are managed by `requestedTransition` in graph state:
 ```
 
 ### Error Responses
+
 - `401 Unauthorized` - Missing X-Api-Key header
 - `403 Forbidden` - Invalid X-Api-Key
 - `404 Not Found` - User not found
@@ -207,46 +237,55 @@ Phase transitions are managed by `requestedTransition` in graph state:
 ## Scenarios
 
 ### S-0008: Valid Chat Request
+
 **Given**: Valid userId and message
 **When**: POST /api/chat
 **Then**: 200 with `{content, timestamp}` is returned [BR-AI-001][BR-AI-002]
 
 ### S-0009: Invalid API Key
+
 **Given**: Missing/invalid API key
 **When**: POST /api/chat
 **Then**: 401/403 is returned
 
 ### S-0010: AI Processing Error
+
 **Given**: AI processing error occurs
 **When**: POST /api/chat
 **Then**: 500 with generic error is returned [BR-AI-001]
 
 ### S-0011: Unknown User
+
 **Given**: Unknown userId
 **When**: POST /api/chat
 **Then**: 404 `{error: {message: 'User not found'}}` [BR-USER-003]
 
 ### S-0040: Registration Phase Routing
+
 **Given**: User with `profileStatus='registration'`
 **When**: POST /api/chat
 **Then**: RegistrationService processes message, extracts profile data
 
 ### S-0041: Chat Phase Routing
+
 **Given**: User with `profileStatus='complete'`
 **When**: POST /api/chat
 **Then**: ChatService processes message, provides coaching
 
 ### S-0042: Phase Transition
+
 **Given**: Registration completes on this message
 **When**: POST /api/chat
 **Then**: Response includes `registrationComplete: true`, status updates to 'complete'
 
 ### S-0043: Conversation Context Loaded
+
 **Given**: User has previous conversation history
 **When**: POST /api/chat
 **Then**: Last 20 turns loaded and included in LLM context
 
 ### S-0044: Turn Persistence
+
 **Given**: Any successful chat interaction
 **When**: Response generated
 **Then**: Both user and assistant messages saved to `conversation_turns`
@@ -265,14 +304,17 @@ Phase transitions are managed by `requestedTransition` in graph state:
 ## Domain Rules
 
 ### From AI Domain
+
 - **BR-AI-001**: LLM errors must be caught and returned as 500 with generic message
 - **BR-AI-002**: AI response must include timestamp
 - **BR-AI-003**: LLM must handle multilingual input
 
 ### From User Domain
+
 - **BR-USER-003**: Unknown user returns 404
 
 ### From Conversation Domain
+
 - **BR-CONV-001**: Context loaded by (userId, phase) before each LLM call
 - **BR-CONV-002**: Conversation turns appended after response generation
 - **BR-CONV-003**: Sliding window default 20 turns for token budget
@@ -281,18 +323,19 @@ Phase transitions are managed by `requestedTransition` in graph state:
 ## Implementation Details
 
 ### Route Implementation
+
 ```typescript
 // apps/server/src/app/routes/chat.routes.ts
 
-fastify.post('/chat', async (request, reply) => {
+fastify.post("/chat", async (request, reply) => {
   const { userId, message } = request.body;
 
   // 1. Load user
   const user = await userService.getUser(userId);
-  if (!user) throw new AppError(404, 'User not found');
+  if (!user) throw new AppError(404, "User not found");
 
   // 2. Determine phase & load context
-  const phase = user.profileStatus === 'registration' ? 'registration' : 'chat';
+  const phase = user.profileStatus === "registration" ? "registration" : "chat";
   const context = conversationContextService.getContext(userId, phase);
   const history = context
     ? conversationContextService.getMessagesForPrompt(context)
@@ -303,13 +346,17 @@ fastify.post('/chat', async (request, reply) => {
   let registrationComplete: boolean | undefined;
   let updatedUser = user;
 
-  if (user.profileStatus === 'registration') {
-    const result = await registrationService.processUserMessage(user, message, history);
+  if (user.profileStatus === "registration") {
+    const result = await registrationService.processUserMessage(
+      user,
+      message,
+      history,
+    );
     content = result.response;
     updatedUser = result.updatedUser;
 
     if (result.isComplete) {
-      updatedUser.profileStatus = 'complete';
+      updatedUser.profileStatus = "complete";
       registrationComplete = true;
     }
   } else {
@@ -328,9 +375,9 @@ fastify.post('/chat', async (request, reply) => {
   if (registrationComplete) {
     conversationContextService.startNewPhase(
       userId,
-      'registration',
-      'chat',
-      'User completed registration, transitioning to chat phase'
+      "registration",
+      "chat",
+      "User completed registration, transitioning to chat phase",
     );
   }
 
@@ -339,13 +386,14 @@ fastify.post('/chat', async (request, reply) => {
     data: {
       content,
       timestamp: new Date().toISOString(),
-      ...(registrationComplete !== undefined && { registrationComplete })
-    }
+      ...(registrationComplete !== undefined && { registrationComplete }),
+    },
   };
 });
 ```
 
 ### Service Dependencies
+
 ```
 ChatRoute
   ├─ UserService (get/update user)
@@ -361,9 +409,11 @@ ChatRoute
 ## Testing
 
 ### Unit Tests
+
 **Location**: `apps/server/src/infra/ai/graph/`
 
 **Coverage**:
+
 - `nodes/__tests__/chat.node.unit.test.ts` — `buildChatSystemPrompt()`
 - `tools/__tests__/chat.tools.unit.test.ts` — `update_profile`, `request_transition` (11 tests)
 - `tools/__tests__/registration.tools.unit.test.ts` — `save_profile_fields`, `complete_registration` (13 tests)
@@ -373,15 +423,18 @@ ChatRoute
 - `__tests__/conversation.graph.unit.test.ts` — graph routing, model factory mocked
 
 ### Integration Tests
+
 **Location**: `apps/server/tests/integration/api/chat.routes.integration.test.ts`
 
 **Coverage**:
+
 - Thin proxy: `graph.invoke` called with correct args
 - User not found → 404
 - Invalid API key → 401/403
 - Error scenarios (500)
 
 ### Test Count
+
 275 passing (as of Step 5 completion)
 
 ## Performance Considerations
@@ -394,12 +447,14 @@ ChatRoute
 ## Future Enhancements
 
 ### Planned
+
 - Conversation summarization when window exceeds threshold
 - Multiple conversation threads per user
 - Training phase with specialized TrainingService
 - Planning phase for workout plan creation
 
 ### Considered but Deferred
+
 - Real-time streaming responses
 - Multi-modal inputs (images, voice)
 - Conversation export/import
@@ -417,6 +472,7 @@ ChatRoute
 ## Migration Notes
 
 ### What Changed in v3.0 (LangGraph Architecture)
+
 - ✅ `RegistrationService` → `registration.subgraph.ts` + `registration.tools.ts`
 - ✅ `ChatService` → `chat.subgraph.ts` + `chat.tools.ts`
 - ✅ Plan creation → `plan-creation.subgraph.ts` + `plan-creation.tools.ts`
@@ -427,5 +483,6 @@ ChatRoute
 - ✅ `registrationComplete` field in response removed (no longer needed — phase tracked by checkpointer)
 
 ### Backward Compatibility
+
 - `POST /api/chat` request contract unchanged: `{ userId, message }`
 - `POST /api/chat` response: `{ data: { content, timestamp } }` — `registrationComplete` field removed in v3.0

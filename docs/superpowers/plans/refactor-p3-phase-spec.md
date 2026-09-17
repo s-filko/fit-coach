@@ -1,8 +1,9 @@
 # Refactor P3 — PhaseSpec Factory and Shared Agent Node Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/refactor-p3-phase-spec
 - After: refactor-p3-tool-executor
+- Review: 2026-09-18 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -27,21 +28,22 @@
 
 ## Decisions taken by this plan (not settled by the durable specs — owner may overrule)
 
-| # | Decision | Alternative rejected | Why |
-|---|---|---|---|
-| D-A | `PhaseSpec.loadContext(input) → { ok: true, data } \| { ok: false, reply: MessageKey }` returns the phase's render data (what today's `agentNode` loads before `render`), including `lastMessageTime` (chat loads it, the others return `null`) | ADR §4.2's `contextBlocks: ContextBlockLoader[]` now | Block loaders render into block 3 of the assembler — that is P4's assembler (budgets, domain blocks). Until then the phase prompt renders domain data inside block 1, so the loader returns the render context. `lastMessageTime` is per phase because every phase's directive list includes `greeting.v1`, which renders only when it is set; loading it for all phases would add a greeting section to four prompts (a wording change). Marked transitional in the JSDoc; P4 replaces it with `contextBlocks` and state's `lastUserMessageAt`. |
-| D-B | The `ok: false` branch of `loadContext` carries training's two guards ("no active session", "session not found") as catalog keys; the agent node replies with `t(reply, lang)` and no model call | Keep the guards in a training-specific pre-node | Guards are phase data availability, which is what the loader knows; the reply is a catalog message like any other (BR-LLM-009). |
-| D-C | The agent node loads the **fresh user** for every phase (`userService.getUser`) and passes it to `render` | Chat keeps rendering `state.user` from the router | Four phases already reload the user before each model call (so `save_profile_fields`/`update_profile` results show in the next prompt); chat's stale copy is the odd one out. The message-assembly harness stubs return the same user either way, so no snapshot moves; live behaviour: after `update_profile`, chat's second model call sees the update. |
-| D-D | Empty reply after the retry → `AIMessage(t('empty_reply', lang))` | Return the empty message (today: `responseMessage: ''`, no run row written, empty bot reply) | ADR §6 "one retry, then the catalog fallback". New user-facing text in `en`/`ru` for the owner to review. |
-| D-E | The agent node does **not** catch exceptions; training's `try/catch` → "Произошла непредвиденная ошибка" is removed | Extend the catch-all to every phase | Today four phases propagate (route → 500 "Processing failed"); training swallows. ADR §6 maps provider errors to 503 in P5 and `refactor-p3-run-context-commit` records failed runs — both need the exception to surface. Until P5 a training provider error becomes a 500 like every other phase's; the bot shows its generic error either way. |
-| D-F | `finalize` uses `textOf` from `llm.gateway.ts` for the final text | Keep the inline content-block flattening | BACKLOG "Consolidate the LLM text/mapping helpers when P2/P3 rewrite the subgraphs" — one home. |
-| D-G | `modelProfile` is on the spec (`'default'` for all five) and the agent node calls `getModel(spec.modelProfile)` | Omit until a phase needs a profile | `getModel(profile)` exists since P1 (AC-1314); the field costs one line and is what ADR §4.2 lists. Values stay `'default'` — a profile change is config, not this plan. |
+| #   | Decision                                                                                                                                                                                                                                        | Alternative rejected                                                                         | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| D-A | `PhaseSpec.loadContext(input) → { ok: true, data } \| { ok: false, reply: MessageKey }` returns the phase's render data (what today's `agentNode` loads before `render`), including `lastMessageTime` (chat loads it, the others return `null`) | ADR §4.2's `contextBlocks: ContextBlockLoader[]` now                                         | Block loaders render into block 3 of the assembler — that is P4's assembler (budgets, domain blocks). Until then the phase prompt renders domain data inside block 1, so the loader returns the render context. `lastMessageTime` is per phase because every phase's directive list includes `greeting.v1`, which renders only when it is set; loading it for all phases would add a greeting section to four prompts (a wording change). Marked transitional in the JSDoc; P4 replaces it with `contextBlocks` and state's `lastUserMessageAt`. |
+| D-B | The `ok: false` branch of `loadContext` carries training's two guards ("no active session", "session not found") as catalog keys; the agent node replies with `t(reply, lang)` and no model call                                                | Keep the guards in a training-specific pre-node                                              | Guards are phase data availability, which is what the loader knows; the reply is a catalog message like any other (BR-LLM-009).                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| D-C | The agent node loads the **fresh user** for every phase (`userService.getUser`) and passes it to `render`                                                                                                                                       | Chat keeps rendering `state.user` from the router                                            | Four phases already reload the user before each model call (so `save_profile_fields`/`update_profile` results show in the next prompt); chat's stale copy is the odd one out. The message-assembly harness stubs return the same user either way, so no snapshot moves; live behaviour: after `update_profile`, chat's second model call sees the update.                                                                                                                                                                                        |
+| D-D | Empty reply after the retry → `AIMessage(t('empty_reply', lang))`                                                                                                                                                                               | Return the empty message (today: `responseMessage: ''`, no run row written, empty bot reply) | ADR §6 "one retry, then the catalog fallback". New user-facing text in `en`/`ru` for the owner to review.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| D-E | The agent node does **not** catch exceptions; training's `try/catch` → "Произошла непредвиденная ошибка" is removed                                                                                                                             | Extend the catch-all to every phase                                                          | Today four phases propagate (route → 500 "Processing failed"); training swallows. ADR §6 maps provider errors to 503 in P5 and `refactor-p3-run-context-commit` records failed runs — both need the exception to surface. Until P5 a training provider error becomes a 500 like every other phase's; the bot shows its generic error either way.                                                                                                                                                                                                 |
+| D-F | `finalize` uses `textOf` from `llm.gateway.ts` for the final text                                                                                                                                                                               | Keep the inline content-block flattening                                                     | BACKLOG "Consolidate the LLM text/mapping helpers when P2/P3 rewrite the subgraphs" — one home.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| D-G | `modelProfile` is on the spec (`'default'` for all five) and the agent node calls `getModel(spec.modelProfile)`                                                                                                                                 | Omit until a phase needs a profile                                                           | `getModel(profile)` exists since P1 (AC-1314); the field costs one line and is what ADR §4.2 lists. Values stay `'default'` — a profile change is config, not this plan.                                                                                                                                                                                                                                                                                                                                                                         |
 
 ---
 
 ### Task 1: `PhaseSpec` type and the five specs
 
 **Files:**
+
 - Create: `apps/server/src/infra/ai/graph/phase-spec.ts`
 - Create: `apps/server/src/infra/ai/graph/phases/{registration,chat,plan-creation,session-planning,training}.spec.ts`, `phases/index.ts`, `phases/__tests__/phase-specs.unit.test.ts`
 - Modify: `apps/server/src/infra/ai/prompts/index.ts` (`PhaseLayout` loses `postToolNudge`, `mergeRuns`; `blocksForLayout` adds `POST_TOOL_NUDGE_V1` for every phase — the registry test's pinned `promptVersions` gains `block.post-tool-nudge: v1` for registration and chat: an explicit, reviewed change)
@@ -50,21 +52,26 @@
 
 ```typescript
 // phase-spec.ts
-export interface LoadInput { userId: string; user: User; activeSessionId: string | null }
-export type LoadResult<D> = { ok: true; data: D } | { ok: false; reply: MessageKey };
+export interface LoadInput {
+  userId: string;
+  user: User;
+  activeSessionId: string | null;
+}
+export type LoadResult<D> =
+  { ok: true; data: D } | { ok: false; reply: MessageKey };
 export interface PhaseSpec<D = unknown> {
   name: ConversationPhase;
-  prompt: PhasePromptEntry<PromptContextFor<D>>;   // PHASE_PROMPTS[name].entry
-  layout: PhaseLayout;                             // PHASE_PROMPTS[name].layout — transitional (P4)
-  tools: StructuredToolInterface[];                // phase tools + buildSharedTools(deps)
+  prompt: PhasePromptEntry<PromptContextFor<D>>; // PHASE_PROMPTS[name].entry
+  layout: PhaseLayout; // PHASE_PROMPTS[name].layout — transitional (P4)
+  tools: StructuredToolInterface[]; // phase tools + buildSharedTools(deps)
   toolPolicy: ToolPolicy;
-  loadContext: (input: LoadInput, deps) => Promise<LoadResult<D>>;   // D-A; deps captured at build time
-  modelProfile: string;                            // 'default'
+  loadContext: (input: LoadInput, deps) => Promise<LoadResult<D>>; // D-A; deps captured at build time
+  modelProfile: string; // 'default'
 }
-export type AvailabilityInput<D> = { data: D };    // what toolPolicy.availability receives (training reads session)
+export type AvailabilityInput<D> = { data: D }; // what toolPolicy.availability receives (training reads session)
 
 // phases/index.ts
-export function buildPhaseSpecs(deps: ConversationGraphDeps): PhaseSpec[];   // five, in ConversationPhase order
+export function buildPhaseSpecs(deps: ConversationGraphDeps): PhaseSpec[]; // five, in ConversationPhase order
 ```
 
 Loader contents (moved verbatim from each `agentNode`'s `Promise.all`, minus history/summary/user which the agent node loads for all): registration → `{ lastMessageTime: null }`; chat → `{ hasActivePlan, recentSessions, lastMessageTime }`; plan_creation → `{ lastMessageTime: null }`; session_planning → `{ context: contextBuilder.buildContext(userId), lastMessageTime: null }`; training → `{ session, previousSession, lastMessageTime: null }` with the two guards (`!activeSessionId` → `training_no_active_session`; `!session` → `training_session_not_found`) — both keys added to the catalog with today's English strings verbatim (`'No active training session found. Please start a session first.'`, `'Training session not found. It may have already been completed.'`) plus Russian translations (D-F of the executor plan).
@@ -80,12 +87,14 @@ Loader contents (moved verbatim from each `agentNode`'s `Promise.all`, minus his
 ### Task 2: The shared agent and finalize nodes
 
 **Files:**
+
 - Create: `apps/server/src/infra/ai/graph/nodes/agent.node.ts`, `nodes/finalize.node.ts`, `nodes/__tests__/agent.node.unit.test.ts`, `nodes/__tests__/finalize.node.unit.test.ts`
 - Modify: `apps/server/src/infra/ai/context/assemble-context.ts` (`assembleContext(input, layout)` — the layout comes from the spec, the registry lookup by phase goes; `mergeMessageRuns` import removed)
 - Modify: `apps/server/src/infra/ai/messages/*` (keys `empty_reply`, `training_no_active_session`, `training_session_not_found`)
 - Delete (in Task 3): `invoke-with-retry.ts`
 
 Agent node (`buildAgentNode(spec, deps)`), in order:
+
 1. `const [history, previousSummary, user] = await Promise.all([contextService.getMessagesForPrompt(userId, spec.name), spec.layout.summaryFrame ? contextService.getLatestSummary(userId) : null, userService.getUser(userId)])`; `user ?? state.user`.
 2. `const loaded = await spec.loadContext({ userId, user, activeSessionId }, deps)`; `!loaded.ok` → `{ messages: [new AIMessage(t(loaded.reply, langOf(user?.languageCode)))] }` (no model call).
 3. `systemPrompt = compose(spec.prompt.current.render({ now: new Date(), timezone: user?.timezone ?? null, client: 'telegram', user, ...loaded.data }))`.
@@ -108,6 +117,7 @@ Finalize node: `{ responseMessage: textOf(lastAIMessage), user: (await userServi
 ### Task 3: `buildPhaseSubgraph`, the graph builds from specs, the subgraph files go
 
 **Files:**
+
 - Create: `apps/server/src/infra/ai/graph/phase-subgraph.factory.ts`, `__tests__/phase-subgraph.factory.unit.test.ts`
 - Modify: `apps/server/src/infra/ai/graph/conversation.graph.ts` (`for (const spec of buildPhaseSpecs(deps)) graph.addNode(spec.name, buildPhaseSubgraph(spec, deps)).addEdge(spec.name, 'persist')`; `routerEnds` derived from the specs + `'persist'`)
 - Modify: `apps/server/evals/snapshots/__tests__/message-assembly.unit.test.ts` (builds `buildPhaseSubgraph(spec, deps)` per phase instead of `buildXSubgraph`), `evals/fixtures/assembly-scenarios.ts` if imports move
@@ -148,11 +158,10 @@ Factory: `StateGraph(PhaseSubgraphState)` where `PhaseSubgraphState` = today's c
 > (transition datasets only, 1 sample, ~18 calls) may be run at the phase close-out
 > if the owner asks.
 
-
-- [ ] **Step 1: AC-1334** — `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v1`; evidence JSON at `docs/superpowers/plans/evidence/refactor-p3-phase-spec-l1-compare.json`; per-dataset table pasted here. Chat/registration now carry the nudge — watch `registration/no-premature-complete` and `chat/no-set-logging` in particular; a regression > 2 pp after one re-run is the rollback trigger (revert the nudge unification only, keep the factory).
-- [ ] **Step 2: Deploy to dev** and smoke all five phases (registration on a fresh user; chat → session_planning → training on the owner's dev user); one run per phase must show `budget_report` and `model` on its row (the P2 query).
-- [ ] **Step 3: Docs reconcile** (factual bucket): `docs/ARCHITECTURE.md` tree (`phase-subgraph.factory.ts`, `phases/`, `nodes/agent.node.ts`, `nodes/finalize.node.ts`; `subgraphs/` and `invoke-with-retry.ts` gone); `docs/CONTRIBUTING_AI.md` ("adding a phase = a `PhaseSpec` + prompt module + tools + a matrix row"); `docs/BACKLOG.md` ticks: "Consolidate the LLM text/mapping helpers" (`textOf` half), the P2 advisories on `postToolNudge` dead weight and the `history_frame` double ternary if touched. ADR-0013 §4.2 `contextBlocks` vs D-A and §4.1 `finalize` wording → **escalate** as amendment text for the owner.
-- [ ] **Step 4: Close-out** — `close-out-review`, checkboxes closed with results (snapshot diff list, INV-LLM-005 test name, L1 table, dev evidence), `- Status: done`, `node scripts/state.mjs --write`, commit, merge, worktree removed; STATE Next → `refactor-p3-run-context-commit`.
+- [x] **Step 1: AC-1334 — NOT RUN** (owner quota waiver 2026-09-17; no evidence JSON for this plan exists or is claimed). Equivalence evidence: the message-assembly snapshot regeneration (Task 3) contained exactly the five sanctioned changes (chat/registration post-tool nudge + three with-summary system splits), reviewed line-by-line by the orchestrator; 43/43 snapshots green thereafter.
+- [x] **Step 2: Deploy to dev** — done at the phase close-out (dev @ `bbab7b07`, 2026-09-17): registration, chat and plan_creation exercised on a fresh dev user; run rows carry model/budget_report (P2 query shape). session_planning/training could not be reached — catalog data defect (deadlift/romanian-deadlift cards → invalid exercise UUIDs), pre-dating P3; full evidence in `refactor-p3-run-context-commit.md` Task 6 Step 2.
+- [x] **Step 3: Docs reconcile** (applied 2026-09-17/18): ARCHITECTURE.md tree (factory, `phases/`, shared agent/finalize nodes; `subgraphs/` + `invoke-with-retry.ts` gone); CONTRIBUTING_AI.md tool playbook now points at `phases/*.spec.ts`; ADR-0013 §4.2/§4.1 escalations resolved by owner-approved amendments (2026-09-18) — see the amendment notes in ADR-0013 §4.2/§4.1.
+- [x] **Step 4: Close-out** — the three P3 plans closed as one phase (owner decision 2026-09-17): the four-zone `close-out-review` ran once over the whole phase diff (2026-09-18; record and findings in `refactor-p3-run-context-commit.md` § Review). INV-LLM-005 test: `conversation.graph.unit.test.ts` sixth-spec test. `- Status: done` set 2026-09-18; STATE → P3 complete, Next → P4 (both plans).
 
 **Verification:** evidence pasted; `node scripts/state.mjs --check` → OK. INV-LLM-005, AC-1334 (this plan's slice).
 
@@ -173,7 +182,7 @@ across `evals/snapshots`). Exactly five snapshots changed; every other key is by
    Do NOT call any more tools."). Diff hunks: `@@ -180` (chat) and `@@ -831` (registration).
 2. `chat / with-summary`, `plan_creation / with-summary`, `session_planning / with-summary` — the
    single merged `system` entry becomes two `system` entries (phase prompt; `CONTEXT FROM PREVIOUS
-   CONVERSATION:` frame). `mergeMessageRuns` joined the two with `"\n"`, so old content equals
+CONVERSATION:` frame). `mergeMessageRuns` joined the two with `"\n"`, so old content equals
    entry 1 + `"\n"` + entry 2 byte-for-byte. Diff hunks: `@@ -257` (chat), `@@ -635` (plan_creation),
    `@@ -1391` (session_planning).
 
