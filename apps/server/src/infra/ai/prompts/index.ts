@@ -11,13 +11,14 @@ import { SUMMARIZER_PROMPT } from './summarizer';
 import type { PhasePromptEntry, PromptModule } from './types';
 
 /**
- * Transitional (ADR-0013 §11, D-D): how a phase's agentNode lays out the
+ * Transitional (ADR-0013 §11, D-D): how a phase's agent node lays out the
  * message array around the rendered phase prompt. Owner rule (STATE.md,
  * 2026-09-17): one chat across the app — phases differ only by prompt, tools
  * and context loaders. Every flag below is a deviation from that rule with a
- * scheduled removal: `historyMode`, `summaryFrame` and `toolResultsFrame` →
- * P4 (the messages channel, episode summaries). The post-tool nudge and the
- * run merge left with P3's shared agent node.
+ * scheduled removal — all three go in P4 (the messages channel, episode
+ * summaries). The P3 flags (`postToolNudge`, `mergeRuns`) are gone: the nudge
+ * applies to every phase and system runs are never merged (the shared agent
+ * node, refactor-p3-phase-spec).
  */
 export interface PhaseLayout {
   /** Whether the phase injects the previous-summary frame (registration: false, others: true). */

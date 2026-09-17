@@ -131,9 +131,9 @@ Factory: `StateGraph(PhaseSubgraphState)` where `PhaseSubgraphState` = today's c
 
 ### Task 4: Docs and rails in code
 
-- [ ] **Step 1:** `PhaseLayout` JSDoc: the P3 flags are gone; the remaining three name P4 as their removal. `phase-spec.ts` JSDoc: `loadContext` is transitional (D-A). `CONTRIBUTING_AI.md` pointer table is Task 5's (orchestrator) — do not edit docs here.
-- [ ] **Step 2:** `no-inline-prompts` grep list still covers `src/infra/ai/graph/**` (the new `nodes/` and `phases/` are under it) — assert by adding a temporary literal in `phases/chat.spec.ts`, paste the lint error, remove it.
-- [ ] **Step 3: Commit** — `docs(ai): JSDoc for the transitional PhaseSpec fields; rails bite proof`
+- [x] **Step 1:** `PhaseLayout` JSDoc: the P3 flags are gone; the remaining three name P4 as their removal. `phase-spec.ts` JSDoc: `loadContext` is transitional (D-A). `CONTRIBUTING_AI.md` pointer table is Task 5's (orchestrator) — do not edit docs here.
+- [x] **Step 2:** `no-inline-prompts` grep list still covers `src/infra/ai/graph/**` (the new `nodes/` and `phases/` are under it) — assert by adding a temporary literal in `phases/chat.spec.ts`, paste the lint error, remove it.
+- [x] **Step 3: Commit** — `docs(ai): JSDoc for the transitional PhaseSpec fields; rails bite proof`
 
 **Verification:** pasted bite; `npm run lint`.
 
