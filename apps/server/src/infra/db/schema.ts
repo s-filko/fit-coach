@@ -143,6 +143,29 @@ export const conversationRuns = pgTable(
   },
 );
 
+// One independent structured episode summary — compaction output, mirrored to a
+// summary turn row (ADR-0013 §3.3/§8; refactor-p4-episode-memory Task 3)
+export const conversationSummaries = pgTable(
+  'conversation_summaries',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    runId: uuid('run_id'),
+    episodeId: uuid('episode_id').notNull(),
+    phaseAtEnd: conversationPhaseEnum('phase_at_end').notNull(),
+    structured: jsonb('structured').notNull(),
+    rendered: text('rendered').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  table => {
+    return {
+      userCreatedIdx: index('idx_conversation_summaries_user_created').on(table.userId, table.createdAt),
+    };
+  },
+);
+
 // --- Training domain enums (see plan: training_session_management_mvp) ---
 
 export const exerciseTypeEnum = pgEnum('exercise_type', [

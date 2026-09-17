@@ -1,4 +1,4 @@
-import type { ConversationPhase } from './conversation-context.ports';
+import type { ConversationPhase } from '../phases';
 
 export type ConversationRunOutcome = 'ok' | 'llm_unavailable' | 'core_error' | 'budget_exhausted';
 

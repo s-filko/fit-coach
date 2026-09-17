@@ -89,7 +89,7 @@
 
 > **Owner rule 2026-09-18: code first, model runs only when budget is left.** This task is not on the executor's path. It runs whenever the owner says there is budget — before or after the code lands — always on the **Task 1 commit** (`git worktree add ../fit_coach-v2-freeze <sha>` + `npm ci` in `apps/server/`), so the number is pre-P4 regardless of when it is taken. Question answered: "how often does P3 code re-search already-known exercises on the 5 id-reuse cases" — the one number AC-1344's +15 pp is measured against. **Call count: 5 cases × 1 sample = 5 calls (+ tool rounds).** No other dataset runs. The full `v2` sweep (62 cases, n=3, ≈186 calls) is a separate red-button item; until it runs AC-1344's "±2 pp on all other datasets" is unmeasured and is recorded as such.
 
-**Task 1 commit SHA:** _(recorded by the orchestrator)_
+**Task 1 commit SHA:** `56696947` (worktree plan/refactor-p4-episode-memory; recorded 2026-09-18)
 
 - [ ] **Step 1:** When the owner releases budget: read the quota (dashboard or `readQuota()`), then in the throwaway worktree at the Task 1 commit: `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase plan_creation --dataset id-reuse --samples 1 --baseline write --baseline-version v2 [--quota-before <n>]` (under the ceiling, no `EVALS_FULL_RUN`). Read the quota again; `npm run evals:ledger -- --after <n>` if manual.
 - [ ] **Step 2:** Commit `evals/baselines/v2/plan_creation.json` (dataset-scoped), `README.md` (freeze record: commit, route, n=1, dataset scope, the `no_redundant_search` pass rate — expected low) and the new `COST_LEDGER.md` row — `test(evals): freeze v2 mini-baseline — plan_creation/id-reuse, n=1 (pre-P4 code)` — committed onto the plan branch (or `dev` if the plan has already merged); remove the throwaway worktree.
@@ -108,9 +108,9 @@
 - Tests: `src/domain/conversation/__tests__/episode.unit.test.ts` (schema round-trip, empty arrays allowed, extra keys rejected); `src/infra/conversation/__tests__/drizzle-transcript.service.unit.test.ts` + `drizzle-summary.service.unit.test.ts` — unit-test the **pure row mapping** (`toTurnRows(input)` exported from the service file) for every D-K case including the `role` derivation; DB round-trips go into `tests/integration/` behind `RUN_DB_TESTS=1` (the executor runs them once locally against the compose DB: `npm run test:integration`).
 - Modify: `apps/server/src/config/index.ts` — `EPISODE_GAP_HOURS` (default `3`), `EPISODE_MIN_TURNS` (default `2`), `EPISODE_MIN_TOKENS` (default `300`), all `z.coerce.number()` with `.default()`, JSDoc naming D-L as the exception; `apps/server/.env.example` documents them and `LLM_PROFILE_SUMMARIZER_{MODEL,TEMPERATURE,MAX_TOKENS}`.
 
-- [ ] **Step 1: Tests first** (schema, row mapping, config defaults and overrides).
-- [ ] **Step 2: Implement.** Generate the migration; apply locally (`npm run db:local:migrate`); `git status apps/server/drizzle` shows exactly one new `0004_*.sql` plus meta.
-- [ ] **Step 3: Commit** — `feat(conversation): episode summary types, transcript and summary ports, conversation_summaries migration (ADR-0013 §3.3, §8)`
+- [x] **Step 1: Tests first** (schema, row mapping, config defaults and overrides).
+- [x] **Step 2: Implement.** Generate the migration; apply locally (`npm run db:local:migrate`); `git status apps/server/drizzle` shows exactly one new `0004_*.sql` plus meta.
+- [x] **Step 3: Commit** — `feat(conversation): episode summary types, transcript and summary ports, conversation_summaries migration (ADR-0013 §3.3, §8)`
 
 **Verification:** `npx jest --ci src/domain/conversation src/infra/conversation src/config`; `npm run test:integration` (DB round-trip); `npm run check-all`.
 
