@@ -20,6 +20,7 @@ export class DrizzleConversationRunService implements IConversationRunService {
       toolCalls: record.toolCalls,
       transition: record.transition,
       outcome: record.outcome,
+      budgetReport: record.budgetReport,
     });
   }
 }

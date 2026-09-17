@@ -1,6 +1,8 @@
+import type { BudgetReport } from '@domain/conversation/ports';
 import type { ConversationStateType } from '@domain/conversation/graph/conversation.state';
 
 import { buildPersistNode } from '@infra/ai/graph/nodes/persist.node';
+import { attachBudgetReport } from '@infra/ai/run-metrics';
 
 const baseState = (overrides: Partial<ConversationStateType> = {}): ConversationStateType =>
   ({
@@ -66,5 +68,41 @@ describe('persist node run logging (AC-1301)', () => {
     await node(baseState({ responseMessage: '' }));
 
     expect(runService.recordRun).not.toHaveBeenCalled();
+  });
+
+  describe('budget report plumbing (refactor-p2-context-assembler, AC-1323)', () => {
+    const budgetReport: BudgetReport = {
+      estimator: 'chars4x1.15',
+      system: 800,
+      summary: 120,
+      history: 300,
+      user: 15,
+      inFlight: 60,
+      toolResults: 0,
+      total: 1295,
+      messages: 7,
+      historyTurns: 4,
+    };
+
+    it('records the attached report with assemblies merged in', async () => {
+      attachBudgetReport('run-report-1', budgetReport);
+      const runService = { recordRun: jest.fn().mockResolvedValue(undefined) };
+      const node = buildPersistNode(contextService as never, runService as never);
+
+      await node(baseState({ runId: 'run-report-1' }));
+
+      const [[record]] = runService.recordRun.mock.calls;
+      expect(record.budgetReport).toEqual({ ...budgetReport, assemblies: 1 });
+    });
+
+    it('records budgetReport null when nothing was attached', async () => {
+      const runService = { recordRun: jest.fn().mockResolvedValue(undefined) };
+      const node = buildPersistNode(contextService as never, runService as never);
+
+      await node(baseState({ runId: 'run-report-2' }));
+
+      const [[record]] = runService.recordRun.mock.calls;
+      expect(record.budgetReport).toBeNull();
+    });
   });
 });

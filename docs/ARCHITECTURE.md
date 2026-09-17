@@ -77,7 +77,7 @@ apps/server/src/
       model.factory.ts          # Single ChatOpenAI construction site (getModel(profile), AC-1313)
       llm.gateway.ts            # OpenAiLlmGateway — LlmGateway port implementation (ADR-0013 §7 D-10)
       llm-log-handler.ts        # LLM boundary callback: debug replay + run-metrics bridge (metadata.runId)
-      run-metrics.ts            # Per-run model/token/latency accumulator, drained by persist.node (ADR-0013 §8)
+      run-metrics.ts            # Per-run model/token/latency/budgetReport accumulator, drained by persist.node (ADR-0013 §8)
       embedding.service.ts      # Local all-MiniLM-L6-v2 via @huggingface/transformers (ONNX)
       embedding-text.util.ts    # buildEmbeddingText() — composite text for exercise embeddings
       graph/
@@ -93,17 +93,21 @@ apps/server/src/
           registration.subgraph.ts      # agent + ToolNode + extractNode
           plan-creation.subgraph.ts     # agent + dedupToolNode + extractNode
           session-planning.subgraph.ts  # agent + dedupToolNode + extractNode + activeSessionId
-          training.subgraph.ts          # agent + ToolNode + extractNode + tool-results/history injection
+          training.subgraph.ts          # agent + ToolNode + extractNode + tool-error retry budget (assembly via assembleContext)
         tools/
           chat.tools.ts                 # update_profile, request_transition
           registration.tools.ts         # save_profile_fields, complete_registration
           plan-creation.tools.ts        # save_workout_plan, search_exercises, request_transition
           session-planning.tools.ts     # start_training_session, search_exercises, request_transition
           search-exercises.tool.ts      # search_exercises — vector search via EmbeddingService
+      context/                      # Context assembler — message order + token accounting (ADR-0013 §3.4)
+        assemble-context.ts         # assembleContext() → { messages, budgetReport } (reporting half; budgets/trimming are P4)
+        token-estimator.ts          # estimateTokens + TOKEN_ESTIMATOR_ID — the single estimator (app + eval stack)
+        tool-results.ts             # renderToolResults — training's tool-results block
       prompts/                       # Versioned prompt modules — every model-facing string (ADR-0013 §5)
         types.ts                     # Section, DirectiveModule, PromptModule<TCtx>, PhasePromptEntry
         compose.ts                   # renderDirectives, compose (join '\n\n'), sectionText, promptVersionsOf
-        index.ts                     # Registry: PHASE_PROMPTS (+ blocks per phase), STANDALONE_PROMPTS, promptVersionsForPhase
+        index.ts                     # Registry: PHASE_PROMPTS (+ per-phase layout), STANDALONE_PROMPTS, blocksForLayout, promptVersionsForPhase
         directives/                  # The nine directives, one versioned module each
           identity.v1.ts             #   FitCoach persona
           greeting.v1.ts             #   new-day greeting (driven by ctx.now, not the clock)

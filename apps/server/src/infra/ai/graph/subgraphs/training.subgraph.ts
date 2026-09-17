@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessage, ToolMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import { Annotation, END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
 import { toolsCondition } from '@langchain/langgraph/prebuilt';
@@ -15,14 +15,15 @@ import type {
 import type { IUserService } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
 
+import { assembleContext } from '@infra/ai/context/assemble-context';
 import { invokeWithRetry } from '@infra/ai/graph/invoke-with-retry';
 import { PendingRefMap } from '@infra/ai/graph/pending-ref-map';
 import { buildSaveTimezoneTool } from '@infra/ai/graph/tools/timezone.tool';
 import { buildTrainingTools, LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '@infra/ai/graph/tools/training.tools';
 import { getModel } from '@infra/ai/model.factory';
-import { HISTORY_FRAME_V1, renderBlock, SUMMARY_FRAME_V1, TOOL_RESULTS_V1 } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
 import { TRAINING_PROMPT } from '@infra/ai/prompts/phases/training';
+import { attachBudgetReport } from '@infra/ai/run-metrics';
 
 import { createLogger } from '@shared/logger';
 
@@ -135,24 +136,6 @@ type TrainingSubgraphStateType = typeof TrainingSubgraphState.State;
 
 /** Maximum number of LLM-caused tool errors allowed per conversation turn before giving up. */
 const LLM_ERROR_RETRY_BUDGET = 1;
-
-/**
- * Builds a SystemMessage injection summarising tool results so the LLM has
- * a factual, structured source to cite in its reply — preventing hallucinated
- * "I logged..." confirmations when no tool was actually called.
- */
-export function buildToolResultsInjection(toolMessages: ToolMessage[]): string {
-  const results = toolMessages.map(m => {
-    const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-    const isError =
-      m.status === 'error' || content.startsWith(LLM_ERROR_PREFIX) || content.startsWith(SYSTEM_ERROR_PREFIX);
-    return isError
-      ? { ok: false as const, content: content.replace(LLM_ERROR_PREFIX, '').replace(SYSTEM_ERROR_PREFIX, '').trim() }
-      : { ok: true as const, content };
-  });
-
-  return renderBlock(TOOL_RESULTS_V1, { results });
-}
 
 export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
   const { userService, trainingService, workoutSessionRepo, contextService, exerciseRepository, embeddingService } =
@@ -362,28 +345,15 @@ export function buildTrainingSubgraph(deps: TrainingSubgraphDeps) {
 
       const model = baseModel.bindTools(availableTools);
 
-      const toolMessages = inFlightMessages.filter((m): m is ToolMessage => m instanceof ToolMessage);
-      const toolResultsInjection = toolMessages.length > 0 ? buildToolResultsInjection(toolMessages) : null;
-
-      const summaryBlock = previousSummary
-        ? [new SystemMessage(renderBlock(SUMMARY_FRAME_V1, { previousSummary }))]
-        : [];
-
-      const llmMessages = [
-        new SystemMessage(systemPrompt),
-        ...summaryBlock,
-        new SystemMessage(
-          renderBlock(HISTORY_FRAME_V1, {
-            history: history.map(m => ({
-              role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
-              content: m.content,
-            })),
-          }),
-        ),
-        new HumanMessage(userMessage),
-        ...inFlightMessages,
-        ...(toolResultsInjection ? [new SystemMessage(toolResultsInjection)] : []),
-      ];
+      const { messages: llmMessages, budgetReport } = assembleContext({
+        phase: 'training',
+        systemPrompt,
+        previousSummary,
+        history,
+        userMessage,
+        inFlight: inFlightMessages,
+      });
+      attachBudgetReport(config.metadata?.['runId'] as string, budgetReport);
 
       const response = await invokeWithRetry(model, llmMessages, config);
 

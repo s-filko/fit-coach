@@ -20,6 +20,19 @@ const record: ConversationRunRecord = {
   toolCalls: null,
   transition: null,
   outcome: 'ok',
+  budgetReport: {
+    estimator: 'chars4x1.15',
+    system: 800,
+    summary: 120,
+    history: 300,
+    user: 15,
+    inFlight: 60,
+    toolResults: 0,
+    total: 1295,
+    messages: 7,
+    historyTurns: 4,
+    assemblies: 1,
+  },
 };
 
 describe('DrizzleConversationRunService (AC-1301)', () => {
@@ -37,7 +50,14 @@ describe('DrizzleConversationRunService (AC-1301)', () => {
         model: 'z-ai/glm-5.3',
         latencyMs: 1500,
         outcome: 'ok',
+        budgetReport: record.budgetReport,
       }),
     );
+  });
+
+  it('maps a null budgetReport as null (runs with no assembly)', async () => {
+    await new DrizzleConversationRunService().recordRun({ ...record, budgetReport: null });
+
+    expect(values).toHaveBeenCalledWith(expect.objectContaining({ budgetReport: null }));
   });
 });

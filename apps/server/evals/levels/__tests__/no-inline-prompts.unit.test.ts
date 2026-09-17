@@ -2,11 +2,16 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
 describe('no inline prompt text outside src/infra/ai/prompts (ADR-0013 §5, BR-LLM-009)', () => {
-  const graphDir = path.resolve(__dirname, '../../../src/infra/ai/graph');
+  // Same coverage as the eslint.config.js no-restricted-syntax override:
+  // graph/ and context/ today; infra/ai/messages is P3's.
+  const scanDirs = [
+    path.resolve(__dirname, '../../../src/infra/ai/graph'),
+    path.resolve(__dirname, '../../../src/infra/ai/context'),
+  ];
 
   function grep(pattern: string): string[] {
     try {
-      return execFileSync('grep', ['-rnE', pattern, graphDir, '--include=*.ts', '--exclude-dir=__tests__'], { encoding: 'utf8' })
+      return execFileSync('grep', ['-rnE', pattern, ...scanDirs, '--include=*.ts', '--exclude-dir=__tests__'], { encoding: 'utf8' })
         .trim()
         .split('\n')
         .filter(Boolean);

@@ -100,7 +100,7 @@ Assertions (each is a named check reported separately):
 - `text.language` — detect script/lang with a small heuristic (Cyrillic ratio) or a tiny classifier; `text.format` — Telegram HTML only: no `**`, no `_x_`, only allowed tags; `maxChars`.
 - `draft` invariants (after P6): all exercise IDs exist, sets/reps within catalog-type constraints, no exercise conflicting with a `physical_constraint` fact.
 - `no_redundant_search`: same `search_exercises` args not repeated within the case's state + run — **not yet implemented** (deferred).
-- Structural: run `outcome === 'ok'`, `budgetReport.history ≤ budget.history`, no orphan tool messages — **not yet implemented** (deferred).
+- Structural: run `outcome === 'ok'`, `budgetReport.history ≤ budget.history`, no orphan tool messages — `budget-report-present` is implemented (refactor-p2-context-assembler, 2026-09-17); the `history ≤ budget` and orphan-tool-message checks stay deferred (budgets are P4).
 
 Sampling: each case runs `n` times (default 3; `n=5` for gating datasets); a case passes if ≥ ⌈n/2⌉ samples pass; the report shows per-check pass rates and the flakiest cases.
 

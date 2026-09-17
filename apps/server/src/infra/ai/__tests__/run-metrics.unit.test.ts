@@ -1,4 +1,7 @@
+import type { BudgetReport } from '@domain/conversation/ports';
+
 import {
+  attachBudgetReport,
   bindCallToRun,
   drainRunMetrics,
   finishLlmCall,
@@ -6,6 +9,19 @@ import {
   startLlmCall,
   startRun,
 } from '@infra/ai/run-metrics';
+
+const report = (total: number): BudgetReport => ({
+  estimator: 'chars4x1.15',
+  system: total,
+  summary: 0,
+  history: 0,
+  user: 0,
+  inFlight: 0,
+  toolResults: 0,
+  total,
+  messages: 2,
+  historyTurns: 0,
+});
 
 describe('run metrics accumulator (ADR-0013 §8, AC-1301)', () => {
   it('sums tokens and counts calls across several LLM calls in one run', () => {
@@ -90,6 +106,36 @@ describe('run metrics accumulator (ADR-0013 §8, AC-1301)', () => {
       expect(resolveCallRun('lc-call-3')).toBeUndefined();
       expect(resolveCallRun('never-bound')).toBeUndefined();
       expect(() => bindCallToRun('', 'run-C')).not.toThrow();
+    });
+  });
+
+  describe('budget reports (refactor-p2-context-assembler, AC-1323)', () => {
+    it('attach on an unknown runId opens the run (evals never call startRun)', () => {
+      attachBudgetReport('run-b1', report(42));
+
+      const metrics = drainRunMetrics('run-b1');
+      expect(metrics.budgetReport).toEqual(report(42));
+      expect(metrics.assemblies).toBe(1);
+    });
+
+    it('last attach wins and assemblies counts every attach', () => {
+      attachBudgetReport('run-b2', report(10));
+      attachBudgetReport('run-b2', report(20));
+
+      const metrics = drainRunMetrics('run-b2');
+      expect(metrics.budgetReport).toEqual(report(20));
+      expect(metrics.assemblies).toBe(2);
+    });
+
+    it('a drain without any attach returns budgetReport null and assemblies 0', () => {
+      const metrics = drainRunMetrics('run-b3');
+      expect(metrics.budgetReport).toBeNull();
+      expect(metrics.assemblies).toBe(0);
+    });
+
+    it('an empty runId is a no-op', () => {
+      expect(() => attachBudgetReport('', report(1))).not.toThrow();
+      expect(drainRunMetrics('').budgetReport).toBeNull();
     });
   });
 });

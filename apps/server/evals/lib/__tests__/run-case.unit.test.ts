@@ -74,6 +74,27 @@ describe('runCase', () => {
     expect(current).toBeGreaterThan(accepted);
   });
 
+  it('carries a non-null budgetReport with a positive total from the recorded run', async () => {
+    const observation = await runCase(testCase);
+    expect(observation.threw).toBeNull();
+    expect(observation.budgetReport).not.toBeNull();
+    expect(observation.budgetReport?.total).toBeGreaterThan(0);
+  });
+
+  it('passes metadata { runId, userId } in the invoke config so the agent node attaches the report', async () => {
+    // Without config.metadata the agentNode reads config.metadata?.['runId'] as
+    // undefined and attachBudgetReport attaches nothing (the LLM callback handler
+    // has the same blind spot in production — ADR-0013 §3.4).
+    const { __mockInvoke: invoke } = modelFactory as unknown as { __mockInvoke: jest.Mock };
+    invoke.mockClear();
+    await runCase(testCase);
+    expect(invoke).toHaveBeenCalled();
+    const config = invoke.mock.calls[0][1] as { metadata?: { runId?: string; userId?: string } };
+    expect(config.metadata?.userId).toBe('22222222-2222-4222-8222-222222222222');
+    expect(typeof config.metadata?.runId).toBe('string');
+    expect(config.metadata?.runId?.length).toBeGreaterThan(0);
+  });
+
   it('reports a non-null transition from the recorded run row when the model calls request_transition', async () => {
     // The transition must come from recordedRuns[0].transition, not from the final
     // graph state: transition_guard nulls requestedTransition before END
