@@ -40,7 +40,6 @@ jest.mock('@infra/ai/graph/phases', () => {
         name: 'zzz_test',
         tools: [],
         toolPolicy: { llmErrorBudget: Infinity },
-        layout: { summaryFrame: false, historyMode: 'interleaved', toolResultsFrame: false },
       },
     ],
   };

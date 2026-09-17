@@ -64,10 +64,10 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
     expect(buildPhaseSpecs(stubDeps()).map(s => s.name)).toEqual(PHASES);
   });
 
-  it.each(PHASES)('%s: modelProfile is default and layout is the registry layout', phase => {
+  it.each(PHASES)('%s: modelProfile is default and the prompt is the registry entry', phase => {
     const spec = specOf(phase);
     expect(spec.modelProfile).toBe('default');
-    expect(spec.layout).toBe(PHASE_PROMPTS[phase].layout);
+    expect(spec.prompt).toBe(PHASE_PROMPTS[phase]);
   });
 
   it.each(PHASES)('%s: tools equal today’s per-phase tool list (shared tools included)', phase => {

@@ -72,22 +72,12 @@ function withPostToolNudge(messages: BaseMessage[]): BaseMessage[] {
 }
 
 export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDeps) {
-  const { contextService } = deps;
-
   return async (state: AgentNodeState, config: RunnableConfig): Promise<{ messages: BaseMessage[] }> => {
     const ctx = ctxOf(config as never);
     const { userId, user, now } = ctx;
     // D-I: this run = the messages from the LAST HumanMessage on; everything
     // before it is episode history from the checkpointed channel itself.
     const { history, current } = splitEpisode(state.messages ?? []);
-    const [first] = current;
-    const userMessage =
-      first !== undefined && first._getType() === 'human' && typeof first.content === 'string' ? first.content : '';
-    const inFlight = current.slice(1);
-
-    // Transitional (Task 4→5): the summary still loads through the legacy
-    // context service; history already comes from state.
-    const previousSummary = spec.layout.summaryFrame ? await contextService.getLatestSummary(userId) : null;
     const lang = langOf(user?.languageCode);
 
     const loaded = await spec.loadContext({ userId, user, activeSessionId: state.activeSessionId ?? null }, deps);
@@ -122,16 +112,14 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     // inherited from the route's invoke config; configurable never reaches handlers.
     const model = getModel(spec.modelProfile).bindTools(tools);
 
-    const { messages: llmMessages, budgetReport } = assembleContext(
-      {
-        systemPrompt,
-        previousSummary,
-        history,
-        userMessage,
-        inFlight,
-      },
-      spec.layout,
-    );
+    const { messages: llmMessages, budgetReport } = assembleContext({
+      systemPrompt,
+      episodeSummaries: state.episodeSummaries ?? [],
+      history,
+      current,
+      now,
+      timezone: user?.timezone ?? null,
+    });
     ctx.metrics.attachBudgetReport(budgetReport);
 
     // Post-tool nudge + empty-reply retry, moved verbatim from invokeWithRetry

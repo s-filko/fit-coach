@@ -150,13 +150,21 @@
 - Modify: `nodes/agent.node.ts` — no `contextService` reads at all; summaries from `state.episodeSummaries`.
 - Modify: `evals/snapshots/__tests__/message-assembly.unit.test.ts` — the `with-summary` scenario seeds `episodeSummaries: [FIXTURE_EPISODE_SUMMARY]` in the invoke input (new fixture in `prompt-contexts.ts`, derived from `FIXTURE_SUMMARY`'s facts); the "registration ignores the summary" assertion is **inverted** (registration now shows the block — one chat) and renamed.
 
-- [ ] **Step 1:** Update the assembler tests to the single shape (`it` names carry `INV-LLM-001`); regenerate the message-assembly snapshots **once**; paste the enumerated diff below under **Snapshot diff (Task 5)**: expected — every phase `[system, (episode summaries), ...history, ...current]`; training loses its `history_frame` and `tool-results` system blocks; `with-summary` shows `## Previous episodes` for all five phases; `post-tool` unchanged apart from the training blocks.
-- [ ] **Step 2: STOP** — `DELEGATE STATUS: done, task: Task 5 Step 1` with the diff list; the orchestrator reviews it before Step 3.
-- [ ] **Step 3: Commit** — `refactor(ai): one message layout for all phases; episode-summaries block; training history frame and tool-results block removed (ADR-0013 §3.4, owner rule: one chat)`
+- [x] **Step 1:** Update the assembler tests to the single shape (`it` names carry `INV-LLM-001`); regenerate the message-assembly snapshots **once**; paste the enumerated diff below under **Snapshot diff (Task 5)**: expected — every phase `[system, (episode summaries), ...history, ...current]`; training loses its `history_frame` and `tool-results` system blocks; `with-summary` shows `## Previous episodes` for all five phases; `post-tool` unchanged apart from the training blocks.
+- [x] **Step 2: STOP** — `DELEGATE STATUS: done, task: Task 5 Step 1` with the diff list; the orchestrator reviews it before Step 3.
+- [x] **Step 3: Commit** — `refactor(ai): one message layout for all phases; episode-summaries block; training history frame and tool-results block removed (ADR-0013 §3.4, owner rule: one chat)`
 
 **Verification:** `grep -rn "historyMode\|summaryFrame\|toolResultsFrame\|PhaseLayout\|SUMMARY_FRAME_V1\|HISTORY_FRAME_V1\|TOOL_RESULTS_V1" apps/server/src apps/server/evals` → empty; `npm run evals -- --level L0`; `npx jest --ci evals/snapshots src/infra/ai/context src/infra/ai/prompts`.
 
-**Snapshot diff (Task 5):** _(pasted by the executor)_
+**Snapshot diff (Task 5):** regenerated once on 2026-09-18 (executor). `message-assembly.unit.test.ts.snap`: 7 of 15 snapshots updated, 8 byte-identical; `prompt-snapshots.unit.test.ts.snap`: 4 obsolete block snapshots removed, 1 new (`block.episode_summaries / present`).
+
+- registration/chat/plan_creation/session_planning `with-summary` ×4: `CONTEXT FROM PREVIOUS CONVERSATION: <rolling summary>` SystemMessage **→** `## Previous episodes` SystemMessage ("Context only. Numbers below are not authoritative…", one paragraph per episode: phase, relative date, the five lists). Expected — one chat.
+- training `plain` / `with-summary` / `post-tool` ×3: the `=== CONVERSATION HISTORY (memory only…) ===` system block **removed** (empty history renders no block — see the Task 1 discovery: FIXTURE_HISTORY never actually seeded the frozen snapshots, so no history rows appear to replace it; they will appear with real episode history at runtime and are covered by the assembler's INV-LLM-001 unit test).
+- training `post-tool`: the `=== TOOL EXECUTION RESULTS ===` system block **removed**; the in-flight `AIMessage(tool_calls)`/`ToolMessage`s ride the channel instead; the post-tool nudge is unchanged.
+- `post-tool` for the four non-training phases: byte-identical.
+- `plain` for the four non-training phases: byte-identical.
+
+Deviation from the plan's expected diff, explained: the plan expected `...history` rows to appear in every snapshot — they cannot, because the frozen snapshots never contained history (see the Task 1 execution note: the P2 harness's `user`/`assistant` roles were silently filtered). The five plain/post-tool snapshots therefore stay byte-identical instead of gaining history rows.
 
 ---
 

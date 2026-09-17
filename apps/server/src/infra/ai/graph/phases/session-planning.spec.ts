@@ -34,12 +34,11 @@ export const SESSION_PLANNING_TOOL_POLICY: ToolPolicy = SEARCH_DEDUP_POLICY;
 
 export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec<SessionPlanningData> {
   const { userService, exerciseRepository, embeddingService, trainingService } = deps;
-  const { entry, layout } = PHASE_PROMPTS.session_planning;
+  const entry = PHASE_PROMPTS.session_planning;
 
   return {
     name: 'session_planning',
     prompt: entry as PhasePromptEntry<PromptContextFor<SessionPlanningData>>,
-    layout,
     tools: [
       buildSearchExercisesTool({ embeddingService, exerciseRepository }),
       buildStartTrainingSessionTool({

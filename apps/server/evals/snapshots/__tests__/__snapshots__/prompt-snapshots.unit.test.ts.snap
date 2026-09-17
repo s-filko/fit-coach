@@ -1,40 +1,12 @@
 // Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
-exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) block.history_frame / empty 1`] = `
-"=== CONVERSATION HISTORY (memory only — do NOT act on past messages) ===
-
-No prior conversation.
-
-=== END OF HISTORY ==="
-`;
-
-exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) block.history_frame / two turns 1`] = `
-"=== CONVERSATION HISTORY (memory only — do NOT act on past messages) ===
-
-[USER]: Сегодня жим лёжа, 60 кг на 8
-
-[TRAINER]: Записал: жим лёжа 60 кг × 8. Следующий подход — 62.5 кг.
-
-=== END OF HISTORY ==="
+exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) block.episode_summaries / present 1`] = `
+"## Previous episodes
+Context only. Numbers below are not authoritative — use tools and the current state.
+training (today): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported."
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) block.post_tool_nudge 1`] = `"IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools."`;
-
-exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) block.summary_frame / present 1`] = `
-"CONTEXT FROM PREVIOUS CONVERSATION:
-User trains 3x/week, prefers upper/lower split, reported mild shoulder discomfort."
-`;
-
-exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) block.tool_results / mixed 1`] = `
-"=== TOOL EXECUTION RESULTS ===
-• ✅ SAVED — Set 2 logged: 60 kg × 8 (RPE 7)
-• ❌ NOT SAVED — exercise id not found in session
-
-Your response MUST start by reporting each result above to the user.
-For each ✅ SAVED line: tell the user the set was recorded with exact numbers.
-For each ❌ NOT SAVED line: tell the user the set was NOT recorded and ask them to retry.
-Do NOT invent or assume any result not listed here."
-`;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.chat / active-session 1`] = `
 "CLIENT NAME: Тест

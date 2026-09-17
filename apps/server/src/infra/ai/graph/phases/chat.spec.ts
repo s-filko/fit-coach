@@ -26,12 +26,11 @@ export const CHAT_TOOL_POLICY: ToolPolicy = NO_POLICY;
 
 export function buildChatSpec(deps: ConversationGraphDeps): PhaseSpec<ChatData> {
   const { userService } = deps;
-  const { entry, layout } = PHASE_PROMPTS.chat;
+  const entry = PHASE_PROMPTS.chat;
 
   return {
     name: 'chat',
     prompt: entry as PhasePromptEntry<PromptContextFor<ChatData>>,
-    layout,
     tools: [
       buildUpdateProfileTool({ userService }),
       buildRequestTransitionTool('chat'),

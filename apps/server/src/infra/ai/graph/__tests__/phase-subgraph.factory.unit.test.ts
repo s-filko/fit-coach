@@ -45,7 +45,6 @@ function makeSpec(tools: DynamicStructuredTool<{ name: string }>[] = [makeFakeTo
       current: { id: 'phase.fake', version: 'v1', directives: [], render: () => [] },
       requiredSections: [],
     },
-    layout: { summaryFrame: false, historyMode: 'interleaved', toolResultsFrame: false },
     tools: tools as PhaseSpec['tools'],
     toolPolicy: { llmErrorBudget: Infinity },
     loadContext: async () => ({ ok: true, data: { lastMessageTime: null } }),

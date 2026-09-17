@@ -41,7 +41,6 @@ function makeSpec(overrides: Partial<PhaseSpec> = {}): PhaseSpec {
       current: { id: 'phase.test', version: 'v1', directives: [], render: renderSpy },
       requiredSections: [],
     } as unknown as PhaseSpec['prompt'],
-    layout: { summaryFrame: true, historyMode: 'interleaved', toolResultsFrame: false },
     tools: [{ name: 'tool_a' }, { name: 'tool_b' }] as unknown as StructuredToolInterface[],
     toolPolicy: { llmErrorBudget: Infinity },
     loadContext: jest.fn(async () => ({ ok: true as const, data: { lastMessageTime: null } })),
@@ -154,12 +153,12 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     await node(state, CONFIG);
 
     const first = mockInvoke.mock.calls[0][0] as BaseMessage[];
-    // [system, summary frame, human, ai(tool_calls), nudge, tool] — the nudge
-    // sits immediately before the last ToolMessage.
-    expect(first).toHaveLength(6);
-    expect(first[4]._getType()).toBe('system');
-    expect(first[4].content).toBe(NUDGE_TEXT);
-    expect(first[5]._getType()).toBe('tool');
+    // [system, human, ai(tool_calls), nudge, tool] — the nudge sits
+    // immediately before the last ToolMessage (one shape, no frames).
+    expect(first).toHaveLength(5);
+    expect(first[3]._getType()).toBe('system');
+    expect(first[3].content).toBe(NUDGE_TEXT);
+    expect(first[4]._getType()).toBe('tool');
   });
 
   it('system-block-final turn (training tool-results frame): no nudge on the first call', async () => {
@@ -177,14 +176,15 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     await node(state, CONFIG);
 
     const first = mockInvoke.mock.calls[0][0] as BaseMessage[];
-    // [system, summary frame, human, ai(tool_calls), tool, tool-results frame]
-    expect(first).toHaveLength(6);
+    // [system, human, ai(tool_calls), tool, system-frame] — a system-final
+    // turn gets no nudge on the first call.
+    expect(first).toHaveLength(5);
     expect(first.every(m => m.content !== NUDGE_TEXT)).toBe(true);
-    expect(first[5]._getType()).toBe('system');
-    expect(String(first[5].content).startsWith('=== TOOL EXECUTION RESULTS ===')).toBe(true);
+    expect(first[4]._getType()).toBe('system');
+    expect(String(first[4].content).startsWith('=== TOOL EXECUTION RESULTS ===')).toBe(true);
   });
 
-  it('empty reply → one retry with the nudge → still empty → empty_reply in the user’s language (D-D)', async () => {
+  it('empty reply → one retry with the nudge → still empty → the empty_reply catalog message (D-D)', async () => {
     mockInvoke.mockResolvedValue(new AIMessage({ content: '', tool_calls: [] }));
     const node = buildAgentNode(makeSpec(), makeDeps());
 
@@ -215,13 +215,13 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     expect(attachSpy).toHaveBeenCalledWith(expect.objectContaining({ total: expect.any(Number) }));
   });
 
-  it('summaryFrame false: the summary is never loaded', async () => {
+  it('summaries come from state, never from the context service (INV-LLM-001)', async () => {
     mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
     const deps = makeDeps();
-    const spec = makeSpec({ layout: { summaryFrame: false, historyMode: 'interleaved', toolResultsFrame: false } });
+    const spec = makeSpec();
     const node = buildAgentNode(spec, deps);
 
-    await node(makeState(), CONFIG);
+    await node({ ...makeState(), episodeSummaries: [] }, CONFIG);
 
     expect(deps.contextService.getLatestSummary as jest.Mock).not.toHaveBeenCalled();
   });

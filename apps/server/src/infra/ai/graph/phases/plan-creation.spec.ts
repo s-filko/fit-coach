@@ -27,12 +27,11 @@ export const PLAN_CREATION_TOOL_POLICY: ToolPolicy = SEARCH_DEDUP_POLICY;
 
 export function buildPlanCreationSpec(deps: ConversationGraphDeps): PhaseSpec<PlanCreationData> {
   const { userService, exerciseRepository, embeddingService } = deps;
-  const { entry, layout } = PHASE_PROMPTS.plan_creation;
+  const entry = PHASE_PROMPTS.plan_creation;
 
   return {
     name: 'plan_creation',
     prompt: entry as PhasePromptEntry<PromptContextFor<PlanCreationData>>,
-    layout,
     tools: [
       buildSearchExercisesTool({ embeddingService, exerciseRepository }),
       buildSaveWorkoutPlanTool({ workoutPlanRepository: deps.workoutPlanRepo, exerciseRepository }),

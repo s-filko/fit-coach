@@ -3,13 +3,7 @@
  * refactor-p2-prompt-modules Task 1 and never regenerated in that plan.
  * Fake timers pin `new Date()` inside the old builders to FIXED_NOW.
  */
-import {
-  HISTORY_FRAME_V1,
-  POST_TOOL_NUDGE_V1,
-  renderBlock,
-  SUMMARY_FRAME_V1,
-  TOOL_RESULTS_V1,
-} from '@infra/ai/prompts/blocks';
+import { EPISODE_SUMMARIES_V1, POST_TOOL_NUDGE_V1, renderBlock } from '@infra/ai/prompts/blocks';
 import { compose, sectionText } from '@infra/ai/prompts/compose';
 import { CHAT_PROMPT } from '@infra/ai/prompts/phases/chat';
 import { PLAN_CREATION_PROMPT } from '@infra/ai/prompts/phases/plan_creation';
@@ -23,9 +17,9 @@ import {
   buildFixtureSession,
   buildSessionPlanningContext,
   FIXED_NOW,
+  FIXTURE_EPISODE_SUMMARY,
   FIXTURE_HISTORY,
   FIXTURE_SUMMARY,
-  FIXTURE_TOOL_RESULTS,
   toUser,
 } from '../../fixtures/prompt-contexts';
 
@@ -126,20 +120,14 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
     expect(sectionText(sections, 'user')).toMatchSnapshot();
   });
 
-  it('block.tool_results / mixed', () => {
-    expect(renderBlock(TOOL_RESULTS_V1, { results: FIXTURE_TOOL_RESULTS })).toMatchSnapshot();
+  it('block.episode_summaries / present', () => {
+    expect(
+      renderBlock(EPISODE_SUMMARIES_V1, { summaries: [FIXTURE_EPISODE_SUMMARY], now: FIXED_NOW, timezone: 'Europe/Berlin' }),
+    ).toMatchSnapshot();
   });
 
-  it('block.history_frame / two turns', () => {
-    expect(renderBlock(HISTORY_FRAME_V1, { history: FIXTURE_HISTORY })).toMatchSnapshot();
-  });
-
-  it('block.history_frame / empty', () => {
-    expect(renderBlock(HISTORY_FRAME_V1, { history: [] })).toMatchSnapshot();
-  });
-
-  it('block.summary_frame / present', () => {
-    expect(renderBlock(SUMMARY_FRAME_V1, { previousSummary: FIXTURE_SUMMARY })).toMatchSnapshot();
+  it('block.episode_summaries / empty renders nothing', () => {
+    expect(renderBlock(EPISODE_SUMMARIES_V1, { summaries: [], now: FIXED_NOW, timezone: null })).toBe('');
   });
 
   it('block.post_tool_nudge', () => {

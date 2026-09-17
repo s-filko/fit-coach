@@ -11,7 +11,6 @@ import type { ConversationPhase } from '@domain/conversation/ports';
 import type { User } from '@domain/user/services/user.service';
 
 import type { MessageKey } from '@infra/ai/messages';
-import type { PhaseLayout } from '@infra/ai/prompts';
 import type { DirectiveContext, PhasePromptEntry } from '@infra/ai/prompts/types';
 
 import type { ConversationGraphDeps } from './conversation.graph';
@@ -42,10 +41,8 @@ export type PromptContextFor<D> = DirectiveContext & D;
 
 export interface PhaseSpec<D = unknown> {
   name: ConversationPhase;
-  /** PHASE_PROMPTS[name].entry */
+  /** PHASE_PROMPTS[name] */
   prompt: PhasePromptEntry<PromptContextFor<D>>;
-  /** PHASE_PROMPTS[name].layout — transitional (P4 removes the remaining flags). */
-  layout: PhaseLayout;
   /** Phase tools + buildSharedTools(deps), built at the composition root. */
   tools: StructuredToolInterface[];
   toolPolicy: ToolPolicy;

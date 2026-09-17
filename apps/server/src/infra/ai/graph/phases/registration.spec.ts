@@ -21,12 +21,11 @@ export const REGISTRATION_TOOL_POLICY: ToolPolicy = NO_POLICY;
 
 export function buildRegistrationSpec(deps: ConversationGraphDeps): PhaseSpec<RegistrationData> {
   const { userService } = deps;
-  const { entry, layout } = PHASE_PROMPTS.registration;
+  const entry = PHASE_PROMPTS.registration;
 
   return {
     name: 'registration',
     prompt: entry as PhasePromptEntry<PromptContextFor<RegistrationData>>,
-    layout,
     tools: [
       buildSaveProfileFieldsTool({ userService }),
       buildCompleteRegistrationTool({ userService }),

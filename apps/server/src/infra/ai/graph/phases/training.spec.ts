@@ -69,7 +69,7 @@ export function buildTrainingToolPolicy(tools: StructuredToolInterface[]): ToolP
 
 export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<TrainingData> {
   const { userService, trainingService, exerciseRepository, embeddingService } = deps;
-  const { entry, layout } = PHASE_PROMPTS.training;
+  const entry = PHASE_PROMPTS.training;
   const tools = [
     buildSearchExercisesTool({ embeddingService, exerciseRepository }),
     buildLogSetTool({ trainingService }),
@@ -83,7 +83,6 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
   return {
     name: 'training',
     prompt: entry as PhasePromptEntry<PromptContextFor<TrainingData>>,
-    layout,
     tools,
     toolPolicy: buildTrainingToolPolicy(tools),
     loadContext: async (input: LoadInput, deps: ConversationGraphDeps): Promise<LoadResult<TrainingData>> => {

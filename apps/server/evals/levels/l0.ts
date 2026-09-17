@@ -118,7 +118,7 @@ interface Target {
 function targets(phaseArg: string): Target[] {
   const phases = Object.entries(PHASE_PROMPTS)
     .filter(([phase]) => phaseArg === 'all' || phase === phaseArg)
-    .map(([, { entry }]) => ({ module: entry.current, requiredSections: entry.requiredSections }));
+    .map(([, entry]) => ({ module: entry.current, requiredSections: entry.requiredSections }));
   const standalone =
     phaseArg === 'all'
       ? STANDALONE_PROMPTS.map(module => ({
