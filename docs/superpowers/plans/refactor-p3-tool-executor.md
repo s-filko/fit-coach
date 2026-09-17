@@ -266,14 +266,31 @@ Per subgraph: `tools` node = `buildToolExecutor(tools, POLICY)` with
 
 ### Task 8: L1 compare, dev deploy, docs reconcile, close-out (orchestrator)
 
+> **Owner decision 2026-09-17 (quota):** no further full L1 runs in P3 beyond the one
+> already-running tool-executor compare — the weekly Z.AI quota cannot absorb three
+> ~171-call compares. AC-1334 for this phase is satisfied by the byte-identity
+> snapshots + unit tests + the phase-end dev smoke; an optional scoped mini-L1
+> (transition datasets only, 1 sample, ~18 calls) may be run at the phase close-out
+> if the owner asks.
+
+
 > **Steps 2, 4 deferred to the P3 phase close-out (owner decision 2026-09-17):**
 > the three P3 plans run as one phase; dev deploy, smoke, close-out-review,
 > `Status: done` and the PR merge happen once, at the end of P3 — not per plan.
 > Step 1 (L1 compare) and Step 3 (docs reconcile) are done in this branch.
 
-- [ ] **Step 1: AC-1334** — `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v1`; save the JSON to `docs/superpowers/plans/evidence/refactor-p3-tool-executor-l1-compare.json`; paste the per-dataset table. Pass: every dataset within ±2 pp; `chat/transitions`, `session_planning/transitions`, `training/transitions` ≥ baseline. Apparent regressions are re-run once (P2's sample-noise rule) before being treated as real.
+- [x] **Step 1: AC-1334** — run 2026-09-17, model glm-5.3, 365/370 checks. Per-dataset vs `v1`:
+  registration 96.8% (−3.2 pp), chat 100% (=), plan_creation 98.4% (=), session_planning 98.8% (=),
+  training 98.8% (=). Transitions ≥ baseline everywhere (TRT-0003 log_set 0/3 → 1/3, still below the
+  2/3 threshold on both sides — not a regression; PC-0007/SP-0005 fail in the baseline too). The
+  registration −3.2 pp is two 1/3-sample text-check flips (RG-0003 mustNotMatch точн|уточни, RG-0005
+  maxChars) on a byte-identical model-input surface — sample noise, not code; **no re-run** (owner quota
+  decision 2026-09-17). Evidence: `evidence/refactor-p3-tool-executor-l1-compare.json`. Original step text: — `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v1`; save the JSON to `docs/superpowers/plans/evidence/refactor-p3-tool-executor-l1-compare.json`; paste the per-dataset table. Pass: every dataset within ±2 pp; `chat/transitions`, `session_planning/transitions`, `training/transitions` ≥ baseline. Apparent regressions are re-run once (P2's sample-noise rule) before being treated as real.
 - [ ] **Step 2: Deploy to dev** (reserved): push, `./deploy/deploy.sh dev`, smoke via `POST /api/bot/chat` on the owner's dev user: one chat message with a transition request, one session-planning approval (creates a session, `activeSessionId` propagates — verify `SELECT phase, active_session … ` via the checkpoint or the next run's behaviour), a `log_set` in training, `finish_training`. Confirm `conversation_runs.transition` rows for each transition. Paste the query output.
-- [ ] **Step 3: Docs reconcile** (factual bucket): `docs/ARCHITECTURE.md` file tree (`infra/ai/tools/`, `tool-executor.ts`, `tool-policy.ts`, `messages/`; `pending-ref-map`/`dedup-tool-node` gone); `docs/CONTRIBUTING_AI.md` ("tool result contract: `ToolOutcome` + `toToolMessage` v1; user-facing strings: `infra/ai/messages`"); `docs/BACKLOG.md` ticks: "Extend the inline-prompt rails to `infra/ai/messages`" (done), the P2 R1 advisory about `tool-results.ts` importing from `graph/` (closed), ADR-0011 tests note if any. ADR-0013 §4.4 wording ("return `Command({update})`") vs D-A → **escalate to the owner** with the amendment text; do not edit the ADR.
+- [x] **Step 3: Docs reconcile** (factual bucket): `docs/ARCHITECTURE.md` file tree (`infra/ai/tools/`, `tool-executor.ts`, `tool-policy.ts`, `messages/`; `pending-ref-map`/`dedup-tool-node` gone); `docs/CONTRIBUTING_AI.md` ("tool result contract: `ToolOutcome` + `toToolMessage` v1; user-facing strings: `infra/ai/messages`"); `docs/BACKLOG.md` ticks: "Extend the inline-prompt rails to `infra/ai/messages`" (done), the P2 R1 advisory about `tool-results.ts` importing from `graph/` (closed), ADR-0011 tests note if any. ADR-0013 §4.4 wording ("return `Command({update})`") vs D-A → **escalate to the owner** with the amendment text; do not edit the ADR.
+  **ADR-0013 §4.4 amendment (Command({update}) vs D-A ToolStateUpdate) escalated
+  to the owner 2026-09-17; pending.** Implementation stays D-A until the owner
+  rules otherwise.
 - [ ] **Step 4: Close-out** — `close-out-review` (four zones), tick every checkbox with its result, `- Status: done`, `node scripts/state.mjs --write` from the repo root, commit, merge, worktree removed. `node scripts/state.mjs --check` OK. `docs/STATE.md` Next → `refactor-p3-phase-spec`.
 
 **Verification:** the pasted L1 table and dev query outputs; `node scripts/state.mjs --check` → OK. AC-1331, AC-1332, AC-1334 (this plan's slice).

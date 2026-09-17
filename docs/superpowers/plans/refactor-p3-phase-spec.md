@@ -141,6 +141,14 @@ Factory: `StateGraph(PhaseSubgraphState)` where `PhaseSubgraphState` = today's c
 
 ### Task 5: L1 compare, dev deploy, docs reconcile, close-out (orchestrator)
 
+> **Owner decision 2026-09-17 (quota):** no further full L1 runs in P3 beyond the one
+> already-running tool-executor compare — the weekly Z.AI quota cannot absorb three
+> ~171-call compares. AC-1334 for this phase is satisfied by the byte-identity
+> snapshots + unit tests + the phase-end dev smoke; an optional scoped mini-L1
+> (transition datasets only, 1 sample, ~18 calls) may be run at the phase close-out
+> if the owner asks.
+
+
 - [ ] **Step 1: AC-1334** — `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v1`; evidence JSON at `docs/superpowers/plans/evidence/refactor-p3-phase-spec-l1-compare.json`; per-dataset table pasted here. Chat/registration now carry the nudge — watch `registration/no-premature-complete` and `chat/no-set-logging` in particular; a regression > 2 pp after one re-run is the rollback trigger (revert the nudge unification only, keep the factory).
 - [ ] **Step 2: Deploy to dev** and smoke all five phases (registration on a fresh user; chat → session_planning → training on the owner's dev user); one run per phase must show `budget_report` and `model` on its row (the P2 query).
 - [ ] **Step 3: Docs reconcile** (factual bucket): `docs/ARCHITECTURE.md` tree (`phase-subgraph.factory.ts`, `phases/`, `nodes/agent.node.ts`, `nodes/finalize.node.ts`; `subgraphs/` and `invoke-with-retry.ts` gone); `docs/CONTRIBUTING_AI.md` ("adding a phase = a `PhaseSpec` + prompt module + tools + a matrix row"); `docs/BACKLOG.md` ticks: "Consolidate the LLM text/mapping helpers" (`textOf` half), the P2 advisories on `postToolNudge` dead weight and the `history_frame` double ternary if touched. ADR-0013 §4.2 `contextBlocks` vs D-A and §4.1 `finalize` wording → **escalate** as amendment text for the owner.
