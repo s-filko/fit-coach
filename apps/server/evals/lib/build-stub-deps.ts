@@ -2,8 +2,13 @@ import { randomUUID } from 'node:crypto';
 
 import { MemorySaver } from '@langchain/langgraph';
 
+import type { LlmGateway } from '@domain/ai/ports/llm.gateway.ports';
 import type { ChatMsg } from '@domain/ai/types';
-import type { ConversationRunRecord } from '@domain/conversation/ports';
+import type {
+  ConversationRunRecord,
+  InsertSummaryInput,
+  AppendRunMessagesInput,
+} from '@domain/conversation/ports';
 
 import type { ConversationGraphDeps } from '@infra/ai/graph/conversation.graph';
 
@@ -12,6 +17,10 @@ import { type EvalFixture, type StateMessage } from '../schema/case.schema';
 export interface StubWorld {
   deps: ConversationGraphDeps;
   recordedRuns: ConversationRunRecord[];
+  /** P4: what the transcript projection received (commit appends here). */
+  transcriptRecords: AppendRunMessagesInput[];
+  /** P4: what the summary port received (compact inserts here — Task 6 on). */
+  summaryRecords: InsertSummaryInput[];
 }
 
 /**
@@ -154,6 +163,8 @@ function stubExercises(
 
 export function buildStubDeps(fixture: EvalFixture, messages?: StateMessage[]): StubWorld {
   const recordedRuns: ConversationRunRecord[] = [];
+  const transcriptRecords: AppendRunMessagesInput[] = [];
+  const summaryRecords: InsertSummaryInput[] = [];
   const userId = '22222222-2222-4222-8222-222222222222';
 
   // Episode seed: the case's state.messages stand in for what production's
@@ -361,10 +372,36 @@ export function buildStubDeps(fixture: EvalFixture, messages?: StateMessage[]): 
         recordedRuns.push(record);
       },
     },
+    // P4 Task 4: the transcript port records; summaries record and report no
+    // legacy summary (the D-E import is compact's business, Task 6); the
+    // gateway's structured() returns a fixed EpisodeSummary (summariser v2's
+    // stand-in until Task 6 wires the real one).
+    transcript: {
+      appendRunMessages: async (input: AppendRunMessagesInput) => {
+        transcriptRecords.push(input);
+      },
+      appendSystemNote: async () => undefined,
+    },
+    summaries: {
+      insert: async (input: InsertSummaryInput) => {
+        summaryRecords.push(input);
+      },
+      latestLegacySummary: async () => null,
+    },
+    llmGateway: {
+      chat: async () => ({ content: '' }),
+      structured: async () => ({
+        topics: ['plan creation discussed'],
+        decisions: [],
+        userState: [],
+        trainingFeedback: [],
+        openItems: [],
+      }),
+    } as unknown as LlmGateway,
     checkpointer: new MemorySaver(),
   } as unknown as ConversationGraphDeps;
 
-  return { deps, recordedRuns };
+  return { deps, recordedRuns, transcriptRecords, summaryRecords };
 }
 
 /** AutoCompletedExercise shape — service.ports.ts:33. */

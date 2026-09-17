@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { BaseCallbackHandler } from '@langchain/core/callbacks/base';
-import { HumanMessage } from '@langchain/core/messages';
+import { type BaseMessage, HumanMessage } from '@langchain/core/messages';
 
 import type {
   ConversationRunPort,
@@ -18,6 +18,7 @@ import type {
 } from '@domain/conversation/ports';
 import type { IUserService } from '@domain/user/ports';
 
+import { lastAiText } from '@infra/ai/graph/episode';
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
 import { createLogger } from '@shared/logger';
@@ -71,11 +72,12 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
             callbacks: [metrics.handler(), ...(extraCallbacks ?? [])],
             recursionLimit: 50,
           },
-        )) as { phase: RunResult['phase'] };
+        )) as { phase: RunResult['phase']; messages: BaseMessage[] };
 
         return {
-          // P3: the reply text rides the collector until P4 stops clearing messages
-          text: metrics.finalText ?? '',
+          // P4: the reply is the last AI message of the persisted channel
+          // (ADR-0013 §3.2 — no responseMessage channel, no collector text).
+          text: lastAiText(result.messages ?? []) ?? '',
           phase: result.phase,
           runId,
         };

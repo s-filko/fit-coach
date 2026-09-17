@@ -27,7 +27,6 @@ import { SEARCH_DEDUP_POLICY, type ToolPolicy } from '../tool-policy';
 /** What the session_planning prompt renders beyond the directive base. */
 export interface SessionPlanningData {
   context: SessionPlanningContextData;
-  lastMessageTime: Date | null;
 }
 
 /** The shared "search dedup" policy (see tool-policy.ts). */
@@ -58,7 +57,6 @@ export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec
         context: await new SessionPlanningContextBuilder(deps.workoutPlanRepo, deps.workoutSessionRepo).buildContext(
           input.userId,
         ),
-        lastMessageTime: null,
       },
     }),
     modelProfile: 'default',

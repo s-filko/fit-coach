@@ -87,6 +87,11 @@ export async function registerInfraServices(container: Container = getGlobalCont
   const { CONVERSATION_RUN_SERVICE_TOKEN, CONVERSATION_RUN_PORT_TOKEN } = await import('@domain/conversation/ports');
   const { DrizzleConversationRunService } = await import('@infra/conversation/drizzle-conversation-run.service');
   container.register(CONVERSATION_RUN_SERVICE_TOKEN, new DrizzleConversationRunService());
+  const { SUMMARY_PORT_TOKEN, TRANSCRIPT_PORT_TOKEN } = await import('@domain/conversation/ports');
+  const { DrizzleTranscriptService } = await import('@infra/conversation/drizzle-transcript.service');
+  const { DrizzleSummaryService } = await import('@infra/conversation/drizzle-summary.service');
+  container.register(TRANSCRIPT_PORT_TOKEN, new DrizzleTranscriptService());
+  container.register(SUMMARY_PORT_TOKEN, new DrizzleSummaryService());
   // The graph token stays internal to infra; the app layer sees the port only.
   const graph = buildConversationGraph({
     trainingService: container.get(TRAINING_SERVICE_TOKEN),
@@ -97,6 +102,9 @@ export async function registerInfraServices(container: Container = getGlobalCont
     userService: container.get(USER_SERVICE_TOKEN),
     contextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN),
     runService: container.get(CONVERSATION_RUN_SERVICE_TOKEN),
+    transcript: container.get(TRANSCRIPT_PORT_TOKEN),
+    summaries: container.get(SUMMARY_PORT_TOKEN),
+    llmGateway: container.get(LLM_GATEWAY_TOKEN),
     checkpointer,
   });
   container.register(

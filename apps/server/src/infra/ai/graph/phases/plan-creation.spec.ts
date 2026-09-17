@@ -20,9 +20,7 @@ import {
 import { SEARCH_DEDUP_POLICY, type ToolPolicy } from '../tool-policy';
 
 /** What the plan_creation prompt renders beyond the directive base: nothing. */
-export interface PlanCreationData {
-  lastMessageTime: Date | null;
-}
+export type PlanCreationData = object;
 
 /** search_exercises dedup runs once per identical args in a batch (was buildDedupToolNode). */
 export const PLAN_CREATION_TOOL_POLICY: ToolPolicy = SEARCH_DEDUP_POLICY;
@@ -44,7 +42,7 @@ export function buildPlanCreationSpec(deps: ConversationGraphDeps): PhaseSpec<Pl
     toolPolicy: PLAN_CREATION_TOOL_POLICY,
     loadContext: async (_input: LoadInput, _deps: ConversationGraphDeps) => ({
       ok: true as const,
-      data: { lastMessageTime: null },
+      data: {},
     }),
     modelProfile: 'default',
   };

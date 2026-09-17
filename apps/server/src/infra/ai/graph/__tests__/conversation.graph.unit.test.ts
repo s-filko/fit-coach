@@ -1,4 +1,4 @@
-import { AIMessage, HumanMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { MemorySaver } from '@langchain/langgraph';
 
 import type { ConversationRunRecord } from '@domain/conversation/ports';
@@ -8,11 +8,13 @@ import type {
   IWorkoutPlanRepository,
   IWorkoutSessionRepository,
 } from '@domain/training/ports';
+import type { LlmGateway } from '@domain/ai/ports/llm.gateway.ports';
 import type { IUserService } from '@domain/user/ports';
 
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
 import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
 
+import { lastAiText } from '../episode';
 import { buildConversationGraph, type ConversationGraphDeps } from '../conversation.graph';
 
 // Mock the model factory so tests don't need a real LLM key
@@ -105,6 +107,25 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
     upsertUser: jest.fn(),
   } as unknown as IUserService,
   contextService: new InMemoryConversationContextService(),
+  transcript: {
+    appendRunMessages: async () => undefined,
+    appendSystemNote: async () => undefined,
+  },
+  summaries: {
+    insert: async () => undefined,
+    latestLegacySummary: async () => null,
+  },
+  llmGateway: {
+    chat: async () => ({ content: '' }),
+    // Cast: LlmGateway.structured is generic; the stub returns one fixed shape.
+    structured: (async () => ({
+      topics: [],
+      decisions: [],
+      userState: [],
+      trainingFeedback: [],
+      openItems: [],
+    })) as unknown as LlmGateway['structured'],
+  },
   runService: {
     recordRun: jest.fn(async (record: ConversationRunRecord) => {
       recorded.push(record);
@@ -139,21 +160,20 @@ describe('ConversationGraph (prepare → route → <phase> → commit)', () => {
     expect(() => buildConversationGraph(makeDeps())).not.toThrow();
   });
 
-  it('routes to the chat phase; the reply lands in ctx.metrics.finalText and messages are cleared', async () => {
+  it('routes to the chat phase; the reply is the last AI message and the channel persists (INV-LLM-002)', async () => {
     const recorded: ConversationRunRecord[] = [];
     const graph = buildConversationGraph(makeDeps(recorded));
     const cfg = ctxConfig('run-chat');
 
     const result = (await graph.invoke({ phase: 'chat', messages: [new HumanMessage('hello')] }, cfg)) as {
       phase: string;
-      messages: unknown[];
+      messages: BaseMessage[];
     };
 
-    const ctx = (cfg as { context: { metrics: RunMetricsCollector } }).context;
-    expect(ctx.metrics.finalText).toBe('Mocked LLM response');
     expect(result.phase).toBe('chat');
-    // commit cleared the channel — history comes from conversation_turns (P4 stops this)
-    expect(result.messages).toHaveLength(0);
+    // commit no longer clears the channel — the reply survives for the next run
+    expect(lastAiText(result.messages)).toBe('Mocked LLM response');
+    expect(result.messages.length).toBeGreaterThan(0);
     // one run row with the non-null observability fields
     expect(recorded).toHaveLength(1);
     expect(recorded[0]?.trigger).toBe('user_message');
@@ -203,10 +223,11 @@ describe('ConversationGraph (prepare → route → <phase> → commit)', () => {
       )) as { phase: string; activeSessionId: string | null };
 
       const ctx = (cfg as { context: { metrics: RunMetricsCollector } }).context;
-      expect(ctx.metrics.finalText).toContain('completed');
+      void ctx;
+      expect(lastAiText((result as unknown as { messages: BaseMessage[] }).messages)).toContain('completed');
       expect(result.phase).toBe('chat');
       expect(result.activeSessionId).toBeNull();
-      expect(ctx.metrics.finalText).not.toBe('Mocked LLM response');
+      expect(lastAiText((result as unknown as { messages: BaseMessage[] }).messages)).not.toBe('Mocked LLM response');
     });
 
     it('training without a session → commit with the catalog reply', async () => {
@@ -217,8 +238,7 @@ describe('ConversationGraph (prepare → route → <phase> → commit)', () => {
         cfg,
       )) as { phase: string };
 
-      const ctx = (cfg as { context: { metrics: RunMetricsCollector } }).context;
-      expect(ctx.metrics.finalText).toContain('could not be resumed');
+      expect(lastAiText((result as unknown as { messages: BaseMessage[] }).messages)).toContain('could not be resumed');
       expect(result.phase).toBe('chat');
     });
 
@@ -238,7 +258,7 @@ describe('ConversationGraph (prepare → route → <phase> → commit)', () => {
       const result = (await graph.invoke(
         { phase: 'training', activeSessionId: 'session-2', messages: [new HumanMessage('hello')] },
         ctxConfig('run-idle'),
-      )) as { phase: string };
+      )) as unknown as { phase: string; messages: BaseMessage[] };
 
       expect(deps.trainingService.completeSession).not.toHaveBeenCalled();
       expect(result.phase).toBe('training');
@@ -294,17 +314,16 @@ describe('ConversationGraph (prepare → route → <phase> → commit)', () => {
     const deps = makeDeps(recorded);
     const graph = buildGraph(deps);
     const cfg = ctxConfig('run-transition');
-    const result = (await graph.invoke({ phase: 'chat', messages: [new HumanMessage('составь план')] }, cfg)) as {
-      phase: string;
-      messages: unknown[];
-    };
+    const result = (await graph.invoke(
+      { phase: 'chat', messages: [new HumanMessage('составь план')] },
+      cfg,
+    )) as unknown as { phase: string; messages: BaseMessage[] };
 
     expect(recorded).toHaveLength(1);
     expect(recorded[0]?.transition?.toPhase).toBe('plan_creation');
     expect(result.phase).toBe('plan_creation');
-    expect(result.messages).toHaveLength(0);
-    const ctx = (cfg as { context: { metrics: RunMetricsCollector } }).context;
-    expect(ctx.metrics.finalText).toBe('Переношу в планирование!');
+    // The channel persists across the transition — compaction owns removal (INV-LLM-002)
+    expect(lastAiText(result.messages)).toBe('Переношу в планирование!');
   });
 
   it('INV-LLM-005: a sixth spec gains the graph node and its commit edge — no builder change', () => {

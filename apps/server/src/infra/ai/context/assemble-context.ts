@@ -15,7 +15,6 @@
  */
 import { AIMessage, type BaseMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 
-import type { ChatMsg } from '@domain/ai/types';
 import type { BudgetReport } from '@domain/conversation/ports';
 
 import type { PhaseLayout } from '@infra/ai/prompts';
@@ -29,8 +28,8 @@ export interface AssembleInput {
   systemPrompt: string;
   /** Ignored when the phase layout has no summary frame. */
   previousSummary?: string | null;
-  /** contextService.getMessagesForPrompt(...) — the loaded transcript turns. */
-  history: ChatMsg[];
+  /** The episode history from the checkpointed `messages` channel (INV-LLM-001). */
+  history: BaseMessage[];
   userMessage: string;
   /** This run's in-flight messages (state.messages ?? []) — AI tool calls and their results. */
   inFlight: BaseMessage[];
@@ -41,9 +40,23 @@ export interface AssembledContext {
   budgetReport: BudgetReport;
 }
 
-/** The role-narrowing lambda from today's training.subgraph agentNode — one home on the assembly side. */
-function toFrameRow(m: ChatMsg): { role: 'user' | 'assistant'; content: string } {
-  return { role: m.role === 'user' ? 'user' : 'assistant', content: m.content };
+/**
+ * history_frame rows (transitional, deleted in Task 5): human turns and
+ * ai-with-text render as rows; tool plumbing is skipped — the frame was always
+ * dialogue-shaped.
+ */
+function toFrameRows(messages: BaseMessage[]): Array<{ role: 'user' | 'assistant'; content: string }> {
+  const rows: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  for (const m of messages) {
+    const type = m._getType();
+    const content = typeof m.content === 'string' ? m.content : '';
+    if (type === 'human') {
+      rows.push({ role: 'user', content });
+    } else if (type === 'ai' && content.length > 0) {
+      rows.push({ role: 'assistant', content });
+    }
+  }
+  return rows;
 }
 
 /** Text a message contributes to the report: string content as is, array content JSON-stringified, plus tool calls. */
@@ -69,12 +82,10 @@ export function assembleContext(input: AssembleInput, layout: PhaseLayout): Asse
   // is today's text); every other phase interleaves the turns as human/ai messages.
   const historyFrameText =
     layout.historyMode === 'history_frame'
-      ? renderBlock(HISTORY_FRAME_V1, { history: input.history.map(toFrameRow) })
+      ? renderBlock(HISTORY_FRAME_V1, { history: toFrameRows(input.history) })
       : null;
   const historyMessages: BaseMessage[] =
-    layout.historyMode === 'interleaved'
-      ? input.history.map(m => (m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content)))
-      : [new SystemMessage(historyFrameText as string)];
+    layout.historyMode === 'interleaved' ? [...input.history] : [new SystemMessage(historyFrameText as string)];
 
   const userMessage = new HumanMessage(input.userMessage);
   const inFlight = [...input.inFlight];

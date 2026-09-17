@@ -20,7 +20,6 @@ import { NO_POLICY, type ToolPolicy } from '../tool-policy';
 export interface ChatData {
   hasActivePlan: boolean;
   recentSessions: WorkoutSessionWithDetails[];
-  lastMessageTime: Date | null;
 }
 
 export const CHAT_TOOL_POLICY: ToolPolicy = NO_POLICY;
@@ -40,14 +39,13 @@ export function buildChatSpec(deps: ConversationGraphDeps): PhaseSpec<ChatData> 
     ],
     toolPolicy: CHAT_TOOL_POLICY,
     loadContext: async (input: LoadInput, deps: ConversationGraphDeps) => {
-      const [activePlan, recentSessions, lastMessageTime] = await Promise.all([
+      const [activePlan, recentSessions] = await Promise.all([
         deps.workoutPlanRepo.findActiveByUserId(input.userId),
         deps.workoutSessionRepo.findRecentByUserIdWithDetails(input.userId, 5),
-        deps.contextService.getLastUserMessageTime(input.userId),
       ]);
       return {
         ok: true as const,
-        data: { hasActivePlan: !!activePlan, recentSessions, lastMessageTime },
+        data: { hasActivePlan: !!activePlan, recentSessions },
       };
     },
     modelProfile: 'default',

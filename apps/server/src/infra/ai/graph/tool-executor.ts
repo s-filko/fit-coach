@@ -115,8 +115,13 @@ export function buildToolExecutor(
         continue;
       }
       // A system error ends the run — no further calls in this batch execute
-      // (earlier ones already ran, same as training today).
+      // (earlier ones already ran, same as training today). D-J: every call is
+      // still ANSWERED — with persistence, an unanswered tool_call would be
+      // replayed to the provider next run and the request rejected.
       if (systemError) {
+        newMessages.push(
+          toToolMessage(llmError('Skipped: an earlier tool in this batch failed with a system error'), call.id ?? ''),
+        );
         continue;
       }
 

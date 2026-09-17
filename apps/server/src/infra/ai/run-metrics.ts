@@ -24,9 +24,6 @@ export interface RunMetrics {
 }
 
 export class RunMetricsCollector {
-  /** P3: the reply text until P4 stops clearing `messages` — `commit` sets it before clearing the channel. */
-  finalText: string | null = null;
-
   private model: string | null = null;
   private tokensIn = 0;
   private tokensOut = 0;

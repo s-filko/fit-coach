@@ -34,7 +34,6 @@ import { type AvailabilityInput, type ToolPolicy, TRAINING_TOOL_PRIORITY } from 
 export interface TrainingData {
   session: WorkoutSessionWithDetails;
   previousSession: WorkoutSessionWithDetails | null;
-  lastMessageTime: Date | null;
 }
 
 /** Mid-workout session shape the availability filter reads (BUG-008 Plan A). */
@@ -101,7 +100,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
             session.sessionKey,
           )
         : null;
-      return { ok: true, data: { session, previousSession, lastMessageTime: null } };
+      return { ok: true, data: { session, previousSession } };
     },
     modelProfile: 'default',
   };

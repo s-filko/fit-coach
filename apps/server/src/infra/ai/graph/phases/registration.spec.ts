@@ -15,9 +15,7 @@ import { buildCompleteRegistrationTool, buildSaveProfileFieldsTool, buildSharedT
 import { NO_POLICY, type ToolPolicy } from '../tool-policy';
 
 /** What the registration prompt renders beyond the directive base: nothing. */
-export interface RegistrationData {
-  lastMessageTime: Date | null;
-}
+export type RegistrationData = object;
 
 export const REGISTRATION_TOOL_POLICY: ToolPolicy = NO_POLICY;
 
@@ -37,7 +35,7 @@ export function buildRegistrationSpec(deps: ConversationGraphDeps): PhaseSpec<Re
     toolPolicy: REGISTRATION_TOOL_POLICY,
     loadContext: async (_input: LoadInput, _deps: ConversationGraphDeps) => ({
       ok: true as const,
-      data: { lastMessageTime: null },
+      data: {},
     }),
     modelProfile: 'default',
   };

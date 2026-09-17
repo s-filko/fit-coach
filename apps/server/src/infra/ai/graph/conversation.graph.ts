@@ -1,6 +1,12 @@
 import { type BaseCheckpointSaver, END, START, StateGraph } from '@langchain/langgraph';
 
-import { IConversationContextService, IConversationRunService } from '@domain/conversation/ports';
+import { LlmGateway } from '@domain/ai/ports';
+import {
+  IConversationContextService,
+  IConversationRunService,
+  SummaryPort,
+  TranscriptPort,
+} from '@domain/conversation/ports';
 import type {
   IEmbeddingService,
   IExerciseRepository,
@@ -10,7 +16,7 @@ import type {
 } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 
-import { buildLegacyPhaseSummaryHandler } from './handlers/legacy-phase-summary.handler';
+import { buildCompactionFlagHandler } from './handlers/compaction-flag.handler';
 import { buildSessionLifecycleHandler } from './handlers/session-lifecycle.handler';
 import { buildCommitNode } from './nodes/commit.node';
 import { buildPrepareNode } from './nodes/prepare.node';
@@ -28,14 +34,18 @@ export interface ConversationGraphDeps {
   exerciseRepository: IExerciseRepository;
   embeddingService: IEmbeddingService;
   userService: IUserService;
+  /** Transitional (P4 Task 4→7): only the agent's summary read still uses it. */
   contextService: IConversationContextService;
   runService: IConversationRunService;
+  transcript: TranscriptPort;
+  summaries: SummaryPort;
+  llmGateway: LlmGateway;
   checkpointer: BaseCheckpointSaver;
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function buildGraph(deps: ConversationGraphDeps) {
-  const { userService, trainingService, contextService, runService, workoutSessionRepo, checkpointer } = deps;
+  const { userService, trainingService, runService, workoutSessionRepo, checkpointer, transcript } = deps;
 
   const specs = buildPhaseSpecs(deps);
 
@@ -45,12 +55,12 @@ function buildGraph(deps: ConversationGraphDeps) {
   const prepareNode = buildPrepareNode({ userService, trainingService });
   const routeNode = buildRouteNode();
   const commitNode = buildCommitNode({
-    contextService,
+    transcript,
     runService,
-    onTransition: [
-      buildSessionLifecycleHandler({ trainingService, workoutSessionRepo }),
-      buildLegacyPhaseSummaryHandler(contextService),
-    ],
+    // D-A: the compaction flag is FIRST — it must be set even if a later
+    // handler fails. The legacy phase-summary handler is gone (P4 Task 4);
+    // its file dies in Task 7.
+    onTransition: [buildCompactionFlagHandler(), buildSessionLifecycleHandler({ trainingService, workoutSessionRepo })],
   });
 
   const graph = new StateGraph(ConversationState, RunContext)

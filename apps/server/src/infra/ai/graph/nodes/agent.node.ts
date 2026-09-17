@@ -8,7 +8,10 @@
 import { AIMessage, type BaseMessage, SystemMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 
+import type { StoredEpisodeSummary } from '@domain/conversation/episode';
+
 import { assembleContext } from '@infra/ai/context/assemble-context';
+import { splitEpisode } from '@infra/ai/graph/episode';
 import type { ConversationGraphDeps, PhaseSpec, PromptContextFor } from '@infra/ai/graph/phase-spec';
 import { ctxOf } from '@infra/ai/graph/state';
 import { langOf, t } from '@infra/ai/messages';
@@ -24,16 +27,10 @@ const log = createLogger('agent-node');
 export interface AgentNodeState {
   messages?: BaseMessage[];
   activeSessionId?: string | null;
-}
-
-/** Splits the run's messages into the user message and the in-flight tail (Task 3 Step 3 split). */
-export function splitUserMessage(messages: BaseMessage[]): { userMessage: string; inFlight: BaseMessage[] } {
-  const [first] = messages;
-  if (first !== undefined && first._getType() === 'human') {
-    const text = typeof first.content === 'string' ? first.content : '';
-    return { userMessage: text, inFlight: messages.slice(1) };
-  }
-  return { userMessage: '', inFlight: [...messages] };
+  /** BR-LLM-001's clock input and the greeting directive's input (D-M — every phase). */
+  lastUserMessageAt?: string | null;
+  /** Read by the episode-summaries block from Task 5 on (declared now, D-H's state contract). */
+  episodeSummaries?: StoredEpisodeSummary[];
 }
 
 function isEmptyAIResponse(response: AIMessage): boolean {
@@ -80,12 +77,17 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
   return async (state: AgentNodeState, config: RunnableConfig): Promise<{ messages: BaseMessage[] }> => {
     const ctx = ctxOf(config as never);
     const { userId, user, now } = ctx;
-    const { userMessage, inFlight } = splitUserMessage(state.messages ?? []);
+    // D-I: this run = the messages from the LAST HumanMessage on; everything
+    // before it is episode history from the checkpointed channel itself.
+    const { history, current } = splitEpisode(state.messages ?? []);
+    const [first] = current;
+    const userMessage =
+      first !== undefined && first._getType() === 'human' && typeof first.content === 'string' ? first.content : '';
+    const inFlight = current.slice(1);
 
-    const [history, previousSummary] = await Promise.all([
-      contextService.getMessagesForPrompt(userId, spec.name),
-      spec.layout.summaryFrame ? contextService.getLatestSummary(userId) : null,
-    ]);
+    // Transitional (Task 4→5): the summary still loads through the legacy
+    // context service; history already comes from state.
+    const previousSummary = spec.layout.summaryFrame ? await contextService.getLatestSummary(userId) : null;
     const lang = langOf(user?.languageCode);
 
     const loaded = await spec.loadContext({ userId, user, activeSessionId: state.activeSessionId ?? null }, deps);
@@ -94,12 +96,14 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
       return { messages: [new AIMessage(t(loaded.reply, lang))] };
     }
 
+    const lastMessageTime = state.lastUserMessageAt ? new Date(state.lastUserMessageAt) : null;
     const systemPrompt = compose(
       spec.prompt.current.render({
         now,
         timezone: user?.timezone ?? null,
         client: 'telegram',
         user,
+        lastMessageTime,
         ...loaded.data,
       } as PromptContextFor<D>),
     );

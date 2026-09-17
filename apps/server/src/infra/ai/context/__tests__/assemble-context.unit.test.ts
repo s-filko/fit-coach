@@ -7,8 +7,6 @@
  */
 import { AIMessage, type BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 
-import type { ChatMsg } from '@domain/ai/types';
-
 import { PHASE_PROMPTS, type PhaseLayout } from '@infra/ai/prompts';
 import { renderBlock, SUMMARY_FRAME_V1 } from '@infra/ai/prompts/blocks';
 
@@ -36,11 +34,9 @@ function chatInput(overrides: Partial<AssembleInput> = {}): AssembleInput {
   };
 }
 
-function historyFixture(): ChatMsg[] {
-  return [
-    { role: 'user', content: 'Привет' },
-    { role: 'assistant', content: 'Здравствуй! Готовы тренироваться?' },
-  ];
+/** P4: history is the checkpointed BaseMessage channel (INV-LLM-001), not ChatMsg rows. */
+function historyFixture(): BaseMessage[] {
+  return [new HumanMessage('Привет'), new AIMessage({ content: 'Здравствуй! Готовы тренироваться?', tool_calls: [] })];
 }
 
 function isType(m: BaseMessage, type: string): boolean {

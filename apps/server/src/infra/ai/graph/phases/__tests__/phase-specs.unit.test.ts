@@ -10,7 +10,6 @@ import { buildPhaseSpecs } from '@infra/ai/graph/phases';
 import { NO_POLICY, type ToolPolicy, TRAINING_TOOL_PRIORITY } from '@infra/ai/graph/tool-policy';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
 
-const STUB_TIME = new Date('2026-09-01T10:00:00Z');
 const SESSION_ROW = {
   id: 'session-1',
   sessionKey: 'Upper A',
@@ -23,7 +22,7 @@ const SESSION_ROW = {
 function stubDeps(overrides: Record<string, unknown> = {}): ConversationGraphDeps {
   return {
     userService: { getUser: async () => ({ id: 'u1' }) },
-    contextService: { getLastUserMessageTime: async () => STUB_TIME },
+    contextService: { getLatestSummary: async () => null, getMessagesForPrompt: async () => [] },
     workoutPlanRepo: { findActiveByUserId: async () => ({ id: 'plan-1', name: 'Plan' }) },
     workoutSessionRepo: {
       findRecentByUserIdWithDetails: async () => [SESSION_ROW],
@@ -103,29 +102,29 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
     ]);
   });
 
-  it('registration loader returns lastMessageTime null (no loader data)', async () => {
+  it('registration loader returns no loader data (lastMessageTime left the Data types — D-M)', async () => {
     const loaded = await specOf('registration').loadContext(
       { userId: 'u1', user: null, activeSessionId: null },
       stubDeps(),
     );
-    expect(loaded).toEqual({ ok: true, data: { lastMessageTime: null } });
+    expect(loaded).toEqual({ ok: true, data: {} });
   });
 
-  it('chat loader returns hasActivePlan, recentSessions, lastMessageTime', async () => {
+  it('chat loader returns hasActivePlan and recentSessions (no lastMessageTime — D-M)', async () => {
     const deps = stubDeps();
     const loaded = await specOf('chat').loadContext({ userId: 'u1', user: null, activeSessionId: null }, deps);
     expect(loaded).toEqual({
       ok: true,
-      data: { hasActivePlan: true, recentSessions: [SESSION_ROW], lastMessageTime: STUB_TIME },
+      data: { hasActivePlan: true, recentSessions: [SESSION_ROW] },
     });
   });
 
-  it('plan_creation loader returns lastMessageTime null (no loader data)', async () => {
+  it('plan_creation loader returns no loader data (D-M)', async () => {
     const loaded = await specOf('plan_creation').loadContext(
       { userId: 'u1', user: null, activeSessionId: null },
       stubDeps(),
     );
-    expect(loaded).toEqual({ ok: true, data: { lastMessageTime: null } });
+    expect(loaded).toEqual({ ok: true, data: {} });
   });
 
   it('session_planning loader returns the context builder output', async () => {
@@ -142,7 +141,6 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
           recentSessions: [SESSION_ROW],
           daysSinceLastWorkout: expect.any(Number),
         },
-        lastMessageTime: null,
       },
     });
   });
@@ -164,7 +162,7 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
     expect(loaded).toEqual({ ok: false, reply: 'training_session_not_found' });
   });
 
-  it('training loader returns the session, its previous completed sibling and lastMessageTime null', async () => {
+  it('training loader returns the session and its previous completed sibling (D-M)', async () => {
     const previous = { id: 'session-0', sessionKey: 'Upper A' };
     const deps = stubDeps({ workoutSessionRepo: { findLastCompletedByUserAndKey: async () => previous } });
     const loaded = await specOf('training').loadContext(
@@ -173,7 +171,7 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
     );
     expect(loaded).toEqual({
       ok: true,
-      data: { session: SESSION_ROW, previousSession: previous, lastMessageTime: null },
+      data: { session: SESSION_ROW, previousSession: previous },
     });
   });
 });

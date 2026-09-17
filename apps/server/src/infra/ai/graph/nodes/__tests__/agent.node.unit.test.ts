@@ -4,7 +4,7 @@
  * with a fake spec so the node is exercised as pure phase-agnostic logic.
  * Message-class checks are duck-typed (_getType) — never instanceof.
  */
-import { AIMessage, type BaseMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { StructuredToolInterface } from '@langchain/core/tools';
 
@@ -143,7 +143,12 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
     const node = buildAgentNode(makeSpec(), makeDeps());
     const state = makeState({
-      messages: [aiWithToolCall(), new ToolMessage({ tool_call_id: 'c1', content: 'ok' })],
+      // P4 shape: this run = human, then the in-flight tool traffic (D-I).
+      messages: [
+        new HumanMessage('ещё подход'),
+        aiWithToolCall(),
+        new ToolMessage({ tool_call_id: 'c1', content: 'ok' }),
+      ],
     });
 
     await node(state, CONFIG);
@@ -162,6 +167,7 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     const node = buildAgentNode(makeSpec(), makeDeps());
     const state = makeState({
       messages: [
+        new HumanMessage('ещё подход'),
         aiWithToolCall(),
         new ToolMessage({ tool_call_id: 'c1', content: 'ok' }),
         new SystemMessage('=== TOOL EXECUTION RESULTS ==='),

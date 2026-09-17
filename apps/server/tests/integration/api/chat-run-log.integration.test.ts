@@ -65,6 +65,18 @@ describe('conversation run log — AC-1301', () => {
       exerciseRepository: {} as never,
       embeddingService: {} as never,
       contextService: new InMemoryConversationContextService(),
+      transcript: {
+        appendRunMessages: async () => undefined,
+        appendSystemNote: async () => undefined,
+      } as never,
+      summaries: {
+        insert: async () => undefined,
+        latestLegacySummary: async () => null,
+      } as never,
+      llmGateway: {
+        chat: async () => ({ content: '' }),
+        structured: async () => ({}),
+      } as never,
       runService: runService as never,
       checkpointer: new MemorySaver(),
     });

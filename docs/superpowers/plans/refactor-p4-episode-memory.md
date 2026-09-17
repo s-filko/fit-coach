@@ -132,9 +132,9 @@
 - Modify: `apps/server/evals/lib/build-stub-deps.ts` — stub `transcript` (records into an array on the `StubWorld`), `summaries` (records; `latestLegacySummary` → `null`), `llmGateway` (`structured` → a fixed `EpisodeSummary`); `evals/snapshots/__tests__/message-assembly.unit.test.ts` — the harness invokes with `messages: [...FIXTURE_HISTORY as Human/AI messages, new HumanMessage('Привет, что сегодня?'), ...inFlight]` instead of seeding through the stub context service. **Snapshots must stay byte-identical in this task** (history rows render the same); if one changes, stop and report.
 - Tests: `src/infra/ai/graph/__tests__/episode.unit.test.ts` (split: no human, one human, two humans with tools between; `lastAiText`; `toTranscriptMessages` for every message type — `it` names carry `INV-LLM-002`); `tool-executor.unit.test.ts` (D-J: `AC-1332: every tool_call id is answered after a system_error`); `commit.node.unit.test.ts` (projection rows per D-K, only `current` projected, `lastUserMessageAt` set, `compactReason` set only on a committed transition, no `RemoveMessage` in the update); `conversation-run.adapter.unit.test.ts` (text from the last AI message); **AC-1341** integration test `src/infra/ai/graph/__tests__/episode-memory.integration.unit.test.ts`: `MemorySaver`, `buildConversationGraph` with the stub deps, a mocked model that on run 1 calls `save_timezone` and on run 2 replies plain text — assert run 2's model input contains run 1's `AIMessage(tool_calls)` **and** its `ToolMessage`, and that the reducer assigned an `id` to every persisted message (compaction relies on ids). `it` name carries `AC-1341`.
 
-- [ ] **Step 1: Tests first.**
-- [ ] **Step 2: Implement.** `npm run check-all && npm run test:unit`; snapshot suite unchanged (43/43).
-- [ ] **Step 3: Commit** — `feat(ai): messages channel persists across runs; commit projects the run into conversation_turns; executor answers every tool call (INV-LLM-001/002, AC-1341)`
+- [x] **Step 1: Tests first.**
+- [x] **Step 2: Implement.** `npm run check-all && npm run test:unit`; snapshot suite unchanged (43/43).
+- [x] **Step 3: Commit** — `feat(ai): messages channel persists across runs; commit projects the run into conversation_turns; executor answers every tool call (INV-LLM-001/002, AC-1341)`
 
 **Verification:** `npx jest --ci src/infra/ai/graph evals/snapshots`; `grep -n "REMOVE_ALL_MESSAGES\|finalText" apps/server/src` → empty.
 
@@ -170,7 +170,7 @@
 - Modify: `phase-spec.ts` (`budget: TokenBudget`), `phases/*.spec.ts` (ADR §3.4 table values, in tokens), `conversation.graph.ts` (wires `buildCompactStep`).
 - Tests: `compact.unit.test.ts` (pure): the three triggers and precedence, no trigger, `lastUserMessageAt === null` never triggers inactivity, turn-safe cut (**first test**: a history ending in `AIMessage(tool_calls)` + `ToolMessage`s can only be cut at a `HumanMessage`; `kept[0]` is human), budget cut removes the minimum number of oldest turns, short-episode rule, transcript rendering. `compact.node.unit.test.ts`: summariser failure path (no summary, messages still removed), max-3 retention (oldest dropped), D-E import exactly once, `RemoveMessage` ids equal the removed messages' ids. **AC-1342** in `episode-memory.integration.unit.test.ts`: two runs with `EPISODE_GAP_HOURS` → 0 (inject via the compact deps, not `process.env`), run 2's model input has exactly one `## Previous episodes` SystemMessage and none of run 1's messages; the stub `summaries.insert` received one row. `it` names carry `AC-1342`, `BR-LLM-001..004`.
 
-- [ ] **Step 1: Tests first.**
+- [x] **Step 1: Tests first.**
 - [ ] **Step 2: Implement; L0 snapshot for summarizer v2.**
 - [ ] **Step 3: Commit** — `feat(ai): synchronous episode compaction with independent structured summaries (BR-LLM-001..004, AC-1342)`
 
