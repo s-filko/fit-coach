@@ -219,6 +219,33 @@ describe('buildToolExecutor (AC-1332)', () => {
     );
   });
 
+  it('AC-1332: a schema-rejection error gets the search_exercises recovery hint appended', async () => {
+    const boom = fakeTool(
+      'save_workout_plan',
+      jest
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            'Received tool input did not match expected schema\n\n✖ Invalid UUID\n  → at sessionTemplates[1].exercises[0].exerciseId',
+          ),
+        ),
+    );
+    const executor = buildToolExecutor(asTools(boom), { llmErrorBudget: Infinity });
+    const update = await executor(stateWithCalls([{ name: 'save_workout_plan', args: {}, id: 'c1' }]), CONFIG);
+    const toolMsg = update.messages.find(m => m._getType() === 'tool') as ToolMessage;
+    expect(String(toolMsg.content)).toContain('did not match expected schema');
+    expect(String(toolMsg.content)).toContain('UUID copied verbatim from the search_exercises results');
+    expect(String(toolMsg.content)).toContain('save_workout_plan again');
+  });
+
+  it('AC-1332: a non-schema tool error passes through without the hint', async () => {
+    const boom = fakeTool('log_set', jest.fn().mockRejectedValue(new Error('db down')));
+    const executor = buildToolExecutor(asTools(boom), { llmErrorBudget: Infinity });
+    const update = await executor(stateWithCalls([{ name: 'log_set', args: {}, id: 'c1' }]), CONFIG);
+    const toolMsg = update.messages.find(m => m._getType() === 'tool') as ToolMessage;
+    expect(String(toolMsg.content)).toBe('LLM_ERROR: db down');
+  });
+
   it('AC-1332: Infinity budget never exhausts', async () => {
     const failing = fakeTool('log_set', jest.fn().mockRejectedValue(new Error('boom')));
     const executor = buildToolExecutor(asTools(failing), NO_BUDGET_POLICY);
