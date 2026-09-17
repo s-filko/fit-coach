@@ -16,13 +16,13 @@ describe('POST /api/bot/user – integration', () => {
     const { USER_SERVICE_TOKEN } = await import('../../../src/domain/user/ports');
     const { CONVERSATION_CONTEXT_SERVICE_TOKEN } = await import('../../../src/domain/conversation/ports');
     const { TRAINING_SERVICE_TOKEN } = await import('../../../src/domain/training/ports');
-    const { CONVERSATION_GRAPH_TOKEN } = await import('../../../src/infra/ai/graph/conversation.graph');
+    const { CONVERSATION_RUN_PORT_TOKEN } = await import('../../../src/domain/conversation/ports');
 
     app.decorate('services', {
       userService: container.get(USER_SERVICE_TOKEN) as any,
       conversationContextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN) as any,
       trainingService: container.get(TRAINING_SERVICE_TOKEN) as any,
-      conversationGraph: container.get(CONVERSATION_GRAPH_TOKEN) as any,
+      conversationRun: container.get(CONVERSATION_RUN_PORT_TOKEN) as any,
     });
 
     await app.ready();
@@ -145,13 +145,13 @@ describe('GET /api/bot/user/{id} – integration', () => {
     const { USER_SERVICE_TOKEN } = await import('../../../src/domain/user/ports');
     const { CONVERSATION_CONTEXT_SERVICE_TOKEN } = await import('../../../src/domain/conversation/ports');
     const { TRAINING_SERVICE_TOKEN } = await import('../../../src/domain/training/ports');
-    const { CONVERSATION_GRAPH_TOKEN } = await import('../../../src/infra/ai/graph/conversation.graph');
+    const { CONVERSATION_RUN_PORT_TOKEN } = await import('../../../src/domain/conversation/ports');
 
     app.decorate('services', {
       userService: container.get(USER_SERVICE_TOKEN) as any,
       conversationContextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN) as any,
       trainingService: container.get(TRAINING_SERVICE_TOKEN) as any,
-      conversationGraph: container.get(CONVERSATION_GRAPH_TOKEN) as any,
+      conversationRun: container.get(CONVERSATION_RUN_PORT_TOKEN) as any,
     });
 
     await app.ready();

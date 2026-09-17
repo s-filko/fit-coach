@@ -3,8 +3,8 @@
  * Usage: npm run evals -- --level L0|L1 [--phase chat|all] [--samples 3]
  *                    [--baseline write|compare] [--baseline-version v0]
  */
-import { runL0, EVAL_PHASES } from './levels/l0';
-import { type CheckResult, buildReport, exitCodeFor, printReport } from './lib/reporter';
+import { EVAL_PHASES, runL0 } from './levels/l0';
+import { buildReport, type CheckResult, exitCodeFor, printReport } from './lib/reporter';
 
 function argValue(flag: string, fallback: string): string {
   const index = process.argv.indexOf(flag);

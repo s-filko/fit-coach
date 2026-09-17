@@ -4,6 +4,7 @@ import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 
 import type { BudgetReport } from '@domain/conversation/ports';
 
+import { buildConversationRunner } from '@infra/ai/graph/conversation-run.adapter';
 import { buildConversationGraph } from '@infra/ai/graph/conversation.graph';
 
 import type { EvalCase } from '../schema/case.schema';
@@ -82,38 +83,31 @@ export async function runCase(testCase: EvalCase): Promise<CaseObservation> {
   const userId = '22222222-2222-4222-8222-222222222222';
   const runId = randomUUID();
   const recorder = new ToolRecorder();
+  const runner = buildConversationRunner({
+    graph,
+    userService: deps.userService,
+    runService: deps.runService,
+    extraCallbacks: [recorder],
+  });
 
   try {
-    const result = await graph.invoke(
-      {
-        userId,
-        userMessage: testCase.input.text,
-        runId,
-        phase: testCase.state?.phase ?? testCase.phase,
-        // The router falls back to chat when phase === 'training' without an
-        // activeSessionId (router.node.ts), so every training case must carry it.
-        activeSessionId: testCase.state?.activeSessionId ?? null,
-      },
-      {
-        configurable: { thread_id: `${testCase.id}-${runId}`, userId, runId },
-        // Same channel production uses: the agentNode reads config.metadata?.['runId']
-        // to attach the context budget report (ADR-0013 §3.4). Without it the report
-        // is never attached in evals.
-        metadata: { runId, userId },
-        callbacks: [recorder],
-        recursionLimit: 50,
-      },
+    // Seed the thread's durable state (D-H): phase and activeSessionId are
+    // checkpointed facts, set the LangGraph way — no test-only port surface.
+    const seeded = testCase.state?.phase ?? testCase.phase;
+    // The prepare node falls back to chat when phase === 'training' without an
+    // activeSessionId, so every training case must carry it.
+    graph.updateState(
+      { configurable: { thread_id: `${testCase.id}-${runId}` } },
+      { phase: seeded, activeSessionId: testCase.state?.activeSessionId ?? null },
     );
 
+    const result = await runner.run({ userId, text: testCase.input.text });
+
     return {
-      text: String(result.responseMessage ?? ''),
+      text: result.text,
       toolCalls: recorder.calls,
-      // `requestedTransition` is consumed by transition_guard before END
-      // (conversation.graph.ts sets `requestedTransition: null` alongside `phase: toPhase`),
-      // so the final graph state can never carry it. The persist node records the
-      // requested transition into the run row before the guard acts — read it there.
-      // Verified against the real model 2026-09-13: run row says toPhase=session_planning
-      // while the final state's requestedTransition is null.
+      // The requested transition lands in the run row via commit; the final
+      // state's pendingTransition is always null after it.
       transition: recordedRuns[0]?.transition?.toPhase ?? null,
       outcome: recordedRuns[0]?.outcome ?? 'ok',
       threw: null,

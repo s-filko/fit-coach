@@ -186,6 +186,22 @@ Cost control: L1 for one phase at 30 cases × n=3 ≈ 90 coach calls (+ tool rou
 
 ---
 
+## 7a. Cost gate for model-backed runs (owner rule, 2026-09-17)
+
+Any `RUN_LLM_EVALS=1` run must be argued before launch, in writing, with:
+
+1. **The question it answers** — the specific risk not already covered by
+   byte-identity snapshots and unit tests.
+2. **The call count** — a full L1 is ~cases × samples (57 × 3 ≈ 171 calls);
+   state the number for the planned invocation.
+3. **Why nothing cheaper answers it** — scoped subset (e.g. transition datasets
+   only, 18 calls), 1 sample instead of 3, or relying on snapshots.
+
+Defaults: plumbing changes proven byte-identical by snapshots get NO L1; full
+L1 runs happen at phase close-out or on explicit owner request; re-runs are
+scoped to the failing dataset only. Context: 2026-09-17, one freeze + one
+compare plus session overhead burned ~10% of the weekly Z.AI quota in hours.
+
 ## 8. Prompt change protocol (mandatory after P7; recommended from P2)
 
 1. State the hypothesis in the PR: which criterion (e.g. `CH-1`) should improve and by how much.

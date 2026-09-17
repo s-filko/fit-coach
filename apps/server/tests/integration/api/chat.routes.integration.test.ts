@@ -1,9 +1,11 @@
 import { buildServer } from '../../../src/app/server';
-import { CONVERSATION_CONTEXT_SERVICE_TOKEN } from '../../../src/domain/conversation/ports';
+import {
+  CONVERSATION_CONTEXT_SERVICE_TOKEN,
+  CONVERSATION_RUN_PORT_TOKEN,
+} from '../../../src/domain/conversation/ports';
 import { USER_SERVICE_TOKEN } from '../../../src/domain/user/ports';
 import { TRAINING_SERVICE_TOKEN } from '../../../src/domain/training/ports';
 import { getGlobalContainer, registerInfraServices } from '../../../src/main/register-infra-services';
-import { CONVERSATION_GRAPH_TOKEN } from '../../../src/infra/ai/graph/conversation.graph';
 
 const createTestChatPayload = (overrides: Partial<{ userId: string; message: string }> = {}) => ({
   userId: overrides.userId ?? `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -12,16 +14,9 @@ const createTestChatPayload = (overrides: Partial<{ userId: string; message: str
 
 const createTestApiKey = () => process.env.BOT_API_KEY!;
 
-const stubGraph = {
-  invoke: jest.fn().mockResolvedValue({
-    userId: 'test-user',
-    phase: 'chat',
-    userMessage: 'hello',
-    responseMessage: 'Stub AI response',
-    user: null,
-    activeSessionId: null,
-    requestedTransition: null,
-  }),
+// The route talks to ConversationRunPort (ADR-0013 §11, AC-1335).
+const stubRun = {
+  run: jest.fn().mockResolvedValue({ text: 'Stub AI response', phase: 'chat', runId: 'stub-run' }),
 };
 
 describe('POST /api/bot/chat – integration', () => {
@@ -37,13 +32,13 @@ describe('POST /api/bot/chat – integration', () => {
       '../../../src/infra/conversation/conversation-context.service'
     );
     container.register(ctxToken, new InMemoryConversationContextService());
-    container.register(CONVERSATION_GRAPH_TOKEN, stubGraph);
+    container.register(CONVERSATION_RUN_PORT_TOKEN, stubRun);
 
     app.decorate('services', {
       userService: container.get(USER_SERVICE_TOKEN) as any,
       conversationContextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN) as any,
       trainingService: container.get(TRAINING_SERVICE_TOKEN) as any,
-      conversationGraph: container.get(CONVERSATION_GRAPH_TOKEN) as any,
+      conversationRun: container.get(CONVERSATION_RUN_PORT_TOKEN) as any,
     });
 
     await app.ready();
@@ -54,7 +49,7 @@ describe('POST /api/bot/chat – integration', () => {
   });
 
   beforeEach(() => {
-    stubGraph.invoke.mockClear();
+    stubRun.run.mockClear();
   });
 
   describe('successful message processing', () => {
@@ -77,7 +72,7 @@ describe('POST /api/bot/chat – integration', () => {
       expect(typeof json.data.content).toBe('string');
     });
 
-    it('should pass userId and userMessage to graph invoke', async () => {
+    it('should pass userId and text to the run port', async () => {
       const payload = { userId: 'user-123', message: 'Hello coach!' };
       const validKey = createTestApiKey();
 
@@ -88,32 +83,11 @@ describe('POST /api/bot/chat – integration', () => {
         payload,
       });
 
-      expect(stubGraph.invoke).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: 'user-123', userMessage: 'Hello coach!', runId: expect.any(String) }),
-        {
-          configurable: {
-            thread_id: 'user-123',
-            userId: 'user-123',
-          },
-          metadata: {
-            runId: expect.any(String),
-            userId: 'user-123',
-          },
-          recursionLimit: 50,
-        },
-      );
+      expect(stubRun.run).toHaveBeenCalledWith({ userId: 'user-123', text: 'Hello coach!' });
     });
 
-    it('should return responseMessage from graph as content', async () => {
-      stubGraph.invoke.mockResolvedValueOnce({
-        userId: 'u1',
-        phase: 'chat',
-        userMessage: 'hi',
-        responseMessage: 'Custom stub response',
-        user: null,
-        activeSessionId: null,
-        requestedTransition: null,
-      });
+    it('should return the run result text as content', async () => {
+      stubRun.run.mockResolvedValueOnce({ text: 'Custom stub response', phase: 'chat', runId: 'r2' });
 
       const res = await app.inject({
         method: 'POST',
@@ -140,8 +114,8 @@ describe('POST /api/bot/chat – integration', () => {
       expect(res.json()).toHaveProperty('error');
     });
 
-    it('should return 500 when graph throws', async () => {
-      stubGraph.invoke.mockRejectedValueOnce(new Error('Graph failure'));
+    it('should return 500 (no details) when the run throws', async () => {
+      stubRun.run.mockRejectedValueOnce(new Error('Graph failure'));
 
       const res = await app.inject({
         method: 'POST',

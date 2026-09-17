@@ -308,11 +308,10 @@ refactor-p2-context-assembler close-out review batch (2026-09-17):
 
 P2 close-out review batch (refactor-p2-prompt-modules, 2026-09-16):
 
-- [ ] **Extend the inline-prompt rails to `infra/ai/messages`**: the ESLint config globs
-  and the grep test now police `src/infra/ai/graph/**` + `src/infra/ai/*.ts` +
-  `src/infra/ai/context/**` (covered by refactor-p2-context-assembler, 2026-09-17);
-  `infra/ai/messages/` (ADR-0013 §11) would still escape both rails once created — cover
-  it when P3 creates the directory. Source: P2 review R1.
+- [x] **Extend the inline-prompt rails to `infra/ai/messages`**: done by
+  refactor-p3-tool-executor Task 3 (2026-09-17) — the ESLint override and the grep
+  test now police `src/infra/ai/messages/**` and `src/infra/ai/tools/**` too
+  (bite-proofed with a temporary `new SystemMessage('x')`). Source: P2 review R1.
 - [ ] **`User` type imported from a service module**: `prompts/types.ts` (and
   registration/chat/training v1) import `User` from `@domain/user/services/user.service`
   rather than a dedicated domain type module — type-only so the dependency still points

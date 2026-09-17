@@ -1,3 +1,4 @@
+import { estimateTokens } from '@infra/ai/context/token-estimator';
 import { PHASE_PROMPTS, STANDALONE_PROMPTS } from '@infra/ai/prompts';
 import { compose } from '@infra/ai/prompts/compose';
 import type { PromptModule } from '@infra/ai/prompts/types';
@@ -5,7 +6,6 @@ import type { PromptModule } from '@infra/ai/prompts/types';
 import { ALL_FIXTURES } from '../fixtures/personas';
 import { contextsForModule } from '../fixtures/prompt-contexts';
 import type { CheckResult } from '../lib/reporter';
-import { estimateTokens } from '@infra/ai/context/token-estimator';
 
 /** §4.1: rendered prompts may not contain these. */
 export const FORBIDDEN_STRINGS = ['undefined', 'null', '[object Object]', 'NaN'];
@@ -123,7 +123,7 @@ function targets(phaseArg: string): Target[] {
     phaseArg === 'all'
       ? STANDALONE_PROMPTS.map(module => ({
           module,
-          requiredSections: module.render(contextsForModule(module.id, ALL_FIXTURES[0]!.fixture)).map(s => s.id),
+          requiredSections: module.render(contextsForModule(module.id, ALL_FIXTURES[0].fixture)).map(s => s.id),
         }))
       : [];
   return [...phases, ...standalone];
@@ -137,7 +137,14 @@ export async function runL0(phaseArg: string): Promise<CheckResult[]> {
       try {
         const sections = module.render(contextsForModule(module.id, fixture));
         results.push(...checkRenderedPrompt(module.id, name, compose(sections)));
-        results.push(...checkSections(module.id, name, sections.map(s => s.id), requiredSections));
+        results.push(
+          ...checkSections(
+            module.id,
+            name,
+            sections.map(s => s.id),
+            requiredSections,
+          ),
+        );
       } catch (err) {
         results.push({
           case: `${module.id}/${name}`,

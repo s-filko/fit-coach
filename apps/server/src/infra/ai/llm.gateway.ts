@@ -22,7 +22,8 @@ function toLangChain(messages: ChatMsg[]): BaseMessage[] {
   });
 }
 
-function textOf(content: unknown): string {
+/** Flattens message content to its text blocks — one home (D-F, BACKLOG consolidation). */
+export function textOf(content: unknown): string {
   if (typeof content === 'string') {
     return content;
   }

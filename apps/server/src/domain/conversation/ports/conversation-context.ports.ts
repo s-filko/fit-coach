@@ -1,6 +1,8 @@
 import { ChatMsg } from '@domain/ai/types';
 
-export type ConversationPhase = 'registration' | 'chat' | 'plan_creation' | 'session_planning' | 'training';
+import type { ConversationPhase } from '../phases';
+
+export type { ConversationPhase };
 
 export interface GetMessagesOptions {
   maxTurns?: number;

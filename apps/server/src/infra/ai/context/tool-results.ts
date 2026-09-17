@@ -1,7 +1,7 @@
 import type { ToolMessage } from '@langchain/core/messages';
 
-import { LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '@infra/ai/graph/tools/training.tools';
 import { renderBlock, TOOL_RESULTS_V1 } from '@infra/ai/prompts/blocks';
+import { LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX } from '@infra/ai/tools/outcome';
 
 /**
  * Renders the tool-results system block so the LLM has a factual, structured
@@ -10,8 +10,8 @@ import { renderBlock, TOOL_RESULTS_V1 } from '@infra/ai/prompts/blocks';
  *
  * Moved verbatim from training.subgraph.ts (refactor-p2-context-assembler
  * Task 4 / D-E): the block is a position in the assembled message array, so
- * it belongs to the context assembler. It keeps importing the error prefixes
- * from the training tools until P3's ToolOutcome removes that import.
+ * it belongs to the context assembler. The error prefixes live in
+ * infra/ai/tools/outcome since refactor-p3-tool-executor Task 3.
  */
 export function renderToolResults(toolMessages: ToolMessage[]): string {
   const results = toolMessages.map(m => {

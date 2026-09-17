@@ -23,7 +23,7 @@ export async function testPlugin(fastify: FastifyInstance): Promise<void> {
   fastify.get('/test-di', async () => ({
     message: 'DI is working',
     hasUserService: !!fastify.services.userService,
-    hasConversationGraph: !!fastify.services.conversationGraph,
+    hasConversationRun: !!fastify.services.conversationRun,
   }));
 
   fastify.post('/test-profile-save', async request => {

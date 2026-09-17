@@ -1,4 +1,4 @@
-import { TOKEN_ESTIMATOR_ID, estimateTokens } from '../token-estimator';
+import { estimateTokens, TOKEN_ESTIMATOR_ID } from '../token-estimator';
 
 describe('estimateTokens (AC-1303 L0 — shared token estimator)', () => {
   it('is chars/4 with a 1.15 safety factor, rounded up', () => {

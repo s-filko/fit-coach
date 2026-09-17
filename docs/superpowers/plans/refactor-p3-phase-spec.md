@@ -1,6 +1,6 @@
 # Refactor P3 — PhaseSpec Factory and Shared Agent Node Implementation Plan
 
-- Status: planned
+- Status: in progress
 - Branch: plan/refactor-p3-phase-spec
 - After: refactor-p3-tool-executor
 
@@ -69,9 +69,9 @@ export function buildPhaseSpecs(deps: ConversationGraphDeps): PhaseSpec[];   // 
 
 Loader contents (moved verbatim from each `agentNode`'s `Promise.all`, minus history/summary/user which the agent node loads for all): registration → `{ lastMessageTime: null }`; chat → `{ hasActivePlan, recentSessions, lastMessageTime }`; plan_creation → `{ lastMessageTime: null }`; session_planning → `{ context: contextBuilder.buildContext(userId), lastMessageTime: null }`; training → `{ session, previousSession, lastMessageTime: null }` with the two guards (`!activeSessionId` → `training_no_active_session`; `!session` → `training_session_not_found`) — both keys added to the catalog with today's English strings verbatim (`'No active training session found. Please start a session first.'`, `'Training session not found. It may have already been completed.'`) plus Russian translations (D-F of the executor plan).
 
-- [ ] **Step 1: Tests first** — for each spec: `name`, `tools.map(t => t.name)` equals today's list (including `save_timezone`), `layout` is `PHASE_PROMPTS[name].layout`, `toolPolicy` equals the executor plan's per-phase policy, `loadContext` with stub deps returns the fields listed above; training's two guard branches.
-- [ ] **Step 2: Implement.** The `ToolPolicy` literals move from the subgraphs into the specs (the subgraphs import them from the spec for one commit; Task 3 deletes the subgraphs).
-- [ ] **Step 3: Commit** — `feat(ai): PhaseSpec type and the five phase specs (ADR-0013 §4.2)`
+- [x] **Step 1: Tests first** — for each spec: `name`, `tools.map(t => t.name)` equals today's list (including `save_timezone`), `layout` is `PHASE_PROMPTS[name].layout`, `toolPolicy` equals the executor plan's per-phase policy, `loadContext` with stub deps returns the fields listed above; training's two guard branches.
+- [x] **Step 2: Implement.** The `ToolPolicy` literals move from the subgraphs into the specs (the subgraphs import them from the spec for one commit; Task 3 deletes the subgraphs).
+- [x] **Step 3: Commit** — `feat(ai): PhaseSpec type and the five phase specs (ADR-0013 §4.2)`
 
 **Verification:** `npx jest --ci src/infra/ai/graph/phases src/infra/ai/prompts`; `npm run type-check`.
 
@@ -97,9 +97,9 @@ Agent node (`buildAgentNode(spec, deps)`), in order:
 
 Finalize node: `{ responseMessage: textOf(lastAIMessage), user: (await userService.getUser(userId).catch(() => null)) ?? state.user }` — today's `extractNode` minus the map consumption (already gone). `refactor-p3-run-context-commit` deletes both fields.
 
-- [ ] **Step 1: Tests first** (mock `getModel`, stub deps; the recording-model pattern from `evals/snapshots/__tests__/message-assembly.unit.test.ts`): loader refusal → catalog reply, no model call; availability filter reaches `bindTools`; nudge inserted before the last tool message when the array ends with a `ToolMessage`, not when it ends with a system block; empty reply → one retry with the nudge → still empty → `empty_reply` text in the user's language; `attachBudgetReport` called with `metadata.runId`; fresh user passed to `render`.
-- [ ] **Step 2: Implement.** `assembleContext` signature change: update its unit tests (`src/infra/ai/context/__tests__`) and remove the `mergeRuns` branch; `budgetReport.messages` is now counted on the unmerged array (JSDoc updated).
-- [ ] **Step 3: Commit** — `feat(ai): shared agent and finalize nodes; nudge and empty-reply fallback for every phase (ADR-0013 §6)`
+- [x] **Step 1: Tests first** (mock `getModel`, stub deps; the recording-model pattern from `evals/snapshots/__tests__/message-assembly.unit.test.ts`): loader refusal → catalog reply, no model call; availability filter reaches `bindTools`; nudge inserted before the last tool message when the array ends with a `ToolMessage`, not when it ends with a system block; empty reply → one retry with the nudge → still empty → `empty_reply` text in the user's language; `attachBudgetReport` called with `metadata.runId`; fresh user passed to `render`.
+- [x] **Step 2: Implement.** `assembleContext` signature change: update its unit tests (`src/infra/ai/context/__tests__`) and remove the `mergeRuns` branch; `budgetReport.messages` is now counted on the unmerged array (JSDoc updated).
+- [x] **Step 3: Commit** — `feat(ai): shared agent and finalize nodes; nudge and empty-reply fallback for every phase (ADR-0013 §6)`
 
 **Verification:** `npx jest --ci src/infra/ai/graph/nodes src/infra/ai/context src/infra/ai/messages`; `grep -n "mergeMessageRuns" apps/server/src` → empty.
 
@@ -115,15 +115,15 @@ Finalize node: `{ responseMessage: textOf(lastAIMessage), user: (await userServi
 
 Factory: `StateGraph(PhaseSubgraphState)` where `PhaseSubgraphState` = today's common subgraph annotation (messages, userId, user, userMessage, responseMessage, requestedTransition, activeSessionId — one annotation for all five; `refactor-p3-run-context-commit` replaces it with the parent state); nodes `agent`, `tools` (executor), `finalize`; edges `START → agent`, `agent → toolsCondition → (tools | finalize)`, `tools → afterTools → (agent | finalize)`, `finalize → END`.
 
-- [ ] **Step 1: Factory test first** — a spec with a fake tool and a mocked model that calls the tool once: the compiled subgraph runs `agent → tools → agent → finalize`, output carries `responseMessage` and the tool's `update`. **INV-LLM-005 test** in `conversation.graph.unit.test.ts`: mock `buildPhaseSpecs` to return the five plus a sixth spec `{ name: 'zzz_test' }` (cast) and assert `graph.getGraph().nodes` has `zzz_test` with an edge to `persist` — no builder change.
-- [ ] **Step 2: Implement; re-point the message-assembly harness; regenerate its snapshot once** (`npx jest evals/snapshots/__tests__/message-assembly.unit.test.ts` without `--ci`, then `--ci`).
-- [ ] **Step 3: Enumerate the snapshot diff** in this plan under **Snapshot diff (Task 3)** — expected, and only:
+- [x] **Step 1: Factory test first** — a spec with a fake tool and a mocked model that calls the tool once: the compiled subgraph runs `agent → tools → agent → finalize`, output carries `responseMessage` and the tool's `update`. **INV-LLM-005 test** in `conversation.graph.unit.test.ts`: mock `buildPhaseSpecs` to return the five plus a sixth spec `{ name: 'zzz_test' }` (cast) and assert `graph.getGraph().nodes` has `zzz_test` with an edge to `persist` — no builder change.
+- [x] **Step 2: Implement; re-point the message-assembly harness; regenerate its snapshot once** (`npx jest evals/snapshots/__tests__/message-assembly.unit.test.ts` without `--ci`, then `--ci`).
+- [x] **Step 3: Enumerate the snapshot diff** in this plan under **Snapshot diff (Task 3)** — expected, and only:
   - `chat / post-tool`, `registration / post-tool`: one new `system` entry (`POST_TOOL_NUDGE_V1` text) inserted immediately before the last `tool` entry.
   - `chat / with-summary`, `plan_creation / with-summary`, `session_planning / with-summary`: the single merged `system` entry becomes two `system` entries (phase prompt; `CONTEXT FROM PREVIOUS CONVERSATION:` frame), contents concatenated equal the old merged content.
   - Every other snapshot (`plain` ×5, `training` ×3, `registration / with-summary`, `plan_creation`/`session_planning` `plain`/`post-tool`): byte-identical. If `git diff` shows anything else — stop; the factory is wrong.
-- [ ] **Step 4 (orchestrator): review the `.snap` diff** against Step 3 before the executor continues.
-- [ ] **Step 5: Delete the subgraph files and `invoke-with-retry.ts`; full unit run; `npm run evals -- --level L0`.**
-- [ ] **Step 6: Commit** — `refactor(ai): buildPhaseSubgraph(spec) replaces the five subgraphs; graph builds from PhaseSpecs (INV-LLM-005)`
+- [x] **Step 4 (orchestrator): review the `.snap` diff** against Step 3 before the executor continues.
+- [x] **Step 5: Delete the subgraph files and `invoke-with-retry.ts`; full unit run; `npm run evals -- --level L0`.**
+- [x] **Step 6: Commit** — `refactor(ai): buildPhaseSubgraph(spec) replaces the five subgraphs; graph builds from PhaseSpecs (INV-LLM-005)`
 
 **Verification:** `ls apps/server/src/infra/ai/graph/subgraphs` → no such directory; `npx jest --ci evals/snapshots` green with the regenerated file; the INV-LLM-005 `it` passes; `npm run check-all && npm run test:unit`.
 
@@ -131,15 +131,23 @@ Factory: `StateGraph(PhaseSubgraphState)` where `PhaseSubgraphState` = today's c
 
 ### Task 4: Docs and rails in code
 
-- [ ] **Step 1:** `PhaseLayout` JSDoc: the P3 flags are gone; the remaining three name P4 as their removal. `phase-spec.ts` JSDoc: `loadContext` is transitional (D-A). `CONTRIBUTING_AI.md` pointer table is Task 5's (orchestrator) — do not edit docs here.
-- [ ] **Step 2:** `no-inline-prompts` grep list still covers `src/infra/ai/graph/**` (the new `nodes/` and `phases/` are under it) — assert by adding a temporary literal in `phases/chat.spec.ts`, paste the lint error, remove it.
-- [ ] **Step 3: Commit** — `docs(ai): JSDoc for the transitional PhaseSpec fields; rails bite proof`
+- [x] **Step 1:** `PhaseLayout` JSDoc: the P3 flags are gone; the remaining three name P4 as their removal. `phase-spec.ts` JSDoc: `loadContext` is transitional (D-A). `CONTRIBUTING_AI.md` pointer table is Task 5's (orchestrator) — do not edit docs here.
+- [x] **Step 2:** `no-inline-prompts` grep list still covers `src/infra/ai/graph/**` (the new `nodes/` and `phases/` are under it) — assert by adding a temporary literal in `phases/chat.spec.ts`, paste the lint error, remove it.
+- [x] **Step 3: Commit** — `docs(ai): JSDoc for the transitional PhaseSpec fields; rails bite proof`
 
 **Verification:** pasted bite; `npm run lint`.
 
 ---
 
 ### Task 5: L1 compare, dev deploy, docs reconcile, close-out (orchestrator)
+
+> **Owner decision 2026-09-17 (quota):** no further full L1 runs in P3 beyond the one
+> already-running tool-executor compare — the weekly Z.AI quota cannot absorb three
+> ~171-call compares. AC-1334 for this phase is satisfied by the byte-identity
+> snapshots + unit tests + the phase-end dev smoke; an optional scoped mini-L1
+> (transition datasets only, 1 sample, ~18 calls) may be run at the phase close-out
+> if the owner asks.
+
 
 - [ ] **Step 1: AC-1334** — `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v1`; evidence JSON at `docs/superpowers/plans/evidence/refactor-p3-phase-spec-l1-compare.json`; per-dataset table pasted here. Chat/registration now carry the nudge — watch `registration/no-premature-complete` and `chat/no-set-logging` in particular; a regression > 2 pp after one re-run is the rollback trigger (revert the nudge unification only, keep the factory).
 - [ ] **Step 2: Deploy to dev** and smoke all five phases (registration on a fresh user; chat → session_planning → training on the owner's dev user); one run per phase must show `budget_report` and `model` on its row (the P2 query).
@@ -152,3 +160,27 @@ Factory: `StateGraph(PhaseSubgraphState)` where `PhaseSubgraphState` = today's c
 
 - `refactor-p3-run-context-commit`: subgraph state = parent state; `finalize` stops returning `responseMessage`/`user`; `userId`, `runId`, `user` from run context; `attachBudgetReport` → the run's metrics collector.
 - P4: `loadContext` → `contextBlocks`, `PhaseSpec.budget`, `lastUserMessageAt` from state, the three remaining layout flags removed.
+
+## Snapshot diff (Task 3)
+
+Observed in `evals/snapshots/__tests__/__snapshots__/message-assembly.unit.test.ts.snap` after the
+single regeneration (Task 3 Step 2, `jest -u` once, then `--ci` green: 16/16 tests, 43/43 snapshots
+across `evals/snapshots`). Exactly five snapshots changed; every other key is byte-identical.
+
+1. `chat / post-tool` and `registration / post-tool` — one new `system` entry inserted immediately
+   before the last `tool` entry, with the `POST_TOOL_NUDGE_V1` text
+   ("IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user.
+   Do NOT call any more tools."). Diff hunks: `@@ -180` (chat) and `@@ -831` (registration).
+2. `chat / with-summary`, `plan_creation / with-summary`, `session_planning / with-summary` — the
+   single merged `system` entry becomes two `system` entries (phase prompt; `CONTEXT FROM PREVIOUS
+   CONVERSATION:` frame). `mergeMessageRuns` joined the two with `"\n"`, so old content equals
+   entry 1 + `"\n"` + entry 2 byte-for-byte. Diff hunks: `@@ -257` (chat), `@@ -635` (plan_creation),
+   `@@ -1391` (session_planning).
+
+Byte-identical (unchanged): `plain` × 5, `training` × 3, `registration / with-summary`,
+`plan_creation / post-tool`, `session_planning / post-tool`. This matches the plan's Global
+Constraints list exactly — no other diffs observed.
+
+Harness note: `evals/snapshots/__tests__/message-assembly.unit.test.ts` now builds
+`buildPhaseSubgraph(spec, deps)` per phase from `buildPhaseSpecs(deps)` (header comment updated to
+record the one regeneration); no fixture changes were needed.

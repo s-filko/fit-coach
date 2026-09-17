@@ -2,35 +2,30 @@
  * The context assembler (ADR-0013 §3.4, D-03 — reporting half, refactor P2):
  * one function builds the message array every phase sends to the model, in
  * exactly today's per-phase order, and reports how many estimated tokens each
- * part costs. The report travels to the persist node via the run-metrics
- * accumulator; the post-tool nudge is inserted later by invokeWithRetry and is
- * not part of the report (see BudgetReport's JSDoc).
+ * part costs. The layout comes from the caller's PhaseSpec (refactor-p3-phase-spec
+ * Task 2) — no registry lookup here; consecutive system messages are sent as
+ * separate SystemMessages (§3.4 blocks 1–3). The report travels to the persist
+ * node via the run-metrics accumulator; the post-tool nudge is inserted later
+ * by the shared agent node and is not part of the report (see BudgetReport's
+ * JSDoc).
  *
  * Pure (same discipline as BR-LLM-007 for prompts): no I/O, no clock reads,
  * no config reads, no logging. It counts and reports — no trimming, no
  * budgets (P4).
  */
-import {
-  AIMessage,
-  type BaseMessage,
-  HumanMessage,
-  mergeMessageRuns,
-  SystemMessage,
-  ToolMessage,
-} from '@langchain/core/messages';
+import { AIMessage, type BaseMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 
 import type { ChatMsg } from '@domain/ai/types';
-import type { BudgetReport, ConversationPhase } from '@domain/conversation/ports';
+import type { BudgetReport } from '@domain/conversation/ports';
 
-import { PHASE_PROMPTS } from '@infra/ai/prompts';
+import type { PhaseLayout } from '@infra/ai/prompts';
 import { HISTORY_FRAME_V1, renderBlock, SUMMARY_FRAME_V1 } from '@infra/ai/prompts/blocks';
 
 import { estimateTokens, TOKEN_ESTIMATOR_ID } from './token-estimator';
 import { renderToolResults } from './tool-results';
 
 export interface AssembleInput {
-  phase: ConversationPhase;
-  /** compose(PHASE.current.render(ctx)) — rendered by the caller (the subgraph owns the data). */
+  /** compose(PHASE.current.render(ctx)) — rendered by the caller (the spec owns the data). */
   systemPrompt: string;
   /** Ignored when the phase layout has no summary frame. */
   previousSummary?: string | null;
@@ -63,9 +58,7 @@ function sumTokens(messages: readonly BaseMessage[]): number {
   return messages.reduce((n, m) => n + estimateTokens(messageText(m)), 0);
 }
 
-export function assembleContext(input: AssembleInput): AssembledContext {
-  const { layout } = PHASE_PROMPTS[input.phase];
-
+export function assembleContext(input: AssembleInput, layout: PhaseLayout): AssembledContext {
   const systemText = input.systemPrompt;
   const summaryText =
     layout.summaryFrame && input.previousSummary
@@ -88,8 +81,9 @@ export function assembleContext(input: AssembleInput): AssembledContext {
   const toolMessages = inFlight.filter((m): m is ToolMessage => m instanceof ToolMessage);
   const toolResultsText = layout.toolResultsFrame && toolMessages.length > 0 ? renderToolResults(toolMessages) : null;
 
-  // Fixed order, identical to today's five agentNodes.
-  const ordered: BaseMessage[] = [
+  // Fixed order, identical to today's five agentNodes; runs are kept — the
+  // model receives separate SystemMessages (ADR-0013 §3.4).
+  const messages: BaseMessage[] = [
     new SystemMessage(systemText),
     ...(summaryText ? [new SystemMessage(summaryText)] : []),
     ...historyMessages,
@@ -97,7 +91,6 @@ export function assembleContext(input: AssembleInput): AssembledContext {
     ...inFlight,
     ...(toolResultsText ? [new SystemMessage(toolResultsText)] : []),
   ];
-  const messages = layout.mergeRuns ? mergeMessageRuns(ordered) : ordered;
 
   const budgetReport: BudgetReport = {
     estimator: TOKEN_ESTIMATOR_ID,
@@ -108,7 +101,7 @@ export function assembleContext(input: AssembleInput): AssembledContext {
     inFlight: sumTokens(inFlight),
     toolResults: toolResultsText ? estimateTokens(toolResultsText) : 0,
     total: 0,
-    // Counted after mergeMessageRuns, before the post-tool nudge.
+    // Counted on the returned (unmerged) array, before the post-tool nudge.
     messages: messages.length,
     historyTurns: input.history.length,
   };

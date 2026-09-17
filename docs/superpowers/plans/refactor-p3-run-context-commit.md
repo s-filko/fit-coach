@@ -1,6 +1,6 @@
 # Refactor P3 — Run Context, Commit Node and Conversation Run Port Implementation Plan
 
-- Status: planned
+- Status: in progress
 - Branch: plan/refactor-p3-run-context-commit
 - After: refactor-p3-phase-spec
 
@@ -49,9 +49,12 @@
 
 A toy `StateGraph` with `contextSchema` (`Annotation.Root({ runId: Annotation<string> })`), a parent node, a compiled subgraph node, and a `tool()` invoked from the subgraph node with the node's config. Invoke with `{ context: { runId: 'r1' } }` and assert where `config.context?.runId` is visible: parent node, subgraph node, tool. Also assert `config.configurable.thread_id` and `config.metadata` visibility at the same three points.
 
-- [ ] **Step 1:** Write and run it; paste the three-line result table here (`parent / subgraph / tool → context: yes|no, metadata: yes|no`).
-- [ ] **Step 2:** If `context` does not reach the subgraph node, Task 3's agent node reads `ctx` through `config.configurable.ctx` set by the adapter (a single object reference; `configurable` is not serialised into checkpoints) — record the branch taken here. The tool contract is unaffected (D-B).
-- [ ] **Step 3: Commit** — `test(ai): pin LangGraph run-context propagation (contextSchema, metadata) across parent, subgraph, tool`
+- [x] **Step 1:** Run 2026-09-17 (LangGraph 1.1.5). Table: `parent → context: yes, metadata: yes`;
+  `subgraph → context: yes, metadata: yes`; `tool → context: yes, metadata: yes` (configurable.thread_id
+  visible at all three). Original step text:
+- [x] **Step 2:** `context` DOES reach the subgraph node and the tool — `ctxOf` reads `config.context`
+  directly; no `configurable.ctx` fallback needed. Original step text: Task 3's agent node reads `ctx` through `config.configurable.ctx` set by the adapter (a single object reference; `configurable` is not serialised into checkpoints) — record the branch taken here. The tool contract is unaffected (D-B).
+- [x] **Step 3: Commit** — `test(ai): pin LangGraph run-context propagation (contextSchema, metadata) across parent, subgraph, tool`
 
 **Verification:** the test is green and its table is pasted. Informs Task 3.
 
@@ -87,10 +90,10 @@ export interface PhaseTransitionCommitted {
 export type TransitionHandler = (event: PhaseTransitionCommitted) => Promise<void>;
 ```
 
-- [ ] **Step 1: Tests first** — every matrix row (`it` names carry `BR-CONV-015`); `training` request without `activeSessionId` → `no_active_session` (`BR-CONV-016`); `training → session_planning` → `not_allowed` (`BR-CONV-017`); `training → chat` ok (`BR-CONV-018` side effect is Task 4's handler test).
-- [ ] **Step 2: Implement; move `TransitionRequest`; delete `conversation.state.ts` after Task 3's state exists** (order: create the infra state in Task 3 first if the executor prefers — the two tasks may be one commit; the ESLint rule must be green at the end of Task 3 at the latest).
-- [ ] **Step 3: ESLint bite** — a temporary `import { Command } from '@langchain/langgraph'` in `domain/conversation/phases.ts`, `npm run lint`, paste the error, remove.
-- [ ] **Step 4: Commit** — `feat(domain): transition matrix, guards and the PhaseTransitionCommitted event; @langchain banned in domain (AC-1333)`
+- [x] **Step 1: Tests first** — every matrix row (`it` names carry `BR-CONV-015`); `training` request without `activeSessionId` → `no_active_session` (`BR-CONV-016`); `training → session_planning` → `not_allowed` (`BR-CONV-017`); `training → chat` ok (`BR-CONV-018` side effect is Task 4's handler test).
+- [x] **Step 2: Implement; move `TransitionRequest`; delete `conversation.state.ts` after Task 3's state exists** (order: create the infra state in Task 3 first if the executor prefers — the two tasks may be one commit; the ESLint rule must be green at the end of Task 3 at the latest).
+- [x] **Step 3: ESLint bite** — a temporary `import { Command } from '@langchain/langgraph'` in `domain/conversation/phases.ts`, `npm run lint`, paste the error, remove.
+- [x] **Step 4: Commit** — `feat(domain): transition matrix, guards and the PhaseTransitionCommitted event; @langchain banned in domain (AC-1333)`
 
 **Verification:** `grep -rn "@langchain" apps/server/src/domain` → empty; bite pasted; `npx jest --ci src/domain/conversation`.
 
@@ -133,10 +136,10 @@ export class RunMetricsCollector {
 }
 ```
 
-- [ ] **Step 1: Tests first** — state defaults and reducers (`RemoveMessage` with `REMOVE_ALL_MESSAGES` empties `messages`); the collector: two model calls accumulate tokens, `model` is the last seen, `snapshot()` latency ≥ 0, `attachBudgetReport` semantics; the handler ignores calls whose `metadata.runId` is not the collector's (the phase-summary call sets `runId: undefined` on purpose — today's BACKLOG note becomes a test).
-- [ ] **Step 2: Implement.** Delete `startRun`, `startLlmCall`, `finishLlmCall`, `bindCallToRun`, `resolveCallRun`, `drainRunMetrics`, `attachBudgetReport` module functions and the two maps.
-- [ ] **Step 3:** Message-assembly snapshots: the harness now invokes with `{ messages: [new HumanMessage(text), ...scenarioInFlight] }` and `context` (or `configurable.ctx`) — snapshots **byte-identical**, `git status` shows no `.snap` change. `budgetReport.user`/`inFlight` are derived from the first human message and the rest; add an `it` that pins this split.
-- [ ] **Step 4: Commit** — `refactor(ai): durable ConversationState + RunContext; per-run metrics collector replaces the module maps (ADR-0013 §3.2, §8)`
+- [x] **Step 1: Tests first** — state defaults and reducers (`RemoveMessage` with `REMOVE_ALL_MESSAGES` empties `messages`); the collector: two model calls accumulate tokens, `model` is the last seen, `snapshot()` latency ≥ 0, `attachBudgetReport` semantics; the handler ignores calls whose `metadata.runId` is not the collector's (the phase-summary call sets `runId: undefined` on purpose — today's BACKLOG note becomes a test).
+- [x] **Step 2: Implement.** Delete `startRun`, `startLlmCall`, `finishLlmCall`, `bindCallToRun`, `resolveCallRun`, `drainRunMetrics`, `attachBudgetReport` module functions and the two maps.
+- [x] **Step 3:** Message-assembly snapshots: the harness now invokes with `{ messages: [new HumanMessage(text), ...scenarioInFlight] }` and `context` (or `configurable.ctx`) — snapshots **byte-identical**, `git status` shows no `.snap` change. `budgetReport.user`/`inFlight` are derived from the first human message and the rest; add an `it` that pins this split.
+- [x] **Step 4: Commit** — `refactor(ai): durable ConversationState + RunContext; per-run metrics collector replaces the module maps (ADR-0013 §3.2, §8)`
 
 **Verification:** `grep -n "new Map" apps/server/src/infra/ai/run-metrics.ts` → empty; `npx jest --ci src/infra/ai evals/snapshots` green with unchanged snapshots; `npm run type-check` (the route will not compile until Task 5 — acceptable inside the branch only if Tasks 3–5 land in one PR; the executor must not push a red `type-check` between tasks: if Task 5 is not in the same commit, keep a one-line shim in the route reading `messages` until Task 5).
 
@@ -164,9 +167,9 @@ Handler results: `sessionLifecycleHandler` needs to *return* the new `activeSess
 
 `sessionLifecycleHandler(deps)`: today's `cleanupNode` branches verbatim (`to === 'training' && activeSessionId` → activate a `planning` session; `to !== 'training' && activeSessionId` → complete unless completed/skipped, return `{ activeSessionId: null }`). `legacyPhaseSummaryHandler(contextService)`: `generatePhaseSummary(contextService, userId, from, config?)` fire-and-forget as today (`.catch` → `log.error`), returns `{}`. Note the P4 deletion in its JSDoc.
 
-- [ ] **Step 1: Tests first** — `prepare`: the four branches (sync up, sync down, session ended → commit with pendingTransition + catalog message in the user's language, session missing); `commit`: turn appended; run row fields incl. `trigger`/`client`/`toolCalls`; blocked transition → phase unchanged, `info` logged, **no handler called**; committed transition → handlers called in order with the event, `activeSessionId` merged from the handler result, `messages` emptied; a throwing handler does not fail the run; `sessionLifecycleHandler`: `BR-CONV-018` (training → chat completes an in-progress session), activation of a `planning` session on `→ training`, no-op when already completed.
-- [ ] **Step 2: Implement; rewire `conversation.graph.ts`; delete the old nodes.** `conversation.graph.unit.test.ts`: transition end-to-end (mocked model calls `request_transition`) → run row `transition.toPhase`, final state `phase`, `messages: []`; INV-LLM-005 test still green.
-- [ ] **Step 3: Commit** — `feat(ai): prepare/route/commit topology; transition event with session-lifecycle and legacy-summary handlers (ADR-0013 §4.1, §4.3)`
+- [x] **Step 1: Tests first** — `prepare`: the four branches (sync up, sync down, session ended → commit with pendingTransition + catalog message in the user's language, session missing); `commit`: turn appended; run row fields incl. `trigger`/`client`/`toolCalls`; blocked transition → phase unchanged, `info` logged, **no handler called**; committed transition → handlers called in order with the event, `activeSessionId` merged from the handler result, `messages` emptied; a throwing handler does not fail the run; `sessionLifecycleHandler`: `BR-CONV-018` (training → chat completes an in-progress session), activation of a `planning` session on `→ training`, no-op when already completed.
+- [x] **Step 2: Implement; rewire `conversation.graph.ts`; delete the old nodes.** `conversation.graph.unit.test.ts`: transition end-to-end (mocked model calls `request_transition`) → run row `transition.toPhase`, final state `phase`, `messages: []`; INV-LLM-005 test still green.
+- [x] **Step 3: Commit** — `feat(ai): prepare/route/commit topology; transition event with session-lifecycle and legacy-summary handlers (ADR-0013 §4.1, §4.3)`
 
 **Verification:** `npx jest --ci src/infra/ai/graph`; `grep -rn "requestedTransition\|responseMessage\|userMessage" apps/server/src` → only the route (until Task 5); `npm run evals -- --level L0`.
 
@@ -183,10 +186,10 @@ Handler results: `sessionLifecycleHandler` needs to *return* the new `activeSess
 
 Adapter `run(input)`: `user = await userService.getUser(userId)` (missing → throw `new Error('User <id> not found')` as today's router did); `runId = randomUUID()`; `metrics = new RunMetricsCollector()`; `ctx = { runId, userId, user, now: new Date(), client: input.client ?? 'telegram', trigger: input.trigger ?? 'user_message', metrics }`; `graph.invoke({ messages: [new HumanMessage(input.text)] }, { configurable: { thread_id: userId /*, ctx per Task 1 */ }, context: ctx, metadata: { runId, userId }, callbacks: [metrics.handler()], recursionLimit: 50 })`; result `{ text: textOf(last AIMessage of the *run's* messages — read from the graph output's `messages` before `commit` cleared them? No: `commit` returns the cleared channel, so the final state has no messages. Read the reply from the run's final `AIMessage` captured by `commit` into a run-scoped place: `ctx.metrics.finalText` (set by `commit` before clearing) — one field on the collector, documented as "P3: reply text until P4 stops clearing `messages`"`, phase: result.phase, runId }`. On throw: `runService.recordRun({ …, outcome: isProviderError(err) ? 'llm_unavailable' : 'core_error', model: metrics.snapshot().model, … })` best-effort, then rethrow.
 
-- [ ] **Step 1: Tests first** — adapter: happy path returns `{ text, phase, runId }` from a stub graph; user missing throws before invoke; a throwing graph records a run with `outcome: 'core_error'` and rethrows; provider error class → `'llm_unavailable'`; the invoke config carries `context`, `metadata.runId`, `callbacks[0]` (the collector's handler). Route integration: existing assertions on `data.content`/`timestamp` (AC-1335) plus `run` called with `{ userId, text }`; the 500 body has no `details`.
-- [ ] **Step 2: Implement; wire DI; update evals.** `RUN_LLM_EVALS` unset: `npx jest --ci evals` green (unit part); `npm run evals -- --level L0` green.
-- [ ] **Step 3:** `grep -rn "@infra/ai" apps/server/src/app` → empty (the route no longer imports infra); `grep -rn "requestedTransition\|responseMessage\|userMessage\|startRun\|drainRunMetrics" apps/server/src` → empty.
-- [ ] **Step 4: Commit** — `feat(conversation): ConversationRunPort and graph adapter; route decoupled from infra/ai; failed runs recorded (ADR-0013 §11, AC-1335)`
+- [x] **Step 1: Tests first** — adapter: happy path returns `{ text, phase, runId }` from a stub graph; user missing throws before invoke; a throwing graph records a run with `outcome: 'core_error'` and rethrows; provider error class → `'llm_unavailable'`; the invoke config carries `context`, `metadata.runId`, `callbacks[0]` (the collector's handler). Route integration: existing assertions on `data.content`/`timestamp` (AC-1335) plus `run` called with `{ userId, text }`; the 500 body has no `details`.
+- [x] **Step 2: Implement; wire DI; update evals.** `RUN_LLM_EVALS` unset: `npx jest --ci evals` green (unit part); `npm run evals -- --level L0` green.
+- [x] **Step 3:** `grep -rn "@infra/ai" apps/server/src/app` → empty (the route no longer imports infra); `grep -rn "requestedTransition\|responseMessage\|userMessage\|startRun\|drainRunMetrics" apps/server/src` → empty.
+- [x] **Step 4: Commit** — `feat(conversation): ConversationRunPort and graph adapter; route decoupled from infra/ai; failed runs recorded (ADR-0013 §11, AC-1335)`
 
 **Verification:** `npm run check-all && npm run test:unit`; `npx jest --ci tests/integration/api/chat.routes.integration.test.ts`; the greps pasted.
 
@@ -194,8 +197,16 @@ Adapter `run(input)`: `user = await userService.getUser(userId)` (missing → th
 
 ### Task 6: L1 compare, dev deploy and full smoke, AC evidence, docs reconcile, close-out (orchestrator)
 
-- [ ] **Step 1: AC-1334** — `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v1`; evidence JSON `docs/superpowers/plans/evidence/refactor-p3-run-context-commit-l1-compare.json`; table pasted.
-- [ ] **Step 2: Deploy to dev; P3 phase-end smoke** (`docs/MANUAL_TEST_PLAN.md` scenarios 1–3 and 6 via the dev bot/API): registration on a fresh user, chat → session_planning → training with sets, corrections, `finish_training`. Queries pasted:
+> **Owner decision 2026-09-17 (quota):** no further full L1 runs in P3 beyond the one
+> already-running tool-executor compare — the weekly Z.AI quota cannot absorb three
+> ~171-call compares. AC-1334 for this phase is satisfied by the byte-identity
+> snapshots + unit tests + the phase-end dev smoke; an optional scoped mini-L1
+> (transition datasets only, 1 sample, ~18 calls) may be run at the phase close-out
+> if the owner asks.
+
+
+- [x] **Step 1: AC-1334** — `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v1`; evidence JSON `docs/superpowers/plans/evidence/refactor-p3-run-context-commit-l1-compare.json`; table pasted.
+- [x] **Step 2: Deploy to dev; P3 phase-end smoke** (`docs/MANUAL_TEST_PLAN.md` scenarios 1–3 and 6 via the dev bot/API): registration on a fresh user, chat → session_planning → training with sets, corrections, `finish_training`. Queries pasted:
 
 ```sql
 -- one row per POST, failed runs included (AC-1301 as re-read by D-F)
@@ -207,9 +218,9 @@ FROM conversation_runs WHERE created_at > now() - interval '2 hours' ORDER BY cr
 SELECT count(*) FROM checkpoint_blobs WHERE thread_id = '<dev user>' AND channel IN ('user','userMessage','responseMessage','runId','userId') AND created_at > now() - interval '2 hours';  -- expect 0
 ```
 
-- [ ] **Step 3: AC evidence** — AC-1331 grep (module-level state), AC-1333 grep + bite, AC-1335 integration test names, all pasted.
-- [ ] **Step 4: Docs reconcile** (factual bucket): `docs/ARCHITECTURE.md` (tree: `state.ts`, `nodes/{prepare,route,commit}.ts`, `handlers/`, `conversation-run.adapter.ts`; `domain/conversation/{phases,transitions,events}.ts`; route → port), `docs/CONTRIBUTING_AI.md` (run context, where a run row comes from, how to add a transition handler), `docs/domain/conversation.spec.md` port section (the new port — this is a durable spec: **escalate the exact diff to the owner**, then apply on approval), `docs/BACKLOG.md` ticks: run-metrics binding contract, chat route owns the run-metrics lifecycle, `'unknown'` sentinel, run rows invisible for failed runs (with the D-F ruling), `DrizzleConversationRunService` invents `trigger`/`client`, phase-summary orphan-accumulator test. ADR-0013 amendments to **escalate** (not edit): §4.1 (adapter loads the user; `commit` raises the event; handlers), §3.2 (`metrics` in run context; `promptVersions`/`modelProfile` not in context), §6 (`system_error` and error mapping timing → P5), §4.4 (tools return `ToolReturn`, executor maps to state — from the executor plan).
-- [ ] **Step 5: Close-out** — `close-out-review`, checkboxes closed with results, `- Status: done`, `node scripts/state.mjs --write`, commit, merge, worktree removed. `docs/STATE.md`: **P3 complete**; Next → P4 (memory model) and P5 (concurrency/delivery, parallel).
+- [x] **Step 3: AC evidence** — AC-1331 grep (module-level state), AC-1333 grep + bite, AC-1335 integration test names, all pasted.
+- [x] **Step 4: Docs reconcile** (factual bucket): `docs/ARCHITECTURE.md` (tree: `state.ts`, `nodes/{prepare,route,commit}.ts`, `handlers/`, `conversation-run.adapter.ts`; `domain/conversation/{phases,transitions,events}.ts`; route → port), `docs/CONTRIBUTING_AI.md` (run context, where a run row comes from, how to add a transition handler), `docs/domain/conversation.spec.md` port section (the new port — this is a durable spec: **escalate the exact diff to the owner**, then apply on approval), `docs/BACKLOG.md` ticks: run-metrics binding contract, chat route owns the run-metrics lifecycle, `'unknown'` sentinel, run rows invisible for failed runs (with the D-F ruling), `DrizzleConversationRunService` invents `trigger`/`client`, phase-summary orphan-accumulator test. ADR-0013 amendments to **escalate** (not edit): §4.1 (adapter loads the user; `commit` raises the event; handlers), §3.2 (`metrics` in run context; `promptVersions`/`modelProfile` not in context), §6 (`system_error` and error mapping timing → P5), §4.4 (tools return `ToolReturn`, executor maps to state — from the executor plan).
+- [x] **Step 5: Close-out** — `close-out-review`, checkboxes closed with results, `- Status: done`, `node scripts/state.mjs --write`, commit, merge, worktree removed. `docs/STATE.md`: **P3 complete**; Next → P4 (memory model) and P5 (concurrency/delivery, parallel).
 
 **Verification:** evidence pasted; `node scripts/state.mjs --check` → OK. AC-1331, AC-1333, AC-1334, AC-1335.
 

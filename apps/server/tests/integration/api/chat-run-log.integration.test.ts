@@ -1,7 +1,9 @@
 import { MemorySaver } from '@langchain/langgraph';
 
+import { HumanMessage } from '@langchain/core/messages';
+
 import { InMemoryConversationContextService } from '../../../src/infra/conversation/conversation-context.service';
-import { finishLlmCall, startLlmCall, startRun } from '../../../src/infra/ai/run-metrics';
+import { RunMetricsCollector } from '../../../src/infra/ai/run-metrics';
 import { buildConversationGraph } from '../../../src/infra/ai/graph/conversation.graph';
 import type { ConversationRunRecord } from '../../../src/domain/conversation/ports';
 
@@ -72,17 +74,28 @@ describe('conversation run log — AC-1301', () => {
 
     // The route normally does this (startRun) and the LLM callback handler fills
     // the accumulator (startLlmCall/finishLlmCall). The mocked model bypasses the
-    // real handler, so feed the accumulator directly — this keeps the assertion
-    // below from passing on the persist node's `?? 'unknown'` fallback, which is
+    // The adapter normally builds the collector; the mocked model bypasses the
+    // real callback handler, so feed the collector directly — this keeps the
+    // assertion below from passing on the `?? 'unknown'` fallback, which is
     // exactly how the zero-token defect on dev went unnoticed.
-    startRun(runId);
-    startLlmCall(runId, 'z-ai/glm-5.3');
-    finishLlmCall(runId, 120, 40);
+    const metrics = new RunMetricsCollector(runId);
+    metrics.onStart('lc-1', 'z-ai/glm-5.3');
+    metrics.onEnd('lc-1', 120, 40);
 
-    await graph.invoke(
-      { userId, userMessage: 'привет', runId },
-      { configurable: { thread_id: userId, userId }, metadata: { runId, userId }, recursionLimit: 50 },
-    );
+    await graph.invoke({ messages: [new HumanMessage('привет')] }, {
+      configurable: { thread_id: userId },
+      metadata: { runId, userId },
+      context: {
+        runId,
+        userId,
+        user: await userService.getUser(),
+        now: new Date(),
+        client: 'telegram',
+        trigger: 'user_message',
+        metrics,
+      },
+      recursionLimit: 50,
+    } as never);
 
     expect(recorded).toHaveLength(1);
     const [row] = recorded;

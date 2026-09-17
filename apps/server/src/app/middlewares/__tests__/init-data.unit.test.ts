@@ -1,7 +1,6 @@
 import { createHmac } from 'node:crypto';
 
 import { buildSignedInitData } from '../../../../tests/helpers/init-data';
-
 import { isAuthDateExpired, parseUser, validateInitData, verifyHmac } from '../init-data';
 
 const TEST_BOT_TOKEN = '123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11';

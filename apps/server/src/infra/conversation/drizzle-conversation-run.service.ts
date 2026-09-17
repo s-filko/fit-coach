@@ -10,9 +10,11 @@ export class DrizzleConversationRunService implements IConversationRunService {
       userId: record.userId,
       phaseIn: record.phaseIn,
       phaseOut: record.phaseOut,
-      trigger: 'user_message',
-      client: 'telegram',
-      model: record.model,
+      trigger: record.trigger,
+      client: record.client,
+      // Column is NOT NULL (schema.ts) — the null model of a failed run keeps the
+      // "unknown" sentinel until a migration widens it (noted in the plan, D-F).
+      model: record.model ?? 'unknown',
       promptVersions: record.promptVersions,
       tokensIn: record.tokensIn,
       tokensOut: record.tokensOut,
