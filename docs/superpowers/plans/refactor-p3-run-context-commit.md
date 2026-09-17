@@ -1,6 +1,6 @@
 # Refactor P3 — Run Context, Commit Node and Conversation Run Port Implementation Plan
 
-- Status: planned
+- Status: in progress
 - Branch: plan/refactor-p3-run-context-commit
 - After: refactor-p3-phase-spec
 
@@ -49,9 +49,12 @@
 
 A toy `StateGraph` with `contextSchema` (`Annotation.Root({ runId: Annotation<string> })`), a parent node, a compiled subgraph node, and a `tool()` invoked from the subgraph node with the node's config. Invoke with `{ context: { runId: 'r1' } }` and assert where `config.context?.runId` is visible: parent node, subgraph node, tool. Also assert `config.configurable.thread_id` and `config.metadata` visibility at the same three points.
 
-- [ ] **Step 1:** Write and run it; paste the three-line result table here (`parent / subgraph / tool → context: yes|no, metadata: yes|no`).
-- [ ] **Step 2:** If `context` does not reach the subgraph node, Task 3's agent node reads `ctx` through `config.configurable.ctx` set by the adapter (a single object reference; `configurable` is not serialised into checkpoints) — record the branch taken here. The tool contract is unaffected (D-B).
-- [ ] **Step 3: Commit** — `test(ai): pin LangGraph run-context propagation (contextSchema, metadata) across parent, subgraph, tool`
+- [x] **Step 1:** Run 2026-09-17 (LangGraph 1.1.5). Table: `parent → context: yes, metadata: yes`;
+  `subgraph → context: yes, metadata: yes`; `tool → context: yes, metadata: yes` (configurable.thread_id
+  visible at all three). Original step text:
+- [x] **Step 2:** `context` DOES reach the subgraph node and the tool — `ctxOf` reads `config.context`
+  directly; no `configurable.ctx` fallback needed. Original step text: Task 3's agent node reads `ctx` through `config.configurable.ctx` set by the adapter (a single object reference; `configurable` is not serialised into checkpoints) — record the branch taken here. The tool contract is unaffected (D-B).
+- [x] **Step 3: Commit** — `test(ai): pin LangGraph run-context propagation (contextSchema, metadata) across parent, subgraph, tool`
 
 **Verification:** the test is green and its table is pasted. Informs Task 3.
 
