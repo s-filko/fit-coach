@@ -162,8 +162,9 @@ npm run test:integration` (apps/server) crashes in jest global teardown
 - [x] `ConversationRunRecord.model` was non-null while its only producer legitimately
       yields null. Resolved at the port level by refactor-p3-run-context-commit (2026-09-17,
       D-F): the type is `string | null` and failed runs record null. Remainder: the DB column
-      is NOT NULL, so the drizzle service still maps null → `'unknown'` — a nullable-column
-      migration is still wanted (small; fold into the next schema-touching branch).
+      was NOT NULL, so the drizzle service mapped null → `'unknown'` — closed 2026-09-18
+      (fix/p3-tails): migration `0003` makes the column nullable, the service passes
+      `record.model` through, applied on dev.
       Source: close-out-review, R1 (2026-09-12).
 - [x] Run rows were invisible for failed runs. Resolved by refactor-p3-run-context-commit
       (2026-09-17, D-F owner-approved direction): the adapter records `outcome:
@@ -373,24 +374,24 @@ P2 close-out review batch (refactor-p2-prompt-modules, 2026-09-16):
       `ConversationGraphDeps`, and `loadContext(input, deps)` re-passes the full deps bag
       although specs are built with their deps at the composition root. Move the deps type to
       its own module, drop the second parameter. Source: close-out-review, R1 (2026-09-18).
-- [ ] `buildRouteNode(phaseNames)` discards its parameter (`void phaseNames`) and the
-      graph lists `'commit'` in route's `ends` though only `prepare` can short-circuit there.
-      Drop both. Source: close-out-review, R1+R2 (2026-09-18).
+- [x] `buildRouteNode(phaseNames)` discarded its parameter and the graph listed `'commit'`
+      in route's `ends` though only `prepare` can short-circuit there. Dropped both
+      (fix/p3-tails, 2026-09-18). Source: close-out-review, R1+R2 (2026-09-18).
 - [ ] The PhaseSpec render-data type is erased at the factory boundary
       (`buildPhaseSpecs` returns `PhaseSpec[]`, the agent node casts `loaded.data as
 PromptContextFor<D>`). Carry the data type through or document the one cast as the
       boundary. Source: close-out-review, R1 (2026-09-18).
-- [ ] `userId` extraction from `config.configurable` is copy-pasted across 11 tool files
-      in two divergent variants; a `userIdOf(config)` beside `sessionIdOf` in
-      `format-exercise-summary.ts` gives it one home. Predates P3 (verbatim move). P4 touches
-      these files anyway. Source: close-out-review, R2 (2026-09-18).
-- [ ] `commit.node.ts` local `messageText()` reinvents `textOf` (string content passes
-      through unchanged) — call `textOf(m.content)` directly. Source: close-out-review, R2 (2026-09-18).
-- [ ] `PLAN_CREATION_TOOL_POLICY` and `SESSION_PLANNING_TOOL_POLICY` are byte-identical
-      literals — centralise a "search dedup" policy constant next to `NO_POLICY`. Source:
-      close-out-review, R2 (2026-09-18).
-- [ ] `llm-log-handler.ts` keeps dead `runId` locals and an `eslint-disable` from the
-      pre-P3 metrics bridge. Source: close-out-review, R2 (2026-09-18).
+- [x] `userId` extraction was copy-pasted across 11 tool files in two divergent variants;
+      `userIdOf(config)` beside `sessionIdOf` in `format-exercise-summary.ts` is the one
+      home now (fix/p3-tails, 2026-09-18). Source: close-out-review, R2 (2026-09-18).
+- [x] `commit.node.ts` local `messageText()` reinvented `textOf`; replaced with direct
+      `textOf(m.content)` calls (fix/p3-tails, 2026-09-18). Source: close-out-review, R2 (2026-09-18).
+- [x] `PLAN_CREATION_TOOL_POLICY`/`SESSION_PLANNING_TOOL_POLICY` were byte-identical
+      literals; centralised as `SEARCH_DEDUP_POLICY` in tool-policy.ts (fix/p3-tails,
+      2026-09-18). Source: close-out-review, R2 (2026-09-18).
+- [x] `llm-log-handler.ts` kept dead `runId` locals from the pre-P3 metrics bridge;
+      removed (the `_llmRunId` positional arg keeps a scoped disable — the repo config has
+      no underscore-ignore pattern) (fix/p3-tails, 2026-09-18). Source: close-out-review, R2 (2026-09-18).
 - [ ] After a `system_error` the executor skips the remaining batch calls without
       answering their `tool_call_id`s — harmless while commit clears messages each run, but
       checkpointed once P4 stops clearing. Source: close-out-review, R3 (2026-09-18).
@@ -400,10 +401,9 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       docs when P4 touches them. Source: close-out-review, R3 (2026-09-18).
 - [ ] New agent/catalog/graph test names cite plan decisions (D-B/D-C/D-D) instead of
       BR-_/AC-_ ids. Source: close-out-review, R3 (2026-09-18).
-- [ ] Stale mechanism pointers remain in open backlog entries and in
-      `docs/MANUAL_TEST_PLAN.md:633` / `docs/BUGS.md` Component fields (subgraphs,
-      training.tools.ts, persist.node — all deleted by P3). Factual cleanup.
-      Source: close-out-review, R4 (2026-09-18).
+- [x] Stale mechanism pointers in `docs/MANUAL_TEST_PLAN.md` / `docs/BUGS.md`: the test
+      plan now names the current files; BUGS.md carries an "as-of" path note at the top
+      (fix/p3-tails, 2026-09-18). Source: close-out-review, R4 (2026-09-18).
 - [ ] `TOOL_OUTCOME_FORMAT_ID` has zero consumers and no snapshot test enforces the
       "output change = bump" rule in CONTRIBUTING_AI.md. Source: close-out-review, R4 (2026-09-18).
 - [ ] ADR-0007/0012 reference sections point at now-deleted files as current homes; adopt
