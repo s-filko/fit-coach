@@ -256,9 +256,9 @@ Per subgraph: `tools` node = `buildToolExecutor(tools, POLICY)` with
 - Tests move alongside (`tools/__tests__/<tool>.unit.test.ts`), bodies unchanged.
 - Delete: `apps/server/src/infra/ai/graph/tools/`.
 
-- [ ] **Step 1:** Mechanical move; subgraphs import from `@infra/ai/tools`.
-- [ ] **Step 2:** `npx jest --ci evals/snapshots` — tool-surface snapshots **unchanged** (this is the point of the snapshot: a description drifting during the split fails here).
-- [ ] **Step 3: Commit** — `refactor(ai): one file per tool under infra/ai/tools (ADR-0013 §11)`
+- [x] **Step 1:** Mechanical move; subgraphs import from `@infra/ai/tools`.
+- [x] **Step 2:** `npx jest --ci evals/snapshots` — tool-surface snapshots **unchanged** (this is the point of the snapshot: a description drifting during the split fails here).
+- [x] **Step 3: Commit** — `refactor(ai): one file per tool under infra/ai/tools (ADR-0013 §11)`
 
 **Verification:** `ls apps/server/src/infra/ai/graph/tools` → no such directory; `npm run check-all && npm run test:unit`; snapshots unchanged.
 
