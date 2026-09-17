@@ -96,8 +96,10 @@ export async function runCase(testCase: EvalCase): Promise<CaseObservation> {
     const seeded = testCase.state?.phase ?? testCase.phase;
     // The prepare node falls back to chat when phase === 'training' without an
     // activeSessionId, so every training case must carry it.
+    // Same thread the adapter invokes (D-H: the adapter uses `thread_id: userId`) —
+    // seeding any other thread id silently runs every case from 'registration'.
     graph.updateState(
-      { configurable: { thread_id: `${testCase.id}-${runId}` } },
+      { configurable: { thread_id: userId } },
       { phase: seeded, activeSessionId: testCase.state?.activeSessionId ?? null },
     );
 

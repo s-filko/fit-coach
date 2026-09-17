@@ -40,9 +40,6 @@ export type LoadResult<D> = { ok: true; data: D } | { ok: false; reply: MessageK
 /** The render context a phase prompt receives: the directive base plus the loader's data. */
 export type PromptContextFor<D> = DirectiveContext & D;
 
-/** What `toolPolicy.availability` receives: the phase's loaded render data (training reads the session). */
-export type AvailabilityInput<D = unknown> = { data: D };
-
 export interface PhaseSpec<D = unknown> {
   name: ConversationPhase;
   /** PHASE_PROMPTS[name].entry */
