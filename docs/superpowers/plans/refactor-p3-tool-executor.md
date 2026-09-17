@@ -266,6 +266,11 @@ Per subgraph: `tools` node = `buildToolExecutor(tools, POLICY)` with
 
 ### Task 8: L1 compare, dev deploy, docs reconcile, close-out (orchestrator)
 
+> **Steps 2, 4 deferred to the P3 phase close-out (owner decision 2026-09-17):**
+> the three P3 plans run as one phase; dev deploy, smoke, close-out-review,
+> `Status: done` and the PR merge happen once, at the end of P3 — not per plan.
+> Step 1 (L1 compare) and Step 3 (docs reconcile) are done in this branch.
+
 - [ ] **Step 1: AC-1334** — `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v1`; save the JSON to `docs/superpowers/plans/evidence/refactor-p3-tool-executor-l1-compare.json`; paste the per-dataset table. Pass: every dataset within ±2 pp; `chat/transitions`, `session_planning/transitions`, `training/transitions` ≥ baseline. Apparent regressions are re-run once (P2's sample-noise rule) before being treated as real.
 - [ ] **Step 2: Deploy to dev** (reserved): push, `./deploy/deploy.sh dev`, smoke via `POST /api/bot/chat` on the owner's dev user: one chat message with a transition request, one session-planning approval (creates a session, `activeSessionId` propagates — verify `SELECT phase, active_session … ` via the checkpoint or the next run's behaviour), a `log_set` in training, `finish_training`. Confirm `conversation_runs.transition` rows for each transition. Paste the query output.
 - [ ] **Step 3: Docs reconcile** (factual bucket): `docs/ARCHITECTURE.md` file tree (`infra/ai/tools/`, `tool-executor.ts`, `tool-policy.ts`, `messages/`; `pending-ref-map`/`dedup-tool-node` gone); `docs/CONTRIBUTING_AI.md` ("tool result contract: `ToolOutcome` + `toToolMessage` v1; user-facing strings: `infra/ai/messages`"); `docs/BACKLOG.md` ticks: "Extend the inline-prompt rails to `infra/ai/messages`" (done), the P2 R1 advisory about `tool-results.ts` importing from `graph/` (closed), ADR-0011 tests note if any. ADR-0013 §4.4 wording ("return `Command({update})`") vs D-A → **escalate to the owner** with the amendment text; do not edit the ADR.
