@@ -1,13 +1,5 @@
-import { randomUUID } from 'node:crypto';
-
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-
-// run-metrics.ts is a documented-temporary infra module (see its file header:
-// "Temporary home: P3 moves this into the commit node's run context"); tracked separately
-// in docs/BACKLOG.md Findings ("The run-metrics binding contract...")
-// eslint-disable-next-line boundaries/element-types -- documented-temporary module, see context above
-import { startRun } from '@infra/ai/run-metrics';
 
 const chatMessageBody = z
   .object({
@@ -85,33 +77,19 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       try {
         const { userId, message } = req.body as { userId: string; message: string };
 
-        const runId = randomUUID();
-        startRun(runId);
-
-        const result = await app.services.conversationGraph.invoke(
-          { userId, userMessage: message, runId },
-          {
-            // configurable: thread_id drives the checkpointer, userId reaches the
-            // tool invocations. runId does NOT belong here — LangChain strips
-            // configurable from what LLM callback handlers see, so run metrics
-            // travel via metadata below; the persist node reads runId from state.
-            configurable: { thread_id: userId, userId },
-            metadata: { runId, userId },
-            recursionLimit: 50,
-          },
-        );
+        const result = await app.services.conversationRun.run({ userId, text: message });
 
         return reply.send({
           data: {
-            content: result.responseMessage,
+            content: result.text,
             timestamp: new Date().toISOString(),
           },
         });
       } catch (error) {
         req.log.error({ err: error }, 'Chat processing failed');
-        return reply.code(500).send({
-          error: { message: 'Processing failed', details: error instanceof Error ? error.message : String(error) },
-        });
+        // INV-LLM-006 half-step: no `details` — the field is optional in the
+        // schema and no client reads it (verified by grep in apps/bot).
+        return reply.code(500).send({ error: { message: 'Processing failed' } });
       }
     },
   );

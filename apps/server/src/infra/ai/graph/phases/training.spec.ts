@@ -4,8 +4,9 @@
  * ADR-0011 protections: priority ordering, log_set batch dedup, error budget
  * 1 and dynamic tool filtering (BUG-008 Plan A).
  */
-import type { IWorkoutSessionRepository } from '@domain/training/ports';
 import type { StructuredToolInterface } from '@langchain/core/tools';
+
+import type { IWorkoutSessionRepository } from '@domain/training/ports';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
 import type {
@@ -27,7 +28,7 @@ import {
   buildUpdateLastSetTool,
 } from '@infra/ai/tools';
 
-import { type AvailabilityInput, TRAINING_TOOL_PRIORITY, type ToolPolicy } from '../tool-policy';
+import { type AvailabilityInput, type ToolPolicy, TRAINING_TOOL_PRIORITY } from '../tool-policy';
 
 /** What the training prompt renders beyond the directive base. */
 export interface TrainingData {

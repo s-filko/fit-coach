@@ -8,27 +8,32 @@
 import { AIMessage, type BaseMessage, SystemMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 
-import type { User } from '@domain/user/services/user.service';
-
 import { assembleContext } from '@infra/ai/context/assemble-context';
 import type { ConversationGraphDeps, PhaseSpec, PromptContextFor } from '@infra/ai/graph/phase-spec';
+import { ctxOf } from '@infra/ai/graph/state';
 import { langOf, t } from '@infra/ai/messages';
 import { getModel } from '@infra/ai/model.factory';
 import { POST_TOOL_NUDGE_V1, renderBlock } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
-import { attachBudgetReport } from '@infra/ai/run-metrics';
 
 import { createLogger } from '@shared/logger';
 
 const log = createLogger('agent-node');
 
-/** The slice of subgraph state the agent node reads. */
+/** The slice of ConversationState the agent node reads. */
 export interface AgentNodeState {
   messages?: BaseMessage[];
-  userId: string;
-  user?: User | null;
-  userMessage: string;
   activeSessionId?: string | null;
+}
+
+/** Splits the run's messages into the user message and the in-flight tail (Task 3 Step 3 split). */
+export function splitUserMessage(messages: BaseMessage[]): { userMessage: string; inFlight: BaseMessage[] } {
+  const [first] = messages;
+  if (first !== undefined && first._getType() === 'human') {
+    const text = typeof first.content === 'string' ? first.content : '';
+    return { userMessage: text, inFlight: messages.slice(1) };
+  }
+  return { userMessage: '', inFlight: [...messages] };
 }
 
 function isEmptyAIResponse(response: AIMessage): boolean {
@@ -70,18 +75,17 @@ function withPostToolNudge(messages: BaseMessage[]): BaseMessage[] {
 }
 
 export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDeps) {
-  const { contextService, userService } = deps;
+  const { contextService } = deps;
 
   return async (state: AgentNodeState, config: RunnableConfig): Promise<{ messages: BaseMessage[] }> => {
-    const { userId, userMessage } = state;
+    const ctx = ctxOf(config as never);
+    const { userId, user, now } = ctx;
+    const { userMessage, inFlight } = splitUserMessage(state.messages ?? []);
 
-    const [history, previousSummary, freshUser] = await Promise.all([
+    const [history, previousSummary] = await Promise.all([
       contextService.getMessagesForPrompt(userId, spec.name),
       spec.layout.summaryFrame ? contextService.getLatestSummary(userId) : null,
-      userService.getUser(userId),
     ]);
-    // The fresh user wins (D-C): every model call sees tool-saved fields.
-    const user = freshUser ?? state.user ?? null;
     const lang = langOf(user?.languageCode);
 
     const loaded = await spec.loadContext({ userId, user, activeSessionId: state.activeSessionId ?? null }, deps);
@@ -92,7 +96,7 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
 
     const systemPrompt = compose(
       spec.prompt.current.render({
-        now: new Date(),
+        now,
         timezone: user?.timezone ?? null,
         client: 'telegram',
         user,
@@ -120,11 +124,11 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
         previousSummary,
         history,
         userMessage,
-        inFlight: state.messages ?? [],
+        inFlight,
       },
       spec.layout,
     );
-    attachBudgetReport(config.metadata?.['runId'] as string, budgetReport);
+    ctx.metrics.attachBudgetReport(budgetReport);
 
     // Post-tool nudge + empty-reply retry, moved verbatim from invokeWithRetry
     // (ADR-0013 §6: every phase, one retry, then the catalog fallback — D-D).

@@ -1,16 +1,12 @@
 /**
  * The LLM boundary callback: debug logging of every model invocation (BUG-003
- * replay payload) plus the run-metrics bridge for conversation_runs (P0,
- * ADR-0013 §8). Lived inside model.factory.ts until close-out review R1 split
- * it out — model construction and callback handling are separate reasons to
- * change.
+ * replay payload). Run metrics live in the per-run collector's handler
+ * (run context) since refactor-p3-run-context-commit — this handler only logs.
  */
 
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import type { Serialized } from '@langchain/core/load/serializable';
 import type { BaseMessage } from '@langchain/core/messages';
-
-import { bindCallToRun, finishLlmCall, resolveCallRun, startLlmCall } from '@infra/ai/run-metrics';
 
 import { loadConfig } from '@config/index';
 
@@ -71,10 +67,7 @@ export class LLMLogHandler extends BaseCallbackHandler {
     const userId = metadata?.['userId'] as string | undefined;
     const runId = metadata?.['runId'] as string | undefined;
     const invocationModel = (invocationParams?.['model'] as string | undefined) ?? config.LLM_MODEL;
-    if (runId) {
-      startLlmCall(runId, invocationModel);
-      bindCallToRun(llmRunId, runId);
-    }
+    void runId;
 
     if (isDebug) {
       const tools = options?.['tools'] as unknown[] | undefined;
@@ -116,14 +109,10 @@ export class LLMLogHandler extends BaseCallbackHandler {
       generations: Array<Array<{ text: string }>>;
       llmOutput?: { tokenUsage?: { promptTokens?: number; completionTokens?: number } };
     },
-    llmRunId: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _llmRunId: string,
   ): void {
     const text = output.generations?.[0]?.[0]?.text;
-    const usage = output.llmOutput?.tokenUsage;
-    const runId = resolveCallRun(llmRunId);
-    if (runId) {
-      finishLlmCall(runId, usage?.promptTokens ?? 0, usage?.completionTokens ?? 0);
-    }
     log.debug(
       {
         responseLength: text?.length ?? 0,

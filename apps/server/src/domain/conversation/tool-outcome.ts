@@ -2,11 +2,10 @@
  * ToolOutcome — the contract every tool returns (ADR-0013 §6).
  *
  * Pure domain type: NO imports with runtime effect. `TransitionRequest` is
- * imported type-only so this file stays free of LangGraph at runtime; the
- * interface itself moves to `domain/conversation/transitions.ts` in
- * refactor-p3-run-context-commit.
+ * imported type-only from `transitions.ts` so this file stays free of
+ * LangGraph at runtime.
  */
-import type { TransitionRequest } from './graph/conversation.state';
+import type { TransitionRequest } from './transitions';
 
 /** Error classification the executor (not the tool) acts on. */
 export type ToolErrorKind = 'user_error' | 'llm_error' | 'system_error';

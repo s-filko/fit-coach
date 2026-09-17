@@ -10,7 +10,6 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import { END } from '@langchain/langgraph';
 
-import type { TransitionRequest } from '@domain/conversation/graph/conversation.state';
 import {
   isToolReturnWithUpdate,
   llmError,
@@ -18,7 +17,9 @@ import {
   type ToolReturn,
   type ToolStateUpdate,
 } from '@domain/conversation/tool-outcome';
+import type { TransitionRequest } from '@domain/conversation/transitions';
 
+import { ctxOf } from '@infra/ai/graph/state';
 import { langOf, t } from '@infra/ai/messages';
 import { outcomeKindOf, toToolMessage } from '@infra/ai/tools/outcome';
 
@@ -39,17 +40,15 @@ type InvokableTool = {
   invoke: (args: Record<string, unknown>, config: RunnableConfig) => Promise<unknown>;
 };
 
-/** The slice of subgraph state the executor reads. */
+/** The slice of ConversationState the executor reads. */
 export interface ToolExecutorState {
   messages: BaseMessage[];
-  userId: string;
   activeSessionId?: string | null;
-  user?: { languageCode?: string | null } | null;
 }
 
 export type ToolExecutorUpdate = {
   messages: BaseMessage[];
-  requestedTransition?: TransitionRequest;
+  pendingTransition?: TransitionRequest;
   activeSessionId?: string;
 };
 
@@ -68,7 +67,8 @@ export function buildToolExecutor(
   const toolMap = Object.fromEntries(tools.map(t => [t.name, t])) as Record<string, InvokableTool>;
 
   return async (state, config) => {
-    const lang = langOf(state.user?.languageCode);
+    const ctx = ctxOf(config as never);
+    const lang = langOf(ctx.user?.languageCode);
     // Duck-typed (_getType, not instanceof): jest.resetModules in subgraph tests
     // re-evaluates @langchain/core and produces a second AIMessage class, which
     // would make instanceof checks fail inside the executor.
@@ -108,7 +108,7 @@ export function buildToolExecutor(
     for (const call of sorted) {
       if (duplicateIds.has(call.id ?? '')) {
         log.warn(
-          { userId: state.userId, tool: call.name },
+          { userId: ctx.userId, tool: call.name },
           'Duplicate tool calls detected in batch — rejecting all duplicates',
         );
         newMessages.push(toToolMessage(llmError(BATCH_DUPLICATE_MESSAGE(call.name)), call.id ?? ''));
@@ -124,7 +124,7 @@ export function buildToolExecutor(
         const cacheKey = `${call.name}:${buildSearchKey(call.args)}`;
         const cached = resultCache.get(cacheKey);
         if (cached !== undefined) {
-          log.debug({ userId: state.userId, tool: call.name }, 'per-turn dedup hit — reusing result');
+          log.debug({ userId: ctx.userId, tool: call.name }, 'per-turn dedup hit — reusing result');
           newMessages.push(new ToolMessage({ tool_call_id: call.id ?? '', content: cached }));
           continue;
         }
@@ -143,9 +143,9 @@ export function buildToolExecutor(
         ...config,
         configurable: {
           ...config.configurable,
-          userId: state.userId,
+          userId: ctx.userId,
           activeSessionId: state.activeSessionId ?? null,
-          runId: config.metadata?.['runId'],
+          runId: ctx.runId,
         },
       };
 
@@ -154,7 +154,7 @@ export function buildToolExecutor(
         ret = await targetTool.invoke(call.args, toolConfig);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        log.warn({ userId: state.userId, tool: call.name, err: message, args: call.args }, 'Tool invocation failed');
+        log.warn({ userId: ctx.userId, tool: call.name, err: message, args: call.args }, 'Tool invocation failed');
         newMessages.push(toToolMessage(llmError(message), call.id ?? ''));
         continue;
       }
@@ -178,7 +178,7 @@ export function buildToolExecutor(
     // Fail immediately on any systemic error — no retry makes sense (as
     // training's agentNode does today; D-D keeps HTTP 200 until P5).
     if (systemError) {
-      log.error({ userId: state.userId }, 'System error detected in tools — stopping');
+      log.error({ userId: ctx.userId }, 'System error detected in tools — stopping');
       newMessages.push(new AIMessage(t('tool_system_error', lang)));
       return finish(newMessages, updates);
     }
@@ -186,7 +186,7 @@ export function buildToolExecutor(
     // Error budget: previous batches plus this one; Infinity never exhausts.
     const toolErrorCount = countLlmErrors(state.messages) + countLlmErrors(newMessages);
     if (toolErrorCount > policy.llmErrorBudget) {
-      log.warn({ userId: state.userId, toolErrorCount }, 'Tool error retry budget exhausted');
+      log.warn({ userId: ctx.userId, toolErrorCount }, 'Tool error retry budget exhausted');
       newMessages.push(new AIMessage(t('tool_error_budget_exhausted', lang)));
       return finish(newMessages, updates);
     }
@@ -195,11 +195,11 @@ export function buildToolExecutor(
   };
 }
 
-/** The single mapping line for the refactor-p3-run-context-commit rename (requestedTransition → pendingTransition). */
+/** Applies the ToolStateUpdate fields to the durable state channels. */
 function finish(newMessages: BaseMessage[], updates: ToolStateUpdate): ToolExecutorUpdate {
   return {
     messages: newMessages,
-    ...(updates.pendingTransition !== undefined ? { requestedTransition: updates.pendingTransition } : {}),
+    ...(updates.pendingTransition !== undefined ? { pendingTransition: updates.pendingTransition } : {}),
     ...(updates.activeSessionId !== undefined ? { activeSessionId: updates.activeSessionId } : {}),
   };
 }

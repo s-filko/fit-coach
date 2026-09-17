@@ -1,93 +1,35 @@
 /**
- * Shared finalize node unit tests (refactor-p3-phase-spec Task 2): today's
- * extractNode behaviour — final text out, fresh user in — with the map
- * consumption already gone.
+ * Shared finalize node unit tests (refactor-p3-run-context-commit): the node
+ * is the validation point — the run must end with a final AIMessage that has
+ * text (the agent's catalog fallback guarantees it). It returns no update:
+ * responseMessage/user left the state; the reply is read by commit.
  */
-import { AIMessage, HumanMessage } from '@langchain/core/messages';
+import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 
-import type { IUserService } from '@domain/user/ports';
-
-import { buildFinalizeNode, type FinalizeNodeState } from '@infra/ai/graph/nodes/finalize.node';
-
-const STALE_USER = { id: 'stale-user', firstName: 'Stale' };
-const FRESH_USER = { id: 'fresh-user', firstName: 'Fresh' };
-
-function makeDeps(getUser: IUserService['getUser']): { userService: IUserService } {
-  return { userService: { getUser } as unknown as IUserService };
-}
-
-function makeState(overrides: Partial<FinalizeNodeState> = {}): FinalizeNodeState {
-  return {
-    messages: [new HumanMessage('hi'), new AIMessage('Готово!')],
-    userId: 'u1',
-    user: STALE_USER,
-    ...overrides,
-  };
-}
+import { buildFinalizeNode } from '@infra/ai/graph/nodes/finalize.node';
 
 describe('buildFinalizeNode (ADR-0013 §4.1)', () => {
-  it('extracts the text of the final AI message', async () => {
-    const finalize = buildFinalizeNode(makeDeps(async () => FRESH_USER));
+  it('returns no update when the run ends with a text-bearing AIMessage', async () => {
+    const finalize = buildFinalizeNode();
 
-    const out = await finalize(makeState());
+    const out = await finalize({ messages: [new HumanMessage('hi'), new AIMessage('Готово!')] });
 
-    expect(out.responseMessage).toBe('Готово!');
+    expect(out).toEqual({});
   });
 
-  it('flattens array-content AI messages to their text blocks', async () => {
-    const finalize = buildFinalizeNode(makeDeps(async () => FRESH_USER));
-    const state = makeState({
-      messages: [
-        new AIMessage({
-          content: [
-            { type: 'text', text: 'Первая часть. ' },
-            { type: 'text', text: 'Вторая часть.' },
-          ],
-        }),
-      ],
-    });
+  it('throws when the last message is not an AIMessage', async () => {
+    const finalize = buildFinalizeNode();
 
-    const out = await finalize(state);
-
-    expect(out.responseMessage).toBe('Первая часть. Вторая часть.');
+    await expect(
+      finalize({ messages: [new AIMessage('x'), new ToolMessage({ tool_call_id: 'c', content: 'r' })] }),
+    ).rejects.toThrow(/final AIMessage/);
   });
 
-  it('a non-AI last message yields an empty responseMessage', async () => {
-    const finalize = buildFinalizeNode(makeDeps(async () => FRESH_USER));
+  it('throws when the final AIMessage has empty text', async () => {
+    const finalize = buildFinalizeNode();
 
-    const out = await finalize(makeState({ messages: [new AIMessage('x'), new HumanMessage('?')] }));
-
-    expect(out.responseMessage).toBe('');
-  });
-
-  it('the fresh user wins over the checkpointed state user', async () => {
-    const getUser = jest.fn(async () => FRESH_USER);
-    const finalize = buildFinalizeNode(makeDeps(getUser));
-
-    const out = await finalize(makeState());
-
-    expect(getUser).toHaveBeenCalledWith('u1');
-    expect(out.user).toEqual(FRESH_USER);
-  });
-
-  it('a failing user fetch falls back to the state user (never throws)', async () => {
-    const getUser = jest.fn(async () => {
-      throw new Error('db down');
-    });
-    const finalize = buildFinalizeNode(makeDeps(getUser));
-
-    const out = await finalize(makeState());
-
-    expect(out.user).toEqual(STALE_USER);
-  });
-
-  it('no userId → no user fetch, state user passed through', async () => {
-    const getUser = jest.fn(async () => FRESH_USER);
-    const finalize = buildFinalizeNode(makeDeps(getUser));
-
-    const out = await finalize(makeState({ userId: '' }));
-
-    expect(getUser).not.toHaveBeenCalled();
-    expect(out.user).toEqual(STALE_USER);
+    await expect(finalize({ messages: [new HumanMessage('hi'), new AIMessage('   ')] })).rejects.toThrow(
+      /final AIMessage/,
+    );
   });
 });

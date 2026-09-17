@@ -8,8 +8,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { fetchRunsSince } from './lib/export-query';
 import { buildDraftCase } from './lib/draft-case';
+import { fetchRunsSince } from './lib/export-query';
 
 function argValue(flag: string, fallback: string): string {
   const index = process.argv.indexOf(flag);

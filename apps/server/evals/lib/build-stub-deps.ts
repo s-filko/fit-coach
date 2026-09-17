@@ -100,9 +100,30 @@ function buildTrainingSession(fixtureSession: unknown): Record<string, unknown> 
       reasoning: 'Strength focus, upper body.',
       estimatedDuration: 60,
       exercises: [
-        { exerciseId: bench, exerciseName: 'Жим лёжа (штанга)', targetSets: 4, targetReps: '8', targetWeight: 80, restSeconds: 180 },
-        { exerciseId: row, exerciseName: 'Тяга штанги в наклоне', targetSets: 4, targetReps: '8', targetWeight: 70, restSeconds: 180 },
-        { exerciseId: press, exerciseName: 'Жим гантелей сидя', targetSets: 3, targetReps: '10', targetWeight: 40, restSeconds: 120 },
+        {
+          exerciseId: bench,
+          exerciseName: 'Жим лёжа (штанга)',
+          targetSets: 4,
+          targetReps: '8',
+          targetWeight: 80,
+          restSeconds: 180,
+        },
+        {
+          exerciseId: row,
+          exerciseName: 'Тяга штанги в наклоне',
+          targetSets: 4,
+          targetReps: '8',
+          targetWeight: 70,
+          restSeconds: 180,
+        },
+        {
+          exerciseId: press,
+          exerciseName: 'Жим гантелей сидя',
+          targetSets: 3,
+          targetReps: '10',
+          targetWeight: 40,
+          restSeconds: 120,
+        },
       ],
     },
     lastActivityAt: startedAt,
@@ -159,9 +180,9 @@ export function buildStubDeps(fixture: EvalFixture, messages?: Array<{ role: str
     // IUserService — the port's method is getUser(id), not getUserById.
     // Verified against src/domain/user/ports/service.ports.ts:5-11.
     userService: {
-      upsertUser: async() => user,
-      getUser: async() => user,
-      updateProfileData: async() => user,
+      upsertUser: async () => user,
+      getUser: async () => user,
+      updateProfileData: async () => user,
       isRegistrationComplete: () => fixture.user.registrationCompleted === true,
       needsRegistration: () => fixture.user.registrationCompleted !== true,
     },
@@ -171,15 +192,15 @@ export function buildStubDeps(fixture: EvalFixture, messages?: Array<{ role: str
     // The mutation methods back the training tools so log_set/finish_training behave
     // like production instead of erroring into the LLM_ERROR retry budget.
     trainingService: {
-      getSessionDetails: async() => session,
-      getActiveSession: async() => session,
-      getActivePlan: async() => activePlan,
-      getTrainingHistory: async() => (fixture.sessions ?? []),
+      getSessionDetails: async () => session,
+      getActiveSession: async () => session,
+      getActivePlan: async () => activePlan,
+      getTrainingHistory: async () => fixture.sessions ?? [],
       // start_training_session (session-planning.tools.ts) resolves the active plan,
       // creates the session and returns it; only `session.id` is read afterwards
       // (propagated as activeSessionId). A fresh id so a started run never
       // collides with the seeded mid-workout 'session-1'.
-      startSession: async() => ({
+      startSession: async () => ({
         id: 'session-2',
         userId,
         planId: activePlan?.id ?? null,
@@ -187,24 +208,31 @@ export function buildStubDeps(fixture: EvalFixture, messages?: Array<{ role: str
         status: 'in_progress',
         exercises: [],
       }),
-      logSetWithContext: async(
+      logSetWithContext: async (
         _sessionId: string,
-        opts: { exerciseId?: string; exerciseName?: string; setData: StubSet['setData']; rpe?: number; feedback?: string },
+        opts: {
+          exerciseId?: string;
+          exerciseName?: string;
+          setData: StubSet['setData'];
+          rpe?: number;
+          feedback?: string;
+        },
       ) => {
         const exs = stubExercises(session);
         let current = exs.find(ex => ex.status === 'in_progress');
         let autoCompleted: ReturnType<typeof summarize> | undefined;
 
         const wanted =
-          exs.find(ex => ex.exerciseId === opts.exerciseId) ??
-          exs.find(ex => ex.name === opts.exerciseName);
+          exs.find(ex => ex.exerciseId === opts.exerciseId) ?? exs.find(ex => ex.name === opts.exerciseName);
         if (wanted && current && wanted !== current) {
           autoCompleted = summarize(current);
           current.status = 'completed';
           current = wanted;
         }
         if (!current) {
-          const plan = session!['sessionPlanJson'] as { exercises: Array<{ exerciseId: string; exerciseName?: string }> };
+          const plan = session!['sessionPlanJson'] as {
+            exercises: Array<{ exerciseId: string; exerciseName?: string }>;
+          };
           const next = plan.exercises.find(p => !exs.some(ex => ex.exerciseId === p.exerciseId));
           if (!opts.exerciseId && !opts.exerciseName) {
             throw new Error('No active exercise and no exercise reference in log_set call');
@@ -218,7 +246,10 @@ export function buildStubDeps(fixture: EvalFixture, messages?: Array<{ role: str
             targetReps: '8-10',
             targetWeight: null,
             sets: [],
-            exercise: { id: opts.exerciseId ?? randomUUID(), name: opts.exerciseName ?? next?.exerciseName ?? 'Exercise' },
+            exercise: {
+              id: opts.exerciseId ?? randomUUID(),
+              name: opts.exerciseName ?? next?.exerciseName ?? 'Exercise',
+            },
           };
           exs.push(fresh);
           current = fresh;
@@ -240,7 +271,7 @@ export function buildStubDeps(fixture: EvalFixture, messages?: Array<{ role: str
           autoCompleted,
         };
       },
-      completeCurrentExercise: async() => {
+      completeCurrentExercise: async () => {
         const current = stubExercises(session).find(ex => ex.status === 'in_progress');
         if (!current) {
           throw new Error('No exercise in progress');
@@ -248,7 +279,7 @@ export function buildStubDeps(fixture: EvalFixture, messages?: Array<{ role: str
         current.status = 'completed';
         return summarize(current);
       },
-      completeSession: async() => {
+      completeSession: async () => {
         if (!session) {
           throw new Error('No active training session in the stub world');
         }
@@ -257,7 +288,7 @@ export function buildStubDeps(fixture: EvalFixture, messages?: Array<{ role: str
         session['durationMinutes'] = 45;
         return session;
       },
-      deleteLastSets: async(_sessionId: string, exerciseId: string, count = 1) => {
+      deleteLastSets: async (_sessionId: string, exerciseId: string, count = 1) => {
         const ex = stubExercises(session).find(e => e.exerciseId === exerciseId);
         if (!ex) {
           throw new Error(`Exercise ${exerciseId} not found in session`);
@@ -268,7 +299,7 @@ export function buildStubDeps(fixture: EvalFixture, messages?: Array<{ role: str
           deletedSets: deleted.map(s => ({ setNumber: s.setNumber, setData: s.setData, rpe: s.rpe })),
         };
       },
-      updateLastSet: async(
+      updateLastSet: async (
         _sessionId: string,
         exerciseId: string,
         updates: { rpe?: number; feedback?: string; weight?: number; reps?: number },
@@ -301,33 +332,32 @@ export function buildStubDeps(fixture: EvalFixture, messages?: Array<{ role: str
     },
     workoutPlanRepo: {
       // Real method name — chat.subgraph.ts:57, session-planning builder.
-      findActiveByUserId: async() => activePlan,
+      findActiveByUserId: async () => activePlan,
     },
     workoutSessionRepo: {
       // Real names — chat.subgraph.ts:58, training.subgraph.ts:338.
-      findRecentByUserIdWithDetails: async() => (fixture.sessions ?? []),
-      findRecentByUserId: async() => (fixture.sessions ?? []),
-      findLastCompletedByUserAndKey: async() => null,
+      findRecentByUserIdWithDetails: async () => fixture.sessions ?? [],
+      findRecentByUserId: async () => fixture.sessions ?? [],
+      findLastCompletedByUserAndKey: async () => null,
     },
     exerciseRepository: {
-      searchByEmbedding: async() => [],
+      searchByEmbedding: async () => [],
       // Resolves the catalog UUIDs the stub plan proposes — see CATALOG above.
-      findByIds: async(ids: string[] = []) =>
-        ids.map(id => ({ id, name: CATALOG.get(id) ?? 'Exercise' })),
+      findByIds: async (ids: string[] = []) => ids.map(id => ({ id, name: CATALOG.get(id) ?? 'Exercise' })),
     },
     embeddingService: {
-      embed: async() => new Array(1536).fill(0),
+      embed: async () => new Array(1536).fill(0),
     },
     contextService: {
-      appendTurn: async() => undefined,
-      getMessagesForPrompt: async() => seededHistory,
-      insertContextReset: async() => undefined,
-      insertPhaseSummary: async() => undefined,
-      getLatestSummary: async() => null,
-      getLastUserMessageTime: async() => null,
+      appendTurn: async () => undefined,
+      getMessagesForPrompt: async () => seededHistory,
+      insertContextReset: async () => undefined,
+      insertPhaseSummary: async () => undefined,
+      getLatestSummary: async () => null,
+      getLastUserMessageTime: async () => null,
     },
     runService: {
-      recordRun: async(record: ConversationRunRecord) => {
+      recordRun: async (record: ConversationRunRecord) => {
         recordedRuns.push(record);
       },
     },

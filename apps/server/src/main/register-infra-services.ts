@@ -82,22 +82,29 @@ export async function registerInfraServices(container: Container = getGlobalCont
   const checkpointer = PostgresSaver.fromConnString(connString);
   await checkpointer.setup();
 
-  const { buildConversationGraph, CONVERSATION_GRAPH_TOKEN } = await import('@infra/ai/graph/conversation.graph');
-  const { CONVERSATION_RUN_SERVICE_TOKEN } = await import('@domain/conversation/ports');
+  const { buildConversationGraph } = await import('@infra/ai/graph/conversation.graph');
+  const { buildConversationRunner } = await import('@infra/ai/graph/conversation-run.adapter');
+  const { CONVERSATION_RUN_SERVICE_TOKEN, CONVERSATION_RUN_PORT_TOKEN } = await import('@domain/conversation/ports');
   const { DrizzleConversationRunService } = await import('@infra/conversation/drizzle-conversation-run.service');
   container.register(CONVERSATION_RUN_SERVICE_TOKEN, new DrizzleConversationRunService());
+  // The graph token stays internal to infra; the app layer sees the port only.
+  const graph = buildConversationGraph({
+    trainingService: container.get(TRAINING_SERVICE_TOKEN),
+    workoutPlanRepo: container.get(WORKOUT_PLAN_REPOSITORY_TOKEN),
+    workoutSessionRepo: container.get(WORKOUT_SESSION_REPOSITORY_TOKEN),
+    exerciseRepository: container.get(EXERCISE_REPOSITORY_TOKEN),
+    embeddingService: container.get(EMBEDDING_SERVICE_TOKEN),
+    userService: container.get(USER_SERVICE_TOKEN),
+    contextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN),
+    runService: container.get(CONVERSATION_RUN_SERVICE_TOKEN),
+    checkpointer,
+  });
   container.register(
-    CONVERSATION_GRAPH_TOKEN,
-    buildConversationGraph({
-      trainingService: container.get(TRAINING_SERVICE_TOKEN),
-      workoutPlanRepo: container.get(WORKOUT_PLAN_REPOSITORY_TOKEN),
-      workoutSessionRepo: container.get(WORKOUT_SESSION_REPOSITORY_TOKEN),
-      exerciseRepository: container.get(EXERCISE_REPOSITORY_TOKEN),
-      embeddingService: container.get(EMBEDDING_SERVICE_TOKEN),
+    CONVERSATION_RUN_PORT_TOKEN,
+    buildConversationRunner({
+      graph,
       userService: container.get(USER_SERVICE_TOKEN),
-      contextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN),
       runService: container.get(CONVERSATION_RUN_SERVICE_TOKEN),
-      checkpointer,
     }),
   );
 

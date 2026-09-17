@@ -5,8 +5,8 @@
  * subgraph node with the node's config. Pins the answer the plan's Task 3
  * depends on (ctxOf accessor: context vs configurable.ctx).
  */
-import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import { tool } from '@langchain/core/tools';
+import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import { z } from 'zod';
 
 interface Observed {

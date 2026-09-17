@@ -12,7 +12,9 @@ export type MessageKey =
   | 'tool_system_error'
   | 'training_no_active_session'
   | 'training_session_not_found'
-  | 'empty_reply';
+  | 'empty_reply'
+  | 'session_ended_return_to_chat'
+  | 'session_missing_return_to_chat';
 
 export type Lang = 'en' | 'ru';
 

@@ -15,4 +15,8 @@ export const en: Record<MessageKey, string> = {
   training_session_not_found: 'Training session not found. It may have already been completed.',
   // new user-facing text (2026-09) — D-D empty-reply fallback, for the owner to review
   empty_reply: "I couldn't come up with a reply. Please send your message again.",
+  // verbatim from router.node.ts (prepare's short-circuits since this plan)
+  session_ended_return_to_chat: 'Your training session has been completed. Ready for a new workout?',
+  session_missing_return_to_chat:
+    "Your training session could not be resumed. You can plan a new session whenever you're ready.",
 };

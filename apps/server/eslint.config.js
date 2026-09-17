@@ -221,6 +221,23 @@ export default tseslint.config(
       }],
     },
   },
+  // ADR-0013 §11 / INV-CONV-004 (AC-1333): LangGraph lives in infra/ai, never in domain.
+  {
+    files: ['src/domain/**/*.ts'],
+    // graph/ dies with Task 5 (ICompiledConversationGraph is replaced by ConversationRunPort)
+    ignores: ['**/__tests__/**', 'src/domain/conversation/graph/**'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            group: ['@langchain/*'],
+            message: 'ADR-0013 §11 / INV-CONV-004: domain owns phases, transitions and ports; LangGraph lives in infra/ai',
+          },
+        ],
+      }],
+    },
+  },
+
   // ADR-0013 §5 / BR-LLM-009: model-facing text lives in prompts/ modules, never inline in graph code.
   {
     files: [

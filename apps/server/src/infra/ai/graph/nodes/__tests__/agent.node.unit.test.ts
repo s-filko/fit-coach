@@ -12,6 +12,7 @@ import { type AgentNodeState, buildAgentNode } from '@infra/ai/graph/nodes/agent
 import type { ConversationGraphDeps, PhaseSpec } from '@infra/ai/graph/phase-spec';
 import { t } from '@infra/ai/messages';
 import { POST_TOOL_NUDGE_V1, renderBlock } from '@infra/ai/prompts/blocks';
+import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
 const mockInvoke = jest.fn();
 const mockBindTools = jest.fn(() => ({ invoke: mockInvoke }));
@@ -21,10 +22,9 @@ jest.mock('@infra/ai/model.factory', () => ({
   getModel: (profile?: string) => mockGetModel(profile),
 }));
 
-const mockAttachBudgetReport = jest.fn();
-jest.mock('@infra/ai/run-metrics', () => ({
-  attachBudgetReport: (...args: unknown[]) => mockAttachBudgetReport(...args),
-}));
+// The agent attaches the report to ctx.metrics (a real collector — spy on it).
+const metricsCollector = new RunMetricsCollector('run-1');
+const attachSpy = jest.spyOn(metricsCollector, 'attachBudgetReport');
 
 const NUDGE_TEXT = renderBlock(POST_TOOL_NUDGE_V1, {});
 
@@ -63,9 +63,6 @@ function makeDeps(overrides: Record<string, unknown> = {}): ConversationGraphDep
 
 function makeState(overrides: Partial<AgentNodeState> = {}): AgentNodeState {
   return {
-    userId: 'u1',
-    user: { id: 'stale-user' } as AgentNodeState['user'],
-    userMessage: 'hi',
     ...overrides,
   };
 }
@@ -73,7 +70,16 @@ function makeState(overrides: Partial<AgentNodeState> = {}): AgentNodeState {
 const CONFIG = {
   configurable: { userId: 'u1' },
   metadata: { runId: 'run-1', userId: 'u1' },
-} as RunnableConfig;
+  context: {
+    runId: 'run-1',
+    userId: 'u1',
+    user: FRESH_USER as never,
+    now: new Date(0),
+    client: 'telegram' as const,
+    trigger: 'user_message' as const,
+    metrics: metricsCollector,
+  },
+} as never as RunnableConfig;
 
 function aiWithToolCall(): AIMessage {
   return new AIMessage({
@@ -87,7 +93,7 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     mockInvoke.mockReset();
     mockBindTools.mockClear();
     mockGetModel.mockClear();
-    mockAttachBudgetReport.mockClear();
+    attachSpy.mockClear();
     renderSpy.mockClear();
   });
 
@@ -194,16 +200,13 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     expect(mockInvoke).toHaveBeenCalledTimes(1);
   });
 
-  it('attachBudgetReport receives config.metadata.runId and the assembler report', async () => {
+  it('the assembler report is attached to the run-context collector', async () => {
     mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
     const node = buildAgentNode(makeSpec(), makeDeps());
 
     await node(makeState(), CONFIG);
 
-    expect(mockAttachBudgetReport).toHaveBeenCalledWith(
-      'run-1',
-      expect.objectContaining({ total: expect.any(Number) }),
-    );
+    expect(attachSpy).toHaveBeenCalledWith(expect.objectContaining({ total: expect.any(Number) }));
   });
 
   it('summaryFrame false: the summary is never loaded', async () => {

@@ -4,7 +4,7 @@
  * A fake spec with one tool and a mocked model that calls the tool once must
  * run the loop and surface the tool's update and the final text.
  */
-import { AIMessage, type BaseMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 
@@ -12,6 +12,7 @@ import { ok } from '@domain/conversation/tool-outcome';
 
 import type { ConversationGraphDeps, PhaseSpec } from '@infra/ai/graph/phase-spec';
 import { buildPhaseSubgraph } from '@infra/ai/graph/phase-subgraph.factory';
+import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
 const mockInvoke = jest.fn();
 jest.mock('@infra/ai/model.factory', () => ({
@@ -57,7 +58,7 @@ describe('buildPhaseSubgraph (ADR-0013 §4.1)', () => {
     mockInvoke.mockReset();
   });
 
-  it('runs agent → tools → agent → finalize; output carries responseMessage and the tool update', async () => {
+  it('runs agent → tools → agent → finalize; output carries the final AIMessage and the tool update', async () => {
     mockInvoke
       .mockResolvedValueOnce(
         new AIMessage({
@@ -68,14 +69,25 @@ describe('buildPhaseSubgraph (ADR-0013 §4.1)', () => {
       .mockResolvedValueOnce(new AIMessage({ content: 'Готово!', tool_calls: [] }));
 
     const subgraph = buildPhaseSubgraph(makeSpec(), makeDeps());
-    const result = (await subgraph.invoke(
-      { userId: 'u1', userMessage: 'привет', user: FRESH_USER },
-      { configurable: { thread_id: 'factory-test' }, recursionLimit: 10 },
-    )) as { responseMessage: string; activeSessionId?: string; messages: BaseMessage[] };
+    const result = (await subgraph.invoke({ messages: [new HumanMessage('привет')] }, {
+      configurable: { thread_id: 'factory-test' },
+      recursionLimit: 10,
+      context: {
+        runId: 'run-factory',
+        userId: 'u1',
+        user: FRESH_USER as never,
+        now: new Date(0),
+        client: 'telegram' as const,
+        trigger: 'user_message' as const,
+        metrics: new RunMetricsCollector('run-factory'),
+      },
+    } as never)) as { activeSessionId?: string | null; messages: BaseMessage[] };
 
     // Two model calls: the tool-call turn, then the final text turn.
     expect(mockInvoke).toHaveBeenCalledTimes(2);
-    expect(result.responseMessage).toBe('Готово!');
+    // The final text is the last message (finalize validated it).
+    const last = result.messages[result.messages.length - 1] as AIMessage;
+    expect(last.content).toBe('Готово!');
     // The executor surfaced the tool's state update through the subgraph state.
     expect(result.activeSessionId).toBe('sess-9');
     // The tool result message is in the run's messages.

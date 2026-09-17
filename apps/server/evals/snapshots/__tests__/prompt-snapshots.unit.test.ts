@@ -3,14 +3,14 @@
  * refactor-p2-prompt-modules Task 1 and never regenerated in that plan.
  * Fake timers pin `new Date()` inside the old builders to FIXED_NOW.
  */
-import { compose, sectionText } from '@infra/ai/prompts/compose';
 import {
   HISTORY_FRAME_V1,
   POST_TOOL_NUDGE_V1,
+  renderBlock,
   SUMMARY_FRAME_V1,
   TOOL_RESULTS_V1,
-  renderBlock,
 } from '@infra/ai/prompts/blocks';
+import { compose, sectionText } from '@infra/ai/prompts/compose';
 import { CHAT_PROMPT } from '@infra/ai/prompts/phases/chat';
 import { PLAN_CREATION_PROMPT } from '@infra/ai/prompts/phases/plan_creation';
 import { REGISTRATION_PROMPT } from '@infra/ai/prompts/phases/registration';
@@ -20,12 +20,12 @@ import { SUMMARIZER_PROMPT } from '@infra/ai/prompts/summarizer';
 
 import { ALL_FIXTURES } from '../../fixtures/personas';
 import {
+  buildFixtureSession,
+  buildSessionPlanningContext,
   FIXED_NOW,
   FIXTURE_HISTORY,
   FIXTURE_SUMMARY,
   FIXTURE_TOOL_RESULTS,
-  buildFixtureSession,
-  buildSessionPlanningContext,
   toUser,
 } from '../../fixtures/prompt-contexts';
 
@@ -43,7 +43,13 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
     const user = toUser(fixture);
 
     it(`phase.registration / ${name}`, () => {
-      const ctx = { now: FIXED_NOW, timezone: user.timezone ?? null, client: 'telegram' as const, user, lastMessageTime: null };
+      const ctx = {
+        now: FIXED_NOW,
+        timezone: user.timezone ?? null,
+        client: 'telegram' as const,
+        user,
+        lastMessageTime: null,
+      };
       expect(compose(REGISTRATION_PROMPT.current.render(ctx))).toMatchSnapshot();
     });
 
@@ -61,7 +67,13 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
     });
 
     it(`phase.plan_creation / ${name}`, () => {
-      const ctx = { now: FIXED_NOW, timezone: user.timezone ?? null, client: 'telegram' as const, user, lastMessageTime: null };
+      const ctx = {
+        now: FIXED_NOW,
+        timezone: user.timezone ?? null,
+        client: 'telegram' as const,
+        user,
+        lastMessageTime: null,
+      };
       expect(compose(PLAN_CREATION_PROMPT.current.render(ctx))).toMatchSnapshot();
     });
 
@@ -92,12 +104,20 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
   }
 
   it('summarizer / system', () => {
-    const sections = SUMMARIZER_PROMPT.render({ phase: 'training', previousSummary: FIXTURE_SUMMARY, history: FIXTURE_HISTORY });
+    const sections = SUMMARIZER_PROMPT.render({
+      phase: 'training',
+      previousSummary: FIXTURE_SUMMARY,
+      history: FIXTURE_HISTORY,
+    });
     expect(sectionText(sections, 'system')).toMatchSnapshot();
   });
 
   it('summarizer / user (with previous summary)', () => {
-    const sections = SUMMARIZER_PROMPT.render({ phase: 'training', previousSummary: FIXTURE_SUMMARY, history: FIXTURE_HISTORY });
+    const sections = SUMMARIZER_PROMPT.render({
+      phase: 'training',
+      previousSummary: FIXTURE_SUMMARY,
+      history: FIXTURE_HISTORY,
+    });
     expect(sectionText(sections, 'user')).toMatchSnapshot();
   });
 

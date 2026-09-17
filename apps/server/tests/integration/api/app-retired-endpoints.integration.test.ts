@@ -21,7 +21,7 @@ describeIfDb('Retired mini-app LLM endpoints (AC-1312, ADR-0013 OQ-1)', () => {
       userService: container.get(USER_SERVICE_TOKEN) as never,
       conversationContextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN) as never,
       trainingService: container.get(TRAINING_SERVICE_TOKEN) as never,
-      conversationGraph: { invoke: jest.fn() } as never,
+      conversationRun: { invoke: jest.fn() } as never,
     });
     await app.ready();
     initData = buildSignedInitData(process.env.TELEGRAM_TOKEN!);
@@ -32,7 +32,11 @@ describeIfDb('Retired mini-app LLM endpoints (AC-1312, ADR-0013 OQ-1)', () => {
   });
 
   it('POST /api/app/plan still enforces auth first (401 without initData)', async () => {
-    const res = await app.inject({ method: 'POST', url: '/api/app/plan', payload: { goal: 'strength', daysPerWeek: 3 } });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/app/plan',
+      payload: { goal: 'strength', daysPerWeek: 3 },
+    });
     expect(res.statusCode).toBe(401);
   });
 

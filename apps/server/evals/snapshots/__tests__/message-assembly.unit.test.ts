@@ -6,19 +6,20 @@
  * (ADR-0013 §3.4 unmerged systems; §6 nudge for every phase). Since then it is
  * never regenerated except by a reviewed, enumerated diff.
  */
-import { AIMessage, type BaseMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage, HumanMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 
 import type { ConversationGraphDeps } from '@infra/ai/graph/conversation.graph';
 import { buildPhaseSubgraph } from '@infra/ai/graph/phase-subgraph.factory';
 import { buildPhaseSpecs } from '@infra/ai/graph/phases';
 import { getModel } from '@infra/ai/model.factory';
+import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
 import {
   ASSEMBLY_SCENARIOS,
+  type AssemblyScenario,
   IN_FLIGHT_POST_TOOL,
   serializeForSnapshot,
-  type AssemblyScenario,
 } from '../../fixtures/assembly-scenarios';
 import { ACTIVE_SESSION, COMPLETE_PROFILE, EMPTY_PROFILE } from '../../fixtures/personas';
 import { FIXED_NOW, FIXTURE_HISTORY, FIXTURE_SUMMARY, toUser } from '../../fixtures/prompt-contexts';
@@ -88,19 +89,30 @@ async function captureInvocation(phase: PhaseCase, scenario: AssemblyScenario): 
   }
 
   const subgraph = buildSubgraph(phase.phase, deps);
+  // The user message is the first HumanMessage of `messages` (the adapter's
+  // shape since run-context-commit); the scenario's in-flight messages follow.
+  const scenarioInFlight = scenario === 'post-tool' ? IN_FLIGHT_POST_TOOL : [];
   await subgraph.invoke(
     {
-      userId: USER_ID,
-      userMessage: 'Привет, что сегодня?',
-      user: toUser(phase.fixture),
-      ...(scenario === 'post-tool' ? { messages: IN_FLIGHT_POST_TOOL } : {}),
+      messages: [new HumanMessage('Привет, что сегодня?'), ...scenarioInFlight],
       ...(phase.input ?? {}),
     },
     {
       configurable: { thread_id: `${phase.phase}-${scenario}`, userId: USER_ID },
       metadata: { runId: 'run-snap', userId: USER_ID },
+      // Run context (Task 3 Step 3): now is FIXED_NOW so `Current Date` stays
+      // byte-identical under the fake timers; the user is the fixture's.
+      context: {
+        runId: 'run-snap',
+        userId: USER_ID,
+        user: toUser(phase.fixture) as never,
+        now: FIXED_NOW,
+        client: 'telegram' as const,
+        trigger: 'user_message' as const,
+        metrics: new RunMetricsCollector('run-snap'),
+      },
       recursionLimit: 10,
-    } as RunnableConfig,
+    } as never,
   );
 
   expect(__recorded).toHaveLength(1);

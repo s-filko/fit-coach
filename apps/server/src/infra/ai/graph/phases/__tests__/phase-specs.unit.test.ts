@@ -5,9 +5,9 @@
  */
 import type { ConversationPhase } from '@domain/conversation/ports';
 
-import { NO_POLICY, TRAINING_TOOL_PRIORITY, type ToolPolicy } from '@infra/ai/graph/tool-policy';
-import { buildPhaseSpecs } from '@infra/ai/graph/phases';
 import type { ConversationGraphDeps, PhaseSpec } from '@infra/ai/graph/phase-spec';
+import { buildPhaseSpecs } from '@infra/ai/graph/phases';
+import { NO_POLICY, type ToolPolicy, TRAINING_TOOL_PRIORITY } from '@infra/ai/graph/tool-policy';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
 
 const STUB_TIME = new Date('2026-09-01T10:00:00Z');

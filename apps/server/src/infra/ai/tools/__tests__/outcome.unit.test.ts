@@ -2,7 +2,7 @@ import { ToolMessage } from '@langchain/core/messages';
 
 import { llmError, ok, systemError, userError } from '@domain/conversation/tool-outcome';
 
-import { LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX, outcomeKindOf, toToolMessage } from '../outcome';
+import { LLM_ERROR_PREFIX, outcomeKindOf, SYSTEM_ERROR_PREFIX, toToolMessage } from '../outcome';
 
 describe('toToolMessage (serialisation v1, refactor-p3-tool-executor Task 3)', () => {
   it('renders ok as the summary verbatim with success status', () => {

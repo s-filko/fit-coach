@@ -9,7 +9,7 @@ import { AIMessage, type BaseMessage, HumanMessage, SystemMessage } from '@langc
 
 import type { ChatMsg } from '@domain/ai/types';
 
-import { type PhaseLayout, PHASE_PROMPTS } from '@infra/ai/prompts';
+import { PHASE_PROMPTS, type PhaseLayout } from '@infra/ai/prompts';
 import { renderBlock, SUMMARY_FRAME_V1 } from '@infra/ai/prompts/blocks';
 
 import { IN_FLIGHT_POST_TOOL } from '../../../../../evals/fixtures/assembly-scenarios';

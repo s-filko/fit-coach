@@ -15,4 +15,7 @@ export const ru: Record<MessageKey, string> = {
   training_session_not_found: 'Тренировка не найдена. Возможно, она уже завершена.',
   // new user-facing text (2026-09) — D-D empty-reply fallback, for the owner to review
   empty_reply: 'Не получилось придумать ответ. Отправь сообщение ещё раз, пожалуйста.',
+  // translation of the en originals (2026-09)
+  session_ended_return_to_chat: 'Тренировка завершена. Готов к новой?',
+  session_missing_return_to_chat: 'Не удалось возобновить тренировку. Можешь запланировать новую, когда будешь готов.',
 };

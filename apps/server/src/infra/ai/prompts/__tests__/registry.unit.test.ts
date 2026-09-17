@@ -1,6 +1,6 @@
 import type { ConversationPhase } from '@domain/conversation/ports';
 
-import { PHASE_PROMPTS, STANDALONE_PROMPTS, blocksForLayout, promptVersionsForPhase } from '..';
+import { blocksForLayout, PHASE_PROMPTS, promptVersionsForPhase, STANDALONE_PROMPTS } from '..';
 
 describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVersions)', () => {
   it('has an entry for every conversation phase', () => {

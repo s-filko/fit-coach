@@ -9,6 +9,8 @@ import { END } from '@langchain/langgraph';
 
 import { ok, systemError } from '@domain/conversation/tool-outcome';
 
+import { RunMetricsCollector } from '@infra/ai/run-metrics';
+
 import { afterTools, buildToolExecutor } from '../tool-executor';
 import { type ToolPolicy, TRAINING_TOOL_PRIORITY } from '../tool-policy';
 
@@ -42,7 +44,24 @@ function stateWithCalls(
   };
 }
 
-const CONFIG: RunnableConfig = { configurable: { thread_id: 't-1' }, metadata: { runId: 'run-1' } };
+const CTX = {
+  runId: 'run-1',
+  userId: 'user-1',
+  user: { languageCode: null },
+  now: new Date(0),
+  client: 'telegram' as const,
+  trigger: 'user_message' as const,
+  metrics: new RunMetricsCollector('run-1'),
+};
+/** Config with run context; the language lives in ctx.user (state no longer carries it). */
+function configWith(languageCode: string | null = null): RunnableConfig {
+  return {
+    configurable: { thread_id: 't-1' },
+    metadata: { runId: 'run-1' },
+    context: { ...CTX, user: { languageCode } },
+  } as never;
+}
+const CONFIG: RunnableConfig = configWith();
 
 describe('buildToolExecutor (AC-1332)', () => {
   it('AC-1332: orders calls per policy and by args.order within log_set', async () => {
@@ -142,7 +161,7 @@ describe('buildToolExecutor (AC-1332)', () => {
     );
 
     // Last write wins per field; activeSessionId survives from the first update.
-    expect(result.requestedTransition).toEqual({ toPhase: 'chat', reason: 'training_complete' });
+    expect(result.pendingTransition).toEqual({ toPhase: 'chat', reason: 'training_complete' });
     expect(result.activeSessionId).toBe('s-42');
   });
 
@@ -162,7 +181,7 @@ describe('buildToolExecutor (AC-1332)', () => {
         ],
         { languageCode: 'ru' },
       ),
-      CONFIG,
+      configWith('ru'),
     )) as { messages: BaseMessage[] };
 
     expect(after.invoke).not.toHaveBeenCalled();
@@ -190,9 +209,8 @@ describe('buildToolExecutor (AC-1332)', () => {
     const second = (await executor(
       stateWithCalls([{ name: 'log_set', args: { reps: 6 }, id: 'b2' }], {
         messages: [new ToolMessage({ tool_call_id: 'b1', content: 'LLM_ERROR: Invalid set data', status: 'error' })],
-        languageCode: 'ru',
       }),
-      CONFIG,
+      configWith('ru'),
     )) as { messages: BaseMessage[] };
 
     const last = second.messages[second.messages.length - 1];
@@ -234,7 +252,8 @@ describe('buildToolExecutor (AC-1332)', () => {
       configurable: { thread_id: 't-9' },
       metadata: { runId: 'run-77' },
       callbacks: callbacks as never,
-    };
+      context: { ...CTX, runId: 'run-77' },
+    } as never;
 
     await executorWithProbe(probe, config);
 
@@ -253,9 +272,7 @@ describe('buildToolExecutor (AC-1332)', () => {
       return executor(
         {
           messages: [new AIMessage({ content: '', tool_calls: [{ name: 'save_timezone', args: {}, id: 'c1' }] })],
-          userId: 'user-1',
           activeSessionId: 's-9',
-          user: { languageCode: null },
         },
         cfg,
       );
@@ -266,16 +283,14 @@ describe('buildToolExecutor (AC-1332)', () => {
     const failing = fakeTool('log_set', jest.fn().mockResolvedValue(systemError('x')));
     const executor = buildToolExecutor(asTools(failing), { llmErrorBudget: 1 });
 
-    const ru = (
-      await executor(stateWithCalls([{ name: 'log_set', args: {}, id: 'r' }], { languageCode: 'ru' }), CONFIG)
-    ).messages as BaseMessage[];
+    const ru = (await executor(stateWithCalls([{ name: 'log_set', args: {}, id: 'r' }]), configWith('ru')))
+      .messages as BaseMessage[];
     expect((ru[ru.length - 1] as AIMessage).content).toMatch(/техническая ошибка/);
 
     const failing2 = fakeTool('log_set', jest.fn().mockResolvedValue(systemError('x')));
     const executor2 = buildToolExecutor(asTools(failing2), { llmErrorBudget: 1 });
-    const en = (
-      await executor2(stateWithCalls([{ name: 'log_set', args: {}, id: 'e' }], { languageCode: null }), CONFIG)
-    ).messages as BaseMessage[];
+    const en = (await executor2(stateWithCalls([{ name: 'log_set', args: {}, id: 'e' }]), configWith(null)))
+      .messages as BaseMessage[];
     expect((en[en.length - 1] as AIMessage).content).toMatch(/technical error/i);
   });
 });

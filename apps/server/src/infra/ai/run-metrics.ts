@@ -1,21 +1,17 @@
 /**
- * Per-run LLM metrics, accumulated at the model boundary and drained when the
- * run is persisted (P0, ADR-0013 §8). Temporary home: P3 moves this into the
- * `commit` node's run context.
+ * Per-run LLM metrics (ADR-0013 §8), refactor-p3-run-context-commit Task 3:
+ * a per-run `RunMetricsCollector` lives in run context; its callback handler
+ * is passed in the invoke config (callbacks are inherited by nested runs, so
+ * every model call of the run reports to it). The P0 module-level maps are
+ * gone — no shared mutable state (AC-1331).
  *
- * `latencyMs` is wall time from `startRun` (called by the route, before the graph
- * runs) to the drain, so it is the end-to-end run latency P5.2 calibrates
- * `requestTimeout` against — not just the time spent inside model calls.
- *
- * Two maps, both capped: `runs` is keyed by our conversation runId and normally
- * dropped by `drainRunMetrics`; `callRuns` bridges LangChain's per-call run id to
- * ours between `handleChatModelStart` and `handleLLMEnd` and is dropped on read.
- * A run or call that errors before that leaves an entry behind, hence the caps.
+ * `latencyMs` is wall time from the collector's construction (the adapter,
+ * before the graph runs) to `snapshot()` — the end-to-end run latency P5.2
+ * calibrates `requestTimeout` against.
  */
-import type { BudgetReport } from '@domain/conversation/ports';
+import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 
-const MAX_TRACKED_RUNS = 500;
-const MAX_TRACKED_CALLS = 500;
+import type { BudgetReport } from '@domain/conversation/ports';
 
 export interface RunMetrics {
   model: string | null;
@@ -27,127 +23,104 @@ export interface RunMetrics {
   assemblies: number;
 }
 
-interface RunAccumulator {
-  model: string | null;
-  tokensIn: number;
-  tokensOut: number;
-  startedAt: number;
-  llmCalls: number;
-  budgetReport: BudgetReport | null;
-  assemblies: number;
-}
+export class RunMetricsCollector {
+  /** P3: the reply text until P4 stops clearing `messages` — `commit` sets it before clearing the channel. */
+  finalText: string | null = null;
 
-const runs = new Map<string, RunAccumulator>();
-const callRuns = new Map<string, string>();
+  private model: string | null = null;
+  private tokensIn = 0;
+  private tokensOut = 0;
+  private llmCalls = 0;
+  private budgetReport: BudgetReport | null = null;
+  private assemblies = 0;
+  // llRunId → started (bridges handleChatModelStart → handleLLMEnd within this run only)
+  private readonly startedCalls = new Set<string>();
 
-const EMPTY: RunMetrics = {
-  model: null,
-  tokensIn: 0,
-  tokensOut: 0,
-  latencyMs: 0,
-  llmCalls: 0,
-  budgetReport: null,
-  assemblies: 0,
-};
+  constructor(
+    readonly runId: string,
+    private readonly startedAt = Date.now(),
+  ) {}
 
-function evictOldest(map: Map<string, unknown>, cap: number): void {
-  if (map.size < cap) {
-    return;
+  /**
+   * Records one context assembly's report (AC-1323). Last one wins (D-B: the
+   * last assembly is the largest context of a run); `assemblies` counts every
+   * attach so queries can separate single-call runs from tool loops.
+   */
+  attachBudgetReport(report: BudgetReport): void {
+    this.budgetReport = report;
+    this.assemblies += 1;
   }
-  const oldest = map.keys().next();
-  if (!oldest.done) {
-    map.delete(oldest.value);
-  }
-}
 
-function openRun(runId: string): RunAccumulator {
-  const existing = runs.get(runId);
-  if (existing) {
-    return existing;
+  handler(): BaseCallbackHandler {
+    return new LlmMetricsHandler(this.runId, this);
   }
-  evictOldest(runs, MAX_TRACKED_RUNS);
-  const acc: RunAccumulator = {
-    model: null,
-    tokensIn: 0,
-    tokensOut: 0,
-    startedAt: Date.now(),
-    llmCalls: 0,
-    budgetReport: null,
-    assemblies: 0,
-  };
-  runs.set(runId, acc);
-  return acc;
-}
 
-export function startRun(runId: string): void {
-  if (!runId) {
-    return;
+  /** Called by the handler for a call whose metadata.runId is ours. */
+  onStart(llmRunId: string, model: string): void {
+    this.startedCalls.add(llmRunId);
+    this.llmCalls += 1;
+    this.model = model;
   }
-  openRun(runId);
-}
 
-export function startLlmCall(runId: string, model: string): void {
-  if (!runId) {
-    return;
+  /** Called by the handler; only counted for calls it started. */
+  onEnd(llmRunId: string, tokensIn: number, tokensOut: number): void {
+    if (this.startedCalls.has(llmRunId)) {
+      this.startedCalls.delete(llmRunId);
+      this.tokensIn += tokensIn;
+      this.tokensOut += tokensOut;
+    }
   }
-  const acc = openRun(runId);
-  acc.llmCalls += 1;
-  acc.model = model;
-}
 
-export function finishLlmCall(runId: string, tokensIn: number, tokensOut: number): void {
-  const acc = runs.get(runId);
-  if (!acc) {
-    return;
+  snapshot(): RunMetrics {
+    return {
+      model: this.model,
+      tokensIn: this.tokensIn,
+      tokensOut: this.tokensOut,
+      latencyMs: Date.now() - this.startedAt,
+      llmCalls: this.llmCalls,
+      budgetReport: this.budgetReport,
+      assemblies: this.assemblies,
+    };
   }
-  acc.tokensIn += tokensIn;
-  acc.tokensOut += tokensOut;
 }
 
 /**
- * Records one context assembly's report for the run (AC-1323). Last one wins
- * (D-B: the last assembly is the largest context of a run); `assemblies`
- * counts every attach so queries can separate single-call runs from tool
- * loops. An unknown runId opens the run — evals never call `startRun`.
+ * The LangChain callback that feeds the collector. Ignores calls whose
+ * `metadata.runId` is not the collector's run — the phase-summary call sets
+ * `runId: undefined` on purpose (today's BACKLOG note, now a test).
  */
-export function attachBudgetReport(runId: string, report: BudgetReport): void {
-  if (!runId) {
-    return;
-  }
-  const acc = openRun(runId);
-  acc.budgetReport = report;
-  acc.assemblies += 1;
-}
+class LlmMetricsHandler extends BaseCallbackHandler {
+  name = 'LlmMetricsHandler';
 
-export function bindCallToRun(llmRunId: string, runId: string): void {
-  if (!llmRunId || !runId) {
-    return;
+  constructor(
+    private readonly runId: string,
+    private readonly collector: RunMetricsCollector,
+  ) {
+    super();
   }
-  evictOldest(callRuns, MAX_TRACKED_CALLS);
-  callRuns.set(llmRunId, runId);
-}
 
-export function resolveCallRun(llmRunId: string): string | undefined {
-  const runId = callRuns.get(llmRunId);
-  if (runId !== undefined) {
-    callRuns.delete(llmRunId);
+  handleChatModelStart(
+    _llm: unknown,
+    _messages: unknown,
+    llmRunId: string,
+    _parentRunId?: string,
+    extraParams?: Record<string, unknown>,
+    _tags?: string[],
+    metadata?: Record<string, unknown>,
+  ): void {
+    if (metadata?.['runId'] !== this.runId) {
+      return;
+    }
+    const invocationParams = extraParams?.['invocation_params'] as Record<string, unknown> | undefined;
+    const invocationModel = (invocationParams?.['model'] as string | undefined) ?? 'unknown';
+    this.collector.onStart(llmRunId, invocationModel);
   }
-  return runId;
-}
 
-export function drainRunMetrics(runId: string): RunMetrics {
-  const acc = runs.get(runId);
-  if (!acc) {
-    return { ...EMPTY };
+  handleLLMEnd(
+    output: { llmOutput?: { tokenUsage?: { promptTokens?: number; completionTokens?: number } } },
+    llmRunId: string,
+  ): void {
+    const usage = output.llmOutput?.tokenUsage;
+    this.collector.onEnd(llmRunId, usage?.promptTokens ?? 0, usage?.completionTokens ?? 0);
   }
-  runs.delete(runId);
-  return {
-    model: acc.model,
-    tokensIn: acc.tokensIn,
-    tokensOut: acc.tokensOut,
-    latencyMs: Date.now() - acc.startedAt,
-    llmCalls: acc.llmCalls,
-    budgetReport: acc.budgetReport,
-    assemblies: acc.assemblies,
-  };
 }
