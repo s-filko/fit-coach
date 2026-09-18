@@ -31,13 +31,14 @@ import {
   type ContextBlockCtx,
   EPISODE_SUMMARIES_V1,
   fullDepth,
+  type RenderableBlock,
   renderBlock,
   renderBlocks,
   type RenderedBlock,
 } from '@infra/ai/prompts/blocks';
 import { SECTION_SEPARATOR } from '@infra/ai/prompts/compose';
 
-import { type BudgetBlockInput, resolveBudget } from './budget';
+import { resolveBudget } from './budget';
 import { estimateMessages, estimateTokens, TOKEN_ESTIMATOR_ID } from './token-estimator';
 
 export interface AssembleInput<D = unknown> {
@@ -49,7 +50,7 @@ export interface AssembleInput<D = unknown> {
    * ADR-0013 §3.4 block 3 (D-A/D-B) — the phase's declared blocks
    * (`spec.contextBlocks`), unrendered. Defaults to none.
    */
-  contextBlocks?: ReadonlyArray<BudgetBlockInput<D>>;
+  contextBlocks?: ReadonlyArray<RenderableBlock<D>>;
   /** The data every block in `contextBlocks` reads — `loaded.data` from `PhaseSpec.loadContext`. */
   blockData?: D;
   /** The episode history from the checkpointed `messages` channel (INV-LLM-001). */
