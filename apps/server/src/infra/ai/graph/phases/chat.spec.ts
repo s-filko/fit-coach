@@ -12,6 +12,7 @@ import type {
   PromptContextFor,
 } from '@infra/ai/graph/phase-spec';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
+import { CHAT_CONTEXT_V1 } from '@infra/ai/prompts/blocks';
 import { buildRequestTransitionTool, buildSharedTools, buildUpdateProfileTool } from '@infra/ai/tools';
 
 import { NO_POLICY, type ToolPolicy } from '../tool-policy';
@@ -49,6 +50,8 @@ export function buildChatSpec(deps: ConversationGraphDeps): PhaseSpec<ChatData> 
         data: { hasActivePlan: !!activePlan, recentSessions },
       };
     },
+    // D-B: the v1 `context` section becomes this domain block (block 3).
+    contextBlocks: [CHAT_CONTEXT_V1],
     modelProfile: 'default',
   };
 }

@@ -426,10 +426,11 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       `ConversationRunnerDeps.graph` declares only `{ invoke }` — the deps interface must
       declare every method the implementation calls (see also the rule candidate in
       `docs/REVIEW_FINDINGS.md` this run). Source: close-out-review, R1 (2026-09-18).
-- [ ] `new RemoveMessage({ id: m.id ?? '' })` in `compact.node.ts` silently no-ops when a
+- [x] `new RemoveMessage({ id: m.id ?? '' })` in `compact.node.ts` silently no-ops when a
       history message has no id: removal never lands, the budget trigger refires every run,
       a summary can repeat per episode. Fail loud (drop the fallback or `log.error`).
-      Source: close-out-review, R3 (2026-09-18).
+      Source: close-out-review, R3 (2026-09-18). Fixed: `refactor-p4-context-budget` Task 4
+      Step 0 — `log.error` + the whole removal set is skipped (never remove with `''`).
 - [ ] `POST /api/bot/chat/clear-context` (chat.routes.ts) is missing from `docs/API_SPEC.md`
       although the branch changed its mechanics and MANUAL_TEST_PLAN S8.4 exercises it.
       Source: close-out-review, R4 (2026-09-18).
@@ -444,10 +445,11 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       the binding contract in `case.schema.ts:72-74` — a `ToolMessage` with an undefined
       `tool_call_id` would reach the provider. Latent (no current dataset has one).
       Source: close-out-review, R3 (2026-09-18).
-- [ ] The D-E legacy-import branch in `compact.node.ts` returns without consuming a pending
+- [x] The D-E legacy-import branch in `compact.node.ts` returns without consuming a pending
       `state.compactReason` — the flag can survive into the next run after a transition-plus-
       first-message combination. Add to `refactor-p4-context-budget`'s test list.
-      Source: close-out-review, R3 (2026-09-18).
+      Source: close-out-review, R3 (2026-09-18). Fixed: `refactor-p4-context-budget` Task 4
+      Step 0 — both the "legacy found" and "no legacy found" returns now set `compactReason: null`.
 - [ ] Evals tooling duplication trio: `estimateWeeklyPct` re-parses ledger rows
       `parseLedgerTable` owns; `argValue`/ledger-path are defined twice across `run.ts` /
       `ledger.ts`; `CostRecorder.handleLLMEnd` mirrors `RunMetricsCollector` token extraction
@@ -459,7 +461,8 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 - [ ] `evals/lib/quota.ts` reads the operator's `~/.claude/settings.json` (with env fallbacks)
       to reach the Z.AI monitor API — repo tooling depends on one machine's home layout;
       consolidate behind the documented env var. Source: close-out-review, R1 (2026-09-18).
-- [ ] `compact.node.ts` re-declares `LegacySummary` as an inline annotation — import the named
+- [x] `compact.node.ts` re-declares `LegacySummary` as an inline annotation — import the named
       type from `summary.ports.ts`. Fold into `refactor-p4-context-budget`'s branch (touches
-      the same file). Source: close-out-review, R2 (2026-09-18).
+      the same file). Source: close-out-review, R2 (2026-09-18). Fixed: `refactor-p4-context-budget`
+      Task 4 Step 0 — imports `LegacySummary` from `@domain/conversation/ports`.
 

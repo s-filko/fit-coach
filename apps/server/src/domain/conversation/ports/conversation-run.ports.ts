@@ -1,26 +1,47 @@
+import type { TokenBudget } from '../episode';
 import type { ConversationPhase } from '../phases';
 
 export type ConversationRunOutcome = 'ok' | 'llm_unavailable' | 'core_error' | 'budget_exhausted';
 
 /**
- * Estimated-token accounting of one context assembly (ADR-0013 §3.4, reporting half).
- * Numbers are estimator output (see `estimator`), not provider counts — compare with
- * `tokensIn` to calibrate. The post-tool nudge is inserted after assembly and is not
- * counted. P2 reports only; budgets and trimming arrive in P4.
+ * Estimated-token accounting of one context assembly (ADR-0013 §3.4, reporting
+ * AND enforcement half since the context-budget plan). Numbers are estimator
+ * output (see `estimator`), not provider counts — compare with `tokensIn` to
+ * calibrate. The post-tool nudge is inserted after assembly and is not
+ * counted. `budget` and `cuts` (Task 3) record what INV-LLM-004's
+ * `resolveBudget` did to fit the run inside `PhaseSpec.budget`, if anything —
+ * `history`/`domain`/`blocks`/`total` below are already POST-cut when a cut
+ * happened.
  */
 export interface BudgetReport {
   estimator: string; // TOKEN_ESTIMATOR_ID
-  system: number; // block 1: the rendered phase prompt (domain data is inside it until P3)
+  system: number; // block 1: the rendered phase prompt — domain data moved to block 3 (context-budget plan Task 2)
   summary: number; // the rendered `## Previous episodes` block, 0 when there are no episode summaries (D-H)
-  history: number; // the episode messages before this run's HumanMessage — the checkpointed channel (D-H)
+  /**
+   * block 3: the rendered domain context blocks (ADR-0013 §4.2 `contextBlocks`,
+   * P4 context-budget plan Task 2, D-A/D-B), AT THE DEPTH `resolveBudget`
+   * chose (full depth unless INV-LLM-004 stepped one down — Task 3). 0 when
+   * the phase has none or all rendered null this run.
+   */
+  domain: number;
+  /** Per-block token/depth breakdown, spec order, AFTER any Task 3 depth cut. */
+  blocks: Array<{ id: string; tokens: number; depth: number }>;
+  history: number; // history messages before this run's HumanMessage (D-H), AFTER any Task 3 trim
   user: number; // the current human message
   inFlight: number; // this run's AI tool-call messages and tool results
   /** Always 0 since P4 (D-H): tool results ride the channel; the field stays for baseline comparability. */
   toolResults: number;
-  total: number; // sum of the six above
+  total: number; // sum of system + summary + domain + history + user + inFlight + toolResults
   messages: number; // messages in the array handed to the model (before the post-tool nudge)
   historyTurns: number; // HumanMessages in history
   assemblies?: number; // filled at persist: how many assemblies this run made (tool loops)
+  /** PhaseSpec.budget for this run — D-C. Absent only for pre-Task-3 report shapes (baseline comparability). */
+  budget?: TokenBudget;
+  /**
+   * What INV-LLM-004's resolveBudget cut, in order, empty when nothing was
+   * cut (D-C). `'floor'` (D-D) means block 1 and `current` only survived.
+   */
+  cuts?: Array<'history' | `block:${string}` | 'summary' | 'floor'>;
 }
 
 /** One recorded conversation run — ADR-0013 §8. `model` is null for runs that failed before any model call (D-F). */

@@ -1,10 +1,18 @@
+/**
+ * `training.client`, `training.workout_overview`, `training.stale_session`,
+ * `training.previous_session` blocks (D-B) — moved verbatim from
+ * `prompts/phases/training/v1.helpers.ts` and the matching sections of
+ * `prompts/phases/training/v1.ts` (P4 context-budget plan, Task 2).
+ * `buildStaleSessionSection`'s trailing "\n\n" stays trimmed by the caller —
+ * the section separator comes from compose()/assembler instead.
+ */
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
-/**
- * Moved verbatim from graph/nodes/training.node.ts private helpers (P2, AC-1321).
- * buildStaleSessionSection's trailing "\n\n" is trimmed by the caller — the section
- * separator comes from compose() instead.
- */
+import { humanTimeAgo } from '@shared/date-utils';
+
+import type { ContextBlock, ContextBlockCtx } from './types';
+
+const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 /**
  * Single source of truth for the LLM about what has been done and what is planned.
@@ -186,3 +194,69 @@ RULES:
 3. If ambiguous, ASK: "Are you adding to the previous session or starting fresh?"
 `;
 }
+
+export interface TrainingClientData {
+  previousSession: WorkoutSessionWithDetails | null;
+}
+
+/** `=== CLIENT ===` — name and goal. Session-independent, so it uses ctx.user only. */
+export const TRAINING_CLIENT_V1: ContextBlock<TrainingClientData> = {
+  id: 'training.client',
+  version: 'v1',
+  render(_data, ctx: ContextBlockCtx) {
+    const clientName = ctx.user?.firstName ?? 'Client';
+    const fitnessGoal = ctx.user?.fitnessGoal ?? null;
+    return `=== CLIENT ===\n\nName: ${clientName}${fitnessGoal ? `\nGoal: ${fitnessGoal}` : ''}`;
+  },
+};
+
+export interface TrainingWorkoutOverviewData {
+  session: WorkoutSessionWithDetails;
+}
+
+export const TRAINING_WORKOUT_OVERVIEW_V1: ContextBlock<TrainingWorkoutOverviewData> = {
+  id: 'training.workout_overview',
+  version: 'v1',
+  render(data, ctx: ContextBlockCtx) {
+    return `=== WORKOUT OVERVIEW ===\n\n${buildWorkoutOverview(data.session, ctx.now)}`;
+  },
+};
+
+export interface TrainingStaleSessionData {
+  session: WorkoutSessionWithDetails;
+}
+
+/** Absent (null) unless the session has been inactive past SESSION_TIMEOUT_MS — v1's `isStale` gate. */
+export const TRAINING_STALE_SESSION_V1: ContextBlock<TrainingStaleSessionData> = {
+  id: 'training.stale_session',
+  version: 'v1',
+  render(data, ctx: ContextBlockCtx) {
+    const lastActivity = data.session.lastActivityAt ?? data.session.updatedAt ?? data.session.createdAt;
+    const sessionAgeMs = ctx.now.getTime() - new Date(lastActivity).getTime();
+    if (sessionAgeMs <= SESSION_TIMEOUT_MS) {
+      return null;
+    }
+    return buildStaleSessionSection(sessionAgeMs).trimEnd();
+  },
+};
+
+export interface TrainingPreviousSessionData {
+  previousSession: WorkoutSessionWithDetails | null;
+}
+
+/** Absent (null) when there is no previous session for this template — v1's `if (previousSession)` gate. */
+export const TRAINING_PREVIOUS_SESSION_V1: ContextBlock<TrainingPreviousSessionData> = {
+  id: 'training.previous_session',
+  version: 'v1',
+  render(data, ctx: ContextBlockCtx) {
+    if (!data.previousSession) {
+      return null;
+    }
+    const when = humanTimeAgo(
+      new Date(data.previousSession.completedAt ?? data.previousSession.createdAt),
+      ctx.now,
+      ctx.user?.timezone,
+    );
+    return `=== PREVIOUS SESSION (same template — ${when}) ===\n\n${buildPreviousSessionSection(data.previousSession)}`;
+  },
+};

@@ -273,4 +273,62 @@ describe('buildCompactStep — D-E legacy import (exactly once)', () => {
     expect(latestLegacySummary).not.toHaveBeenCalled();
     expect(update).toEqual({});
   });
+
+  // P4 close-out review advisory (b), BACKLOG "The D-E legacy-import branch in
+  // compact.node.ts returns without consuming a pending state.compactReason":
+  // a transition-plus-first-message combination must not leave the flag set
+  // for the next run, whether or not a legacy summary was found.
+  it('BACKLOG (b): consumes a pending compactReason even when no legacy summary is found', async () => {
+    const { deps, latestLegacySummary } = makeDeps();
+    latestLegacySummary.mockResolvedValue(null);
+    const compact = buildCompactStep(deps);
+
+    const update = await compact({ ...firstRunState(), compactReason: 'phase_boundary' }, ctxConfig());
+
+    expect(update.compactReason).toBeNull();
+    expect(update.episodeSummaries).toBeUndefined();
+  });
+
+  it('BACKLOG (b): consumes a pending compactReason when a legacy summary IS imported', async () => {
+    const { deps, latestLegacySummary } = makeDeps();
+    latestLegacySummary.mockResolvedValue({
+      text: 'legacy text',
+      phase: 'training',
+      createdAt: new Date('2026-09-17T18:00:00Z'),
+    });
+    const compact = buildCompactStep(deps);
+
+    const update = await compact({ ...firstRunState(), compactReason: 'phase_boundary' }, ctxConfig());
+
+    expect(update.compactReason).toBeNull();
+    expect(update.episodeSummaries).toHaveLength(1);
+  });
+});
+
+describe('BACKLOG (a): id-less RemoveMessage fails loud instead of silently no-opping', () => {
+  it('logs an error and skips the removal set when a history message has no id', async () => {
+    const { deps } = makeDeps();
+    const compact = buildCompactStep(deps);
+
+    // Same fixture as channelState() but m1 has no id — RemoveMessage({id: ''})
+    // would silently no-op, letting the budget/inactivity trigger refire every
+    // run and the summary repeat per episode.
+    const state: ConversationStateType = {
+      ...channelState(),
+      messages: [
+        new HumanMessage({ content: 'Составь план на грудь' }), // no id
+        new AIMessage({ content: 'Готовим план', id: 'm2', tool_calls: [] }),
+        new HumanMessage({ content: 'Спасибо', id: 'm3' }),
+      ],
+    };
+
+    const update = await compact(state, ctxConfig());
+
+    // No RemoveMessage set at all — never remove with '' (would resurrect m2 next run).
+    expect(update.messages).toBeUndefined();
+    // The episode is NOT rotated — compactReason is not consumed, so the trigger can retry
+    // once the id gap is fixed upstream (this failure must be visible, not silently accepted).
+    expect(update.episodeId).toBeUndefined();
+    expect(update.compactReason).toBeUndefined();
+  });
 });

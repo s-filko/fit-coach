@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { parseLlmBudgetOverrides, type TokenBudgetOverride } from './llm-budget-overrides';
 import { type LlmProfileOverride, parseLlmProfiles } from './llm-profiles';
 
 /**
@@ -50,7 +51,12 @@ export const EnvSchema = z.object({
     .pipe(z.number().min(0).max(2)),
 });
 
-export type Env = z.infer<typeof EnvSchema> & { PORT: number; LLM_PROFILES: Record<string, LlmProfileOverride> };
+export type Env = z.infer<typeof EnvSchema> & {
+  PORT: number;
+  LLM_PROFILES: Record<string, LlmProfileOverride>;
+  /** LLM_BUDGET_<PHASE>_<PART> — P4 context-budget plan Task 3, applied over PhaseSpec.budget. */
+  LLM_BUDGETS: Record<string, TokenBudgetOverride>;
+};
 
 export function loadConfig(): Env {
   const parsed = EnvSchema.safeParse(process.env);
@@ -61,6 +67,11 @@ export function loadConfig(): Env {
         'Please ensure all required environment variables are set in your .env file.',
     );
   }
-  const data = parsed.data as Omit<Env, 'LLM_PROFILES'>;
-  return { ...data, PORT: data.PORT, LLM_PROFILES: parseLlmProfiles(process.env) } as Env;
+  const data = parsed.data as Omit<Env, 'LLM_PROFILES' | 'LLM_BUDGETS'>;
+  return {
+    ...data,
+    PORT: data.PORT,
+    LLM_PROFILES: parseLlmProfiles(process.env),
+    LLM_BUDGETS: parseLlmBudgetOverrides(process.env),
+  } as Env;
 }

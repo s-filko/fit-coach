@@ -38,6 +38,8 @@ export function buildRegistrationSpec(deps: ConversationGraphDeps): PhaseSpec<Re
       ok: true as const,
       data: {},
     }),
+    // D-B: no domain sections moved out of the registration prompt (it has none).
+    contextBlocks: [],
     modelProfile: 'default',
   };
 }

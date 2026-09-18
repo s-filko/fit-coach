@@ -5,11 +5,11 @@
  */
 import { EPISODE_SUMMARIES_V1, POST_TOOL_NUDGE_V1, renderBlock } from '@infra/ai/prompts/blocks';
 import { compose, sectionText } from '@infra/ai/prompts/compose';
-import { CHAT_PROMPT } from '@infra/ai/prompts/phases/chat';
-import { PLAN_CREATION_PROMPT } from '@infra/ai/prompts/phases/plan_creation';
+import { CHAT_PROMPT, CHAT_V1 } from '@infra/ai/prompts/phases/chat';
+import { PLAN_CREATION_PROMPT, PLAN_CREATION_V1 } from '@infra/ai/prompts/phases/plan_creation';
 import { REGISTRATION_PROMPT } from '@infra/ai/prompts/phases/registration';
-import { SESSION_PLANNING_PROMPT } from '@infra/ai/prompts/phases/session_planning';
-import { TRAINING_PROMPT } from '@infra/ai/prompts/phases/training';
+import { SESSION_PLANNING_PROMPT, SESSION_PLANNING_V1 } from '@infra/ai/prompts/phases/session_planning';
+import { TRAINING_PROMPT, TRAINING_V1 } from '@infra/ai/prompts/phases/training';
 import { SUMMARIZER_PROMPT, SUMMARIZER_V1 } from '@infra/ai/prompts/summarizer';
 
 import { ALL_FIXTURES } from '../../fixtures/personas';
@@ -58,7 +58,7 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
         hasActivePlan: fixture.hasActivePlan ?? false,
         recentSessions: [],
       };
-      expect(compose(CHAT_PROMPT.current.render(ctx))).toMatchSnapshot();
+      expect(compose(CHAT_V1.render(ctx))).toMatchSnapshot();
     });
 
     it(`phase.plan_creation / ${name}`, () => {
@@ -69,7 +69,7 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
         user,
         lastMessageTime: null,
       };
-      expect(compose(PLAN_CREATION_PROMPT.current.render(ctx))).toMatchSnapshot();
+      expect(compose(PLAN_CREATION_V1.render(ctx))).toMatchSnapshot();
     });
 
     it(`phase.session_planning / ${name}`, () => {
@@ -81,7 +81,7 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
         lastMessageTime: null,
         context: buildSessionPlanningContext(fixture, FIXED_NOW),
       };
-      expect(compose(SESSION_PLANNING_PROMPT.current.render(ctx))).toMatchSnapshot();
+      expect(compose(SESSION_PLANNING_V1.render(ctx))).toMatchSnapshot();
     });
 
     it(`phase.training / ${name}`, () => {
@@ -93,6 +93,57 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
         lastMessageTime: null,
         session: buildFixtureSession(fixture, FIXED_NOW),
         previousSession: null,
+      };
+      expect(compose(TRAINING_V1.render(ctx))).toMatchSnapshot();
+    });
+
+    // v2 (P4 context-budget plan, Task 2, D-B): v1 minus the moved domain
+    // sections — CHAT_PROMPT/PLAN_CREATION_PROMPT/SESSION_PLANNING_PROMPT/
+    // TRAINING_PROMPT's `.current` is v2 as of this plan. New snapshots
+    // (v1's stay pinned above, untouched).
+    it(`phase.chat v2 / ${name}`, () => {
+      const ctx = {
+        now: FIXED_NOW,
+        timezone: user.timezone ?? null,
+        client: 'telegram' as const,
+        user,
+        lastMessageTime: LAST_MESSAGE_YESTERDAY,
+        hasActivePlan: fixture.hasActivePlan ?? false,
+      };
+      expect(compose(CHAT_PROMPT.current.render(ctx))).toMatchSnapshot();
+    });
+
+    it(`phase.plan_creation v2 / ${name}`, () => {
+      const ctx = {
+        now: FIXED_NOW,
+        timezone: user.timezone ?? null,
+        client: 'telegram' as const,
+        user,
+        lastMessageTime: null,
+      };
+      expect(compose(PLAN_CREATION_PROMPT.current.render(ctx))).toMatchSnapshot();
+    });
+
+    it(`phase.session_planning v2 / ${name}`, () => {
+      const { daysSinceLastWorkout } = buildSessionPlanningContext(fixture, FIXED_NOW);
+      const ctx = {
+        now: FIXED_NOW,
+        timezone: user.timezone ?? null,
+        client: 'telegram' as const,
+        user,
+        lastMessageTime: null,
+        context: { daysSinceLastWorkout },
+      };
+      expect(compose(SESSION_PLANNING_PROMPT.current.render(ctx))).toMatchSnapshot();
+    });
+
+    it(`phase.training v2 / ${name}`, () => {
+      const ctx = {
+        now: FIXED_NOW,
+        timezone: user.timezone ?? null,
+        client: 'telegram' as const,
+        user,
+        lastMessageTime: null,
       };
       expect(compose(TRAINING_PROMPT.current.render(ctx))).toMatchSnapshot();
     });

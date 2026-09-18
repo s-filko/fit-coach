@@ -105,6 +105,8 @@ export async function registerInfraServices(container: Container = getGlobalCont
       minTurns: config.EPISODE_MIN_TURNS,
       minTokens: config.EPISODE_MIN_TOKENS,
     },
+    // LLM_BUDGET_* overrides (P4 context-budget plan Task 3), resolved once here.
+    budgetOverrides: config.LLM_BUDGETS,
     checkpointer,
   });
   container.register(

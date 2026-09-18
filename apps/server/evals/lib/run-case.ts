@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
+import { AIMessage, type BaseMessage, ToolMessage } from '@langchain/core/messages';
 
 import type { BudgetReport } from '@domain/conversation/ports';
 
@@ -12,6 +13,15 @@ import type { EvalCase } from '../schema/case.schema';
 import { buildStubDeps } from './build-stub-deps';
 import { toBaseMessages } from './seed-messages';
 
+/** One message of the last model input, reduced to what the L1 budget/orphan checks need. */
+export interface ModelInputMessage {
+  type: string;
+  /** AIMessage: the tool_call ids it carries (empty if none). */
+  toolCallIds: string[];
+  /** ToolMessage: the tool_call_id it answers. */
+  toolCallId?: string;
+}
+
 export interface CaseObservation {
   text: string;
   toolCalls: Array<{ name: string; args: Record<string, unknown> }>;
@@ -19,11 +29,42 @@ export interface CaseObservation {
   outcome: string;
   threw: string | null;
   budgetReport: BudgetReport | null;
+  /** The LAST model call's input, reduced (D-C — needs the model input, not just the report). */
+  lastModelInput: ModelInputMessage[];
 }
 
 interface ObservedToolCall {
   name: string;
   args: Record<string, unknown>;
+}
+
+function toolCallIdsOf(m: BaseMessage): string[] {
+  if (!(m instanceof AIMessage)) {
+    return [];
+  }
+  return (m.tool_calls ?? []).map(tc => tc.id).filter((id): id is string => !!id);
+}
+
+function reduceModelMessage(m: BaseMessage): ModelInputMessage {
+  const toolCallId = m instanceof ToolMessage ? m.tool_call_id : undefined;
+  return { type: m._getType(), toolCallIds: toolCallIdsOf(m), toolCallId };
+}
+
+/**
+ * Records the LAST model call's input messages, reduced to type + tool-call
+ * pairing (D-C: `budget-within-limits` and `no-orphan-tool-message` need what
+ * the model actually received, not just the report). Same
+ * `BaseCallbackHandler` pattern as `ToolRecorder` — `handleChatModelStart`
+ * fires once per model invocation, `messages` is `BaseMessage[][]` (LangChain
+ * batches); a run never batches, so `messages[0]` is the call.
+ */
+export class ModelInputRecorder extends BaseCallbackHandler {
+  name = 'EvalModelInputRecorder';
+  last: ModelInputMessage[] = [];
+
+  handleChatModelStart(_serialized: unknown, messages: BaseMessage[][]): void {
+    this.last = (messages[0] ?? []).map(reduceModelMessage);
+  }
 }
 
 /**
@@ -76,6 +117,7 @@ const EMPTY_OBSERVATION: CaseObservation = {
   outcome: 'core_error',
   threw: null,
   budgetReport: null,
+  lastModelInput: [],
 };
 
 export async function runCase(
@@ -87,13 +129,14 @@ export async function runCase(
   const userId = '22222222-2222-4222-8222-222222222222';
   const runId = randomUUID();
   const recorder = new ToolRecorder();
+  const modelInputRecorder = new ModelInputRecorder();
   const runner = buildConversationRunner({
     graph,
     userService: deps.userService,
     runService: deps.runService,
     checkpointer: deps.checkpointer,
     transcript: deps.transcript,
-    extraCallbacks: [recorder, ...extraCallbacks],
+    extraCallbacks: [recorder, modelInputRecorder, ...extraCallbacks],
   });
 
   try {
@@ -128,6 +171,7 @@ export async function runCase(
       outcome: recordedRuns[0]?.outcome ?? 'ok',
       threw: null,
       budgetReport: recordedRuns[0]?.budgetReport ?? null,
+      lastModelInput: modelInputRecorder.last,
     };
   } catch (err) {
     return { ...EMPTY_OBSERVATION, threw: err instanceof Error ? err.message : String(err) };

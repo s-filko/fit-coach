@@ -1,12 +1,15 @@
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
+import {
+  buildPreviousSessionSection,
+  buildStaleSessionSection,
+  buildWorkoutOverview,
+} from '@infra/ai/prompts/blocks/training-workout-overview.v1';
 import { renderDirectives } from '@infra/ai/prompts/compose';
 import { DIRECTIVES_WITHOUT_IDENTITY_V1 } from '@infra/ai/prompts/directives';
 import type { DirectiveContext, PromptModule, Section } from '@infra/ai/prompts/types';
 
 import { humanTimeAgo } from '@shared/date-utils';
-
-import { buildPreviousSessionSection, buildStaleSessionSection, buildWorkoutOverview } from './v1.helpers';
 
 export interface TrainingPromptContext extends DirectiveContext {
   session: WorkoutSessionWithDetails;
