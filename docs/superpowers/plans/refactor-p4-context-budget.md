@@ -1,6 +1,6 @@
 # Refactor P4 — Context Budget and Domain Blocks Implementation Plan
 
-- Status: planned
+- Status: in progress
 - Branch: plan/refactor-p4-context-budget
 - After: refactor-p4-episode-memory
 
@@ -10,8 +10,18 @@
 > and with the revised `refactor-p4-episode-memory` plan (which now owns the greeting-for-all-
 > phases change, `PhaseSpec.budget` as data, the single message layout and the eval seeding).
 > D-A is redesigned: blocks are pure renderers over the phase's already-loaded data, not a
-> second loader. **Re-validate this plan against the tree once the episode-memory plan has
-> merged** — its Task 1 measurement and the exact assembler signature are inputs.
+> second loader.
+>
+> **Revision 2026-09-19** (orchestrator, after P4 episode memory merged at `b5dc2e1d`):
+> re-validated against the tree — `assembleContext({ systemPrompt, episodeSummaries, history,
+> current, now, timezone })`, `PhaseSpec.budget`, the D-B section ids, `compact.node.ts`'s
+> `budgetFor` trigger and `sectionText` in `prompts/compose.ts` all exist as named. Task 1's
+> measurement is pasted (smoke-only data — dev has no organic traffic). Three P4 close-out
+> advisories that touch `compact.node.ts` are folded into Task 4. **Owner strategy
+> 2026-09-19:** budget goes into the code skeleton; per plan only mocked tests, L0 and one
+> dev smoke — no model-backed eval run on this plan. AC-1344's re-run moves to the
+> consolidated eval pass (after P6, recommended). Executor today: a Sonnet subagent, not
+> the GLM `claude -p` path.
 
 **Goal:** The assembler enforces a per-phase token budget in the ADR-0013 §3.4 order — trim history, reduce domain block depth, drop the oldest episode summary — and never touches the phase prompt (INV-LLM-004). Domain data leaves the phase prompt (block 1) and becomes declared, budgeted context blocks (block 3) rendered from `PhaseSpec.contextBlocks`. Checkpoints are pruned by a script (BR-LLM-005). The `budgetReport` gains the budget and what was cut.
 
@@ -30,7 +40,7 @@
 - **Trimming never splits a tool pair and never starts the kept tail on a non-human message** (`trimMessages` with `strategy: 'last'`, `startOn: 'human'`, `includeSystem: false`, `allowPartial: false`, the estimator as `tokenCounter`). Because the episode-memory plan's compaction already removes whole turns, trimming here is the in-run safety net (a single huge run); the "kept tail starts with a human" property test is reused against the trimmer.
 - **Domain block depth reduction is declared per block** (`depths`); the assembler steps depth down before dropping a summary and records what it cut in `budgetReport.cuts`.
 - **Pruning script is run by the owner** (cron note in `docs/CICD.md`); no scheduler in the app. It never deletes the latest checkpoint per `(thread_id, checkpoint_ns)`. The `checkpoints*` tables are LangGraph runtime storage, absent from `schema.ts` — the script uses raw SQL and **never** adds them to migrations (HB-01 rule in `CLAUDE.md`).
-- **Reserved to the orchestrator:** Task 1, Task 7. Verification from `apps/server/`. No attribution lines. No `RUN_LLM_EVALS=1` runs by the executor; the orchestrator's only model-backed step is the one-dataset n=1 mini-compare in Task 7 (§7a hardened 2026-09-18 — full sweeps are red-button only).
+- **Reserved to the orchestrator:** Task 1, Task 7. Verification from `apps/server/`. No attribution lines. **No model-backed run on this plan at all** (owner strategy 2026-09-19): the executor runs no `RUN_LLM_EVALS=1` command; the orchestrator's only live-model step is the 3–5-call dev smoke in Task 7. AC-1344's re-run is recorded as pending the consolidated eval pass.
 
 ## Decisions taken by this plan (not settled by the durable specs — owner may overrule)
 
@@ -46,12 +56,30 @@
 
 ### Task 1: Re-measure §3.4 on dev with episode memory on (orchestrator)
 
-- [ ] **Step 1:** After `refactor-p4-episode-memory` has run on dev for at least a day: `SELECT phase_in, count(*), percentile_cont(0.5) WITHIN GROUP (ORDER BY (budget_report->>'system')::int) AS p50_system, max((budget_report->>'system')::int), percentile_cont(0.95) WITHIN GROUP (ORDER BY (budget_report->>'history')::int) AS p95_history, max((budget_report->>'summary')::int) FROM conversation_runs WHERE budget_report IS NOT NULL AND created_at > now() - interval '7 days' GROUP BY 1;` — paste here.
-- [ ] **Step 2:** Set the `PhaseSpec.budget` values (table below) — start from ADR §3.4 and adjust `system` to p50 + 30 %, `history` to max(ADR, p95) rounded up to 0.5 k; `domain` from the block sizes after Task 2 (re-check once Task 2 lands). Record the chosen table under **Budget defaults (Task 1)**.
+- [x] **Step 1:** After `refactor-p4-episode-memory` has run on dev for at least a day: `SELECT phase_in, count(*), percentile_cont(0.5) WITHIN GROUP (ORDER BY (budget_report->>'system')::int) AS p50_system, max((budget_report->>'system')::int), percentile_cont(0.95) WITHIN GROUP (ORDER BY (budget_report->>'history')::int) AS p95_history, max((budget_report->>'summary')::int) FROM conversation_runs WHERE budget_report IS NOT NULL AND created_at > now() - interval '7 days' GROUP BY 1;` — paste here.
+- [x] **Step 2:** Set the `PhaseSpec.budget` values (table below) — start from ADR §3.4 and adjust `system` to p50 + 30 %, `history` to max(ADR, p95) rounded up to 0.5 k; `domain` from the block sizes after Task 2 (re-check once Task 2 lands). Record the chosen table under **Budget defaults (Task 1)**.
 
 **Verification:** the table exists before Task 3 starts.
 
-**Budget defaults (Task 1):** _(pasted by the orchestrator)_
+**Measurement (Task 1 Step 1, 2026-09-19, dev, 7 days, estimator `chars4x1.15`):** dev has
+no organic traffic — every row is a smoke run (n = 1…16 per phase); these are floors, not means.
+
+| phase_in | n | p50 system | max system | p95 history | max history | max summary |
+|---|---:|---:|---:|---:|---:|---:|
+| registration | 7 | 977 | 1029 | 390 | 391 | 0 |
+| chat | 5 | 1330 | 1435 | 3655 | 3688 | 388 |
+| plan_creation | 16 | 1413 | 1445 | 2178 | 2479 | 388 |
+| session_planning | 1 | 3218 | 3218 | 5139 | 5139 | 351 |
+| training | 2 | 3625 | 3643 | 4973 | 4981 | 331 |
+
+**Budget defaults (Task 1 Step 2, owner decision 2026-09-19):** the ADR §3.4 table stands
+unchanged as the defaults already in `phases/*.spec.ts`. Rationale: p50 + 30 % is *below*
+the ADR `system` value for every phase, and max(ADR, p95) rounded up equals the ADR
+`history` value for every phase; lowering `system` on n ≤ 16 floors would only produce
+spurious `warn` logs (system over budget is reported, never cut). `domain` is re-checked
+by the executor against the block sizes after Task 2 (pasted under **Snapshot diff**);
+if any phase's full-depth blocks exceed `domain`, raise that phase's `domain` to the
+measured size rounded up to 0.5 k and note it there — do not lower the others.
 
 ---
 
@@ -76,7 +104,7 @@
 ### Task 3: Budget enforcement in the assembler
 
 **Files:**
-- Create: `apps/server/src/infra/ai/context/budget.ts` — `resolveBudget({ systemTokens, summaries, blocks, history, current, budget, estimate }) → { history; blockDepths; summaries; cuts }` — pure; `trimHistory(history, maxTokens, estimate)` wraps `trimMessages` (`strategy: 'last'`, `startOn: 'human'`, `includeSystem: false`, `allowPartial: false`, `tokenCounter` = the estimator over `messageText`).
+- Create: `apps/server/src/infra/ai/context/budget.ts` — `resolveBudget({ systemTokens, summaries, blocks, history, current, budget, estimate }) → { history; blockDepths; summaries; cuts }` — pure; `trimHistory(history, maxTokens, estimate)` wraps `trimMessages` (`strategy: 'last'`, `startOn: 'human'`, `includeSystem: false`, `allowPartial: false`, `tokenCounter` = `estimateMessages` from `context/token-estimator.ts`, i.e. the estimator over `messageTokenText` — the one message-token basis, R2 close-out rule).
 - Modify: `assemble-context.ts` (calls `resolveBudget`, re-renders blocks at the chosen depth), `config/index.ts` + `.env.example` (`LLM_BUDGET_<PHASE>_<PART>` optional overrides, applied where the specs are built), `phases/*.spec.ts` (Task 1's table), `domain/conversation/ports/conversation-run.ports.ts` (`BudgetReport` fields per D-C), the agent node (logs `warn` when `system > budget.system`, `error` on `'floor'`).
 
 Resolution order (INV-LLM-004): (a) trim history to `budget.history`; (b) if `total` still > `sum − outputReserve`, step each block down its `depths` (largest block first) until within; (c) drop episode summaries oldest first; (d) D-D floor. `system` over its budget is **reported**, never cut.
@@ -89,12 +117,18 @@ Resolution order (INV-LLM-004): (a) trim history to `budget.history`; (b) if `to
 
 ---
 
-### Task 4: AC-1343 replay test and the L1 checks
+### Task 4: AC-1343 replay test, the L1 checks, and the compaction-node advisories
 
 **Files:**
-- Create: `apps/server/evals/fixtures/long-training-transcript.ts` (60 turns: human → `log_set` tool call → tool result → ai, realistic lengths, built with the seed helper from the episode-memory plan), `evals/levels/__tests__/budget-replay.unit.test.ts`
-- Modify: `evals/levels/l1.ts` (`budget-within-limits`, `no-orphan-tool-message`), `evals/lib/run-case.ts` (`ModelInputRecorder` — last model input's message types and tool-call/tool-message pairing), `evals/lib/reporter.ts` if the check list is enumerated there.
+- Create: `apps/server/evals/fixtures/long-training-transcript.ts` (60 turns: human → `log_set` tool call → tool result → ai, realistic lengths, built with `evals/lib/seed-messages.ts`), `evals/levels/__tests__/budget-replay.unit.test.ts`
+- Modify: `evals/levels/l1.ts` (`budget-within-limits`, `no-orphan-tool-message`), `evals/lib/run-case.ts` (`ModelInputRecorder` — last model input's message types and tool-call/tool-message pairing, same `BaseCallbackHandler` pattern as `ToolRecorder`), `evals/lib/reporter.ts` if the check list is enumerated there.
+- Modify: `src/infra/ai/graph/nodes/compact.node.ts` + its unit test — three P4 close-out advisories (BACKLOG § P4 close-out review advisories, 2026-09-18), folded here because the replay test exercises exactly this node:
+  (a) `new RemoveMessage({ id: m.id ?? '' })` silently no-ops for an id-less message, so the budget trigger refires every run and a summary can repeat per episode — fail loud: `log.error` + skip the removal set (never remove with `''`), and a unit test where one history message has no id;
+  (b) the D-E legacy-import branch returns without consuming a pending `state.compactReason` — it must return `compactReason: null` too; unit test: transition-plus-first-message leaves no flag behind;
+  (c) `LegacySummary` is re-declared inline — import the named type from `summary.ports.ts`.
+  Tick the three BACKLOG entries in the same commit.
 
+- [ ] **Step 0:** Compaction-node advisories (a)–(c), tests first; commit — `fix(ai): compact node fails loud on id-less messages, consumes compactReason on legacy import, imports LegacySummary (P4 close-out advisories)`
 - [ ] **Step 1:** Replay: seed the 60-turn transcript into `messages` with `updateState`, run 10 consecutive mocked-model runs (each appends a set), assert `budgetReport.history ≤ budget.history` and no orphan tool message on every run, and that compaction by budget (BR-LLM-003) fired at least once (the stub `summaries.insert` received a row) — the `it` name carries `AC-1343`.
 - [ ] **Step 2: Commit** — `test(evals): AC-1343 long-transcript replay; L1 budget and orphan-tool checks`
 
@@ -125,10 +159,10 @@ Resolution order (INV-LLM-004): (a) trim history to `budget.history`; (b) if `to
 
 ### Task 7: Evals, dev deploy, pruning dry-run on dev, docs, close-out (orchestrator)
 
-- [ ] **Step 1: AC-1344, minimal half** — one dataset, n=1: `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase training --dataset <the training dataset with the most tool rounds> --samples 1 --baseline compare --baseline-version v2` — **≤ 10 calls** (the training phase is where trimming bites; state the exact count before running). Evidence JSON `…/evidence/refactor-p4-context-budget-l1-compare.json`. The full sweep is a separate owner-launched red-button item (§7a, 2026-09-18), not a close-out condition. Rollback per the master plan only once the owner runs the sweep; before that, the dev smoke and `budget-within-limits` on live rows are the gate.
+- [ ] **Step 1: AC-1344 — deferred, no run here** (owner strategy 2026-09-19): no model-backed eval on this plan. Record in the close-out that AC-1344's re-run (L1 ±2 pp, L2 manual rubric) is pending the consolidated eval pass on the prod model via OpenRouter (off the Z.AI quota), together with the P4 episode-memory compare. Gate for this plan = unit/integration/L0 + the dev smoke + `budget-within-limits` on live rows.
 - [ ] **Step 2: Deploy to dev**; smoke all phases; `SELECT phase_in, max((budget_report->>'history')::int), (budget_report->'budget'->>'history') FROM conversation_runs WHERE created_at > now() - interval '2 hours' GROUP BY 1, 3;` — history never above budget; `SELECT budget_report->'cuts' FROM conversation_runs WHERE jsonb_array_length(budget_report->'cuts') > 0 AND created_at > now() - interval '2 hours';` — inspect what was cut. `npm run db:prune-checkpoints` dry-run on dev — paste counts; `--apply` on dev only after the owner sees the counts.
 - [ ] **Step 3: Docs reconcile** (factual): `ARCHITECTURE.md`, `CONTRIBUTING_AI.md` (adding a context block; tuning a budget via env), `PROMPT_EVAL_FRAMEWORK.md` §4.2 (the two checks are implemented), `CICD.md` cron note, `BACKLOG.md` ticks (`budget-report-present` false positive → guarded; small P2 duplications — profile block). ADR-0013 amendments to **escalate**: §3.4 budget table replaced by Task 1's measured defaults; §4.2 `contextBlocks` shape (renderers over loaded data); D-D floor rule.
-- [ ] **Step 4: Close-out** — `close-out-review`, `- Status: done`, `node scripts/state.mjs --write`, merge; STATE: **P4 complete**; Next → P5 (if not already run in parallel) and P6.
+- [ ] **Step 4: Close-out** — `close-out-review` (one review for the plan; P4 episode memory had its own), `- Status: done`, `node scripts/state.mjs --write`, merge; STATE: **P4 complete**, AC-1344 pending the consolidated pass; Next → P5 (if not already run in parallel) and P6. Branch/worktree cleanup only on the owner's explicit command (CLAUDE.md rule).
 
 **Verification:** evidence pasted; `node scripts/state.mjs --check` → OK. AC-1343, AC-1344, INV-LLM-004, BR-LLM-005.
 

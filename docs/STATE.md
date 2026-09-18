@@ -15,7 +15,6 @@ _Generated 2026-09-18 from docs/superpowers/plans/ + git. Never hand-edit; regen
 — none —
 
 **Planned**
-- `refactor-p4-context-budget.md` — Refactor P4 — Context Budget and Domain Blocks Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 
 **Done**
@@ -40,7 +39,7 @@ _Generated 2026-09-18 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 
 **Close-out debt (merged but plan not done)**
-— none —
+- `refactor-p4-context-budget.md` — merged into `dev`
 <!-- AUTO:status END -->
 
 ## Scope now
@@ -87,11 +86,19 @@ _Generated 2026-09-18 from docs/superpowers/plans/ + git. Never hand-edit; regen
    `refactor-p4-evals-verify` (compare run, budget-gated). One follow-up found in the smoke
    and fixed post-merge: the structured-output retry gate now also catches `SyntaxError`.
    Advisories: `BACKLOG.md` § P4 close-out review advisories (11 entries).
-   **Next: `refactor-p4-context-budget`** (its Task 1 needs a day of dev traffic on
-   episode memory — dispatch 2026-09-19+; re-validate the plan against the tree first;
-   folds the `LegacySummary` import advisory). `refactor-p4-evals-verify` runs when the
-   owner releases budget (Steps 3–4 only: the compare + evidence JSON). P5 may run in
-   parallel per the master plan; it is not planned yet.
+   **`refactor-p4-context-budget` is in progress (dispatched 2026-09-19)** — plan
+   re-validated against `b5dc2e1d`; Task 1 measured from smoke rows (dev has no organic
+   traffic) and the ADR §3.4 defaults kept; three `compact.node.ts` advisories folded into
+   its Task 4. Executor: a Sonnet subagent from the orchestrating session (Z.AI weekly
+   quota 63 % consumed by 2026-09-19 — GLM executor paused until the window resets).
+   **Owner strategy 2026-09-19 — code first, one consolidated eval pass:** per plan only
+   mocked tests, L0 and one 3–5-call dev smoke; no mini-runs, working-checks or per-plan
+   `evals-verify` micro-tasks. All model-backed evals (AC-1344 compare for episode memory
+   and context budget, L2 rubric) run once, on the prod model through OpenRouter (off the
+   Z.AI quota), after a milestone the owner picks (recommended: after P6), then fixes are
+   planned from the results and the suite is re-run. `refactor-p4-evals-verify` stays
+   planned only as the record of what that pass must include. P5 may run in parallel per
+   the master plan; it is not planned yet.
 3. Then P6 → P7 per the master plan phase map.
 3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
    the code aligned to it, ESLint keeping it that way. Independent of the P0 chain;
