@@ -41,3 +41,10 @@ every comparison made against v0.
 Re-run a comparison with:
 
     RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase <phase> --samples 3 --baseline compare --baseline-version v0
+
+## v2 mini-freeze (2026-09-18, refactor-p4-episode-memory Task 2)
+
+- Commit: `56696947` (Task 1, pre-P4 code), throwaway worktree, direct Z.AI coding route, glm-5.3.
+- Scope: `plan_creation/id-reuse` only, n=1 (5 cases, 13 requests incl. tool rounds; 14889 in / 2853 out tokens; weekly quota 30182 → 28347 = −1835 credits, which also includes the orchestrating Claude Code session's own consumption).
+- Baseline: `evals/baselines/v2/plan_creation.json` (tagged `dataset: id-reuse`).
+- `no_redundant_search`: **5/5 passed** pre-P4 — the plan's "expected low" was wrong; the gate "≥ +15 pp" is therefore vacuous against this baseline and the meaningful post-P4 question is "no regression below 5/5" (owner to re-scope AC-1344).
