@@ -26,3 +26,12 @@ bot.on('polling_error', (err) => {
     log.error({ err }, 'Telegram polling error');
     watchdog.record(err);
 });
+
+// node-telegram-bot-api exposes no "poll succeeded" event (verified in
+// telegramPolling.js — only polling_error on failure and per-update-type
+// events when an update actually arrives), so a delivered message is used as
+// the proof-of-life signal: receiving one is only possible if the poll loop
+// is running, so it resets the watchdog's consecutive-error count.
+bot.on('message', () => {
+    watchdog.recordSuccess();
+});

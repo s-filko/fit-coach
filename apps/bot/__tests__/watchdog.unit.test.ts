@@ -97,6 +97,27 @@ describe('createPollingWatchdog (AC-1353, BUG-012)', () => {
         expect(onFatal).not.toHaveBeenCalled();
     });
 
+    it('AC-1353: after recordSuccess(), threshold - 1 prior errors no longer contribute — the next single error does not trip', () => {
+        const onFatal = jest.fn();
+        const clock = makeClock();
+        const watchdog = createPollingWatchdog({ windowMs: WINDOW_MS, threshold: THRESHOLD, onFatal, now: clock.now });
+
+        // threshold - 1 = 9 errors, all still well inside the window.
+        for (let i = 0; i < THRESHOLD - 1; i++) {
+            clock.advance(1000);
+            watchdog.record(new Error(`transient ${i}`));
+        }
+        clock.advance(1000);
+        watchdog.recordSuccess();
+
+        // A single error right after the reset must not trip — if the 9
+        // prior timestamps had survived, this 10th record() would trip.
+        clock.advance(1000);
+        watchdog.record(new Error('transient after reset'));
+
+        expect(onFatal).not.toHaveBeenCalled();
+    });
+
     it('never sleeps and never calls the real process.exit — onFatal/now are fully injected', () => {
         const onFatal = jest.fn();
         const clock = makeClock(123456789);
