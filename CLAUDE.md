@@ -50,7 +50,7 @@ curl https://fitcoach-dev.filko.dev/health   # → 200
 
 ## Gotchas
 
-- **Bot can hang silently**: node-telegram-bot-api polling dies on persistent Telegram errors (502/ECONNRESET, seen 2026-08-08) without exiting the process — Docker restart policy never fires, bot just stops consuming updates. Fix = `docker restart fitcoach-dev-bot`. Proper fix (watchdog on `polling_error` → process exit) not yet implemented
+- **Bot can hang silently**: node-telegram-bot-api polling dies on persistent Telegram errors (502/ECONNRESET, seen 2026-08-08) without exiting the process — Docker restart policy never fires, bot just stops consuming updates. Fix = `docker restart fitcoach-dev-bot`. Proper fix (watchdog on `polling_error` → process exit) implemented in P5 (`apps/bot/watchdog.ts`, wired in `apps/bot/index.ts`): trips on `EFATAL` or 10 errors within 2 minutes, calls `process.exit(1)` so Docker restarts the bot
 - **Bot logs only errors** — a working message flow shows just one "incoming message" INFO line and nothing else. Don't mistake this for a hang; verify via server logs (`docker logs fitcoach-dev-server`) looking for POST /api/bot/user + /api/bot/chat
 - **Deploy workflows run the OLD deploy.sh**: GitHub Actions executes `bash /srv/docker/fitcoach/deploy/deploy.sh <env>` on the VPS before the script pulls the branch — the first deploy after any deploy.sh change runs the previous version. After editing deploy.sh, validate with a manual second run on dev: `ssh filko.dev "cd /srv/docker/fitcoach && ./deploy/deploy.sh dev"`
 - Webapp build is part of the server Docker image (`apps/server/Dockerfile`)

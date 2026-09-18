@@ -66,7 +66,15 @@ export function buildServer(): FastifyInstance {
         censor: '[REDACTED]',
       },
     },
-    requestTimeout: 30000,
+    // P5 item 2, calibrated 2026-09-19 against measured run latency on dev:
+    // plan_creation p95 = 317 s, max = 393 s (n = 54, smoke traffic — a floor,
+    // not a mean). At the previous 30 s, 15 recorded runs exceeded the limit
+    // and 14 of them had outcome 'ok' — the graph finished while Fastify was
+    // entitled to abort the connection. 420 s clears the p95 with headroom and
+    // sits above the observed max, while staying under the 10 min mark where a
+    // client or proxy gives up first. A backstop for a pathological run, not a
+    // target: nothing waits on it in the normal path.
+    requestTimeout: 420000,
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);

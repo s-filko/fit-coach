@@ -52,11 +52,12 @@ apps/server/src/
       transitions.ts          # TRANSITION_MATRIX + evaluateTransition — pure domain rules (BR-CONV-015..018, ADR-0013 §4.3)
       events.ts               # PhaseTransitionCommitted event + TransitionHandler type (ADR-0013 §4.3)
       episode.ts              # EpisodeSummary schema/types, StoredEpisodeSummary, CompactReason, TokenBudget (ADR-0013 §3.3)
+      errors.ts                # LlmUnavailableError/ThreadBusyError/CoreError + HTTP_STATUS_BY_CODE (D-B, ADR-0013 §6) — typed errors the adapter throws and chat.routes.ts maps to 503/409/500
       ports/
         transcript.ports.ts   # TranscriptPort (appendRunMessages, appendSystemNote) + TranscriptMessage — transcript projection (§8)
         summary.ports.ts      # SummaryPort (insert, latestLegacySummary) — conversation_summaries (§8)
         conversation-run.ports.ts      # IConversationRunService (run rows, §8) + ConversationRunPort (§11 — run the graph, clearContext; token CONVERSATION_RUN_PORT_TOKEN)
-        index.ts               # Re-exports (incl. ConversationPhase)
+        index.ts               # Re-exports (incl. ConversationPhase, and errors.ts's exports)
     training/
       ports/                   # Named by contract (rule 2)
         index.ts               # Re-exports
@@ -70,6 +71,9 @@ apps/server/src/
       set-data.types.ts        # Zod schemas for set_data — single source of truth for the SetData union
 
   infra/                        # Integrations + drivers
+    conversation/
+      keyed-mutex.ts            # createKeyedMutex({ waitMs }) — generic per-key in-process mutex; a waiter that can't start within waitMs rejects with ThreadBusyError (D-12)
+      with-run-mutex.ts         # withRunMutex(port, opts) — decorator around ConversationRunPort serialising run/clearContext per userId (D-A, ADR-0013 §6/§11); composed in register-infra-services.ts
     db/
       schema.ts                 # Drizzle schema (users, user_accounts, conversation_turns, etc.)
       drizzle.ts                # Pool + drizzle init + health
@@ -309,8 +313,21 @@ Standing exceptions (each names the task that closes it):
 - Base path: `/api` (no versioning for now). If added later: `/api/v1`.
 - JSON only. Use consistent response envelopes:
   - Success: `{ data: <payload> }`
-  - Error: `{ error: { message, code? } }`
+  - Error: `{ error: { message, code? } }` (general routes); the chat routes are the
+    documented exception — see below.
 - Names: plural resources (e.g., `/users/:id`). Custom actions are subresources (e.g., `/messages`).
+- **`POST /api/bot/chat` error codes** (ADR-0013 §6, P5, INV-LLM-006): the catch block maps
+  a typed `ConversationError` (`domain/conversation/errors.ts`) through `HTTP_STATUS_BY_CODE`
+  and replies `{ error: { code } }` — **no `message` field, no exception text, no stack**.
+
+  | HTTP | `code` | Meaning |
+  |---|---|---|
+  | 503 | `LLM_UNAVAILABLE` | The provider (or the network path to it) failed or timed out; run row `outcome: 'llm_unavailable'` |
+  | 409 | `THREAD_BUSY` | The per-user run mutex rejected the request after `LLM_RUN_MUTEX_WAIT_MS`; the graph was never entered, so **no run row is written** (D-D) |
+  | 500 | `CORE_ERROR` | Anything else (a bug, an unexpected exception); run row `outcome: 'core_error'` |
+
+  `req.log.error({ err })` still carries the original message for logs — only the response
+  body is restricted.
 
 ## Testing Strategy
 - Unit: domain services with repository stubs.

@@ -39,6 +39,10 @@ export const EnvSchema = z.object({
   EPISODE_GAP_HOURS: z.coerce.number().default(3),
   EPISODE_MIN_TURNS: z.coerce.number().default(2),
   EPISODE_MIN_TOKENS: z.coerce.number().default(300),
+  // Same class as EPISODE_*/LLM_BUDGET_* above: a tunable, not a secret (P5,
+  // D-A/D-12). How long a waiter for the per-userId run mutex waits before
+  // rejecting with ThreadBusyError (HTTP 409).
+  LLM_RUN_MUTEX_WAIT_MS: z.coerce.number().default(20000),
   LLM_TEMPERATURE: z
     .string()
     .transform(v => {

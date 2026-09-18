@@ -495,3 +495,20 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 - [ ] `context/budget.ts`'s `renderBlockAt` reimplements `renderBlocks`'s render-and-measure step
       with a different return shape (token count instead of a `RenderedBlock`). Not a clean
       duplicate, but the same operation expressed twice. Source: close-out-review, R2 (2026-09-19).
+
+## P5 close-out review advisories (2026-09-19)
+
+- [ ] `infra/conversation/keyed-mutex.ts:43-52` — a waiter that later times out still holds its
+      chain slot until its own settle, so a third caller queues behind a timed-out second caller
+      rather than being freed when that waiter's window expires. Behaviourally harmless (each
+      waiter races its own timeout), but the chain length is bounded by concurrent callers, not
+      by successful completions — worth a comment saying so. Source: close-out-review, R3 (2026-09-19).
+- [ ] No test exercises `chatQueue.enqueue` wired through `registerBotHandlers` — two rapid
+      messages to one chatId producing two sequential HTTP calls. Consistent with D-E's stated
+      pure-unit test boundary for the bot, so not an AC gap, but nothing proves that seam
+      end-to-end. Source: close-out-review, R3 (2026-09-19).
+- [ ] `app/routes/chat.routes.ts` duck-types the thrown error's `code` field instead of using
+      `instanceof` against the exported error classes. This is D-B's explicit intent (one shared
+      status table, no instanceof chain) and is correct — recorded only so the divergence from
+      the usual discriminated-class style is a deliberate choice on record.
+      Source: close-out-review, R1 (2026-09-19).

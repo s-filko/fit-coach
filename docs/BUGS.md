@@ -805,7 +805,7 @@ workout_sessions: no new in_progress session
 
 ## BUG-012 — Bot polling dies silently on persistent Telegram errors; container stays "Up"
 
-**Status:** Open
+**Status:** Fixed (refactor-p5-concurrency-delivery, AC-1353)
 **Severity:** High
 **Found during:** Dev environment revival 2026-09-09 (incident window 2026-08-08/09)
 **Component:** `apps/bot/index.ts`
@@ -854,6 +854,10 @@ In `apps/bot/index.ts`, add a watchdog: count consecutive `polling_error` events
 ### Regression test
 
 Simulate Telegram API failures (e.g. network policy drop or mock returning 502/connection reset) — bot process must exit within the configured window and be restarted by Docker; container eventually returns to normal polling when Telegram recovers.
+
+### Resolution (2026-09-19)
+
+Fixed by P5 (`refactor-p5-concurrency-delivery`, AC-1353, Task 4): `apps/bot/watchdog.ts`'s `createPollingWatchdog({ windowMs, threshold, onFatal, now })` is wired into `bot.on('polling_error', ...)` in `apps/bot/index.ts`. It trips immediately on an `EFATAL` error (either shape node-telegram-bot-api emits), or on `threshold` (10) consecutive errors inside a 2-minute sliding window; `onFatal` logs structured and calls `process.exit(1)`, so Docker's `restart: unless-stopped` policy revives the bot. A success signal from the live receive path resets the consecutive-error count via `recordSuccess()`. Covered by `apps/bot/__tests__/watchdog.unit.test.ts` (the `it` names carry `AC-1353`).
 
 ---
 

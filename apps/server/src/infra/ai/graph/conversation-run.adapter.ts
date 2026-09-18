@@ -1,22 +1,40 @@
 /**
  * The ConversationRunPort adapter (ADR-0013 §11, D-A): loads the user, builds
  * the immutable run context (runId, user, now, client, trigger, metrics) and
- * invokes the graph. Failed runs get a run row (D-F) and rethrow — error
- * MAPPING itself is P5.
+ * invokes the graph. Failed runs get a run row (D-F) and rethrow — as a typed
+ * error (P5 has landed, ADR-0013 §6): `isProviderError` → `LlmUnavailableError`
+ * (503), anything else → `CoreError` (500). The original error stays on
+ * `cause` for the log only — `chat.routes.ts` never sees it (INV-LLM-006).
+ *
+ * NOT implemented (owner escalation, P5 Task 3, 2026-09-19): ADR-0013 §6
+ * maps a tool `system_error` to a raised `ToolSystemError` → `CoreError` →
+ * HTTP 500 with no body internals. The tool executor
+ * (`infra/ai/graph/tool-executor.ts:189-195`) does not raise — on a
+ * `system_error` it still appends the localized `tool_system_error` catalog
+ * message (ru/en) and the run finalizes normally as HTTP 200, exactly as it
+ * did before this plan (the `D-D keeps HTTP 200 until P5` comment there
+ * predates this decision). Making the executor raise here would turn that
+ * 200-with-an-explanation into a 500-with-nothing — a user-visible
+ * regression, not a refactor — so it is deliberately left alone and escalated
+ * to the owner rather than decided unilaterally. `TOOL_OUTCOME_FORMAT_ID`,
+ * the `SYSTEM_ERROR:` prefix and the skip-remaining-batch behaviour in the
+ * executor are all untouched by this plan.
  */
 import { randomUUID } from 'node:crypto';
 
 import type { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import { type BaseMessage, HumanMessage } from '@langchain/core/messages';
 
-import type {
-  ConversationPhase,
-  ConversationRunPort,
-  ConversationRunRecord,
-  IConversationRunService,
-  RunInput,
-  RunResult,
-  TranscriptPort,
+import {
+  type ConversationPhase,
+  type ConversationRunPort,
+  type ConversationRunRecord,
+  CoreError,
+  type IConversationRunService,
+  LlmUnavailableError,
+  type RunInput,
+  type RunResult,
+  type TranscriptPort,
 } from '@domain/conversation/ports';
 import type { IUserService } from '@domain/user/ports';
 
@@ -32,6 +50,16 @@ const log = createLogger('conversation-run-adapter');
 function isProviderError(err: unknown): boolean {
   const status = (err as { status?: number } | null)?.status;
   return typeof status === 'number' && (status === 429 || status >= 500);
+}
+
+/**
+ * Typed rethrow (ADR-0013 §6, INV-LLM-006): the route maps this to an HTTP
+ * status and a body carrying only `code`. `err` rides `cause` for the log
+ * (`req.log.error({ err })` still sees the real message) — never the message
+ * on the thrown error itself.
+ */
+function toConversationError(err: unknown): LlmUnavailableError | CoreError {
+  return isProviderError(err) ? new LlmUnavailableError(undefined, err) : new CoreError(undefined, err);
 }
 
 export interface ConversationRunnerDeps {
@@ -123,7 +151,7 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
         } catch (recordErr) {
           log.error({ err: recordErr, runId }, 'Failed to record the failed run');
         }
-        throw err;
+        throw toConversationError(err);
       }
     },
 

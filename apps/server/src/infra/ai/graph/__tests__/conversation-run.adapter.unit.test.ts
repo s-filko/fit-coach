@@ -5,7 +5,7 @@
  */
 import { AIMessage, HumanMessage } from '@langchain/core/messages';
 
-import type { IConversationRunService } from '@domain/conversation/ports';
+import { CoreError, LlmUnavailableError, type IConversationRunService } from '@domain/conversation/ports';
 import type { IUserService } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
 
@@ -64,7 +64,7 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it('D-F: a throwing graph records outcome core_error and rethrows', async () => {
+  it('D-F/ADR-0013 §6: a throwing graph records outcome core_error and rethrows a typed CoreError', async () => {
     const { deps, recordRun } = makeDeps(
       {
         invoke: async () => {
@@ -75,7 +75,7 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
     );
     const runner = buildConversationRunner(deps);
 
-    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toThrow('boom');
+    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toBeInstanceOf(CoreError);
     expect(recordRun).toHaveBeenCalledTimes(1);
     const [[record]] = recordRun.mock.calls;
     expect(record.outcome).toBe('core_error');
@@ -83,7 +83,34 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
     expect(record.userId).toBe(UID);
   });
 
-  it('D-F: a provider error (status >= 500 / 429) records outcome llm_unavailable', async () => {
+  it('ADR-0013 §6/INV-LLM-006: the thrown CoreError carries a fixed message, not the original — the original rides cause', async () => {
+    const sentinel = 'SENTINEL_ORIGINAL_MESSAGE_e8f2a1';
+    const { deps } = makeDeps(
+      {
+        invoke: async () => {
+          throw new Error(sentinel);
+        },
+      },
+      makeUser(),
+    );
+    const runner = buildConversationRunner(deps);
+
+    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toMatchObject({
+      code: 'CORE_ERROR',
+    });
+    try {
+      await runner.run({ userId: UID, text: 'x' });
+      throw new Error('expected rejection');
+    } catch (thrown) {
+      expect(thrown).toBeInstanceOf(CoreError);
+      const coreError = thrown as CoreError;
+      expect(coreError.message).not.toContain(sentinel);
+      expect(coreError.cause).toBeInstanceOf(Error);
+      expect((coreError.cause as Error).message).toBe(sentinel);
+    }
+  });
+
+  it('D-F/ADR-0013 §6: a provider error (status >= 500 / 429) records outcome llm_unavailable and rethrows a typed LlmUnavailableError', async () => {
     const providerError = Object.assign(new Error('upstream'), { status: 503 });
     const { deps, recordRun } = makeDeps(
       {
@@ -95,11 +122,13 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
     );
     const runner = buildConversationRunner(deps);
 
-    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toThrow('upstream');
+    const rejection = runner.run({ userId: UID, text: 'x' });
+    await expect(rejection).rejects.toBeInstanceOf(LlmUnavailableError);
+    await expect(rejection).rejects.toMatchObject({ code: 'LLM_UNAVAILABLE' });
     expect(recordRun.mock.calls[0][0].outcome).toBe('llm_unavailable');
   });
 
-  it('D-F: a failed recordRun never masks the original error', async () => {
+  it('D-F: a failed recordRun never masks the original error (still a typed CoreError)', async () => {
     const { deps, recordRun } = makeDeps(
       {
         invoke: async () => {
@@ -111,7 +140,7 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
     recordRun.mockRejectedValueOnce(new Error('db down'));
     const runner = buildConversationRunner(deps);
 
-    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toThrow('boom');
+    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toBeInstanceOf(CoreError);
   });
 
   it('carries the invoke config contract: context, metadata.runId, callbacks[0], thread_id (D-B)', async () => {
