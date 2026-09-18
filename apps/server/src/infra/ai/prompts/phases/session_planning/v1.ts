@@ -1,11 +1,13 @@
 import type { SessionPlanningContextData } from '@domain/training/services/session-planning-context.builder';
-import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
+import { buildActivePlanSection } from '@infra/ai/prompts/blocks/session-planning-active-plan.v1';
+import { buildHistorySection } from '@infra/ai/prompts/blocks/session-planning-recent-history.v1';
+import { buildRecoverySection } from '@infra/ai/prompts/blocks/session-planning-recovery-timeline.v1';
 import { renderDirectives } from '@infra/ai/prompts/compose';
 import { DEFAULT_DIRECTIVES_V1 } from '@infra/ai/prompts/directives';
 import type { DirectiveContext, PromptModule, Section } from '@infra/ai/prompts/types';
 
-import { calendarDaysAgo, formatInUserTz, humanTimeAgo } from '@shared/date-utils';
+import { formatInUserTz } from '@shared/date-utils';
 
 export interface SessionPlanningPromptContext extends DirectiveContext {
   context: SessionPlanningContextData;
@@ -80,122 +82,6 @@ If the user's message is NOT about session planning (choosing a workout, exercis
    - "thanks, bye" → "Удачи! Сессию оставляем на потом?"
 2. If the user confirms leaving OR their next message is still not about session planning → call \`request_transition({ toPhase: 'chat', reason: 'off_topic' })\`.
 3. If the user says they want to continue planning → stay and proceed normally.`;
-
-function buildActivePlanSection(
-  name: string,
-  planJson:
-    | {
-        goal?: string;
-        trainingStyle?: string;
-        sessionTemplates?: Array<{
-          key: string;
-          name: string;
-          focus: string;
-          estimatedDuration: number;
-          exercises: Array<{
-            exerciseId: string;
-            exerciseName: string;
-            targetSets: number;
-            targetReps: string;
-            targetWeight?: number;
-            restSeconds: number;
-          }>;
-        }>;
-      }
-    | undefined
-    | null,
-): string {
-  if (!planJson) {
-    return `Plan: ${name}\n(Plan details not available)`;
-  }
-
-  const lines = [
-    `Plan: ${name}`,
-    `Goal: ${planJson.goal ?? '?'}`,
-    `Style: ${planJson.trainingStyle ?? '?'}`,
-    '',
-    'Session Templates:',
-  ];
-
-  for (const template of planJson.sessionTemplates ?? []) {
-    lines.push(`\n### ${template.name} (key: ${template.key})`);
-    lines.push(`Focus: ${template.focus} | Est. ${template.estimatedDuration} min`);
-    lines.push('Exercises:');
-    for (const ex of template.exercises) {
-      const weight = ex.targetWeight ? ` @ ${ex.targetWeight}kg` : '';
-      lines.push(
-        `  - [ID:${ex.exerciseId}] ${ex.exerciseName}: ${ex.targetSets}x${ex.targetReps}${weight} (rest: ${ex.restSeconds}s)`,
-      );
-    }
-  }
-
-  return lines.join('\n');
-}
-
-function buildHistorySection(sessions: WorkoutSessionWithDetails[], now: Date, tz?: string | null): string {
-  if (sessions.length === 0) {
-    return 'No training history yet. This will be the first session.';
-  }
-
-  return sessions
-    .map((session, idx) => {
-      const sessionDate = new Date(session.startedAt ?? session.createdAt);
-      const timeAgo = humanTimeAgo(sessionDate, now, tz);
-
-      const exerciseList = session.exercises
-        .map(ex => {
-          const setsInfo = ex.sets
-            .map(s => {
-              if (s.setData.type === 'strength') {
-                const w = s.setData.weight ?? 'BW';
-                return `${s.setData.reps}x${w}${s.setData.weightUnit ?? 'kg'}`;
-              }
-              return `${s.setData.type}`;
-            })
-            .join(', ');
-          return `    - ${ex.exercise.name}: ${setsInfo || 'no sets logged'}`;
-        })
-        .join('\n');
-
-      return [
-        `${idx + 1}. ${session.sessionKey ?? 'Custom'} (${timeAgo}) — ${session.status} — ${session.durationMinutes ?? '?'} min`,
-        exerciseList || '    (no exercises logged)',
-      ].join('\n');
-    })
-    .join('\n\n');
-}
-
-function buildRecoverySection(sessions: WorkoutSessionWithDetails[], now: Date, tz?: string | null): string {
-  const lastTrainedByMuscle = new Map<string, { daysAgo: number; date: Date }>();
-
-  for (const session of sessions) {
-    const sessionDate = new Date(session.startedAt ?? session.createdAt);
-    const daysAgo = calendarDaysAgo(sessionDate, now, tz);
-
-    for (const ex of session.exercises) {
-      for (const mg of (ex.exercise as { muscleGroups?: Array<{ muscleGroup: string }> }).muscleGroups ?? []) {
-        const existing = lastTrainedByMuscle.get(mg.muscleGroup);
-        if (!existing || daysAgo < existing.daysAgo) {
-          lastTrainedByMuscle.set(mg.muscleGroup, { daysAgo, date: sessionDate });
-        }
-      }
-    }
-  }
-
-  if (lastTrainedByMuscle.size === 0) {
-    return 'No muscle group data — fully rested.';
-  }
-
-  return Array.from(lastTrainedByMuscle.entries())
-    .sort((a, b) => a[1].daysAgo - b[1].daysAgo)
-    .map(([muscle, { daysAgo, date }]) => {
-      const when = humanTimeAgo(date, now, tz);
-      const warn = daysAgo <= 2 ? '⚠ ' : '';
-      const note = daysAgo <= 2 ? ' — may still be sore' : ' — likely recovered';
-      return `- ${muscle}: ${warn}${when}${note}`;
-    })
-    .join('\n');
-}
 
 /** Moved verbatim from graph/nodes/session-planning.node.ts (P2, AC-1321 — snapshot-arbitered). */
 export const SESSION_PLANNING_V1: PromptModule<SessionPlanningPromptContext> = {
