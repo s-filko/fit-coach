@@ -15,10 +15,27 @@
       "Bash(source:*)",
       "Bash(echo:*)",
       "Bash(lsof:*)",
-      "Bash(pgrep:*)"
+      "Bash(pgrep:*)",
+      "Bash(node scripts/state.mjs --check)",
+      "Bash(git log *)",
+      "Bash(cat docs/ORCHESTRATION.md; echo \"=== skill\"; find ~/.claude -path \"*delegate-implementation*\" -name \"SKILL.md\" 2>/dev/null | head; find .claude -path \"*delegate-implementation*\" 2>/dev/null | head)",
+      "Bash(bash _p4-run-executor.sh)"
     ]
   },
   "disabledMcpjsonServers": [
     "supabase"
-  ]
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/owner-gate-branch-delete.sh"
+          }
+        ]
+      }
+    ]
+  }
 }

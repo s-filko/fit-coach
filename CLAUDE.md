@@ -67,6 +67,7 @@ curl https://fitcoach-dev.filko.dev/health   # → 200
 ## Rules
 
 - Respond in Russian (user preference)
+- **Deleting branches, worktrees, or Orca agent sessions requires the owner's explicit command naming the target.** This is the single normative statement of the rule (owner rule 2026-09-18) — other docs only point here. Never do it as "cleanup", not even after a successful merge: Orca binds agent sessions to worktrees, so one deletion kills every session on that branch, including other agents', and their history becomes unreachable. Report targets as ready to clean up and wait. Enforced by the PreToolUse hook `.claude/hooks/owner-gate-branch-delete.sh` (forces an approval prompt on any `git branch -d/-D/--delete`, `git push --delete`/`:branch`, `git worktree remove/prune`, `git update-ref -d`)
 - Docs in this repo are English-only; unique IDs (INV-*, BR-*, S-*, AC-*) — see `docs/DOCUMENTATION_GUIDE.md`
 
 ## Spec-Driven Development (Superpowers)

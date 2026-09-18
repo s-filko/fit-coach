@@ -109,13 +109,10 @@ set were present in the executor's `slash_commands` **[verified]**. No MCP serve
 configured for this project (`mcp_servers: []` **[verified]**) and none is needed; the
 executor works with the built-in file, search, and Bash tools.
 
-Delete the worktree when the plan is merged or cancelled:
-`git worktree remove "../fit_coach-$SLUG"`.
-
-**Full post-close-out cleanup** (owner-ruled 2026-09-16): after merge (or cancellation),
-the orchestrator removes the worktree, deletes the local `plan/<slug>` branch, and deletes
-the remote branch. This is part of close-out and needs no owner approval beyond the merge
-itself.
+**Branch and worktree deletion is owner-gated.** The rule and its enforcement are defined
+in `CLAUDE.md` § Rules (single source; owner rule 2026-09-18, revoking the 2026-09-16
+auto-cleanup). After merge or cancellation, report the worktree and the `plan/<slug>` branch
+as ready to clean up — delete nothing.
 
 **Never delegate into a worktree holding the orchestrator's uncommitted work.** The
 executor commits as the plan's steps require, and a bare `git commit` sweeps in whatever
