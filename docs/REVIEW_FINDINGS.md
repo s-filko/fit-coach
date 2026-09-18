@@ -241,6 +241,16 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   deleting old behavioural tests requires naming where each `it` moved.
   Runs: refactor-p3-run-context-commit (2026-09-17).
 
+- [×1] The zone rule "every AC has a test; a claimed AC with no test is blocking" misfires
+  on this plan's two live/budget-gated ACs: AC-1345 is by definition live-DB evidence and
+  AC-1344 is owner-gated with a sanctioned pending state. Rule candidate for the zone file
+  (or a principle in docs/CONTRIBUTING_AI.md): "An AC whose own text defines live-evidence
+  or budget-gated proof is verified by the evidence artifact named in the plan (pasted
+  output, ledger row, evidence JSON), not by a test suite; blocking applies only when the
+  named artifact is absent." Distinct from the absence-shaped-AC entry above: that one
+  discharges by re-executing a stated command, this one by an artifact the plan names.
+  Runs: refactor-p4-episode-memory (2026-09-18).
+
 ## Rule candidates
 
 A finding a zone wanted to raise as blocking but could not, because no rule in this repo
@@ -478,11 +488,22 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   done." Related to the ports-layout entry on claimed-vs-real output but distinct: that one
   governs the reviewer's brief, this one the executor's checkbox.
   Runs: refactor-p3-run-context-commit (2026-09-17).
-- [×1] A docs-reconcile task's checklist written from the author's memory left five durable
+- [×2] A docs-reconcile task's checklist written from the author's memory left five durable
   docs drifted (API_SPEC.md, three FEAT-* specs, BUGS.md/MANUAL_TEST_PLAN pointers) while
   every enumerated step was ticked done. Proposed sentence for the factual-bucket definition
   in `SUPERPOWERS_INTEGRATION.md` rule 3: a docs-reconcile step's file list must be derived
   mechanically — for every file/symbol the branch deletes or moves, paste
   `git grep -l -e <deleted-path-stem> -e <renamed-symbol> -- docs` into the plan and tick
-  items only against that list.
-  Runs: refactor-p3-run-context-commit (2026-09-17).
+  items only against that list. Second occurrence adds a sharper variant: the drift hit
+  docs that the same branch's own edits cited — CONTRIBUTING_AI's rewritten section still
+  pointed readers at `conversation.spec.md` for verification two lines after declaring the
+  mechanism deleted — so the checklist author did not notice even while editing an adjacent
+  paragraph about it.
+  Runs: refactor-p3-run-context-commit (2026-09-17), refactor-p4-episode-memory (2026-09-18).
+- [×1] A deps interface narrowing what the implementation may use, hiding real needs behind
+  `as`-casts: `ConversationRunnerDeps.graph` declares only `{ invoke }` while `clearContext`
+  calls `graph.getState(...)` through an unchecked cast. Proposed wording for
+  `docs/CONTRIBUTING_AI.md` (code rules section): "A dependency interface declares every
+  method the implementation calls; widening a dependency through a type cast instead of
+  extending the interface is a review finding."
+  Runs: refactor-p4-episode-memory (2026-09-18).

@@ -419,3 +419,47 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 - [ ] ADR-0007/0012 reference sections point at now-deleted files as current homes; adopt
       an "as-of / superseded paths" note convention instead of editing history.
       Source: close-out-review, R4 (2026-09-18).
+
+## P4 close-out review advisories (2026-09-18)
+
+- [ ] `clearContext` calls `graph.getState(...)` through an unchecked cast while
+      `ConversationRunnerDeps.graph` declares only `{ invoke }` — the deps interface must
+      declare every method the implementation calls (see also the rule candidate in
+      `docs/REVIEW_FINDINGS.md` this run). Source: close-out-review, R1 (2026-09-18).
+- [ ] `new RemoveMessage({ id: m.id ?? '' })` in `compact.node.ts` silently no-ops when a
+      history message has no id: removal never lands, the budget trigger refires every run,
+      a summary can repeat per episode. Fail loud (drop the fallback or `log.error`).
+      Source: close-out-review, R3 (2026-09-18).
+- [ ] `POST /api/bot/chat/clear-context` (chat.routes.ts) is missing from `docs/API_SPEC.md`
+      although the branch changed its mechanics and MANUAL_TEST_PLAN S8.4 exercises it.
+      Source: close-out-review, R4 (2026-09-18).
+- [ ] Pre-P4 context docs still read as live: `docs/features/FEAT-0009-conversation-context.md`
+      and `docs/CONVERSATION_CONTEXT_ARCHITECTURE.md` need superseded banners (ADR-0013 :62
+      already says the latter should be archived) and `docs/README.md:45` should stop listing
+      it as current. Full rewrite at P7. Source: close-out-review, R4 (2026-09-18).
+- [ ] `docs/domain/ai.spec.md` still calls ChatMsg's home "temporary until refactor P1/P4" —
+      P4 resolved its fate differently (it stays as the `LlmGateway` call type); drop the
+      promised retirement. Source: close-out-review, R4 (2026-09-18).
+- [ ] Orphan `tool_result` seeds are not skipped in `evals/lib/seed-messages.ts`, contradicting
+      the binding contract in `case.schema.ts:72-74` — a `ToolMessage` with an undefined
+      `tool_call_id` would reach the provider. Latent (no current dataset has one).
+      Source: close-out-review, R3 (2026-09-18).
+- [ ] The D-E legacy-import branch in `compact.node.ts` returns without consuming a pending
+      `state.compactReason` — the flag can survive into the next run after a transition-plus-
+      first-message combination. Add to `refactor-p4-context-budget`'s test list.
+      Source: close-out-review, R3 (2026-09-18).
+- [ ] Evals tooling duplication trio: `estimateWeeklyPct` re-parses ledger rows
+      `parseLedgerTable` owns; `argValue`/ledger-path are defined twice across `run.ts` /
+      `ledger.ts`; `CostRecorder.handleLLMEnd` mirrors `RunMetricsCollector` token extraction
+      with a wider accepted shape. One shared row parser / CLI-args module / usage extractor.
+      Source: close-out-review, R2 (2026-09-18).
+- [ ] `episode.ts` basename collision: `domain/conversation/episode.ts` (domain types) vs
+      `infra/ai/graph/episode.ts` (channel helpers) — rename the infra one (e.g.
+      `episode-channel.ts`). Source: close-out-review, R1 (2026-09-18).
+- [ ] `evals/lib/quota.ts` reads the operator's `~/.claude/settings.json` (with env fallbacks)
+      to reach the Z.AI monitor API — repo tooling depends on one machine's home layout;
+      consolidate behind the documented env var. Source: close-out-review, R1 (2026-09-18).
+- [ ] `compact.node.ts` re-declares `LegacySummary` as an inline annotation — import the named
+      type from `summary.ports.ts`. Fold into `refactor-p4-context-budget`'s branch (touches
+      the same file). Source: close-out-review, R2 (2026-09-18).
+

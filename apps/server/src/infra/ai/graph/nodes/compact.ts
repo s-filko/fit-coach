@@ -11,23 +11,18 @@ import { AIMessage, type BaseMessage } from '@langchain/core/messages';
 
 import type { CompactReason } from '@domain/conversation/episode';
 
-import { estimateTokens } from '@infra/ai/context/token-estimator';
 import { textOf } from '@infra/ai/llm.gateway';
 
 /** Tool results are truncated at this many characters in the summariser transcript. */
 const TOOL_RESULT_MAX_CHARS = 500;
 
+/**
+ * The estimation seam (D-A/D-P): pure compaction takes its measure as data.
+ * The production default is `estimateMessages` from token-estimator — the
+ * same definition the budget report uses, so the trigger and the report can
+ * never drift apart.
+ */
 export type Estimate = (messages: BaseMessage[]) => number;
-
-/** Message-level token estimate — same text basis as the budget report (chars/4 × 1.15). */
-export function estimateMessages(messages: BaseMessage[]): number {
-  return messages.reduce((n, m) => {
-    const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-    const toolCalls =
-      m instanceof AIMessage && m.tool_calls && m.tool_calls.length > 0 ? JSON.stringify(m.tool_calls) : '';
-    return n + estimateTokens(`${content}${toolCalls}`);
-  }, 0);
-}
 
 export interface DecideCompactInput {
   /** The two trigger inputs that live in state (D-A). */

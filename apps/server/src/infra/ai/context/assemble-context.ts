@@ -11,14 +11,14 @@
  * no config reads, no logging. It counts and reports — no trimming, no
  * budgets (the context-budget plan).
  */
-import { AIMessage, type BaseMessage, SystemMessage } from '@langchain/core/messages';
+import { type BaseMessage, SystemMessage } from '@langchain/core/messages';
 
 import type { StoredEpisodeSummary } from '@domain/conversation/episode';
 import type { BudgetReport } from '@domain/conversation/ports';
 
 import { EPISODE_SUMMARIES_V1, renderBlock } from '@infra/ai/prompts/blocks';
 
-import { estimateTokens, TOKEN_ESTIMATOR_ID } from './token-estimator';
+import { estimateMessages, estimateTokens, TOKEN_ESTIMATOR_ID } from './token-estimator';
 
 export interface AssembleInput {
   /** compose(PHASE.current.render(ctx)) — rendered by the caller (the spec owns the data). */
@@ -36,18 +36,6 @@ export interface AssembleInput {
 export interface AssembledContext {
   messages: BaseMessage[];
   budgetReport: BudgetReport;
-}
-
-/** Text a message contributes to the report: string content as is, array content JSON-stringified, plus tool calls. */
-function messageText(m: BaseMessage): string {
-  const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-  const toolCalls =
-    m instanceof AIMessage && m.tool_calls && m.tool_calls.length > 0 ? JSON.stringify(m.tool_calls) : '';
-  return `${content}${toolCalls}`;
-}
-
-function sumTokens(messages: readonly BaseMessage[]): number {
-  return messages.reduce((n, m) => n + estimateTokens(messageText(m)), 0);
 }
 
 function isHuman(m: BaseMessage): boolean {
@@ -82,9 +70,9 @@ export function assembleContext(input: AssembleInput): AssembledContext {
     estimator: TOKEN_ESTIMATOR_ID,
     system: estimateTokens(input.systemPrompt),
     summary: summariesText ? estimateTokens(summariesText) : 0,
-    history: sumTokens(input.history),
+    history: estimateMessages(input.history),
     user: estimateTokens(userText),
-    inFlight: sumTokens(inFlight),
+    inFlight: estimateMessages(inFlight),
     // Always 0 since P4 (D-H): the training tool-results block is gone; kept
     // for baseline comparability across the migration.
     toolResults: 0,
