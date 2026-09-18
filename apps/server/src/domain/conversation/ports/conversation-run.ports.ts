@@ -4,20 +4,24 @@ import type { ConversationPhase } from '../phases';
 export type ConversationRunOutcome = 'ok' | 'llm_unavailable' | 'core_error' | 'budget_exhausted';
 
 /**
- * Estimated-token accounting of one context assembly (ADR-0013 §3.4, reporting half).
- * Numbers are estimator output (see `estimator`), not provider counts — compare with
- * `tokensIn` to calibrate. The post-tool nudge is inserted after assembly and is not
- * counted. P2 reports only; Task 3 (P4 context-budget plan) adds enforcement — `budget`
- * and `cuts` record what INV-LLM-004 did, if anything.
+ * Estimated-token accounting of one context assembly (ADR-0013 §3.4, reporting
+ * AND enforcement half since the context-budget plan). Numbers are estimator
+ * output (see `estimator`), not provider counts — compare with `tokensIn` to
+ * calibrate. The post-tool nudge is inserted after assembly and is not
+ * counted. `budget` and `cuts` (Task 3) record what INV-LLM-004's
+ * `resolveBudget` did to fit the run inside `PhaseSpec.budget`, if anything —
+ * `history`/`domain`/`blocks`/`total` below are already POST-cut when a cut
+ * happened.
  */
 export interface BudgetReport {
   estimator: string; // TOKEN_ESTIMATOR_ID
-  system: number; // block 1: the rendered phase prompt (domain data is inside it until P3)
+  system: number; // block 1: the rendered phase prompt — domain data moved to block 3 (context-budget plan Task 2)
   summary: number; // the rendered `## Previous episodes` block, 0 when there are no episode summaries (D-H)
   /**
    * block 3: the rendered domain context blocks (ADR-0013 §4.2 `contextBlocks`,
-   * P4 context-budget plan Task 2, D-A/D-B). 0 when the phase has none or all
-   * rendered null this run.
+   * P4 context-budget plan Task 2, D-A/D-B), AT THE DEPTH `resolveBudget`
+   * chose (full depth unless INV-LLM-004 stepped one down — Task 3). 0 when
+   * the phase has none or all rendered null this run.
    */
   domain: number;
   /** Per-block token/depth breakdown, spec order, AFTER any Task 3 depth cut. */

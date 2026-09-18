@@ -49,18 +49,29 @@ export interface PhaseSpec<D = unknown> {
   tools: StructuredToolInterface[];
   toolPolicy: ToolPolicy;
   /**
-   * ADR-0013 §3.4 table values, as data (D-D). P4 reads only `history` — the
-   * BR-LLM-003 compaction trigger; enforcement (trimming) is the
-   * context-budget plan.
+   * ADR-0013 §3.4 table values, as data (D-D) — Task 1's measured defaults,
+   * optionally overridden per phase/part via `LLM_BUDGET_<PHASE>_<PART>`
+   * (`config/llm-budget-overrides.ts`, applied once in `conversation.graph.ts`'s
+   * `withBudgetOverrides`). `history` alone drives the BR-LLM-003 compaction
+   * trigger (`compact.node.ts`'s `budgetFor`); the full object is enforced by
+   * `assembleContext`/`resolveBudget` (INV-LLM-004, context-budget plan Task 3)
+   * — trim history, step domain blocks down `depths`, drop the oldest episode
+   * summary, then the D-D floor. Block 1 (the rendered prompt) is never cut;
+   * `system` over its own budget is reported (`BudgetReport`), not enforced.
    */
   budget: TokenBudget;
   /** Transitional (D-A) — see LoadResult. */
   loadContext: (input: LoadInput, deps: ConversationGraphDeps) => Promise<LoadResult<D>>;
   /**
    * Domain blocks (ADR-0013 §3.4 block 3, §4.2, D-A/D-B) — pure renderers over
-   * `loadContext`'s data, rendered by the agent node and placed by the
-   * assembler after the episode-summaries block. Empty for registration
-   * (D-B: no domain sections moved out of its prompt).
+   * `loadContext`'s data (`ContextBlock<D>.render(data, ctx, depth)`), passed
+   * unrendered to `assembleContext`, which renders each at the depth
+   * `resolveBudget` picks (full depth by default; a smaller step from
+   * `depths`, largest block first, when INV-LLM-004 needs to cut — context-
+   * budget plan Task 3) and places the result after the episode-summaries
+   * block. A block whose `render` returns `null` is absent that run (e.g. no
+   * previous session). Empty for registration (D-B: no domain sections moved
+   * out of its prompt). Add a phase's blocks in `graph/phases/<phase>.spec.ts`.
    */
   contextBlocks: ReadonlyArray<ContextBlock<D>>;
   /** getModel(profile) — 'default' for every phase today (D-G). */

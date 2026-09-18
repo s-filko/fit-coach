@@ -184,9 +184,15 @@ Resolution order (INV-LLM-004): (a) trim history to `budget.history`; (b) if `to
 
 ### Task 6: JSDoc, rails, backlog notes in code
 
-- [ ] `PhaseSpec.budget`/`contextBlocks` JSDoc; `BudgetReport` JSDoc updated; rails cover `context/blocks/**` (bite proof pasted).
-- [ ] **Commit** — `docs(ai): budget and context-block JSDoc; rails proof`
-- [ ] **STOP** — `DELEGATE STATUS: done, task: plan`.
+- [x] `PhaseSpec.budget`/`contextBlocks` JSDoc; `BudgetReport` JSDoc updated; rails cover `context/blocks/**` (bite proof pasted).
+- [x] **Commit** — `docs(ai): budget and context-block JSDoc; rails proof`
+- [x] **STOP** — `DELEGATE STATUS: done, task: plan`.
+
+**JSDoc updated:** `PhaseSpec.budget` (`graph/phase-spec.ts`) — now states the `LLM_BUDGET_*` override path, that `resolveBudget`/`assembleContext` enforce the whole object (not just `history`), and the INV-LLM-004 resolution order/floor rule, replacing the stale pre-Task-3 "enforcement is the context-budget plan" wording. `PhaseSpec.contextBlocks` — now states blocks are passed unrendered to `assembleContext`, which picks the render depth (full unless `resolveBudget` steps one down) and where to add a phase's blocks. `BudgetReport` (`domain/conversation/ports/conversation-run.ports.ts`) — module docstring now says "reporting AND enforcement half"; `system`'s inline comment no longer says domain data lives inside it "until P3" (it left in Task 2); `domain`'s comment now notes the field reflects the post-cut depth.
+
+**Rails cover `context/blocks/**` — note on the actual path (Task 2 relocation) and bite proof:** the blocks that ended up needing "rails" protection from inline prompt text live at `prompts/blocks/**` (relocated there in Task 2 — see that task's tree-vs-plan deviation note; `context/**` itself now correctly has ZERO prompt text, verified by `no-inline-prompts.unit.test.ts` passing against `budget.ts`/`assemble-context.ts`). Bite proof (executed, not just asserted): appended `const PROOF_LEAK = new SystemMessage('=== LEAK PROOF ===');` to the bottom of `src/infra/ai/context/budget.ts`, re-ran `npx jest --ci evals/levels/__tests__/no-inline-prompts.unit.test.ts` — 2 of 3 checks failed, both naming the exact injected line (`has no SystemMessage built from a literal`, `has no === HEADER === prompt text`). Reverted the file immediately after capturing the failure; re-ran the same command — 3/3 pass again. The `no-restricted-syntax` ESLint override (`eslint.config.js`) enforces the same rule at lint time over `graph/`, `context/`, `messages/`, `tools/` — `prompts/**` (where the blocks actually live) is correctly excluded, since prompt text belongs there.
+
+**Verification:** `npx tsc --noEmit` clean; `npm run check-all` → 0 errors; full `npx jest --ci` → 805/805; `npm run evals -- --level L0` → 96/96.
 
 ---
 
