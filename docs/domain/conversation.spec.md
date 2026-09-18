@@ -1,4 +1,4 @@
-Domain: Conversation (keyed by userId + phase)
+Domain: Conversation
 
 > **Superseded 2026-09-18 (refactor P4):** the context-service model below is retired.
 > Dialogue history is the checkpointed `messages` channel — one chat across phases

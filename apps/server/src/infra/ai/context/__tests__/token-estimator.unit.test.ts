@@ -47,8 +47,9 @@ describe('messageTokenText / estimateMessages (the one message-level basis — b
       new AIMessage({ content: 'b'.repeat(40), tool_calls: [{ id: 'c1', name: 't', args: {} }] }),
       new ToolMessage({ content: 'c'.repeat(40), tool_call_id: 'c1' }),
     ];
-    const expected = messages.reduce((n, m) => n + estimateTokens(messageTokenText(m)), 0);
-    expect(estimateMessages(messages)).toBe(expected);
+    // Literals, not a re-derivation: human 40 chars → 12; ai 40 chars + tool_calls
+    // JSON (33 chars) → ceil(73/4 × 1.15) = 22; tool result 40 chars → 12. Total 46.
+    expect(estimateMessages(messages)).toBe(46);
     expect(estimateMessages([])).toBe(0);
   });
 });
