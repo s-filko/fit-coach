@@ -88,7 +88,7 @@ async function main(): Promise<void> {
       }
 
       // D-R/D-Q quota gate + pre-run estimate banner.
-      const quota = readQuota();
+      const quota = await readQuota();
       const quotaBeforeFlag = argValue('--quota-before', '');
       if (quota === null && quotaBeforeFlag === '') {
         console.error(
@@ -140,7 +140,7 @@ async function main(): Promise<void> {
         delta: '?',
         pctWeekly: '?',
       });
-      const quotaAfter = readQuota();
+      const quotaAfter = await readQuota();
       if (quotaAfter !== null) {
         completeLastRow(LEDGER_PATH, { quotaAfter: quotaAfter.weeklyRemaining, weeklyLimit });
         console.log('ledger row completed automatically (quota endpoint).');
