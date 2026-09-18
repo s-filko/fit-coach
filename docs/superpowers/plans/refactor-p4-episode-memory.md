@@ -1,8 +1,9 @@
 # Refactor P4 — Episode Memory Implementation Plan
 
-- Status: planned
+- Status: done
 - Branch: plan/refactor-p4-episode-memory
 - After: refactor-p3-run-context-commit
+- Review: 2026-09-18 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -93,8 +94,8 @@
 
 **Task 1 commit SHA:** `56696947` (worktree plan/refactor-p4-episode-memory; recorded 2026-09-18)
 
-- [ ] **Step 1:** When the owner releases budget: read the quota (dashboard or `readQuota()`), then in the throwaway worktree at the Task 1 commit: `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase plan_creation --dataset id-reuse --samples 1 --baseline write --baseline-version v2 [--quota-before <n>]` (under the ceiling, no `EVALS_FULL_RUN`). Read the quota again; `npm run evals:ledger -- --after <n>` if manual.
-- [ ] **Step 2:** Commit `evals/baselines/v2/plan_creation.json` (dataset-scoped), `README.md` (freeze record: commit, route, n=1, dataset scope, the `no_redundant_search` pass rate — expected low) and the new `COST_LEDGER.md` row — `test(evals): freeze v2 mini-baseline — plan_creation/id-reuse, n=1 (pre-P4 code)` — committed onto the plan branch (or `dev` if the plan has already merged); remove the throwaway worktree.
+- [x] **Step 1 (done via `refactor-p4-evals-verify` Step 1, 2026-09-18):** When the owner releases budget: read the quota (dashboard or `readQuota()`), then in the throwaway worktree at the Task 1 commit: `RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase plan_creation --dataset id-reuse --samples 1 --baseline write --baseline-version v2 [--quota-before <n>]` (under the ceiling, no `EVALS_FULL_RUN`). Read the quota again; `npm run evals:ledger -- --after <n>` if manual.
+- [x] **Step 2 (done via `refactor-p4-evals-verify` Step 2):** Commit `evals/baselines/v2/plan_creation.json` (dataset-scoped), `README.md` (freeze record: commit, route, n=1, dataset scope, the `no_redundant_search` pass rate — expected low) and the new `COST_LEDGER.md` row — `test(evals): freeze v2 mini-baseline — plan_creation/id-reuse, n=1 (pre-P4 code)` — committed onto the plan branch (or `dev` if the plan has already merged); remove the throwaway worktree.
 
 **Verification:** file present and tagged `dataset: id-reuse`; the ledger row has requests, tokens, quota before/after, delta and % of weekly filled (this row is also the first data point the pre-run estimator uses).
 
@@ -156,7 +157,7 @@
 - [x] **Step 2: STOP** — `DELEGATE STATUS: done, task: Task 5 Step 1` with the diff list; the orchestrator reviews it before Step 3.
 - [x] **Step 3: Commit** — `refactor(ai): one message layout for all phases; episode-summaries block; training history frame and tool-results block removed (ADR-0013 §3.4, owner rule: one chat)`
 
-**Verification:** `grep -rn "historyMode\|summaryFrame\|toolResultsFrame\|PhaseLayout\|SUMMARY_FRAME_V1\|HISTORY_FRAME_V1\|TOOL_RESULTS_V1" apps/server/src apps/server/evals` → empty; `npm run evals -- --level L0`; `npx jest --ci evals/snapshots src/infra/ai/context src/infra/ai/prompts`.
+**Verification:** `grep -rn "historyMode\|summaryFrame\|toolResultsFrame\|PhaseLayout\|SUMMARY_FRAME_V1\|HISTORY_FRAME_V1\|TOOL_RESULTS_V1" apps/server/src apps/server/evals` → one hit only: the JSDoc in `prompts/index.ts:16` explaining `PhaseLayout` is gone (no live code; review-verified 2026-09-18); `npm run evals -- --level L0`; `npx jest --ci evals/snapshots src/infra/ai/context src/infra/ai/prompts`.
 
 **Snapshot diff (Task 5):** regenerated once on 2026-09-18 (executor). `message-assembly.unit.test.ts.snap`: 7 of 15 snapshots updated, 8 byte-identical; `prompt-snapshots.unit.test.ts.snap`: 4 obsolete block snapshots removed, 1 new (`block.episode_summaries / present`).
 
@@ -256,7 +257,7 @@ conversation_summaries: 1 row — plan_creation, topics=3, created 2026-09-18 07
 **Finding (fixed on the plan branch):** the summarizer profile once answered with prose (`topics: ...`) instead of a tool-call; `withStructuredOutput`'s JSON.parse threw `SyntaxError`, which the retry gate did not treat as a schema failure — the episode compacted without a summary (BR-LLM-004 degradation held, no crash). Fix: `isSchemaFailure` in `llm.gateway.ts` also matches `SyntaxError` (unit test added; dev smoke 2026-09-18).
 
 - [x] **Step 3: Docs reconcile** (factual): `ARCHITECTURE.md` (tree: `episode.ts`, `nodes/compact*.ts`, `handlers/compaction-flag.handler.ts`, `infra/conversation/drizzle-{transcript,summary}.service.ts`; the ChatMsg hedge at :48 → resolved), `CONTRIBUTING_AI.md` (memory tiers; how to seed an episode in evals; the config exception), `PROMPT_EVAL_FRAMEWORK.md` §4.2 (seeding sentence; `no_redundant_search` implemented), `MANUAL_TEST_PLAN.md` ("context after a gap" scenario), `BUGS.md` (BUG-016 fixed by the projection), `BACKLOG.md` ticks (`toFrameRow` twin, `toLangChain` twin, `history_frame` ternary, executor `system_error` orphan, run-row semantics note). ADR-0013 amendments to **escalate**, never edit: §3.3 (short-episode threshold; compaction flag via the transition handler; summariser v2 without `previousSummary`; `episodeId = runId`), §3.2 (`episodeId`, `compactReason` channels), §8 (`role` derivation for legacy readers; summary rows mirrored to `conversation_turns`), D-14/§10 (`remember_fact` dropped — owner decision 2026-09-17), `clear-context` through the run port.
-- [ ] **Step 4: Close-out** — `close-out-review`, `- Status: done`, `node scripts/state.mjs --write`, merge (PR title carries the slug), worktree + branches removed; STATE Next → `refactor-p4-context-budget` (its Task 1 measurement needs a day of dev traffic on this code) and, when the owner releases budget, `refactor-p4-evals-verify`.
+- [x] **Step 4: Close-out** — `close-out-review`, `- Status: done`, `node scripts/state.mjs --write`, merge (PR title carries the slug), worktree + branches removed; STATE Next → `refactor-p4-context-budget` (its Task 1 measurement needs a day of dev traffic on this code) and, when the owner releases budget, `refactor-p4-evals-verify`.
 
 **Verification:** evidence pasted; `node scripts/state.mjs --check` → OK. AC-1341/1342/1345/1346 closed here; AC-1344 pending the micro-task (stated in the close-out record, not hidden).
 
@@ -269,7 +270,12 @@ conversation_summaries: 1 row — plan_creation, topics=3, created 2026-09-18 07
 
 ## Review
 
-Close-out review 2026-09-18, four zones (base `05acee92`), verdict: **blocked** — 3 blocking findings open (R2 ×1, R4 ×2). No `- Review:` header line until a clean re-run records one.
+Close-out review 2026-09-18, four zones (base `05acee92`). First pass: **blocked** — 3 blocking findings (R2 ×1, R4 ×2). Fix commit `754fd870` + post-verdict amendments `138e6752` (re-run zones' own suggested wording; test literal); re-run R2 → pass, re-run R4 → clean. Final verdict: **clean** — `- Review:` header line above.
+
+Closure record:
+1. R2 `estimateMessages` duplication — CLOSED: the message-level token basis (`messageTokenText` + `estimateMessages`) lives once in `infra/ai/context/token-estimator.ts` beside the formula; `assemble-context` (report half) and `compact.node` (trigger half) import it; `compact.ts` keeps only the injected `Estimate` seam. Behavior byte-identical; re-run verified no third copy, no drift.
+2. R4 `conversation.spec.md` stale law — CLOSED: superseded banner + P4 amendment note in the P3-note style; every factual claim in both verified against the tree by the re-run; Rules line re-pointed at the three live ports; title no longer asserts the (userId, phase) identity.
+3. R4 `CONTRIBUTING_AI.md` verification pointer — CLOSED: now names ADR-0013 §3 + § Memory (episode model); FEAT-0009 marked history pending the P7 docs-reconciliation pass (not promised a P7 rewrite — it is not in P7 scope).
 
 ### Blocking (open)
 
@@ -280,6 +286,8 @@ Close-out review 2026-09-18, four zones (base `05acee92`), verdict: **blocked** 
 Findings 2 and 3 share one root cause: Task 9 Step 3's reconcile covered app-level docs but not the durable domain/feature specs that other just-updated docs still cite.
 
 ### Advisory (route: docs/BACKLOG.md via the backlog skill)
+
+**Routed 2026-09-18:** 11 consolidated entries in `docs/BACKLOG.md` § P4 close-out review advisories. Two advisories did not go to the backlog: the Task 5 grep-claim imprecision is fixed in this plan (verification line above), and the master-plan P4 completion annotation is carried by the STATE Next hand-edit at close-out (as P0–P3 were).
 
 - **R1 | `conversation-run.adapter.ts:131-140`** — `clearContext` calls `graph.getState(...)` through an unchecked cast while `ConversationRunnerDeps.graph` declares only `{ invoke }`; the deps interface should declare `getState` explicitly.
 - **R1 | `episode.ts` basename collision** — two unrelated modules share it (`domain/conversation/episode.ts` domain types vs `infra/ai/graph/episode.ts` channel helpers); rename (e.g. `episode-channel.ts`) is cheap.

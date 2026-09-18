@@ -9,14 +9,14 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-09-17 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-09-18 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
 — none —
 
 **Planned**
 - `refactor-p4-context-budget.md` — Refactor P4 — Context Budget and Domain Blocks Implementation Plan
-- `refactor-p4-episode-memory.md` — Refactor P4 — Episode Memory Implementation Plan
+- `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
@@ -36,6 +36,7 @@ _Generated 2026-09-17 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p3-phase-spec.md` — Refactor P3 — PhaseSpec Factory and Shared Agent Node Implementation Plan
 - `refactor-p3-run-context-commit.md` — Refactor P3 — Run Context, Commit Node and Conversation Run Port Implementation Plan
 - `refactor-p3-tool-executor.md` — Refactor P3 — Shared Tool Executor Implementation Plan
+- `refactor-p4-episode-memory.md` — Refactor P4 — Episode Memory Implementation Plan
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 
 **Close-out debt (merged but plan not done)**
@@ -76,20 +77,21 @@ _Generated 2026-09-17 from docs/superpowers/plans/ + git. Never hand-edit; regen
    L1 half was waived by the owner (quota); byte-identity snapshots + the dev smoke stand in.
    Verified again 2026-09-18 on `6ea80646`: `check-all` clean, 491 unit tests green,
    `state.mjs --check` OK.
-2. **P4 — dispatch `refactor-p4-episode-memory` first** (plan rewritten 2026-09-18 against
-   the shipped P3 code; executor brief in `plans/_refactor-p4-episode-memory.executor-prompt.md`).
-   **Eval budget rule (owner, 2026-09-18): code first, model runs only when budget is
-   left.** Nothing model-backed on the executor's path; one ≈10-call working-check run
-   after all code (Task 9 Step 1 — finds errors, does not score); the plan merges on unit /
-   integration / L0 + that run + dev smoke with AC-1344's statistics recorded as pending.
-   The two 5-call mini-runs (`v2` mini-freeze on the Task 1 commit; the compare) form the
-   budget-gated micro-task `refactor-p4-evals-verify`; the full `v2` freeze and the
-   AC-1344 sweep are red-button items (see Blocked below).
-   Before RUN 1: a glance at the plan's Decisions table (D-L config defaults, D-K `role`
-   derivation are the likeliest to be overruled). Then `refactor-p4-context-budget`
-   (`After:` the first; its Task 1 needs a day of dev traffic on episode memory; re-validate
-   it against the tree before dispatch). P5 may run in parallel with P4 per the master plan;
-   it is not planned yet.
+2. **Refactor P4 (episode memory) is complete (2026-09-18)**: `refactor-p4-episode-memory`
+   merged to dev (`159a4a80` at deploy; review fixes through `138e6752`), deployed to dev,
+   migration `0004` applied, dev smoke green (legacy import once, AC-1345 live evidence,
+   forced-gap compaction → one `conversation_summaries` row). Close-out review: first pass
+   blocked (R2 token-basis duplication ×1, R4 stale law docs ×2), fixed architecturally —
+   the message-token basis now lives once in `token-estimator.ts`; re-run clean
+   (`- Review: 2026-09-18 | clean`). AC-1341/1342/1345/1346 closed; **AC-1344 pending**
+   `refactor-p4-evals-verify` (compare run, budget-gated). One follow-up found in the smoke
+   and fixed post-merge: the structured-output retry gate now also catches `SyntaxError`.
+   Advisories: `BACKLOG.md` § P4 close-out review advisories (11 entries).
+   **Next: `refactor-p4-context-budget`** (its Task 1 needs a day of dev traffic on
+   episode memory — dispatch 2026-09-19+; re-validate the plan against the tree first;
+   folds the `LegacySummary` import advisory). `refactor-p4-evals-verify` runs when the
+   owner releases budget (Steps 3–4 only: the compare + evidence JSON). P5 may run in
+   parallel per the master plan; it is not planned yet.
 3. Then P6 → P7 per the master plan phase map.
 3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
    the code aligned to it, ESLint keeping it that way. Independent of the P0 chain;
