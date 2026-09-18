@@ -85,6 +85,8 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
     prompt: entry as PhasePromptEntry<PromptContextFor<TrainingData>>,
     tools,
     toolPolicy: buildTrainingToolPolicy(tools),
+    // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).
+    budget: { system: 5000, longTerm: 1500, domain: 6000, history: 8000, outputReserve: 2000 },
     loadContext: async (input: LoadInput, deps: ConversationGraphDeps): Promise<LoadResult<TrainingData>> => {
       if (!input.activeSessionId) {
         return { ok: false, reply: 'training_no_active_session' };

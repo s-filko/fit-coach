@@ -5,7 +5,7 @@ import type { ConversationPhase, IConversationContextService } from '@domain/con
 
 import { getModel } from '@infra/ai/model.factory';
 import { sectionText } from '@infra/ai/prompts/compose';
-import { SUMMARIZER_PROMPT } from '@infra/ai/prompts/summarizer';
+import { SUMMARIZER_V1 } from '@infra/ai/prompts/summarizer';
 
 import { createLogger } from '@shared/logger';
 
@@ -27,7 +27,7 @@ export async function generatePhaseSummary(
       return;
     }
 
-    const sections = SUMMARIZER_PROMPT.render({
+    const sections = SUMMARIZER_V1.render({
       phase,
       previousSummary,
       history: history.map(m => ({

@@ -1,6 +1,7 @@
 import { type BaseCheckpointSaver, END, START, StateGraph } from '@langchain/langgraph';
 
 import { LlmGateway } from '@domain/ai/ports';
+import type { ConversationPhase } from '@domain/conversation/phases';
 import {
   IConversationContextService,
   IConversationRunService,
@@ -19,6 +20,7 @@ import type { IUserService } from '@domain/user/ports';
 import { buildCompactionFlagHandler } from './handlers/compaction-flag.handler';
 import { buildSessionLifecycleHandler } from './handlers/session-lifecycle.handler';
 import { buildCommitNode } from './nodes/commit.node';
+import { buildCompactStep, type EpisodeTunables } from './nodes/compact.node';
 import { buildPrepareNode } from './nodes/prepare.node';
 import { buildRouteNode } from './nodes/route.node';
 import { buildPhaseSubgraph } from './phase-subgraph.factory';
@@ -40,19 +42,29 @@ export interface ConversationGraphDeps {
   transcript: TranscriptPort;
   summaries: SummaryPort;
   llmGateway: LlmGateway;
+  /** The D-L episode tunables, resolved from env at the composition root. */
+  episodeConfig: EpisodeTunables;
   checkpointer: BaseCheckpointSaver;
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function buildGraph(deps: ConversationGraphDeps) {
   const { userService, trainingService, runService, workoutSessionRepo, checkpointer, transcript } = deps;
+  const { llmGateway, summaries, episodeConfig } = deps;
 
   const specs = buildPhaseSpecs(deps);
+
+  // D-D: the BR-LLM-003 trigger reads PhaseSpec.budget.history; an unknown
+  // phase never overflows (the trigger is a comparison, enforcement is the
+  // context-budget plan).
+  const budgetFor = (phase: ConversationPhase): number =>
+    specs.find(s => s.name === phase)?.budget.history ?? Number.POSITIVE_INFINITY;
+  const compactStep = buildCompactStep({ llmGateway, summaries, config: episodeConfig, budgetFor });
 
   // prepare routes to 'route' normally and short-circuits dead training
   // states to 'commit' (D-E); route fans out to the phase nodes; every phase
   // falls into commit. Adding a phase = adding a spec (INV-LLM-005).
-  const prepareNode = buildPrepareNode({ userService, trainingService });
+  const prepareNode = buildPrepareNode({ userService, trainingService, compact: compactStep });
   const routeNode = buildRouteNode();
   const commitNode = buildCommitNode({
     transcript,

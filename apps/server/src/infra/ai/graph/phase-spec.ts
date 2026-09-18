@@ -7,6 +7,7 @@
  */
 import type { StructuredToolInterface } from '@langchain/core/tools';
 
+import type { TokenBudget } from '@domain/conversation/episode';
 import type { ConversationPhase } from '@domain/conversation/ports';
 import type { User } from '@domain/user/services/user.service';
 
@@ -46,6 +47,12 @@ export interface PhaseSpec<D = unknown> {
   /** Phase tools + buildSharedTools(deps), built at the composition root. */
   tools: StructuredToolInterface[];
   toolPolicy: ToolPolicy;
+  /**
+   * ADR-0013 §3.4 table values, as data (D-D). P4 reads only `history` — the
+   * BR-LLM-003 compaction trigger; enforcement (trimming) is the
+   * context-budget plan.
+   */
+  budget: TokenBudget;
   /** Transitional (D-A) — see LoadResult. */
   loadContext: (input: LoadInput, deps: ConversationGraphDeps) => Promise<LoadResult<D>>;
   /** getModel(profile) — 'default' for every phase today (D-G). */

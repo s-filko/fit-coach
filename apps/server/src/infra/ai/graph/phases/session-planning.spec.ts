@@ -50,6 +50,8 @@ export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec
       ...buildSharedTools({ userService }),
     ],
     toolPolicy: SESSION_PLANNING_TOOL_POLICY,
+    // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).
+    budget: { system: 5000, longTerm: 1500, domain: 6000, history: 8000, outputReserve: 3000 },
     loadContext: async (input: LoadInput, deps: ConversationGraphDeps) => ({
       ok: true as const,
       data: {

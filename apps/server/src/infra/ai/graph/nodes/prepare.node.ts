@@ -17,15 +17,19 @@ import { langOf, t } from '@infra/ai/messages';
 
 import { createLogger } from '@shared/logger';
 
+import type { CompactStep } from './compact.node';
+
 const log = createLogger('prepare-node');
 
 export interface PrepareNodeDeps {
   userService: IUserService;
   trainingService: ITrainingService;
+  /** The compact step (ADR-0013 §4.1): runs before the phase sync, at most once per run. */
+  compact: CompactStep;
 }
 
 export function buildPrepareNode(deps: PrepareNodeDeps) {
-  const { userService, trainingService } = deps;
+  const { userService, trainingService, compact } = deps;
 
   return async function prepareNode(
     state: ConversationStateType,
@@ -37,6 +41,15 @@ export function buildPrepareNode(deps: PrepareNodeDeps) {
 
     // Always reset — a stale blocked transition must not leak into this run.
     const updates: Partial<ConversationStateType> = { pendingTransition: null };
+
+    // D-O: the run that starts an episode owns its id.
+    if (state.episodeId === '') {
+      updates.episodeId = ctx.runId;
+    }
+
+    // Compaction (BR-LLM-001..003) — before the training checks and the phase
+    // sync so every path (including the short-circuits) carries its updates.
+    const compactUpdates = await compact(state, config);
 
     // Training phase — check whether the active session has ended. NO idle
     // timeout: a session stays in_progress until explicitly closed (the
@@ -53,8 +66,10 @@ export function buildPrepareNode(deps: PrepareNodeDeps) {
           goto: 'commit',
           update: {
             ...updates,
+            ...compactUpdates,
             pendingTransition: { toPhase: 'chat', reason: 'session_ended' },
-            messages: [new AIMessage(t('session_ended_return_to_chat', lang))],
+            // Compaction may have returned RemoveMessages — the catalog reply rides with them.
+            messages: [...(compactUpdates.messages ?? []), new AIMessage(t('session_ended_return_to_chat', lang))],
           },
         });
       }
@@ -68,8 +83,9 @@ export function buildPrepareNode(deps: PrepareNodeDeps) {
         goto: 'commit',
         update: {
           ...updates,
+          ...compactUpdates,
           pendingTransition: { toPhase: 'chat', reason: 'session_missing' },
-          messages: [new AIMessage(t('session_missing_return_to_chat', lang))],
+          messages: [...(compactUpdates.messages ?? []), new AIMessage(t('session_missing_return_to_chat', lang))],
         },
       });
     }
@@ -84,6 +100,6 @@ export function buildPrepareNode(deps: PrepareNodeDeps) {
       updates.phase = 'registration';
     }
 
-    return new Command({ goto: 'route', update: updates });
+    return new Command({ goto: 'route', update: { ...updates, ...compactUpdates } });
   };
 }

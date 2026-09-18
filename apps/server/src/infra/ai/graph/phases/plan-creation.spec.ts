@@ -39,6 +39,8 @@ export function buildPlanCreationSpec(deps: ConversationGraphDeps): PhaseSpec<Pl
       ...buildSharedTools({ userService }),
     ],
     toolPolicy: PLAN_CREATION_TOOL_POLICY,
+    // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).
+    budget: { system: 4000, longTerm: 1500, domain: 2000, history: 12000, outputReserve: 4000 },
     loadContext: async (_input: LoadInput, _deps: ConversationGraphDeps) => ({
       ok: true as const,
       data: {},

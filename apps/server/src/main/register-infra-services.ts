@@ -105,6 +105,12 @@ export async function registerInfraServices(container: Container = getGlobalCont
     transcript: container.get(TRANSCRIPT_PORT_TOKEN),
     summaries: container.get(SUMMARY_PORT_TOKEN),
     llmGateway: container.get(LLM_GATEWAY_TOKEN),
+    // D-L: episode tunables resolved once here — the nodes never read env mid-run.
+    episodeConfig: {
+      gapMs: config.EPISODE_GAP_HOURS * 3_600_000,
+      minTurns: config.EPISODE_MIN_TURNS,
+      minTokens: config.EPISODE_MIN_TOKENS,
+    },
     checkpointer,
   });
   container.register(

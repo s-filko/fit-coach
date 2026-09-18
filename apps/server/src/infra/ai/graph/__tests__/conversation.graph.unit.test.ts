@@ -130,6 +130,7 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
       recorded.push(record);
     }),
   },
+  episodeConfig: { gapMs: 365 * 24 * 3600 * 1000, minTurns: 2, minTokens: 300 },
   checkpointer: new MemorySaver() as unknown as InstanceType<
     typeof import('@langchain/langgraph-checkpoint-postgres').PostgresSaver
   >,

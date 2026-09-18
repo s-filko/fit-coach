@@ -77,6 +77,7 @@ function makeDeps(): ConversationGraphDeps {
       structured: jest.fn(),
     } as never,
     runService: { recordRun: jest.fn() } as never,
+    episodeConfig: { gapMs: 24 * 3600 * 1000, minTurns: 2, minTokens: 300 },
     checkpointer: new MemorySaver(),
   } as unknown as ConversationGraphDeps;
 }
@@ -134,5 +135,58 @@ describe('episode memory across runs (AC-1341, INV-LLM-001/002)', () => {
     // messagesStateReducer assigned an id to every persisted message (RemoveMessage needs ids).
     expect(second.messages.every(m => typeof m.id === 'string' && m.id.length > 0)).toBe(true);
     void run1Input;
+  });
+
+  it('AC-1342: EPISODE_GAP → 0 — run 2 sees exactly one episode-summary block and none of run 1’s messages; one summaries row', async () => {
+    // Injected through the compact deps, never process.env.
+    const deps = makeDeps();
+    (deps as unknown as { episodeConfig: { gapMs: number; minTurns: number; minTokens: number } }).episodeConfig = {
+      gapMs: 0,
+      minTurns: 0,
+      minTokens: 0,
+    };
+    const summariesMock = deps.summaries as unknown as { insert: jest.Mock };
+    const gatewayMock = deps.llmGateway as unknown as { structured: jest.Mock };
+    summariesMock.insert = jest.fn().mockResolvedValue(undefined);
+    gatewayMock.structured = jest.fn().mockResolvedValue({
+      topics: ['timezone setup'],
+      decisions: [],
+      userState: [],
+      trainingFeedback: [],
+      openItems: [],
+    });
+    const graph = buildConversationGraph(deps);
+    __recorded.length = 0;
+
+    await graph.invoke({ phase: 'chat', messages: [new HumanMessage('Моё время Берлин')] }, ctxConfig('run-1'));
+    await graph.invoke({ phase: 'chat', messages: [new HumanMessage('Спасибо!')] }, ctxConfig('run-2'));
+
+    // Run 2's first model call (run 1 took two: the tool call and the final
+    // reply): one `## Previous episodes` system block, and run 1's traffic
+    // (the timezone question, the tool call, its result) is gone.
+    const run2Input = __recorded[2]! as BaseMessage[];
+    const episodeBlocks = run2Input.filter(
+      (m: BaseMessage) => m._getType() === 'system' && String(m.content).includes('## Previous episodes'),
+    );
+    expect(episodeBlocks).toHaveLength(1);
+    expect(String(episodeBlocks[0].content)).toContain('timezone setup');
+    const isRun1Traffic = (m: BaseMessage): boolean => {
+      if (String(m.content).includes('Моё время Берлин')) {
+        return true;
+      }
+      if (m._getType() === 'ai') {
+        return (m as AIMessage).tool_calls?.some(c => c.id === 'call-tz-1') ?? false;
+      }
+      return m._getType() === 'tool' && (m as ToolMessage).tool_call_id === 'call-tz-1';
+    };
+    expect(run2Input.some(isRun1Traffic)).toBe(false);
+
+    // One conversation_summaries row, tied to the episode run 1 started.
+    expect(summariesMock.insert).toHaveBeenCalledTimes(1);
+    expect(summariesMock.insert.mock.calls[0][0]).toMatchObject({
+      userId: 'u1',
+      episodeId: 'run-1',
+      phaseAtEnd: 'chat',
+    });
   });
 });

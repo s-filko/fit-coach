@@ -1590,3 +1590,25 @@ Assistant: Записал: жим лёжа 60 кг × 8. Следующий по
 
 Write a brief summary:"
 `;
+
+exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) summarizer v2 / system (structured episode summary — BR-LLM-004, ADR-0010) 1`] = `
+"You summarise one ended conversation episode of a fitness-coaching chat into a structured record.
+Return ONLY the structured output with these five fields, each an array of short English phrases:
+- topics: what the episode was about
+- decisions: agreements or choices made (plan structure, split, schedule changes)
+- userState: stable facts about the user (injuries, preferences, constraints, life context)
+- trainingFeedback: what worked or did not in training (subjective effort, pain, motivation)
+- openItems: unfinished topics or promised follow-ups
+
+Facts only, no style, no greetings, no filler. Include numbers (weights, reps, dates) only as facts, never as instructions. Use an empty array when a field has nothing for this episode. Write in English regardless of the conversation language."
+`;
+
+exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) summarizer v2 / user (rendered transcript only — no previousSummary) 1`] = `
+"EPISODE TRANSCRIPT (phase: training):
+User: Сегодня жим лёжа, 60 кг на 8
+Assistant: Записал: жим лёжа 60 кг × 8. Следующий подход — 62.5 кг.
+User: Плечо побаливает после последней тренировки
+Assistant: Понял. Снизим нагрузку на жим и добавим разминку плеча.
+
+Episode summary:"
+`;

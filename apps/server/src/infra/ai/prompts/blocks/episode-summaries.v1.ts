@@ -30,6 +30,18 @@ function relativeDate(endedAt: string, now: Date, timezone: string | null): stri
   return `${days} days ago`;
 }
 
+/** D-C: one deterministic paragraph per episode — also what `SummaryPort.insert` stores as `rendered`. */
+export function episodeParagraph(s: StoredEpisodeSummary, now: Date, timezone: string | null): string {
+  const parts = [
+    renderList('Topics', s.summary.topics),
+    renderList('Decisions', s.summary.decisions),
+    renderList('User state', s.summary.userState),
+    renderList('Training feedback', s.summary.trainingFeedback),
+    renderList('Open items', s.summary.openItems),
+  ].filter((p): p is string => p !== null);
+  return `${s.phaseAtEnd} (${relativeDate(s.endedAt, now, timezone)}): ${parts.join('. ')}.`;
+}
+
 /**
  * `## Previous episodes` (D-C, ADR-0013 §3.4 block 2): one paragraph per
  * episode, oldest first — phase, relative date, then the five structured
@@ -45,16 +57,6 @@ export const EPISODE_SUMMARIES_V1: PromptModule<EpisodeSummariesContext> = {
     if (summaries.length === 0) {
       return [];
     }
-    const paragraphs = summaries.map(s => {
-      const parts = [
-        renderList('Topics', s.summary.topics),
-        renderList('Decisions', s.summary.decisions),
-        renderList('User state', s.summary.userState),
-        renderList('Training feedback', s.summary.trainingFeedback),
-        renderList('Open items', s.summary.openItems),
-      ].filter((p): p is string => p !== null);
-      return `${s.phaseAtEnd} (${relativeDate(s.endedAt, now, timezone)}): ${parts.join('. ')}.`;
-    });
     return [
       {
         id: 'episode_summaries',
@@ -62,7 +64,7 @@ export const EPISODE_SUMMARIES_V1: PromptModule<EpisodeSummariesContext> = {
         text: [
           '## Previous episodes',
           'Context only. Numbers below are not authoritative — use tools and the current state.',
-          ...paragraphs,
+          ...summaries.map(s => episodeParagraph(s, now, timezone)),
         ].join('\n'),
       },
     ];

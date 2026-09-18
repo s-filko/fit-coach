@@ -37,6 +37,8 @@ export function buildChatSpec(deps: ConversationGraphDeps): PhaseSpec<ChatData> 
       ...buildSharedTools({ userService }),
     ],
     toolPolicy: CHAT_TOOL_POLICY,
+    // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).
+    budget: { system: 3000, longTerm: 1500, domain: 2000, history: 8000, outputReserve: 2000 },
     loadContext: async (input: LoadInput, deps: ConversationGraphDeps) => {
       const [activePlan, recentSessions] = await Promise.all([
         deps.workoutPlanRepo.findActiveByUserId(input.userId),

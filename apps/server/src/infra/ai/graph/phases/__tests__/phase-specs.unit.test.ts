@@ -70,6 +70,18 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
     expect(spec.prompt).toBe(PHASE_PROMPTS[phase]);
   });
 
+  it.each(
+    Object.entries({
+      registration: { system: 2500, longTerm: 1000, domain: 1000, history: 6000, outputReserve: 1500 },
+      chat: { system: 3000, longTerm: 1500, domain: 2000, history: 8000, outputReserve: 2000 },
+      plan_creation: { system: 4000, longTerm: 1500, domain: 2000, history: 12000, outputReserve: 4000 },
+      session_planning: { system: 5000, longTerm: 1500, domain: 6000, history: 8000, outputReserve: 3000 },
+      training: { system: 5000, longTerm: 1500, domain: 6000, history: 8000, outputReserve: 2000 },
+    }) as Array<[ConversationPhase, Record<string, number>]>,
+  )('%s: budget equals the ADR-0013 §3.4 table (tokens, as data — D-D)', (phase, budget) => {
+    expect(specOf(phase).budget).toEqual(budget);
+  });
+
   it.each(PHASES)('%s: tools equal today’s per-phase tool list (shared tools included)', phase => {
     expect(specOf(phase).tools.map(t => t.name)).toEqual(TOOL_NAMES[phase]);
   });

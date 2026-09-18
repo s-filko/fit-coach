@@ -32,6 +32,8 @@ export function buildRegistrationSpec(deps: ConversationGraphDeps): PhaseSpec<Re
       ...buildSharedTools({ userService }),
     ],
     toolPolicy: REGISTRATION_TOOL_POLICY,
+    // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).
+    budget: { system: 2500, longTerm: 1000, domain: 1000, history: 6000, outputReserve: 1500 },
     loadContext: async (_input: LoadInput, _deps: ConversationGraphDeps) => ({
       ok: true as const,
       data: {},

@@ -49,6 +49,7 @@ function makeSpec(tools: DynamicStructuredTool<{ name: string }>[] = [makeFakeTo
     toolPolicy: { llmErrorBudget: Infinity },
     loadContext: async () => ({ ok: true, data: { lastMessageTime: null } }),
     modelProfile: 'default',
+    budget: { system: 1, longTerm: 1, domain: 1, history: 1000, outputReserve: 1 },
   };
 }
 
