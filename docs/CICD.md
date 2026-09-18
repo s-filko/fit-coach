@@ -327,6 +327,24 @@ mode (`process.stdin.setRawMode()`), so piping stdin does not work. The `expect`
 creates a pseudo-TTY to handle this. Without it, the container hangs indefinitely on
 new table creation.
 
+## 7a. Checkpoint pruning (BR-LLM-005)
+
+LangGraph's `checkpoint_blobs` table holds the checkpointed `messages` channel as raw bytea
+and grows unbounded — there is no in-app scheduler for cleanup (owner-run only, per BR-LLM-005).
+
+- Script: `apps/server/src/infra/db/scripts/prune-checkpoints.ts` (pure SQL builder,
+  `buildPruneStatements`) + `prune-checkpoints.cli.ts` (the runnable entry point).
+- `npm run db:prune-checkpoints` — dry-run by default (prints what would be deleted, deletes
+  nothing); pass `-- --apply` to actually delete. `-- --days N` overrides the default 14-day
+  cutoff.
+- Deletes `checkpoints` / `checkpoint_writes` / `checkpoint_blobs` rows older than the cutoff,
+  **except** the latest checkpoint per `(thread_id, checkpoint_ns)` and the blob versions its
+  `channel_versions` references — that checkpoint must stay loadable.
+- The owner installs the cron job; the app does not:
+  ```
+  0 4 * * * cd /srv/docker/fitcoach && docker exec fitcoach-prod-server npm run db:prune-checkpoints -- --apply
+  ```
+
 ## 8. Networking and HTTPS
 
 ### Nginx Proxy Manager (NPM)
