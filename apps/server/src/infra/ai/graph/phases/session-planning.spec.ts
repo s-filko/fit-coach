@@ -27,7 +27,6 @@ import { SEARCH_DEDUP_POLICY, type ToolPolicy } from '../tool-policy';
 /** What the session_planning prompt renders beyond the directive base. */
 export interface SessionPlanningData {
   context: SessionPlanningContextData;
-  lastMessageTime: Date | null;
 }
 
 /** The shared "search dedup" policy (see tool-policy.ts). */
@@ -35,12 +34,11 @@ export const SESSION_PLANNING_TOOL_POLICY: ToolPolicy = SEARCH_DEDUP_POLICY;
 
 export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec<SessionPlanningData> {
   const { userService, exerciseRepository, embeddingService, trainingService } = deps;
-  const { entry, layout } = PHASE_PROMPTS.session_planning;
+  const entry = PHASE_PROMPTS.session_planning;
 
   return {
     name: 'session_planning',
     prompt: entry as PhasePromptEntry<PromptContextFor<SessionPlanningData>>,
-    layout,
     tools: [
       buildSearchExercisesTool({ embeddingService, exerciseRepository }),
       buildStartTrainingSessionTool({
@@ -52,13 +50,14 @@ export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec
       ...buildSharedTools({ userService }),
     ],
     toolPolicy: SESSION_PLANNING_TOOL_POLICY,
+    // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).
+    budget: { system: 5000, longTerm: 1500, domain: 6000, history: 8000, outputReserve: 3000 },
     loadContext: async (input: LoadInput, deps: ConversationGraphDeps) => ({
       ok: true as const,
       data: {
         context: await new SessionPlanningContextBuilder(deps.workoutPlanRepo, deps.workoutSessionRepo).buildContext(
           input.userId,
         ),
-        lastMessageTime: null,
       },
     }),
     modelProfile: 'default',

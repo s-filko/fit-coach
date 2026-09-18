@@ -9,6 +9,7 @@ export const en: Record<MessageKey, string> = {
   tool_error_budget_exhausted:
     "Couldn't save the data after several attempts. Please rephrase: state the exercise, weight and number of reps clearly.",
   // translation of the ru original (2026-09)
+  context_cleared: 'Conversation context cleared.',
   tool_system_error: 'A technical error occurred while saving your training data. Please try again or contact support.',
   // today's training.subgraph.ts guard literals, verbatim (refactor-p3-phase-spec Task 1, D-B)
   training_no_active_session: 'No active training session found. Please start a session first.',

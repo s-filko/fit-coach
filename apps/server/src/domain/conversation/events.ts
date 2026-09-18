@@ -4,6 +4,7 @@
  * effects. Consumers today: session lifecycle, the legacy phase summary;
  * P4 adds compaction.
  */
+import type { CompactReason } from './episode';
 import type { ConversationPhase } from './phases';
 
 /** Raised once per committed phase transition, after the run row is recorded. */
@@ -23,10 +24,10 @@ export interface PhaseTransitionCommitted {
  * What a handler wants changed in durable state after handling the event
  * (commit merges the partials in handler order).
  */
-export type TransitionHandlerResult = Partial<{ activeSessionId: string | null }>;
+export type TransitionHandlerResult = Partial<{ activeSessionId: string | null; compactReason: CompactReason }>;
 
 /**
- * Ordered, awaited (D-C): session activation must complete before the reply.
+ * Ordered, awaited (D-C): the compaction flag comes first, session activation completes before the reply.
  * One failing handler is logged at `error`; the others still run; the reply
  * is not failed (BR-CONV-007 spirit).
  */

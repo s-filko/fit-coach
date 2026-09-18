@@ -16,10 +16,6 @@ export async function registerInfraServices(container: Container = getGlobalCont
   // Lazy load all dependencies to avoid circular imports and config loading issues
   const { DrizzleUserRepository } = await import('@infra/db/repositories/user.repository');
   const { UserService } = await import('@domain/user/services/user.service');
-  const { CONVERSATION_CONTEXT_SERVICE_TOKEN } = await import('@domain/conversation/ports');
-  const { DrizzleConversationContextService } = await import(
-    '@infra/conversation/drizzle-conversation-context.service'
-  );
   const { USER_REPOSITORY_TOKEN, USER_SERVICE_TOKEN } = await import('@domain/user/ports');
 
   // Training domain
@@ -45,7 +41,6 @@ export async function registerInfraServices(container: Container = getGlobalCont
   container.register(EMBEDDING_SERVICE_TOKEN, embeddingService);
 
   // Register infrastructure implementations
-  container.register(CONVERSATION_CONTEXT_SERVICE_TOKEN, new DrizzleConversationContextService());
   container.register(USER_REPOSITORY_TOKEN, new DrizzleUserRepository());
   container.registerFactory(USER_SERVICE_TOKEN, c => new UserService(c.get(USER_REPOSITORY_TOKEN)));
 
@@ -87,6 +82,11 @@ export async function registerInfraServices(container: Container = getGlobalCont
   const { CONVERSATION_RUN_SERVICE_TOKEN, CONVERSATION_RUN_PORT_TOKEN } = await import('@domain/conversation/ports');
   const { DrizzleConversationRunService } = await import('@infra/conversation/drizzle-conversation-run.service');
   container.register(CONVERSATION_RUN_SERVICE_TOKEN, new DrizzleConversationRunService());
+  const { SUMMARY_PORT_TOKEN, TRANSCRIPT_PORT_TOKEN } = await import('@domain/conversation/ports');
+  const { DrizzleTranscriptService } = await import('@infra/conversation/drizzle-transcript.service');
+  const { DrizzleSummaryService } = await import('@infra/conversation/drizzle-summary.service');
+  container.register(TRANSCRIPT_PORT_TOKEN, new DrizzleTranscriptService());
+  container.register(SUMMARY_PORT_TOKEN, new DrizzleSummaryService());
   // The graph token stays internal to infra; the app layer sees the port only.
   const graph = buildConversationGraph({
     trainingService: container.get(TRAINING_SERVICE_TOKEN),
@@ -95,8 +95,16 @@ export async function registerInfraServices(container: Container = getGlobalCont
     exerciseRepository: container.get(EXERCISE_REPOSITORY_TOKEN),
     embeddingService: container.get(EMBEDDING_SERVICE_TOKEN),
     userService: container.get(USER_SERVICE_TOKEN),
-    contextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN),
     runService: container.get(CONVERSATION_RUN_SERVICE_TOKEN),
+    transcript: container.get(TRANSCRIPT_PORT_TOKEN),
+    summaries: container.get(SUMMARY_PORT_TOKEN),
+    llmGateway: container.get(LLM_GATEWAY_TOKEN),
+    // D-L: episode tunables resolved once here — the nodes never read env mid-run.
+    episodeConfig: {
+      gapMs: config.EPISODE_GAP_HOURS * 3_600_000,
+      minTurns: config.EPISODE_MIN_TURNS,
+      minTokens: config.EPISODE_MIN_TOKENS,
+    },
     checkpointer,
   });
   container.register(
@@ -105,6 +113,9 @@ export async function registerInfraServices(container: Container = getGlobalCont
       graph,
       userService: container.get(USER_SERVICE_TOKEN),
       runService: container.get(CONVERSATION_RUN_SERVICE_TOKEN),
+      // D-F: clearContext goes through the same checkpointer and transcript.
+      checkpointer,
+      transcript: container.get(TRANSCRIPT_PORT_TOKEN),
     }),
   );
 

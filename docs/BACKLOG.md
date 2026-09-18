@@ -84,8 +84,10 @@ Rules:
       ARCHITECTURE.md module layout's `config/` entry; optional
       `LLM_PROFILE_<NAME>_{MODEL,TEMPERATURE,MAX_TOKENS}` absent from the env section and
       `apps/server/.env.example`. Source: refactor-P1 close-out review R4 (2026-09-16).
-- [ ] **ARCHITECTURE.md:48 ChatMsg hedge** ("retired in refactor P1/P4") — P1 shipped
-      with ChatMsg untouched; resolve the hedge to P4-only when P4's plan touches the file.
+- [x] **ARCHITECTURE.md:48 ChatMsg hedge** ("retired in refactor P1/P4").
+      Resolved by refactor-p4-episode-memory (2026-09-18): the comment now states the
+      P4 outcome — ChatMsg remains only as the `LlmGateway` call type; graph history
+      interleaves as LangChain `BaseMessage`s from the checkpointed `messages` channel.
       Source: refactor-P1 close-out review R4 (2026-09-16).
 - [ ] **Registration-era feature specs reference the deleted `LLMService`**:
       FEAT-0004:23 and FEAT-0005:30 (generateResponse never existed; no named downstream
@@ -279,21 +281,25 @@ refactor-p2-context-assembler close-out review batch (2026-09-17):
       it one home; also `messageText` concatenates content and `JSON.stringify(tool_calls)` with
       no separator, so adjacent texts merge and slightly under-count tokens at the boundary
       (report numbers only). Source: review R2/R3.
-- [ ] **`toFrameRow` twin**: assemble-context.ts:51 = phase-summary.node.ts:34, two identical
-      role-narrowing mappings — the plan ruled the summariser's copy stays for now, but nothing
-      schedules the unification. Source: review R2.
-- [ ] **History mapper duplicates `toLangChain`**: the interleaved-history mapping in
+- [x] **`toFrameRow` twin**: assemble-context.ts:51 = phase-summary.node.ts:34, two identical
+      role-narrowing mappings. Resolved by refactor-p4-episode-memory (2026-09-18): both copies
+      are deleted — the history frame and the legacy phase-summary node are gone.
+      Source: review R2.
+- [x] **History mapper duplicates `toLangChain`**: the interleaved-history mapping in
       assemble-context.ts:83 reinvents `toLangChain` (llm.gateway.ts:13, which also handles
-      `system`); unify when P3's PhaseSpec touches this code. Source: review R2.
+      `system`). Resolved by refactor-p4-episode-memory (2026-09-18): the ChatMsg history
+      mapper is deleted — history rides the checkpointed `messages` channel as `BaseMessage`s.
+      Source: review R2.
 - [ ] **BudgetReport test fixtures ×4**: hand-written literals in
       persist.node.unit.test.ts:75, conversation-run.service.unit.test.ts:24,
       run-metrics.unit.test.ts:14, l1.unit.test.ts:18 — and the l1 fixture stamps estimator id
       `'chars/4'` instead of `TOKEN_ESTIMATOR_ID` (`'chars4x1.15'`); one shared fixture keeps them
       in step. Source: review R2.
-- [ ] **`history_frame` double ternary**: assemble-context.ts:97 builds the message via a
-      second ternary over the same condition that produced the text, non-nullness papered over by
-      an `as string` cast — if the conditions diverge, a silent `SystemMessage(undefined)`
-      results; compute text and message in one branch. Source: review R3.
+- [x] **`history_frame` double ternary**: assemble-context.ts:97 builds the message via a
+      second ternary over the same condition that produced the text. Resolved by
+      refactor-p4-episode-memory (2026-09-18): the `history_frame` mode was removed with the
+      per-phase layouts — the assembler emits `BaseMessage`s directly.
+      Source: review R3.
 - [ ] **`budget-report-present` false positive on agent-less eval runs**: the check fails for
       any eval run that completes without an agent model call (router short-circuit,
       `outcome: 'llm_unavailable'` without throwing); no such case exists today — guard it when
@@ -392,13 +398,17 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 - [x] `llm-log-handler.ts` kept dead `runId` locals from the pre-P3 metrics bridge;
       removed (the `_llmRunId` positional arg keeps a scoped disable — the repo config has
       no underscore-ignore pattern) (fix/p3-tails, 2026-09-18). Source: close-out-review, R2 (2026-09-18).
-- [ ] After a `system_error` the executor skips the remaining batch calls without
-      answering their `tool_call_id`s — harmless while commit clears messages each run, but
-      checkpointed once P4 stops clearing. Source: close-out-review, R3 (2026-09-18).
-- [ ] Run-row semantics drifted beyond the declared trigger/client change: `transition`
+- [x] After a `system_error` the executor skips the remaining batch calls without
+      answering their `tool_call_id`s. Resolved by refactor-p4-episode-memory (2026-09-18):
+      the executor answers every call in a batch — skipped calls get a `ToolMessage`
+      (`llmError('Skipped: an earlier tool in this batch failed with a system error')`)
+      before the terminal `AIMessage`; invariant-tested now that messages persist.
+      Source: close-out-review, R3 (2026-09-18).
+- [x] Run-row semantics drifted beyond the declared trigger/client change: `transition`
       now carries `reason`, and a blocked transition is recorded with `transition` set but
-      `phaseOut: null`. More accurate than the old persist node; declare it in the run-row
-      docs when P4 touches them. Source: close-out-review, R3 (2026-09-18).
+      `phaseOut: null`. Resolved by refactor-p4-episode-memory (2026-09-18): the semantics
+      are declared in `CONTRIBUTING_AI.md` § Run a Conversation (one run row per POST).
+      Source: close-out-review, R3 (2026-09-18).
 - [ ] New agent/catalog/graph test names cite plan decisions (D-B/D-C/D-D) instead of
       BR-_/AC-_ ids. Source: close-out-review, R3 (2026-09-18).
 - [x] Stale mechanism pointers in `docs/MANUAL_TEST_PLAN.md` / `docs/BUGS.md`: the test

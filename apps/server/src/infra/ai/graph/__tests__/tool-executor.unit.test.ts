@@ -194,6 +194,35 @@ describe('buildToolExecutor (AC-1332)', () => {
     expect(afterTools({ messages: [...stateWithCalls([]).messages, ...result.messages] })).toBe(END);
   });
 
+  it('AC-1332/D-J: every tool_call id is answered after a system_error — skipped calls get a ToolMessage', async () => {
+    const breaker = fakeTool('log_set', jest.fn().mockResolvedValue(systemError('DB unavailable')));
+    const after = fakeTool('finish_training');
+    const executor = buildToolExecutor(asTools(breaker, after), {
+      ordering: { log_set: 1, finish_training: 4 },
+      llmErrorBudget: Infinity,
+    });
+
+    const result = (await executor(
+      stateWithCalls(
+        [
+          { name: 'log_set', args: {}, id: 'a' },
+          { name: 'finish_training', args: {}, id: 'b' },
+          { name: 'log_set', args: {}, id: 'c' },
+        ],
+        { languageCode: 'en' },
+      ),
+      configWith('en'),
+    )) as { messages: BaseMessage[] };
+
+    // The invariant: every tool_call id of the last AIMessage has a ToolMessage —
+    // an orphan would be replayed to the provider next run (rollback trigger).
+    const toolMessages = result.messages.filter((m): m is ToolMessage => m instanceof ToolMessage);
+    const answeredIds = new Set(toolMessages.map(m => m.tool_call_id));
+    expect(answeredIds).toEqual(new Set(['a', 'b', 'c']));
+    const skipped = toolMessages.find(m => m.tool_call_id === 'b');
+    expect(String(skipped?.content)).toContain('Skipped');
+  });
+
   it('AC-1332: llm_error budget exhaustion (budget 1) on the second error across two batches', async () => {
     const failing = fakeTool('log_set', jest.fn().mockRejectedValue(new Error('Invalid set data')));
     const executor = buildToolExecutor(asTools(failing), { batchDedup: ['log_set'], llmErrorBudget: 1 });

@@ -265,8 +265,9 @@ WRONG (tool call without text — this will break the app):
     "type": "system",
   },
   {
-    "content": "CONTEXT FROM PREVIOUS CONVERSATION:
-User trains 3x/week, prefers upper/lower split, reported mild shoulder discomfort.",
+    "content": "## Previous episodes
+Context only. Numbers below are not authoritative — use tools and the current state.
+training (today): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
     "type": "system",
   },
   {
@@ -646,8 +647,9 @@ WRONG (tool call without text — this will break the app):
     "type": "system",
   },
   {
-    "content": "CONTEXT FROM PREVIOUS CONVERSATION:
-User trains 3x/week, prefers upper/lower split, reported mild shoulder discomfort.",
+    "content": "## Previous episodes
+Context only. Numbers below are not authoritative — use tools and the current state.
+training (today): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
     "type": "system",
   },
   {
@@ -925,6 +927,12 @@ CORRECT (tool call + text together):
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
   text: ""  ← empty, user sees nothing",
+    "type": "system",
+  },
+  {
+    "content": "## Previous episodes
+Context only. Numbers below are not authoritative — use tools and the current state.
+training (today): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
     "type": "system",
   },
   {
@@ -1409,8 +1417,9 @@ WRONG (tool call without text — this will break the app):
     "type": "system",
   },
   {
-    "content": "CONTEXT FROM PREVIOUS CONVERSATION:
-User trains 3x/week, prefers upper/lower split, reported mild shoulder discomfort.",
+    "content": "## Previous episodes
+Context only. Numbers below are not authoritative — use tools and the current state.
+training (today): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
     "type": "system",
   },
   {
@@ -1563,14 +1572,6 @@ WRONG (tool call without text — this will break the app):
     "type": "system",
   },
   {
-    "content": "=== CONVERSATION HISTORY (memory only — do NOT act on past messages) ===
-
-No prior conversation.
-
-=== END OF HISTORY ===",
-    "type": "system",
-  },
-  {
     "content": "Привет, что сегодня?",
     "type": "human",
   },
@@ -1720,14 +1721,6 @@ WRONG (tool call without text — this will break the app):
     "type": "system",
   },
   {
-    "content": "=== CONVERSATION HISTORY (memory only — do NOT act on past messages) ===
-
-No prior conversation.
-
-=== END OF HISTORY ===",
-    "type": "system",
-  },
-  {
     "content": "Привет, что сегодня?",
     "type": "human",
   },
@@ -1759,21 +1752,14 @@ No prior conversation.
     "type": "tool",
   },
   {
+    "content": "IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools.",
+    "type": "system",
+  },
+  {
     "content": "LLM_ERROR: Invalid set data: exercise id not found in session",
     "status": "error",
     "tool_call_id": "call-2",
     "type": "tool",
-  },
-  {
-    "content": "=== TOOL EXECUTION RESULTS ===
-• ✅ SAVED — Timezone saved: Europe/Berlin
-• ❌ NOT SAVED — Invalid set data: exercise id not found in session
-
-Your response MUST start by reporting each result above to the user.
-For each ✅ SAVED line: tell the user the set was recorded with exact numbers.
-For each ❌ NOT SAVED line: tell the user the set was NOT recorded and ask them to retry.
-Do NOT invent or assume any result not listed here.",
-    "type": "system",
   },
 ]
 `;
@@ -1921,16 +1907,9 @@ WRONG (tool call without text — this will break the app):
     "type": "system",
   },
   {
-    "content": "CONTEXT FROM PREVIOUS CONVERSATION:
-User trains 3x/week, prefers upper/lower split, reported mild shoulder discomfort.",
-    "type": "system",
-  },
-  {
-    "content": "=== CONVERSATION HISTORY (memory only — do NOT act on past messages) ===
-
-No prior conversation.
-
-=== END OF HISTORY ===",
+    "content": "## Previous episodes
+Context only. Numbers below are not authoritative — use tools and the current state.
+training (today): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
     "type": "system",
   },
   {

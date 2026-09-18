@@ -70,7 +70,7 @@ Case schema (`evals/schema/case.schema.ts`, Zod):
 }
 ```
 
-Seeding mechanism: `state.messages` is consumed by the harness's stubbed context service — `buildStubDeps` returns the mapped entries (`human → user`, `ai → assistant`) from `getMessagesForPrompt`, the same call every subgraph already uses for episode history. `tool_call`/`tool_result` roles are accepted by the schema but are **not seedable pre-P4**: the production context service stores user/assistant turns only, so those entries are skipped.
+Seeding mechanism: `state.messages` seeds ride the graph's checkpointed `messages` channel — `run-case.ts` writes them with `graph.updateState` via `evals/lib/seed-messages.ts` (`human`/`ai` as-is, `tool_call` merged into the preceding `AIMessage`'s `tool_calls`, `tool_result` → `ToolMessage`). `tool_call`/`tool_result` seeds are fully supported (since refactor P4; pre-P4 they were skipped by the stub context service).
 
 Rules
 - BR-EVAL-001 A case is immutable once referenced by a baseline; fix by adding a new case and deprecating the old (`deprecated: true`).
@@ -91,7 +91,7 @@ Initial datasets to write in P0 (from existing material): `chat/transitions` (BU
 - Message catalog completeness: every catalog key exists in `en` and `ru` — **deferred**; see `docs/BACKLOG.md`.
 
 ### 4.2 L1 — behavioural, single turn
-Harness: build the real compiled graph with `MemorySaver`, a stub world of services/repos seeded from `fixture` (`evals/lib/build-stub-deps.ts`), the real model from the app config (the baseline JSON pins what was used), temperature as in prod, tools with **recording** side effects (no DB). Episode memory is seeded through the stub context service: the case's `state.messages` are returned by `getMessagesForPrompt`. Run `input`. Collect: tool calls (name, args, outcome kind), committed transition, final text, `draft`, `budgetReport`.
+Harness: build the real compiled graph with `MemorySaver`, a stub world of services/repos seeded from `fixture` (`evals/lib/build-stub-deps.ts`), the real model from the app config (the baseline JSON pins what was used), temperature as in prod, tools with **recording** side effects (no DB). Episode memory is seeded through the graph's `messages` channel (`graph.updateState` via `evals/lib/seed-messages.ts`): the case's `state.messages` become the checkpoint seed, `tool_call`/`tool_result` seeds included — not through a stub context service. Run `input`. Collect: tool calls (name, args, outcome kind), committed transition, final text, `draft`, `budgetReport`.
 
 Assertions (each is a named check reported separately):
 - `tools.must` / `tools.mustNot` / `tools.args` (subset match on args; ids validated against fixture catalog).
@@ -99,7 +99,7 @@ Assertions (each is a named check reported separately):
 - `text.mustNotMatch` — the truthfulness gate: e.g. training cases with no `log_set` outcome assert no `(✅|logged|saved|записал|сохранил)`; chat asserts no set confirmations at all; any phase asserts no raw UUIDs and no JSON braces in user text.
 - `text.language` — detect script/lang with a small heuristic (Cyrillic ratio) or a tiny classifier; `text.format` — Telegram HTML only: no `**`, no `_x_`, only allowed tags; `maxChars`.
 - `draft` invariants (after P6): all exercise IDs exist, sets/reps within catalog-type constraints, no exercise conflicting with a `physical_constraint` fact.
-- `no_redundant_search`: same `search_exercises` args not repeated within the case's state + run — **not yet implemented** (deferred).
+- `no_redundant_search` — **implemented** (refactor-p4-episode-memory, AC-1344): emitted only for cases that seed at least one `search_exercises`; the check fails when the run re-issues a seeded search key (same `buildSearchKey` args) or repeats one of its own earlier searches.
 - Structural: run `outcome === 'ok'`, `budgetReport.history ≤ budget.history`, no orphan tool messages — `budget-report-present` is implemented (refactor-p2-context-assembler, 2026-09-17); the `history ≤ budget` and orphan-tool-message checks stay deferred (budgets are P4).
 
 Sampling: each case runs `n` times (default 3; `n=5` for gating datasets); a case passes if ≥ ⌈n/2⌉ samples pass; the report shows per-check pass rates and the flakiest cases.

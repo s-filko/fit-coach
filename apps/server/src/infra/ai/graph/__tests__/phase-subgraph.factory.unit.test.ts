@@ -24,7 +24,6 @@ const FRESH_USER = { id: 'u1', languageCode: 'en', timezone: 'Europe/Berlin' };
 function makeDeps(): ConversationGraphDeps {
   return {
     userService: { getUser: jest.fn(async () => FRESH_USER) },
-    contextService: { getMessagesForPrompt: jest.fn(async () => []) },
   } as unknown as ConversationGraphDeps;
 }
 
@@ -45,11 +44,11 @@ function makeSpec(tools: DynamicStructuredTool<{ name: string }>[] = [makeFakeTo
       current: { id: 'phase.fake', version: 'v1', directives: [], render: () => [] },
       requiredSections: [],
     },
-    layout: { summaryFrame: false, historyMode: 'interleaved', toolResultsFrame: false },
     tools: tools as PhaseSpec['tools'],
     toolPolicy: { llmErrorBudget: Infinity },
     loadContext: async () => ({ ok: true, data: { lastMessageTime: null } }),
     modelProfile: 'default',
+    budget: { system: 1, longTerm: 1, domain: 1, history: 1000, outputReserve: 1 },
   };
 }
 

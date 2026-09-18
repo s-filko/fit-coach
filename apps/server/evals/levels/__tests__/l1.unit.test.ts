@@ -124,3 +124,59 @@ describe('assertCase', () => {
     expect(results.find(r => r.check.startsWith('text.mustMatch'))?.passed).toBe(true);
   });
 });
+
+describe('no_redundant_search (AC-1344, D-N)', () => {
+  const seededSearchCase: EvalCase = {
+    ...base,
+    id: 'PCR-0001',
+    phase: 'plan_creation',
+    state: {
+      phase: 'plan_creation',
+      messages: [
+        { role: 'human', text: 'составь план' },
+        { role: 'tool_call', name: 'search_exercises', args: { query: 'Upper Body Compound' } },
+        { role: 'tool_result', text: 'Found 3 exercises:' },
+        { role: 'ai', text: 'Предлагаю…' },
+      ],
+    },
+  };
+  const search = (query: string) => ({ name: 'search_exercises', args: { query } });
+
+  it('AC-1344: no_redundant_search fails on a repeated seeded key', () => {
+    const results = assertCase(seededSearchCase, observed({ toolCalls: [search('upper body compound')] }));
+    expect(results.find(r => r.check === 'no_redundant_search')?.passed).toBe(false);
+  });
+
+  it('AC-1344: no_redundant_search fails when the run repeats its own earlier search key', () => {
+    const results = assertCase(
+      seededSearchCase,
+      observed({ toolCalls: [search('legs bodyweight'), search('legs bodyweight')] }),
+    );
+    expect(results.find(r => r.check === 'no_redundant_search')?.passed).toBe(false);
+  });
+
+  it('AC-1344: no_redundant_search passes when the run reuses ids without searching', () => {
+    const results = assertCase(seededSearchCase, observed({ toolCalls: [] }));
+    expect(results.find(r => r.check === 'no_redundant_search')?.passed).toBe(true);
+  });
+
+  it('AC-1344: no_redundant_search passes for a different search key (new intent, not redundant)', () => {
+    const results = assertCase(seededSearchCase, observed({ toolCalls: [search('legs bodyweight')] }));
+    expect(results.find(r => r.check === 'no_redundant_search')?.passed).toBe(true);
+  });
+
+  it('AC-1344: no_redundant_search is not emitted for cases without seeded searches', () => {
+    const noSeeds: EvalCase = {
+      ...base,
+      state: {
+        phase: 'chat',
+        messages: [
+          { role: 'human', text: 'q' },
+          { role: 'ai', text: 'a' },
+        ],
+      },
+    };
+    const results = assertCase(noSeeds, observed({ toolCalls: [search('upper body compound')] }));
+    expect(results.some(r => r.check === 'no_redundant_search')).toBe(false);
+  });
+});

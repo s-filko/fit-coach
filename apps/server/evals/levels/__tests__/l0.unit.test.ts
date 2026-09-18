@@ -55,7 +55,12 @@ describe('L0 registry iteration (AC-1303, refactor-p2-prompt-modules Task 6)', (
   });
 
   it('passes when every required section is present', () => {
-    const results = checkSections('phase.chat', 'empty-profile', ['context', 'rules', 'tools'], ['context', 'rules', 'tools']);
+    const results = checkSections(
+      'phase.chat',
+      'empty-profile',
+      ['context', 'rules', 'tools'],
+      ['context', 'rules', 'tools'],
+    );
     expect(results.every(r => r.passed)).toBe(true);
   });
 
@@ -64,7 +69,7 @@ describe('L0 registry iteration (AC-1303, refactor-p2-prompt-modules Task 6)', (
     const cases = new Set(results.map(r => r.case));
     expect(cases.has('phase.chat/empty-profile')).toBe(true);
     expect(cases.has('summarizer/empty-profile')).toBe(true);
-    expect(cases.has('block.tool_results/empty-profile')).toBe(true);
+    expect(cases.has('block.episode_summaries/empty-profile')).toBe(true);
     expect(results.every(r => r.passed)).toBe(true);
   });
 });

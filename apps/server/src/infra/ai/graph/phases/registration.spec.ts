@@ -15,29 +15,28 @@ import { buildCompleteRegistrationTool, buildSaveProfileFieldsTool, buildSharedT
 import { NO_POLICY, type ToolPolicy } from '../tool-policy';
 
 /** What the registration prompt renders beyond the directive base: nothing. */
-export interface RegistrationData {
-  lastMessageTime: Date | null;
-}
+export type RegistrationData = object;
 
 export const REGISTRATION_TOOL_POLICY: ToolPolicy = NO_POLICY;
 
 export function buildRegistrationSpec(deps: ConversationGraphDeps): PhaseSpec<RegistrationData> {
   const { userService } = deps;
-  const { entry, layout } = PHASE_PROMPTS.registration;
+  const entry = PHASE_PROMPTS.registration;
 
   return {
     name: 'registration',
     prompt: entry as PhasePromptEntry<PromptContextFor<RegistrationData>>,
-    layout,
     tools: [
       buildSaveProfileFieldsTool({ userService }),
       buildCompleteRegistrationTool({ userService }),
       ...buildSharedTools({ userService }),
     ],
     toolPolicy: REGISTRATION_TOOL_POLICY,
+    // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).
+    budget: { system: 2500, longTerm: 1000, domain: 1000, history: 6000, outputReserve: 1500 },
     loadContext: async (_input: LoadInput, _deps: ConversationGraphDeps) => ({
       ok: true as const,
-      data: { lastMessageTime: null },
+      data: {},
     }),
     modelProfile: 'default',
   };

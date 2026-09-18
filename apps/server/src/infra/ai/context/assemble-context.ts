@@ -1,49 +1,41 @@
 /**
- * The context assembler (ADR-0013 §3.4, D-03 — reporting half, refactor P2):
- * one function builds the message array every phase sends to the model, in
- * exactly today's per-phase order, and reports how many estimated tokens each
- * part costs. The layout comes from the caller's PhaseSpec (refactor-p3-phase-spec
- * Task 2) — no registry lookup here; consecutive system messages are sent as
- * separate SystemMessages (§3.4 blocks 1–3). The report travels to the persist
- * node via the run-metrics accumulator; the post-tool nudge is inserted later
- * by the shared agent node and is not part of the report (see BudgetReport's
- * JSDoc).
+ * The context assembler (ADR-0013 §3.4, D-03/D-H — refactor P2, reworked in
+ * P4 Task 5): one function builds the message array every phase sends to the
+ * model, in ONE fixed order for every phase — the phase system prompt, the
+ * `## Previous episodes` block (when summaries exist), the interleaved
+ * episode history from the checkpointed `messages` channel, and this run's
+ * current messages. Consecutive system messages are sent as separate
+ * SystemMessages (§3.4 blocks 1–3).
  *
  * Pure (same discipline as BR-LLM-007 for prompts): no I/O, no clock reads,
  * no config reads, no logging. It counts and reports — no trimming, no
- * budgets (P4).
+ * budgets (the context-budget plan).
  */
-import { AIMessage, type BaseMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage, SystemMessage } from '@langchain/core/messages';
 
-import type { ChatMsg } from '@domain/ai/types';
+import type { StoredEpisodeSummary } from '@domain/conversation/episode';
 import type { BudgetReport } from '@domain/conversation/ports';
 
-import type { PhaseLayout } from '@infra/ai/prompts';
-import { HISTORY_FRAME_V1, renderBlock, SUMMARY_FRAME_V1 } from '@infra/ai/prompts/blocks';
+import { EPISODE_SUMMARIES_V1, renderBlock } from '@infra/ai/prompts/blocks';
 
 import { estimateTokens, TOKEN_ESTIMATOR_ID } from './token-estimator';
-import { renderToolResults } from './tool-results';
 
 export interface AssembleInput {
   /** compose(PHASE.current.render(ctx)) — rendered by the caller (the spec owns the data). */
   systemPrompt: string;
-  /** Ignored when the phase layout has no summary frame. */
-  previousSummary?: string | null;
-  /** contextService.getMessagesForPrompt(...) — the loaded transcript turns. */
-  history: ChatMsg[];
-  userMessage: string;
-  /** This run's in-flight messages (state.messages ?? []) — AI tool calls and their results. */
-  inFlight: BaseMessage[];
+  /** state.episodeSummaries — empty array renders no block. */
+  episodeSummaries: StoredEpisodeSummary[];
+  /** The episode history from the checkpointed `messages` channel (INV-LLM-001). */
+  history: BaseMessage[];
+  /** This run: [HumanMessage, ...inFlight] — the assembler never splits it. */
+  current: BaseMessage[];
+  now: Date;
+  timezone: string | null;
 }
 
 export interface AssembledContext {
   messages: BaseMessage[];
   budgetReport: BudgetReport;
-}
-
-/** The role-narrowing lambda from today's training.subgraph agentNode — one home on the assembly side. */
-function toFrameRow(m: ChatMsg): { role: 'user' | 'assistant'; content: string } {
-  return { role: m.role === 'user' ? 'user' : 'assistant', content: m.content };
 }
 
 /** Text a message contributes to the report: string content as is, array content JSON-stringified, plus tool calls. */
@@ -58,52 +50,48 @@ function sumTokens(messages: readonly BaseMessage[]): number {
   return messages.reduce((n, m) => n + estimateTokens(messageText(m)), 0);
 }
 
-export function assembleContext(input: AssembleInput, layout: PhaseLayout): AssembledContext {
-  const systemText = input.systemPrompt;
-  const summaryText =
-    layout.summaryFrame && input.previousSummary
-      ? renderBlock(SUMMARY_FRAME_V1, { previousSummary: input.previousSummary })
+function isHuman(m: BaseMessage): boolean {
+  return m._getType() === 'human';
+}
+
+export function assembleContext(input: AssembleInput): AssembledContext {
+  const summariesText =
+    input.episodeSummaries.length > 0
+      ? renderBlock(EPISODE_SUMMARIES_V1, {
+          summaries: input.episodeSummaries,
+          now: input.now,
+          timezone: input.timezone,
+        })
       : null;
 
-  // training frames history as one system block, rendered even when empty ("No prior conversation."
-  // is today's text); every other phase interleaves the turns as human/ai messages.
-  const historyFrameText =
-    layout.historyMode === 'history_frame'
-      ? renderBlock(HISTORY_FRAME_V1, { history: input.history.map(toFrameRow) })
-      : null;
-  const historyMessages: BaseMessage[] =
-    layout.historyMode === 'interleaved'
-      ? input.history.map(m => (m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content)))
-      : [new SystemMessage(historyFrameText as string)];
+  const [userMessage, ...inFlight] = input.current;
+  const userText =
+    userMessage !== undefined && isHuman(userMessage) && typeof userMessage.content === 'string'
+      ? userMessage.content
+      : '';
 
-  const userMessage = new HumanMessage(input.userMessage);
-  const inFlight = [...input.inFlight];
-  const toolMessages = inFlight.filter((m): m is ToolMessage => m instanceof ToolMessage);
-  const toolResultsText = layout.toolResultsFrame && toolMessages.length > 0 ? renderToolResults(toolMessages) : null;
-
-  // Fixed order, identical to today's five agentNodes; runs are kept — the
-  // model receives separate SystemMessages (ADR-0013 §3.4).
+  // Fixed order, identical for every phase (ADR-0013 §3.4).
   const messages: BaseMessage[] = [
-    new SystemMessage(systemText),
-    ...(summaryText ? [new SystemMessage(summaryText)] : []),
-    ...historyMessages,
-    userMessage,
-    ...inFlight,
-    ...(toolResultsText ? [new SystemMessage(toolResultsText)] : []),
+    new SystemMessage(input.systemPrompt),
+    ...(summariesText ? [new SystemMessage(summariesText)] : []),
+    ...input.history,
+    ...input.current,
   ];
 
   const budgetReport: BudgetReport = {
     estimator: TOKEN_ESTIMATOR_ID,
-    system: estimateTokens(systemText),
-    summary: summaryText ? estimateTokens(summaryText) : 0,
-    history: historyFrameText ? estimateTokens(historyFrameText) : sumTokens(historyMessages),
-    user: estimateTokens(input.userMessage),
+    system: estimateTokens(input.systemPrompt),
+    summary: summariesText ? estimateTokens(summariesText) : 0,
+    history: sumTokens(input.history),
+    user: estimateTokens(userText),
     inFlight: sumTokens(inFlight),
-    toolResults: toolResultsText ? estimateTokens(toolResultsText) : 0,
+    // Always 0 since P4 (D-H): the training tool-results block is gone; kept
+    // for baseline comparability across the migration.
+    toolResults: 0,
     total: 0,
-    // Counted on the returned (unmerged) array, before the post-tool nudge.
+    // Counted on the returned array, before the post-tool nudge.
     messages: messages.length,
-    historyTurns: input.history.length,
+    historyTurns: input.history.filter(isHuman).length,
   };
   budgetReport.total =
     budgetReport.system +

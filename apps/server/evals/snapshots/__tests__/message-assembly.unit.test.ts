@@ -22,7 +22,7 @@ import {
   serializeForSnapshot,
 } from '../../fixtures/assembly-scenarios';
 import { ACTIVE_SESSION, COMPLETE_PROFILE, EMPTY_PROFILE } from '../../fixtures/personas';
-import { FIXED_NOW, FIXTURE_HISTORY, FIXTURE_SUMMARY, toUser } from '../../fixtures/prompt-contexts';
+import { FIXED_NOW, FIXTURE_EPISODE_SUMMARY, FIXTURE_HISTORY, toUser } from '../../fixtures/prompt-contexts';
 import { buildStubDeps } from '../../lib/build-stub-deps';
 import type { EvalFixture } from '../../schema/case.schema';
 
@@ -79,14 +79,14 @@ function buildSubgraph(phase: PhaseName, deps: ConversationGraphDeps): Invokable
  */
 async function captureInvocation(phase: PhaseCase, scenario: AssemblyScenario): Promise<BaseMessage[]> {
   __recorded.length = 0;
-  // buildStubDeps takes history as { role, text } — adapt FIXTURE_HISTORY inline.
-  const { deps } = buildStubDeps(
-    phase.fixture,
-    FIXTURE_HISTORY.map(h => ({ role: h.role, text: h.content })),
-  );
-  if (scenario === 'with-summary') {
-    deps.contextService.getLatestSummary = async () => FIXTURE_SUMMARY;
-  }
+  // History seeding — discovered 2026-09-18 (P4 Task 1): FIXTURE_HISTORY's
+  // user/assistant roles never matched buildStubDeps' human/ai filter, so every
+  // frozen snapshot below was captured with EMPTY history. Fixing the roles
+  // now would change the frozen snapshots outside a reviewed diff, so the
+  // harness keeps history empty; P4 Task 4 rewires seeding through the
+  // `messages` channel and Task 5's enumerated diff is where history rows
+  // appear.
+  const { deps } = buildStubDeps(phase.fixture);
 
   const subgraph = buildSubgraph(phase.phase, deps);
   // The user message is the first HumanMessage of `messages` (the adapter's
@@ -95,6 +95,9 @@ async function captureInvocation(phase: PhaseCase, scenario: AssemblyScenario): 
   await subgraph.invoke(
     {
       messages: [new HumanMessage('Привет, что сегодня?'), ...scenarioInFlight],
+      // Task 5: one chat — the `## Previous episodes` block seeds through state
+      // for every phase alike (owner rule 2026-09-17).
+      ...(scenario === 'with-summary' ? { episodeSummaries: [FIXTURE_EPISODE_SUMMARY] } : {}),
       ...(phase.input ?? {}),
     },
     {
@@ -139,9 +142,10 @@ describe('message assembly (pre-wiring truth, refactor-p2-context-assembler Task
   // Registration never loads the summary — its with-summary array must be
   // byte-identical to its plain one. Cheapest proof the harness sees real
   // differences between scenarios.
-  it('registration / with-summary equals plain (registration ignores the summary)', async () => {
-    const plain = await captureInvocation(PHASES[0], 'plain');
+  it('registration / with-summary shows the episode-summaries block (one chat — inverted)', async () => {
     const withSummary = await captureInvocation(PHASES[0], 'with-summary');
-    expect(serializeForSnapshot(withSummary)).toEqual(serializeForSnapshot(plain));
+    const serialized = JSON.stringify(serializeForSnapshot(withSummary));
+    expect(serialized).toContain('## Previous episodes');
+    expect(serialized).toContain('upper/lower split');
   });
 });

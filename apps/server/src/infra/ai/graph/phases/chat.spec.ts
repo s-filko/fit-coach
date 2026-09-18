@@ -20,34 +20,33 @@ import { NO_POLICY, type ToolPolicy } from '../tool-policy';
 export interface ChatData {
   hasActivePlan: boolean;
   recentSessions: WorkoutSessionWithDetails[];
-  lastMessageTime: Date | null;
 }
 
 export const CHAT_TOOL_POLICY: ToolPolicy = NO_POLICY;
 
 export function buildChatSpec(deps: ConversationGraphDeps): PhaseSpec<ChatData> {
   const { userService } = deps;
-  const { entry, layout } = PHASE_PROMPTS.chat;
+  const entry = PHASE_PROMPTS.chat;
 
   return {
     name: 'chat',
     prompt: entry as PhasePromptEntry<PromptContextFor<ChatData>>,
-    layout,
     tools: [
       buildUpdateProfileTool({ userService }),
       buildRequestTransitionTool('chat'),
       ...buildSharedTools({ userService }),
     ],
     toolPolicy: CHAT_TOOL_POLICY,
+    // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).
+    budget: { system: 3000, longTerm: 1500, domain: 2000, history: 8000, outputReserve: 2000 },
     loadContext: async (input: LoadInput, deps: ConversationGraphDeps) => {
-      const [activePlan, recentSessions, lastMessageTime] = await Promise.all([
+      const [activePlan, recentSessions] = await Promise.all([
         deps.workoutPlanRepo.findActiveByUserId(input.userId),
         deps.workoutSessionRepo.findRecentByUserIdWithDetails(input.userId, 5),
-        deps.contextService.getLastUserMessageTime(input.userId),
       ]);
       return {
         ok: true as const,
-        data: { hasActivePlan: !!activePlan, recentSessions, lastMessageTime },
+        data: { hasActivePlan: !!activePlan, recentSessions },
       };
     },
     modelProfile: 'default',

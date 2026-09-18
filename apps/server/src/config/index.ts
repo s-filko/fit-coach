@@ -11,7 +11,7 @@ import { type LlmProfileOverride, parseLlmProfiles } from './llm-profiles';
  * - No hardcoded credentials or default values in source code
  * - Application fails fast if environment is not properly configured
  */
-const EnvSchema = z.object({
+export const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
   PORT: z.string().transform(v => Number(v)),
@@ -31,6 +31,13 @@ const EnvSchema = z.object({
     .transform(s => (s == null || s.trim() === '' ? undefined : s))
     .pipe(z.string().url().min(1).optional()),
   LLM_MODEL: z.string().min(1),
+  // Episode-memory tunables (D-L, refactor-p4-episode-memory) — the second
+  // documented exception to "no defaults in code" (tunables, not secrets; same
+  // class as LLM_PROFILE_*): requiring them would mean hand-editing .env.dev /
+  // .env.prod before the deploy can boot.
+  EPISODE_GAP_HOURS: z.coerce.number().default(3),
+  EPISODE_MIN_TURNS: z.coerce.number().default(2),
+  EPISODE_MIN_TOKENS: z.coerce.number().default(300),
   LLM_TEMPERATURE: z
     .string()
     .transform(v => {

@@ -14,7 +14,8 @@ export type MessageKey =
   | 'training_session_not_found'
   | 'empty_reply'
   | 'session_ended_return_to_chat'
-  | 'session_missing_return_to_chat';
+  | 'session_missing_return_to_chat'
+  | 'context_cleared';
 
 export type Lang = 'en' | 'ru';
 

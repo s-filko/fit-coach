@@ -7,17 +7,21 @@
 import { randomUUID } from 'node:crypto';
 
 import type { BaseCallbackHandler } from '@langchain/core/callbacks/base';
-import { HumanMessage } from '@langchain/core/messages';
+import { type BaseMessage, HumanMessage } from '@langchain/core/messages';
 
 import type {
+  ConversationPhase,
   ConversationRunPort,
   ConversationRunRecord,
   IConversationRunService,
   RunInput,
   RunResult,
+  TranscriptPort,
 } from '@domain/conversation/ports';
 import type { IUserService } from '@domain/user/ports';
 
+import { lastAiText } from '@infra/ai/graph/episode';
+import { langOf, t } from '@infra/ai/messages';
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
 import { createLogger } from '@shared/logger';
@@ -35,12 +39,16 @@ export interface ConversationRunnerDeps {
   graph: { invoke(input: unknown, config?: unknown): Promise<any> };
   userService: IUserService;
   runService: IConversationRunService;
+  /** D-F: clearContext deletes the thread through the checkpointer. */
+  checkpointer: { deleteThread(threadId: string): Promise<void> };
+  /** D-F: clearContext leaves a catalog system note in the transcript. */
+  transcript: TranscriptPort;
   /** Extra LangChain callbacks for the run (evals' ToolRecorder) — infra-only surface. */
   extraCallbacks?: BaseCallbackHandler[];
 }
 
 export function buildConversationRunner(deps: ConversationRunnerDeps): ConversationRunPort {
-  const { graph, userService, runService, extraCallbacks } = deps;
+  const { graph, userService, runService, checkpointer, transcript, extraCallbacks } = deps;
 
   return {
     async run(input: RunInput): Promise<RunResult> {
@@ -71,11 +79,12 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
             callbacks: [metrics.handler(), ...(extraCallbacks ?? [])],
             recursionLimit: 50,
           },
-        )) as { phase: RunResult['phase'] };
+        )) as { phase: RunResult['phase']; messages: BaseMessage[] };
 
         return {
-          // P3: the reply text rides the collector until P4 stops clearing messages
-          text: metrics.finalText ?? '',
+          // P4: the reply is the last AI message of the persisted channel
+          // (ADR-0013 §3.2 — no responseMessage channel, no collector text).
+          text: lastAiText(result.messages ?? []) ?? '',
           phase: result.phase,
           runId,
         };
@@ -116,6 +125,29 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
         }
         throw err;
       }
+    },
+
+    /** D-F: delete the thread, note it in the transcript — nothing else. */
+    async clearContext(userId: string): Promise<void> {
+      // The note's phase = the thread's last phase — read before the thread is gone.
+      let phase: ConversationPhase = 'chat';
+      try {
+        const st = await (
+          graph as { getState?: (c: unknown) => Promise<{ values?: { phase?: ConversationPhase } }> }
+        ).getState?.({ configurable: { thread_id: userId } });
+        const { phase: lastPhase } = st?.values ?? {};
+        if (lastPhase) {
+          phase = lastPhase;
+        }
+      } catch {
+        // best-effort — the default phase carries the note
+      }
+      const user = await userService.getUser(userId);
+      const { languageCode } = user ?? { languageCode: null as string | null };
+      const lang = langOf(languageCode);
+      await checkpointer.deleteThread(userId);
+      await transcript.appendSystemNote({ userId, phase, text: t('context_cleared', lang) });
+      log.info({ userId, phase }, 'Context cleared');
     },
   };
 }

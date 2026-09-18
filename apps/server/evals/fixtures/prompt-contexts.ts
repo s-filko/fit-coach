@@ -15,6 +15,28 @@ export const FIXTURE_HISTORY: Array<{ role: 'user' | 'assistant'; content: strin
 
 export const FIXTURE_SUMMARY = 'User trains 3x/week, prefers upper/lower split, reported mild shoulder discomfort.';
 
+/** P4 Task 6: what compact's renderTranscript produces for the fixture episode (summariser v2 input). */
+export const FIXTURE_TRANSCRIPT = [
+  'User: Сегодня жим лёжа, 60 кг на 8',
+  'Assistant: Записал: жим лёжа 60 кг × 8. Следующий подход — 62.5 кг.',
+  'User: Плечо побаливает после последней тренировки',
+  'Assistant: Понял. Снизим нагрузку на жим и добавим разминку плеча.',
+].join('\n');
+
+/** P4 Task 5: an episode summary derived from FIXTURE_SUMMARY's facts (D-C). */
+export const FIXTURE_EPISODE_SUMMARY = {
+  episodeId: '11111111-1111-4111-8111-111111111111',
+  phaseAtEnd: 'training' as const,
+  endedAt: '2026-09-16T18:00:00.000Z',
+  summary: {
+    topics: ['training plan discussed'],
+    decisions: ['upper/lower split, 3 sessions per week'],
+    userState: ['mild shoulder discomfort reported'],
+    trainingFeedback: [],
+    openItems: [],
+  },
+};
+
 export const FIXTURE_TOOL_RESULTS: Array<{ ok: boolean; content: string }> = [
   { ok: true, content: 'Set 2 logged: 60 kg × 8 (RPE 7)' },
   { ok: false, content: 'exercise id not found in session' },
@@ -91,13 +113,9 @@ export function contextsForModule(moduleId: string, fixture: EvalFixture): unkno
     case 'phase.training':
       return { ...base, session: buildFixtureSession(fixture, FIXED_NOW), previousSession: null };
     case 'summarizer':
-      return { phase: 'training', previousSummary: FIXTURE_SUMMARY, history: FIXTURE_HISTORY };
-    case 'block.tool_results':
-      return { results: FIXTURE_TOOL_RESULTS };
-    case 'block.history_frame':
-      return { history: FIXTURE_HISTORY };
-    case 'block.summary_frame':
-      return { previousSummary: FIXTURE_SUMMARY };
+      return { phase: 'training', transcript: FIXTURE_TRANSCRIPT };
+    case 'block.episode_summaries':
+      return { summaries: [FIXTURE_EPISODE_SUMMARY], now: FIXED_NOW, timezone: 'Europe/Berlin' };
     case 'block.post_tool_nudge':
       return {};
     default:

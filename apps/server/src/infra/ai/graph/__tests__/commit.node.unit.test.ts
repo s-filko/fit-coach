@@ -1,13 +1,14 @@
 /**
- * commit node tests (refactor-p3-run-context-commit Task 4 Step 1, ADR-0013
- * §4.1/§4.3/§8): turn persistence, run-row recording with toolCalls
- * (collectToolCalls), transition evaluation, handler order/isolation and the
- * cleared durable state.
+ * commit node tests (refactor-p3-run-context-commit Task 4 Step 1, reworked
+ * for P4 Task 4 — ADR-0013 §4.1/§4.3/§8, D-K/D-I): transcript projection of
+ * this run's messages only, run-row recording with toolCalls
+ * (collectToolCalls), transition evaluation, handler order/isolation, and the
+ * durable state that no longer clears `messages` (INV-LLM-002).
  */
 import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 
 import type { PhaseTransitionCommitted, TransitionHandler } from '@domain/conversation/events';
-import type { IConversationContextService, IConversationRunService } from '@domain/conversation/ports';
+import type { IConversationRunService, TranscriptPort } from '@domain/conversation/ports';
 import type { User } from '@domain/user/services/user.service';
 
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
@@ -35,15 +36,18 @@ function makeConfig() {
 }
 
 function makeDeps(handlers: TransitionHandler[] = []) {
-  const appendTurn = jest.fn();
+  const transcript: jest.Mocked<TranscriptPort> = {
+    appendRunMessages: jest.fn(),
+    appendSystemNote: jest.fn(),
+  };
   const recordRun = jest.fn();
   return {
     node: buildCommitNode({
-      contextService: { appendTurn } as unknown as IConversationContextService,
+      transcript,
       runService: { recordRun } as unknown as IConversationRunService,
       onTransition: handlers,
     }),
-    appendTurn,
+    transcript,
     recordRun,
   };
 }
@@ -54,33 +58,75 @@ function stateOf(overrides: Partial<Parameters<ReturnType<typeof buildCommitNode
     activeSessionId: null as string | null,
     messages: [new HumanMessage('вопрос'), new AIMessage('ответ')],
     pendingTransition: null,
+    episodeId: 'ep-1',
+    episodeSummaries: [],
+    episodeStartedAt: null,
+    lastUserMessageAt: null,
+    compactReason: null,
     ...overrides,
   };
 }
 
-describe('buildCommitNode (ADR-0013 §4.1/§4.3/§8)', () => {
-  it('persists the turn and clears durable state: phase kept, no pendingTransition, messages cleared', async () => {
-    const { node, appendTurn } = makeDeps();
+describe('buildCommitNode (ADR-0013 §4.1/§4.3/§8; P4 Task 4)', () => {
+  it('INV-LLM-002: does not return a messages key — the channel persists, compaction is the only remover', async () => {
+    const { node } = makeDeps();
     const { config } = makeConfig();
 
     const result = await node(stateOf(), config as never);
 
-    expect(appendTurn).toHaveBeenCalledWith(UID, 'chat', 'вопрос', 'ответ');
+    expect(result).not.toHaveProperty('messages');
     expect(result.phase).toBe('chat');
     expect(result.pendingTransition).toBeNull();
-    expect(result.messages).toHaveLength(1);
-    expect((result.messages as AIMessage[])[0]._getType()).toBe('remove'); // REMOVE_ALL_MESSAGES
   });
 
-  it('§8: records one run row with toolCalls filled (collectToolCalls) and outcome ok', async () => {
+  it('D-K/D-I: projects only this run (from the last HumanMessage) with one row per message plus tool calls', async () => {
+    const { node, transcript } = makeDeps();
+    const { config } = makeConfig();
+    const call = new AIMessage({
+      content: '',
+      tool_calls: [{ id: 'c1', name: 'log_set', args: { weight: 60 } }],
+    });
+    const messages = [
+      new HumanMessage('старый вопрос'),
+      new AIMessage('старый ответ'),
+      new HumanMessage('вопрос'),
+      call,
+      new ToolMessage({ tool_call_id: 'c1', content: 'ok result' }),
+      new AIMessage('готово'),
+    ];
+
+    await node(stateOf({ messages }), config as never);
+
+    expect(transcript.appendRunMessages).toHaveBeenCalledTimes(1);
+    const input = transcript.appendRunMessages.mock.calls[0]?.[0];
+    // Only from the last HumanMessage; tool_calls carry their own rows (D-K).
+    expect(input).toMatchObject({ userId: UID, runId: 'run-test', phase: 'chat', episodeId: 'ep-1' });
+    expect(input?.messages).toEqual([
+      { kind: 'human', text: 'вопрос' },
+      { kind: 'ai', text: '', toolCalls: [{ id: 'c1', name: 'log_set', args: { weight: 60 } }] },
+      { kind: 'tool_result', toolCallId: 'c1', text: 'ok result', status: 'ok' },
+      { kind: 'ai', text: 'готово' },
+    ]);
+  });
+
+  it('stamps lastUserMessageAt from ctx.now and no compactReason without a transition', async () => {
+    const { node } = makeDeps();
+    const { config } = makeConfig();
+
+    const result = await node(stateOf(), config as never);
+
+    expect(result.lastUserMessageAt).toBe('2026-09-18T10:00:00.000Z');
+    expect(result.compactReason).toBeNull();
+  });
+
+  it('§8: records one run row with toolCalls filled from this run (collectToolCalls) and outcome ok', async () => {
     const { node, recordRun } = makeDeps();
-    const { config, metrics } = makeConfig();
+    const { config } = makeConfig();
     const toolMsg = new ToolMessage({ tool_call_id: 'c1', content: 'ok result' });
     const ai = new AIMessage({
       content: '',
       tool_calls: [{ id: 'c1', name: 'log_set', args: { exerciseId: 'e1', weight: 60 } }],
     });
-    metrics.finalText = 'готово';
 
     await node(stateOf({ messages: [new HumanMessage('q'), ai, toolMsg, new AIMessage('готово')] }), config as never);
 
@@ -107,7 +153,7 @@ describe('buildCommitNode (ADR-0013 §4.1/§4.3/§8)', () => {
     expect(record.transition).toEqual({ toPhase: 'training', reason: undefined });
   });
 
-  it('§4.3: a committed transition raises the event to handlers in order and merges activeSessionId', async () => {
+  it('§4.3: a committed transition raises the event to handlers in order, merging activeSessionId and compactReason', async () => {
     const order: string[] = [];
     const first: TransitionHandler = async e => {
       order.push(`first:${e.to}`);
@@ -115,7 +161,7 @@ describe('buildCommitNode (ADR-0013 §4.1/§4.3/§8)', () => {
     };
     const second: TransitionHandler = async e => {
       order.push(`second:${e.from}->${e.to}`);
-      return {};
+      return { compactReason: 'phase_boundary' };
     };
     const { node } = makeDeps([first, second]);
     const { config } = makeConfig();
@@ -132,6 +178,7 @@ describe('buildCommitNode (ADR-0013 §4.1/§4.3/§8)', () => {
     expect(order).toEqual(['first:training', 'second:session_planning->training']);
     expect(result.phase).toBe('training');
     expect(result.activeSessionId).toBe('s-new');
+    expect(result.compactReason).toBe('phase_boundary');
   });
 
   it('BR-CONV-007 spirit: one failing handler is isolated — the rest still run, the reply survives', async () => {
@@ -152,25 +199,20 @@ describe('buildCommitNode (ADR-0013 §4.1/§4.3/§8)', () => {
     expect(result.activeSessionId).toBeNull();
   });
 
-  it('a failing appendTurn or recordRun never fails the run (analytics is best-effort)', async () => {
-    const appendTurn = jest.fn().mockRejectedValue(new Error('db'));
+  it('a failing projection or recordRun never fails the run (analytics is best-effort)', async () => {
+    const transcript: jest.Mocked<TranscriptPort> = {
+      appendRunMessages: jest.fn().mockRejectedValue(new Error('db')),
+      appendSystemNote: jest.fn(),
+    };
     const recordRun = jest.fn().mockRejectedValue(new Error('db'));
     const node = buildCommitNode({
-      contextService: { appendTurn } as unknown as IConversationContextService,
+      transcript,
       runService: { recordRun } as unknown as IConversationRunService,
       onTransition: [],
     });
     const { config } = makeConfig();
 
     await expect(node(stateOf(), config as never)).resolves.toMatchObject({ phase: 'chat' });
-  });
-
-  it('BR-CONV-002: no turn is persisted when either half of the pair is missing', async () => {
-    const { node, appendTurn } = makeDeps();
-    const { config } = makeConfig();
-
-    await node(stateOf({ messages: [new HumanMessage('только вопрос')] }), config as never);
-    expect(appendTurn).not.toHaveBeenCalled();
   });
 });
 

@@ -946,7 +946,7 @@ Detector case SP-0005 (`tools.must:start_training_session`) is in the baseline. 
 
 ## BUG-016 — `conversation_turns.run_id` is never written: runs and turns cannot be linked
 
-**Status:** Open
+**Status:** Fixed (refactor-p4-episode-memory, 2026-09-18)
 **Severity:** Medium
 **Found during:** transcript-export verification 2026-09-15 (Task 4 of `refactor-p0-transcript-export`)
 **Component:** `apps/server/src/infra/ai/graph/nodes/persist.node.ts`, `src/domain/conversation/ports/conversation-context.ports.ts`, `src/infra/conversation/` (appendTurn path)
@@ -967,6 +967,10 @@ Thread `runId` through `appendTurn` → drizzle implementation → persist.node 
 ### Regression test
 
 After the fix: a message through the graph writes a `conversation_turns` row with non-NULL `run_id` equal to the logged run's id (integration test with the same stub pattern as the run-log suite).
+
+### Resolution (2026-09-18)
+
+Fixed by the P4 run projection (`refactor-p4-episode-memory`): `appendTurn` is gone — the `commit` node projects every message of the run through `TranscriptPort.appendRunMessages({ userId, runId, ... })`, so every projected `conversation_turns` row (human/ai/tool_call/tool_result, plus mirrored `summary` rows) carries the run's `run_id`; `system_note` rows from `clear-context` are the only rows without one. Locked by the commit-node projection unit tests and the AC-1345 dev smoke (`run_id IS NULL` count = 0 for post-deploy rows).
 
 ---
 

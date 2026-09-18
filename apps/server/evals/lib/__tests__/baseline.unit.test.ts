@@ -46,4 +46,17 @@ describe('baselines', () => {
     writeBaseline('v0', 'chat', 'z-ai/glm-5.3', 3, results);
     expect(compareToBaseline('v0', 'chat', [results[0]!]).missing).toHaveLength(1);
   });
+
+  it('tags a dataset-scoped baseline and compares against the same scope (D-P)', () => {
+    writeBaseline('v2', 'plan_creation', 'z-ai/glm-5.3', 1, results, 'id-reuse');
+    const diff = compareToBaseline('v2', 'plan_creation', results, 'id-reuse');
+    expect(diff.regressions).toEqual([]);
+  });
+
+  it('refuses to compare a dataset-scoped baseline against a full run and vice versa (D-P)', () => {
+    writeBaseline('v2', 'plan_creation', 'z-ai/glm-5.3', 1, results, 'id-reuse');
+    expect(() => compareToBaseline('v2', 'plan_creation', results)).toThrow(/scope mismatch/);
+    writeBaseline('v2', 'chat', 'z-ai/glm-5.3', 3, results);
+    expect(() => compareToBaseline('v2', 'chat', results, 'id-reuse')).toThrow(/scope mismatch/);
+  });
 });

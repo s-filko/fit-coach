@@ -7,6 +7,7 @@
 import type { BaseMessage } from '@langchain/core/messages';
 import { Annotation, type LangGraphRunnableConfig, messagesStateReducer } from '@langchain/langgraph';
 
+import type { CompactReason, StoredEpisodeSummary } from '@domain/conversation/episode';
 import type { TransitionRequest } from '@domain/conversation/transitions';
 import type { User } from '@domain/user/services/user.service';
 
@@ -20,7 +21,21 @@ export const ConversationState = Annotation.Root({
   activeSessionId: Annotation<string | null>({ reducer: (_, v) => v, default: () => null }),
   messages: Annotation<BaseMessage[]>({ reducer: messagesStateReducer, default: () => [] }),
   pendingTransition: Annotation<TransitionRequest | null>({ reducer: (_, v) => v, default: () => null }),
-  // P4 adds: episodeSummaries, episodeStartedAt, lastUserMessageAt, draft
+  // Episode memory (ADR-0013 §3.2/§3.3, P4). Writers per channel:
+  //  - episodeSummaries: `compact` appends one StoredEpisodeSummary, keeps the
+  //    last 3, oldest first (BR-LLM-001..003); read by the prompt block.
+  //  - episodeId: `prepare` sets it to ctx.runId when empty or right after a
+  //    compaction (D-O — the id of the run that started the episode).
+  //  - episodeStartedAt: `compact` (the new episode begins at compaction time).
+  //  - lastUserMessageAt: `commit` stamps ctx.now after every run (BR-LLM-001's
+  //    clock input, and the greeting directive's input — D-M).
+  //  - compactReason: the compaction-flag transition handler sets
+  //    'phase_boundary' (D-A); `compact` resets it to null after consuming.
+  episodeSummaries: Annotation<StoredEpisodeSummary[]>({ reducer: (_, v) => v, default: () => [] }),
+  episodeId: Annotation<string>({ reducer: (_, v) => v, default: () => '' }),
+  episodeStartedAt: Annotation<string | null>({ reducer: (_, v) => v, default: () => null }),
+  lastUserMessageAt: Annotation<string | null>({ reducer: (_, v) => v, default: () => null }),
+  compactReason: Annotation<CompactReason | null>({ reducer: (_, v) => v, default: () => null }),
 });
 
 export type ConversationStateType = typeof ConversationState.State;

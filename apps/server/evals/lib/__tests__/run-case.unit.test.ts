@@ -43,7 +43,7 @@ describe('runCase', () => {
     expect(observation.transition).toBeNull();
   });
 
-  it('passes seeded episode turns to the model before the current user message', async () => {
+  it('passes seeded episode turns to the model before the current user message (P4 Task 7: seeding rides the messages channel)', async () => {
     const { __mockInvoke: invoke } = modelFactory as unknown as { __mockInvoke: jest.Mock };
     const seededCase: EvalCase = {
       ...testCase,

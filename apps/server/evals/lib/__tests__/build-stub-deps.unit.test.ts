@@ -43,23 +43,24 @@ describe('buildStubDeps', () => {
     expect(world.recordedRuns).toHaveLength(1);
   });
 
-  it('seeds case state.messages as the episode memory the prompt reads', async () => {
-    const { deps } = buildStubDeps(EMPTY_PROFILE, [
-      { role: 'human', text: 'сделал 80 на 8' },
-      { role: 'ai', text: 'Принято!' },
-      // tool_call/tool_result cannot be expressed as ChatMsg pre-P4 — skipped, not thrown on
-      { role: 'tool_call', text: '{"tool":"log_set"}' },
-      { role: 'tool_result', text: 'ok' },
-    ]);
-    await expect(deps.contextService.getMessagesForPrompt('u', 'chat')).resolves.toEqual([
-      { role: 'user', content: 'сделал 80 на 8' },
-      { role: 'assistant', content: 'Принято!' },
-    ]);
-  });
-
-  it('persists no conversation turns', async () => {
-    const { deps } = buildStubDeps(COMPLETE_PROFILE);
-    await expect(deps.contextService.appendTurn('u', 'chat', 'a', 'b')).resolves.toBeUndefined();
-    expect(await deps.contextService.getMessagesForPrompt('u', 'chat')).toEqual([]);
+  it('records transcript and summary writes into the stub world (P4 ports)', async () => {
+    const { deps, transcriptRecords, summaryRecords } = buildStubDeps(COMPLETE_PROFILE);
+    await deps.transcript.appendRunMessages({
+      userId: 'u',
+      runId: 'r',
+      phase: 'chat',
+      episodeId: 'e',
+      messages: [{ kind: 'human', text: 'привет' }],
+    });
+    await deps.summaries.insert({
+      userId: 'u',
+      runId: 'r',
+      episodeId: 'e',
+      phaseAtEnd: 'chat',
+      structured: { topics: [], decisions: [], userState: [], trainingFeedback: [], openItems: [] },
+      rendered: 'chat (today): .',
+    });
+    expect(transcriptRecords).toHaveLength(1);
+    expect(summaryRecords).toHaveLength(1);
   });
 });

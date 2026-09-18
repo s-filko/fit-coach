@@ -11,6 +11,7 @@ export const ru: Record<MessageKey, string> = {
   tool_system_error:
     'Произошла техническая ошибка при сохранении данных тренировки. Пожалуйста, попробуй снова или обратись в поддержку.',
   // translations of the en guard literals (2026-09) — new user-facing text for the owner to review
+  context_cleared: 'Контекст диалога очищен.',
   training_no_active_session: 'Нет активной тренировки. Сначала начни тренировку.',
   training_session_not_found: 'Тренировка не найдена. Возможно, она уже завершена.',
   // new user-facing text (2026-09) — D-D empty-reply fallback, for the owner to review

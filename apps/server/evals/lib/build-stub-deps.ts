@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 import { MemorySaver } from '@langchain/langgraph';
 
-import type { ChatMsg } from '@domain/ai/types';
-import type { ConversationRunRecord } from '@domain/conversation/ports';
+import type { LlmGateway } from '@domain/ai/ports/llm.gateway.ports';
+import type { ConversationRunRecord, InsertSummaryInput, AppendRunMessagesInput } from '@domain/conversation/ports';
 
 import type { ConversationGraphDeps } from '@infra/ai/graph/conversation.graph';
 
@@ -12,6 +12,10 @@ import type { EvalFixture } from '../schema/case.schema';
 export interface StubWorld {
   deps: ConversationGraphDeps;
   recordedRuns: ConversationRunRecord[];
+  /** P4: what the transcript projection received (commit appends here). */
+  transcriptRecords: AppendRunMessagesInput[];
+  /** P4: what the summary port received (compact inserts here — Task 6 on). */
+  summaryRecords: InsertSummaryInput[];
 }
 
 /**
@@ -152,18 +156,11 @@ function stubExercises(
   return session['exercises'] as Array<StubSessionExercise & { exercise: { id: string; name: string } }>;
 }
 
-export function buildStubDeps(fixture: EvalFixture, messages?: Array<{ role: string; text: string }>): StubWorld {
+export function buildStubDeps(fixture: EvalFixture): StubWorld {
   const recordedRuns: ConversationRunRecord[] = [];
+  const transcriptRecords: AppendRunMessagesInput[] = [];
+  const summaryRecords: InsertSummaryInput[] = [];
   const userId = '22222222-2222-4222-8222-222222222222';
-
-  // Episode seed: the case's state.messages stand in for what production's
-  // context service would return from persisted turns. `human → user`,
-  // `ai → assistant`; tool_call/tool_result cannot be expressed as ChatMsg
-  // pre-P4 (the production context service stores user/assistant turns only)
-  // and are skipped, not thrown on.
-  const seededHistory: ChatMsg[] = (messages ?? [])
-    .filter((m): m is { role: 'human' | 'ai'; text: string } => m.role === 'human' || m.role === 'ai')
-    .map(m => ({ role: m.role === 'human' ? 'user' : 'assistant', content: m.text }));
 
   const user = { id: userId, ...fixture.user };
   const activePlan = fixture.hasActivePlan
@@ -348,23 +345,44 @@ export function buildStubDeps(fixture: EvalFixture, messages?: Array<{ role: str
     embeddingService: {
       embed: async () => new Array(1536).fill(0),
     },
-    contextService: {
-      appendTurn: async () => undefined,
-      getMessagesForPrompt: async () => seededHistory,
-      insertContextReset: async () => undefined,
-      insertPhaseSummary: async () => undefined,
-      getLatestSummary: async () => null,
-      getLastUserMessageTime: async () => null,
-    },
     runService: {
       recordRun: async (record: ConversationRunRecord) => {
         recordedRuns.push(record);
       },
     },
+    // P4 Task 4: the transcript port records; summaries record and report no
+    // legacy summary (the D-E import is compact's business, Task 6); the
+    // gateway's structured() returns a fixed EpisodeSummary (summariser v2's
+    // stand-in until Task 6 wires the real one).
+    transcript: {
+      appendRunMessages: async (input: AppendRunMessagesInput) => {
+        transcriptRecords.push(input);
+      },
+      appendSystemNote: async () => undefined,
+    },
+    summaries: {
+      insert: async (input: InsertSummaryInput) => {
+        summaryRecords.push(input);
+      },
+      latestLegacySummary: async () => null,
+    },
+    llmGateway: {
+      chat: async () => ({ content: '' }),
+      structured: async () => ({
+        topics: ['plan creation discussed'],
+        decisions: [],
+        userState: [],
+        trainingFeedback: [],
+        openItems: [],
+      }),
+    } as unknown as LlmGateway,
+    // P4 Task 6: compaction never fires in evals by default — a year-long gap
+    // and no budget overflow; a case that wants compaction overrides it.
+    episodeConfig: { gapMs: 365 * 24 * 3600 * 1000, minTurns: 2, minTokens: 300 },
     checkpointer: new MemorySaver(),
   } as unknown as ConversationGraphDeps;
 
-  return { deps, recordedRuns };
+  return { deps, recordedRuns, transcriptRecords, summaryRecords };
 }
 
 /** AutoCompletedExercise shape — service.ports.ts:33. */
