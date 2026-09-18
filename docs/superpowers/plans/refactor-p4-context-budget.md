@@ -153,10 +153,12 @@ Resolution order (INV-LLM-004): (a) trim history to `budget.history`; (b) if `to
   Tick the three BACKLOG entries in the same commit.
 
 - [x] **Step 0:** Compaction-node advisories (a)–(c), tests first; commit — `fix(ai): compact node fails loud on id-less messages, consumes compactReason on legacy import, imports LegacySummary (P4 close-out advisories)`
-- [ ] **Step 1:** Replay: seed the 60-turn transcript into `messages` with `updateState`, run 10 consecutive mocked-model runs (each appends a set), assert `budgetReport.history ≤ budget.history` and no orphan tool message on every run, and that compaction by budget (BR-LLM-003) fired at least once (the stub `summaries.insert` received a row) — the `it` name carries `AC-1343`.
-- [ ] **Step 2: Commit** — `test(evals): AC-1343 long-transcript replay; L1 budget and orphan-tool checks`
+- [x] **Step 1:** Replay: seed the 60-turn transcript into `messages` with `updateState`, run 10 consecutive mocked-model runs (each appends a set), assert `budgetReport.history ≤ budget.history` and no orphan tool message on every run, and that compaction by budget (BR-LLM-003) fired at least once (the stub `summaries.insert` received a row) — the `it` name carries `AC-1343`.
+- [x] **Step 2: Commit** — `test(evals): AC-1343 long-transcript replay; L1 budget and orphan-tool checks`
 
-**Verification:** `npx jest --ci evals`.
+**Verification:** `npx jest --ci evals` → 170/170 pass (169 existing + this suite); full `npx jest --ci` → 795/795; `npm run evals -- --level L0` → 96/96; `npm run check-all` (src/**) → 0 errors. Live signal from the replay run: `reason: "budget"` compaction fired on nearly every one of the 10 runs once history crossed 8000 estimated tokens, `budgetReport.history` stayed ≤ 8000 throughout, and the stub `summaries.insert` recorded rows (`summaryRecords.length > 0`).
+
+**Note on `ModelInputRecorder` (D-C):** the shared eval model mock (`jest.mock('@infra/ai/model.factory', …)` returning a plain `{ invoke, bindTools }` object, used by `run-case.unit.test.ts` and others) never dispatches `handleChatModelStart` — that callback only fires from inside a real `@langchain/core` `BaseChatModel`'s own `.invoke()`, which the plain-object mock bypasses entirely. Confirmed empirically before writing the real test (a throwaway probe showed `lastModelInput: []` against the plain mock, `[system, system, human]` against a `BaseChatModel` subclass). `evals/lib/run-case.ts`'s `ModelInputRecorder` is unchanged from the plan's design and works correctly; `budget-replay.unit.test.ts` supplies its own model mock as a small `BaseChatModel` subclass (`ScriptedFakeChatModel`) instead of reusing the shared plain-object one, so callbacks propagate. No other test's model mock was touched.
 
 ---
 
