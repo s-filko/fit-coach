@@ -65,10 +65,12 @@ export type ConversationError = LlmUnavailableError | ThreadBusyError | CoreErro
 
 /**
  * Single source of truth for `code → HTTP status`, shared by the chat routes,
- * the bot's error-text mapper and the tests (D-B).
+ * the bot's error-text mapper and the tests (D-B). `as const` keeps the
+ * values as HTTP-status literal types, not `number` — Fastify's typed
+ * `reply.code(...)` needs the literal to match a declared response schema.
  */
-export const HTTP_STATUS_BY_CODE: Record<ConversationErrorCode, number> = {
+export const HTTP_STATUS_BY_CODE = {
   LLM_UNAVAILABLE: 503,
   THREAD_BUSY: 409,
   CORE_ERROR: 500,
-};
+} as const satisfies Record<ConversationErrorCode, number>;

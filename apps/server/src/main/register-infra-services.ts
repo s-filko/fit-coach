@@ -120,9 +120,8 @@ export async function registerInfraServices(container: Container = getGlobalCont
   });
   container.register(
     CONVERSATION_RUN_PORT_TOKEN,
-    // D-A, D-12: one conversation run per userId at a time. waitMs is a
-    // literal default here; Task 3 moves it to config (LLM_RUN_MUTEX_WAIT_MS).
-    withRunMutex(runner, { waitMs: 20000 }),
+    // D-A, D-12: one conversation run per userId at a time.
+    withRunMutex(runner, { waitMs: config.LLM_RUN_MUTEX_WAIT_MS }),
   );
 
   // Kick off model warm-up in background — do not await so server starts immediately

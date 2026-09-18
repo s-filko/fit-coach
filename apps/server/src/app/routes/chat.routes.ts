@@ -1,6 +1,15 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { type ConversationErrorCode, HTTP_STATUS_BY_CODE } from '@domain/conversation/ports';
+
+/** Any thrown value carrying a ConversationErrorCode (D-B) — duck-typed so a thrown
+ * LlmUnavailableError/ThreadBusyError/CoreError all match without an instanceof chain. */
+function conversationErrorCodeOf(err: unknown): ConversationErrorCode | undefined {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === 'string' && code in HTTP_STATUS_BY_CODE ? (code as ConversationErrorCode) : undefined;
+}
+
 const chatMessageBody = z
   .object({
     userId: z.string().min(1).describe('User ID'),
@@ -63,7 +72,9 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
           401: z.object({ error: z.object({ message: z.string() }) }),
           403: z.object({ error: z.object({ message: z.string() }) }),
           404: z.object({ error: z.object({ message: z.string() }) }),
-          500: z.object({ error: z.object({ message: z.string(), details: z.string().optional() }) }),
+          409: z.object({ error: z.object({ code: z.literal('THREAD_BUSY') }) }),
+          500: z.object({ error: z.object({ code: z.literal('CORE_ERROR') }) }),
+          503: z.object({ error: z.object({ code: z.literal('LLM_UNAVAILABLE') }) }),
         },
       },
     },
@@ -81,9 +92,10 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         });
       } catch (error) {
         req.log.error({ err: error }, 'Chat processing failed');
-        // INV-LLM-006 half-step: no `details` — the field is optional in the
-        // schema and no client reads it (verified by grep in apps/bot).
-        return reply.code(500).send({ error: { message: 'Processing failed' } });
+        // INV-LLM-006: the body carries only `code`, never the exception's
+        // message or a stack — logs (above) may keep the message.
+        const code = conversationErrorCodeOf(error) ?? 'CORE_ERROR';
+        return reply.code(HTTP_STATUS_BY_CODE[code]).send({ error: { code } });
       }
     },
   );
