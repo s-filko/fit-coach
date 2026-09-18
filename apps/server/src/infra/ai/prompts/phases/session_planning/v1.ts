@@ -1,5 +1,6 @@
 import type { SessionPlanningContextData } from '@domain/training/services/session-planning-context.builder';
 
+import { buildClientProfileText } from '@infra/ai/prompts/blocks/client-profile.v1';
 import { buildActivePlanSection } from '@infra/ai/prompts/blocks/session-planning-active-plan.v1';
 import { buildHistorySection } from '@infra/ai/prompts/blocks/session-planning-recent-history.v1';
 import { buildRecoverySection } from '@infra/ai/prompts/blocks/session-planning-recovery-timeline.v1';
@@ -95,18 +96,6 @@ export const SESSION_PLANNING_V1: PromptModule<SessionPlanningPromptContext> = {
     const tz = user?.timezone;
     const { dateOnly } = formatInUserTz(now, tz);
 
-    const profileSection = user
-      ? [
-          `Name: ${user.firstName ?? 'Unknown'}`,
-          `Age: ${user.age ?? '?'}`,
-          `Gender: ${user.gender ?? '?'}`,
-          `Height: ${user.height ?? '?'} cm`,
-          `Weight: ${user.weight ?? '?'} kg`,
-          `Fitness Level: ${user.fitnessLevel ?? '?'}`,
-          `Fitness Goal: ${user.fitnessGoal ?? '?'}`,
-        ].join('\n')
-      : 'Profile not loaded.';
-
     const planSection = context.activePlan
       ? buildActivePlanSection(context.activePlan.name, context.activePlan.planJson)
       : 'No active workout plan. The user should create a plan first (use chat to navigate to plan creation).';
@@ -122,7 +111,7 @@ export const SESSION_PLANNING_V1: PromptModule<SessionPlanningPromptContext> = {
 
     return [
       { id: 'date', required: true, text: `Current Date: ${dateOnly}\n${daysSince}` },
-      { id: 'client_profile', required: true, text: `=== CLIENT PROFILE ===\n\n${profileSection}` },
+      { id: 'client_profile', required: true, text: buildClientProfileText(user) },
       { id: 'active_plan', required: true, text: `=== ACTIVE WORKOUT PLAN ===\n\n${planSection}` },
       {
         id: 'recent_history',
