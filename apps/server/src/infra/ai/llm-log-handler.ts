@@ -13,8 +13,17 @@ import { loadConfig } from '@config/index';
 import { createLogger } from '@shared/logger';
 
 const log = createLogger('llm');
-const config = loadConfig();
-const isDebug = config.LOG_LEVEL === 'debug' || config.LOG_LEVEL === 'trace';
+
+// Config is read on first use, not at import: this module sits on the import
+// path of the eval runner (run-case → conversation-run.adapter → episode →
+// llm.gateway → model.factory), and L0 runs in CI without a .env. An
+// import-time loadConfig() there fails the whole L0 step (dev deploys were red
+// from f8387ee6 to bbed9f50 because of it).
+let cached: ReturnType<typeof loadConfig> | null = null;
+function config(): ReturnType<typeof loadConfig> {
+  cached ??= loadConfig();
+  return cached;
+}
 
 interface OpenAIMessage {
   role: string;
@@ -67,7 +76,9 @@ export class LLMLogHandler extends BaseCallbackHandler {
     // (runId left this handler with the P3 run-metrics move; the per-run
     // collector's handler owns run identity now.)
     const userId = metadata?.['userId'] as string | undefined;
-    const invocationModel = (invocationParams?.['model'] as string | undefined) ?? config.LLM_MODEL;
+    const cfg = config();
+    const invocationModel = (invocationParams?.['model'] as string | undefined) ?? cfg.LLM_MODEL;
+    const isDebug = cfg.LOG_LEVEL === 'debug' || cfg.LOG_LEVEL === 'trace';
 
     if (isDebug) {
       const tools = options?.['tools'] as unknown[] | undefined;
@@ -76,7 +87,7 @@ export class LLMLogHandler extends BaseCallbackHandler {
       const replayPayload: Record<string, unknown> = {
         model: invocationModel,
         messages: openaiMessages,
-        temperature: invocationParams?.['temperature'] ?? config.LLM_TEMPERATURE,
+        temperature: invocationParams?.['temperature'] ?? cfg.LLM_TEMPERATURE,
       };
       if (tools && tools.length > 0) {
         replayPayload['tools'] = tools;
