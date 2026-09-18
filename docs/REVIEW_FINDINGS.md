@@ -260,6 +260,22 @@ backs it. Each entry names the proposed wording and where it would live
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
 
+- [×1] Nothing written down requires a decorator's side-effect-suppression claim to be proven by
+  a spy on the downstream write rather than inferred from the error type. P5's
+  `with-run-mutex.unit.test.ts` does it the right way — it asserts `recordRun` was never called
+  for a request the mutex rejected, instead of concluding "a `ThreadBusyError` was thrown, so no
+  row can exist" — but had that test been missing, no rule made it citable. Proposed principle for
+  `docs/CONTRIBUTING_AI.md` (Testing section): "When a decorator or wrapper claims to suppress a
+  downstream side effect (no row written, no call made, no event emitted), the test asserts on a
+  spy over that downstream effect. Inferring the suppression from the thrown error's type proves
+  only the throw, not the suppression." Runs: refactor-p5-concurrency-delivery (2026-09-19, R3).
+- [×1] `ARCHITECTURE.md`'s module-layout table says one directory per domain with `index.ts` as
+  the entry point, but does not say whether non-port domain files (`errors.ts`, `phases.ts`,
+  `episode.ts`) are meant to re-export through `ports/index.ts` or carry their own barrel. P5's
+  plan had to instruct the executor to `grep` for the precedent before placing `errors.ts`, and
+  the answer was only derivable from how `ConversationPhase` happened to be re-exported. Proposed:
+  one line in the module-layout preamble stating the convention, so the next plan does not
+  re-derive it. Runs: refactor-p5-concurrency-delivery (2026-09-19, R1).
 - [×2] A helper extracted into a shared module leaves its pre-existing call sites untouched,
   and no rule says that is unfinished. On this branch Task 2 moved the domain renderers into
   `prompts/blocks/` and only `training/v1.ts` was repointed; `chat/v1.ts`, `plan_creation/v1.ts`

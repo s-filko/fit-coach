@@ -16,7 +16,6 @@ _Generated 2026-09-18 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 **Planned**
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
-- `refactor-p5-concurrency-delivery.md` — Refactor P5 — Concurrency and Delivery Hardening Implementation Plan
 - `refactor-p6-facts-and-progress-blocks.md` — Refactor P6 — User Facts, Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 
 **Done**
@@ -39,6 +38,7 @@ _Generated 2026-09-18 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p3-tool-executor.md` — Refactor P3 — Shared Tool Executor Implementation Plan
 - `refactor-p4-context-budget.md` — Refactor P4 — Context Budget and Domain Blocks Implementation Plan
 - `refactor-p4-episode-memory.md` — Refactor P4 — Episode Memory Implementation Plan
+- `refactor-p5-concurrency-delivery.md` — Refactor P5 — Concurrency and Delivery Hardening Implementation Plan
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 
 **Close-out debt (merged but plan not done)**
@@ -120,10 +120,24 @@ _Generated 2026-09-18 from docs/superpowers/plans/ + git. Never hand-edit; regen
    Z.AI quota), after a milestone the owner picks (recommended: after P6), then fixes are
    planned from the results and the suite is re-run. `refactor-p4-evals-verify` stays
    planned only as the record of what that pass must include.
-3. **Next to dispatch: `refactor-p5-concurrency-delivery`** (independent of P4, depends on
-   P3 — may start immediately), then `refactor-p6-facts-and-progress-blocks` (depends on
-   `refactor-p4-context-budget`, now `done`, so it is unblocked). Then P7 per the master
-   plan phase map.
+3. **P5 is complete (2026-09-19)**: `refactor-p5-concurrency-delivery` closed —
+   `Status: done`, review `2026-09-19 | clean | R1,R3` with **no blocking findings in either
+   zone**, merged to `dev` and deployed. All four ACs closed now, none deferred: AC-1351
+   (per-`userId` run mutex on `ConversationRunPort` via `withRunMutex`; DB-backed integration
+   test on real run rows), AC-1352 + INV-LLM-006 (typed errors → 503/409/500, bodies carry
+   `code` only, no exception text or stack), AC-1353 (bot polling watchdog — **BUG-012 fixed**),
+   AC-1354 (localized error text per code, no two codes sharing a string). `requestTimeout`
+   raised 30 s → 420 s against measured dev latency: `plan_creation` p95 = 317 s, and 15 runs
+   had already exceeded the old limit with 14 of them finishing `ok`. `apps/bot` gained its
+   first test harness (16 tests). **Two things deliberately not implemented and escalated to
+   the owner:** the `ToolSystemError` raise (ADR-0013 §6:324 says raise → HTTP 500, but the
+   shipped code answers HTTP 200 with the localized `tool_system_error` message; raising would
+   be a user-visible regression, so the ADR and the code genuinely disagree and the owner
+   decides), and the bot's clear-on-404 cache branch (unreachable — no route the bot calls
+   returns 404). ADR-0013 §6 amendments to escalate are listed in the plan's `## Review`.
+4. **Next to dispatch: `refactor-p6-facts-and-progress-blocks`** — its `After:`
+   (`refactor-p4-context-budget`) is `done`, so it is unblocked. Then P7 per the master plan
+   phase map.
 3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
    the code aligned to it, ESLint keeping it that way. Independent of the P0 chain;
    can run alongside it.
