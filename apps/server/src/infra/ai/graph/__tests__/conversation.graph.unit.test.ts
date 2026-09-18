@@ -14,7 +14,8 @@ import type { IUserService } from '@domain/user/ports';
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
 import { lastAiText } from '../episode';
-import { buildConversationGraph, type ConversationGraphDeps } from '../conversation.graph';
+import { buildConversationGraph, withBudgetOverrides, type ConversationGraphDeps } from '../conversation.graph';
+import { buildPhaseSpecs } from '../phases';
 
 // Mock the model factory so tests don't need a real LLM key
 jest.mock('@infra/ai/model.factory', () => ({
@@ -333,5 +334,37 @@ describe('ConversationGraph (prepare → route → <phase> → commit)', () => {
 
     const edge = [...drawable.edges].find(e => e.source === 'zzz_test');
     expect(edge?.target).toBe('commit');
+  });
+});
+
+describe('withBudgetOverrides (P4 context-budget plan Task 3 — LLM_BUDGET_<PHASE>_<PART>)', () => {
+  const deps = makeDeps();
+
+  it('applies a partial override over the phase default without touching other fields', () => {
+    const specs = buildPhaseSpecs(deps);
+    const defaultChat = specs.find(s => s.name === 'chat')!.budget;
+
+    const overridden = withBudgetOverrides(specs, { chat: { history: 12345 } });
+    const chat = overridden.find(s => s.name === 'chat')!;
+
+    expect(chat.budget.history).toBe(12345);
+    expect(chat.budget.system).toBe(defaultChat.system);
+    expect(chat.budget.domain).toBe(defaultChat.domain);
+  });
+
+  it('leaves phases with no matching override untouched', () => {
+    const specs = buildPhaseSpecs(deps);
+    const overridden = withBudgetOverrides(specs, { chat: { history: 1 } });
+    const training = overridden.find(s => s.name === 'training')!;
+    const originalTraining = specs.find(s => s.name === 'training')!;
+
+    expect(training.budget).toEqual(originalTraining.budget);
+    expect(training).toBe(originalTraining); // untouched entries are the same object
+  });
+
+  it('empty overrides map returns budgets unchanged', () => {
+    const specs = buildPhaseSpecs(deps);
+    const overridden = withBudgetOverrides(specs, {});
+    expect(overridden.map(s => s.budget)).toEqual(specs.map(s => s.budget));
   });
 });

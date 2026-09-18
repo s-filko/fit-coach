@@ -12,6 +12,8 @@ import type {
 } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 
+import type { TokenBudgetOverride } from '@config/llm-budget-overrides';
+
 import { buildCompactionFlagHandler } from './handlers/compaction-flag.handler';
 import { buildSessionLifecycleHandler } from './handlers/session-lifecycle.handler';
 import { buildCommitNode } from './nodes/commit.node';
@@ -37,7 +39,20 @@ export interface ConversationGraphDeps {
   llmGateway: LlmGateway;
   /** The D-L episode tunables, resolved from env at the composition root. */
   episodeConfig: EpisodeTunables;
+  /** LLM_BUDGET_<PHASE>_<PART> overrides (P4 context-budget plan Task 3), resolved once here. */
+  budgetOverrides?: Record<string, TokenBudgetOverride>;
   checkpointer: BaseCheckpointSaver;
+}
+
+/** Applies a phase's LLM_BUDGET_* override (partial) over its PhaseSpec.budget default. */
+export function withBudgetOverrides(
+  specs: ReturnType<typeof buildPhaseSpecs>,
+  overrides: Record<string, TokenBudgetOverride>,
+) {
+  return specs.map(spec => {
+    const override = overrides[spec.name];
+    return override ? { ...spec, budget: { ...spec.budget, ...override } } : spec;
+  });
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
@@ -45,7 +60,7 @@ function buildGraph(deps: ConversationGraphDeps) {
   const { userService, trainingService, runService, workoutSessionRepo, checkpointer, transcript } = deps;
   const { llmGateway, summaries, episodeConfig } = deps;
 
-  const specs = buildPhaseSpecs(deps);
+  const specs = withBudgetOverrides(buildPhaseSpecs(deps), deps.budgetOverrides ?? {});
 
   // D-D: the BR-LLM-003 trigger reads PhaseSpec.budget.history; an unknown
   // phase never overflows (the trigger is a comparison, enforcement is the

@@ -16,7 +16,7 @@ import type { ConversationGraphDeps, PhaseSpec, PromptContextFor } from '@infra/
 import { ctxOf } from '@infra/ai/graph/state';
 import { langOf, t } from '@infra/ai/messages';
 import { getModel } from '@infra/ai/model.factory';
-import { fullDepth, POST_TOOL_NUDGE_V1, renderBlock, renderBlocks } from '@infra/ai/prompts/blocks';
+import { POST_TOOL_NUDGE_V1, renderBlock } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
 
 import { createLogger } from '@shared/logger';
@@ -112,21 +112,37 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     // inherited from the route's invoke config; configurable never reaches handlers.
     const model = getModel(spec.modelProfile).bindTools(tools);
 
-    // ADR-0013 §3.4 block 3 (D-A/D-B): render at full depth — Task 3's budget
-    // resolver re-renders at a smaller depth when trimming is needed.
-    const blockCtx = { now, timezone: user?.timezone ?? null, user };
-    const blocks = renderBlocks(spec.contextBlocks, loaded.data, blockCtx, fullDepth);
-
-    const { messages: llmMessages, budgetReport } = assembleContext({
+    // ADR-0013 §3.4 block 3 (D-A/D-B) + INV-LLM-004 (Task 3): assembleContext
+    // renders spec.contextBlocks at full depth and enforces the budget via
+    // resolveBudget — trim history, step blocks down their depths, drop the
+    // oldest summary, D-D floor, in that order. Block 1 (systemPrompt) is
+    // never touched here.
+    const { messages: llmMessages, budgetReport } = await assembleContext({
       systemPrompt,
       episodeSummaries: state.episodeSummaries ?? [],
-      blocks,
+      contextBlocks: spec.contextBlocks,
+      blockData: loaded.data,
       history,
       current,
+      budget: spec.budget,
       now,
       timezone: user?.timezone ?? null,
+      user,
     });
     ctx.metrics.attachBudgetReport(budgetReport);
+
+    if (budgetReport.system > spec.budget.system) {
+      log.warn(
+        { userId, phase: spec.name, system: budgetReport.system, budget: spec.budget.system },
+        'Phase system prompt exceeds its token budget (reported, never cut — INV-LLM-004)',
+      );
+    }
+    if (budgetReport.cuts?.includes('floor')) {
+      log.error(
+        { userId, phase: spec.name, cuts: budgetReport.cuts },
+        'Context budget hit the floor (D-D) — history and summaries dropped for this run',
+      );
+    }
 
     // Post-tool nudge + empty-reply retry, moved verbatim from invokeWithRetry
     // (ADR-0013 §6: every phase, one retry, then the catalog fallback — D-D).

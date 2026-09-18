@@ -9,12 +9,6 @@ import type { StructuredToolInterface } from '@langchain/core/tools';
 import type { IWorkoutSessionRepository } from '@domain/training/ports';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
-import {
-  TRAINING_CLIENT_V1,
-  TRAINING_PREVIOUS_SESSION_V1,
-  TRAINING_STALE_SESSION_V1,
-  TRAINING_WORKOUT_OVERVIEW_V1,
-} from '@infra/ai/prompts/blocks';
 import type {
   ConversationGraphDeps,
   LoadInput,
@@ -24,6 +18,12 @@ import type {
   PromptContextFor,
 } from '@infra/ai/graph/phase-spec';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
+import {
+  TRAINING_CLIENT_V1,
+  TRAINING_PREVIOUS_SESSION_V1,
+  TRAINING_STALE_SESSION_V1,
+  TRAINING_WORKOUT_OVERVIEW_V1,
+} from '@infra/ai/prompts/blocks';
 import {
   buildCompleteCurrentExerciseTool,
   buildDeleteLastSetsTool,

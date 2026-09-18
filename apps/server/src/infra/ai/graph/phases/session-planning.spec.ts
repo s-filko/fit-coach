@@ -7,13 +7,6 @@ import {
   type SessionPlanningContextData,
 } from '@domain/training/services/session-planning-context.builder';
 
-import {
-  SESSION_PLANNING_ACTIVE_PLAN_V1,
-  SESSION_PLANNING_CLIENT_PROFILE_V1,
-  SESSION_PLANNING_RECENT_HISTORY_V1,
-  SESSION_PLANNING_RECOVERY_TIMELINE_V1,
-  type ContextBlock,
-} from '@infra/ai/prompts/blocks';
 import type {
   ConversationGraphDeps,
   LoadInput,
@@ -22,6 +15,13 @@ import type {
   PromptContextFor,
 } from '@infra/ai/graph/phase-spec';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
+import {
+  type ContextBlock,
+  SESSION_PLANNING_ACTIVE_PLAN_V1,
+  SESSION_PLANNING_CLIENT_PROFILE_V1,
+  SESSION_PLANNING_RECENT_HISTORY_V1,
+  SESSION_PLANNING_RECOVERY_TIMELINE_V1,
+} from '@infra/ai/prompts/blocks';
 import {
   buildRequestTransitionTool,
   buildSearchExercisesTool,

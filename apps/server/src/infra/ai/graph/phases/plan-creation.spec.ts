@@ -2,7 +2,6 @@
  * Plan-creation PhaseSpec (ADR-0013 §4.2) — moved verbatim from
  * plan-creation.subgraph.ts (refactor-p3-phase-spec Task 1).
  */
-import { PLAN_CREATION_CLIENT_PROFILE_V1 } from '@infra/ai/prompts/blocks';
 import type {
   ConversationGraphDeps,
   LoadInput,
@@ -11,6 +10,7 @@ import type {
   PromptContextFor,
 } from '@infra/ai/graph/phase-spec';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
+import { PLAN_CREATION_CLIENT_PROFILE_V1 } from '@infra/ai/prompts/blocks';
 import {
   buildRequestTransitionTool,
   buildSaveWorkoutPlanTool,

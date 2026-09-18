@@ -4,7 +4,6 @@
  */
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
-import { CHAT_CONTEXT_V1 } from '@infra/ai/prompts/blocks';
 import type {
   ConversationGraphDeps,
   LoadInput,
@@ -13,6 +12,7 @@ import type {
   PromptContextFor,
 } from '@infra/ai/graph/phase-spec';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
+import { CHAT_CONTEXT_V1 } from '@infra/ai/prompts/blocks';
 import { buildRequestTransitionTool, buildSharedTools, buildUpdateProfileTool } from '@infra/ai/tools';
 
 import { NO_POLICY, type ToolPolicy } from '../tool-policy';

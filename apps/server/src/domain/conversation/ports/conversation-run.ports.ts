@@ -1,3 +1,4 @@
+import type { TokenBudget } from '../episode';
 import type { ConversationPhase } from '../phases';
 
 export type ConversationRunOutcome = 'ok' | 'llm_unavailable' | 'core_error' | 'budget_exhausted';
@@ -6,7 +7,8 @@ export type ConversationRunOutcome = 'ok' | 'llm_unavailable' | 'core_error' | '
  * Estimated-token accounting of one context assembly (ADR-0013 §3.4, reporting half).
  * Numbers are estimator output (see `estimator`), not provider counts — compare with
  * `tokensIn` to calibrate. The post-tool nudge is inserted after assembly and is not
- * counted. P2 reports only; budgets and trimming arrive in P4.
+ * counted. P2 reports only; Task 3 (P4 context-budget plan) adds enforcement — `budget`
+ * and `cuts` record what INV-LLM-004 did, if anything.
  */
 export interface BudgetReport {
   estimator: string; // TOKEN_ESTIMATOR_ID
@@ -18,9 +20,9 @@ export interface BudgetReport {
    * rendered null this run.
    */
   domain: number;
-  /** Per-block token/depth breakdown, spec order (Task 2). Budget-driven depth cuts land in Task 3. */
+  /** Per-block token/depth breakdown, spec order, AFTER any Task 3 depth cut. */
   blocks: Array<{ id: string; tokens: number; depth: number }>;
-  history: number; // the episode messages before this run's HumanMessage — the checkpointed channel (D-H)
+  history: number; // history messages before this run's HumanMessage (D-H), AFTER any Task 3 trim
   user: number; // the current human message
   inFlight: number; // this run's AI tool-call messages and tool results
   /** Always 0 since P4 (D-H): tool results ride the channel; the field stays for baseline comparability. */
@@ -29,6 +31,13 @@ export interface BudgetReport {
   messages: number; // messages in the array handed to the model (before the post-tool nudge)
   historyTurns: number; // HumanMessages in history
   assemblies?: number; // filled at persist: how many assemblies this run made (tool loops)
+  /** PhaseSpec.budget for this run — D-C. Absent only for pre-Task-3 report shapes (baseline comparability). */
+  budget?: TokenBudget;
+  /**
+   * What INV-LLM-004's resolveBudget cut, in order, empty when nothing was
+   * cut (D-C). `'floor'` (D-D) means block 1 and `current` only survived.
+   */
+  cuts?: Array<'history' | `block:${string}` | 'summary' | 'floor'>;
 }
 
 /** One recorded conversation run — ADR-0013 §8. `model` is null for runs that failed before any model call (D-F). */
