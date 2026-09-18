@@ -100,7 +100,7 @@ Assertions (each is a named check reported separately):
 - `text.language` — detect script/lang with a small heuristic (Cyrillic ratio) or a tiny classifier; `text.format` — Telegram HTML only: no `**`, no `_x_`, only allowed tags; `maxChars`.
 - `draft` invariants (after P6): all exercise IDs exist, sets/reps within catalog-type constraints, no exercise conflicting with a `physical_constraint` fact.
 - `no_redundant_search` — **implemented** (refactor-p4-episode-memory, AC-1344): emitted only for cases that seed at least one `search_exercises`; the check fails when the run re-issues a seeded search key (same `buildSearchKey` args) or repeats one of its own earlier searches.
-- Structural: run `outcome === 'ok'`, `budgetReport.history ≤ budget.history`, no orphan tool messages — `budget-report-present` is implemented (refactor-p2-context-assembler, 2026-09-17); the `history ≤ budget` and orphan-tool-message checks stay deferred (budgets are P4).
+- Structural: run `outcome === 'ok'`; `budget-report-present` (refactor-p2-context-assembler, 2026-09-17); `budget-within-limits` — `budgetReport.history ≤ budget.history` and `total ≤ sum − outputReserve` — and `no-orphan-tool-message` — every `ToolMessage` in the last model input answers a `tool_call` id in it (`ModelInputRecorder` in `evals/lib/run-case.ts`) — both implemented by refactor-p4-context-budget (2026-09-19). AC-1343's replay proof lives in `evals/levels/__tests__/budget-replay.unit.test.ts`.
 
 Sampling: each case runs `n` times (default 3; `n=5` for gating datasets); a case passes if ≥ ⌈n/2⌉ samples pass; the report shows per-check pass rates and the flakiest cases.
 

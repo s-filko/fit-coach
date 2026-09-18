@@ -118,8 +118,9 @@ apps/server/src/
       messages/                      # User-facing message catalog (ADR-0013 §11) — en/ru, language_code driven
         catalog.ts / en.ts / ru.ts / index.ts
       context/                      # Context assembler — message order + token accounting (ADR-0013 §3.4)
-        assemble-context.ts         # assembleContext() → { messages, budgetReport }: system → episode summaries → history → current (one shape for every phase; reporting half — enforcement is the context-budget plan)
-        token-estimator.ts          # estimateTokens + TOKEN_ESTIMATOR_ID — the single estimator (app + eval stack)
+        assemble-context.ts         # assembleContext() → { messages, budgetReport }: block 1 system → block 2 episode summaries → block 3 domain blocks → history → current (one shape for every phase); calls resolveBudget
+        budget.ts                   # resolveBudget/trimHistory — INV-LLM-004 order: trim history → step block depths → drop oldest summary → D-D floor (block 1 never cut; `system` over budget only reported)
+        token-estimator.ts          # estimateTokens + estimateMessages + TOKEN_ESTIMATOR_ID — the single estimator (app + eval stack)
       prompts/                       # Versioned prompt modules — every model-facing string (ADR-0013 §5)
         types.ts                     # Section, DirectiveModule, PromptModule<TCtx>, PhasePromptEntry
         compose.ts                   # renderDirectives, compose (join '\n\n'), sectionText, promptVersionsOf
@@ -139,10 +140,15 @@ apps/server/src/
           chat/v1.ts                 #   context/rules/tools/no_set_logging (BUG-009 guard)
           plan_creation/v1.ts        #
           session_planning/v1.ts     #
-          training/v1.ts             #   + v1.helpers.ts; DIRECTIVES_WITHOUT_IDENTITY_V1
+          training/v1.ts             #   DIRECTIVES_WITHOUT_IDENTITY_V1 (render helpers live in blocks/ since the context-budget plan)
+          */v2.ts                    #   current for chat/plan_creation/session_planning/training: v1 minus the domain sections (now block 3); registration has no v2
         blocks/                      # Injected fragments that are neither phase prompt nor directive
+          types.ts                   #   ContextBlock<D> (D-A): pure renderer over the phase's loaded data, optional `depths`
+          index.ts                   #   renderBlocks/fullDepth + re-exports
           episode-summaries.v1.ts    #   ## Previous episodes block — context, not data (numbers come from tools)
           post-tool-nudge.v1.ts      #   post-tool nudge (agent node retry)
+          chat-context.v1.ts / client-profile.v1.ts / session-planning-*.v1.ts / training-workout-overview.v1.ts
+                                     #   domain context blocks (ADR-0013 §3.4 block 3, D-B): one per moved v1 section, byte-equal at full depth; declared on PhaseSpec.contextBlocks
         summarizer/v1.ts             # Legacy end-of-phase summariser (not used by the graph since P4; kept with its snapshot tests)
         summarizer/v2.ts             # Episode summariser — structured EpisodeSummary from the rendered transcript (no previousSummary)
     conversation/

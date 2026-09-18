@@ -337,9 +337,10 @@ P2 close-out review batch (refactor-p2-prompt-modules, 2026-09-16):
 - [ ] **`Section.required` is written but never read**: every module sets it; L0 reads
       `PhasePromptEntry.requiredSections` instead. Drop the field or wire the check to it in P4.
       Source: P2 review R2.
-- [ ] **Small P2 duplications**: 11-line profile block + `=== CLIENT PROFILE ===` wrapper in
-      plan_creation/v1.ts:68 = session_planning/v1.ts:212 (moved verbatim; pairs with
-      context-assembler); magic timestamp 2026-09-12T08:00Z duplicated between
+- [ ] **Small P2 duplications**: ~~11-line profile block + `=== CLIENT PROFILE ===` wrapper in
+      plan_creation/v1.ts:68 = session_planning/v1.ts:212~~ — one shared renderer
+      `prompts/blocks/client-profile.v1.ts` since refactor-p4-context-budget (2026-09-19);
+      the remaining two items stand: magic timestamp 2026-09-12T08:00Z duplicated between
       prompt-snapshots.unit.test.ts:32 and prompt-contexts.ts:62 (must stay in sync for
       AC-1321/L0 agreement — export one constant); chat v1 test `makeUser` is the sixth copy of
       the test user factory. Source: P2 review R2.
