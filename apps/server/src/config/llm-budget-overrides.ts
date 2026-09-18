@@ -7,6 +7,8 @@
  * `LLM_PROFILE_*` and `EPISODE_*` in `config/index.ts` — the mechanism is the
  * invariant (INV-LLM-004), not the values.
  */
+import { parsePrefixedEnv } from './prefixed-env';
+
 export interface TokenBudgetOverride {
   system?: number;
   longTerm?: number;
@@ -32,24 +34,15 @@ const FIELD_BY_PART: Record<string, keyof TokenBudgetOverride> = {
  * whatever remains, lower-cased.
  */
 export function parseLlmBudgetOverrides(env: NodeJS.ProcessEnv): Record<string, TokenBudgetOverride> {
-  const overrides: Record<string, TokenBudgetOverride> = {};
-
-  for (const [key, raw] of Object.entries(env)) {
-    const match = BUDGET_KEY.exec(key);
-    if (!match || raw == null || raw.trim() === '') {
-      continue;
-    }
-
-    const phase = match[1].toLowerCase();
-    const field = FIELD_BY_PART[match[2]];
-    const n = Number(raw);
-    if (!Number.isInteger(n) || n <= 0) {
-      throw new Error(`${key} must be a positive integer`);
-    }
-
-    const override = (overrides[phase] ??= {});
-    override[field] = n;
-  }
-
-  return overrides;
+  return parsePrefixedEnv<TokenBudgetOverride>({
+    env,
+    pattern: BUDGET_KEY,
+    assign: (override, { key, raw, field }) => {
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n <= 0) {
+        throw new Error(`${key} must be a positive integer`);
+      }
+      override[FIELD_BY_PART[field]] = n;
+    },
+  });
 }

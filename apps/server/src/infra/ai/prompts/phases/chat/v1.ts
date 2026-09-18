@@ -1,10 +1,9 @@
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
+import { buildChatContextText } from '@infra/ai/prompts/blocks/chat-context.v1';
 import { renderDirectives } from '@infra/ai/prompts/compose';
 import { DEFAULT_DIRECTIVES_V1 } from '@infra/ai/prompts/directives';
 import type { DirectiveContext, PromptModule, Section } from '@infra/ai/prompts/types';
-
-import { humanTimeAgo } from '@shared/date-utils';
 
 export interface ChatPromptContext extends DirectiveContext {
   hasActivePlan: boolean;
@@ -38,46 +37,13 @@ export const CHAT_V1: PromptModule<ChatPromptContext> = {
   version: 'v1',
   directives: DEFAULT_DIRECTIVES_V1,
   render(ctx: ChatPromptContext): Section[] {
-    const { user, hasActivePlan, recentSessions } = ctx;
+    const { hasActivePlan } = ctx;
 
-    const profile = [
-      user?.age && `Age: ${user.age}`,
-      user?.gender && `Gender: ${user.gender}`,
-      user?.height && `Height: ${user.height} cm`,
-      user?.weight && `Weight: ${user.weight} kg`,
-      user?.fitnessLevel && `Fitness level: ${user.fitnessLevel}`,
-      user?.fitnessGoal && `Goal: ${user.fitnessGoal}`,
-    ]
-      .filter(Boolean)
-      .join(', ');
-
-    const planStatus = hasActivePlan
-      ? 'User HAS an active workout plan. They can start planning workout sessions.'
-      : 'User DOES NOT have a workout plan yet. Suggest creating one when appropriate.';
-
-    const recentSessionsSection =
-      recentSessions.length > 0
-        ? recentSessions
-            .map(s => {
-              const date = s.completedAt ?? s.startedAt ?? s.createdAt;
-              const when = humanTimeAgo(new Date(date), ctx.now, user?.timezone);
-              const exercises = s.exercises.map(ex => `${ex.exercise.name} (${ex.sets.length} sets)`).join(', ');
-              return `- ${s.sessionKey ?? 'session'} — ${when}, ${s.durationMinutes ?? '?'} min: ${exercises || 'no exercises logged'}`;
-            })
-            .join('\n')
-        : 'No recent sessions.';
-
-    const clientName = user?.firstName ?? null;
+    const contextText = buildChatContextText(ctx, ctx, 5);
 
     const planRule = hasActivePlan
       ? 'When the user wants to train/start a workout/plan today\'s session, IMMEDIATELY call request_transition({ toPhase: "session_planning" }). Do NOT give workout advice directly from chat.'
       : 'Suggest creating a workout plan if user wants to train. Call request_transition({ toPhase: "plan_creation" }) when user agrees.';
-
-    const contextText = `CLIENT NAME: ${clientName ?? 'not provided'}
-CLIENT PROFILE: ${profile || 'Not available'}
-WORKOUT PLAN STATUS: ${planStatus}
-RECENT TRAINING HISTORY (last 5 sessions):
-${recentSessionsSection}`;
 
     return [
       { id: 'context', required: true, text: contextText },

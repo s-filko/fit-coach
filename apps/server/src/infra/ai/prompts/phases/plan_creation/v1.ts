@@ -1,3 +1,4 @@
+import { buildClientProfileText } from '@infra/ai/prompts/blocks/client-profile.v1';
 import { renderDirectives } from '@infra/ai/prompts/compose';
 import { DEFAULT_DIRECTIVES_V1 } from '@infra/ai/prompts/directives';
 import type { DirectiveContext, PromptModule, Section } from '@infra/ai/prompts/types';
@@ -65,21 +66,9 @@ export const PLAN_CREATION_V1: PromptModule<PlanCreationPromptContext> = {
     const { user } = ctx;
     const { dateOnly } = formatInUserTz(ctx.now, user?.timezone);
 
-    const profileSection = user
-      ? [
-          `Name: ${user.firstName ?? 'Unknown'}`,
-          `Age: ${user.age ?? '?'}`,
-          `Gender: ${user.gender ?? '?'}`,
-          `Height: ${user.height ?? '?'} cm`,
-          `Weight: ${user.weight ?? '?'} kg`,
-          `Fitness Level: ${user.fitnessLevel ?? '?'}`,
-          `Fitness Goal: ${user.fitnessGoal ?? '?'}`,
-        ].join('\n')
-      : 'Profile not loaded.';
-
     return [
       { id: 'date', required: true, text: `Current Date: ${dateOnly}` },
-      { id: 'client_profile', required: true, text: `=== CLIENT PROFILE ===\n\n${profileSection}` },
+      { id: 'client_profile', required: true, text: buildClientProfileText(user) },
       { id: 'task', required: true, text: TASK_TEXT },
       { id: 'conversation_flow', required: true, text: FLOW_TEXT },
       { id: 'rules', required: true, text: RULES_TEXT },

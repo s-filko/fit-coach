@@ -13,7 +13,7 @@ import { AIMessage, type BaseMessage, HumanMessage, SystemMessage } from '@langc
 
 import type { StoredEpisodeSummary, TokenBudget } from '@domain/conversation/episode';
 
-import type { BudgetBlockInput } from '../budget';
+import type { RenderableBlock } from '@infra/ai/prompts/blocks';
 
 import { IN_FLIGHT_POST_TOOL } from '../../../../../evals/fixtures/assembly-scenarios';
 import { assembleContext, type AssembleInput } from '../assemble-context';
@@ -60,7 +60,7 @@ function input(overrides: Partial<AssembleInput> = {}): AssembleInput {
 }
 
 /** A block fixture as a { id, render } pair, replacing Task 2's pre-rendered { id, text, tokens, depth } shape. */
-function block(id: string, text: string): BudgetBlockInput<unknown> {
+function block(id: string, text: string): RenderableBlock<unknown> {
   return { id, render: () => text };
 }
 

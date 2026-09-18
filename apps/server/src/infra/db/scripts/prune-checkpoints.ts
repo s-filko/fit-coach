@@ -94,18 +94,28 @@ JOIN stale
 
 /**
  * A blob row (thread_id, checkpoint_ns, channel, version) survives if its
- * version is referenced in the SURVIVING (rn = 1) checkpoint's
- * channel_versions for that (thread_id, checkpoint_ns) — everything else for
- * a (thread_id, checkpoint_ns) pair that HAS at least one stale checkpoint is
- * a pruning candidate. A pair with no stale checkpoints is left untouched
- * entirely (its blobs are never scanned) — cheaper and matches "older blobs
- * go", not "unreferenced blobs go" globally.
+ * version is referenced in the channel_versions of ANY RETAINED checkpoint for
+ * that (thread_id, checkpoint_ns) — retained meaning "younger than cutoff OR
+ * the latest (rn = 1)", exactly the set the checkpoints statement keeps
+ * (ranked.* minus stale.*). Scoping "referenced" to only the latest checkpoint
+ * (as an earlier version of this query did) would delete blobs still needed by
+ * a retained-but-not-latest checkpoint (R3 close-out finding, BR-LLM-005) —
+ * that checkpoint would then fail to load. A (thread_id, checkpoint_ns) pair
+ * with no stale checkpoints is left untouched entirely (its blobs are never
+ * scanned) — cheaper and matches "older blobs go", not "unreferenced blobs go"
+ * globally.
  */
 function blobsStatement(apply: boolean): PruneStatement {
   const referencedVersions = `
   referenced AS (
-    SELECT latest.thread_id, latest.checkpoint_ns, kv.key AS channel, kv.value AS version
-    FROM latest, jsonb_each_text(latest.checkpoint->'channel_versions') AS kv
+    SELECT ranked.thread_id, ranked.checkpoint_ns, kv.key AS channel, kv.value AS version
+    FROM ranked, jsonb_each_text(ranked.checkpoint->'channel_versions') AS kv
+    WHERE NOT EXISTS (
+      SELECT 1 FROM stale
+      WHERE stale.thread_id = ranked.thread_id
+        AND stale.checkpoint_ns = ranked.checkpoint_ns
+        AND stale.checkpoint_id = ranked.checkpoint_id
+    )
   )`;
   const sql = apply
     ? `${LATEST_CHECKPOINT_CTE},

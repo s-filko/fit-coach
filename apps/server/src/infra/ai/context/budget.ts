@@ -19,16 +19,15 @@ import { type BaseMessage, trimMessages } from '@langchain/core/messages';
 
 import type { StoredEpisodeSummary, TokenBudget } from '@domain/conversation/episode';
 
-import { type ContextBlockCtx, EPISODE_SUMMARIES_V1, renderBlock } from '@infra/ai/prompts/blocks';
+import {
+  type ContextBlockCtx,
+  EPISODE_SUMMARIES_V1,
+  fullDepth,
+  type RenderableBlock,
+  renderBlock,
+} from '@infra/ai/prompts/blocks';
 
 import { estimateTokens } from './token-estimator';
-
-/** The one shape `resolveBudget` needs from a `ContextBlock<D>` — render + optional depth steps. */
-export interface BudgetBlockInput<D> {
-  id: string;
-  depths?: readonly number[];
-  render(data: D, ctx: ContextBlockCtx, depth: number): string | null;
-}
 
 export type BudgetCut = 'history' | `block:${string}` | 'summary' | 'floor';
 
@@ -38,7 +37,7 @@ export interface ResolveBudgetInput<D> {
   /** state.episodeSummaries, oldest first — (c) drops from the front. */
   summaries: StoredEpisodeSummary[];
   /** Domain blocks (D-A) with the phase's loaded data folded in via `data`/`ctx` below. */
-  blocks: ReadonlyArray<BudgetBlockInput<D>>;
+  blocks: ReadonlyArray<RenderableBlock<D>>;
   /** The data every block in `blocks` reads — the phase's single `loadContext` result. */
   data: D;
   /** The block-render context (`now`/`timezone`/`user`) — identical to the agent node's full-depth render. */
@@ -83,11 +82,7 @@ export async function trimHistory(
   });
 }
 
-function fullDepthOf(depths?: readonly number[]): number {
-  return depths?.[0] ?? 0;
-}
-
-function renderBlockAt<D>(block: BudgetBlockInput<D>, data: D, ctx: ContextBlockCtx, depth: number): number {
+function renderBlockAt<D>(block: RenderableBlock<D>, data: D, ctx: ContextBlockCtx, depth: number): number {
   const text = block.render(data, ctx, depth);
   return text === null ? 0 : estimateTokens(text);
 }
@@ -117,7 +112,7 @@ export async function resolveBudget<D>(input: ResolveBudgetInput<D>): Promise<Re
 
   const blockDepths: Record<string, number> = {};
   // Full-depth token count per block, in spec order (mutated as depths step down).
-  const blockTokens = blocks.map(b => renderBlockAt(b, data, blockCtx, fullDepthOf(b.depths)));
+  const blockTokens = blocks.map(b => renderBlockAt(b, data, blockCtx, fullDepth(b)));
 
   function totalNow(summaries: StoredEpisodeSummary[]): number {
     const domainNow = blockTokens.reduce((n, t) => n + t, 0);

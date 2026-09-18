@@ -5,6 +5,8 @@
  * This is the one deliberate exception to "no defaults in code" in config/index.ts:
  * the defaults are the existing required variables, not literals.
  */
+import { parsePrefixedEnv } from './prefixed-env';
+
 export interface LlmProfileOverride {
   model?: string;
   temperature?: number;
@@ -34,24 +36,15 @@ function setNumericField(
 }
 
 export function parseLlmProfiles(env: NodeJS.ProcessEnv): Record<string, LlmProfileOverride> {
-  const profiles: Record<string, LlmProfileOverride> = {};
-
-  for (const [key, raw] of Object.entries(env)) {
-    const match = PROFILE_KEY.exec(key);
-    if (!match || raw == null || raw.trim() === '') {
-      continue;
-    }
-
-    const name = match[1].toLowerCase();
-    const field = match[2] as 'MODEL' | 'TEMPERATURE' | 'MAX_TOKENS';
-    const profile = (profiles[name] ??= {});
-
-    if (field === 'MODEL') {
-      profile.model = raw.trim();
-    } else {
-      setNumericField(key, field, raw, profile);
-    }
-  }
-
-  return profiles;
+  return parsePrefixedEnv<LlmProfileOverride>({
+    env,
+    pattern: PROFILE_KEY,
+    assign: (profile, { key, raw, field }) => {
+      if (field === 'MODEL') {
+        profile.model = raw.trim();
+      } else {
+        setNumericField(key, field as 'TEMPERATURE' | 'MAX_TOKENS', raw, profile);
+      }
+    },
+  });
 }

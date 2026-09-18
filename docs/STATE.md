@@ -12,7 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-18 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `refactor-p4-context-budget.md` — Refactor P4 — Context Budget and Domain Blocks Implementation Plan (branch: `plan/refactor-p4-context-budget`, last commit 2026-09-19)
+— none —
 
 **Planned**
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
@@ -35,6 +35,7 @@ _Generated 2026-09-18 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p3-phase-spec.md` — Refactor P3 — PhaseSpec Factory and Shared Agent Node Implementation Plan
 - `refactor-p3-run-context-commit.md` — Refactor P3 — Run Context, Commit Node and Conversation Run Port Implementation Plan
 - `refactor-p3-tool-executor.md` — Refactor P3 — Shared Tool Executor Implementation Plan
+- `refactor-p4-context-budget.md` — Refactor P4 — Context Budget and Domain Blocks Implementation Plan
 - `refactor-p4-episode-memory.md` — Refactor P4 — Episode Memory Implementation Plan
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 
@@ -86,20 +87,41 @@ _Generated 2026-09-18 from docs/superpowers/plans/ + git. Never hand-edit; regen
    `refactor-p4-evals-verify` (compare run, budget-gated). One follow-up found in the smoke
    and fixed post-merge: the structured-output retry gate now also catches `SyntaxError`.
    Advisories: `BACKLOG.md` § P4 close-out review advisories (11 entries).
-   **`refactor-p4-context-budget` is in progress (dispatched 2026-09-19)** — plan
-   re-validated against `b5dc2e1d`; Task 1 measured from smoke rows (dev has no organic
-   traffic) and the ADR §3.4 defaults kept; three `compact.node.ts` advisories folded into
-   its Task 4. Executor: a Sonnet subagent from the orchestrating session (Z.AI weekly
-   quota 63 % consumed by 2026-09-19 — GLM executor paused until the window resets).
+   **P4 is complete in full (2026-09-19)**: `refactor-p4-context-budget` closed —
+   `Status: done`, review `2026-09-19 | clean | R1,R2,R3,R4`, merged to `dev` and deployed.
+   Task 1 measured from smoke rows (dev has no organic traffic) and the ADR §3.4 defaults
+   kept; three `compact.node.ts` advisories folded into its Task 4. Executor: Sonnet
+   subagents from the orchestrating session (Z.AI weekly quota 63 % consumed by 2026-09-19 —
+   GLM executor paused until the window resets). The close-out took three review passes and
+   seven blocking fixes, all DRY/correctness, none behavioural: one shared prefixed-env
+   parser (`config/prefixed-env.ts`); `prune-checkpoints` blob retention scoped to every
+   retained checkpoint, not only the latest (BR-LLM-005 — the bug would have made a
+   younger-than-cutoff checkpoint unloadable); the four phase `v1.ts` files repointed to
+   `prompts/blocks/` (the plan's Task 2 import-back step, previously done only for
+   `training/v1.ts`); and one canonical `RenderableBlock<D>` in `blocks/types.ts` with
+   `ContextBlock<D>` extending it. Dev smoke: 3 × `/api/bot/chat`, all 200,
+   `budgetReport.history` 1610 ≤ `budget.history` 12000, no `cuts`. **AC-1344 remains
+   pending** the consolidated eval pass. Advisories: `BACKLOG.md` § P4 context-budget
+   close-out review advisories (6 entries); rule candidates in `REVIEW_FINDINGS.md`.
+   **P5 and P6 are planned (2026-09-19)**: `refactor-p5-concurrency-delivery`
+   (AC-1351..1354 — per-user run mutex on `ConversationRunPort`, typed error mapping, bot
+   watchdog and localized fallbacks; all four ACs deterministic, nothing deferred) and
+   `refactor-p6-facts-and-progress-blocks` (AC-1361..1364 — `user_facts` extracted at
+   compaction with `remember_fact` dropped per the owner's 2026-09-17 decision,
+   muscle-centric progress blocks, structured drafts; deterministic halves now, model-backed
+   halves deferred). Each carries a "Decided without the owner (2026-09-19)" table for
+   review — P5 has 10 entries, P6 has 13.
    **Owner strategy 2026-09-19 — code first, one consolidated eval pass:** per plan only
    mocked tests, L0 and one 3–5-call dev smoke; no mini-runs, working-checks or per-plan
    `evals-verify` micro-tasks. All model-backed evals (AC-1344 compare for episode memory
    and context budget, L2 rubric) run once, on the prod model through OpenRouter (off the
    Z.AI quota), after a milestone the owner picks (recommended: after P6), then fixes are
    planned from the results and the suite is re-run. `refactor-p4-evals-verify` stays
-   planned only as the record of what that pass must include. P5 may run in parallel per
-   the master plan; it is not planned yet.
-3. Then P6 → P7 per the master plan phase map.
+   planned only as the record of what that pass must include.
+3. **Next to dispatch: `refactor-p5-concurrency-delivery`** (independent of P4, depends on
+   P3 — may start immediately), then `refactor-p6-facts-and-progress-blocks` (depends on
+   `refactor-p4-context-budget`, now `done`, so it is unblocked). Then P7 per the master
+   plan phase map.
 3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
    the code aligned to it, ESLint keeping it that way. Independent of the P0 chain;
    can run alongside it.

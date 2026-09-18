@@ -337,9 +337,10 @@ P2 close-out review batch (refactor-p2-prompt-modules, 2026-09-16):
 - [ ] **`Section.required` is written but never read**: every module sets it; L0 reads
       `PhasePromptEntry.requiredSections` instead. Drop the field or wire the check to it in P4.
       Source: P2 review R2.
-- [ ] **Small P2 duplications**: 11-line profile block + `=== CLIENT PROFILE ===` wrapper in
-      plan_creation/v1.ts:68 = session_planning/v1.ts:212 (moved verbatim; pairs with
-      context-assembler); magic timestamp 2026-09-12T08:00Z duplicated between
+- [ ] **Small P2 duplications**: ~~11-line profile block + `=== CLIENT PROFILE ===` wrapper in
+      plan_creation/v1.ts:68 = session_planning/v1.ts:212~~ — one shared renderer
+      `prompts/blocks/client-profile.v1.ts` since refactor-p4-context-budget (2026-09-19);
+      the remaining two items stand: magic timestamp 2026-09-12T08:00Z duplicated between
       prompt-snapshots.unit.test.ts:32 and prompt-contexts.ts:62 (must stay in sync for
       AC-1321/L0 agreement — export one constant); chat v1 test `makeUser` is the sixth copy of
       the test user factory. Source: P2 review R2.
@@ -466,3 +467,31 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       the same file). Source: close-out-review, R2 (2026-09-18). Fixed: `refactor-p4-context-budget`
       Task 4 Step 0 — imports `LegacySummary` from `@domain/conversation/ports`.
 
+
+## P4 context-budget close-out review advisories (2026-09-19)
+
+- [ ] `prompts/blocks/training-workout-overview.v1.ts` holds four training blocks
+      (`client`, `workout_overview`, `stale_session`, `previous_session`) while every other
+      block has its own file — split it, or write the grouping rule down so the exception is
+      deliberate (see the matching rule candidate in `docs/REVIEW_FINDINGS.md`).
+      Source: close-out-review, R1/R2 (2026-09-19).
+- [ ] Domain blocks are rendered twice per run — once by `resolveBudget` to measure tokens,
+      once by `assembleContext` to build the text. Pure renderers make this correct but not
+      free; a render cache keyed by `(block id, depth)` would halve it. Measure before fixing:
+      the cost is unquantified. Source: close-out-review, R2 (2026-09-19).
+- [ ] `ModelInputRecorder` only attaches to a real `BaseChatModel`, so on L1 datasets whose
+      model is a stub the `no-orphan-tool-message` check silently does not run — a check that
+      passes because it never executed. Make the skip loud (log or fail the case).
+      Source: close-out-review, R3 (2026-09-19).
+- [ ] `src/infra/db/scripts/__tests__/prune-checkpoints.unit.test.ts:6-7` — the module docstring
+      and test 5's title still describe the pre-fix blob semantics ("referenced by the SURVIVING
+      latest checkpoint"); the code now keeps blobs referenced by any retained checkpoint. The
+      test still passes because it only asserts the SQL mentions `channel_versions`.
+      Source: close-out-review, R3 (2026-09-19).
+- [ ] `renderBlocks`'s injectable `depthOf` and the structural `RenderableBlock<D>` widening were
+      built for two callers; Task 3 collapsed them into one real caller (`assembleContext`).
+      Either simplify to that caller's needs or leave it as the extension point P6's blocks will
+      use — decide when P6 lands, not before. Source: close-out-review, R2 (2026-09-19).
+- [ ] `context/budget.ts`'s `renderBlockAt` reimplements `renderBlocks`'s render-and-measure step
+      with a different return shape (token count instead of a `RenderedBlock`). Not a clean
+      duplicate, but the same operation expressed twice. Source: close-out-review, R2 (2026-09-19).

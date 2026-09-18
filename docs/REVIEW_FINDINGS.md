@@ -260,6 +260,38 @@ backs it. Each entry names the proposed wording and where it would live
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
 
+- [×2] A helper extracted into a shared module leaves its pre-existing call sites untouched,
+  and no rule says that is unfinished. On this branch Task 2 moved the domain renderers into
+  `prompts/blocks/` and only `training/v1.ts` was repointed; `chat/v1.ts`, `plan_creation/v1.ts`
+  and `session_planning/v1.ts` kept byte-identical copies for three review passes, each pass
+  paying to rediscover them. The plan's own text required the import-back, but a reviewer with
+  no plan would have had nothing to cite. Proposed principle for `docs/CONTRIBUTING_AI.md`
+  § Principles & Boundaries, next to the DRY bullet: "When a helper is extracted into a shared
+  module, every pre-existing call site in the same change is repointed to it. A new shared
+  module standing beside surviving copies is a partial extraction, not an accepted intermediate
+  state." Second occurrence, the type-level variant, from the fix to the fix: `RenderableBlock<D>`
+  and `BudgetBlockInput<D>` were declared field-for-field identically in two modules purely so
+  values could cross a module boundary, i.e. a duplication fix that introduced a duplicate type.
+  The same bullet should cover it: "Do not declare a second interface that is a structural subset
+  of an existing one to decouple two modules; import the canonical type, or narrow it with
+  `Pick`/`Omit`." Runs: refactor-p4-context-budget (2026-09-19, R2 second and third passes).
+- [×1] BR-LLM-005 says pruning never deletes the latest checkpoint per `(thread_id,
+  checkpoint_ns)`, and says nothing about the blobs those checkpoints reference or about
+  checkpoints retained by age rather than by being latest. The gap let a correct-looking query
+  delete blobs belonging to a younger-than-cutoff, non-latest checkpoint, silently making that
+  checkpoint unloadable — the sort of defect a reviewer can only call blocking by citing a rule
+  that does not yet exist. Proposed amendment to ADR-0013 §3.3 (escalated to the owner, not
+  edited): "Pruning retains every checkpoint younger than the cutoff, not only the latest per
+  `(thread_id, checkpoint_ns)`. Blob deletion is scoped by the same retention test: a blob
+  version referenced by any retained checkpoint's `channel_versions` is never deleted."
+  Runs: refactor-p4-context-budget (2026-09-19, R3).
+- [×1] Blocks under `prompts/blocks/` are one-per-file except `training-workout-overview.v1.ts`,
+  which holds four. Nothing states the convention, so R1/R2 could only file the inconsistency as
+  advisory — and the plan's own Task 2 file list names four separate training files that were
+  never created, meaning the plan and the tree disagree with no rule to arbitrate. Proposed
+  principle for `docs/CONTRIBUTING_AI.md` § "Adding a context block": "One `ContextBlock` per
+  file, named `blocks/<phase>-<section>.vN.ts`. Blocks that share a data shape may share a
+  render helper, but each block gets its own module." Runs: refactor-p4-context-budget (2026-09-19, R1/R2).
 - [×1] `docs/adr/0013-llm-core-target-architecture.md` §11 names the `domain/** →
   @langchain/*` boundary as an explicit invariant, but not the app→infra boundary that
   `eslint.config.js`'s `boundaries/element-types` rule also enforces (`app` may only import
