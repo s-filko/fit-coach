@@ -302,11 +302,19 @@ Result:
 ```
 INFO  reqId=req-42  processing chat message          userId=abc phase=plan_creation
 DEBUG reqId=req-42  phase resolution                  hasTrainingCtx=false
-DEBUG reqId=req-42  LLM request prepared              model=gpt-4o promptTokens=450
-INFO  reqId=req-42  LLM call completed                latencyMs=1842 totalTokens=680
+DEBUG reqId=req-42  LLM invoke                        userId=abc totalMessages=12
+DEBUG reqId=req-42  LLM response                      responseLength=340
+INFO  reqId=req-42  Conversation run recorded         runId=... phase=chat model=z-ai/glm-5.3 tokensIn=450 tokensOut=180 latencyMs=1842
 INFO  reqId=req-42  phase transition                  from=plan_creation to=session_planning
 INFO  reqId=req-42  request completed                 statusCode=200 responseTime=2340ms
 ```
+
+The graph path's per-run `info` event is "Conversation run recorded" (persist node) —
+it carries runId, phase, model, promptVersions, tokensIn/Out, latencyMs, llmCalls.
+The legacy `llm.service.ts` path (and its "LLM call completed" event) was deleted in
+refactor P1 (2026-09); non-graph LLM calls now go through `infra/ai/llm.gateway.ts`,
+which emits an `LLM gateway call` `info` event (profile, runId/jobId, latencyMs, kind).
+LLM request/response content itself stays at `debug` (BUG-003 replay behaviour).
 
 ---
 

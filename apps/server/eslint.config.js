@@ -83,7 +83,7 @@ export default tseslint.config(
         enforceConst: true
       }],
       'camelcase': ['error', { properties: 'never' }],
-      'max-len': ['error', { code: 120, ignoreUrls: true, ignoreStrings: true }],
+      'max-len': ['error', { code: 120, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }],
       'no-multiple-empty-lines': ['error', { max: 1 }],
       'quotes': ['error', 'single', { avoidEscape: true }],
       'semi': ['error', 'always'],
@@ -125,7 +125,7 @@ export default tseslint.config(
       // Style rules
       'array-bracket-spacing': ['error', 'never'],
       'object-curly-spacing': ['error', 'always'],
-      'space-before-function-paren': ['warn', 'never'],
+      'space-before-function-paren': ['warn', { anonymous: 'never', named: 'never', asyncArrow: 'always' }],
 
       // Stricter existing rules
       'max-depth': ['warn', 4],
@@ -157,7 +157,13 @@ export default tseslint.config(
         'no-restricted-imports': ['error', {
           patterns: [
             { group: ['../**'], message: 'Use aliases instead of parent relative imports' },
-            { group: ['@main/**'], message: 'Do not import main from other layers' }
+            { group: ['@main/**'], message: 'Do not import main from other layers' },
+            {
+              group: ['@domain/*/ports/*', '**/domain/*/ports/*'],
+              message:
+                'Import ports through the directory index (@domain/<domain>/ports), not a file inside it — ' +
+                'ARCHITECTURE.md § Interface Organization Principles rule 4.',
+            },
           ]
         }],
       
@@ -215,6 +221,50 @@ export default tseslint.config(
       }],
     },
   },
+  // ADR-0013 §11 / INV-CONV-004 (AC-1333): LangGraph lives in infra/ai, never in domain.
+  {
+    files: ['src/domain/**/*.ts'],
+    // graph/ dies with Task 5 (ICompiledConversationGraph is replaced by ConversationRunPort)
+    ignores: ['**/__tests__/**', 'src/domain/conversation/graph/**'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            group: ['@langchain/*'],
+            message: 'ADR-0013 §11 / INV-CONV-004: domain owns phases, transitions and ports; LangGraph lives in infra/ai',
+          },
+        ],
+      }],
+    },
+  },
+
+  // ADR-0013 §5 / BR-LLM-009: model-facing text lives in prompts/ modules, never inline in graph code.
+  {
+    files: [
+      'src/infra/ai/graph/**/*.ts',
+      'src/infra/ai/context/**/*.ts',
+      'src/infra/ai/messages/**/*.ts',
+      'src/infra/ai/tools/**/*.ts',
+      'src/infra/ai/*.ts',
+    ],
+    ignores: ['**/__tests__/**'],
+    rules: {
+      'no-restricted-syntax': ['error',
+        {
+          selector: "NewExpression[callee.name='SystemMessage'] > Literal.arguments",
+          message: 'Inline system prompt text. Render it from a module in src/infra/ai/prompts/ (ADR-0013 §5).',
+        },
+        {
+          selector: "NewExpression[callee.name='SystemMessage'] > TemplateLiteral.arguments",
+          message: 'Inline system prompt text. Render it from a module in src/infra/ai/prompts/ (ADR-0013 §5).',
+        },
+        {
+          selector: "Property[key.name='role'][value.value='system'] ~ Property[key.name='content'] > :matches(Literal, TemplateLiteral)",
+          message: 'Inline system prompt text. Render it from a module in src/infra/ai/prompts/ (ADR-0013 §5).',
+        },
+      ],
+    },
+  },
   // Relaxed rules for test files
   {
     files: ['**/__tests__/**/*.ts', '**/*.test.ts', '**/*.spec.ts', '**/tests/**/*.ts', '**/test/**/*.ts'],
@@ -268,6 +318,7 @@ export default tseslint.config(
       '*.js',
       '*.d.ts',
       'jest.config.cjs',
+      'src/infra/db/scripts/',
     ],
   }
 );

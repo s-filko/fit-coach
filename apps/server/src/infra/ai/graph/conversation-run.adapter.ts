@@ -1,0 +1,153 @@
+/**
+ * The ConversationRunPort adapter (ADR-0013 §11, D-A): loads the user, builds
+ * the immutable run context (runId, user, now, client, trigger, metrics) and
+ * invokes the graph. Failed runs get a run row (D-F) and rethrow — error
+ * MAPPING itself is P5.
+ */
+import { randomUUID } from 'node:crypto';
+
+import type { BaseCallbackHandler } from '@langchain/core/callbacks/base';
+import { type BaseMessage, HumanMessage } from '@langchain/core/messages';
+
+import type {
+  ConversationPhase,
+  ConversationRunPort,
+  ConversationRunRecord,
+  IConversationRunService,
+  RunInput,
+  RunResult,
+  TranscriptPort,
+} from '@domain/conversation/ports';
+import type { IUserService } from '@domain/user/ports';
+
+import { lastAiText } from '@infra/ai/graph/episode';
+import { langOf, t } from '@infra/ai/messages';
+import { RunMetricsCollector } from '@infra/ai/run-metrics';
+
+import { createLogger } from '@shared/logger';
+
+const log = createLogger('conversation-run-adapter');
+
+/** Provider/network failures the OpenAI client throws — outcome 'llm_unavailable' (D-F). */
+function isProviderError(err: unknown): boolean {
+  const status = (err as { status?: number } | null)?.status;
+  return typeof status === 'number' && (status === 429 || status >= 500);
+}
+
+export interface ConversationRunnerDeps {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  graph: { invoke(input: unknown, config?: unknown): Promise<any> };
+  userService: IUserService;
+  runService: IConversationRunService;
+  /** D-F: clearContext deletes the thread through the checkpointer. */
+  checkpointer: { deleteThread(threadId: string): Promise<void> };
+  /** D-F: clearContext leaves a catalog system note in the transcript. */
+  transcript: TranscriptPort;
+  /** Extra LangChain callbacks for the run (evals' ToolRecorder) — infra-only surface. */
+  extraCallbacks?: BaseCallbackHandler[];
+}
+
+export function buildConversationRunner(deps: ConversationRunnerDeps): ConversationRunPort {
+  const { graph, userService, runService, checkpointer, transcript, extraCallbacks } = deps;
+
+  return {
+    async run(input: RunInput): Promise<RunResult> {
+      const user = await userService.getUser(input.userId);
+      if (!user) {
+        throw new Error(`User ${input.userId} not found`);
+      }
+
+      const runId = randomUUID();
+      const metrics = new RunMetricsCollector(runId);
+      const ctx = {
+        runId,
+        userId: input.userId,
+        user,
+        now: new Date(),
+        client: input.client ?? 'telegram',
+        trigger: input.trigger ?? 'user_message',
+        metrics,
+      };
+
+      try {
+        const result = (await graph.invoke(
+          { messages: [new HumanMessage(input.text)] },
+          {
+            configurable: { thread_id: input.userId },
+            metadata: { runId, userId: input.userId },
+            context: ctx,
+            callbacks: [metrics.handler(), ...(extraCallbacks ?? [])],
+            recursionLimit: 50,
+          },
+        )) as { phase: RunResult['phase']; messages: BaseMessage[] };
+
+        return {
+          // P4: the reply is the last AI message of the persisted channel
+          // (ADR-0013 §3.2 — no responseMessage channel, no collector text).
+          text: lastAiText(result.messages ?? []) ?? '',
+          phase: result.phase,
+          runId,
+        };
+      } catch (err) {
+        // Best-effort failed-run row (D-F): AC-1301's "one row per POST" becomes true.
+        try {
+          let phaseIn: ConversationRunRecord['phaseIn'] = 'chat';
+          try {
+            const st = await (
+              graph as { getState?: (c: unknown) => Promise<{ values?: { phase?: ConversationRunRecord['phaseIn'] } }> }
+            ).getState?.({ configurable: { thread_id: input.userId } });
+            if (st?.values?.phase) {
+              phaseIn = st.values.phase;
+            }
+          } catch {
+            // state read is best-effort
+          }
+          const record: ConversationRunRecord = {
+            runId,
+            userId: input.userId,
+            phaseIn,
+            phaseOut: null,
+            trigger: ctx.trigger,
+            client: ctx.client,
+            model: metrics.snapshot().model,
+            promptVersions: {},
+            tokensIn: null,
+            tokensOut: null,
+            latencyMs: metrics.snapshot().latencyMs,
+            toolCalls: null,
+            transition: null,
+            outcome: isProviderError(err) ? 'llm_unavailable' : 'core_error',
+            budgetReport: null,
+          };
+          await runService.recordRun(record);
+        } catch (recordErr) {
+          log.error({ err: recordErr, runId }, 'Failed to record the failed run');
+        }
+        throw err;
+      }
+    },
+
+    /** D-F: delete the thread, note it in the transcript — nothing else. */
+    async clearContext(userId: string): Promise<void> {
+      // The note's phase = the thread's last phase — read before the thread is gone.
+      let phase: ConversationPhase = 'chat';
+      try {
+        const st = await (
+          graph as { getState?: (c: unknown) => Promise<{ values?: { phase?: ConversationPhase } }> }
+        ).getState?.({ configurable: { thread_id: userId } });
+        const { phase: lastPhase } = st?.values ?? {};
+        if (lastPhase) {
+          phase = lastPhase;
+        }
+      } catch {
+        // best-effort — the default phase carries the note
+      }
+      const user = await userService.getUser(userId);
+      const { languageCode } = user ?? { languageCode: null as string | null };
+      const lang = langOf(languageCode);
+      await checkpointer.deleteThread(userId);
+      await transcript.appendSystemNote({ userId, phase, text: t('context_cleared', lang) });
+      log.info({ userId, phase }, 'Context cleared');
+    },
+  };
+}

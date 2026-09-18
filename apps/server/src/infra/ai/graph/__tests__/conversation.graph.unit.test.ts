@@ -1,16 +1,19 @@
-import { AIMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { MemorySaver } from '@langchain/langgraph';
 
+import type { ConversationRunRecord } from '@domain/conversation/ports';
 import type {
   IExerciseRepository,
   ITrainingService,
   IWorkoutPlanRepository,
   IWorkoutSessionRepository,
 } from '@domain/training/ports';
+import type { LlmGateway } from '@domain/ai/ports/llm.gateway.ports';
 import type { IUserService } from '@domain/user/ports';
 
-import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
+import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
+import { lastAiText } from '../episode';
 import { buildConversationGraph, type ConversationGraphDeps } from '../conversation.graph';
 
 // Mock the model factory so tests don't need a real LLM key
@@ -22,13 +25,38 @@ jest.mock('@infra/ai/model.factory', () => ({
   }),
 }));
 
-const makeDeps = (): ConversationGraphDeps => ({
+// INV-LLM-005 harness: the real five specs plus a sixth — the graph must gain
+// the node with no builder change. The fake spec carries the fields the
+// factory touches at build time (tools/policy/layout); nothing ever routes to
+// it, so the missing prompt and loaders never matter.
+jest.mock('@infra/ai/graph/phases', () => {
+  const actual = jest.requireActual('@infra/ai/graph/phases');
+  return {
+    ...actual,
+    buildPhaseSpecs: (deps: ConversationGraphDeps) => [
+      ...actual.buildPhaseSpecs(deps),
+      {
+        name: 'zzz_test',
+        tools: [],
+        toolPolicy: { llmErrorBudget: Infinity },
+      },
+    ],
+  };
+});
+
+const USER = {
+  id: 'u1',
+  firstName: 'Test',
+  languageCode: 'en',
+  profileStatus: 'complete',
+};
+
+const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps => ({
   trainingService: {
     getTrainingHistory: jest.fn().mockResolvedValue([]),
     getSessionDetails: jest.fn().mockResolvedValue(null),
     completeSession: jest.fn().mockResolvedValue({}),
     startSession: jest.fn().mockResolvedValue({ id: 'session-1' }),
-    getNextSessionRecommendation: jest.fn(),
     addExerciseToSession: jest.fn(),
     logSet: jest.fn(),
     skipSession: jest.fn(),
@@ -46,6 +74,7 @@ const makeDeps = (): ConversationGraphDeps => ({
     findRecentByUserId: jest.fn().mockResolvedValue([]),
     findRecentByUserIdWithDetails: jest.fn().mockResolvedValue([]),
     findActiveByUserId: jest.fn().mockResolvedValue(null),
+    findLastCompletedByUserAndKey: jest.fn().mockResolvedValue(null),
     update: jest.fn().mockResolvedValue({}),
     complete: jest.fn(),
     updateActivity: jest.fn(),
@@ -69,81 +98,113 @@ const makeDeps = (): ConversationGraphDeps => ({
     embedBatch: jest.fn().mockResolvedValue([]),
   },
   userService: {
-    getUser: jest.fn().mockResolvedValue({
-      id: 'u1',
-      firstName: 'Test',
-      profileStatus: 'complete',
-    }),
+    getUser: jest.fn().mockResolvedValue(USER),
     updateProfileData: jest.fn(),
     isRegistrationComplete: jest.fn().mockReturnValue(true),
     needsRegistration: jest.fn().mockReturnValue(false),
     upsertUser: jest.fn(),
   } as unknown as IUserService,
-  contextService: new InMemoryConversationContextService(),
+  transcript: {
+    appendRunMessages: async () => undefined,
+    appendSystemNote: async () => undefined,
+  },
+  summaries: {
+    insert: async () => undefined,
+    latestLegacySummary: async () => null,
+  },
+  llmGateway: {
+    chat: async () => ({ content: '' }),
+    // Cast: LlmGateway.structured is generic; the stub returns one fixed shape.
+    structured: (async () => ({
+      topics: [],
+      decisions: [],
+      userState: [],
+      trainingFeedback: [],
+      openItems: [],
+    })) as unknown as LlmGateway['structured'],
+  },
+  runService: {
+    recordRun: jest.fn(async (record: ConversationRunRecord) => {
+      recorded.push(record);
+    }),
+  },
+  episodeConfig: { gapMs: 365 * 24 * 3600 * 1000, minTurns: 2, minTokens: 300 },
   checkpointer: new MemorySaver() as unknown as InstanceType<
     typeof import('@langchain/langgraph-checkpoint-postgres').PostgresSaver
   >,
 });
 
-describe('ConversationGraph', () => {
+/** Invoke config with a run context — what the adapter builds in production. */
+function ctxConfig(runId: string, userId = 'u1') {
+  const metrics = new RunMetricsCollector(runId);
+  return {
+    configurable: { thread_id: `${userId}-${runId}` },
+    metadata: { runId, userId },
+    context: {
+      runId,
+      userId,
+      user: USER as never,
+      now: new Date(),
+      client: 'telegram' as const,
+      trigger: 'user_message' as const,
+      metrics,
+    },
+    recursionLimit: 25,
+  } as never;
+}
+
+describe('ConversationGraph (prepare → route → <phase> → commit)', () => {
   it('compiles without throwing', () => {
     expect(() => buildConversationGraph(makeDeps())).not.toThrow();
   });
 
-  it('routes to chat subgraph and returns responseMessage', async () => {
+  it('routes to the chat phase; the reply is the last AI message and the channel persists (INV-LLM-002)', async () => {
+    const recorded: ConversationRunRecord[] = [];
+    const graph = buildConversationGraph(makeDeps(recorded));
+    const cfg = ctxConfig('run-chat');
+
+    const result = (await graph.invoke({ phase: 'chat', messages: [new HumanMessage('hello')] }, cfg)) as {
+      phase: string;
+      messages: BaseMessage[];
+    };
+
+    expect(result.phase).toBe('chat');
+    // commit no longer clears the channel — the reply survives for the next run
+    expect(lastAiText(result.messages)).toBe('Mocked LLM response');
+    expect(result.messages.length).toBeGreaterThan(0);
+    // one run row with the non-null observability fields
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]?.trigger).toBe('user_message');
+    expect(recorded[0]?.client).toBe('telegram');
+  });
+
+  it('prepare syncs phase with profile status: complete → chat', async () => {
     const graph = buildConversationGraph(makeDeps());
 
-    const result = await graph.invoke(
-      { userId: 'u1', phase: 'chat', userMessage: 'hello' },
-      { configurable: { thread_id: 'u1' } },
-    );
+    const result = (await graph.invoke(
+      { phase: 'registration', messages: [new HumanMessage('hi')] },
+      ctxConfig('run-sync-up'),
+    )) as { phase: string };
 
-    expect(result.responseMessage).toBe('Mocked LLM response');
-    expect(result.userId).toBe('u1');
     expect(result.phase).toBe('chat');
   });
 
-  it('router loads user and sets phase from profile', async () => {
+  it('prepare keeps an unregistered user in registration', async () => {
     const deps = makeDeps();
-    const graph = buildConversationGraph(deps);
-
-    const result = await graph.invoke(
-      { userId: 'u1', phase: 'registration', userMessage: 'hi' },
-      { configurable: { thread_id: 'u1-new' } },
-    );
-
-    expect(result.user).not.toBeNull();
-    expect(result.user?.id).toBe('u1');
-    // profileStatus is 'complete' → router advances phase to 'chat'
-    expect(result.phase).toBe('chat');
-  });
-
-  it('routes unregistered user to registration subgraph', async () => {
-    const deps = makeDeps();
-    // Override: user is NOT registered → stays in registration
     (deps.userService.isRegistrationComplete as jest.Mock).mockReturnValue(false);
-    (deps.userService.getUser as jest.Mock).mockResolvedValue({
-      id: 'u2',
-      firstName: 'New',
-      profileStatus: 'registration',
-    });
 
     const graph = buildConversationGraph(deps);
-    const result = await graph.invoke(
-      { userId: 'u2', phase: 'registration', userMessage: 'hi' },
-      { configurable: { thread_id: 'u2' } },
-    );
+    const result = (await graph.invoke(
+      { phase: 'chat', messages: [new HumanMessage('hi')] },
+      ctxConfig('run-sync-down'),
+    )) as { phase: string };
 
-    // Registration subgraph is now real (mocked LLM) — check it returned a response
-    expect(result.responseMessage).toBeTruthy();
     expect(result.phase).toBe('registration');
   });
 
-  describe('session timeout routing', () => {
-    it('session ended: router uses Command(goto=persist) — LLM subgraph is NOT invoked', async () => {
+  describe('prepare training short-circuits (D-E)', () => {
+    it('session ended → commit with the catalog reply, phase chat, session cleared', async () => {
       const deps = makeDeps();
-
-      // Simulate: user is in training phase with an active session that has already ended
       (deps.trainingService.getSessionDetails as jest.Mock).mockResolvedValue({
         id: 'session-1',
         status: 'completed',
@@ -153,29 +214,34 @@ describe('ConversationGraph', () => {
       });
 
       const graph = buildConversationGraph(deps);
+      const cfg = ctxConfig('run-ended');
+      const result = (await graph.invoke(
+        { phase: 'training', activeSessionId: 'session-1', messages: [new HumanMessage('hi')] },
+        cfg,
+      )) as { phase: string; activeSessionId: string | null };
 
-      // Start the thread in training phase with an active session
-      const result = await graph.invoke(
-        { userId: 'u1', phase: 'training', userMessage: 'hi', activeSessionId: 'session-1' },
-        { configurable: { thread_id: 'u1-timeout-ended' } },
-      );
-
-      // Router should have bypassed the training subgraph via Command(goto='persist')
-      // and returned the timeout message directly — NOT the mocked LLM response
-      expect(result.responseMessage).toContain('completed');
+      const ctx = (cfg as { context: { metrics: RunMetricsCollector } }).context;
+      void ctx;
+      expect(lastAiText((result as unknown as { messages: BaseMessage[] }).messages)).toContain('completed');
       expect(result.phase).toBe('chat');
       expect(result.activeSessionId).toBeNull();
-
-      // LLM was NOT invoked — the mocked LLM returns 'Mocked LLM response'
-      // so if responseMessage equals that, the subgraph ran (which is the bug)
-      expect(result.responseMessage).not.toBe('Mocked LLM response');
+      expect(lastAiText((result as unknown as { messages: BaseMessage[] }).messages)).not.toBe('Mocked LLM response');
     });
 
-    it('session idle but in_progress: router passes through to training subgraph (stale handled by finish_training)', async () => {
-      const deps = makeDeps();
+    it('training without a session → commit with the catalog reply', async () => {
+      const graph = buildConversationGraph(makeDeps());
+      const cfg = ctxConfig('run-missing');
+      const result = (await graph.invoke(
+        { phase: 'training', activeSessionId: null, messages: [new HumanMessage('hi')] },
+        cfg,
+      )) as { phase: string };
 
-      // Session is in_progress but idle for > 2 hours — router does NOT auto-close
-      // Stale detection is handled inside the training subgraph via finish_training tool
+      expect(lastAiText((result as unknown as { messages: BaseMessage[] }).messages)).toContain('could not be resumed');
+      expect(result.phase).toBe('chat');
+    });
+
+    it('in_progress session: no auto-close, phase stays training', async () => {
+      const deps = makeDeps();
       const twoHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
       (deps.trainingService.getSessionDetails as jest.Mock).mockResolvedValue({
         id: 'session-2',
@@ -187,114 +253,85 @@ describe('ConversationGraph', () => {
       });
 
       const graph = buildConversationGraph(deps);
+      const result = (await graph.invoke(
+        { phase: 'training', activeSessionId: 'session-2', messages: [new HumanMessage('hello')] },
+        ctxConfig('run-idle'),
+      )) as unknown as { phase: string; messages: BaseMessage[] };
 
-      const result = await graph.invoke(
-        { userId: 'u1', phase: 'training', userMessage: 'hello', activeSessionId: 'session-2' },
-        { configurable: { thread_id: 'u1-timeout-idle' } },
-      );
-
-      // Router should NOT have called completeSession — it's the training subgraph's responsibility
       expect(deps.trainingService.completeSession).not.toHaveBeenCalled();
-
-      // Session remains in training phase — LLM handles the stale context
       expect(result.phase).toBe('training');
     });
   });
 
-  describe('session_planning subgraph routing', () => {
-    it('routes to session_planning subgraph and returns LLM response', async () => {
-      const deps = makeDeps();
-      const graph = buildConversationGraph(deps);
+  it('commit blocks a transition outside the matrix — phase unchanged, no session side effects', async () => {
+    const deps = makeDeps();
+    const graph = buildConversationGraph(deps);
 
-      const result = await graph.invoke(
-        { userId: 'u1', phase: 'session_planning', userMessage: 'what should I do today?' },
-        { configurable: { thread_id: 'u1-sp-basic' } },
-      );
+    // session_planning → training without an active session: the request is
+    // recorded but the verdict is no_active_session (BR-CONV-016).
+    const result = (await graph.invoke(
+      {
+        phase: 'session_planning',
+        activeSessionId: null,
+        pendingTransition: { toPhase: 'training', reason: 'session_planning_complete' },
+        messages: [new HumanMessage('start!'), new AIMessage('ready')],
+      },
+      ctxConfig('run-blocked'),
+    )) as { phase: string; activeSessionId: string | null };
 
-      expect(result.responseMessage).toBe('Mocked LLM response');
-      expect(result.phase).toBe('session_planning');
-      expect(result.activeSessionId).toBeNull();
-    });
+    expect(result.phase).toBe('session_planning');
+    expect(result.activeSessionId).toBeNull();
+    expect(deps.trainingService.completeSession).not.toHaveBeenCalled();
   });
 
-  describe('training phase guards', () => {
-    it('router falls back to chat when phase=training but activeSessionId is null', async () => {
-      const deps = makeDeps();
-      const graph = buildConversationGraph(deps);
-
-      const result = await graph.invoke(
-        { userId: 'u1', phase: 'training', userMessage: 'hi', activeSessionId: null },
-        { configurable: { thread_id: 'u1-guard-null-session' } },
-      );
-
-      // Router should have bypassed the training subgraph and fallen back to chat
-      expect(result.phase).toBe('chat');
-      expect(result.activeSessionId).toBeNull();
-      expect(result.responseMessage).not.toBe('Mocked LLM response');
-      expect(result.responseMessage).toContain('could not be resumed');
-    });
-
-    it('transitionGuard blocks session_planning→training when activeSessionId is missing', async () => {
-      // Mock LLM to call request_transition with toPhase=training via a tool call
-      // that writes pendingTransition directly. We simulate this by having the LLM
-      // call start_training_session which would normally set activeSessionId, but here
-      // the service throws — so activeSessionId stays null while requestedTransition is set.
-      let callCount = 0;
-      jest.resetModules();
-      jest.mock('@infra/ai/model.factory', () => ({
-        getModel: () => ({
-          bindTools: () => ({
-            invoke: jest.fn().mockImplementation(async () => {
-              callCount++;
-              if (callCount === 1) {
-                // First call in session_planning: call start_training_session
-                return new AIMessage({
-                  content: '',
-                  tool_calls: [
-                    {
-                      id: 'tc-guard-1',
-                      name: 'start_training_session',
-                      args: {
-                        sessionKey: 'test',
-                        sessionName: 'Test',
-                        reasoning: 'test',
-                        exercises: [
-                          {
-                            exerciseId: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
-                            exerciseName: 'Bench Press',
-                            targetSets: 3,
-                            targetReps: '8-10',
-                            restSeconds: 90,
-                          },
-                        ],
-                        estimatedDuration: 60,
-                      },
-                      type: 'tool_call',
-                    },
-                  ],
-                });
-              }
-              return new AIMessage({ content: 'OK ready!', tool_calls: [] });
-            }),
+  it('committed transition end-to-end: run row carries it, phase changes, messages clear', async () => {
+    let callCount = 0;
+    jest.resetModules();
+    jest.mock('@infra/ai/model.factory', () => ({
+      getModel: () => ({
+        bindTools: () => ({
+          invoke: jest.fn().mockImplementation(async () => {
+            callCount += 1;
+            if (callCount === 1) {
+              return new AIMessage({
+                content: '',
+                tool_calls: [
+                  { id: 'tc-req-1', name: 'request_transition', args: { toPhase: 'plan_creation' }, type: 'tool_call' },
+                ],
+              });
+            }
+            return new AIMessage({ content: 'Переношу в планирование!', tool_calls: [] });
           }),
         }),
-      }));
+      }),
+    }));
 
-      const { buildConversationGraph: buildGraph } = await import('../conversation.graph');
+    const { buildConversationGraph: buildGraph } = await import('../conversation.graph');
 
-      const guardDeps = makeDeps();
-      // startSession throws → pendingActiveSessionId stays null, but pendingTransition IS set
-      (guardDeps.trainingService.startSession as jest.Mock).mockRejectedValue(new Error('DB unavailable'));
+    const recorded: ConversationRunRecord[] = [];
+    const deps = makeDeps(recorded);
+    const graph = buildGraph(deps);
+    const cfg = ctxConfig('run-transition');
+    const result = (await graph.invoke(
+      { phase: 'chat', messages: [new HumanMessage('составь план')] },
+      cfg,
+    )) as unknown as { phase: string; messages: BaseMessage[] };
 
-      const graph = buildGraph(guardDeps);
-      const result = await graph.invoke(
-        { userId: 'u1', phase: 'session_planning', userMessage: 'start!' },
-        { configurable: { thread_id: 'u1-guard-block' }, recursionLimit: 10 },
-      );
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]?.transition?.toPhase).toBe('plan_creation');
+    expect(result.phase).toBe('plan_creation');
+    // The channel persists across the transition — compaction owns removal (INV-LLM-002)
+    expect(lastAiText(result.messages)).toBe('Переношу в планирование!');
+  });
 
-      // Guard should have blocked: phase stays session_planning, no activeSessionId
-      expect(result.phase).toBe('session_planning');
-      expect(result.activeSessionId).toBeNull();
-    });
+  it('INV-LLM-005: a sixth spec gains the graph node and its commit edge — no builder change', () => {
+    const graph = buildConversationGraph(makeDeps());
+    const drawable = graph.getGraph();
+
+    const nodeIds = Object.values(drawable.nodes).map(n => n.id);
+    expect(nodeIds).toContain('zzz_test');
+
+    const edge = [...drawable.edges].find(e => e.source === 'zzz_test');
+    expect(edge?.target).toBe('commit');
   });
 });

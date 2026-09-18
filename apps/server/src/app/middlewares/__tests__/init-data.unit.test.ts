@@ -1,39 +1,13 @@
 import { createHmac } from 'node:crypto';
 
-import { validateInitData, verifyHmac, isAuthDateExpired, parseUser } from '../init-data';
+import { buildSignedInitData } from '../../../../tests/helpers/init-data';
+import { isAuthDateExpired, parseUser, validateInitData, verifyHmac } from '../init-data';
 
 const TEST_BOT_TOKEN = '123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11';
 
-function buildInitData(
-  overrides: Partial<{
-    user: Record<string, unknown>;
-    authDate: number;
-    botToken: string;
-  }> = {},
-): string {
-  const token = overrides.botToken ?? TEST_BOT_TOKEN;
-  const authDate = overrides.authDate ?? Math.floor(Date.now() / 1000);
-  const user = JSON.stringify(overrides.user ?? { id: 42, first_name: 'Test', username: 'tester' });
-
-  const params = new URLSearchParams();
-  params.set('auth_date', String(authDate));
-  params.set('user', user);
-
-  const dataCheckString = [...params.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([k, v]) => `${k}=${v}`)
-    .join('\n');
-
-  const secretKey = createHmac('sha256', 'WebAppData').update(token).digest();
-  const hash = createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-
-  params.set('hash', hash);
-  return params.toString();
-}
-
 describe('validateInitData', () => {
   it('accepts valid initData with correct HMAC', () => {
-    const raw = buildInitData();
+    const raw = buildSignedInitData(TEST_BOT_TOKEN, { user: { id: 42, first_name: 'Test', username: 'tester' } });
     const result = validateInitData(raw, TEST_BOT_TOKEN);
 
     expect(result.valid).toBe(true);
@@ -43,14 +17,14 @@ describe('validateInitData', () => {
   });
 
   it('rejects initData signed with wrong token', () => {
-    const raw = buildInitData({ botToken: 'wrong-token' });
+    const raw = buildSignedInitData('wrong-token');
     const result = validateInitData(raw, TEST_BOT_TOKEN);
 
     expect(result.valid).toBe(false);
   });
 
   it('rejects tampered initData', () => {
-    const raw = buildInitData();
+    const raw = buildSignedInitData(TEST_BOT_TOKEN, { user: { id: 42, first_name: 'Test', username: 'tester' } });
     const tampered = raw.replace('tester', 'hacker');
     const result = validateInitData(tampered, TEST_BOT_TOKEN);
 
@@ -59,7 +33,7 @@ describe('validateInitData', () => {
 
   it('rejects expired auth_date', () => {
     const expired = Math.floor(Date.now() / 1000) - 90000;
-    const raw = buildInitData({ authDate: expired });
+    const raw = buildSignedInitData(TEST_BOT_TOKEN, { authDate: expired });
     const result = validateInitData(raw, TEST_BOT_TOKEN);
 
     expect(result.valid).toBe(false);
@@ -88,7 +62,7 @@ describe('validateInitData', () => {
   });
 
   it('rejects initData with non-numeric user id', () => {
-    const raw = buildInitData({ user: { id: 'not-a-number', first_name: 'Bad' } });
+    const raw = buildSignedInitData(TEST_BOT_TOKEN, { user: { id: 'not-a-number', first_name: 'Bad' } });
     const result = validateInitData(raw, TEST_BOT_TOKEN);
 
     expect(result.valid).toBe(false);

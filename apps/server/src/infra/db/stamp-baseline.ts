@@ -20,7 +20,9 @@ export function hashMigration(sql: string): string {
 
 export function migrationsThrough(journal: Journal, tag: string): JournalEntry[] {
   const idx = journal.entries.findIndex(e => e.tag === tag);
-  if (idx === -1) throw new Error(`Migration tag not found in journal: ${tag}`);
+  if (idx === -1) {
+    throw new Error(`Migration tag not found in journal: ${tag}`);
+  }
   return journal.entries.slice(0, idx + 1);
 }
 
@@ -38,7 +40,7 @@ export async function stampBaseline(through: string, drizzleDir: string): Promis
   await client.connect();
 
   try {
-    const existing = await client.query(`
+    const existing = await client.query<{ present: boolean }>(`
       SELECT EXISTS (
         SELECT 1 FROM information_schema.tables
         WHERE table_schema = 'drizzle' AND table_name = '__drizzle_migrations'
@@ -46,19 +48,21 @@ export async function stampBaseline(through: string, drizzleDir: string): Promis
     `);
 
     if (existing.rows[0].present) {
-      const count = await client.query('SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations;');
+      const count = await client.query<{ n: number }>('SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations;');
       if (count.rows[0].n > 0) {
+        // eslint-disable-next-line no-console -- CLI script progress output
         console.log(`Migration history already present (${count.rows[0].n} rows) — nothing to stamp.`);
         return;
       }
     }
 
     // Refuse to stamp an empty database: there is nothing to pretend was applied.
-    const tables = await client.query(`
+    const tables = await client.query<{ n: number }>(`
       SELECT count(*)::int AS n FROM information_schema.tables
       WHERE table_schema = 'public' AND table_name NOT LIKE 'checkpoint%';
     `);
     if (tables.rows[0].n === 0) {
+      // eslint-disable-next-line no-console -- CLI script progress output
       console.log('Empty database — skipping stamp so migrations apply normally.');
       return;
     }
@@ -83,6 +87,7 @@ export async function stampBaseline(through: string, drizzleDir: string): Promis
       ]);
     }
     await client.query('COMMIT');
+    // eslint-disable-next-line no-console -- CLI script progress output
     console.log(`Stamped ${entries.length} migration(s) through ${through}.`);
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});

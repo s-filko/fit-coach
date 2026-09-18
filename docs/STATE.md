@@ -9,16 +9,35 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-09-11 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-09-18 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
 — none —
 
 **Planned**
-— none —
+- `refactor-p4-context-budget.md` — Refactor P4 — Context Budget and Domain Blocks Implementation Plan
+- `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 
 **Done**
+- `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
+- `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
+- `ports-layout-consistency.md` — Ports Layout Consistency Implementation Plan
+- `refactor-p0-dead-code.md` — Refactor P0 — Dead Code Removal Implementation Plan
+- `refactor-p0-eval-baseline.md` — Refactor P0 — Remaining Datasets and v0 Baseline Implementation Plan
+- `refactor-p0-eval-harness-seeding.md` — Refactor P0 — Harness Episode Seeding and v0 Re-freeze Implementation Plan
+- `refactor-p0-eval-harness.md` — Refactor P0 — Eval Harness (L0) Implementation Plan
+- `refactor-p0-eval-l1-chat-training.md` — Refactor P0 — L1 Runner and Chat/Training Datasets Implementation Plan
+- `refactor-p0-run-log.md` — Refactor P0 — Run Log Implementation Plan
+- `refactor-p0-transcript-export.md` — Refactor P0 — Transcript Export Implementation Plan
+- `refactor-p1-legacy-llm-retirement.md` — Refactor P1 — Legacy LLM Path Retirement Implementation Plan
+- `refactor-p2-context-assembler.md` — Refactor P2 — Context Assembler Implementation Plan
+- `refactor-p2-prompt-modules.md` — Refactor P2 — Prompt Modules Implementation Plan
+- `refactor-p3-phase-spec.md` — Refactor P3 — PhaseSpec Factory and Shared Agent Node Implementation Plan
+- `refactor-p3-run-context-commit.md` — Refactor P3 — Run Context, Commit Node and Conversation Run Port Implementation Plan
+- `refactor-p3-tool-executor.md` — Refactor P3 — Shared Tool Executor Implementation Plan
+- `refactor-p4-episode-memory.md` — Refactor P4 — Episode Memory Implementation Plan
+- `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 
 **Close-out debt (merged but plan not done)**
 — none —
@@ -28,7 +47,11 @@ _Generated 2026-09-11 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 - **LLM core refactor** — the governing initiative. Master plan: `LLM_CORE_REFACTOR_PLAN.md`
   (phases P0–P7, acceptance criteria `AC-13xx`), target architecture `docs/adr/0013-llm-core-target-architecture.md`,
-  quality gate `PROMPT_EVAL_FRAMEWORK.md`. No phase has started yet.
+  quality gate `PROMPT_EVAL_FRAMEWORK.md`. **P0 is complete (2026-09-15)**: all six plans
+  merged; the `v0` baseline is frozen at `evals/baselines/v0/` (seeded-harness re-freeze,
+  direct-Z.AI route). **P1 is complete (2026-09-16)**: legacy LLM path retired, merged via PR #14,
+  deployed to dev. **P2 is complete in full (2026-09-17)**: prompt modules (items 1, 2, 4, 5)
+  and the context assembler (item 3, PR #16, deployed to dev, AC-1323 met on live runs).
 - **Architecture/hygiene backlog** — `PLAN-architecture-refactor-backlog.md` (`HB-##` items).
 - **Global backlog** — `BACKLOG.md`: permanent parking lot of unplanned ideas/findings/
   wishes; top entries are candidates for *Next* below (intake via the `backlog` skill).
@@ -36,18 +59,81 @@ _Generated 2026-09-11 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 ## Next (dispatch order)
 
-1. **Refactor P0** — safety net and measurement (`AC-1301`–`AC-1304`). Its hard
-   precondition (HB-01: no `drizzle-kit push` anywhere) is now met
-   (`superpowers/plans/migration-discipline.md` is done).
-2. Then P1 → P2 → P3 → P4/P5 → P6 → P7 per the master plan phase map.
-3. **HB-02** (production Docker image) — its own plan, sequenced after HB-01;
+1. **Refactor P2 complete in full (2026-09-17)** — all five items merged:
+   `refactor-p2-prompt-modules` (items 1, 2, 4, 5; AC-1321/1322/1324) and
+   `refactor-p2-context-assembler` (item 3, AC-1323, merged via PR #16, deployed to dev).
+   One `assembleContext` + per-phase `PhaseLayout` on the registry; `budgetReport` on every
+   agent-backed run row and in the run log line; byte identity proven by 15 frozen
+   message-assembly snapshots; AC-1322 held (3 apparent text-check regressions were sample
+   noise — not reproduced on re-run). §3.4 first measurement on dev: session_planning
+   system ~3.2 k / training ~3.6 k estimated tokens (n=1/2 — floors, not means; re-measure
+   before P4 locks budgets). PC-0007/SP-0005 (BUG-014/015) still fail in both v0 and v1 —
+   wording work per PROMPT_EVAL_FRAMEWORK §8, not refactor scope (BUG-014 observed live in
+   the smoke: the model narrates a saved plan without calling `save_workout_plan`).
+   **P3 is complete (2026-09-18)**: the three chained plans (`refactor-p3-tool-executor`,
+   `refactor-p3-phase-spec`, `refactor-p3-run-context-commit`) closed as one phase with a
+   clean four-zone review, deployed to dev at `bbab7b07`, plus the `fix/p3-tails` follow-up
+   (executor schema-rejection hint, nullable `model` column — migration `0003`). AC-1334's
+   L1 half was waived by the owner (quota); byte-identity snapshots + the dev smoke stand in.
+   Verified again 2026-09-18 on `6ea80646`: `check-all` clean, 491 unit tests green,
+   `state.mjs --check` OK.
+2. **Refactor P4 (episode memory) is complete (2026-09-18)**: `refactor-p4-episode-memory`
+   merged to dev (`159a4a80` at deploy; review fixes through `138e6752`), deployed to dev,
+   migration `0004` applied, dev smoke green (legacy import once, AC-1345 live evidence,
+   forced-gap compaction → one `conversation_summaries` row). Close-out review: first pass
+   blocked (R2 token-basis duplication ×1, R4 stale law docs ×2), fixed architecturally —
+   the message-token basis now lives once in `token-estimator.ts`; re-run clean
+   (`- Review: 2026-09-18 | clean`). AC-1341/1342/1345/1346 closed; **AC-1344 pending**
+   `refactor-p4-evals-verify` (compare run, budget-gated). One follow-up found in the smoke
+   and fixed post-merge: the structured-output retry gate now also catches `SyntaxError`.
+   Advisories: `BACKLOG.md` § P4 close-out review advisories (11 entries).
+   **Next: `refactor-p4-context-budget`** (its Task 1 needs a day of dev traffic on
+   episode memory — dispatch 2026-09-19+; re-validate the plan against the tree first;
+   folds the `LegacySummary` import advisory). `refactor-p4-evals-verify` runs when the
+   owner releases budget (Steps 3–4 only: the compare + evidence JSON). P5 may run in
+   parallel per the master plan; it is not planned yet.
+3. Then P6 → P7 per the master plan phase map.
+3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
+   the code aligned to it, ESLint keeping it that way. Independent of the P0 chain;
+   can run alongside it.
+4. **HB-02** (production Docker image) — its own plan, sequenced after HB-01;
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
 ## Blocked / waiting on owner
 
-- Nothing blocked right now. OQ-3 (judge profile) has a recommended default
+- **Red-button eval runs (owner-launched only, separate budget; not blocking any plan):**
+  (a) full `v2` baseline on post-P3 code — 62 cases × n=3 ≈ 186 calls — must run on the
+  `refactor-p4-episode-memory` Task 1 commit (before Task 3 lands) if it is ever to exist;
+  (b) full AC-1344 sweep after P4 episode memory merges (same size). The runner refuses
+  both without `EVALS_FULL_RUN=1` (guard lands in that plan's Task 1). Until (b) runs,
+  AC-1344's "±2 pp on other datasets" stays unmeasured and is recorded as such. Every
+  model-backed run (mini or red-button) is metered: requests, tokens, quota before/after,
+  delta and % of the weekly limit go into `apps/server/evals/COST_LEDGER.md` (mechanism =
+  that plan's Task 1; whether Z.AI exposes a quota endpoint is a spike there — unverified).
+- OQ-3 (judge profile) has a recommended default
   (Gemini 3 Flash PAYG) that P0's eval harness will assume until ruled otherwise.
+- Three P1/P2 questions were **decided by the owner on 2026-09-13** and need no further
+  input: summariser→`structured` deferred to P4; `prompts/blocks/` accepted as an
+  ADR-0013 §5.1 layout extension; the `PlanningView` auto-recommend call is removed as
+  part of P1 (the mini-app stays frozen otherwise).
+- **Memory model decisions by the owner, 2026-09-17** (to be folded into ADR-0013 at P4/P6
+  planning; the ADR text is not yet amended):
+  - One chat across the app; phases differ only by prompt, tool set (phase tools + shared
+    tools) and context loaders. No per-phase message layouts survive P4.
+  - Episode summaries are produced at compaction (phase transition, inactivity gap, budget
+    overflow); summaries are independent per episode, not rolling; facts (weights, reps,
+    session state) never come from a summary, only from domain tables.
+  - **Long-term user facts are extracted only at summarisation**, from the summariser's
+    structured output, via an idempotent upsert with a confirmation counter. Until an
+    episode is compacted the fact lives in the `messages` channel and needs no table.
+    Consequence: the P6 `remember_fact` tool (ADR-0013 D-14) is dropped; `user_facts` stays.
+  - Phase transition is a typed in-process event raised by `commit` (compaction, session
+    activation/close, run log consume it); a per-user run mutex (D-12) guards double-sends.
+  - Trivially short episodes are trimmed without a summary (threshold to be set in P4).
+- ADR-0002 divergence **resolved 2026-09-13** by owner call: ADR-0002's Decision section
+  is historical context; the live interface-layout rule is `ARCHITECTURE.md`
+  § Interface Organization Principles. Both files now say so.
 
 ## Notes
 

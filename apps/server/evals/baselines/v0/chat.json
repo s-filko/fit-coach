@@ -1,0 +1,368 @@
+{
+  "version": "v0",
+  "model": "glm-5.3",
+  "samples": 3,
+  "recordedAt": "2026-09-15T09:31:08.372Z",
+  "entries": [
+    {
+      "case": "CH-0007",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0007",
+      "check": "tools.mustNot:log_set",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0007",
+      "check": "text.mustNotMatch:(?i)записал|сохранил|logged|saved|✅",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0007",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0007",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0007",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0008",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0008",
+      "check": "tools.mustNot:log_set",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0008",
+      "check": "text.mustNotMatch:(?i)записал|сохранил|logged|saved|✅",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0008",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0008",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0008",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0009",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0009",
+      "check": "tools.mustNot:log_set",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0009",
+      "check": "text.mustNotMatch:(?i)записал|сохранил|отметил|logged|saved|✅",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0009",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0009",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0009",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0010",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0010",
+      "check": "tools.mustNot:log_set",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0010",
+      "check": "text.mustNotMatch:(?i)записал|сохранил|logged|saved|✅",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0010",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0010",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0010",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0001",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0001",
+      "check": "tools.must:request_transition",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0001",
+      "check": "tools.args:request_transition",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0001",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0001",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0001",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0002",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0002",
+      "check": "tools.must:request_transition",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0002",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0002",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0002",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0003",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0003",
+      "check": "tools.must:request_transition",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0003",
+      "check": "tools.args:request_transition",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0003",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0003",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0003",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0004",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0004",
+      "check": "tools.mustNot:request_transition",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0004",
+      "check": "transition",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0004",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0004",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0004",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0005",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0005",
+      "check": "tools.mustNot:request_transition",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0005",
+      "check": "transition",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0005",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0005",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0005",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0006",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0006",
+      "check": "tools.mustNot:request_transition",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0006",
+      "check": "transition",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0006",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0006",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0006",
+      "check": "text.maxChars",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "CH-0006",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    }
+  ]
+}

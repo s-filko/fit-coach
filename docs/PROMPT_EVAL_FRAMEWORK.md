@@ -50,14 +50,13 @@ Case schema (`evals/schema/case.schema.ts`, Zod):
   id: 'CH-0007',                       // stable; referenced by baselines and PRs
   phase: 'chat',
   tags: ['transition', 'BUG-011'],
-  fixture: {                           // domain snapshot loaded into mocked repos
-    user: { languageCode: 'ru', timezone: 'Europe/Berlin', profile: {...} },
+  fixture: {                           // domain snapshot loaded into the stub world
+    user: { languageCode: 'ru', timezone: 'Europe/Berlin', age?, gender?, height?, weight?, fitnessLevel?, fitnessGoal?, registrationCompleted? },
     plan?: {...}, sessions?: [...], activeSession?: {...}, facts?: [...]
   },
   state: {                             // checkpoint seed: episode memory going in
     phase: 'chat', activeSessionId: null,
-    messages: [ {role:'human', text:'...'}, {role:'ai', text:'...'}, {role:'tool_call',...}, ... ],
-    episodeSummaries: [...]
+    messages: [ {role:'human', text:'...'}, {role:'ai', text:'...'}, ... ]
   },
   input: { text: 'Upper A давай' },    // the user turn under test
   expect: {
@@ -70,6 +69,8 @@ Case schema (`evals/schema/case.schema.ts`, Zod):
   provenance: { runId?: 'uuid', addedBy: 'owner', date: '2026-09-10' }
 }
 ```
+
+Seeding mechanism: `state.messages` seeds ride the graph's checkpointed `messages` channel — `run-case.ts` writes them with `graph.updateState` via `evals/lib/seed-messages.ts` (`human`/`ai` as-is, `tool_call` merged into the preceding `AIMessage`'s `tool_calls`, `tool_result` → `ToolMessage`). `tool_call`/`tool_result` seeds are fully supported (since refactor P4; pre-P4 they were skipped by the stub context service).
 
 Rules
 - BR-EVAL-001 A case is immutable once referenced by a baseline; fix by adding a new case and deprecating the old (`deprecated: true`).
@@ -84,13 +85,13 @@ Initial datasets to write in P0 (from existing material): `chat/transitions` (BU
 ## 4. Deterministic checks (L0, L1)
 
 ### 4.1 L0 — static
-- Render every current prompt module with three fixtures; assert required sections present, total estimated tokens ≤ `PhaseSpec.budget.system`.
-- Forbidden strings in rendered prompts: `undefined`, `null`, `[object Object]`, `NaN`.
-- Version discipline: if a `prompts/**` file changed in the diff, its `version` string changed too (git diff based).
-- Message catalog completeness: every catalog key exists in `en` and `ru`.
+- Render every current prompt module with three fixtures; assert a non-empty render and total estimated tokens ≤ the module's budget (`PROMPT_TOKEN_BUDGET`, keyed by module id, in `evals/levels/l0.ts` until PhaseSpec lands). Section presence is **implemented** (shipped in `refactor-p2-prompt-modules`): every required section id of the phase contract (`requiredSections` in the module's `index.ts`) must appear in the rendered output (`checkSections` in `evals/levels/l0.ts`, per ADR-0013 §5.2 `Section`).
+- Forbidden strings in rendered prompts: `undefined`, `null`, `[object Object]`, `NaN` (with an exact-phrase allowlist stopgap; see `FORBIDDEN_STRING_ALLOWLIST`).
+- Version discipline: if a `prompts/**` file changed in the diff, its `version` string changed too (git diff based) — **deferred**, needs prompt version identifiers; see `docs/BACKLOG.md`.
+- Message catalog completeness: every catalog key exists in `en` and `ru` — **deferred**; see `docs/BACKLOG.md`.
 
 ### 4.2 L1 — behavioural, single turn
-Harness: build the real compiled graph with `MemorySaver`, mocked repositories seeded from `fixture`, the real `LlmGateway` (coach model pinned by `EVAL_MODEL`, temperature as in prod), tools with **recording** side effects (no DB). Seed state via `graph.updateState`. Run `input`. Collect: tool calls (name, args, outcome kind), committed transition, final text, `draft`, `budgetReport`.
+Harness: build the real compiled graph with `MemorySaver`, a stub world of services/repos seeded from `fixture` (`evals/lib/build-stub-deps.ts`), the real model from the app config (the baseline JSON pins what was used), temperature as in prod, tools with **recording** side effects (no DB). Episode memory is seeded through the graph's `messages` channel (`graph.updateState` via `evals/lib/seed-messages.ts`): the case's `state.messages` become the checkpoint seed, `tool_call`/`tool_result` seeds included — not through a stub context service. Run `input`. Collect: tool calls (name, args, outcome kind), committed transition, final text, `draft`, `budgetReport`.
 
 Assertions (each is a named check reported separately):
 - `tools.must` / `tools.mustNot` / `tools.args` (subset match on args; ids validated against fixture catalog).
@@ -98,8 +99,8 @@ Assertions (each is a named check reported separately):
 - `text.mustNotMatch` — the truthfulness gate: e.g. training cases with no `log_set` outcome assert no `(✅|logged|saved|записал|сохранил)`; chat asserts no set confirmations at all; any phase asserts no raw UUIDs and no JSON braces in user text.
 - `text.language` — detect script/lang with a small heuristic (Cyrillic ratio) or a tiny classifier; `text.format` — Telegram HTML only: no `**`, no `_x_`, only allowed tags; `maxChars`.
 - `draft` invariants (after P6): all exercise IDs exist, sets/reps within catalog-type constraints, no exercise conflicting with a `physical_constraint` fact.
-- `no_redundant_search`: same `search_exercises` args not repeated within the case's state + run.
-- Structural: run `outcome === 'ok'`, `budgetReport.history ≤ budget.history`, no orphan tool messages.
+- `no_redundant_search` — **implemented** (refactor-p4-episode-memory, AC-1344): emitted only for cases that seed at least one `search_exercises`; the check fails when the run re-issues a seeded search key (same `buildSearchKey` args) or repeats one of its own earlier searches.
+- Structural: run `outcome === 'ok'`, `budgetReport.history ≤ budget.history`, no orphan tool messages — `budget-report-present` is implemented (refactor-p2-context-assembler, 2026-09-17); the `history ≤ budget` and orphan-tool-message checks stay deferred (budgets are P4).
 
 Sampling: each case runs `n` times (default 3; `n=5` for gating datasets); a case passes if ≥ ⌈n/2⌉ samples pass; the report shows per-check pass rates and the flakiest cases.
 
@@ -165,7 +166,7 @@ Scores: 5 = fully meets anchor; 3 = partially; 1 = violates. Criteria marked **(
 ## 6. Versioning — how promptVersions tie logs → evals → changes
 
 - Every run stores `prompt_versions` (ADR-0013 §8). Every eval report stores the same map plus `coachModel`, `judgeModel`, `judgeVersion`, `datasetHash`, `n`, and git SHA.
-- Baselines: `evals/baselines/<phase>/<promptVersion>.json` — per-check and per-criterion aggregates for the current `dev` prompts. A baseline is (re)written only by the nightly job on `dev` after a merge that changed prompts, never by a PR.
+- Baselines: `evals/baselines/<version>/<phase>.json` — per-check and per-criterion aggregates for the current `dev` prompts. A baseline is (re)written only by the nightly job on `dev` after a merge that changed prompts, never by a PR — with one recorded exception: the bootstrap/re-freeze of v0 (2026-09-15, on the seeded harness), performed before v0's first `--baseline compare` use and recorded in `evals/baselines/v0/README.md`.
 - Reproducing a production complaint: find `run_id` in logs → `conversation_runs` gives `prompt_versions` and the input turns → `evals:case-from-run <runId>` creates a case skeleton with the exact state/fixture → add expectations → the case joins the dataset with `provenance.runId`.
 - Rollback of a prompt = re-pointing `phases/<phase>/index.ts` to the previous version file; the report for that version already exists.
 
@@ -184,6 +185,36 @@ Scores: 5 = fully meets anchor; 3 = partially; 1 = violates. Criteria marked **(
 Cost control: L1 for one phase at 30 cases × n=3 ≈ 90 coach calls (+ tool rounds); a full sweep ≈ 5 phases × 30 × 5 + L2 judge calls + 25 L3 scenarios ≈ 1.5–2k calls. Run scope, sample counts, and ceilings live in `evals/config.ts` — tune them to the coach-model plan quota and the judge budget whenever those change; the runner stops and marks the report `partial` when the per-run budget is exceeded. Model choice (coach profiles, judge profile) is likewise config, not architecture.
 
 ---
+
+## 7a. Cost gate for model-backed runs (owner rule, 2026-09-17)
+
+Any `RUN_LLM_EVALS=1` run must be argued before launch, in writing, with:
+
+1. **The question it answers** — the specific risk not already covered by
+   byte-identity snapshots and unit tests.
+2. **The call count** — a full L1 is ~cases × samples (57 × 3 ≈ 171 calls);
+   state the number for the planned invocation.
+3. **Why nothing cheaper answers it** — scoped subset (e.g. transition datasets
+   only, 18 calls), 1 sample instead of 3, or relying on snapshots.
+
+Defaults: plumbing changes proven byte-identical by snapshots get NO L1; re-runs are
+scoped to the failing dataset only. Context: 2026-09-17, one freeze + one
+compare plus session overhead burned ~20% of the weekly Z.AI quota in hours and
+blocked development.
+
+**Hardened 2026-09-18 (owner rule):** a full L1 (all datasets, n ≥ 3) is never part of a
+plan task, a close-out or a background job. It runs only through the **red button**: a
+manual owner launch with `EVALS_FULL_RUN=1` in addition to `RUN_LLM_EVALS=1`; the runner
+prints the planned call count and refuses any run above `EVALS_CALL_CEILING` (default 30)
+without that flag. What a plan may run is a *minimal basic* check — one dataset
+(`--dataset <stem>`), `--samples 1`, single-digit call count — plus the dev smoke. Any
+larger verification is a separately planned budget item with its own owner decision.
+Every model-backed run is **metered**: the runner prints planned requests and an estimate
+(tokens, % of the weekly limit) before starting, records actual requests and tokens via a
+callback, snapshots the remaining quota before and after (Z.AI endpoint if one exists,
+otherwise `--quota-before` / `evals:ledger --after` entered from the dashboard), and
+appends the delta to the committed `apps/server/evals/COST_LEDGER.md`. Mechanism lands in
+`refactor-p4-episode-memory` Task 1.
 
 ## 8. Prompt change protocol (mandatory after P7; recommended from P2)
 

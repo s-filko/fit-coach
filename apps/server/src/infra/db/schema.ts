@@ -10,7 +10,6 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
-  serial,
   text,
   timestamp,
   unique,
@@ -29,6 +28,20 @@ export const conversationPhaseEnum = pgEnum('conversation_phase', [
   'training',
 ]);
 export const conversationRoleEnum = pgEnum('conversation_role', ['user', 'assistant', 'system', 'summary']);
+export const conversationTurnKindEnum = pgEnum('conversation_turn_kind', [
+  'human',
+  'ai',
+  'tool_call',
+  'tool_result',
+  'system_note',
+  'summary',
+]);
+export const conversationRunOutcomeEnum = pgEnum('conversation_run_outcome', [
+  'ok',
+  'llm_unavailable',
+  'core_error',
+  'budget_exhausted',
+]);
 
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -82,6 +95,9 @@ export const conversationTurns = pgTable(
     phase: conversationPhaseEnum('phase').notNull(),
     role: conversationRoleEnum('role').notNull(),
     content: text('content').notNull(),
+    runId: uuid('run_id'),
+    kind: conversationTurnKindEnum('kind').notNull().default('human'),
+    payload: jsonb('payload'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   table => {
@@ -91,6 +107,61 @@ export const conversationTurns = pgTable(
         table.phase,
         table.createdAt,
       ),
+    };
+  },
+);
+
+// One row per conversation run — the measurement base for the LLM core refactor (ADR-0013 §8)
+export const conversationRuns = pgTable(
+  'conversation_runs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    runId: uuid('run_id').notNull().unique(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    phaseIn: conversationPhaseEnum('phase_in').notNull(),
+    phaseOut: conversationPhaseEnum('phase_out'),
+    trigger: text('trigger').notNull().default('user_message'),
+    client: text('client').notNull().default('telegram'),
+    // Nullable since 2026-09-18: failed runs before any model call record null (D-F remainder)
+    model: text('model'),
+    promptVersions: jsonb('prompt_versions'),
+    tokensIn: integer('tokens_in'),
+    tokensOut: integer('tokens_out'),
+    latencyMs: integer('latency_ms').notNull(),
+    toolCalls: jsonb('tool_calls'),
+    transition: jsonb('transition'),
+    outcome: conversationRunOutcomeEnum('outcome').notNull(),
+    budgetReport: jsonb('budget_report'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  table => {
+    return {
+      userCreatedIdx: index('idx_conversation_runs_user_created').on(table.userId, table.createdAt),
+    };
+  },
+);
+
+// One independent structured episode summary — compaction output, mirrored to a
+// summary turn row (ADR-0013 §3.3/§8; refactor-p4-episode-memory Task 3)
+export const conversationSummaries = pgTable(
+  'conversation_summaries',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    runId: uuid('run_id'),
+    episodeId: uuid('episode_id').notNull(),
+    phaseAtEnd: conversationPhaseEnum('phase_at_end').notNull(),
+    structured: jsonb('structured').notNull(),
+    rendered: text('rendered').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  table => {
+    return {
+      userCreatedIdx: index('idx_conversation_summaries_user_created').on(table.userId, table.createdAt),
     };
   },
 );

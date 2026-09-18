@@ -6,19 +6,34 @@ documentation system (spec governance) work together without conflicts. It compl
 the durable-docs rules (IDs, locations, English-only) win on **content**, Superpowers
 skills win on **process**.
 
+**Extensions, never contradictions.** This repo adds layers on top of Superpowers (the
+Status layer, `STATE.md`, the backlog skill, the mandatory review phase); it does not
+rewrite the plugin. Plugin files live in a versioned cache and are never edited — a change
+there is lost on upgrade and invisible to git. Where this contract states something the
+plugin does not, it extends it and is read first (the plugin's own rule: user instructions
+take precedence over skills). Where both speak, this contract follows the plugin unless an
+override is written down below, with its reason. Defaults adopted as-is need no note.
+
+**Overrides in force:**
+
+- Plan filenames are `<task-slug>.md`, not the plugin's `YYYY-MM-DD-<feature-name>.md`.
+  The slug is the task ID: it names the branch (`plan/<slug>`), appears in the PR title,
+  is referenced by `- After:`, and is parsed by `scripts/state.mjs`. A date would break
+  that chain. Spec filenames keep the plugin default (dated).
+
 ## Division of roles
 
 | Layer | Owner | Contents | Lifetime |
 |---|---|---|---|
 | Durable specs | Repo docs system (`docs/`) | ADRs, domain specs, feature specs (FEAT-####), API_SPEC, `LLM_CORE_REFACTOR_PLAN.md`, `PROMPT_EVAL_FRAMEWORK.md`; IDs INV/BR/S/AC | Long-lived, versioned, the law |
-| Process artifacts | Superpowers | `docs/superpowers/specs/<topic>-design.md` (brainstorm output), `docs/superpowers/plans/<task-slug>.md` (implementation plans; stable slugs, no dates) | Working documents, edited in place |
+| Process artifacts | Superpowers | `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` (brainstorm output, per `superpowers:brainstorming`), `docs/superpowers/plans/<task-slug>.md` (implementation plans) | Working documents, edited in place |
 
 `docs/superpowers/**` is a recognized process-artifact area: files there are working
 documents, not sources of truth. **Working documents are edited in place.** When a
 design or plan is superseded, it is rewritten or deleted immediately — never kept
 alongside its replacement: near-correct duplicate variants pollute the agent's context
 and degrade output quality. Ordering/precedence between documents comes from
-`docs/STATE.md` (priority/dispatch order), never from filenames or dates. History
+`docs/STATE.md` (priority/dispatch order), never from filenames. History
 that matters (decisions, not drafts) lives in the durable layer — ADRs and specs with
 IDs; file history is git's job.
 
@@ -35,7 +50,14 @@ idea
       │                            every task references AC-#### it implements
       │                            + verification command (npm scripts / manual check)
  └─ superpowers:executing-plans + test-driven-development
- └─ verification-before-completion, requesting/receiving-code-review
+      │                            executed by a delegated `claude -p` executor on
+      │                            GLM/z.ai (`delegate-implementation` skill);
+      │                            contract: docs/ORCHESTRATION.md
+ └─ verification-before-completion
+ └─ close-out-review (MANDATORY) ──▶ four zones: architecture, duplication,
+      │                          correctness, documentation currency.
+      │                          All four block. Uses requesting/receiving-code-review
+      │                          as technique. Records `- Review:` in the plan.
  └─ finishing-a-development-branch  ── includes close-out (see Status layer):
  │                                  plan Status → done + STATE.md regen, BEFORE merge
  └─ docs reconcile: touched durable specs re-checked against what shipped
@@ -51,7 +73,14 @@ idea
    and the command that verifies it. A task without a verification path is not done.
 3. **Escalation, never silent edits.** If execution reveals a durable spec is wrong, the
    agent stops and surfaces the conflict to the owner. Durable specs change through the
-   owner, in the open, with IDs preserved.
+   owner, in the open, with IDs preserved. Owner delegation (2026-09-16): *obvious* errors
+   with no behavior-change consequence — factual reconciliation of a durable spec with
+   already-approved code (stale pointers, wrong counts, references to deleted files),
+   test-only fixes, dead-reference cleanup — may be fixed without a prior owner decision;
+   the session classifies each finding and states the class when reporting. Still
+   owner-level without exception: anything that changes runtime behavior, anything that
+   changes what a durable rule *means* (not merely what it points at), product-scope
+   calls, trade-offs the plan does not settle, and push/merge/deploy.
 4. **TDD conventions.** Tests follow `apps/server/TESTING.md`; `describe/it` names keep
    BR/AC references per CONTRIBUTING_AI. Superpowers red-green-refactor discipline
    applies inside those conventions.
@@ -59,6 +88,15 @@ idea
    the plan's `AC-13xx` are the acceptance criteria; a superpowers plan for a phase cites
    them per task instead of inventing new ACs.
 6. **Language.** Everything in `docs/` (including `docs/superpowers/`) is English-only.
+7. **Review precedes close-out.** `Status: done` is not set until the `close-out-review` phase
+   records `- Review: <date> | clean | <zones>` in the plan. All four zones block,
+   documentation included: a durable spec that has drifted from the code actively misleads
+   the next agent. Blocking findings are fixed; advisory findings leave the branch for
+   `docs/BACKLOG.md`. Review precedes close-out, and close-out precedes merge.
+   Findings about the phase *itself* — a misleading prompt, a gap between zones, a rule that
+   should block but is written down nowhere — are `meta`: they change no verdict and go to
+   `docs/REVIEW_FINDINGS.md`, which the owner triages periodically. Owner-raised ideas keep
+   going to `docs/BACKLOG.md` via the `backlog` skill; the two streams stay separate.
 
 ## Status layer
 
@@ -71,6 +109,7 @@ project, statuses derived from facts.
 | Artifact | Role | Owner |
 |---|---|---|
 | Plan header line `- Status: planned \| in progress \| done` | durable per-plan truth (in git) | executing agent |
+| Plan header line `- Review: <date> \| clean \| <zones>` | the review phase passed (written only on a clean verdict; its absence means not reviewed) | close-out-review skill |
 | Plan header line `- Branch: <name>` (optional) | the branch the plan executes on | executing agent |
 | `docs/STATE.md` | project orientation point: in progress / next / scope / blocked | agent updates on every status change; AUTO block regenerated by script |
 | `node scripts/state.mjs` | board / `--write` regen / `--check` gate | script (zero deps) |

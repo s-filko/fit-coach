@@ -1,0 +1,320 @@
+{
+  "version": "v0",
+  "model": "glm-5.3",
+  "samples": 3,
+  "recordedAt": "2026-09-15T09:59:22.541Z",
+  "entries": [
+    {
+      "case": "SP-0001",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0001",
+      "check": "tools.mustNot:start_training_session",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0001",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0001",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0001",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0002",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0002",
+      "check": "tools.mustNot:start_training_session",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0002",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0002",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0002",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0003",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0003",
+      "check": "tools.mustNot:start_training_session",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0003",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0003",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0003",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0004",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0004",
+      "check": "tools.mustNot:start_training_session",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0004",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0004",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0004",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0005",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0005",
+      "check": "tools.must:start_training_session",
+      "passed": false,
+      "detail": "1/3 samples passed"
+    },
+    {
+      "case": "SP-0005",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0005",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0005",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0006",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0006",
+      "check": "tools.mustNot:start_training_session",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0006",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0006",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0006",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0007",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0007",
+      "check": "tools.must:request_transition",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0007",
+      "check": "tools.mustNot:start_training_session",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0007",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0007",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0007",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0008",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0008",
+      "check": "tools.mustNot:start_training_session",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0008",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0008",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0008",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0009",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0009",
+      "check": "text.mustNotMatch:\\{|\\}",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0009",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0009",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0009",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0010",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0010",
+      "check": "tools.mustNot:start_training_session",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0010",
+      "check": "text.mustNotMatch:(?i)да, началась|уже идёт",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0010",
+      "check": "text.language",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0010",
+      "check": "text.format",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    },
+    {
+      "case": "SP-0010",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "3/3 samples passed"
+    }
+  ]
+}

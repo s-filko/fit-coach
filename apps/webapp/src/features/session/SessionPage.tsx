@@ -27,7 +27,7 @@ export function SessionPage() {
   const {
     session, loading, error,
     startSession, starting,
-    recommend, recommending, plan,
+    plan,
     updatePlan, beginSession,
   } = useSession();
 
@@ -77,8 +77,6 @@ export function SessionPage() {
     return (
       <PlanningView
         plan={plan}
-        recommending={recommending}
-        onRecommend={recommend}
         onUpdatePlan={updatePlan}
         onBegin={beginSession}
       />

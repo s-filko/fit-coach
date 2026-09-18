@@ -1,0 +1,1 @@
+ALTER TABLE "conversation_runs" ALTER COLUMN "model" DROP NOT NULL;

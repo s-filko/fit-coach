@@ -1,0 +1,135 @@
+import { randomUUID } from 'node:crypto';
+
+import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
+
+import type { BudgetReport } from '@domain/conversation/ports';
+
+import { buildConversationRunner } from '@infra/ai/graph/conversation-run.adapter';
+import { buildConversationGraph } from '@infra/ai/graph/conversation.graph';
+
+import type { EvalCase } from '../schema/case.schema';
+
+import { buildStubDeps } from './build-stub-deps';
+import { toBaseMessages } from './seed-messages';
+
+export interface CaseObservation {
+  text: string;
+  toolCalls: Array<{ name: string; args: Record<string, unknown> }>;
+  transition: string | null;
+  outcome: string;
+  threw: string | null;
+  budgetReport: BudgetReport | null;
+}
+
+interface ObservedToolCall {
+  name: string;
+  args: Record<string, unknown>;
+}
+
+/**
+ * Records every tool invocation of one eval run.
+ *
+ * Why a callback and not the seeded channel afterwards: the channel keeps the
+ * whole episode, so reading it back cannot tell this run's calls from the
+ * seeds. Callbacks observe the calls as they happen.
+ */
+export class ToolRecorder extends BaseCallbackHandler {
+  name = 'EvalToolRecorder';
+  readonly calls: ObservedToolCall[] = [];
+
+  /**
+   * Signature verified empirically against the installed @langchain/core (2026-09-13):
+   *   - `serialized` does NOT carry the tool name. It is `{ lc, type, id }` where
+   *     `id` is ['langchain','tools','DynamicStructuredTool'] — the class, not the tool.
+   *     Reading `serialized.name` yields undefined and `id.at(-1)` yields
+   *     'DynamicStructuredTool' for every tool, which would break every tools.must check.
+   *   - The real tool name arrives as the 7th parameter, `runName` ('request_transition').
+   *   - `input` is a JSON string of the tool arguments.
+   * Keep the unused middle parameters: they are positional and cannot be skipped.
+   */
+  handleToolStart(
+    _serialized: unknown,
+    input: string,
+    _runId: string,
+    _parentRunId?: string,
+    _tags?: string[],
+    _metadata?: Record<string, unknown>,
+    runName?: string,
+  ): void {
+    let args: Record<string, unknown> = {};
+    try {
+      const parsed: unknown = JSON.parse(input);
+      if (typeof parsed === 'object' && parsed !== null) {
+        args = parsed as Record<string, unknown>;
+      }
+    } catch {
+      args = { raw: input };
+    }
+    this.calls.push({ name: runName ?? 'unknown', args });
+  }
+}
+
+const EMPTY_OBSERVATION: CaseObservation = {
+  text: '',
+  toolCalls: [],
+  transition: null,
+  outcome: 'core_error',
+  threw: null,
+  budgetReport: null,
+};
+
+export async function runCase(
+  testCase: EvalCase,
+  extraCallbacks: BaseCallbackHandler[] = [],
+): Promise<CaseObservation> {
+  const { deps, recordedRuns } = buildStubDeps(testCase.fixture);
+  const graph = buildConversationGraph(deps);
+  const userId = '22222222-2222-4222-8222-222222222222';
+  const runId = randomUUID();
+  const recorder = new ToolRecorder();
+  const runner = buildConversationRunner({
+    graph,
+    userService: deps.userService,
+    runService: deps.runService,
+    checkpointer: deps.checkpointer,
+    transcript: deps.transcript,
+    extraCallbacks: [recorder, ...extraCallbacks],
+  });
+
+  try {
+    // Seed the thread's durable state (D-H): phase and activeSessionId are
+    // checkpointed facts, set the LangGraph way — no test-only port surface.
+    const seeded = testCase.state?.phase ?? testCase.phase;
+    // The prepare node falls back to chat when phase === 'training' without an
+    // activeSessionId, so every training case must carry it.
+    // Same thread the adapter invokes (D-H: the adapter uses `thread_id: userId`) —
+    // seeding any other thread id silently runs every case from 'registration'.
+    // Awaited (P4 Task 7): un-awaited, the checkpoint write races the
+    // invoke that follows and the seeds can silently vanish.
+    await graph.updateState(
+      { configurable: { thread_id: userId } },
+      {
+        phase: seeded,
+        activeSessionId: testCase.state?.activeSessionId ?? null,
+        // P4 Task 7: seeded episode turns ride the same `messages` channel
+        // production uses — human/ai as-is, tool traffic as tool_calls+ToolMessage.
+        ...(testCase.state?.messages?.length ? { messages: toBaseMessages(testCase.state.messages) } : {}),
+      },
+    );
+
+    const result = await runner.run({ userId, text: testCase.input.text });
+
+    return {
+      text: result.text,
+      toolCalls: recorder.calls,
+      // The requested transition lands in the run row via commit; the final
+      // state's pendingTransition is always null after it.
+      transition: recordedRuns[0]?.transition?.toPhase ?? null,
+      outcome: recordedRuns[0]?.outcome ?? 'ok',
+      threw: null,
+      budgetReport: recordedRuns[0]?.budgetReport ?? null,
+    };
+  } catch (err) {
+    return { ...EMPTY_OBSERVATION, threw: err instanceof Error ? err.message : String(err) };
+  }
+}

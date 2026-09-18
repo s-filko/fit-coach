@@ -13,7 +13,7 @@ Documentation is the AI agent's context: near-correct duplicate variants of the 
 content cause the model to blend them into wrong output. Therefore:
 - One current, unambiguous version of everything. Stale content is rewritten or deleted
   immediately — never kept beside its replacement.
-- Ordering/precedence between documents comes from `STATE.md`, not from filenames or dates.
+- Ordering/precedence between documents comes from `STATE.md`, not from filenames.
 - History is kept only where it is the point of the document: ADRs, IDs, decision
   records. Everything else relies on git.
 
@@ -58,7 +58,7 @@ IDs must appear in docs, code comments (JSDoc near ports/services), and tests (d
 
 ## Domain Spec
 - One file per domain (≤ 50 lines).
-- Must reflect existing ports in `apps/server/src/domain/*/ports/*.ts` (or `ports.ts`).
+- Must reflect existing ports in `apps/server/src/domain/*/ports/*.ts`.
 - Format:
   - Domain
   - Terms (single‑line definitions)

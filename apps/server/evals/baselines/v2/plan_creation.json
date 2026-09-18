@@ -1,0 +1,189 @@
+{
+  "version": "v2",
+  "model": "glm-5.3",
+  "samples": 1,
+  "recordedAt": "2026-09-18T06:38:58.419Z",
+  "dataset": "id-reuse",
+  "entries": [
+    {
+      "case": "PCR-0001",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0001",
+      "check": "budget-report-present",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0001",
+      "check": "no_redundant_search",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0001",
+      "check": "text.language",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0001",
+      "check": "text.format",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0001",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0002",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0002",
+      "check": "budget-report-present",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0002",
+      "check": "no_redundant_search",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0002",
+      "check": "text.language",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0002",
+      "check": "text.format",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0002",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0003",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0003",
+      "check": "budget-report-present",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0003",
+      "check": "no_redundant_search",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0003",
+      "check": "text.language",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0003",
+      "check": "text.format",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0003",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0004",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0004",
+      "check": "budget-report-present",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0004",
+      "check": "no_redundant_search",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0004",
+      "check": "text.language",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0004",
+      "check": "text.format",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0004",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0005",
+      "check": "runs-without-throwing",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0005",
+      "check": "budget-report-present",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0005",
+      "check": "no_redundant_search",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0005",
+      "check": "text.language",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0005",
+      "check": "text.format",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    },
+    {
+      "case": "PCR-0005",
+      "check": "text.no-raw-uuid",
+      "passed": true,
+      "detail": "1/1 samples passed"
+    }
+  ]
+}

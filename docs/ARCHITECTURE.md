@@ -26,7 +26,7 @@ The codebase has been successfully migrated to Fastify. All Express dependencies
 apps/server/src/
   app/                          # HTTP transport (Fastify adapters)
     routes/                     # Route handlers (thin controllers)
-      chat.routes.ts            # ~20-line thin proxy to ConversationGraph
+      chat.routes.ts            # Thin proxy to ConversationRunPort (DI token CONVERSATION_RUN_PORT_TOKEN)
     plugins/                    # Fastify plugins (routes, security, docs)
     middlewares/                # Error, logging, validation hooks
     server.ts                   # Builds Fastify instance (plugins, hooks, routes)
@@ -34,26 +34,40 @@ apps/server/src/
 
   domain/                       # Business logic (framework-agnostic)
     user/
-      ports/                    # Modular interface organization
+      ports/                    # One directory per domain; entry point is index.ts
         index.ts               # Re-exports for convenience
-        repository.ports.ts    # Data access contracts
-        service.ports.ts       # Business logic contracts
-        prompt.ports.ts        # Specialized utility contracts (TODO: remove after Step 9)
+        repository.ports.ts    # Data access contracts (layer name allowed: one such contract)
+        service.ports.ts       # Business logic contracts (layer name allowed: one such contract)
       services/
         user.service.ts        # User CRUD operations
-        prompt.service.ts      # Dynamic system prompt generation (TODO: remove after Step 9)
-      validation/
         registration.validation.ts # Zod validators for registration fields (reused in tools)
     ai/
-      ports.ts                 # ILLMService interface (TODO: remove after Step 9)
-    conversation/
-      graph/
-        conversation.state.ts  # LangGraph ConversationState (Annotation.Root)
       ports/
-        conversation-context.ports.ts  # IConversationContextService (2-method: appendTurn + getMessagesForPrompt)
-        index.ts               # Re-exports
+        llm.gateway.ports.ts   # LlmGateway (chat, structured) — ADR-0013 §7; the only LLM port
+        index.ts
+      types.ts                 # ChatMsg — LlmGateway call type only; graph history is LangChain BaseMessages from the checkpointed `messages` channel (P4, ADR-0013 §3.1)
+    conversation/
+      tool-outcome.ts         # ToolOutcome/ToolReturn/ToolStateUpdate — pure tool contract (ADR-0013 §6; no runtime LangGraph)
+      phases.ts               # ConversationPhase — the five phases (ADR-0013 §11)
+      transitions.ts          # TRANSITION_MATRIX + evaluateTransition — pure domain rules (BR-CONV-015..018, ADR-0013 §4.3)
+      events.ts               # PhaseTransitionCommitted event + TransitionHandler type (ADR-0013 §4.3)
+      episode.ts              # EpisodeSummary schema/types, StoredEpisodeSummary, CompactReason, TokenBudget (ADR-0013 §3.3)
+      ports/
+        transcript.ports.ts   # TranscriptPort (appendRunMessages, appendSystemNote) + TranscriptMessage — transcript projection (§8)
+        summary.ports.ts      # SummaryPort (insert, latestLegacySummary) — conversation_summaries (§8)
+        conversation-run.ports.ts      # IConversationRunService (run rows, §8) + ConversationRunPort (§11 — run the graph, clearContext; token CONVERSATION_RUN_PORT_TOKEN)
+        index.ts               # Re-exports (incl. ConversationPhase)
     training/
-      ports/                   # Training domain interfaces
+      ports/                   # Named by contract (rule 2)
+        index.ts               # Re-exports
+        embedding.ports.ts     # IEmbeddingService
+        exercise.ports.ts      # IExerciseRepository, ExerciseSearchFilters
+        workout-plan.ports.ts  # IWorkoutPlanRepository
+        workout-session.ports.ts   # Session / session-exercise / session-set repositories
+        training-service.ports.ts  # ITrainingService + result types (standing exception, rule 3)
+      services/
+      types.ts                 # Training DTOs (SessionSet.setData inferred from set-data.types.ts Zod)
+      set-data.types.ts        # Zod schemas for set_data — single source of truth for the SetData union
 
   infra/                        # Integrations + drivers
     db/
@@ -64,33 +78,77 @@ apps/server/src/
         exercise.repository.ts  # Includes searchByEmbedding() for vector search
         workout-plan.repository.ts
     ai/
-      model.factory.ts          # Shared ChatOpenAI factory (getModel())
+      model.factory.ts          # Single ChatOpenAI construction site (getModel(profile), AC-1313)
+      llm.gateway.ts            # OpenAiLlmGateway — LlmGateway port implementation (ADR-0013 §7 D-10)
+      llm-log-handler.ts        # LLM boundary callback: debug logging only (run metrics live in the per-run collector)
+      run-metrics.ts            # RunMetricsCollector — per-run instance carried in run context (ADR-0013 §8; no module state, AC-1331)
       embedding.service.ts      # Local all-MiniLM-L6-v2 via @huggingface/transformers (ONNX)
       embedding-text.util.ts    # buildEmbeddingText() — composite text for exercise embeddings
       graph/
-        conversation.graph.ts   # Main StateGraph: router→phase→persist→guard→cleanup
-        dedup-tool-node.ts      # Per-turn deduplication of identical search_exercises calls
-        invoke-with-retry.ts    # Retry wrapper for empty LLM responses after tool calls
+        conversation.graph.ts   # Main StateGraph: prepare→route→<phase>→commit (ADR-0013 §4.1)
+        state.ts                # ConversationState (durable, checkpointed) + RunContext (caller-provided, never checkpointed) + ctxOf accessor (ADR-0013 §3.2)
+        phase-spec.ts           # PhaseSpec — one declarative spec per phase (INV-LLM-005)
+        phase-subgraph.factory.ts  # buildPhaseSubgraph(spec) — the single factory building every phase subgraph
+        phases/                 # The five PhaseSpecs: registration, chat, plan-creation, session-planning, training
+        episode.ts              # splitEpisode (history vs current, D-I), lastAiText, toTranscriptMessages
+        conversation-run.adapter.ts  # ConversationRunPort adapter: loads the user, builds run context, records failed runs, clearContext via the checkpointer (D-F)
+        tool-executor.ts        # Shared tool executor: runs every phase's tool calls, answers every tool_call id, serialises ToolOutcome v1, applies ToolStateUpdate (ADR-0013 §4.2/§4.4/§6)
+        tool-policy.ts          # ToolPolicy + pure helpers: ordering, batch dedup, search key (AC-1331/AC-1332)
         nodes/
-          router.node.ts             # Phase determination, session timeout, user loading
-          persist.node.ts            # appendTurn to conversation_turns
-          chat.node.ts               # buildChatSystemPrompt()
-          registration.node.ts       # buildRegistrationSystemPrompt()
-          plan-creation.node.ts      # buildPlanCreationSystemPrompt()
-          session-planning.node.ts   # buildSessionPlanningSystemPrompt() with context
-        subgraphs/
-          chat.subgraph.ts              # agent + ToolNode + extractNode
-          registration.subgraph.ts      # agent + ToolNode + extractNode
-          plan-creation.subgraph.ts     # agent + dedupToolNode + extractNode
-          session-planning.subgraph.ts  # agent + dedupToolNode + extractNode + activeSessionId
-        tools/
-          chat.tools.ts                 # update_profile, request_transition
-          registration.tools.ts         # save_profile_fields, complete_registration
-          plan-creation.tools.ts        # save_workout_plan, search_exercises, request_transition
-          session-planning.tools.ts     # start_training_session, search_exercises, request_transition
-          search-exercises.tool.ts      # search_exercises — vector search via EmbeddingService
+          agent.node.ts             # Shared agent node: system split, post-tool nudge, empty-reply retry (replaces the five subgraphs)
+          prepare.node.ts           # pendingTransition reset, episode compaction, training short-circuits → commit, registration↔chat sync
+          route.node.ts             # Phase dispatch to the subgraph factory
+          commit.node.ts            # transcript projection + run row + evaluateTransition + PhaseTransitionCommitted handlers (§4.1/§4.3; messages are never cleared)
+          finalize.node.ts          # Returns {} (the reply is the last AIMessage in state)
+          compact.ts                # Pure compaction rules: decideCompactReason, planCompaction (turn-safe cut), short-episode check, transcript rendering
+          compact.node.ts           # buildCompactStep: summarises the ended episode via LlmGateway.structured, keeps max 3 summaries, RemoveMessage trim (BR-LLM-001..004)
+        handlers/
+          session-lifecycle.handler.ts      # TransitionHandler: training session completion, activeSessionId clearing
+          compaction-flag.handler.ts        # TransitionHandler: sets compactReason = 'phase_boundary' on a committed transition
+      tools/                        # One file per tool (ADR-0013 §11); tools return ToolReturn, never touch LangGraph
+        outcome.ts                   # ToolOutcome serialisation v1: toToolMessage, outcomeKindOf, LLM/SYSTEM_ERROR prefixes
+        index.ts                     # buildSharedTools + per-tool builder re-exports
+        save-profile-fields.tool.ts / complete-registration.tool.ts
+        update-profile.tool.ts / request-transition.tool.ts
+        save-workout-plan.tool.ts / start-training-session.tool.ts
+        log-set.tool.ts / complete-current-exercise.tool.ts / finish-training.tool.ts
+        delete-last-sets.tool.ts / update-last-set.tool.ts
+        search-exercises.tool.ts / timezone.tool.ts
+        format-exercise-summary.ts   # Shared training summary helper + session constants
+      messages/                      # User-facing message catalog (ADR-0013 §11) — en/ru, language_code driven
+        catalog.ts / en.ts / ru.ts / index.ts
+      context/                      # Context assembler — message order + token accounting (ADR-0013 §3.4)
+        assemble-context.ts         # assembleContext() → { messages, budgetReport }: system → episode summaries → history → current (one shape for every phase; reporting half — enforcement is the context-budget plan)
+        token-estimator.ts          # estimateTokens + TOKEN_ESTIMATOR_ID — the single estimator (app + eval stack)
+      prompts/                       # Versioned prompt modules — every model-facing string (ADR-0013 §5)
+        types.ts                     # Section, DirectiveModule, PromptModule<TCtx>, PhasePromptEntry
+        compose.ts                   # renderDirectives, compose (join '\n\n'), sectionText, promptVersionsOf
+        index.ts                     # Registry: PHASE_PROMPTS, STANDALONE_PROMPTS, promptVersionsForPhase
+        directives/                  # The nine directives, one versioned module each
+          identity.v1.ts             #   FitCoach persona
+          greeting.v1.ts             #   new-day greeting (driven by ctx.now, not the clock)
+          language.v1.ts             #   reply language
+          timezone.v1.ts             #   user timezone
+          name-usage.v1.ts           #   name usage rules
+          formatting.telegram.v1.ts  #   Telegram formatting (per ctx.client)
+          time-reference.v1.ts       #   workout time reference
+          output.v1.ts               #   plain-text output
+          tool-reply.v1.ts           #   reply after every tool call + index.ts (DEFAULT_DIRECTIVES_V1 order)
+        phases/                      # Phase system prompts — text identical to the pre-P2 builders
+          registration/v1.ts         #   + index.ts (PhasePromptEntry, requiredSections)
+          chat/v1.ts                 #   context/rules/tools/no_set_logging (BUG-009 guard)
+          plan_creation/v1.ts        #
+          session_planning/v1.ts     #
+          training/v1.ts             #   + v1.helpers.ts; DIRECTIVES_WITHOUT_IDENTITY_V1
+        blocks/                      # Injected fragments that are neither phase prompt nor directive
+          episode-summaries.v1.ts    #   ## Previous episodes block — context, not data (numbers come from tools)
+          post-tool-nudge.v1.ts      #   post-tool nudge (agent node retry)
+        summarizer/v1.ts             # Legacy end-of-phase summariser (not used by the graph since P4; kept with its snapshot tests)
+        summarizer/v2.ts             # Episode summariser — structured EpisodeSummary from the rendered transcript (no previousSummary)
     conversation/
-      drizzle-conversation-context.service.ts   # IConversationContextService impl (2-method, DB-backed)
+      drizzle-transcript.service.ts             # TranscriptPort impl — projects run messages into conversation_turns (one row per message, run_id always set)
+      drizzle-summary.service.ts                # SummaryPort impl — writes conversation_summaries + the mirrored `summary` turn row in one transaction
+      drizzle-conversation-run.service.ts       # IConversationRunService impl — writes conversation_runs
     di/
       container.ts              # DI container with factory support + lazy initialization
     config/
@@ -121,15 +179,45 @@ Notes:
 5) Transport DTOs live in `app/*` (schemas), domain types in `domain/*`, and DB models in `infra/db/schema`.
 
 ### Interface Organization Principles
-- **Separation by Functional Areas**: Organize interfaces by responsibility, not by type
-- **Modular Structure**: Use `domain/*/ports/` directory with specialized files:
-  - `repository.ports.ts` - Data access contracts
-  - `service.ports.ts` - Business logic contracts  
-  - `prompt.ports.ts` - Specialized utility contracts
-  - `index.ts` - Re-exports for convenience
-- **File Size Limits**: Keep interface files under 50 lines for readability
-- **Single Responsibility**: Each file handles one functional area
-- **Backward Compatibility**: Main `ports.ts` re-exports from modular structure
+
+This section is the single source of this rule. ADR-0002 records why the monolithic
+`ports.ts` was split; its Decision section is historical and is not the current spec.
+
+1. **Location.** Every domain port lives in `domain/<domain>/ports/`. No port file
+   exists outside that directory — including sub-packages such as `graph/`.
+   **Exception, and its limit:** a contract that cannot yet satisfy the domain's
+   dependency invariants is *not* relocated into `ports/` merely to satisfy this rule —
+   the move would plant the violation in the surface reserved for clean contracts. It
+   stays where it is, and the exception names the ADR or task that retires it. An
+   exception without a named closing task is not allowed.
+2. **Naming by contract, not by layer.** A file name answers "a contract for what":
+   `embedding.ports.ts`, `conversation-run.ports.ts`, `workout-plan.ports.ts`.
+   Layer names (`repository.ports.ts`, `service.ports.ts`) are allowed only while a
+   domain has exactly one such contract; once there are several, split by meaning.
+3. **Size is a signal, not a limit.** A port file holds one contract. Exceeding the
+   guide figures — an interface over ~7 methods, or a file over ~80 lines — does **not**
+   block on its own; it obliges a review, whose outcome is recorded next to the port:
+   - *Is all of it used?* A method with no call sites is dead code — delete it, do not
+     carry it along.
+   - *Is it all in the right place?* If the methods fall into groups called by different
+     consumers, several APIs share one contract — separate them.
+   - *One reason to change?* Groups with different reasons to change are different
+     contracts.
+
+   The review ends in exactly one of three outcomes: remove what is unused, split the
+   contract, or record a justified exception naming the task or ADR that closes it.
+   Silently exceeding the guide is not allowed; neither is splitting a file mechanically
+   to satisfy a counter.
+4. **One entry point.** Every `ports/` directory has an `index.ts` re-exporting its
+   files, and imports always address the directory (`@domain/training/ports`).
+   Importing a file past `index.ts` is forbidden and is enforced by ESLint.
+5. **No flat `ports.ts`.** A single contract still gets a directory with an `index.ts`.
+
+Standing exceptions (each names the task that closes it):
+
+- `training/ports/training-service.ports.ts` — `ITrainingService`, 16 methods (four legacy
+  LLM methods deleted in refactor P1). Rule 3 review done: two unused methods and a split
+  by consumer were identified; decomposition by role is tracked in `docs/BACKLOG.md` (rule 3).
 
 ### Enforced by ESLint (import boundaries)
 - Domain (`src/domain/**`): cannot import `@app/*`, `**/app/**`, `@infra/*`, `**/infra/**`.
@@ -138,20 +226,22 @@ Notes:
 - See `apps/server/eslint.config.js:1` for rules. Violations fail lint.
 
 ## Dependency Injection
-- DI tokens and port interfaces live in `domain/*/ports/` with modular organization (or a neutral `shared/core` if порт общий по доменам).
+- DI tokens and port interfaces live in `domain/*/ports/` with modular organization (or a neutral `shared/core` if a port is shared across domains).
 - **DI tokens are declared as `unique symbol` next to their corresponding port interfaces** in the same file (e.g., `USER_SERVICE_TOKEN` alongside `IUserService`).
 - Port implementations are located in `infra/*` and registered in the composition root.
 - App / controllers and routes depend only on ports and tokens, NOT on implementations.
 - Request‑scoped dependencies are used only when transactions are needed; singletons by default.
 - **Composition Root = `src/main/**`**: dependency assembly (implementation registration, container, config, and server startup) is performed in `src/main/**`. App layer does not import or resolve implementations from the container.
-- **Import Strategy**: for domain contracts, use `domain/*/ports/index.ts` or specific port files.
+- **Import Strategy**: import domain contracts through the ports directory
+  (`@domain/<domain>/ports`), never a file inside it — § Interface Organization
+  Principles rule 4, enforced by ESLint.
 
 ### DI Container Implementation
 - Container (`src/infra/di/container.ts`) supports both direct instance registration and factory-based lazy initialization.
 - **Factory pattern**: `container.registerFactory(token, (container) => new Service(...))` allows lazy instantiation and access to other dependencies via the container parameter.
 - **Lazy initialization**: Services registered with factories are instantiated only on first `container.get(token)` call, preventing circular dependencies and improving startup time.
 - **Service registration order** (`src/main/register-infra-services.ts`):
-  1. ConversationContextService (Drizzle-backed, 2-method interface)
+  1. Transcript/Summary services (Drizzle-backed `TranscriptPort`/`SummaryPort`)
   2. UserRepository (Drizzle-backed)
   3. UserService (depends on UserRepository)
   4. TrainingService (depends on training repositories)
@@ -248,18 +338,14 @@ These rules are for any AI assistant working in this repo:
 9) For non-trivial changes, add an ADR entry under `docs/adr/` (see below).
 10) Preserve `tsconfig.json` path aliases and update imports accordingly if files move.
 
-## Conversation Context (Session) [FEAT-0009] ✅ IMPLEMENTED (simplified)
-- **Conversation history** (`conversation_turns` table) stores dialogue turns per (userId, phase) for prompt building and analytics.
-- **Phase/session state** is managed by **LangGraph PostgresSaver checkpointer** — not by `IConversationContextService`. No `[PHASE_ENDED]` markers, no `startNewPhase()`.
-- Domain port: `IConversationContextService` (2 methods only):
-  - `appendTurn(userId, phase, userMessage, assistantResponse): Promise<void>`
-  - `getMessagesForPrompt(userId, phase, options?): Promise<ChatMsg[]>`
-- Each phase subgraph calls `getMessagesForPrompt()` to load history before building the LLM prompt. `persist.node.ts` calls `appendTurn()` after each response.
-- **Sliding window** (default 20 turns) via `LIMIT` in SQL query [BR-CONV-003].
-- Module layout: `domain/conversation/ports/conversation-context.ports.ts`; `infra/conversation/drizzle-conversation-context.service.ts`.
-- **ADR-0005**: original patterns (partially superseded by checkpointer for state management).
+## Conversation Context (Session) [FEAT-0009] ✅ IMPLEMENTED (episode memory, refactor P4)
+- **Dialogue memory** is the checkpointed LangGraph `messages` channel (PostgresSaver): it survives runs, interleaves as `BaseMessage`s (human / AI with `tool_calls` / tool results) and is the only source of history for every phase (INV-LLM-001/002). One chat across the app — no per-phase history.
+- **Episodes end by rule** — inactivity gap (`EPISODE_GAP_HOURS`, default 3), a committed phase transition (`compaction-flag.handler` → `compactReason`), or history-budget overflow — and the synchronous `compact` step in `prepare` summarises the ended episode into one independent structured summary; at most 3 are kept and rendered by the `## Previous episodes` block. Summaries are context, not data: facts (weights, reps) come from tools only (INV-LLM-003).
+- **Transcript** (`conversation_turns` table) is an append-only projection: the `commit` node writes one row per message (`kind` human/ai/tool_call/tool_result, plus mirrored `summary` rows and `system_note`s), each carrying the run's `run_id`.
+- **Clear context**: `POST /api/bot/chat/clear-context` calls `ConversationRunPort.clearContext(userId)` — the adapter deletes the checkpoint thread and appends a `context_cleared` system note; the next message starts fresh.
+- **ADR-0005**: original patterns (superseded — no context service, no sliding window; the legacy `IConversationContextService` was deleted in P4).
 - No breaking change to API: `POST /api/chat` contract unchanged [AC-0110].
-- **Database storage**: `conversation_turns` table with (userId, phase, role, content, createdAt); `langgraph_checkpoints` table (managed by PostgresSaver).
+- **Database storage**: `conversation_turns` table with (userId, phase, role, content, runId, kind, payload, createdAt); `conversation_summaries` table — structured episode summaries (ADR-0013 §8, written at compaction via `SummaryPort`); `conversation_runs` table — one row per run with model/tokens/latency/outcome (ADR-0013 §8, written by the commit node); `langgraph_checkpoints` table (managed by PostgresSaver).
 
 ## LLM Integration
 **Implementation**: `src/infra/ai/model.factory.ts`
@@ -280,10 +366,10 @@ LLM_TEMPERATURE=<0-2>                 # Required: temperature for generation
 
 ### Interaction Pattern (Tool Calling Loop)
 Each phase subgraph runs a tool-calling loop:
-1. `agentNode`: `model.bindTools(tools).invoke([systemMsg, history..., humanMsg, ...stateMessages])`
-2. If `AIMessage.tool_calls` present → `ToolNode` executes tools → `ToolMessage` results appended
+1. `agentNode`: `model.bindTools(tools).invoke(assembleContext(...))` — `[SystemMessage(systemPrompt), (## Previous episodes), ...history, ...current]`, history interleaved from the checkpointed `messages` channel
+2. If `AIMessage.tool_calls` present → the tool executor runs them → `ToolMessage` results appended
 3. Loop back to `agentNode` with updated messages (tool results visible)
-4. If no `tool_calls` → `extractNode` extracts `responseMessage`, reads `pendingTransition`
+4. If no `tool_calls` → `finalize` returns `{}` — the reply is the last `AIMessage` in state; `commit` reads `pendingTransition` and projects the run
 
 ### Tool Calling vs JSON Mode
 - **Old approach**: LLM forced to respond in JSON → code parses with Zod → error-prone
@@ -344,7 +430,7 @@ Change control:
 - ✅ 275 passing tests (unit + integration)
 - ✅ OpenAPI documentation generation with Swagger UI
 - ✅ Security plugin with API key authentication for `/api/*` routes
-- ✅ LangGraph graph fully operational: router + persist nodes, checkpointer, chat/registration/plan_creation subgraphs
+- ✅ LangGraph graph fully operational: prepare/route/commit nodes, PhaseSpec factory subgraphs, checkpointer, transition event handlers
 - 🔄 LangGraph migration IN PROGRESS: training subgraph, full transition guard conditions pending (Steps 7–9); session_planning implemented (Step 6 ✓)
 
 ---

@@ -3,6 +3,9 @@
 > This file tracks bugs found during manual and automated testing.
 > Each entry must include: root cause, logs/DB evidence, impact, and fix status.
 > Do NOT close a bug without a confirmed fix and regression test.
+> **Component paths are as of the bug's time.** The 2026-09-17 refactor (P3) renamed the
+> graph layout (subgraphs → PhaseSpecs, router/persist → prepare/route/commit, tools split
+> per file under `infra/ai/tools/`) — see `docs/ARCHITECTURE.md` for the current tree.
 
 ---
 
@@ -331,10 +334,14 @@ No "previous session" block. `previousSession` parameter removed from prompt bui
 
 ## BUG-006 — LLM calls `finish_training` without user intent (fallback after removed error)
 
-**Status:** Fixed (Phase 1)  
+**Status:** Open — regression found 2026-09-13 (was Fixed in Phase 1)  
 **Severity:** Critical  
 **Found during:** Manual test run 2026-03-12, real training session  
 **Component:** `apps/server/src/infra/ai/graph/nodes/training.node.ts`, `apps/server/src/infra/ai/graph/tools/training.tools.ts`
+
+### Regression (2026-09-13)
+
+The first L1 eval measurement (`z-ai/glm-5.3`, 3 samples/case) reproduced the bug: on «всё, я устал» (fatigue report, not an explicit finish request) the model called `finish_training` in 2 of 3 samples — case TR-0010, `tools.mustNot:finish_training` failed (1/3 passed, threshold ⌈n/2⌉). `AUDIT: training session finished` entries in the eval log confirm real tool executions. The Phase 1 fix (fallback removal + prompt rule "ask before finishing") does not hold at temperature > 0. Standing regression detector: dataset TR-0010 (`apps/server/evals/datasets/training/no-false-confirmation.jsonl`, tagged BUG-006) — per BR-EVAL-002 this case already satisfies the tagged-case requirement. Record: `docs/superpowers/plans/refactor-p0-eval-l1-chat-training.md` (Task 6 measurement).
 
 ### Description
 
@@ -847,6 +854,123 @@ In `apps/bot/index.ts`, add a watchdog: count consecutive `polling_error` events
 ### Regression test
 
 Simulate Telegram API failures (e.g. network policy drop or mock returning 502/connection reset) — bot process must exit within the configured window and be restarted by Docker; container eventually returns to normal polling when Telegram recovers.
+
+---
+
+## BUG-013 — Training LLM intermittently leaks markdown (**bold**, headers) into Telegram HTML replies
+
+**Status:** Open
+**Severity:** Medium
+**Found during:** First L1 eval measurement 2026-09-13, case TR-0009 (`apps/server/evals/datasets/training/no-false-confirmation.jsonl`)
+**Component:** `apps/server/src/infra/ai/graph/subgraphs/training.subgraph.ts` (training prompt), model output formatting
+
+### Description
+
+Asked «расскажи про технику жима» in the training phase, the model intermittently answers in markdown — observed `**Техника жима лёжа со штангой:**`, `**1. Исходное положение**` — instead of the Telegram HTML the product requires. Telegram renders the asterisks as literal text, degrading readability. No crash, no data corruption.
+
+Intermittent: in a 1-sample L1 run the deterministic `text.format` check failed; in the 3-sample run 2 of 3 replies complied (sub-threshold pass). Sampled with `z-ai/glm-5.3`.
+
+### Root cause
+
+Model behavior: the Telegram-HTML-only directive in the training prompt is not strong enough to bind at temperature > 0 — the model defaults to markdown for structured technique explanations. Known-pattern gap: no existing BUG-001..012 entry covers output formatting.
+
+### Flow
+
+```
+User asks for an exercise technique explanation
+  → training LLM composes a multi-part structured answer
+  → emits markdown emphasis (**bold**, numbered bold headers)
+  → Telegram renders literal asterisks instead of formatting
+```
+
+### Log evidence
+
+L1 eval run 2026-09-13, case TR-0009, sample observation: reply text contains `**Техника жима лёжа со штангой:**` → `text.format: telegram_html` check FAIL. Recorded in `docs/superpowers/plans/refactor-p0-eval-l1-chat-training.md` (Task 6 measurement).
+
+### Impact
+
+- Degraded readability of technique/guidance answers in Telegram (literal `**` in user-facing text)
+- Intermittent — passes most of the time, so manual testing easily misses it
+
+### Fix plan (proposed, not implemented)
+
+Prompt-side: strengthen the Telegram-HTML directive for long structured replies in the training prompt (P2 prompt modules is the natural vehicle). Consider a deterministic post-check (regex gate on `**`/`##`) in the eval harness — already exists as `text.format` in L1.
+
+### Regression test
+
+L1 case TR-0009 already exercises this behavior (`text.format: telegram_html`). Per BR-EVAL-002, tag the dataset case with `BUG-013` before this entry is marked Fixed. Fix is verified when TR-0009 passes `text.format` at 3/3 samples.
+
+---
+
+## BUG-014 — Plan-creation LLM never calls `save_workout_plan` despite explicit user approval
+
+**Status:** Open
+**Severity:** High
+**Found during:** v0 baseline re-freeze 2026-09-15, case PC-0007 (`apps/server/evals/datasets/plan_creation/`)
+**Component:** `apps/server/src/infra/ai/graph/subgraphs/plan-creation.subgraph.ts` (plan-creation prompt)
+
+### Description
+
+With the full prerequisite exchange and the user's explicit approval turn present in episode memory, the model still never calls `save_workout_plan` (0/3 samples on the seeded harness; was also 0/3 on the blind harness — the seeding fix did not change it, confirming it is prompt behaviour, not harness blindness). The proposed plan stays a draft; the user's plan is never persisted.
+
+### Root cause
+
+Presumed prompt-side: the plan-creation prompt's save-approval directive does not bind (PC-5 rubric anchor "saves only after explicit approval" — the model neither saves after approval nor reliably proposes the save step). Diagnosis belongs to P2's prompt modules work; not fixing it now to avoid prompt churn before the v0 comparison chain is in place.
+
+### Regression test
+
+Detector case PC-0007 (`tools.must:save_workout_plan`) already exists in the baseline. Per BR-EVAL-001 the baselined case is immutable — before this bug is marked Fixed, add a fresh case tagged `BUG-014` (BR-EVAL-002) and pass it at 3/3.
+
+---
+
+## BUG-015 — Session-planning LLM skips `start_training_session` on explicit confirmation (flaky)
+
+**Status:** Open
+**Severity:** Medium
+**Found during:** v0 baseline re-freeze 2026-09-15, case SP-0005 (`apps/server/evals/datasets/session_planning/`)
+**Component:** `apps/server/src/infra/ai/graph/subgraphs/session-planning.subgraph.ts` (session-planning prompt)
+
+### Description
+
+With the proposal turn and the user's explicit confirmation in episode memory, the model calls `start_training_session` in only 1/3 samples (gate ⌈3/2⌉ = 2). Improved from 0/3 on the blind harness — partially a memory-visibility artefact, but the residual failure is real prompt behaviour at temperature > 0.
+
+### Root cause
+
+Presumed prompt-side: the "start only on explicit approval" directive over-generalises to confirmation turns. Diagnosis belongs to P2; not fixed now (prompt churn before the comparison chain is running would pollute the before/after signal).
+
+### Regression test
+
+Detector case SP-0005 (`tools.must:start_training_session`) is in the baseline. Per BR-EVAL-001/002: add a fresh case tagged `BUG-015` before marking Fixed; pass at 3/3.
+
+---
+
+## BUG-016 — `conversation_turns.run_id` is never written: runs and turns cannot be linked
+
+**Status:** Fixed (refactor-p4-episode-memory, 2026-09-18)
+**Severity:** Medium
+**Found during:** transcript-export verification 2026-09-15 (Task 4 of `refactor-p0-transcript-export`)
+**Component:** `apps/server/src/infra/ai/graph/nodes/persist.node.ts`, `src/domain/conversation/ports/conversation-context.ports.ts`, `src/infra/conversation/` (appendTurn path)
+
+### Description
+
+The run-log schema gives `conversation_turns` a `run_id` column, but no code path ever populates it: `appendTurn(userId, phase, userContent, assistantContent)` takes no runId, and `persist.node` (which holds one in state) never passes it. Verified on dev 2026-09-15: 742 turns, 0 with non-NULL `run_id`, while 16 runs were logged 09-12..09-14 over the same conversations.
+
+### Impact
+
+- Transcript export must fall back to a time-window join (implemented in `evals/lib/export-query.ts`, prefers explicit run_id when present) — approximate attribution instead of exact.
+- Any future per-run analysis (L2 judge input, replay, cost attribution per conversation) inherits the same approximation.
+
+### Fix plan (proposed, for P1/P3 where the persist layer is reworked)
+
+Thread `runId` through `appendTurn` → drizzle implementation → persist.node call site. Column already exists; no migration needed. Existing unlinked rows stay unlinked (the export fallback covers them).
+
+### Regression test
+
+After the fix: a message through the graph writes a `conversation_turns` row with non-NULL `run_id` equal to the logged run's id (integration test with the same stub pattern as the run-log suite).
+
+### Resolution (2026-09-18)
+
+Fixed by the P4 run projection (`refactor-p4-episode-memory`): `appendTurn` is gone — the `commit` node projects every message of the run through `TranscriptPort.appendRunMessages({ userId, runId, ... })`, so every projected `conversation_turns` row (human/ai/tool_call/tool_result, plus mirrored `summary` rows) carries the run's `run_id`; `system_note` rows from `clear-context` are the only rows without one. Locked by the commit-node projection unit tests and the AC-1345 dev smoke (`run_id IS NULL` count = 0 for post-deploy rows).
 
 ---
 

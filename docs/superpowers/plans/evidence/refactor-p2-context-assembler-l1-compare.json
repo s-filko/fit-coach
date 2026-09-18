@@ -1,0 +1,32 @@
+{
+  "plan": "refactor-p2-context-assembler",
+  "date": "2026-09-17",
+  "command": "RUN_LLM_EVALS=1 npm run evals -- --level L1 --phase all --samples 3 --baseline compare --baseline-version v0",
+  "model": "glm-5.3",
+  "route": "direct Z.AI (dev)",
+  "note": "Assembled from the runner's console output; the compare mode prints diffs, it does not write a JSON report. Sample details are the majority-collapsed check results the comparator saw.",
+  "run1_all_phases": {
+    "totals": { "passed": 318, "total": 323, "failed": 5 },
+    "per_phase_diffs": {
+      "registration": { "regressions": ["RG-0003 :: text.mustNotMatch:(?i)точн|уточни", "RG-0005 :: text.maxChars"], "improvements": 0, "missing": 0, "new_checks": 10 },
+      "chat": { "regressions": [], "improvements": 0, "missing": 0, "new_checks": 16 },
+      "plan_creation": { "regressions": ["PC-0008 :: text.format"], "improvements": 0, "missing": 0, "new_checks": 10 },
+      "session_planning": { "regressions": [], "improvements": 0, "missing": 0, "new_checks": 10 },
+      "training": { "regressions": [], "improvements": 0, "missing": 0, "new_checks": 10 }
+    },
+    "failing_checks": [
+      { "case": "RG-0003", "check": "text.mustNotMatch:(?i)точн|уточни", "samples_passed": "0/3" },
+      { "case": "RG-0005", "check": "text.maxChars", "samples_passed": "1/3" },
+      { "case": "PC-0007", "check": "tools.must:save_workout_plan", "samples_passed": "0/3", "known": "BUG-014, fails in v0 too" },
+      { "case": "PC-0008", "check": "text.format", "samples_passed": "1/3" },
+      { "case": "SP-0005", "check": "tools.must:start_training_session", "samples_passed": "1/3", "known": "BUG-015, fails in v0 too" }
+    ],
+    "budget_report_present_failures": 0
+  },
+  "investigation1_reruns": {
+    "rationale": "All three regressions are text-output checks; the message array is byte-identical to pre-refactor (Task 1 snapshots, Task 5 arbiter 15/15). Suspected sample noise, re-run per plan Step 3.",
+    "registration": { "regressions": 0, "totals": { "passed": 62, "total": 62 }, "not_reproduced": ["RG-0003", "RG-0005"] },
+    "plan_creation": { "regressions": 0, "totals": { "passed": 60, "total": 61, "failed": 1 }, "not_reproduced": ["PC-0008"], "still_failing_known": ["PC-0007 (BUG-014)"] }
+  },
+  "verdict": "AC-1322 met. Rollback condition never triggered: every non-BUG-014/015 check passes in at least one of the two runs per dataset; the run-1 regressions did not reproduce."
+}

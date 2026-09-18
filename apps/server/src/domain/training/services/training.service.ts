@@ -1,5 +1,8 @@
-import type { LLMService } from '@domain/ai/ports';
 import type {
+  AutoCompletedExercise,
+  CompletedSetDetail,
+  DeletedSetsResult,
+  EnsureExerciseResult,
   IEmbeddingService,
   IExerciseRepository,
   ISessionExerciseRepository,
@@ -7,14 +10,8 @@ import type {
   ITrainingService,
   IWorkoutPlanRepository,
   IWorkoutSessionRepository,
-} from '@domain/training/ports';
-import type {
-  AutoCompletedExercise,
-  CompletedSetDetail,
-  DeletedSetsResult,
-  EnsureExerciseResult,
   UpdateSetResult,
-} from '@domain/training/ports/service.ports';
+} from '@domain/training/ports';
 import type {
   CreateSessionDto,
   CreateSessionExerciseDto,
@@ -23,14 +20,11 @@ import type {
   SessionRecommendation,
   SessionSet,
   SetData,
-  UserProfile,
   WorkoutPlan,
   WorkoutSession,
   WorkoutSessionWithDetails,
 } from '@domain/training/types';
-import type { ChatMsg, UserRepository } from '@domain/user/ports';
-
-import { buildSessionRecommendationPrompt } from './prompts/session-recommendation.prompt';
+import type { UserRepository } from '@domain/user/ports';
 
 const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
 
@@ -69,7 +63,6 @@ export class TrainingService implements ITrainingService {
     private sessionExerciseRepo: ISessionExerciseRepository,
     private sessionSetRepo: ISessionSetRepository,
     private userRepo: UserRepository,
-    private llmService: LLMService,
     private embeddingService?: IEmbeddingService,
   ) {}
 
@@ -77,154 +70,11 @@ export class TrainingService implements ITrainingService {
     return this.workoutPlanRepo.findActiveByUserId(userId);
   }
 
-  async createPlanFromPrompt(
-    userId: string,
-    params: { goal: string; daysPerWeek: number; equipment?: string },
-  ): Promise<WorkoutPlan> {
-    // Archive existing active plan
-    const existing = await this.workoutPlanRepo.findActiveByUserId(userId);
-    if (existing) {
-      await this.workoutPlanRepo.archive(existing.id);
-    }
-
-    const userEntity = await this.userRepo.getById(userId);
-    const prompt = `Create a workout plan for:
-- Goal: ${params.goal}
-- Days per week: ${params.daysPerWeek}
-- Equipment: ${params.equipment ?? 'full gym'}
-- User: ${userEntity?.gender ?? 'N/A'}, age ${userEntity?.age ?? 'N/A'}, ${userEntity?.weight ?? 'N/A'}kg, level: ${userEntity?.fitnessLevel ?? 'beginner'}
-
-Return JSON with this structure:
-{
-  "name": "Plan Name",
-  "goal": "${params.goal}",
-  "trainingStyle": "hypertrophy|strength|endurance|functional",
-  "targetMuscleGroups": ["chest", "back", ...],
-  "sessionTemplates": [
-    {
-      "key": "day_1",
-      "name": "Session Name",
-      "focus": "What muscles",
-      "energyCost": "high|medium|low",
-      "estimatedDuration": 60,
-      "exercises": [
-        {
-          "exerciseId": "00000000-0000-0000-0000-000000000000",
-          "exerciseName": "Exercise Name",
-          "energyCost": "high|medium|low",
-          "targetSets": 3,
-          "targetReps": "8-10",
-          "targetWeight": 0,
-          "restSeconds": 90,
-          "estimatedDuration": 10
-        }
-      ]
-    }
-  ],
-  "recoveryGuidelines": {
-    "majorMuscleGroups": { "minRestDays": 2, "maxRestDays": 4 },
-    "smallMuscleGroups": { "minRestDays": 1, "maxRestDays": 3 },
-    "highIntensity": { "minRestDays": 2 },
-    "customRules": []
-  },
-  "progressionRules": ["rule1", "rule2"]
-}`;
-
-    const messages: ChatMsg[] = [{ role: 'user', content: prompt }];
-    const raw = await this.llmService.generateWithSystemPrompt(
-      messages,
-      'You are an expert fitness coach. Create a detailed workout plan. Return valid JSON only.',
-      { jsonMode: true },
-    );
-
-    const planData = JSON.parse(raw) as WorkoutPlan['planJson'] & { name?: string };
-    const planName = planData.name ?? `${params.goal} Plan`;
-
-    return this.workoutPlanRepo.create(userId, {
-      name: planName,
-      planJson: planData,
-      status: 'active',
-    });
-  }
-
-  async getNextSessionRecommendation(userId: string): Promise<SessionRecommendation> {
-    // 1. Get user profile
-    const userEntity = await this.userRepo.getById(userId);
-    if (!userEntity) {
-      throw new Error('User not found');
-    }
-
-    const user: UserProfile = {
-      id: userEntity.id,
-      gender: userEntity.gender ?? null,
-      age: userEntity.age ?? null,
-      height: userEntity.height ?? null,
-      weight: userEntity.weight ?? null,
-      fitnessGoal: userEntity.fitnessGoal ?? null,
-      fitnessLevel: userEntity.fitnessLevel ?? null,
-    };
-
-    // 3. Get active plan
-    const plan = await this.workoutPlanRepo.findActiveByUserId(userId);
-    if (!plan) {
-      throw new Error('No active workout plan found. Please create a plan first.');
-    }
-
-    // 4. Get last 5 sessions with full details
-    const recentSessions = await this.sessionRepo.findRecentByUserIdWithDetails(userId, 5);
-
-    // 5. Build AI prompt
-    const prompt = await buildSessionRecommendationPrompt(user, plan, recentSessions);
-
-    // 6. Get AI recommendation
-    const messages: ChatMsg[] = [{ role: 'user', content: prompt }];
-    const rawResponse = await this.llmService.generateWithSystemPrompt(
-      messages,
-      'You are an expert fitness coach analyzing training history and providing personalized workout recommendations.',
-      { jsonMode: true },
-    );
-
-    // 7. Parse and validate response
-    const recommendation = JSON.parse(rawResponse) as SessionRecommendation;
-
-    return recommendation;
-  }
-
-  async recommendForSession(sessionId: string, userId: string, comment?: string): Promise<SessionRecommendation> {
-    const session = await this.sessionRepo.findById(sessionId);
-    if (!session) throw new Error('Session not found');
-    if (session.userId !== userId) throw new Error('Access denied');
-
-    let recommendation: SessionRecommendation;
-    const hasPlan = !!(await this.workoutPlanRepo.findActiveByUserId(userId));
-
-    if (hasPlan) {
-      recommendation = await this.getNextSessionRecommendation(userId);
-    } else {
-      recommendation = await this.generateFreeformRecommendation(userId);
-    }
-
-    // If user left a comment, ask AI to adjust the plan
-    if (comment?.trim()) {
-      const adjustPrompt = `The following workout plan was generated:\n${JSON.stringify(recommendation, null, 2)}\n\nThe user requests the following adjustment: "${comment}"\n\nPlease return an updated plan in the same JSON format, incorporating the user's feedback. Keep the same structure.`;
-      const messages: ChatMsg[] = [{ role: 'user', content: adjustPrompt }];
-      const adjusted = await this.llmService.generateWithSystemPrompt(
-        messages,
-        'You are an expert fitness coach. Adjust the workout plan based on user feedback. Return valid JSON only.',
-        { jsonMode: true },
-      );
-      const adjustedPlan = JSON.parse(adjusted) as SessionRecommendation;
-      await this.sessionRepo.update(sessionId, { sessionPlanJson: adjustedPlan });
-      return adjustedPlan;
-    }
-
-    await this.sessionRepo.update(sessionId, { sessionPlanJson: recommendation });
-    return recommendation;
-  }
-
   async updateSessionPlan(sessionId: string, exercises: SessionRecommendation['exercises']): Promise<WorkoutSession> {
     const session = await this.sessionRepo.findById(sessionId);
-    if (!session) throw new Error('Session not found');
+    if (!session) {
+      throw new Error('Session not found');
+    }
 
     const currentPlan = (session.sessionPlanJson ?? {}) as SessionRecommendation;
     const updatedPlan: SessionRecommendation = {
@@ -438,7 +288,9 @@ Return JSON with this structure:
 
     // Check in_progress first, then planning
     const inProgress = await this.sessionRepo.findActiveByUserId(userId);
-    if (inProgress) return this.sessionRepo.findByIdWithDetails(inProgress.id);
+    if (inProgress) {
+      return this.sessionRepo.findByIdWithDetails(inProgress.id);
+    }
 
     const recent = await this.sessionRepo.findRecentByUserIdWithDetails(userId, 1);
     const planning = recent.find(s => s.status === 'planning');
@@ -533,7 +385,6 @@ Return JSON with this structure:
     }
 
     for (const s of setsToDelete) {
-      // eslint-disable-next-line no-await-in-loop
       await this.sessionSetRepo.deleteById(s.id);
     }
 
@@ -619,60 +470,6 @@ Return JSON with this structure:
   }
 
   // --- Private helpers ---
-
-  private async generateFreeformRecommendation(userId: string): Promise<SessionRecommendation> {
-    const userEntity = await this.userRepo.getById(userId);
-    if (!userEntity) throw new Error('User not found');
-
-    const recentSessions = await this.sessionRepo.findRecentByUserIdWithDetails(userId, 5);
-
-    const historySection = recentSessions.length
-      ? recentSessions
-          .map((s, i) => {
-            const exList = s.exercises
-              .map(ex => `  - ${ex.exercise?.name ?? ex.exerciseId}: ${ex.sets.length} sets`)
-              .join('\n');
-            return `${i + 1}. ${s.sessionKey ?? 'Custom'} (${s.status})\n${exList}`;
-          })
-          .join('\n')
-      : 'No training history yet.';
-
-    const prompt = `# CLIENT PROFILE
-- Gender: ${userEntity.gender ?? 'N/A'}
-- Age: ${userEntity.age ?? 'N/A'}
-- Height: ${userEntity.height ?? 'N/A'} cm
-- Weight: ${userEntity.weight ?? 'N/A'} kg
-- Fitness Goal: ${userEntity.fitnessGoal ?? 'general fitness'}
-- Fitness Level: ${userEntity.fitnessLevel ?? 'beginner'}
-
-# TRAINING HISTORY
-${historySection}
-
-# TASK
-The user has no structured workout plan yet. Design a balanced full-body workout session suitable for their profile. Pick 5-7 exercises. Use common exercise names (no IDs needed — set exerciseId to a placeholder UUID "00000000-0000-0000-0000-000000000000" for each).
-
-**Response Format (JSON only):**
-{
-  "sessionKey": "freeform",
-  "sessionName": "Full Body Workout",
-  "reasoning": "Explanation...",
-  "exercises": [
-    { "exerciseId": "00000000-0000-0000-0000-000000000000", "exerciseName": "Exercise Name", "targetSets": 3, "targetReps": "8-12", "targetWeight": 0, "restSeconds": 90, "notes": "..." }
-  ],
-  "estimatedDuration": 45,
-  "warnings": [],
-  "modifications": []
-}`;
-
-    const messages: ChatMsg[] = [{ role: 'user', content: prompt }];
-    const raw = await this.llmService.generateWithSystemPrompt(
-      messages,
-      'You are an expert fitness coach. Design a personalized workout session. Return valid JSON only.',
-      { jsonMode: true },
-    );
-
-    return JSON.parse(raw) as SessionRecommendation;
-  }
 
   private async autoCloseTimedOutSessions(userId: string): Promise<void> {
     const cutoffTime = new Date(Date.now() - SESSION_TIMEOUT_MS);

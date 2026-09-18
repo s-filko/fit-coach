@@ -15,7 +15,22 @@ If you do not see `Cannot connect to the Docker daemon`, you can proceed.
 
 ## 2. Start the database
 
-From the project root:
+**Always from the project root.** The db service mounts its data directory with a
+*relative* path (`./data/local/postgres` in the root `docker-compose.yml`), so the
+cluster is created relative to wherever you ran the command. Starting it from a git
+worktree (or any subdirectory) silently creates a *second, empty* cluster there —
+`data/local/postgres` under that worktree — and the container keeps that path until it
+is recreated. Symptoms: `fitcoach_dev` appears to have lost its data, or a stray
+`.worktrees/<slug>/data/local/postgres` directory turns up that nobody can explain.
+Verify what the running container is actually bound to with:
+
+```bash
+docker inspect fitcoach-db --format '{{range .Mounts}}{{.Source}}{{end}}'
+```
+
+If that path is not `<repo root>/data/local/postgres`, recreate the container from the
+repo root (`docker compose up -d --force-recreate db`) after checking which of the two
+directories holds the data you want to keep.
 
 ```bash
 docker compose up -d db
@@ -125,12 +140,46 @@ CREATE TABLE conversation_turns (
   phase TEXT NOT NULL,            -- 'registration' | 'chat' | 'training' | 'planning'
   role TEXT NOT NULL,             -- 'user' | 'assistant' | 'system' | 'summary'
   content TEXT NOT NULL,
+  run_id UUID,                    -- conversation run that produced the turn (nullable, not backfilled)
+  kind TEXT NOT NULL DEFAULT 'human',  -- 'human' | 'ai' | 'tool_call' | 'tool_result' | 'system_note' | 'summary'
+  payload JSONB,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 -- Optimized for loading conversation history by (userId, phase) in chronological order
 CREATE INDEX idx_conversation_turns_user_phase_created
   ON conversation_turns(user_id, phase, created_at);
+```
+
+#### conversation_runs
+One row per conversation run — the measurement base for the LLM core refactor
+(ADR-0013 §8): phase in/out, model, prompt versions, tokens, latency, tool calls,
+transition, outcome.
+
+```sql
+CREATE TYPE conversation_run_outcome AS ENUM('ok', 'llm_unavailable', 'core_error', 'budget_exhausted');
+
+CREATE TABLE conversation_runs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id UUID NOT NULL UNIQUE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  phase_in TEXT NOT NULL,         -- conversation_phase enum
+  phase_out TEXT,                 -- conversation_phase enum, null when no transition
+  trigger TEXT NOT NULL DEFAULT 'user_message',
+  client TEXT NOT NULL DEFAULT 'telegram',
+  model TEXT NOT NULL,
+  prompt_versions JSONB,
+  tokens_in INTEGER,
+  tokens_out INTEGER,
+  latency_ms INTEGER NOT NULL,
+  tool_calls JSONB,               -- [{name, argsHash, outcomeKind}] (ADR-0013 §8)
+  transition JSONB,
+  outcome conversation_run_outcome NOT NULL,
+  budget_report JSONB,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_conversation_runs_user_created ON conversation_runs(user_id, created_at);
 ```
 
 **Purpose**: Stores all conversation dialogue for context management.

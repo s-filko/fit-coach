@@ -69,22 +69,22 @@ Tool calling instead of JSON parsing; phase subgraphs with phase-scoped toolsets
 
 ## 2. Decision summary
 
-| ID | Decision | Replaces |
-|----|----------|----------|
-| D-01 | One authoritative short-term memory: a `messages` channel in the **parent** graph state, checkpointed, containing tool calls and results. `conversation_turns` becomes an append-only transcript/run log (projection), never a prompt source. | ADR-0005 window from DB; ADR-0007 §5 |
-| D-02 | Thread lifecycle: `thread_id = userId` stays; **episodes** are managed inside state by a synchronous `compact` step (inactivity gap, committed phase transition, or budget overflow) producing independent per-episode summaries (max 3 kept). | fire-and-forget rolling `phase-summary` |
-| D-03 | Deterministic context assembly with a per-phase token budget, one assembler for all phases, block order fixed and versioned. | per-subgraph ad hoc assembly |
-| D-04 | Split durable state (checkpointed) from run context (`contextSchema`, not checkpointed). `user`, `userMessage`, `responseMessage` leave durable state. | `conversation.state.ts` |
-| D-05 | Tools update state by returning `Command({update})`; delete `PendingRefMap`. Session id and user id reach tools via run context. | ADR-0007 §6 closure refs |
-| D-06 | Topology: `prepare → route → <phase subgraph> → commit`. One `buildPhaseSubgraph(PhaseSpec)` factory; one shared tool executor with per-phase policy. | five hand-written subgraphs |
-| D-07 | Transition matrix and guards are data in `domain/conversation` (pure), side effects only in `commit`. | inline matrix in `conversation.graph.ts:98-104` |
-| D-08 | Structured `ToolOutcome` envelope + graph-level error policy + typed failures to the route (503 with fallback text, never 500 with internals). User-facing strings live in a message catalog keyed by language. | prefixes, hardcoded Russian |
-| D-09 | Prompts are versioned modules (`infra/ai/prompts/<phase>/vN.ts`) composed from versioned directive modules into a `PromptSpec` (ordered, id'd sections). Every run records `promptVersions`. | inline templates |
-| D-10 | One `LlmGateway` port (`chat`, `structured`) over `getModel(profile)`; per-phase model profiles from config. Delete `LLMService`, `PromptService`, dead prompts/parsers now; **retire** both legacy mini-app LLM endpoints (410) — no migration (OQ-1). | legacy path |
-| D-11 | Every run writes a `conversation_runs` row (ids, phase, prompt versions, model, tokens, latency, tool calls, outcome). This is the source for datasets and regression baselines. | nothing |
-| D-12 | Per-thread serialisation of runs (in-process keyed mutex; single instance) and a bot watchdog that exits on fatal polling errors. | none |
-| D-13 | Domain boundary restored: LangGraph types live in `infra/ai`; domain owns phases, transitions, ports, prompt-context types. Stale docs reconciled or archived. | INV-CONV-004 violation |
-| D-14 | Capability enablers, scoped by the vision: user facts (ADR-0009), muscle-centric progress blocks (BUG-005 plan), structured plan draft in state. **Cut**: vector retrieval over conversation history, proactive push, topic-based thread detection. | — |
+| ID   | Decision                                                                                                                                                                                                                                                | Replaces                                        |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| D-01 | One authoritative short-term memory: a `messages` channel in the **parent** graph state, checkpointed, containing tool calls and results. `conversation_turns` becomes an append-only transcript/run log (projection), never a prompt source.           | ADR-0005 window from DB; ADR-0007 §5            |
+| D-02 | Thread lifecycle: `thread_id = userId` stays; **episodes** are managed inside state by a synchronous `compact` step (inactivity gap, committed phase transition, or budget overflow) producing independent per-episode summaries (max 3 kept).          | fire-and-forget rolling `phase-summary`         |
+| D-03 | Deterministic context assembly with a per-phase token budget, one assembler for all phases, block order fixed and versioned.                                                                                                                            | per-subgraph ad hoc assembly                    |
+| D-04 | Split durable state (checkpointed) from run context (`contextSchema`, not checkpointed). `user`, `userMessage`, `responseMessage` leave durable state.                                                                                                  | `conversation.state.ts`                         |
+| D-05 | Tools update state by returning `Command({update})`; delete `PendingRefMap`. Session id and user id reach tools via run context.                                                                                                                        | ADR-0007 §6 closure refs                        |
+| D-06 | Topology: `prepare → route → <phase subgraph> → commit`. One `buildPhaseSubgraph(PhaseSpec)` factory; one shared tool executor with per-phase policy.                                                                                                   | five hand-written subgraphs                     |
+| D-07 | Transition matrix and guards are data in `domain/conversation` (pure), side effects only in `commit`.                                                                                                                                                   | inline matrix in `conversation.graph.ts:98-104` |
+| D-08 | Structured `ToolOutcome` envelope + graph-level error policy + typed failures to the route (503 with fallback text, never 500 with internals). User-facing strings live in a message catalog keyed by language.                                         | prefixes, hardcoded Russian                     |
+| D-09 | Prompts are versioned modules (`infra/ai/prompts/<phase>/vN.ts`) composed from versioned directive modules into a `PromptSpec` (ordered, id'd sections). Every run records `promptVersions`.                                                            | inline templates                                |
+| D-10 | One `LlmGateway` port (`chat`, `structured`) over `getModel(profile)`; per-phase model profiles from config. Delete `LLMService`, `PromptService`, dead prompts/parsers now; **retire** both legacy mini-app LLM endpoints (410) — no migration (OQ-1). | legacy path                                     |
+| D-11 | Every run writes a `conversation_runs` row (ids, phase, prompt versions, model, tokens, latency, tool calls, outcome). This is the source for datasets and regression baselines.                                                                        | nothing                                         |
+| D-12 | Per-thread serialisation of runs (in-process keyed mutex; single instance) and a bot watchdog that exits on fatal polling errors.                                                                                                                       | none                                            |
+| D-13 | Domain boundary restored: LangGraph types live in `infra/ai`; domain owns phases, transitions, ports, prompt-context types. Stale docs reconciled or archived.                                                                                          | INV-CONV-004 violation                          |
+| D-14 | Capability enablers, scoped by the vision: user facts (ADR-0009), muscle-centric progress blocks (BUG-005 plan), structured plan draft in state. **Cut**: vector retrieval over conversation history, proactive push, topic-based thread detection.     | —                                               |
 
 Each decision is expanded below with invariants (`INV-LLM-###`), business rules (`BR-LLM-###`) and rejected alternatives.
 
@@ -94,12 +94,12 @@ Each decision is expanded below with invariants (`INV-LLM-###`), business rules 
 
 ### 3.1 Memory tiers (the one story)
 
-| Tier | Holds | Lives in | Written by | Bounded by |
-|------|-------|----------|------------|------------|
-| Working | messages of the current run (agent ↔ tools loop) | subgraph `messages` (inherits parent channel) | agent/tools nodes | recursion limit |
-| Episode (short-term) | messages of the current episode incl. tool calls/results, `episodeSummaries[]` (≤3), `phase`, `activeSessionId`, `draft` | parent state, PostgresSaver, `thread_id = userId` | `commit`, `compact` | token budget (D-03) |
-| Long-term | profile, plans, sessions, sets (progress); `user_facts`; episode summaries mirrored to DB | Postgres domain tables | domain services via tools | schema |
-| Transcript / runs | every message and every run's metadata | `conversation_turns` (+ new columns), `conversation_runs` | `commit` | retention policy |
+| Tier                 | Holds                                                                                                                    | Lives in                                                  | Written by                | Bounded by          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- | ------------------------- | ------------------- |
+| Working              | messages of the current run (agent ↔ tools loop)                                                                         | subgraph `messages` (inherits parent channel)             | agent/tools nodes         | recursion limit     |
+| Episode (short-term) | messages of the current episode incl. tool calls/results, `episodeSummaries[]` (≤3), `phase`, `activeSessionId`, `draft` | parent state, PostgresSaver, `thread_id = userId`         | `commit`, `compact`       | token budget (D-03) |
+| Long-term            | profile, plans, sessions, sets (progress); `user_facts`; episode summaries mirrored to DB                                | Postgres domain tables                                    | domain services via tools | schema              |
+| Transcript / runs    | every message and every run's metadata                                                                                   | `conversation_turns` (+ new columns), `conversation_runs` | `commit`                  | retention policy    |
 
 INV-LLM-001: The prompt's dialogue history is derived only from the checkpointed `messages` channel; no node reads `conversation_turns` to build a prompt.
 INV-LLM-002: Every tool call and tool result of a completed run is present in `messages` until compacted; compaction is the only way messages leave the channel.
@@ -131,6 +131,17 @@ Run output: the final `AIMessage.content` of the run (text) plus `phase`. No `re
 
 Rejected: keeping `user` in state "for the LLM to see it" — the assembler renders profile from run context; a per-run load is one indexed SELECT.
 
+> **Amendment 2026-09-18** (P3 implementation, owner-approved at close-out): `user` is
+> loaded by the **conversation-run adapter** before `invoke` — LangGraph's `context` is
+> caller-provided and immutable inside the graph, so no node can fill it (`prepare` only
+> validates/uses it). Run context additionally carries `metrics` (the per-run
+> `RunMetricsCollector`); the identity fields (runId, userId, user, now, client, trigger)
+> are immutable inside the graph and the collector is the one mutable accumulator, written
+> only via its methods. `promptVersions` is rendered by `commit` via
+> `promptVersionsForPhase` and `modelProfile` is deferred to P4 — neither rides in run
+> context. Pinned by `run-context-propagation.unit.test.ts` (context reaches parent,
+> subgraph and tool).
+
 ### 3.3 Episode lifecycle (thread lifecycle)
 
 `thread_id` remains `userId` (stable, trivially discoverable, `clear-context` remains `checkpointer.deleteThread(userId)` instead of raw SQL on three tables — `chat.routes.ts:41-43`).
@@ -146,6 +157,7 @@ An **episode** is a contiguous span of `messages`. `prepare` runs `compact` befo
 The summariser uses the `LlmGateway.structured` call with schema `{ topics[], decisions[], userState[], trainingFeedback[], openItems[] }` and the ADR-0010 "facts only, no style" instruction; summary text is rendered from that structure (deterministic, evaluable). Summaries are mirrored to `conversation_summaries` (user_id, episode_id, phase_at_end, structured json, created_at) for analytics and eval datasets; the prompt reads them from state, not from the table.
 
 Rejected alternatives:
+
 - New `thread_id` per episode: requires a `current_thread` lookup table, breaks `clear-context` simplicity, and LangGraph offers nothing extra for it. The in-state episode gives the same isolation.
 - Asynchronous summary (current): verified race; the first message after a long gap is exactly when the summary matters.
 - Rolling summary (current prompt): contextual drift; ADR-0010 already rejected it.
@@ -165,13 +177,13 @@ One function, `assembleContext(phaseSpec, state, ctx): { messages: BaseMessage[]
 
 Budget (per phase, in `PhaseSpec.budget`, tokens estimated with a fixed estimator so results are reproducible offline):
 
-| Phase | system | long-term | domain | history | output reserve |
-|-------|-------:|----------:|-------:|--------:|---------------:|
-| registration | 2.5k | 1k | 1k | 6k | 1.5k |
-| chat | 3k | 1.5k | 2k | 8k | 2k |
-| plan_creation | 4k | 1.5k | 2k | 12k | 4k |
-| session_planning | 5k | 1.5k | 6k | 8k | 3k |
-| training | 5k | 1.5k | 6k | 8k | 2k |
+| Phase            | system | long-term | domain | history | output reserve |
+| ---------------- | -----: | --------: | -----: | ------: | -------------: |
+| registration     |   2.5k |        1k |     1k |      6k |           1.5k |
+| chat             |     3k |      1.5k |     2k |      8k |             2k |
+| plan_creation    |     4k |      1.5k |     2k |     12k |             4k |
+| session_planning |     5k |      1.5k |     6k |      8k |             3k |
+| training         |     5k |      1.5k |     6k |      8k |             2k |
 
 Numbers are initial defaults to be tuned with the eval harness; the invariant is the mechanism, not the values. INV-LLM-004: the assembler never drops or truncates block 1; over-budget is resolved by (a) trimming history, (b) reducing domain block depth (e.g. 5 → 3 sessions), (c) dropping oldest episode summary — in that order, and the `budgetReport` is logged per run. **HYPOTHESIS**: today's session-planning system prompt alone is 6–10k tokens (full plan JSON + 5 sessions + recovery + ~130 lines of instructions); measure with the estimator in P2 before choosing values.
 
@@ -197,6 +209,17 @@ START → prepare → route ──Command(goto=phase)──▶ <phase subgraph> 
 
 Subgraphs share the parent's `messages` channel (same key in both schemas), so the working tier is the episode tier — one channel, one reducer. Subgraphs are compiled without their own checkpointer (unchanged); only the parent checkpoints.
 
+> **Amendment 2026-09-18** (P3 implementation, owner-approved at close-out): step (3) of
+> `commit` is realised as the typed `PhaseTransitionCommitted` event
+> (`domain/conversation/events.ts`) delivered to an ordered list of **awaited**
+> `TransitionHandler`s (`onTransition: TransitionHandler[]`); one failing handler is
+> logged at `error` and skipped, the reply never fails (BR-CONV-007 spirit). P3 handlers:
+> `session-lifecycle` (activation/completion) and `legacy-phase-summary` (deleted in P4).
+> The compaction flag joins the handler list in P4. `prepare` does not load `user`
+> (see the §3.2 amendment — the adapter does); the post-tool nudge/empty-reply retry lives
+> in the shared agent node, and `finalize` returns `{}` in P3 (the reply is the last
+> `AIMessage` in state).
+
 ### 4.2 `PhaseSpec` — the one place a phase is defined
 
 ```
@@ -215,16 +238,29 @@ The five phases become five `PhaseSpec` objects plus one factory. The current tr
 
 INV-LLM-005: Adding a phase means adding a `PhaseSpec`, its prompt module, its tools, and a row in the transition matrix — no edits to the graph builder.
 
+> **Amendment 2026-09-18** (P3 implementation, owner-approved at close-out): the P3
+> `PhaseSpec` carries `prompt`, `tools`, `toolPolicy` and a `loadContext` loader that
+> yields the phase's render data (training reads the session through it). `contextBlocks`
+> (D-03 domain blocks) and `budget`/`modelProfile` are deferred to P4's context-budget
+> plan — the P3 context assembly remains the P2 assembler fed by the loader.
+
 ### 4.3 Transitions
 
-`domain/conversation/transitions.ts` exports the matrix (today's `allowed` map, `conversation.graph.ts:98-104`) and guard predicates as pure functions over `(state, ctx)` with typed reasons (`{ ok: true } | { ok: false, reason: 'not_allowed' | 'no_active_session' | ... }`). Tools request transitions by returning `Command({ update: { pendingTransition } })`. `commit` decides. Guards remain server-side (BR-CONV-015/016/017/018 keep their IDs).
+`domain/conversation/transitions.ts` exports the matrix (today's `allowed` map, `conversation.graph.ts:98-104`) and guard predicates as pure functions over `(state, ctx)` with typed reasons (`{ ok: true } | { ok: false, reason: 'not_allowed' | 'no_active_session' | ... }`). Tools request transitions by returning a `ToolStateUpdate` with `pendingTransition` (see the §4.4 amendment). `commit` decides. Guards remain server-side (BR-CONV-015/016/017/018 keep their IDs).
 
 BR-LLM-006: A transition committed in run N takes effect in run N+1's `route`; the reply of run N is produced by the outgoing phase (unchanged from today) — the eval rubric requires that reply to announce the hand-off.
 
 ### 4.4 Tools
 
 - Tools are pure adapters over domain services (unchanged principle). They receive `userId`, `activeSessionId`, `runId` from `config.configurable`/run context (LangGraph passes `config` to tools; today only `userId` is passed — `chat.subgraph.ts:78-80`).
-- State updates: return `Command({ update })`. `ToolNode`/the shared executor handles `Command` returns (verified in `tool_node.js`). ADR-0007 guardrail 2 ("do not use Command") is **rescinded** for `Command({update})`; `Command({resume})` remains out of scope (no interrupts planned).
+- State updates: tools return a `ToolReturn` — the `ToolOutcome` plus an optional
+  `ToolStateUpdate` partial (`domain/conversation/tool-outcome.ts`); the **shared executor**
+  is the single place that applies the update to state and serialises the outcome to the
+  `ToolMessage`. Implemented without LangGraph `Command` in P3: `ToolStateUpdate` is a plain
+  domain type, so tools stay LangGraph-free and the executor maps them (ADR-0007 guardrail 2
+  therefore stands as written; `Command({update})` was verified possible but not used —
+  the plain-type path keeps the tool contract testable without a graph).
+  > _Amendment 2026-09-18, owner-approved at close-out._
 - Every tool returns a `ToolOutcome` (§6) which the executor serialises to a `ToolMessage` in a fixed textual shape the prompts and evals can rely on.
 
 Rejected: a single flat agent with all tools and a "phase" instruction — phase-scoped toolsets are the main defence against the ADR-0011 incident class (a chat model that cannot see `log_set` cannot log phantom sets).
@@ -287,14 +323,20 @@ ToolOutcome =
 - `llm_error`: malformed or impossible arguments (invalid exercise id, duplicate batch). Counts against `toolPolicy.llmErrorBudget`; when exhausted, the executor emits a terminal `AIMessage` from the catalog (`tool_error_budget_exhausted`) and the run ends.
 - `system_error`: infrastructure. Executor stops the loop immediately and raises `ToolSystemError` → graph-level handler.
 
+> **Amendment 2026-09-18** (P3 implementation, owner-approved at close-out): P3 keeps the
+> textual `SYSTEM_ERROR:` prefix in the tool surface (byte-identical to the old training
+> loop; after a system error the remaining batch calls are skipped) and stops the loop via
+> the error budget. The typed `ToolSystemError` raise and the run-level error mapping
+> (503/409/500) move to P5 with the adapter's error model.
+
 Graph-level (in the route/`ConversationService` wrapper around `graph.invoke`):
 
-| Failure | Mapped to | Client gets |
-|---------|-----------|-------------|
-| Provider error / timeout (OpenRouter 4xx/5xx, network) | `LlmUnavailableError` | HTTP 503 `{ error: { code: 'LLM_UNAVAILABLE' } }` |
-| `ToolSystemError` | `CoreError` | HTTP 500 `{ code: 'CORE_ERROR' }`, no internals |
-| Guard-blocked transition | not an error; logged `info` | normal 200 |
-| Concurrent run for the same thread (D-12) | wait up to N s, else `ThreadBusyError` | HTTP 409 `{ code: 'THREAD_BUSY' }` |
+| Failure                                                | Mapped to                              | Client gets                                       |
+| ------------------------------------------------------ | -------------------------------------- | ------------------------------------------------- |
+| Provider error / timeout (OpenRouter 4xx/5xx, network) | `LlmUnavailableError`                  | HTTP 503 `{ error: { code: 'LLM_UNAVAILABLE' } }` |
+| `ToolSystemError`                                      | `CoreError`                            | HTTP 500 `{ code: 'CORE_ERROR' }`, no internals   |
+| Guard-blocked transition                               | not an error; logged `info`            | normal 200                                        |
+| Concurrent run for the same thread (D-12)              | wait up to N s, else `ThreadBusyError` | HTTP 409 `{ code: 'THREAD_BUSY' }`                |
 
 The bot maps codes to localized catalog messages (it already knows `language_code`). INV-LLM-006: no HTTP response body contains an exception message.
 
@@ -304,7 +346,7 @@ The empty-response nudge (`invokeWithRetry`) becomes part of the shared agent no
 
 ## 7. LLM access and the legacy path (D-10)
 
-- `domain/ai/ports.ts` is rewritten as `LlmGateway { chat(input, opts): AIMessage; structured<T>(schema, input, opts): T }` — no `ChatMsg`, no `jsonMode`. Implementation in `infra/ai/llm.gateway.ts` over `getModel(profile)`; `structured` uses `withStructuredOutput` (available in `@langchain/openai` 1.x) with one retry on schema failure.
+- The LLM access port is `LlmGateway { chat(messages, opts): { content }; structured<T>(schema, messages, opts): T }` in `domain/ai/ports/llm.gateway.ports.ts`. **Amendment (2026-09-16, shipped in P1):** the port speaks the domain's own `ChatMsg` and returns plain data — not the LangChain `AIMessage` this section originally worded it with — because the domain-purity invariant (§11, D-13 / INV-CONV-004) forbids `@langchain/*` in `domain/**`; the infra implementation (`infra/ai/llm.gateway.ts` over `getModel(profile)`) does the `ChatMsg`→LangChain conversion and flattens the response to text. No `jsonMode`. `structured` uses `withStructuredOutput` (available in `@langchain/openai` 1.x) with one retry on schema failure.
 - `getModel(profile)`: profiles from config `LLM_MODEL`, `LLM_TEMPERATURE` (defaults) with optional `LLM_PROFILE_<NAME>_MODEL/_TEMPERATURE/_MAX_TOKENS` overrides. Rationale: the summariser and the judge want low temperature and possibly a cheaper model; training may want a different one than plan creation; today one singleton at `maxTokens: 4096` serves everything (`model.factory.ts:117-125`).
 - Delete now (zero consumers): `PromptService`, `IPromptService`/`PROMPT_SERVICE_TOKEN`, `domain/user/services/prompts/*`, `training-intent.types.ts`, `plan-creation.types.ts`, `parseSessionPlanningResponse` and `SessionPlanningLLMResponseSchema`, `InMemoryConversationContextService` (after tests are moved to the new port).
 - `LLMService` and the four `TrainingService` LLM methods (`createPlanFromPrompt`, `getNextSessionRecommendation`, `recommendForSession`, `generateFreeformRecommendation`): **delete, do not migrate** (OQ-1, answered). `POST /api/app/plan` and `POST /api/app/session/:id/recommend` return `410 { error: { code: 'RETIRED' } }`. Rationale: the mini-app is a state visualization and control surface, not a conversational client (§9) — plan generation is a bot conversation, and "what do I do today" in the UI is deterministic (next session from the saved plan). Precondition before shipping the 410s: check prod access logs for `POST /api/app/*` over the last weeks (usage is [ASSUMPTION]-none, not log-verified); real traffic is surfaced to the owner, not retired silently.
@@ -321,6 +363,8 @@ Rejected: keeping `LLMService` "until the mini-app redesign" — it is the only 
 `conversation_turns` gains: `run_id, thread_episode_id, kind ('human'|'ai'|'tool_call'|'tool_result'|'system_note'|'summary'), payload jsonb` (tool call args / structured summary), while `content` stays for text. Existing rows are kept; `phase` stays for analytics.
 
 The LLM `info` log line carries `runId, phase, promptVersions, model, tokens, latencyMs`; the full replay payload stays at `debug` (BUG-003 behaviour preserved). LangSmith/OTel tracing is optional and not required by this ADR.
+
+P0 implementation note (2026-09-12): the `info` line ("Conversation run recorded") is emitted by the persist node next to the row write — the module boundary keeps the LLM callback `debug`-only while feeding the run-metrics accumulator. Constraint discovered during execution: LangChain strips `configurable` from the options callback handlers receive (`runnables/base.js` deletes it from callOptions), so run identity must travel via config `metadata`, which is inherited by nested runs — P3's run context must not assume `configurable` reaches callbacks.
 
 INV-LLM-007: A run is reproducible offline from `(conversation_runs.prompt_versions, the run's input messages from conversation_turns, the domain snapshot referenced by the eval fixture)`. This is what makes the eval framework possible.
 
@@ -348,15 +392,15 @@ The mini-app is **not a conversational client**. It has no chat history and will
 
 ## 10. Capability enablers, scoped by the product vision (D-14)
 
-| Capability (vision reference) | Exists | Missing | Minimal enabler | Justified? |
-|---|---|---|---|---|
-| Long-term user memory (Ongoing Data Collection) | profile fields; rolling summary | durable facts across phases | ADR-0009 `user_facts` + `remember_fact` tool in all phases; injected as long-term block, ≤50 facts, hard-constraint category respected by plan/session tools (validation, not just prompt) | Yes |
-| Progress awareness between sessions (Training Sessions §) | 5 recent sessions; previous session by `sessionKey` (BUG-005) | per-exercise / per-muscle history | muscle-centric context blocks (PLAN-muscle-centric-history) as D-03 domain loaders: `muscleRecovery` (session_planning) and `currentExerciseHistory` (training) | Yes |
-| Multi-turn plan iteration (Workout Plan Generation §, steps 3–4) | free-text iteration; `save_workout_plan` at the end | a structured draft the model edits | `draft` channel + `propose_plan_draft`/`update_plan_draft` tools; `save_workout_plan` saves the draft (no re-emission of the whole plan); same for session drafts | Yes — also makes plan quality evaluable deterministically |
-| Retrieval over conversation history | none | — | **Cut.** Training facts live in tables; episode summaries + facts cover narrative context. Re-open only if evals show "user referenced something older than 3 episodes" failures. | No |
-| Proactive session planning / nudges | none | scheduler, outbound send | **Cut for now** (vision: "Motivation … Planned Expansion"). Keep the cheap seam: `trigger: 'system'` in run context and a bot endpoint contract (`POST /notify`), no implementation. | Not yet |
-| "What should I do today?" (Training Sessions §) | session_planning phase | recovery data quality (see progress) | covered by muscle-centric blocks | Yes |
-| Adaptation mid-session (Adaptation §) | correction tools, off-plan logging | — | none beyond error model | Already |
+| Capability (vision reference)                                    | Exists                                                        | Missing                              | Minimal enabler                                                                                                                                                                            | Justified?                                                |
+| ---------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| Long-term user memory (Ongoing Data Collection)                  | profile fields; rolling summary                               | durable facts across phases          | ADR-0009 `user_facts` + `remember_fact` tool in all phases; injected as long-term block, ≤50 facts, hard-constraint category respected by plan/session tools (validation, not just prompt) | Yes                                                       |
+| Progress awareness between sessions (Training Sessions §)        | 5 recent sessions; previous session by `sessionKey` (BUG-005) | per-exercise / per-muscle history    | muscle-centric context blocks (PLAN-muscle-centric-history) as D-03 domain loaders: `muscleRecovery` (session_planning) and `currentExerciseHistory` (training)                            | Yes                                                       |
+| Multi-turn plan iteration (Workout Plan Generation §, steps 3–4) | free-text iteration; `save_workout_plan` at the end           | a structured draft the model edits   | `draft` channel + `propose_plan_draft`/`update_plan_draft` tools; `save_workout_plan` saves the draft (no re-emission of the whole plan); same for session drafts                          | Yes — also makes plan quality evaluable deterministically |
+| Retrieval over conversation history                              | none                                                          | —                                    | **Cut.** Training facts live in tables; episode summaries + facts cover narrative context. Re-open only if evals show "user referenced something older than 3 episodes" failures.          | No                                                        |
+| Proactive session planning / nudges                              | none                                                          | scheduler, outbound send             | **Cut for now** (vision: "Motivation … Planned Expansion"). Keep the cheap seam: `trigger: 'system'` in run context and a bot endpoint contract (`POST /notify`), no implementation.       | Not yet                                                   |
+| "What should I do today?" (Training Sessions §)                  | session_planning phase                                        | recovery data quality (see progress) | covered by muscle-centric blocks                                                                                                                                                           | Yes                                                       |
+| Adaptation mid-session (Adaptation §)                            | correction tools, off-plan logging                            | —                                    | none beyond error model                                                                                                                                                                    | Already                                                   |
 
 ---
 
@@ -365,7 +409,7 @@ The mini-app is **not a conversational client**. It has no chat history and will
 ```
 domain/conversation/    phases.ts (ConversationPhase), transitions.ts (matrix + guards), ports/
                         (ConversationRunPort: run(input) → RunResult; TranscriptPort; SummaryPort)
-domain/ai/              llm.gateway.ports.ts (LlmGateway), prompt-context.types.ts
+domain/ai/              ports/ (llm.gateway.ports.ts: LlmGateway), prompt-context.types.ts
 domain/user|training/   unchanged services; + user-facts service/port (ADR-0009)
 infra/ai/graph/         conversation.graph.ts (topology), phase-subgraph.factory.ts, tool-executor.ts,
                         nodes/{prepare,route,commit,compact}.ts, state.ts (annotations + contextSchema)

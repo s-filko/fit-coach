@@ -1,13 +1,13 @@
 import type {
+  EnsureExerciseResult,
   IExerciseRepository,
   ISessionExerciseRepository,
   ISessionSetRepository,
   IWorkoutPlanRepository,
   IWorkoutSessionRepository,
-  EnsureExerciseResult,
 } from '@domain/training/ports';
-import type { SessionExercise, SessionSet } from '@domain/training/types';
 import { TrainingService } from '@domain/training/services/training.service';
+import type { SessionExercise, SessionSet } from '@domain/training/types';
 
 const makeSessionExercise = (overrides: Partial<SessionExercise> = {}): SessionExercise => ({
   id: 'se-1',

@@ -19,7 +19,7 @@ Invariants
 Business Rules
 	• BR-TRAINING-001: All training interactions happen through /api/chat; no separate REST endpoints
 	• BR-TRAINING-002: Database is single source of truth; AI loads session details from DB on each message
-	• BR-TRAINING-003: Session recommendations analyze last 5 sessions, recovery guidelines, and current date
+	• BR-TRAINING-003: Session recommendations analyze last 5 sessions, recovery guidelines, and current date; realized by the session_planning phase (mini-app REST endpoint retired 2026-09, ADR-0013 OQ-1)
 	• BR-TRAINING-004: Session created with status='planning'; LLM plan stored in session_plan_json
 	• BR-TRAINING-005: UserContext (mood, sleep, energy, availableTime, intensity) collected at planning start
 	• BR-TRAINING-006: timeLimit enforced only when user explicitly provides available time
@@ -33,7 +33,6 @@ Business Rules
 
 Ports (apps/server/src/domain/training/ports/)
 	• ITrainingService (TRAINING_SERVICE_TOKEN)
-		• getNextSessionRecommendation(userId): SessionRecommendation [BR-TRAINING-003]
 		• startSession(userId, dto): WorkoutSession [BR-TRAINING-004][BR-TRAINING-005]
 		• addExerciseToSession(sessionId, dto): SessionExercise
 		• logSet(exerciseId, dto): SessionSet [BR-TRAINING-006]
