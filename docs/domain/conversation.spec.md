@@ -1,5 +1,13 @@
 Domain: Conversation (keyed by userId + phase)
 
+> **Superseded 2026-09-18 (refactor P4):** the context-service model below is retired.
+> Dialogue history is the checkpointed `messages` channel — one chat across phases
+> (INV-LLM-001/002) — with independent episode summaries produced at compaction
+> (ADR-0013 §3.3). Live truth: ADR-0013 §3 and `docs/CONTRIBUTING_AI.md` § Memory
+> (episode model). The full rewrite of this file is scheduled at master-plan P7; until
+> then read Terms/Invariants/Business Rules/Ports below as the pre-P4 historical model,
+> except what the amendment notes at the end keep alive.
+
 Terms - ConversationTurn: a single exchange { role: 'user' | 'assistant' | 'system' | 'summary', content: string, timestamp } - ConversationContext: ordered list of turns for a (userId, phase) pair, with optional summarySoFar, lastActivityAt, and phase-specific context - Phase: logical scope of a conversation ('registration' | 'chat' | 'session_planning' | 'training'); determines routing and context structure - SlidingWindow: policy that keeps only the last maxTurns turns when building the prompt - PhaseTransition: explicit reset or startNewPhase when app state changes (e.g. registration complete, session planning start, training start/end) - SessionPlanningContext: additional context for 'session_planning' phase { recommendedSessionId?: string } - TrainingContext: additional context for 'training' phase { activeSessionId: string } - LLMConversationResponse: structured LLM output { message: string, phaseTransition?: { toPhase, reason?, sessionId? } } - PhaseTransitionFlag: instruction from LLM to change conversation phase based on user intent
 
 Invariants - INV-CONV-001: Context identity is (userId, phase); each pair has at most one active context - INV-CONV-002: Turns within a context are strictly chronologically ordered - INV-CONV-003: getMessagesForPrompt never returns more than maxTurns turns (default 20) - INV-CONV-004: Domain port has no dependency on LangChain or infra; types are ChatMsg / ConversationTurn only
@@ -19,7 +27,16 @@ calls to run one turn: run({userId, text, client?, trigger?}) → {text, phase, 
 > `domain/conversation/phases.ts` holds ConversationPhase — the domain owns both without
 > LangGraph (INV-CONV-004).
 
+> Amended 2026-09-18 at the P4 close-out: `IConversationContextService` (with
+> `appendTurn` / `getMessagesForPrompt`) is deleted — the Ports section above survives
+> as history except `ConversationRunPort` and the run-service note. Dialogue history
+> for every phase is the checkpointed `messages` channel (episode memory, ADR-0013
+> §3.1–§3.3); persistence goes through `TranscriptPort` / `SummaryPort`.
+> INV-CONV-001 (identity by userId + phase) is superseded by one-chat identity (userId);
+> BR-CONV-003/004 (sliding window, summary prepend) by the episode model (ADR §3.4
+> history + `## Previous episodes`). BR-CONV-015..018 remain live domain transition rules.
+
 Rules:
 
 - One file per domain (<=50 lines).
-- Must match apps/server/src/domain/conversation/ports/conversation-context.ports.ts.
+- Must match apps/server/src/domain/conversation/ports/ (transcript.ports.ts, summary.ports.ts, conversation-run.ports.ts — the context-service port is deleted; P7 rewrites this file against the episode model).

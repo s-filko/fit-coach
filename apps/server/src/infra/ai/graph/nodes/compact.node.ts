@@ -16,6 +16,7 @@ import { type EpisodeSummary, EpisodeSummarySchema, type StoredEpisodeSummary } 
 import type { ConversationPhase } from '@domain/conversation/phases';
 import type { SummaryPort } from '@domain/conversation/ports';
 
+import { estimateMessages } from '@infra/ai/context/token-estimator';
 import { splitEpisode } from '@infra/ai/graph/episode';
 import { type ConversationStateType, ctxOf } from '@infra/ai/graph/state';
 import { episodeParagraph } from '@infra/ai/prompts/blocks';
@@ -23,7 +24,7 @@ import { SUMMARIZER_PROMPT } from '@infra/ai/prompts/summarizer';
 
 import { createLogger } from '@shared/logger';
 
-import { decideCompactReason, estimateMessages, isShortEpisode, planCompaction, renderTranscript } from './compact';
+import { decideCompactReason, isShortEpisode, planCompaction, renderTranscript } from './compact';
 
 const log = createLogger('compact-node');
 

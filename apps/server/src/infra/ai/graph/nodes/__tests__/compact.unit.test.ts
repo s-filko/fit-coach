@@ -8,7 +8,9 @@ import { AIMessage, type BaseMessage, HumanMessage, ToolMessage } from '@langcha
 
 import type { CompactReason } from '@domain/conversation/episode';
 
-import { estimateMessages, decideCompactReason, isShortEpisode, planCompaction, renderTranscript } from '../compact';
+import { estimateMessages } from '@infra/ai/context/token-estimator';
+
+import { decideCompactReason, isShortEpisode, planCompaction, renderTranscript } from '../compact';
 
 const NOW = new Date('2026-09-18T12:00:00Z');
 const GAP_MS = 3 * 3600 * 1000;

@@ -154,7 +154,7 @@ code review. The division of roles and conflict rules are defined in
 
 ### Integrate Conversation Context into a Flow
 1) Spec:
-   - Verify FEAT-0009 scenarios and domain rules in `docs/features/FEAT-0009-conversation-context.md` and `docs/domain/conversation.spec.md`.
+   - Verify domain rules in `docs/adr/0013-llm-core-target-architecture.md` §3 and the § Memory (episode model) section above. (`docs/features/FEAT-0009-conversation-context.md` and `docs/domain/conversation.spec.md` still describe the pre-P4 context-service model; their rewrite is scheduled at master-plan P7 — read them as history, not law.)
    - Reference BR-CONV-001..BR-CONV-007 in code and tests.
 2) Domain:
    - There is no context service and no prompt-side history read: dialogue history is the checkpointed `messages` channel, assembled by `assemble-context.ts` (see § Memory (episode model) above). The legacy `IConversationContextService` was deleted in refactor P4.
