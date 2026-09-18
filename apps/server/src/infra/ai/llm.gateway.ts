@@ -52,7 +52,9 @@ function isSchemaFailure(err: unknown): boolean {
     return false;
   }
   const { name } = err as { name?: string };
-  return name === 'ZodError' || name === 'OutputParserException';
+  // SyntaxError: the model answered with prose instead of a tool call (seen live
+  // on the summarizer profile, dev smoke 2026-09-18) — a format failure like any other.
+  return name === 'ZodError' || name === 'OutputParserException' || name === 'SyntaxError';
 }
 
 export class OpenAiLlmGateway implements LlmGateway {

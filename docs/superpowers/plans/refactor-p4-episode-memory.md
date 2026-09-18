@@ -231,13 +231,29 @@ Deviation from the plan's expected diff, explained: the plan expected `...histor
 
   **Result (2026-09-18):** all green — `plan_creation/id-reuse` 5 cases **30/30 checks** (7 requests, 27206 in / 6489 out tokens, weekly −82 credits ≈ −0.1%); smoke one-case-per-phase registration 6/6, chat 7/7, session_planning 7/7, training 7/7. No thrown case, no provider rejection (message ordering / orphan tool message), replies readable. Raw `no_redundant_search`: **5/5 post-P4** vs **5/5 pre-P4** (the v2 mini-freeze) — no regression; see Task 2's execution note: the plan's "expected low" pre-P4 number was wrong, so AC-1344's "+15 pp" gate is vacuous against this baseline (owner to re-scope; recorded in `evals/datasets/README.md`).
 - [x] **Step 1b: AC-1344 statistics — deferred to the micro-task `refactor-p4-evals-verify`** (`SUPERPOWERS_INTEGRATION.md` § Delivering: ACs that need a budget the plan does not have are the entry ticket of a dedicated micro-task). This plan closes with AC-1344 recorded as **pending**; the micro-task (one-page plan, written when the owner releases budget) does Task 2's mini-freeze on the Task 1 commit (5 calls) and the compare on merged `dev` (`… --baseline compare --baseline-version v2`, 5 calls), evidence JSON → `docs/superpowers/plans/evidence/refactor-p4-episode-memory-l1-compare.json`; gate `no_redundant_search` ≥ +15 pp (at n=1 on 5 cases: ≥ 1 more case passing; raw counts); L2 half = manual rubric pass (CH/PC/SP/TR, `PROMPT_EVAL_FRAMEWORK.md` §5.1) on the dev smoke transcripts. The full sweep stays a red-button item. **Rollback trigger while the statistics are pending:** Step 1 or the smoke below surfacing a provider rejection on message ordering → revert the plan as a unit.
-- [ ] **Step 2: Deploy to dev** (`deploy.sh` applies `0004`); smoke: an existing dev user's first message imports the legacy summary once (D-E — `SELECT checkpoint FROM checkpoints WHERE thread_id = '<user>' ORDER BY checkpoint_id DESC LIMIT 1` → `episodeSummaries` length 1), a plan-creation flow (AC-1345), a training session, then a forced gap (`EPISODE_GAP_HOURS=0` on dev for one run via the compose env override, then removed) → one `conversation_summaries` row. Paste:
+- [x] **Step 2: Deploy to dev** (`deploy.sh` applies `0004`); smoke: an existing dev user's first message imports the legacy summary once (D-E — `SELECT checkpoint FROM checkpoints WHERE thread_id = '<user>' ORDER BY checkpoint_id DESC LIMIT 1` → `episodeSummaries` length 1), a plan-creation flow (AC-1345), a training session, then a forced gap (`EPISODE_GAP_HOURS=0` on dev for one run via the compose env override, then removed) → one `conversation_summaries` row. Paste:
 
 ```sql
 SELECT kind, count(*) FROM conversation_turns WHERE created_at > now() - interval '2 hours' GROUP BY 1;   -- tool_call/tool_result > 0 (AC-1345); run_id never null (BUG-016)
 SELECT user_id, phase_at_end, jsonb_array_length(structured->'topics') FROM conversation_summaries ORDER BY created_at DESC LIMIT 5;
 SELECT count(*) FROM conversation_turns WHERE created_at > now() - interval '2 hours' AND run_id IS NULL;   -- expect 0
 ```
+
+**Smoke evidence (dev, 2026-09-18, commit `f8387ee6`; window widened to 12 h — the runs happened around 07:0x–07:27):**
+
+- Legacy summary import (D-E): confirmed on the first message of an existing dev user — checkpoint `episodeSummaries` length 1, single import.
+- Plan-creation + training runs: AC-1345 held — 15 `tool_call` / 15 `tool_result` rows, every turn carries `run_id` (0 rows with `run_id IS NULL` — BUG-016).
+- Phase transition: `Episode compacted, reason: "phase_boundary"` removed 9 messages.
+- Forced gap (`EPISODE_GAP_HOURS=0` via `/tmp/episode-gap-override.yml`): `Episode compacted, reason: "inactivity", removed: 18, summarised: true` at 07:27:48 → `conversation_summaries` row (`phase_at_end: plan_creation`, 3 topics, rendered paragraph stored; 1 mirrored `summary` row in `conversation_turns`). Override removed after the run (server recreated without it).
+
+```sql
+kind       | count
+human      | 5, ai | 7, tool_call | 15, tool_result | 15, summary | 1
+turns_without_run: 0
+conversation_summaries: 1 row — plan_creation, topics=3, created 2026-09-18 07:27:48.857
+```
+
+**Finding (fixed on the plan branch):** the summarizer profile once answered with prose (`topics: ...`) instead of a tool-call; `withStructuredOutput`'s JSON.parse threw `SyntaxError`, which the retry gate did not treat as a schema failure — the episode compacted without a summary (BR-LLM-004 degradation held, no crash). Fix: `isSchemaFailure` in `llm.gateway.ts` also matches `SyntaxError` (unit test added; dev smoke 2026-09-18).
 
 - [x] **Step 3: Docs reconcile** (factual): `ARCHITECTURE.md` (tree: `episode.ts`, `nodes/compact*.ts`, `handlers/compaction-flag.handler.ts`, `infra/conversation/drizzle-{transcript,summary}.service.ts`; the ChatMsg hedge at :48 → resolved), `CONTRIBUTING_AI.md` (memory tiers; how to seed an episode in evals; the config exception), `PROMPT_EVAL_FRAMEWORK.md` §4.2 (seeding sentence; `no_redundant_search` implemented), `MANUAL_TEST_PLAN.md` ("context after a gap" scenario), `BUGS.md` (BUG-016 fixed by the projection), `BACKLOG.md` ticks (`toFrameRow` twin, `toLangChain` twin, `history_frame` ternary, executor `system_error` orphan, run-row semantics note). ADR-0013 amendments to **escalate**, never edit: §3.3 (short-episode threshold; compaction flag via the transition handler; summariser v2 without `previousSummary`; `episodeId = runId`), §3.2 (`episodeId`, `compactReason` channels), §8 (`role` derivation for legacy readers; summary rows mirrored to `conversation_turns`), D-14/§10 (`remember_fact` dropped — owner decision 2026-09-17), `clear-context` through the run port.
 - [ ] **Step 4: Close-out** — `close-out-review`, `- Status: done`, `node scripts/state.mjs --write`, merge (PR title carries the slug), worktree + branches removed; STATE Next → `refactor-p4-context-budget` (its Task 1 measurement needs a day of dev traffic on this code) and, when the owner releases budget, `refactor-p4-evals-verify`.

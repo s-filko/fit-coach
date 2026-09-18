@@ -84,6 +84,22 @@ describe('OpenAiLlmGateway (ADR-0013 §7 D-10, AC-1311 — the single non-graph 
     expect(structuredInvoke).toHaveBeenCalledTimes(2);
   });
 
+  // Dev smoke 2026-09-18: the summarizer profile once answered with prose
+  // ("topics: ...") instead of a tool call — withStructuredOutput parses that
+  // as JSON and JSON.parse throws SyntaxError, which is as much a format
+  // failure as a ZodError and deserves the same single retry.
+  it('structured() retries once on a JSON SyntaxError (prose instead of a tool call)', async () => {
+    const schema = z.object({ topics: z.array(z.string()) });
+    structuredInvoke.mockRejectedValueOnce(new SyntaxError("Unexpected token 't'")).mockResolvedValueOnce({
+      topics: ['legs'],
+    });
+
+    const result = await new OpenAiLlmGateway().structured(schema, [{ role: 'user', content: 'x' }]);
+
+    expect(result).toEqual({ topics: ['legs'] });
+    expect(structuredInvoke).toHaveBeenCalledTimes(2);
+  });
+
   it('structured() does not retry provider errors', async () => {
     const schema = z.object({ topics: z.array(z.string()) });
     structuredInvoke.mockRejectedValue(new Error('502 Bad Gateway'));
