@@ -109,16 +109,20 @@ export async function registerInfraServices(container: Container = getGlobalCont
     budgetOverrides: config.LLM_BUDGETS,
     checkpointer,
   });
+  const { withRunMutex } = await import('@infra/conversation/with-run-mutex');
+  const runner = buildConversationRunner({
+    graph,
+    userService: container.get(USER_SERVICE_TOKEN),
+    runService: container.get(CONVERSATION_RUN_SERVICE_TOKEN),
+    // D-F: clearContext goes through the same checkpointer and transcript.
+    checkpointer,
+    transcript: container.get(TRANSCRIPT_PORT_TOKEN),
+  });
   container.register(
     CONVERSATION_RUN_PORT_TOKEN,
-    buildConversationRunner({
-      graph,
-      userService: container.get(USER_SERVICE_TOKEN),
-      runService: container.get(CONVERSATION_RUN_SERVICE_TOKEN),
-      // D-F: clearContext goes through the same checkpointer and transcript.
-      checkpointer,
-      transcript: container.get(TRANSCRIPT_PORT_TOKEN),
-    }),
+    // D-A, D-12: one conversation run per userId at a time. waitMs is a
+    // literal default here; Task 3 moves it to config (LLM_RUN_MUTEX_WAIT_MS).
+    withRunMutex(runner, { waitMs: 20000 }),
   );
 
   // Kick off model warm-up in background — do not await so server starts immediately
