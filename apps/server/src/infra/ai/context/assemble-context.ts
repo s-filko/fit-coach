@@ -92,7 +92,9 @@ export async function assembleContext<D>(input: AssembleInput<D>): Promise<Assem
   // Block 3: render each block once at its resolved depth (full depth unless
   // resolveBudget stepped it down); a null render means the block is absent
   // this run. Reused for the joined SystemMessage, `domain` and `blocks`.
-  const renderedBlocks = contextBlocks
+  // At the D-D floor only block 1 and `current` survive — block 3 goes too.
+  const floored = resolved.cuts.includes('floor');
+  const renderedBlocks = (floored ? [] : contextBlocks)
     .map(b => {
       const depth = resolved.blockDepths[b.id] ?? b.depths?.[0] ?? 0;
       const text = b.render(input.blockData as D, blockCtx, depth);

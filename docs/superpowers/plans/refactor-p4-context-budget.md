@@ -141,6 +141,10 @@ Resolution order (INV-LLM-004): (a) trim history to `budget.history`; (b) if `to
 
 ---
 
+**Orchestrator review note (Task 3, 2026-09-19):** the executor's assembler kept block 3 rendered at its smallest depth when the D-D floor fired; D-D says only block 1 and `current` survive. Fixed by the orchestrator (`assembleContext` skips block 3 on `'floor'`; test `INV-LLM-004 (d) D-D floor → block 3 is dropped too`).
+
+---
+
 ### Task 4: AC-1343 replay test, the L1 checks, and the compaction-node advisories
 
 **Files:**

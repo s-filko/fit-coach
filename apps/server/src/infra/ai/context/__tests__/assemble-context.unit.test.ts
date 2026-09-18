@@ -219,6 +219,28 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
       expect(budgetReport.blocks).toEqual([]);
     });
 
+    it('INV-LLM-004 (d) D-D floor → block 3 is dropped too: only block 1 and current remain', async () => {
+      const { messages, budgetReport } = await assembleContext(
+        input({
+          episodeSummaries: [EPISODE_SUMMARY],
+          history: historyFixture(),
+          contextBlocks: [block('chat.context', 'CLIENT NAME: Alex')],
+          // A current message so large that (a)–(c) cannot bring the total within budget.
+          current: [new HumanMessage('u'.repeat(20000))],
+          budget: { system: 50, longTerm: 10, domain: 10, history: 10, outputReserve: 1 },
+        }),
+      );
+
+      expect(budgetReport.cuts).toContain('floor');
+      expect(messages).toHaveLength(2);
+      expect(String(messages[0].content)).toBe(SYSTEM);
+      expect(isType(messages[1], 'human')).toBe(true);
+      expect(budgetReport.blocks).toEqual([]);
+      expect(budgetReport.domain).toBe(0);
+      expect(budgetReport.summary).toBe(0);
+      expect(budgetReport.history).toBe(0);
+    });
+
     it('empty contextBlocks array renders no domain SystemMessage', async () => {
       const { messages, budgetReport } = await assembleContext(input({ contextBlocks: [] }));
       expect(messages).toEqual([new SystemMessage(SYSTEM), new HumanMessage(USER_MESSAGE)]);
