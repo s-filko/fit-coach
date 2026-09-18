@@ -10,6 +10,7 @@ import { buildConversationGraph } from '@infra/ai/graph/conversation.graph';
 import type { EvalCase } from '../schema/case.schema';
 
 import { buildStubDeps } from './build-stub-deps';
+import { toBaseMessages } from './seed-messages';
 
 export interface CaseObservation {
   text: string;
@@ -28,9 +29,9 @@ interface ObservedToolCall {
 /**
  * Records every tool invocation of one eval run.
  *
- * Why a callback and not graph state: the parent graph has no `messages` channel
- * (conversation.state.ts) and subgraph messages do not survive the run, so there is
- * nothing to read afterwards. Callbacks observe the calls as they happen.
+ * Why a callback and not the seeded channel afterwards: the channel keeps the
+ * whole episode, so reading it back cannot tell this run's calls from the
+ * seeds. Callbacks observe the calls as they happen.
  */
 export class ToolRecorder extends BaseCallbackHandler {
   name = 'EvalToolRecorder';
@@ -81,7 +82,7 @@ export async function runCase(
   testCase: EvalCase,
   extraCallbacks: BaseCallbackHandler[] = [],
 ): Promise<CaseObservation> {
-  const { deps, recordedRuns } = buildStubDeps(testCase.fixture, testCase.state?.messages);
+  const { deps, recordedRuns } = buildStubDeps(testCase.fixture);
   const graph = buildConversationGraph(deps);
   const userId = '22222222-2222-4222-8222-222222222222';
   const runId = randomUUID();
@@ -90,6 +91,8 @@ export async function runCase(
     graph,
     userService: deps.userService,
     runService: deps.runService,
+    checkpointer: deps.checkpointer,
+    transcript: deps.transcript,
     extraCallbacks: [recorder, ...extraCallbacks],
   });
 
@@ -101,9 +104,17 @@ export async function runCase(
     // activeSessionId, so every training case must carry it.
     // Same thread the adapter invokes (D-H: the adapter uses `thread_id: userId`) —
     // seeding any other thread id silently runs every case from 'registration'.
-    graph.updateState(
+    // Awaited (P4 Task 7): un-awaited, the checkpoint write races the
+    // invoke that follows and the seeds can silently vanish.
+    await graph.updateState(
       { configurable: { thread_id: userId } },
-      { phase: seeded, activeSessionId: testCase.state?.activeSessionId ?? null },
+      {
+        phase: seeded,
+        activeSessionId: testCase.state?.activeSessionId ?? null,
+        // P4 Task 7: seeded episode turns ride the same `messages` channel
+        // production uses — human/ai as-is, tool traffic as tool_calls+ToolMessage.
+        ...(testCase.state?.messages?.length ? { messages: toBaseMessages(testCase.state.messages) } : {}),
+      },
     );
 
     const result = await runner.run({ userId, text: testCase.input.text });

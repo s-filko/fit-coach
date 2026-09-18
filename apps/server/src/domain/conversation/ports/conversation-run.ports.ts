@@ -68,4 +68,10 @@ export const CONVERSATION_RUN_PORT_TOKEN = Symbol('ConversationRunPort');
 
 export interface ConversationRunPort {
   run(input: RunInput): Promise<RunResult>;
+  /**
+   * Wipes the user's conversation memory (D-F): the checkpointed thread
+   * (messages channel and episode state) is deleted and a system note lands
+   * in the transcript. The route talks to this port only.
+   */
+  clearContext(userId: string): Promise<void>;
 }

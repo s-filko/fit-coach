@@ -12,7 +12,6 @@ import type { LlmGateway } from '@domain/ai/ports/llm.gateway.ports';
 import type { IUserService } from '@domain/user/ports';
 
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
-import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
 
 import { lastAiText } from '../episode';
 import { buildConversationGraph, type ConversationGraphDeps } from '../conversation.graph';
@@ -105,7 +104,6 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
     needsRegistration: jest.fn().mockReturnValue(false),
     upsertUser: jest.fn(),
   } as unknown as IUserService,
-  contextService: new InMemoryConversationContextService(),
   transcript: {
     appendRunMessages: async () => undefined,
     appendSystemNote: async () => undefined,

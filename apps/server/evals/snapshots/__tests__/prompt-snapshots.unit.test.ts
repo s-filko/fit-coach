@@ -134,7 +134,11 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
 
   it('block.episode_summaries / present', () => {
     expect(
-      renderBlock(EPISODE_SUMMARIES_V1, { summaries: [FIXTURE_EPISODE_SUMMARY], now: FIXED_NOW, timezone: 'Europe/Berlin' }),
+      renderBlock(EPISODE_SUMMARIES_V1, {
+        summaries: [FIXTURE_EPISODE_SUMMARY],
+        now: FIXED_NOW,
+        timezone: 'Europe/Berlin',
+      }),
     ).toMatchSnapshot();
   });
 

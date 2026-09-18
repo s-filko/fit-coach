@@ -24,7 +24,6 @@ const FRESH_USER = { id: 'u1', languageCode: 'en', timezone: 'Europe/Berlin' };
 function makeDeps(): ConversationGraphDeps {
   return {
     userService: { getUser: jest.fn(async () => FRESH_USER) },
-    contextService: { getMessagesForPrompt: jest.fn(async () => []) },
   } as unknown as ConversationGraphDeps;
 }
 

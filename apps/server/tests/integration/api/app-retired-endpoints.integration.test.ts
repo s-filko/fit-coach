@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
 import { buildServer } from '../../../src/app/server';
-import { CONVERSATION_CONTEXT_SERVICE_TOKEN } from '../../../src/domain/conversation/ports';
 import { TRAINING_SERVICE_TOKEN } from '../../../src/domain/training/ports';
 import { USER_SERVICE_TOKEN } from '../../../src/domain/user/ports';
 import { getGlobalContainer, registerInfraServices } from '../../../src/main/register-infra-services';
@@ -19,7 +18,6 @@ describeIfDb('Retired mini-app LLM endpoints (AC-1312, ADR-0013 OQ-1)', () => {
     app = buildServer();
     app.decorate('services', {
       userService: container.get(USER_SERVICE_TOKEN) as never,
-      conversationContextService: container.get(CONVERSATION_CONTEXT_SERVICE_TOKEN) as never,
       trainingService: container.get(TRAINING_SERVICE_TOKEN) as never,
       conversationRun: { invoke: jest.fn() } as never,
     });

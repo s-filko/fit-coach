@@ -11,7 +11,6 @@ import { MemorySaver } from '@langchain/langgraph';
 import type { ConversationRunRecord } from '@domain/conversation/ports';
 
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
-import { InMemoryConversationContextService } from '@infra/conversation/conversation-context.service';
 
 import { buildConversationGraph, type ConversationGraphDeps } from '../conversation.graph';
 
@@ -69,7 +68,6 @@ function makeDeps(): ConversationGraphDeps {
       needsRegistration: jest.fn().mockReturnValue(false),
       upsertUser: jest.fn(),
     } as never,
-    contextService: new InMemoryConversationContextService(),
     transcript: { appendRunMessages: jest.fn(), appendSystemNote: jest.fn() },
     summaries: { insert: jest.fn(), latestLegacySummary: jest.fn().mockResolvedValue(null) },
     llmGateway: {

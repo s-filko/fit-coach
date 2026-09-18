@@ -32,15 +32,9 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       try {
         const { userId } = req.body as { userId: string };
 
-        // Insert context reset marker — getMessagesForPrompt will only return messages after this
-        await app.services.conversationContextService.insertContextReset(userId);
-
-        // Clear LangGraph checkpoints for this user (thread_id = userId by convention)
-        const { db } = await import('@infra/db/drizzle');
-        const { sql } = await import('drizzle-orm');
-        await db.execute(sql`DELETE FROM checkpoint_writes WHERE thread_id = ${userId}`);
-        await db.execute(sql`DELETE FROM checkpoint_blobs WHERE thread_id = ${userId}`);
-        await db.execute(sql`DELETE FROM checkpoints WHERE thread_id = ${userId}`);
+        // D-F: the port deletes the thread and notes it in the transcript —
+        // the route touches no tables and no checkpointer.
+        await app.services.conversationRun.clearContext(userId);
 
         req.log.info({ userId }, 'Context cleared');
         return reply.send({ data: { ok: true } });

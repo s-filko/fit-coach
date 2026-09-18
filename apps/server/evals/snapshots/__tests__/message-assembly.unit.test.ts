@@ -86,7 +86,7 @@ async function captureInvocation(phase: PhaseCase, scenario: AssemblyScenario): 
   // harness keeps history empty; P4 Task 4 rewires seeding through the
   // `messages` channel and Task 5's enumerated diff is where history rows
   // appear.
-  const { deps } = buildStubDeps(phase.fixture, []);
+  const { deps } = buildStubDeps(phase.fixture);
 
   const subgraph = buildSubgraph(phase.phase, deps);
   // The user message is the first HumanMessage of `messages` (the adapter's

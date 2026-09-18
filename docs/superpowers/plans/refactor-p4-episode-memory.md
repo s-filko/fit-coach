@@ -198,9 +198,11 @@ Deviation from the plan's expected diff, explained: the plan expected `...histor
 - Modify: `tests/integration/api/chat.routes.integration.test.ts` — clear-context asserts the port method was called; DI resolution test (`registerInfraServices()` resolves the run port with the new services — BACKLOG "pure-deletion plan" note).
 - Create: `evals/levels/__tests__/legacy-memory-removed.unit.test.ts` — AC-1346 as a grep test (`execFileSync grep -rn` over `apps/server/src`, pattern built by concatenation so the test file does not match itself).
 
-- [ ] **Step 1:** AC-1346 test first (red).
-- [ ] **Step 2: Implement.** `npm run check-all && npm run test:unit && npm run test:integration`.
-- [ ] **Step 3: Commit** — `refactor(conversation): legacy rolling summary and context service removed; clear-context via deleteThread; eval seeding through the messages channel (AC-1346)`
+- [x] **Step 1:** AC-1346 test first (red).
+- [x] **Step 2: Implement.** `npm run check-all && npm run test:unit && npm run test:integration`.
+- [x] **Step 3: Commit** — `refactor(conversation): legacy rolling summary and context service removed; clear-context via deleteThread; eval seeding through the messages channel (AC-1346)`
+
+  > **Execution note (2026-09-18):** the un-skipped seeding test exposed a latent harness bug from P2 — `run-case.ts` called `graph.updateState(...)` **without await**, so the checkpoint write raced the invoke that followed and seeds could silently vanish (phase seeding only *appeared* to work because prepare syncs chat by profile). Now awaited; the seeding test is the regression lock. `ConversationPhase` was re-exported from `ports/index.ts` (the deleted `conversation-context.ports.ts` had carried it — a dozen files import it from the ports barrel). The D-E clear-context edge flagged in Task 6 stands: after `clearContext` the thread is fresh, `episodeSummaries` empty, and the legacy `role='summary'` row still in `conversation_turns` — the one-time import would fire again and resurrect the cleared summary. Owner to decide at Task 9 (options: ignore rows older than the `context_cleared` note, or hard-clear legacy rows in `clearContext`).
 
 **Verification:** the grep test; `npx jest --ci tests/integration evals`; `grep -rn "contextService\|IConversationContextService\|CONVERSATION_CONTEXT_SERVICE_TOKEN" apps/server/src apps/server/evals apps/server/tests` → empty.
 

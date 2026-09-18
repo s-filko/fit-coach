@@ -2,12 +2,7 @@ import { type BaseCheckpointSaver, END, START, StateGraph } from '@langchain/lan
 
 import { LlmGateway } from '@domain/ai/ports';
 import type { ConversationPhase } from '@domain/conversation/phases';
-import {
-  IConversationContextService,
-  IConversationRunService,
-  SummaryPort,
-  TranscriptPort,
-} from '@domain/conversation/ports';
+import { IConversationRunService, SummaryPort, TranscriptPort } from '@domain/conversation/ports';
 import type {
   IEmbeddingService,
   IExerciseRepository,
@@ -36,8 +31,6 @@ export interface ConversationGraphDeps {
   exerciseRepository: IExerciseRepository;
   embeddingService: IEmbeddingService;
   userService: IUserService;
-  /** Transitional (P4 Task 4→7): only the agent's summary read still uses it. */
-  contextService: IConversationContextService;
   runService: IConversationRunService;
   transcript: TranscriptPort;
   summaries: SummaryPort;

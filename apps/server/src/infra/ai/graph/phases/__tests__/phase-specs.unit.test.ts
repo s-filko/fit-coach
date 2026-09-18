@@ -22,7 +22,6 @@ const SESSION_ROW = {
 function stubDeps(overrides: Record<string, unknown> = {}): ConversationGraphDeps {
   return {
     userService: { getUser: async () => ({ id: 'u1' }) },
-    contextService: { getLatestSummary: async () => null, getMessagesForPrompt: async () => [] },
     workoutPlanRepo: { findActiveByUserId: async () => ({ id: 'plan-1', name: 'Plan' }) },
     workoutSessionRepo: {
       findRecentByUserIdWithDetails: async () => [SESSION_ROW],

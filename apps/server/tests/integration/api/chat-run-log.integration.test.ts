@@ -2,7 +2,6 @@ import { MemorySaver } from '@langchain/langgraph';
 
 import { HumanMessage } from '@langchain/core/messages';
 
-import { InMemoryConversationContextService } from '../../../src/infra/conversation/conversation-context.service';
 import { RunMetricsCollector } from '../../../src/infra/ai/run-metrics';
 import { buildConversationGraph } from '../../../src/infra/ai/graph/conversation.graph';
 import type { ConversationRunRecord } from '../../../src/domain/conversation/ports';
@@ -64,7 +63,6 @@ describe('conversation run log — AC-1301', () => {
       } as never,
       exerciseRepository: {} as never,
       embeddingService: {} as never,
-      contextService: new InMemoryConversationContextService(),
       transcript: {
         appendRunMessages: async () => undefined,
         appendSystemNote: async () => undefined,

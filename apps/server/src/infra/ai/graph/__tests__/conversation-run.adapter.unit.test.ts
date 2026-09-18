@@ -25,7 +25,16 @@ function makeDeps(graph: StubGraph, user: User | null) {
   const userService = { getUser: async () => user } as unknown as IUserService;
   const recordRun = jest.fn();
   const runService = { recordRun } as unknown as IConversationRunService;
-  return { deps: { graph, userService, runService }, recordRun };
+  const deleteThread = jest.fn().mockResolvedValue(undefined);
+  const appendSystemNote = jest.fn().mockResolvedValue(undefined);
+  const deps = {
+    graph,
+    userService,
+    runService,
+    checkpointer: { deleteThread },
+    transcript: { appendRunMessages: jest.fn(), appendSystemNote },
+  };
+  return { deps, deleteThread, appendSystemNote, recordRun };
 }
 
 describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
@@ -131,5 +140,23 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
     const first = config.callbacks[0] as { handleLLMEnd?: unknown };
     expect(typeof first.handleLLMEnd).toBe('function'); // the collector's handler
     expect((seen.input as { messages: HumanMessage[] }).messages).toHaveLength(1);
+  });
+
+  it('D-F (P4 Task 7): clearContext deletes the thread and notes it in the transcript, port-only', async () => {
+    const graph = {
+      invoke: async () => ({}),
+      getState: async () => ({ values: { phase: 'training' } }),
+    };
+    const { deps, deleteThread, appendSystemNote } = makeDeps(graph, makeUser());
+    const runner = buildConversationRunner(deps);
+
+    await runner.clearContext(UID);
+
+    expect(deleteThread).toHaveBeenCalledWith(UID);
+    expect(appendSystemNote).toHaveBeenCalledWith({
+      userId: UID,
+      phase: 'training',
+      text: 'Контекст диалога очищен.', // ru user (makeUser)
+    });
   });
 });

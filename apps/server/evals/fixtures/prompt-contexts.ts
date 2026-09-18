@@ -13,7 +13,7 @@ export const FIXTURE_HISTORY: Array<{ role: 'user' | 'assistant'; content: strin
   { role: 'assistant', content: 'Записал: жим лёжа 60 кг × 8. Следующий подход — 62.5 кг.' },
 ];
 
-export const FIXTURE_SUMMARY = 'User trains 3x/week, prefers upper/lower split, reported mild shoulder discomfort.'
+export const FIXTURE_SUMMARY = 'User trains 3x/week, prefers upper/lower split, reported mild shoulder discomfort.';
 
 /** P4 Task 6: what compact's renderTranscript produces for the fixture episode (summariser v2 input). */
 export const FIXTURE_TRANSCRIPT = [
@@ -35,7 +35,7 @@ export const FIXTURE_EPISODE_SUMMARY = {
     trainingFeedback: [],
     openItems: [],
   },
-};;
+};
 
 export const FIXTURE_TOOL_RESULTS: Array<{ ok: boolean; content: string }> = [
   { ok: true, content: 'Set 2 logged: 60 kg × 8 (RPE 7)' },

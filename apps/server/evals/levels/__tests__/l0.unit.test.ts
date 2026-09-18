@@ -55,7 +55,12 @@ describe('L0 registry iteration (AC-1303, refactor-p2-prompt-modules Task 6)', (
   });
 
   it('passes when every required section is present', () => {
-    const results = checkSections('phase.chat', 'empty-profile', ['context', 'rules', 'tools'], ['context', 'rules', 'tools']);
+    const results = checkSections(
+      'phase.chat',
+      'empty-profile',
+      ['context', 'rules', 'tools'],
+      ['context', 'rules', 'tools'],
+    );
     expect(results.every(r => r.passed)).toBe(true);
   });
 

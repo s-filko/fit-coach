@@ -3,16 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { MemorySaver } from '@langchain/langgraph';
 
 import type { LlmGateway } from '@domain/ai/ports/llm.gateway.ports';
-import type { ChatMsg } from '@domain/ai/types';
-import type {
-  ConversationRunRecord,
-  InsertSummaryInput,
-  AppendRunMessagesInput,
-} from '@domain/conversation/ports';
+import type { ConversationRunRecord, InsertSummaryInput, AppendRunMessagesInput } from '@domain/conversation/ports';
 
 import type { ConversationGraphDeps } from '@infra/ai/graph/conversation.graph';
 
-import { type EvalFixture, type StateMessage } from '../schema/case.schema';
+import type { EvalFixture } from '../schema/case.schema';
 
 export interface StubWorld {
   deps: ConversationGraphDeps;
@@ -161,20 +156,11 @@ function stubExercises(
   return session['exercises'] as Array<StubSessionExercise & { exercise: { id: string; name: string } }>;
 }
 
-export function buildStubDeps(fixture: EvalFixture, messages?: StateMessage[]): StubWorld {
+export function buildStubDeps(fixture: EvalFixture): StubWorld {
   const recordedRuns: ConversationRunRecord[] = [];
   const transcriptRecords: AppendRunMessagesInput[] = [];
   const summaryRecords: InsertSummaryInput[] = [];
   const userId = '22222222-2222-4222-8222-222222222222';
-
-  // Episode seed: the case's state.messages stand in for what production's
-  // context service would return from persisted turns. `human → user`,
-  // `ai → assistant`; tool_call/tool_result seeds are still SKIPPED here —
-  // that is the pre-P4 truth this plan measures the id-reuse delta against.
-  // P4 Task 7 moves seeding into the graph's `messages` channel instead.
-  const seededHistory: ChatMsg[] = (messages ?? [])
-    .filter((m): m is { role: 'human' | 'ai'; text: string } => m.role === 'human' || m.role === 'ai')
-    .map(m => ({ role: m.role === 'human' ? 'user' : 'assistant', content: m.text }));
 
   const user = { id: userId, ...fixture.user };
   const activePlan = fixture.hasActivePlan
@@ -358,14 +344,6 @@ export function buildStubDeps(fixture: EvalFixture, messages?: StateMessage[]): 
     },
     embeddingService: {
       embed: async () => new Array(1536).fill(0),
-    },
-    contextService: {
-      appendTurn: async () => undefined,
-      getMessagesForPrompt: async () => seededHistory,
-      insertContextReset: async () => undefined,
-      insertPhaseSummary: async () => undefined,
-      getLatestSummary: async () => null,
-      getLastUserMessageTime: async () => null,
     },
     runService: {
       recordRun: async (record: ConversationRunRecord) => {

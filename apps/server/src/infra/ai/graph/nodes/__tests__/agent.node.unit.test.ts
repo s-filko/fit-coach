@@ -52,10 +52,6 @@ function makeSpec(overrides: Partial<PhaseSpec> = {}): PhaseSpec {
 
 function makeDeps(overrides: Record<string, unknown> = {}): ConversationGraphDeps {
   return {
-    contextService: {
-      getMessagesForPrompt: jest.fn(async () => []),
-      getLatestSummary: jest.fn(async () => 'SUMMARY TEXT'),
-    },
     userService: { getUser: jest.fn(async () => FRESH_USER) },
     ...overrides,
   } as unknown as ConversationGraphDeps;
@@ -223,7 +219,5 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     const node = buildAgentNode(spec, deps);
 
     await node({ ...makeState(), episodeSummaries: [] }, CONFIG);
-
-    expect(deps.contextService.getLatestSummary as jest.Mock).not.toHaveBeenCalled();
   });
 });
