@@ -16,6 +16,8 @@ _Generated 2026-09-18 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 **Planned**
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
+- `refactor-p5-concurrency-delivery.md` — Refactor P5 — Concurrency and Delivery Hardening Implementation Plan
+- `refactor-p6-facts-and-progress-blocks.md` — Refactor P6 — User Facts, Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
