@@ -26,6 +26,8 @@ const record: ConversationRunRecord = {
     estimator: 'chars4x1.15',
     system: 800,
     summary: 120,
+    domain: 0,
+    blocks: [],
     history: 300,
     user: 15,
     inFlight: 60,

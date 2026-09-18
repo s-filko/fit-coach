@@ -16,7 +16,7 @@ import type { ConversationGraphDeps, PhaseSpec, PromptContextFor } from '@infra/
 import { ctxOf } from '@infra/ai/graph/state';
 import { langOf, t } from '@infra/ai/messages';
 import { getModel } from '@infra/ai/model.factory';
-import { POST_TOOL_NUDGE_V1, renderBlock } from '@infra/ai/prompts/blocks';
+import { fullDepth, POST_TOOL_NUDGE_V1, renderBlock, renderBlocks } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
 
 import { createLogger } from '@shared/logger';
@@ -112,9 +112,15 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     // inherited from the route's invoke config; configurable never reaches handlers.
     const model = getModel(spec.modelProfile).bindTools(tools);
 
+    // ADR-0013 §3.4 block 3 (D-A/D-B): render at full depth — Task 3's budget
+    // resolver re-renders at a smaller depth when trimming is needed.
+    const blockCtx = { now, timezone: user?.timezone ?? null, user };
+    const blocks = renderBlocks(spec.contextBlocks, loaded.data, blockCtx, fullDepth);
+
     const { messages: llmMessages, budgetReport } = assembleContext({
       systemPrompt,
       episodeSummaries: state.episodeSummaries ?? [],
+      blocks,
       history,
       current,
       now,

@@ -12,6 +12,7 @@ import type { ConversationPhase } from '@domain/conversation/ports';
 import type { User } from '@domain/user/services/user.service';
 
 import type { MessageKey } from '@infra/ai/messages';
+import type { ContextBlock } from '@infra/ai/prompts/blocks';
 import type { DirectiveContext, PhasePromptEntry } from '@infra/ai/prompts/types';
 
 import type { ConversationGraphDeps } from './conversation.graph';
@@ -55,6 +56,13 @@ export interface PhaseSpec<D = unknown> {
   budget: TokenBudget;
   /** Transitional (D-A) — see LoadResult. */
   loadContext: (input: LoadInput, deps: ConversationGraphDeps) => Promise<LoadResult<D>>;
+  /**
+   * Domain blocks (ADR-0013 §3.4 block 3, §4.2, D-A/D-B) — pure renderers over
+   * `loadContext`'s data, rendered by the agent node and placed by the
+   * assembler after the episode-summaries block. Empty for registration
+   * (D-B: no domain sections moved out of its prompt).
+   */
+  contextBlocks: ReadonlyArray<ContextBlock<D>>;
   /** getModel(profile) — 'default' for every phase today (D-G). */
   modelProfile: string;
 }

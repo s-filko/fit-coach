@@ -1,22 +1,15 @@
-import type { WorkoutSessionWithDetails } from '@domain/training/types';
-
-import {
-  buildPreviousSessionSection,
-  buildStaleSessionSection,
-  buildWorkoutOverview,
-} from '@infra/ai/prompts/blocks/training-workout-overview.v1';
 import { renderDirectives } from '@infra/ai/prompts/compose';
 import { DIRECTIVES_WITHOUT_IDENTITY_V1 } from '@infra/ai/prompts/directives';
 import type { DirectiveContext, PromptModule, Section } from '@infra/ai/prompts/types';
 
-import { humanTimeAgo } from '@shared/date-utils';
-
-export interface TrainingPromptContext extends DirectiveContext {
-  session: WorkoutSessionWithDetails;
-  previousSession: WorkoutSessionWithDetails | null;
-}
-
-const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+/**
+ * v2 (P4 context-budget plan, Task 2, D-B): v1 minus `client`,
+ * `workout_overview`, `stale_session`, `previous_session` — they move to the
+ * `training.*` domain blocks (block 3, ADR-0013 §3.4). `intro`, `task`,
+ * `tools`, `rules` are session-independent and stay in the prompt.
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- v2 adds no fields
+export interface TrainingPromptContextV2 extends DirectiveContext {}
 
 const TASK_TEXT = `=== YOUR TASK ===
 
@@ -95,63 +88,21 @@ FIRST MESSAGE RULE: If WORKOUT OVERVIEW shows ACTIVE: none and no sets logged ye
 
 Do NOT include internal IDs in your response text. Exercise IDs are for tool calls only.`;
 
-/** Moved verbatim from graph/nodes/training.node.ts (P2, AC-1321 — snapshot-arbitered). */
-export const TRAINING_V1: PromptModule<TrainingPromptContext> = {
+export const TRAINING_V2: PromptModule<TrainingPromptContextV2> = {
   id: 'phase.training',
-  version: 'v1',
+  version: 'v2',
   directives: DIRECTIVES_WITHOUT_IDENTITY_V1,
-  render(ctx: TrainingPromptContext): Section[] {
-    const { user, session, previousSession } = ctx;
-    const { now } = ctx;
-    const clientName = user?.firstName ?? 'Client';
-    const fitnessGoal = user?.fitnessGoal ?? null;
-
-    const lastActivity = session.lastActivityAt ?? session.updatedAt ?? session.createdAt;
-    const sessionAgeMs = now.getTime() - new Date(lastActivity).getTime();
-    const isStale = sessionAgeMs > SESSION_TIMEOUT_MS;
-
-    const sections: Section[] = [
+  render(ctx: TrainingPromptContextV2): Section[] {
+    return [
       {
         id: 'intro',
         required: true,
         text: 'You are a professional personal trainer guiding the client through their workout in real time via Telegram.',
       },
-      {
-        id: 'client',
-        required: true,
-        text: `=== CLIENT ===\n\nName: ${clientName}${fitnessGoal ? `\nGoal: ${fitnessGoal}` : ''}`,
-      },
-      {
-        id: 'workout_overview',
-        required: true,
-        text: `=== WORKOUT OVERVIEW ===\n\n${buildWorkoutOverview(session, now)}`,
-      },
-    ];
-
-    if (isStale) {
-      sections.push({ id: 'stale_session', required: false, text: buildStaleSessionSection(sessionAgeMs).trimEnd() });
-    }
-
-    if (previousSession) {
-      const when = humanTimeAgo(
-        new Date(previousSession.completedAt ?? previousSession.createdAt),
-        now,
-        user?.timezone,
-      );
-      sections.push({
-        id: 'previous_session',
-        required: false,
-        text: `=== PREVIOUS SESSION (same template — ${when}) ===\n\n${buildPreviousSessionSection(previousSession)}`,
-      });
-    }
-
-    sections.push(
       { id: 'task', required: true, text: TASK_TEXT },
       { id: 'tools', required: true, text: TOOLS_TEXT },
       { id: 'rules', required: true, text: RULES_TEXT },
       ...renderDirectives(this.directives, ctx),
-    );
-
-    return sections;
+    ];
   },
 };

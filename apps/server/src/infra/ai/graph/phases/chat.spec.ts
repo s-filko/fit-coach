@@ -4,6 +4,7 @@
  */
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
+import { CHAT_CONTEXT_V1 } from '@infra/ai/prompts/blocks';
 import type {
   ConversationGraphDeps,
   LoadInput,
@@ -49,6 +50,8 @@ export function buildChatSpec(deps: ConversationGraphDeps): PhaseSpec<ChatData> 
         data: { hasActivePlan: !!activePlan, recentSessions },
       };
     },
+    // D-B: the v1 `context` section becomes this domain block (block 3).
+    contextBlocks: [CHAT_CONTEXT_V1],
     modelProfile: 'default',
   };
 }

@@ -133,4 +133,75 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
     expect(first.messages).toEqual(second.messages);
     expect(first.budgetReport).toEqual(second.budgetReport);
   });
+
+  // P4 context-budget plan, Task 2 (ADR-0013 §3.4 block 3, D-A/D-B): the
+  // caller hands already-rendered blocks (agent.node.ts renders them from
+  // spec.contextBlocks); the assembler only places them and reports tokens.
+  describe('block 3 — domain blocks (ADR-0013 §3.4)', () => {
+    it('no blocks (default) → same shape as before (no behaviour change)', () => {
+      const { messages, budgetReport } = assembleContext(input());
+      expect(messages).toEqual([new SystemMessage(SYSTEM), new HumanMessage(USER_MESSAGE)]);
+      expect(budgetReport.blocks).toEqual([]);
+      expect(budgetReport.domain).toBe(0);
+    });
+
+    it('one block → its own SystemMessage after the summaries block, before history', () => {
+      const { messages, budgetReport } = assembleContext(
+        input({
+          episodeSummaries: [EPISODE_SUMMARY],
+          history: historyFixture(),
+          blocks: [{ id: 'chat.context', text: 'CLIENT NAME: Alex', tokens: 42, depth: 5 }],
+        }),
+      );
+
+      // [system, summaries, domain block, ...history, human]
+      expect(messages).toHaveLength(6);
+      expect(String(messages[0].content)).toBe(SYSTEM);
+      expect(String(messages[1].content)).toContain('## Previous episodes');
+      expect(isType(messages[2], 'system')).toBe(true);
+      expect(String(messages[2].content)).toBe('CLIENT NAME: Alex');
+      expect(messages.slice(3, 5)).toEqual(historyFixture());
+      expect(isType(messages[5], 'human')).toBe(true);
+
+      expect(budgetReport.blocks).toEqual([{ id: 'chat.context', tokens: 42, depth: 5 }]);
+      expect(budgetReport.domain).toBe(42);
+    });
+
+    it('multiple blocks compose into one SystemMessage, spec order, joined like compose()', () => {
+      const { messages, budgetReport } = assembleContext(
+        input({
+          blocks: [
+            { id: 'training.client', text: 'CLIENT BLOCK', tokens: 3, depth: 0 },
+            { id: 'training.workout_overview', text: 'OVERVIEW BLOCK', tokens: 5, depth: 0 },
+          ],
+        }),
+      );
+
+      expect(String(messages[1].content)).toBe('CLIENT BLOCK\n\nOVERVIEW BLOCK');
+      expect(budgetReport.domain).toBe(8);
+      expect(budgetReport.blocks).toEqual([
+        { id: 'training.client', tokens: 3, depth: 0 },
+        { id: 'training.workout_overview', tokens: 5, depth: 0 },
+      ]);
+    });
+
+    it('empty blocks array renders no domain SystemMessage (all blocks returned null upstream)', () => {
+      const { messages, budgetReport } = assembleContext(input({ blocks: [] }));
+      expect(messages).toEqual([new SystemMessage(SYSTEM), new HumanMessage(USER_MESSAGE)]);
+      expect(budgetReport.domain).toBe(0);
+    });
+
+    it('total includes domain tokens', () => {
+      const { budgetReport } = assembleContext(input({ blocks: [{ id: 'x', text: 'hello', tokens: 7, depth: 0 }] }));
+      expect(budgetReport.total).toBe(
+        budgetReport.system +
+          budgetReport.summary +
+          budgetReport.domain +
+          budgetReport.history +
+          budgetReport.user +
+          budgetReport.inFlight +
+          budgetReport.toolResults,
+      );
+    });
+  });
 });

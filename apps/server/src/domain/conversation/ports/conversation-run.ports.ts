@@ -12,12 +12,20 @@ export interface BudgetReport {
   estimator: string; // TOKEN_ESTIMATOR_ID
   system: number; // block 1: the rendered phase prompt (domain data is inside it until P3)
   summary: number; // the rendered `## Previous episodes` block, 0 when there are no episode summaries (D-H)
+  /**
+   * block 3: the rendered domain context blocks (ADR-0013 §4.2 `contextBlocks`,
+   * P4 context-budget plan Task 2, D-A/D-B). 0 when the phase has none or all
+   * rendered null this run.
+   */
+  domain: number;
+  /** Per-block token/depth breakdown, spec order (Task 2). Budget-driven depth cuts land in Task 3. */
+  blocks: Array<{ id: string; tokens: number; depth: number }>;
   history: number; // the episode messages before this run's HumanMessage — the checkpointed channel (D-H)
   user: number; // the current human message
   inFlight: number; // this run's AI tool-call messages and tool results
   /** Always 0 since P4 (D-H): tool results ride the channel; the field stays for baseline comparability. */
   toolResults: number;
-  total: number; // sum of the six above
+  total: number; // sum of system + summary + domain + history + user + inFlight + toolResults
   messages: number; // messages in the array handed to the model (before the post-tool nudge)
   historyTurns: number; // HumanMessages in history
   assemblies?: number; // filled at persist: how many assemblies this run made (tool loops)

@@ -9,6 +9,12 @@ import type { StructuredToolInterface } from '@langchain/core/tools';
 import type { IWorkoutSessionRepository } from '@domain/training/ports';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
+import {
+  TRAINING_CLIENT_V1,
+  TRAINING_PREVIOUS_SESSION_V1,
+  TRAINING_STALE_SESSION_V1,
+  TRAINING_WORKOUT_OVERVIEW_V1,
+} from '@infra/ai/prompts/blocks';
 import type {
   ConversationGraphDeps,
   LoadInput,
@@ -103,6 +109,13 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
         : null;
       return { ok: true, data: { session, previousSession } };
     },
+    // D-B: v1's `client`, `workout_overview`, `stale_session`, `previous_session` sections.
+    contextBlocks: [
+      TRAINING_CLIENT_V1,
+      TRAINING_WORKOUT_OVERVIEW_V1,
+      TRAINING_STALE_SESSION_V1,
+      TRAINING_PREVIOUS_SESSION_V1,
+    ],
     modelProfile: 'default',
   };
 }

@@ -44,6 +44,7 @@ function makeSpec(overrides: Partial<PhaseSpec> = {}): PhaseSpec {
     tools: [{ name: 'tool_a' }, { name: 'tool_b' }] as unknown as StructuredToolInterface[],
     toolPolicy: { llmErrorBudget: Infinity },
     loadContext: jest.fn(async () => ({ ok: true as const, data: { lastMessageTime: null } })),
+    contextBlocks: [],
     modelProfile: 'default',
     budget: { system: 1, longTerm: 1, domain: 1, history: 1000, outputReserve: 1 },
     ...overrides,
@@ -219,5 +220,44 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     const node = buildAgentNode(spec, deps);
 
     await node({ ...makeState(), episodeSummaries: [] }, CONFIG);
+  });
+
+  // P4 context-budget plan, Task 2 (ADR-0013 §3.4 block 3, D-A/D-B): the
+  // node renders spec.contextBlocks from loaded.data at full depth and hands
+  // them to the assembler as a domain SystemMessage.
+  it('renders spec.contextBlocks at full depth and sends them to the model as a domain block', async () => {
+    mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
+    const spec = makeSpec({
+      loadContext: jest.fn(async () => ({ ok: true as const, data: { greeting: 'hi' } })),
+      contextBlocks: [
+        {
+          id: 'test.block',
+          version: 'v1',
+          render: (data: { greeting: string }) => `BLOCK: ${data.greeting}`,
+        },
+      ],
+    });
+    const node = buildAgentNode(spec, makeDeps());
+
+    await node(makeState(), CONFIG);
+
+    const sent = mockInvoke.mock.calls[0][0] as BaseMessage[];
+    const domainMessage = sent.find(m => m._getType() === 'system' && String(m.content) === 'BLOCK: hi');
+    expect(domainMessage).toBeDefined();
+    expect(attachSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ blocks: [{ id: 'test.block', tokens: expect.any(Number), depth: 0 }] }),
+    );
+  });
+
+  it('a block that renders null is absent from the message array (block is "not applicable" this run)', async () => {
+    mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
+    const spec = makeSpec({
+      contextBlocks: [{ id: 'test.absent', version: 'v1', render: () => null }],
+    });
+    const node = buildAgentNode(spec, makeDeps());
+
+    await node(makeState(), CONFIG);
+
+    expect(attachSpy).toHaveBeenCalledWith(expect.objectContaining({ blocks: [], domain: 0 }));
   });
 });

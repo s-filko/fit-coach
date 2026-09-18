@@ -2,6 +2,7 @@
  * Plan-creation PhaseSpec (ADR-0013 §4.2) — moved verbatim from
  * plan-creation.subgraph.ts (refactor-p3-phase-spec Task 1).
  */
+import { PLAN_CREATION_CLIENT_PROFILE_V1 } from '@infra/ai/prompts/blocks';
 import type {
   ConversationGraphDeps,
   LoadInput,
@@ -45,6 +46,8 @@ export function buildPlanCreationSpec(deps: ConversationGraphDeps): PhaseSpec<Pl
       ok: true as const,
       data: {},
     }),
+    // D-B: the v1 `client_profile` section becomes this domain block (block 3).
+    contextBlocks: [PLAN_CREATION_CLIENT_PROFILE_V1],
     modelProfile: 'default',
   };
 }

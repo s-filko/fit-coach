@@ -18,6 +18,8 @@ const budgetReport: BudgetReport = {
   estimator: 'chars/4',
   system: 500,
   summary: 0,
+  domain: 0,
+  blocks: [],
   history: 100,
   user: 20,
   inFlight: 0,

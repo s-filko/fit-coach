@@ -6,6 +6,8 @@ const report = (total: number): BudgetReport => ({
   estimator: 'chars4x1.15',
   system: total,
   summary: 0,
+  domain: 0,
+  blocks: [],
   history: 0,
   user: 0,
   inFlight: 0,
