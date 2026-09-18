@@ -17,7 +17,7 @@ import type { PromptModule } from '@infra/ai/prompts/types';
 
 import { EPISODE_SUMMARIES_V1 } from './episode-summaries.v1';
 import { POST_TOOL_NUDGE_V1 } from './post-tool-nudge.v1';
-import type { ContextBlock, ContextBlockCtx, RenderedBlock } from './types';
+import type { ContextBlockCtx, RenderedBlock } from './types';
 
 export { EPISODE_SUMMARIES_V1, POST_TOOL_NUDGE_V1 };
 export { episodeParagraph } from './episode-summaries.v1';
@@ -68,23 +68,34 @@ export function renderBlock<TCtx>(module: PromptModule<TCtx>, ctx: TCtx): string
 /**
  * The default (full) depth for a block: its largest declared step, or 0 for a
  * single-depth block. Task 3's budget resolver picks a smaller step from
- * `depths` when trimming; Task 2 always renders at full depth.
+ * `depths` when trimming; Task 2 always renders at full depth. Takes the
+ * `depths` shape structurally so both `ContextBlock<D>` (Task 2) and
+ * `BudgetBlockInput<D>` (Task 3's narrower render-only shape) satisfy it.
  */
-export function fullDepth<D>(block: ContextBlock<D>): number {
+export function fullDepth(block: { depths?: readonly number[] }): number {
   return block.depths?.[0] ?? 0;
+}
+
+/** The minimal shape `renderBlocks`/`fullDepth` need from a block — id, optional depth steps, and render. */
+export interface RenderableBlock<D> {
+  id: string;
+  depths?: readonly number[];
+  render(data: D, ctx: ContextBlockCtx, depth: number): string | null;
 }
 
 /**
  * Renders every domain block in spec order at `depthOf(block)` (default:
  * full depth). `null` renders are dropped — the block is absent this run
  * (e.g. no previous session). `data` is the phase's single loaded object;
- * each block reads the slice it declares via its own `D`.
+ * each block reads the slice it declares via its own `D`. Takes the minimal
+ * `RenderableBlock<D>` shape structurally, so both `ContextBlock<D>` (Task 2)
+ * and `BudgetBlockInput<D>` (Task 3's narrower shape, no `version`) satisfy it.
  */
 export function renderBlocks<D>(
-  blocks: ReadonlyArray<ContextBlock<D>>,
+  blocks: ReadonlyArray<RenderableBlock<D>>,
   data: D,
   ctx: ContextBlockCtx,
-  depthOf: (block: ContextBlock<D>) => number = fullDepth,
+  depthOf: (block: RenderableBlock<D>) => number = fullDepth,
 ): RenderedBlock[] {
   const rendered: RenderedBlock[] = [];
   for (const block of blocks) {

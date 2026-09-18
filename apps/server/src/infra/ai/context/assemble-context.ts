@@ -27,7 +27,14 @@ import type { StoredEpisodeSummary, TokenBudget } from '@domain/conversation/epi
 import type { BudgetReport } from '@domain/conversation/ports';
 import type { User } from '@domain/user/services/user.service';
 
-import { type ContextBlockCtx, EPISODE_SUMMARIES_V1, renderBlock } from '@infra/ai/prompts/blocks';
+import {
+  type ContextBlockCtx,
+  EPISODE_SUMMARIES_V1,
+  fullDepth,
+  renderBlock,
+  renderBlocks,
+  type RenderedBlock,
+} from '@infra/ai/prompts/blocks';
 import { SECTION_SEPARATOR } from '@infra/ai/prompts/compose';
 
 import { type BudgetBlockInput, resolveBudget } from './budget';
@@ -94,13 +101,12 @@ export async function assembleContext<D>(input: AssembleInput<D>): Promise<Assem
   // this run. Reused for the joined SystemMessage, `domain` and `blocks`.
   // At the D-D floor only block 1 and `current` survive — block 3 goes too.
   const floored = resolved.cuts.includes('floor');
-  const renderedBlocks = (floored ? [] : contextBlocks)
-    .map(b => {
-      const depth = resolved.blockDepths[b.id] ?? b.depths?.[0] ?? 0;
-      const text = b.render(input.blockData as D, blockCtx, depth);
-      return text === null ? null : { id: b.id, text, tokens: estimateTokens(text), depth };
-    })
-    .filter((b): b is { id: string; text: string; tokens: number; depth: number } => b !== null);
+  const renderedBlocks: RenderedBlock[] = renderBlocks(
+    floored ? [] : contextBlocks,
+    input.blockData as D,
+    blockCtx,
+    b => resolved.blockDepths[b.id] ?? fullDepth(b),
+  );
   const domainText = renderedBlocks.length > 0 ? renderedBlocks.map(b => b.text).join(SECTION_SEPARATOR) : null;
 
   const { history } = resolved;

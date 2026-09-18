@@ -19,7 +19,7 @@ import { type BaseMessage, trimMessages } from '@langchain/core/messages';
 
 import type { StoredEpisodeSummary, TokenBudget } from '@domain/conversation/episode';
 
-import { type ContextBlockCtx, EPISODE_SUMMARIES_V1, renderBlock } from '@infra/ai/prompts/blocks';
+import { type ContextBlockCtx, EPISODE_SUMMARIES_V1, fullDepth, renderBlock } from '@infra/ai/prompts/blocks';
 
 import { estimateTokens } from './token-estimator';
 
@@ -83,10 +83,6 @@ export async function trimHistory(
   });
 }
 
-function fullDepthOf(depths?: readonly number[]): number {
-  return depths?.[0] ?? 0;
-}
-
 function renderBlockAt<D>(block: BudgetBlockInput<D>, data: D, ctx: ContextBlockCtx, depth: number): number {
   const text = block.render(data, ctx, depth);
   return text === null ? 0 : estimateTokens(text);
@@ -117,7 +113,7 @@ export async function resolveBudget<D>(input: ResolveBudgetInput<D>): Promise<Re
 
   const blockDepths: Record<string, number> = {};
   // Full-depth token count per block, in spec order (mutated as depths step down).
-  const blockTokens = blocks.map(b => renderBlockAt(b, data, blockCtx, fullDepthOf(b.depths)));
+  const blockTokens = blocks.map(b => renderBlockAt(b, data, blockCtx, fullDepth(b)));
 
   function totalNow(summaries: StoredEpisodeSummary[]): number {
     const domainNow = blockTokens.reduce((n, t) => n + t, 0);
