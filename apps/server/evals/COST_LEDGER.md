@@ -24,3 +24,8 @@ Manual fallback workflow: `RUN_LLM_EVALS=1 npm run evals -- … --quota-before
 | date | command | scope | requests | tokens in | tokens out | quota before | quota after | delta | % weekly |
 |---|---|---|---|---|---|---|---|---|---|
 | 2026-09-18 | npm run evals -- --level L1 --phase plan_creation --dataset id-reuse --samples 1 --baseline write --baseline-version v2 --quota-before 30182 | L1 plan_creation/id-reuse (5×1) | 13 | 14889 | 2853 | 30182 | 28347 | -1835 | ? |
+| 2026-09-18 | npm run evals -- --level L1 --phase plan_creation --dataset id-reuse --samples 1 | L1 plan_creation/id-reuse (5×1) | 7 | 27206 | 6489 | 27866 | 27784 | -82 | -0.1% |
+| 2026-09-18 | npm run evals -- --level L1 --phase registration --dataset field-extraction-smoke --samples 1 | L1 registration/field-extraction-smoke (1×1) | 2 | 3026 | 456 | 27580 | 27568 | -12 | -0.0% |
+| 2026-09-18 | npm run evals -- --level L1 --phase chat --dataset transitions-smoke --samples 1 | L1 chat/transitions-smoke (1×1) | 2 | 3222 | 186 | 27568 | 27566 | -2 | -0.0% |
+| 2026-09-18 | npm run evals -- --level L1 --phase session_planning --dataset transitions-smoke --samples 1 | L1 session_planning/transitions-smoke (1×1) | 2 | 7269 | 1127 | 27566 | 27561 | -5 | -0.0% |
+| 2026-09-18 | npm run evals -- --level L1 --phase training --dataset transitions-smoke --samples 1 | L1 training/transitions-smoke (1×1) | 2 | 11055 | 376 | 27561 | 27555 | -6 | -0.0% |
