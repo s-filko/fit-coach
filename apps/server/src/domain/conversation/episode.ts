@@ -6,6 +6,9 @@ import type { ConversationPhase } from './phases';
  * Episode memory types (ADR-0013 §3.3, D-C). One episode = a contiguous span
  * of `messages` ended by rule; `compact` turns it into one independent
  * structured summary — never merged with older ones (ADR-0010 rationale).
+ * The D-I invariant underneath: the adapter appends exactly one HumanMessage
+ * per run and no node adds another — that is what makes "this run's
+ * messages" findable by position in `infra/ai/graph/episode.ts`.
  */
 export const EpisodeSummarySchema = z
   .object({

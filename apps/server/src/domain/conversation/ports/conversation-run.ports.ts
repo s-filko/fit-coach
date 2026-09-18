@@ -11,14 +11,15 @@ export type ConversationRunOutcome = 'ok' | 'llm_unavailable' | 'core_error' | '
 export interface BudgetReport {
   estimator: string; // TOKEN_ESTIMATOR_ID
   system: number; // block 1: the rendered phase prompt (domain data is inside it until P3)
-  summary: number; // previous-summary frame, 0 when absent or not in the phase layout
-  history: number; // interleaved turns, or the history_frame block (training)
+  summary: number; // the rendered `## Previous episodes` block, 0 when there are no episode summaries (D-H)
+  history: number; // the episode messages before this run's HumanMessage — the checkpointed channel (D-H)
   user: number; // the current human message
   inFlight: number; // this run's AI tool-call messages and tool results
-  toolResults: number; // training's tool-results block, 0 elsewhere
+  /** Always 0 since P4 (D-H): tool results ride the channel; the field stays for baseline comparability. */
+  toolResults: number;
   total: number; // sum of the six above
   messages: number; // messages in the array handed to the model (before the post-tool nudge)
-  historyTurns: number; // history messages loaded from the transcript
+  historyTurns: number; // HumanMessages in history
   assemblies?: number; // filled at persist: how many assemblies this run made (tool loops)
 }
 

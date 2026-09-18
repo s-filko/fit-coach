@@ -210,10 +210,14 @@ Deviation from the plan's expected diff, explained: the plan expected `...histor
 
 ### Task 8: JSDoc, rails, backlog notes in code
 
-- [ ] JSDoc on `state.ts` channels (which BR writes each), `compact.ts` (the three rules and precedence), `episode.ts` (D-I invariant), `EPISODE_SUMMARIES_V1` (context, not data), `TranscriptPort`/`SummaryPort`. The inline-prompt ESLint rails still cover `prompts/blocks/**` (bite proof: add a temporary `new SystemMessage('x')` in `agent.node.ts`, paste the one-line lint error here, revert).
-- [ ] `BudgetReport` JSDoc: `toolResults` documented as always 0 since P4 (kept for baseline comparability).
-- [ ] **Commit** — `docs(ai): episode memory JSDoc and rails proof`
-- [ ] **STOP** — `DELEGATE STATUS: done, task: plan` with the full verification list.
+- [x] JSDoc on `state.ts` channels (which BR writes each), `compact.ts` (the three rules and precedence), `episode.ts` (D-I invariant), `EPISODE_SUMMARIES_V1` (context, not data), `TranscriptPort`/`SummaryPort`. The inline-prompt ESLint rails still cover `prompts/blocks/**` (bite proof: add a temporary `new SystemMessage('x')` in `agent.node.ts`, paste the one-line lint error here, revert).
+- [x] `BudgetReport` JSDoc: `toolResults` documented as always 0 since P4 (kept for baseline comparability).
+- [x] **Commit** — `docs(ai): episode memory JSDoc and rails proof`
+- [x] **STOP** — `DELEGATE STATUS: done, task: plan` with the full verification list.
+
+  > **Rails bite proof (2026-09-18):** temporary `const RAIL_BITE_PROOF = new SystemMessage('x');` at `agent.node.ts:24`, then reverted. The one-line lint error:
+  > `24:43  error  Inline system prompt text. Render it from a module in src/infra/ai/prompts/ (ADR-0013 §5)  no-restricted-syntax`
+  > (Most JSDoc named above landed with the tasks that created the files — Tasks 3–7 — this task added the D-I pointer in `episode.ts`, and the D-H meanings of `summary`/`history`/`toolResults` in `BudgetReport`.)
 
 **Verification:** `npm run check-all && npm run test:unit`; rail bite line pasted.
 
