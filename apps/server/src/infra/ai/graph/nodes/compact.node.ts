@@ -14,7 +14,7 @@ import type { LlmGateway } from '@domain/ai/ports';
 import type { ChatMsg } from '@domain/ai/types';
 import { type EpisodeSummary, EpisodeSummarySchema, type StoredEpisodeSummary } from '@domain/conversation/episode';
 import type { ConversationPhase } from '@domain/conversation/phases';
-import type { SummaryPort } from '@domain/conversation/ports';
+import type { LegacySummary, SummaryPort } from '@domain/conversation/ports';
 
 import { estimateMessages } from '@infra/ai/context/token-estimator';
 import { splitEpisode } from '@infra/ai/graph/episode';
@@ -64,12 +64,10 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
     // history and no episode summaries, and imports the legacy rolling
     // summary as the one prior episode so users keep their context.
     if (history.length === 0 && state.episodeSummaries.length === 0) {
-      const legacy: { text: string; phase: ConversationPhase; createdAt: Date } | null = await summaries
-        .latestLegacySummary(userId)
-        .catch((err: unknown) => {
-          log.error({ err, userId }, 'Legacy summary read failed — skipping the one-time import');
-          return null;
-        });
+      const legacy: LegacySummary | null = await summaries.latestLegacySummary(userId).catch((err: unknown) => {
+        log.error({ err, userId }, 'Legacy summary read failed — skipping the one-time import');
+        return null;
+      });
       if (legacy) {
         const imported: StoredEpisodeSummary = {
           episodeId: state.episodeId || runId,
@@ -78,9 +76,13 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
           summary: { topics: [legacy.text], decisions: [], userState: [], trainingFeedback: [], openItems: [] },
         };
         log.info({ userId, phase: legacy.phase }, 'Imported the legacy rolling summary as one episode');
-        return { episodeSummaries: [imported] };
+        // BACKLOG (b): this branch must also consume a pending compactReason —
+        // a transition-plus-first-message run would otherwise leave the flag
+        // set for the next run.
+        return { episodeSummaries: [imported], compactReason: null };
       }
-      return {};
+      // BACKLOG (b): no legacy summary found — still consume the flag, if any.
+      return { compactReason: null };
     }
 
     const historyBudget = budgetFor(state.phase);
@@ -101,8 +103,23 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
     }
 
     const { removed } = planCompaction({ history, reason, historyBudget, estimate: estimateMessages });
+
+    // BACKLOG (a): `new RemoveMessage({ id: '' })` silently no-ops for an
+    // id-less message — the trigger would refire every run and a summary
+    // could repeat per episode. Fail loud instead: skip the whole removal
+    // set (never remove with '') and leave compactReason untouched so the
+    // trigger retries once the id gap is fixed upstream.
+    const idlessCount = removed.filter(m => !m.id).length;
+    if (idlessCount > 0) {
+      log.error(
+        { userId, runId, reason, idlessCount, removed: removed.length },
+        'Compaction skipped this run — one or more history messages have no id; RemoveMessage requires one',
+      );
+      return {};
+    }
+
     const updates: Partial<ConversationStateType> = {
-      messages: removed.map(m => new RemoveMessage({ id: m.id ?? '' })),
+      messages: removed.map(m => new RemoveMessage({ id: m.id as string })),
       // D-O: the new episode starts with this run.
       episodeId: runId,
       episodeStartedAt: ctx.now.toISOString(),

@@ -152,7 +152,7 @@ Resolution order (INV-LLM-004): (a) trim history to `budget.history`; (b) if `to
   (c) `LegacySummary` is re-declared inline — import the named type from `summary.ports.ts`.
   Tick the three BACKLOG entries in the same commit.
 
-- [ ] **Step 0:** Compaction-node advisories (a)–(c), tests first; commit — `fix(ai): compact node fails loud on id-less messages, consumes compactReason on legacy import, imports LegacySummary (P4 close-out advisories)`
+- [x] **Step 0:** Compaction-node advisories (a)–(c), tests first; commit — `fix(ai): compact node fails loud on id-less messages, consumes compactReason on legacy import, imports LegacySummary (P4 close-out advisories)`
 - [ ] **Step 1:** Replay: seed the 60-turn transcript into `messages` with `updateState`, run 10 consecutive mocked-model runs (each appends a set), assert `budgetReport.history ≤ budget.history` and no orphan tool message on every run, and that compaction by budget (BR-LLM-003) fired at least once (the stub `summaries.insert` received a row) — the `it` name carries `AC-1343`.
 - [ ] **Step 2: Commit** — `test(evals): AC-1343 long-transcript replay; L1 budget and orphan-tool checks`
 
