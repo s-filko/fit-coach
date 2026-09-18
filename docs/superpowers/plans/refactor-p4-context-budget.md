@@ -1,8 +1,9 @@
 # Refactor P4 — Context Budget and Domain Blocks Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/refactor-p4-context-budget
 - After: refactor-p4-episode-memory
+- Review: 2026-09-19 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -202,13 +203,23 @@ Resolution order (INV-LLM-004): (a) trim history to `budget.history`; (b) if `to
 
 ### Task 7: Evals, dev deploy, pruning dry-run on dev, docs, close-out (orchestrator)
 
-- [ ] **Step 1: AC-1344 — deferred, no run here** (owner strategy 2026-09-19): no model-backed eval on this plan. Record in the close-out that AC-1344's re-run (L1 ±2 pp, L2 manual rubric) is pending the consolidated eval pass on the prod model via OpenRouter (off the Z.AI quota), together with the P4 episode-memory compare. Gate for this plan = unit/integration/L0 + the dev smoke + `budget-within-limits` on live rows.
-- [~] **Step 2: Deploy to dev** — done 2026-09-19 (merged to `dev`, GitHub Actions deploy at `4cfbf678`, health 200). Two findings on the way, both fixed on the branch: (1) the dev deploy workflow had been **red since `f8387ee6`** (P4 episode memory) — `llm-log-handler.ts` called `loadConfig()` at import and sits on the L0 import chain (`run-case → conversation-run.adapter → episode → llm.gateway → model.factory`), so CI's L0 step died without a `.env`; now lazy (`238f72c0`), L0 verified with an empty environment; the P4 deploy had gone through `deploy.sh` by hand, hiding the red CI. (2) `db:prune-checkpoints` / `db:cleanup-orphan-checkpoints` used `--env-file=.env`, which does not exist inside the containers (compose `env_file`) — `--env-file-if-exists` (`677483ae`). Pruning dry-run on dev (`npx tsx src/infra/db/scripts/prune-checkpoints.cli.ts` in `fitcoach-dev-server`): `checkpoints 0, checkpoint_blobs 0` rows older than 14 days — nothing to delete yet; `--apply` deferred until there is something to see. **Smoke pending** (owner sends 3–5 messages to the dev bot across phases; then the two SQL checks below are pasted here).
+- [x] **Step 1: AC-1344 — deferred, no run here** (owner strategy 2026-09-19): no model-backed eval on this plan. Record in the close-out that AC-1344's re-run (L1 ±2 pp, L2 manual rubric) is pending the consolidated eval pass on the prod model via OpenRouter (off the Z.AI quota), together with the P4 episode-memory compare. Gate for this plan = unit/integration/L0 + the dev smoke + `budget-within-limits` on live rows.
+- [~] **Step 2: Deploy to dev** — done 2026-09-19 (merged to `dev`, GitHub Actions deploy at `4cfbf678`, health 200). Two findings on the way, both fixed on the branch: (1) the dev deploy workflow had been **red since `f8387ee6`** (P4 episode memory) — `llm-log-handler.ts` called `loadConfig()` at import and sits on the L0 import chain (`run-case → conversation-run.adapter → episode → llm.gateway → model.factory`), so CI's L0 step died without a `.env`; now lazy (`238f72c0`), L0 verified with an empty environment; the P4 deploy had gone through `deploy.sh` by hand, hiding the red CI. (2) `db:prune-checkpoints` / `db:cleanup-orphan-checkpoints` used `--env-file=.env`, which does not exist inside the containers (compose `env_file`) — `--env-file-if-exists` (`677483ae`). Pruning dry-run on dev (`npx tsx src/infra/db/scripts/prune-checkpoints.cli.ts` in `fitcoach-dev-server`): `checkpoints 0, checkpoint_blobs 0` rows older than 14 days — nothing to delete yet; `--apply` deferred until there is something to see. **Smoke done 2026-09-19** (orchestrator, overnight autonomy — run directly against the deployed API rather than through the Telegram client, since the owner was asleep): 3 × `POST /api/bot/chat` with `X-Api-Key` from `.env.dev` on the VPS (key read into a shell variable, never printed), user `358bedb4…` (`profile_status = complete`), messages "Напомни, какая у меня цель по тренировкам?" → "Что мне стоит потренировать сегодня?" → "Хочу потренироваться сейчас". All three `HTTP 200` (12.2 s / 26.8 s / 17.3 s), each answer domain-grounded (the goal came back from the profile, the workout from the active plan), so block 3 reached the model. The two SQL checks on the resulting rows:
+
+```
+ phase_in      | max_history | budget_history
+---------------+-------------+----------------
+ plan_creation |        1610 |          12000
+
+ budget_report->'cuts'  → 0 rows
+```
+
+`budgetReport.history` (1610) is well under `budget.history` (12000) — the PROMPT_EVAL_FRAMEWORK §4.2 `budget-within-limits` check holds on live rows — and no run needed a cut, which is the expected shape for a short fresh episode: the cut paths themselves are covered by the unit tests and the AC-1343 60-turn replay, not by this smoke.
 
   Smoke SQL: `SELECT phase_in, max((budget_report->>'history')::int), (budget_report->'budget'->>'history') FROM conversation_runs WHERE created_at > now() - interval '2 hours' GROUP BY 1, 3;` and `SELECT budget_report->'cuts' FROM conversation_runs WHERE jsonb_array_length(budget_report->'cuts') > 0 AND created_at > now() - interval '2 hours';`
 
 - [x] **Step 3: Docs reconcile** (factual, 2026-09-19): `ARCHITECTURE.md` (context/budget.ts, blocks/ entries, phases v2), `CONTRIBUTING_AI.md` (new "Context budget and domain blocks" section: adding a block, `LLM_BUDGET_*` as the third config exception, reading `cuts`), `PROMPT_EVAL_FRAMEWORK.md` §4.2 (both checks implemented), `CICD.md` §7a (written in Task 5), `BACKLOG.md` (profile-block duplication struck; `budget-report-present` false-positive entry **left open** — not guarded by this plan, no agent-less case exists). ADR-0013 amendments to **escalate to the owner, not edited**: §3.4 budget table confirmed as defaults (Task 1 — no replacement needed, note the smoke-only basis); §4.2 `contextBlocks` = pure renderers over `loadContext` data (D-A) living under `prompts/blocks/`, not `context/`; §3.4 D-D floor rule (block 1 + current only, `cuts` ends with `'floor'`).
-- [ ] **Step 4: Close-out** — `close-out-review` (one review for the plan; P4 episode memory had its own), `- Status: done`, `node scripts/state.mjs --write`, merge; STATE: **P4 complete**, AC-1344 pending the consolidated pass; Next → P5 (if not already run in parallel) and P6. Branch/worktree cleanup only on the owner's explicit command (CLAUDE.md rule).
+- [x] **Step 4: Close-out** — done 2026-09-19. `close-out-review` ran (R1/R4 first pass; R2/R3 re-run on the fix diff) → **clean** after seven blocking findings were fixed; see `## Review` below. `- Status: done`; `node scripts/state.mjs --write`; merged to `dev`; STATE updated (**P4 complete**, AC-1344 pending the consolidated pass; Next → P5 and P6, both now planned). Branch and worktree left in place — cleanup only on the owner's explicit command (CLAUDE.md rule).
 
 **Verification:** evidence pasted; `node scripts/state.mjs --check` → OK. AC-1343, AC-1344, INV-LLM-004, BR-LLM-005.
 
@@ -217,3 +228,66 @@ Resolution order (INV-LLM-004): (a) trim history to `budget.history`; (b) if `to
 - P6: `muscleRecovery` (session_planning) and `currentExerciseHistory` (training) as `ContextBlock`s; `## User Facts` block 2 half; fact extraction at compaction.
 - P5: `requestTimeout` calibrated against p95 latency including compaction; per-user mutex.
 - P7: `LLM_BUDGET_*` overrides documented in the ops runbook; nightly evals report the `cuts` distribution.
+
+---
+
+## Review
+
+**Verdict: clean (2026-09-19)** — zones R1, R2, R3, R4. R1 and R4 ran in the first pass;
+R2 and R3 were re-run on the fix diff (base `a5065c68`). Seven blocking findings were raised
+across the passes; all seven are fixed on this branch, each re-checked by the orchestrator
+against the tree before the fix was dispatched.
+
+**Blocking findings and how they were closed:**
+
+1. **R2 — `parseLlmBudgetOverrides` duplicated `parseLlmProfiles`** (`config/llm-budget-overrides.ts:1-55`
+   vs `config/llm-profiles.ts:14-56`; DRY, CONTRIBUTING_AI.md "Principles & Boundaries"):
+   the prefixed-env scan/lower-case/accumulate loop now lives once in
+   `config/prefixed-env.ts` (`parsePrefixedEnv`), each call site supplying only its own
+   `assign` validation. All original error messages preserved. Commit `0c63acf1`.
+2. **R3 — `prune-checkpoints` could orphan a retained checkpoint's blobs**
+   (`infra/db/scripts/prune-checkpoints.ts:104-137`; BR-LLM-005): `referenced` scanned only
+   the latest checkpoint's `channel_versions`, so a blob referenced by a younger-than-cutoff
+   but non-latest checkpoint was deleted and that checkpoint became unloadable. `referenced`
+   is now `ranked` minus `stale` — exactly the set the checkpoints statement retains.
+   Integration case `'a recent non-latest checkpoint keeps its blobs'` added. Commit `897d0305`.
+3-5. **R2 — Task 2's "v1 imports the helpers back from blocks/" step was done only for
+   `training/v1.ts`**: `phases/session_planning/v1.ts` (`buildActivePlanSection`,
+   `buildHistorySection`, `buildRecoverySection`), `phases/chat/v1.ts` (chat context text)
+   and `phases/plan_creation/v1.ts` (client profile) each kept byte-identical copies of the
+   block renderers (DRY). All three now import from `prompts/blocks/`. Byte identity proven
+   by `jest --ci` (which fails on snapshot writes) staying at 812/812 with 54/54 snapshots
+   unchanged. Commit `c2eab1f6`; the same defect in `session_planning/v1.ts`'s client-profile
+   section — reported by the executor, outside its assigned scope — closed by `d43830b0`.
+6. **R2 — the budget code reimplemented two shared block helpers**
+   (`context/budget.ts:86` `fullDepthOf` vs `blocks/index.ts:73` `fullDepth`;
+   `context/assemble-context.ts:94-103`'s render/filter loop vs `renderBlocks`; DRY):
+   both now call the shared helpers, which were widened to a structural parameter type.
+   Commit `55ab4178`.
+7. **R2 (third pass) — that fix introduced a duplicate type**: `RenderableBlock<D>`
+   (`blocks/index.ts:80`) and `BudgetBlockInput<D>` (`budget.ts:27`) were identical field for
+   field, both existing only to let block objects cross a module boundary (DRY). Collapsed to
+   one canonical `RenderableBlock<D>` in `blocks/types.ts`, with `ContextBlock<D> extends
+   RenderableBlock<D>` making the relationship explicit instead of merely structural.
+   Commit `c714802e`.
+
+**Verification after the last fix:** `npx jest --ci` 812/812 (101 suites, 54/54 snapshots
+unchanged), `npm run evals -- --level L0` 96/96, `npx tsc --noEmit` clean,
+`npm run check-all` 0 errors, `npm run format:check` clean,
+`RUN_DB_TESTS=1 npm run test:integration` 131/131.
+
+**Advisory findings → `docs/BACKLOG.md`** (§ P4 context-budget close-out review advisories):
+four training blocks in one file while every other block has its own; blocks rendered twice
+(once by `resolveBudget` to measure, once by `assembleContext` for the text);
+`ModelInputRecorder` silently skipped on L1 datasets whose stub is not a real `BaseChatModel`;
+the stale docstring in `prune-checkpoints.unit.test.ts`; `renderBlocks`'s `depthOf`/structural
+widening carrying flexibility for what collapsed into a single caller; `renderBlockAt`
+reimplementing `renderBlocks`'s render-and-measure step with a different return shape.
+
+**Meta findings → `docs/REVIEW_FINDINGS.md`** (rule candidates: one ContextBlock per file;
+BR-LLM-005 pruning scoped by the same age test; partial extraction is not an accepted
+intermediate state; structural-subset interfaces as a DRY violation).
+
+**Note on R4:** the first pass's R4 finding — the Task 2 file list names four training block
+files where one exists (`training-workout-overview.v1.ts`) — is a plan-text inaccuracy, not a
+code defect; the deviation is documented in Task 2's "Tree-vs-plan deviation" note.
