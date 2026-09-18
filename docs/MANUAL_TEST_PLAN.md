@@ -643,6 +643,56 @@ curl -s -X POST http://localhost:3000/api/chat \
 
 **Expected:** Second response references "Alex".
 
+### 8.3 Context after an inactivity gap (episode memory)
+
+Let the user be inactive for at least `EPISODE_GAP_HOURS` (default 3) — or temporarily set
+`EPISODE_GAP_HOURS=0` in the server env for one run. Then send a message that needs the older
+context:
+
+```bash
+curl -s -X POST http://localhost:3000/api/bot/chat \
+  -H "Content-Type: application/json" -H "X-Api-Key: dev-key" \
+  -d "{\"userId\": \"$USER_ID\", \"message\": \"Let's continue with the plan we agreed on\"}" | jq .data.content
+```
+
+**Expected:** Continuity is preserved — the ended episode was summarised and the next run
+carries the `## Previous episodes` block: the bot recalls topics/decisions from before the gap.
+
+**Numbers must come from tools, not the summary:** ask a follow-up like "what weight did I use
+last time?" — the bot must fetch it via tools / session data, never quote the summary. The
+summary block itself is context, not data.
+
+**DB verification:**
+
+```sql
+SELECT phase_at_end, created_at FROM conversation_summaries
+WHERE user_id = '<USER_ID>' ORDER BY created_at DESC LIMIT 3;
+-- Expected: one summary row per ended episode (max 3 kept)
+
+SELECT kind, count(*) FROM conversation_turns
+WHERE user_id = '<USER_ID>' AND created_at > now() - interval '1 hour' GROUP BY 1;
+-- Expected: human/ai rows, tool_call/tool_result > 0 when tools were used
+```
+
+### 8.4 Clear context
+
+```bash
+curl -s -X POST http://localhost:3000/api/bot/chat/clear-context \
+  -H "Content-Type: application/json" -H "X-Api-Key: dev-key" \
+  -d "{\"userId\": \"$USER_ID\"}" | jq .
+```
+
+**Expected:** `{ "data": { "ok": true } }`. Memory is wiped — the next message starts fresh:
+the bot no longer recalls the name or plan from before the clear.
+
+**DB verification:** the transcript keeps a `system_note` row (`context_cleared`):
+
+```sql
+SELECT kind, role, LEFT(content, 60) AS preview FROM conversation_turns
+WHERE user_id = '<USER_ID>' ORDER BY created_at DESC LIMIT 3;
+-- Expected: the latest row has kind = 'system_note'
+```
+
 ---
 
 ## SCENARIO 9 — Session Skip
@@ -687,6 +737,8 @@ ORDER BY order_index;
 | S7.3 — Empty message      | 400                                                                    |
 | S7.5 — Upsert idempotency | Exactly 1 user_accounts row for same provider+providerUserId           |
 | S8 — Context              | Bot remembers information from earlier in conversation                 |
+| S8.3 — Context after gap  | After ≥ `EPISODE_GAP_HOURS` the reply shows continuity via the episode summary; numbers still come from tools |
+| S8.4 — Clear context      | `clear-context` returns ok; next message starts fresh; `context_cleared` system_note in `conversation_turns` |
 | S9 — Skip exercise        | `session_exercises.status = 'skipped'`                                 |
 
 ---
@@ -830,3 +882,4 @@ If no bugs found, write: "No bugs found in this run."
 | Date       | Change                                                    | Author       |
 | ---------- | --------------------------------------------------------- | ------------ |
 | 2026-03-12 | Initial creation — full flow from registration to history | AI assistant |
+| 2026-09-18 | S8.3 context after a gap (episode memory), S8.4 clear context | AI assistant |

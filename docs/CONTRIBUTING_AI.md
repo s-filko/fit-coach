@@ -130,7 +130,7 @@ code review. The division of roles and conflict rules are defined in
    - `apps/server/src/infra/ai/prompts/phases/registration/vN.ts` (system prompt module)
    - Prompt changes follow `docs/PROMPT_EVAL_FRAMEWORK.md` §8 (new version file, keep the old one, run L1 for the phase) — recommended from P2, mandatory after P7.
    - `apps/server/src/infra/ai/tools/save-profile-fields.tool.ts:1` and `complete-registration.tool.ts` (one file per tool, ADR-0013 §11)
-   - Message order and token accounting: `apps/server/src/infra/ai/context/assemble-context.ts` (the context assembler); per-phase layout on `apps/server/src/infra/ai/prompts/index.ts`.
+   - Message order and token accounting: `apps/server/src/infra/ai/context/assemble-context.ts` (the context assembler); prompt registry on `apps/server/src/infra/ai/prompts/index.ts`.
 3) Update profile-field validation:
    - `apps/server/src/domain/user/services/registration.validation.ts:1`
 4) Keep error format and logging consistent; add/adjust tests accordingly.
@@ -142,28 +142,29 @@ code review. The division of roles and conflict rules are defined in
 4) User-facing strings (budget/system-error replies, router text) live in `infra/ai/messages/` (en/ru catalog), never inline.
 
 ### Run a Conversation (run context, run rows, transitions)
-1) Everything a run needs travels as **run context**, not durable state: the conversation-run adapter (`infra/ai/graph/conversation-run.adapter.ts`) loads the user, builds `RunContext` (runId, userId, user, now, client, trigger, a per-run `RunMetricsCollector`) and invokes the graph with it. `ConversationState` (`graph/state.ts`) holds only what must survive between runs: phase, activeSessionId, messages, pendingTransition (ADR-0013 §3.2). Nodes/tools read context via `ctxOf(config)`; run context is never checkpointed.
-2) **One run row per POST** (`conversation_runs`, ADR-0013 §8): the `commit` node records outcome `ok`; the adapter records failed runs (`llm_unavailable` for provider/network errors, `core_error` otherwise) before rethrowing. There is no other writer.
+1) Everything a run needs travels as **run context**, not durable state: the conversation-run adapter (`infra/ai/graph/conversation-run.adapter.ts`) loads the user, builds `RunContext` (runId, userId, user, now, client, trigger, a per-run `RunMetricsCollector`) and invokes the graph with it. `ConversationState` (`graph/state.ts`) holds only what must survive between runs: phase, activeSessionId, messages, pendingTransition, plus the episode-memory channels (`episodeSummaries`, `episodeId`, `episodeStartedAt`, `lastUserMessageAt`, `compactReason` — refactor P4, ADR-0013 §3.2). Nodes/tools read context via `ctxOf(config)`; run context is never checkpointed.
+2) **One run row per POST** (`conversation_runs`, ADR-0013 §8): the `commit` node records outcome `ok`; the adapter records failed runs (`llm_unavailable` for provider/network errors, `core_error` otherwise) before rethrowing. There is no other writer. Run-row semantics: `transition` = `{ toPhase, reason }` from the run's `request_transition` call (null when none); `phaseOut` is set only when the transition **committed** — a blocked or uncommitted request leaves `transition` set with `phaseOut: null`.
 3) **To add a transition side effect** (a new `TransitionHandler`): implement `(event: PhaseTransitionCommitted) => Promise<TransitionHandlerResult>` in `infra/ai/graph/handlers/` and append it to the `onTransition` list the commit node receives. Handlers run in order, awaited; one failing handler is logged at `error` and skipped, the reply never fails (BR-CONV-007 spirit). Transition legality itself lives in the domain (`domain/conversation/transitions.ts`, BR-CONV-015..018) — never re-check it in a handler.
+
+### Memory (episode model, refactor P4)
+- **Short-term memory = the checkpointed `messages` channel** (LangGraph PostgresSaver): it persists across runs, carries tool calls and tool results, and is the only source of dialogue history for every phase — one chat, no per-phase history (INV-LLM-001/002).
+- **Episodes end by rule** (precedence `phase_boundary` > `inactivity` > `budget`): a committed phase transition (`compaction-flag.handler`), an inactivity gap ≥ `EPISODE_GAP_HOURS`, or a history-budget overflow. The synchronous `compact` step in `prepare` turns the ended episode into **one independent structured summary** (no rolling `previousSummary`); at most 3 summaries are kept (oldest dropped first) and rendered as the `## Previous episodes` block. Summaries are context, not data — numbers (weights, reps) always come from tools, never from a summary (INV-LLM-003).
+- **Seeding an episode in evals**: case `state.messages` seeds ride the `messages` channel via `evals/lib/seed-messages.ts` (`graph.updateState`) — `human`/`ai` seeds are stored as-is, `tool_call` merges into the preceding `AIMessage`'s `tool_calls`, `tool_result` becomes a `ToolMessage`.
+- **Config exception**: `EPISODE_GAP_HOURS` / `EPISODE_MIN_TURNS` / `EPISODE_MIN_TOKENS` are optional env vars with code defaults in `config/index.ts` — the second documented exception to "no defaults in code", after `LLM_PROFILE_*` (tunables, not secrets).
 
 ### Integrate Conversation Context into a Flow
 1) Spec:
    - Verify FEAT-0009 scenarios and domain rules in `docs/features/FEAT-0009-conversation-context.md` and `docs/domain/conversation.spec.md`.
    - Reference BR-CONV-001..BR-CONV-007 in code and tests.
 2) Domain:
-   - Import `IConversationContextService` and `CONVERSATION_CONTEXT_SERVICE_TOKEN` from `domain/conversation/ports/`.
-   - Use `ChatMsg` type (shared with AI domain) for message arrays.
-3) Orchestration (route or orchestrator service):
-   - Determine phase from user state (e.g. profileStatus -> 'registration' or 'chat').
-   - Load: `ctx = await conversationContextService.getContext(userId, phase)` [BR-CONV-001].
-   - Build: `history = conversationContextService.getMessagesForPrompt(ctx, {maxTurns: 20})` [BR-CONV-003].
-   - Call LLM: `llmGateway.chat([...history, {role:'user', content: message}], {runId})`.
-   - Persist: `await conversationContextService.appendTurn(userId, phase, message, response)` [BR-CONV-002].
-   - On phase change: `await conversationContextService.startNewPhase(userId, oldPhase, newPhase, systemNote)` [BR-CONV-005].
+   - There is no context service and no prompt-side history read: dialogue history is the checkpointed `messages` channel, assembled by `assemble-context.ts` (see § Memory (episode model) above). The legacy `IConversationContextService` was deleted in refactor P4.
+   - Persistence goes through `TranscriptPort` / `SummaryPort` (`domain/conversation/ports/`), called by the graph's `commit` / `compact` steps — never from a route.
+3) Orchestration:
+   - Routes talk to `ConversationRunPort` only (`chat.routes.ts`); the adapter loads the user, builds run context and invokes the graph. Phase is derived from user state inside the graph (`prepare`), not by the route.
+   - To wipe memory: `conversationRun.clearContext(userId)` (deletes the checkpoint thread, appends a `context_cleared` system note).
 4) Tests:
-   - Unit: mock IConversationContextService; verify orchestrator calls getContext, getMessagesForPrompt, appendTurn in order.
-   - Integration: verify sliding window truncation [S-0059], phase reset [S-0060], full flow [S-0063].
-5) DI: resolve via `CONVERSATION_CONTEXT_SERVICE_TOKEN`; register in `main/bootstrap.ts`.
+   - Unit: stub the graph deps (`evals/lib/build-stub-deps.ts` is the reference stub world); seed episode memory as `state.messages` (see § Memory (episode model) above).
+   - Integration: verify `conversation_turns` projection rows and checkpoint persistence across runs (`episode-memory.integration.unit.test.ts`).
 
 ## Templates
 - Domain Spec: `docs/templates/domain.spec.template.md`
@@ -186,9 +187,9 @@ code review. The division of roles and conflict rules are defined in
   - Repository ports: `apps/server/src/domain/user/ports/repository.ports.ts`
   - Service ports: `apps/server/src/domain/user/ports/service.ports.ts`
   - Convenience imports: `apps/server/src/domain/user/ports/index.ts`
-- Conversation context:
-  - Token and port: `apps/server/src/domain/conversation/ports/conversation-context.ports.ts`
-  - `CONVERSATION_CONTEXT_SERVICE_TOKEN` -> `IConversationContextService`
+- Conversation:
+  - Transcript / summary ports: `apps/server/src/domain/conversation/ports/transcript.ports.ts`, `summary.ports.ts`
+  - `TRANSCRIPT_PORT_TOKEN` -> `TranscriptPort`; `SUMMARY_PORT_TOKEN` -> `SummaryPort`
 
 When adding new ports, define `unique symbol` tokens and interfaces under `domain/*/ports/` with modular organization. Implement in `infra/*` and register in `bootstrap.ts` via `register`/`registerFactory`.
 

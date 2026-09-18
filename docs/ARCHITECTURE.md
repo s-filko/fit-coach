@@ -45,16 +45,18 @@ apps/server/src/
       ports/
         llm.gateway.ports.ts   # LlmGateway (chat, structured) — ADR-0013 §7; the only LLM port
         index.ts
-      types.ts                 # ChatMsg (temporary home; retired in refactor P1/P4 per ADR-0013)
+      types.ts                 # ChatMsg — LlmGateway call type only; graph history is LangChain BaseMessages from the checkpointed `messages` channel (P4, ADR-0013 §3.1)
     conversation/
       tool-outcome.ts         # ToolOutcome/ToolReturn/ToolStateUpdate — pure tool contract (ADR-0013 §6; no runtime LangGraph)
       phases.ts               # ConversationPhase — the five phases (ADR-0013 §11)
       transitions.ts          # TRANSITION_MATRIX + evaluateTransition — pure domain rules (BR-CONV-015..018, ADR-0013 §4.3)
       events.ts               # PhaseTransitionCommitted event + TransitionHandler type (ADR-0013 §4.3)
+      episode.ts              # EpisodeSummary schema/types, StoredEpisodeSummary, CompactReason, TokenBudget (ADR-0013 §3.3)
       ports/
-        conversation-context.ports.ts  # IConversationContextService (2-method: appendTurn + getMessagesForPrompt)
-        conversation-run.ports.ts      # IConversationRunService (run rows, §8) + ConversationRunPort (§11 — run the graph; token CONVERSATION_RUN_PORT_TOKEN)
-        index.ts               # Re-exports
+        transcript.ports.ts   # TranscriptPort (appendRunMessages, appendSystemNote) + TranscriptMessage — transcript projection (§8)
+        summary.ports.ts      # SummaryPort (insert, latestLegacySummary) — conversation_summaries (§8)
+        conversation-run.ports.ts      # IConversationRunService (run rows, §8) + ConversationRunPort (§11 — run the graph, clearContext; token CONVERSATION_RUN_PORT_TOKEN)
+        index.ts               # Re-exports (incl. ConversationPhase)
     training/
       ports/                   # Named by contract (rule 2)
         index.ts               # Re-exports
@@ -88,19 +90,21 @@ apps/server/src/
         phase-spec.ts           # PhaseSpec — one declarative spec per phase (INV-LLM-005)
         phase-subgraph.factory.ts  # buildPhaseSubgraph(spec) — the single factory building every phase subgraph
         phases/                 # The five PhaseSpecs: registration, chat, plan-creation, session-planning, training
-        conversation-run.adapter.ts  # ConversationRunPort adapter: loads the user, builds run context, records failed runs (D-F)
-        tool-executor.ts        # Shared tool executor: runs every phase's tool calls, serialises ToolOutcome v1, applies ToolStateUpdate (ADR-0013 §4.2/§4.4/§6)
+        episode.ts              # splitEpisode (history vs current, D-I), lastAiText, toTranscriptMessages
+        conversation-run.adapter.ts  # ConversationRunPort adapter: loads the user, builds run context, records failed runs, clearContext via the checkpointer (D-F)
+        tool-executor.ts        # Shared tool executor: runs every phase's tool calls, answers every tool_call id, serialises ToolOutcome v1, applies ToolStateUpdate (ADR-0013 §4.2/§4.4/§6)
         tool-policy.ts          # ToolPolicy + pure helpers: ordering, batch dedup, search key (AC-1331/AC-1332)
         nodes/
           agent.node.ts             # Shared agent node: system split, post-tool nudge, empty-reply retry (replaces the five subgraphs)
-          prepare.node.ts           # pendingTransition reset, training short-circuits → commit (D-E), registration↔chat sync
+          prepare.node.ts           # pendingTransition reset, episode compaction, training short-circuits → commit, registration↔chat sync
           route.node.ts             # Phase dispatch to the subgraph factory
-          commit.node.ts            # appendTurn + run row + evaluateTransition + PhaseTransitionCommitted handlers + state clear (§4.1/§4.3)
-          finalize.node.ts          # Reply extraction — returns {} (the reply is the last AIMessage in state)
-          phase-summary.node.ts    # End-of-phase summary rendering (used by the legacy handler)
+          commit.node.ts            # transcript projection + run row + evaluateTransition + PhaseTransitionCommitted handlers (§4.1/§4.3; messages are never cleared)
+          finalize.node.ts          # Returns {} (the reply is the last AIMessage in state)
+          compact.ts                # Pure compaction rules: decideCompactReason, planCompaction (turn-safe cut), short-episode check, transcript rendering
+          compact.node.ts           # buildCompactStep: summarises the ended episode via LlmGateway.structured, keeps max 3 summaries, RemoveMessage trim (BR-LLM-001..004)
         handlers/
           session-lifecycle.handler.ts      # TransitionHandler: training session completion, activeSessionId clearing
-          legacy-phase-summary.handler.ts   # End-of-phase summary; P4 deletes it
+          compaction-flag.handler.ts        # TransitionHandler: sets compactReason = 'phase_boundary' on a committed transition
       tools/                        # One file per tool (ADR-0013 §11); tools return ToolReturn, never touch LangGraph
         outcome.ts                   # ToolOutcome serialisation v1: toToolMessage, outcomeKindOf, LLM/SYSTEM_ERROR prefixes
         index.ts                     # buildSharedTools + per-tool builder re-exports
@@ -114,13 +118,12 @@ apps/server/src/
       messages/                      # User-facing message catalog (ADR-0013 §11) — en/ru, language_code driven
         catalog.ts / en.ts / ru.ts / index.ts
       context/                      # Context assembler — message order + token accounting (ADR-0013 §3.4)
-        assemble-context.ts         # assembleContext() → { messages, budgetReport } (reporting half; budgets/trimming are P4)
+        assemble-context.ts         # assembleContext() → { messages, budgetReport }: system → episode summaries → history → current (one shape for every phase; reporting half — enforcement is the context-budget plan)
         token-estimator.ts          # estimateTokens + TOKEN_ESTIMATOR_ID — the single estimator (app + eval stack)
-        tool-results.ts             # renderToolResults — training's tool-results block
       prompts/                       # Versioned prompt modules — every model-facing string (ADR-0013 §5)
         types.ts                     # Section, DirectiveModule, PromptModule<TCtx>, PhasePromptEntry
         compose.ts                   # renderDirectives, compose (join '\n\n'), sectionText, promptVersionsOf
-        index.ts                     # Registry: PHASE_PROMPTS (+ per-phase layout), STANDALONE_PROMPTS, blocksForLayout, promptVersionsForPhase
+        index.ts                     # Registry: PHASE_PROMPTS, STANDALONE_PROMPTS, promptVersionsForPhase
         directives/                  # The nine directives, one versioned module each
           identity.v1.ts             #   FitCoach persona
           greeting.v1.ts             #   new-day greeting (driven by ctx.now, not the clock)
@@ -138,14 +141,13 @@ apps/server/src/
           session_planning/v1.ts     #
           training/v1.ts             #   + v1.helpers.ts; DIRECTIVES_WITHOUT_IDENTITY_V1
         blocks/                      # Injected fragments that are neither phase prompt nor directive
-          tool-results.v1.ts         #   === TOOL EXECUTION RESULTS === block (BUG-006/BUG-009 guard)
-          history-frame.v1.ts        #   training system-block history frame
-          summary-frame.v1.ts        #   CONTEXT FROM PREVIOUS CONVERSATION wrapper
+          episode-summaries.v1.ts    #   ## Previous episodes block — context, not data (numbers come from tools)
           post-tool-nudge.v1.ts      #   post-tool nudge (agent node retry)
-        summarizer/v1.ts             # End-of-phase summariser (system + user sections)
+        summarizer/v1.ts             # Legacy end-of-phase summariser (not used by the graph since P4; kept with its snapshot tests)
+        summarizer/v2.ts             # Episode summariser — structured EpisodeSummary from the rendered transcript (no previousSummary)
     conversation/
-      conversation-context.service.ts          # InMemoryConversationContextService (test double)
-      drizzle-conversation-context.service.ts   # IConversationContextService impl (2-method, DB-backed)
+      drizzle-transcript.service.ts             # TranscriptPort impl — projects run messages into conversation_turns (one row per message, run_id always set)
+      drizzle-summary.service.ts                # SummaryPort impl — writes conversation_summaries + the mirrored `summary` turn row in one transaction
       drizzle-conversation-run.service.ts       # IConversationRunService impl — writes conversation_runs
     di/
       container.ts              # DI container with factory support + lazy initialization
@@ -239,7 +241,7 @@ Standing exceptions (each names the task that closes it):
 - **Factory pattern**: `container.registerFactory(token, (container) => new Service(...))` allows lazy instantiation and access to other dependencies via the container parameter.
 - **Lazy initialization**: Services registered with factories are instantiated only on first `container.get(token)` call, preventing circular dependencies and improving startup time.
 - **Service registration order** (`src/main/register-infra-services.ts`):
-  1. ConversationContextService (Drizzle-backed, 2-method interface)
+  1. Transcript/Summary services (Drizzle-backed `TranscriptPort`/`SummaryPort`)
   2. UserRepository (Drizzle-backed)
   3. UserService (depends on UserRepository)
   4. TrainingService (depends on training repositories)
@@ -336,18 +338,14 @@ These rules are for any AI assistant working in this repo:
 9) For non-trivial changes, add an ADR entry under `docs/adr/` (see below).
 10) Preserve `tsconfig.json` path aliases and update imports accordingly if files move.
 
-## Conversation Context (Session) [FEAT-0009] ✅ IMPLEMENTED (simplified)
-- **Conversation history** (`conversation_turns` table) stores dialogue turns per (userId, phase) for prompt building and analytics.
-- **Phase/session state** is managed by **LangGraph PostgresSaver checkpointer** — not by `IConversationContextService`. No `[PHASE_ENDED]` markers, no `startNewPhase()`.
-- Domain port: `IConversationContextService` (2 methods only):
-  - `appendTurn(userId, phase, userMessage, assistantResponse): Promise<void>`
-  - `getMessagesForPrompt(userId, phase, options?): Promise<ChatMsg[]>`
-- The agent node calls `getMessagesForPrompt()` to load history before building the LLM prompt. The `commit` node calls `appendTurn()` after the response.
-- **Sliding window** (default 20 turns) via `LIMIT` in SQL query [BR-CONV-003].
-- Module layout: `domain/conversation/ports/conversation-context.ports.ts`; `infra/conversation/drizzle-conversation-context.service.ts`.
-- **ADR-0005**: original patterns (partially superseded by checkpointer for state management).
+## Conversation Context (Session) [FEAT-0009] ✅ IMPLEMENTED (episode memory, refactor P4)
+- **Dialogue memory** is the checkpointed LangGraph `messages` channel (PostgresSaver): it survives runs, interleaves as `BaseMessage`s (human / AI with `tool_calls` / tool results) and is the only source of history for every phase (INV-LLM-001/002). One chat across the app — no per-phase history.
+- **Episodes end by rule** — inactivity gap (`EPISODE_GAP_HOURS`, default 3), a committed phase transition (`compaction-flag.handler` → `compactReason`), or history-budget overflow — and the synchronous `compact` step in `prepare` summarises the ended episode into one independent structured summary; at most 3 are kept and rendered by the `## Previous episodes` block. Summaries are context, not data: facts (weights, reps) come from tools only (INV-LLM-003).
+- **Transcript** (`conversation_turns` table) is an append-only projection: the `commit` node writes one row per message (`kind` human/ai/tool_call/tool_result, plus mirrored `summary` rows and `system_note`s), each carrying the run's `run_id`.
+- **Clear context**: `POST /api/bot/chat/clear-context` calls `ConversationRunPort.clearContext(userId)` — the adapter deletes the checkpoint thread and appends a `context_cleared` system note; the next message starts fresh.
+- **ADR-0005**: original patterns (superseded — no context service, no sliding window; the legacy `IConversationContextService` was deleted in P4).
 - No breaking change to API: `POST /api/chat` contract unchanged [AC-0110].
-- **Database storage**: `conversation_turns` table with (userId, phase, role, content, runId, kind, payload, createdAt); `conversation_runs` table — one row per run with model/tokens/latency/outcome (ADR-0013 §8, written by the commit node); `langgraph_checkpoints` table (managed by PostgresSaver).
+- **Database storage**: `conversation_turns` table with (userId, phase, role, content, runId, kind, payload, createdAt); `conversation_summaries` table — structured episode summaries (ADR-0013 §8, written at compaction via `SummaryPort`); `conversation_runs` table — one row per run with model/tokens/latency/outcome (ADR-0013 §8, written by the commit node); `langgraph_checkpoints` table (managed by PostgresSaver).
 
 ## LLM Integration
 **Implementation**: `src/infra/ai/model.factory.ts`
@@ -368,10 +366,10 @@ LLM_TEMPERATURE=<0-2>                 # Required: temperature for generation
 
 ### Interaction Pattern (Tool Calling Loop)
 Each phase subgraph runs a tool-calling loop:
-1. `agentNode`: `model.bindTools(tools).invoke([systemMsg, history..., humanMsg, ...stateMessages])`
-2. If `AIMessage.tool_calls` present → `ToolNode` executes tools → `ToolMessage` results appended
+1. `agentNode`: `model.bindTools(tools).invoke(assembleContext(...))` — `[SystemMessage(systemPrompt), (## Previous episodes), ...history, ...current]`, history interleaved from the checkpointed `messages` channel
+2. If `AIMessage.tool_calls` present → the tool executor runs them → `ToolMessage` results appended
 3. Loop back to `agentNode` with updated messages (tool results visible)
-4. If no `tool_calls` → `extractNode` extracts `responseMessage`, reads `pendingTransition`
+4. If no `tool_calls` → `finalize` returns `{}` — the reply is the last `AIMessage` in state; `commit` reads `pendingTransition` and projects the run
 
 ### Tool Calling vs JSON Mode
 - **Old approach**: LLM forced to respond in JSON → code parses with Zod → error-prone
