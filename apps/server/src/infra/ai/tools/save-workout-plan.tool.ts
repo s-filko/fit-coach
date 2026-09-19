@@ -6,8 +6,8 @@ import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
 import type { IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
 import type { MuscleGroup } from '@domain/training/types';
 import type { IUserFactsService } from '@domain/user/ports';
-import { checkFactConflicts, factConflictMessage } from '@domain/user/services/fact-conflicts';
 
+import { rejectOnFactConflict } from './fact-constraint-guard';
 import { userIdOf } from './format-exercise-summary';
 
 export interface SaveWorkoutPlanToolDeps {
@@ -114,10 +114,9 @@ export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
 
         // Hard validation (D-G): a physical_constraint fact's muscle group among
         // an exercise's PRIMARY muscles rejects the call — nothing is persisted.
-        const facts = await userFactsService.getConstraints(userId);
-        const conflict = checkFactConflicts({ facts, exercises: found });
-        if (conflict) {
-          return userError(factConflictMessage(conflict));
+        const rejection = await rejectOnFactConflict(userFactsService, userId, found);
+        if (rejection) {
+          return rejection;
         }
       }
 

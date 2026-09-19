@@ -5,8 +5,8 @@ import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
 import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
 import { SessionRecommendationSchema } from '@domain/training/session-planning.types';
 import type { IUserFactsService } from '@domain/user/ports';
-import { checkFactConflicts, factConflictMessage } from '@domain/user/services/fact-conflicts';
 
+import { rejectOnFactConflict } from './fact-constraint-guard';
 import { userIdOf } from './format-exercise-summary';
 
 export interface StartTrainingSessionToolDeps {
@@ -51,10 +51,9 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
 
         // Hard validation (D-G): a physical_constraint fact's muscle group among
         // an exercise's PRIMARY muscles rejects the call — nothing is persisted.
-        const facts = await userFactsService.getConstraints(userId);
-        const conflict = checkFactConflicts({ facts, exercises: found });
-        if (conflict) {
-          return userError(factConflictMessage(conflict));
+        const rejection = await rejectOnFactConflict(userFactsService, userId, found);
+        if (rejection) {
+          return rejection;
         }
       }
 
