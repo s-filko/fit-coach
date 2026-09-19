@@ -4,6 +4,8 @@ import { tool } from '@langchain/core/tools';
 import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
 import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
 import { SessionRecommendationSchema } from '@domain/training/session-planning.types';
+import type { IUserFactsService } from '@domain/user/ports';
+import { checkFactConflicts, factConflictMessage } from '@domain/user/services/fact-conflicts';
 
 import { userIdOf } from './format-exercise-summary';
 
@@ -11,6 +13,8 @@ export interface StartTrainingSessionToolDeps {
   trainingService: ITrainingService;
   workoutPlanRepository: IWorkoutPlanRepository;
   exerciseRepository: IExerciseRepository;
+  /** P6 Task 5: hard validation against physical_constraint facts (D-G). */
+  userFactsService: IUserFactsService;
 }
 
 const START_TRAINING_SESSION_DESCRIPTION = [
@@ -21,7 +25,7 @@ const START_TRAINING_SESSION_DESCRIPTION = [
 ].join(' ');
 
 export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps) {
-  const { trainingService, workoutPlanRepository, exerciseRepository } = deps;
+  const { trainingService, workoutPlanRepository, exerciseRepository, userFactsService } = deps;
 
   return tool(
     async (input, config) => {
@@ -30,11 +34,12 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
         return userError('Error: could not identify user. Please try again.');
       }
 
-      // Validate all exerciseIds exist in DB before creating the session
+      // Validate all exerciseIds exist in DB before creating the session, and
+      // resolve their muscles in the same call for the constraint check below.
       const allIds = input.exercises.map((e: { exerciseId: string }) => e.exerciseId);
       const uniqueIds = [...new Set(allIds)];
       if (uniqueIds.length > 0) {
-        const found = await exerciseRepository.findByIds(uniqueIds);
+        const found = await exerciseRepository.findByIdsWithMuscles(uniqueIds);
         const foundIds = new Set(found.map(e => e.id));
         const missing = uniqueIds.filter(id => !foundIds.has(id));
         if (missing.length > 0) {
@@ -42,6 +47,14 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
             `Invalid exerciseId(s): ${missing.join(', ')}. These IDs do not exist in the exercise catalog. ` +
               'Use search_exercises to find valid exercise IDs, then retry.',
           );
+        }
+
+        // Hard validation (D-G): a physical_constraint fact's muscle group among
+        // an exercise's PRIMARY muscles rejects the call — nothing is persisted.
+        const facts = await userFactsService.getConstraints(userId);
+        const conflict = checkFactConflicts({ facts, exercises: found });
+        if (conflict) {
+          return userError(factConflictMessage(conflict));
         }
       }
 

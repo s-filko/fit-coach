@@ -70,6 +70,7 @@ export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec
         trainingService,
         workoutPlanRepository: deps.workoutPlanRepo,
         exerciseRepository,
+        userFactsService: deps.userFacts,
       }),
       buildRequestTransitionTool('session_planning'),
       ...buildSharedTools({ userService }),

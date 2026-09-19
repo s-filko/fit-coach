@@ -5,12 +5,16 @@ import { z } from 'zod';
 import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
 import type { IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
 import type { MuscleGroup } from '@domain/training/types';
+import type { IUserFactsService } from '@domain/user/ports';
+import { checkFactConflicts, factConflictMessage } from '@domain/user/services/fact-conflicts';
 
 import { userIdOf } from './format-exercise-summary';
 
 export interface SaveWorkoutPlanToolDeps {
   workoutPlanRepository: IWorkoutPlanRepository;
   exerciseRepository: IExerciseRepository;
+  /** P6 Task 5: hard validation against physical_constraint facts (D-G). */
+  userFactsService: IUserFactsService;
 }
 
 const MUSCLE_GROUPS: [MuscleGroup, ...MuscleGroup[]] = [
@@ -84,7 +88,7 @@ const SAVE_WORKOUT_PLAN_DESCRIPTION = [
 ].join(' ');
 
 export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
-  const { workoutPlanRepository, exerciseRepository } = deps;
+  const { workoutPlanRepository, exerciseRepository, userFactsService } = deps;
 
   return tool(
     async (input, config) => {
@@ -93,11 +97,12 @@ export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
         return userError('Error: could not identify user. Please try again.');
       }
 
-      // Validate all exerciseIds exist in DB before saving
+      // Validate all exerciseIds exist in DB before saving, and resolve their
+      // muscles in the same call for the constraint check below.
       const allIds = input.sessionTemplates.flatMap(t => t.exercises.map(e => e.exerciseId));
       const uniqueIds = [...new Set(allIds)];
       if (uniqueIds.length > 0) {
-        const found = await exerciseRepository.findByIds(uniqueIds);
+        const found = await exerciseRepository.findByIdsWithMuscles(uniqueIds);
         const foundIds = new Set(found.map(e => e.id));
         const missing = uniqueIds.filter(id => !foundIds.has(id));
         if (missing.length > 0) {
@@ -105,6 +110,14 @@ export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
             `Invalid exerciseId(s): ${missing.join(', ')}. These IDs do not exist in the exercise catalog. ` +
               'Use search_exercises to find valid exercise IDs.',
           );
+        }
+
+        // Hard validation (D-G): a physical_constraint fact's muscle group among
+        // an exercise's PRIMARY muscles rejects the call — nothing is persisted.
+        const facts = await userFactsService.getConstraints(userId);
+        const conflict = checkFactConflicts({ facts, exercises: found });
+        if (conflict) {
+          return userError(factConflictMessage(conflict));
         }
       }
 

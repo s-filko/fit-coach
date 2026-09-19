@@ -290,10 +290,10 @@ Review notes: the unique constraint on `(user_id, category, fact_key)` is what m
 - Modify: `apps/server/src/infra/ai/graph/phases/plan-creation.spec.ts`, `session-planning.spec.ts`, `training.spec.ts` — whichever specs build those tools (**grep**: `grep -rn "saveWorkoutPlanTool\|startTrainingSessionTool" src/infra/ai/graph/phases/`) get the service through their deps.
 - Modify: the two tools' existing `__tests__`.
 
-- [ ] **Step 1: Tests first** — pure function: no facts → null; a `physical_constraint` fact with `muscleGroup: 'lower_back'` and an exercise whose **primary** muscles include `lower_back` → conflict; the same muscle as a **secondary** muscle → **no** conflict (constraints bind on primary involvement only — state this in the JSDoc); a non-`physical_constraint` fact with a muscle group → no conflict (preferences are soft, per ADR-0009's category semantics). Tools: a conflicting plan returns `ok: false, kind: 'user_error'` with the fact's text in the message and **persists nothing**; a clean plan persists as before (byte-identical `ok.summary` — `TOOL_OUTCOME_FORMAT_ID` is frozen).
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `feat(ai): save_workout_plan and start_training_session reject exercises conflicting with a physical_constraint fact (AC-1361 deterministic half)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 1: Tests first** — pure function: no facts → null; a `physical_constraint` fact with `muscleGroup: 'lower_back'` and an exercise whose **primary** muscles include `lower_back` → conflict; the same muscle as a **secondary** muscle → **no** conflict (constraints bind on primary involvement only — state this in the JSDoc); a non-`physical_constraint` fact with a muscle group → no conflict (preferences are soft, per ADR-0009's category semantics). Tools: a conflicting plan returns `ok: false, kind: 'user_error'` with the fact's text in the message and **persists nothing**; a clean plan persists as before (byte-identical `ok.summary` — `TOOL_OUTCOME_FORMAT_ID` is frozen).
+- [x] **Step 2: Implement.**
+- [x] **Step 3: Commit** — `feat(ai): save_workout_plan and start_training_session reject exercises conflicting with a physical_constraint fact (AC-1361 deterministic half)`
+- [x] **Step 4: STOP** for orchestrator review.
 
 **Verification:** `npx jest --ci src/domain/user src/infra/ai/tools src/infra/ai/graph/phases` → all pass; `npm run evals -- --level L0` → pass (tool-result text for the clean path must be unchanged).
 

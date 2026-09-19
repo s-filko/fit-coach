@@ -59,6 +59,7 @@ function phaseTools(phase: PhaseName): StructuredToolInterface[] {
         buildSaveWorkoutPlanTool({
           workoutPlanRepository: deps.workoutPlanRepo,
           exerciseRepository: deps.exerciseRepository,
+          userFactsService: deps.userFacts,
         }),
         buildRequestTransitionTool('plan_creation'),
         ...shared(),
@@ -73,6 +74,7 @@ function phaseTools(phase: PhaseName): StructuredToolInterface[] {
           trainingService: deps.trainingService,
           workoutPlanRepository: deps.workoutPlanRepo,
           exerciseRepository: deps.exerciseRepository,
+          userFactsService: deps.userFacts,
         }),
         buildRequestTransitionTool('session_planning'),
         ...shared(),

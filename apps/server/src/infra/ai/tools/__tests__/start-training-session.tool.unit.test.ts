@@ -2,6 +2,8 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 
 import { isToolReturnWithUpdate, type ToolReturn } from '@domain/conversation/tool-outcome';
 import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
+import type { IUserFactsService, UserFact } from '@domain/user/ports/user-facts.ports';
+import type { ExerciseWithMuscles } from '@domain/training/types';
 
 import { toToolMessage } from '@infra/ai/tools/outcome';
 
@@ -63,26 +65,72 @@ const makeConfig = (userId = 'u1'): RunnableConfig => ({
 
 const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> =>
   ({
-    findByIds: jest.fn().mockResolvedValue([{ id: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95' }]),
+    findByIds: jest.fn().mockResolvedValue([]),
     searchByEmbedding: jest.fn().mockResolvedValue([]),
     updateEmbedding: jest.fn(),
     findAll: jest.fn(),
     findAllWithMuscles: jest.fn(),
     findById: jest.fn(),
     findByIdWithMuscles: jest.fn(),
-    findByIdsWithMuscles: jest.fn(),
+    findByIdsWithMuscles: jest
+      .fn()
+      .mockResolvedValue([makeExerciseWithMuscles([{ muscleGroup: 'chest', involvement: 'primary' }])]),
     findByMuscleGroup: jest.fn(),
     search: jest.fn(),
   }) as unknown as jest.Mocked<IExerciseRepository>;
 
+const makeExerciseWithMuscles = (
+  muscleGroups: ExerciseWithMuscles['muscleGroups'],
+  id = 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
+  name = 'Bench Press',
+): ExerciseWithMuscles => ({
+  id,
+  name,
+  category: 'compound',
+  equipment: 'barbell',
+  exerciseType: 'strength',
+  description: null,
+  energyCost: 'high',
+  complexity: 'intermediate',
+  typicalDurationMinutes: 12,
+  requiresSpotter: false,
+  imageUrl: null,
+  videoUrl: null,
+  createdAt: new Date(),
+  muscleGroups,
+});
+
+const makeConstraintFact = (muscleGroup: UserFact['muscleGroup']): UserFact => ({
+  id: 'fact-1',
+  userId: 'u1',
+  category: 'physical_constraint',
+  fact: 'User has a shoulder injury — avoid direct chest pressing.',
+  factKey: 'shoulder-injury',
+  muscleGroup,
+  confirmations: 1,
+  sourceTurnId: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+});
+
+const makeUserFactsService = (constraints: UserFact[] = []): jest.Mocked<IUserFactsService> =>
+  ({
+    upsertMany: jest.fn(),
+    getForPrompt: jest.fn(),
+    getConstraints: jest.fn().mockResolvedValue(constraints),
+  }) as unknown as jest.Mocked<IUserFactsService>;
+
 const buildTools = (
   trainingService: jest.Mocked<ITrainingService>,
   workoutPlanRepository: jest.Mocked<IWorkoutPlanRepository>,
+  userFactsService: jest.Mocked<IUserFactsService> = makeUserFactsService(),
+  exerciseRepository: jest.Mocked<IExerciseRepository> = makeExerciseRepository(),
 ) => {
   const startTrainingSession = buildStartTrainingSessionTool({
     trainingService,
     workoutPlanRepository,
-    exerciseRepository: makeExerciseRepository(),
+    exerciseRepository,
+    userFactsService,
   }) as unknown as InvokableTool;
   return { startTrainingSession };
 };
@@ -154,6 +202,46 @@ describe('start-training-session.tool — start_training_session', () => {
     const result = (await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig())) as ToolReturn;
 
     expect(renderedContent(result)).toContain('session-1');
+  });
+
+  it('rejects a session whose exercise PRIMARILY trains a constrained muscle group, quoting the fact', async () => {
+    const trainingService = makeTrainingService();
+    const workoutPlanRepo = makeWorkoutPlanRepo();
+    const fact = makeConstraintFact('chest'); // Bench Press's primary muscle in the mock
+    const { startTrainingSession } = buildTools(trainingService, workoutPlanRepo, makeUserFactsService([fact]));
+
+    const result = (await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig('u1'))) as ToolReturn;
+
+    expect(result).toEqual({
+      ok: false,
+      kind: 'user_error',
+      message: expect.stringContaining('User has a shoulder injury — avoid direct chest pressing.'),
+    });
+    // persists nothing and requests no state update
+    expect(trainingService.startSession).not.toHaveBeenCalled();
+    expect(isToolReturnWithUpdate(result)).toBe(false);
+  });
+
+  it('does NOT reject when the constrained muscle is only a secondary muscle', async () => {
+    const trainingService = makeTrainingService('session-ok');
+    const exerciseRepository = makeExerciseRepository();
+    exerciseRepository.findByIdsWithMuscles.mockResolvedValue([
+      makeExerciseWithMuscles([
+        { muscleGroup: 'chest', involvement: 'primary' },
+        { muscleGroup: 'triceps', involvement: 'secondary' },
+      ]),
+    ]);
+    const { startTrainingSession } = buildTools(
+      trainingService,
+      makeWorkoutPlanRepo(),
+      makeUserFactsService([makeConstraintFact('triceps')]),
+      exerciseRepository,
+    );
+
+    const result = (await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig('u1'))) as ToolReturn;
+
+    expect(isToolReturnWithUpdate(result)).toBe(true);
+    expect(trainingService.startSession).toHaveBeenCalledTimes(1);
   });
 
   it('returns error string when userId is missing', async () => {
