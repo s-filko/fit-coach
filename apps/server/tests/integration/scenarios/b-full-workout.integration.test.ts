@@ -9,8 +9,8 @@
  *
  * `beforeAll` runs the journey once (real wiring via `runScenario`, Date-only
  * fake timers); per-step `seen` is attributed through the runner's `onStep`
- * hook. The BUG-018 points fail today and run as `test.failing` (owner rule:
- * reproduction before fixes); everything else must pass.
+ * hook. The BUG-018 points are fixed (chat-continuity Tasks 1-3) and run as
+ * plain tests; the knownBug machinery stays for any future reproduction.
  */
 import { eq } from 'drizzle-orm';
 
@@ -116,7 +116,13 @@ beforeAll(async () => {
       }
       const calls = model.drainChatInputs();
       callsByStep.set(obs.stepIndex, calls);
-      seenByStep.set(obs.stepIndex, calls.flat().map(m => textOf(m)).join('\n'));
+      seenByStep.set(
+        obs.stepIndex,
+        calls
+          .flat()
+          .map(m => textOf(m))
+          .join('\n'),
+      );
     },
   });
 });
@@ -294,9 +300,10 @@ describe('journey B — a full workout, greeting to finish', () => {
       ]);
     });
 
-    it('the delivered text is the final AI message only (the run itself succeeds)', () => {
-      // Mirror of journey A: today the adapter delivers only the last AI text.
-      expect(observationOf(4).delivered).toBe('Отлично, есть первый подход!');
+    it('the delivered text is every AI text of the run, in order (AC-CC-3)', () => {
+      // Mirror of journey A: the "Записал!" written alongside the tool call
+      // is delivered before the after-tool text.
+      expect(observationOf(4).delivered).toBe(`Записал!\n\nОтлично, есть первый подход!`);
     });
   });
 

@@ -10,8 +10,8 @@
  * `beforeAll` runs the journey once (real wiring via `runScenario`, Date-only
  * fake timers so `ctx.now` and the wall-clock reads follow the scenario
  * clock); every assertion below is its own test. The three BUG-018 points
- * fail today and run as `test.failing` (owner rule: reproduction before
- * fixes); everything else must pass.
+ * are fixed (chat-continuity Tasks 1-3) and run as plain tests; the
+ * knownBug machinery stays for any future reproduction.
  */
 import { eq } from 'drizzle-orm';
 
@@ -20,8 +20,18 @@ import { conversationTurns } from '@infra/db/schema';
 import type { BaseMessage } from '@langchain/core/messages';
 
 import { runScenario, type ScenarioRunResult } from '../../../evals/lib/run-scenario';
-import { assertionKnownBug, assertionText, ScenarioSchema, type TaggedAssertion } from '../../../evals/schema/scenario.schema';
-import { FINAL_TEXT, GAP_NOTE_MARKER, scenario } from '../../../evals/scenarios/a-greeting-after-pause.scenario';
+import {
+  assertionKnownBug,
+  assertionText,
+  ScenarioSchema,
+  type TaggedAssertion,
+} from '../../../evals/schema/scenario.schema';
+import {
+  FINAL_TEXT,
+  GAP_NOTE_MARKER,
+  GREETING_TEXT,
+  scenario,
+} from '../../../evals/scenarios/a-greeting-after-pause.scenario';
 
 import { installScriptedModel, type ScriptedModelHandle } from './scripted-model';
 
@@ -149,17 +159,17 @@ describe('journey A — greeting after a pause (BUG-018 repro)', () => {
   });
 
   describe('delivered — what the user got', () => {
-    // Point 3 of BUG-018: the adapter delivers only the last AI message, so
-    // the greeting written alongside the tool call is lost.
-    test.failing(`the reply contains the greeting [${expect_.delivered?.knownBug}]`, () => {
+    // Point 3 of BUG-018 (fixed, Task 3): the reply carries every non-empty
+    // AI text of the run, so the greeting arrives with the final text.
+    test(`the reply contains the greeting`, () => {
       const delivered = result.steps[0]!.delivered;
       for (const substring of expect_.delivered?.mustMatch ?? []) {
         expect(delivered).toContain(substring);
       }
     });
 
-    it('the reply is the final scripted text (the run itself succeeds)', () => {
-      expect(result.steps[0]!.delivered).toBe(FINAL_TEXT);
+    it('the reply is every scripted text of the run, in order (AC-CC-3)', () => {
+      expect(result.steps[0]!.delivered).toBe(`${GREETING_TEXT}\n\n${FINAL_TEXT}`);
     });
   });
 
@@ -174,9 +184,7 @@ describe('journey A — greeting after a pause (BUG-018 repro)', () => {
     it('the run row records the applied transition to session_planning', () => {
       const runRow = result.steps[0]!.runRow;
       expect(runRow!.phaseOut).toBe('session_planning');
-      expect(runRow!.transition).toEqual(
-        expect.objectContaining({ toPhase: 'session_planning' }),
-      );
+      expect(runRow!.transition).toEqual(expect.objectContaining({ toPhase: 'session_planning' }));
     });
 
     it('the run row records the request_transition tool call', () => {

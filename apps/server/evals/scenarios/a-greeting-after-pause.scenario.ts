@@ -18,7 +18,7 @@ import type { Scenario } from '../schema/scenario.schema';
  * in Europe/Berlin; the integration test must keep that T0.
  */
 
-/** The greeting the scripted model writes alongside the transition call (AC-CC-3). */
+/** The greeting the scripted model writes alongside the transition call (the AC-CC-3 shape). */
 export const GREETING_TEXT = 'Привет, Алекс! Рад тебя видеть.';
 
 /** The final text after the transition tool result. */
@@ -145,9 +145,9 @@ export const scenario: Scenario = {
           ],
         },
         tools: { must: ['request_transition'] },
-        // The greeting rides the same AI message as the tool call; today the
-        // adapter delivers only the last AI text (BUG-018 point 3).
-        delivered: { mustMatch: [GREETING_TEXT], knownBug: 'BUG-018/AC-CC-3' },
+        // AC-CC-3 (fixed): the greeting rides the same AI message as the tool
+        // call and is delivered alongside the final text.
+        delivered: { mustMatch: [GREETING_TEXT] },
         persisted: { turnRecorded: true },
         phaseAfter: { phase: 'session_planning' },
       },

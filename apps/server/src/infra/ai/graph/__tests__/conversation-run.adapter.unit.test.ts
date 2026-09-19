@@ -38,7 +38,7 @@ function makeDeps(graph: StubGraph, user: User | null) {
 }
 
 describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
-  it('returns { text, phase, runId } — the text is the last AI message of the channel (P4, ADR-0013 §3.2)', async () => {
+  it('returns { text, phase, runId } — a single-AI run delivers that text byte-for-byte (AC-CC-3)', async () => {
     const graph = {
       invoke: async () => ({
         phase: 'chat',
@@ -53,6 +53,37 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
       phase: 'chat',
       runId: expect.any(String),
     });
+  });
+
+  // chat-continuity Task 3 (AC-CC-3 / BUG-018): the greeting written alongside
+  // the tool calls reaches the user too — every non-empty AI text of THIS run,
+  // in order, blank line between; the pre-run exchange is never re-sent.
+  it('AC-CC-3: the reply carries every non-empty AI text of the run, not only the last one', async () => {
+    const graph = {
+      invoke: async () => ({
+        phase: 'session_planning',
+        messages: [
+          new HumanMessage('q1'),
+          new AIMessage({ content: 'старый ответ', tool_calls: [] }),
+          new HumanMessage('привет'),
+          new AIMessage({
+            content: 'Привет! Рад тебя видеть.',
+            tool_calls: [{ id: 'c1', name: 'request_transition', args: {}, type: 'tool_call' }],
+          }),
+          new AIMessage({
+            content: '',
+            tool_calls: [{ id: 'c2', name: 'search_exercises', args: {}, type: 'tool_call' }],
+          }),
+          new AIMessage({ content: 'Финальный ответ.', tool_calls: [] }),
+        ],
+      }),
+    };
+    const { deps } = makeDeps(graph, makeUser());
+    const runner = buildConversationRunner(deps);
+
+    const out = await runner.run({ userId: UID, text: 'привет' });
+    expect(out.text).toBe('Привет! Рад тебя видеть.\n\nФинальный ответ.');
+    expect(out.text).not.toContain('старый ответ');
   });
 
   it('throws before invoke when the user is missing (D-A)', async () => {

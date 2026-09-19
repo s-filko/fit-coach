@@ -204,7 +204,7 @@ export const scenario: Scenario = {
   id: 'b-full-workout',
   description:
     'a full workout, greeting to finish: planning → start → sets → finish over the real test DB; ' +
-    'AC-CC-1 (turns lost after transitions) and AC-CC-3 ("Записал!" not delivered) reproductions',
+    'AC-CC-1 and AC-CC-3 fixed (chat-continuity Tasks 1 and 3)',
   past: sharedPast,
   steps: [
     ...setupSteps,
@@ -239,9 +239,9 @@ export const scenario: Scenario = {
           ],
         },
         tools: { must: ['log_set'] },
-        // BUG-018 point 3: the adapter delivers only the last AI text, so the
-        // "Записал!" written alongside the tool call is lost.
-        delivered: { mustMatch: [{ text: LOGGED_TEXT, knownBug: 'BUG-018/AC-CC-3' }, AFTER_BENCH_1_TEXT] },
+        // AC-CC-3 (fixed): the "Записал!" written alongside the tool call is
+        // delivered too, before the after-tool text.
+        delivered: { mustMatch: [LOGGED_TEXT, AFTER_BENCH_1_TEXT] },
         persisted: {
           session: {
             key: 'upper_a',
@@ -272,7 +272,7 @@ export const scenario: Scenario = {
           ],
         },
         tools: { must: ['log_set'] },
-        delivered: { mustMatch: [{ text: LOGGED_TEXT, knownBug: 'BUG-018/AC-CC-3' }, AFTER_BENCH_2_TEXT] },
+        delivered: { mustMatch: [LOGGED_TEXT, AFTER_BENCH_2_TEXT] },
         persisted: {
           session: {
             key: 'upper_a',

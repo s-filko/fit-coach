@@ -13,8 +13,8 @@
  *
  * `beforeAll` (per variant) runs the journey once (real wiring via
  * `runScenario`, Date-only fake timers); per-step `seen` is attributed through
- * the runner's `onStep` hook. The BUG-018 points fail today and run as
- * `test.failing` (owner rule: reproduction before fixes); `liveOnly` entries
+ * the runner's `onStep` hook. The BUG-018 points are fixed (chat-continuity
+ * Tasks 1-3) and run as plain tests; `liveOnly` entries
  * (what a REAL model must reply — the L3 layer, Task 6) are skipped here;
  * everything else must pass.
  */

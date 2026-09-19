@@ -159,12 +159,12 @@ message; the gap is computed from the previous message's time — the graph alre
 **Files:** `apps/server/src/infra/ai/graph/conversation-run.adapter.ts` (replace `lastAiText` for the
 reply), `apps/server/src/infra/ai/graph/episode.ts` (a helper next to `lastAiText`), tests.
 
-- [ ] **Step 1: Tests first** — run with text + tool calls + final text → both texts, in order,
+- [x] **Step 1: Tests first** — run with text + tool calls + final text → both texts, in order,
   blank line between; tool-only AI messages contribute nothing; texts from earlier runs never
   included; single-message runs unchanged byte for byte.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 2b:** flip Task 0's case (c) to `test`; it must pass, and the pinned-symptom test is deleted (it now fails by design).
-- [ ] **Step 3: Commit** — `fix(ai): the reply includes assistant text written alongside tool calls in this run (BUG-018, AC-CC-3)`
+- [x] **Step 2: Implement.**
+- [x] **Step 2b:** flip Task 0's case (c) to `test`; it must pass, and the pinned-symptom test is deleted (it now fails by design).
+- [x] **Step 3: Commit** — `fix(ai): the reply includes assistant text written alongside tool calls in this run (BUG-018, AC-CC-3)`
 - [ ] **Step 4: STOP** for orchestrator review.
 
 **Verification:** `npx jest --ci src/infra/ai` → pass; `npm run test:unit` → green; L0 green.

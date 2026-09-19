@@ -10,11 +10,11 @@
  * calls search_exercises in one step, then dumps the plan after the tool
  * results.
  *
- * Cases (a)-(c) are the REQUIRED behaviour (AC-CC-1..3). Cases (a) and (b)
- * turned green with the Task 1 (compaction verbatim tail) and Task 2
- * (time-gap note) fixes; (c) remains `test.failing` until Task 3 lands. The last test pins today's
- * observable symptom: the adapter delivers only the last AI message
- * (`lastAiText`), so the owner sees the plan dump, not the greeting.
+ * Cases (a)-(c) are the REQUIRED behaviour (AC-CC-1..3) and all three are
+ * green now: (a) landed with the Task 1 compaction verbatim tail, (b) with
+ * the Task 2 time-gap note, (c) with the Task 3 reply carrying every
+ * assistant text of the run — the greeting reaches Telegram alongside the
+ * plan dump.
  */
 import { AIMessage, type BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { MemorySaver } from '@langchain/langgraph';
@@ -261,11 +261,10 @@ describe('BUG-018 reproduction — "привет" after a 6-hour pause (AC-CC-4)
     expect(String(note?.content)).toMatch(/The user returns after/i);
   });
 
-  test.failing('(c) AC-CC-3 — the delivered reply contains the greeting written alongside the tool calls', () => {
+  test('(c) AC-CC-3 — the delivered reply contains the greeting written alongside the tool calls', () => {
     expect(delivered.text).toContain(GREETING);
-  });
-
-  test("today's symptom (BUG-018) — the delivered reply is the final plan dump only", () => {
-    expect(delivered.text).toBe(PLAN_DUMP);
+    // …and the final text still arrives after it (everything the run said, in order).
+    expect(delivered.text).toContain(PLAN_DUMP);
+    expect(delivered.text.indexOf(GREETING)).toBeLessThan(delivered.text.indexOf(PLAN_DUMP));
   });
 });

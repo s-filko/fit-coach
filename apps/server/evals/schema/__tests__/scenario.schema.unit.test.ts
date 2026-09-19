@@ -75,7 +75,7 @@ const validScenario = {
     {
       action: 'user',
       text: 'что я делал в прошлый раз?',
-      expect: { seen: { mustMatch: ['Bench Press'], knownBug: 'BUG-018/AC-CC-1' } },
+      expect: { seen: { mustMatch: ['Bench Press'], knownBug: 'BUG-9001/AC-X-9' } },
     },
   ],
 };
@@ -171,7 +171,7 @@ describe('ScenarioSchema (AC-TJ-1 — one scenario format for both layers)', () 
 });
 
 describe('knownBug tag (AC-TJ-1 — optional per assertion)', () => {
-  it.each(['BUG-018', 'BUG-018/AC-CC-1', 'BUG-007/AC-1361'] as const)('accepts %s', tag => {
+  it.each(['BUG-018', 'BUG-9001/AC-X-9', 'BUG-007/AC-1361'] as const)('accepts %s', tag => {
     expect(() =>
       ScenarioSchema.parse(
         withSteps([
@@ -181,7 +181,7 @@ describe('knownBug tag (AC-TJ-1 — optional per assertion)', () => {
     ).not.toThrow();
   });
 
-  it.each(['bug-018', 'BUG-018/CC-1', 'BUG-018/AC-CC-x', 'AC-CC-1'] as const)('rejects %s', tag => {
+  it.each(['bug-018', 'BUG-018/CC-1', 'BUG-9001/AC-CC-x', 'AC-CC-1'] as const)('rejects %s', tag => {
     expect(() =>
       ScenarioSchema.parse(
         withSteps([
@@ -204,8 +204,8 @@ describe('per-assertion knownBug (Task 4 Step 0 — one tag per single assertion
               seen: {
                 mustMatch: [
                   '=== RECENT TRAINING HISTORY',
-                  { text: 'привет, хочу потренироваться', knownBug: 'BUG-018/AC-CC-1' },
-                  { text: 'Привет, Алекс!', knownBug: 'BUG-018/AC-CC-1' },
+                  { text: 'привет, хочу потренироваться', knownBug: 'BUG-9001/AC-X-9' },
+                  { text: 'Привет, Алекс!', knownBug: 'BUG-9001/AC-X-9' },
                 ],
               },
             },
@@ -222,7 +222,7 @@ describe('per-assertion knownBug (Task 4 Step 0 — one tag per single assertion
           {
             action: 'user',
             text: 'привет',
-            expect: { [plane]: { mustNotMatch: [{ text: 'Ничего не записал', knownBug: 'BUG-018/AC-CC-3' }] } },
+            expect: { [plane]: { mustNotMatch: [{ text: 'Ничего не записал', knownBug: 'BUG-9001/AC-X-9' }] } },
           },
         ]),
       ),
@@ -274,7 +274,11 @@ describe('per-assertion knownBug (Task 4 Step 0 — one tag per single assertion
     expect(() =>
       ScenarioSchema.parse(
         withSteps([
-          { action: 'user', text: 'привет', expect: { delivered: { mustMatch: ['Привет'], knownBug: 'BUG-018/AC-CC-3' } } },
+          {
+            action: 'user',
+            text: 'привет',
+            expect: { delivered: { mustMatch: ['Привет'], knownBug: 'BUG-9001/AC-X-9' } },
+          },
         ]),
       ),
     ).not.toThrow();
@@ -311,7 +315,7 @@ describe('liveOnly tag (Task 5b — the L3 layer checks it, the deterministic la
           {
             action: 'user',
             text: 'привет',
-            expect: { delivered: { mustMatch: [{ text: 'Привет', knownBug: 'BUG-018/AC-CC-3', liveOnly: true }] } },
+            expect: { delivered: { mustMatch: [{ text: 'Привет', knownBug: 'BUG-9001/AC-X-9', liveOnly: true }] } },
           },
         ]),
       ),
@@ -330,7 +334,11 @@ describe('liveOnly tag (Task 5b — the L3 layer checks it, the deterministic la
     expect(() =>
       ScenarioSchema.parse(
         withSteps([
-          { action: 'user', text: 'привет', expect: { delivered: { mustMatch: [{ text: 'Привет', liveOnly: false }] } } },
+          {
+            action: 'user',
+            text: 'привет',
+            expect: { delivered: { mustMatch: [{ text: 'Привет', liveOnly: false }] } },
+          },
         ]),
       ),
     ).toThrow();
@@ -339,13 +347,13 @@ describe('liveOnly tag (Task 5b — the L3 layer checks it, the deterministic la
   it('assertionLiveOnly flags exactly the liveOnly entries and never a bare string', () => {
     const entries = [
       'always checked',
-      { text: 'known bug', knownBug: 'BUG-018/AC-CC-1' },
+      { text: 'known bug', knownBug: 'BUG-9001/AC-X-9' },
       { text: 'live only', liveOnly: true },
-      { text: 'both', knownBug: 'BUG-018/AC-CC-2', liveOnly: true },
+      { text: 'both', knownBug: 'BUG-9002/AC-X-9', liveOnly: true },
     ] as const;
     expect(entries.map(assertionLiveOnly)).toEqual([false, false, true, true]);
     // The other accessors still see every entry.
     expect(entries.map(assertionText)).toEqual(['always checked', 'known bug', 'live only', 'both']);
-    expect(entries.map(assertionKnownBug)).toEqual([null, 'BUG-018/AC-CC-1', null, 'BUG-018/AC-CC-2']);
+    expect(entries.map(assertionKnownBug)).toEqual([null, 'BUG-9001/AC-X-9', null, 'BUG-9002/AC-X-9']);
   });
 });

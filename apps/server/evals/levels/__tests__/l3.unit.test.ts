@@ -9,12 +9,7 @@ import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
 import { buildReport, exitCodeFor, type CheckResult } from '../../lib/reporter';
 import type { ScenarioRunResult, ScenarioStepObservation } from '../../lib/run-scenario';
-import {
-  assertionText,
-  resolveRelativeTime,
-  ScenarioSchema,
-  type Scenario,
-} from '../../schema/scenario.schema';
+import { assertionText, resolveRelativeTime, ScenarioSchema, type Scenario } from '../../schema/scenario.schema';
 
 import { countUserSteps, evaluateScenario, loadScenarios, planL3Calls, runL3, type ScenarioRunner } from '../l3';
 
@@ -50,9 +45,9 @@ const tinyScenario: Scenario = ScenarioSchema.parse({
       expect: {
         delivered: {
           mustMatch: [{ text: 'к предыдущей тренировке', liveOnly: true }],
-          mustNotMatch: [{ text: 'не доехал', knownBug: 'BUG-018/AC-CC-1' }],
+          mustNotMatch: [{ text: 'не доехал', knownBug: 'BUG-9001/AC-X-9' }],
         },
-        phaseAfter: { phase: 'training', knownBug: 'BUG-018/AC-CC-1' },
+        phaseAfter: { phase: 'training', knownBug: 'BUG-9001/AC-X-9' },
       },
     },
   ],
@@ -68,7 +63,9 @@ const runRowOf = (over: Partial<NonNullable<ScenarioStepObservation['runRow']>> 
   ...over,
 });
 
-const sessionWithSets = (over: Partial<{ status: string; durationMinutes: number | null; completedAt: Date | null }> = {}) =>
+const sessionWithSets = (
+  over: Partial<{ status: string; durationMinutes: number | null; completedAt: Date | null }> = {},
+) =>
   ({
     id: 's1',
     sessionKey: 'upper_a',
@@ -321,8 +318,11 @@ describe('evaluateScenario', () => {
     const results = evaluateScenario(tinyScenario, run);
     const tagged = results.find(r => r.check === 'phaseAfter' && r.case.endsWith('step 2'));
     expect(tagged?.passed).toBe(false);
-    expect(tagged?.knownBug).toBe('BUG-018/AC-CC-1');
-    const report = buildReport('L3', results.filter(r => r.check === 'phaseAfter'));
+    expect(tagged?.knownBug).toBe('BUG-9001/AC-X-9');
+    const report = buildReport(
+      'L3',
+      results.filter(r => r.check === 'phaseAfter'),
+    );
     expect(report.failed).toBe(0);
     expect(report.known).toBe(1);
     expect(exitCodeFor(report)).toBe(0);
@@ -334,7 +334,7 @@ describe('evaluateScenario', () => {
     const results = evaluateScenario(tinyScenario, run);
     const entry = results.find(r => r.check.startsWith('delivered.mustNotMatch:"не доехал"'));
     expect(entry?.passed).toBe(false);
-    expect(entry?.knownBug).toBe('BUG-018/AC-CC-1');
+    expect(entry?.knownBug).toBe('BUG-9001/AC-X-9');
   });
 
   it('checks persisted.turnRecorded through the observation turnCount', () => {
@@ -391,18 +391,22 @@ describe('evaluateScenario', () => {
     };
 
     it('passes on an exact projection match (order, weights, bodyweight without weight)', () => {
-      const results = evaluateScenario(persistedScenario, resultOf([
-        obs(0, 'user', { runRow: runRowOf(), turnCount: 1, sessions: [sessionWithSets()] }),
-      ]));
+      const results = evaluateScenario(
+        persistedScenario,
+        resultOf([obs(0, 'user', { runRow: runRowOf(), turnCount: 1, sessions: [sessionWithSets()] })]),
+      );
       const failed = results.filter(r => !r.passed);
       expect(failed).toEqual([]);
       expect(results.find(r => r.check === 'persisted.session.exercises')?.passed).toBe(true);
     });
 
     it('fails on a wrong durationMinutes with expected/got detail', () => {
-      const results = evaluateScenario(persistedScenario, resultOf([
-        obs(0, 'user', { runRow: runRowOf(), turnCount: 1, sessions: [sessionWithSets({ durationMinutes: 11 })] }),
-      ]));
+      const results = evaluateScenario(
+        persistedScenario,
+        resultOf([
+          obs(0, 'user', { runRow: runRowOf(), turnCount: 1, sessions: [sessionWithSets({ durationMinutes: 11 })] }),
+        ]),
+      );
       const check = results.find(r => r.check === 'persisted.session.durationMinutes');
       expect(check?.passed).toBe(false);
       expect(check?.detail).toContain('11');
@@ -414,9 +418,10 @@ describe('evaluateScenario', () => {
         setData: { type: string; reps: number; weight?: number };
       }>;
       driftedSets[1]!.setData = { type: 'strength', reps: 8, weight: 85 };
-      const results = evaluateScenario(persistedScenario, resultOf([
-        obs(0, 'user', { runRow: runRowOf(), turnCount: 1, sessions: [drifted] }),
-      ]));
+      const results = evaluateScenario(
+        persistedScenario,
+        resultOf([obs(0, 'user', { runRow: runRowOf(), turnCount: 1, sessions: [drifted] })]),
+      );
       expect(results.find(r => r.check === 'persisted.session.exercises')?.passed).toBe(false);
     });
 
@@ -424,7 +429,7 @@ describe('evaluateScenario', () => {
       const results = evaluateScenario(persistedScenario, resultOf([obs(0, 'user', { runRow: runRowOf() })]));
       const check = results.find(r => r.check === 'persisted.session');
       expect(check?.passed).toBe(false);
-      expect(check?.detail).toContain("no upper_a session");
+      expect(check?.detail).toContain('no upper_a session');
     });
   });
 });
