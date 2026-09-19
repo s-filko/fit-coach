@@ -1,0 +1,220 @@
+# Training Journey Scenarios — Deterministic over the Real Test DB + Live L3 Implementation Plan
+
+- Status: done
+- Branch: plan/training-journey-scenarios
+- After: structured-output-json-object-mode
+- Review: 2026-09-20 | clean | R1,R2,R3,R4
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and superpowers:test-driven-development. One plan task per worker session; stop after the task.
+
+**Goal (owner, 2026-09-20):** several tests that reproduce a whole training journey end to end —
+"привет" → session planning → the person trains (sets across exercises, a question mid-workout, a
+pause) → finishes — with **past events already in place** (previous workouts, a saved plan, facts,
+older conversation). **Mandatory: a real test database.** Two layers share one scenario definition:
+(1) deterministic — a scripted model on the production-wired graph over the real test Postgres,
+asserting at every step what the model **saw**, what got **persisted** and what was **delivered**;
+(2) live — the same scenarios as a multi-turn L3 eval level, authored now, run only by the owner.
+Owner rule: reproduction before fixes — assertions that fail today are committed as `test.failing`.
+
+**Why a real DB (not only the owner's requirement):** the eval stub world (`evals/lib/build-stub-deps.ts`)
+is not stateful — a started session never reaches `getSessionDetails`, `searchByEmbedding` returns
+`[]` — so a full journey cannot run on it. No test runs the real graph against a real DB today.
+
+**Findings this plan builds on (verified 2026-09-20, paths under `apps/server/`):**
+- Flow: chat → session_planning via `request_transition` (`tools/request-transition.tool.ts:28-50`);
+  session_planning → training via `start_training_session` (`tools/start-training-session.tool.ts:63-97`:
+  session `planning`, `pendingTransition training`, `activeSessionId`); training → chat via
+  `finish_training` (`tools/finish-training.tool.ts:21-72`); in between `log_set`,
+  `complete_current_exercise`, `delete_last_sets`, `update_last_set` (`graph/phases/training.spec.ts:55-87`).
+  Commit applies transitions (`commit.node.ts:89-172`); `session-lifecycle.handler.ts:20-43` sets
+  `in_progress`/completes; `prepare.node.ts:55-89` returns a training run to chat if the session ended.
+- Past workouts reach the model through `WorkoutSessionRepository.findRecentByUserIdWithDetails`
+  (`infra/db/repositories/workout-session.repository.ts:123`, ordered by `createdAt` — seeds need
+  explicit timestamps) and `findLastCompletedByUserAndKey` (`:221`); blocks: chat "RECENT TRAINING
+  HISTORY (last 5 sessions)", session_planning RECENT TRAINING HISTORY / RECOVERY TIMELINE / active
+  plan `[ID:…]`, training WORKOUT OVERVIEW / STALE SESSION (> 2 h) / PREVIOUS SESSION. Wall-clock
+  reads (not `ctx.now`): `daysSinceLastWorkout` (context builder :40), `finish_training` staleness (:34).
+- DB tests: `npm run test:integration` (`RUN_DB_TESTS=1`); `src/app/test/setup.ts:36-150` drops and
+  recreates schema `public`, applies `drizzle/*.sql` once per file, seeds 4 exercises. `.env.test`
+  → `DB_NAME=fitcoach_test` (the local dev DB is `fitcoach_dev` — never touched).
+- Composition root `registerInfraServices` (`src/main/register-infra-services.ts:74-128`) wires the
+  real repositories, `PostgresSaver`, gateway, graph and the mutex-wrapped runner; the graph itself
+  is not exposed. CI (`.github/workflows/ci.yml:61`) has no Postgres.
+- Reusable: `graph-test-support.ts` (`USER`, `ctxConfig` with controlled `now`); the scripted model
+  beneath the real gateway in `user-facts.scenario.unit.test.ts`; `run-case.ts` seeding via
+  `graph.updateState` (:160-178); `ModelInputRecorder`, `ToolRecorder`; case-schema pieces
+  (`FixtureUserSchema`, `FixtureFactSchema`, `StateMessageSchema`, `toBaseMessages`). L3 is specified
+  (`docs/PROMPT_EVAL_FRAMEWORK.md:36`) but not built.
+
+**Architecture:**
+- **One scenario format** — a zod-validated TS module per scenario in `evals/scenarios/`: `past`
+  (user, active plan, dated workouts with exercises/sets, facts, checkpoint conversation incl.
+  summaries and `lastUserMessageAt`) + `steps[]` (`advance` relative time, `user` text, `script` for
+  the deterministic layer only, `expect`: `seen` / `tools` / `phaseAfter` / `delivered` / `persisted`,
+  each assertion optionally tagged `knownBug: "BUG-018/AC-CC-1"`). Relative times (`-3d`, `+6h`)
+  from `T0`.
+- **One runner** `evals/lib/run-scenario.ts` for both layers: `registerInfraServices(new Container())`
+  (real wiring), seed real rows (user, extra exercises `ON CONFLICT`, plan, sessions/exercises/sets
+  with explicit timestamps, facts via `UserFactsRepository.upsertMany`) and the checkpoint via
+  `graph.updateState`; each step through `ConversationRunPort.run`; per step it observes the
+  delivered text, the `conversation_runs` row (tools, transition), the phase (`getState`) and a DB
+  snapshot of the user's sessions. **Hard guard: refuses to run unless `DB_NAME` ends in `_test`.**
+- Isolation: a random user UUID per scenario (`thread_id` = `userId`); schema reset per file (setup.ts).
+- Clock: `jest.setSystemTime` with Date-only fake timers (`advanceTimers: true`, timer APIs in
+  `doNotFake`) — spiked in Task 2; fallback is an optional `now` seam on the runner deps.
+- Deterministic test shape: `beforeAll` runs the journey once and stores observations; each
+  assertion is its own `test`, or `test.failing` when it carries `knownBug` (the scripted model
+  ignores its input, so the flow is identical with or without the bug).
+
+**Spec:** `docs/PROMPT_EVAL_FRAMEWORK.md` §2 (L3), §7a (guard); ADR-0013 §3.3/§3.4; BUG-018;
+`docs/superpowers/plans/chat-continuity.md` AC-CC-1..3.
+
+**Acceptance criteria:**
+- **AC-TJ-1** — one scenario format with a schema unit test; scenarios A, B, C authored in it.
+- **AC-TJ-2** — each scenario has a deterministic test over the real test DB with past events seeded
+  as rows + checkpoint, asserting seen / persisted / delivered at every step.
+- **AC-TJ-3** — every assertion failing today is `test.failing` whose failure names the bug; all
+  others pass.
+- **AC-TJ-4** — `--level L3` runs the same scenario modules live, gated by `RUN_LLM_EVALS=1` + a call
+  ceiling (steps × samples) + the `_test` DB guard; proven by a unit test only (never run by a task).
+- **AC-TJ-5** — `npm run test:scenarios` runs the deterministic layer; not part of `test:unit` or
+  pre-commit.
+
+## Global Constraints
+
+- `RUN_LLM_EVALS` / `EVALS_FULL_RUN` never set; no real-model call in any task. Only the model is
+  mocked; repositories, services, gateway and checkpointer are real.
+- The local DB container is started by the orchestrator (`docker compose up -d db` from the repo
+  root); tests use `.env.test` (`fitcoach_test`). Never write any `.env*`.
+- Reserved to the orchestrator: push, merge, deploy, `npm run db:*`, `docker compose`, CI workflows,
+  durable specs, `docs/STATE.md`, `docs/BUGS.md`, any `Status:`.
+- **Test-DB safety (added 2026-09-20 after the Task 1 incident):** no task runs DDL, `DROP` or `CREATE DATABASE` by hand on any database — on a DB error, stop and escalate. The scenario runner takes a Postgres advisory lock around the per-file schema reset so two runs cannot drop the schema under each other; `.env.test`'s `RUN_DB_TESTS=1` (which makes even unit runs reset the schema) is an owner decision pending.
+- **Coordination with `chat-continuity`:** its fix tasks (1–3) start only after this plan's Tasks
+  1–3 (format, runner, journey A) are accepted — the owner wants the DB-backed reproduction first.
+  Each chat-continuity fix then also flips the matching `knownBug` cases here to `test`.
+
+---
+
+### Task 1: Scenario format (AC-TJ-1, format)
+
+**Files:** `evals/schema/case.schema.ts` (export the reused sub-schemas), `evals/schema/scenario.schema.ts`
+(+ relative-time parser), `evals/schema/__tests__/scenario.schema.unit.test.ts`.
+
+- [x] Tests first: a valid scenario, invalid ones, time parsing (`-3d`, `+6h`, `-14h`), the
+  `knownBug` format. Implement.
+- [x] Commit `test(evals): scenario format for multi-turn training journeys (AC-TJ-1)`. STOP. **Accepted 2026-09-20** (`1bb7d05d`, GLM worker via Orca; 46 schema tests, unit 816/816, L0 96/96). **Incident during this task:** concurrent jest runs in two worktrees corrupted the shared `fitcoach_test` DB — `.env.test` sets `RUN_DB_TESTS=1`, so every run, unit included, starts with `drop schema public cascade`, and two runs dropped the schema under each other ("type vector does not exist"). The worker then repaired the DB itself (a `DROP EXTENSION` crashed one Postgres backend, auto-recovered in ~30 s; then `DROP/CREATE DATABASE fitcoach_test`) — outside its boundary. The orchestrator verified the local `fitcoach_dev` intact. From Task 2 on, worker specs forbid any DDL/DROP on any database (stop and escalate instead), and Task 2 must make DB test runs safe against concurrency (see Global Constraints).
+
+**Verification:** `npx jest --ci evals/schema` → pass; `npm run test:unit` → green; type-check clean.
+
+### Task 2: DB world + runner (AC-TJ-2, infra)
+
+**Files:** `src/main/register-infra-services.ts` (register the compiled graph under a
+`CONVERSATION_GRAPH_TOKEN`), `evals/lib/scenario-world.ts` (seeding), `evals/lib/run-scenario.ts`,
+`tests/integration/scenarios/scripted-model.ts` (shared jest mock of `@infra/ai/model.factory`:
+records every input; chat FIFO from step scripts; `structured()` returns a scripted or minimal valid
+summary), `tests/integration/scenarios/harness.integration.test.ts` (smoke: one seeded workout, one
+step — row, seen block, delivered text), `package.json` script
+`"test:scenarios": "RUN_DB_TESTS=1 NODE_ENV=test jest --testMatch='**/tests/integration/scenarios/**/*.integration.test.ts'"`.
+
+- [x] **Spike first:** Date-only fake timers with `pg` and `PostgresSaver`; report in STOP (fallback:
+  a `now` seam on the runner deps + the wall-clock reads listed in Findings).
+- [x] The `_test` DB guard with a unit test.
+- [x] Commit `test(ai): DB-backed scenario runner with a scripted model beneath the real gateway`. STOP. **Accepted 2026-09-20** (`7adafe21`, GLM worker via Orca). Orchestrator re-ran `npm run test:scenarios` → 6/6; worker: unit 827/827, integration 151/151, L0 96/96. Fake-timer spike succeeded (Date-only fake timers keep pg, `PostgresSaver` and the embedding pipeline working) — no `now` seam needed. The per-file schema reset in `src/app/test/setup.ts` now runs on one client holding `pg_advisory_lock(742150001)`, unlocked in `finally`. `run-scenario.ts:110` calls the `_test` guard before wiring. `.env.test` no longer sets `RUN_DB_TESTS=1` (owner-approved edit by the orchestrator, backup kept), so unit runs never touch the DB.
+
+**Verification:** `npm run test:scenarios` → green; `npm run test:unit` → green (quote the known
+teardown exit 134 from BACKLOG if it occurs).
+
+### Task 3: Journey A — greeting after a pause, with past workouts (AC-TJ-2/3)
+
+Past: two completed workouts (−4d `upper_a`, −2d `lower_a`), an active plan, one fact, one stored
+episode summary ("plan ready, pending save" style `openItems`), a one-turn chat exchange with
+`lastUserMessageAt` 14 h back. Step: "привет"; the script writes the greeting text **and**
+`request_transition(session_planning)` in one AI message, then a final text after the tool result.
+
+**Files:** `evals/scenarios/a-greeting-after-pause.scenario.ts`,
+`tests/integration/scenarios/a-greeting-after-pause.integration.test.ts`.
+
+- Expected to pass today: `seen` — chat context lists both workouts with the right ages, GREETING
+  directive, `## User Facts`, `## Previous episodes`; persisted — `conversation_turns` + run row with
+  the transition; phase after — session_planning.
+- `test.failing` today: the earlier exchange verbatim (AC-CC-1); the gap note before "привет"
+  (AC-CC-2); the delivered text contains the greeting (AC-CC-3).
+- [x] Quote each failing case's real failure message in STOP (a case failing for another reason is
+  not a reproduction).
+- [x] Commit `test(ai): journey A — greeting after a pause over the real DB (BUG-018 repro)`. STOP. **Accepted 2026-09-20** (`41a4e8f1`, GLM worker via Orca; orchestrator re-ran `npm run test:scenarios` → 24/24, journey A 18 incl. 3 expected failures). Real failure messages: AC-CC-1 — the seeded exchange absent from the model input; AC-CC-2 — no gap note; AC-CC-3 — delivered only the final text, not the greeting. Everything else passes (both workouts with correct ages, GREETING directive, `## User Facts`, `## Previous episodes`, the transition persisted). Deviation: the scenario format allows one `knownBug` per `seen` object, so two tags live in a side export — Task 4 first moves `knownBug` to per-assertion granularity and migrates A. **Sequencing (orchestrator, 2026-09-20):** Tasks 4–6 and close-out land before the `chat-continuity` fixes, so each fix worker can run `npm run test:scenarios` itself (owner rule).
+
+### Task 4: Journey B — a full workout, greeting to finish (AC-TJ-2/3)
+
+Steps: "привет, хочу потренироваться" → session_planning; "давай верх" → proposal; "да, поехали" →
+`start_training_session(upper_a, plan IDs)`; bench sets via `log_set` (one AI message carries both
+"Записал!" and the tool call); pull-up sets (auto-completes bench); "всё, закончил" →
+`finish_training`; "спасибо" in chat.
+
+**Files:** `evals/scenarios/b-full-workout.scenario.ts`, `tests/integration/scenarios/b-full-workout.integration.test.ts`.
+
+- Expected to pass: step 2 `seen` RECENT TRAINING HISTORY with the seeded weights, RECOVERY
+  TIMELINE, plan `[ID:`; step 3 session `planning` → `in_progress` with `startedAt`; step 4 `seen`
+  WORKOUT OVERVIEW + PREVIOUS SESSION with seeded weights; sets persisted in order; finish →
+  `completed`, `durationMinutes`, `completedAt`; step 7 `seen` the new workout first in chat context.
+- `test.failing` today: the previous turn not seen verbatim after each transition (AC-CC-1); step 4
+  "Записал!" not delivered (AC-CC-3).
+- [x] Commit `test(ai): journey B — full workout with history over the real DB`. STOP. **Accepted 2026-09-20** (`e68ae51d`, GLM worker via Orca; orchestrator re-ran `npm run test:scenarios` → 95/95). 14 steps greeting → finish → "спасибо"; 8 BUG-018 reproductions with real failure messages (AC-CC-1 ×6: the previous turn absent after each transition; AC-CC-3 ×2: "Записал!" written alongside `log_set` not delivered); no new product bug; `knownBug` now per assertion. **Harness note for review:** sessions created mid-journey get `created_at`/`last_activity_at` from the DB clock while the journey runs on the fake clock; the runner re-stamps a new session's creation fields to the scenario clock — an honest test artefact, but it points at a design smell (session timestamps from two clocks) to record as an advisory at close-out.
+
+### Task 5: Journey C — interrupted workout (AC-TJ-2/3)
+
+Steps: two sets logged; a mid-workout question about rest time (text only); clock +3.5 h; "вернулся,
+доделаю"; one more set; finish.
+
+**Files:** `evals/scenarios/c-interrupted-workout.scenario.ts`,
+`tests/integration/scenarios/c-interrupted-workout.integration.test.ts`.
+
+- Expected to pass: the question answered, phase stays training; after the pause `seen` has STALE
+  SESSION and a WORKOUT OVERVIEW still listing the pre-pause sets (from the DB); finish persisted.
+- `test.failing` today: the mid-workout exchange not seen verbatim after the pause (AC-CC-1); the gap
+  note missing (AC-CC-2).
+- [x] Commit `test(ai): journey C — interrupted workout over the real DB`. STOP. **Accepted 2026-09-20 with a correction** (`c3a7d07a`; orchestrator re-ran → 156/156; journey B's past/setup shared, not copied). The run showed that after a >2 h pause `log_set` records a *retro* set (timestamped after the last activity, activity not refreshed) and `finish_training` closes the session at the pre-pause time (duration 11 min). **Owner ruling 2026-09-20: that is correct** — a 3.5 h gap is not a rest between sets, it is the user catching up an old workout later ("I left in a hurry and forgot to log the last exercise", even the next day). What the scenario got wrong is the user text "вернулся, доделаю" (it depicts continuing). Required AI behaviour: understand that the message belongs to the previous workout (or ask), add it there, and answer like "Added to your previous workout — close it or add something else?"; an explicit "добавь к последней тренировке …" must work the same way. → Task 5b.
+
+### Task 5b: Journey C reworded as catch-up logging, plus the explicit variant (owner ruling)
+
+**Files:** `evals/scenarios/c-interrupted-workout.scenario.ts` (rename to `c-catch-up-logging.scenario.ts` if clearer) and its integration test; a second scenario/step list for the explicit wording.
+
+- [x] After the pause the user writes an implicit catch-up ("забыл дописать: последнее упражнение — подтягивания 3×8") — assert the sets land in the **previous** session with retro timestamps, the model **saw** the STALE SESSION block, the session closes at the pre-pause time; the mid-workout Q&A / gap-note `knownBug` cases stay.
+- [x] Variant with the explicit "добавь к последней тренировке: подтягивания 3×8" — same persisted outcome.
+- [x] Live-only expectation (L3, ignored by the deterministic layer): the delivered reply says the sets were added to the previous workout and asks whether to close it or add more.
+- [x] Commit `test(ai): journey C as catch-up logging after a pause, explicit variant (owner ruling)`. STOP. **Accepted 2026-09-20** (`fe093693`, GLM worker via Orca; orchestrator re-ran `npm run test:scenarios` → 221/221, 4 suites). Implicit ("забыл дописать…") and explicit ("добавь к последней тренировке…") variants share one builder; persisted assertions shared by both layers: each catch-up set `createdAt` = last pre-pause activity + `RETRO_SET_OFFSET_MS`, `completedAt` = `lastActivityAt`, duration 11 min, **no new session opened**, STALE SESSION seen. A minimal `liveOnly` flag marks only the reply wording ("к предыдущей тренировке" / "закрыть её или добавить") as L3-only.
+
+### Task 6: Live layer L3 (AC-TJ-4)
+
+**Files:** `evals/levels/l3.ts`, `evals/run.ts` (`--level L3 [--scenario id]`),
+`evals/levels/__tests__/l3.unit.test.ts` (fake runner: gating, ceiling via
+`planCallCount(steps, samples)`, the `_test` guard, per-step report with known-bug labels),
+`evals/datasets/README.md`.
+
+- The live layer ignores `script`, skips `seen`, reads tools from `conversation_runs`.
+- [x] Commit `feat(evals): L3 scenario level sharing the journey definitions (AC-TJ-4)`. STOP. **Accepted 2026-09-20** (`16f51d88`, GLM worker via Orca; orchestrator re-ran `npx jest --ci evals` → 264/264, and `npm run evals -- --level L3` without the flag → "L3 skipped", no call). Live layer = same journeys through `run-scenario`, real model, `script`/`seen` ignored; delivered (incl. `liveOnly`), tools, phase, persisted evaluated; `knownBug` assertions reported as KNOWN; gated by `RUN_LLM_EVALS=1` + the shared L1 ceiling (`planCallCount`: 26 calls for all four journeys at `--samples 1`) + the `_test` guard. Advance steps work live through a Date-only fake clock (`@sinonjs/fake-timers` 13.0.5 pinned; `toFake: ['Date']`, timers stay real). **Owner launch command:** `DB_NAME=fitcoach_test RUN_LLM_EVALS=1 npm run evals -- --level L3 [--scenario c-catch-up-logging]` (from `apps/server/`).
+
+**Verification:** unit test green; `npm run evals -- --level L3` without the flag prints "skipped";
+L0 green.
+
+### Task 7: Close-out (orchestrator)
+
+- [x] `close-out-review`; `- Status: done`; `state.mjs --write`; merge, push. Pre-merge check by
+  the orchestrator: `npm run test:scenarios` → 4 suites, 221/221 (incl. the `test.failing` cases).
+- [x] **Owner decision (2026-09-20): no CI job.** Scenario tests are agent self-verification —
+  recorded in `docs/ORCHESTRATION.md` § Scenario self-check and the `delegate-implementation`
+  skill in the close-out commit.
+
+## Review
+
+2026-09-20 — **clean**. One combined review agent applied all four zone lenses (R1–R4) — owner
+rule for test-heavy plans: one review per phase, one agent. No blocking findings.
+
+Advisory → `docs/BACKLOG.md`:
+- R2: `tests/integration/scenarios/scripted-model.ts:78-93` re-implements the scripted-model mock
+  of `user-facts.scenario.unit.test.ts:118-148` → appended to the existing structured-output-fenced-json
+  entry about that double (now four copies).
+- R1: `evals/lib/run-scenario.ts:136-160` re-stamps sessions because DB `defaultNow()` and app
+  `now` are two clocks → § training-journey-scenarios close-out review advisories.
+
+Meta → `docs/REVIEW_FINDINGS.md` § Rule candidates: the "DRY applies to test fixtures and
+harnesses" entry raised to ×3.

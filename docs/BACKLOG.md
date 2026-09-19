@@ -598,7 +598,10 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       `user-facts.scenario`); `graph/__tests__/graph-test-support.ts` (added at this close-out
       for `USER` / `ctxConfig`) is the natural home for one builder — and for
       `conversation.graph.unit.test.ts`'s own local `USER` / positional `ctxConfig`, which predate
-      this branch and were left alone. Source: close-out-review, R2 (2026-09-19).
+      this branch and were left alone. Source: close-out-review, R2 (2026-09-19). Fourth copy
+      added 2026-09-20: `tests/integration/scenarios/scripted-model.ts` `installScriptedModel()`
+      re-implements the same shape as `user-facts.scenario.unit.test.ts:118-148` — extract one
+      shared builder (e.g. `tests/support/scripted-chat-model.ts`). Source: training-journey-scenarios close-out, R2.
 - [ ] No test proves that a `RunMetricsCollector` attached through the invoke config still
       receives the LLM callbacks for `structured()` calls — the switch from
       `withStructuredOutput(...)` to `withConfig({ response_format })` is believed equivalent
@@ -611,3 +614,11 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       `structured()` to pin that it now propagates without a retry (the blanket `SyntaxError`
       retry was removed as dead for format errors; a transport-level one is a non-format error
       by the plan's AC and propagates — correct, but unpinned). Source: close-out-review, R3 (2026-09-19).
+
+## training-journey-scenarios close-out review advisories (2026-09-20)
+
+- [ ] Session timestamps come from two clocks: `workout_sessions` rows created mid-journey get
+      the DB's `defaultNow()` while the app runs on its own `now` (fake clock in scenarios), so
+      the scenario runner re-stamps new sessions (`evals/lib/run-scenario.ts:136-160`,
+      `stampNewSessions`). Production has the same split (DB time vs app time) — pass `now`
+      explicitly on insert and drop the harness patch. Source: Task 4 worker + close-out review, R1 (2026-09-20).

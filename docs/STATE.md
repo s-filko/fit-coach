@@ -43,6 +43,7 @@ _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 - `structured-output-fenced-json.md` — Structured Output — Fenced-JSON Recovery and the User-Facts Scenario Test Implementation Plan
 - `structured-output-json-object-mode.md` — Structured Output — Provider Mode `json_object` for the Z.AI Route Implementation Plan
+- `training-journey-scenarios.md` — Training Journey Scenarios — Deterministic over the Real Test DB + Live L3 Implementation Plan
 
 **Close-out debt (merged but plan not done)**
 — none —

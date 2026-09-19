@@ -203,11 +203,24 @@ short — the worker reads the plan itself. Every spec names:
    touch other plan tasks.
 4. **Ownership:** which files/modules this task may edit.
 5. **Observable acceptance:** the task's verification command from the plan, and its
-   result quoted in the `worker_done` summary.
+   result quoted in the `worker_done` summary. A task touching conversation, the graph,
+   memory, phases or training tools also lists `npm run test:scenarios` (from
+   `apps/server/`, real `fitcoach_test` DB) — see § Scenario self-check.
 6. **Worker notes:** "Bash, Read, Edit and Write are built-in tools — call them directly,
    never look them up with ToolSearch" (the GLM stall above); questions about intent go
    through the preamble's `ask`, never a local prompt; send `worker_done --outcome
    failed` after a second failed verification rather than looping.
+
+### Scenario self-check
+
+The DB-backed training-journey scenarios (`npm run test:scenarios`, plan
+`training-journey-scenarios`) are agent self-verification, not a CI job and not pre-commit
+(owner decision 2026-09-20). Workers run them when the task touches conversation / graph /
+memory / phases / training tools and quote the result; the orchestrator re-runs them itself at
+task acceptance and before every merge of such work — it never trusts a reported count. The
+orchestrator makes sure the local DB is up (`docker compose up -d db` from the repo root)
+before dispatching such a task, and never lets two worktrees run them against the test DB at
+once.
 
 ## Failure handling
 

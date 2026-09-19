@@ -79,7 +79,7 @@ export async function registerInfraServices(container: Container = getGlobalCont
   const checkpointer = PostgresSaver.fromConnString(connString);
   await checkpointer.setup();
 
-  const { buildConversationGraph } = await import('@infra/ai/graph/conversation.graph');
+  const { buildConversationGraph, CONVERSATION_GRAPH_TOKEN } = await import('@infra/ai/graph/conversation.graph');
   const { buildConversationRunner } = await import('@infra/ai/graph/conversation-run.adapter');
   const { CONVERSATION_RUN_SERVICE_TOKEN, CONVERSATION_RUN_PORT_TOKEN } = await import('@domain/conversation/ports');
   const { DrizzleConversationRunService } = await import('@infra/conversation/drizzle-conversation-run.service');
@@ -112,6 +112,10 @@ export async function registerInfraServices(container: Container = getGlobalCont
     budgetOverrides: config.LLM_BUDGETS,
     checkpointer,
   });
+  // The compiled graph under its token: infra-internal, but the scenario
+  // runner (evals/lib/run-scenario.ts) needs it for checkpoint seeding
+  // (`updateState`) and phase observation (`getState`).
+  container.register(CONVERSATION_GRAPH_TOKEN, graph);
   const { withRunMutex } = await import('@infra/conversation/with-run-mutex');
   const runner = buildConversationRunner({
     graph,
