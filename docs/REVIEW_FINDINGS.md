@@ -260,6 +260,18 @@ backs it. Each entry names the proposed wording and where it would live
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
 
+- [×1] A snapshot test can claim to freeze a specific version while actually rendering a moving
+  alias, and nothing catches it. P6 Task 2 found `evals/snapshots/__tests__/prompt-snapshots.unit.test.ts`'s
+  two `summarizer v2 / …` tests rendering `SUMMARIZER_PROMPT` — the alias that Task 2 was in the
+  act of repointing from v2 to v3. The tests passed, their names said "v2", and the first
+  `jest -u` after the repoint would have silently re-baselined v2's frozen snapshot onto v3's
+  output, destroying exactly the byte-identity guarantee the frozen file exists to provide.
+  (v1 was safe only by accident: its tests already referenced `SUMMARIZER_V1` directly.) Nothing
+  in the repo makes this citable — it is not duplication, not a logic bug, and the test is green.
+  Proposed principle for `docs/CONTRIBUTING_AI.md` (Testing section, next to the version-bump
+  rule): "A snapshot or byte-identity test references the concrete versioned artefact it claims
+  to freeze (`SUMMARIZER_V2`, `CHAT_V1`), never a moving alias such as `*_PROMPT` or `current`.
+  A test whose name states a version must import that version." Runs: refactor-p6-facts-and-progress-blocks (2026-09-19, executor find during Task 2).
 - [×1] Nothing written down requires a decorator's side-effect-suppression claim to be proven by
   a spy on the downstream write rather than inferred from the error type. P5's
   `with-run-mutex.unit.test.ts` does it the right way — it asserts `recordRun` was never called
