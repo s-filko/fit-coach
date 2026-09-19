@@ -1,4 +1,11 @@
-import { RelativeTimeSchema, resolveRelativeTime, ScenarioSchema } from '../scenario.schema';
+import {
+  assertionKnownBug,
+  assertionLiveOnly,
+  assertionText,
+  RelativeTimeSchema,
+  resolveRelativeTime,
+  ScenarioSchema,
+} from '../scenario.schema';
 
 const T0 = new Date('2026-09-20T12:00:00.000Z');
 
@@ -271,5 +278,74 @@ describe('per-assertion knownBug (Task 4 Step 0 — one tag per single assertion
         ]),
       ),
     ).not.toThrow();
+  });
+});
+
+describe('liveOnly tag (Task 5b — the L3 layer checks it, the deterministic layer skips it)', () => {
+  it('accepts a liveOnly entry alongside bare strings and knownBug entries', () => {
+    expect(() =>
+      ScenarioSchema.parse(
+        withSteps([
+          {
+            action: 'user',
+            text: 'забыл дописать: подтягивания 3×8',
+            expect: {
+              delivered: {
+                mustMatch: [
+                  'Записал подтягивания 3×8 к предыдущей тренировке.',
+                  { text: 'к предыдущей тренировке', liveOnly: true },
+                  { text: 'закрыть её или добавить', liveOnly: true },
+                ],
+              },
+            },
+          },
+        ]),
+      ),
+    ).not.toThrow();
+  });
+
+  it('accepts liveOnly combined with a knownBug tag', () => {
+    expect(() =>
+      ScenarioSchema.parse(
+        withSteps([
+          {
+            action: 'user',
+            text: 'привет',
+            expect: { delivered: { mustMatch: [{ text: 'Привет', knownBug: 'BUG-018/AC-CC-3', liveOnly: true }] } },
+          },
+        ]),
+      ),
+    ).not.toThrow();
+  });
+
+  it('rejects a tagged entry with neither knownBug nor liveOnly (use a bare string)', () => {
+    expect(() =>
+      ScenarioSchema.parse(
+        withSteps([{ action: 'user', text: 'привет', expect: { delivered: { mustMatch: [{ text: 'Привет' }] } } }]),
+      ),
+    ).toThrow();
+  });
+
+  it('rejects liveOnly: false (only the literal true marks the entry)', () => {
+    expect(() =>
+      ScenarioSchema.parse(
+        withSteps([
+          { action: 'user', text: 'привет', expect: { delivered: { mustMatch: [{ text: 'Привет', liveOnly: false }] } } },
+        ]),
+      ),
+    ).toThrow();
+  });
+
+  it('assertionLiveOnly flags exactly the liveOnly entries and never a bare string', () => {
+    const entries = [
+      'always checked',
+      { text: 'known bug', knownBug: 'BUG-018/AC-CC-1' },
+      { text: 'live only', liveOnly: true },
+      { text: 'both', knownBug: 'BUG-018/AC-CC-2', liveOnly: true },
+    ] as const;
+    expect(entries.map(assertionLiveOnly)).toEqual([false, false, true, true]);
+    // The other accessors still see every entry.
+    expect(entries.map(assertionText)).toEqual(['always checked', 'known bug', 'live only', 'both']);
+    expect(entries.map(assertionKnownBug)).toEqual([null, 'BUG-018/AC-CC-1', null, 'BUG-018/AC-CC-2']);
   });
 });

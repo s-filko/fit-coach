@@ -61,24 +61,42 @@ const KnownBugSchema = z.string().regex(/^BUG-\d+(?:\/AC-(?:[A-Z]+-)?\d+)?$/);
  * ones (e.g. journey B's training step: WORKOUT OVERVIEW passes, the previous
  * turn verbatim is BUG-018/AC-CC-1) — one plane-level `knownBug` would drag
  * the passing assertions into `test.failing` with it.
+ *
+ * `liveOnly` (Task 5b) marks an expectation only the live L3 layer can check —
+ * e.g. what a REAL model replies after a catch-up message. The deterministic
+ * layer skips such entries: its `delivered` text is whatever the script
+ * happened to say, so the entry would be vacuous there, not wrong. An object
+ * needs at least one of `knownBug`/`liveOnly`; with neither, use a bare
+ * string.
  */
 export interface TaggedAssertion {
   text: string;
-  knownBug: string;
+  knownBug?: string;
+  /** Only the literal `true` marks an entry (the schema rejects `false`). */
+  liveOnly?: true;
 }
 
 export type ScenarioAssertion = string | TaggedAssertion;
 
 const AssertionSchema = z.union([
   z.string().min(1),
-  z.object({ text: z.string().min(1), knownBug: KnownBugSchema }),
+  z
+    .object({ text: z.string().min(1), knownBug: KnownBugSchema.optional(), liveOnly: z.literal(true).optional() })
+    .refine(a => a.knownBug !== undefined || a.liveOnly !== undefined, {
+      message: 'a tagged assertion needs knownBug, liveOnly, or both',
+    }),
 ]);
 
 /** The substring a list entry asserts on, whichever form it takes. */
 export const assertionText = (a: ScenarioAssertion): string => (typeof a === 'string' ? a : a.text);
 
-/** The entry's knownBug tag, or null for a bare string. */
-export const assertionKnownBug = (a: ScenarioAssertion): string | null => (typeof a === 'string' ? null : a.knownBug);
+/** The entry's knownBug tag, or null when absent (bare string or liveOnly-only). */
+export const assertionKnownBug = (a: ScenarioAssertion): string | null =>
+  typeof a === 'string' ? null : (a.knownBug ?? null);
+
+/** True when only the live L3 layer checks this entry (deterministic skips it). */
+export const assertionLiveOnly = (a: ScenarioAssertion): boolean =>
+  typeof a !== 'string' && a.liveOnly === true;
 
 // --- past: the world a scenario starts from ---
 

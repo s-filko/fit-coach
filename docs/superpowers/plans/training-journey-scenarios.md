@@ -177,9 +177,9 @@ Steps: two sets logged; a mid-workout question about rest time (text only); cloc
 
 **Files:** `evals/scenarios/c-interrupted-workout.scenario.ts` (rename to `c-catch-up-logging.scenario.ts` if clearer) and its integration test; a second scenario/step list for the explicit wording.
 
-- [ ] After the pause the user writes an implicit catch-up ("забыл дописать: последнее упражнение — подтягивания 3×8") — assert the sets land in the **previous** session with retro timestamps, the model **saw** the STALE SESSION block, the session closes at the pre-pause time; the mid-workout Q&A / gap-note `knownBug` cases stay.
-- [ ] Variant with the explicit "добавь к последней тренировке: подтягивания 3×8" — same persisted outcome.
-- [ ] Live-only expectation (L3, ignored by the deterministic layer): the delivered reply says the sets were added to the previous workout and asks whether to close it or add more.
+- [x] After the pause the user writes an implicit catch-up ("забыл дописать: последнее упражнение — подтягивания 3×8") — assert the sets land in the **previous** session with retro timestamps, the model **saw** the STALE SESSION block, the session closes at the pre-pause time; the mid-workout Q&A / gap-note `knownBug` cases stay.
+- [x] Variant with the explicit "добавь к последней тренировке: подтягивания 3×8" — same persisted outcome.
+- [x] Live-only expectation (L3, ignored by the deterministic layer): the delivered reply says the sets were added to the previous workout and asks whether to close it or add more.
 - [ ] Commit `test(ai): journey C as catch-up logging after a pause, explicit variant (owner ruling)`. STOP.
 
 ### Task 6: Live layer L3 (AC-TJ-4)
