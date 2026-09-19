@@ -108,7 +108,7 @@ just implied): the delivered reply equals the final plan-dump text only.
 - [x] **Step 1:** write the test; run it; confirm (a)–(c) fail for the stated reason (quote each
   failure message in the STOP report — a case that fails for another reason is not a reproduction).
 - [x] **Step 2: Commit** — `test(ai): reproduce BUG-018 — greeting after a pause is not answered (AC-CC-4)`
-- [ ] **Step 3: STOP** for orchestrator review.
+- [x] **Step 3: STOP** for orchestrator review. **Reviewed and accepted 2026-09-20** (commit `69d7bd19`, GLM worker via Orca; orchestrator re-ran the file: 4/4, the three cases reported as expected failures). Each case was flipped to `test` by the worker and failed for the stated reason: (a) the model input held no AI message at all; (b) the message before "привет" was the `=== CLIENT PROFILE ===` domain block, not a gap note; (c) the delivered text was the plan dump. Logs in the run confirm the mechanism: the 2-turn episode was summarised, the 1-turn one "trimmed without a summary (D-B)", history 0. **Fixes wait (owner, 2026-09-20)** until `training-journey-scenarios` Tasks 1–3 (DB-backed journey A) are accepted.
 
 **Verification:** `npx jest --ci src/infra/ai/graph/__tests__/chat-continuity.repro.unit.test.ts`
 → passes (with the three `failing` cases); `npm run test:unit` → green.
