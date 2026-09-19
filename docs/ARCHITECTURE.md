@@ -149,12 +149,14 @@ apps/server/src/
         blocks/                      # Injected fragments that are neither phase prompt nor directive
           types.ts                   #   ContextBlock<D> (D-A): pure renderer over the phase's loaded data, optional `depths`
           index.ts                   #   renderBlocks/fullDepth + re-exports
+          user-facts.v1.ts           #   ## User Facts block (ADR-0013 §3.4 block 2, budgeted on `longTerm`) — durable facts extracted at compaction
           episode-summaries.v1.ts    #   ## Previous episodes block — context, not data (numbers come from tools)
           post-tool-nudge.v1.ts      #   post-tool nudge (agent node retry)
           chat-context.v1.ts / client-profile.v1.ts / session-planning-*.v1.ts / training-workout-overview.v1.ts
                                      #   domain context blocks (ADR-0013 §3.4 block 3, D-B): one per moved v1 section, byte-equal at full depth; declared on PhaseSpec.contextBlocks
         summarizer/v1.ts             # Legacy end-of-phase summariser (not used by the graph since P4; kept with its snapshot tests)
         summarizer/v2.ts             # Episode summariser — structured EpisodeSummary from the rendered transcript (no previousSummary)
+        summarizer/v3.ts             # current: v2 plus a typed `facts` array (category, fact, muscleGroup?) consumed by the compact step (P6)
     conversation/
       drizzle-transcript.service.ts             # TranscriptPort impl — projects run messages into conversation_turns (one row per message, run_id always set)
       drizzle-summary.service.ts                # SummaryPort impl — writes conversation_summaries + the mirrored `summary` turn row in one transaction
@@ -364,11 +366,12 @@ These rules are for any AI assistant working in this repo:
 ## Conversation Context (Session) [FEAT-0009] ✅ IMPLEMENTED (episode memory, refactor P4)
 - **Dialogue memory** is the checkpointed LangGraph `messages` channel (PostgresSaver): it survives runs, interleaves as `BaseMessage`s (human / AI with `tool_calls` / tool results) and is the only source of history for every phase (INV-LLM-001/002). One chat across the app — no per-phase history.
 - **Episodes end by rule** — inactivity gap (`EPISODE_GAP_HOURS`, default 3), a committed phase transition (`compaction-flag.handler` → `compactReason`), or history-budget overflow — and the synchronous `compact` step in `prepare` summarises the ended episode into one independent structured summary; at most 3 are kept and rendered by the `## Previous episodes` block. Summaries are context, not data: facts (weights, reps) come from tools only (INV-LLM-003).
+- **User facts (P6)** — durable facts are written **only at compaction**: the `compact` step upserts summariser v3's `facts` array idempotently on the `(user_id, category, fact_key)` unique index of `user_facts` — a repeat increments `confirmations`, never rewrites `fact`; a failed upsert is logged and never fails the compaction. There is no per-turn fact tool: `remember_fact` (ADR-0013 D-14) was **dropped by owner decision 2026-09-17**. Facts render as the `## User Facts` block at block 2, ahead of `## Previous episodes`, budgeted against `longTerm` (ADR-0013 §3.4); zero facts render nothing. A `physical_constraint` fact with a `muscleGroup` is hard-enforced by `save_workout_plan` and `start_training_session` (`checkFactConflicts`, `domain/user/services/fact-conflicts.ts`): an exercise whose **primary** muscles include it is rejected with a `user_error` quoting the fact and nothing is persisted; secondary involvement and other categories do not bind (AC-1361).
 - **Transcript** (`conversation_turns` table) is an append-only projection: the `commit` node writes one row per message (`kind` human/ai/tool_call/tool_result, plus mirrored `summary` rows and `system_note`s), each carrying the run's `run_id`.
 - **Clear context**: `POST /api/bot/chat/clear-context` calls `ConversationRunPort.clearContext(userId)` — the adapter deletes the checkpoint thread and appends a `context_cleared` system note; the next message starts fresh.
 - **ADR-0005**: original patterns (superseded — no context service, no sliding window; the legacy `IConversationContextService` was deleted in P4).
 - No breaking change to API: `POST /api/chat` contract unchanged [AC-0110].
-- **Database storage**: `conversation_turns` table with (userId, phase, role, content, runId, kind, payload, createdAt); `conversation_summaries` table — structured episode summaries (ADR-0013 §8, written at compaction via `SummaryPort`); `conversation_runs` table — one row per run with model/tokens/latency/outcome (ADR-0013 §8, written by the commit node); `langgraph_checkpoints` table (managed by PostgresSaver).
+- **Database storage**: `conversation_turns` table with (userId, phase, role, content, runId, kind, payload, createdAt); `user_facts` table — durable user facts with a confirmation counter (P6, migration `0005`); `conversation_summaries` table — structured episode summaries (ADR-0013 §8, written at compaction via `SummaryPort`); `conversation_runs` table — one row per run with model/tokens/latency/outcome (ADR-0013 §8, written by the commit node); `langgraph_checkpoints` table (managed by PostgresSaver).
 
 ## LLM Integration
 **Implementation**: `src/infra/ai/model.factory.ts`
@@ -389,7 +392,7 @@ LLM_TEMPERATURE=<0-2>                 # Required: temperature for generation
 
 ### Interaction Pattern (Tool Calling Loop)
 Each phase subgraph runs a tool-calling loop:
-1. `agentNode`: `model.bindTools(tools).invoke(assembleContext(...))` — `[SystemMessage(systemPrompt), (## Previous episodes), ...history, ...current]`, history interleaved from the checkpointed `messages` channel
+1. `agentNode`: `model.bindTools(tools).invoke(assembleContext(...))` — `[SystemMessage(systemPrompt), (## User Facts), (## Previous episodes), (domain blocks), ...history, ...current]`, history interleaved from the checkpointed `messages` channel
 2. If `AIMessage.tool_calls` present → the tool executor runs them → `ToolMessage` results appended
 3. Loop back to `agentNode` with updated messages (tool results visible)
 4. If no `tool_calls` → `finalize` returns `{}` — the reply is the last `AIMessage` in state; `commit` reads `pendingTransition` and projects the run
@@ -414,7 +417,7 @@ Each phase subgraph runs a tool-calling loop:
 - **ADR-0006**: Session plan storage
 - **ADR-0007**: LangGraph migration — IN PROGRESS (Steps 0–6 done; see `docs/ADR-0007-IMPLEMENTATION-PLAN.md`)
 - **ADR-0008**: Centralized logging with Grafana/Loki
-- **ADR-0009**: User long-term memory — passive fact extraction per conversation turn, persistent `user_facts` table, injected into all phase prompts (PROPOSED)
+- **ADR-0009**: User long-term memory — passive fact extraction per conversation turn, persistent `user_facts` table, injected into all phase prompts (PROPOSED; its per-turn extraction mechanism is superseded by the 2026-09-17 owner decision — P6 reuses its table shape and categories, extraction happens at compaction)
 - **ADR-0010**: Conversation thread summarization (PROPOSED)
 - **ADR-0011**: Training tool execution hardening (PROPOSED, partially implemented)
 - **ADR-0012**: Exercise catalog vector search

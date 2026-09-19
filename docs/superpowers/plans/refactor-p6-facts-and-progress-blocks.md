@@ -1,4 +1,4 @@
-# Refactor P6 — User Facts, Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
+# Refactor P6 — User Facts (Group 1) Implementation Plan
 
 - Status: in progress
 - Branch: plan/refactor-p6-facts-and-progress-blocks
@@ -6,6 +6,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Split 2026-09-19 (owner decision):** this file now covers master-plan P6 item 1 only (Tasks 1–6
+> + Task G1). Items 2–3 (Tasks 7–13, AC-1362/1363) live in `refactor-p6-progress-and-drafts.md`.
+> The text below up to Group 1 is the original whole-phase preamble, kept for its shared decisions.
+>
 > **Planned 2026-09-19** (planning architect). Master-plan phase P6, AC-1361..1364.
 > Three items, sequenced as three separable task groups in one plan file (D-A).
 >
@@ -76,7 +80,7 @@ only); `docs/LLM_CORE_REFACTOR_PLAN.md` § P6 items 1–3, its Notes (the carrie
   - **Deferred to the consolidated eval pass:** the `≥ 90 % over n=3` pass rate, and that a
     *live* model actually states the constraint in a way the summariser extracts. The
     `memory/facts` dataset is **authored** in Task 6 and committed; it is not run.
-- **AC-1362** *(progress/history)* — "with fixture history in a different `sessionKey`, the
+- **[moved to `refactor-p6-progress-and-drafts`]** **AC-1362** *(progress/history)* — "with fixture history in a different `sessionKey`, the
   training run's input contains the exercise's previous sets (deterministic: block present
   with ≥1 set) — 100 %; judge criterion TR-6 mean ≥ 4.0/5."
   - **Provable now (Task 8):** the deterministic 100 % half, as a unit test over fixture
@@ -85,7 +89,7 @@ only); `docs/LLM_CORE_REFACTOR_PLAN.md` § P6 items 1–3, its Notes (the carrie
     exactly BUG-005's failure and needs no model.
   - **Deferred:** the TR-6 judge mean (L2 — and **no L2 runner exists**, per the P4 plan's
     own note on AC-1344).
-- **AC-1363** *(plan/iteration)* — "a 4-turn scripted iteration ends with
+- **[moved to `refactor-p6-progress-and-drafts`]** **AC-1363** *(plan/iteration)* — "a 4-turn scripted iteration ends with
   `save_workout_plan` persisting a plan equal to the last draft (deep-equal), and the
   draft's exercise IDs all exist in the catalog — 100 %."
   - **Provable now (Task 11):** the deep-equal invariant is **structural** once drafts
@@ -272,7 +276,7 @@ Review notes: the unique constraint on `(user_id, category, fact_key)` is what m
 - [x] **Step 1: Tests first** — block renders nothing (`null`/absent) for zero facts; renders grouped and capped for many; the assembler places it before the summaries block; a fixture with no facts produces a byte-identical message array to today's; `resolveBudget` truncates facts before trimming history and records `'facts'` in `cuts`; INV-LLM-004 still holds (block 1 untouched).
 - [x] **Step 2: Implement.** Snapshot diff enumerated below; **reviewed by the orchestrator before any regeneration — and the answer was that none was needed.**
 - [x] **Step 3: Commit** — `feat(ai): ## User Facts context block at block 2, budgeted against longTerm (ADR-0013 §3.4)` — `9378851d`.
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 4: STOP** for orchestrator review. **Reviewed and accepted 2026-09-19** (see `bc5c5dac`).
 
 **Verification:** `npx jest --ci src/infra/ai evals/snapshots` → all pass; `npm run evals -- --level L0` → 96/96 (or the new count after Task 2 — state it); `npx jest --ci evals/levels/__tests__/no-inline-prompts.unit.test.ts` → pass (the block is under `prompts/`, which is the allowed location — **not** `context/`).
 
@@ -309,146 +313,35 @@ Review notes: the unique constraint on `(user_id, category, fact_key)` is what m
 
 - [x] **Step 1:** Author the dataset and the check; unit-test the check against fixture observations (the check is pure — it does not need a model).
 - [x] **Step 2: Commit** — `test(evals): memory/facts dataset and the user-facts-block check (AC-1361, authored not run)`
-- [ ] **Step 3: STOP** — **Group 1 boundary.** Report: the tree is green, item 1 is complete and independently revertable here.
+- [x] **Step 3: STOP** — **Group 1 boundary.** Report: the tree is green, item 1 is complete and independently revertable here. **Reviewed and accepted 2026-09-19** (commit `b40af508`, GLM worker via Orca). Verified independently: `npx jest --ci evals` 184/184, L0 96/96, no snapshot moved. The orchestrator widened the task during execution (answering the worker's question): the eval harness stubbed `userFacts` with `[]`, so the new check could never have passed in a real L1 run — `fixture.facts` is now typed (`FixtureFactSchema`) and `build-stub-deps` serves it with the real port's semantics; `CaseObservation.assembledInput` (in-memory only) carries the last model input's text. The loader needed no change (`loadCases('memory', 'facts')` pinned by tests). `ARCHITECTURE.md` was applied by the orchestrator in Task G1 (outside the worker boundary).
 
 **Verification:** `npx jest --ci evals` → all pass; `npm run evals -- --level L0` → pass. **No `RUN_LLM_EVALS=1`.** AC-1361's deterministic half is closed; its pass-rate half is recorded as pending the consolidated eval pass.
 
 ---
 
-## Group 2 — Muscle-centric progress blocks (master plan P6 item 2)
+## Groups 2 and 3 — split out (owner decision 2026-09-19)
 
-### Task 7: Repository and service methods
-
-**Files:**
-- Modify: `apps/server/src/domain/training/types.ts` — `ExerciseSetHistory`, `ExerciseSessionHistory`, `MuscleGroupFatigue` per `PLAN-muscle-centric-history.md` § New types, **with `exerciseId: string`** (uuid — the design doc's `number` is stale). Reuse the existing `Involvement` type at line 57 — do not redeclare it.
-- Modify: `apps/server/src/domain/training/ports/workout-session.ports.ts` — add `getMuscleGroupFatigue(userId)` and `getExerciseHistory(userId, exerciseId, primaryMuscles, opts)` to `IWorkoutSessionRepository` (D-H — **the design doc's names, not the master plan's**).
-- Modify: `apps/server/src/domain/training/ports/training-service.ports.ts` — add `getMuscleReadiness(userId)` and `getExerciseHistoryByMuscles(userId, exerciseId, primaryMuscles)` to the service interface (D-H).
-- Modify: `apps/server/src/infra/db/repositories/workout-session.repository.ts` — the two queries, adapted from `PLAN-muscle-centric-history.md` § New repository methods. **`exerciseId` is a `string` (uuid) in this tree**, not the `number` that doc's types show — see Discrepancies.
-- Modify: the training service implementation (**grep**: `grep -rln "implements ITrainingService\|getTrainingHistory" src/domain/training/services/`).
-- Modify: `apps/server/tests/integration/database/training.repository.integration.test.ts` — extend.
-- Modify: every test stub of `IWorkoutSessionRepository` (**grep**: `grep -rln "findLastCompletedByUserAndKey" src/ tests/`) — the interface grew, so the stubs must too.
-
-- [ ] **Step 1: Tests first** — integration: fatigue aggregates primary **and** secondary involvement with correct `daysSince` and `totalSets`; exercise history returns exact matches before primary-muscle matches, each with its sets, and **finds history logged under a different `sessionKey`** (this is BUG-005 and the deterministic core of AC-1362); an exercise with no history returns an empty array, never null.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `feat(training): muscle-group fatigue and muscle-matched exercise history queries (P6 item 2, BUG-005)`
-- [ ] **Step 4: STOP** for orchestrator review.
-
-**Verification:** `RUN_DB_TESTS=1 NODE_ENV=test npx jest --ci --testMatch='**/tests/integration/database/training.repository.integration.test.ts'` → pass; `npx jest --ci src/domain/training` → pass; `npx tsc --noEmit` clean (the interface change ripples into stubs — that ripple is the point).
+Tasks 7–13 (master-plan P6 items 2 and 3 and the phase close-out) moved verbatim to
+`docs/superpowers/plans/refactor-p6-progress-and-drafts.md` (`- After:` this plan), at the
+Group 1 / Group 2 boundary D-A pre-recorded. The owner chose this on 2026-09-19 so Group 1 can
+close as done without claiming Tasks 7–12, and without leaving a merged-but-not-done plan
+(close-out debt in `scripts/state.mjs`). This file now covers item 1 only.
 
 ---
 
-### Task 8: The two context blocks and AC-1362's deterministic half
+### Task G1: Group 1 docs, close-out, merge and dev deploy (orchestrator)
 
 **Files:**
-- Create: `apps/server/src/infra/ai/prompts/blocks/session-planning-muscle-recovery.v1.ts` — `ContextBlock<D>` `session_planning.muscle_recovery`, `depths` declared (e.g. all groups → primary only) so the budget resolver can step it down.
-- Create: `apps/server/src/infra/ai/prompts/blocks/training-current-exercise-history.v1.ts` — `ContextBlock<D>` `training.current_exercise_history`, keyed by the in-progress exercise's primary muscles, `depths` for the number of past sessions shown.
-- Modify: `apps/server/src/infra/ai/prompts/blocks/index.ts` — export both.
-- Modify: `apps/server/src/infra/ai/graph/phases/session-planning.spec.ts` — `loadContext` also loads muscle readiness; `contextBlocks` gains the new block.
-- Modify: `apps/server/src/infra/ai/graph/phases/training.spec.ts` — `loadContext` finds the in-progress exercise and loads its muscle-matched history; `contextBlocks` gains the new block. **Add `@deprecated` JSDoc** to the `findLastCompletedByUserAndKey` call at line ~105 naming this plan (D-I) — **do not remove it**.
-- Create: `apps/server/src/infra/ai/prompts/blocks/__tests__/` tests for both blocks.
-- Modify: `apps/server/evals/snapshots/__tests__/message-assembly.unit.test.ts` — regenerate once, diff enumerated first.
+- Modify: `docs/ARCHITECTURE.md` — the facts path (orchestrator-applied; `ARCHITECTURE.md` is outside the worker boundary): `user-facts.v1.ts` and `summarizer/v3.ts` in the layout, the "User facts (P6)" bullet in § Conversation Context, block order in § Interaction Pattern, `user_facts` in § Database storage, ADR-0009's list entry annotated as superseded in mechanism.
+- Modify: `docs/BACKLOG.md` via the `backlog` skill — D-C's near-duplicate-facts limitation and the close-out advisories.
+- ADR amendments to **escalate to the owner, never edit** (`docs/adr/**` is read-only for this plan): **ADR-0009** — its per-turn passive-extraction mechanism and its `remember_fact` tool are superseded by the 2026-09-17 owner decision; its table shape and categories survive (D-B). **ADR-0013** — D-14 (`remember_fact`) is dropped; §3.4 block 2 is now the `## User Facts` block budgeted against `longTerm`.
 
-- [ ] **Step 1: Tests first** — **AC-1362 deterministic half** (the `it` name carries `AC-1362`): with fixture history under a **different `sessionKey`**, the training block renders with **≥ 1 set** for the current exercise. Plus: each block renders `null` when its data is empty; depth steps render strictly less text; both blocks are pure.
-- [ ] **Step 2: Implement.** Paste the enumerated snapshot diff under **Snapshot diff (Task 8)**; STOP before regenerating.
-- [ ] **Step 3: Commit** — `feat(ai): muscleRecovery and currentExerciseHistory context blocks (AC-1362 deterministic half)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 1: Docs reconcile** — the `ARCHITECTURE.md` edits above.
+- [ ] **Step 2: Close-out review** — `close-out-review` skill over the Group 1 diff; blocking findings fixed, advisories to `BACKLOG.md`, meta to `REVIEW_FINDINGS.md`.
+- [ ] **Step 3: Close-out** — tick every checkbox, `- Status: done`, `node scripts/state.mjs --write`, commit. **Per-AC split, restated:** AC-1361 deterministic half **closed** (Task 4 block + Task 5 hard validation + Task 3 mocked extraction + Task 6 authored dataset/check) / its `≥ 90 % over n=3` pass rate **deferred** to the consolidated eval pass; AC-1362 and AC-1363 **moved** to `refactor-p6-progress-and-drafts`; **AC-1364 deferred in full** (with AC-1344).
+- [ ] **Step 4: Merge and deploy to dev** — merge to `dev`, push, GitHub Actions deploy, migration `0005` applied by `deploy.sh` before containers start, `curl https://fitcoach-dev.filko.dev/health` → 200, `node scripts/state.mjs --check` → OK. Branch/worktree cleanup **only on the owner's explicit command**.
 
-**Verification:** `npx jest --ci src/infra/ai evals/snapshots` → all pass; `npm run evals -- --level L0` → pass; `npm run check-all` → 0 errors.
-
-**Snapshot diff (Task 8):** _(enumerate before regenerating)_
-
----
-
-### Task 9: Training and session_planning prompt bump, `progress/history` dataset
-
-**Files:**
-- Create: `apps/server/src/infra/ai/prompts/phases/training/v3.ts` and `.../session-planning/v3.ts` (**check the real version currently at `current`** — P4 introduced `v2`; `grep -n "current" src/infra/ai/prompts/phases/training/index.ts`). Changes: the previous-session section is replaced by a reference to the new block, and the master plan's **carried-over rule** is folded in — *after every logged set the response must contain a concrete next-set recommendation (weight or rep target), never a bare confirmation* (today the prompt requires this only conditionally, at RPE ≥ 8 / reported difficulty).
-- Modify: the two phases' `index.ts` — `current` repointed; **both old versions kept**.
-- Modify: L0 fixtures and snapshots for v3.
-- Create: `apps/server/evals/datasets/progress/history.jsonl` — AC-1362's cases (authored, **not run**; same cross-phase-directory caveat as Task 6).
-- Modify: `apps/server/evals/levels/l1.ts` — a deterministic `exercise-history-block-present` check.
-
-- [ ] **Step 1: Tests first** — v3 renders without the previous-session section and with the next-set rule; v2 still renders byte-identically (both files kept); the new L1 check is unit-tested against fixture observations.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `feat(ai): training and session_planning prompts v3 — muscle-centric history, mandatory next-set recommendation (P6 item 2)`
-- [ ] **Step 4: STOP** — **Group 2 boundary.** Report: green tree, item 2 complete and independently revertable.
-
-**Verification:** `npx jest --ci src/infra/ai evals` → all pass; `npm run evals -- --level L0` → pass (state the new count). **No model-backed run.** AC-1362's deterministic half is closed; TR-6's judge mean is recorded as pending the consolidated eval pass (and **no L2 runner exists**).
-
----
-
-## Group 3 — Structured drafts (master plan P6 item 3)
-
-### Task 10: The `draft` channel and the four draft tools
-
-**Files:**
-- Create: `apps/server/src/domain/conversation/draft.ts` — `PlanDraftSchema` and `SessionDraftSchema` (Zod), derived from the **existing** `save_workout_plan` / `start_training_session` payload schemas so a draft is exactly what those tools already accept (read `src/infra/ai/tools/save-workout-plan.tool.ts` — `sessionTemplateSchema`, `sessionTemplateExerciseSchema`, the `MUSCLE_GROUPS` and `ENERGY_COST` tuples — and reuse, do not retype). `type Draft = { kind: 'plan'; value: PlanDraft } | { kind: 'session'; value: SessionDraft }`.
-- Modify: `apps/server/src/infra/ai/graph/state.ts` — the `draft` channel (D-J), `Annotation<Draft | null>`, last-write-wins, default `null`. Document the writers in the existing channel-writers comment block.
-- Modify: `apps/server/src/domain/conversation/tool-outcome.ts` — `ToolStateUpdate` gains `draft?: Draft | null` (D-J).
-- Modify: `apps/server/src/infra/ai/graph/tool-executor.ts` — `finish()` applies `updates.draft` alongside `pendingTransition` and `activeSessionId` (line ~210).
-- Create: `apps/server/src/infra/ai/tools/propose-plan-draft.tool.ts`, `update-plan-draft.tool.ts`, `propose-session-draft.tool.ts`, `update-session-draft.tool.ts`. `propose_*` replaces the draft; `update_*` applies a partial patch to the existing one and returns `llmError` when there is no draft to update.
-- Modify: `apps/server/src/infra/ai/tools/index.ts`, `src/infra/ai/graph/phases/plan-creation.spec.ts` (the two plan tools), `session-planning.spec.ts` (the two session tools).
-- Create: `__tests__` for each tool.
-
-- [ ] **Step 1: Tests first** — `propose_*` returns an `ok` outcome **and** a `ToolStateUpdate` carrying the draft; `update_*` patches and preserves untouched fields; `update_*` with no draft returns `llm_error`; the executor's `finish()` writes the channel; an invalid draft (bad exercise id shape) returns `llm_error`, never `system_error`; `clearContext` drops the draft with the thread (it is a state channel — assert it is not persisted anywhere else).
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `feat(ai): draft state channel and the four plan/session draft tools (P6 item 3)`
-- [ ] **Step 4: STOP** for orchestrator review.
-
-**Verification:** `npx jest --ci src/infra/ai src/domain/conversation` → all pass; `npx tsc --noEmit` clean.
-
----
-
-### Task 11: Save-from-draft and AC-1363's deterministic half
-
-**Files:**
-- Modify: `apps/server/src/infra/ai/tools/save-workout-plan.tool.ts` and `start-training-session.tool.ts` — per **D-K**: when `state.draft` matches the tool's kind, persist the draft and ignore the payload; otherwise fall back to today's payload path. The tools need read access to the draft — **check how a tool reads state today** (`grep -n "config\|getCurrentTaskInput\|state" src/infra/ai/graph/tool-executor.ts | head -20`; the executor already passes `activeSessionId` into the tool call context at line ~152 — extend that same mechanism rather than inventing a new one).
-- Modify: the two tools' catalog validation — the draft's exercise IDs must all exist (`exerciseRepository.findByIds`); a missing ID returns `llmError`.
-- Create: `apps/server/evals/fixtures/plan-iteration-draft.ts` — a 4-turn scripted iteration fixture.
-- Create: `apps/server/evals/levels/__tests__/draft-iteration.unit.test.ts` — **AC-1363 deterministic half** (the `it` name carries `AC-1363`): a mocked-model 4-turn run (`propose_plan_draft` → `update_plan_draft` ×2 → `save_workout_plan`) ends with the persisted plan **deep-equal** to the last draft, and every draft exercise ID exists in the stub catalog. Use a `BaseChatModel` **subclass** as the mock, not a plain object — the P4 plan's Task 4 note records that the shared plain-object model mock never dispatches LangChain callbacks.
-- Create: `apps/server/evals/datasets/plan/iteration.jsonl` — authored, **not run** (same cross-phase-directory caveat as Task 6).
-- Modify: `apps/server/evals/levels/l1.ts` — a deterministic `draft-equals-persisted` check (PROMPT_EVAL_FRAMEWORK §4.2's "deterministic checks read the draft").
-
-- [ ] **Step 1: Tests first** — as described, plus: with **no** draft the legacy payload path still works byte-identically (D-K); with a draft, a *conflicting* payload is ignored (the draft wins) and that is logged.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `feat(ai): save_workout_plan and start_training_session persist the current draft (AC-1363 deterministic half)`
-- [ ] **Step 4: STOP** for orchestrator review.
-
-**Verification:** `npx jest --ci evals src/infra/ai/tools` → all pass; full `npx jest --ci` → green; `npm run evals -- --level L0` → pass.
-
----
-
-### Task 12: Plan-creation and session-planning prompts for the draft flow
-
-**Files:**
-- Create: `apps/server/src/infra/ai/prompts/phases/plan-creation/v3.ts` and `.../session-planning/v4.ts` (**session_planning already gets a v3 in Task 9 — check the version actually at `current` before numbering**). The rule becomes "propose a draft, edit the draft, then save"; the save tool's description says it takes no arguments when a draft exists.
-- Modify: the phases' `index.ts` — `current` repointed; all old versions kept.
-- Modify: L0 fixtures/snapshots for the new versions.
-
-- [ ] **Step 1: Tests first** — the new versions render with the draft instructions; the previous versions render byte-identically.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `feat(ai): plan_creation and session_planning prompts instruct the draft-then-save flow (P6 item 3)`
-- [ ] **Step 4: STOP** — **Group 3 boundary.**
-
-**Verification:** `npx jest --ci src/infra/ai evals` → all pass; `npm run evals -- --level L0` → pass (state the count); `npm run check-all` → 0 errors.
-
----
-
-### Task 13: Docs, dev deploy, smoke, close-out (orchestrator)
-
-**Files:**
-- Modify: `docs/ARCHITECTURE.md` (the facts path, the two new blocks, the draft channel, `user_facts`), `docs/CONTRIBUTING_AI.md` (adding a fact category; the draft flow; that `remember_fact` was dropped), `docs/PROMPT_EVAL_FRAMEWORK.md` §4.2 (the three new deterministic checks), `docs/BUGS.md` (BUG-005 — mark it addressed by item 2, **pending** the consolidated pass's TR-6 confirmation, not closed outright).
-- Modify: `docs/BACKLOG.md` via the `backlog` skill — the D-C near-duplicate-facts limitation; D-I's deferred removal of `findLastCompletedByUserAndKey`; D-K's deferred removal of the legacy tool payloads (P7).
-- ADR amendments to **escalate to the owner, never edit** (`docs/adr/**` is read-only for this plan): **ADR-0009** — its per-turn passive-extraction mechanism and its `remember_fact` tool are superseded by the 2026-09-17 owner decision; its table shape and categories survive (D-B). **ADR-0013** — D-14 (`remember_fact`) is dropped; §3.4 block 2 is now the `## User Facts` block budgeted against `longTerm`; §4.2 gains the `draft` channel and the third `ToolStateUpdate` field.
-
-- [ ] **Step 1: JSDoc and rails** — every new port, block, tool and channel carries JSDoc naming its AC/ADR section. `npx jest --ci evals/levels/__tests__/no-inline-prompts.unit.test.ts` → pass (all new prompt text is under `prompts/`, never `context/`).
-- [ ] **Step 2: Docs reconcile** — commit `docs: reconcile ARCHITECTURE, CONTRIBUTING_AI, PROMPT_EVAL_FRAMEWORK, BUGS, BACKLOG with P6`.
-- [ ] **Step 3: Deploy to dev** — merge to `dev`, GitHub Actions deploy, migration `0005` applied by `deploy.sh` **before** containers start, `curl https://fitcoach-dev.filko.dev/health` → 200. Confirm the migration actually ran: `docker logs fitcoach-dev-server --tail 50`.
-- [ ] **Step 4: Dev smoke — 3–5 calls only.** The owner sends 3–5 messages to `@MyFitAiCoachDevBot`. Paste: (a) one forced compaction (phase transition) followed by `SELECT category, fact, muscle_group, confirmations FROM user_facts WHERE user_id = '<id>';` → at least one row, or an explicit note that the episode carried no durable fact; (b) `SELECT budget_report->'longTerm', budget_report->'cuts' FROM conversation_runs WHERE created_at > now() - interval '2 hours';`; (c) one plan_creation turn showing a `propose_plan_draft` tool call in the run row's `tool_calls`. **No `RUN_LLM_EVALS=1`, no mini-compare, no baseline freeze.**
-- [ ] **Step 5: Close-out** — `close-out-review` skill, tick every checkbox, `- Status: done`, `node scripts/state.mjs --write`, commit, merge. **The close-out must restate the per-AC split verbatim:** AC-1361 deterministic half closed / pass-rate deferred; AC-1362 deterministic half closed / TR-6 deferred (no L2 runner); AC-1363 deep-equal invariant closed structurally / live pass rate deferred; **AC-1364 deferred in full**. All deferred halves go to the consolidated eval pass on the prod model via OpenRouter, together with AC-1344. STATE: P6 complete-with-deferrals; Next → P7 (which the master plan says depends on P4 **and** P6) and the consolidated eval pass. Branch/worktree cleanup **only on the owner's explicit command** — report the branch as ready, do not delete it.
-
-**Verification:** `npm run check-all` → 0 errors; full `npx jest --ci` → green; `npm run evals -- --level L0` → pass; `node scripts/state.mjs --check` → OK; `grep -rn "remember_fact" apps/server/src` → no hits. AC-1361, AC-1362, AC-1363 (deterministic halves), AC-1364 (deferred).
-
+**Verification:** `npm run check-all` → 0 errors; full `npx jest --ci` → green; `npm run evals -- --level L0` → 96/96; `grep -rn "remember_fact" apps/server/src` → no hits; `node scripts/state.mjs --check` → OK.
 ---
 
 ### Task 14: Decided without the owner (2026-09-19)
@@ -474,6 +367,11 @@ Review notes: the unique constraint on `(user_id, category, fact_key)` is what m
 ---
 
 ## Execution status (2026-09-19, overnight orchestration)
+
+> **Update 2026-09-19 (day):** the owner chose option 1 plus the D-A split. Tasks 5 and 6 were
+> executed by GLM workers via Orca (one worker session per task) and accepted; Groups 2–3 moved to
+> `refactor-p6-progress-and-drafts.md`; Task G1 closes Group 1. The text below is the overnight
+> record, kept as written.
 
 **Group 1 (user facts) is 4 of 6 tasks done, on the branch and NOT merged to `dev`; Groups 2 and
 3 are untouched.** The plan stays `- Status: in progress`. Nothing here is half-written: every
