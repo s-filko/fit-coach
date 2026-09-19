@@ -165,7 +165,7 @@ reply), `apps/server/src/infra/ai/graph/episode.ts` (a helper next to `lastAiTex
 - [x] **Step 2: Implement.**
 - [x] **Step 2b:** flip Task 0's case (c) to `test`; it must pass, and the pinned-symptom test is deleted (it now fails by design).
 - [x] **Step 3: Commit** — `fix(ai): the reply includes assistant text written alongside tool calls in this run (BUG-018, AC-CC-3)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-20** (`04ad33fe` + follow-up `1877dd27`, GLM worker via Orca). `runAiText` (episode.ts) joins every non-empty AI text of the current run with a blank line; the run port delivers it; `lastAiText` deleted (no production caller left). Case (c) flipped, the pinned-symptom test deleted, every BUG-018 `knownBug` tag gone from the journeys. Orchestrator re-ran: test:unit 888/888, L0 96/96, test:scenarios 221/221, type-check + format clean.
 
 **Verification:** `npx jest --ci src/infra/ai` → pass; `npm run test:unit` → green; L0 green.
 
