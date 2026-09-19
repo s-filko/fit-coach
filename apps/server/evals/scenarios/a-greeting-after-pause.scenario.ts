@@ -139,6 +139,13 @@ export const scenario: Scenario = {
             'Prefers short, direct replies without long intros',
             '## Previous episodes',
             'The workout plan is ready and pending save',
+            // The two BUG-018 `seen` points (Task 4 Step 0 moved them here from
+            // a side export — per-assertion tags): they fail today.
+            // Point 1: the inactivity compaction drops the whole history.
+            { text: PAST_HUMAN_TEXT, knownBug: 'BUG-018/AC-CC-1' },
+            { text: PAST_AI_TEXT, knownBug: 'BUG-018/AC-CC-1' },
+            // Point 2: no note tells the model time has passed.
+            { text: GAP_NOTE_MARKER, knownBug: 'BUG-018/AC-CC-2' },
           ],
         },
         tools: { must: ['request_transition'] },
@@ -151,20 +158,3 @@ export const scenario: Scenario = {
     },
   ],
 };
-
-/**
- * The two `seen` assertions that fail today. They live beside the schema-valid
- * `expect` because the scenario format (Task 1, accepted) carries a single
- * `seen` object with at most one `knownBug` tag — two independent known bugs
- * on the same plane cannot be expressed there. The deterministic test runs
- * each of these as `test.failing` (owner rule: reproduction before fixes).
- */
-export const seenKnownBugExpectations: ReadonlyArray<{
-  knownBug: 'BUG-018/AC-CC-1' | 'BUG-018/AC-CC-2';
-  mustMatch: string[];
-}> = [
-  // Point 1: the inactivity compaction drops the whole history today.
-  { knownBug: 'BUG-018/AC-CC-1', mustMatch: [PAST_HUMAN_TEXT, PAST_AI_TEXT] },
-  // Point 2: no note tells the model time has passed.
-  { knownBug: 'BUG-018/AC-CC-2', mustMatch: [GAP_NOTE_MARKER] },
-];

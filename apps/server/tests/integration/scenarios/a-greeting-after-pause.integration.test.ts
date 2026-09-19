@@ -20,13 +20,8 @@ import { conversationTurns } from '@infra/db/schema';
 import type { BaseMessage } from '@langchain/core/messages';
 
 import { runScenario, type ScenarioRunResult } from '../../../evals/lib/run-scenario';
-import { ScenarioSchema } from '../../../evals/schema/scenario.schema';
-import {
-  FINAL_TEXT,
-  GAP_NOTE_MARKER,
-  scenario,
-  seenKnownBugExpectations,
-} from '../../../evals/scenarios/a-greeting-after-pause.scenario';
+import { assertionKnownBug, assertionText, ScenarioSchema, type TaggedAssertion } from '../../../evals/schema/scenario.schema';
+import { FINAL_TEXT, GAP_NOTE_MARKER, scenario } from '../../../evals/scenarios/a-greeting-after-pause.scenario';
 
 import { installScriptedModel, type ScriptedModelHandle } from './scripted-model';
 
@@ -124,23 +119,27 @@ afterAll(() => {
 });
 
 describe('journey A — greeting after a pause (BUG-018 repro)', () => {
+  // Task 4 Step 0: knownBug tags ride the individual `seen.mustMatch` entries.
+  const seenEntries = expect_.seen?.mustMatch ?? [];
+  const passingSeen = seenEntries.filter(e => assertionKnownBug(e) === null);
+  const failingSeen = seenEntries.filter((e): e is TaggedAssertion => assertionKnownBug(e) !== null);
+
   describe('seen — what the model was handed', () => {
-    it.each(expect_.seen?.mustMatch ?? [])('model input contains "%s"', substring => {
+    it.each(passingSeen.map(assertionText))('model input contains "%s"', substring => {
       expect(seen).toContain(substring);
     });
 
     // Point 1 of BUG-018: the inactivity compaction returns kept: [] today,
     // so the earlier one-turn exchange never reaches the model.
-    test.failing(`the earlier exchange is still verbatim [${seenKnownBugExpectations[0]!.knownBug}]`, () => {
-      for (const substring of seenKnownBugExpectations[0]!.mustMatch) {
-        expect(seen).toContain(substring);
-      }
-    });
+    for (const entry of failingSeen) {
+      test.failing(`model input contains "${entry.text}" [${entry.knownBug}]`, () => {
+        expect(seen).toContain(entry.text);
+      });
+    }
 
-    // Point 2 of BUG-018: nothing tells the model that time has passed.
-    // Beyond presence, the note must sit right before the current user
-    // message ("привет"), not somewhere in the long-term blocks.
-    test.failing(`a time-gap note sits right before "привет" [${seenKnownBugExpectations[1]!.knownBug}]`, () => {
+    // Point 2 of BUG-018 beyond presence: the note must sit right before the
+    // current user message ("привет"), not somewhere in the long-term blocks.
+    test.failing(`a time-gap note sits right before "привет" [BUG-018/AC-CC-2]`, () => {
       expect(seen).toContain(GAP_NOTE_MARKER);
       const firstCall = seenCalls[0] ?? [];
       const currentIdx = firstCall.findIndex(m => typeOf(m) === 'human' && textOf(m).includes(step.text));

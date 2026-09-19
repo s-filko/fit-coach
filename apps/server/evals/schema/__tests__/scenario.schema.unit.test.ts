@@ -184,3 +184,92 @@ describe('knownBug tag (AC-TJ-1 — optional per assertion)', () => {
     ).toThrow();
   });
 });
+
+describe('per-assertion knownBug (Task 4 Step 0 — one tag per single assertion)', () => {
+  it('accepts tagged entries inside seen.mustMatch alongside bare strings', () => {
+    expect(() =>
+      ScenarioSchema.parse(
+        withSteps([
+          {
+            action: 'user',
+            text: 'давай верх',
+            expect: {
+              seen: {
+                mustMatch: [
+                  '=== RECENT TRAINING HISTORY',
+                  { text: 'привет, хочу потренироваться', knownBug: 'BUG-018/AC-CC-1' },
+                  { text: 'Привет, Алекс!', knownBug: 'BUG-018/AC-CC-1' },
+                ],
+              },
+            },
+          },
+        ]),
+      ),
+    ).not.toThrow();
+  });
+
+  it.each(['seen', 'delivered'] as const)('accepts tagged entries in %s.mustNotMatch', plane => {
+    expect(() =>
+      ScenarioSchema.parse(
+        withSteps([
+          {
+            action: 'user',
+            text: 'привет',
+            expect: { [plane]: { mustNotMatch: [{ text: 'Ничего не записал', knownBug: 'BUG-018/AC-CC-3' }] } },
+          },
+        ]),
+      ),
+    ).not.toThrow();
+  });
+
+  it('accepts tagged entries in tools.must and tools.mustNot', () => {
+    expect(() =>
+      ScenarioSchema.parse(
+        withSteps([
+          {
+            action: 'user',
+            text: 'да, поехали',
+            expect: {
+              tools: {
+                must: [{ text: 'start_training_session', knownBug: 'BUG-015' }],
+                mustNot: [{ text: 'finish_training', knownBug: 'BUG-006' }],
+              },
+            },
+          },
+        ]),
+      ),
+    ).not.toThrow();
+  });
+
+  it('rejects a bad tag on a tagged entry', () => {
+    expect(() =>
+      ScenarioSchema.parse(
+        withSteps([
+          {
+            action: 'user',
+            text: 'привет',
+            expect: { seen: { mustMatch: [{ text: 'Привет', knownBug: 'CC-1' }] } },
+          },
+        ]),
+      ),
+    ).toThrow();
+  });
+
+  it('rejects a tagged entry without text', () => {
+    expect(() =>
+      ScenarioSchema.parse(
+        withSteps([{ action: 'user', text: 'привет', expect: { seen: { mustMatch: [{ knownBug: 'BUG-018' }] } } }]),
+      ),
+    ).toThrow();
+  });
+
+  it('keeps the plane-level knownBug valid (backward compatibility, journey A)', () => {
+    expect(() =>
+      ScenarioSchema.parse(
+        withSteps([
+          { action: 'user', text: 'привет', expect: { delivered: { mustMatch: ['Привет'], knownBug: 'BUG-018/AC-CC-3' } } },
+        ]),
+      ),
+    ).not.toThrow();
+  });
+});

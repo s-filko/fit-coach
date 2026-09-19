@@ -54,6 +54,32 @@ export function resolveRelativeTime(spec: string, t0: Date): Date {
  */
 const KnownBugSchema = z.string().regex(/^BUG-\d+(?:\/AC-(?:[A-Z]+-)?\d+)?$/);
 
+/**
+ * One entry of a `mustMatch`/`must` list (Task 4 Step 0): a bare string, or an
+ * object tagging THAT single assertion with its bug. Per-entry granularity is
+ * what a plane needs when its list mixes passing assertions with known-bug
+ * ones (e.g. journey B's training step: WORKOUT OVERVIEW passes, the previous
+ * turn verbatim is BUG-018/AC-CC-1) — one plane-level `knownBug` would drag
+ * the passing assertions into `test.failing` with it.
+ */
+export interface TaggedAssertion {
+  text: string;
+  knownBug: string;
+}
+
+export type ScenarioAssertion = string | TaggedAssertion;
+
+const AssertionSchema = z.union([
+  z.string().min(1),
+  z.object({ text: z.string().min(1), knownBug: KnownBugSchema }),
+]);
+
+/** The substring a list entry asserts on, whichever form it takes. */
+export const assertionText = (a: ScenarioAssertion): string => (typeof a === 'string' ? a : a.text);
+
+/** The entry's knownBug tag, or null for a bare string. */
+export const assertionKnownBug = (a: ScenarioAssertion): string | null => (typeof a === 'string' ? null : a.knownBug);
+
 // --- past: the world a scenario starts from ---
 
 /** One recorded set of a seeded workout. */
@@ -156,22 +182,27 @@ const ScriptedMessageSchema = z
   });
 
 const SeenExpectSchema = z.object({
-  /** Substrings the assembled model input must (not) contain — prompt blocks. */
-  mustMatch: z.array(z.string().min(1)).optional(),
-  mustNotMatch: z.array(z.string().min(1)).optional(),
+  /**
+   * Substrings the assembled model input must (not) contain — prompt blocks.
+   * A tagged entry fails today and runs as `test.failing` (per-assertion
+   * granularity, Task 4 Step 0); the plane-level `knownBug` below stays valid
+   * for scenarios authored before it.
+   */
+  mustMatch: z.array(AssertionSchema).optional(),
+  mustNotMatch: z.array(AssertionSchema).optional(),
   knownBug: KnownBugSchema.optional(),
 });
 
 const ToolsExpectSchema = z.object({
-  must: z.array(z.string()).optional(),
-  mustNot: z.array(z.string()).optional(),
+  must: z.array(AssertionSchema).optional(),
+  mustNot: z.array(AssertionSchema).optional(),
   knownBug: KnownBugSchema.optional(),
 });
 
 const DeliveredExpectSchema = z.object({
   /** Substrings the delivered (user-visible) text must (not) contain. */
-  mustMatch: z.array(z.string().min(1)).optional(),
-  mustNotMatch: z.array(z.string().min(1)).optional(),
+  mustMatch: z.array(AssertionSchema).optional(),
+  mustNotMatch: z.array(AssertionSchema).optional(),
   knownBug: KnownBugSchema.optional(),
 });
 

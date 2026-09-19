@@ -157,7 +157,7 @@ Steps: "привет, хочу потренироваться" → session_plann
   `completed`, `durationMinutes`, `completedAt`; step 7 `seen` the new workout first in chat context.
 - `test.failing` today: the previous turn not seen verbatim after each transition (AC-CC-1); step 4
   "Записал!" not delivered (AC-CC-3).
-- [ ] Commit `test(ai): journey B — full workout with history over the real DB`. STOP.
+- [x] Commit `test(ai): journey B — full workout with history over the real DB`. STOP.
 
 ### Task 5: Journey C — interrupted workout (AC-TJ-2/3)
 
