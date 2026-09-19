@@ -366,6 +366,14 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
       },
       latestLegacySummary: async () => null,
     },
+    // P6 Task 3: facts are never invented in evals by default — the summariser stand-in
+    // above returns an empty facts array, so upsertMany is never even called (compact.node
+    // skips the call when facts.length === 0).
+    userFacts: {
+      upsertMany: async () => 0,
+      getForPrompt: async () => [],
+      getConstraints: async () => [],
+    },
     llmGateway: {
       chat: async () => ({ content: '' }),
       structured: async () => ({
@@ -374,6 +382,7 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
         userState: [],
         trainingFeedback: [],
         openItems: [],
+        facts: [],
       }),
     } as unknown as LlmGateway,
     // P4 Task 6: compaction never fires in evals by default — a year-long gap

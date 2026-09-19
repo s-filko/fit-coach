@@ -100,6 +100,7 @@ export async function registerInfraServices(container: Container = getGlobalCont
     runService: container.get(CONVERSATION_RUN_SERVICE_TOKEN),
     transcript: container.get(TRANSCRIPT_PORT_TOKEN),
     summaries: container.get(SUMMARY_PORT_TOKEN),
+    userFacts: container.get(USER_FACTS_SERVICE_TOKEN),
     llmGateway: container.get(LLM_GATEWAY_TOKEN),
     // D-L: episode tunables resolved once here — the nodes never read env mid-run.
     episodeConfig: {

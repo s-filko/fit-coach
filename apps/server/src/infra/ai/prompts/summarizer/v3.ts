@@ -11,7 +11,7 @@ export interface SummarizerV3Context {
 /**
  * Episode summariser v3 (P6 Task 2, owner decision 2026-09-17): v2's five
  * fields plus a sixth, `facts` — the ONLY source of durable `user_facts` rows.
- * There is no `remember_fact` tool; extraction happens here, in the
+ * There is no per-turn fact-writing tool; extraction happens here, in the
  * summariser's one structured call, and is written to `user_facts` by the
  * `compact` node (Task 3), not by this prompt.
  *

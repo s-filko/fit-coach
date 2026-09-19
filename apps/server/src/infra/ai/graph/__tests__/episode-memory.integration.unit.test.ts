@@ -70,6 +70,7 @@ function makeDeps(): ConversationGraphDeps {
     } as never,
     transcript: { appendRunMessages: jest.fn(), appendSystemNote: jest.fn() },
     summaries: { insert: jest.fn(), latestLegacySummary: jest.fn().mockResolvedValue(null) },
+    userFacts: { upsertMany: jest.fn().mockResolvedValue(0), getForPrompt: jest.fn(), getConstraints: jest.fn() },
     llmGateway: {
       chat: jest.fn(),
       structured: jest.fn(),
@@ -152,6 +153,7 @@ describe('episode memory across runs (AC-1341, INV-LLM-001/002)', () => {
       userState: [],
       trainingFeedback: [],
       openItems: [],
+      facts: [],
     });
     const graph = buildConversationGraph(deps);
     __recorded.length = 0;

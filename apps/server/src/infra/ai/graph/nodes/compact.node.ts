@@ -6,6 +6,14 @@
  * degrades to trimming without a summary), keeps the last 3 summaries oldest
  * first, and is the ONLY writer that removes messages from the channel
  * (INV-LLM-002). Also owns the one-time legacy import for live threads (D-E).
+ *
+ * P6 Task 3 (owner decision 2026-09-17): this is the ONLY path that ever
+ * writes a `user_facts` row — there is no per-turn fact-writing tool and none
+ * may be added. After a successful `summaries.insert`, `summary.facts` (the
+ * summariser's own structured output, P6 Task 2) is upserted via
+ * `IUserFactsService.upsertMany`. D-E: a failed fact upsert logs `error` and
+ * the compaction result is otherwise unchanged — a fact write is a
+ * nice-to-have, compaction is on the critical path.
  */
 import { RemoveMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
@@ -15,6 +23,7 @@ import type { ChatMsg } from '@domain/ai/types';
 import { type EpisodeSummary, EpisodeSummarySchema, type StoredEpisodeSummary } from '@domain/conversation/episode';
 import type { ConversationPhase } from '@domain/conversation/phases';
 import type { LegacySummary, SummaryPort } from '@domain/conversation/ports';
+import type { IUserFactsService } from '@domain/user/ports';
 
 import { estimateMessages } from '@infra/ai/context/token-estimator';
 import { splitEpisode } from '@infra/ai/graph/episode';
@@ -41,6 +50,8 @@ export interface EpisodeTunables {
 export interface CompactStepDeps {
   llmGateway: LlmGateway;
   summaries: SummaryPort;
+  /** P6 Task 3: the only fact-writing path — no per-turn fact tool exists or may exist (owner decision 2026-09-17). */
+  userFacts: IUserFactsService;
   config: EpisodeTunables;
   /** PhaseSpec.budget.history (D-D) — the BR-LLM-003 trigger input. */
   budgetFor: (phase: ConversationPhase) => number;
@@ -52,7 +63,7 @@ export type CompactStep = (
 ) => Promise<Partial<ConversationStateType>>;
 
 export function buildCompactStep(deps: CompactStepDeps): CompactStep {
-  const { llmGateway, summaries, config, budgetFor } = deps;
+  const { llmGateway, summaries, userFacts, config, budgetFor } = deps;
   const { gapMs, minTurns, minTokens } = config;
 
   return async function compactStep(state, config): Promise<Partial<ConversationStateType>> {
@@ -175,6 +186,19 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
         log.error({ err, userId, runId }, 'Episode summary insert failed — the run continues without it');
       }
       updates.episodeSummaries = [...state.episodeSummaries, stored].slice(-3);
+
+      // P6 Task 3 (owner decision 2026-09-17): the ONLY fact-writing path — no
+      // per-turn fact tool. Own try/catch, independent of the summary insert
+      // above: a failed or skipped fact write must never change what this
+      // function returns (D-E). Skip the call entirely when there is nothing
+      // to write — no pointless round-trip for the (common) empty-facts case.
+      if (summary.facts.length > 0) {
+        try {
+          await userFacts.upsertMany(userId, summary.facts);
+        } catch (err) {
+          log.error({ err, userId, runId }, 'User facts upsert failed — the run continues without it');
+        }
+      }
     }
 
     log.info({ userId, runId, reason, removed: removed.length, summarised: summary !== null }, 'Episode compacted');

@@ -2,7 +2,7 @@
 //
 // Facts are written ONLY at compaction, from the summariser's structured output
 // (owner decision 2026-09-17, docs/STATE.md § "Blocked / waiting on owner"). There is
-// no `remember_fact` tool and none may be added — see
+// no per-turn fact-writing tool and none may be added — see
 // docs/superpowers/plans/refactor-p6-facts-and-progress-blocks.md Global Constraints.
 //
 // Table shape and FactCategory values are reused from ADR-0009; ADR-0009's per-turn
@@ -20,7 +20,8 @@ export type FactCategory =
   | 'equipment'
   | 'nutrition_preference';
 
-export const FACT_CATEGORIES: readonly FactCategory[] = [
+/** `as const` tuple (not `readonly FactCategory[]`) so `z.enum(FACT_CATEGORIES)` infers the literal union. */
+export const FACT_CATEGORIES = [
   'physical_constraint',
   'exercise_preference',
   'exercise_dislike',
@@ -29,7 +30,7 @@ export const FACT_CATEGORIES: readonly FactCategory[] = [
   'schedule_constraint',
   'equipment',
   'nutrition_preference',
-];
+] as const satisfies readonly FactCategory[];
 
 export interface UserFact {
   id: string;

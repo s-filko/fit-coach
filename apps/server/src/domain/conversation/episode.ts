@@ -13,8 +13,8 @@ import type { ConversationPhase } from './phases';
  * messages" findable by position in `infra/ai/graph/episode.ts`.
  *
  * `facts` (P6 Task 2, owner decision 2026-09-17): the summariser's structured
- * output is the ONLY source of durable user facts — there is no `remember_fact`
- * tool. Extraction into `user_facts` happens in the `compact` node (Task 3).
+ * output is the ONLY source of durable user facts — there is no per-turn
+ * fact-writing tool. Extraction into `user_facts` happens in the `compact` node (Task 3).
  * D-D: `StoredEpisodeSummary`'s rendering (`episodeParagraph`,
  * `episode-summaries.v1.ts`) names its five fields explicitly and does not read
  * `facts` — adding this field must not change what the user-visible
@@ -30,7 +30,7 @@ export const EpisodeSummarySchema = z
     facts: z.array(
       z
         .object({
-          category: z.enum(FACT_CATEGORIES as [string, ...string[]]),
+          category: z.enum(FACT_CATEGORIES),
           fact: z.string(),
           muscleGroup: z.string().optional(),
         })
