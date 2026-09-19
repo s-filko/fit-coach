@@ -138,7 +138,7 @@ episode summary ("plan ready, pending save" style `openItems`), a one-turn chat 
   the transition; phase after — session_planning.
 - `test.failing` today: the earlier exchange verbatim (AC-CC-1); the gap note before "привет"
   (AC-CC-2); the delivered text contains the greeting (AC-CC-3).
-- [ ] Quote each failing case's real failure message in STOP (a case failing for another reason is
+- [x] Quote each failing case's real failure message in STOP (a case failing for another reason is
   not a reproduction).
 - [ ] Commit `test(ai): journey A — greeting after a pause over the real DB (BUG-018 repro)`. STOP.
 
