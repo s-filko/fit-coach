@@ -4,6 +4,7 @@ import { MemorySaver } from '@langchain/langgraph';
 
 import type { LlmGateway } from '@domain/ai/ports/llm.gateway.ports';
 import type { ConversationRunRecord, InsertSummaryInput, AppendRunMessagesInput } from '@domain/conversation/ports';
+import type { UserFact } from '@domain/user/ports';
 
 import type { ConversationGraphDeps } from '@infra/ai/graph/conversation.graph';
 
@@ -172,6 +173,24 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
   // Chat fixtures carry no activeSession — production would return null there,
   // and a synthetic in-progress session would change what the chat prompt sees.
   const session = fixture.activeSession ? buildTrainingSession(fixture.activeSession) : null;
+
+  // P6 Task 6: fixture facts are the durable rows the case STARTS with — the
+  // extraction itself is proved by Task 3's mocked-summariser test, so evals
+  // never invent facts at runtime. Mapped onto `UserFact` the way the real
+  // service returns rows; a fixture without facts still gets [] (nothing moves
+  // for existing datasets).
+  const facts: UserFact[] = (fixture.facts ?? []).map((fact, index) => ({
+    id: `fact-${index + 1}`,
+    userId,
+    category: fact.category,
+    fact: fact.fact,
+    factKey: `${fact.category}:${fact.fact.toLowerCase()}`,
+    muscleGroup: fact.muscleGroup ?? null,
+    confirmations: 1,
+    sourceTurnId: null,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+  }));
 
   const deps = {
     // IUserService — the port's method is getUser(id), not getUserById.
@@ -366,6 +385,18 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
       },
       latestLegacySummary: async () => null,
     },
+    // P6 Task 3: facts are never WRITTEN in evals — the summariser stand-in above
+    // returns an empty facts array, so upsertMany is never even called (compact.node
+    // skips the call when facts.length === 0). Reading is the fixture's business
+    // (P6 Task 6): getForPrompt returns the fixture rows as-is (the fixture is
+    // authored in the port's category-then-recency order); getConstraints applies
+    // the real port's subset — physical_constraint with a non-null muscleGroup.
+    userFacts: {
+      upsertMany: async () => 0,
+      getForPrompt: async () => facts,
+      getConstraints: async () =>
+        facts.filter(fact => fact.category === 'physical_constraint' && fact.muscleGroup !== null),
+    },
     llmGateway: {
       chat: async () => ({ content: '' }),
       structured: async () => ({
@@ -374,6 +405,7 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
         userState: [],
         trainingFeedback: [],
         openItems: [],
+        facts: [],
       }),
     } as unknown as LlmGateway,
     // P4 Task 6: compaction never fires in evals by default — a year-long gap

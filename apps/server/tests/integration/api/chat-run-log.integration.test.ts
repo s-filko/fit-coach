@@ -71,6 +71,11 @@ describe('conversation run log — AC-1301', () => {
         insert: async () => undefined,
         latestLegacySummary: async () => null,
       } as never,
+      userFacts: {
+        upsertMany: async () => 0,
+        getForPrompt: async () => [],
+        getConstraints: async () => [],
+      } as never,
       llmGateway: {
         chat: async () => ({ content: '' }),
         structured: async () => ({}),

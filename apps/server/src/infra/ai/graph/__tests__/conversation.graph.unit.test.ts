@@ -113,6 +113,11 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
     insert: async () => undefined,
     latestLegacySummary: async () => null,
   },
+  userFacts: {
+    upsertMany: jest.fn().mockResolvedValue(0),
+    getForPrompt: jest.fn().mockResolvedValue([]),
+    getConstraints: jest.fn().mockResolvedValue([]),
+  },
   llmGateway: {
     chat: async () => ({ content: '' }),
     // Cast: LlmGateway.structured is generic; the stub returns one fixed shape.
@@ -122,6 +127,7 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
       userState: [],
       trainingFeedback: [],
       openItems: [],
+      facts: [],
     })) as unknown as LlmGateway['structured'],
   },
   runService: {

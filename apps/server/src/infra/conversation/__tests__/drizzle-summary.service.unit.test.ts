@@ -5,7 +5,7 @@ const INPUT = {
   runId: 'run-1',
   episodeId: 'ep-1',
   phaseAtEnd: 'training' as const,
-  structured: { topics: ['legs'], decisions: [], userState: [], trainingFeedback: [], openItems: [] },
+  structured: { topics: ['legs'], decisions: [], userState: [], trainingFeedback: [], openItems: [], facts: [] },
   rendered: '## Previous episodes\n- training (today): topics: legs',
 };
 

@@ -34,6 +34,7 @@ export const FIXTURE_EPISODE_SUMMARY = {
     userState: ['mild shoulder discomfort reported'],
     trainingFeedback: [],
     openItems: [],
+    facts: [],
   },
 };
 

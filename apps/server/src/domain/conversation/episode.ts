@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { FACT_CATEGORIES } from '@domain/user/ports';
+
 import type { ConversationPhase } from './phases';
 
 /**
@@ -9,6 +11,14 @@ import type { ConversationPhase } from './phases';
  * The D-I invariant underneath: the adapter appends exactly one HumanMessage
  * per run and no node adds another — that is what makes "this run's
  * messages" findable by position in `infra/ai/graph/episode.ts`.
+ *
+ * `facts` (P6 Task 2, owner decision 2026-09-17): the summariser's structured
+ * output is the ONLY source of durable user facts — there is no per-turn
+ * fact-writing tool. Extraction into `user_facts` happens in the `compact` node (Task 3).
+ * D-D: `StoredEpisodeSummary`'s rendering (`episodeParagraph`,
+ * `episode-summaries.v1.ts`) names its five fields explicitly and does not read
+ * `facts` — adding this field must not change what the user-visible
+ * `## Previous episodes` block renders.
  */
 export const EpisodeSummarySchema = z
   .object({
@@ -17,6 +27,15 @@ export const EpisodeSummarySchema = z
     userState: z.array(z.string()),
     trainingFeedback: z.array(z.string()),
     openItems: z.array(z.string()),
+    facts: z.array(
+      z
+        .object({
+          category: z.enum(FACT_CATEGORIES),
+          fact: z.string(),
+          muscleGroup: z.string().optional(),
+        })
+        .strict(),
+    ),
   })
   .strict();
 

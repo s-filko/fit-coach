@@ -31,6 +31,13 @@ export interface CaseObservation {
   budgetReport: BudgetReport | null;
   /** The LAST model call's input, reduced (D-C — needs the model input, not just the report). */
   lastModelInput: ModelInputMessage[];
+  /**
+   * The LAST model call's input as text (message contents joined by newlines) —
+   * what `user-facts-block-present` (AC-1361, P6 Task 6) scans for the
+   * `## User Facts` heading and the fact substrings. '' when no model call was
+   * made. In-memory only: never written into reports or baselines.
+   */
+  assembledInput: string;
 }
 
 interface ObservedToolCall {
@@ -50,6 +57,11 @@ function reduceModelMessage(m: BaseMessage): ModelInputMessage {
   return { type: m._getType(), toolCallIds: toolCallIdsOf(m), toolCallId };
 }
 
+/** Message content as flat text — string content verbatim, structured content JSON-encoded. */
+function contentText(m: BaseMessage): string {
+  return typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+}
+
 /**
  * Records the LAST model call's input messages, reduced to type + tool-call
  * pairing (D-C: `budget-within-limits` and `no-orphan-tool-message` need what
@@ -57,13 +69,19 @@ function reduceModelMessage(m: BaseMessage): ModelInputMessage {
  * `BaseCallbackHandler` pattern as `ToolRecorder` — `handleChatModelStart`
  * fires once per model invocation, `messages` is `BaseMessage[][]` (LangChain
  * batches); a run never batches, so `messages[0]` is the call.
+ *
+ * Also keeps the call's text (`assembledInput`, AC-1361 P6 Task 6) — the
+ * reduced `last` deliberately drops content, but `user-facts-block-present`
+ * scans for the `## User Facts` heading and fact substrings.
  */
 export class ModelInputRecorder extends BaseCallbackHandler {
   name = 'EvalModelInputRecorder';
   last: ModelInputMessage[] = [];
+  lastText = '';
 
   handleChatModelStart(_serialized: unknown, messages: BaseMessage[][]): void {
     this.last = (messages[0] ?? []).map(reduceModelMessage);
+    this.lastText = (messages[0] ?? []).map(contentText).join('\n');
   }
 }
 
@@ -118,6 +136,7 @@ const EMPTY_OBSERVATION: CaseObservation = {
   threw: null,
   budgetReport: null,
   lastModelInput: [],
+  assembledInput: '',
 };
 
 export async function runCase(
@@ -172,6 +191,7 @@ export async function runCase(
       threw: null,
       budgetReport: recordedRuns[0]?.budgetReport ?? null,
       lastModelInput: modelInputRecorder.last,
+      assembledInput: modelInputRecorder.lastText,
     };
   } catch (err) {
     return { ...EMPTY_OBSERVATION, threw: err instanceof Error ? err.message : String(err) };

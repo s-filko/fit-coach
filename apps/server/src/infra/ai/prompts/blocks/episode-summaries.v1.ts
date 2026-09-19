@@ -30,7 +30,12 @@ function relativeDate(endedAt: string, now: Date, timezone: string | null): stri
   return `${days} days ago`;
 }
 
-/** D-C: one deterministic paragraph per episode — also what `SummaryPort.insert` stores as `rendered`. */
+/**
+ * D-C: one deterministic paragraph per episode — also what `SummaryPort.insert` stores as `rendered`.
+ * D-D (P6 Task 2, verified 2026-09-19): this function names its five fields explicitly rather than
+ * iterating `s.summary` generically — adding `EpisodeSummary.facts` therefore does NOT change this
+ * function's output. No change was needed here for Task 2; this comment records that it was checked.
+ */
 export function episodeParagraph(s: StoredEpisodeSummary, now: Date, timezone: string | null): string {
   const parts = [
     renderList('Topics', s.summary.topics),

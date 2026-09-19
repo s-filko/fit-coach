@@ -30,6 +30,7 @@ refactor phases add cases. The gap is deliberate, not an unmet acceptance criter
 | `registration/no-premature-complete.jsonl` | RG-0007..RG-0010 | BUG-009 class |
 | `plan_creation/basics.jsonl` | PC-0001..PC-0010 | PC-1, search discipline (renamed from id-reuse.jsonl in P4 Task 1 — the stem moved to the seeded id-reuse dataset) |
 | `session_planning/one-question-first.jsonl` | SP-0001..SP-0010 | SP-1 |
+| `memory/facts.jsonl` | MF-0001..MF-0004 | AC-1361 (P6 Task 6, authored not run) |
 
 ## Frozen by baseline v0
 

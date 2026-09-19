@@ -16,6 +16,11 @@ export type ConversationRunOutcome = 'ok' | 'llm_unavailable' | 'core_error' | '
 export interface BudgetReport {
   estimator: string; // TOKEN_ESTIMATOR_ID
   system: number; // block 1: the rendered phase prompt — domain data moved to block 3 (context-budget plan Task 2)
+  /**
+   * block 2a: the rendered `## User Facts` block (P6 Task 4), 0 when the user
+   * has no facts. Billed against `budget.longTerm`.
+   */
+  longTerm: number;
   summary: number; // the rendered `## Previous episodes` block, 0 when there are no episode summaries (D-H)
   /**
    * block 3: the rendered domain context blocks (ADR-0013 §4.2 `contextBlocks`,
@@ -39,9 +44,12 @@ export interface BudgetReport {
   budget?: TokenBudget;
   /**
    * What INV-LLM-004's resolveBudget cut, in order, empty when nothing was
-   * cut (D-C). `'floor'` (D-D) means block 1 and `current` only survived.
+   * cut (D-C). `'facts'` (P6 Task 4) truncates the `## User Facts` list
+   * BEFORE history is trimmed — a deliberate extension of the invariant's
+   * published order (facts are the cheapest thing to shorten). `'floor'`
+   * (D-D) means block 1 and `current` only survived.
    */
-  cuts?: Array<'history' | `block:${string}` | 'summary' | 'floor'>;
+  cuts?: Array<'facts' | 'history' | `block:${string}` | 'summary' | 'floor'>;
 }
 
 /** One recorded conversation run — ADR-0013 §8. `model` is null for runs that failed before any model call (D-F). */

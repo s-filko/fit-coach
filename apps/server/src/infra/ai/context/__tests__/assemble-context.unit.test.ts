@@ -33,6 +33,7 @@ const EPISODE_SUMMARY: StoredEpisodeSummary = {
     userState: ['mild shoulder discomfort'],
     trainingFeedback: [],
     openItems: ['day 2 not logged'],
+    facts: [],
   },
 };
 
@@ -48,6 +49,7 @@ const GENEROUS_BUDGET: TokenBudget = {
 function input(overrides: Partial<AssembleInput> = {}): AssembleInput {
   return {
     systemPrompt: SYSTEM,
+    userFacts: [],
     episodeSummaries: [],
     history: [],
     current: [new HumanMessage(USER_MESSAGE)],
@@ -136,7 +138,9 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
     for (const caseInput of cases) {
       // eslint-disable-next-line no-await-in-loop
       const { budgetReport: r } = await assembleContext(caseInput);
-      expect(r.total).toBe(r.system + r.summary + r.domain + r.history + r.user + r.inFlight + r.toolResults);
+      expect(r.total).toBe(
+        r.system + r.longTerm + r.summary + r.domain + r.history + r.user + r.inFlight + r.toolResults,
+      );
     }
   });
 
@@ -251,6 +255,87 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
       const { budgetReport } = await assembleContext(input({ contextBlocks: [block('x', 'hello')] }));
       expect(budgetReport.total).toBe(
         budgetReport.system +
+          budgetReport.longTerm +
+          budgetReport.summary +
+          budgetReport.domain +
+          budgetReport.history +
+          budgetReport.user +
+          budgetReport.inFlight +
+          budgetReport.toolResults,
+      );
+    });
+  });
+
+  // P6 Task 4 (D-F, ADR-0013 §3.4 block 2): `## User Facts` renders ahead of
+  // `## Previous episodes` — long-term memory precedes episode memory.
+  describe('block 2a — ## User Facts (P6 Task 4)', () => {
+    const FACT = {
+      id: 'f1',
+      userId: 'u1',
+      category: 'equipment' as const,
+      fact: 'Trains at home with dumbbells only',
+      factKey: 'trains at home with dumbbells only',
+      muscleGroup: null,
+      confirmations: 1,
+      sourceTurnId: null,
+      createdAt: new Date('2026-09-01T00:00:00Z'),
+      updatedAt: new Date('2026-09-01T00:00:00Z'),
+    };
+
+    it('no facts (default []) → byte-identical to a run with no facts field at all', async () => {
+      const withEmptyFacts = await assembleContext(input({ userFacts: [] }));
+      const withoutFactsKey = await assembleContext(input());
+      expect(withEmptyFacts.messages).toEqual(withoutFactsKey.messages);
+      expect(withEmptyFacts.budgetReport).toEqual(withoutFactsKey.budgetReport);
+      expect(withEmptyFacts.messages).toEqual([new SystemMessage(SYSTEM), new HumanMessage(USER_MESSAGE)]);
+      expect(withEmptyFacts.budgetReport.longTerm).toBe(0);
+    });
+
+    it('with facts → its own SystemMessage BEFORE the episode-summaries block (ADR-0013 §3.4 block 2 ordering)', async () => {
+      const { messages, budgetReport } = await assembleContext(
+        input({ userFacts: [FACT], episodeSummaries: [EPISODE_SUMMARY] }),
+      );
+
+      // [system, facts, summaries, human]
+      expect(messages).toHaveLength(4);
+      expect(String(messages[0].content)).toBe(SYSTEM);
+      expect(String(messages[1].content)).toContain('## User Facts');
+      expect(String(messages[1].content)).toContain('Trains at home with dumbbells only');
+      expect(String(messages[2].content)).toContain('## Previous episodes');
+      expect(isType(messages[3], 'human')).toBe(true);
+      expect(budgetReport.longTerm).toBeGreaterThan(0);
+    });
+
+    it('facts alone (no summaries) render right after block 1, before history', async () => {
+      const { messages } = await assembleContext(input({ userFacts: [FACT], history: historyFixture() }));
+
+      expect(String(messages[0].content)).toBe(SYSTEM);
+      expect(String(messages[1].content)).toContain('## User Facts');
+      expect(messages.slice(2, 4)).toEqual(historyFixture());
+      expect(isType(messages[4], 'human')).toBe(true);
+    });
+
+    it('INV-LLM-004 (d) D-D floor drops facts too: only block 1 and current remain', async () => {
+      const { messages, budgetReport } = await assembleContext(
+        input({
+          userFacts: [FACT],
+          episodeSummaries: [EPISODE_SUMMARY],
+          history: historyFixture(),
+          current: [new HumanMessage('u'.repeat(20000))],
+          budget: { system: 50, longTerm: 10, domain: 10, history: 10, outputReserve: 1 },
+        }),
+      );
+
+      expect(budgetReport.cuts).toContain('floor');
+      expect(messages).toHaveLength(2);
+      expect(budgetReport.longTerm).toBe(0);
+    });
+
+    it('total includes longTerm tokens', async () => {
+      const { budgetReport } = await assembleContext(input({ userFacts: [FACT] }));
+      expect(budgetReport.total).toBe(
+        budgetReport.system +
+          budgetReport.longTerm +
           budgetReport.summary +
           budgetReport.domain +
           budgetReport.history +

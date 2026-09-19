@@ -5,6 +5,7 @@ import { RunMetricsCollector } from '@infra/ai/run-metrics';
 const report = (total: number): BudgetReport => ({
   estimator: 'chars4x1.15',
   system: total,
+  longTerm: 0,
   summary: 0,
   domain: 0,
   blocks: [],

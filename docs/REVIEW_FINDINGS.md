@@ -116,10 +116,25 @@ or is inert for the kind of diff under review.
   from its file list inject errors the zone must notice and route to meta on its own.
   Runs: refactor-p1-legacy-llm-retirement (2026-09-16).
 
+- [×1] R2's brief scopes its symbol search to `apps/` and `scripts/`; doc-content
+  duplication (here: near-parallel "user facts" sections in `ARCHITECTURE.md` and
+  `CONTRIBUTING_AI.md`) is outside its grep and presumably R4's — a one-line note in the R2
+  zone file saying so would stop a future R2 reviewer spending time deciding whether to flag it.
+  Runs: refactor-p6-facts-and-progress-blocks (2026-09-19).
+
 ## Blind spots
 
 What fell between the zones — a real problem no zone's mandate covered, usually surfaced by
 a wider reader (the final whole-branch review) or noticed after the fact.
+
+- [×2] A known-and-accepted carve-out (FEAT-0003's stale LLMService diagram is P7-owned)
+  lives only in the master plan's phase map; the review brief's known-and-accepted list is
+  assembled ad hoc each round, so the same carve-out must be re-derived or gets re-flagged.
+  Second instance (R4): `LLM_CORE_REFACTOR_PLAN.md` § P6 still describes the dropped
+  `remember_fact` tool and pre-design-doc repository names; the plan's Discrepancies table
+  records it and P7 owns the doc cleanup, but a reviewer with a narrower diff window could
+  misclassify it as new rot.
+  Runs: refactor-p1-legacy-llm-retirement (2026-09-16), refactor-p6-facts-and-progress-blocks (2026-09-19).
 
 - [×1] AC-1322's "within ±2 pp of v0" was proven loosely: run 1 exceeded the threshold on
   three checks and the criterion was closed by "did not reproduce on re-run" (n=3, fresh
@@ -228,11 +243,6 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   false blocking call.
   Runs: refactor-p0-run-log re-run (2026-09-12), refactor-p2-prompt-modules (2026-09-16).
 
-- [×1] A known-and-accepted carve-out (FEAT-0003's stale LLMService diagram is P7-owned)
-  lives only in the master plan's phase map; the review brief's known-and-accepted list is
-  assembled ad hoc each round, so the same carve-out must be re-derived or gets re-flagged.
-  Runs: refactor-p1-legacy-llm-retirement (2026-09-16).
-
 - [×1] "Every AC has a test" has no procedure for promised test files that simply do not
   exist while the task's broad jest command still passes: the adapter and commit/handler
   test files listed in plan tasks were never written, the old persist.node tests were
@@ -260,6 +270,18 @@ backs it. Each entry names the proposed wording and where it would live
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
 
+- [×1] A snapshot test can claim to freeze a specific version while actually rendering a moving
+  alias, and nothing catches it. P6 Task 2 found `evals/snapshots/__tests__/prompt-snapshots.unit.test.ts`'s
+  two `summarizer v2 / …` tests rendering `SUMMARIZER_PROMPT` — the alias that Task 2 was in the
+  act of repointing from v2 to v3. The tests passed, their names said "v2", and the first
+  `jest -u` after the repoint would have silently re-baselined v2's frozen snapshot onto v3's
+  output, destroying exactly the byte-identity guarantee the frozen file exists to provide.
+  (v1 was safe only by accident: its tests already referenced `SUMMARIZER_V1` directly.) Nothing
+  in the repo makes this citable — it is not duplication, not a logic bug, and the test is green.
+  Proposed principle for `docs/CONTRIBUTING_AI.md` (Testing section, next to the version-bump
+  rule): "A snapshot or byte-identity test references the concrete versioned artefact it claims
+  to freeze (`SUMMARIZER_V2`, `CHAT_V1`), never a moving alias such as `*_PROMPT` or `current`.
+  A test whose name states a version must import that version." Runs: refactor-p6-facts-and-progress-blocks (2026-09-19, executor find during Task 2).
 - [×1] Nothing written down requires a decorator's side-effect-suppression claim to be proven by
   a spy on the downstream write rather than inferred from the error type. P5's
   `with-run-mutex.unit.test.ts` does it the right way — it asserts `recordRun` was never called
@@ -555,3 +577,16 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   method the implementation calls; widening a dependency through a type cast instead of
   extending the interface is a review finding."
   Runs: refactor-p4-episode-memory (2026-09-18).
+
+- [×1] A plan's STOP verification notes are hand-typed pass counts ("36/36", "tsc clean"),
+  not raw command output — a reviewer cannot tell real evidence from a plausible claim
+  without re-executing everything (R3 did, and all matched). Proposed principle for
+  `SUPERPOWERS_INTEGRATION.md` § Rules of engagement or `CONTRIBUTING_AI.md`: a STOP
+  verification note pastes the command's result lines (or links a CI run), not a count.
+  Runs: refactor-p6-facts-and-progress-blocks (2026-09-19).
+- [×1] Nothing requires a new eval dataset to be listed in `evals/datasets/README.md`'s
+  Datasets table (only BR-EVAL-001..003 exist, none about the catalog), so the missing
+  `memory/facts.jsonl` row could only be advisory. Proposed wording (for
+  `PROMPT_EVAL_FRAMEWORK.md` §3 or the README header): "Every new
+  `<phase-or-category>/<dataset>.jsonl` gets one row in this README's Datasets table in the
+  same commit that adds it." Runs: refactor-p6-facts-and-progress-blocks (2026-09-19).

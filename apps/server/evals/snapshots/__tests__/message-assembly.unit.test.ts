@@ -15,6 +15,8 @@ import { buildPhaseSpecs } from '@infra/ai/graph/phases';
 import { getModel } from '@infra/ai/model.factory';
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
+import type { UserFact } from '@domain/user/ports';
+
 import {
   ASSEMBLY_SCENARIOS,
   type AssemblyScenario,
@@ -76,8 +78,18 @@ function buildSubgraph(phase: PhaseName, deps: ConversationGraphDeps): Invokable
 /**
  * Builds the stub world for one phase and runs one scenario through it,
  * returning the exact BaseMessage[] the model was invoked with.
+ *
+ * `userFacts` (P6 Task 4, optional): overrides buildStubDeps' fixed `[]`
+ * stub for the one inverted test that proves the `## User Facts` block
+ * actually renders — every other call site omits it, so every existing
+ * scenario keeps calling the untouched stub and its snapshot stays
+ * byte-identical.
  */
-async function captureInvocation(phase: PhaseCase, scenario: AssemblyScenario): Promise<BaseMessage[]> {
+async function captureInvocation(
+  phase: PhaseCase,
+  scenario: AssemblyScenario,
+  userFacts?: UserFact[],
+): Promise<BaseMessage[]> {
   __recorded.length = 0;
   // History seeding — discovered 2026-09-18 (P4 Task 1): FIXTURE_HISTORY's
   // user/assistant roles never matched buildStubDeps' human/ai filter, so every
@@ -87,6 +99,10 @@ async function captureInvocation(phase: PhaseCase, scenario: AssemblyScenario): 
   // `messages` channel and Task 5's enumerated diff is where history rows
   // appear.
   const { deps } = buildStubDeps(phase.fixture);
+  if (userFacts) {
+    (deps.userFacts as { getForPrompt: (userId: string, cap?: number) => Promise<UserFact[]> }).getForPrompt =
+      async () => userFacts;
+  }
 
   const subgraph = buildSubgraph(phase.phase, deps);
   // The user message is the first HumanMessage of `messages` (the adapter's
@@ -147,5 +163,32 @@ describe('message assembly (pre-wiring truth, refactor-p2-context-assembler Task
     const serialized = JSON.stringify(serializeForSnapshot(withSummary));
     expect(serialized).toContain('## Previous episodes');
     expect(serialized).toContain('upper/lower split');
+  });
+
+  // P6 Task 4 (D-F, ADR-0013 §3.4 block 2): a fixture WITH facts gains a
+  // `## User Facts` SystemMessage, positioned before `## Previous episodes`
+  // — inverted proof, cheapest way to show the harness sees the block at
+  // all (every parameterized scenario above uses buildStubDeps' `[]` stub,
+  // so this is the only place a fact actually renders).
+  it('chat / with-facts-and-summary shows ## User Facts BEFORE ## Previous episodes (block 2 ordering)', async () => {
+    const fact: UserFact = {
+      id: 'f1',
+      userId: USER_ID,
+      category: 'equipment',
+      fact: 'Trains at home with dumbbells only',
+      factKey: 'trains at home with dumbbells only',
+      muscleGroup: null,
+      confirmations: 1,
+      sourceTurnId: null,
+      createdAt: new Date('2026-09-01T00:00:00Z'),
+      updatedAt: new Date('2026-09-01T00:00:00Z'),
+    };
+    const chatPhase = PHASES.find(p => p.phase === 'chat')!;
+    const recorded = await captureInvocation(chatPhase, 'with-summary', [fact]);
+    const serialized = JSON.stringify(serializeForSnapshot(recorded));
+
+    expect(serialized).toContain('## User Facts');
+    expect(serialized).toContain('Trains at home with dumbbells only');
+    expect(serialized.indexOf('## User Facts')).toBeLessThan(serialized.indexOf('## Previous episodes'));
   });
 });

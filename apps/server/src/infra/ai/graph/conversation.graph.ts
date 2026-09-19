@@ -10,7 +10,7 @@ import type {
   IWorkoutPlanRepository,
   IWorkoutSessionRepository,
 } from '@domain/training/ports';
-import type { IUserService } from '@domain/user/ports';
+import type { IUserFactsService, IUserService } from '@domain/user/ports';
 
 import type { TokenBudgetOverride } from '@config/llm-budget-overrides';
 
@@ -36,6 +36,8 @@ export interface ConversationGraphDeps {
   runService: IConversationRunService;
   transcript: TranscriptPort;
   summaries: SummaryPort;
+  /** P6 Task 3: the only fact-writing path — no per-turn fact tool exists or may exist (owner decision 2026-09-17). */
+  userFacts: IUserFactsService;
   llmGateway: LlmGateway;
   /** The D-L episode tunables, resolved from env at the composition root. */
   episodeConfig: EpisodeTunables;
@@ -58,7 +60,7 @@ export function withBudgetOverrides(
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function buildGraph(deps: ConversationGraphDeps) {
   const { userService, trainingService, runService, workoutSessionRepo, checkpointer, transcript } = deps;
-  const { llmGateway, summaries, episodeConfig } = deps;
+  const { llmGateway, summaries, userFacts, episodeConfig } = deps;
 
   const specs = withBudgetOverrides(buildPhaseSpecs(deps), deps.budgetOverrides ?? {});
 
@@ -67,7 +69,7 @@ function buildGraph(deps: ConversationGraphDeps) {
   // context-budget plan).
   const budgetFor = (phase: ConversationPhase): number =>
     specs.find(s => s.name === phase)?.budget.history ?? Number.POSITIVE_INFINITY;
-  const compactStep = buildCompactStep({ llmGateway, summaries, config: episodeConfig, budgetFor });
+  const compactStep = buildCompactStep({ llmGateway, summaries, userFacts, config: episodeConfig, budgetFor });
 
   // prepare routes to 'route' normally and short-circuits dead training
   // states to 'commit' (D-E); route fans out to the phase nodes; every phase

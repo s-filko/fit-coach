@@ -24,6 +24,8 @@ const FRESH_USER = { id: 'u1', languageCode: 'en', timezone: 'Europe/Berlin' };
 function makeDeps(): ConversationGraphDeps {
   return {
     userService: { getUser: jest.fn(async () => FRESH_USER) },
+    // P6 Task 4: agent.node.ts loads facts once per run via deps.userFacts.
+    userFacts: { getForPrompt: jest.fn(async () => []), getConstraints: jest.fn(), upsertMany: jest.fn() },
   } as unknown as ConversationGraphDeps;
 }
 

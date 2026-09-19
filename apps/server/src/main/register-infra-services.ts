@@ -16,7 +16,8 @@ export async function registerInfraServices(container: Container = getGlobalCont
   // Lazy load all dependencies to avoid circular imports and config loading issues
   const { DrizzleUserRepository } = await import('@infra/db/repositories/user.repository');
   const { UserService } = await import('@domain/user/services/user.service');
-  const { USER_REPOSITORY_TOKEN, USER_SERVICE_TOKEN } = await import('@domain/user/ports');
+  const { USER_REPOSITORY_TOKEN, USER_SERVICE_TOKEN, USER_FACTS_SERVICE_TOKEN } = await import('@domain/user/ports');
+  const { UserFactsRepository } = await import('@infra/db/repositories/user-facts.repository');
 
   // Training domain
   const { TrainingService } = await import('@domain/training/services/training.service');
@@ -43,6 +44,7 @@ export async function registerInfraServices(container: Container = getGlobalCont
   // Register infrastructure implementations
   container.register(USER_REPOSITORY_TOKEN, new DrizzleUserRepository());
   container.registerFactory(USER_SERVICE_TOKEN, c => new UserService(c.get(USER_REPOSITORY_TOKEN)));
+  container.register(USER_FACTS_SERVICE_TOKEN, new UserFactsRepository());
 
   const { OpenAiLlmGateway } = await import('@infra/ai/llm.gateway');
   const { LLM_GATEWAY_TOKEN } = await import('@domain/ai/ports');
@@ -98,6 +100,7 @@ export async function registerInfraServices(container: Container = getGlobalCont
     runService: container.get(CONVERSATION_RUN_SERVICE_TOKEN),
     transcript: container.get(TRANSCRIPT_PORT_TOKEN),
     summaries: container.get(SUMMARY_PORT_TOKEN),
+    userFacts: container.get(USER_FACTS_SERVICE_TOKEN),
     llmGateway: container.get(LLM_GATEWAY_TOKEN),
     // D-L: episode tunables resolved once here — the nodes never read env mid-run.
     episodeConfig: {

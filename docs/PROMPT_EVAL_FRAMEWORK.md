@@ -41,7 +41,7 @@ Deterministic before judged: a case that fails L1 is not scored in L2 (avoids re
 
 ## 3. Datasets
 
-Location: `apps/server/evals/datasets/<phase>/<dataset>.jsonl`; one JSON object per case. Sources, in priority order: (1) production runs exported from `conversation_runs`/`conversation_turns` (P0 export script; redacted), (2) BUGS.md regressions, (3) `MANUAL_TEST_PLAN.md` scenarios, (4) adversarial hand-written cases.
+Location: `apps/server/evals/datasets/<phase>/<dataset>.jsonl`; one JSON object per case. Cross-phase datasets live in their own (non-phase) directories — first: `memory/facts.jsonl` (refactor-p6-facts, AC-1361; loaded as `loadCases('memory', 'facts')` / `--phase memory --dataset facts`); a case's routing still comes from its own `phase` field, never from the directory name. Sources, in priority order: (1) production runs exported from `conversation_runs`/`conversation_turns` (P0 export script; redacted), (2) BUGS.md regressions, (3) `MANUAL_TEST_PLAN.md` scenarios, (4) adversarial hand-written cases.
 
 Case schema (`evals/schema/case.schema.ts`, Zod):
 
@@ -52,7 +52,8 @@ Case schema (`evals/schema/case.schema.ts`, Zod):
   tags: ['transition', 'BUG-011'],
   fixture: {                           // domain snapshot loaded into the stub world
     user: { languageCode: 'ru', timezone: 'Europe/Berlin', age?, gender?, height?, weight?, fitnessLevel?, fitnessGoal?, registrationCompleted? },
-    plan?: {...}, sessions?: [...], activeSession?: {...}, facts?: [...]
+    plan?: {...}, sessions?: [...], activeSession?: {...},
+    facts?: [ { category: FactCategory, fact: string, muscleGroup?: string | null } ]  // durable rows the case starts with (refactor-p6-facts)
   },
   state: {                             // checkpoint seed: episode memory going in
     phase: 'chat', activeSessionId: null,
@@ -100,6 +101,7 @@ Assertions (each is a named check reported separately):
 - `text.language` — detect script/lang with a small heuristic (Cyrillic ratio) or a tiny classifier; `text.format` — Telegram HTML only: no `**`, no `_x_`, only allowed tags; `maxChars`.
 - `draft` invariants (after P6): all exercise IDs exist, sets/reps within catalog-type constraints, no exercise conflicting with a `physical_constraint` fact.
 - `no_redundant_search` — **implemented** (refactor-p4-episode-memory, AC-1344): emitted only for cases that seed at least one `search_exercises`; the check fails when the run re-issues a seeded search key (same `buildSearchKey` args) or repeats one of its own earlier searches.
+- `user-facts-block-present` — **implemented** (refactor-p6-facts, AC-1361): emitted only for cases whose `fixture.facts` is non-empty; the check fails when the last model input's assembled text lacks the `## User Facts` heading or any fixture fact's text (`assembledInput` in `CaseObservation`, captured by `ModelInputRecorder`). The dataset is `memory/facts` — the first cross-phase dataset directory (`loadCases('memory', 'facts')`; a case's routing still comes from its own `phase` field).
 - Structural: run `outcome === 'ok'`; `budget-report-present` (refactor-p2-context-assembler, 2026-09-17); `budget-within-limits` — `budgetReport.history ≤ budget.history` and `total ≤ sum − outputReserve` — and `no-orphan-tool-message` — every `ToolMessage` in the last model input answers a `tool_call` id in it (`ModelInputRecorder` in `evals/lib/run-case.ts`) — both implemented by refactor-p4-context-budget (2026-09-19). AC-1343's replay proof lives in `evals/levels/__tests__/budget-replay.unit.test.ts`.
 
 Sampling: each case runs `n` times (default 3; `n=5` for gating datasets); a case passes if ≥ ⌈n/2⌉ samples pass; the report shows per-check pass rates and the flakiest cases.

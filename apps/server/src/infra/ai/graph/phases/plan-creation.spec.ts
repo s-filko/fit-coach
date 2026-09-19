@@ -35,7 +35,11 @@ export function buildPlanCreationSpec(deps: ConversationGraphDeps): PhaseSpec<Pl
     prompt: entry as PhasePromptEntry<PromptContextFor<PlanCreationData>>,
     tools: [
       buildSearchExercisesTool({ embeddingService, exerciseRepository }),
-      buildSaveWorkoutPlanTool({ workoutPlanRepository: deps.workoutPlanRepo, exerciseRepository }),
+      buildSaveWorkoutPlanTool({
+        workoutPlanRepository: deps.workoutPlanRepo,
+        exerciseRepository,
+        userFactsService: deps.userFacts,
+      }),
       buildRequestTransitionTool('plan_creation'),
       ...buildSharedTools({ userService }),
     ],

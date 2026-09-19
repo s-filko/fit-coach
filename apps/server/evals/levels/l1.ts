@@ -127,6 +127,25 @@ export function assertCase(testCase: EvalCase, observation: CaseObservation): Ch
     add('no_redundant_search', redundant === null, redundant ? `repeated search key ${redundant}` : undefined);
   }
 
+  // AC-1361 deterministic half (P6 Task 6): a case that carries fixture facts
+  // expects them rendered — the assembled input must contain the `## User Facts`
+  // heading AND every fixture fact's text. Emitted only when the fixture has
+  // facts, so baselines v0–v2 (facts-free fixtures) record nothing new.
+  const expectedFacts = testCase.fixture.facts ?? [];
+  if (expectedFacts.length > 0) {
+    const hasHeading = observation.assembledInput.includes('## User Facts');
+    const missingFact = expectedFacts.find(fact => !observation.assembledInput.includes(fact.fact));
+    add(
+      'user-facts-block-present',
+      hasHeading && missingFact === undefined,
+      !hasHeading
+        ? 'no ## User Facts heading in the assembled input'
+        : missingFact
+          ? `fact not in the assembled input: ${missingFact.fact}`
+          : undefined,
+    );
+  }
+
   if (testCase.expect.transition !== undefined) {
     add(
       'transition',
@@ -161,7 +180,13 @@ export function assertCase(testCase: EvalCase, observation: CaseObservation): Ch
   return results;
 }
 
-/** Loads a phase's cases; `dataset` (a file stem) narrows to `<dataset>.jsonl` (D-P). */
+/**
+ * Loads a phase's cases; `dataset` (a file stem) narrows to `<dataset>.jsonl` (D-P).
+ * `phase` is a dataset-directory key, not necessarily an `EvalPhase`: cross-phase
+ * datasets live in their own directories — the first is `memory/` (P6 Task 6,
+ * AC-1361), loaded as `loadCases('memory', 'facts')` / `--phase memory --dataset facts`.
+ * A case's routing still comes from its own `phase` field, never from the directory.
+ */
 export function loadCases(phase: string, dataset?: string): EvalCase[] {
   const phases = phase === 'all' ? readdirSync(DATASETS_DIR) : [phase];
   const cases: EvalCase[] = [];

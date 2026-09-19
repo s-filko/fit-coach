@@ -10,6 +10,7 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 import type { EpisodeSummary, StoredEpisodeSummary } from '@domain/conversation/episode';
 import type { SummaryPort } from '@domain/conversation/ports';
 import type { LlmGateway } from '@domain/ai/ports';
+import type { IUserFactsService } from '@domain/user/ports';
 
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
@@ -27,6 +28,7 @@ const FIXED_SUMMARY: EpisodeSummary = {
   userState: ['mild shoulder discomfort'],
   trainingFeedback: [],
   openItems: ['day 2 not logged'],
+  facts: [],
 };
 
 /** Run 1's traffic (with ids — RemoveMessage needs them) + run 2's human message. */
@@ -64,19 +66,29 @@ function ctxConfig(now = NOW): RunnableConfig {
   } as never;
 }
 
-function makeDeps(overrides: { config?: Partial<EpisodeTunables>; structured?: () => Promise<EpisodeSummary> } = {}) {
+function makeDeps(
+  overrides: {
+    config?: Partial<EpisodeTunables>;
+    structured?: () => Promise<EpisodeSummary>;
+    upsertMany?: () => Promise<number>;
+  } = {},
+) {
   const insert = jest.fn<Promise<void>, Parameters<SummaryPort['insert']>[0][]>().mockResolvedValue(undefined);
   const latestLegacySummary = jest.fn().mockResolvedValue(null);
   const structured = jest
     .fn()
     .mockImplementation(() => (overrides.structured ? overrides.structured() : Promise.resolve(FIXED_SUMMARY)));
+  const upsertMany = jest
+    .fn()
+    .mockImplementation(() => (overrides.upsertMany ? overrides.upsertMany() : Promise.resolve(0)));
   const deps = {
     llmGateway: { chat: jest.fn(), structured } as unknown as LlmGateway,
     summaries: { insert, latestLegacySummary } as unknown as SummaryPort,
+    userFacts: { upsertMany, getForPrompt: jest.fn(), getConstraints: jest.fn() } as unknown as IUserFactsService,
     config: { gapMs: 3 * 3600 * 1000, minTurns: 0, minTokens: 0, ...overrides.config },
     budgetFor: () => 1_000_000,
   };
-  return { deps, insert, latestLegacySummary, structured };
+  return { deps, insert, latestLegacySummary, structured, upsertMany };
 }
 
 function removedIds(update: Partial<ConversationStateType>): string[] {
@@ -112,13 +124,17 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
   });
 
   it('BR-LLM-004: summariser failure → no summary, messages still removed', async () => {
-    const { deps, insert, structured } = makeDeps({ structured: () => Promise.reject(new Error('provider down')) });
+    const { deps, insert, structured, upsertMany } = makeDeps({
+      structured: () => Promise.reject(new Error('provider down')),
+    });
     const compact = buildCompactStep(deps);
 
     const update = await compact(channelState(), ctxConfig());
 
     expect(structured).toHaveBeenCalledTimes(1);
     expect(insert).not.toHaveBeenCalled();
+    // P6 Task 3: a failed summariser writes no facts (there is no `summary` to read facts from).
+    expect(upsertMany).not.toHaveBeenCalled();
     expect(removedIds(update)).toEqual(['m1', 'm2']);
     expect(update.episodeSummaries).toBeUndefined();
   });
@@ -207,6 +223,87 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
       userId: USER_ID,
     });
     void schema;
+  });
+});
+
+describe('buildCompactStep — user facts extraction (P6 Task 3, owner decision 2026-09-17)', () => {
+  it('a summariser returning two facts calls upsertMany once with both', async () => {
+    const summaryWithFacts: EpisodeSummary = {
+      ...FIXED_SUMMARY,
+      facts: [
+        { category: 'physical_constraint', fact: 'Bad shoulder', muscleGroup: 'shoulders_front' },
+        { category: 'equipment', fact: 'Home dumbbells only' },
+      ],
+    };
+    const { deps, upsertMany } = makeDeps({ structured: () => Promise.resolve(summaryWithFacts) });
+    const compact = buildCompactStep(deps);
+
+    await compact(channelState(), ctxConfig());
+
+    expect(upsertMany).toHaveBeenCalledTimes(1);
+    expect(upsertMany).toHaveBeenCalledWith(USER_ID, summaryWithFacts.facts);
+  });
+
+  it('a summariser returning facts: [] skips the upsertMany call entirely (no pointless round-trip)', async () => {
+    const { deps, upsertMany } = makeDeps({ structured: () => Promise.resolve({ ...FIXED_SUMMARY, facts: [] }) });
+    const compact = buildCompactStep(deps);
+
+    await compact(channelState(), ctxConfig());
+
+    expect(upsertMany).not.toHaveBeenCalled();
+  });
+
+  it('D-E: a throwing upsertMany logs error and the compaction result is byte-identical to a run with no facts', async () => {
+    const summaryWithFacts: EpisodeSummary = {
+      ...FIXED_SUMMARY,
+      facts: [{ category: 'equipment', fact: 'Has a squat rack' }],
+    };
+    const { deps: throwingDeps } = makeDeps({
+      structured: () => Promise.resolve(summaryWithFacts),
+      upsertMany: () => Promise.reject(new Error('db down')),
+    });
+    const { deps: noFactsDeps } = makeDeps({
+      structured: () => Promise.resolve({ ...FIXED_SUMMARY, facts: [] }),
+    });
+
+    const updateWithThrowingUpsert = await buildCompactStep(throwingDeps)(channelState(), ctxConfig());
+    const updateWithNoFacts = await buildCompactStep(noFactsDeps)(channelState(), ctxConfig());
+
+    // The two updates differ only in `summary.facts` inside the stored episode summary
+    // (the extracted facts vs. none) — everything else the caller observes (messages
+    // removed, episodeId/episodeStartedAt/compactReason, and critically that a summary
+    // WAS stored) is identical. A failed fact write must not degrade the compaction
+    // outcome itself.
+    expect(removedIds(updateWithThrowingUpsert)).toEqual(removedIds(updateWithNoFacts));
+    expect(updateWithThrowingUpsert.episodeId).toEqual(updateWithNoFacts.episodeId);
+    expect(updateWithThrowingUpsert.episodeStartedAt).toEqual(updateWithNoFacts.episodeStartedAt);
+    expect(updateWithThrowingUpsert.compactReason).toEqual(updateWithNoFacts.compactReason);
+    expect(updateWithThrowingUpsert.episodeSummaries).toHaveLength(1);
+    expect(updateWithNoFacts.episodeSummaries).toHaveLength(1);
+  });
+
+  it('BR-LLM-004: a failed summariser writes no facts and still trims the episode', async () => {
+    const { deps, upsertMany, insert } = makeDeps({
+      structured: () => Promise.reject(new Error('provider down')),
+    });
+    const compact = buildCompactStep(deps);
+
+    const update = await compact(channelState(), ctxConfig());
+
+    expect(upsertMany).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+    expect(removedIds(update)).toEqual(['m1', 'm2']); // trimming happened regardless
+  });
+
+  it('a short episode trimmed without a summary writes no facts', async () => {
+    const { deps, upsertMany, structured } = makeDeps({ config: { minTurns: 5 } });
+    const compact = buildCompactStep(deps);
+
+    const update = await compact(channelState(), ctxConfig());
+
+    expect(structured).not.toHaveBeenCalled();
+    expect(upsertMany).not.toHaveBeenCalled();
+    expect(removedIds(update)).toEqual(['m1', 'm2']);
   });
 });
 

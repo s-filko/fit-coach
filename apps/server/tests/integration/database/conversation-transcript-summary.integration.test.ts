@@ -62,7 +62,7 @@ describe('DrizzleTranscriptService / DrizzleSummaryService – integration', () 
   });
 
   it('insert writes the conversation_summaries row and mirrors it to a summary turn row in one transaction', async () => {
-    const structured = { topics: ['plan'], decisions: [], userState: [], trainingFeedback: [], openItems: [] };
+    const structured = { topics: ['plan'], decisions: [], userState: [], trainingFeedback: [], openItems: [], facts: [] };
     await summaries.insert({
       userId,
       runId: '11111111-1111-4111-8111-111111111110',
