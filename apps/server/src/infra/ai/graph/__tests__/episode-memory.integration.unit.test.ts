@@ -10,17 +10,8 @@ import { MemorySaver } from '@langchain/langgraph';
 
 import type { ConversationRunRecord } from '@domain/conversation/ports';
 
-import { RunMetricsCollector } from '@infra/ai/run-metrics';
-
 import { buildConversationGraph, type ConversationGraphDeps } from '../conversation.graph';
-
-const USER = {
-  id: 'u1',
-  firstName: 'Test',
-  languageCode: 'ru',
-  profileStatus: 'complete',
-  registrationCompleted: true,
-};
+import { USER, ctxConfig } from './graph-test-support';
 
 /** Run 1 calls save_timezone; run 2 replies with plain text. */
 jest.mock('@infra/ai/model.factory', () => {
@@ -85,23 +76,6 @@ function makeDeps(): ConversationGraphDeps {
   } as unknown as ConversationGraphDeps;
 }
 
-function ctxConfig(runId: string, userId = 'u1') {
-  return {
-    configurable: { thread_id: userId },
-    metadata: { runId, userId },
-    context: {
-      runId,
-      userId,
-      user: USER as never,
-      now: new Date(),
-      client: 'telegram' as const,
-      trigger: 'user_message' as const,
-      metrics: new RunMetricsCollector(runId),
-    },
-    recursionLimit: 25,
-  } as never;
-}
-
 describe('episode memory across runs (AC-1341, INV-LLM-001/002)', () => {
   it('AC-1341: run 2 sees run 1’s tool call and result; every persisted message has an id', async () => {
     const deps = makeDeps();
@@ -110,7 +84,7 @@ describe('episode memory across runs (AC-1341, INV-LLM-001/002)', () => {
 
     const first = (await graph.invoke(
       { phase: 'chat', messages: [new HumanMessage('Моё время Берлин')] },
-      ctxConfig('run-1'),
+      ctxConfig({ runId: 'run-1' }),
     )) as { messages: BaseMessage[] };
     const run1Input = __recorded[0]! as BaseMessage[];
     const run1Output = first.messages;
@@ -118,7 +92,7 @@ describe('episode memory across runs (AC-1341, INV-LLM-001/002)', () => {
 
     const second = (await graph.invoke(
       { phase: 'chat', messages: [new HumanMessage('Спасибо!')] },
-      ctxConfig('run-2'),
+      ctxConfig({ runId: 'run-2' }),
     )) as { messages: BaseMessage[] };
 
     // Run 2's model input contains run 1's AIMessage(tool_calls) and its ToolMessage.
@@ -162,8 +136,11 @@ describe('episode memory across runs (AC-1341, INV-LLM-001/002)', () => {
     const graph = buildConversationGraph(deps);
     __recorded.length = 0;
 
-    await graph.invoke({ phase: 'chat', messages: [new HumanMessage('Моё время Берлин')] }, ctxConfig('run-1'));
-    await graph.invoke({ phase: 'chat', messages: [new HumanMessage('Спасибо!')] }, ctxConfig('run-2'));
+    await graph.invoke(
+      { phase: 'chat', messages: [new HumanMessage('Моё время Берлин')] },
+      ctxConfig({ runId: 'run-1' }),
+    );
+    await graph.invoke({ phase: 'chat', messages: [new HumanMessage('Спасибо!')] }, ctxConfig({ runId: 'run-2' }));
 
     // Run 2's first model call (run 1 took two: the tool call and the final
     // reply): one `## Previous episodes` system block, and run 1's traffic

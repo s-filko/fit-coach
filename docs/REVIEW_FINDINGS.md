@@ -261,6 +261,14 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   discharges by re-executing a stated command, this one by an artifact the plan names.
   Runs: refactor-p4-episode-memory (2026-09-18).
 
+- [×1] Code that stops matching the *mechanism* a durable spec names (ADR-0013 §7:
+  "`structured` uses `withStructuredOutput`") is claimed by both R1 ("declared boundaries") and
+  R4 (doc currency) — both raised it as blocking this run. Neither zone file says which owns a
+  mechanism drift that crosses no layer, nor who escalates a blocking finding on a document the
+  zones may not edit (R4: "who actually escalates it, and where is that recorded?"). One line in
+  the skill — mechanism drift is R4's; the orchestrator escalates read-only-spec findings to the
+  owner at close-out — would settle both. Runs: structured-output-fenced-json (2026-09-19).
+
 ## Rule candidates
 
 A finding a zone wanted to raise as blocking but could not, because no rule in this repo
@@ -590,3 +598,14 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   `PROMPT_EVAL_FRAMEWORK.md` §3 or the README header): "Every new
   `<phase-or-category>/<dataset>.jsonl` gets one row in this README's Datasets table in the
   same commit that adds it." Runs: refactor-p6-facts-and-progress-blocks (2026-09-19).
+- [×1] `CONTRIBUTING_AI.md`'s DRY bullet reads as production-only ("no copy-paste, no
+  reinvention of what the repo already has"); R2 applied it to duplicated test fixtures
+  (`USER`, `ctxConfig`) and blocked, but a reviewer could as reasonably have downgraded them.
+  Proposed line: "DRY applies to test fixtures and harnesses too." Runs: structured-output-fenced-json (2026-09-19).
+- [×1] Any change to `OpenAiLlmGateway`'s model-wrapping call site should be covered by a test
+  proving a `RunMetricsCollector` attached via the invoke config still receives
+  `onStart`/`onEnd` for that call — today no test wires the collector to a real `invoke()`.
+  Proposed as a `BR-LLM-*` in ADR-0013 §8 or a line in `CONTRIBUTING_AI.md`. Runs: structured-output-fenced-json (2026-09-19).
+- [×1] `CONTRIBUTING_AI.md` § ID Conventions lists INV-/BR-/S-/AC- but not `BUG-###`, although
+  bug-fix tests already cite `BUG-###` in their names (the de facto pattern R3 accepted).
+  Proposed: add "Bugs: BUG-### (`docs/BUGS.md`)" to that list. Runs: structured-output-fenced-json (2026-09-19).

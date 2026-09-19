@@ -1,21 +1,10 @@
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 
 import type { FactCategory, IUserFactsService, UpsertFactInput, UserFact } from '@domain/user/ports';
+import { computeFactKey } from '@domain/user/services/fact-key';
 
 import { db } from '@infra/db/drizzle';
 import { userFacts } from '@infra/db/schema';
-
-/**
- * Normalises fact text into the D-C idempotency key: lowercase, trim, collapse
- * whitespace, strip terminal punctuation. Deterministic and testable without a model.
- */
-export function computeFactKey(fact: string): string {
-  return fact
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/[.!?,;:]+$/, '');
-}
 
 function toUserFact(row: typeof userFacts.$inferSelect): UserFact {
   return {

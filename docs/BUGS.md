@@ -1004,3 +1004,24 @@ Fixed by the P4 run projection (`refactor-p4-episode-memory`): `appendTurn` is g
 ### Regression test
 
 -->
+
+---
+
+## BUG-017 — Structured output fails on fenced JSON: episode summaries (and user facts) are never produced on the GLM route
+
+**Status:** Fixed (structured-output-fenced-json, 2026-09-19 — `057b4240`; live confirmation by the plan's dev smoke)
+**Severity:** High
+**Found during:** P6 dev smoke 2026-09-19, right after `refactor-p6-facts-and-progress-blocks` merged
+**Component:** `apps/server/src/infra/ai/llm.gateway.ts` (`structured()`)
+
+### Description
+
+On the dev route (GLM via Z.AI) the summariser answered a structured call with the JSON wrapped in a Markdown code fence (`` ```json … ``` ``). `withStructuredOutput`'s parser threw `SyntaxError: Unexpected token '`', "```json`, the gateway retried once, the retry answered the same way, and `compact` trimmed the ended episode **without a summary** (BR-LLM-004 — non-fatal by design, so the user's reply was not affected). Consequence: no `conversation_summaries` row and no `user_facts` rows — P6's fact extraction never runs on this route. The two summariser attempts took 621 s of a 650 s run (`conversation_runs.latency_ms` = 649757). The same `SyntaxError` was already seen on 2026-09-18 (the comment in `isSchemaFailure`); widening the retry to cover it did not help, because the retry repeats the identical call.
+
+### Root cause
+
+`structured()` trusts the provider to return a parseable structured response and has no recovery for a well-formed JSON payload delivered as fenced text. The retry is the only fallback and it cannot change the model's format.
+
+### Regression test
+
+Gateway unit tests (fenced JSON → one call, parsed; invalid fenced JSON → one retry then throw) and a mocked-model scenario test of the whole facts chain — both in the plan above. Fixed is confirmed by a dev smoke that produces a `conversation_summaries` row and a `user_facts` row.
