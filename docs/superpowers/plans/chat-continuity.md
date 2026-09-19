@@ -173,7 +173,7 @@ reply), `apps/server/src/infra/ai/graph/episode.ts` (a helper next to `lastAiTex
 
 ### Task 5: Close-out, deploy, smoke (orchestrator)
 
-- [ ] `close-out-review`; ADR-0013 §3.3 amendment (owner-approved 2026-09-20); BUG-018 status;
+- [ ] `close-out-review`; ADR-0013 §3.3 amendment — **text approved by the owner 2026-09-20:** "Compaction at any trigger (inactivity gap, phase transition, budget) summarises only messages older than the last `EPISODE_KEEP_TURNS` turns (default 6), which stay verbatim; a part too short to summarise is kept, never dropped (supersedes D-B's trim-without-summary). After a gap longer than `EPISODE_GAP_HOURS` a time-gap note precedes the new user message. The user receives every assistant text of the run. The standard summarise-older / keep-recent pattern.";  BUG-018 status;
   `- Status: done`; `state.mjs --write`; merge, push, deploy, health 200.
 - [ ] Smoke: one API call on the smoke user after a gap, and **the owner's own Telegram "привет"**
   (AC-CC-5) — the reply must answer the greeting.
