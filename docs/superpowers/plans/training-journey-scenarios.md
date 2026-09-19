@@ -118,7 +118,7 @@ step — row, seen block, delivered text), `package.json` script
 - [x] **Spike first:** Date-only fake timers with `pg` and `PostgresSaver`; report in STOP (fallback:
   a `now` seam on the runner deps + the wall-clock reads listed in Findings).
 - [x] The `_test` DB guard with a unit test.
-- [ ] Commit `test(ai): DB-backed scenario runner with a scripted model beneath the real gateway`. STOP.
+- [x] Commit `test(ai): DB-backed scenario runner with a scripted model beneath the real gateway`. STOP. **Accepted 2026-09-20** (`7adafe21`, GLM worker via Orca). Orchestrator re-ran `npm run test:scenarios` → 6/6; worker: unit 827/827, integration 151/151, L0 96/96. Fake-timer spike succeeded (Date-only fake timers keep pg, `PostgresSaver` and the embedding pipeline working) — no `now` seam needed. The per-file schema reset in `src/app/test/setup.ts` now runs on one client holding `pg_advisory_lock(742150001)`, unlocked in `finally`. `run-scenario.ts:110` calls the `_test` guard before wiring. `.env.test` no longer sets `RUN_DB_TESTS=1` (owner-approved edit by the orchestrator, backup kept), so unit runs never touch the DB.
 
 **Verification:** `npm run test:scenarios` → green; `npm run test:unit` → green (quote the known
 teardown exit 134 from BACKLOG if it occurs).
