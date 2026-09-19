@@ -114,7 +114,7 @@ failure is non-fatal), `docs/superpowers/plans/refactor-p6-facts-and-progress-bl
   5. Re-state the same fact in a later compaction → still one fact, `confirmations` = 2.
 - [x] **Step 2:** make it pass without touching production code (Task 1 must already be in).
 - [x] **Step 3: Commit** — `test(ai): user-facts scenario end to end — fenced summary to fact to block to tool rejection (AC-1361)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 4: STOP** for orchestrator review. **Reviewed and accepted 2026-09-19** (commit `57178d62`, GLM worker via Orca). `user-facts.scenario.unit.test.ts` runs the real graph with the model mocked beneath the real `OpenAiLlmGateway`, so step 2 goes through the fenced-JSON recovery (one provider call); steps 1–5 each carry their own assertion (block before `## Previous episodes`; primary-muscle deadlift rejected and not persisted, secondary-muscle squat accepted; restated fact → one row, `confirmations` = 2). No production code touched. Note for the review: the in-memory stand-in restates `computeFactKey` rather than importing it (the repository module pulls in the Drizzle pool).
 
 **Verification:** `npx jest --ci src/infra/ai/graph` → all pass; full `npm run test:unit` →
 green; `npm run evals -- --level L0` → 96/96; `npm run format:check`, `npm run type-check` →
