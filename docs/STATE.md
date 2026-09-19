@@ -43,6 +43,7 @@ _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 - `structured-output-fenced-json.md` — Structured Output — Fenced-JSON Recovery and the User-Facts Scenario Test Implementation Plan
 - `structured-output-json-object-mode.md` — Structured Output — Provider Mode `json_object` for the Z.AI Route Implementation Plan
+- `training-journey-scenarios.md` — Training Journey Scenarios — Deterministic over the Real Test DB + Live L3 Implementation Plan
 
 **Close-out debt (merged but plan not done)**
 — none —
@@ -185,6 +186,29 @@ _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen
 4. **HB-02** (production Docker image) — its own plan, sequenced after HB-01;
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
+
+## Handoff (orchestrator relay, 2026-09-20)
+
+The orchestrator relays to a fresh session at clean boundaries (owner rule 2026-09-20; memory
+`orchestrator-session-relay`, `economical-work`). Where work stands:
+
+- **`training-journey-scenarios` — done, merged to `dev` (2026-09-20)**: review clean (one combined
+  agent), pre-merge `npm run test:scenarios` 221/221. Owner decided no CI job — the rule is in
+  `docs/ORCHESTRATION.md` § Scenario self-check. Worktree
+  `/Users/filko/orca/workspaces/fit_coach/training-journey-scenarios` and branch
+  `plan/training-journey-scenarios` are **ready to clean up** (owner-gated; run `run_f05123509d74`
+  has two retained idle worker terminals).
+- **`chat-continuity`** (BUG-018; worktree `/Users/filko/orca/workspaces/fit_coach/chat-continuity`,
+  branch `plan/chat-continuity`, run `run_b49c61f61663`): Task 0 (unit repro) accepted; ADR-0013 §3.3
+  amendment text approved by the owner (in the plan). **After the journey plan merges:** merge `dev`
+  into the branch so the scenarios are present, then Tasks 1–3 (one worker each); each fix flips
+  its `test.failing` case in the unit repro AND the matching `knownBug` cases in journeys A/B/C;
+  one review at the end; deploy; final check = the owner's own Telegram "привет" after a pause.
+- **Test DB:** `fitcoach_test` (local container `fitcoach-db`); `.env.test` no longer sets
+  `RUN_DB_TESTS` (backup `apps/server/.env.test.bak-20260920`, owner may ask to delete). Never
+  run tests in two worktrees against it at once; workers never touch a DB by hand.
+- **Owner-only:** live L3 (`DB_NAME=fitcoach_test RUN_LLM_EVALS=1 npm run evals -- --level L3`),
+  closing Orca sessions, deleting branches/worktrees.
 
 ## Blocked / waiting on owner
 

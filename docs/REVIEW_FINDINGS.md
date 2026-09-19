@@ -278,6 +278,13 @@ backs it. Each entry names the proposed wording and where it would live
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
 
+- [×3] `CONTRIBUTING_AI.md`'s DRY bullet reads as production-only ("no copy-paste, no
+  reinvention of what the repo already has"); R2 applied it to duplicated test fixtures
+  (`USER`, `ctxConfig`) and blocked, but a reviewer could as reasonably have downgraded them.
+  Third run: the same scripted-model test double reimplemented inline in a second file could
+  only be advisory — DRY as written targets a copied *symbol*, not an unexported shape.
+  Proposed line: "DRY applies to test fixtures and harnesses too, including the same test
+  double reimplemented in two files." Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19), training-journey-scenarios (2026-09-20).
 - [×1] A snapshot test can claim to freeze a specific version while actually rendering a moving
   alias, and nothing catches it. P6 Task 2 found `evals/snapshots/__tests__/prompt-snapshots.unit.test.ts`'s
   two `summarizer v2 / …` tests rendering `SUMMARIZER_PROMPT` — the alias that Task 2 was in the
@@ -598,10 +605,6 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   `PROMPT_EVAL_FRAMEWORK.md` §3 or the README header): "Every new
   `<phase-or-category>/<dataset>.jsonl` gets one row in this README's Datasets table in the
   same commit that adds it." Runs: refactor-p6-facts-and-progress-blocks (2026-09-19).
-- [×2] `CONTRIBUTING_AI.md`'s DRY bullet reads as production-only ("no copy-paste, no
-  reinvention of what the repo already has"); R2 applied it to duplicated test fixtures
-  (`USER`, `ctxConfig`) and blocked, but a reviewer could as reasonably have downgraded them.
-  Proposed line: "DRY applies to test fixtures and harnesses too." Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19).
 - [×1] Any change to `OpenAiLlmGateway`'s model-wrapping call site should be covered by a test
   proving a `RunMetricsCollector` attached via the invoke config still receives
   `onStart`/`onEnd` for that call — today no test wires the collector to a real `invoke()`.

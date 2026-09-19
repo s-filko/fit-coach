@@ -11,7 +11,7 @@ export const EvalPhaseSchema = z.enum(['registration', 'chat', 'plan_creation', 
  * be passed straight to a prompt builder. `height`/`weight`/`age` are numbers
  * there, not strings — the plan's draft had them as strings; the real type wins.
  */
-const FixtureUserSchema = z.object({
+export const FixtureUserSchema = z.object({
   languageCode: z.string(),
   timezone: z.string(),
   firstName: z.string().optional(),
@@ -30,7 +30,7 @@ const FixtureUserSchema = z.object({
  * `category` is ADR-0009's eight; `muscleGroup` is the `MuscleGroup` slug a
  * `physical_constraint` carries when hard validation must fire (AC-1361).
  */
-const FixtureFactSchema = z.object({
+export const FixtureFactSchema = z.object({
   category: z.enum(FACT_CATEGORIES),
   fact: z.string().min(1),
   muscleGroup: z.string().nullable().optional(),

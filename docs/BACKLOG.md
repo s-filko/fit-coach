@@ -28,8 +28,12 @@ Rules:
       filled at extraction. Scope to design: render dates/confirmations as context, a staleness
       rule per category (an injury ages differently from equipment), explicit retraction
       (summariser output and/or user command), deletion vs. soft-archive, and how hard
-      validation treats an old constraint. Needs an owner decision on the fact-lifecycle model
-      (ADR-0009 / ADR-0013 amendment) before planning. Related: the near-duplicate-facts entry in
+      validation treats an old constraint. **Direction chosen by the owner 2026-09-20 — standard
+      agent memory:** at compaction the summariser sees the known facts and returns operations
+      (add / confirm / update / retract); the prompt shows each fact with its date and confirmation
+      count; a retracted fact is archived, not deleted; a long-unconfirmed constraint is shown as
+      "may be outdated — ask" instead of silently blocking. Details to be checked against the
+      standard before planning; needs an ADR-0009 / ADR-0013 amendment. Related: the near-duplicate-facts entry in
       § P6 facts (Group 1) close-out review advisories. Source: owner review of the P6 dev smoke
       (2026-09-19).
 - [ ] Connector layer on top of P1's `LlmGateway`: profiles become full connectors —
@@ -594,7 +598,10 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       `user-facts.scenario`); `graph/__tests__/graph-test-support.ts` (added at this close-out
       for `USER` / `ctxConfig`) is the natural home for one builder — and for
       `conversation.graph.unit.test.ts`'s own local `USER` / positional `ctxConfig`, which predate
-      this branch and were left alone. Source: close-out-review, R2 (2026-09-19).
+      this branch and were left alone. Source: close-out-review, R2 (2026-09-19). Fourth copy
+      added 2026-09-20: `tests/integration/scenarios/scripted-model.ts` `installScriptedModel()`
+      re-implements the same shape as `user-facts.scenario.unit.test.ts:118-148` — extract one
+      shared builder (e.g. `tests/support/scripted-chat-model.ts`). Source: training-journey-scenarios close-out, R2.
 - [ ] No test proves that a `RunMetricsCollector` attached through the invoke config still
       receives the LLM callbacks for `structured()` calls — the switch from
       `withStructuredOutput(...)` to `withConfig({ response_format })` is believed equivalent
@@ -607,3 +614,11 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       `structured()` to pin that it now propagates without a retry (the blanket `SyntaxError`
       retry was removed as dead for format errors; a transport-level one is a non-format error
       by the plan's AC and propagates — correct, but unpinned). Source: close-out-review, R3 (2026-09-19).
+
+## training-journey-scenarios close-out review advisories (2026-09-20)
+
+- [ ] Session timestamps come from two clocks: `workout_sessions` rows created mid-journey get
+      the DB's `defaultNow()` while the app runs on its own `now` (fake clock in scenarios), so
+      the scenario runner re-stamps new sessions (`evals/lib/run-scenario.ts:136-160`,
+      `stampNewSessions`). Production has the same split (DB time vs app time) — pass `now`
+      explicitly on insert and drop the harness patch. Source: Task 4 worker + close-out review, R1 (2026-09-20).
