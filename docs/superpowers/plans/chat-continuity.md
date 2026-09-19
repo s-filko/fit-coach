@@ -148,7 +148,7 @@ message; the gap is computed from the previous message's time — the graph alre
 - [x] **Step 2: Implement.**
 - [x] **Step 2b:** flip Task 0's case (b) to `test`; it must pass.
 - [x] **Step 3: Commit** — `feat(ai): time-gap note before the user's new message after a pause (BUG-018, AC-CC-2)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-20** (`73628765`, GLM worker via Orca). `TIME_GAP_V1` block ("The user returns after <N> h. Reply to their new message first; the earlier conversation is context, not an agenda."), computed in `agent.node` from `lastUserMessageAt` vs `ctx.now` against the episode-config `gapMs`, placed by `assembleContext` as a SystemMessage right before the current HumanMessage (rides with `current`, not budgeted, not persisted). Case (b) and the AC-CC-2 scenario tags flipped; journey C's pause moved +3.5 h → +3.7 h so the measured silence (from the last message at +12 min) is the asserted 3.5 h — accepted. Orchestrator re-ran: test:unit 885/885, no-inline-prompts 3/3, L0 96/96 (no snapshot moved), test:scenarios 221/221, type-check + format clean.
 
 **Verification:** as Task 1, plus `npx jest --ci evals/levels/__tests__/no-inline-prompts.unit.test.ts`.
 
