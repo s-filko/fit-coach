@@ -67,7 +67,7 @@ curl https://fitcoach-dev.filko.dev/health   # → 200
 ## Rules
 
 - Respond in Russian (user preference)
-- **Deleting branches, worktrees, or Orca agent sessions requires the owner's explicit command naming the target.** This is the single normative statement of the rule (owner rule 2026-09-18) — other docs only point here. Never do it as "cleanup", not even after a successful merge: Orca binds agent sessions to worktrees, so one deletion kills every session on that branch, including other agents', and their history becomes unreachable. Report targets as ready to clean up and wait. Enforced by the PreToolUse hook `.claude/hooks/owner-gate-branch-delete.sh` (forces an approval prompt on any `git branch -d/-D/--delete`, `git push --delete`/`:branch`, `git worktree remove/prune`, `git update-ref -d`)
+- **Deleting branches, worktrees, or Orca agent sessions requires the owner's explicit command naming the target.** This is the single normative statement of the rule (owner rule 2026-09-18) — other docs only point here. Never do it as "cleanup", not even after a successful merge: Orca binds agent sessions to worktrees, so one deletion kills every session on that branch, including other agents', and their history becomes unreachable. Report targets as ready to clean up and wait. Enforced by the PreToolUse hook `.claude/hooks/owner-gate-branch-delete.sh` (forces an approval prompt on any `git branch -d/-D/--delete`, `git push --delete`/`:branch`, `git worktree remove/prune`, `git update-ref -d`, `orca worktree rm`)
 - Docs in this repo are English-only; unique IDs (INV-*, BR-*, S-*, AC-*) — see `docs/DOCUMENTATION_GUIDE.md`
 
 ## Spec-Driven Development (Superpowers)
@@ -79,5 +79,5 @@ curl https://fitcoach-dev.filko.dev/health   # → 200
 - Process methodology: Superpowers plugin (brainstorming → writing-plans → TDD execution → verification/review). Design docs go to `docs/superpowers/specs/`, implementation plans to `docs/superpowers/plans/`.
 - Durable specs (ADRs, domain/feature specs, API_SPEC, refactor master plan) stay in `docs/` per the docs-first workflow — they are the law; superpowers artifacts are working documents.
 - Every plan task must reference the AC-#### it implements and its verification command. Never silently edit durable specs — escalate to the owner.
-- **Plan execution is delegated**: an interactive session orchestrates (planning, review, decisions) and hands implementation to a `claude -p` executor on GLM/z.ai via the `delegate-implementation` skill. Review, `Status:` transitions, merge and deploy are never delegated. Contract: `docs/ORCHESTRATION.md`
+- **Plan execution is delegated**: an interactive session orchestrates (planning, review, decisions) and hands implementation to Orca-dispatched worker sessions in a plan worktree (GLM by default, Sonnet/Opus when agreed) via the `delegate-implementation` skill. Review, `Status:` transitions, merge and deploy are never delegated. Contract: `docs/ORCHESTRATION.md`
 - Full contract: `docs/SUPERPOWERS_INTEGRATION.md`

@@ -1,15 +1,18 @@
 ---
 name: delegate-implementation
-description: Use when an implementation plan is ready to execute in this repo — delegates the coding to a `claude -p` executor on the GLM/z.ai provider instead of implementing it in this session, then supervises the stop/answer/resume cycle until the plan is done. Also use when the owner asks to hand a plan to the executor or to resume a stopped executor session.
+description: Use when an implementation plan is ready to execute in this repo — the orchestrator (you) creates the plan worktree and dispatches Orca-supervised worker sessions (GLM by default, Sonnet/Opus when agreed) to implement it task by task, answering their questions and reviewing each task until the plan is done. Also use when the owner asks to hand a plan to a worker or to resume a stalled worker.
 ---
 
-# Delegate implementation to the CLI executor
+# Delegate implementation to Orca workers
 
-The full contract — provider setup, isolation, permissions, failure table — is
+The full contract — roles, executors, isolation, boundary, failure table — is
 `docs/ORCHESTRATION.md`. Read it before the first delegation in a session. This skill is
 the procedure; the contract is the law. Do not restate the contract's rules here.
 
-**Announce at start:** "Using delegate-implementation to hand `<slug>` to the executor."
+Load the `orchestration` skill (Orca's version-matched guide) before the first
+`orca orchestration` command. You are the **coordinator**; you never act as a worker.
+
+**Announce at start:** "Using delegate-implementation to hand `<slug>` to Orca workers."
 
 ## When this applies
 
@@ -17,95 +20,70 @@ An implementation plan in `docs/superpowers/plans/` is ready to execute. Impleme
 work is delegated; judgement is not. If there is no plan yet, this is the wrong skill —
 go to `superpowers:brainstorming` / `superpowers:writing-plans` first.
 
-**Never delegate:** `close-out-review` (its worth comes from context independent of the
-executor's), `Status:` transitions, `STATE.md`, durable specs, merge, deploy. See the
-reserved list in the contract.
+**Never delegate:** `close-out-review`, `Status:` transitions, `STATE.md`, durable specs,
+push, merge, deploy. See the reserved list in the contract.
 
-## Step 1 — Prepare the worktree
+## Step 1 — Choose the executor
+
+Propose one to the owner (contract § Executors): **glm** by default; **sonnet** / **opus**
+only with a reason. Use the owner's choice; with no answer, use glm.
+
+## Step 2 — Prepare the worktree
+
+Run the prepare block from contract § Isolation (`orca worktree create`, rename to
+`plan/<slug>`, link the three env files, `npm ci` + `type-check` in `apps/server`). Keep
+the `id:<repo-id>::<path>` selector. Set the plan's `- Branch: plan/<slug>` header now;
+**leave `- Status: planned` until the first worker commit lands**.
+
+## Step 3 — Create the Run and dispatch task 1
 
 ```bash
-SLUG=<plan-slug>
-git worktree add "../fit_coach-$SLUG" -b "plan/$SLUG"
-for f in .env .env.test .env.production; do        # all three: pre-commit runs test:unit
-  ln -sfn "$(pwd)/apps/server/$f" "../fit_coach-$SLUG/apps/server/$f"
-done
-(cd "../fit_coach-$SLUG/apps/server" && npm ci)   # NOT the worktree root — no root package.json
+orca orchestration run-create --objective "<slug>: <plan title>" --json
+orca orchestration worker-start --spec "<spec>" --task-title "<slug> task 1" \
+  --worktree "<selector>" <executor flags> --json
 ```
 
-Verify the baseline before delegating: `(cd ../fit_coach-$SLUG/apps/server && npm run type-check)`
-must pass. Missing `.env.test` makes every executor commit fail in the pre-commit hook
-(contract § Isolation).
+Write the spec per contract § Task spec — all six parts, short, the plan is not pasted.
+Check the receipt: exit 0, `launch.effective` matches the executor.
 
-Set the plan's `- Branch:` header now. **Leave `- Status: planned` until the executor's
-first commit lands** — an `in progress` plan on an empty branch is misreported as
-close-out debt (contract § Isolation). Flip the status and run
-`node scripts/state.mjs --write` after the first returned batch of work, not before.
+## Step 4 — Supervise
 
-## Step 2 — Write the executor prompt
+`check --wait --types worker_done,escalation,question`, then per message:
 
-The prompt is the executor's whole briefing; it starts cold. It must contain:
-
-1. The plan path and the instruction to follow `superpowers:executing-plans`.
-2. The working directory (the worktree).
-3. The reserved list, with the reason: these are the orchestrator's, stop rather than
-   work around them.
-4. The stop rule: after each plan task, on a question the plan does not answer, on
-   hitting the boundary, on a second failed verification.
-5. TDD is required (`superpowers:test-driven-development`); verification commands come
-   from the plan.
-6. The exact `DELEGATE STATUS` block to end its final message with.
-
-Keep it specific and short. The executor reads the plan itself — do not paste the plan
-into the prompt.
-
-## Step 3 — Run
-
-Use the invocation from the contract (env block, `bypassPermissions`,
-`--disallowedTools` as **one comma-separated argument**, prompt after `--`,
-`< /dev/null`, JSON to a file). Save `session_id` from the result event — the whole
-supervision cycle depends on it.
-
-Run it in the background when the plan task is substantial, so the owner can interject.
-
-## Step 4 — Read the result
-
-Parse the event array, take `type == "result"`, then read in this order:
-
-1. `is_error` and whether a `result` event exists at all.
-2. `permission_denials[]` — the boundary, if hit.
-3. `modelUsage` — confirm `glm-5.3`; if the run went elsewhere, stop and say so.
-4. The `DELEGATE STATUS` block.
-
-Never infer the executor's state from prose when the block is missing — resume and ask
-for it.
-
-## Step 5 — Decide
-
-| state | Orchestrator does |
+| Message | Orchestrator does |
 |---|---|
-| `done` (task) | Review the diff against the plan task; resume for the next task |
-| `done` (plan) | Verify, then run `close-out-review` yourself |
-| `question` | Answer it — decide, do not relay it to the owner unless it is an owner-level call (scope, a durable spec, a trade-off the plan does not settle) |
-| `blocked` | Perform the reserved action yourself, or grant narrowly (single-use `--allowedTools`) and resume |
+| `question` | Answer with `reply` — decide yourself unless it is an owner-level call (scope, a durable spec, a trade-off the plan does not settle) |
+| `escalation` | Perform the reserved action yourself, or grant narrowly in the reply |
+| `worker_done succeeded` | Review the task's commits against the plan task and its AC; run its verification if in doubt |
+| `worker_done failed` | Decide: fix the plan, answer and retry (`--retry-of`), or take the task over |
 
-Resume with `claude -p --resume <session_id> -- "<answer>" < /dev/null`, same env and
-flags. The session keeps its history, so the answer can be short.
+After the first returned commit: flip `- Status: in progress`, `node scripts/state.mjs --write`.
 
-Escalate to the owner — never to the executor — when a durable spec looks wrong
-(`SUPERPOWERS_INTEGRATION.md`: escalation, never silent edits).
+If nothing arrives and the worker looks idle, read its transcript (`worker-read --source
+auto`) instead of waiting — contract § Waiting without stalling.
+
+## Step 5 — Next task
+
+Dispatch the next plan task into the same terminal so the worker keeps its context:
+`worker-start --task <id> --terminal <agent_terminal_handle> --worktree "<selector>"`
+(or `--spec` for a new Task). Repeat Step 4. Release each worker you will not reuse.
 
 ## Step 6 — Close
 
-When the plan is done: review, `close-out-review`, `Status: done`, `state.mjs --write`,
-then merge and remove the worktree. The executor has no part in this step.
+When all plan tasks are done: verify, run `close-out-review` yourself, `Status: done`,
+`state.mjs --write`, push, merge. Release the remaining workers
+(`worker-list --run <run_id> --terminal-state reclaimable` must return none). Report the
+worktree and `plan/<slug>` branch as **ready to clean up — delete nothing** (owner gate,
+`CLAUDE.md` § Rules). Workers have no part in this step.
 
 ## Red flags
 
 | Thought | Reality |
 |---|---|
-| "Faster if I just write this code myself" | Then the delegation contract buys nothing. Delegate; spend this session on judgement. |
-| "I'll let the executor run close-out-review, it has the context" | That context is exactly the problem. The review is independent or it is theatre. |
+| "Faster if I just write this code myself" | Then delegation buys nothing. Dispatch; spend this session on judgement. |
+| "Let the worker run close-out-review, it has the context" | That context is exactly the problem. The review is independent or it is theatre. |
 | "It only needs one small `ssh` / `push`" | That is the reserved list. Do it yourself. |
-| "No status block, but I can tell it finished" | Guessing the state is how a half-done plan gets marked done. Ask. |
-| "It hit a denial, so the run is broken" | Denials are expected signal, not failure. Read them and decide. |
-| "I'll re-run from scratch to fix a small misunderstanding" | Resume. A fresh run re-pays the context warm-up. |
+| "Idle and no `worker_done`, but I can tell it finished" | Read the transcript; a turn without `worker_done` is a stall, not a success. |
+| "I'll keep waiting on `check --wait`" | Inspect first (`worker-list`, `worker-read`); the owner is waiting too. |
+| "Two workers in one worktree will be faster" | Only one editor per worktree — the pre-commit hook checks the whole tree. |
+| "I'll clean up the worktree after merge" | Owner-gated. Report it, delete nothing. |
