@@ -455,6 +455,7 @@ Review notes: the unique constraint on `(user_id, category, fact_key)` is what m
 
 | Decision | Options considered | What I chose and why | How to revert |
 |---|---|---|---|
+| **Group 1 stopped after Task 4 and the branch is left UNMERGED.** Decided by the orchestrator at the end of the delegated night, 2026-09-19. | (a) Merge the four done tasks and set `Status: done`; (b) merge and accept a failing `state.mjs --check`; (c) split the plan file at the Task 4/5 boundary; (d) leave the branch unmerged, `--check` green. | **(d)** — I did merge it, observed the consequence, and reverted (local only, never pushed). `scripts/state.mjs` equates "merged" with "finished": a merged plan whose `Status` is not `done` is reported as **close-out debt** and fails the gate. (a) is a lie — Tasks 5–12 are not done. (b) hands over a red gate, which is exactly the close-out debt the rule exists to prevent. (c) is a plan rewrite, and cutting mid-group unsupervised at the end of a night is the kind of judgement that should have the owner in the loop. (d) misrepresents nothing: the code is green and committed, `dev` is untouched, `--check` is OK. | Nothing to revert. To land the work: finish Tasks 5–6 and close Group 1 normally (cheapest), or split per D-A and close Group 1 as its own plan. |
 | **All three P6 items in one plan file, three task groups.** | (a) Three plan files/branches; (b) one file, one undifferentiated task list; (c) one file, three explicitly separable groups. | **(c)** — D-A. The master plan calls the items "independent PRs" and reverts them individually, so the boundaries must survive; but three files would triplicate the shared vocabulary (blocks, budget, `ToolStateUpdate`) and the `After:` chain. The group boundaries (end of Task 6, Task 9, Task 12) are each a green tree. **Splitting into three branches remains an option for the owner** — cut at those two points. | Split the file at the group boundaries into `refactor-p6-facts`, `refactor-p6-progress-blocks`, `refactor-p6-drafts` with an `After:` chain. No task content changes. |
 | **Every AC split into a deterministic half (now) and a model-backed half (deferred).** | (a) Mark AC-1361..1364 wholly deferred; (b) split per AC. | **(b)** — the owner's instruction was explicit that the deterministic half is implemented and tested now and the split is stated per AC. It also means three of the four ACs have real, failing-if-broken tests in CI today rather than an IOU. AC-1364 alone is deferred in full because it is a two-run comparison by definition. | Nothing to revert — the deferred halves are recorded, not skipped. The consolidated eval pass closes them. |
 | **Summariser v3 extends the structured schema rather than reusing `userState`.** | (a) Mine the existing `userState` free-text array for facts; (b) a second LLM call at compaction; (c) add a typed `facts` field to the one structured call. | **(c)** — D-D. `userState` has no category and no muscle tag, so it cannot drive the hard validation (D-G) that AC-1361's deterministic half rests on; (b) doubles compaction latency and cost on the user's critical path. (c) costs one schema field. | Revert `v3.ts`, repoint `SUMMARIZER_PROMPT` to v2, drop `facts` from `EpisodeSummarySchema`. Task 3's extraction call becomes a no-op. |
@@ -474,9 +475,29 @@ Review notes: the unique constraint on `(user_id, category, fact_key)` is what m
 
 ## Execution status (2026-09-19, overnight orchestration)
 
-**Group 1 (user facts) is 4 of 6 tasks done and merged to `dev`; Groups 2 and 3 are untouched.**
-The plan stays `- Status: in progress`. Nothing here is half-written: every merged task is
-committed, tested and reviewed, and the tree is clean at `9378851d`.
+**Group 1 (user facts) is 4 of 6 tasks done, on the branch and NOT merged to `dev`; Groups 2 and
+3 are untouched.** The plan stays `- Status: in progress`. Nothing here is half-written: every
+task is committed, tested and reviewed, and the tree is clean at `bc5c5dac`.
+
+**Why it is not merged — decided by the orchestrator, 2026-09-19.** I merged it, saw what that
+does to the status gate, and reverted the merge (local only, never pushed). `scripts/state.mjs`
+treats "merged into dev" + "Status is not done" as **close-out debt** and fails `--check`, because
+it assumes a merged plan is a finished plan. A partially-executed plan merged mid-way has no
+honest representation in that model: `Status: done` would be a lie (Tasks 5–12 are not done), and
+the only other options were to rewrite the gate or to split the plan file at Task 4 — neither of
+which I will do unsupervised at the end of a delegated night. So the branch stays unmerged and
+`--check` stays green, which is the state that misrepresents nothing.
+
+**What the owner can do with it, in order of preference:**
+1. Continue Group 1 — run Task 5 (hard validation) and Task 6 (dataset + docs), then close and
+   merge the whole group normally. This is the cheapest path; the branch is ready to build on.
+2. Split the plan at the Task 4/5 boundary into `refactor-p6-facts` (done) and a follow-up plan
+   holding Tasks 5–12, per D-A's pre-recorded option. Then Group 1's four tasks close and merge
+   cleanly on their own.
+3. Merge as-is and accept one `--check` failure until Group 1 finishes — the code is green
+   (878 tests, 56 snapshots, L0 96/96, `check-all` 0 errors) and migration `0005` is additive.
+
+Option 1 or 2; option 3 only if the code is wanted on dev today.
 
 | Task | State |
 |---|---|
