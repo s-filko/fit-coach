@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { buildJsonSchemaResponseFormat, extractJsonPayload } from '../structured-json';
+import { buildJsonSchemaResponseFormat, buildSchemaInstruction, extractJsonPayload } from '../structured-json';
 
 describe('extractJsonPayload (BUG-017 — recover JSON the model delivered as text)', () => {
   it('returns the payload from a ```json fence', () => {
@@ -64,5 +64,20 @@ describe('buildJsonSchemaResponseFormat (BUG-017 — same wire request, gateway-
     const bare = z.object({ topics: z.array(z.string()) });
     const format = buildJsonSchemaResponseFormat(bare, 'structured_output');
     expect(JSON.parse(JSON.stringify(format)).json_schema).not.toHaveProperty('description');
+  });
+});
+
+describe('buildSchemaInstruction (json_object mode — the schema in a system message)', () => {
+  const schema = z.object({ topics: z.array(z.string()) }).describe('Episode topics');
+
+  it('is the fixed instruction followed by the same JSON Schema buildJsonSchemaResponseFormat embeds', () => {
+    const instruction = buildSchemaInstruction(schema, 'episode_summary');
+    const newline = instruction.indexOf('\n');
+    expect(instruction.slice(0, newline)).toBe(
+      'Respond with a single JSON object that conforms to this JSON Schema, and nothing else:',
+    );
+    expect(JSON.parse(instruction.slice(newline + 1))).toEqual(
+      buildJsonSchemaResponseFormat(schema, 'episode_summary').json_schema.schema,
+    );
   });
 });

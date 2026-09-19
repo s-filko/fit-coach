@@ -1,9 +1,9 @@
 import { ChatOpenAI } from '@langchain/openai';
-import { HumanMessage } from '@langchain/core/messages';
+import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { z, ZodError } from 'zod';
 
 import { OpenAiLlmGateway } from '../llm.gateway';
-import { buildJsonSchemaResponseFormat } from '../structured-json';
+import { buildJsonSchemaResponseFormat, buildSchemaInstruction } from '../structured-json';
 
 const invoke = jest.fn();
 const structuredInvoke = jest.fn();
@@ -23,16 +23,19 @@ const { __logFns: logFns } = jest.requireMock('@shared/logger') as {
 
 const recoveryWarn = expect.objectContaining({ recovery: 'fenced-json' });
 
+const resetGatewayMocks = () => {
+  invoke.mockReset();
+  structuredInvoke.mockReset();
+  withStructuredOutput.mockReset();
+  withConfig.mockClear();
+  getModel.mockClear();
+  logFns.info.mockClear();
+  logFns.warn.mockClear();
+  delete process.env.LLM_STRUCTURED_OUTPUT_MODE;
+};
+
 describe('OpenAiLlmGateway (ADR-0013 §7 D-10, AC-1311 — the single non-graph LLM path)', () => {
-  beforeEach(() => {
-    invoke.mockReset();
-    structuredInvoke.mockReset();
-    withStructuredOutput.mockReset();
-    withConfig.mockClear();
-    getModel.mockClear();
-    logFns.info.mockClear();
-    logFns.warn.mockClear();
-  });
+  beforeEach(resetGatewayMocks);
 
   it('chat() converts ChatMsg[] to LangChain messages and returns the text content', async () => {
     invoke.mockResolvedValue({ content: 'hello there' });
@@ -162,6 +165,83 @@ describe('OpenAiLlmGateway (ADR-0013 §7 D-10, AC-1311 — the single non-graph 
   });
 });
 
+describe('structured() structured-output mode (LLM_STRUCTURED_OUTPUT_MODE)', () => {
+  const schema = z.object({ topics: z.array(z.string()) });
+
+  beforeEach(resetGatewayMocks);
+
+  it('json_schema (default): today’s request unchanged — no trailing schema message', async () => {
+    structuredInvoke.mockResolvedValue({ content: '{"topics":["legs"]}' });
+
+    await new OpenAiLlmGateway().structured(schema, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'x' },
+    ]);
+
+    expect(withConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        response_format: expect.objectContaining({
+          json_schema: expect.objectContaining({ name: 'structured_output' }),
+        }),
+      }),
+    );
+    const firstCall = structuredInvoke.mock.calls[0] ?? [];
+    const [messages] = firstCall;
+    expect(messages).toHaveLength(2);
+    expect(messages[messages.length - 1]._getType()).toBe('human');
+  });
+
+  it('json_object: response_format {type:"json_object"} + one trailing system message with the schema; clean answer → one call, no warn', async () => {
+    process.env.LLM_STRUCTURED_OUTPUT_MODE = 'json_object';
+    structuredInvoke.mockResolvedValue({ content: '{"topics":["legs"]}' });
+
+    const result = await new OpenAiLlmGateway().structured(
+      schema,
+      [
+        { role: 'system', content: 'sys' },
+        { role: 'user', content: 'x' },
+      ],
+      { schemaName: 'episode_summary' },
+    );
+
+    expect(result).toEqual({ topics: ['legs'] });
+    const [configArg] = withConfig.mock.calls[0] as unknown as [{ response_format: { type: string } }];
+    expect(configArg.response_format).toEqual({ type: 'json_object' });
+    // plain primitive string type — takes the create() path, no SDK-side parse
+    expect(configArg.response_format.type).toBe('json_object');
+    const firstCall = structuredInvoke.mock.calls[0] ?? [];
+    const [messages] = firstCall;
+    expect(messages).toHaveLength(3);
+    const last = messages[2] as SystemMessage;
+    expect(last._getType()).toBe('system');
+    expect(String(last.content)).toBe(buildSchemaInstruction(schema, 'episode_summary'));
+    expect(String(last.content)).toContain('"title":"episode_summary"');
+    expect(structuredInvoke).toHaveBeenCalledTimes(1);
+    expect(logFns.warn).not.toHaveBeenCalled();
+  });
+
+  it('json_object: fenced answer is recovered with one model call (BUG-017 path unchanged)', async () => {
+    process.env.LLM_STRUCTURED_OUTPUT_MODE = 'json_object';
+    structuredInvoke.mockResolvedValue({ content: '```json\n{"topics":["legs"]}\n```' });
+
+    const result = await new OpenAiLlmGateway().structured(schema, [{ role: 'user', content: 'x' }]);
+
+    expect(result).toEqual({ topics: ['legs'] });
+    expect(structuredInvoke).toHaveBeenCalledTimes(1);
+    expect(logFns.warn).toHaveBeenCalledWith(recoveryWarn, expect.any(String));
+  });
+
+  it('json_object: schema-invalid answer retries once, then throws', async () => {
+    process.env.LLM_STRUCTURED_OUTPUT_MODE = 'json_object';
+    structuredInvoke.mockResolvedValue({ content: '{"topics":"not-an-array"}' });
+
+    await expect(new OpenAiLlmGateway().structured(schema, [{ role: 'user', content: 'x' }])).rejects.toBeInstanceOf(
+      ZodError,
+    );
+    expect(structuredInvoke).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('structured() wire format (BUG-017 — same request, gateway-owned parsing)', () => {
   const schema = z.object({ topics: z.array(z.string()).describe('t'), summary: z.string() }).describe('A summary');
   const name = 'episode_summary';
@@ -237,5 +317,16 @@ describe('structured() wire format (BUG-017 — same request, gateway-owned pars
 
     expect(String(message.content)).toBe(fenced);
     expect(bodies).toHaveLength(1);
+  });
+
+  it('json_object mode puts {type:"json_object"} and the trailing schema system message on the wire', async () => {
+    await model()
+      .withConfig({ response_format: { type: 'json_object' } })
+      .invoke([new HumanMessage('x'), new SystemMessage(buildSchemaInstruction(schema, name))]);
+
+    const body = JSON.parse(bodies[0]);
+    expect(body.response_format).toEqual({ type: 'json_object' });
+    expect(body.messages.at(-1).role).toBe('system');
+    expect(body.messages.at(-1).content).toBe(buildSchemaInstruction(schema, name));
   });
 });

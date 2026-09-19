@@ -5,7 +5,14 @@ import type { LlmCallOptions, LlmGateway } from '@domain/ai/ports';
 import type { ChatMsg } from '@domain/ai/types';
 
 import { getModel } from '@infra/ai/model.factory';
-import { buildJsonSchemaResponseFormat, extractJsonPayload, parseJsonOrUndefined } from '@infra/ai/structured-json';
+import {
+  buildJsonSchemaResponseFormat,
+  buildSchemaInstruction,
+  extractJsonPayload,
+  parseJsonOrUndefined,
+} from '@infra/ai/structured-json';
+
+import { loadConfig } from '@config/index';
 
 import { createLogger } from '@shared/logger';
 
@@ -84,10 +91,20 @@ export class OpenAiLlmGateway implements LlmGateway {
    */
   async structured<T>(schema: ZodType<T>, messages: ChatMsg[], opts: LlmCallOptions = {}): Promise<T> {
     const profile = opts.profile ?? 'default';
+    const schemaName = opts.schemaName ?? 'structured_output';
+    // LLM_STRUCTURED_OUTPUT_MODE (Z.AI route, 2026-09-19): 'json_schema' sends
+    // today's request, byte-identical. 'json_object' is for providers that
+    // ignore json_schema (GLM via Z.AI) — response_format {type:'json_object'}
+    // plus one trailing system message carrying the JSON Schema. In both modes
+    // the raw answer comes back through create() and is parsed/recovered/
+    // validated by the BUG-017 code below, unchanged.
+    const jsonObjectMode = loadConfig().LLM_STRUCTURED_OUTPUT_MODE === 'json_object';
     const model = getModel(profile).withConfig({
-      response_format: buildJsonSchemaResponseFormat(schema, opts.schemaName ?? 'structured_output'),
+      response_format: jsonObjectMode ? { type: 'json_object' } : buildJsonSchemaResponseFormat(schema, schemaName),
     });
-    const lcMessages = toLangChain(messages);
+    const lcMessages = jsonObjectMode
+      ? [...toLangChain(messages), new SystemMessage(buildSchemaInstruction(schema, schemaName))]
+      : toLangChain(messages);
     const started = Date.now();
 
     const attempt = async (): Promise<T> => {

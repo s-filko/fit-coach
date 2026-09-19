@@ -1,20 +1,7 @@
 import { EnvSchema } from '../index';
+import { BASE_ENV } from './base-env.fixture';
 
-const BASE = {
-  NODE_ENV: 'development',
-  PORT: '3000',
-  HOST: '0.0.0.0',
-  DB_HOST: 'localhost',
-  DB_PORT: '5432',
-  DB_USER: 'u',
-  DB_PASSWORD: 'p',
-  DB_NAME: 'db',
-  BOT_API_KEY: 'k',
-  TELEGRAM_TOKEN: 't',
-  LLM_API_KEY: 'k',
-  LLM_MODEL: 'm',
-  LLM_TEMPERATURE: '0.7',
-};
+const BASE = BASE_ENV;
 
 describe('episode-memory tunables (D-L — the second documented defaults exception)', () => {
   it('defaults EPISODE_GAP_HOURS=3, EPISODE_MIN_TURNS=2, EPISODE_MIN_TOKENS=300', () => {
