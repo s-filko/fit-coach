@@ -180,7 +180,7 @@ Steps: two sets logged; a mid-workout question about rest time (text only); cloc
 - [x] After the pause the user writes an implicit catch-up ("забыл дописать: последнее упражнение — подтягивания 3×8") — assert the sets land in the **previous** session with retro timestamps, the model **saw** the STALE SESSION block, the session closes at the pre-pause time; the mid-workout Q&A / gap-note `knownBug` cases stay.
 - [x] Variant with the explicit "добавь к последней тренировке: подтягивания 3×8" — same persisted outcome.
 - [x] Live-only expectation (L3, ignored by the deterministic layer): the delivered reply says the sets were added to the previous workout and asks whether to close it or add more.
-- [ ] Commit `test(ai): journey C as catch-up logging after a pause, explicit variant (owner ruling)`. STOP.
+- [x] Commit `test(ai): journey C as catch-up logging after a pause, explicit variant (owner ruling)`. STOP. **Accepted 2026-09-20** (`fe093693`, GLM worker via Orca; orchestrator re-ran `npm run test:scenarios` → 221/221, 4 suites). Implicit ("забыл дописать…") and explicit ("добавь к последней тренировке…") variants share one builder; persisted assertions shared by both layers: each catch-up set `createdAt` = last pre-pause activity + `RETRO_SET_OFFSET_MS`, `completedAt` = `lastActivityAt`, duration 11 min, **no new session opened**, STALE SESSION seen. A minimal `liveOnly` flag marks only the reply wording ("к предыдущей тренировке" / "закрыть её или добавить") as L3-only.
 
 ### Task 6: Live layer L3 (AC-TJ-4)
 
