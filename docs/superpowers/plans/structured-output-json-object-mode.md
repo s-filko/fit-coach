@@ -1,8 +1,9 @@
 # Structured Output — Provider Mode `json_object` for the Z.AI Route Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/structured-output-json-object-mode
 - After: structured-output-fenced-json
+- Review: 2026-09-19 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and superpowers:test-driven-development. One plan task per worker session; stop after the task.
 
@@ -93,9 +94,39 @@ Callers and prompts do not change.
 
 - [ ] **Step 1:** Owner sets `LLM_STRUCTURED_OUTPUT_MODE=json_object` in
   `/srv/docker/fitcoach/.env.dev` (prod untouched).
-- [ ] **Step 2:** `close-out-review`; ADR-0013 §7 note on the mode (owner approval); BUG-017
+- [x] **Step 2:** `close-out-review`; ADR-0013 §7 note on the mode (owner approval); BUG-017
   live confirmation; `- Status: done`; `state.mjs --write`; merge, push, deploy, health 200.
 - [ ] **Step 3: Dev smoke — 3 calls**, direct to the server (not through the 90 s NPM proxy): a
   phase transition, then a turn that compacts, then one more turn. Paste the
   `conversation_summaries` row, `SELECT category, fact, muscle_group, confirmations FROM
   user_facts`, and `budget_report->'longTerm'` > 0 on the last run.
+
+---
+
+## Review
+
+Close-out review 2026-09-19, four zones in parallel (Sonnet subagents), diff `44a2087d...HEAD`.
+
+**First pass: blocked — two findings, both R2, both test code.**
+
+- **blocking | R2** | `apps/server/src/infra/ai/__tests__/llm.gateway.unit.test.ts:169-176` | DRY
+  (`CONTRIBUTING_AI.md`) — the new describe's `beforeEach` copied the outer reset verbatim.
+- **blocking | R2** | `apps/server/src/config/__tests__/structured-output-mode.unit.test.ts:3-16` and
+  `episode-tunables.unit.test.ts:3-16` | DRY — byte-identical `BASE` env fixture.
+
+Both **closed** in `79ac9499` (GLM worker via Orca): one `resetGatewayMocks` helper, one
+`src/config/__tests__/base-env.fixture.ts`; test count unchanged (432), L0 96/96. R2 re-run: clean.
+R1 and R3 found nothing blocking; R3 proved the AC-1311 guard end to end by dropping a real
+offender file into `src/infra/ai/` and watching the guard fail. **Verdict: clean.**
+
+**Advisory findings and where they went:** R4 — BUG-017 marked Fixed before any live confirmation
+→ corrected in `ed80dd13` (Fixed only once a dev smoke produces the rows); R4 — ADR-0013 §7 silent on
+the mode, and R3 — AC-1311's grep wording now literally false → both amended in `ed80dd13` with the
+owner's approval. No backlog entries.
+
+**Meta findings → `docs/REVIEW_FINDINGS.md`:** R1 — ADR currency vs. R1's zone (raises the existing
+R1/R4 mechanism-drift blind spot); R2 — test-fixture DRY scope (raises the existing rule
+candidate); R3 — a plan outside the `AC-13xx` series should mint its own AC ids (raises the existing
+"plan with no AC ids" blind spot); R4 — `BUGS.md`'s own header rule cannot be cited as blocking
+(new rule candidate).
+

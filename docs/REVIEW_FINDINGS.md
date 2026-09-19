@@ -216,7 +216,7 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   demonstrably reads. The skill should say a zone may execute the repo's own lint/type-check
   against the branch tree, and that a passing verification command itself requires verification.
   Runs: ports-layout-consistency (2026-09-14).
-- [×2] A type-only refactor plan with no `AC-####` ids slips through R3's "every AC has a test"
+- [×3] A type-only refactor plan with no `AC-####` ids slips through R3's "every AC has a test"
   check by having no ACs to check — this plan states four prose clauses instead, and defines no
   tests. `SUPERPOWERS_INTEGRATION.md` rule 2 requires plan tasks to cite the AC they implement;
   nothing catches a plan that cites none. R1 noticed the same absence and flagged it as outside
@@ -224,7 +224,7 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   backlog-finding plan (not a phase-spec task) also carries no ACs by design — R3 correctly
   treated the absence as inapplicable rather than a gap, but the zone brief still gives no
   explicit instruction for this plan shape, so the correct call was judgment, not guidance.
-  Runs: ports-layout-consistency (2026-09-14), lint-glob-fix (2026-09-14).
+  Runs: ports-layout-consistency (2026-09-14), lint-glob-fix (2026-09-14), structured-output-json-object-mode (2026-09-19).
 - [×1] R2 has no rule for duplication that is *pre-existing and untouched by the branch* but
   which the branch's own rename broke: the eval stub's comment anchoring a hand-mirrored domain
   type cited `service.ports.ts`, a filename this diff renamed. R2 reported it advisory on the
@@ -261,13 +261,13 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   discharges by re-executing a stated command, this one by an artifact the plan names.
   Runs: refactor-p4-episode-memory (2026-09-18).
 
-- [×1] Code that stops matching the *mechanism* a durable spec names (ADR-0013 §7:
+- [×2] Code that stops matching the *mechanism* a durable spec names (ADR-0013 §7:
   "`structured` uses `withStructuredOutput`") is claimed by both R1 ("declared boundaries") and
   R4 (doc currency) — both raised it as blocking this run. Neither zone file says which owns a
   mechanism drift that crosses no layer, nor who escalates a blocking finding on a document the
   zones may not edit (R4: "who actually escalates it, and where is that recorded?"). One line in
   the skill — mechanism drift is R4's; the orchestrator escalates read-only-spec findings to the
-  owner at close-out — would settle both. Runs: structured-output-fenced-json (2026-09-19).
+  owner at close-out — would settle both. Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19).
 
 ## Rule candidates
 
@@ -598,10 +598,10 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   `PROMPT_EVAL_FRAMEWORK.md` §3 or the README header): "Every new
   `<phase-or-category>/<dataset>.jsonl` gets one row in this README's Datasets table in the
   same commit that adds it." Runs: refactor-p6-facts-and-progress-blocks (2026-09-19).
-- [×1] `CONTRIBUTING_AI.md`'s DRY bullet reads as production-only ("no copy-paste, no
+- [×2] `CONTRIBUTING_AI.md`'s DRY bullet reads as production-only ("no copy-paste, no
   reinvention of what the repo already has"); R2 applied it to duplicated test fixtures
   (`USER`, `ctxConfig`) and blocked, but a reviewer could as reasonably have downgraded them.
-  Proposed line: "DRY applies to test fixtures and harnesses too." Runs: structured-output-fenced-json (2026-09-19).
+  Proposed line: "DRY applies to test fixtures and harnesses too." Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19).
 - [×1] Any change to `OpenAiLlmGateway`'s model-wrapping call site should be covered by a test
   proving a `RunMetricsCollector` attached via the invoke config still receives
   `onStart`/`onEnd` for that call — today no test wires the collector to a real `invoke()`.
@@ -609,3 +609,8 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
 - [×1] `CONTRIBUTING_AI.md` § ID Conventions lists INV-/BR-/S-/AC- but not `BUG-###`, although
   bug-fix tests already cite `BUG-###` in their names (the de facto pattern R3 accepted).
   Proposed: add "Bugs: BUG-### (`docs/BUGS.md`)" to that list. Runs: structured-output-fenced-json (2026-09-19).
+- [×1] `docs/BUGS.md`'s own header ("Do NOT close a bug without a confirmed fix and regression
+  test") is an explicit written rule a status line can violate as concretely as a `BR-*`, but the
+  blocking-citation list (AC/BR/INV/SUPERPOWERS_INTEGRATION/ADR) excludes it, so a premature
+  "Fixed" could only be advisory. Proposed: allow "an explicit rule in a durable doc's own header"
+  as a citable source, or promote that rule to a numbered rule. Runs: structured-output-json-object-mode (2026-09-19).

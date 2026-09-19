@@ -12,7 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `structured-output-json-object-mode.md` — Structured Output — Provider Mode `json_object` for the Z.AI Route Implementation Plan (branch: `plan/structured-output-json-object-mode`, last commit 2026-09-19)
+— none —
 
 **Planned**
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
@@ -42,6 +42,7 @@ _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p6-facts-and-progress-blocks.md` — Refactor P6 — User Facts (Group 1) Implementation Plan
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 - `structured-output-fenced-json.md` — Structured Output — Fenced-JSON Recovery and the User-Facts Scenario Test Implementation Plan
+- `structured-output-json-object-mode.md` — Structured Output — Provider Mode `json_object` for the Z.AI Route Implementation Plan
 
 **Close-out debt (merged but plan not done)**
 — none —
@@ -166,7 +167,16 @@ _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen
    Advisories: `BACKLOG.md` § structured-output-fenced-json close-out review advisories. Also
    observed in that smoke: the public NPM proxy cuts `/api/bot/chat` at 90 s (504) while the
    server allows 420 s — the bot is unaffected (it calls the server directly).
-6. **Next to dispatch: `refactor-p6-progress-and-drafts`** — unblocked once the facts plan is
+6. **Structured output on the Z.AI route (2026-09-19)**: `structured-output-json-object-mode`
+   closed — review `2026-09-19 | clean | R1,R2,R3,R4` (first pass blocked on two test-fixture
+   duplications, fixed, R2 re-run clean). The BUG-017 smoke showed GLM on Z.AI ignores
+   `json_schema` altogether (the Z.AI API accepts only `text`/`json_object`); `structured()` now
+   takes its request mode from `LLM_STRUCTURED_OUTPUT_MODE` — `json_schema` (default, prod) or
+   `json_object` + the JSON Schema in a trailing system message (dev; probed 4/4 schema-valid with
+   the real summariser prompt). ADR-0013 §7 and AC-1311 amended with the owner's approval.
+   **Owner action for dev:** `LLM_STRUCTURED_OUTPUT_MODE=json_object` in `.env.dev`; BUG-017 stays
+   open until a dev smoke produces a `conversation_summaries` and a `user_facts` row.
+7. **Next to dispatch: `refactor-p6-progress-and-drafts`** — unblocked once the facts plan is
    merged. Then P7 per the master plan phase map and the consolidated eval pass.
 3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
    the code aligned to it, ESLint keeping it that way. Independent of the P0 chain;
