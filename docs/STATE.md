@@ -12,7 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-— none —
+- `structured-output-json-object-mode.md` — Structured Output — Provider Mode `json_object` for the Z.AI Route Implementation Plan (branch: `plan/structured-output-json-object-mode`, last commit 2026-09-19)
 
 **Planned**
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task

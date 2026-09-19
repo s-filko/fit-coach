@@ -1,6 +1,6 @@
 # Structured Output — Provider Mode `json_object` for the Z.AI Route Implementation Plan
 
-- Status: planned
+- Status: in progress
 - Branch: plan/structured-output-json-object-mode
 - After: structured-output-fenced-json
 
@@ -82,7 +82,7 @@ Callers and prompts do not change.
   `json_object` + schema-invalid answer → one retry then throw; (e) config rejects an unknown mode.
 - [x] **Step 2: Implement.**
 - [x] **Step 3: Commit** — `feat(ai): LLM_STRUCTURED_OUTPUT_MODE — json_object mode with the schema in the prompt for providers without json_schema (Z.AI)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 4: STOP** for orchestrator review. **Reviewed and accepted 2026-09-19** (commit `407ee0eb`, GLM worker via Orca). Orchestrator re-ran from `apps/server/`: `npx jest --ci src/infra/ai src/config` → `Test Suites: 58 passed, 58 total` / `Tests: 432 passed, 432 total`; `npm run evals -- --level L0` → `L0: 96/96 checks passed, 0 failed`; the worker reported `npm run test:unit` 785/785, format and type-check clean, pre-commit green. **Deviation authorised by the orchestrator mid-task:** the AC-1311 guard (`legacy-path-retired.unit.test.ts`) banned the literal `json_object` in `src` as retired `LLMService` JSON-mode vocabulary; it now allows it only in the three files that carry the new mode (gateway, `structured-json.ts`, config) — `jsonMode` / `LLMService` stay banned everywhere, and a fixture assertion proves `json_object` anywhere else still fails. `loadConfig()` per `structured()` call follows `model.factory.ts`'s existing pattern.
 
 **Verification:** `npx jest --ci src/infra/ai src/config` → all pass; `npm run test:unit` → green;
 `npm run evals -- --level L0` → 96/96; `npm run format:check`, `npm run type-check` → clean.
