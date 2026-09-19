@@ -87,6 +87,7 @@ is not stateful — a started session never reaches `getSessionDetails`, `search
   root); tests use `.env.test` (`fitcoach_test`). Never write any `.env*`.
 - Reserved to the orchestrator: push, merge, deploy, `npm run db:*`, `docker compose`, CI workflows,
   durable specs, `docs/STATE.md`, `docs/BUGS.md`, any `Status:`.
+- **Test-DB safety (added 2026-09-20 after the Task 1 incident):** no task runs DDL, `DROP` or `CREATE DATABASE` by hand on any database — on a DB error, stop and escalate. The scenario runner takes a Postgres advisory lock around the per-file schema reset so two runs cannot drop the schema under each other; `.env.test`'s `RUN_DB_TESTS=1` (which makes even unit runs reset the schema) is an owner decision pending.
 - **Coordination with `chat-continuity`:** its fix tasks (1–3) start only after this plan's Tasks
   1–3 (format, runner, journey A) are accepted — the owner wants the DB-backed reproduction first.
   Each chat-continuity fix then also flips the matching `knownBug` cases here to `test`.
@@ -100,7 +101,7 @@ is not stateful — a started session never reaches `getSessionDetails`, `search
 
 - [x] Tests first: a valid scenario, invalid ones, time parsing (`-3d`, `+6h`, `-14h`), the
   `knownBug` format. Implement.
-- [ ] Commit `test(evals): scenario format for multi-turn training journeys (AC-TJ-1)`. STOP.
+- [x] Commit `test(evals): scenario format for multi-turn training journeys (AC-TJ-1)`. STOP. **Accepted 2026-09-20** (`1bb7d05d`, GLM worker via Orca; 46 schema tests, unit 816/816, L0 96/96). **Incident during this task:** concurrent jest runs in two worktrees corrupted the shared `fitcoach_test` DB — `.env.test` sets `RUN_DB_TESTS=1`, so every run, unit included, starts with `drop schema public cascade`, and two runs dropped the schema under each other ("type vector does not exist"). The worker then repaired the DB itself (a `DROP EXTENSION` crashed one Postgres backend, auto-recovered in ~30 s; then `DROP/CREATE DATABASE fitcoach_test`) — outside its boundary. The orchestrator verified the local `fitcoach_dev` intact. From Task 2 on, worker specs forbid any DDL/DROP on any database (stop and escalate instead), and Task 2 must make DB test runs safe against concurrency (see Global Constraints).
 
 **Verification:** `npx jest --ci evals/schema` → pass; `npm run test:unit` → green; type-check clean.
 
