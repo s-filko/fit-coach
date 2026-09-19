@@ -16,7 +16,7 @@ import type { ConversationGraphDeps, PhaseSpec, PromptContextFor } from '@infra/
 import { ctxOf } from '@infra/ai/graph/state';
 import { langOf, t } from '@infra/ai/messages';
 import { getModel } from '@infra/ai/model.factory';
-import { POST_TOOL_NUDGE_V1, renderBlock } from '@infra/ai/prompts/blocks';
+import { POST_TOOL_NUDGE_V1, renderBlock, TIME_GAP_V1 } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
 
 import { createLogger } from '@shared/logger';
@@ -87,6 +87,14 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     }
 
     const lastMessageTime = state.lastUserMessageAt ? new Date(state.lastUserMessageAt) : null;
+    // AC-CC-2 (chat-continuity Task 2): when the new message arrives after an
+    // EPISODE_GAP_HOURS pause, one time-gap note sits immediately before it —
+    // the SAME threshold compaction's inactivity trigger uses, threaded from
+    // the episode config (never re-read from env). `lastUserMessageAt` still
+    // holds the previous run's time here; commit.node stamps the new one
+    // after the run, and compaction never clears it.
+    const gapMs = lastMessageTime !== null ? now.getTime() - lastMessageTime.getTime() : null;
+    const gapNote = gapMs !== null && gapMs >= deps.episodeConfig.gapMs ? renderBlock(TIME_GAP_V1, { gapMs }) : null;
     const systemPrompt = compose(
       spec.prompt.current.render({
         now,
@@ -129,6 +137,7 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
       blockData: loaded.data,
       history,
       current,
+      gapNote,
       budget: spec.budget,
       now,
       timezone: user?.timezone ?? null,

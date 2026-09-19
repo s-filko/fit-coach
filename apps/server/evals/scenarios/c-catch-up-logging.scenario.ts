@@ -27,9 +27,9 @@ import { BENCH_PRESS_ID, PULL_UPS_ID, setupSteps, sharedPast } from './b-full-wo
  * last pre-pause activity — `durationMinutes` measures the trained window
  * (≈11 min), not the wall clock.
  *
- * The two BUG-018 reproductions: the mid-workout exchange not seen verbatim
- * after the pause (AC-CC-1 — the inactivity compaction dropped it) and the
- * missing gap note before the catch-up message (AC-CC-2). The `liveOnly`
+ * Former BUG-018 reproductions, now fixed (Tasks 1-2): the mid-workout
+ * exchange stays verbatim after the pause (AC-CC-1) and the gap note sits
+ * before the catch-up message (AC-CC-2). The `liveOnly`
  * delivered entries (Task 5b) carry the L3 expectation — a REAL reply must
  * say the sets went to the PREVIOUS workout and ask whether to close it or
  * add more; the deterministic layer skips them (its delivered text is just
@@ -57,8 +57,8 @@ export const CATCH_UP_REPLY_TEXT = 'Записал подтягивания 3×8
 export const FINISH_C_FINAL_TEXT = 'Закрыл! Жим и подтягивания записаны — 11 минут работы.';
 
 /**
- * The gap note AC-CC-2 will add before the catch-up message — same shape as
- * journey A's marker, with the measured gap (3.5 h).
+ * The gap note AC-CC-2 places before the catch-up message (fixed, Task 2) —
+ * same shape as journey A's marker, with the measured gap (3.5 h).
  */
 export const GAP_NOTE_MARKER = 'The user returns after 3.5 h';
 
@@ -172,8 +172,10 @@ function buildCatchUpScenario(id: string, description: string, catchUpText: stri
           phaseAfter: { phase: 'training' },
         },
       },
-      // --- step 8: the pause — +3.5 h, past EPISODE_GAP_HOURS (3 h) ---
-      { action: 'advance', at: '+3.5h' },
+      // --- step 8: the pause — 3.5 h of SILENCE since the rest exchange at
+      // +12m, past EPISODE_GAP_HOURS (3 h); the advance anchor is T0-relative,
+      // hence +3.7h (AC-CC-2 measures from the previous message, not T0). ---
+      { action: 'advance', at: '+3.7h' },
       // --- step 9: the catch-up — the session re-read from the DB, stale;
       // the three pull-up sets land RETRO in the PREVIOUS session window ---
       {
@@ -194,8 +196,8 @@ function buildCatchUpScenario(id: string, description: string, catchUpText: stri
               // AC-CC-1 (fixed): the rest exchange stays verbatim after the gap.
               REST_QUESTION,
               REST_ANSWER,
-              // BUG-018 point 2: nothing tells the model time has passed.
-              { text: GAP_NOTE_MARKER, knownBug: 'BUG-018/AC-CC-2' },
+              // AC-CC-2 (fixed): the gap note before the catch-up message.
+              GAP_NOTE_MARKER,
             ],
           },
           tools: { must: ['log_set'] },
@@ -223,7 +225,7 @@ function buildCatchUpScenario(id: string, description: string, catchUpText: stri
           phaseAfter: { phase: 'training' },
         },
       },
-      { action: 'advance', at: '+3.55h' },
+      { action: 'advance', at: '+3.75h' },
       // --- step 11: finish — stale, so completedAt falls back to the last
       // real activity (set 2, +12m) and durationMinutes floors to 11 ---
       {
@@ -260,8 +262,7 @@ function buildCatchUpScenario(id: string, description: string, catchUpText: stri
 export const scenario: Scenario = buildCatchUpScenario(
   'c-catch-up-logging',
   'catch-up logging after a +3.5 h pause: two sets, a text-only rest question, then the missed pull-ups ' +
-    'logged retro into the previous session; AC-CC-1 (the exchange lost to inactivity compaction) and ' +
-    'AC-CC-2 (no gap note) reproductions',
+    'logged retro into the previous session; AC-CC-1 and AC-CC-2 fixed (Tasks 1-2)',
   IMPLICIT_CATCH_UP_TEXT,
 );
 

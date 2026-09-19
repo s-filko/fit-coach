@@ -56,6 +56,8 @@ function makeDeps(overrides: Record<string, unknown> = {}): ConversationGraphDep
     userService: { getUser: jest.fn(async () => FRESH_USER) },
     // P6 Task 4: agent.node.ts loads facts once per run via deps.userFacts.
     userFacts: { getForPrompt: jest.fn(async () => []), getConstraints: jest.fn(), upsertMany: jest.fn() },
+    // The production default gap (3 h) — AC-CC-2's threshold, same as compaction's.
+    episodeConfig: { gapMs: 3 * 3_600_000, minTurns: 2, minTokens: 300, keepTurns: 6 },
     ...overrides,
   } as unknown as ConversationGraphDeps;
 }
@@ -261,5 +263,57 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     await node(makeState(), CONFIG);
 
     expect(attachSpy).toHaveBeenCalledWith(expect.objectContaining({ blocks: [], domain: 0 }));
+  });
+
+  // chat-continuity plan Task 2 (AC-CC-2 / BUG-018): after an EPISODE_GAP_HOURS
+  // pause, one time-gap system note sits immediately before the new message.
+  describe('time-gap note (AC-CC-2)', () => {
+    const messageBeforeHuman = (sent: BaseMessage[]): BaseMessage | undefined => {
+      const humanIdx = sent.findIndex(m => m._getType() === 'human');
+      return humanIdx > 0 ? sent[humanIdx - 1] : undefined;
+    };
+
+    it('gap ≥ EPISODE_GAP_HOURS → a system note with the duration right before the new message', async () => {
+      mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
+      const node = buildAgentNode(makeSpec(), makeDeps());
+
+      // CONFIG's now is the epoch; the previous message was 4 h earlier.
+      await node(
+        {
+          ...makeState(),
+          messages: [new HumanMessage('привет')],
+          lastUserMessageAt: new Date(-4 * 3_600_000).toISOString(),
+        },
+        CONFIG,
+      );
+
+      const sent = mockInvoke.mock.calls[0][0] as BaseMessage[];
+      const before = messageBeforeHuman(sent);
+      expect(before?._getType()).toBe('system');
+      expect(String(before?.content)).toContain('The user returns after 4 h.');
+    });
+
+    it('gap below EPISODE_GAP_HOURS → no note anywhere', async () => {
+      mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
+      const node = buildAgentNode(makeSpec(), makeDeps());
+
+      await node(
+        { ...makeState(), messages: [new HumanMessage('привет')], lastUserMessageAt: new Date(-60_000).toISOString() },
+        CONFIG,
+      );
+
+      const sent = mockInvoke.mock.calls[0][0] as BaseMessage[];
+      expect(sent.some(m => String(m.content).includes('The user returns after'))).toBe(false);
+    });
+
+    it('first message ever (lastUserMessageAt null) → no note', async () => {
+      mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
+      const node = buildAgentNode(makeSpec(), makeDeps());
+
+      await node({ ...makeState(), messages: [new HumanMessage('привет')], lastUserMessageAt: null }, CONFIG);
+
+      const sent = mockInvoke.mock.calls[0][0] as BaseMessage[];
+      expect(sent.some(m => String(m.content).includes('The user returns after'))).toBe(false);
+    });
   });
 });

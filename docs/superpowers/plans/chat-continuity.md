@@ -142,12 +142,12 @@ green; `npm run evals -- --level L0` → green (list any moved snapshot); format
 message; the gap is computed from the previous message's time — the graph already tracks
 `lastUserMessageAt` in state), tests, snapshot updates if any.
 
-- [ ] **Step 1: Tests first** — gap > `EPISODE_GAP_HOURS` → the note (with a human-readable
+- [x] **Step 1: Tests first** — gap > `EPISODE_GAP_HOURS` → the note (with a human-readable
   duration) sits immediately before the current message; no gap → no note; first message ever →
   no note.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 2b:** flip Task 0's case (b) to `test`; it must pass.
-- [ ] **Step 3: Commit** — `feat(ai): time-gap note before the user's new message after a pause (BUG-018, AC-CC-2)`
+- [x] **Step 2: Implement.**
+- [x] **Step 2b:** flip Task 0's case (b) to `test`; it must pass.
+- [x] **Step 3: Commit** — `feat(ai): time-gap note before the user's new message after a pause (BUG-018, AC-CC-2)`
 - [ ] **Step 4: STOP** for orchestrator review.
 
 **Verification:** as Task 1, plus `npx jest --ci evals/levels/__tests__/no-inline-prompts.unit.test.ts`.

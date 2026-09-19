@@ -23,6 +23,8 @@ import { USER_FACTS_V1 } from './user-facts.v1';
 export { EPISODE_SUMMARIES_V1, POST_TOOL_NUDGE_V1, USER_FACTS_V1 };
 export { episodeParagraph } from './episode-summaries.v1';
 export type { EpisodeSummariesContext } from './episode-summaries.v1';
+export { TIME_GAP_V1 } from './time-gap.v1';
+export type { TimeGapContext } from './time-gap.v1';
 export type { UserFactsContext } from './user-facts.v1';
 
 export type { ContextBlock, ContextBlockCtx, RenderableBlock, RenderedBlock } from './types';

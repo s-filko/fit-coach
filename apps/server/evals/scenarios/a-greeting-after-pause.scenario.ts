@@ -29,10 +29,8 @@ export const PAST_HUMAN_TEXT = 'Привет! Как прошла трениро
 export const PAST_AI_TEXT = 'Среда прошла отлично: жим лёжа 80 кг на 8 повторов в двух подходах.';
 
 /**
- * The gap note AC-CC-2 will add before the current message. The exact
- * wording is the fix plan's (chat-continuity); the substring asserted here is
- * the plan's example opening — "The user returns after …" with the measured
- * gap (14 h).
+ * The gap note AC-CC-2 places before the current message (fixed, Task 2):
+ * "The user returns after …" with the measured gap (14 h).
  */
 export const GAP_NOTE_MARKER = 'The user returns after 14 h';
 
@@ -142,8 +140,8 @@ export const scenario: Scenario = {
             // AC-CC-1 (fixed): the one-turn exchange stays verbatim after the gap.
             PAST_HUMAN_TEXT,
             PAST_AI_TEXT,
-            // BUG-018 point 2: no note tells the model time has passed.
-            { text: GAP_NOTE_MARKER, knownBug: 'BUG-018/AC-CC-2' },
+            // AC-CC-2 (fixed): the gap note before the new message.
+            GAP_NOTE_MARKER,
           ],
         },
         tools: { must: ['request_transition'] },

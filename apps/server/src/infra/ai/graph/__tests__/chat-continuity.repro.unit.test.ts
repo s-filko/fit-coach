@@ -10,9 +10,9 @@
  * calls search_exercises in one step, then dumps the plan after the tool
  * results.
  *
- * Cases (a)-(c) are the REQUIRED behaviour (AC-CC-1..3). Case (a) turned
- * green with the Task 1 fix (the compaction verbatim tail); (b) and (c)
- * remain `test.failing` until Tasks 2 and 3 land. The last test pins today's
+ * Cases (a)-(c) are the REQUIRED behaviour (AC-CC-1..3). Cases (a) and (b)
+ * turned green with the Task 1 (compaction verbatim tail) and Task 2
+ * (time-gap note) fixes; (c) remains `test.failing` until Task 3 lands. The last test pins today's
  * observable symptom: the adapter delivers only the last AI message
  * (`lastAiText`), so the owner sees the plan dump, not the greeting.
  */
@@ -246,7 +246,7 @@ describe('BUG-018 reproduction — "привет" after a 6-hour pause (AC-CC-4)
     expect(hellos).toHaveLength(2);
   });
 
-  test.failing('(b) AC-CC-2 — a time-gap system note sits immediately before the new "привет"', () => {
+  test('(b) AC-CC-2 — a time-gap system note sits immediately before the new "привет"', () => {
     let lastHuman = -1;
     for (let i = run3FirstInput.length - 1; i >= 0; i -= 1) {
       if (run3FirstInput[i]?._getType() === 'human') {
@@ -257,9 +257,8 @@ describe('BUG-018 reproduction — "привет" after a 6-hour pause (AC-CC-4)
     expect(lastHuman).toBeGreaterThan(0);
     const note = run3FirstInput[lastHuman - 1];
     expect(note?._getType()).toBe('system');
-    // The wording belongs to the future gap-note block — assert only that
-    // the note mentions the elapsed duration (hours).
-    expect(String(note?.content)).toMatch(/hour/i);
+    // The time-gap block's wording (Task 2): the measured gap is ~6.1 h.
+    expect(String(note?.content)).toMatch(/The user returns after/i);
   });
 
   test.failing('(c) AC-CC-3 — the delivered reply contains the greeting written alongside the tool calls', () => {

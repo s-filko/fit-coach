@@ -137,9 +137,9 @@ describe('journey A — greeting after a pause (BUG-018 repro)', () => {
       });
     }
 
-    // Point 2 of BUG-018 beyond presence: the note must sit right before the
-    // current user message ("привет"), not somewhere in the long-term blocks.
-    test.failing(`a time-gap note sits right before "привет" [BUG-018/AC-CC-2]`, () => {
+    // Point 2 of BUG-018 beyond presence (fixed, Task 2): the note sits right
+    // before the current user message ("привет"), not in the long-term blocks.
+    test(`a time-gap note sits right before "привет"`, () => {
       expect(seen).toContain(GAP_NOTE_MARKER);
       const firstCall = seenCalls[0] ?? [];
       const currentIdx = firstCall.findIndex(m => typeOf(m) === 'human' && textOf(m).includes(step.text));
