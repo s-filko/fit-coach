@@ -95,7 +95,7 @@ failure is non-fatal), `docs/superpowers/plans/refactor-p6-facts-and-progress-bl
 - Modify only test helpers/fixtures that scenario needs; no production code (if production code
   turns out to be wrong, STOP and report — that is a finding, not part of this task).
 
-- [ ] **Step 1: Write the scenario** as one `describe` with ordered steps sharing state:
+- [x] **Step 1: Write the scenario** as one `describe` with ordered steps sharing state:
   1. Episode 1: the user states a lower-back injury in chat (scripted model replies in text).
   2. A compaction trigger (use whichever the harness supports — phase transition via the
      compaction flag, or the inactivity gap with a controlled clock): the summariser is served
@@ -112,8 +112,8 @@ failure is non-fatal), `docs/superpowers/plans/refactor-p6-facts-and-progress-bl
      fact and the session/plan repository was **not** written; then with an exercise that has
      `lower_back` only as a **secondary** muscle → the call succeeds.
   5. Re-state the same fact in a later compaction → still one fact, `confirmations` = 2.
-- [ ] **Step 2:** make it pass without touching production code (Task 1 must already be in).
-- [ ] **Step 3: Commit** — `test(ai): user-facts scenario end to end — fenced summary to fact to block to tool rejection (AC-1361)`
+- [x] **Step 2:** make it pass without touching production code (Task 1 must already be in).
+- [x] **Step 3: Commit** — `test(ai): user-facts scenario end to end — fenced summary to fact to block to tool rejection (AC-1361)`
 - [ ] **Step 4: STOP** for orchestrator review.
 
 **Verification:** `npx jest --ci src/infra/ai/graph` → all pass; full `npm run test:unit` →
