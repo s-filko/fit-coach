@@ -23,31 +23,11 @@ import { MemorySaver } from '@langchain/langgraph';
 import type { UpsertFactInput, UserFact, IUserFactsService } from '@domain/user/ports';
 
 import { OpenAiLlmGateway } from '@infra/ai/llm.gateway';
-import { RunMetricsCollector } from '@infra/ai/run-metrics';
 import type { ExerciseWithMuscles } from '@domain/training/types';
+import { computeFactKey } from '@domain/user/services/fact-key';
 
 import { buildConversationGraph, type ConversationGraphDeps } from '../conversation.graph';
-
-const USER = {
-  id: 'u1',
-  firstName: 'Test',
-  languageCode: 'ru',
-  profileStatus: 'complete',
-  registrationCompleted: true,
-};
-
-/**
- * Mirrors `UserFactsRepository.computeFactKey` (D-C) — the real module import
- * would pull in the Drizzle pool, so the rule is restated here: lowercase,
- * trim, collapse whitespace, strip terminal punctuation.
- */
-function computeFactKey(fact: string): string {
-  return fact
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/[.!?,;:]+$/, '');
-}
+import { USER, ctxConfig } from './graph-test-support';
 
 /** In-memory `IUserFactsService` with the Drizzle port's semantics (D-C/D-G). */
 class InMemoryUserFactsService implements IUserFactsService {
@@ -240,24 +220,6 @@ function makeDeps(userFacts: InMemoryUserFactsService): ConversationGraphDeps {
   } as unknown as ConversationGraphDeps;
 }
 
-/** ctxConfig with a controlled clock (BR-LLM-001's inactivity trigger input). */
-function ctxConfig(runId: string, now: Date, userId = 'u1') {
-  return {
-    configurable: { thread_id: userId },
-    metadata: { runId, userId },
-    context: {
-      runId,
-      userId,
-      user: USER as never,
-      now,
-      client: 'telegram' as const,
-      trigger: 'user_message' as const,
-      metrics: new RunMetricsCollector(runId),
-    },
-    recursionLimit: 25,
-  } as never;
-}
-
 describe('user-facts scenario end to end (AC-1361, fenced summary → fact → block → tool rejection)', () => {
   it('carries a stated constraint through compaction, facts, prompt and hard validation', async () => {
     const facts = new InMemoryUserFactsService();
@@ -308,13 +270,19 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
     structuredAnswers.push(fencedSummary(FACT_V1), fencedSummary(FACT_V2));
 
     // --- Step 1: the user states a lower-back injury in an episode.
-    await graph.invoke({ phase: 'chat', messages: [new HumanMessage(INJURY_MESSAGE)] }, ctxConfig('run-1', T0));
+    await graph.invoke(
+      { phase: 'chat', messages: [new HumanMessage(INJURY_MESSAGE)] },
+      ctxConfig({ runId: 'run-1', now: T0 }),
+    );
     const run1Input = recorded[0]!;
     expect(run1Input.some(m => m._getType() === 'human' && String(m.content).includes('поясницы'))).toBe(true);
 
     // --- Step 2: compaction — the summariser answers INSIDE a ```json fence
     // through the REAL gateway; the summary is stored and the fact upserted.
-    await graph.invoke({ phase: 'chat', messages: [new HumanMessage('Спасибо, до связи.')] }, ctxConfig('run-2', T1));
+    await graph.invoke(
+      { phase: 'chat', messages: [new HumanMessage('Спасибо, до связи.')] },
+      ctxConfig({ runId: 'run-2', now: T1 }),
+    );
 
     expect(summariesInsert).toHaveBeenCalledTimes(1);
     expect(summariesInsert.mock.calls[0][0]).toMatchObject({
@@ -340,7 +308,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
     // with the fact, placed BEFORE `## Previous episodes` (D-F ordering).
     await graph.invoke(
       { phase: 'session_planning', messages: [new HumanMessage('Давай тренировку.')] },
-      ctxConfig('run-3', T2),
+      ctxConfig({ runId: 'run-3', now: T2 }),
     );
     const run3FirstInput = recorded[2]! as BaseMessage[];
     const factsBlock = run3FirstInput.find(
@@ -378,7 +346,10 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
     expect(String(acceptance!.content)).toContain('Session created (ID: sess-1)');
 
     // --- Step 5: a later compaction restating the same fact confirms it.
-    await graph.invoke({ phase: 'chat', messages: [new HumanMessage('План отличный.')] }, ctxConfig('run-4', T3));
+    await graph.invoke(
+      { phase: 'chat', messages: [new HumanMessage('План отличный.')] },
+      ctxConfig({ runId: 'run-4', now: T3 }),
+    );
 
     expect(summariesInsert).toHaveBeenCalledTimes(2);
     expect(facts.upsertCalls).toHaveLength(2);

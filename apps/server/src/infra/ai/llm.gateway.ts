@@ -55,9 +55,11 @@ function isSchemaFailure(err: unknown): boolean {
   const { name } = err as { name?: string };
   // A schema failure is the ZodError our own validation throws: the model's
   // answer (direct JSON, fenced JSON, or prose-recovered JSON — BUG-017) did
-  // not satisfy the schema, or contained no JSON at all. Provider errors
-  // (network/auth) never reach validation and propagate untouched.
-  return name === 'ZodError' || name === 'OutputParserException' || name === 'SyntaxError';
+  // not satisfy the schema, or contained no JSON at all. The gateway parses
+  // the raw answer itself (parseJsonOrUndefined swallows SyntaxError), so no
+  // SyntaxError ever reaches here. Provider errors (network/auth) never reach
+  // validation and propagate untouched.
+  return name === 'ZodError' || name === 'OutputParserException';
 }
 
 export class OpenAiLlmGateway implements LlmGateway {
