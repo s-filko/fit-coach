@@ -1,8 +1,9 @@
 # Training Journey Scenarios — Deterministic over the Real Test DB + Live L3 Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/training-journey-scenarios
 - After: structured-output-json-object-mode
+- Review: 2026-09-20 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and superpowers:test-driven-development. One plan task per worker session; stop after the task.
 
@@ -197,6 +198,23 @@ L0 green.
 
 ### Task 7: Close-out (orchestrator)
 
-- [ ] `close-out-review`; `- Status: done`; `state.mjs --write`; merge, push.
-- [ ] **Owner decision:** a CI job with a `pgvector` service running `npm run test:scenarios` (needs
-  the embedding warm-up skipped in CI).
+- [x] `close-out-review`; `- Status: done`; `state.mjs --write`; merge, push. Pre-merge check by
+  the orchestrator: `npm run test:scenarios` → 4 suites, 221/221 (incl. the `test.failing` cases).
+- [x] **Owner decision (2026-09-20): no CI job.** Scenario tests are agent self-verification —
+  recorded in `docs/ORCHESTRATION.md` § Scenario self-check and the `delegate-implementation`
+  skill in the close-out commit.
+
+## Review
+
+2026-09-20 — **clean**. One combined review agent applied all four zone lenses (R1–R4) — owner
+rule for test-heavy plans: one review per phase, one agent. No blocking findings.
+
+Advisory → `docs/BACKLOG.md`:
+- R2: `tests/integration/scenarios/scripted-model.ts:78-93` re-implements the scripted-model mock
+  of `user-facts.scenario.unit.test.ts:118-148` → appended to the existing structured-output-fenced-json
+  entry about that double (now four copies).
+- R1: `evals/lib/run-scenario.ts:136-160` re-stamps sessions because DB `defaultNow()` and app
+  `now` are two clocks → § training-journey-scenarios close-out review advisories.
+
+Meta → `docs/REVIEW_FINDINGS.md` § Rule candidates: the "DRY applies to test fixtures and
+harnesses" entry raised to ×3.

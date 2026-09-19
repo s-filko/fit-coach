@@ -54,7 +54,7 @@ Check the receipt: exit 0, `launch.effective` matches the executor.
 |---|---|
 | `question` | Answer with `reply` — decide yourself unless it is an owner-level call (scope, a durable spec, a trade-off the plan does not settle) |
 | `escalation` | Perform the reserved action yourself, or grant narrowly in the reply |
-| `worker_done succeeded` | Review the task's commits against the plan task and its AC; run its verification if in doubt |
+| `worker_done succeeded` | Review the task's commits against the plan task and its AC; run its verification if in doubt; if it touches conversation / graph / memory / phases / training tools, re-run `npm run test:scenarios` yourself (contract § Scenario self-check) |
 | `worker_done failed` | Decide: fix the plan, answer and retry (`--retry-of`), or take the task over |
 
 After the first returned commit: flip `- Status: in progress`, `node scripts/state.mjs --write`.
@@ -70,7 +70,7 @@ Dispatch the next plan task into the same terminal so the worker keeps its conte
 
 ## Step 6 — Close
 
-When all plan tasks are done: verify, run `close-out-review` yourself, `Status: done`,
+When all plan tasks are done: verify (incl. `npm run test:scenarios` where § Scenario self-check applies), run `close-out-review` yourself, `Status: done`,
 `state.mjs --write`, push, merge. Release the remaining workers
 (`worker-list --run <run_id> --terminal-state reclaimable` must return none). Report the
 worktree and `plan/<slug>` branch as **ready to clean up — delete nothing** (owner gate,
