@@ -19,6 +19,19 @@ Rules:
 
 ## Ideas
 
+- [ ] **User-fact lifecycle: dates, context, expiry, retraction (owner, 2026-09-19).** Today a
+      `user_facts` row lives forever: the `## User Facts` block shows only the text (+ muscle), no
+      "when stated / last confirmed / how many times"; nothing ages a fact out; nothing removes one
+      the user contradicts ("the hernia healed" adds a new row, the old `physical_constraint`
+      stays — and the hard validation keeps rejecting exercises for it); the summariser never sees
+      the known facts, so it cannot say one is no longer true; `source_turn_id` exists but is not
+      filled at extraction. Scope to design: render dates/confirmations as context, a staleness
+      rule per category (an injury ages differently from equipment), explicit retraction
+      (summariser output and/or user command), deletion vs. soft-archive, and how hard
+      validation treats an old constraint. Needs an owner decision on the fact-lifecycle model
+      (ADR-0009 / ADR-0013 amendment) before planning. Related: the near-duplicate-facts entry in
+      § P6 facts (Group 1) close-out review advisories. Source: owner review of the P6 dev smoke
+      (2026-09-19).
 - [ ] Connector layer on top of P1's `LlmGateway`: profiles become full connectors —
       each carries its own `API_URL` + `API_KEY` (provider/token pair), so the app talks to
       any provider through one interface with per-task routing (strong model for content,
