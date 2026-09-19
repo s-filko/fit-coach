@@ -140,7 +140,7 @@ episode summary ("plan ready, pending save" style `openItems`), a one-turn chat 
   (AC-CC-2); the delivered text contains the greeting (AC-CC-3).
 - [x] Quote each failing case's real failure message in STOP (a case failing for another reason is
   not a reproduction).
-- [ ] Commit `test(ai): journey A — greeting after a pause over the real DB (BUG-018 repro)`. STOP.
+- [x] Commit `test(ai): journey A — greeting after a pause over the real DB (BUG-018 repro)`. STOP. **Accepted 2026-09-20** (`41a4e8f1`, GLM worker via Orca; orchestrator re-ran `npm run test:scenarios` → 24/24, journey A 18 incl. 3 expected failures). Real failure messages: AC-CC-1 — the seeded exchange absent from the model input; AC-CC-2 — no gap note; AC-CC-3 — delivered only the final text, not the greeting. Everything else passes (both workouts with correct ages, GREETING directive, `## User Facts`, `## Previous episodes`, the transition persisted). Deviation: the scenario format allows one `knownBug` per `seen` object, so two tags live in a side export — Task 4 first moves `knownBug` to per-assertion granularity and migrates A. **Sequencing (orchestrator, 2026-09-20):** Tasks 4–6 and close-out land before the `chat-continuity` fixes, so each fix worker can run `npm run test:scenarios` itself (owner rule).
 
 ### Task 4: Journey B — a full workout, greeting to finish (AC-TJ-2/3)
 
