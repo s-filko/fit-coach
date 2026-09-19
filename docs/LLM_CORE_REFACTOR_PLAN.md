@@ -75,7 +75,7 @@ Depends on: P0 (run log fields for gateway calls).
 
 Acceptance criteria
 
-- AC-1311 `grep -rn "jsonMode\|json_object\|LLMService" apps/server/src` → empty.
+- AC-1311 `grep -rn "jsonMode\|json_object\|LLMService" apps/server/src` → empty. **Amendment (2026-09-19, owner-approved, `structured-output-json-object-mode`):** except `json_object` as the provider wire value of `LLM_STRUCTURED_OUTPUT_MODE` in the three gateway/config files the guard test allowlists (`config/index.ts`, `infra/ai/llm.gateway.ts`, `infra/ai/structured-json.ts`); `jsonMode` and `LLMService` stay banned everywhere — the retired JSON-mode API is still gone.
 - AC-1312 Integration tests: `POST /api/app/plan` and `POST /api/app/session/:id/recommend` return `410` with body `{ error: { code: 'RETIRED' } }` (auth still enforced first: 401/403 without valid `initData`). `grep -rn "recommendForSession\|createPlanFromPrompt\|getNextSessionRecommendation\|generateFreeformRecommendation" apps/server/src` → empty. `docs/API_SPEC.md` marks both endpoints retired.
 - AC-1313 Exactly one `ChatOpenAI` construction site remains (`model.factory.ts`).
 - AC-1314 Config with no `LLM_PROFILE_*` variables behaves identically to before (unit test on `getModel('summarizer')` falling back to defaults).
