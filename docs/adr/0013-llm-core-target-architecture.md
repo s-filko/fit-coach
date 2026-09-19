@@ -127,7 +127,7 @@ runId, userId, user (loaded once in prepare), now, client: 'telegram'|'webapp',
 trigger: 'user_message'|'system', promptVersions (filled by assembler), modelProfile
 ```
 
-Run output: the final `AIMessage.content` of the run (text) plus `phase`. No `responseMessage` channel; the route reads the last AI message. Rationale for dropping `user` from state: it is reloaded 3× per turn today (§1.4); a checkpointed copy only adds staleness.
+Run output: every non-empty `AIMessage` text of the run, in order, joined with a blank line (text written alongside tool calls included; amended 2026-09-20, BUG-018 / AC-CC-3), plus `phase`. No `responseMessage` channel. Rationale for dropping `user` from state: it is reloaded 3× per turn today (§1.4); a checkpointed copy only adds staleness.
 
 Rejected: keeping `user` in state "for the LLM to see it" — the assembler renders profile from run context; a per-run load is one indexed SELECT.
 
@@ -153,6 +153,8 @@ An **episode** is a contiguous span of `messages`. `prepare` runs `compact` befo
 - BR-LLM-003 (budget): estimated tokens of `messages` exceed the phase history budget (D-03).
 
 `compact` is synchronous and deterministic: it summarises the messages being removed into **one new `EpisodeSummary`** (independent, not merged with older ones — per ADR-0010 rationale), keeps the last 3 summaries, and emits `RemoveMessage`s for the compacted range. For BR-LLM-003 it removes the oldest whole turns (a turn = human message through the following final AI message, never splitting a tool-call/tool-result pair) until under budget. On summariser failure it falls back to trimming without a summary and logs `warn` (graceful degradation, BR-LLM-004).
+
+**Amendment 2026-09-20 (BUG-018, owner-approved):** Compaction at any trigger (inactivity gap, phase transition, budget) summarises only messages older than the last `EPISODE_KEEP_TURNS` turns (default 6), which stay verbatim; a part too short to summarise is kept, never dropped (supersedes D-B's trim-without-summary). After a gap longer than `EPISODE_GAP_HOURS` a time-gap note precedes the new user message. The user receives every assistant text of the run. The standard summarise-older / keep-recent pattern.
 
 The summariser uses the `LlmGateway.structured` call with schema `{ topics[], decisions[], userState[], trainingFeedback[], openItems[] }` and the ADR-0010 "facts only, no style" instruction; summary text is rendered from that structure (deterministic, evaluable). Summaries are mirrored to `conversation_summaries` (user_id, episode_id, phase_at_end, structured json, created_at) for analytics and eval datasets; the prompt reads them from state, not from the table.
 

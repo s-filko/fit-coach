@@ -622,3 +622,13 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       the scenario runner re-stamps new sessions (`evals/lib/run-scenario.ts:136-160`,
       `stampNewSessions`). Production has the same split (DB time vs app time) — pass `now`
       explicitly on insert and drop the harness patch. Source: Task 4 worker + close-out review, R1 (2026-09-20).
+
+## chat-continuity close-out review advisories (2026-09-20)
+
+- [ ] The inactivity test "gap since the previous message ≥ `EPISODE_GAP_HOURS`" is written out twice
+      against the same `gapMs` — `agent.node.ts:96-97` (time-gap note) and `compact.ts:52` (compaction
+      trigger). One shared `isPastGap(now, last, gapMs)` would keep the two from drifting.
+      Source: close-out-review, R2 (2026-09-20).
+- [ ] Long pauses read as hours in the time-gap note (`time-gap.v1.ts`: two weeks → "336 h"); days
+      would be friendlier to the model once the note is tuned in the consolidated eval pass.
+      Source: orchestrator at Task 2 acceptance (2026-09-20).

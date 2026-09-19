@@ -94,7 +94,7 @@ apps/server/src/
         phase-spec.ts           # PhaseSpec — one declarative spec per phase (INV-LLM-005)
         phase-subgraph.factory.ts  # buildPhaseSubgraph(spec) — the single factory building every phase subgraph
         phases/                 # The five PhaseSpecs: registration, chat, plan-creation, session-planning, training
-        episode.ts              # splitEpisode (history vs current, D-I), lastAiText, toTranscriptMessages
+        episode.ts              # splitEpisode (history vs current, D-I), runAiText (the run's reply, AC-CC-3), toTranscriptMessages
         conversation-run.adapter.ts  # ConversationRunPort adapter: loads the user, builds run context, records failed runs, clearContext via the checkpointer (D-F)
         tool-executor.ts        # Shared tool executor: runs every phase's tool calls, answers every tool_call id, serialises ToolOutcome v1, applies ToolStateUpdate (ADR-0013 §4.2/§4.4/§6)
         tool-policy.ts          # ToolPolicy + pure helpers: ordering, batch dedup, search key (AC-1331/AC-1332)
@@ -103,7 +103,7 @@ apps/server/src/
           prepare.node.ts           # pendingTransition reset, episode compaction, training short-circuits → commit, registration↔chat sync
           route.node.ts             # Phase dispatch to the subgraph factory
           commit.node.ts            # transcript projection + run row + evaluateTransition + PhaseTransitionCommitted handlers (§4.1/§4.3; messages are never cleared)
-          finalize.node.ts          # Returns {} (the reply is the last AIMessage in state)
+          finalize.node.ts          # Returns {} (the reply = every AI text of the run, runAiText)
           compact.ts                # Pure compaction rules: decideCompactReason, planCompaction (turn-safe cut), short-episode check, transcript rendering
           compact.node.ts           # buildCompactStep: summarises the ended episode via LlmGateway.structured, keeps max 3 summaries, RemoveMessage trim (BR-LLM-001..004)
         handlers/
@@ -395,7 +395,7 @@ Each phase subgraph runs a tool-calling loop:
 1. `agentNode`: `model.bindTools(tools).invoke(assembleContext(...))` — `[SystemMessage(systemPrompt), (## User Facts), (## Previous episodes), (domain blocks), ...history, ...current]`, history interleaved from the checkpointed `messages` channel
 2. If `AIMessage.tool_calls` present → the tool executor runs them → `ToolMessage` results appended
 3. Loop back to `agentNode` with updated messages (tool results visible)
-4. If no `tool_calls` → `finalize` returns `{}` — the reply is the last `AIMessage` in state; `commit` reads `pendingTransition` and projects the run
+4. If no `tool_calls` → `finalize` returns `{}` — the reply is every non-empty `AIMessage` text of the run (`runAiText`, AC-CC-3); `commit` reads `pendingTransition` and projects the run
 
 ### Tool Calling vs JSON Mode
 - **Old approach**: LLM forced to respond in JSON → code parses with Zod → error-prone

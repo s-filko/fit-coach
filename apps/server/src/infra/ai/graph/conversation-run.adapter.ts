@@ -38,7 +38,7 @@ import {
 } from '@domain/conversation/ports';
 import type { IUserService } from '@domain/user/ports';
 
-import { lastAiText } from '@infra/ai/graph/episode';
+import { runAiText } from '@infra/ai/graph/episode';
 import { langOf, t } from '@infra/ai/messages';
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
@@ -110,9 +110,11 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
         )) as { phase: RunResult['phase']; messages: BaseMessage[] };
 
         return {
-          // P4: the reply is the last AI message of the persisted channel
-          // (ADR-0013 §3.2 — no responseMessage channel, no collector text).
-          text: lastAiText(result.messages ?? []) ?? '',
+          // AC-CC-3 (chat-continuity Task 3): the reply is EVERY non-empty AI
+          // text of this run, in order — text written alongside tool calls is
+          // delivered too; earlier runs' texts are never re-sent (ADR-0013
+          // §3.2 amended at close-out).
+          text: runAiText(result.messages ?? []),
           phase: result.phase,
           runId,
         };

@@ -410,7 +410,7 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
     } as unknown as LlmGateway,
     // P4 Task 6: compaction never fires in evals by default — a year-long gap
     // and no budget overflow; a case that wants compaction overrides it.
-    episodeConfig: { gapMs: 365 * 24 * 3600 * 1000, minTurns: 2, minTokens: 300 },
+    episodeConfig: { gapMs: 365 * 24 * 3600 * 1000, minTurns: 2, minTokens: 300, keepTurns: 6 },
     checkpointer: new MemorySaver(),
   } as unknown as ConversationGraphDeps;
 

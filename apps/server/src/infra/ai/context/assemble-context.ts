@@ -66,6 +66,14 @@ export interface AssembleInput<D = unknown> {
   history: BaseMessage[];
   /** This run: [HumanMessage, ...inFlight] — the assembler never splits it, even at the D-D floor. */
   current: BaseMessage[];
+  /**
+   * AC-CC-2 (chat-continuity Task 2): the rendered time-gap note — one
+   * SystemMessage immediately before `current`'s HumanMessage when the user
+   * returns after an EPISODE_GAP_HOURS pause; null/absent otherwise. Rides
+   * with `current` (survives the D-D floor) and is not budgeted — a fixed
+   * ~30-token note, counted only in `budgetReport.messages`.
+   */
+  gapNote?: string | null;
   /** PhaseSpec.budget (Task 1's table / LLM_BUDGET_* overrides). Enforced via resolveBudget. */
   budget: TokenBudget;
   now: Date;
@@ -139,6 +147,9 @@ export async function assembleContext<D>(input: AssembleInput<D>): Promise<Assem
     ...(summariesText ? [new SystemMessage(summariesText)] : []),
     ...(domainText ? [new SystemMessage(domainText)] : []),
     ...history,
+    // AC-CC-2: the gap note belongs to `current`, not to history — placed
+    // immediately before its HumanMessage, never trimmed away.
+    ...(input.gapNote ? [new SystemMessage(input.gapNote)] : []),
     ...input.current,
   ];
 

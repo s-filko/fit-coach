@@ -345,4 +345,45 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
       );
     });
   });
+
+  describe('gapNote (chat-continuity Task 2, AC-CC-2)', () => {
+    it("a system note sits immediately before current's HumanMessage, after history", async () => {
+      const { messages } = await assembleContext(
+        input({ history: historyFixture(), gapNote: 'The user returns after 14 h.' }),
+      );
+
+      // [system, ...history(2), note, human]
+      expect(messages).toHaveLength(5);
+      expect(isType(messages[3], 'system')).toBe(true);
+      expect(String(messages[3].content)).toBe('The user returns after 14 h.');
+      expect(isType(messages[4], 'human')).toBe(true);
+      expect(String(messages[4].content)).toBe(USER_MESSAGE);
+    });
+
+    it('no gapNote → no extra system message (the default shape is unchanged)', async () => {
+      const { messages } = await assembleContext(input({ history: historyFixture() }));
+
+      // [system, ...history(2), human]
+      expect(messages).toHaveLength(4);
+      expect(messages.filter(m => isType(m, 'system'))).toHaveLength(1);
+    });
+
+    it('the note rides with current at the D-D floor — never dropped, never splits current', async () => {
+      const { messages, budgetReport } = await assembleContext(
+        input({
+          history: historyFixture(),
+          gapNote: 'The user returns after 14 h.',
+          current: [new HumanMessage('u'.repeat(20000))],
+          budget: { system: 50, longTerm: 10, domain: 10, history: 10, outputReserve: 1 },
+        }),
+      );
+
+      expect(budgetReport.cuts).toContain('floor');
+      // Block 1, the note, current — the note belongs to `current`, not to history.
+      expect(messages).toHaveLength(3);
+      expect(isType(messages[1], 'system')).toBe(true);
+      expect(String(messages[1].content)).toContain('The user returns after');
+      expect(isType(messages[2], 'human')).toBe(true);
+    });
+  });
 });

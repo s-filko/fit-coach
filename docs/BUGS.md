@@ -1025,3 +1025,24 @@ On the dev route (GLM via Z.AI) the summariser answered a structured call with t
 ### Regression test
 
 Gateway unit tests (fenced JSON → one call, parsed; invalid fenced JSON → one retry then throw) and a mocked-model scenario test of the whole facts chain — both in the plan above. Fixed is confirmed by a dev smoke that produces a `conversation_summaries` row and a `user_facts` row.
+
+---
+
+## BUG-018 — After a pause the bot does not answer the user's message: compaction drops the recent conversation and only the last AI message is delivered
+
+**Status:** Fixed in code (2026-09-20, plan `chat-continuity`: AC-CC-1..3) — closes after the dev deploy and the owner's own Telegram "привет" after a pause (AC-CC-5)
+**Severity:** High
+**Found during:** owner's use of `@MyFitAiCoachDevBot`, 2026-09-19 16:27 UTC ("привет" answered with a plan dump)
+**Component:** `apps/server/src/infra/ai/graph/nodes/compact.ts` (`planCompaction`), `apps/server/src/infra/ai/graph/conversation-run.adapter.ts` (reply = `lastAiText`)
+
+### Description
+
+After a 6 h gap the owner wrote "привет". The model did greet ("Hi filko! 👋 Good to see you back…") but in the same step called `search_exercises` 13 times; after the tools it wrote a plan dump, and only that last message was delivered — the owner got no answer to his message. Before the model call, compaction had removed the whole history (an inactivity/transition compaction keeps nothing) and, the ended episode being one turn, D-B trimmed it without a summary — so the model did not see the previous conversation at all, only an older episode summary ("plan ready, pending save"), and pushed that agenda.
+
+### Root cause
+
+(1) `planCompaction` returns `kept: []` for `inactivity`/`transition`: the recent conversation is never kept verbatim, and short episodes are dropped unsummarised (D-B). This deviates from the standard summarise-older/keep-recent pattern. (2) The adapter delivers only the last AI message of the run; text written alongside tool calls is lost. (3) Nothing tells the model that time has passed and that the new message comes first.
+
+### Regression test
+
+Unit tests per task and the mocked-model scenario (gap → "привет" → reply answers it) in the plan above; fixed only when the owner's own Telegram "привет" after a pause gets an answer.

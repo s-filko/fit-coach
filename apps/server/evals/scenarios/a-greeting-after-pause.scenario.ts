@@ -18,7 +18,7 @@ import type { Scenario } from '../schema/scenario.schema';
  * in Europe/Berlin; the integration test must keep that T0.
  */
 
-/** The greeting the scripted model writes alongside the transition call (AC-CC-3). */
+/** The greeting the scripted model writes alongside the transition call (the AC-CC-3 shape). */
 export const GREETING_TEXT = 'Привет, Алекс! Рад тебя видеть.';
 
 /** The final text after the transition tool result. */
@@ -29,10 +29,8 @@ export const PAST_HUMAN_TEXT = 'Привет! Как прошла трениро
 export const PAST_AI_TEXT = 'Среда прошла отлично: жим лёжа 80 кг на 8 повторов в двух подходах.';
 
 /**
- * The gap note AC-CC-2 will add before the current message. The exact
- * wording is the fix plan's (chat-continuity); the substring asserted here is
- * the plan's example opening — "The user returns after …" with the measured
- * gap (14 h).
+ * The gap note AC-CC-2 places before the current message (fixed, Task 2):
+ * "The user returns after …" with the measured gap (14 h).
  */
 export const GAP_NOTE_MARKER = 'The user returns after 14 h';
 
@@ -139,19 +137,17 @@ export const scenario: Scenario = {
             'Prefers short, direct replies without long intros',
             '## Previous episodes',
             'The workout plan is ready and pending save',
-            // The two BUG-018 `seen` points (Task 4 Step 0 moved them here from
-            // a side export — per-assertion tags): they fail today.
-            // Point 1: the inactivity compaction drops the whole history.
-            { text: PAST_HUMAN_TEXT, knownBug: 'BUG-018/AC-CC-1' },
-            { text: PAST_AI_TEXT, knownBug: 'BUG-018/AC-CC-1' },
-            // Point 2: no note tells the model time has passed.
-            { text: GAP_NOTE_MARKER, knownBug: 'BUG-018/AC-CC-2' },
+            // AC-CC-1 (fixed): the one-turn exchange stays verbatim after the gap.
+            PAST_HUMAN_TEXT,
+            PAST_AI_TEXT,
+            // AC-CC-2 (fixed): the gap note before the new message.
+            GAP_NOTE_MARKER,
           ],
         },
         tools: { must: ['request_transition'] },
-        // The greeting rides the same AI message as the tool call; today the
-        // adapter delivers only the last AI text (BUG-018 point 3).
-        delivered: { mustMatch: [GREETING_TEXT], knownBug: 'BUG-018/AC-CC-3' },
+        // AC-CC-3 (fixed): the greeting rides the same AI message as the tool
+        // call and is delivered alongside the final text.
+        delivered: { mustMatch: [GREETING_TEXT] },
         persisted: { turnRecorded: true },
         phaseAfter: { phase: 'session_planning' },
       },
