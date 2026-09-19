@@ -1,8 +1,9 @@
 # Chat Continuity — Compaction Keeps the Recent Conversation, the Reply Answers the Latest Message Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/chat-continuity
 - After: structured-output-json-object-mode
+- Review: 2026-09-20 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and superpowers:test-driven-development. One plan task per worker session; stop after the task.
 
@@ -173,7 +174,24 @@ reply), `apps/server/src/infra/ai/graph/episode.ts` (a helper next to `lastAiTex
 
 ### Task 5: Close-out, deploy, smoke (orchestrator)
 
-- [ ] `close-out-review`; ADR-0013 §3.3 amendment — **text approved by the owner 2026-09-20:** "Compaction at any trigger (inactivity gap, phase transition, budget) summarises only messages older than the last `EPISODE_KEEP_TURNS` turns (default 6), which stay verbatim; a part too short to summarise is kept, never dropped (supersedes D-B's trim-without-summary). After a gap longer than `EPISODE_GAP_HOURS` a time-gap note precedes the new user message. The user receives every assistant text of the run. The standard summarise-older / keep-recent pattern.";  BUG-018 status;
+- [x] `close-out-review`; ADR-0013 §3.3 amendment — **text approved by the owner 2026-09-20:** "Compaction at any trigger (inactivity gap, phase transition, budget) summarises only messages older than the last `EPISODE_KEEP_TURNS` turns (default 6), which stay verbatim; a part too short to summarise is kept, never dropped (supersedes D-B's trim-without-summary). After a gap longer than `EPISODE_GAP_HOURS` a time-gap note precedes the new user message. The user receives every assistant text of the run. The standard summarise-older / keep-recent pattern.";  BUG-018 status;
   `- Status: done`; `state.mjs --write`; merge, push, deploy, health 200.
 - [ ] Smoke: one API call on the smoke user after a gap, and **the owner's own Telegram "привет"**
   (AC-CC-5) — the reply must answer the greeting.
+
+## Review
+
+2026-09-20 — first pass **blocked** (one combined agent, R1–R4 lenses), re-run of R3+R4 **clean**.
+
+Blocking, closed:
+- R4 `docs/adr/0013-llm-core-target-architecture.md` §3.3 amendment vs `compact.node.ts:171-177` — the
+  budget cut still trimmed a "short" part without a summary (`isShortEpisode` is turns < min **or**
+  tokens < min, so one long oldest turn qualified — BUG-018-class loss). Closed in code, matching the
+  owner-approved text: the budget cut is always summarised; only summariser failure degrades to trim
+  (BR-LLM-004) — `6419465c`, pinned by two new `compact.node` tests.
+- R4 `docs/ARCHITECTURE.md:97` named the deleted `lastAiText` — `9451b654`; lines 106/398 ("the reply is
+  the last AIMessage") reconciled in the close-out commit.
+
+Advisory → `docs/BACKLOG.md` § chat-continuity close-out review advisories: the "gap ≥ threshold"
+comparison written twice (`agent.node.ts:96-97`, `compact.ts:52`); `docs/STATE.md`'s 2026-09-17
+"trivially short episodes are trimmed without a summary" bullet annotated as superseded.

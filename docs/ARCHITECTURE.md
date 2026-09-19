@@ -103,7 +103,7 @@ apps/server/src/
           prepare.node.ts           # pendingTransition reset, episode compaction, training short-circuits → commit, registration↔chat sync
           route.node.ts             # Phase dispatch to the subgraph factory
           commit.node.ts            # transcript projection + run row + evaluateTransition + PhaseTransitionCommitted handlers (§4.1/§4.3; messages are never cleared)
-          finalize.node.ts          # Returns {} (the reply is the last AIMessage in state)
+          finalize.node.ts          # Returns {} (the reply = every AI text of the run, runAiText)
           compact.ts                # Pure compaction rules: decideCompactReason, planCompaction (turn-safe cut), short-episode check, transcript rendering
           compact.node.ts           # buildCompactStep: summarises the ended episode via LlmGateway.structured, keeps max 3 summaries, RemoveMessage trim (BR-LLM-001..004)
         handlers/
@@ -395,7 +395,7 @@ Each phase subgraph runs a tool-calling loop:
 1. `agentNode`: `model.bindTools(tools).invoke(assembleContext(...))` — `[SystemMessage(systemPrompt), (## User Facts), (## Previous episodes), (domain blocks), ...history, ...current]`, history interleaved from the checkpointed `messages` channel
 2. If `AIMessage.tool_calls` present → the tool executor runs them → `ToolMessage` results appended
 3. Loop back to `agentNode` with updated messages (tool results visible)
-4. If no `tool_calls` → `finalize` returns `{}` — the reply is the last `AIMessage` in state; `commit` reads `pendingTransition` and projects the run
+4. If no `tool_calls` → `finalize` returns `{}` — the reply is every non-empty `AIMessage` text of the run (`runAiText`, AC-CC-3); `commit` reads `pendingTransition` and projects the run
 
 ### Tool Calling vs JSON Mode
 - **Old approach**: LLM forced to respond in JSON → code parses with Zod → error-prone
