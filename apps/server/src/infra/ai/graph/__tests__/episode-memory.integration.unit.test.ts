@@ -70,7 +70,11 @@ function makeDeps(): ConversationGraphDeps {
     } as never,
     transcript: { appendRunMessages: jest.fn(), appendSystemNote: jest.fn() },
     summaries: { insert: jest.fn(), latestLegacySummary: jest.fn().mockResolvedValue(null) },
-    userFacts: { upsertMany: jest.fn().mockResolvedValue(0), getForPrompt: jest.fn(), getConstraints: jest.fn() },
+    userFacts: {
+      upsertMany: jest.fn().mockResolvedValue(0),
+      getForPrompt: jest.fn().mockResolvedValue([]),
+      getConstraints: jest.fn(),
+    },
     llmGateway: {
       chat: jest.fn(),
       structured: jest.fn(),

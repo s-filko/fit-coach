@@ -112,13 +112,18 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     // inherited from the route's invoke config; configurable never reaches handlers.
     const model = getModel(spec.modelProfile).bindTools(tools);
 
-    // ADR-0013 §3.4 block 3 (D-A/D-B) + INV-LLM-004 (Task 3): assembleContext
-    // renders spec.contextBlocks at full depth and enforces the budget via
-    // resolveBudget — trim history, step blocks down their depths, drop the
-    // oldest summary, D-D floor, in that order. Block 1 (systemPrompt) is
-    // never touched here.
+    // P6 Task 4 (D-F): facts are loaded once per run here, not per block
+    // render — the block itself is pure and takes already-loaded data.
+    const userFacts = await deps.userFacts.getForPrompt(userId);
+
+    // ADR-0013 §3.4 block 2a (D-F) + block 3 (D-A/D-B) + INV-LLM-004 (Task 3,
+    // order extended by Task 4): assembleContext renders spec.contextBlocks at
+    // full depth and enforces the budget via resolveBudget — truncate facts,
+    // trim history, step blocks down their depths, drop the oldest summary,
+    // D-D floor, in that order. Block 1 (systemPrompt) is never touched here.
     const { messages: llmMessages, budgetReport } = await assembleContext({
       systemPrompt,
+      userFacts,
       episodeSummaries: state.episodeSummaries ?? [],
       contextBlocks: spec.contextBlocks,
       blockData: loaded.data,

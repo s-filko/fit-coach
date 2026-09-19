@@ -25,6 +25,7 @@ const record: ConversationRunRecord = {
   budgetReport: {
     estimator: 'chars4x1.15',
     system: 800,
+    longTerm: 0,
     summary: 120,
     domain: 0,
     blocks: [],

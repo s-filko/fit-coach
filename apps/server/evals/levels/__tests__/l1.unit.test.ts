@@ -17,6 +17,7 @@ const base: EvalCase = {
 const budgetReport: BudgetReport = {
   estimator: 'chars/4',
   system: 500,
+  longTerm: 0,
   summary: 0,
   domain: 0,
   blocks: [],
