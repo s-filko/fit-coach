@@ -1,6 +1,6 @@
 # Refactor P6 — User Facts, Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 
-- Status: planned
+- Status: in progress
 - Branch: plan/refactor-p6-facts-and-progress-blocks
 - After: refactor-p4-context-budget
 
@@ -269,9 +269,9 @@ Review notes: the unique constraint on `(user_id, category, fact_key)` is what m
 - Modify: `apps/server/src/infra/ai/graph/nodes/agent.node.ts` — load the facts once per run and pass them to `assembleContext` (**grep the current call site**: `grep -n "assembleContext" src/infra/ai/graph/nodes/agent.node.ts`).
 - Modify: `apps/server/evals/snapshots/__tests__/message-assembly.unit.test.ts` — regenerate **once**, with the diff enumerated first: a new SystemMessage appears at position 2 **only** for fixtures that have facts; fixtures without facts are byte-identical.
 
-- [ ] **Step 1: Tests first** — block renders nothing (`null`/absent) for zero facts; renders grouped and capped for many; the assembler places it before the summaries block; a fixture with no facts produces a byte-identical message array to today's; `resolveBudget` truncates facts before trimming history and records `'facts'` in `cuts`; INV-LLM-004 still holds (block 1 untouched).
-- [ ] **Step 2: Implement.** Paste the enumerated snapshot diff under **Snapshot diff (Task 4)**; STOP for orchestrator review before regenerating.
-- [ ] **Step 3: Commit** — `feat(ai): ## User Facts context block at block 2, budgeted against longTerm (ADR-0013 §3.4)`
+- [x] **Step 1: Tests first** — block renders nothing (`null`/absent) for zero facts; renders grouped and capped for many; the assembler places it before the summaries block; a fixture with no facts produces a byte-identical message array to today's; `resolveBudget` truncates facts before trimming history and records `'facts'` in `cuts`; INV-LLM-004 still holds (block 1 untouched).
+- [x] **Step 2: Implement.** Snapshot diff enumerated below; **reviewed by the orchestrator before any regeneration — and the answer was that none was needed.**
+- [x] **Step 3: Commit** — `feat(ai): ## User Facts context block at block 2, budgeted against longTerm (ADR-0013 §3.4)` — `9378851d`.
 - [ ] **Step 4: STOP** for orchestrator review.
 
 **Verification:** `npx jest --ci src/infra/ai evals/snapshots` → all pass; `npm run evals -- --level L0` → 96/96 (or the new count after Task 2 — state it); `npx jest --ci evals/levels/__tests__/no-inline-prompts.unit.test.ts` → pass (the block is under `prompts/`, which is the allowed location — **not** `context/`).
@@ -468,3 +468,45 @@ Review notes: the unique constraint on `(user_id, category, fact_key)` is what m
 | **`memory/`, `progress/` and `plan/` dataset directories are cross-phase**, which the eval loader may not support. | (a) Force the datasets into existing phase directories; (b) check the loader and extend it if needed. | **(b)** — the AC text names those dataset paths (`memory/facts`, `progress/history`, `plan/iteration`), and bending them into phase directories would make the consolidated pass's report not match the ACs. Task 6 makes verifying the loader an explicit step rather than an assumption. | If the owner prefers phase directories, rename the three files and drop the loader change. |
 | **P6's `- After:` names `refactor-p4-context-budget`.** | (a) `refactor-p4-episode-memory`; (b) `refactor-p4-context-budget`. | **(b)** — as instructed, and correct on the merits: P6's blocks and budget accounting build directly on the context-budget plan's `ContextBlock`/`resolveBudget`/`prompts/blocks/` machinery, not merely on episode memory. Note that plan is **`in progress`**, so P6 must not start until it is `done` (dispatch rule). | Change the header line. |
 | **BUG-005 is marked addressed-pending-confirmation, not closed.** | (a) Close it when item 2 merges; (b) mark addressed, close after the consolidated pass. | **(b)** — the bug's user-visible symptom is a *quality* claim; the deterministic test proves the data now reaches the prompt, which is necessary but not sufficient. Closing on the deterministic half alone would overstate what was verified. | Close it once TR-6 reports. |
+
+
+---
+
+## Execution status (2026-09-19, overnight orchestration)
+
+**Group 1 (user facts) is 4 of 6 tasks done and merged to `dev`; Groups 2 and 3 are untouched.**
+The plan stays `- Status: in progress`. Nothing here is half-written: every merged task is
+committed, tested and reviewed, and the tree is clean at `9378851d`.
+
+| Task | State |
+|---|---|
+| 1 — `user_facts` table and port | **done** (`626c9d21`), migration `0005` reviewed before commit |
+| 2 — summariser v3 with a `facts` field | **done** (`d9231e2b`) |
+| 3 — fact extraction in the `compact` node | **done** (`98724cd4`) |
+| 4 — `## User Facts` block at block 2, `longTerm` budget | **done** (`9378851d`) |
+| 5 — hard validation (constraint conflicts reject the tool call) | **not started** |
+| 6 — `memory/facts` dataset and Group 1 docs | **not started** |
+| 7–12 — Groups 2 (progress blocks) and 3 (structured drafts) | **not started** |
+
+**What works end to end after these four tasks:** the summariser emits durable facts in its
+structured output, compaction upserts them idempotently with a confirmation counter, and the
+`## User Facts` block renders them at block 2 — ahead of episode memory, budgeted against
+`longTerm`, truncated most-expendable-first when over budget. A fact stated in conversation now
+survives compaction and comes back in the next run's prompt.
+
+**What is deliberately not there yet:** nothing *enforces* a fact. Task 5's hard validation —
+rejecting a `save_workout_plan` / `start_training_session` call whose exercises conflict with a
+`physical_constraint` fact — is unimplemented, so today a stated injury informs the model without
+binding it. That is the difference between "the model knows" and "the system guarantees", and it
+is the next task to run.
+
+**Why it stopped here:** the owner delegated the night and is due back; Task 5 modifies two tools
+whose output text is frozen by `TOOL_OUTCOME_FORMAT_ID = 'v1'`, and starting it without leaving
+time for review and a dev smoke would have meant handing over a branch mid-task. AC-1361's
+deterministic half depends on Task 5, so it stays **pending**, as do AC-1362/1363 (Groups 2/3)
+and AC-1364 (a two-run comparison by definition, deferred to the consolidated eval pass).
+
+**Migration note for the owner:** `0005_blue_domino.sql` is merged to `dev` and applied by
+`deploy.sh` on the next dev deploy. It is additive — one new table, no column changes to existing
+tables — so it carries no rollback hazard for the running app. It has **not** reached prod, and
+must not until the owner decides.
