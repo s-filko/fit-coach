@@ -58,9 +58,8 @@ part too short to summarise is **kept**, never dropped. Fact extraction stays at
   immediately before the current user message; with no gap there is no note.
 - **AC-CC-3** — the reply delivered to the client contains every non-empty assistant text of the
   current run in order (text written alongside tool calls included), and nothing from earlier runs.
-- **AC-CC-4** — one mocked-model scenario test: long chat → 14 h gap → "привет" → the model input
-  has the summary (if anything was summarised), the verbatim tail, the gap note, then "привет";
-  a scripted answer "Hi!" + tool calls + a final text yields a reply that starts with "Hi!".
+- **AC-CC-4** — the reproduction test (Task 0) exists before any fix, reproduces the owner's case
+  and fails today on all three points; each fix task turns its own point green.
 - **AC-CC-5** — dev smoke through the owner's Telegram bot: after a gap, "привет" gets a reply
   that answers the greeting.
 
@@ -76,6 +75,44 @@ part too short to summarise is **kept**, never dropped. Fact extraction stays at
   `API_SPEC.md`, `ARCHITECTURE.md`, `LLM_CORE_REFACTOR_PLAN.md`), `docs/STATE.md`, `docs/BUGS.md`,
   any `Status:`.
 
+**Order (owner, 2026-09-20): no fix before the reproduction.** Task 0 lands first; Tasks 1–3 each
+flip one of its `test.failing` cases to `test`, and may not start until Task 0 is accepted.
+
+---
+
+### Task 0: Reproduction — the owner's "привет" after a pause (AC-CC-4)
+
+**Files:** `apps/server/src/infra/ai/graph/__tests__/chat-continuity.repro.unit.test.ts` (reuse
+`graph-test-support.ts` and the scripted-model pattern of `user-facts.scenario.unit.test.ts`; the
+model is mocked beneath the real `OpenAiLlmGateway`). Test code only — no production change.
+
+The scenario mirrors BUG-018's evidence:
+1. Prior state: one stored episode summary whose `openItems` say the plan is ready and pending save
+   (the agenda the model later pushed), and a **one-turn** conversation in `plan_creation` (the
+   10:23 exchange: user "привет", assistant greeting).
+2. A controlled clock advances **6 h** (> `EPISODE_GAP_HOURS`); the user sends "привет".
+3. The scripted model answers in two steps: first an AI message with text "Hi! Good to see you
+   back." **and** `search_exercises` tool calls; after the tool results, a final text that is a plan
+   dump.
+
+Three cases, each written as the **required** behaviour and marked `test.failing` (Jest) because
+today's code violates it — the file is green while the bug exists and each case turns red the
+moment its fix lands, which is when the fix task flips it to `test`:
+- **(a) AC-CC-1** — the model input for the new "привет" contains the 10:23 exchange verbatim.
+- **(b) AC-CC-2** — the model input carries a time-gap note immediately before the new message.
+- **(c) AC-CC-3** — the reply delivered by the run port contains "Hi! Good to see you back."
+
+Plus one ordinary `test` pinning today's observable symptom (so the reproduction is visible, not
+just implied): the delivered reply equals the final plan-dump text only.
+
+- [ ] **Step 1:** write the test; run it; confirm (a)–(c) fail for the stated reason (quote each
+  failure message in the STOP report — a case that fails for another reason is not a reproduction).
+- [ ] **Step 2: Commit** — `test(ai): reproduce BUG-018 — greeting after a pause is not answered (AC-CC-4)`
+- [ ] **Step 3: STOP** for orchestrator review.
+
+**Verification:** `npx jest --ci src/infra/ai/graph/__tests__/chat-continuity.repro.unit.test.ts`
+→ passes (with the three `failing` cases); `npm run test:unit` → green.
+
 ---
 
 ### Task 1: Compaction keeps a verbatim tail and never drops unsummarised messages (AC-CC-1)
@@ -89,6 +126,7 @@ use), `apps/server/src/infra/ai/graph/nodes/compact.node.ts`, `apps/server/src/c
   summarised (and facts extracted as today) while the tail stays; budget trigger unchanged except
   it respects the tail; a turn is never split (a tool call and its result stay together).
 - [ ] **Step 2: Implement.**
+- [ ] **Step 2b:** flip Task 0's case (a) from `test.failing` to `test`; it must pass.
 - [ ] **Step 3: Commit** — `fix(ai): compaction keeps the last turns verbatim and never drops unsummarised messages (BUG-018, AC-CC-1)`
 - [ ] **Step 4: STOP** for orchestrator review.
 
@@ -108,6 +146,7 @@ message; the gap is computed from the previous message's time — the graph alre
   duration) sits immediately before the current message; no gap → no note; first message ever →
   no note.
 - [ ] **Step 2: Implement.**
+- [ ] **Step 2b:** flip Task 0's case (b) to `test`; it must pass.
 - [ ] **Step 3: Commit** — `feat(ai): time-gap note before the user's new message after a pause (BUG-018, AC-CC-2)`
 - [ ] **Step 4: STOP** for orchestrator review.
 
@@ -124,21 +163,11 @@ reply), `apps/server/src/infra/ai/graph/episode.ts` (a helper next to `lastAiTex
   blank line between; tool-only AI messages contribute nothing; texts from earlier runs never
   included; single-message runs unchanged byte for byte.
 - [ ] **Step 2: Implement.**
+- [ ] **Step 2b:** flip Task 0's case (c) to `test`; it must pass, and the pinned-symptom test is deleted (it now fails by design).
 - [ ] **Step 3: Commit** — `fix(ai): the reply includes assistant text written alongside tool calls in this run (BUG-018, AC-CC-3)`
 - [ ] **Step 4: STOP** for orchestrator review.
 
 **Verification:** `npx jest --ci src/infra/ai` → pass; `npm run test:unit` → green; L0 green.
-
----
-
-### Task 4: Scenario test — gap, greeting, answered (AC-CC-4)
-
-**Files:** one test next to `apps/server/src/infra/ai/graph/__tests__/user-facts.scenario.unit.test.ts`
-reusing `graph-test-support.ts`. Test code only.
-
-- [ ] **Step 1:** the scenario in AC-CC-4, asserting the assembled input order and the delivered reply.
-- [ ] **Step 2: Commit** — `test(ai): chat continuity scenario — gap, greeting, answered (AC-CC-4)`
-- [ ] **Step 3: STOP** for orchestrator review.
 
 ---
 
