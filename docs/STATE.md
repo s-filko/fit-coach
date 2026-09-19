@@ -174,8 +174,9 @@ _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen
    takes its request mode from `LLM_STRUCTURED_OUTPUT_MODE` — `json_schema` (default, prod) or
    `json_object` + the JSON Schema in a trailing system message (dev; probed 4/4 schema-valid with
    the real summariser prompt). ADR-0013 §7 and AC-1311 amended with the owner's approval.
-   **Owner action for dev:** `LLM_STRUCTURED_OUTPUT_MODE=json_object` in `.env.dev`; BUG-017 stays
-   open until a dev smoke produces a `conversation_summaries` and a `user_facts` row.
+   Set on dev by the owner; **dev smoke 2026-09-19 green** — one episode summary and four user
+   facts (incl. `physical_constraint`/`lower_back`), summariser 14 s with no retry, `longTerm` = 99
+   on the next run. **BUG-017 fixed.** Prod is untouched (default `json_schema`).
 7. **Next to dispatch: `refactor-p6-progress-and-drafts`** — unblocked once the facts plan is
    merged. Then P7 per the master plan phase map and the consolidated eval pass.
 3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,

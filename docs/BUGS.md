@@ -1009,7 +1009,7 @@ Fixed by the P4 run projection (`refactor-p4-episode-memory`): `appendTurn` is g
 
 ## BUG-017 — Structured output fails on fenced JSON: episode summaries (and user facts) are never produced on the GLM route
 
-**Status:** Fix in two parts — (1) `structured-output-fenced-json` (`057b4240`): the gateway parses and recovers the answer itself, no 7× internal retry (merged, deployed 2026-09-19); (2) `structured-output-json-object-mode`: that deploy's smoke still produced no summary because GLM on Z.AI ignores `json_schema` altogether (pseudo-YAML answers) — fixed by the `json_object` mode. **Fixed only once a dev smoke produces a `conversation_summaries` and a `user_facts` row.**
+**Status:** Fixed (2026-09-19) — confirmed by the dev smoke in `structured-output-json-object-mode.md` § Dev smoke: one `conversation_summaries` row and four `user_facts` rows (incl. `physical_constraint`/`lower_back`), summariser 14 s with no retry. Fix in two parts — (1) `structured-output-fenced-json` (`057b4240`): the gateway parses and recovers the answer itself, no 7× internal retry (merged, deployed 2026-09-19); (2) `structured-output-json-object-mode`: that deploy's smoke still produced no summary because GLM on Z.AI ignores `json_schema` altogether (pseudo-YAML answers) — fixed by the `json_object` mode. **Fixed only once a dev smoke produces a `conversation_summaries` and a `user_facts` row.**
 **Severity:** High
 **Found during:** P6 dev smoke 2026-09-19, right after `refactor-p6-facts-and-progress-blocks` merged
 **Component:** `apps/server/src/infra/ai/llm.gateway.ts` (`structured()`)

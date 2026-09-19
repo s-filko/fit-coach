@@ -92,11 +92,11 @@ Callers and prompts do not change.
 
 ### Task 2: Close-out, deploy, dev smoke (orchestrator)
 
-- [ ] **Step 1:** Owner sets `LLM_STRUCTURED_OUTPUT_MODE=json_object` in
+- [x] **Step 1:** Owner sets `LLM_STRUCTURED_OUTPUT_MODE=json_object` in
   `/srv/docker/fitcoach/.env.dev` (prod untouched).
 - [x] **Step 2:** `close-out-review`; ADR-0013 §7 note on the mode (owner approval); BUG-017
   live confirmation; `- Status: done`; `state.mjs --write`; merge, push, deploy, health 200.
-- [ ] **Step 3: Dev smoke — 3 calls**, direct to the server (not through the 90 s NPM proxy): a
+- [x] **Step 3: Dev smoke — 3 calls**, direct to the server (not through the 90 s NPM proxy): a
   phase transition, then a turn that compacts, then one more turn. Paste the
   `conversation_summaries` row, `SELECT category, fact, muscle_group, confirmations FROM
   user_facts`, and `budget_report->'longTerm'` > 0 on the last run.
@@ -129,4 +129,39 @@ R1/R4 mechanism-drift blind spot); R2 — test-fixture DRY scope (raises the exi
 candidate); R3 — a plan outside the `AC-13xx` series should mint its own AC ids (raises the existing
 "plan with no AC ids" blind spot); R4 — `BUGS.md`'s own header rule cannot be cited as blocking
 (new rule candidate).
+
+## Dev smoke (2026-09-19, after deploy `21d5e2a6`)
+
+The owner set `LLM_STRUCTURED_OUTPUT_MODE=json_object` in `.env.dev`; the orchestrator recreated
+`fitcoach-dev-server` (compose `up -d server`, as `deploy.sh` does) and confirmed the value inside
+the container. Calls went straight to the server (`172.21.0.3:3000`), not through the 90 s NPM
+proxy. **Five calls, not three**: episodes shorter than two turns are trimmed without a summary by
+design (D-B), and the phase transition in call 1 compacted a one-turn episode — so the injury had
+to be restated and the episode grown to three turns before the transition that mattered.
+
+| # | Message (smoke user `358bedb4…`) | Result |
+|---|---|---|
+| 1 | restates the lumbar hernia | 200, 44 s; gap compaction of a 1-turn chat episode → trimmed (D-B); model moved chat → plan_creation |
+| 2 | Mon/Wed/Fri, home, dumbbells ≤ 20 kg + bench | 200, 149 s; transition compaction → 1-turn episode trimmed (D-B); plan proposed |
+| 3 | restates the hernia, asks if the plan respects it | 200, 69 s; plan revised (bent-over row → chest-supported row, plank removed) |
+| 4 | "let's postpone the plan, just talk" | 200, 14 s; plan_creation → chat |
+| 5 | "which core exercises are safe for my back?" | 200, 49 s; **compaction with a summary** |
+
+Evidence from call 5: gateway log `profile: "summarizer"`, `latencyMs: 14141`, no retry and no
+recovery warning; `conversation_summaries` — 1 row (15:26:47); `user_facts`:
+
+```
+      category       |                                   fact                                    | muscle_group | confirmations
+---------------------+---------------------------------------------------------------------------+--------------+---------------
+ equipment           | Trains at home with dumbbells up to 20 kg and a bench                     |              | 1
+ schedule_constraint | Trains Monday, Wednesday, Friday                                          |              | 1
+ physical_constraint | Lumbar hernia; doctor forbids any lower back loading — no deadlifts, ... | lower_back   | 1
+ coaching_preference | Primary training goal is muscle mass gain                                 |              | 1
+```
+
+and the same run's `budget_report->'longTerm'` = **99** (the `## User Facts` block reached the
+prompt). BUG-017 is fixed; AC-1361's extraction and block halves are now seen live on dev (its
+pass-rate half stays deferred to the consolidated eval pass). The live hard-validation path
+(a conflicting exercise rejected by `save_workout_plan`/`start_training_session`) was not driven
+in this smoke — it is pinned by the unit tests and the mocked scenario test.
 
