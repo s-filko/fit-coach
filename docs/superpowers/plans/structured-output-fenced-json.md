@@ -1,6 +1,6 @@
 # Structured Output — Fenced-JSON Recovery and the User-Facts Scenario Test Implementation Plan
 
-- Status: planned
+- Status: in progress
 - Branch: plan/structured-output-fenced-json
 - After: refactor-p6-facts-and-progress-blocks
 

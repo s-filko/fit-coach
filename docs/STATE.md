@@ -12,7 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-— none —
+- `structured-output-fenced-json.md` — Structured Output — Fenced-JSON Recovery and the User-Facts Scenario Test Implementation Plan (branch: `plan/structured-output-fenced-json`, last commit 2026-09-19)
 
 **Planned**
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
