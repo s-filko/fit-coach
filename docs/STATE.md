@@ -192,16 +192,12 @@ _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen
 The orchestrator relays to a fresh session at clean boundaries (owner rule 2026-09-20; memory
 `orchestrator-session-relay`, `economical-work`). Where work stands:
 
-- **`training-journey-scenarios`** (worktree `/Users/filko/orca/workspaces/fit_coach/training-journey-scenarios`,
-  branch `plan/training-journey-scenarios`, Orca run `run_f05123509d74`): Tasks 1–6 accepted (see
-  the plan's acceptance notes). **Next: Task 7 close-out** — ONE combined review agent (test-heavy
-  plan; owner rule "one review per phase"), `Status: done`, `state.mjs --write`, merge to `dev`,
-  push. Owner decided **no CI job**: scenario tests are run manually by the owner and by agents as
-  self-verification — add that rule to `docs/ORCHESTRATION.md` § Task spec and the
-  `delegate-implementation` skill in the close-out commit (`npm run test:scenarios` in the
-  acceptance of any task touching conversation / graph / memory / phases / training tools;
-  orchestrator re-runs it at acceptance and before merge). Advisory to file: session timestamps
-  come from two clocks (DB `defaultNow` vs app `now`) — the scenario runner re-stamps them.
+- **`training-journey-scenarios` — done, merged to `dev` (2026-09-20)**: review clean (one combined
+  agent), pre-merge `npm run test:scenarios` 221/221. Owner decided no CI job — the rule is in
+  `docs/ORCHESTRATION.md` § Scenario self-check. Worktree
+  `/Users/filko/orca/workspaces/fit_coach/training-journey-scenarios` and branch
+  `plan/training-journey-scenarios` are **ready to clean up** (owner-gated; run `run_f05123509d74`
+  has two retained idle worker terminals).
 - **`chat-continuity`** (BUG-018; worktree `/Users/filko/orca/workspaces/fit_coach/chat-continuity`,
   branch `plan/chat-continuity`, run `run_b49c61f61663`): Task 0 (unit repro) accepted; ADR-0013 §3.3
   amendment text approved by the owner (in the plan). **After the journey plan merges:** merge `dev`
