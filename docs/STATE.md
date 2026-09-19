@@ -199,12 +199,13 @@ The orchestrator relays to a fresh session at clean boundaries (owner rule 2026-
   `/Users/filko/orca/workspaces/fit_coach/training-journey-scenarios` and branch
   `plan/training-journey-scenarios` are **ready to clean up** (owner-gated; run `run_f05123509d74`
   has two retained idle worker terminals).
-- **`chat-continuity`** (BUG-018; worktree `/Users/filko/orca/workspaces/fit_coach/chat-continuity`,
-  branch `plan/chat-continuity`, run `run_b49c61f61663`): Task 0 (unit repro) accepted; ADR-0013 §3.3
-  amendment text approved by the owner (in the plan). **After the journey plan merges:** merge `dev`
-  into the branch so the scenarios are present, then Tasks 1–3 (one worker each); each fix flips
-  its `test.failing` case in the unit repro AND the matching `knownBug` cases in journeys A/B/C;
-  one review at the end; deploy; final check = the owner's own Telegram "привет" after a pause.
+- **`chat-continuity` (BUG-018) — done, merged to `dev` (2026-09-20)**: compaction keeps the last
+  `EPISODE_KEEP_TURNS` (6) turns and never drops unsummarised messages, time-gap note before the new
+  message after a pause, the reply carries every assistant text of the run. Review clean after one fix
+  (budget cut now always summarised). **Next:** deploy to dev (health 200), then the owner's own Telegram
+  "привет" after a pause (AC-CC-5) closes BUG-018. Worktree `/Users/filko/orca/workspaces/fit_coach/chat-continuity`
+  and branch `plan/chat-continuity` ready to clean up (owner-gated); run `run_b49c61f61663` keeps one
+  idle worker terminal.
 - **Test DB:** `fitcoach_test` (local container `fitcoach-db`); `.env.test` no longer sets
   `RUN_DB_TESTS` (backup `apps/server/.env.test.bak-20260920`, owner may ask to delete). Never
   run tests in two worktrees against it at once; workers never touch a DB by hand.
@@ -241,7 +242,7 @@ The orchestrator relays to a fresh session at clean boundaries (owner rule 2026-
     Consequence: the P6 `remember_fact` tool (ADR-0013 D-14) is dropped; `user_facts` stays.
   - Phase transition is a typed in-process event raised by `commit` (compaction, session
     activation/close, run log consume it); a per-user run mutex (D-12) guards double-sends.
-  - Trivially short episodes are trimmed without a summary (threshold to be set in P4).
+  - Trivially short episodes are trimmed without a summary (threshold to be set in P4). *(Superseded 2026-09-20 by the ADR-0013 §3.3 amendment, BUG-018: a too-short part is kept, never dropped; the budget cut is always summarised.)*
 - ADR-0002 divergence **resolved 2026-09-13** by owner call: ADR-0002's Decision section
   is historical context; the live interface-layout rule is `ARCHITECTURE.md`
   § Interface Organization Principles. Both files now say so.
