@@ -1,8 +1,9 @@
 # Refactor P6 — User Facts (Group 1) Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/refactor-p6-facts-and-progress-blocks
 - After: refactor-p4-context-budget
+- Review: 2026-09-19 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -136,7 +137,7 @@ only); `docs/LLM_CORE_REFACTOR_PLAN.md` § P6 items 1–3, its Notes (the carrie
   normalised key's job at write — not an LLM call of its own.
 - **Do not plan any branch or worktree deletion** and **do not write to any `.env` file**.
   New env vars go into `.env.example` only; the owner applies them.
-- **Reserved to the orchestrator:** Task 13 (deploy, smoke, close-out) and every
+- **Reserved to the orchestrator:** Task 13 (deploy, smoke, close-out; since the split, Task G1 in this file) and every
   `Status:`/merge transition. Verification from `apps/server/`. No attribution lines.
 
 ## Decisions taken by this plan (not settled by the durable specs — owner may overrule)
@@ -162,7 +163,7 @@ only); `docs/LLM_CORE_REFACTOR_PLAN.md` § P6 items 1–3, its Notes (the carrie
 | P6 item 1: "`remember_fact` tool in all `PhaseSpec`s" | Nothing — no such tool exists (`grep -rn "remember_fact" apps/server/src` → no hits) | **Dropped by owner decision 2026-09-17** (`STATE.md`). Extraction moves to `compact.node.ts`. The Global Constraints make "no fact-writing tool" a hard rule |
 | P6 item 1: "long-term block `## User Facts` rendered by the assembler" | `assembleContext` renders block 1 (phase prompt), block 2 (`## Previous episodes`), block 3 (domain blocks), then history — **no long-term block**. `TokenBudget.longTerm` exists and is set by all five specs, and `budget.ts:110` already includes it in `sumMinusReserve`, but nothing is billed to it | D-F: a `PromptModule` at `prompts/blocks/user-facts.v1.ts`, rendered ahead of the summaries block, billed to `longTerm` |
 | P6 item 1: "`user_facts` table" | **Does not exist.** `schema.ts` has 11 tables; `user_facts` is not among them, and `drizzle/` stops at `0004_quick_agent_brand.sql` | Task 1 creates it via `npm run drizzle:generate` (migration `0005`) |
-| ADR-0009's mechanism: per-turn passive extraction via a `remember_fact` tool | Never implemented | Superseded by the 2026-09-17 decision. **ADR-0009's table shape and its eight `FactCategory` values are reused** (D-B); its mechanism is escalated to the owner as superseded, not edited (Task 13) |
+| ADR-0009's mechanism: per-turn passive extraction via a `remember_fact` tool | Never implemented | Superseded by the 2026-09-17 decision. **ADR-0009's table shape and its eight `FactCategory` values are reused** (D-B); its mechanism is escalated to the owner as superseded, not edited (Task 13; since the split, Task G1 in this file) |
 | P6 item 2: repository methods "`getMuscleRecovery(userId, days)`" and "`getExerciseHistoryByMuscles(userId, muscles, limit)`" | **Neither exists.** `IWorkoutSessionRepository` has `findLastCompletedByUserAndKey` (the method item 2 replaces) and 12 others. `PLAN-muscle-centric-history.md` — the design doc the master plan cites — names these **`getMuscleGroupFatigue`** / **`getExerciseHistory`** at the *repository* layer and `getMuscleReadiness` / `getExerciseHistoryByMuscles` at the *service* layer | D-H: follow the design doc's two-layer naming. The master plan compressed two layers into one line |
 | `PLAN-muscle-centric-history.md` § Prompt changes points at `session-planning.node.ts`, `training.node.ts`, `training.subgraph.ts`, `session-planning.subgraph.ts` | **None of these exist.** P3 replaced per-phase nodes/subgraphs with one `PhaseSpec` per phase (`graph/phases/*.spec.ts`) plus a shared `agent.node.ts`; there is **no `graph/subgraphs/` directory** | Tasks 8–9 target `graph/phases/session-planning.spec.ts`, `graph/phases/training.spec.ts` and the `prompts/phases/*/` version files instead |
 | `PLAN-muscle-centric-history.md` § New types: `exerciseId: number` | Exercise and session-exercise ids are **`string` (uuid)** throughout (`IExerciseRepository.findById(id: string)`, `ISessionExerciseRepository.findById(exerciseId: string)`) | Task 7 uses `string`. `Involvement = 'primary' \| 'secondary'` **already exists** at `src/domain/training/types.ts:57` — reuse it, do not redeclare |
@@ -334,11 +335,11 @@ close as done without claiming Tasks 7–12, and without leaving a merged-but-no
 **Files:**
 - Modify: `docs/ARCHITECTURE.md` — the facts path (orchestrator-applied; `ARCHITECTURE.md` is outside the worker boundary): `user-facts.v1.ts` and `summarizer/v3.ts` in the layout, the "User facts (P6)" bullet in § Conversation Context, block order in § Interaction Pattern, `user_facts` in § Database storage, ADR-0009's list entry annotated as superseded in mechanism.
 - Modify: `docs/BACKLOG.md` via the `backlog` skill — D-C's near-duplicate-facts limitation and the close-out advisories.
-- ADR amendments to **escalate to the owner, never edit** (`docs/adr/**` is read-only for this plan): **ADR-0009** — its per-turn passive-extraction mechanism and its `remember_fact` tool are superseded by the 2026-09-17 owner decision; its table shape and categories survive (D-B). **ADR-0013** — D-14 (`remember_fact`) is dropped; §3.4 block 2 is now the `## User Facts` block budgeted against `longTerm`.
+- ADR amendments to **escalate to the owner, never edit** (`docs/adr/**` is read-only for this plan): **ADR-0009** — its per-turn passive-extraction mechanism and its `remember_fact` tool are superseded by the 2026-09-17 owner decision; its table shape and categories survive (D-B). **ADR-0013** — D-14 (`remember_fact`) is dropped; §3.4 block 2 is now the `## User Facts` block budgeted against `longTerm`; §3.4's cut order (INV-LLM-004, (a)–(c)) gains a step (0) — facts are truncated, lowest-`confirmations` then oldest first, before history is trimmed (recorded in Task 14; surfaced by the close-out review, R1).
 
 - [x] **Step 1: Docs reconcile** — the `ARCHITECTURE.md` edits above.
-- [ ] **Step 2: Close-out review** — `close-out-review` skill over the Group 1 diff; blocking findings fixed, advisories to `BACKLOG.md`, meta to `REVIEW_FINDINGS.md`.
-- [ ] **Step 3: Close-out** — tick every checkbox, `- Status: done`, `node scripts/state.mjs --write`, commit. **Per-AC split, restated:** AC-1361 deterministic half **closed** (Task 4 block + Task 5 hard validation + Task 3 mocked extraction + Task 6 authored dataset/check) / its `≥ 90 % over n=3` pass rate **deferred** to the consolidated eval pass; AC-1362 and AC-1363 **moved** to `refactor-p6-progress-and-drafts`; **AC-1364 deferred in full** (with AC-1344).
+- [x] **Step 2: Close-out review** — `close-out-review` skill over the Group 1 diff; blocking findings fixed, advisories to `BACKLOG.md`, meta to `REVIEW_FINDINGS.md`.
+- [x] **Step 3: Close-out** — tick every checkbox, `- Status: done`, `node scripts/state.mjs --write`, commit. **Per-AC split, restated:** AC-1361 deterministic half **closed** (Task 4 block + Task 5 hard validation + Task 3 mocked extraction + Task 6 authored dataset/check) / its `≥ 90 % over n=3` pass rate **deferred** to the consolidated eval pass; AC-1362 and AC-1363 **moved** to `refactor-p6-progress-and-drafts`; **AC-1364 deferred in full** (with AC-1344).
 - [ ] **Step 4: Merge and deploy to dev** — merge to `dev`, push, GitHub Actions deploy, migration `0005` applied by `deploy.sh` before containers start, `curl https://fitcoach-dev.filko.dev/health` → 200, `node scripts/state.mjs --check` → OK. Branch/worktree cleanup **only on the owner's explicit command**.
 
 **Verification:** `npm run check-all` → 0 errors; full `npx jest --ci` → green; `npm run evals -- --level L0` → 96/96; `grep -rn "remember_fact" apps/server/src` → no hits; `node scripts/state.mjs --check` → OK.
@@ -429,3 +430,56 @@ and AC-1364 (a two-run comparison by definition, deferred to the consolidated ev
 `deploy.sh` on the next dev deploy. It is additive — one new table, no column changes to existing
 tables — so it carries no rollback hazard for the running app. It has **not** reached prod, and
 must not until the owner decides.
+
+---
+
+## Review
+
+Close-out review of Group 1 (Tasks 1–6 + G1), 2026-09-19, four zones in parallel (Sonnet
+subagents, cold contexts), diff `a1b3863e...HEAD`.
+
+**First pass: blocked — one finding.**
+
+- **blocking | R2** | `apps/server/src/infra/ai/tools/save-workout-plan.tool.ts:117-120` | DRY
+  (`docs/CONTRIBUTING_AI.md` "Principles & Boundaries") — "The 4-line fact-conflict check block
+  (`const facts = await userFactsService.getConstraints(userId); const conflict =
+  checkFactConflicts(...); if (conflict) { return userError(factConflictMessage(conflict)); }`)
+  is copy-pasted verbatim into apps/server/src/infra/ai/tools/start-training-session.tool.ts:54-57."
+  **Closed** by `8ca8d2b8` (GLM worker via Orca): one shared guard
+  `rejectOnFactConflict(Pick<IUserFactsService, 'getConstraints'>, userId, exercises)` in
+  `infra/ai/tools/fact-constraint-guard.ts`, used by both tools; error text, check order and the
+  success path unchanged (L0 96/96, 146/146 in the task's suites). R2 re-run on the fix: closed,
+  no new duplication, no blocking findings.
+
+**Verdict after the fix: clean.** R3 re-ran every verification itself (full jest 902/902, 56
+snapshots, L0 96/96, `tsc` clean, the `user_facts` integration test 5/5 on a real DB) and found
+no blocking issue.
+
+**Advisory findings and where they went:**
+
+| Zone | Finding | Became |
+|---|---|---|
+| R1 | `CompactStepDeps.userFacts` and the two tools' deps typed as the full `IUserFactsService` while each uses one method | `BACKLOG.md` § P6 facts (Group 1) close-out review advisories |
+| R1 | `fact-conflicts.ts` placement — its substance is exercise muscle involvement, arguably `domain/training/services/` | same section |
+| R1 (noted, not raised) | `resolveBudget`'s new step (0) extends INV-LLM-004's published cut order but was missing from the ADR escalation list | Added to Task G1's ADR-0013 escalation list |
+| R4 | `evals/datasets/README.md` catalog lacked `memory/facts.jsonl` | Fixed in `8ca8d2b8` |
+| R4 | In-body "Task 13" references in this file's kept preamble point outside the file after the split | Annotated in place ("since the split, Task G1") |
+| orchestrator | `FixtureFactSchema.muscleGroup` is `z.string()`, not the `MuscleGroup` enum | `BACKLOG.md`, same section |
+| plan D-C | Near-duplicate facts in different words become separate rows | `BACKLOG.md`, same section |
+
+**Meta findings** (filed in `docs/REVIEW_FINDINGS.md`): R2 — doc-content duplication is outside
+R2's grep scope (prompt defect); R3 — STOP verification notes are hand-typed counts, not raw
+output (rule candidate); R4 — no rule requires a new dataset to be listed in the datasets README
+(rule candidate); R4 — the P7-owned `LLM_CORE_REFACTOR_PLAN.md` § P6 staleness is a re-derived
+carve-out (existing blind-spot entry raised to ×2).
+
+**Per-AC split (close-out restatement):** AC-1361 deterministic half **closed** (Task 3 mocked
+extraction, Task 4 block at block 2, Task 5 hard validation, Task 6 authored dataset + the
+`user-facts-block-present` check) / its `≥ 90 % over n=3` pass rate **deferred** to the
+consolidated eval pass on the prod model via OpenRouter; AC-1362 and AC-1363 **moved** to
+`refactor-p6-progress-and-drafts`; **AC-1364 deferred in full**, together with AC-1344.
+
+**Escalated to the owner, not edited:** ADR-0009 (mechanism superseded; table and categories
+survive) and ADR-0013 (D-14 dropped; §3.4 block 2 = `## User Facts` on `longTerm`; INV-LLM-004 cut
+order gains step (0)) — see Task G1.
+

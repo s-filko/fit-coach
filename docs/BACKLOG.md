@@ -518,3 +518,25 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       dev smoke, 2026-09-19; the P4 smoke's own SQL in the plan has the same latent flaw).
       Either store it as `timestamptz` (migration) or fix every query and the plans that carry
       them. Source: P5 dev smoke (2026-09-19).
+
+## P6 facts (Group 1) close-out review advisories (2026-09-19)
+
+- [ ] Near-duplicate facts create separate `user_facts` rows — D-C's idempotency key is a
+      code-normalised text (`fact_key`), so the same fact in different words is two rows (the
+      block caps at 50 and truncates lowest-`confirmations` first). A similarity-based merge
+      needs the consolidated eval pass to judge it. Source: plan
+      refactor-p6-facts-and-progress-blocks D-C (2026-09-19).
+- [ ] Dependency types wider than use: `CompactStepDeps.userFacts`
+      (`graph/nodes/compact.node.ts:53`) is the full `IUserFactsService` but only `upsertMany`
+      is called; the two tools' deps (`save-workout-plan.tool.ts`,
+      `start-training-session.tool.ts`) still declare the full service although the shared
+      `rejectOnFactConflict` guard already takes `Pick<IUserFactsService, 'getConstraints'>`.
+      Narrowing makes read vs. write visible at the type level. Source: close-out-review, R1 (2026-09-19).
+- [ ] `domain/user/services/fact-conflicts.ts` works entirely over exercise muscle involvement
+      (the fact only supplies the constrained muscle) — its substantive domain is "which
+      exercises are safe", arguably `domain/training/services/`. Not a boundary violation
+      (lint-clean, domain→domain imports are existing practice). Source: close-out-review, R1 (2026-09-19).
+- [ ] `evals/schema/case.schema.ts` `FixtureFactSchema.muscleGroup` is `z.string()`, not the
+      `MuscleGroup` enum — a typo in a dataset (`shoulder_front`) would silently make a
+      `physical_constraint` fixture bind nothing. Validate against the enum. Source:
+      orchestrator review of P6 Task 6 (2026-09-19).

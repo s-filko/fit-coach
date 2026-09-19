@@ -12,7 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `refactor-p6-facts-and-progress-blocks.md` — Refactor P6 — User Facts (Group 1) Implementation Plan (branch: `plan/refactor-p6-facts-and-progress-blocks`, last commit 2026-09-19)
+— none —
 
 **Planned**
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
@@ -39,6 +39,7 @@ _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p4-context-budget.md` — Refactor P4 — Context Budget and Domain Blocks Implementation Plan
 - `refactor-p4-episode-memory.md` — Refactor P4 — Episode Memory Implementation Plan
 - `refactor-p5-concurrency-delivery.md` — Refactor P5 — Concurrency and Delivery Hardening Implementation Plan
+- `refactor-p6-facts-and-progress-blocks.md` — Refactor P6 — User Facts (Group 1) Implementation Plan
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 
 **Close-out debt (merged but plan not done)**
@@ -135,9 +136,24 @@ _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen
    be a user-visible regression, so the ADR and the code genuinely disagree and the owner
    decides), and the bot's clear-on-404 cache branch (unreachable — no route the bot calls
    returns 404). ADR-0013 §6 amendments to escalate are listed in the plan's `## Review`.
-4. **Next to dispatch: `refactor-p6-facts-and-progress-blocks`** — its `After:`
-   (`refactor-p4-context-budget`) is `done`, so it is unblocked. Then P7 per the master plan
-   phase map.
+4. **P6 Group 1 (user facts) is complete (2026-09-19)**: `refactor-p6-facts-and-progress-blocks`
+   closed — `Status: done`, review `2026-09-19 | clean | R1,R2,R3,R4` (first pass blocked on
+   one DRY finding — the fact-conflict check duplicated in both tools — fixed by one shared
+   guard, R2 re-run clean), merged to `dev` and deployed with migration `0005` (`user_facts`).
+   Facts are extracted only at compaction (summariser v3 `facts`, idempotent upsert with a
+   confirmation counter; `remember_fact` stays dropped), rendered as `## User Facts` at block 2
+   on the `longTerm` budget, and a `physical_constraint` fact now **binds**:
+   `save_workout_plan` / `start_training_session` reject an exercise whose primary muscles hit
+   it. AC-1361 deterministic half closed; its pass rate and AC-1364 deferred to the
+   consolidated eval pass. First plan executed through Orca workers (GLM, one worker session
+   per task). **By owner decision the plan was split at the Group 1 boundary (D-A):** Groups 2–3
+   (muscle-centric progress blocks, structured drafts; AC-1362/1363) are now
+   `refactor-p6-progress-and-drafts` (`Status: planned`, `After:` the facts plan).
+   **Escalated to the owner:** ADR-0009 / ADR-0013 amendments listed in the facts plan's
+   Task G1 (D-14 dropped, block 2, INV-LLM-004 cut order gains a facts step). Advisories:
+   `BACKLOG.md` § P6 facts (Group 1) close-out review advisories.
+5. **Next to dispatch: `refactor-p6-progress-and-drafts`** — unblocked once the facts plan is
+   merged. Then P7 per the master plan phase map and the consolidated eval pass.
 3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
    the code aligned to it, ESLint keeping it that way. Independent of the P0 chain;
    can run alongside it.
