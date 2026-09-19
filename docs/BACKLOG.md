@@ -42,6 +42,31 @@ Rules:
 
 ## Findings
 
+- [ ] **BOT UX — `plan_creation` makes the user wait minutes in silence (owner priority, 2026-09-19).**
+      The owner's position: a bot must answer in seconds, or tell the user it is working. Today it
+      does neither — it holds the HTTP connection open and stays silent. Measured on dev
+      (`conversation_runs`, n = 25 for this phase): **avg 72 s, p95 317 s, max 393 s**; `chat` by
+      comparison averages 19 s. `requestTimeout` was raised 30 s → 420 s (commit `42d4fe8f`) so the
+      answer is not truncated — that is a band-aid on the symptom, not the fix, and it should be
+      lowered again once the real causes are addressed.
+      **Three distinct causes, from the data — they need different fixes:**
+      1. **Generation itself dominates, not tools.** The two slowest runs (393 s, 324 s) made
+         **zero** tool calls, and `plan_creation` runs with no tools still average **67 s**. The
+         model is writing a whole multi-session plan as one long structured answer. Fixes to weigh:
+         stream the response, split plan creation into steps the user sees arriving, or shrink what
+         one turn must produce.
+      2. **No progress signal.** Nothing is sent between "message received" and the final answer —
+         no typing action, no "собираю план…" interim message. Telegram's `sendChatAction` is the
+         cheap half of this; an interim message is the honest half.
+      3. **Tool-call fan-out and schema retries.** One run issued **12 sequential `search_exercises`
+         calls** (one per exercise, no batching) and then **two `save_workout_plan` calls that both
+         came back `llm_error`** — the model failed the schema twice and retried. Batch the search,
+         and treat repeated `llm_error` on the same tool as a prompt/schema defect worth its own
+         look.
+      **Not scoped as a plan yet** — it spans prompt design, bot UX and tool ergonomics, so it wants
+      the owner's call on direction before it becomes one. Source: P5 Task 6 latency calibration +
+      owner instruction (2026-09-19).
+
 - [ ] **Decompose `ITrainingService` (16 methods) by role**: rule-3 review (ARCHITECTURE.md,
       recorded as a standing exception) found one contract serving two different consumers —
       HTTP routes (`plan.routes.ts`, `session.routes.ts`) and LLM tools
