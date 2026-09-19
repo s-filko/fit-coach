@@ -44,36 +44,34 @@ export async function setupTestDI(): Promise<void> {
       port: Number(process.env.DB_PORT),
     });
 
-    const client = await pool.connect();
+    const SCHEMA_RESET_ADVISORY_LOCK_KEY = 742_150_001;
+    // Test-DB safety (training-journey-scenarios plan, 2026-09-20): the whole
+    // per-file reset (drop + recreate + migrations + seeds) runs on ONE client
+    // holding a Postgres advisory lock with a fixed key, so two concurrent jest
+    // runs (e.g. two worktrees sharing one test DB) cannot drop the schema
+    // under each other — the second waits for the lock instead of interleaving.
+    // A crashed process loses the lock with its session, so nothing deadlocks.
+    const resetClient = await pool.connect();
     try {
-      await client.query('drop schema if exists public cascade; create schema public;');
-    } finally {
-      client.release();
-    }
+      await resetClient.query('select pg_advisory_lock($1)', [SCHEMA_RESET_ADVISORY_LOCK_KEY]);
+      await resetClient.query('drop schema if exists public cascade; create schema public;');
 
-    // Apply all migrations in order
-    const { readFile, readdir } = await import('fs/promises');
-    const path = await import('path');
-    const migrationsDir = path.resolve(process.cwd(), 'drizzle');
-    const files = await readdir(migrationsDir);
-    const sqlFiles = files.filter(f => f.endsWith('.sql')).sort(); // Sort to apply in order
+      // Apply all migrations in order
+      const { readFile, readdir } = await import('fs/promises');
+      const path = await import('path');
+      const migrationsDir = path.resolve(process.cwd(), 'drizzle');
+      const files = await readdir(migrationsDir);
+      const sqlFiles = files.filter(f => f.endsWith('.sql')).sort(); // Sort to apply in order
 
-    for (const file of sqlFiles) {
-      const sqlPath = path.join(migrationsDir, file);
-      const sql = await readFile(sqlPath, 'utf8');
-      const client2 = await pool.connect();
-      try {
-        await client2.query(sql);
-      } finally {
-        client2.release();
+      for (const file of sqlFiles) {
+        const sqlPath = path.join(migrationsDir, file);
+        const sql = await readFile(sqlPath, 'utf8');
+        await resetClient.query(sql);
       }
-    }
 
-    // Seed minimal test exercises data
-    const client3 = await pool.connect();
-    try {
+      // Seed minimal test exercises data
       // Insert test exercises with fixed UUIDs (matching seed file)
-      await client3.query(`
+      await resetClient.query(`
         INSERT INTO exercises (
           id, name, category, equipment, exercise_type, description, 
           energy_cost, complexity, typical_duration_minutes, requires_spotter
@@ -91,7 +89,7 @@ export async function setupTestDI(): Promise<void> {
       `);
 
       // Get exercise IDs
-      const result = await client3.query(`
+      const result = await resetClient.query(`
         SELECT id, name FROM exercises 
         WHERE name IN (
           'Barbell Bench Press', 'Barbell Back Squat', 'Pull-ups', 'Running'
@@ -101,7 +99,7 @@ export async function setupTestDI(): Promise<void> {
       // Insert muscle group mappings
       for (const row of result.rows) {
         if (row.name === 'Barbell Bench Press') {
-          await client3.query(
+          await resetClient.query(
             `
             INSERT INTO exercise_muscle_groups (exercise_id, muscle_group, involvement)
             VALUES ($1, 'chest', 'primary'), ($1, 'shoulders_front', 'secondary'), ($1, 'triceps', 'secondary')
@@ -110,7 +108,7 @@ export async function setupTestDI(): Promise<void> {
             [row.id],
           );
         } else if (row.name === 'Barbell Back Squat') {
-          await client3.query(
+          await resetClient.query(
             `
             INSERT INTO exercise_muscle_groups (exercise_id, muscle_group, involvement)
             VALUES ($1, 'quads', 'primary'), ($1, 'glutes', 'primary'), ($1, 'hamstrings', 'secondary')
@@ -119,7 +117,7 @@ export async function setupTestDI(): Promise<void> {
             [row.id],
           );
         } else if (row.name === 'Pull-ups') {
-          await client3.query(
+          await resetClient.query(
             `
             INSERT INTO exercise_muscle_groups (exercise_id, muscle_group, involvement)
             VALUES ($1, 'back_lats', 'primary'), ($1, 'biceps', 'secondary')
@@ -128,7 +126,7 @@ export async function setupTestDI(): Promise<void> {
             [row.id],
           );
         } else if (row.name === 'Running') {
-          await client3.query(
+          await resetClient.query(
             `
             INSERT INTO exercise_muscle_groups (exercise_id, muscle_group, involvement)
             VALUES ($1, 'cardio_system', 'primary'), ($1, 'lower_body_endurance', 'secondary')
@@ -139,7 +137,8 @@ export async function setupTestDI(): Promise<void> {
         }
       }
     } finally {
-      client3.release();
+      await resetClient.query('select pg_advisory_unlock($1)', [SCHEMA_RESET_ADVISORY_LOCK_KEY]).catch(() => {});
+      resetClient.release();
     }
 
     // Register services in test container

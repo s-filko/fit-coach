@@ -115,9 +115,9 @@ summary), `tests/integration/scenarios/harness.integration.test.ts` (smoke: one 
 step — row, seen block, delivered text), `package.json` script
 `"test:scenarios": "RUN_DB_TESTS=1 NODE_ENV=test jest --testMatch='**/tests/integration/scenarios/**/*.integration.test.ts'"`.
 
-- [ ] **Spike first:** Date-only fake timers with `pg` and `PostgresSaver`; report in STOP (fallback:
+- [x] **Spike first:** Date-only fake timers with `pg` and `PostgresSaver`; report in STOP (fallback:
   a `now` seam on the runner deps + the wall-clock reads listed in Findings).
-- [ ] The `_test` DB guard with a unit test.
+- [x] The `_test` DB guard with a unit test.
 - [ ] Commit `test(ai): DB-backed scenario runner with a scripted model beneath the real gateway`. STOP.
 
 **Verification:** `npm run test:scenarios` → green; `npm run test:unit` → green (quote the known
