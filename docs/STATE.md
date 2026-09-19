@@ -186,6 +186,33 @@ _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
+## Handoff (orchestrator relay, 2026-09-20)
+
+The orchestrator relays to a fresh session at clean boundaries (owner rule 2026-09-20; memory
+`orchestrator-session-relay`, `economical-work`). Where work stands:
+
+- **`training-journey-scenarios`** (worktree `/Users/filko/orca/workspaces/fit_coach/training-journey-scenarios`,
+  branch `plan/training-journey-scenarios`, Orca run `run_f05123509d74`): Tasks 1–6 accepted (see
+  the plan's acceptance notes). **Next: Task 7 close-out** — ONE combined review agent (test-heavy
+  plan; owner rule "one review per phase"), `Status: done`, `state.mjs --write`, merge to `dev`,
+  push. Owner decided **no CI job**: scenario tests are run manually by the owner and by agents as
+  self-verification — add that rule to `docs/ORCHESTRATION.md` § Task spec and the
+  `delegate-implementation` skill in the close-out commit (`npm run test:scenarios` in the
+  acceptance of any task touching conversation / graph / memory / phases / training tools;
+  orchestrator re-runs it at acceptance and before merge). Advisory to file: session timestamps
+  come from two clocks (DB `defaultNow` vs app `now`) — the scenario runner re-stamps them.
+- **`chat-continuity`** (BUG-018; worktree `/Users/filko/orca/workspaces/fit_coach/chat-continuity`,
+  branch `plan/chat-continuity`, run `run_b49c61f61663`): Task 0 (unit repro) accepted; ADR-0013 §3.3
+  amendment text approved by the owner (in the plan). **After the journey plan merges:** merge `dev`
+  into the branch so the scenarios are present, then Tasks 1–3 (one worker each); each fix flips
+  its `test.failing` case in the unit repro AND the matching `knownBug` cases in journeys A/B/C;
+  one review at the end; deploy; final check = the owner's own Telegram "привет" after a pause.
+- **Test DB:** `fitcoach_test` (local container `fitcoach-db`); `.env.test` no longer sets
+  `RUN_DB_TESTS` (backup `apps/server/.env.test.bak-20260920`, owner may ask to delete). Never
+  run tests in two worktrees against it at once; workers never touch a DB by hand.
+- **Owner-only:** live L3 (`DB_NAME=fitcoach_test RUN_LLM_EVALS=1 npm run evals -- --level L3`),
+  closing Orca sessions, deleting branches/worktrees.
+
 ## Blocked / waiting on owner
 
 - **Red-button eval runs (owner-launched only, separate budget; not blocking any plan):**
