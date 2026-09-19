@@ -67,7 +67,7 @@ failure is non-fatal), `docs/superpowers/plans/refactor-p6-facts-and-progress-bl
 - Modify: `apps/server/src/infra/ai/__tests__/llm.gateway.unit.test.ts` (+ a unit test file for
   the helper if one is created).
 
-- [ ] **Step 1: Tests first.** (a) model answer is `` ```json\n{…valid…}\n``` `` → returns the
+- [x] **Step 1: Tests first.** (a) model answer is `` ```json\n{…valid…}\n``` `` → returns the
   parsed object, model invoked **once**, one `warn` log naming the recovery and the profile;
   (b) the same without a language tag, and JSON surrounded by prose; (c) fenced JSON that
   **fails** the schema → one retry, then the error propagates (today's contract); (d) a normal
@@ -76,8 +76,8 @@ failure is non-fatal), `docs/superpowers/plans/refactor-p6-facts-and-progress-bl
   gateway tests use to stub the model (read them first); `withStructuredOutput(…, { includeRaw:
   true })` is the expected way to keep the raw message — verify its failure shape in the
   installed `@langchain/*` version rather than assuming it.
-- [ ] **Step 2: Implement.** Keep `isSchemaFailure` semantics for the retry decision.
-- [ ] **Step 3: Commit** — `fix(ai): structured() recovers fenced JSON from the raw model answer before retrying (BUG-017)`
+- [x] **Step 2: Implement.** Keep `isSchemaFailure` semantics for the retry decision.
+- [x] **Step 3: Commit** — `fix(ai): structured() recovers fenced JSON from the raw model answer before retrying (BUG-017)`
 - [ ] **Step 4: STOP** for orchestrator review.
 
 **Verification:** `npx jest --ci src/infra/ai` → all pass; `npm run evals -- --level L0` →
