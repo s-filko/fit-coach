@@ -512,3 +512,9 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       status table, no instanceof chain) and is correct — recorded only so the divergence from
       the usual discriminated-class style is a deliberate choice on record.
       Source: close-out-review, R1 (2026-09-19).
+- [ ] `conversation_runs.created_at` is stored **without a timezone, in local time**, while
+      Postgres `now()` returns UTC — so `WHERE created_at > now() - interval 'N minutes'`
+      silently returns zero rows even when the runs exist (cost a confused query during the P5
+      dev smoke, 2026-09-19; the P4 smoke's own SQL in the plan has the same latent flaw).
+      Either store it as `timestamptz` (migration) or fix every query and the plans that carry
+      them. Source: P5 dev smoke (2026-09-19).
