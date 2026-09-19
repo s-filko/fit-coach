@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { FACT_CATEGORIES } from '@domain/user/ports';
+
 /** Case schema — docs/PROMPT_EVAL_FRAMEWORK.md §3. */
 export const EvalPhaseSchema = z.enum(['registration', 'chat', 'plan_creation', 'session_planning', 'training']);
 
@@ -23,13 +25,24 @@ const FixtureUserSchema = z.object({
   registrationCompleted: z.boolean().optional(),
 });
 
+/**
+ * A fixture fact — the already-extracted durable row a case starts with (P6 Task 6).
+ * `category` is ADR-0009's eight; `muscleGroup` is the `MuscleGroup` slug a
+ * `physical_constraint` carries when hard validation must fire (AC-1361).
+ */
+const FixtureFactSchema = z.object({
+  category: z.enum(FACT_CATEGORIES),
+  fact: z.string().min(1),
+  muscleGroup: z.string().nullable().optional(),
+});
+
 const FixtureSchema = z.object({
   user: FixtureUserSchema,
   hasActivePlan: z.boolean().optional(),
   plan: z.unknown().optional(),
   sessions: z.array(z.unknown()).optional(),
   activeSession: z.unknown().optional(),
-  facts: z.array(z.unknown()).optional(),
+  facts: z.array(FixtureFactSchema).optional(),
 });
 
 /**

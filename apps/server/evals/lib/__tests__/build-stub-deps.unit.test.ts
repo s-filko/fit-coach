@@ -63,4 +63,39 @@ describe('buildStubDeps', () => {
     expect(transcriptRecords).toHaveLength(1);
     expect(summaryRecords).toHaveLength(1);
   });
+
+  it('maps fixture facts onto UserFact rows for getForPrompt (P6 Task 6, AC-1361)', async () => {
+    const { deps } = buildStubDeps({
+      ...COMPLETE_PROFILE,
+      facts: [
+        { category: 'physical_constraint', fact: 'Травмировано правое плечо', muscleGroup: 'shoulders_front' },
+        { category: 'exercise_preference', fact: 'Предпочитает гантели штангам' },
+      ],
+    });
+    const facts = await deps.userFacts.getForPrompt('u');
+    expect(facts.map(f => [f.category, f.fact, f.muscleGroup])).toEqual([
+      ['physical_constraint', 'Травмировано правое плечо', 'shoulders_front'],
+      ['exercise_preference', 'Предпочитает гантели штангам', null],
+    ]);
+    expect(facts.every(f => f.id && f.userId && f.factKey && f.confirmations >= 1)).toBe(true);
+  });
+
+  it('getConstraints returns only physical_constraint facts with a muscle group (real port semantics)', async () => {
+    const { deps } = buildStubDeps({
+      ...COMPLETE_PROFILE,
+      facts: [
+        { category: 'physical_constraint', fact: 'Боль в колене', muscleGroup: 'quads' },
+        { category: 'physical_constraint', fact: 'Общее ограничение без группы' },
+        { category: 'exercise_preference', fact: 'Предпочитает гантели штангам', muscleGroup: 'biceps' },
+      ],
+    });
+    const constraints = await deps.userFacts.getConstraints('u');
+    expect(constraints.map(f => f.fact)).toEqual(['Боль в колене']);
+  });
+
+  it('returns no facts for facts-free fixtures — nothing moves for existing datasets', async () => {
+    const { deps } = buildStubDeps(COMPLETE_PROFILE);
+    expect(await deps.userFacts.getForPrompt('u')).toEqual([]);
+    expect(await deps.userFacts.getConstraints('u')).toEqual([]);
+  });
 });

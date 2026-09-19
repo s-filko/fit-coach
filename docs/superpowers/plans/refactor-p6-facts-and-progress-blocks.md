@@ -307,8 +307,8 @@ Review notes: the unique constraint on `(user_id, category, fact_key)` is what m
 - Modify: `docs/ARCHITECTURE.md`, `docs/CONTRIBUTING_AI.md` — the facts path (extraction at compaction, block 2, hard validation), explicitly stating that `remember_fact` was dropped by owner decision 2026-09-17.
 - Modify: `docs/PROMPT_EVAL_FRAMEWORK.md` §4.2 — the new check.
 
-- [ ] **Step 1:** Author the dataset and the check; unit-test the check against fixture observations (the check is pure — it does not need a model).
-- [ ] **Step 2: Commit** — `test(evals): memory/facts dataset and the user-facts-block check (AC-1361, authored not run)`
+- [x] **Step 1:** Author the dataset and the check; unit-test the check against fixture observations (the check is pure — it does not need a model).
+- [x] **Step 2: Commit** — `test(evals): memory/facts dataset and the user-facts-block check (AC-1361, authored not run)`
 - [ ] **Step 3: STOP** — **Group 1 boundary.** Report: the tree is green, item 1 is complete and independently revertable here.
 
 **Verification:** `npx jest --ci evals` → all pass; `npm run evals -- --level L0` → pass. **No `RUN_LLM_EVALS=1`.** AC-1361's deterministic half is closed; its pass-rate half is recorded as pending the consolidated eval pass.

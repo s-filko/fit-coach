@@ -2,7 +2,7 @@ import type { BudgetReport } from '@domain/conversation/ports';
 
 import type { CaseObservation } from '../../lib/run-case';
 import type { EvalCase } from '../../schema/case.schema';
-import { assertCase } from '../l1';
+import { assertCase, loadCases } from '../l1';
 
 const base: EvalCase = {
   id: 'CH-0001',
@@ -38,6 +38,7 @@ const observed = (overrides: Partial<CaseObservation> = {}): CaseObservation => 
   threw: null,
   budgetReport: null,
   lastModelInput: [],
+  assembledInput: 'Assembled prompt without facts',
   ...overrides,
 });
 
@@ -270,6 +271,72 @@ describe('no_redundant_search (AC-1344, D-N)', () => {
     it('is not emitted when lastModelInput is empty (no model call observed)', () => {
       const results = assertCase(base, observed({ lastModelInput: [] }));
       expect(results.some(r => r.check === 'no-orphan-tool-message')).toBe(false);
+    });
+  });
+
+  describe('user-facts-block-present (AC-1361, P6 Task 6)', () => {
+    const factsCase: EvalCase = {
+      ...base,
+      id: 'MF-TEST',
+      phase: 'session_planning',
+      fixture: {
+        ...base.fixture,
+        hasActivePlan: true,
+        facts: [
+          { category: 'physical_constraint', fact: 'Травмировано правое плечо', muscleGroup: 'shoulders_front' },
+          { category: 'exercise_preference', fact: 'Предпочитает гантели штангам', muscleGroup: null },
+        ],
+      },
+    };
+    const assembledWithFacts =
+      '## User Facts\nphysical_constraint:\n- Травмировано правое плечо (shoulders_front)\nexercise_preference:\n- Предпочитает гантели штангам';
+
+    it('passes when the assembled input carries the heading and every fact text', () => {
+      const results = assertCase(factsCase, observed({ assembledInput: assembledWithFacts }));
+      expect(results.find(r => r.check === 'user-facts-block-present')?.passed).toBe(true);
+    });
+
+    it('fails when the ## User Facts heading is missing', () => {
+      const results = assertCase(factsCase, observed({ assembledInput: 'Травмировано правое плечо, но без блока' }));
+      const check = results.find(r => r.check === 'user-facts-block-present');
+      expect(check?.passed).toBe(false);
+      expect(check?.detail).toContain('## User Facts');
+    });
+
+    it('fails when the heading is present but a fact text is missing', () => {
+      const results = assertCase(
+        factsCase,
+        observed({
+          assembledInput: '## User Facts\nphysical_constraint:\n- Травмировано правое плечо (shoulders_front)',
+        }),
+      );
+      const check = results.find(r => r.check === 'user-facts-block-present');
+      expect(check?.passed).toBe(false);
+      expect(check?.detail).toContain('Предпочитает гантели');
+    });
+
+    it('is not emitted for facts-free fixtures (baselines v0–v2 record nothing new)', () => {
+      const results = assertCase(base, observed());
+      expect(results.some(r => r.check === 'user-facts-block-present')).toBe(false);
+    });
+  });
+
+  describe('loadCases (cross-phase directory, P6 Task 6)', () => {
+    it('loads memory/facts — the first cross-phase dataset — via its directory key', () => {
+      const cases = loadCases('memory', 'facts');
+      expect(cases.length).toBeGreaterThanOrEqual(4);
+      expect(cases.every(c => c.id.startsWith('MF-'))).toBe(true);
+      // Routing comes from the case's own phase field, never from the directory.
+      expect(cases.every(c => c.phase === 'session_planning')).toBe(true);
+      expect(cases.every(c => (c.fixture.facts ?? []).length > 0)).toBe(true);
+    });
+
+    it('loads existing phase datasets exactly as before', () => {
+      expect(loadCases('chat').length).toBeGreaterThan(0);
+      const chatIds = loadCases('chat').map(c => c.id);
+      expect(chatIds).toContain('CH-0001');
+      // The memory dataset never leaks into a phase directory's load.
+      expect(chatIds.some(id => id.startsWith('MF-'))).toBe(false);
     });
   });
 });
