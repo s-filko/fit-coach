@@ -98,7 +98,7 @@ is not stateful — a started session never reaches `getSessionDetails`, `search
 **Files:** `evals/schema/case.schema.ts` (export the reused sub-schemas), `evals/schema/scenario.schema.ts`
 (+ relative-time parser), `evals/schema/__tests__/scenario.schema.unit.test.ts`.
 
-- [ ] Tests first: a valid scenario, invalid ones, time parsing (`-3d`, `+6h`, `-14h`), the
+- [x] Tests first: a valid scenario, invalid ones, time parsing (`-3d`, `+6h`, `-14h`), the
   `knownBug` format. Implement.
 - [ ] Commit `test(evals): scenario format for multi-turn training journeys (AC-TJ-1)`. STOP.
 
