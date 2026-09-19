@@ -157,7 +157,7 @@ Steps: "привет, хочу потренироваться" → session_plann
   `completed`, `durationMinutes`, `completedAt`; step 7 `seen` the new workout first in chat context.
 - `test.failing` today: the previous turn not seen verbatim after each transition (AC-CC-1); step 4
   "Записал!" not delivered (AC-CC-3).
-- [x] Commit `test(ai): journey B — full workout with history over the real DB`. STOP.
+- [x] Commit `test(ai): journey B — full workout with history over the real DB`. STOP. **Accepted 2026-09-20** (`e68ae51d`, GLM worker via Orca; orchestrator re-ran `npm run test:scenarios` → 95/95). 14 steps greeting → finish → "спасибо"; 8 BUG-018 reproductions with real failure messages (AC-CC-1 ×6: the previous turn absent after each transition; AC-CC-3 ×2: "Записал!" written alongside `log_set` not delivered); no new product bug; `knownBug` now per assertion. **Harness note for review:** sessions created mid-journey get `created_at`/`last_activity_at` from the DB clock while the journey runs on the fake clock; the runner re-stamps a new session's creation fields to the scenario clock — an honest test artefact, but it points at a design smell (session timestamps from two clocks) to record as an advisory at close-out.
 
 ### Task 5: Journey C — interrupted workout (AC-TJ-2/3)
 
@@ -171,7 +171,16 @@ Steps: two sets logged; a mid-workout question about rest time (text only); cloc
   SESSION and a WORKOUT OVERVIEW still listing the pre-pause sets (from the DB); finish persisted.
 - `test.failing` today: the mid-workout exchange not seen verbatim after the pause (AC-CC-1); the gap
   note missing (AC-CC-2).
-- [x] Commit `test(ai): journey C — interrupted workout over the real DB`. STOP.
+- [x] Commit `test(ai): journey C — interrupted workout over the real DB`. STOP. **Accepted 2026-09-20 with a correction** (`c3a7d07a`; orchestrator re-ran → 156/156; journey B's past/setup shared, not copied). The run showed that after a >2 h pause `log_set` records a *retro* set (timestamped after the last activity, activity not refreshed) and `finish_training` closes the session at the pre-pause time (duration 11 min). **Owner ruling 2026-09-20: that is correct** — a 3.5 h gap is not a rest between sets, it is the user catching up an old workout later ("I left in a hurry and forgot to log the last exercise", even the next day). What the scenario got wrong is the user text "вернулся, доделаю" (it depicts continuing). Required AI behaviour: understand that the message belongs to the previous workout (or ask), add it there, and answer like "Added to your previous workout — close it or add something else?"; an explicit "добавь к последней тренировке …" must work the same way. → Task 5b.
+
+### Task 5b: Journey C reworded as catch-up logging, plus the explicit variant (owner ruling)
+
+**Files:** `evals/scenarios/c-interrupted-workout.scenario.ts` (rename to `c-catch-up-logging.scenario.ts` if clearer) and its integration test; a second scenario/step list for the explicit wording.
+
+- [ ] After the pause the user writes an implicit catch-up ("забыл дописать: последнее упражнение — подтягивания 3×8") — assert the sets land in the **previous** session with retro timestamps, the model **saw** the STALE SESSION block, the session closes at the pre-pause time; the mid-workout Q&A / gap-note `knownBug` cases stay.
+- [ ] Variant with the explicit "добавь к последней тренировке: подтягивания 3×8" — same persisted outcome.
+- [ ] Live-only expectation (L3, ignored by the deterministic layer): the delivered reply says the sets were added to the previous workout and asks whether to close it or add more.
+- [ ] Commit `test(ai): journey C as catch-up logging after a pause, explicit variant (owner ruling)`. STOP.
 
 ### Task 6: Live layer L3 (AC-TJ-4)
 
