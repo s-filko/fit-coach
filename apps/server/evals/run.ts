@@ -1,8 +1,8 @@
 /**
  * Eval runner — see docs/PROMPT_EVAL_FRAMEWORK.md.
- * Usage: npm run evals -- --level L0|L1 [--phase chat|all] [--samples 3]
+ * Usage: npm run evals -- --level L0|L1|L3 [--phase chat|all] [--samples 3]
  *                    [--dataset <stem>] [--baseline write|compare] [--baseline-version v0]
- *                    [--quota-before <n>]
+ *                    [--quota-before <n>] | --level L3 [--scenario <id>] [--samples 1]
  *
  * Red button (§7a, D-P): every L1 run prints its planned model calls before
  * anything runs and refuses above EVALS_CALL_CEILING (default 30) unless
@@ -12,12 +12,17 @@
  * and appends a row to evals/COST_LEDGER.md. Quota is read automatically when
  * readQuota() finds an endpoint (D-R: none confirmed as of 2026-09-18), else
  * via --quota-before <n> and completed with `npm run evals:ledger -- --after <n>`.
+ *
+ * L3 (live scenarios, owner-launched only): the same journeys the
+ * deterministic layer runs, with the REAL model over the test DB — see
+ * evals/datasets/README.md § L3 for the manual launch command.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { EVAL_PHASES, runL0 } from './levels/l0';
 import { loadCases, runL1 } from './levels/l1';
+import { loadScenarios, runL3 } from './levels/l3';
 import {
   appendLedgerRow,
   completeLastRow,
@@ -45,8 +50,10 @@ function ledgerText(): string {
 async function main(): Promise<void> {
   const level = argValue('--level', 'L0').toUpperCase();
   const phase = argValue('--phase', 'all');
-  const samples = Number(argValue('--samples', '3'));
+  // L3's default is one pass per journey — a live journey is many turns long.
+  const samples = Number(argValue('--samples', level === 'L3' ? '1' : '3'));
   const dataset = argValue('--dataset', '');
+  const baselineMode = argValue('--baseline', '');
 
   if (dataset !== '' && phase === 'all') {
     console.error('--dataset requires --phase <phase> — a dataset lives in one phase directory');
@@ -147,15 +154,42 @@ async function main(): Promise<void> {
       } else {
         console.log('ledger row appended — complete it: npm run evals:ledger -- --after <n>');
       }
+    } else if (level === 'L3') {
+      if (baselineMode !== '') {
+        console.error('L3 does not support --baseline (scenarios are not a per-phase baseline source).');
+        process.exit(2);
+      }
+      const scenarioId = argValue('--scenario', '');
+      let scenarios;
+      try {
+        scenarios = loadScenarios(scenarioId || undefined);
+      } catch (err) {
+        console.error(err instanceof Error ? err.message : String(err));
+        process.exit(2);
+      }
+      const outcome = await runL3(scenarios, samples, {
+        onPlanned: info =>
+          console.log(
+            `planned model calls: ${info.plannedCalls} (${info.userSteps} user steps × ${info.samples} samples, ceiling ${info.ceiling})`,
+          ),
+      });
+      if (outcome.status === 'skipped') {
+        console.log(outcome.message);
+        process.exit(0);
+      }
+      if (outcome.status === 'refused') {
+        console.error(outcome.message);
+        process.exit(3);
+      }
+      perPhaseResults.set('scenarios', outcome.results);
     } else {
-      console.error(`Level ${level} is not implemented yet (P0 ships L0 and L1).`);
+      console.error(`Level ${level} is not implemented yet (P0 ships L0, L1 and L3).`);
       process.exit(2);
     }
   }
 
   const results = [...perPhaseResults.values()].flat();
 
-  const baselineMode = argValue('--baseline', '');
   const baselineVersion = argValue('--baseline-version', 'v0');
 
   if (baselineMode === 'write') {

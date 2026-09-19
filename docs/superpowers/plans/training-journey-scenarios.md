@@ -190,7 +190,7 @@ Steps: two sets logged; a mid-workout question about rest time (text only); cloc
 `evals/datasets/README.md`.
 
 - The live layer ignores `script`, skips `seen`, reads tools from `conversation_runs`.
-- [ ] Commit `feat(evals): L3 scenario level sharing the journey definitions (AC-TJ-4)`. STOP.
+- [x] Commit `feat(evals): L3 scenario level sharing the journey definitions (AC-TJ-4)`. STOP.
 
 **Verification:** unit test green; `npm run evals -- --level L3` without the flag prints "skipped";
 L0 green.

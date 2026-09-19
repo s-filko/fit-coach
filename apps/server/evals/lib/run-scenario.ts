@@ -29,7 +29,7 @@ import { type IWorkoutSessionRepository, WORKOUT_SESSION_REPOSITORY_TOKEN } from
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import type { CompiledConversationGraph } from '@infra/ai/graph/conversation.graph';
 import { db } from '@infra/db/drizzle';
-import { conversationRuns, workoutSessions } from '@infra/db/schema';
+import { conversationRuns, conversationTurns, workoutSessions } from '@infra/db/schema';
 import { Container } from '@infra/di/container';
 import { registerInfraServices } from '@main/register-infra-services';
 
@@ -56,6 +56,8 @@ export interface ScenarioStepObservation {
   /** Delivered text (final AI message of the run); '' on advance steps. */
   delivered: string;
   runRow: ScenarioRunRow | null;
+  /** `conversation_turns` rows linked to this step's run; 0 on advance steps. */
+  turnCount: number;
   /** Checkpointed phase after the step (`graph.getState`). */
   phase: ConversationPhase;
   /** DB snapshot: the user's sessions, newest first. */
@@ -168,6 +170,7 @@ export async function runScenario(scenario: Scenario, opts: RunScenarioOptions =
         action: 'advance',
         delivered: '',
         runRow: null,
+        turnCount: 0,
         phase: await currentPhase(graph, world.userId),
         sessions: await sessionRepo.findRecentByUserIdWithDetails(world.userId, 10),
       };
@@ -183,6 +186,7 @@ export async function runScenario(scenario: Scenario, opts: RunScenarioOptions =
       action: 'user',
       delivered: result.text,
       runRow: await loadRunRow(result.runId),
+      turnCount: await countTurns(result.runId),
       phase: await currentPhase(graph, world.userId),
       sessions: await sessionRepo.findRecentByUserIdWithDetails(world.userId, 10),
     };
@@ -191,6 +195,14 @@ export async function runScenario(scenario: Scenario, opts: RunScenarioOptions =
   }
 
   return { userId: world.userId, planId: world.planId, t0, steps };
+}
+
+async function countTurns(runId: string): Promise<number> {
+  const turns = await db
+    .select({ id: conversationTurns.id })
+    .from(conversationTurns)
+    .where(eq(conversationTurns.runId, runId));
+  return turns.length;
 }
 
 async function currentPhase(graph: CompiledConversationGraph, userId: string): Promise<ConversationPhase> {
