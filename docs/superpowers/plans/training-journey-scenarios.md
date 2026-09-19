@@ -1,6 +1,6 @@
 # Training Journey Scenarios — Deterministic over the Real Test DB + Live L3 Implementation Plan
 
-- Status: planned
+- Status: in progress
 - Branch: plan/training-journey-scenarios
 - After: structured-output-json-object-mode
 
@@ -190,7 +190,7 @@ Steps: two sets logged; a mid-workout question about rest time (text only); cloc
 `evals/datasets/README.md`.
 
 - The live layer ignores `script`, skips `seen`, reads tools from `conversation_runs`.
-- [x] Commit `feat(evals): L3 scenario level sharing the journey definitions (AC-TJ-4)`. STOP.
+- [x] Commit `feat(evals): L3 scenario level sharing the journey definitions (AC-TJ-4)`. STOP. **Accepted 2026-09-20** (`16f51d88`, GLM worker via Orca; orchestrator re-ran `npx jest --ci evals` → 264/264, and `npm run evals -- --level L3` without the flag → "L3 skipped", no call). Live layer = same journeys through `run-scenario`, real model, `script`/`seen` ignored; delivered (incl. `liveOnly`), tools, phase, persisted evaluated; `knownBug` assertions reported as KNOWN; gated by `RUN_LLM_EVALS=1` + the shared L1 ceiling (`planCallCount`: 26 calls for all four journeys at `--samples 1`) + the `_test` guard. Advance steps work live through a Date-only fake clock (`@sinonjs/fake-timers` 13.0.5 pinned; `toFake: ['Date']`, timers stay real). **Owner launch command:** `DB_NAME=fitcoach_test RUN_LLM_EVALS=1 npm run evals -- --level L3 [--scenario c-catch-up-logging]` (from `apps/server/`).
 
 **Verification:** unit test green; `npm run evals -- --level L3` without the flag prints "skipped";
 L0 green.
