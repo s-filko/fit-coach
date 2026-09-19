@@ -32,6 +32,12 @@ export const EnvSchema = z.object({
     .transform(s => (s == null || s.trim() === '' ? undefined : s))
     .pipe(z.string().url().min(1).optional()),
   LLM_MODEL: z.string().min(1),
+  // Structured-output request mode for the whole LLM route (Z.AI route,
+  // 2026-09-19). 'json_schema' — today's request, byte-identical. 'json_object' —
+  // for providers that ignore json_schema (GLM via Z.AI): response_format
+  // {type:'json_object'} plus the JSON Schema in one trailing system message.
+  // Same tunables-not-secrets exception as EPISODE_*/LLM_PROFILE_*.
+  LLM_STRUCTURED_OUTPUT_MODE: z.enum(['json_schema', 'json_object']).default('json_schema'),
   // Episode-memory tunables (D-L, refactor-p4-episode-memory) — the second
   // documented exception to "no defaults in code" (tunables, not secrets; same
   // class as LLM_PROFILE_*): requiring them would mean hand-editing .env.dev /

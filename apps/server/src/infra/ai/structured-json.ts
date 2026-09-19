@@ -41,6 +41,23 @@ export function extractJsonPayload(text: string): unknown | undefined {
 }
 
 /**
+ * Serialises a Zod schema to JSON Schema exactly the way `withStructuredOutput`
+ * does for a non-`gpt-*` model: `cycles`/`reused` ref-packing and the response
+ * format's `name` as the schema `title`. Both structured-output modes embed the
+ * same serialisation — the schema travels in `response_format` (json_schema
+ * mode) or in the trailing system instruction (json_object mode).
+ */
+function serializeToJsonSchema(schema: ZodType, name: string): Record<string, unknown> {
+  return toJsonSchema(schema, {
+    cycles: 'ref',
+    reused: 'ref',
+    override: ctx => {
+      ctx.jsonSchema.title = name;
+    },
+  }) as Record<string, unknown>;
+}
+
+/**
  * Builds the `response_format` for `structured()` — byte-identical on the wire
  * to what `withStructuredOutput(schema, { name })` sends for a non-`gpt-*`
  * model (method `jsonSchema`), with one deliberate difference: `type` is a
@@ -70,14 +87,6 @@ export function buildJsonSchemaResponseFormat(
     schema: Record<string, unknown>;
   };
 } {
-  const jsonSchema = toJsonSchema(schema, {
-    cycles: 'ref',
-    reused: 'ref',
-    override: ctx => {
-      ctx.jsonSchema.title = name;
-    },
-  }) as Record<string, unknown>;
-
   return {
     type: new String('json_schema') as unknown as 'json_schema',
     json_schema: {
@@ -86,7 +95,21 @@ export function buildJsonSchemaResponseFormat(
         : {}),
       name,
       strict: true,
-      schema: jsonSchema,
+      schema: serializeToJsonSchema(schema, name),
     },
   };
+}
+
+/**
+ * The trailing system message text for json_object mode (`LLM_STRUCTURED_OUTPUT_MODE=json_object`)
+ * — providers that ignore `response_format: json_schema` (GLM via the Z.AI
+ * OpenAI-compatible endpoint accepts `text` and `json_object` only). The recipe
+ * Z.AI's own docs recommend: `json_object` + the JSON Schema described in the
+ * system prompt + client-side validation (the gateway's BUG-017 parse/recovery
+ * already is that validation).
+ */
+export function buildSchemaInstruction(schema: ZodType, name: string): string {
+  return `Respond with a single JSON object that conforms to this JSON Schema, and nothing else:\n${JSON.stringify(
+    serializeToJsonSchema(schema, name),
+  )}`;
 }

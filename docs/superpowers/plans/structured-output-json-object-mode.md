@@ -74,14 +74,14 @@ Callers and prompts do not change.
   `apps/server/src/infra/ai/__tests__/structured-json.unit.test.ts`.
 - Modify: `apps/server/.env.example`.
 
-- [ ] **Step 1: Tests first** — (a) default mode: request body byte-identical to today (existing
+- [x] **Step 1: Tests first** — (a) default mode: request body byte-identical to today (existing
   wire test untouched and green); (b) `json_object`: request body has
   `response_format: { type: 'json_object' }` (plain string type) and the last message is a system
   message containing the serialised JSON Schema; clean JSON answer → one provider call, no warn;
   (c) `json_object` + fenced answer → recovered, one call (recovery path unchanged); (d)
   `json_object` + schema-invalid answer → one retry then throw; (e) config rejects an unknown mode.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `feat(ai): LLM_STRUCTURED_OUTPUT_MODE — json_object mode with the schema in the prompt for providers without json_schema (Z.AI)`
+- [x] **Step 2: Implement.**
+- [x] **Step 3: Commit** — `feat(ai): LLM_STRUCTURED_OUTPUT_MODE — json_object mode with the schema in the prompt for providers without json_schema (Z.AI)`
 - [ ] **Step 4: STOP** for orchestrator review.
 
 **Verification:** `npx jest --ci src/infra/ai src/config` → all pass; `npm run test:unit` → green;
