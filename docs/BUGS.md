@@ -1030,7 +1030,7 @@ Gateway unit tests (fenced JSON → one call, parsed; invalid fenced JSON → on
 
 ## BUG-018 — After a pause the bot does not answer the user's message: compaction drops the recent conversation and only the last AI message is delivered
 
-**Status:** Open — fix planned in `docs/superpowers/plans/chat-continuity.md`
+**Status:** Fixed in code (2026-09-20, plan `chat-continuity`: AC-CC-1..3) — closes after the dev deploy and the owner's own Telegram "привет" after a pause (AC-CC-5)
 **Severity:** High
 **Found during:** owner's use of `@MyFitAiCoachDevBot`, 2026-09-19 16:27 UTC ("привет" answered with a plan dump)
 **Component:** `apps/server/src/infra/ai/graph/nodes/compact.ts` (`planCompaction`), `apps/server/src/infra/ai/graph/conversation-run.adapter.ts` (reply = `lastAiText`)
