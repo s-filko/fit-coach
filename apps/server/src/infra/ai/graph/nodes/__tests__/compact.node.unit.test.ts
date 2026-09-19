@@ -237,6 +237,40 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
     expect(removedIds(update)).toEqual(['m0', 'm0a', 'm1', 'm2']);
   });
 
+  // Close-out review fix (ADR-0013 §3.3 amendment, 2026-09-20): at ANY
+  // trigger a too-short part is never dropped — a budget cut is ALWAYS
+  // summarised, so one huge oldest turn (D-B "short" by turns) or a tiny
+  // removed part can no longer leave the channel unsummarised (BUG-018).
+  it('AC-CC-1: a budget-cut part is always summarised — a single long oldest turn is not dropped unsummarised', async () => {
+    const { deps, insert, structured } = makeDeps({ config: { minTurns: 5 } }); // removed is "short" by D-B's turns
+    (deps as { budgetFor: () => number }).budgetFor = () => 1; // every message overflows
+    const compact = buildCompactStep(deps);
+
+    const update = await compact(
+      channelState({ lastUserMessageAt: new Date(NOW.getTime() - 60_000).toISOString() }),
+      ctxConfig(),
+    );
+
+    expect(structured).toHaveBeenCalledTimes(1);
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(removedIds(update)).toEqual(['m0', 'm0a', 'm1', 'm2']);
+  });
+
+  it('AC-CC-1: a tiny budget-cut part is still summarised (no D-B trim on the budget trigger)', async () => {
+    const { deps, insert, structured } = makeDeps({ config: { minTokens: 500_000 } }); // "short" by D-B's tokens
+    (deps as { budgetFor: () => number }).budgetFor = () => 1;
+    const compact = buildCompactStep(deps);
+
+    const update = await compact(
+      channelState({ lastUserMessageAt: new Date(NOW.getTime() - 60_000).toISOString() }),
+      ctxConfig(),
+    );
+
+    expect(structured).toHaveBeenCalledTimes(1);
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(removedIds(update)).toEqual(['m0', 'm0a', 'm1', 'm2']);
+  });
+
   it('the summariser call goes through the gateway with the summarizer profile and schema name', async () => {
     const { deps, structured } = makeDeps();
     const compact = buildCompactStep(deps);

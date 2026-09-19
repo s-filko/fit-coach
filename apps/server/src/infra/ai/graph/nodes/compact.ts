@@ -101,9 +101,11 @@ export interface PlanCompactionInput {
  * summarise it. budget keeps its existing token-driven loop — the minimum
  * number of OLDEST whole turns until the kept history fits — which respects
  * the tail by construction: the cut reaches the last `keepTurns` turns only
- * when the tail alone exceeds the budget (then oldest-first, as before). The
- * cut is turn-safe by construction: turns are never split, so tool calls and
- * their results always travel together (D-I, master plan P4 rollback
+ * when the tail alone exceeds the budget (then oldest-first). Whatever the
+ * budget removes is ALWAYS summarised by the caller (AC-CC-1, ADR-0013 §3.3
+ * amendment 2026-09-20): no D-B trim-without-summary remains on any trigger.
+ * The cut is turn-safe by construction: turns are never split, so tool calls
+ * and their results always travel together (D-I, master plan P4 rollback
  * trigger).
  */
 export function planCompaction(input: PlanCompactionInput): { removed: BaseMessage[]; kept: BaseMessage[] } {
@@ -130,10 +132,11 @@ export function planCompaction(input: PlanCompactionInput): { removed: BaseMessa
 }
 
 /**
- * D-B: an ended episode with fewer than `minTurns` human turns or fewer than
- * `minTokens` estimated tokens is trimmed without a summary — a one-line
- * exchange is not worth a model call and would ride the prompt for three
- * episodes as noise.
+ * D-B, as amended (AC-CC-1): a part with fewer than `minTurns` human turns
+ * or fewer than `minTokens` estimated tokens is too short to be worth a
+ * model call — at inactivity/transition such a part is KEPT verbatim
+ * (planCompaction defers the compaction), never trimmed. No trigger trims
+ * without a summary any more.
  */
 export function isShortEpisode(
   removed: BaseMessage[],

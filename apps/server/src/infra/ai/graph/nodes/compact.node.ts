@@ -4,8 +4,10 @@
  * run. Ends the previous episode by rule (BR-LLM-001..003), turns it into
  * one independent structured summary (BR-LLM-004; summariser failure
  * degrades to trimming without a summary), keeps the last `EPISODE_KEEP_TURNS`
- * turns verbatim — nothing is dropped without a summary unless the budget
- * forces it (AC-CC-1) — keeps the last 3 summaries oldest
+ * turns verbatim and never drops a part without summarising it (AC-CC-1,
+ * ADR-0013 §3.3 amendment 2026-09-20: a too-short part is kept at
+ * inactivity/transition, and a budget cut is always summarised), keeps the
+ * last 3 summaries oldest
  * first, and is the ONLY writer that removes messages from the channel
  * (INV-LLM-002). Also owns the one-time legacy import for live threads (D-E).
  *
@@ -35,7 +37,7 @@ import { SUMMARIZER_PROMPT } from '@infra/ai/prompts/summarizer';
 
 import { createLogger } from '@shared/logger';
 
-import { decideCompactReason, isShortEpisode, planCompaction, renderTranscript } from './compact';
+import { decideCompactReason, planCompaction, renderTranscript } from './compact';
 
 const log = createLogger('compact-node');
 
@@ -167,14 +169,6 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
       episodeStartedAt: ctx.now.toISOString(),
       compactReason: null,
     };
-
-    if (isShortEpisode(removed, { minTurns, minTokens, estimate: estimateMessages })) {
-      // Budget-only today (AC-CC-1): inactivity/transition never get here —
-      // planCompaction defers a too-short beyond-tail part instead — but a
-      // budget cut may still have to drop a short oldest part to fit.
-      log.info({ userId, reason, removed: removed.length }, 'Short episode trimmed without a summary (D-B)');
-      return updates;
-    }
 
     let summary: EpisodeSummary | null = null;
     try {
