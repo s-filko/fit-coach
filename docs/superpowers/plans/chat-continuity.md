@@ -1,6 +1,6 @@
 # Chat Continuity — Compaction Keeps the Recent Conversation, the Reply Answers the Latest Message Implementation Plan
 
-- Status: planned
+- Status: in progress
 - Branch: plan/chat-continuity
 - After: structured-output-json-object-mode
 
@@ -128,7 +128,7 @@ use), `apps/server/src/infra/ai/graph/nodes/compact.node.ts`, `apps/server/src/c
 - [x] **Step 2: Implement.**
 - [x] **Step 2b:** flip Task 0's case (a) from `test.failing` to `test`; it must pass.
 - [x] **Step 3: Commit** — `fix(ai): compaction keeps the last turns verbatim and never drops unsummarised messages (BUG-018, AC-CC-1)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-20** (`784ce65b`, GLM worker via Orca). `planCompaction` keeps the last `EPISODE_KEEP_TURNS` (default 6) turns on every trigger; on inactivity/transition a beyond-tail part too short to summarise is kept (compaction deferred, flag consumed, no rotation) instead of dropped; the budget loop is unchanged (oldest-first; reaches the tail only when the tail alone exceeds the budget, where the D-B trim still applies). Task 0 case (a) and all six AC-CC-1 scenario tags flipped. Orchestrator re-ran: `npm run test:unit` 875/875, L0 96/96 (no snapshot moved), `npm run test:scenarios` 221/221, type-check + format clean.
 
 **Verification:** `npx jest --ci src/infra/ai/graph src/config` → pass; `npm run test:unit` →
 green; `npm run evals -- --level L0` → green (list any moved snapshot); format + type-check clean.
