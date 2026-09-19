@@ -105,9 +105,9 @@ moment its fix lands, which is when the fix task flips it to `test`:
 Plus one ordinary `test` pinning today's observable symptom (so the reproduction is visible, not
 just implied): the delivered reply equals the final plan-dump text only.
 
-- [ ] **Step 1:** write the test; run it; confirm (a)–(c) fail for the stated reason (quote each
+- [x] **Step 1:** write the test; run it; confirm (a)–(c) fail for the stated reason (quote each
   failure message in the STOP report — a case that fails for another reason is not a reproduction).
-- [ ] **Step 2: Commit** — `test(ai): reproduce BUG-018 — greeting after a pause is not answered (AC-CC-4)`
+- [x] **Step 2: Commit** — `test(ai): reproduce BUG-018 — greeting after a pause is not answered (AC-CC-4)`
 - [ ] **Step 3: STOP** for orchestrator review.
 
 **Verification:** `npx jest --ci src/infra/ai/graph/__tests__/chat-continuity.repro.unit.test.ts`
