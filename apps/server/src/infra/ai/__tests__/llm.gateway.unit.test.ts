@@ -23,17 +23,19 @@ const { __logFns: logFns } = jest.requireMock('@shared/logger') as {
 
 const recoveryWarn = expect.objectContaining({ recovery: 'fenced-json' });
 
+const resetGatewayMocks = () => {
+  invoke.mockReset();
+  structuredInvoke.mockReset();
+  withStructuredOutput.mockReset();
+  withConfig.mockClear();
+  getModel.mockClear();
+  logFns.info.mockClear();
+  logFns.warn.mockClear();
+  delete process.env.LLM_STRUCTURED_OUTPUT_MODE;
+};
+
 describe('OpenAiLlmGateway (ADR-0013 §7 D-10, AC-1311 — the single non-graph LLM path)', () => {
-  beforeEach(() => {
-    invoke.mockReset();
-    structuredInvoke.mockReset();
-    withStructuredOutput.mockReset();
-    withConfig.mockClear();
-    getModel.mockClear();
-    logFns.info.mockClear();
-    logFns.warn.mockClear();
-    delete process.env.LLM_STRUCTURED_OUTPUT_MODE;
-  });
+  beforeEach(resetGatewayMocks);
 
   it('chat() converts ChatMsg[] to LangChain messages and returns the text content', async () => {
     invoke.mockResolvedValue({ content: 'hello there' });
@@ -166,15 +168,7 @@ describe('OpenAiLlmGateway (ADR-0013 §7 D-10, AC-1311 — the single non-graph 
 describe('structured() structured-output mode (LLM_STRUCTURED_OUTPUT_MODE)', () => {
   const schema = z.object({ topics: z.array(z.string()) });
 
-  beforeEach(() => {
-    invoke.mockReset();
-    structuredInvoke.mockReset();
-    withConfig.mockClear();
-    getModel.mockClear();
-    logFns.info.mockClear();
-    logFns.warn.mockClear();
-    delete process.env.LLM_STRUCTURED_OUTPUT_MODE;
-  });
+  beforeEach(resetGatewayMocks);
 
   it('json_schema (default): today’s request unchanged — no trailing schema message', async () => {
     structuredInvoke.mockResolvedValue({ content: '{"topics":["legs"]}' });
