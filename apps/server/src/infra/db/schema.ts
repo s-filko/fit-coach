@@ -166,6 +166,36 @@ export const conversationSummaries = pgTable(
   },
 );
 
+// Durable user facts extracted at compaction (ADR-0009 table shape and FactCategory
+// values; mechanism superseded 2026-09-17 — see refactor-p6-facts-and-progress-blocks
+// Task 1 and Task 3). Idempotent upsert on (user_id, category, fact_key) with a
+// confirmation counter (D-C); `fact` text is never overwritten once written.
+export const userFacts = pgTable(
+  'user_facts',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    category: text('category').notNull(),
+    fact: text('fact').notNull(),
+    factKey: text('fact_key').notNull(),
+    muscleGroup: text('muscle_group'),
+    confirmations: integer('confirmations').notNull().default(1),
+    sourceTurnId: uuid('source_turn_id').references(() => conversationTurns.id),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  table => ({
+    userIdx: index('idx_user_facts_user').on(table.userId),
+    userCategoryFactKeyUnique: unique('uq_user_facts_user_category_fact_key').on(
+      table.userId,
+      table.category,
+      table.factKey,
+    ),
+  }),
+);
+
 // --- Training domain enums (see plan: training_session_management_mvp) ---
 
 export const exerciseTypeEnum = pgEnum('exercise_type', [
