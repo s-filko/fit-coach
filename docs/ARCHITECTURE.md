@@ -94,7 +94,7 @@ apps/server/src/
         phase-spec.ts           # PhaseSpec — one declarative spec per phase (INV-LLM-005)
         phase-subgraph.factory.ts  # buildPhaseSubgraph(spec) — the single factory building every phase subgraph
         phases/                 # The five PhaseSpecs: registration, chat, plan-creation, session-planning, training
-        episode.ts              # splitEpisode (history vs current, D-I), lastAiText, toTranscriptMessages
+        episode.ts              # splitEpisode (history vs current, D-I), runAiText (the run's reply, AC-CC-3), toTranscriptMessages
         conversation-run.adapter.ts  # ConversationRunPort adapter: loads the user, builds run context, records failed runs, clearContext via the checkpointer (D-F)
         tool-executor.ts        # Shared tool executor: runs every phase's tool calls, answers every tool_call id, serialises ToolOutcome v1, applies ToolStateUpdate (ADR-0013 §4.2/§4.4/§6)
         tool-policy.ts          # ToolPolicy + pure helpers: ordering, batch dedup, search key (AC-1331/AC-1332)

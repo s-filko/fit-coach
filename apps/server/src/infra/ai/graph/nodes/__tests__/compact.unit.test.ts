@@ -263,7 +263,7 @@ describe('planCompaction (AC-CC-1 — the verbatim tail; D-I — the cut never s
   });
 });
 
-describe('isShortEpisode (D-B — trimmed without a summary)', () => {
+describe('isShortEpisode (D-B — too short to summarise: compaction defers)', () => {
   const oneTurn: BaseMessage[] = [human('h1', 'ок'), ai('a1', 'хорошо')];
   const twoTurns: BaseMessage[] = [...oneTurn, human('h2', 'а план?'), ai('a2', 'вот план')];
 
