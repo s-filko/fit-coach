@@ -28,8 +28,12 @@ Rules:
       filled at extraction. Scope to design: render dates/confirmations as context, a staleness
       rule per category (an injury ages differently from equipment), explicit retraction
       (summariser output and/or user command), deletion vs. soft-archive, and how hard
-      validation treats an old constraint. Needs an owner decision on the fact-lifecycle model
-      (ADR-0009 / ADR-0013 amendment) before planning. Related: the near-duplicate-facts entry in
+      validation treats an old constraint. **Direction chosen by the owner 2026-09-20 — standard
+      agent memory:** at compaction the summariser sees the known facts and returns operations
+      (add / confirm / update / retract); the prompt shows each fact with its date and confirmation
+      count; a retracted fact is archived, not deleted; a long-unconfirmed constraint is shown as
+      "may be outdated — ask" instead of silently blocking. Details to be checked against the
+      standard before planning; needs an ADR-0009 / ADR-0013 amendment. Related: the near-duplicate-facts entry in
       § P6 facts (Group 1) close-out review advisories. Source: owner review of the P6 dev smoke
       (2026-09-19).
 - [ ] Connector layer on top of P1's `LlmGateway`: profiles become full connectors —
