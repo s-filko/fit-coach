@@ -565,3 +565,23 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       `MuscleGroup` enum — a typo in a dataset (`shoulder_front`) would silently make a
       `physical_constraint` fixture bind nothing. Validate against the enum. Source:
       orchestrator review of P6 Task 6 (2026-09-19).
+
+## structured-output-fenced-json close-out review advisories (2026-09-19)
+
+- [ ] `extractJsonPayload` (`infra/ai/structured-json.ts`) looks at the first Markdown fence
+      only, and its brace-span fallback spans the whole text — an answer with two fenced blocks
+      (a discarded draft plus the real payload) is not recovered and not tested. Iterate every
+      fence before falling back. Source: close-out-review, R3 (2026-09-19).
+- [ ] `infra/ai/structured-json.ts` holds two independent reasons to change: the JSON-recovery
+      heuristics (BUG-017's fix) and the `response_format` builder whose `String`-object `type`
+      exists only to dodge a `@langchain/openai` internal routing check. Split if either grows;
+      the routing workaround is the one a library upgrade will touch. Source: close-out-review, R1 (2026-09-19).
+- [ ] The scripted-model `jest.mock('@infra/ai/model.factory', …)` double is now near-copied in
+      three graph test files (`episode-memory.integration`, `conversation.graph`,
+      `user-facts.scenario`); `graph/__tests__/graph-test-support.ts` (added at this close-out
+      for `USER` / `ctxConfig`) is the natural home for one builder. Source: close-out-review, R2 (2026-09-19).
+- [ ] No test proves that a `RunMetricsCollector` attached through the invoke config still
+      receives the LLM callbacks for `structured()` calls — the switch from
+      `withStructuredOutput(...)` to `withConfig({ response_format })` is believed equivalent
+      (both bind the same `ChatOpenAI`) but that is inference; a dev smoke run row's token
+      counts for a compaction would settle it cheaply. Source: close-out-review, R3 (2026-09-19).

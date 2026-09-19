@@ -1009,7 +1009,7 @@ Fixed by the P4 run projection (`refactor-p4-episode-memory`): `appendTurn` is g
 
 ## BUG-017 — Structured output fails on fenced JSON: episode summaries (and user facts) are never produced on the GLM route
 
-**Status:** Open — fix planned in `docs/superpowers/plans/structured-output-fenced-json.md`
+**Status:** Fixed (structured-output-fenced-json, 2026-09-19 — `057b4240`; live confirmation by the plan's dev smoke)
 **Severity:** High
 **Found during:** P6 dev smoke 2026-09-19, right after `refactor-p6-facts-and-progress-blocks` merged
 **Component:** `apps/server/src/infra/ai/llm.gateway.ts` (`structured()`)
