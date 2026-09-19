@@ -73,7 +73,14 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
           episodeId: state.episodeId || runId,
           phaseAtEnd: legacy.phase,
           endedAt: legacy.createdAt.toISOString(),
-          summary: { topics: [legacy.text], decisions: [], userState: [], trainingFeedback: [], openItems: [] },
+          summary: {
+            topics: [legacy.text],
+            decisions: [],
+            userState: [],
+            trainingFeedback: [],
+            openItems: [],
+            facts: [], // pre-P4 legacy import has no structured facts (Task 2)
+          },
         };
         log.info({ userId, phase: legacy.phase }, 'Imported the legacy rolling summary as one episode');
         // BACKLOG (b): this branch must also consume a pending compactReason —

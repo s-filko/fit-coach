@@ -27,6 +27,7 @@ const FIXED_SUMMARY: EpisodeSummary = {
   userState: ['mild shoulder discomfort'],
   trainingFeedback: [],
   openItems: ['day 2 not logged'],
+  facts: [],
 };
 
 /** Run 1's traffic (with ids — RemoveMessage needs them) + run 2's human message. */

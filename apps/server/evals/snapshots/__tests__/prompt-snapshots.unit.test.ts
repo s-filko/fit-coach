@@ -10,7 +10,7 @@ import { PLAN_CREATION_PROMPT, PLAN_CREATION_V1 } from '@infra/ai/prompts/phases
 import { REGISTRATION_PROMPT } from '@infra/ai/prompts/phases/registration';
 import { SESSION_PLANNING_PROMPT, SESSION_PLANNING_V1 } from '@infra/ai/prompts/phases/session_planning';
 import { TRAINING_PROMPT, TRAINING_V1 } from '@infra/ai/prompts/phases/training';
-import { SUMMARIZER_PROMPT, SUMMARIZER_V1 } from '@infra/ai/prompts/summarizer';
+import { SUMMARIZER_V1, SUMMARIZER_V2, SUMMARIZER_V3 } from '@infra/ai/prompts/summarizer';
 
 import { ALL_FIXTURES } from '../../fixtures/personas';
 import {
@@ -173,13 +173,25 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
     expect(sectionText(sections, 'user')).toMatchSnapshot();
   });
 
+  // v2 is frozen for the record (referenced directly, not via the moving SUMMARIZER_PROMPT
+  // alias) — v3 is current as of P6 Task 2.
   it('summarizer v2 / system (structured episode summary — BR-LLM-004, ADR-0010)', () => {
-    const sections = SUMMARIZER_PROMPT.render({ phase: 'training', transcript: FIXTURE_TRANSCRIPT });
+    const sections = SUMMARIZER_V2.render({ phase: 'training', transcript: FIXTURE_TRANSCRIPT });
     expect(sectionText(sections, 'system')).toMatchSnapshot();
   });
 
   it('summarizer v2 / user (rendered transcript only — no previousSummary)', () => {
-    const sections = SUMMARIZER_PROMPT.render({ phase: 'training', transcript: FIXTURE_TRANSCRIPT });
+    const sections = SUMMARIZER_V2.render({ phase: 'training', transcript: FIXTURE_TRANSCRIPT });
+    expect(sectionText(sections, 'user')).toMatchSnapshot();
+  });
+
+  it('summarizer v3 / system (adds the facts field — P6 Task 2, owner decision 2026-09-17)', () => {
+    const sections = SUMMARIZER_V3.render({ phase: 'training', transcript: FIXTURE_TRANSCRIPT });
+    expect(sectionText(sections, 'system')).toMatchSnapshot();
+  });
+
+  it('summarizer v3 / user (rendered transcript only — no previousSummary)', () => {
+    const sections = SUMMARIZER_V3.render({ phase: 'training', transcript: FIXTURE_TRANSCRIPT });
     expect(sectionText(sections, 'user')).toMatchSnapshot();
   });
 

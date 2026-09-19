@@ -52,7 +52,7 @@ const SUMMARY = (id: string, endedAt: string): StoredEpisodeSummary => ({
   episodeId: id,
   phaseAtEnd: 'training',
   endedAt,
-  summary: { topics: ['t'], decisions: [], userState: [], trainingFeedback: [], openItems: [] },
+  summary: { topics: ['t'], decisions: [], userState: [], trainingFeedback: [], openItems: [], facts: [] },
 });
 
 function baseBudget(overrides: Partial<Parameters<typeof resolveBudget>[0]['budget']> = {}) {

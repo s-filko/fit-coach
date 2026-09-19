@@ -33,6 +33,7 @@ const EPISODE_SUMMARY: StoredEpisodeSummary = {
     userState: ['mild shoulder discomfort'],
     trainingFeedback: [],
     openItems: ['day 2 not logged'],
+    facts: [],
   },
 };
 

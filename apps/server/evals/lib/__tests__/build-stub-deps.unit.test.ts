@@ -57,7 +57,7 @@ describe('buildStubDeps', () => {
       runId: 'r',
       episodeId: 'e',
       phaseAtEnd: 'chat',
-      structured: { topics: [], decisions: [], userState: [], trainingFeedback: [], openItems: [] },
+      structured: { topics: [], decisions: [], userState: [], trainingFeedback: [], openItems: [], facts: [] },
       rendered: 'chat (today): .',
     });
     expect(transcriptRecords).toHaveLength(1);
