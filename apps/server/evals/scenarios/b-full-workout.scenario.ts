@@ -43,160 +43,172 @@ export const AFTER_PULLUP_2_TEXT = 'Два подхода подтягивани
 export const FINISH_FINAL_TEXT = 'Отличная работа! Четыре подхода за 20 минут. Отдыхай!';
 export const THANKS_REPLY_TEXT = 'Всегда пожалуйста! До следующей тренировки.';
 
+/**
+ * The seeded world journeys B and C share (Task 5 moved the literal out of
+ * `scenario` so journey C imports it instead of copying — DRY at review).
+ */
+export const sharedPast: Scenario['past'] = {
+  user: {
+    languageCode: 'ru',
+    timezone: 'Europe/Berlin',
+    firstName: 'Alex',
+    age: 30,
+    gender: 'male',
+    height: 180,
+    weight: 80,
+    fitnessLevel: 'intermediate',
+    fitnessGoal: 'strength',
+    registrationCompleted: true,
+  },
+  plan: {
+    name: 'Upper/Lower Split',
+    sessions: [
+      {
+        key: 'upper_a',
+        title: 'Upper A',
+        exercises: [
+          { exercise: 'Barbell Bench Press', sets: 3, reps: '8-10', weight: 80 },
+          { exercise: 'Pull-ups', sets: 3, reps: '6-8' },
+        ],
+      },
+      {
+        key: 'lower_a',
+        title: 'Lower A',
+        exercises: [{ exercise: 'Barbell Back Squat', sets: 3, reps: '8-10', weight: 100 }],
+      },
+    ],
+  },
+  workouts: [
+    {
+      at: '-4d',
+      key: 'upper_a',
+      exercises: [
+        {
+          exercise: 'Barbell Bench Press',
+          sets: [
+            { reps: 8, weight: 80 },
+            { reps: 8, weight: 80 },
+          ],
+        },
+      ],
+    },
+    {
+      at: '-2d',
+      key: 'lower_a',
+      exercises: [
+        {
+          exercise: 'Barbell Back Squat',
+          sets: [
+            { reps: 10, weight: 100 },
+            { reps: 10, weight: 100 },
+          ],
+        },
+      ],
+    },
+  ],
+  facts: [{ category: 'coaching_preference', fact: 'Prefers short, direct replies without long intros' }],
+};
+
+/**
+ * The chat → session_planning → training setup (steps 0–2), shared with
+ * journey C's interrupted workout (Task 5) — import, don't copy.
+ */
+export const setupSteps: Scenario['steps'] = [
+  // --- step 0: greeting, chat → session_planning ---
+  {
+    action: 'user',
+    text: GREETING_REQUEST,
+    script: [
+      {
+        text: GREETING_AND_TRANSITION_TEXT,
+        toolCall: { name: 'request_transition', args: { toPhase: 'session_planning', reason: 'user wants to train' } },
+      },
+      { text: PLANNING_FINAL_TEXT },
+    ],
+    expect: {
+      tools: { must: ['request_transition'] },
+      delivered: { mustMatch: [PLANNING_FINAL_TEXT] },
+      persisted: { turnRecorded: true },
+      phaseAfter: { phase: 'session_planning' },
+    },
+  },
+  // --- step 1: "давай верх" — the proposal, built on history + recovery + plan ---
+  {
+    action: 'user',
+    text: GO_UPPER,
+    script: [{ text: 'Отлично — Upper A: жим лёжа 3×8-10 @ 80 кг, подтягивания 3×6-8. Начинаем?' }],
+    expect: {
+      seen: {
+        mustMatch: [
+          '=== RECENT TRAINING HISTORY (last sessions) ===',
+          '1. lower_a (2d ago (Fri) afternoon) — completed — 60 min',
+          '- Barbell Back Squat: 10x100kg, 10x100kg',
+          '2. upper_a (4d ago (Wed)) — completed — 60 min',
+          '- Barbell Bench Press: 8x80kg, 8x80kg',
+          '=== RECOVERY TIMELINE (muscle groups) ===',
+          '- quads: ⚠ 2d ago (Fri) afternoon — may still be sore',
+          '- chest: 4d ago (Wed) — likely recovered',
+          '=== ACTIVE WORKOUT PLAN ===',
+          'Plan: Upper/Lower Split',
+          '### Upper A (key: upper_a)',
+          `[ID:${BENCH_PRESS_ID}] Barbell Bench Press: 3x8-10 @ 80kg (rest: 120s)`,
+          // BUG-018 point 1: the chat→session_planning transition ended the
+          // episode, so the immediately preceding turn is gone from the input.
+          { text: GREETING_REQUEST, knownBug: 'BUG-018/AC-CC-1' },
+          { text: PLANNING_FINAL_TEXT, knownBug: 'BUG-018/AC-CC-1' },
+        ],
+      },
+      delivered: { mustMatch: ['жим лёжа 3×8-10 @ 80 кг'] },
+      persisted: { turnRecorded: true },
+      phaseAfter: { phase: 'session_planning' },
+    },
+  },
+  // --- step 2: "да, поехали" — start_training_session with the plan IDs ---
+  {
+    action: 'user',
+    text: LETS_GO,
+    script: [
+      {
+        toolCall: {
+          name: 'start_training_session',
+          args: {
+            sessionKey: 'upper_a',
+            sessionName: 'Upper A',
+            reasoning: 'Upper day per the active split; chest recovered, quads still sore — upper is the right call.',
+            exercises: [
+              {
+                exerciseId: BENCH_PRESS_ID,
+                exerciseName: 'Barbell Bench Press',
+                targetSets: 3,
+                targetReps: '8-10',
+                targetWeight: 80,
+                restSeconds: 120,
+              },
+              { exerciseId: PULL_UPS_ID, exerciseName: 'Pull-ups', targetSets: 3, targetReps: '6-8', restSeconds: 120 },
+            ],
+            estimatedDuration: 60,
+          },
+        },
+      },
+      { text: START_FINAL_TEXT },
+    ],
+    expect: {
+      tools: { must: ['start_training_session'] },
+      delivered: { mustMatch: ['Поехали!'] },
+      phaseAfter: { phase: 'training' },
+      persisted: { session: { key: 'upper_a', status: 'in_progress', hasStartedAt: true } },
+    },
+  },
+];
+
 export const scenario: Scenario = {
   id: 'b-full-workout',
   description:
     'a full workout, greeting to finish: planning → start → sets → finish over the real test DB; ' +
     'AC-CC-1 (turns lost after transitions) and AC-CC-3 ("Записал!" not delivered) reproductions',
-  past: {
-    user: {
-      languageCode: 'ru',
-      timezone: 'Europe/Berlin',
-      firstName: 'Alex',
-      age: 30,
-      gender: 'male',
-      height: 180,
-      weight: 80,
-      fitnessLevel: 'intermediate',
-      fitnessGoal: 'strength',
-      registrationCompleted: true,
-    },
-    plan: {
-      name: 'Upper/Lower Split',
-      sessions: [
-        {
-          key: 'upper_a',
-          title: 'Upper A',
-          exercises: [
-            { exercise: 'Barbell Bench Press', sets: 3, reps: '8-10', weight: 80 },
-            { exercise: 'Pull-ups', sets: 3, reps: '6-8' },
-          ],
-        },
-        {
-          key: 'lower_a',
-          title: 'Lower A',
-          exercises: [{ exercise: 'Barbell Back Squat', sets: 3, reps: '8-10', weight: 100 }],
-        },
-      ],
-    },
-    workouts: [
-      {
-        at: '-4d',
-        key: 'upper_a',
-        exercises: [
-          {
-            exercise: 'Barbell Bench Press',
-            sets: [
-              { reps: 8, weight: 80 },
-              { reps: 8, weight: 80 },
-            ],
-          },
-        ],
-      },
-      {
-        at: '-2d',
-        key: 'lower_a',
-        exercises: [
-          {
-            exercise: 'Barbell Back Squat',
-            sets: [
-              { reps: 10, weight: 100 },
-              { reps: 10, weight: 100 },
-            ],
-          },
-        ],
-      },
-    ],
-    facts: [{ category: 'coaching_preference', fact: 'Prefers short, direct replies without long intros' }],
-  },
+  past: sharedPast,
   steps: [
-    // --- step 0: greeting, chat → session_planning ---
-    {
-      action: 'user',
-      text: GREETING_REQUEST,
-      script: [
-        {
-          text: GREETING_AND_TRANSITION_TEXT,
-          toolCall: { name: 'request_transition', args: { toPhase: 'session_planning', reason: 'user wants to train' } },
-        },
-        { text: PLANNING_FINAL_TEXT },
-      ],
-      expect: {
-        tools: { must: ['request_transition'] },
-        delivered: { mustMatch: [PLANNING_FINAL_TEXT] },
-        persisted: { turnRecorded: true },
-        phaseAfter: { phase: 'session_planning' },
-      },
-    },
-    // --- step 1: "давай верх" — the proposal, built on history + recovery + plan ---
-    {
-      action: 'user',
-      text: GO_UPPER,
-      script: [
-        { text: 'Отлично — Upper A: жим лёжа 3×8-10 @ 80 кг, подтягивания 3×6-8. Начинаем?' },
-      ],
-      expect: {
-        seen: {
-          mustMatch: [
-            '=== RECENT TRAINING HISTORY (last sessions) ===',
-            '1. lower_a (2d ago (Fri) afternoon) — completed — 60 min',
-            '- Barbell Back Squat: 10x100kg, 10x100kg',
-            '2. upper_a (4d ago (Wed)) — completed — 60 min',
-            '- Barbell Bench Press: 8x80kg, 8x80kg',
-            '=== RECOVERY TIMELINE (muscle groups) ===',
-            '- quads: ⚠ 2d ago (Fri) afternoon — may still be sore',
-            '- chest: 4d ago (Wed) — likely recovered',
-            '=== ACTIVE WORKOUT PLAN ===',
-            'Plan: Upper/Lower Split',
-            '### Upper A (key: upper_a)',
-            `[ID:${BENCH_PRESS_ID}] Barbell Bench Press: 3x8-10 @ 80kg (rest: 120s)`,
-            // BUG-018 point 1: the chat→session_planning transition ended the
-            // episode, so the immediately preceding turn is gone from the input.
-            { text: GREETING_REQUEST, knownBug: 'BUG-018/AC-CC-1' },
-            { text: PLANNING_FINAL_TEXT, knownBug: 'BUG-018/AC-CC-1' },
-          ],
-        },
-        delivered: { mustMatch: ['жим лёжа 3×8-10 @ 80 кг'] },
-        persisted: { turnRecorded: true },
-        phaseAfter: { phase: 'session_planning' },
-      },
-    },
-    // --- step 2: "да, поехали" — start_training_session with the plan IDs ---
-    {
-      action: 'user',
-      text: LETS_GO,
-      script: [
-        {
-          toolCall: {
-            name: 'start_training_session',
-            args: {
-              sessionKey: 'upper_a',
-              sessionName: 'Upper A',
-              reasoning: 'Upper day per the active split; chest recovered, quads still sore — upper is the right call.',
-              exercises: [
-                {
-                  exerciseId: BENCH_PRESS_ID,
-                  exerciseName: 'Barbell Bench Press',
-                  targetSets: 3,
-                  targetReps: '8-10',
-                  targetWeight: 80,
-                  restSeconds: 120,
-                },
-                { exerciseId: PULL_UPS_ID, exerciseName: 'Pull-ups', targetSets: 3, targetReps: '6-8', restSeconds: 120 },
-              ],
-              estimatedDuration: 60,
-            },
-          },
-        },
-        { text: START_FINAL_TEXT },
-      ],
-      expect: {
-        tools: { must: ['start_training_session'] },
-        delivered: { mustMatch: ['Поехали!'] },
-        phaseAfter: { phase: 'training' },
-        persisted: { session: { key: 'upper_a', status: 'in_progress', hasStartedAt: true } },
-      },
-    },
+    ...setupSteps,
     { action: 'advance', at: '+5m' },
     // --- step 4: bench set 1 — "Записал!" rides the same AI message as log_set ---
     {
@@ -344,10 +356,7 @@ export const scenario: Scenario = {
               },
               {
                 exercise: 'Pull-ups',
-                sets: [
-                  { reps: 8 },
-                  { reps: 8 },
-                ],
+                sets: [{ reps: 8 }, { reps: 8 }],
               },
             ],
           },
@@ -389,10 +398,7 @@ export const scenario: Scenario = {
               },
               {
                 exercise: 'Pull-ups',
-                sets: [
-                  { reps: 8 },
-                  { reps: 8 },
-                ],
+                sets: [{ reps: 8 }, { reps: 8 }],
               },
             ],
           },

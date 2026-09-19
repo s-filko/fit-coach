@@ -171,7 +171,7 @@ Steps: two sets logged; a mid-workout question about rest time (text only); cloc
   SESSION and a WORKOUT OVERVIEW still listing the pre-pause sets (from the DB); finish persisted.
 - `test.failing` today: the mid-workout exchange not seen verbatim after the pause (AC-CC-1); the gap
   note missing (AC-CC-2).
-- [ ] Commit `test(ai): journey C — interrupted workout over the real DB`. STOP.
+- [x] Commit `test(ai): journey C — interrupted workout over the real DB`. STOP.
 
 ### Task 6: Live layer L3 (AC-TJ-4)
 
