@@ -1,8 +1,9 @@
 # Structured Output — Fenced-JSON Recovery and the User-Facts Scenario Test Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/structured-output-fenced-json
 - After: refactor-p6-facts-and-progress-blocks
+- Review: 2026-09-19 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and superpowers:test-driven-development. One plan task per worker session; stop after the task.
 
@@ -124,8 +125,8 @@ clean.
 
 ### Task 3: Close-out, deploy, dev smoke (orchestrator)
 
-- [ ] **Step 1:** `docs/BUGS.md` BUG-017 → Fixed with the commit and test names.
-- [ ] **Step 2:** `close-out-review`; `- Status: done`; `node scripts/state.mjs --write`; merge
+- [x] **Step 1:** `docs/BUGS.md` BUG-017 → Fixed with the commit and test names.
+- [x] **Step 2:** `close-out-review`; `- Status: done`; `node scripts/state.mjs --write`; merge
   to `dev`, push, deploy, health 200, `state.mjs --check` → OK.
 - [ ] **Step 3: Dev smoke — 3 calls, the P6 facts scenario on the live model** (smoke user,
   called on the server directly, not through the NPM proxy, whose 90 s timeout returns 504):
@@ -133,3 +134,42 @@ clean.
   `conversation_summaries` row, `SELECT category, fact, muscle_group, confirmations FROM
   user_facts`, the run's `budget_report->'longTerm'` > 0, and the summariser's gateway log line
   (recovered or clean).
+
+---
+
+## Review
+
+Close-out review 2026-09-19, four zones in parallel (Sonnet subagents, cold contexts), diff
+`fc300b38...HEAD`.
+
+**First pass: blocked — four findings (three distinct).**
+
+- **blocking | R1 + R4** | `docs/adr/0013-llm-core-target-architecture.md:349` | ADR-0013 §7 —
+  the ADR said "`structured` uses `withStructuredOutput` … with one retry on schema failure";
+  the gateway no longer does. **Closed** in `d04fb2ae` by an inline amendment to §7, **approved
+  by the owner in this session** (same style as the 2026-09-16 P1 amendment in that sentence).
+- **blocking | R2** | `apps/server/src/infra/ai/graph/__tests__/user-facts.scenario.unit.test.ts:31-37`
+  and `:244-259` | DRY (`CONTRIBUTING_AI.md`) — `USER` and `ctxConfig` copied from
+  `episode-memory.integration.unit.test.ts`. **Closed** in `1ce72b8d` (GLM worker via Orca): one
+  `graph/__tests__/graph-test-support.ts` imported by both. The same commit moved the pure
+  `computeFactKey` to `domain/user/services/fact-key.ts` (the scenario test had restated it —
+  orchestrator's note) and removed `isSchemaFailure`'s now-dead `SyntaxError` branch (R3 advisory).
+- **blocking | R3** | `docs/superpowers/plans/structured-output-fenced-json.md:117` |
+  `SUPERPOWERS_INTEGRATION.md` rule 2 — Task 2's acceptance recorded no run of its verification
+  commands (L0 is not in the pre-commit hook). **Closed** in `d04fb2ae`: the orchestrator re-ran
+  all five on `1ce72b8d` and recorded the result lines; R3's re-run reproduced them exactly.
+
+**Re-run of R2, R3, R4 on the fixes: clean** (R1's finding is the same ADR sentence R4
+re-verified against the code). **Verdict: clean.**
+
+**Advisory findings → `docs/BACKLOG.md` § structured-output-fenced-json close-out review
+advisories:** multi-fence recovery (R3); split `structured-json.ts` into recovery vs. routing
+workaround (R1); one scripted-model test builder, incl. `conversation.graph.unit.test.ts`'s local
+fixtures (R2 ×2); no test of `RunMetricsCollector` callbacks on `structured()` (R3); ARCHITECTURE
+tree omits three new files (R4); no test pins transport-level `SyntaxError` propagation (R3).
+
+**Meta findings → `docs/REVIEW_FINDINGS.md`:** mechanism drift from a durable spec is claimed by
+both R1 and R4, and nothing says who escalates a blocking finding on a read-only spec (blind spot,
+R1 + R4); DRY for test fixtures, a `RunMetricsCollector` test rule, and `BUG-###` in the ID
+conventions (rule candidates, R2 / R3 / R3).
+

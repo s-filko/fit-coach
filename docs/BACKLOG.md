@@ -579,9 +579,18 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 - [ ] The scripted-model `jest.mock('@infra/ai/model.factory', …)` double is now near-copied in
       three graph test files (`episode-memory.integration`, `conversation.graph`,
       `user-facts.scenario`); `graph/__tests__/graph-test-support.ts` (added at this close-out
-      for `USER` / `ctxConfig`) is the natural home for one builder. Source: close-out-review, R2 (2026-09-19).
+      for `USER` / `ctxConfig`) is the natural home for one builder — and for
+      `conversation.graph.unit.test.ts`'s own local `USER` / positional `ctxConfig`, which predate
+      this branch and were left alone. Source: close-out-review, R2 (2026-09-19).
 - [ ] No test proves that a `RunMetricsCollector` attached through the invoke config still
       receives the LLM callbacks for `structured()` calls — the switch from
       `withStructuredOutput(...)` to `withConfig({ response_format })` is believed equivalent
       (both bind the same `ChatOpenAI`) but that is inference; a dev smoke run row's token
       counts for a compaction would settle it cheaply. Source: close-out-review, R3 (2026-09-19).
+- [ ] `docs/ARCHITECTURE.md`'s module-layout tree omits `domain/user/services/fact-conflicts.ts`,
+      `domain/user/services/fact-key.ts` and `infra/ai/structured-json.ts` (the tree is
+      illustrative and was already non-exhaustive). Source: close-out-review, R4 (2026-09-19).
+- [ ] No test drives a raw `SyntaxError` from the provider/transport layer through
+      `structured()` to pin that it now propagates without a retry (the blanket `SyntaxError`
+      retry was removed as dead for format errors; a transport-level one is a non-format error
+      by the plan's AC and propagates — correct, but unpinned). Source: close-out-review, R3 (2026-09-19).

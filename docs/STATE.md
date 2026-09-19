@@ -12,7 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `structured-output-fenced-json.md` — Structured Output — Fenced-JSON Recovery and the User-Facts Scenario Test Implementation Plan (branch: `plan/structured-output-fenced-json`, last commit 2026-09-19)
+— none —
 
 **Planned**
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
@@ -41,6 +41,7 @@ _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p5-concurrency-delivery.md` — Refactor P5 — Concurrency and Delivery Hardening Implementation Plan
 - `refactor-p6-facts-and-progress-blocks.md` — Refactor P6 — User Facts (Group 1) Implementation Plan
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
+- `structured-output-fenced-json.md` — Structured Output — Fenced-JSON Recovery and the User-Facts Scenario Test Implementation Plan
 
 **Close-out debt (merged but plan not done)**
 — none —
@@ -152,7 +153,20 @@ _Generated 2026-09-19 from docs/superpowers/plans/ + git. Never hand-edit; regen
    **Escalated to the owner:** ADR-0009 / ADR-0013 amendments listed in the facts plan's
    Task G1 (D-14 dropped, block 2, INV-LLM-004 cut order gains a facts step). Advisories:
    `BACKLOG.md` § P6 facts (Group 1) close-out review advisories.
-5. **Next to dispatch: `refactor-p6-progress-and-drafts`** — unblocked once the facts plan is
+5. **BUG-017 fixed (2026-09-19)**: `structured-output-fenced-json` closed — review
+   `2026-09-19 | clean | R1,R2,R3,R4` (first pass blocked on a stale ADR-0013 §7 sentence,
+   duplicated test fixtures and an unrecorded verification; all closed, re-run clean). The P6
+   dev smoke found that the summariser (GLM via Z.AI) answers structured calls with fenced JSON,
+   which the SDK-side parse threw on before any message existed — so no episode summary and no
+   user fact was ever produced on dev, and LangChain retried each failure 6 more times (621 s of
+   one 650 s run). `structured()` now sends the identical `json_schema` request and parses the
+   answer itself (JSON → code fence → JSON in prose, same Zod schema, one retry). ADR-0013 §7
+   amended with the owner's approval. A mocked-model scenario test now pins the whole user-facts
+   chain (fenced summary → fact → `## User Facts` block → tool rejection → confirmation counter).
+   Advisories: `BACKLOG.md` § structured-output-fenced-json close-out review advisories. Also
+   observed in that smoke: the public NPM proxy cuts `/api/bot/chat` at 90 s (504) while the
+   server allows 420 s — the bot is unaffected (it calls the server directly).
+6. **Next to dispatch: `refactor-p6-progress-and-drafts`** — unblocked once the facts plan is
    merged. Then P7 per the master plan phase map and the consolidated eval pass.
 3. **`ports-layout-consistency`** — one rule for port file layout in `ARCHITECTURE.md`,
    the code aligned to it, ESLint keeping it that way. Independent of the P0 chain;
