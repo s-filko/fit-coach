@@ -1,6 +1,6 @@
 import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 
-import { lastAiText, runAiText, splitEpisode, toTranscriptMessages } from '../episode';
+import { runAiText, splitEpisode, toTranscriptMessages } from '../episode';
 
 describe('splitEpisode (D-I — this run = from the last HumanMessage on; INV-LLM-002)', () => {
   it('splits on the single human message', () => {
@@ -29,16 +29,6 @@ describe('splitEpisode (D-I — this run = from the last HumanMessage on; INV-LL
   it('returns current = [] when there is no human message', () => {
     const messages = [new AIMessage('a')];
     expect(splitEpisode(messages)).toEqual({ history: messages, current: [] });
-  });
-});
-
-describe('lastAiText', () => {
-  it('returns the text of the last AI message', () => {
-    expect(lastAiText([new HumanMessage('q'), new AIMessage('first'), new AIMessage('last')])).toBe('last');
-  });
-
-  it('returns null with no AI message', () => {
-    expect(lastAiText([new HumanMessage('q')])).toBeNull();
   });
 });
 
@@ -71,9 +61,9 @@ describe("runAiText (AC-CC-3 — the run's reply: every non-empty AI text of THI
     expect(runAiText([...earlier, ...run])).toBe('новый ответ');
   });
 
-  it('a single-AI-message run is byte-for-byte what lastAiText returned', () => {
+  it("a single-AI-message run delivers exactly that message's text, unchanged", () => {
     const run = [new HumanMessage('q'), new AIMessage('  Ответ  ')];
-    expect(runAiText(run)).toBe(lastAiText(run));
+    expect(runAiText(run)).toBe('  Ответ  ');
   });
 
   it('no AI message at all → empty string', () => {
