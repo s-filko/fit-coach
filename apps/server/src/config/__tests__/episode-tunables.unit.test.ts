@@ -4,18 +4,26 @@ import { BASE_ENV } from './base-env.fixture';
 const BASE = BASE_ENV;
 
 describe('episode-memory tunables (D-L — the second documented defaults exception)', () => {
-  it('defaults EPISODE_GAP_HOURS=3, EPISODE_MIN_TURNS=2, EPISODE_MIN_TOKENS=300', () => {
+  it('defaults EPISODE_GAP_HOURS=3, EPISODE_MIN_TURNS=2, EPISODE_MIN_TOKENS=300, EPISODE_KEEP_TURNS=6', () => {
     const env = EnvSchema.parse(BASE);
     expect(env.EPISODE_GAP_HOURS).toBe(3);
     expect(env.EPISODE_MIN_TURNS).toBe(2);
     expect(env.EPISODE_MIN_TOKENS).toBe(300);
+    expect(env.EPISODE_KEEP_TURNS).toBe(6);
   });
 
   it('coerces string overrides to numbers', () => {
-    const env = EnvSchema.parse({ ...BASE, EPISODE_GAP_HOURS: '5', EPISODE_MIN_TURNS: '4', EPISODE_MIN_TOKENS: '800' });
+    const env = EnvSchema.parse({
+      ...BASE,
+      EPISODE_GAP_HOURS: '5',
+      EPISODE_MIN_TURNS: '4',
+      EPISODE_MIN_TOKENS: '800',
+      EPISODE_KEEP_TURNS: '10',
+    });
     expect(env.EPISODE_GAP_HOURS).toBe(5);
     expect(env.EPISODE_MIN_TURNS).toBe(4);
     expect(env.EPISODE_MIN_TOKENS).toBe(800);
+    expect(env.EPISODE_KEEP_TURNS).toBe(10);
   });
 
   it('rejects a non-numeric override (fail fast, not NaN at runtime)', () => {

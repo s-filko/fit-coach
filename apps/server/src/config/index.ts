@@ -45,6 +45,10 @@ export const EnvSchema = z.object({
   EPISODE_GAP_HOURS: z.coerce.number().default(3),
   EPISODE_MIN_TURNS: z.coerce.number().default(2),
   EPISODE_MIN_TOKENS: z.coerce.number().default(300),
+  // AC-CC-1 (chat-continuity): every compaction trigger keeps the last N
+  // turns verbatim; only what precedes the tail is summarised — a part too
+  // short to summarise is kept, never dropped.
+  EPISODE_KEEP_TURNS: z.coerce.number().default(6),
   // Same class as EPISODE_*/LLM_BUDGET_* above: a tunable, not a secret (P5,
   // D-A/D-12). How long a waiter for the per-userId run mutex waits before
   // rejecting with ThreadBusyError (HTTP 409).

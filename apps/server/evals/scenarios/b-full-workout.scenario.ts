@@ -152,10 +152,9 @@ export const setupSteps: Scenario['steps'] = [
           'Plan: Upper/Lower Split',
           '### Upper A (key: upper_a)',
           `[ID:${BENCH_PRESS_ID}] Barbell Bench Press: 3x8-10 @ 80kg (rest: 120s)`,
-          // BUG-018 point 1: the chat→session_planning transition ended the
-          // episode, so the immediately preceding turn is gone from the input.
-          { text: GREETING_REQUEST, knownBug: 'BUG-018/AC-CC-1' },
-          { text: PLANNING_FINAL_TEXT, knownBug: 'BUG-018/AC-CC-1' },
+          // AC-CC-1 (fixed): the transition keeps the immediately preceding turn verbatim.
+          GREETING_REQUEST,
+          PLANNING_FINAL_TEXT,
         ],
       },
       delivered: { mustMatch: ['жим лёжа 3×8-10 @ 80 кг'] },
@@ -234,10 +233,9 @@ export const scenario: Scenario = {
             `Barbell Bench Press [ID:${BENCH_PRESS_ID}]`,
             '  Set 1: 8 reps @ 80 kg',
             '  Set 2: 8 reps @ 80 kg',
-            // BUG-018 point 1: the session_planning→training transition ate
-            // the "да, поехали" turn the same way.
-            { text: LETS_GO, knownBug: 'BUG-018/AC-CC-1' },
-            { text: START_FINAL_TEXT, knownBug: 'BUG-018/AC-CC-1' },
+            // AC-CC-1 (fixed): the transition keeps the "да, поехали" turn verbatim.
+            LETS_GO,
+            START_FINAL_TEXT,
           ],
         },
         tools: { must: ['log_set'] },
@@ -416,10 +414,9 @@ export const scenario: Scenario = {
           mustMatch: [
             'RECENT TRAINING HISTORY (last 5 sessions):',
             '- upper_a — today (Sun) afternoon, 20 min: Barbell Bench Press (2 sets), Pull-ups (2 sets)',
-            // BUG-018 point 1: the training→chat transition dropped the
-            // "всё, закончил" turn.
-            { text: FINISH_REQUEST, knownBug: 'BUG-018/AC-CC-1' },
-            { text: FINISH_FINAL_TEXT, knownBug: 'BUG-018/AC-CC-1' },
+            // AC-CC-1 (fixed): the transition keeps the "всё, закончил" turn verbatim.
+            FINISH_REQUEST,
+            FINISH_FINAL_TEXT,
           ],
         },
         delivered: { mustMatch: [THANKS_REPLY_TEXT] },

@@ -191,11 +191,9 @@ function buildCatchUpScenario(id: string, description: string, catchUpText: stri
               `ACTIVE: Barbell Bench Press [ID:${BENCH_PRESS_ID}] — 2 set(s) done, 1 remaining per plan.`,
               'min ago): 8 reps @ 80 kg',
               '(retro-logged).',
-              // BUG-018 point 1: the 3.5 h gap crossed EPISODE_GAP_HOURS, the
-              // inactivity compaction ended the episode, and the rest exchange
-              // is gone from the model input.
-              { text: REST_QUESTION, knownBug: 'BUG-018/AC-CC-1' },
-              { text: REST_ANSWER, knownBug: 'BUG-018/AC-CC-1' },
+              // AC-CC-1 (fixed): the rest exchange stays verbatim after the gap.
+              REST_QUESTION,
+              REST_ANSWER,
               // BUG-018 point 2: nothing tells the model time has passed.
               { text: GAP_NOTE_MARKER, knownBug: 'BUG-018/AC-CC-2' },
             ],

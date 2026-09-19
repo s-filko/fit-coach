@@ -81,7 +81,7 @@ describe('conversation run log — AC-1301', () => {
         structured: async () => ({}),
       } as never,
       runService: runService as never,
-      episodeConfig: { gapMs: 365 * 24 * 3600 * 1000, minTurns: 2, minTokens: 300 },
+      episodeConfig: { gapMs: 365 * 24 * 3600 * 1000, minTurns: 2, minTokens: 300, keepTurns: 6 },
       checkpointer: new MemorySaver(),
     });
 

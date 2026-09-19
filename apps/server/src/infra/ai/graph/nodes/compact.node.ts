@@ -3,7 +3,9 @@
  * `prepare`, before the phase sync — never fire-and-forget, at most once per
  * run. Ends the previous episode by rule (BR-LLM-001..003), turns it into
  * one independent structured summary (BR-LLM-004; summariser failure
- * degrades to trimming without a summary), keeps the last 3 summaries oldest
+ * degrades to trimming without a summary), keeps the last `EPISODE_KEEP_TURNS`
+ * turns verbatim — nothing is dropped without a summary unless the budget
+ * forces it (AC-CC-1) — keeps the last 3 summaries oldest
  * first, and is the ONLY writer that removes messages from the channel
  * (INV-LLM-002). Also owns the one-time legacy import for live threads (D-E).
  *
@@ -45,6 +47,8 @@ export interface EpisodeTunables {
   minTurns: number;
   /** EPISODE_MIN_TOKENS (D-B). */
   minTokens: number;
+  /** EPISODE_KEEP_TURNS — the verbatim tail every trigger keeps (AC-CC-1). */
+  keepTurns: number;
 }
 
 export interface CompactStepDeps {
@@ -64,7 +68,7 @@ export type CompactStep = (
 
 export function buildCompactStep(deps: CompactStepDeps): CompactStep {
   const { llmGateway, summaries, userFacts, config, budgetFor } = deps;
-  const { gapMs, minTurns, minTokens } = config;
+  const { gapMs, minTurns, minTokens, keepTurns } = config;
 
   return async function compactStep(state, config): Promise<Partial<ConversationStateType>> {
     const ctx = ctxOf(config as never);
@@ -120,7 +124,27 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
       return { compactReason: null };
     }
 
-    const { removed } = planCompaction({ history, reason, historyBudget, estimate: estimateMessages });
+    const { removed } = planCompaction({
+      history,
+      reason,
+      historyBudget,
+      estimate: estimateMessages,
+      keepTurns,
+      minTurns,
+      minTokens,
+    });
+
+    if (removed.length === 0) {
+      // AC-CC-1: the beyond-tail part is too short to summarise (D-B) — it
+      // stays verbatim and rides along until a later compaction can summarise
+      // it (supersedes D-B's trim-without-summary). The episode does not
+      // rotate; only the trigger flag is consumed.
+      log.info(
+        { userId, runId, reason, history: history.length },
+        'Compaction deferred — the beyond-tail part is too short to summarise (AC-CC-1)',
+      );
+      return { compactReason: null };
+    }
 
     // BACKLOG (a): `new RemoveMessage({ id: '' })` silently no-ops for an
     // id-less message — the trigger would refire every run and a summary
@@ -145,6 +169,9 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
     };
 
     if (isShortEpisode(removed, { minTurns, minTokens, estimate: estimateMessages })) {
+      // Budget-only today (AC-CC-1): inactivity/transition never get here —
+      // planCompaction defers a too-short beyond-tail part instead — but a
+      // budget cut may still have to drop a short oldest part to fit.
       log.info({ userId, reason, removed: removed.length }, 'Short episode trimmed without a summary (D-B)');
       return updates;
     }

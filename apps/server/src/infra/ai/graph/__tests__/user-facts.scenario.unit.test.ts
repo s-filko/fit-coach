@@ -215,7 +215,9 @@ function makeDeps(userFacts: InMemoryUserFactsService): ConversationGraphDeps {
     // The REAL gateway — only the ChatModel beneath it is the mock above.
     llmGateway: new OpenAiLlmGateway(),
     runService: { recordRun: jest.fn() } as never,
-    episodeConfig: { gapMs: 60_000, minTurns: 0, minTokens: 0 },
+    // keepTurns 0: the scenario's compactions must fold everything into
+    // summaries (the fact pipeline under test) — the tail would defer them.
+    episodeConfig: { gapMs: 60_000, minTurns: 0, minTokens: 0, keepTurns: 0 },
     checkpointer: new MemorySaver(),
   } as unknown as ConversationGraphDeps;
 }

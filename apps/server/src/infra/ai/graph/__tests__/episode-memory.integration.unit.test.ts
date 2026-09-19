@@ -71,7 +71,7 @@ function makeDeps(): ConversationGraphDeps {
       structured: jest.fn(),
     } as never,
     runService: { recordRun: jest.fn() } as never,
-    episodeConfig: { gapMs: 24 * 3600 * 1000, minTurns: 2, minTokens: 300 },
+    episodeConfig: { gapMs: 24 * 3600 * 1000, minTurns: 2, minTokens: 300, keepTurns: 6 },
     checkpointer: new MemorySaver(),
   } as unknown as ConversationGraphDeps;
 }
@@ -117,11 +117,11 @@ describe('episode memory across runs (AC-1341, INV-LLM-001/002)', () => {
   it('AC-1342: EPISODE_GAP → 0 — run 2 sees exactly one episode-summary block and none of run 1’s messages; one summaries row', async () => {
     // Injected through the compact deps, never process.env.
     const deps = makeDeps();
-    (deps as unknown as { episodeConfig: { gapMs: number; minTurns: number; minTokens: number } }).episodeConfig = {
-      gapMs: 0,
-      minTurns: 0,
-      minTokens: 0,
-    };
+    // keepTurns 0 disables the verbatim tail — AC-1342 folds the WHOLE
+    // episode into its summary, which is what this test pins.
+    (
+      deps as unknown as { episodeConfig: { gapMs: number; minTurns: number; minTokens: number; keepTurns: number } }
+    ).episodeConfig = { gapMs: 0, minTurns: 0, minTokens: 0, keepTurns: 0 };
     const summariesMock = deps.summaries as unknown as { insert: jest.Mock };
     const gatewayMock = deps.llmGateway as unknown as { structured: jest.Mock };
     summariesMock.insert = jest.fn().mockResolvedValue(undefined);

@@ -37,6 +37,10 @@ function channelState(overrides: Partial<ConversationStateType> = {}): Conversat
     phase: 'chat',
     activeSessionId: null,
     messages: [
+      // Two prior turns; with the default keepTurns 1 the first turn is the
+      // beyond-tail part and the second stays verbatim (AC-CC-1).
+      new HumanMessage({ content: 'Что делаем сегодня?', id: 'm0' }),
+      new AIMessage({ content: 'Продолжаем план на грудь', id: 'm0a', tool_calls: [] }),
       new HumanMessage({ content: 'Составь план на грудь', id: 'm1' }),
       new AIMessage({ content: 'Готовим план', id: 'm2', tool_calls: [] }),
       new HumanMessage({ content: 'Спасибо', id: 'm3' }), // this run's human
@@ -85,7 +89,7 @@ function makeDeps(
     llmGateway: { chat: jest.fn(), structured } as unknown as LlmGateway,
     summaries: { insert, latestLegacySummary } as unknown as SummaryPort,
     userFacts: { upsertMany, getForPrompt: jest.fn(), getConstraints: jest.fn() } as unknown as IUserFactsService,
-    config: { gapMs: 3 * 3600 * 1000, minTurns: 0, minTokens: 0, ...overrides.config },
+    config: { gapMs: 3 * 3600 * 1000, minTurns: 0, minTokens: 0, keepTurns: 1, ...overrides.config },
     budgetFor: () => 1_000_000,
   };
   return { deps, insert, latestLegacySummary, structured, upsertMany };
@@ -108,7 +112,7 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
 
     const update = await compact(channelState({ episodeSummaries: existing }), ctxConfig());
 
-    expect(removedIds(update)).toEqual(['m1', 'm2']);
+    expect(removedIds(update)).toEqual(['m0', 'm0a']);
     expect(insert).toHaveBeenCalledTimes(1);
     expect(insert.mock.calls[0][0]).toMatchObject({
       userId: USER_ID,
@@ -135,7 +139,7 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
     expect(insert).not.toHaveBeenCalled();
     // P6 Task 3: a failed summariser writes no facts (there is no `summary` to read facts from).
     expect(upsertMany).not.toHaveBeenCalled();
-    expect(removedIds(update)).toEqual(['m1', 'm2']);
+    expect(removedIds(update)).toEqual(['m0', 'm0a']);
     expect(update.episodeSummaries).toBeUndefined();
   });
 
@@ -147,10 +151,10 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
     const update = await compact(channelState(), ctxConfig());
 
     expect(insert).toHaveBeenCalledTimes(1);
-    expect(removedIds(update)).toEqual(['m1', 'm2']); // trimming happened regardless
+    expect(removedIds(update)).toEqual(['m0', 'm0a']); // trimming happened regardless
   });
 
-  it('D-B: a short episode is trimmed WITHOUT a model call', async () => {
+  it('AC-CC-1: a too-short beyond-tail part is KEPT — no model call, nothing removed, no rotation', async () => {
     const { deps, insert, structured } = makeDeps({ config: { minTurns: 5 } });
     const compact = buildCompactStep(deps);
 
@@ -158,7 +162,36 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
 
     expect(structured).not.toHaveBeenCalled();
     expect(insert).not.toHaveBeenCalled();
-    expect(removedIds(update)).toEqual(['m1', 'm2']);
+    // Supersedes D-B's trim-without-summary: the one-turn older part rides
+    // along verbatim until a later compaction can summarise it.
+    expect(update.messages).toBeUndefined();
+    expect(update.episodeId).toBeUndefined();
+    expect(update.episodeStartedAt).toBeUndefined();
+    expect(update.compactReason).toBeNull(); // the flag is still consumed
+  });
+
+  it('AC-CC-1: history within keepTurns turns → compaction deferred entirely', async () => {
+    const { deps, insert, structured } = makeDeps({ config: { keepTurns: 5 } });
+    const compact = buildCompactStep(deps);
+
+    const update = await compact(channelState(), ctxConfig());
+
+    expect(structured).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+    expect(update.messages).toBeUndefined();
+    expect(update.compactReason).toBeNull();
+  });
+
+  it('AC-CC-1: the summariser sees only the beyond-tail part — the tail stays out of the transcript', async () => {
+    const { deps, structured } = makeDeps();
+    const compact = buildCompactStep(deps);
+
+    await compact(channelState(), ctxConfig());
+
+    const calls = structured.mock.calls as unknown as [unknown, Array<{ role: string; content: string }>][];
+    const transcript = calls[0][1].find(m => m.role === 'user')!.content;
+    expect(transcript).toContain('Что делаем сегодня?');
+    expect(transcript).not.toContain('Составь план на грудь');
   });
 
   it('BR-LLM-002: phase_boundary (state.compactReason) is consumed exactly once', async () => {
@@ -174,7 +207,7 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
     );
 
     expect(update.compactReason).toBeNull();
-    expect(removedIds(update)).toEqual(['m1', 'm2']);
+    expect(removedIds(update)).toEqual(['m0', 'm0a']);
   });
 
   it('no trigger → {} (nothing touched)', async () => {
@@ -200,7 +233,8 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
       ctxConfig(),
     );
 
-    expect(removedIds(update)).toEqual(['m1', 'm2']);
+    // Budget 1: even the keepTurns-1 tail alone overflows — everything goes, oldest first.
+    expect(removedIds(update)).toEqual(['m0', 'm0a', 'm1', 'm2']);
   });
 
   it('the summariser call goes through the gateway with the summarizer profile and schema name', async () => {
@@ -292,10 +326,10 @@ describe('buildCompactStep — user facts extraction (P6 Task 3, owner decision 
 
     expect(upsertMany).not.toHaveBeenCalled();
     expect(insert).not.toHaveBeenCalled();
-    expect(removedIds(update)).toEqual(['m1', 'm2']); // trimming happened regardless
+    expect(removedIds(update)).toEqual(['m0', 'm0a']); // trimming happened regardless
   });
 
-  it('a short episode trimmed without a summary writes no facts', async () => {
+  it('AC-CC-1: a too-short beyond-tail part kept verbatim writes no facts (no summariser ran)', async () => {
     const { deps, upsertMany, structured } = makeDeps({ config: { minTurns: 5 } });
     const compact = buildCompactStep(deps);
 
@@ -303,7 +337,7 @@ describe('buildCompactStep — user facts extraction (P6 Task 3, owner decision 
 
     expect(structured).not.toHaveBeenCalled();
     expect(upsertMany).not.toHaveBeenCalled();
-    expect(removedIds(update)).toEqual(['m1', 'm2']);
+    expect(update.messages).toBeUndefined();
   });
 });
 
@@ -407,13 +441,15 @@ describe('BACKLOG (a): id-less RemoveMessage fails loud instead of silently no-o
     const { deps } = makeDeps();
     const compact = buildCompactStep(deps);
 
-    // Same fixture as channelState() but m1 has no id — RemoveMessage({id: ''})
+    // Same fixture as channelState() but m0 has no id — RemoveMessage({id: ''})
     // would silently no-op, letting the budget/inactivity trigger refire every
     // run and the summary repeat per episode.
     const state: ConversationStateType = {
       ...channelState(),
       messages: [
-        new HumanMessage({ content: 'Составь план на грудь' }), // no id
+        new HumanMessage({ content: 'Что делаем сегодня?' }), // no id
+        new AIMessage({ content: 'Продолжаем план на грудь', id: 'm0a', tool_calls: [] }),
+        new HumanMessage({ content: 'Составь план на грудь', id: 'm1' }),
         new AIMessage({ content: 'Готовим план', id: 'm2', tool_calls: [] }),
         new HumanMessage({ content: 'Спасибо', id: 'm3' }),
       ],

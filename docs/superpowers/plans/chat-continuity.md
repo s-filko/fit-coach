@@ -121,13 +121,13 @@ just implied): the delivered reply equals the final plan-dump text only.
 use), `apps/server/src/infra/ai/graph/nodes/compact.node.ts`, `apps/server/src/config/index.ts`
 (`EPISODE_KEEP_TURNS`), their tests, `apps/server/.env.example`.
 
-- [ ] **Step 1: Tests first** — inactivity and transition keep the last `K` turns and remove only
+- [x] **Step 1: Tests first** — inactivity and transition keep the last `K` turns and remove only
   the older part; a short older part → nothing removed, no summariser call; a long older part →
   summarised (and facts extracted as today) while the tail stays; budget trigger unchanged except
   it respects the tail; a turn is never split (a tool call and its result stay together).
-- [ ] **Step 2: Implement.**
-- [ ] **Step 2b:** flip Task 0's case (a) from `test.failing` to `test`; it must pass.
-- [ ] **Step 3: Commit** — `fix(ai): compaction keeps the last turns verbatim and never drops unsummarised messages (BUG-018, AC-CC-1)`
+- [x] **Step 2: Implement.**
+- [x] **Step 2b:** flip Task 0's case (a) from `test.failing` to `test`; it must pass.
+- [x] **Step 3: Commit** — `fix(ai): compaction keeps the last turns verbatim and never drops unsummarised messages (BUG-018, AC-CC-1)`
 - [ ] **Step 4: STOP** for orchestrator review.
 
 **Verification:** `npx jest --ci src/infra/ai/graph src/config` → pass; `npm run test:unit` →

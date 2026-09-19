@@ -10,9 +10,9 @@
  * calls search_exercises in one step, then dumps the plan after the tool
  * results.
  *
- * Cases (a)-(c) are the REQUIRED behaviour (AC-CC-1..3), marked `test.failing`
- * because today's code violates them — the file is green while the bug exists
- * and each fix task flips its own case to `test`. The last test pins today's
+ * Cases (a)-(c) are the REQUIRED behaviour (AC-CC-1..3). Case (a) turned
+ * green with the Task 1 fix (the compaction verbatim tail); (b) and (c)
+ * remain `test.failing` until Tasks 2 and 3 land. The last test pins today's
  * observable symptom: the adapter delivers only the last AI message
  * (`lastAiText`), so the owner sees the plan dump, not the greeting.
  */
@@ -163,8 +163,8 @@ function makeDeps(): ConversationGraphDeps {
     // The REAL gateway — only the ChatModel beneath it is the mock above.
     llmGateway: new OpenAiLlmGateway(),
     runService: { recordRun: jest.fn() } as never,
-    // Production defaults (config/index.ts): 3 h gap, 2 turns / 300 tokens.
-    episodeConfig: { gapMs: 3 * 3600 * 1000, minTurns: 2, minTokens: 300 },
+    // Production defaults (config/index.ts): 3 h gap, 2 turns / 300 tokens, 6-turn tail.
+    episodeConfig: { gapMs: 3 * 3600 * 1000, minTurns: 2, minTokens: 300, keepTurns: 6 },
     checkpointer: new MemorySaver(),
   } as unknown as ConversationGraphDeps;
 }
@@ -238,16 +238,13 @@ describe('BUG-018 reproduction — "привет" after a 6-hour pause (AC-CC-4)
     run3FirstInput = recorded[recorded.length - 2]!;
   });
 
-  test.failing(
-    '(a) AC-CC-1 — the model input for the new "привет" still contains the one-turn exchange verbatim',
-    () => {
-      const aiTexts = run3FirstInput.filter(m => m._getType() === 'ai').map(m => String(m.content));
-      expect(aiTexts).toContain(OLD_GREETING);
-      // The exchange's human half: the pre-pause "привет" AND the current one.
-      const hellos = run3FirstInput.filter(m => m._getType() === 'human' && String(m.content) === 'привет');
-      expect(hellos).toHaveLength(2);
-    },
-  );
+  test('(a) AC-CC-1 — the model input for the new "привет" still contains the one-turn exchange verbatim', () => {
+    const aiTexts = run3FirstInput.filter(m => m._getType() === 'ai').map(m => String(m.content));
+    expect(aiTexts).toContain(OLD_GREETING);
+    // The exchange's human half: the pre-pause "привет" AND the current one.
+    const hellos = run3FirstInput.filter(m => m._getType() === 'human' && String(m.content) === 'привет');
+    expect(hellos).toHaveLength(2);
+  });
 
   test.failing('(b) AC-CC-2 — a time-gap system note sits immediately before the new "привет"', () => {
     let lastHuman = -1;

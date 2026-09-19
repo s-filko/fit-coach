@@ -113,7 +113,7 @@ describe('decideCompactReason (BR-LLM-001..003; precedence phase_boundary > inac
   });
 });
 
-describe('planCompaction (D-I — the cut never splits a turn)', () => {
+describe('planCompaction (AC-CC-1 — the verbatim tail; D-I — the cut never splits a turn)', () => {
   const history: BaseMessage[] = [
     ...toolTurn('t1'),
     human('h1', 'первый вопрос'),
@@ -123,45 +123,64 @@ describe('planCompaction (D-I — the cut never splits a turn)', () => {
     ...toolTurn('t3'),
     ai('a2', 'второй ответ'),
   ];
+  // Layout: [t1(2), h1, t2(2), a1, h2, t3(2), a2] — turn 3 starts at h2 (index 6).
+  const NOT_SHORT = { minTurns: 0, minTokens: 0 };
 
-  it('FIRST: a history ending in AIMessage(tool_calls) + ToolMessage is only cut at a HumanMessage — kept[0] is human', () => {
+  it.each(['inactivity', 'phase_boundary'] as const)(
+    '%s keeps the last keepTurns turns verbatim and removes only the older part',
+    (reason: CompactReason) => {
+      const { removed, kept } = planCompaction({
+        history,
+        reason,
+        historyBudget: 1_000_000,
+        estimate: estimateMessages,
+        keepTurns: 1,
+        ...NOT_SHORT,
+      });
+
+      expect(removed).toEqual(history.slice(0, 6));
+      expect(kept).toEqual(history.slice(6));
+    },
+  );
+
+  it('AC-CC-1: a too-short older part is kept, never dropped — nothing removed this run', () => {
+    // keepTurns 2 → the older part is turn 1 (one human turn < minTurns 2, D-B).
     const { removed, kept } = planCompaction({
       history,
-      reason: 'budget',
-      historyBudget: 1,
+      reason: 'inactivity',
+      historyBudget: 1_000_000,
       estimate: estimateMessages,
+      keepTurns: 2,
+      minTurns: 2,
+      minTokens: 0,
     });
 
-    // Budget 1 token: everything must go — the extreme case still cuts whole turns.
-    expect(removed.length + kept.length).toBe(history.length);
-    if (kept.length > 0) {
-      expect(kept[0]._getType()).toBe('human');
-    }
+    expect(removed).toEqual([]);
+    expect(kept).toEqual(history);
   });
 
-  it('budget cut removes the minimum number of OLDEST turns until the kept history fits', () => {
-    // Estimate per message ~1; give a budget that fits only the last turn.
-    // Layout: [t1(2), h1, t2(2), a1, h2, t3(2), a2] — turn 2 starts at h2 (index 6).
-    const lastTurn = history.slice(6);
-    const budget = estimateMessages(lastTurn);
+  it('AC-CC-1: history within keepTurns turns → nothing removed (rides along verbatim)', () => {
     const { removed, kept } = planCompaction({
       history,
-      reason: 'budget',
-      historyBudget: budget,
+      reason: 'phase_boundary',
+      historyBudget: 1_000_000,
       estimate: estimateMessages,
+      keepTurns: 3,
+      ...NOT_SHORT,
     });
 
-    expect(kept).toEqual(lastTurn);
-    expect(removed).toEqual(history.slice(0, 6));
-    expect(estimateMessages(kept)).toBeLessThanOrEqual(budget);
+    expect(removed).toEqual([]);
+    expect(kept).toEqual(history);
   });
 
   it('tool pairs travel together: no side holds an AIMessage(tool_calls) without its ToolMessages', () => {
     const { removed, kept } = planCompaction({
       history,
-      reason: 'budget',
-      historyBudget: 3,
+      reason: 'inactivity',
+      historyBudget: 1_000_000,
       estimate: estimateMessages,
+      keepTurns: 2,
+      ...NOT_SHORT,
     });
     for (const side of [removed, kept]) {
       for (const m of side) {
@@ -175,8 +194,70 @@ describe('planCompaction (D-I — the cut never splits a turn)', () => {
     }
   });
 
-  it.each(['inactivity', 'phase_boundary'] as const)('%s removes the whole history', (reason: CompactReason) => {
-    const { removed, kept } = planCompaction({ history, reason, historyBudget: 1_000_000, estimate: estimateMessages });
+  it('FIRST: a history ending in AIMessage(tool_calls) + ToolMessage is only cut at a HumanMessage — kept[0] is human', () => {
+    const { removed, kept } = planCompaction({
+      history,
+      reason: 'budget',
+      historyBudget: 1,
+      estimate: estimateMessages,
+      keepTurns: 1,
+      ...NOT_SHORT,
+    });
+
+    // Budget 1 token: everything must go — the extreme case still cuts whole turns.
+    expect(removed.length + kept.length).toBe(history.length);
+    if (kept.length > 0) {
+      expect(kept[0]._getType()).toBe('human');
+    }
+  });
+
+  it('budget cut removes the minimum number of OLDEST turns until the kept history fits', () => {
+    // Estimate per message ~1; give a budget that fits only the last turn.
+    const lastTurn = history.slice(6);
+    const budget = estimateMessages(lastTurn);
+    const { removed, kept } = planCompaction({
+      history,
+      reason: 'budget',
+      historyBudget: budget,
+      estimate: estimateMessages,
+      keepTurns: 1,
+      ...NOT_SHORT,
+    });
+
+    expect(kept).toEqual(lastTurn);
+    expect(removed).toEqual(history.slice(0, 6));
+    expect(estimateMessages(kept)).toBeLessThanOrEqual(budget);
+  });
+
+  it('budget never cuts into the tail while the tail fits the budget', () => {
+    // Turns here: [t1(2)] [h1, t2(2), a1] [h2, t3(2), a2] — the pre-human
+    // tool prefix is its own turn — so the keepTurns-2 tail is slice(2).
+    // A budget exactly the tail's size: only the prefix leaves.
+    const tail = history.slice(2);
+    const budget = estimateMessages(tail);
+    const { removed, kept } = planCompaction({
+      history,
+      reason: 'budget',
+      historyBudget: budget,
+      estimate: estimateMessages,
+      keepTurns: 2,
+      ...NOT_SHORT,
+    });
+
+    expect(removed).toEqual(history.slice(0, 2));
+    expect(kept).toEqual(tail);
+  });
+
+  it('budget cuts into the tail oldest-first only when the tail alone exceeds the budget', () => {
+    const { removed, kept } = planCompaction({
+      history,
+      reason: 'budget',
+      historyBudget: 1,
+      estimate: estimateMessages,
+      keepTurns: 2,
+      ...NOT_SHORT,
+    });
+
     expect(removed).toEqual(history);
     expect(kept).toEqual([]);
   });
