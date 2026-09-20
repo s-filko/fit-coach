@@ -161,13 +161,30 @@ fingerprint, the pure event predicate), `graph/state.ts` (the persisted directiv
 **Files:** `domain/user/services/fact-conflicts.ts`, `infra/ai/tools/fact-constraint-guard.ts`,
 `save-workout-plan.tool.ts`, `start-training-session.tool.ts`, tests.
 
-- [ ] **Step 1: Tests first** — a `permanent` constraint still rejects (nothing persisted); a
+- [x] **Step 1: Tests first** — a `permanent` constraint still rejects (nothing persisted); a
   long-term or short constraint no longer rejects: the call succeeds and the result carries an
   advisory naming the fact and the exercise; an advisory lists **all** conflicting exercises, not just
   the first; no constraint → unchanged.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `fix(training): only permanent constraints block a write; the rest advise (AC-FL-6)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 2: Implement.**
+- [x] **Step 3: Commit** — `fix(training): only permanent constraints block a write; the rest advise (AC-FL-6)`
+- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-21** (`a6d8c216`, Sonnet worker).
+  The guard splits into two honest halves: `findFactConflicts` returns EVERY conflict (exercise order,
+  then fact order) and `blockingConflicts` keeps only the `permanent` ones. A permanent conflict still
+  rejects with nothing persisted and quotes only the permanent facts even in a mixed set; a
+  `long_term` / `short` conflict now persists and appends an advisory to the tool's ok summary naming
+  each fact (durability + phase note) and every conflicting exercise; no constraint or no intersection
+  leaves the summary byte-identical. The rationale (a muscle label expresses neither movement nor
+  load — a `lower_back` constraint blocks Conventional Deadlift and Hyperextension while allowing
+  Romanian Deadlift and Barbell Row) is recorded in `fact-conflicts.ts` so it cannot be "fixed" back by
+  someone who only sees the code.
+  Accepted as reported: the advisory rides in the ok summary because that is the only channel a
+  `ToolOutcome` gives the model, and `save_workout_plan`'s fixed "congratulate them" becomes "write a
+  brief confirmation" when an advisory is present — congratulating over an unaddressed injury caveat
+  would be wrong.
+  Pinned by mutation, as in Task 1: making everything block again fails 10 tests, reporting only the
+  first conflict fails 15. Orchestrator re-ran on the committed tree: `npx jest --ci src/infra/ai` 569
+  tests, `npx jest --ci src/domain/user` 58, `npm run test:unit` 1076, L0 96/96, `npm run
+  test:scenarios` 221.
 
 **Verification:** as Task 1.
 
