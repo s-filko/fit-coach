@@ -14,6 +14,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   vector,
 } from 'drizzle-orm/pg-core';
@@ -177,8 +178,8 @@ export const factArchivedReasonEnum = pgEnum('fact_archived_reason', ['user_clos
 
 // Durable user facts extracted at compaction (ADR-0009 table shape and FactCategory
 // values; mechanism superseded 2026-09-17 — see refactor-p6-facts-and-progress-blocks
-// Task 1 and Task 3). Idempotent upsert on (user_id, category, fact_key) with a
-// confirmation counter (D-C); `fact` text is never overwritten once written.
+// Task 1 and Task 3). Idempotent upsert on (user_id, category, fact_key) AMONG ACTIVE
+// ROWS with a confirmation counter (D-C); `fact` text is never overwritten once written.
 // Lifecycle columns (AC-FL-1): existing rows migrate with defaults that change
 // nothing today — durability=permanent (no dates, never expires), status=active,
 // every date/closure column null.
@@ -212,11 +213,13 @@ export const userFacts = pgTable(
   },
   table => ({
     userIdx: index('idx_user_facts_user').on(table.userId),
-    userCategoryFactKeyUnique: unique('uq_user_facts_user_category_fact_key').on(
-      table.userId,
-      table.category,
-      table.factKey,
-    ),
+    // fact-lifecycle Task 2 fix (AC-FL-3): the uniqueness of (user_id, category,
+    // fact_key) holds among ACTIVE rows only — a closed row keeps its key and
+    // its history, and newer evidence creates a NEW row linked via supersedes_id.
+    // A Postgres UNIQUE constraint cannot be partial, hence a partial unique index.
+    activeUserCategoryFactKeyUnique: uniqueIndex('uq_user_facts_active_user_category_fact_key')
+      .on(table.userId, table.category, table.factKey)
+      .where(sql`status = 'active'`),
   }),
 );
 

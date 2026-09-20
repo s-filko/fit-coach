@@ -124,6 +124,13 @@ export interface RememberFactInput {
   explicitPermanent?: boolean;
   /** A genuinely new statement replacing a CLOSED fact — linked via supersedes_id. */
   supersedesFactId?: string;
+  /**
+   * When this evidence was actually stated — the AC-FL-3 clock. Defaults to `now`
+   * (a live conversation is its own evidence); the compaction path (Task 3) passes
+   * the summarised turn's time so an OLD restatement cannot re-open a closed fact.
+   * Only the closure comparison reads it — every date written uses `now`.
+   */
+  evidenceAt?: Date;
 }
 
 /** What a conversational write did — the tool reports each differently (AC-FL-2/AC-FL-3). */
@@ -131,9 +138,11 @@ export type RememberFactOutcome =
   | { outcome: 'created'; fact: UserFact }
   /** An active fact with the same key, corrected in place: text rewritten, confirmations bumped. */
   | { outcome: 'updated'; fact: UserFact }
-  /** A closed fact key re-created from NEWER evidence: back to active, counter kept, closure cleared. */
-  | { outcome: 'reactivated'; fact: UserFact }
-  /** Evidence older than the user's closure — nothing written (AC-FL-3). */
+  /**
+   * Evidence older than the user's closure — nothing written (AC-FL-3). The closed
+   * row is returned so the caller can see why; a NEWER statement never lands here —
+   * it creates a new row linked via supersedes_id (`created`).
+   */
   | { outcome: 'skipped_stale_evidence'; fact: UserFact };
 
 /** The listing shape AC-FL-8 reviews from: active grouped by the caller, archived only when asked. */
@@ -176,9 +185,11 @@ export interface IUserFactsService {
 
   /**
    * Writes one fact from conversation: creates, corrects an active fact in place, or
-   * re-creates a user-closed key from evidence NEWER than the closure (older evidence
-   * is skipped, AC-FL-3). Bounds and the `permanent` gate are applied here via
-   * `resolveLifecycle`; throws `PermanentFactRefusal` when the gate does not open.
+   * re-opens a closed key from evidence NEWER than the closure — as a NEW row linked
+   * via supersedes_id; the closed row is never un-archived (AC-FL-3, and wave B's
+   * recurrence promotion counts exactly that archive). Older evidence (input.evidenceAt,
+   * defaulting to `now`) is skipped. Bounds and the `permanent` gate are applied here
+   * via `resolveLifecycle`; throws `PermanentFactRefusal` when the gate does not open.
    */
   rememberFact(userId: string, input: RememberFactInput, now: Date): Promise<RememberFactOutcome>;
 

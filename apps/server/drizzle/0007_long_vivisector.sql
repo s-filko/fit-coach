@@ -1,0 +1,2 @@
+ALTER TABLE "user_facts" DROP CONSTRAINT "uq_user_facts_user_category_fact_key";--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_user_facts_active_user_category_fact_key" ON "user_facts" USING btree ("user_id","category","fact_key") WHERE status = 'active';

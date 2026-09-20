@@ -297,27 +297,83 @@ describe('UserFactsRepository – integration', () => {
       expect((await repository.listFacts(user.id, false, NOW)).active).toHaveLength(1);
     });
 
-    it('AC-FL-3: a user-closed key is NOT re-created from older evidence, but IS from newer', async () => {
+    it('AC-FL-3: a user-closed key is NOT re-created from older evidence; newer evidence creates a NEW linked row and the closure stays intact', async () => {
       const userData = createTestUserData({ username: 'user_facts_closed_key_user' });
       const user = await userRepo.create(userData);
-      const T0 = new Date('2026-09-21T12:00:00Z');
-      const CLOSED_AT = new Date('2026-09-21T18:00:00Z');
+      const T0 = new Date('2026-09-21T09:00:00Z'); // the statement was made
+      const T1 = new Date('2026-09-21T18:00:00Z'); // the user closed the fact
+      const T2 = new Date('2026-09-21T20:00:00Z'); // this run's clock (always > T1)
+      const T3 = new Date('2026-09-21T19:00:00Z'); // a genuinely newer statement
 
       await repository.rememberFact(user.id, { category: 'physical_constraint', fact: 'Shoulder hurts', durability: 'short', ttlDays: 7 }, T0);
-      const closed = await repository.retractFact(user.id, { factId: (await repository.getForPrompt(user.id, T0))[0]!.id }, CLOSED_AT);
-      expect(closed).toMatchObject({ status: 'archived', archivedReason: 'user_closed', closedByUserAt: CLOSED_AT });
+      const closedId = (await repository.getForPrompt(user.id, T0))[0]!.id;
+      const closed = await repository.retractFact(user.id, { factId: closedId }, T1);
+      expect(closed).toMatchObject({ status: 'archived', archivedReason: 'user_closed', closedByUserAt: T1 });
 
-      // Evidence OLDER than the closure (a summariser replaying an old turn): skipped.
-      const stale = await repository.rememberFact(user.id, { category: 'physical_constraint', fact: 'Shoulder hurts', durability: 'short', ttlDays: 7 }, new Date(CLOSED_AT.getTime() - 3_600_000));
+      // FINDING 2 pin — cannot pass by accident: the RUN clock is well past the
+      // closure, but the EVIDENCE predates it (a summariser replaying an old
+      // turn). The comparison must use evidenceAt, not now.
+      const stale = await repository.rememberFact(
+        user.id,
+        { category: 'physical_constraint', fact: 'Shoulder hurts', durability: 'short', ttlDays: 7, evidenceAt: T0 },
+        T2,
+      );
       expect(stale.outcome).toBe('skipped_stale_evidence');
+      // Nothing was written: the closed row is untouched.
+      const afterStale = await repository.listFacts(user.id, true, T2);
+      expect(afterStale.active).toEqual([]);
+      expect(afterStale.archived.map(f => f.id)).toEqual([closedId]);
 
-      // Evidence NEWER than the closure: the fact comes back (reactivated, counter kept).
-      const fresh = await repository.rememberFact(user.id, { category: 'physical_constraint', fact: 'Shoulder hurts', durability: 'short', ttlDays: 7 }, new Date(CLOSED_AT.getTime() + 3_600_000));
-      expect(fresh.outcome).toBe('reactivated');
-      if (fresh.outcome !== 'reactivated') return;
+      // FINDING 1 pin: evidence NEWER than the closure creates a NEW active row
+      // linked via supersedes_id — the closed row is never un-archived.
+      const fresh = await repository.rememberFact(
+        user.id,
+        { category: 'physical_constraint', fact: 'Shoulder hurts', durability: 'short', ttlDays: 7, evidenceAt: T3 },
+        T2,
+      );
+      expect(fresh.outcome).toBe('created');
+      if (fresh.outcome !== 'created') return;
+      expect(fresh.fact.id).not.toBe(closedId); // a NEW row
+      expect(fresh.fact.supersedesId).toBe(closedId); // linked to the closed one
       expect(fresh.fact.status).toBe('active');
-      expect(fresh.fact.closedByUserAt).toBeNull();
-      expect(fresh.fact.confirmations).toBe(2);
+      expect(fresh.fact.createdAt).toEqual(T2); // date arithmetic keeps the RUN clock
+      expect(fresh.fact.expiresAt).toEqual(new Date(T2.getTime() + 7 * 86_400_000));
+
+      // The closure evidence survives for wave B's recurrence promotion.
+      const afterFresh = await repository.listFacts(user.id, true, T2);
+      expect(afterFresh.active.map(f => f.id)).toEqual([fresh.fact.id]);
+      const stillClosed = afterFresh.archived.find(f => f.id === closedId);
+      expect(stillClosed).toMatchObject({ status: 'archived', archivedReason: 'user_closed', closedByUserAt: T1 });
+    });
+
+    it('AC-FL-3: without evidenceAt, the evidence defaults to the run clock — a live conversation is always newer than the closure', async () => {
+      const userData = createTestUserData({ username: 'user_facts_default_evidence_user' });
+      const user = await userRepo.create(userData);
+      const T0 = new Date('2026-09-21T12:00:00Z');
+      const T1 = new Date('2026-09-21T18:00:00Z');
+      const T2 = new Date('2026-09-21T20:00:00Z');
+
+      await repository.rememberFact(user.id, { category: 'equipment', fact: 'Borrowed a barbell', durability: 'short', ttlDays: 5 }, T0);
+      const closedId = (await repository.getForPrompt(user.id, T0))[0]!.id;
+      await repository.retractFact(user.id, { factId: closedId }, T1);
+
+      const again = await repository.rememberFact(user.id, { category: 'equipment', fact: 'Borrowed a barbell', durability: 'short', ttlDays: 5 }, T2);
+      expect(again.outcome).toBe('created');
+      if (again.outcome !== 'created') return;
+      expect(again.fact.supersedesId).toBe(closedId);
+    });
+
+    it('the summariser upsert still dedupes against ACTIVE rows (partial unique index)', async () => {
+      const userData = createTestUserData({ username: 'user_facts_partial_idx_user' });
+      const user = await userRepo.create(userData);
+      const NOW = new Date('2026-09-21T12:00:00Z');
+
+      await repository.upsertMany(user.id, [{ category: 'equipment', fact: 'Has a barbell.' }]);
+      await repository.upsertMany(user.id, [{ category: 'equipment', fact: 'has a barbell' }]);
+
+      const rows = await repository.getForPrompt(user.id, NOW);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.confirmations).toBe(2);
     });
 
     it('links a genuinely new statement to the closed fact via supersedesFactId', async () => {

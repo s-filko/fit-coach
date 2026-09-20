@@ -40,11 +40,12 @@ const MANAGE_FACT_DESCRIPTION = [
 function saveSummary(result: RememberFactOutcome): string {
   switch (result.outcome) {
     case 'created':
-      return `Fact saved: "${result.fact.fact}" (${result.fact.durability}).`;
+      // A new row linked to a closed one is a re-opening of that subject (AC-FL-3).
+      return result.fact.supersedesId !== null
+        ? `Fact saved: "${result.fact.fact}" (${result.fact.durability}) — a new statement re-opening a fact the user had closed.`
+        : `Fact saved: "${result.fact.fact}" (${result.fact.durability}).`;
     case 'updated':
       return `Fact updated: "${result.fact.fact}" (${result.fact.durability}, ${result.fact.confirmations}× confirmed).`;
-    case 'reactivated':
-      return `Fact re-opened from a newer statement: "${result.fact.fact}" (${result.fact.durability}).`;
     case 'skipped_stale_evidence':
       return `Not saved: "${result.fact.fact}" was closed by the user and this statement is not newer than the closure.`;
   }
