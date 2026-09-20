@@ -273,7 +273,8 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
 /**
  * Applies ONE summariser fact operation (AC-FL-4). Malformed operations (a
  * missing factId, or an add without category/fact/durability) are skipped
- * silently — the schema already rejects invented ids, and the compaction result
+ * silently — the schema verifies UUID FORMAT only, so a well-formed invented id
+ * simply matches no row later (a no-op), and the compaction result
  * must never depend on operation shape (D-E).
  */
 async function applyFactOperation(
@@ -289,7 +290,8 @@ async function applyFactOperation(
       if (op.category === undefined || op.fact === undefined || op.durability === undefined) {
         return;
       }
-      await userFacts.rememberFact(
+      await rememberFromEpisode(
+        userFacts,
         userId,
         {
           category: op.category,
@@ -301,6 +303,7 @@ async function applyFactOperation(
           phaseNote: op.phaseNote ?? null,
           onExpiry: op.onExpiry,
           context: 'stated in a compacted episode',
+          explicitPermanent: op.explicitPermanent,
           evidenceAt,
         },
         now,
@@ -325,7 +328,8 @@ async function applyFactOperation(
       ) {
         return;
       }
-      await userFacts.supersedeFact(
+      await supersedeFromEpisode(
+        userFacts,
         userId,
         {
           factId: op.factId,
@@ -338,6 +342,7 @@ async function applyFactOperation(
           phaseNote: op.phaseNote ?? null,
           onExpiry: op.onExpiry,
           context: 'corrected in a compacted episode',
+          explicitPermanent: op.explicitPermanent,
         },
         evidenceAt,
         now,
@@ -352,5 +357,73 @@ async function applyFactOperation(
       await userFacts.retractFact(userId, { factId: op.factId, evidenceAt, reason: op.reason }, now);
       return;
     }
+  }
+}
+
+/**
+ * Close-out finding 2: a compaction-sourced `permanent` must never be LOST.
+ * When the permanent gate does not open (the episode did not establish
+ * irreversibility in the user's own words), the fact is retried as `long_term`
+ * at the class-minimum review date, with a context note saying why — a fact the
+ * coach must not forget is recorded for review, not dropped. The live tool
+ * path keeps its refusal-and-ask behaviour: only the summariser path downgrades.
+ */
+const PERMANENCE_NOTE = 'recorded for review as long_term: permanence was not established';
+
+async function rememberFromEpisode(
+  userFacts: IUserFactsService,
+  userId: string,
+  input: Parameters<IUserFactsService['rememberFact']>[1],
+  now: Date,
+  sourceTurnId: string | undefined,
+): Promise<void> {
+  try {
+    await userFacts.rememberFact(userId, input, now, sourceTurnId);
+  } catch (err) {
+    if (!(err instanceof PermanentFactRefusal)) {
+      throw err;
+    }
+    await userFacts.rememberFact(
+      userId,
+      {
+        ...input,
+        durability: 'long_term',
+        ttlDays: undefined,
+        onExpiry: undefined,
+        context: `${input.context ?? ''} — ${PERMANENCE_NOTE}`.replace(/^ — /, ''),
+      },
+      now,
+      sourceTurnId,
+    );
+  }
+}
+
+async function supersedeFromEpisode(
+  userFacts: IUserFactsService,
+  userId: string,
+  input: Parameters<IUserFactsService['supersedeFact']>[1],
+  evidenceAt: Date,
+  now: Date,
+  sourceTurnId: string | undefined,
+): Promise<void> {
+  try {
+    await userFacts.supersedeFact(userId, input, evidenceAt, now, sourceTurnId);
+  } catch (err) {
+    if (!(err instanceof PermanentFactRefusal)) {
+      throw err;
+    }
+    await userFacts.supersedeFact(
+      userId,
+      {
+        ...input,
+        durability: 'long_term',
+        ttlDays: undefined,
+        onExpiry: undefined,
+        context: `${input.context ?? ''} — ${PERMANENCE_NOTE}`.replace(/^ — /, ''),
+      },
+      evidenceAt,
+      now,
+      sourceTurnId,
+    );
   }
 }

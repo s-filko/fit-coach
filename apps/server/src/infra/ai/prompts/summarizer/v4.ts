@@ -33,7 +33,9 @@ function knownFactLine(fact: UserFact): string {
  * SEES the user's known active facts, so it can confirm, correct or retract
  * them instead of blind-upserting restatements. The known-facts list renders
  * with ids; every confirm/update/retract must reference one of those ids
- * verbatim (the schema rejects invented uuids). A user-closed fact is never in
+ * verbatim (the schema verifies UUID FORMAT only — a well-formed but invented
+ * id resolves to no row later and the operation is a silent no-op). A
+ * user-closed fact is never in
  * the list (the caller passes active facts only) and must never be re-added.
  *
  * Pure (BR-LLM-007): transcript, known facts and the phase arrive as data; no
@@ -75,7 +77,7 @@ Compare the episode against the KNOWN ACTIVE FACTS listed in the input:
 Never re-add a fact as "add" when it matches a known fact — that is what "confirm" is for. Do not invent ids: every factId must be copied from the KNOWN ACTIVE FACTS list.
 
 Durability for add/update (pick by what the episode shows):
-- "permanent": only an irreversible condition the user stated explicitly (amputation, irreversible diagnosis).
+- "permanent": only an irreversible condition the user stated explicitly (amputation, irreversible diagnosis). Set explicitPermanent: true ONLY when the user stated the irreversibility themselves, in their own words, in this episode; without the flag a permanent is recorded for review as long_term instead.
 - "long_term": an injury or recovery measured in weeks or months → pass reviewInDays (when to re-ask) and a short phaseNote in the user's words.
 - "short": a state that resolves in days (soreness, bad sleep, food poisoning, a tweak) → pass ttlDays and onExpiry: "forget" when it certainly passes, "ask_once" when it may leave a trace (a pain under load).
 

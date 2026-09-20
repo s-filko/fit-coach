@@ -48,7 +48,9 @@ export type EpisodeSummary = z.infer<typeof EpisodeSummarySchema>;
  * summariser SEES the known active facts and says what to do with them, instead
  * of a blind upsert list. Flat on purpose — the same shape `manage_fact`'s
  * schema taught the provider family. `factId`s must be copied verbatim from the
- * known-facts list the prompt rendered; a made-up id is a schema rejection.
+ * known-facts list the prompt rendered; the schema verifies UUID FORMAT only —
+ * a well-formed but invented id resolves to no row later and the operation
+ * becomes a silent no-op in the port (confirm/retract return false/null).
  */
 export const FactOperationSchema = z
   .object({
@@ -61,6 +63,8 @@ export const FactOperationSchema = z
     fact: z.string().optional(),
     muscleGroup: z.string().optional(),
     durability: z.enum(FACT_DURABILITIES).optional(),
+    /** add/update + permanent: the user stated irreversibility in the episode, in their own words. */
+    explicitPermanent: z.boolean().optional(),
     ttlDays: z.number().int().optional(),
     reviewInDays: z.number().int().optional(),
     phaseNote: z.string().optional(),

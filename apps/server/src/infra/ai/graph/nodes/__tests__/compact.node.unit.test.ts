@@ -467,6 +467,78 @@ describe('buildCompactStep — fact operations (fact-lifecycle Task 3, AC-FL-4)'
     expect(rememberFact.mock.calls[0][1].evidenceAt).toEqual(NOW);
   });
 
+  it('add: explicitPermanent flows through — an irreversible condition stated in the episode stores permanent', async () => {
+    const { deps, rememberFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            {
+              op: 'add',
+              category: 'physical_constraint',
+              fact: 'Amputated left leg',
+              durability: 'permanent',
+              explicitPermanent: true,
+            },
+          ],
+        }),
+    });
+    const compact = buildCompactStep(deps);
+
+    await compact(channelState(), ctxConfig());
+
+    expect(rememberFact).toHaveBeenCalledTimes(1);
+    expect(rememberFact.mock.calls[0][1]).toMatchObject({ durability: 'permanent', explicitPermanent: true });
+  });
+
+  it('add: permanent WITHOUT the flag is not LOST — retried as long_term with a review note (close-out finding 2)', async () => {
+    const { deps, rememberFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            { op: 'add', category: 'physical_constraint', fact: 'Bad back forever', durability: 'permanent' },
+          ],
+        }),
+    });
+    rememberFact.mockRejectedValueOnce(new PermanentFactRefusal());
+    const compact = buildCompactStep(deps);
+
+    await compact(channelState(), ctxConfig());
+
+    expect(rememberFact).toHaveBeenCalledTimes(2);
+    expect(rememberFact.mock.calls[1]?.[1]).toMatchObject({
+      durability: 'long_term',
+      reviewInDays: undefined, // the class-minimum review date is the default
+    });
+    expect(String(rememberFact.mock.calls[1]?.[1]?.context)).toContain('permanence was not established');
+  });
+
+  it('update: supersedeFact gets explicitPermanent too — and the same non-lossy downgrade', async () => {
+    const { deps, supersedeFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            {
+              op: 'update',
+              factId: KNOWN_FACT_ID,
+              category: 'physical_constraint',
+              fact: 'Chronic, irreversible disc condition',
+              durability: 'permanent',
+              explicitPermanent: true,
+            },
+          ],
+        }),
+    });
+    const compact = buildCompactStep(deps);
+
+    await compact(channelState(), ctxConfig());
+
+    expect(supersedeFact).toHaveBeenCalledTimes(1);
+    expect(supersedeFact.mock.calls[0][1]).toMatchObject({ durability: 'permanent', explicitPermanent: true });
+  });
+
   it('confirm: bumps the counter without touching the text — confirmFact with the run clock', async () => {
     const { deps, confirmFact, rememberFact } = makeDeps({
       structured: () =>
@@ -531,7 +603,7 @@ describe('buildCompactStep — fact operations (fact-lifecycle Task 3, AC-FL-4)'
     );
   });
 
-  it('a PermanentFactRefusal on one operation skips it and the rest of the batch still applies', async () => {
+  it('a PermanentFactRefusal downgrades that operation and the rest of the batch still applies', async () => {
     const { deps, rememberFact, confirmFact } = makeDeps({
       structured: () =>
         Promise.resolve({
@@ -547,8 +619,11 @@ describe('buildCompactStep — fact operations (fact-lifecycle Task 3, AC-FL-4)'
 
     const update = await compact(channelState(), ctxConfig());
 
-    expect(rememberFact).toHaveBeenCalledTimes(1);
-    expect(confirmFact).toHaveBeenCalledTimes(1); // the batch continued
+    // Not skipped, not lost: the permanent was retried as long_term (finding 2)...
+    expect(rememberFact).toHaveBeenCalledTimes(2);
+    expect(rememberFact.mock.calls[1][1]).toMatchObject({ durability: 'long_term' });
+    // ...and the batch continued past it.
+    expect(confirmFact).toHaveBeenCalledTimes(1);
     expect(removedIds(update)).toEqual(['m0', 'm0a']); // compaction unchanged
   });
 

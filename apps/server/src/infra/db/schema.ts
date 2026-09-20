@@ -176,10 +176,11 @@ export const factOnExpiryEnum = pgEnum('fact_on_expiry', ['forget', 'ask_once'])
 export const factStatusEnum = pgEnum('fact_status', ['active', 'archived']);
 export const factArchivedReasonEnum = pgEnum('fact_archived_reason', ['user_closed', 'expired', 'superseded']);
 
-// Durable user facts extracted at compaction (ADR-0009 table shape and FactCategory
-// values; mechanism superseded 2026-09-17 — see refactor-p6-facts-and-progress-blocks
-// Task 1 and Task 3). Idempotent upsert on (user_id, category, fact_key) AMONG ACTIVE
-// ROWS with a confirmation counter (D-C); `fact` text is never overwritten once written.
+// Durable user facts (ADR-0009 table shape and FactCategory values). Writes are
+// select-then-branch in the repository (fact-lifecycle Tasks 2-3): a new active
+// row, an in-place correction, a superseding row, or an archival — never a blind
+// upsert. Uniqueness of (user_id, category, fact_key) holds among ACTIVE rows
+// only (the partial index), so closed history keeps its key.
 // Lifecycle columns (AC-FL-1): existing rows migrate with defaults that change
 // nothing today — durability=permanent (no dates, never expires), status=active,
 // every date/closure column null.
@@ -206,7 +207,12 @@ export const userFacts = pgTable(
     archivedAt: timestamp('archived_at'),
     archivedReason: factArchivedReasonEnum('archived_reason'),
     closedByUserAt: timestamp('closed_by_user_at'),
-    supersedesId: uuid('supersedes_id').references((): AnyPgColumn => userFacts.id),
+    // The history link is optional by nature (close-out finding 3): erasing the
+    // superseded row must succeed — AC-FL-8's "removed entirely, no trace" — so
+    // the link nulls instead of raising an FK violation.
+    supersedesId: uuid('supersedes_id').references((): AnyPgColumn => userFacts.id, {
+      onDelete: 'set null',
+    }),
     context: text('context'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),

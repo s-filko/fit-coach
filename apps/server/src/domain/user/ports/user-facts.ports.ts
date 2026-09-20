@@ -101,6 +101,8 @@ export interface SupersedeFactInput {
   fact: string;
   muscleGroup?: string | null;
   durability: FactDurability;
+  /** The user stated irreversibility explicitly — opens the permanent gate. */
+  explicitPermanent?: boolean;
   ttlDays?: number;
   reviewInDays?: number;
   phaseNote?: string | null;

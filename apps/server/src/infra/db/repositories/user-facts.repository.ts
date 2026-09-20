@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNull, ne, or, sql } from 'drizzle-orm';
 
 import type {
   FactCategory,
@@ -45,10 +45,20 @@ function toUserFact(row: typeof userFacts.$inferSelect): UserFact {
 /**
  * The AC-FL-1 read filter (the SQL twin of `isActiveForPrompt`): active rows
  * only, and nothing whose TTL is up at the caller's `now` (the run clock —
- * passed in as data, never the DB clock or a fresh `new Date()`).
+ * passed in as data, never the DB clock or a fresh `new Date()`). Expiry is a
+ * SHORT-class property in the twin, so the SQL checks durability too — the two
+ * cannot drift apart on a stray expires_at on a non-short row.
  */
 function visibleAt(now: Date) {
-  return and(eq(userFacts.status, 'active'), or(isNull(userFacts.expiresAt), gt(userFacts.expiresAt, now)));
+  return and(
+    eq(userFacts.status, 'active'),
+    or(isNull(userFacts.expiresAt), ne(userFacts.durability, 'short'), gt(userFacts.expiresAt, now)),
+  );
+}
+
+/** Postgres unique-violation (the partial unique index) — matched by code, never message text. */
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505';
 }
 
 /** Drizzle implementation of {@link IUserFactsService} (ADR-0009 table shape, D-B/D-C). */
@@ -71,6 +81,25 @@ export class UserFactsRepository implements IUserFactsService {
     return rows.filter(row => row.muscleGroup !== null).map(toUserFact);
   }
 
+  /** The key lookup: prefer the ACTIVE row (the dedupe/update target), fall back to the newest closed row. */
+  private async rowsForKey(userId: string, category: string, factKey: string): Promise<UserFact[]> {
+    return (
+      await db
+        .select()
+        .from(userFacts)
+        .where(and(eq(userFacts.userId, userId), eq(userFacts.category, category), eq(userFacts.factKey, factKey)))
+        .orderBy(desc(userFacts.createdAt))
+    ).map(toUserFact);
+  }
+
+  private async rowById(userId: string, factId: string): Promise<UserFact | null> {
+    const [row] = await db
+      .select()
+      .from(userFacts)
+      .where(and(eq(userFacts.id, factId), eq(userFacts.userId, userId)));
+    return row === undefined ? null : toUserFact(row);
+  }
+
   async rememberFact(
     userId: string,
     input: RememberFactInput,
@@ -79,27 +108,10 @@ export class UserFactsRepository implements IUserFactsService {
   ): Promise<RememberFactOutcome> {
     const factKey = computeFactKey(input.fact);
     // A correction references the row by id (the corrected text normalises to a
-    // NEW key); without an id, the (userId, category, factKey) unique index is
-    // the dedupe — a repeat of the same wording updates, not duplicates.
-    // With the partial unique index the same key can carry one ACTIVE row plus
-    // closed history — the key lookup prefers the active row (the dedupe/update
-    // target) and falls back to the newest closed row (the closure check / link).
+    // NEW key); without an id, the key lookup is the dedupe.
     const rows = input.factId
-      ? (
-          await db
-            .select()
-            .from(userFacts)
-            .where(and(eq(userFacts.id, input.factId), eq(userFacts.userId, userId)))
-        ).map(toUserFact)
-      : (
-          await db
-            .select()
-            .from(userFacts)
-            .where(
-              and(eq(userFacts.userId, userId), eq(userFacts.category, input.category), eq(userFacts.factKey, factKey)),
-            )
-            .orderBy(desc(userFacts.createdAt))
-        ).map(toUserFact);
+      ? [await this.rowById(userId, input.factId)].filter((row): row is UserFact => row !== null)
+      : await this.rowsForKey(userId, input.category, factKey);
     const existing = rows.find(row => row.status === 'active') ?? rows[0] ?? null;
 
     // Code owns the bounds (fact-lifecycle plan): clamping per class, and the
@@ -131,26 +143,68 @@ export class UserFactsRepository implements IUserFactsService {
       phaseAt: input.phaseNote != null ? now : null,
     };
 
-    if (existing === null) {
-      const [row] = await db
-        .insert(userFacts)
-        .values({
-          userId,
-          category: input.category,
+    // The ACTIVE-row correction, shared by the direct path and the race
+    // recovery below: a conversational correction REWRITES the text (unlike a
+    // confirm, D-C) and bumps the counter.
+    const updateInPlace = async (row: UserFact): Promise<RememberFactOutcome> => {
+      const [updated] = await db
+        .update(userFacts)
+        .set({
           fact: input.fact,
+          // A correction can change the normalised key too — the row moves with its text.
           factKey,
           muscleGroup: input.muscleGroup ?? null,
-          confirmations: 1,
-          // A genuinely new statement replacing a KNOWN closed fact keeps the link (AC-FL-3).
-          supersedesId: input.supersedesFactId ?? null,
-          context: input.context ?? null,
-          sourceTurnId: sourceTurnId ?? null,
+          confirmations: row.confirmations + 1,
+          context: input.context ?? row.context,
           ...lifecycleValues,
-          createdAt: now,
           updatedAt: now,
         })
+        .where(eq(userFacts.id, row.id))
         .returning();
-      return { outcome: 'created', fact: toUserFact(row) };
+      return { outcome: 'updated', fact: toUserFact(updated) };
+    };
+
+    // Close-out finding 1: select-then-branch is not atomic — the partial
+    // unique index is the only guard. If a concurrent writer wins the INSERT,
+    // the loser's 23505 is caught, the row is re-read and the call falls
+    // through to the same UPDATE path: the caller still gets a normal outcome,
+    // never a raw DB error.
+    const insertOr = async (values: typeof userFacts.$inferInsert): Promise<RememberFactOutcome | null> => {
+      try {
+        const [row] = await db.insert(userFacts).values(values).returning();
+        return { outcome: 'created', fact: toUserFact(row) };
+      } catch (err) {
+        if (!isUniqueViolation(err)) {
+          throw err;
+        }
+        return null; // lost the race — the caller re-reads and updates
+      }
+    };
+
+    if (existing === null) {
+      const created = await insertOr({
+        userId,
+        category: input.category,
+        fact: input.fact,
+        factKey,
+        muscleGroup: input.muscleGroup ?? null,
+        confirmations: 1,
+        // A genuinely new statement replacing a KNOWN closed fact keeps the link (AC-FL-3).
+        supersedesId: input.supersedesFactId ?? null,
+        context: input.context ?? null,
+        sourceTurnId: sourceTurnId ?? null,
+        ...lifecycleValues,
+        createdAt: now,
+        updatedAt: now,
+      });
+      if (created !== null) {
+        return created;
+      }
+      const raced = (await this.rowsForKey(userId, input.category, factKey)).find(row => row.status === 'active');
+      if (raced === undefined) {
+        throw new Error('unique violation on user_facts insert, but no active row found on re-read');
+      }
+      return updateInPlace(raced);
     }
 
     // A genuinely new statement re-opening a CLOSED key creates a NEW row linked
@@ -158,44 +212,31 @@ export class UserFactsRepository implements IUserFactsService {
     // archive — wave B's recurrence promotion counts exactly that evidence — and
     // the partial unique index (active rows only) leaves room for both.
     if (existing.status === 'archived') {
-      const [row] = await db
-        .insert(userFacts)
-        .values({
-          userId,
-          category: input.category,
-          fact: input.fact,
-          factKey,
-          muscleGroup: input.muscleGroup ?? null,
-          confirmations: 1,
-          supersedesId: input.supersedesFactId ?? existing.id,
-          context: input.context ?? null,
-          sourceTurnId: sourceTurnId ?? null,
-          ...lifecycleValues,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning();
-      return { outcome: 'created', fact: toUserFact(row) };
-    }
-
-    // An ACTIVE fact, corrected in place: a conversational correction REWRITES
-    // the text (unlike the summariser's confirm-only upsert, D-C) and bumps the
-    // counter.
-    const [row] = await db
-      .update(userFacts)
-      .set({
+      const created = await insertOr({
+        userId,
+        category: input.category,
         fact: input.fact,
-        // A correction can change the normalised key too — the row moves with its text.
         factKey,
         muscleGroup: input.muscleGroup ?? null,
-        confirmations: existing.confirmations + 1,
-        context: input.context ?? existing.context,
+        confirmations: 1,
+        supersedesId: input.supersedesFactId ?? existing.id,
+        context: input.context ?? null,
+        sourceTurnId: sourceTurnId ?? null,
         ...lifecycleValues,
+        createdAt: now,
         updatedAt: now,
-      })
-      .where(eq(userFacts.id, existing.id))
-      .returning();
-    return { outcome: 'updated', fact: toUserFact(row) };
+      });
+      if (created !== null) {
+        return created;
+      }
+      const raced = (await this.rowsForKey(userId, input.category, factKey)).find(row => row.status === 'active');
+      if (raced === undefined) {
+        throw new Error('unique violation on user_facts insert, but no active row found on re-read');
+      }
+      return updateInPlace(raced);
+    }
+
+    return updateInPlace(existing);
   }
 
   async retractFact(
@@ -273,7 +314,7 @@ export class UserFactsRepository implements IUserFactsService {
     }
 
     const lifecycle = resolveLifecycle(input, now, {
-      explicit: false,
+      explicit: input.explicitPermanent,
       confirmations: 1, // a superseding statement starts its own history
     });
 

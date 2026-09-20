@@ -132,6 +132,7 @@ describe('EpisodeSummaryV4Schema (fact-lifecycle Task 3, AC-FL-4 — operations,
           fact: 'Trains at home with dumbbells up to 20kg',
           category: 'equipment',
           durability: 'permanent',
+          explicitPermanent: true,
         },
         {
           op: 'retract',

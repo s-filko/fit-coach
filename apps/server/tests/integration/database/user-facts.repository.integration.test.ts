@@ -586,4 +586,73 @@ describe('UserFactsRepository – integration', () => {
       expect(withArchived.archived[0]).toMatchObject({ archivedReason: 'user_closed' });
     });
   });
+
+  describe('close-out review fixes', () => {
+    it('finding 3: deleting the TARGET of a supersede link succeeds — the survivor keeps its row, supersedes_id nulled (AC-FL-8)', async () => {
+      const userData = createTestUserData({ username: 'user_facts_fk_delete_user' });
+      const user = await userRepo.create(userData);
+      const T0 = new Date('2026-09-21T12:00:00Z');
+
+      const created = await remember(user.id, 'Old knee issue', 'physical_constraint', { muscleGroup: 'quads' });
+      const oldId = created.outcome === 'created' ? created.fact.id : null;
+      if (oldId === null) throw new Error('expected created');
+
+      const superseded = await repository.supersedeFact(
+        user.id,
+        { factId: oldId, category: 'physical_constraint', fact: 'Knee fully rehabbed', durability: 'short', ttlDays: 5 },
+        T0,
+        T0,
+      );
+      const survivorId = superseded?.outcome === 'created' ? superseded.fact.id : null;
+      if (survivorId === null) throw new Error('expected created');
+
+      // The erase-me case: a history-carrying fact is exactly what a user asks to delete.
+      await expect(repository.deleteFact(user.id, oldId)).resolves.toBe(true);
+      const listing = await repository.listFacts(user.id, true, T0);
+      const survivor = [...listing.active, ...listing.archived].find(f => f.id === survivorId);
+      expect(survivor).toBeDefined();
+      expect(survivor?.supersedesId).toBeNull(); // SET NULL, not an FK error
+    });
+
+    it('finding 2: supersedeFact with explicitPermanent stores the new row permanent', async () => {
+      const userData = createTestUserData({ username: 'user_facts_supersede_perm_user' });
+      const user = await userRepo.create(userData);
+      const T0 = new Date('2026-09-21T12:00:00Z');
+
+      const created = await remember(user.id, 'Recovering shoulder', 'physical_constraint', { muscleGroup: 'shoulders_front' });
+      const oldId = created.outcome === 'created' ? created.fact.id : null;
+      if (oldId === null) throw new Error('expected created');
+
+      const result = await repository.supersedeFact(
+        user.id,
+        { factId: oldId, category: 'physical_constraint', fact: 'Shoulder permanently limited after surgery', durability: 'permanent', explicitPermanent: true },
+        T0,
+        T0,
+      );
+
+      expect(result?.outcome).toBe('created');
+      if (result?.outcome !== 'created') return;
+      expect(result.fact.durability).toBe('permanent');
+      expect(result.fact.expiresAt).toBeNull();
+      expect(result.fact.reviewAfter).toBeNull();
+    });
+
+    it('advisory: a NON-short row with a stray past expires_at is still visible — the SQL filter checks durability, like isActiveForPrompt', async () => {
+      const userData = createTestUserData({ username: 'user_facts_durability_filter_user' });
+      const user = await userRepo.create(userData);
+      const NOW = new Date('2026-09-21T12:00:00Z');
+
+      // A malformed/legacy row: long_term with a stray expires_at in the past.
+      // isActiveForPrompt ignores the date for non-short facts; the SQL must too.
+      await seedFact(user.id, {
+        category: 'physical_constraint',
+        fact: 'Herniated disc under long recovery',
+        durability: 'long_term',
+        expiresAt: new Date(NOW.getTime() - 86_400_000),
+        reviewAfter: new Date(NOW.getTime() + 30 * 86_400_000),
+      });
+
+      await expect(repository.getForPrompt(user.id, NOW)).resolves.toHaveLength(1);
+    });
+  });
 });
