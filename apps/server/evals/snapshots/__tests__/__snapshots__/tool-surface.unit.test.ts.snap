@@ -919,7 +919,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) tra
     },
   },
   {
-    "description": "Log a completed set for the current exercise. Always provide exerciseId (from SESSION PLAN or exercise catalog). For strength/weighted exercises: provide reps and weight (in kg). For bodyweight exercises: provide reps only. For cardio duration (bike, elliptical): provide durationSeconds only. For cardio distance (treadmill, running): provide distanceKm. durationSeconds is optional — if unknown, log without it and ask the user. Optionally: inclinePct (treadmill only). setNumber is computed automatically — do NOT pass it. Call once per set. For multiple sets reported at once, call log_set multiple times.",
+    "description": "Log a completed set for the current exercise. Identify the exercise with exerciseId ONLY when you have its exact UUID — copied verbatim from the SESSION PLAN or from a search_exercises result ("ID:..." line). If the exercise is not in the plan and you do not have its exact UUID, pass exerciseName instead (the server resolves it in the catalog) — never invent or guess a UUID. For strength/weighted exercises: provide reps and weight (in kg). For bodyweight exercises: provide reps only. For cardio duration (bike, elliptical): provide durationSeconds only. For cardio distance (treadmill, running): provide distanceKm. durationSeconds is optional — if unknown, log without it and ask the user. Optionally: inclinePct (treadmill only). setNumber is computed automatically — do NOT pass it. Call once per set. For multiple sets reported at once, call log_set multiple times.",
     "name": "log_set",
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -937,13 +937,13 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) tra
           "type": "integer",
         },
         "exerciseId": {
-          "description": "Exercise UUID from the session plan. Preferred over exerciseName.",
+          "description": "Exercise UUID copied verbatim from the session plan or search_exercises results. Never invent one.",
           "format": "uuid",
           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
           "type": "string",
         },
         "exerciseName": {
-          "description": "Exercise name — only if exerciseId is unknown.",
+          "description": "Exercise name — use when the exercise is not in the session plan and its exact UUID is unknown.",
           "type": "string",
         },
         "feedback": {
