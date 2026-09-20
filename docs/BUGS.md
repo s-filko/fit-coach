@@ -1076,7 +1076,7 @@ roughly halves per-call latency and cuts the number of tool round-trips.
 
 ## BUG-020 — `list_facts` never prints the fact id, so the coach can neither retract nor delete a fact — and says it did
 
-**Status:** Open (found 2026-09-21 by the fact-lifecycle wave-A dev smoke)
+**Status:** Fixed 2026-09-21 (`5e59391c`, merged in `a45e76cd`) — pending live re-smoke
 **Severity:** High — it breaks AC-FL-2 / AC-FL-8 in the only way the user can see, and the coach reports success it did not achieve
 **Found during:** Orchestrator dev smoke on `bd75508e`, throwaway user `smoke_factlife`
 **Component:** `apps/server/src/infra/ai/tools/list-facts.tool.ts` (`activeLine` / `archivedLine`), `infra/ai/tools/manage-fact.tool.ts`
@@ -1121,7 +1121,7 @@ candidates when it is ambiguous — the model reached for that behaviour twice.
 
 ## BUG-021 — The tool schema-rejection hint always talks about `search_exercises`
 
-**Status:** Fix in progress (2026-09-21, branch `fix/tool-schema-hint`)
+**Status:** Fixed 2026-09-21 (`9332fc6c`, merged in `a45e76cd`)
 **Severity:** Medium — the only recovery cue a model gets after a schema rejection points at an unrelated tool
 **Component:** `apps/server/src/infra/ai/graph/tool-executor.ts:160-170`
 
