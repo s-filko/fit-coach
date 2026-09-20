@@ -692,3 +692,26 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       ache do not share a key (category + `muscle_group` grouping is cheap but coarse; model-judged
       identity is accurate but costs a call); (3) the threshold and the window (3 within N days?).
       Source: wave-B Task 3 `ask` + orchestrator decision to keep it out of that plan (2026-09-21).
+
+## course-check (wave B) close-out review advisories (2026-09-21)
+
+- [ ] `user-facts.repository.ts` `expiredAt(now)` re-expresses `isExpired`'s clause (active + short +
+      `expires_at <= now`) as raw SQL — a second statement of the rule that owns its numbers in
+      `domain/user/services/fact-lifecycle.ts`, next to the existing `visibleAt` / `isActiveForPrompt`
+      twin. SQL cannot call the TS predicate, so this is structural, but a change to the `<=` edge will
+      not fail to compile if the SQL drifts — only fail behaviourally.
+      Source: close-out-review, R2 (2026-09-21).
+- [ ] `tests/integration/scenarios/scripted-model.ts` routes a structured call to the course-check
+      answer queue by matching the literal opening sentence of `prompts/course-check/v1.ts`. Reword that
+      sentence and every FL journey misroutes its course-check call into the summariser's queue (a loud
+      schema failure, not a silent one, but nothing ties the two strings together). Route by schema name
+      instead. Source: close-out-review, R2+R3 (2026-09-21).
+- [ ] The course-check prompt forbids putting an expiry check-in into the general `questions` list
+      instead of the dedicated field, but code cannot tell the two apart — a model that ignores the
+      instruction would have its expiry question persisted like an ordinary one, so it would be asked
+      more than once. Worth one deterministic check in the consolidated eval pass.
+      Source: wave-B Task 3b worker note, accepted by the orchestrator (2026-09-21).
+- [ ] The new optional field in the course-check structured schema follows the summariser's precedent
+      for optional fields under strict `json_schema`, but only a live provider run proves the provider
+      accepts it. Worth confirming on the first live course-check run.
+      Source: wave-B Task 3b worker note (2026-09-21).
