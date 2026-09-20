@@ -166,15 +166,30 @@ export function isActiveForPrompt(fact: LifecycleFact, now: Date): boolean {
  * - 'forget' — any other expired short fact (`forget`, or no flag): archive silently;
  * - null     — not expired (or not active/short): nothing to perform.
  *
+ * Staleness bound (`askWindowMs`, configuration passed as data): a question
+ * about a state that expired LONGER ago than the window is noise — asking about
+ * four-day-old soreness already is, a months-old tweak more so — so such an
+ * `ask_once` fact is archived silently like `forget`. Strictly beyond the
+ * window; the comparison is against the passed `now` (the run clock). Omitted =
+ * no bound.
+ *
  * Built on {@link isExpired}, so the date rule (<=, active short only) lives in
  * exactly one place. The read that finds these facts is the port's
  * `getExpiredActive`; this decides what each one gets.
  */
-export function expiryAction(fact: LifecycleFact, now: Date): 'ask' | 'forget' | null {
+export function expiryAction(
+  fact: LifecycleFact,
+  now: Date,
+  askWindowMs = Number.POSITIVE_INFINITY,
+): 'ask' | 'forget' | null {
   if (!isExpired(fact, now)) {
     return null;
   }
-  return fact.onExpiry === 'ask_once' ? 'ask' : 'forget';
+  if (fact.onExpiry !== 'ask_once') {
+    return 'forget';
+  }
+  const expiredFor = now.getTime() - (fact.expiresAt as Date).getTime(); // isExpired guarantees a date
+  return expiredFor > askWindowMs ? 'forget' : 'ask';
 }
 
 /** The archive fields the closure moment reads. */

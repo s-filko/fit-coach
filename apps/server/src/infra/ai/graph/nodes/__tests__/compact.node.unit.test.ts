@@ -54,6 +54,7 @@ function channelState(overrides: Partial<ConversationStateType> = {}): Conversat
     compactReason: null,
     courseDirective: null,
     courseCheckFailure: null,
+    courseExpiryQuestions: [],
     ...overrides,
   };
 }

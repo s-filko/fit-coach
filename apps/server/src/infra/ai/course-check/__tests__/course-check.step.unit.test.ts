@@ -35,6 +35,7 @@ const RUN_ID = 'run-2';
 const USER_ID = 'u1';
 const GAP_MS = 3 * 3_600_000;
 const COOLDOWN_MS = 15 * 60_000;
+const ASK_WINDOW_MS = 7 * 86_400_000;
 const PLAN_ID = 'plan-1';
 
 const DIRECTIVE: CourseCheckDirective = {
@@ -86,6 +87,7 @@ function state(overrides: Partial<ConversationStateType> = {}): ConversationStat
     compactReason: null,
     courseDirective: null,
     courseCheckFailure: null,
+    courseExpiryQuestions: [],
     ...overrides,
   };
 }
@@ -129,7 +131,12 @@ function makeDeps(overrides: DepsOverrides = {}): CourseCheckStepDeps {
     trainingService: {
       getActivePlan: jest.fn(() => Promise.resolve({ id: PLAN_ID })),
     } as unknown as ITrainingService,
-    config: { enabled: overrides.enabled ?? true, gapMs: GAP_MS, retryCooldownMs: COOLDOWN_MS },
+    config: {
+      enabled: overrides.enabled ?? true,
+      gapMs: GAP_MS,
+      retryCooldownMs: COOLDOWN_MS,
+      expiryAskWindowMs: ASK_WINDOW_MS,
+    },
   };
 }
 
@@ -798,5 +805,89 @@ describe('buildCourseCheckStep — expiry is performed', () => {
 
     expect(archivedIds(deps).sort()).toEqual(['short-1', 'short-2']);
     expect(deps.llmGateway.structured).not.toHaveBeenCalled();
+  });
+
+  // --- FIX 1: the expiry question is one-shot ---
+
+  it('ONE-SHOT: the run that fires carries the question on a transient channel; the PERSISTED directive lacks it', async () => {
+    const withQuestion = { ...DIRECTIVE, expiryQuestions: ['Did the shoulder tweak leave any trace?'] };
+    const deps = makeDeps({ expired: [shortFact()], structured: () => Promise.resolve(withQuestion) });
+    const step = buildCourseCheckStep(deps);
+
+    const updates = await step(state(), ctxConfig());
+
+    expect(updates.courseExpiryQuestions).toEqual(['Did the shoulder tweak leave any trace?']);
+    expect(updates.courseDirective?.directive).toEqual(DIRECTIVE); // the rest persists exactly as before
+    expect(updates.courseDirective?.directive).not.toHaveProperty('expiryQuestions');
+  });
+
+  it('the next run clears it: unchanged fingerprint, ZERO model calls, and the directive still without the question', async () => {
+    const due = [shortFact()];
+    const deps = makeDeps({
+      expired: due,
+      structured: () => Promise.resolve({ ...DIRECTIVE, expiryQuestions: ['Did the shoulder tweak leave any trace?'] }),
+      archiveExpired: async (_u, id) => {
+        due.splice(0, due.length, ...due.filter(f => f.id !== id));
+        return true;
+      },
+    });
+    const step = buildCourseCheckStep(deps);
+    let current = state();
+
+    current = carry(current, await step(current, ctxConfig())); // the run that asked
+    expect(current.courseExpiryQuestions).toHaveLength(1);
+
+    const next = await step(current, ctxConfig(new Date(NOW.getTime() + 60_000)));
+
+    expect(deps.llmGateway.structured).toHaveBeenCalledTimes(1);
+    expect(next).toEqual({ courseExpiryQuestions: [] }); // nothing else moves; only the leftover is cleared
+    current = carry(current, next);
+    expect(current.courseExpiryQuestions).toEqual([]);
+    expect(current.courseDirective?.directive).toEqual(DIRECTIVE);
+  });
+
+  it('a leftover is cleared by ANY run — switched off, backing off, or quiet', async () => {
+    const leftover = state({ courseExpiryQuestions: ['stale question'] });
+    const off = await buildCourseCheckStep(makeDeps({ enabled: false }))(leftover, ctxConfig());
+    expect(off.courseExpiryQuestions).toEqual([]);
+
+    const failing = makeDeps({ structured: () => Promise.reject(new Error('provider down')) });
+    const failed = await buildCourseCheckStep(failing)(leftover, ctxConfig());
+    expect(failed.courseExpiryQuestions).toEqual([]);
+  });
+
+  it('expiry questions the model volunteers when NOTHING is owed one are dropped — neither rendered nor stored', async () => {
+    const deps = makeDeps({ structured: () => Promise.resolve({ ...DIRECTIVE, expiryQuestions: ['unsolicited'] }) });
+    const step = buildCourseCheckStep(deps);
+
+    const updates = await step(state(), ctxConfig());
+
+    expect(updates.courseExpiryQuestions).toBeUndefined();
+    expect(updates.courseDirective?.directive).not.toHaveProperty('expiryQuestions');
+  });
+
+  // --- FIX 2: no question about something that expired long ago ---
+
+  it('an ask_once fact expired BEYOND the staleness bound is archived silently: never in the check input, no question owed', async () => {
+    const stale = shortFact({ id: 'stale-1', expiresAt: new Date(NOW.getTime() - ASK_WINDOW_MS - 1) });
+    const deps = makeDeps({ expired: [stale] });
+    const step = buildCourseCheckStep(deps);
+
+    const updates = await step(state(), ctxConfig());
+
+    expect(archivedIds(deps)).toEqual(['stale-1']); // archived (expired) …
+    expect(checkInput(deps)).not.toContain('Left shoulder tweaked while pressing'); // … but never asked about
+    expect(checkInput(deps)).not.toContain('day(s) ago');
+    expect(updates.courseExpiryQuestions).toBeUndefined();
+  });
+
+  it('exactly AT the bound it is still asked; one millisecond beyond it is not (strictly beyond, run clock)', async () => {
+    const atBound = makeDeps({ expired: [shortFact({ expiresAt: new Date(NOW.getTime() - ASK_WINDOW_MS) })] });
+    await buildCourseCheckStep(atBound)(state(), ctxConfig());
+    expect(checkInput(atBound)).toContain('Left shoulder tweaked while pressing');
+
+    const beyond = makeDeps({ expired: [shortFact({ expiresAt: new Date(NOW.getTime() - ASK_WINDOW_MS - 1) })] });
+    await buildCourseCheckStep(beyond)(state(), ctxConfig());
+    expect(checkInput(beyond)).not.toContain('Left shoulder tweaked while pressing');
   });
 });

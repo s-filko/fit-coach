@@ -19,12 +19,20 @@ import { directive, pastWith, summary } from './fl-shared';
  * - both rows keep their dates and flags in the archive (the history any
  *   future recurrence counting reads), and neither counts as the user's word:
  *   `closed_by_user_at` stays null.
+ * - the question is ONE-SHOT: it rides the run that asked (`expiryQuestions`) and is
+ *   never persisted with the directive, so the next turn renders the directive
+ *   without it and makes no course-check call;
+ * - a third fact, an `ask_once` tweak that expired 46 days before T0, is beyond
+ *   the staleness bound (7 days by default): archived silently at the first
+ *   run, never handed to the check, never a question.
  * With the layer OFF nobody can ask, so both are archived without a question;
  * the database ending is the same.
  */
 
 export const DOMS_FACT = "Legs sore after yesterday's squats (DOMS)";
 export const SHOULDER_TWEAK = 'Left shoulder tweaked while pressing';
+export const STALE_ANKLE = 'Right ankle rolled on a run';
+export const EXPIRY_QUESTION = 'did the left shoulder tweak leave any trace?';
 
 export const scenario: Scenario = {
   id: 'fl-c-short-states',
@@ -37,6 +45,15 @@ export const scenario: Scenario = {
       durability: 'short',
       ttlDays: 3,
       onExpiry: 'forget',
+    },
+    // Expired 46 days before T0 (stated 60 days ago, 14-day TTL): far beyond the staleness bound.
+    {
+      category: 'physical_constraint',
+      fact: STALE_ANKLE,
+      durability: 'short',
+      at: '-60d',
+      ttlDays: 14,
+      onExpiry: 'ask_once',
     },
     {
       category: 'physical_constraint',
@@ -60,9 +77,18 @@ export const scenario: Scenario = {
       },
       script: [{ text: 'Привет! Как левое плечо, уже спокойнее?' }],
       expect: {
-        seen: { mustMatch: ['## User Facts', DOMS_FACT, SHOULDER_TWEAK] },
+        seen: { mustMatch: ['## User Facts', DOMS_FACT, SHOULDER_TWEAK], mustNotMatch: [STALE_ANKLE] },
         persisted: {
           facts: [
+            // Stale beyond the bound: archived silently at this first run — never asked about.
+            {
+              fact: STALE_ANKLE,
+              status: 'archived',
+              archivedReason: 'expired',
+              closedByUser: false,
+              onExpiry: 'ask_once',
+              expiresAt: '-46d',
+            },
             { fact: DOMS_FACT, status: 'active', durability: 'short', onExpiry: 'forget', expiresAt: '+3d' },
             { fact: SHOULDER_TWEAK, status: 'active', durability: 'short', onExpiry: 'ask_once', expiresAt: '+3d' },
           ],
@@ -76,7 +102,8 @@ export const scenario: Scenario = {
       structured: {
         courseCheck: directive({
           vector: 'General fitness, easing back in',
-          questions: ['One check-in: did the left shoulder tweak leave any trace?'],
+          // One-shot: rendered in this run only, never stored with the directive.
+          expiryQuestions: ['One check-in: did the left shoulder tweak leave any trace?'],
         }),
       },
       script: [{ text: 'С возвращением! Плечо после той травмы ничего не беспокоит?' }],
@@ -85,7 +112,7 @@ export const scenario: Scenario = {
         seen: {
           mustMatch: [
             { text: '## Course Directive', courseCheckOnly: true },
-            { text: 'did the left shoulder tweak leave any trace?', courseCheckOnly: true },
+            { text: EXPIRY_QUESTION, courseCheckOnly: true },
           ],
           mustNotMatch: [DOMS_FACT, SHOULDER_TWEAK],
         },
@@ -119,6 +146,8 @@ export const scenario: Scenario = {
       text: 'Плечо в порядке, давай тренироваться',
       script: [{ text: 'Отлично, начинаем.' }],
       expect: {
+        // ONE-SHOT: the question is gone from the model's input, though the directive block still is.
+        seen: { mustNotMatch: [EXPIRY_QUESTION, SHOULDER_TWEAK] },
         // Asked exactly once: nothing due, nothing changes.
         persisted: {
           facts: [

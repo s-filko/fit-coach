@@ -55,7 +55,7 @@ describe('COURSE_CHECK_V1 (AC-FL-5: the structured call’s input)', () => {
     expect(sections.every(s => s.required)).toBe(true);
   });
 
-  it('the system section names the five directive fields — vector, constraints, questions, suspects, verdicts', () => {
+  it('the system section names the six directive fields — vector, constraints, questions, expiryQuestions, suspects, verdicts', () => {
     const [system] = COURSE_CHECK_V1.render({
       phase: 'chat',
       goal: null,
@@ -64,7 +64,7 @@ describe('COURSE_CHECK_V1 (AC-FL-5: the structured call’s input)', () => {
       activePlanId: null,
     });
 
-    for (const field of ['vector', 'constraints', 'questions', 'suspectFacts', 'exerciseVerdicts']) {
+    for (const field of ['vector', 'constraints', 'questions', 'expiryQuestions', 'suspectFacts', 'exerciseVerdicts']) {
       expect(system.text).toContain(field);
     }
   });
@@ -197,6 +197,7 @@ describe('COURSE_CHECK_V1 (AC-FL-5: the structured call’s input)', () => {
       const [system] = COURSE_CHECK_V1.render({ phase: 'chat', goal: null, facts: [], now: NOW, activePlanId: null });
 
       expect(system.text).toContain('exactly ONE short check-in');
+      expect(system.text).toContain('put it HERE, never in questions'); // one-shot: never stored
       expect(system.text).toMatch(/still-active ask_once fact is NOT asked about yet/);
     });
   });

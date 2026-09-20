@@ -32,7 +32,13 @@ import {
 } from '../../../evals/schema/scenario.schema';
 import { scenario as journeyA, KNEE_FACT, NEW_PHASE } from '../../../evals/scenarios/fl-a-review-date.scenario';
 import { scenario as journeyB, SHOULDER_FACT } from '../../../evals/scenarios/fl-b-closed-not-resurrected.scenario';
-import { scenario as journeyC, DOMS_FACT, SHOULDER_TWEAK } from '../../../evals/scenarios/fl-c-short-states.scenario';
+import {
+  scenario as journeyC,
+  DOMS_FACT,
+  EXPIRY_QUESTION,
+  SHOULDER_TWEAK,
+  STALE_ANKLE,
+} from '../../../evals/scenarios/fl-c-short-states.scenario';
 import { scenario as journeyD, RECURRING_FACT } from '../../../evals/scenarios/fl-d-recurring-short-state.scenario';
 import { scenario as journeyE } from '../../../evals/scenarios/fl-e-advisory-plan.scenario';
 import {
@@ -405,6 +411,29 @@ describe('journey (c) — a short state that expires silently versus one that as
     expect(courseChecks(run.steps[3]!)).toHaveLength(0);
     expect(run.steps[3]!.chatText).not.toContain(SHOULDER_TWEAK);
   });
+
+  it('[on] ONE-SHOT: the question is rendered in the run that asked and in NO later run, while the directive block itself persists', () => {
+    const run = runOf(journeyC, 'on');
+    expect(run.steps[2]!.chatText).toContain(EXPIRY_QUESTION);
+    expect(run.steps[3]!.chatText).not.toContain(EXPIRY_QUESTION);
+    expect(run.steps[3]!.chatText).toContain('## Course Directive'); // the stored directive still rides — without the question
+  });
+
+  it.each(MODES)(
+    '[%s] a fact expired far beyond the staleness bound is archived silently at the first run and never asked',
+    mode => {
+      const run = runOf(journeyC, mode);
+      expect(run.result.steps[0]!.facts.find(f => f.fact === STALE_ANKLE)).toMatchObject({
+        status: 'archived',
+        archivedReason: 'expired',
+        closedByUserAt: null,
+      });
+      for (const rec of run.steps) {
+        expect(rec.chatText).not.toContain(STALE_ANKLE);
+        expect(rec.structured.map(inputText).join('\n')).not.toContain(STALE_ANKLE);
+      }
+    },
+  );
 
   it('[on] the tweak was archived AFTER the question was put — the directive that carries it is what the model saw', () => {
     const run = runOf(journeyC, 'on');

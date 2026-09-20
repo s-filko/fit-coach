@@ -368,6 +368,8 @@ const StepStructuredSchema = z.object({
       vector: z.string().min(1),
       constraints: z.array(z.string()).default([]),
       questions: z.array(z.string()).default([]),
+      /** One-shot check-ins about facts that just expired — shown in the run that asked, never stored. */
+      expiryQuestions: z.array(z.string()).optional(),
       suspectFacts: z.array(z.string()).default([]),
       exerciseVerdicts: z.array(z.object({ exercise: z.string(), verdict: z.string() })).default([]),
     })

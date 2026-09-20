@@ -11,7 +11,7 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 import type { StoredEpisodeSummary } from '@domain/conversation/episode';
 
 import { assembleContext } from '@infra/ai/context/assemble-context';
-import type { StoredCourseDirective } from '@infra/ai/course-check/directive';
+import type { CourseCheckDirective, StoredCourseDirective } from '@infra/ai/course-check/directive';
 import { splitEpisode } from '@infra/ai/graph/episode';
 import type { ConversationGraphDeps, PhaseSpec, PromptContextFor } from '@infra/ai/graph/phase-spec';
 import { ctxOf } from '@infra/ai/graph/state';
@@ -36,6 +36,8 @@ export interface AgentNodeState {
   episodeSummaries?: StoredEpisodeSummary[];
   /** AC-FL-5: the persisted course-check directive — prepare's step wrote it; its payload renders as block 2a′. */
   courseDirective?: StoredCourseDirective | null;
+  /** This run's one-shot expiry questions — rendered with the directive, cleared by commit, never persisted with it. */
+  courseExpiryQuestions?: string[];
 }
 
 function isEmptyAIResponse(response: AIMessage): boolean {
@@ -177,7 +179,7 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
       userFacts,
       // AC-FL-5: the directive the course-check step stored (or kept) in
       // prepare this run — its payload, rendered as one block after the facts.
-      courseDirective: state.courseDirective?.directive ?? null,
+      courseDirective: directiveForRun(state),
       episodeSummaries: state.episodeSummaries ?? [],
       contextBlocks: spec.contextBlocks,
       blockData: loaded.data,
@@ -231,4 +233,18 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
 
     return { messages: [response] };
   };
+}
+
+/**
+ * The directive as THIS run renders it: the stored one, plus the expiry
+ * questions asked this run (course-check expiry) appended to its questions. The
+ * stored directive never carries them — they are one-shot.
+ */
+function directiveForRun(state: AgentNodeState): CourseCheckDirective | null {
+  const stored = state.courseDirective?.directive;
+  if (stored === undefined) {
+    return null;
+  }
+  const oneShot = state.courseExpiryQuestions ?? [];
+  return oneShot.length === 0 ? stored : { ...stored, questions: [...stored.questions, ...oneShot] };
 }

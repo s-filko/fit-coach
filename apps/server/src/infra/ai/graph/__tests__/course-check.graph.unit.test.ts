@@ -77,11 +77,14 @@ function fact(id: string, text: string): UserFact {
 interface Harness {
   deps: ConversationGraphDeps;
   facts: UserFact[];
+  /** Active short facts past their TTL (getExpiredActive's rows); archiveExpired removes from it. */
+  expired: UserFact[];
   structured: jest.Mock;
 }
 
 function makeHarness(): Harness {
   const facts: UserFact[] = [fact('f1', 'Left shoulder aches when pressing')];
+  const expired: UserFact[] = [];
   const structured = jest.fn().mockResolvedValue(DIRECTIVE);
   const deps = {
     trainingService: {
@@ -111,6 +114,11 @@ function makeHarness(): Harness {
       upsertMany: jest.fn().mockResolvedValue(0),
       getForPrompt: jest.fn(() => Promise.resolve([...facts])),
       getConstraints: jest.fn().mockResolvedValue([]),
+      getExpiredActive: jest.fn(() => Promise.resolve([...expired])),
+      archiveExpired: jest.fn((_userId: string, factId: string) => {
+        expired.splice(0, expired.length, ...expired.filter(f => f.id !== factId));
+        return Promise.resolve(true);
+      }),
     },
     llmGateway: { chat: jest.fn(), structured } as never,
     runService: { recordRun: jest.fn() } as never,
@@ -119,7 +127,7 @@ function makeHarness(): Harness {
     episodeConfig: { gapMs: 24 * 3_600_000, minTurns: 2, minTokens: 300, keepTurns: 6 },
     checkpointer: new MemorySaver(),
   } as unknown as ConversationGraphDeps;
-  return { deps, facts, structured };
+  return { deps, facts, expired, structured };
 }
 
 async function turn(
@@ -231,6 +239,63 @@ describe('course check through the graph (AC-FL-5)', () => {
     await turn(graph, 8, 1.2, 'И штанги нет');
     expect(structured).toHaveBeenCalledTimes(3);
     expect(String(directiveBlocks(lastModelInput())[0]!.content)).toContain('Home dumbbell training');
+  });
+
+  it('the expiry question is ONE-SHOT: rendered in the run that asked, gone from the next — zero calls, the rest of the directive intact', async () => {
+    const { deps, expired, structured } = makeHarness();
+    expired.push({
+      ...fact('exp-1', 'Left shoulder tweaked while pressing'),
+      durability: 'short',
+      reviewAfter: null,
+      expiresAt: at(-24),
+      onExpiry: 'ask_once',
+    });
+    structured.mockResolvedValue({ ...DIRECTIVE, expiryQuestions: ['Did the shoulder tweak leave any trace?'] });
+    const graph = buildConversationGraph(deps);
+
+    await turn(graph, 1, 0, 'Привет');
+    expect(structured).toHaveBeenCalledTimes(1);
+    const first = String(directiveBlocks(lastModelInput())[0]!.content);
+    expect(first).toContain('Did the shoulder tweak leave any trace?'); // asked in the run that fired it
+    expect(first).toContain(DIRECTIVE.questions[0]); // alongside the ordinary directive question
+    expect(expired).toEqual([]); // and the fact was archived in that same run
+    // The checkpoint AT REST never carries the one-shot question, nor the stored directive.
+    const atRest = (await graph.getState({ configurable: { thread_id: 'u1' } })).values as {
+      courseExpiryQuestions: string[];
+      courseDirective: { directive: Record<string, unknown> };
+    };
+    expect(atRest.courseExpiryQuestions).toEqual([]);
+    expect(atRest.courseDirective.directive).not.toHaveProperty('expiryQuestions');
+
+    for (const n of [2, 3, 4]) {
+      await turn(graph, n, n - 1, 'Ок');
+      const block = String(directiveBlocks(lastModelInput())[0]!.content);
+      expect(block).not.toContain('Did the shoulder tweak leave any trace?'); // never stored, never re-asked
+      expect(block).toContain(DIRECTIVE.questions[0]); // the rest of the directive persists as before
+      expect(block).toContain('Build muscle 3×/week');
+    }
+    expect(structured).toHaveBeenCalledTimes(1); // unchanged fingerprint: zero further calls
+  });
+
+  it('an ask_once fact expired beyond the staleness bound is archived silently: no question, not in the check input', async () => {
+    const { deps, expired, structured } = makeHarness();
+    expired.push({
+      ...fact('old-1', 'Right ankle rolled on a run'),
+      durability: 'short',
+      reviewAfter: null,
+      expiresAt: at(-24 * 60), // sixty days ago — far past the 7-day default
+      onExpiry: 'ask_once',
+    });
+    structured.mockResolvedValue({ ...DIRECTIVE, expiryQuestions: ['Did the ankle leave a trace?'] });
+    const graph = buildConversationGraph(deps);
+
+    await turn(graph, 1, 0, 'Привет');
+
+    expect(expired).toEqual([]); // archived …
+    const input = (structured.mock.calls[0]![1] as Array<{ content: string }>).map(m => m.content).join('\n');
+    expect(input).not.toContain('Right ankle rolled on a run'); // … but never handed to the check
+    // and even if the model volunteers a question, none was owed: it is dropped, not rendered
+    expect(String(directiveBlocks(lastModelInput())[0]!.content)).not.toContain('Did the ankle leave a trace?');
   });
 
   it('a malformed answer is ignored the same way — the run is untouched', async () => {

@@ -47,6 +47,12 @@ export const ConversationState = Annotation.Root({
   // input that keeps a provider outage from costing a failed call per turn.
   // Cleared by the next success or when the layer is switched off.
   courseCheckFailure: Annotation<CourseCheckFailure | null>({ reducer: (_, v) => v, default: () => null }),
+  // The expiry questions ASKED THIS RUN (course-check expiry): set by the
+  // course-check step when the run's directive carries them, rendered by the
+  // agent node next to the stored directive's questions, cleared by `commit` at
+  // the end of the run — never part of the persisted directive, because the
+  // fact they are about is archived in the same run and the question belongs to it.
+  courseExpiryQuestions: Annotation<string[]>({ reducer: (_, v) => v, default: () => [] }),
 });
 
 export type ConversationStateType = typeof ConversationState.State;

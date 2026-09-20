@@ -62,8 +62,16 @@ export interface CourseCheckStepDeps {
     gapMs: number;
     /** A failed check is not re-attempted on the same fingerprint for this long (ms), threaded as data. */
     retryCooldownMs: number;
+    /**
+     * COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS in ms, threaded as data: an ask_once
+     * fact expired LONGER ago than this is archived silently, never asked about.
+     */
+    expiryAskWindowMs: number;
   };
 }
+
+/** COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS default (7 days) — used when the composition root passes none. */
+export const DEFAULT_EXPIRY_ASK_WINDOW_MS = 7 * 86_400_000;
 
 /** COURSE_CHECK_RETRY_COOLDOWN_MINUTES default (15 min) — used when the composition root passes none. */
 export const DEFAULT_RETRY_COOLDOWN_MS = 15 * 60_000;
@@ -86,7 +94,7 @@ export function buildCourseCheckStep(deps: CourseCheckStepDeps): CourseCheckStep
   const { llmGateway, userFacts, trainingService } = deps;
   // Destructured up front — the closure's `config` parameter is the LangGraph
   // RunnableConfig and shadows nothing (same discipline as the compact step).
-  const { enabled, gapMs, retryCooldownMs } = deps.config;
+  const { enabled, gapMs, retryCooldownMs, expiryAskWindowMs } = deps.config;
 
   /** Archives expired facts one by one; each failure is logged and skipped (never fails the run). */
   async function archiveExpired(list: UserFact[], userId: string, runId: string, now: Date): Promise<void> {
@@ -99,7 +107,10 @@ export function buildCourseCheckStep(deps: CourseCheckStepDeps): CourseCheckStep
     }
   }
 
-  return async function courseCheckStep(state, config): Promise<Partial<ConversationStateType>> {
+  async function checkStep(
+    state: ConversationStateType,
+    config: RunnableConfig,
+  ): Promise<Partial<ConversationStateType>> {
     const ctx = ctxOf(config as never);
     const { userId, runId, user, now } = ctx;
     const goal = user?.fitnessGoal ?? null;
@@ -112,13 +123,14 @@ export function buildCourseCheckStep(deps: CourseCheckStepDeps): CourseCheckStep
     } catch (err) {
       log.error({ err, userId, runId }, 'Expired-facts load failed — expiry is not performed this run');
     }
+    // Past the staleness bound an ask_once fact is 'forget' too: archived silently, never a question.
     await archiveExpired(
-      expired.filter(f => expiryAction(f, now) === 'forget'),
+      expired.filter(f => expiryAction(f, now, expiryAskWindowMs) === 'forget'),
       userId,
       runId,
       now,
     );
-    const ask = expired.filter(f => expiryAction(f, now) === 'ask');
+    const ask = expired.filter(f => expiryAction(f, now, expiryAskWindowMs) === 'ask');
 
     if (!enabled) {
       // Nobody can ask with the layer off: the ask_once facts are archived too.
@@ -190,7 +202,13 @@ export function buildCourseCheckStep(deps: CourseCheckStepDeps): CourseCheckStep
         );
         return failed(fingerprint, now);
       }
-      const directive = parsed.data;
+      // ONE-SHOT: the expiry questions belong to this run — the facts they are about
+      // are archived below — so they ride a transient channel (rendered by the agent,
+      // cleared by commit) and the directive is persisted WITHOUT them. Everything
+      // else in the directive persists exactly as before. Questions about facts that
+      // were not owed one (none due this run) are dropped, not stored.
+      const { expiryQuestions, ...directive } = parsed.data;
+      const asked = ask.length > 0 ? (expiryQuestions ?? []) : [];
       log.info({ userId, runId, phase: state.phase, event }, 'Course-check directive generated');
       // The question is in the directive — only now are the ask_once facts archived
       // (asked once; a failed call above leaves them due, so nothing is lost).
@@ -198,6 +216,7 @@ export function buildCourseCheckStep(deps: CourseCheckStepDeps): CourseCheckStep
       return {
         courseDirective: { fingerprint: settledFingerprint, directive, generatedAt: now.toISOString() },
         courseCheckFailure: null,
+        ...(asked.length > 0 ? { courseExpiryQuestions: asked } : {}),
       };
     } catch (err) {
       log.warn(
@@ -206,5 +225,14 @@ export function buildCourseCheckStep(deps: CourseCheckStepDeps): CourseCheckStep
       );
       return failed(fingerprint, now);
     }
+  }
+
+  // A previous run's one-shot questions never outlive it: whatever this run does
+  // (fires, backs off, stays quiet, is switched off), a leftover is cleared.
+  return async function courseCheckStep(state, config): Promise<Partial<ConversationStateType>> {
+    const updates = await checkStep(state, config);
+    return state.courseExpiryQuestions.length > 0 && updates.courseExpiryQuestions === undefined
+      ? { ...updates, courseExpiryQuestions: [] }
+      : updates;
   };
 }

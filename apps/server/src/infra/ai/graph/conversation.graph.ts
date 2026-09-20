@@ -12,7 +12,11 @@ import type {
 } from '@domain/training/ports';
 import type { IUserFactsService, IUserService } from '@domain/user/ports';
 
-import { buildCourseCheckStep, DEFAULT_RETRY_COOLDOWN_MS } from '@infra/ai/course-check/course-check.step';
+import {
+  buildCourseCheckStep,
+  DEFAULT_EXPIRY_ASK_WINDOW_MS,
+  DEFAULT_RETRY_COOLDOWN_MS,
+} from '@infra/ai/course-check/course-check.step';
 
 import type { TokenBudgetOverride } from '@config/llm-budget-overrides';
 
@@ -57,6 +61,11 @@ export interface ConversationGraphDeps {
    * retried on the same fingerprint. Optional like the switch; absent = 15 min.
    */
   courseCheckRetryCooldownMs?: number;
+  /**
+   * COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS in ms — an ask_once fact expired longer
+   * ago than this is archived silently, never asked about. Absent = 7 days.
+   */
+  courseCheckExpiryAskWindowMs?: number;
   /** LLM_BUDGET_<PHASE>_<PART> overrides (P4 context-budget plan Task 3), resolved once here. */
   budgetOverrides?: Record<string, TokenBudgetOverride>;
   checkpointer: BaseCheckpointSaver;
@@ -96,6 +105,7 @@ function buildGraph(deps: ConversationGraphDeps) {
       enabled: deps.courseCheckEnabled ?? true,
       gapMs: episodeConfig.gapMs,
       retryCooldownMs: deps.courseCheckRetryCooldownMs ?? DEFAULT_RETRY_COOLDOWN_MS,
+      expiryAskWindowMs: deps.courseCheckExpiryAskWindowMs ?? DEFAULT_EXPIRY_ASK_WINDOW_MS,
     },
   });
 

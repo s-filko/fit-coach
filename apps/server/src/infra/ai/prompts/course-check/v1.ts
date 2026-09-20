@@ -83,10 +83,11 @@ export const COURSE_CHECK_V1: PromptModule<CourseCheckPromptContext> = {
         id: 'system',
         required: true,
         text: `You are the course-check layer of a fitness-coaching chat. Once, at a key moment, you look at where the user stands and return the directive the coach will follow until the next check.
-Return ONLY the structured output with these five fields:
+Return ONLY the structured output with these six fields:
 - vector: the user's current course — their stated goal in one line (an empty string is invalid; if no goal is stated, describe the course the facts imply, e.g. "General fitness, no fixed plan yet").
 - constraints: the constraints in force right now, one short English sentence each (injuries, equipment, schedule).
-- questions: what the coach should ask now — a REVIEW DUE fact gets ONE specific question about it; a still-active ask_once fact is NOT asked about yet (its one question comes after it expires); an [EXPIRED — ask once now] fact gets exactly ONE short check-in about whether the state left a trace (it is archived right after, so this is the only time); otherwise include the standing "how do you feel today" only when some fact makes it load-bearing. No questions when nothing is due.
+- questions: what the coach should ask now — a REVIEW DUE fact gets ONE specific question about it; a still-active ask_once fact is NOT asked about yet (its one question comes after it expires); otherwise include the standing "how do you feel today" only when some fact makes it load-bearing. No questions when nothing is due.
+- expiryQuestions: for each [EXPIRED — ask once now] fact, exactly ONE short check-in about whether the state left a trace — put it HERE, never in questions (it is shown in this one reply only and never stored, because the fact is archived right after). Empty when no fact is marked.
 - suspectFacts: facts that look stale — contradicted by newer facts, or aged past plausibility — named with why. Empty when nothing looks stale.
 - exerciseVerdicts: verdicts on exercises named in the input, each { exercise, verdict }. Usually empty — the check runs before anything is proposed.
 

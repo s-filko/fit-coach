@@ -195,6 +195,33 @@ describe('expiryAction — what performing an expiry means', () => {
     expect(expiryAction(fact, new Date(NOW.getTime() - 1))).toBeNull();
   });
 
+  describe('the staleness bound (askWindowMs, passed as data)', () => {
+    const WEEK = 7 * DAY_MS;
+    const askOnly = (expiredAgoMs: number) =>
+      ({
+        status: 'active',
+        durability: 'short',
+        onExpiry: 'ask_once',
+        expiresAt: new Date(NOW.getTime() - expiredAgoMs),
+      }) as const;
+
+    it('within the window an ask_once fact is still asked, exactly AT it too', () => {
+      expect(expiryAction(askOnly(WEEK - 1), NOW, WEEK)).toBe('ask');
+      expect(expiryAction(askOnly(WEEK), NOW, WEEK)).toBe('ask');
+    });
+
+    it('strictly beyond the window it is archived silently, like forget — never a question', () => {
+      expect(expiryAction(askOnly(WEEK + 1), NOW, WEEK)).toBe('forget');
+      expect(expiryAction(askOnly(90 * DAY_MS), NOW, WEEK)).toBe('forget');
+    });
+
+    it('forget stays forget, an unexpired fact stays null, and no window means no bound', () => {
+      expect(expiryAction({ ...askOnly(DAY_MS), onExpiry: 'forget' }, NOW, WEEK)).toBe('forget');
+      expect(expiryAction({ ...askOnly(DAY_MS), expiresAt: daysLater(1) }, NOW, WEEK)).toBeNull();
+      expect(expiryAction(askOnly(400 * DAY_MS), NOW)).toBe('ask');
+    });
+  });
+
   it('nothing to perform for an unexpired, archived or non-short fact', () => {
     expect(expiryAction({ ...expired, onExpiry: 'ask_once', expiresAt: daysLater(1) }, NOW)).toBeNull();
     expect(expiryAction({ ...expired, onExpiry: 'ask_once', status: 'archived' }, NOW)).toBeNull();

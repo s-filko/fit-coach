@@ -14,6 +14,7 @@ export const COURSE_CHECK_DIRECTIVE_SCHEMA_NAME = 'course_check_directive_v1';
  * - `constraints` — the constraints in force right now;
  * - `questions` — what to ask now: review-date and expiry questions, plus the
  *   standing "how do you feel today" when one is due;
+ * - `expiryQuestions` — one-shot check-ins about facts that just expired (see the schema);
  * - `suspectFacts` — facts the check suspects are stale (named, with why);
  * - `exerciseVerdicts` — verdicts on proposed exercises; usually empty — the
  *   check runs before the coach proposes, so there is rarely anything on trial.
@@ -22,6 +23,13 @@ export const CourseCheckDirectiveSchema = z.object({
   vector: z.string().min(1),
   constraints: z.array(z.string()),
   questions: z.array(z.string()),
+  /**
+   * One-shot check-ins about facts that just EXPIRED (each `[EXPIRED — ask once now]`
+   * fact in the input gets one here, NOT in `questions`). Rendered in the run that
+   * asked and never stored: the fact is archived in that same run, so the question
+   * belongs to it. Optional: absent = none.
+   */
+  expiryQuestions: z.array(z.string()).optional(),
   suspectFacts: z.array(z.string()),
   exerciseVerdicts: z.array(
     z.object({
