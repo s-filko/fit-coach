@@ -102,6 +102,12 @@ user override.
   constraints; other conflicts come back as an advisory the coach must address, and the plan is saved.
 - **AC-FL-7** — scenario cases compare "prompt-only" against "with the course check" on the same
   journeys, so the layer is kept or dropped on evidence.
+- **AC-FL-8** — the user can review and control their own memory: on request the coach lists every
+  active fact (grouped by category, each with its date, confirmation count and durability class) and,
+  if asked, the archived ones with their closure reason; the user can have a fact corrected, archived
+  ("that's not true, stop using it") or **permanently deleted** ("I don't want you storing that") —
+  two distinct operations, never silently swapped, with the coach asking which is meant when the
+  request is ambiguous.
 
 ## Global Constraints
 
@@ -136,17 +142,28 @@ class bounds, expiry/review predicates against a passed-in `now`), `infra/ai/pro
 
 ---
 
-### Task 2: Fact tools in conversation (AC-FL-2, AC-FL-3)
+### Task 2: Fact tools in conversation (AC-FL-2, AC-FL-3, AC-FL-8)
 
-**Files:** `apps/server/src/infra/ai/tools/remember-fact.tool.ts`, `retract-fact.tool.ts` (or one
-`manage_fact` tool — the worker decides and says why), their registration in the shared tool set
-(`graph/phases/*.spec.ts`), `domain/user/services/fact-lifecycle.ts`, tests.
+**Files:** `apps/server/src/infra/ai/tools/remember-fact.tool.ts`, `retract-fact.tool.ts`,
+`list-facts.tool.ts` (or one `manage_fact` tool plus a listing tool — the worker decides and says
+why), their registration in the shared tool set (`graph/phases/*.spec.ts`),
+`domain/user/services/fact-lifecycle.ts`, tests.
+
+The listing tool is what answers "what do you remember about me": the `## User Facts` prompt block is
+capped and ordered for steering, not for review, so it cannot serve this. The listing returns active
+facts grouped by category with date, confirmation count and durability class, and archived ones with
+their closure reason when asked.
+
+Archive and delete are **two operations**: `retract` (not true / no longer applies — archived, keeps
+history and the recurrence counter) and `delete` (the user does not want it stored — the row is gone,
+no trace). The tool exposes both; the model picks by intent and asks when the request is ambiguous.
 
 - [ ] **Step 1: Tests first** — add/update/retract paths; user closure sets `closed_by_user_at` and
   archives; a closed fact key is not re-created from older evidence but is from newer; bounds enforced
-  on the tool input; the tool never deletes a row.
+  on the tool input; `retract` never deletes a row and `delete` leaves none; the listing returns the
+  documented shape and excludes archived facts unless asked.
 - [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `feat(memory): the coach can add, update and retract facts in conversation (AC-FL-2, AC-FL-3)`
+- [ ] **Step 3: Commit** — `feat(memory): the coach can list, add, update, retract and delete facts in conversation (AC-FL-2, AC-FL-3, AC-FL-8)`
 - [ ] **Step 4: STOP** for orchestrator review.
 
 **Verification:** as Task 1, plus `npx jest --ci src/infra/ai/tools`.
@@ -215,7 +232,8 @@ fingerprint, the pure event predicate), `graph/state.ts` (the persisted directiv
   never asked again, and a later compaction of older evidence does not resurrect it; (c) a short state
   that expires silently vs one that asks once; (d) the same short state recurring three times → a
   pattern fact; (e) a plan containing an exercise that hits a non-permanent constraint → saved with an
-  advisory the coach relays.
+  advisory the coach relays; (f) the user asks what the coach remembers, then has one fact corrected
+  and one deleted outright — the listing reflects both on the next ask.
 - [ ] **Step 2:** the same journeys are runnable with the course check on and off, so the owner can
   compare (AC-FL-7) — the comparison itself is an owner-launched live run, never a task.
 - [ ] **Step 3: Commit** — `test(ai): journeys for fact lifecycle and the course check (AC-FL-7)`
