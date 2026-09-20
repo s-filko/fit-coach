@@ -40,23 +40,56 @@ import { guardDecision, planCallCount } from '../lib/run-guard';
 import type { CheckResult } from '../lib/reporter';
 import type { RunScenarioOptions, ScenarioRunResult, ScenarioStepObservation } from '../lib/run-scenario';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
+import { evaluateFactExpectations, evaluatePlanExpectations } from '../lib/persisted-expectations';
 import { assertionKnownBug, assertionText, type Scenario } from '../schema/scenario.schema';
 
 import { scenario as journeyA } from '../scenarios/a-greeting-after-pause.scenario';
 import { scenario as journeyB } from '../scenarios/b-full-workout.scenario';
 import { explicitScenario as journeyCExplicit, scenario as journeyC } from '../scenarios/c-catch-up-logging.scenario';
 
-/** Every authored journey, in run order. */
+import { scenario as journeyFlA } from '../scenarios/fl-a-review-date.scenario';
+import { scenario as journeyFlB } from '../scenarios/fl-b-closed-not-resurrected.scenario';
+import { scenario as journeyFlC } from '../scenarios/fl-c-short-states.scenario';
+import { scenario as journeyFlD } from '../scenarios/fl-d-recurring-short-state.scenario';
+import { scenario as journeyFlE } from '../scenarios/fl-e-advisory-plan.scenario';
+import { scenario as journeyFlF } from '../scenarios/fl-f-remembered-corrected-deleted.scenario';
+
+/** Every authored training journey, in run order — what a plain L3 run executes. */
 const ALL_SCENARIOS: Scenario[] = [journeyA, journeyB, journeyC, journeyCExplicit];
 
-/** Loads the authored journeys; an id narrows to exactly that one. */
+/**
+ * The fact-lifecycle journeys (course-check plan Task 3, AC-FL-7). Selectable
+ * by id or as a group (`fact-lifecycle`), NOT part of the default run: they
+ * add ~14 model calls, and a plain L3 run would cross the shared call ceiling.
+ *
+ * The course-check comparison the owner asked for is this group run twice — with
+ * COURSE_CHECK_ENABLED=true and with COURSE_CHECK_ENABLED=false in the
+ * environment of the run (the runner wires the graph from it) — and the two
+ * reports set side by side. The database plane (`persisted.facts` /
+ * `persisted.plans`) is what is compared; `seen` is skipped live.
+ */
+export const FACT_LIFECYCLE_GROUP = 'fact-lifecycle';
+const FACT_LIFECYCLE_SCENARIOS: Scenario[] = [
+  journeyFlA,
+  journeyFlB,
+  journeyFlC,
+  journeyFlD,
+  journeyFlE,
+  journeyFlF,
+];
+
+/** Loads the authored journeys; an id narrows to exactly that one, `fact-lifecycle` to that group. */
 export function loadScenarios(scenarioId?: string): Scenario[] {
   if (scenarioId === undefined || scenarioId === '') {
     return ALL_SCENARIOS;
   }
-  const found = ALL_SCENARIOS.filter(s => s.id === scenarioId);
+  if (scenarioId === FACT_LIFECYCLE_GROUP) {
+    return FACT_LIFECYCLE_SCENARIOS;
+  }
+  const found = [...ALL_SCENARIOS, ...FACT_LIFECYCLE_SCENARIOS].filter(s => s.id === scenarioId);
   if (found.length === 0) {
-    throw new Error(`Unknown scenario '${scenarioId}'. Available: ${ALL_SCENARIOS.map(s => s.id).join(', ')}`);
+    const available = [...ALL_SCENARIOS, ...FACT_LIFECYCLE_SCENARIOS].map(s => s.id).join(', ');
+    throw new Error(`Unknown scenario '${scenarioId}'. Available: ${available}, or '${FACT_LIFECYCLE_GROUP}'`);
   }
   return found;
 }
@@ -117,6 +150,7 @@ function evaluateStep(
   caseId: string,
   step: Scenario['steps'][number],
   obs: ScenarioStepObservation,
+  t0: Date,
   out: CheckResult[],
 ): void {
   const expect = step.expect ?? {};
@@ -171,6 +205,14 @@ function evaluateStep(
       add('persisted.turnRecorded', obs.turnCount > 0, expect.persisted.knownBug,
         obs.turnCount > 0 ? undefined : `turnCount ${obs.turnCount}`);
     }
+    // The fact-lifecycle plane (AC-FL-7): rows, not prose — evaluated by the SAME
+    // pure functions the deterministic layer uses.
+    for (const check of [
+      ...evaluateFactExpectations(obs.facts, expect.persisted.facts, expect.persisted.factsAbsent, t0),
+      ...evaluatePlanExpectations(obs.plans, expect.persisted.plans),
+    ]) {
+      add(check.check, check.passed, expect.persisted.knownBug, check.detail);
+    }
     const expected = expect.persisted.session;
     if (expected) {
       const session = expected.key !== undefined
@@ -219,7 +261,7 @@ export function evaluateScenario(scenario: Scenario, result: ScenarioRunResult, 
         detail: 'no observation for this step' });
       return;
     }
-    evaluateStep(`${scenario.id}${sampleLabel}::step ${stepIndex}`, step, obs, out);
+    evaluateStep(`${scenario.id}${sampleLabel}::step ${stepIndex}`, step, obs, result.t0, out);
   });
   return out;
 }

@@ -100,6 +100,8 @@ const obs = (
   turnCount: 0,
   phase: 'chat',
   sessions: [],
+  facts: [],
+  plans: [],
   ...over,
 });
 
@@ -124,6 +126,54 @@ function fakeRunner(observations: ScenarioStepObservation[]): { runner: Scenario
 // --- loadScenarios / call planning ---
 
 describe('loadScenarios', () => {
+  it('the fact-lifecycle group is selectable by name and by id, and NOT part of the default run (call ceiling)', () => {
+    const group = loadScenarios('fact-lifecycle');
+    expect(group.map(s => s.id)).toEqual([
+      'fl-a-review-date',
+      'fl-b-closed-not-resurrected',
+      'fl-c-short-states',
+      'fl-d-recurring-short-state',
+      'fl-e-advisory-plan',
+      'fl-f-remembered-corrected-deleted',
+    ]);
+    expect(loadScenarios('fl-e-advisory-plan').map(s => s.id)).toEqual(['fl-e-advisory-plan']);
+    const defaults = loadScenarios().map(s => s.id);
+    expect(defaults.some(id => id.startsWith('fl-'))).toBe(false);
+  });
+
+  it('evaluates the database plane: a wrong fact row fails, the right one passes', () => {
+    const scenario = loadScenarios('fl-b-closed-not-resurrected')[0]!;
+    const t0 = new Date();
+    const row = (over: Record<string, unknown> = {}) => ({
+      id: 'f1',
+      fact: 'Right shoulder pain when pressing overhead',
+      status: 'archived' as const,
+      archivedReason: 'user_closed' as const,
+      closedByUserAt: t0,
+      durability: 'long_term' as const,
+      onExpiry: null,
+      expiresAt: null,
+      reviewAfter: null,
+      phaseNote: null,
+      confirmations: 1,
+      supersedesId: null,
+      ...over,
+    });
+    const prefers = row({ id: 'f2', fact: 'Prefers short, direct replies', status: 'active', archivedReason: null, closedByUserAt: null, durability: 'permanent' });
+    const step0 = (facts: ReturnType<typeof row>[]) =>
+      resultOf([obs(0, 'user', { runRow: { outcome: 'ok', toolCalls: [{ name: 'manage_fact' }] } as never, facts }), obs(1, 'advance', { facts }), obs(2, 'user', { facts })]);
+
+    const good = evaluateScenario(scenario, { ...step0([row(), prefers]), t0 });
+    expect(good.filter(c => c.check.startsWith('persisted.facts')).every(c => c.passed)).toBe(true);
+
+    // The coach said "closed" but the row is still active — the 2026-09-21 smoke failure.
+    const bad = evaluateScenario(scenario, {
+      ...step0([row({ status: 'active', archivedReason: null, closedByUserAt: null }), prefers]),
+      t0,
+    });
+    expect(bad.some(c => c.check.startsWith('persisted.facts') && !c.passed)).toBe(true);
+  });
+
   it('returns every authored journey by default', () => {
     expect(loadScenarios().map(s => s.id)).toEqual([
       'a-greeting-after-pause',

@@ -74,6 +74,12 @@ export interface TaggedAssertion {
   knownBug?: string;
   /** Only the literal `true` marks an entry (the schema rejects `false`). */
   liveOnly?: true;
+  /**
+   * Fact-lifecycle journeys (AC-FL-7): the entry holds only when the course
+   * check is ON — the directive block and the check's own input do not exist
+   * when it is off. The deterministic layer skips it in the off run.
+   */
+  courseCheckOnly?: true;
 }
 
 export type ScenarioAssertion = string | TaggedAssertion;
@@ -81,9 +87,14 @@ export type ScenarioAssertion = string | TaggedAssertion;
 const AssertionSchema = z.union([
   z.string().min(1),
   z
-    .object({ text: z.string().min(1), knownBug: KnownBugSchema.optional(), liveOnly: z.literal(true).optional() })
-    .refine(a => a.knownBug !== undefined || a.liveOnly !== undefined, {
-      message: 'a tagged assertion needs knownBug, liveOnly, or both',
+    .object({
+      text: z.string().min(1),
+      knownBug: KnownBugSchema.optional(),
+      liveOnly: z.literal(true).optional(),
+      courseCheckOnly: z.literal(true).optional(),
+    })
+    .refine(a => a.knownBug !== undefined || a.liveOnly !== undefined || a.courseCheckOnly !== undefined, {
+      message: 'a tagged assertion needs knownBug, liveOnly, courseCheckOnly, or a combination',
     }),
 ]);
 
@@ -94,9 +105,12 @@ export const assertionText = (a: ScenarioAssertion): string => (typeof a === 'st
 export const assertionKnownBug = (a: ScenarioAssertion): string | null =>
   typeof a === 'string' ? null : (a.knownBug ?? null);
 
+/** True when the entry only holds with the course check ON (the off run skips it). */
+export const assertionCourseCheckOnly = (a: ScenarioAssertion): boolean =>
+  typeof a !== 'string' && a.courseCheckOnly === true;
+
 /** True when only the live L3 layer checks this entry (deterministic skips it). */
-export const assertionLiveOnly = (a: ScenarioAssertion): boolean =>
-  typeof a !== 'string' && a.liveOnly === true;
+export const assertionLiveOnly = (a: ScenarioAssertion): boolean => typeof a !== 'string' && a.liveOnly === true;
 
 // --- past: the world a scenario starts from ---
 
@@ -169,11 +183,33 @@ const ConversationPastSchema = z.object({
   lastUserMessageAt: RelativeTimeSchema.optional(),
 });
 
+/**
+ * A seeded fact with its lifecycle (fact-lifecycle journeys, AC-FL-7). Without
+ * `durability` it is what it always was — a permanent, explicitly stated
+ * standing truth. With one, it goes through the REAL write path
+ * (`rememberFact`) at the moment `at` (default: T0), so the code — not the
+ * seed — computes `expires_at` / `review_after` from the class bounds:
+ * `ttlDays` (short, 1–14) and `reviewInDays` (long_term, 14–182) count from `at`.
+ * A fact seeded at `-20d` with `reviewInDays: 14` therefore has its review date
+ * six days in the past at T0.
+ */
+export const ScenarioFactSchema = FixtureFactSchema.extend({
+  durability: z.enum(['permanent', 'long_term', 'short']).optional(),
+  /** When the fact was stated — the clock its dates count from; default T0. */
+  at: RelativeTimeSchema.optional(),
+  ttlDays: z.number().int().positive().optional(),
+  reviewInDays: z.number().int().positive().optional(),
+  phaseNote: z.string().optional(),
+  onExpiry: z.enum(['forget', 'ask_once']).optional(),
+});
+
+export type ScenarioFact = z.infer<typeof ScenarioFactSchema>;
+
 const ScenarioPastSchema = z.object({
   user: FixtureUserSchema,
   plan: PlanSchema.optional(),
   workouts: z.array(WorkoutSchema).default([]),
-  facts: z.array(FixtureFactSchema).default([]),
+  facts: z.array(ScenarioFactSchema).default([]),
   conversation: ConversationPastSchema.optional(),
 });
 
@@ -229,7 +265,53 @@ const PhaseAfterExpectSchema = z.object({
   knownBug: KnownBugSchema.optional(),
 });
 
+/**
+ * One expectation about the user's `user_facts` rows (AC-FL-7): the DATABASE
+ * is the evidence, never the coach's prose — the 2026-09-21 dev smoke had the
+ * coach announcing a retraction that never happened.
+ *
+ * `fact` is a substring identifying the rows (matched against the fact text,
+ * archived rows included). `status` narrows them; exactly `count` (default 1)
+ * must then remain, and every remaining row must satisfy every other field.
+ * Dates are relative to T0 and compared within a 10-minute tolerance (the
+ * scenario clock drifts with real time between steps); `null` means the column
+ * must be null.
+ */
+export const FactRowExpectSchema = z.object({
+  fact: z.string().min(1),
+  status: z.enum(['active', 'archived']).optional(),
+  count: z.number().int().nonnegative().optional(),
+  archivedReason: z.enum(['user_closed', 'expired', 'superseded']).nullable().optional(),
+  /** true = `closed_by_user_at` set, false = null. */
+  closedByUser: z.boolean().optional(),
+  durability: z.enum(['permanent', 'long_term', 'short']).optional(),
+  onExpiry: z.enum(['forget', 'ask_once']).nullable().optional(),
+  expiresAt: RelativeTimeSchema.nullable().optional(),
+  reviewAfter: RelativeTimeSchema.nullable().optional(),
+  phaseNote: z.string().nullable().optional(),
+  confirmations: z.number().int().positive().optional(),
+  /** true = `supersedes_id` set, false = null. */
+  supersedes: z.boolean().optional(),
+});
+
+export type FactRowExpect = z.infer<typeof FactRowExpectSchema>;
+
+/** One expectation about the user's `workout_plans` rows (journey (e): the plan is PERSISTED). */
+export const PlanRowExpectSchema = z.object({
+  status: z.enum(['active', 'archived']).optional(),
+  /** Names of exercises the persisted plan_json must contain (all of them). */
+  exercises: z.array(z.string().min(1)).optional(),
+});
+
+export type PlanRowExpect = z.infer<typeof PlanRowExpectSchema>;
+
 const PersistedExpectSchema = z.object({
+  /** The user's `user_facts` rows after the step (AC-FL-7). */
+  facts: z.array(FactRowExpectSchema).optional(),
+  /** Substrings that must match NO row at all — a deleted fact leaves no trace. */
+  factsAbsent: z.array(z.string().min(1)).optional(),
+  /** Exactly this many `workout_plans` rows exist after the step, and (when given) match. */
+  plans: z.array(PlanRowExpectSchema).optional(),
   /** Snapshot of the user's `workout_sessions` after the step. */
   session: z
     .object({
@@ -272,11 +354,42 @@ const AdvanceStepSchema = z.object({
   expect: StepExpectSchema.optional(),
 });
 
+/**
+ * The scripted STRUCTURED answers of a user step (deterministic layer only —
+ * live never reads them). `courseCheck` answers the course-check call if it
+ * fires this step (it is discarded when it does not, or when the check is
+ * off); `summary` answers the episode summariser if compaction fires. Any
+ * string may carry a `{{factId:<text substring>}}` placeholder, resolved to the
+ * id of the user's fact containing that text at the moment the model answers.
+ */
+const StepStructuredSchema = z.object({
+  courseCheck: z
+    .object({
+      vector: z.string().min(1),
+      constraints: z.array(z.string()).default([]),
+      questions: z.array(z.string()).default([]),
+      suspectFacts: z.array(z.string()).default([]),
+      exerciseVerdicts: z.array(z.object({ exercise: z.string(), verdict: z.string() })).default([]),
+    })
+    .optional(),
+  summary: z
+    .object({
+      topics: z.array(z.string()).default([]),
+      decisions: z.array(z.string()).default([]),
+      userState: z.array(z.string()).default([]),
+      trainingFeedback: z.array(z.string()).default([]),
+      openItems: z.array(z.string()).default([]),
+      factOperations: z.array(z.record(z.string(), z.unknown())).default([]),
+    })
+    .optional(),
+});
+
 /** One user turn: text in, run through the graph, expectations checked. */
 const UserStepSchema = z.object({
   action: z.literal('user'),
   text: z.string().min(1),
   script: z.array(ScriptedMessageSchema).optional(),
+  structured: StepStructuredSchema.optional(),
   expect: StepExpectSchema.optional(),
 });
 

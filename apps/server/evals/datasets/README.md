@@ -86,3 +86,29 @@ Manual launch (the owner's red button; never run by a plan task or CI):
   `evals/COST_LEDGER.md` afterwards (L3 does not meter per-request itself).
 - Requires the local Postgres container (`docker compose up -d db` from the
   repo root) — each journey seeds a random throwaway user, nothing is reset.
+
+### The fact-lifecycle journeys and the course-check comparison (AC-FL-7)
+
+Six more journeys (`fl-a` … `fl-f`, course-check plan Task 3) cover long-term
+review dates, "it's fine now", short states, recurrence, advisory plans and
+"what do you remember". They are NOT in the default run — they add 14 user
+steps and a plain L3 run would cross the call ceiling — so select them by
+group or id:
+
+    DB_NAME=fitcoach_test RUN_LLM_EVALS=1 npm run evals -- --level L3 --scenario fact-lifecycle
+    DB_NAME=fitcoach_test RUN_LLM_EVALS=1 npm run evals -- --level L3 --scenario fl-e-advisory-plan
+
+To compare the course check, run the group twice on the same journeys and set
+the two reports side by side — the layer is switched by the run's environment
+(the runner wires the graph from it):
+
+    COURSE_CHECK_ENABLED=true  DB_NAME=fitcoach_test RUN_LLM_EVALS=1 npm run evals -- --level L3 --scenario fact-lifecycle
+    COURSE_CHECK_ENABLED=false DB_NAME=fitcoach_test RUN_LLM_EVALS=1 npm run evals -- --level L3 --scenario fact-lifecycle
+
+What is compared is the DATABASE plane (`persisted.facts` / `persisted.plans`:
+status, archive reason, closure stamp, dates, confirmations, links) plus tools
+and phase — never the coach's prose. Live, the model chooses its own dates and
+durabilities, so a date expectation can fail on a legitimate model choice;
+read the detail before calling it a regression. The deterministic layer
+(`tests/integration/scenarios/fact-lifecycle.integration.test.ts`) already runs
+every journey with the check on AND off against a scripted model.
