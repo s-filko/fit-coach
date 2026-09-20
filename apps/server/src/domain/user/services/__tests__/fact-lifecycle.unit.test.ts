@@ -7,6 +7,8 @@
 import {
   FACT_LIFECYCLE_BOUNDS,
   PermanentFactRefusal,
+  closureMoment,
+  expiryAction,
   isActiveForPrompt,
   isExpired,
   isReviewDue,
@@ -172,5 +174,50 @@ describe('isExpired / isReviewDue / isActiveForPrompt — predicates against a p
     expect(isActiveForPrompt(live, NOW)).toBe(true);
     expect(isActiveForPrompt(expired, NOW)).toBe(false);
     expect(isActiveForPrompt(archived, NOW)).toBe(false);
+  });
+});
+
+describe('expiryAction — what performing an expiry means', () => {
+  const expired = { status: 'active', durability: 'short', expiresAt: daysLater(-1) } as const;
+
+  it('an expired ask_once fact is asked, then archived', () => {
+    expect(expiryAction({ ...expired, onExpiry: 'ask_once' }, NOW)).toBe('ask');
+  });
+
+  it('an expired forget fact — or one with no flag — is archived silently', () => {
+    expect(expiryAction({ ...expired, onExpiry: 'forget' }, NOW)).toBe('forget');
+    expect(expiryAction({ ...expired, onExpiry: null }, NOW)).toBe('forget');
+  });
+
+  it('uses isExpired’s edge: at expiresAt exactly it is due, one millisecond before it is not', () => {
+    const fact = { status: 'active', durability: 'short', onExpiry: 'ask_once', expiresAt: NOW } as const;
+    expect(expiryAction(fact, NOW)).toBe('ask');
+    expect(expiryAction(fact, new Date(NOW.getTime() - 1))).toBeNull();
+  });
+
+  it('nothing to perform for an unexpired, archived or non-short fact', () => {
+    expect(expiryAction({ ...expired, onExpiry: 'ask_once', expiresAt: daysLater(1) }, NOW)).toBeNull();
+    expect(expiryAction({ ...expired, onExpiry: 'ask_once', status: 'archived' }, NOW)).toBeNull();
+    expect(
+      expiryAction({ status: 'active', durability: 'long_term', onExpiry: 'ask_once', expiresAt: daysLater(-1) }, NOW),
+    ).toBeNull();
+  });
+});
+
+describe('closureMoment — when an archived fact’s subject ended (the AC-FL-3 stale-evidence guard reads it)', () => {
+  const base = { archivedAt: daysLater(-1), archivedReason: null, closedByUserAt: null, expiresAt: null } as const;
+
+  it('the user’s word wins: closed_by_user_at', () => {
+    expect(closureMoment({ ...base, archivedReason: 'user_closed', closedByUserAt: daysLater(-3) })).toEqual(
+      daysLater(-3),
+    );
+  });
+
+  it('an EXPIRED archive counts from the expiry date, not from when the archive happened to run', () => {
+    expect(closureMoment({ ...base, archivedReason: 'expired', expiresAt: daysLater(-4) })).toEqual(daysLater(-4));
+  });
+
+  it('a superseded archive counts from archived_at', () => {
+    expect(closureMoment({ ...base, archivedReason: 'superseded' })).toEqual(daysLater(-1));
   });
 });

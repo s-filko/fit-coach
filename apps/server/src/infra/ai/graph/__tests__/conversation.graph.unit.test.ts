@@ -122,6 +122,8 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
     listFacts: jest.fn().mockResolvedValue({ active: [], archived: [] }),
     getForPrompt: jest.fn().mockResolvedValue([]),
     getConstraints: jest.fn().mockResolvedValue([]),
+    getExpiredActive: jest.fn().mockResolvedValue([]),
+    archiveExpired: jest.fn().mockResolvedValue(false),
   },
   llmGateway: {
     chat: async () => ({ content: '' }),

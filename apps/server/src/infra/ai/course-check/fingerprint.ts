@@ -29,6 +29,14 @@ export interface CourseCheckFingerprintInput {
   activePlanId: string | null;
   /** The run clock — decides whether a review date has arrived (isReviewDue, never restated). */
   now: Date;
+  /**
+   * Expired `ask_once` facts still due their one question (expiryAction 'ask').
+   * A fact BECOMING due is a real input change and fires the check once. The
+   * step stores the SETTLED fingerprint — this list emptied, as it is once the
+   * question has been put and the facts archived — so the next run's hash
+   * matches and the check does not refire. Absent = none due.
+   */
+  expiredAsk?: UserFact[];
 }
 
 /**
@@ -72,6 +80,7 @@ export function courseCheckFingerprint(input: CourseCheckFingerprintInput): stri
     .update(
       JSON.stringify({
         facts: facts.map(f => factComponent(f, input.now)),
+        expiredAsk: [...(input.expiredAsk ?? [])].sort(byId).map(f => factComponent(f, input.now)),
         goal: input.goal,
         phase: input.phase,
         activePlanId: input.activePlanId,

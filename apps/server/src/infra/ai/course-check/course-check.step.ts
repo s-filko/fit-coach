@@ -15,6 +15,18 @@
  * Degraded reads degrade to what is known: a failed facts load is an empty
  * list, a failed plan load is "no plan" — the check still runs on the rest.
  *
+ * Expiry is PERFORMED here, in this one place (the step owns the run clock and
+ * already reads the facts): every active short fact past its TTL is either
+ * `forget` — archived silently (`archived_reason: 'expired'`) — or `ask_once`
+ * — handed to the check as an EXPIRED fact owed one question and archived only
+ * AFTER the directive that carries it was produced, so it is asked once and a
+ * failed call loses nothing (it stays due and is retried, cooldown permitting).
+ * With the layer off nobody can ask, so both kinds are archived without a
+ * question. `getForPrompt` / `getConstraints` never change: expired rows stay
+ * hidden from the prompt and the guard whether or not they are archived yet.
+ * Archiving follows the compaction's per-operation discipline: a failure logs
+ * an error and never fails or blocks the run.
+ *
  * Like compact, this step owns no clock: every date comes from ctx.now (the
  * run clock) or state, and the gap threshold is threaded from the episode
  * config — the SAME threshold compaction and the time-gap note use.
@@ -25,6 +37,7 @@ import type { LlmGateway } from '@domain/ai/ports';
 import type { ChatMsg } from '@domain/ai/types';
 import type { ITrainingService } from '@domain/training/ports';
 import type { IUserFactsService, UserFact } from '@domain/user/ports';
+import { expiryAction } from '@domain/user/services/fact-lifecycle';
 
 import { type ConversationStateType, ctxOf } from '@infra/ai/graph/state';
 import { COURSE_CHECK_V1 } from '@infra/ai/prompts/course-check/v1';
@@ -75,18 +88,47 @@ export function buildCourseCheckStep(deps: CourseCheckStepDeps): CourseCheckStep
   // RunnableConfig and shadows nothing (same discipline as the compact step).
   const { enabled, gapMs, retryCooldownMs } = deps.config;
 
+  /** Archives expired facts one by one; each failure is logged and skipped (never fails the run). */
+  async function archiveExpired(list: UserFact[], userId: string, runId: string, now: Date): Promise<void> {
+    for (const fact of list) {
+      try {
+        await userFacts.archiveExpired(userId, fact.id, now);
+      } catch (err) {
+        log.error({ err, userId, runId, factId: fact.id }, 'Archiving an expired fact failed — the run continues');
+      }
+    }
+  }
+
   return async function courseCheckStep(state, config): Promise<Partial<ConversationStateType>> {
+    const ctx = ctxOf(config as never);
+    const { userId, runId, user, now } = ctx;
+    const goal = user?.fitnessGoal ?? null;
+
+    // Expiry, performed: the one "due" read, then the silent archive of every
+    // `forget` fact. Independent of the layer's switch and of the event below.
+    let expired: UserFact[] = [];
+    try {
+      expired = await userFacts.getExpiredActive(userId, now);
+    } catch (err) {
+      log.error({ err, userId, runId }, 'Expired-facts load failed — expiry is not performed this run');
+    }
+    await archiveExpired(
+      expired.filter(f => expiryAction(f, now) === 'forget'),
+      userId,
+      runId,
+      now,
+    );
+    const ask = expired.filter(f => expiryAction(f, now) === 'ask');
+
     if (!enabled) {
+      // Nobody can ask with the layer off: the ask_once facts are archived too.
+      await archiveExpired(ask, userId, runId, now);
       // Off means off: a stored directive stops rendering — cleared once, then
       // the channel stays empty without further state writes.
       return state.courseDirective === null && state.courseCheckFailure === null
         ? {}
         : { courseDirective: null, courseCheckFailure: null };
     }
-
-    const ctx = ctxOf(config as never);
-    const { userId, runId, user, now } = ctx;
-    const goal = user?.fitnessGoal ?? null;
 
     // Degraded reads degrade to what is known — try/catch (not .catch, which
     // misses a synchronously-missing method on a stub) so a broken port never
@@ -104,7 +146,13 @@ export function buildCourseCheckStep(deps: CourseCheckStepDeps): CourseCheckStep
       log.error({ err, userId, runId }, 'Course-check active-plan load failed — checking without it');
     }
 
-    const fingerprint = courseCheckFingerprint({ facts, goal, phase: state.phase, activePlanId, now });
+    // The hash the EVENT sees includes the ask-due facts (their becoming due is
+    // an input change); the hash that is STORED is the settled one — those facts
+    // emptied, as they are once the question was put and they are archived — so
+    // the next run recomputes the same value and does not refire.
+    const inputs = { facts, goal, phase: state.phase, activePlanId, now };
+    const fingerprint = courseCheckFingerprint({ ...inputs, expiredAsk: ask });
+    const settledFingerprint = ask.length === 0 ? fingerprint : courseCheckFingerprint(inputs);
     const stored = state.courseDirective;
     const event = courseCheckEvent({
       fingerprint,
@@ -120,7 +168,7 @@ export function buildCourseCheckStep(deps: CourseCheckStepDeps): CourseCheckStep
     }
 
     try {
-      const sections = COURSE_CHECK_V1.render({ phase: state.phase, goal, facts, now, activePlanId });
+      const sections = COURSE_CHECK_V1.render({ phase: state.phase, goal, facts, now, activePlanId, expiredAsk: ask });
       const messages: ChatMsg[] = sections.map(s => ({
         role: s.id === 'system' ? 'system' : 'user',
         content: s.text,
@@ -144,8 +192,11 @@ export function buildCourseCheckStep(deps: CourseCheckStepDeps): CourseCheckStep
       }
       const directive = parsed.data;
       log.info({ userId, runId, phase: state.phase, event }, 'Course-check directive generated');
+      // The question is in the directive — only now are the ask_once facts archived
+      // (asked once; a failed call above leaves them due, so nothing is lost).
+      await archiveExpired(ask, userId, runId, now);
       return {
-        courseDirective: { fingerprint, directive, generatedAt: now.toISOString() },
+        courseDirective: { fingerprint: settledFingerprint, directive, generatedAt: now.toISOString() },
         courseCheckFailure: null,
       };
     } catch (err) {

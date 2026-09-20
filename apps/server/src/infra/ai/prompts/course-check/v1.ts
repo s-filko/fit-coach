@@ -17,6 +17,12 @@ export interface CourseCheckPromptContext {
   now: Date;
   /** The active plan's id, or null. */
   activePlanId: string | null;
+  /**
+   * Expired `ask_once` facts due their ONE check-in question (expiryAction
+   * 'ask'). They are listed apart from `facts`: they are no longer in force,
+   * only owed a question — asked now, then archived by the step. Absent = none.
+   */
+  expiredAsk?: UserFact[];
 }
 
 /** One fact as the check must see it: the lifecycle view, with the due marks computed by fact-lifecycle. */
@@ -41,6 +47,12 @@ function factLine(fact: UserFact, now: Date): string {
   return `- ${fact.fact} (${bits.join(', ')})${due}`;
 }
 
+/** One expired ask_once fact: what it was, and how long ago its TTL ran out. */
+function expiredLine(fact: UserFact, now: Date): string {
+  const days = Math.max(Math.floor((now.getTime() - (fact.expiresAt ?? now).getTime()) / DAY_MS), 0);
+  return `- ${fact.fact} (${fact.category}, expired ${days} day(s) ago) [EXPIRED — ask once now]`;
+}
+
 /**
  * Course-check prompt v1 (course-check plan Task 1, AC-FL-5): the input of the
  * one structured call that keeps the coach on course. Given the run's state —
@@ -56,8 +68,15 @@ export const COURSE_CHECK_V1: PromptModule<CourseCheckPromptContext> = {
   id: 'course-check',
   version: 'v1',
   directives: [],
-  render({ phase, goal, facts, now, activePlanId }): Section[] {
+  render({ phase, goal, facts, now, activePlanId, expiredAsk = [] }): Section[] {
     const factList = facts.length > 0 ? facts.map(f => factLine(f, now)).join('\n') : 'no facts yet.';
+
+    const expiredBlock =
+      expiredAsk.length > 0
+        ? `\n- expired facts owed ONE question (no longer in force; they are archived once you have asked):\n${expiredAsk
+            .map(f => expiredLine(f, now))
+            .join('\n')}`
+        : '';
 
     return [
       {
@@ -67,7 +86,7 @@ export const COURSE_CHECK_V1: PromptModule<CourseCheckPromptContext> = {
 Return ONLY the structured output with these five fields:
 - vector: the user's current course — their stated goal in one line (an empty string is invalid; if no goal is stated, describe the course the facts imply, e.g. "General fitness, no fixed plan yet").
 - constraints: the constraints in force right now, one short English sentence each (injuries, equipment, schedule).
-- questions: what the coach should ask now — a REVIEW DUE fact gets ONE specific question about it; an ask_once short fact near expiry gets one check-in; otherwise include the standing "how do you feel today" only when some fact makes it load-bearing. No questions when nothing is due.
+- questions: what the coach should ask now — a REVIEW DUE fact gets ONE specific question about it; a still-active ask_once fact is NOT asked about yet (its one question comes after it expires); an [EXPIRED — ask once now] fact gets exactly ONE short check-in about whether the state left a trace (it is archived right after, so this is the only time); otherwise include the standing "how do you feel today" only when some fact makes it load-bearing. No questions when nothing is due.
 - suspectFacts: facts that look stale — contradicted by newer facts, or aged past plausibility — named with why. Empty when nothing looks stale.
 - exerciseVerdicts: verdicts on exercises named in the input, each { exercise, verdict }. Usually empty — the check runs before anything is proposed.
 
@@ -81,7 +100,7 @@ Facts only, no style, no filler. Write in English regardless of the conversation
 - stated goal: ${goal ?? 'not stated yet'}
 - active plan: ${activePlanId ?? 'none'}
 - facts:
-${factList}
+${factList}${expiredBlock}
 Course-check directive:`,
       },
     ];

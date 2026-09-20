@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNull, lte, ne, or, sql } from 'drizzle-orm';
 
 import type {
   FactCategory,
@@ -10,7 +10,7 @@ import type {
   UserFact,
 } from '@domain/user/ports';
 import { computeFactKey } from '@domain/user/services/fact-key';
-import { isActiveForPrompt, resolveLifecycle } from '@domain/user/services/fact-lifecycle';
+import { closureMoment, isActiveForPrompt, resolveLifecycle } from '@domain/user/services/fact-lifecycle';
 
 import { db } from '@infra/db/drizzle';
 import { userFacts } from '@infra/db/schema';
@@ -56,6 +56,15 @@ function visibleAt(now: Date) {
   );
 }
 
+/**
+ * The SQL twin of `isExpired`: an ACTIVE short fact whose TTL is up at the
+ * caller's `now` (<=) — the exact complement of the expiry clause in
+ * {@link visibleAt}. Kept next to it so the two cannot drift.
+ */
+function expiredAt(now: Date) {
+  return and(eq(userFacts.status, 'active'), eq(userFacts.durability, 'short'), lte(userFacts.expiresAt, now));
+}
+
 /** Postgres unique-violation (the partial unique index) — matched by code, never message text. */
 function isUniqueViolation(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505';
@@ -71,6 +80,25 @@ export class UserFactsRepository implements IUserFactsService {
       .orderBy(asc(userFacts.category), desc(userFacts.createdAt))
       .limit(cap);
     return rows.map(toUserFact);
+  }
+
+  async getExpiredActive(userId: string, now: Date): Promise<UserFact[]> {
+    const rows = await db
+      .select()
+      .from(userFacts)
+      .where(and(eq(userFacts.userId, userId), expiredAt(now)))
+      .orderBy(asc(userFacts.expiresAt));
+    return rows.map(toUserFact);
+  }
+
+  async archiveExpired(userId: string, factId: string, now: Date): Promise<boolean> {
+    const rows = await db
+      .update(userFacts)
+      .set({ status: 'archived', archivedAt: now, archivedReason: 'expired', updatedAt: now })
+      // The guard lives in the write: a fact re-stated since (TTL renewed) or already archived is not touched.
+      .where(and(eq(userFacts.id, factId), eq(userFacts.userId, userId), expiredAt(now)))
+      .returning({ id: userFacts.id });
+    return rows.length > 0;
   }
 
   async getConstraints(userId: string, now: Date): Promise<UserFact[]> {
@@ -127,7 +155,7 @@ export class UserFactsRepository implements IUserFactsService {
     // conversation is its own evidence), never the DB clock; `now` stays the
     // clock for every date written below.
     if (existing?.status === 'archived') {
-      const closureAt = existing.closedByUserAt ?? existing.archivedAt;
+      const closureAt = closureMoment(existing);
       const evidenceAt = input.evidenceAt ?? now;
       if (closureAt !== null && evidenceAt.getTime() <= closureAt.getTime()) {
         return { outcome: 'skipped_stale_evidence', fact: existing };
@@ -307,7 +335,7 @@ export class UserFactsRepository implements IUserFactsService {
     // A user-closed fact is never re-added (AC-FL-3): superseding it from an
     // episode no newer than the closure is stale evidence — skip.
     if (existing.status === 'archived') {
-      const closureAt = existing.closedByUserAt ?? existing.archivedAt;
+      const closureAt = closureMoment(existing);
       if (closureAt !== null && evidenceAt.getTime() <= closureAt.getTime()) {
         return { outcome: 'skipped_stale_evidence', fact: existing };
       }

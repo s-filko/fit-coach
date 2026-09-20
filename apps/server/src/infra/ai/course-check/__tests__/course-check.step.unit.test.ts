@@ -107,6 +107,9 @@ function ctxConfig(now = NOW): RunnableConfig {
 
 interface DepsOverrides {
   facts?: UserFact[];
+  /** Active short facts past their TTL — what the port's getExpiredActive returns. */
+  expired?: UserFact[];
+  archiveExpired?: (userId: string, factId: string, now: Date) => Promise<boolean>;
   stored?: StoredCourseDirective | null;
   structured?: (schema: unknown, messages: unknown[]) => Promise<CourseCheckDirective>;
   enabled?: boolean;
@@ -120,6 +123,8 @@ function makeDeps(overrides: DepsOverrides = {}): CourseCheckStepDeps {
     } as unknown as LlmGateway,
     userFacts: {
       getForPrompt: jest.fn(() => Promise.resolve(overrides.facts ?? [fact()])),
+      getExpiredActive: jest.fn(() => Promise.resolve(overrides.expired ?? [])),
+      archiveExpired: jest.fn(overrides.archiveExpired ?? (() => Promise.resolve(true))),
     } as unknown as IUserFactsService,
     trainingService: {
       getActivePlan: jest.fn(() => Promise.resolve({ id: PLAN_ID })),
@@ -141,6 +146,11 @@ function expectedFingerprint(
     activePlanId,
     now: NOW,
   });
+}
+
+/** Carry a step's updates into the next run's state — what the checkpointer does between runs. */
+function carry(prev: ConversationStateType, updates: Partial<ConversationStateType>): ConversationStateType {
+  return { ...prev, ...updates };
 }
 
 /** A stored directive that matches the default deps + state exactly (fingerprint holds). */
@@ -419,11 +429,6 @@ describe('buildCourseCheckStep (AC-FL-5)', () => {
 
   // --- Back-off: a provider outage gets quieter, not chattier ---
 
-  /** Carry a step's updates into the next run's state — what the checkpointer does between runs. */
-  function carry(prev: ConversationStateType, updates: Partial<ConversationStateType>): ConversationStateType {
-    return { ...prev, ...updates };
-  }
-
   it('a failed call followed by N ordinary turns on the same fingerprint issues exactly ONE model call', async () => {
     const stored = storedFor([fact()]);
     const newFacts = [fact(), fact({ id: 'f2', factKey: 'k2', fact: 'Trains at home', category: 'equipment' })];
@@ -583,5 +588,215 @@ describe('buildCourseCheckStep (AC-FL-5)', () => {
     expect(messages[1].content).toContain('Build muscle 3×/week');
     expect(messages[1].content).toContain('Left shoulder aches when pressing');
     expect(messages[1].content).toContain(PLAN_ID);
+  });
+});
+
+// --- Expiry, performed (AC-FL-1, AC-FL-5): ask_once is asked once, forget is archived silently ---
+
+describe('buildCourseCheckStep — expiry is performed', () => {
+  beforeEach(() => {
+    Object.values(logFns).forEach(fn => fn.mockClear());
+  });
+
+  const DAY = 86_400_000;
+  /** An expired short fact, TTL ran out two days before NOW. */
+  const shortFact = (overrides: Partial<UserFact> = {}): UserFact =>
+    fact({
+      id: 'short-1',
+      category: 'physical_constraint',
+      fact: 'Left shoulder tweaked while pressing',
+      factKey: 'left shoulder tweaked while pressing',
+      durability: 'short',
+      reviewAfter: null,
+      phaseNote: null,
+      phaseAt: null,
+      expiresAt: new Date(NOW.getTime() - 2 * DAY),
+      onExpiry: 'ask_once',
+      ...overrides,
+    });
+  const doms = (overrides: Partial<UserFact> = {}): UserFact =>
+    shortFact({
+      id: 'short-2',
+      category: 'physiological_pattern',
+      fact: 'Legs sore after squats',
+      factKey: 'legs sore after squats',
+      muscleGroup: null,
+      onExpiry: 'forget',
+      ...overrides,
+    });
+
+  const archivedIds = (deps: CourseCheckStepDeps): string[] =>
+    (deps.userFacts.archiveExpired as jest.Mock).mock.calls.map(c => c[1] as string);
+  const checkInput = (deps: CourseCheckStepDeps): string =>
+    ((deps.llmGateway.structured as jest.Mock).mock.calls[0]![1] as Array<{ content: string }>)
+      .map(m => m.content)
+      .join('\n');
+
+  it('an expired ask_once fact reaches the check input marked for ONE question, and is archived after the directive', async () => {
+    const deps = makeDeps({ expired: [shortFact()] });
+    const step = buildCourseCheckStep(deps);
+
+    const updates = await step(state(), ctxConfig());
+
+    expect(deps.llmGateway.structured).toHaveBeenCalledTimes(1);
+    const input = checkInput(deps);
+    expect(input).toContain('Left shoulder tweaked while pressing');
+    // The per-fact line (the bare marker also appears in the check's own instructions).
+    expect(input).toContain('Left shoulder tweaked while pressing (physical_constraint, expired 2 day(s) ago)');
+    expect(updates.courseDirective?.directive).toEqual(DIRECTIVE);
+    expect(archivedIds(deps)).toEqual(['short-1']);
+    // Archived AFTER the call, with the run clock: the question is never lost to a failed call.
+    const [structuredOrder] = (deps.llmGateway.structured as jest.Mock).mock.invocationCallOrder;
+    const [archiveOrder] = (deps.userFacts.archiveExpired as jest.Mock).mock.invocationCallOrder;
+    expect(archiveOrder).toBeGreaterThan(structuredOrder!);
+    expect((deps.userFacts.archiveExpired as jest.Mock).mock.calls[0]).toEqual([USER_ID, 'short-1', NOW]);
+  });
+
+  it('asked exactly ONCE: the next runs find nothing due, and the stored fingerprint is the SETTLED one — no refire', async () => {
+    // The port drops the fact from the due list once archived (the real repository does).
+    const due = [shortFact()];
+    const deps = makeDeps({
+      expired: due,
+      archiveExpired: async (_u, id) => {
+        due.splice(0, due.length, ...due.filter(f => f.id !== id));
+        return true;
+      },
+    });
+    const step = buildCourseCheckStep(deps);
+    let current = state();
+
+    current = carry(current, await step(current, ctxConfig()));
+    expect(deps.llmGateway.structured).toHaveBeenCalledTimes(1);
+    // Stored hash == the hash of the steady state (nothing due): what the next run recomputes.
+    expect(current.courseDirective?.fingerprint).toBe(expectedFingerprint([fact()], 'chat'));
+
+    for (let i = 1; i <= 5; i++) {
+      const updates = await step(current, ctxConfig(new Date(NOW.getTime() + i * 60_000)));
+      expect(updates).toEqual({});
+      current = carry(current, updates);
+    }
+
+    expect(deps.llmGateway.structured).toHaveBeenCalledTimes(1); // the fingerprint is stable turn to turn
+    expect(archivedIds(deps)).toEqual(['short-1']); // archived once
+  });
+
+  it('a fact becoming due refires the check even when nothing else moved (it expired while an earlier directive already excluded it)', async () => {
+    // The stored hash is the steady state: facts as they are NOW (the expired fact long gone from them).
+    const facts = [fact()];
+    const stored = storedFor(facts);
+    const deps = makeDeps({ facts, expired: [shortFact()] });
+    const step = buildCourseCheckStep(deps);
+
+    const updates = await step(state({ courseDirective: stored }), ctxConfig());
+
+    expect(deps.llmGateway.structured).toHaveBeenCalledTimes(1);
+    expect(archivedIds(deps)).toEqual(['short-1']);
+    expect(updates.courseDirective?.fingerprint).toBe(stored.fingerprint); // settled: back to the steady state
+  });
+
+  it('an expired forget fact is archived silently: no question, no prompt line, no model call of its own', async () => {
+    const facts = [fact()];
+    const deps = makeDeps({ facts, expired: [doms()] });
+    const stored = storedFor(facts);
+    const step = buildCourseCheckStep(deps);
+
+    const updates = await step(state({ courseDirective: stored }), ctxConfig());
+
+    expect(archivedIds(deps)).toEqual(['short-2']);
+    expect(deps.llmGateway.structured).not.toHaveBeenCalled(); // nothing else moved: it does not fire the check
+    expect(updates).toEqual({});
+  });
+
+  it('a forget fact never appears in a check that fires for another reason', async () => {
+    const deps = makeDeps({ expired: [doms(), shortFact()] });
+    const step = buildCourseCheckStep(deps);
+
+    await step(state(), ctxConfig());
+
+    const input = checkInput(deps);
+    expect(input).not.toContain('Legs sore after squats');
+    expect(input).toContain('Left shoulder tweaked while pressing');
+    expect(archivedIds(deps).sort()).toEqual(['short-1', 'short-2']);
+  });
+
+  it('a fact that is not expired, or is not active, is untouched (the predicate decides, not the port)', async () => {
+    const notYet = shortFact({ id: 'live', expiresAt: new Date(NOW.getTime() + DAY) });
+    const closed = shortFact({ id: 'closed', status: 'archived', archivedReason: 'user_closed', archivedAt: NOW });
+    const longTerm = fact({ id: 'long' }); // durability long_term: never expires
+    const deps = makeDeps({ expired: [notYet, closed, longTerm] });
+    const step = buildCourseCheckStep(deps);
+
+    await step(state(), ctxConfig());
+
+    expect(deps.userFacts.archiveExpired).not.toHaveBeenCalled();
+    expect(checkInput(deps)).not.toContain('day(s) ago');
+  });
+
+  it('a failed archive never fails or blocks the run: the directive is still produced, an error is logged', async () => {
+    const deps = makeDeps({
+      expired: [shortFact(), doms()],
+      archiveExpired: () => Promise.reject(new Error('db down')),
+    });
+    const step = buildCourseCheckStep(deps);
+
+    const updates = await step(state(), ctxConfig());
+
+    expect(updates.courseDirective?.directive).toEqual(DIRECTIVE);
+    expect(deps.userFacts.archiveExpired).toHaveBeenCalledTimes(2); // one failure does not stop the batch
+    expect(logFns.error).toHaveBeenCalledTimes(2);
+  });
+
+  it('a failed due-read degrades to no expiry this run — the check still runs on the rest', async () => {
+    const deps = makeDeps();
+    (deps.userFacts.getExpiredActive as jest.Mock).mockRejectedValue(new Error('db down'));
+    const step = buildCourseCheckStep(deps);
+
+    const updates = await step(state(), ctxConfig());
+
+    expect(updates.courseDirective?.directive).toEqual(DIRECTIVE);
+    expect(deps.userFacts.archiveExpired).not.toHaveBeenCalled();
+  });
+
+  it('a FAILED check leaves the ask_once fact unarchived (still owed), backs off, and asks after the cooldown', async () => {
+    const due = [shortFact()];
+    const structured = jest
+      .fn<Promise<CourseCheckDirective>, [unknown, unknown[]]>()
+      .mockRejectedValueOnce(new Error('provider down'))
+      .mockResolvedValueOnce(DIRECTIVE);
+    const deps = makeDeps({
+      expired: due,
+      structured,
+      archiveExpired: async (_u, id) => {
+        due.splice(0, due.length, ...due.filter(f => f.id !== id));
+        return true;
+      },
+    });
+    const step = buildCourseCheckStep(deps);
+    let current = state();
+
+    current = carry(current, await step(current, ctxConfig()));
+    expect(deps.userFacts.archiveExpired).not.toHaveBeenCalled();
+    expect(current.courseCheckFailure).not.toBeNull();
+
+    // Inside the cooldown: quiet, and still owed.
+    await step(current, ctxConfig(new Date(NOW.getTime() + 60_000)));
+    expect(structured).toHaveBeenCalledTimes(1);
+    expect(deps.userFacts.archiveExpired).not.toHaveBeenCalled();
+
+    // After it: the one question is asked and only then is the fact archived.
+    const retried = await step(current, ctxConfig(new Date(NOW.getTime() + COOLDOWN_MS)));
+    expect(structured).toHaveBeenCalledTimes(2);
+    expect(retried.courseDirective).toBeDefined();
+    expect(archivedIds(deps)).toEqual(['short-1']);
+  });
+
+  it('with the layer OFF nobody can ask: both kinds are archived, still no model call', async () => {
+    const deps = makeDeps({ enabled: false, expired: [shortFact(), doms()] });
+    const step = buildCourseCheckStep(deps);
+
+    await step(state(), ctxConfig());
+
+    expect(archivedIds(deps).sort()).toEqual(['short-1', 'short-2']);
+    expect(deps.llmGateway.structured).not.toHaveBeenCalled();
   });
 });

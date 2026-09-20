@@ -392,17 +392,40 @@ describe('journey (c) — a short state that expires silently versus one that as
     expect(text.split('\n').find(l => l.includes(DOMS_FACT))!).not.toContain('ask_once');
   });
 
-  it('[on] after the expiry the check refires (the fact set changed) and is handed neither', () => {
+  it('[on] after the expiry the check refires once: the forget fact is NOT in its input, the ask_once fact is — marked for ONE question', () => {
     const inputs = courseChecks(runOf(journeyC, 'on').steps[2]!);
     expect(inputs).toHaveLength(1);
-    expect(inputText(inputs[0]!)).not.toContain(DOMS_FACT);
-    expect(inputText(inputs[0]!)).not.toContain(SHOULDER_TWEAK);
+    const text = inputText(inputs[0]!);
+    expect(text).not.toContain(DOMS_FACT); // silently archived: not even a prompt line
+    expect(text).toContain(`${SHOULDER_TWEAK} (physical_constraint, expired 1 day(s) ago)`);
   });
 
-  // The owner's model: an `ask_once` fact is asked about ONCE when it expires. Nothing does that
-  // yet — an expired fact is hidden from getForPrompt, so it never reaches the course check, and
-  // nothing records that a question was put. Reported to the coordinator; not implemented here.
-  it.todo('ask_once: an expired ask_once fact yields exactly one follow-up question, then never again');
+  it('[on] it is asked exactly once: the next turn makes no course-check call and nothing is due', () => {
+    const run = runOf(journeyC, 'on');
+    expect(courseChecks(run.steps[3]!)).toHaveLength(0);
+    expect(run.steps[3]!.chatText).not.toContain(SHOULDER_TWEAK);
+  });
+
+  it('[on] the tweak was archived AFTER the question was put — the directive that carries it is what the model saw', () => {
+    const run = runOf(journeyC, 'on');
+    expect(run.steps[2]!.chatText).toContain('did the left shoulder tweak leave any trace?');
+    expect(run.result.steps[2]!.facts.find(f => f.fact === SHOULDER_TWEAK)).toMatchObject({
+      status: 'archived',
+      archivedReason: 'expired',
+    });
+  });
+
+  it('[off] nobody asks, but expiry is still performed: both facts are archived as expired, the same ending in the database', () => {
+    const run = runOf(journeyC, 'off');
+    expect(run.steps.flatMap(courseChecks)).toEqual([]);
+    const rows = run.result.steps[2]!.facts;
+    expect(rows.map(f => [f.fact, f.status, f.archivedReason])).toEqual(
+      expect.arrayContaining([
+        [DOMS_FACT, 'archived', 'expired'],
+        [SHOULDER_TWEAK, 'archived', 'expired'],
+      ]),
+    );
+  });
 });
 
 describe('journey (d) — the same short state recurring three times', () => {

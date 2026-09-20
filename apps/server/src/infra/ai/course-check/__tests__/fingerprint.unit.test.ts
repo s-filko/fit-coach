@@ -128,4 +128,35 @@ describe('courseCheckFingerprint (AC-FL-5)', () => {
       base,
     );
   });
+
+  describe('expired ask_once facts (expiry performed)', () => {
+    const due = () =>
+      fact({
+        id: 'due-1',
+        durability: 'short',
+        reviewAfter: null,
+        expiresAt: new Date('2026-09-19T00:00:00Z'),
+        onExpiry: 'ask_once',
+      });
+
+    it('a fact BECOMING due changes the fingerprint — a real input change that fires the check once', () => {
+      const base = courseCheckFingerprint(input());
+      expect(courseCheckFingerprint(input({ expiredAsk: [due()] }))).not.toBe(base);
+    });
+
+    it('the SETTLED hash (nothing due) equals a run that never had one — so the next turn matches the stored one and does not refire', () => {
+      expect(courseCheckFingerprint(input({ expiredAsk: [] }))).toBe(courseCheckFingerprint(input()));
+    });
+
+    it('is order-free in the due list, and stable turn to turn while the same fact is due', () => {
+      const a = due();
+      const b = { ...due(), id: 'due-2' };
+      expect(courseCheckFingerprint(input({ expiredAsk: [a, b] }))).toBe(
+        courseCheckFingerprint(input({ expiredAsk: [b, a] })),
+      );
+      expect(courseCheckFingerprint(input({ expiredAsk: [a] }))).toBe(
+        courseCheckFingerprint(input({ expiredAsk: [a] })),
+      );
+    });
+  });
 });

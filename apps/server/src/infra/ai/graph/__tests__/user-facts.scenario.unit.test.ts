@@ -32,7 +32,7 @@ import type {
 import { OpenAiLlmGateway } from '@infra/ai/llm.gateway';
 import type { ExerciseWithMuscles } from '@domain/training/types';
 import { computeFactKey } from '@domain/user/services/fact-key';
-import { isActiveForPrompt } from '@domain/user/services/fact-lifecycle';
+import { closureMoment, isActiveForPrompt, isExpired } from '@domain/user/services/fact-lifecycle';
 
 import { buildConversationGraph, type ConversationGraphDeps } from '../conversation.graph';
 import { USER, ctxConfig } from './graph-test-support';
@@ -71,7 +71,7 @@ class InMemoryUserFactsService implements IUserFactsService {
 
     const evidenceAt = input.evidenceAt ?? now;
     if (existing !== null && existing.status === 'archived') {
-      const closureAt = existing.closedByUserAt ?? existing.archivedAt;
+      const closureAt = closureMoment(existing);
       if (closureAt !== null && evidenceAt.getTime() <= closureAt.getTime()) {
         return { outcome: 'skipped_stale_evidence', fact: existing };
       }
@@ -162,7 +162,7 @@ class InMemoryUserFactsService implements IUserFactsService {
       return null;
     }
     if (old.status === 'archived') {
-      const closureAt = old.closedByUserAt ?? old.archivedAt;
+      const closureAt = closureMoment(old);
       if (closureAt !== null && evidenceAt.getTime() <= closureAt.getTime()) {
         return { outcome: 'skipped_stale_evidence', fact: old };
       }
@@ -242,6 +242,19 @@ class InMemoryUserFactsService implements IUserFactsService {
   async getForPrompt(userId: string, now: Date, cap = 50): Promise<UserFact[]> {
     this.promptCalls.push({ userId, now });
     return this.rows.filter(r => r.userId === userId && isActiveForPrompt(r, now)).slice(0, cap);
+  }
+
+  async getExpiredActive(userId: string, now: Date): Promise<UserFact[]> {
+    return this.rows.filter(r => r.userId === userId && isExpired(r, now));
+  }
+
+  async archiveExpired(userId: string, factId: string, now: Date): Promise<boolean> {
+    const row = this.rows.find(r => r.id === factId && r.userId === userId);
+    if (row === undefined || !isExpired(row, now)) {
+      return false;
+    }
+    Object.assign(row, { status: 'archived', archivedAt: now, archivedReason: 'expired', updatedAt: now });
+    return true;
   }
 
   async getConstraints(userId: string, now: Date): Promise<UserFact[]> {

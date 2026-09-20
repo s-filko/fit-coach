@@ -127,6 +127,8 @@ export interface LifecycleFact {
   durability: FactDurability;
   expiresAt?: Date | null;
   reviewAfter?: Date | null;
+  /** Read by {@link expiryAction} — what a short fact's expiry does. */
+  onExpiry?: FactOnExpiry | null;
 }
 
 /**
@@ -156,4 +158,51 @@ export function isReviewDue(fact: LifecycleFact, now: Date): boolean {
 /** The prompt/constraint-read contract: active AND not expired (AC-FL-1). */
 export function isActiveForPrompt(fact: LifecycleFact, now: Date): boolean {
   return fact.status === 'active' && !isExpired(fact, now);
+}
+
+/**
+ * What PERFORMING a fact's expiry means (course-check plan, expiry task):
+ * - 'ask'    — an expired `ask_once` fact: one check-in question, THEN archive;
+ * - 'forget' — any other expired short fact (`forget`, or no flag): archive silently;
+ * - null     — not expired (or not active/short): nothing to perform.
+ *
+ * Built on {@link isExpired}, so the date rule (<=, active short only) lives in
+ * exactly one place. The read that finds these facts is the port's
+ * `getExpiredActive`; this decides what each one gets.
+ */
+export function expiryAction(fact: LifecycleFact, now: Date): 'ask' | 'forget' | null {
+  if (!isExpired(fact, now)) {
+    return null;
+  }
+  return fact.onExpiry === 'ask_once' ? 'ask' : 'forget';
+}
+
+/** The archive fields the closure moment reads. */
+export interface ClosureFact {
+  archivedAt: Date | null;
+  archivedReason: FactArchivedReason | null;
+  closedByUserAt: Date | null;
+  expiresAt?: Date | null;
+}
+
+/**
+ * WHEN an archived fact's subject ended — the moment the stale-evidence guard
+ * (AC-FL-3) compares new evidence against: a statement no newer than this is
+ * old news about the closed subject; a newer one is a genuinely new statement.
+ *
+ * - the user's word wins: `closed_by_user_at` (the moment they said it);
+ * - an EXPIRED archive: the expiry date itself, NOT `archived_at` — archival
+ *   happens whenever the course check next runs, possibly days later, and a
+ *   restatement made in between must not be discarded as "older than the
+ *   closure";
+ * - anything else (superseded…): `archived_at`.
+ */
+export function closureMoment(fact: ClosureFact): Date | null {
+  if (fact.closedByUserAt !== null) {
+    return fact.closedByUserAt;
+  }
+  if (fact.archivedReason === 'expired' && fact.expiresAt != null) {
+    return fact.expiresAt;
+  }
+  return fact.archivedAt;
 }

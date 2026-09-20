@@ -158,4 +158,46 @@ describe('COURSE_CHECK_V1 (AC-FL-5: the structured call’s input)', () => {
 
     expect(user.text).toMatch(/no facts yet|none yet/i);
   });
+
+  describe('expired ask_once facts (expiry performed)', () => {
+    const expired = fact({
+      id: 'exp-1',
+      category: 'physical_constraint',
+      fact: 'Left shoulder tweaked while pressing',
+      durability: 'short',
+      reviewAfter: null,
+      expiresAt: new Date('2026-09-19T12:00:00Z'),
+      onExpiry: 'ask_once',
+    });
+
+    it('lists each one apart from the facts in force, marked for ONE question, with how long ago it expired', () => {
+      const [, user] = COURSE_CHECK_V1.render({
+        phase: 'chat',
+        goal: null,
+        facts: [],
+        now: NOW,
+        activePlanId: null,
+        expiredAsk: [expired],
+      });
+
+      expect(user.text).toContain(
+        'Left shoulder tweaked while pressing (physical_constraint, expired 2 day(s) ago) [EXPIRED — ask once now]',
+      );
+      expect(user.text.indexOf('no facts yet.')).toBeLessThan(user.text.indexOf('expired facts owed ONE question'));
+    });
+
+    it('renders nothing extra when none is due', () => {
+      const [, user] = COURSE_CHECK_V1.render({ phase: 'chat', goal: null, facts: [], now: NOW, activePlanId: null });
+
+      expect(user.text).not.toContain('expired facts owed');
+      expect(user.text).not.toContain('day(s) ago');
+    });
+
+    it('the system text asks for exactly one check-in for it, and none for a still-active ask_once fact', () => {
+      const [system] = COURSE_CHECK_V1.render({ phase: 'chat', goal: null, facts: [], now: NOW, activePlanId: null });
+
+      expect(system.text).toContain('exactly ONE short check-in');
+      expect(system.text).toMatch(/still-active ask_once fact is NOT asked about yet/);
+    });
+  });
 });

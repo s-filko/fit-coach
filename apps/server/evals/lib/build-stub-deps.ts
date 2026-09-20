@@ -415,6 +415,8 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
       deleteFact: async () => false,
       listFacts: async () => ({ active: [], archived: [] }),
       getForPrompt: async () => facts,
+      getExpiredActive: async () => [],
+      archiveExpired: async () => false,
       getConstraints: async () =>
         facts.filter(fact => fact.category === 'physical_constraint' && fact.muscleGroup !== null),
     },
