@@ -19,6 +19,8 @@ import { getModel } from '@infra/ai/model.factory';
 import { POST_TOOL_NUDGE_V1, renderBlock, TIME_GAP_V1 } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
 
+import { loadConfig } from '@config/index';
+
 import { createLogger } from '@shared/logger';
 
 const log = createLogger('agent-node');
@@ -48,6 +50,43 @@ function typeOf(m: BaseMessage | undefined): string {
 
 function endsWithToolMessage(messages: BaseMessage[]): boolean {
   return typeOf(messages[messages.length - 1]) === 'tool';
+}
+
+/** Z.AI/LangChain put the OpenAI finish_reason here (stop | tool_calls | length | …). */
+function finishReasonOf(response: AIMessage): string | undefined {
+  const meta = response.response_metadata as { finish_reason?: string } | undefined;
+  return meta?.finish_reason;
+}
+
+/** Token counts: LangChain's usage_metadata, or response_metadata.tokenUsage (OpenAI shape). */
+function tokenUsageOf(response: AIMessage): { promptTokens?: number; completionTokens?: number } {
+  const um = response.usage_metadata;
+  if (um && typeof um.input_tokens === 'number') {
+    return { promptTokens: um.input_tokens, completionTokens: um.output_tokens };
+  }
+  const tu = (response.response_metadata as { tokenUsage?: { promptTokens?: number; completionTokens?: number } })
+    ?.tokenUsage;
+  return { promptTokens: tu?.promptTokens, completionTokens: tu?.completionTokens };
+}
+
+/**
+ * BUG-019 / AC-RL-2: every model response is visible at info — one line per
+ * call with the finish reason and token counts, never the message bodies.
+ * A `length` response additionally warns: the answer was cut off by the
+ * output-token cap, a call we already know is dead. Returns the finish reason
+ * so the caller can skip the retry (see below).
+ */
+function logModelResponse(response: AIMessage, userId: string, phase: string): string | undefined {
+  const finishReason = finishReasonOf(response);
+  const { promptTokens, completionTokens } = tokenUsageOf(response);
+  log.info({ userId, phase, finishReason, promptTokens, completionTokens }, 'LLM response');
+  if (finishReason === 'length') {
+    log.warn(
+      { userId, phase, finishReason, completionTokens, maxTokens: loadConfig().LLM_MAX_TOKENS },
+      'LLM answer truncated by the output-token cap (finish_reason=length)',
+    );
+  }
+  return finishReason;
 }
 
 /**
@@ -163,12 +202,20 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     const postTool = endsWithToolMessage(llmMessages);
     const firstMessages = postTool ? withPostToolNudge(llmMessages) : llmMessages;
     const response = await model.invoke(firstMessages, config);
+    const finishReason = logModelResponse(response, userId, spec.name);
 
     if (isEmptyAIResponse(response)) {
+      // BUG-019 / AC-RL-2: an empty answer truncated by the output cap is a
+      // call we already know was cut off — never pay a second multi-minute
+      // invoke for it; the user gets the catalog text right away.
+      if (finishReason === 'length') {
+        return { messages: [new AIMessage(t('empty_reply', lang))] };
+      }
       log.warn({ userId, phase: spec.name }, 'LLM returned empty response — retrying once');
       // On retry always include the nudge regardless of message structure
       const retryMessages = postTool ? firstMessages : withPostToolNudge(llmMessages);
       const retried = await model.invoke(retryMessages, config);
+      logModelResponse(retried, userId, spec.name);
       if (isEmptyAIResponse(retried)) {
         return { messages: [new AIMessage(t('empty_reply', lang))] };
       }

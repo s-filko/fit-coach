@@ -22,6 +22,16 @@ jest.mock('@infra/ai/model.factory', () => ({
   getModel: (profile?: string) => mockGetModel(profile),
 }));
 
+// AC-RL-2: the node's log lines (info per response, warn on truncation) are
+// part of the contract — one shared mock, same pattern as llm.gateway tests.
+jest.mock('@shared/logger', () => {
+  const fns = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
+  return { createLogger: () => fns, __logFns: fns };
+});
+const { __logFns: logFns } = jest.requireMock('@shared/logger') as {
+  __logFns: { info: jest.Mock; warn: jest.Mock; error: jest.Mock; debug: jest.Mock };
+};
+
 // The agent attaches the report to ctx.metrics (a real collector — spy on it).
 const metricsCollector = new RunMetricsCollector('run-1');
 const attachSpy = jest.spyOn(metricsCollector, 'attachBudgetReport');
@@ -314,6 +324,139 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
 
       const sent = mockInvoke.mock.calls[0][0] as BaseMessage[];
       expect(sent.some(m => String(m.content).includes('The user returns after'))).toBe(false);
+    });
+  });
+
+  // BUG-019 / AC-RL-2: a length-truncated answer is visible in the log and is
+  // never blindly re-run; only a genuinely empty stop answer keeps the retry.
+  describe('truncation visibility and the no-blind-retry rule (AC-RL-2)', () => {
+    beforeEach(() => {
+      logFns.info.mockClear();
+      logFns.warn.mockClear();
+      logFns.error.mockClear();
+      logFns.debug.mockClear();
+      process.env.LLM_MAX_TOKENS = '16384';
+    });
+    afterEach(() => {
+      delete process.env.LLM_MAX_TOKENS;
+    });
+
+    it('length + empty → ONE invoke, warn names the truncation and the cap, catalog text (no retry)', async () => {
+      mockInvoke.mockResolvedValueOnce(
+        new AIMessage({
+          content: '',
+          tool_calls: [],
+          response_metadata: { finish_reason: 'length', tokenUsage: { promptTokens: 30160, completionTokens: 16384 } },
+        }),
+      );
+      const node = buildAgentNode(makeSpec(), makeDeps());
+
+      const out = await node(makeState(), CONFIG);
+
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
+      expect(out.messages).toHaveLength(1);
+      expect((out.messages[0] as AIMessage).content).toBe(t('empty_reply', 'ru'));
+      expect(logFns.warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'u1',
+          phase: 'chat',
+          finishReason: 'length',
+          completionTokens: 16384,
+          maxTokens: 16384,
+        }),
+        expect.stringMatching(/truncat/i),
+      );
+    });
+
+    it('stop + empty → retried once exactly as today (two invokes, then the catalog text)', async () => {
+      mockInvoke.mockResolvedValue(
+        new AIMessage({ content: '', tool_calls: [], response_metadata: { finish_reason: 'stop' } }),
+      );
+      const node = buildAgentNode(makeSpec(), makeDeps());
+
+      const out = await node(makeState(), CONFIG);
+
+      expect(mockInvoke).toHaveBeenCalledTimes(2);
+      expect((out.messages[0] as AIMessage).content).toBe(t('empty_reply', 'ru'));
+      expect(logFns.warn).not.toHaveBeenCalledWith(
+        expect.objectContaining({ finishReason: 'length' }),
+        expect.anything(),
+      );
+    });
+
+    it('normal answer → one info line with the finish reason and token counts, no warn', async () => {
+      mockInvoke.mockResolvedValueOnce(
+        new AIMessage({
+          content: 'готово',
+          tool_calls: [],
+          response_metadata: { finish_reason: 'stop', tokenUsage: { promptTokens: 30160, completionTokens: 1200 } },
+        }),
+      );
+      const node = buildAgentNode(makeSpec(), makeDeps());
+
+      await node(makeState(), CONFIG);
+
+      expect(logFns.info).toHaveBeenCalledTimes(1);
+      expect(logFns.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'u1',
+          phase: 'chat',
+          finishReason: 'stop',
+          promptTokens: 30160,
+          completionTokens: 1200,
+        }),
+        expect.any(String),
+      );
+      // the fake spec's budget (system: 1) always trips the budget warn — what
+      // must NOT appear is the truncation warn
+      expect(logFns.warn).not.toHaveBeenCalledWith(
+        expect.objectContaining({ finishReason: 'length' }),
+        expect.anything(),
+      );
+    });
+
+    it('reads token counts from usage_metadata when tokenUsage is absent', async () => {
+      mockInvoke.mockResolvedValueOnce(
+        new AIMessage({
+          content: 'готово',
+          tool_calls: [],
+          usage_metadata: { input_tokens: 500, output_tokens: 25, total_tokens: 525 },
+        }),
+      );
+      const node = buildAgentNode(makeSpec(), makeDeps());
+
+      await node(makeState(), CONFIG);
+
+      expect(logFns.info).toHaveBeenCalledWith(
+        expect.objectContaining({ promptTokens: 500, completionTokens: 25 }),
+        expect.any(String),
+      );
+    });
+
+    it('truncated-but-non-empty → flow unchanged (the partial answer is returned), warn logged', async () => {
+      mockInvoke.mockResolvedValueOnce(
+        new AIMessage({ content: 'частичный ответ', tool_calls: [], response_metadata: { finish_reason: 'length' } }),
+      );
+      const node = buildAgentNode(makeSpec(), makeDeps());
+
+      const out = await node(makeState(), CONFIG);
+
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
+      expect((out.messages[0] as AIMessage).content).toBe('частичный ответ');
+      expect(logFns.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ finishReason: 'length' }),
+        expect.stringMatching(/truncat/i),
+      );
+    });
+
+    it('no message bodies in the info line — only counters and the finish reason', async () => {
+      mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'СЕКРЕТНЫЙ_ТЕКСТ_ОТВЕТА', tool_calls: [] }));
+      const node = buildAgentNode(makeSpec(), makeDeps());
+
+      await node(makeState(), CONFIG);
+
+      const infoArg = JSON.stringify(logFns.info.mock.calls[0][0]);
+      expect(infoArg).not.toContain('СЕКРЕТНЫЙ_ТЕКСТ_ОТВЕТА');
     });
   });
 });

@@ -17,7 +17,6 @@ _Generated 2026-09-20 from docs/superpowers/plans/ + git. Never hand-edit; regen
 **Planned**
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
-- `reply-latency-and-typing.md` — Reply Latency and Live Typing (BUG-019) Implementation Plan
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
@@ -42,6 +41,7 @@ _Generated 2026-09-20 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p4-episode-memory.md` — Refactor P4 — Episode Memory Implementation Plan
 - `refactor-p5-concurrency-delivery.md` — Refactor P5 — Concurrency and Delivery Hardening Implementation Plan
 - `refactor-p6-facts-and-progress-blocks.md` — Refactor P6 — User Facts (Group 1) Implementation Plan
+- `reply-latency-and-typing.md` — Reply Latency and Live Typing (BUG-019) Implementation Plan
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 - `structured-output-fenced-json.md` — Structured Output — Fenced-JSON Recovery and the User-Facts Scenario Test Implementation Plan
 - `structured-output-json-object-mode.md` — Structured Output — Provider Mode `json_object` for the Z.AI Route Implementation Plan
