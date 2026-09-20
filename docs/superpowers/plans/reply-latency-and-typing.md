@@ -89,12 +89,12 @@ format + type-check clean.
 **Files:** `apps/bot/` — the message handler plus a small `typing-keepalive.ts` helper, its tests
 (`apps/bot` has a jest harness since P5).
 
-- [ ] **Step 1: Tests first** (fake timers) — the helper pulses `sendChatAction('typing')` immediately
+- [x] **Step 1: Tests first** (fake timers) — the helper pulses `sendChatAction('typing')` immediately
   and then every 5–6 s while the request is in flight; it stops on success, on error and at a ceiling
   (use the server's `requestTimeout`, 420 s, as the cap); a failing `sendChatAction` never breaks the
   reply path; no timer survives the call.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `feat(bot): keep the typing indicator alive while the reply is produced (BUG-019, AC-RL-3)`
+- [x] **Step 2: Implement.**
+- [x] **Step 3: Commit** — `feat(bot): keep the typing indicator alive while the reply is produced (BUG-019, AC-RL-3)`
 - [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-20** (`094f5569`, GLM worker via Orca). Chosen site: `agent.node` (it sees `response_metadata.finish_reason`, knows phase/userId and owns the retry; `handleLLMEnd`'s debug payload carries bodies and must stay debug). One info line per call (finish reason + token counts, no bodies); `length` adds a warn naming the cap; an empty `length` answer returns the catalog text with zero retries; empty `stop` keeps the one-shot nudge retry. Orchestrator re-ran: test:unit 903/903, L0 96/96.
 
 **Verification:** `npx jest --ci` in `apps/bot` → pass; `npm run test:unit` in `apps/server` → green;

@@ -3,6 +3,7 @@ import axios from 'axios';
 import { errorTextFor } from './error-text';
 import { log } from './logger';
 import { createChatQueue } from './queue';
+import { withTypingIndicator } from './typing-keepalive';
 
 async function sendHtml(bot: TelegramBot, chatId: number, text: string): Promise<void> {
     try {
@@ -110,9 +111,10 @@ export function registerBotHandlers(bot: TelegramBot) {
 
             if (userText === '/clear_context') {
                 try {
-                    await bot.sendChatAction(chatId, 'typing');
-                    const user = await registerOrGetUser(msg);
-                    await api.post('/api/bot/chat/clear-context', { userId: user.id });
+                    await withTypingIndicator(bot, chatId, async () => {
+                        const user = await registerOrGetUser(msg);
+                        await api.post('/api/bot/chat/clear-context', { userId: user.id });
+                    });
                     await bot.sendMessage(chatId, '🧹 Context cleared. Starting fresh!');
                 } catch (error) {
                     if (isNotFound(error)) {
@@ -126,29 +128,29 @@ export function registerBotHandlers(bot: TelegramBot) {
 
             if (userText === '/start') {
                 try {
-                    await bot.sendChatAction(chatId, 'typing');
+                    await withTypingIndicator(bot, chatId, async () => {
+                        // Register user and get LLM greeting
+                        const user = await registerOrGetUser(msg);
 
-                    // Register user and get LLM greeting
-                    const user = await registerOrGetUser(msg);
+                        // Send initial message to get personalized greeting from LLM
+                        const chatResponse = await api.post('/api/bot/chat', {
+                            userId: user.id,
+                            message: 'hi',
+                        });
 
-                    // Send initial message to get personalized greeting from LLM
-                    const chatResponse = await api.post('/api/bot/chat', {
-                        userId: user.id,
-                        message: 'hi',
+                        const aiResponse = chatResponse.data?.data?.content;
+                        if (typeof aiResponse !== 'string') {
+                            log.error({ responseData: chatResponse.data }, 'invalid AI response on /start');
+                            throw new Error('Invalid response from AI service');
+                        }
+
+                        if (!aiResponse.trim()) {
+                            log.warn({ chatId, username: msg.from?.username }, 'LLM returned empty response on /start, suppressing');
+                            return;
+                        }
+
+                        await sendHtml(bot, chatId, aiResponse);
                     });
-
-                    const aiResponse = chatResponse.data?.data?.content;
-                    if (typeof aiResponse !== 'string') {
-                        log.error({ responseData: chatResponse.data }, 'invalid AI response on /start');
-                        throw new Error('Invalid response from AI service');
-                    }
-
-                    if (!aiResponse.trim()) {
-                        log.warn({ chatId, username: msg.from?.username }, 'LLM returned empty response on /start, suppressing');
-                        return;
-                    }
-
-                    await sendHtml(bot, chatId, aiResponse);
                 } catch (error) {
                     if (isNotFound(error)) {
                         userIdByChatId.delete(chatId);
@@ -169,29 +171,29 @@ export function registerBotHandlers(bot: TelegramBot) {
             if (!userText) return;
 
             try {
-                await bot.sendChatAction(chatId, 'typing');
+                await withTypingIndicator(bot, chatId, async () => {
+                    // Ensure user exists to get userId
+                    const user = await registerOrGetUser(msg);
 
-                // Ensure user exists to get userId
-                const user = await registerOrGetUser(msg);
+                    // Send message to LLM chat API
+                    const chatResponse = await api.post('/api/bot/chat', {
+                        userId: user.id,
+                        message: userText,
+                    });
 
-                // Send message to LLM chat API
-                const chatResponse = await api.post('/api/bot/chat', {
-                    userId: user.id,
-                    message: userText,
+                    const aiResponse = chatResponse.data?.data?.content;
+                    if (typeof aiResponse !== 'string') {
+                        log.error({ responseData: chatResponse.data }, 'invalid AI response');
+                        throw new Error('Invalid response from AI service');
+                    }
+
+                    if (!aiResponse.trim()) {
+                        log.warn({ chatId, username: msg.from?.username, userText }, 'LLM returned empty response, suppressing');
+                        return;
+                    }
+
+                    await sendHtml(bot, chatId, aiResponse);
                 });
-
-                const aiResponse = chatResponse.data?.data?.content;
-                if (typeof aiResponse !== 'string') {
-                    log.error({ responseData: chatResponse.data }, 'invalid AI response');
-                    throw new Error('Invalid response from AI service');
-                }
-
-                if (!aiResponse.trim()) {
-                    log.warn({ chatId, username: msg.from?.username, userText }, 'LLM returned empty response, suppressing');
-                    return;
-                }
-
-                await sendHtml(bot, chatId, aiResponse);
             } catch (error) {
                 if (isNotFound(error)) {
                     userIdByChatId.delete(chatId);
