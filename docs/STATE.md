@@ -191,38 +191,41 @@ _Generated 2026-09-20 from docs/superpowers/plans/ + git. Never hand-edit; regen
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
-## Handoff (orchestrator relay, 2026-09-20)
+## Handoff (orchestrator relay, 2026-09-21)
 
-The orchestrator relays to a fresh session at clean boundaries (owner rule 2026-09-20; memory
-`orchestrator-session-relay`, `economical-work`). Where work stands:
+Previous orchestrator (session of 2026-09-20/21) closed three plans — `training-journey-scenarios`,
+`chat-continuity` (BUG-018) and `reply-latency-and-typing` (BUG-019) — all merged to `dev` and deployed.
+Then a long design session with the owner produced the fact-memory work, split into two waves.
 
-- **`training-journey-scenarios` — done, merged to `dev` (2026-09-20)**: review clean (one combined
-  agent), pre-merge `npm run test:scenarios` 221/221. Owner decided no CI job — the rule is in
-  `docs/ORCHESTRATION.md` § Scenario self-check. Worktree
-  `/Users/filko/orca/workspaces/fit_coach/training-journey-scenarios` and branch
-  `plan/training-journey-scenarios` are **ready to clean up** (owner-gated; run `run_f05123509d74`
-  has two retained idle worker terminals).
-- **`chat-continuity` (BUG-018) — done, merged to `dev` (2026-09-20)**: compaction keeps the last
-  `EPISODE_KEEP_TURNS` (6) turns and never drops unsummarised messages, time-gap note before the new
-  message after a pause, the reply carries every assistant text of the run. Review clean after one fix
-  (budget cut now always summarised). **Next:** deploy to dev (health 200), then the owner's own Telegram
-  "привет" after a pause (AC-CC-5) closes BUG-018. Worktree `/Users/filko/orca/workspaces/fit_coach/chat-continuity`
-  and branch `plan/chat-continuity` ready to clean up (owner-gated); run `run_b49c61f61663` keeps one
-  idle worker terminal.
-- **`reply-latency-and-typing` (BUG-019) — done, merged to `dev` (2026-09-20)**: `LLM_MAX_TOKENS`
-  (16384, was a hard-coded 4096) and `LLM_REASONING_EFFORT` (`low|high|max|off`, default `low`) are
-  configuration; truncated answers are logged and never re-run blindly; the bot re-pulses the Telegram
-  typing action every 5.5 s while a reply is produced. Review clean after one ADR reconciliation.
-  No prod action: **prod is frozen** (owner, 2026-09-20 — unused, 8 days behind on `a2809b0f`, old schema;
-  only stable versions go there, and dev is not usable yet). Plans end at the dev deploy. Worktree
-  `/Users/filko/orca/workspaces/fit_coach/reply-latency-and-typing` and branch
-  `plan/reply-latency-and-typing` ready to clean up (owner-gated); run `run_609e642a70fa` has one idle
-  worker terminal.
-- **Test DB:** `fitcoach_test` (local container `fitcoach-db`); `.env.test` no longer sets
-  `RUN_DB_TESTS` (backup `apps/server/.env.test.bak-20260920`, owner may ask to delete). Never
-  run tests in two worktrees against it at once; workers never touch a DB by hand.
-- **Owner-only:** live L3 (`DB_NAME=fitcoach_test RUN_LLM_EVALS=1 npm run evals -- --level L3`),
-  closing Orca sessions, deleting branches/worktrees.
+**Next action: wave A, `docs/superpowers/plans/fact-lifecycle.md`, Task 1.**
+- Worktree `/Users/filko/orca/workspaces/fit_coach/fact-lifecycle`, branch `plan/fact-lifecycle`,
+  prepared (env files linked, `npm ci`, clean type-check, `git status` empty). An Orca run still has to
+  be created for it.
+- Execution contract as always: one GLM worker per task via `delegate-implementation`, tight spec, the
+  orchestrator re-runs the verification itself at acceptance (`npm run test:scenarios` included — the
+  local DB container `fitcoach-db` is up), one combined close-out review per wave (owner rule).
+- The plan's Task 4 close-out must escalate the ADR-0009 / ADR-0013 §3.3 amendment texts to the owner
+  before merge. No worker touches `docs/adr/**`.
+- Wave B (`course-check-and-constraints.md`) waits for wave A: the course-check layer plus narrowing
+  the hard constraint block to `permanent` facts, measured against a prompt-only baseline.
+
+**Owner decisions from the design session (2026-09-20/21), already written into the plans:**
+durability classes (permanent / long-term with a review date and phase / short with a TTL); a short
+state expires silently when it certainly resolves and asks once when it may leave a trace; the user's
+"it's fine now" closes a fact for good and a later summarisation must not resurrect it; recurrence
+promotes a short state to a `physiological_pattern`; the user can list, correct, archive or truly
+delete their own facts; the hard block survives only for `permanent`.
+
+**Not to re-litigate:** prod is frozen (plans end at the dev deploy). Live model runs (L3, eval
+sweeps, comparisons) are owner-launched only.
+
+**Ready to clean up — owner-gated, delete nothing:** worktrees/branches
+`plan/training-journey-scenarios`, `plan/chat-continuity`, `plan/reply-latency-and-typing`; idle worker
+terminals in runs `run_f05123509d74`, `run_b49c61f61663`, `run_609e642a70fa`; backup
+`apps/server/.env.test.bak-20260920`.
+
+- **Test DB:** `fitcoach_test` (local container `fitcoach-db`). Never run tests in two worktrees against
+  it at once; workers never touch a DB by hand.
 
 ## Blocked / waiting on owner
 
