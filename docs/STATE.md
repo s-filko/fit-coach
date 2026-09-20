@@ -191,38 +191,43 @@ _Generated 2026-09-20 from docs/superpowers/plans/ + git. Never hand-edit; regen
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
-## Handoff (orchestrator relay, 2026-09-21)
+## Handoff (orchestrator night shift, 2026-09-21)
 
-Previous orchestrator (session of 2026-09-20/21) closed three plans — `training-journey-scenarios`,
-`chat-continuity` (BUG-018) and `reply-latency-and-typing` (BUG-019) — all merged to `dev` and deployed.
-Then a long design session with the owner produced the fact-memory work, split into two waves.
+**Wave A (`fact-lifecycle`) is done: `Status: done`, merged, deployed to dev and verified live.**
+Dev runs `deb4bb01`; migrations `0006` (lifecycle columns), `0007` (partial unique index over ACTIVE
+rows) and `0008` (`supersedes_id` → `ON DELETE SET NULL`) are applied. Executor: one GLM worker through
+Orca for all tasks (run `run_2bc2e93d5539`, terminal `term_c9999fac`), orchestrator on Opus.
 
-**Next action: wave A, `docs/superpowers/plans/fact-lifecycle.md`, Task 1.**
-- Worktree `/Users/filko/orca/workspaces/fit_coach/fact-lifecycle`, branch `plan/fact-lifecycle`,
-  prepared (env files linked, `npm ci`, clean type-check, `git status` empty). An Orca run still has to
-  be created for it.
-- Execution contract as always: one GLM worker per task via `delegate-implementation`, tight spec, the
-  orchestrator re-runs the verification itself at acceptance (`npm run test:scenarios` included — the
-  local DB container `fitcoach-db` is up), one combined close-out review per wave (owner rule).
-- The plan's Task 4 close-out must escalate the ADR-0009 / ADR-0013 §3.3 amendment texts to the owner
-  before merge. No worker touches `docs/adr/**`.
-- Wave B (`course-check-and-constraints.md`) waits for wave A: the course-check layer plus narrowing
-  the hard constraint block to `permanent` facts, measured against a prompt-only baseline.
+Close-out review (one combined agent, all four zones) found **three blocking defects, all fixed** —
+a `permanent` fact stated in a compacted episode was silently dropped, deleting a fact that had history
+raised an FK violation, and `rememberFact` could surface a raw unique violation. Details and the
+"Decided without the owner (2026-09-21)" table are in the plan file.
 
-**Owner decisions from the design session (2026-09-20/21), already written into the plans:**
-durability classes (permanent / long-term with a review date and phase / short with a TTL); a short
-state expires silently when it certainly resolves and asks once when it may leave a trace; the user's
-"it's fine now" closes a fact for good and a later summarisation must not resurrect it; recurrence
-promotes a short state to a `physiological_pattern`; the user can list, correct, archive or truly
-delete their own facts; the hard block survives only for `permanent`.
+**The live dev smoke (orchestrator, through the bot API on throwaway user `smoke_factlife`) found what
+no test could** — two bugs, both fixed and merged the same night:
+- **BUG-020 (High):** `list_facts` never printed the fact id while `manage_fact` required it, so retract
+  and delete were structurally impossible; the coach then claimed a retraction that never happened.
+  Fixed: ids lead every listing line, and `manage_fact` resolves an unambiguous fact by text. Verified
+  live afterwards: a short fact archived with `archived_reason='user_closed'`, an explicit erase removed
+  its row.
+- **BUG-021 (Medium):** the tool schema-rejection hint always talked about `search_exercises`.
 
-**Not to re-litigate:** prod is frozen (plans end at the dev deploy). Live model runs (L3, eval
-sweeps, comparisons) are owner-launched only.
+**Next action: wave B, `docs/superpowers/plans/course-check-and-constraints.md`.** It needs its own
+worktree (one per plan). It is behavioural — the course-check layer plus narrowing the hard constraint
+block to `permanent` — and its measurement against a prompt-only baseline is a model-backed run, which
+is owner-launched.
 
-**Cleanup done (2026-09-21, by the amended CLAUDE.md § Rules):** worktrees, branches (local and
-remote) and leftover agent tabs of `training-journey-scenarios`, `chat-continuity` and
-`reply-latency-and-typing` are gone, plus seven older merged `plan/*` branches. Only
-`plan/fact-lifecycle` (live) remains. `apps/server/.env.test.bak-20260920` still waits on the owner.
+**Not done on purpose (owner-gated, night shift):** nothing was deleted. Ready to clean up when the
+owner says so: worktree `/Users/filko/orca/workspaces/fit_coach/fact-lifecycle` (currently on the merged
+`fix/tool-schema-hint`), branches `plan/fact-lifecycle` and `fix/tool-schema-hint`, the worker terminal
+of run `run_2bc2e93d5539`, and the dev fixture user `smoke_factlife`
+(`e78054ac-578e-40b5-a3e4-a5cee4347820`). One action was refused by the harness and skipped rather than
+worked around: a direct `UPDATE users` on dev to complete the smoke user's profile — the smoke therefore
+ran in the `registration` phase, which is where the memory tools were exercised.
+
+**Open, not blocking:** AC-FL-3's live half (a closed fact not resurrected by compacting an OLDER
+episode) is pinned end-to-end by a scenario test but was not reproduced live — forcing a real compaction
+of an old episode needs a seeded thread. Worth one live check when wave B touches compaction.
 
 - **Test DB:** `fitcoach_test` (local container `fitcoach-db`). Never run tests in two worktrees against
   it at once; workers never touch a DB by hand.
