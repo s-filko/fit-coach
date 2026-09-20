@@ -71,10 +71,11 @@ Dispatch the next plan task into the same terminal so the worker keeps its conte
 ## Step 6 — Close
 
 When all plan tasks are done: verify (incl. `npm run test:scenarios` where § Scenario self-check applies), run `close-out-review` yourself, `Status: done`,
-`state.mjs --write`, push, merge. Release the remaining workers
-(`worker-list --run <run_id> --terminal-state reclaimable` must return none). Report the
-worktree and `plan/<slug>` branch as **ready to clean up — delete nothing** (owner gate,
-`CLAUDE.md` § Rules). Workers have no part in this step.
+`state.mjs --write`, push, merge. Then clean up, per `CLAUDE.md` § Rules: release every
+worker (`worker-list --run <run_id> --terminal-state reclaimable` must return none — releasing
+archives the transcript), close the plan's leftover agent tabs, and remove the worktree and the
+`plan/<slug>` branch, local and remote. Stop and ask only if something is unmerged, uncommitted or
+still live. Workers have no part in this step.
 
 ## Red flags
 
@@ -86,4 +87,4 @@ worktree and `plan/<slug>` branch as **ready to clean up — delete nothing** (o
 | "Idle and no `worker_done`, but I can tell it finished" | Read the transcript; a turn without `worker_done` is a stall, not a success. |
 | "I'll keep waiting on `check --wait`" | Inspect first (`worker-list`, `worker-read`); the owner is waiting too. |
 | "Two workers in one worktree will be faster" | Only one editor per worktree — the pre-commit hook checks the whole tree. |
-| "I'll clean up the worktree after merge" | Owner-gated. Report it, delete nothing. |
+| "I'll clean up the worktree after merge" | That is the procedure — once it is merged, pushed and clean. Unmerged or still live: report and wait. |

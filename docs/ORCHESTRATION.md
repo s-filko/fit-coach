@@ -114,9 +114,11 @@ done
   the whole tree, so a second editor's half-done changes break the first one's commits.
   Additional sessions in the same worktree are read-only (research, review); parallel
   implementation means parallel plans, each in its own worktree.
-- **Branch and worktree deletion is owner-gated** — `CLAUDE.md` § Rules (single source).
-  This includes `orca worktree rm`. After merge or cancellation, report the worktree and
-  its branch as ready to clean up and delete nothing.
+- **Cleanup is part of close-out** — the rule and its conditions live in `CLAUDE.md` § Rules
+  (single source). In short: a plan that is `done`, merged and pushed gets its workers released,
+  its leftover agent tabs closed and its worktree and branch removed by the orchestrator, without
+  asking; anything unmerged, uncommitted or still live stays owner-gated. The deletion commands
+  still raise the owner-gate prompt.
 
 ## Boundary: what workers never do
 
