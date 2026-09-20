@@ -204,8 +204,27 @@ fingerprint, the pure event predicate), `graph/state.ts` (the persisted directiv
   and one deleted outright — the listing reflects both on the next ask.
 - [ ] **Step 2:** the same journeys are runnable with the course check on and off, so the owner can
   compare (AC-FL-7) — the comparison itself is an owner-launched live run, never a task.
-- [ ] **Step 3: Commit** — `test(ai): journeys for fact lifecycle and the course check (AC-FL-7)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 3: Commit** — `test(ai): journeys for fact lifecycle and the course check (AC-FL-7)`
+- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-21** (`efe4988e`, Sonnet worker).
+  Six journeys (`fl-a` … `fl-f`), each runnable with the course check ON and OFF, each ending in an
+  assertion read from `user_facts` / `workout_plans` — not from the coach's prose, which is the whole
+  point after the 2026-09-21 smoke found the coach announcing a retraction that never happened. The
+  runner gained the on/off switch, per-step scripting, fact-id placeholders and a pg-pool release (12
+  runs had been exhausting DB connections). Pinned by five mutations of PRODUCTION code, each failing
+  the journeys: equal-time stale evidence accepted (5 fail), a retract that writes nothing (17), every
+  constraint blocking again (6), a delete that only archives (6), an update that does not move
+  `review_after` (7).
+  **Journey (d) deliberately stops short**, per my ruling on the worker's `ask`: the recurrence →
+  `physiological_pattern` promotion does not exist anywhere in the code, so (d) asserts the three-row
+  `supersedes_id` chain (2 archived, 1 active) and marks the missing ending as `it.todo` rather than
+  faking it by scripting the coach to write the pattern fact. The gap and the three owner decisions it
+  needs are recorded in `BACKLOG.md`.
+  Orchestrator re-ran on the committed tree: `npm run test:scenarios` 5 suites / 300 tests (298 passed,
+  2 todo), L0 96/96, `npm run test:unit` 1078.
+  Two further findings from the worker, both recorded rather than silently fixed: the `fl-*` group is
+  selectable with `--scenario fact-lifecycle` but is not in the default L3 run (it would cross the call
+  ceiling), and live L3 judges review dates strictly, so a model answering 28 where the journey expects
+  30 review days would fail journey (a) on a live run. **The third finding became its own task below.**
 
 **Verification:** `npm run test:scenarios` → green; L0 green.
 
