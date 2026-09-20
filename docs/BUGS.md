@@ -1071,3 +1071,69 @@ blindly — the wasted 129 s. Nothing logs `finish_reason`, so the truncation is
 8.8 s. Realistic prompt (~4.5 k prompt tokens + the `search_exercises` tool) — 5.3 as-is 8.8 s,
 285 completion tokens, 5 tool calls / 5.3 `low` 5.0 s, 65 completion tokens, 3 tool calls. Low effort
 roughly halves per-call latency and cuts the number of tool round-trips.
+
+---
+
+## BUG-020 — `list_facts` never prints the fact id, so the coach can neither retract nor delete a fact — and says it did
+
+**Status:** Open (found 2026-09-21 by the fact-lifecycle wave-A dev smoke)
+**Severity:** High — it breaks AC-FL-2 / AC-FL-8 in the only way the user can see, and the coach reports success it did not achieve
+**Found during:** Orchestrator dev smoke on `bd75508e`, throwaway user `smoke_factlife`
+**Component:** `apps/server/src/infra/ai/tools/list-facts.tool.ts` (`activeLine` / `archivedLine`), `infra/ai/tools/manage-fact.tool.ts`
+
+### Description
+
+`manage_fact` requires `factId` for `retract` and `delete`, and both tool descriptions tell the model to
+copy the id verbatim from `list_facts`. `list_facts` renders each fact as
+`- <text> — <durability>, <n>× confirmed, updated <date>` and **never emits the id**. The id therefore
+cannot be obtained through any conversational path, and retract/delete are structurally impossible.
+
+### Evidence
+
+The smoke wrote one fact correctly (`manage_fact save`, `durability=short`, `expires_at` +7 d,
+`on_expiry=ask_once`) and listed it correctly. Then:
+
+- «Поясница уже прошла, всё нормально, забудь про неё» → `conversation_runs.tool_calls` =
+  `manage_fact` → `llm_error`, then `list_facts` → `ok`. The reply told the user the constraint was no
+  longer applied; `user_facts` still held `status='active'`, no `closed_by_user_at`, no `archived_at`.
+- «Удали … полностью. Подтверждаю удаление» → the model answered that it could not see the record's
+  identifier and asked the user to repeat the command.
+- «удалить» → the model answered that it had a technical problem, could not delete, and then claimed the
+  fact was "marked as not applicable" — which is false: the row was still `active`.
+
+The model's stated cause was correct; the final reassurance was not. That last sentence is the same
+narrate-instead-of-act family as BUG-014/BUG-015, but here the tool genuinely could not be called.
+
+### Root cause
+
+A cross-tool contract that no test covers: the unit and integration tests call the port directly with an
+id in hand, so nothing exercises "obtain the id the way the model must obtain it". Both tool descriptions
+assert a fact about the other tool's output that is not true.
+
+### Fix
+
+Emit the id on every `list_facts` line (active and archived) in a form that is unmistakably copyable, and
+pin the contract with a test that asserts the rendered line contains the fact's id. Consider additionally
+letting `manage_fact` resolve an unambiguous fact by text when `factId` is absent, and return the
+candidates when it is ambiguous — the model reached for that behaviour twice.
+
+---
+
+## BUG-021 — The tool schema-rejection hint always talks about `search_exercises`
+
+**Status:** Fix in progress (2026-09-21, branch `fix/tool-schema-hint`)
+**Severity:** Medium — the only recovery cue a model gets after a schema rejection points at an unrelated tool
+**Component:** `apps/server/src/infra/ai/graph/tool-executor.ts:160-170`
+
+### Description
+
+Any tool input that fails Zod validation gets this appended, regardless of which tool failed:
+`Fix the arguments and call <tool> again: every id must be a UUID copied verbatim from the search_exercises
+results (the "ID:..." line), never invented or abbreviated.` It was written for a 2026-09-17 exercise-id
+smoke. In the 2026-09-21 fact-lifecycle smoke the failing call was `manage_fact` with an invalid
+`operation` enum value, and the hint sent the model looking for exercise ids that play no part in it.
+
+### Fix
+
+Generic cue by default ("correct the arguments and call that tool again" — the Zod message above it already
+names the offending field); the `search_exercises` sentence only when the rejection concerns an exercise id.
