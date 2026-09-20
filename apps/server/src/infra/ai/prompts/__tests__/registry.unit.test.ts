@@ -13,9 +13,9 @@ describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVer
     ]);
   });
 
-  it('promptVersionsForPhase(training) lists the phase (v2, P4 context-budget plan Task 2, D-B), its directives and the shared blocks', () => {
+  it('promptVersionsForPhase(training) lists the phase (v3 — exerciseId / search_exercises tool rules; v2 was P4 Task 2, D-B), its directives and the shared blocks', () => {
     const versions = promptVersionsForPhase('training');
-    expect(versions['phase.training']).toBe('v2');
+    expect(versions['phase.training']).toBe('v3');
     expect(versions['directive.identity']).toBeUndefined(); // training has no identity directive
     expect(versions['directive.tool-reply']).toBe('v1');
     expect(versions['block.episode_summaries']).toBe('v1');

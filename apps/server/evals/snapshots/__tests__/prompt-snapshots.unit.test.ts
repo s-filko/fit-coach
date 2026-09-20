@@ -9,7 +9,7 @@ import { CHAT_PROMPT, CHAT_V1 } from '@infra/ai/prompts/phases/chat';
 import { PLAN_CREATION_PROMPT, PLAN_CREATION_V1 } from '@infra/ai/prompts/phases/plan_creation';
 import { REGISTRATION_PROMPT } from '@infra/ai/prompts/phases/registration';
 import { SESSION_PLANNING_PROMPT, SESSION_PLANNING_V1 } from '@infra/ai/prompts/phases/session_planning';
-import { TRAINING_PROMPT, TRAINING_V1 } from '@infra/ai/prompts/phases/training';
+import { TRAINING_PROMPT, TRAINING_V1, TRAINING_V2 } from '@infra/ai/prompts/phases/training';
 import { SUMMARIZER_V1, SUMMARIZER_V2, SUMMARIZER_V3 } from '@infra/ai/prompts/summarizer';
 
 import { ALL_FIXTURES } from '../../fixtures/personas';
@@ -100,7 +100,9 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
     // v2 (P4 context-budget plan, Task 2, D-B): v1 minus the moved domain
     // sections — CHAT_PROMPT/PLAN_CREATION_PROMPT/SESSION_PLANNING_PROMPT/
     // TRAINING_PROMPT's `.current` is v2 as of this plan. New snapshots
-    // (v1's stay pinned above, untouched).
+    // (v1's stay pinned above, untouched). Training moved on to v3 (log_set
+    // exerciseId rules + search_exercises): its v2 snapshot is pinned to
+    // TRAINING_V2 below, v3 gets its own.
     it(`phase.chat v2 / ${name}`, () => {
       const ctx = {
         now: FIXED_NOW,
@@ -138,6 +140,17 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
     });
 
     it(`phase.training v2 / ${name}`, () => {
+      const ctx = {
+        now: FIXED_NOW,
+        timezone: user.timezone ?? null,
+        client: 'telegram' as const,
+        user,
+        lastMessageTime: null,
+      };
+      expect(compose(TRAINING_V2.render(ctx))).toMatchSnapshot();
+    });
+
+    it(`phase.training v3 / ${name}`, () => {
       const ctx = {
         now: FIXED_NOW,
         timezone: user.timezone ?? null,
