@@ -1,4 +1,4 @@
-import type { EpisodeSummary } from '../episode';
+import type { EpisodeSummary, EpisodeSummaryV4 } from '../episode';
 import type { ConversationPhase } from '../phases';
 
 /**
@@ -13,7 +13,8 @@ export interface InsertSummaryInput {
   runId: string;
   episodeId: string;
   phaseAtEnd: ConversationPhase;
-  structured: EpisodeSummary;
+  /** v3 (legacy, `facts`) or v4 (`factOperations`) — renderers read only the five list fields. */
+  structured: EpisodeSummary | EpisodeSummaryV4;
   rendered: string;
 }
 

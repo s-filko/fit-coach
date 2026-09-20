@@ -215,16 +215,21 @@ export async function seedScenarioRows(past: Scenario['past'], t0: Date): Promis
     await seedWorkout(userId, workout, planId, exerciseIds, t0);
   }
 
-  // Facts through the real repository — the idempotent upsert with its
-  // confirmation counter is exactly what compaction goes through.
-  if (past.facts.length > 0) {
-    await new UserFactsRepository().upsertMany(
+  // Facts through the real repository. Pre-Task-3 this was the blind upsert;
+  // now the write path is rememberFact — seeded history facts are permanent
+  // and explicitly stated (the fixture authors them as standing truths).
+  const factsRepo = new UserFactsRepository();
+  for (const f of past.facts) {
+    await factsRepo.rememberFact(
       userId,
-      past.facts.map(f => ({
+      {
         category: f.category,
         fact: f.fact,
         ...(f.muscleGroup !== undefined && f.muscleGroup !== null ? { muscleGroup: f.muscleGroup } : {}),
-      })),
+        durability: 'permanent',
+        explicitPermanent: true,
+      },
+      t0,
     );
   }
 

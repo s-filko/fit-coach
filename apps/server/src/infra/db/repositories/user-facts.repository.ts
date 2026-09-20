@@ -6,7 +6,7 @@ import type {
   IUserFactsService,
   RememberFactInput,
   RememberFactOutcome,
-  UpsertFactInput,
+  SupersedeFactInput,
   UserFact,
 } from '@domain/user/ports';
 import { computeFactKey } from '@domain/user/services/fact-key';
@@ -53,39 +53,6 @@ function visibleAt(now: Date) {
 
 /** Drizzle implementation of {@link IUserFactsService} (ADR-0009 table shape, D-B/D-C). */
 export class UserFactsRepository implements IUserFactsService {
-  async upsertMany(userId: string, facts: UpsertFactInput[], sourceTurnId?: string): Promise<number> {
-    let count = 0;
-    for (const input of facts) {
-      const factKey = computeFactKey(input.fact);
-      await db
-        .insert(userFacts)
-        .values({
-          userId,
-          category: input.category,
-          fact: input.fact,
-          factKey,
-          muscleGroup: input.muscleGroup ?? null,
-          sourceTurnId: sourceTurnId ?? null,
-        })
-        .onConflictDoUpdate({
-          target: [userFacts.userId, userFacts.category, userFacts.factKey],
-          // The conflict target is the PARTIAL unique index (active rows only) —
-          // its predicate must be repeated for Postgres to accept the target.
-          // An archived row with the same key does not conflict: the insert
-          // lands as a new row instead of touching the closed one (AC-FL-3).
-          targetWhere: sql`status = 'active'`,
-          // D-C: the stored `fact` text is never rewritten — only the counter and
-          // timestamp move on a repeat.
-          set: {
-            confirmations: sql`${userFacts.confirmations} + 1`,
-            updatedAt: sql`now()`,
-          },
-        });
-      count += 1;
-    }
-    return count;
-  }
-
   async getForPrompt(userId: string, now: Date, cap = 50): Promise<UserFact[]> {
     const rows = await db
       .select()
@@ -104,7 +71,12 @@ export class UserFactsRepository implements IUserFactsService {
     return rows.filter(row => row.muscleGroup !== null).map(toUserFact);
   }
 
-  async rememberFact(userId: string, input: RememberFactInput, now: Date): Promise<RememberFactOutcome> {
+  async rememberFact(
+    userId: string,
+    input: RememberFactInput,
+    now: Date,
+    sourceTurnId?: string,
+  ): Promise<RememberFactOutcome> {
     const factKey = computeFactKey(input.fact);
     // A correction references the row by id (the corrected text normalises to a
     // NEW key); without an id, the (userId, category, factKey) unique index is
@@ -172,6 +144,7 @@ export class UserFactsRepository implements IUserFactsService {
           // A genuinely new statement replacing a KNOWN closed fact keeps the link (AC-FL-3).
           supersedesId: input.supersedesFactId ?? null,
           context: input.context ?? null,
+          sourceTurnId: sourceTurnId ?? null,
           ...lifecycleValues,
           createdAt: now,
           updatedAt: now,
@@ -196,6 +169,7 @@ export class UserFactsRepository implements IUserFactsService {
           confirmations: 1,
           supersedesId: input.supersedesFactId ?? existing.id,
           context: input.context ?? null,
+          sourceTurnId: sourceTurnId ?? null,
           ...lifecycleValues,
           createdAt: now,
           updatedAt: now,
@@ -224,7 +198,11 @@ export class UserFactsRepository implements IUserFactsService {
     return { outcome: 'updated', fact: toUserFact(row) };
   }
 
-  async retractFact(userId: string, input: { factId: string }, now: Date): Promise<UserFact | null> {
+  async retractFact(
+    userId: string,
+    input: { factId: string; evidenceAt?: Date; reason?: string },
+    now: Date,
+  ): Promise<UserFact | null> {
     const [existingRow] = await db
       .select()
       .from(userFacts)
@@ -237,18 +215,104 @@ export class UserFactsRepository implements IUserFactsService {
       // Idempotent: the first closure is kept, never re-stamped.
       return existing;
     }
+    // AC-FL-3/AC-FL-4: the closure is stamped WHEN THE RETRACTION WAS STATED —
+    // the episode clock on the summariser path, `now` in live conversation —
+    // so the stale-evidence guard compares against the right moment. `now`
+    // stays the clock for updatedAt.
+    const closureAt = input.evidenceAt ?? now;
     const [row] = await db
       .update(userFacts)
       .set({
         status: 'archived',
         archivedAt: now,
         archivedReason: 'user_closed',
-        closedByUserAt: now,
+        closedByUserAt: closureAt,
+        // The summariser's rationale is "how we learned this" — the retraction.
+        ...(input.reason != null ? { context: input.reason } : {}),
         updatedAt: now,
       })
       .where(eq(userFacts.id, existing.id))
       .returning();
     return toUserFact(row);
+  }
+
+  async confirmFact(userId: string, factId: string, now: Date): Promise<boolean> {
+    const rows = await db
+      .update(userFacts)
+      .set({ confirmations: sql`${userFacts.confirmations} + 1`, updatedAt: now })
+      // D-C: only the counter and timestamp move — the text is never rewritten.
+      // Active rows only: a closed fact is never confirmed back to life.
+      .where(and(eq(userFacts.id, factId), eq(userFacts.userId, userId), eq(userFacts.status, 'active')))
+      .returning({ id: userFacts.id });
+    return rows.length > 0;
+  }
+
+  async supersedeFact(
+    userId: string,
+    input: SupersedeFactInput,
+    evidenceAt: Date,
+    now: Date,
+    sourceTurnId?: string,
+  ): Promise<RememberFactOutcome | null> {
+    const [existingRow] = await db
+      .select()
+      .from(userFacts)
+      .where(and(eq(userFacts.id, input.factId), eq(userFacts.userId, userId)));
+    if (existingRow === undefined) {
+      return null;
+    }
+    const existing = toUserFact(existingRow);
+
+    // A user-closed fact is never re-added (AC-FL-3): superseding it from an
+    // episode no newer than the closure is stale evidence — skip.
+    if (existing.status === 'archived') {
+      const closureAt = existing.closedByUserAt ?? existing.archivedAt;
+      if (closureAt !== null && evidenceAt.getTime() <= closureAt.getTime()) {
+        return { outcome: 'skipped_stale_evidence', fact: existing };
+      }
+    }
+
+    const lifecycle = resolveLifecycle(input, now, {
+      explicit: false,
+      confirmations: 1, // a superseding statement starts its own history
+    });
+
+    // The old row is archived with its text and history intact — only its
+    // status/reason move; the new row below carries the corrected statement.
+    await db
+      .update(userFacts)
+      .set({
+        status: 'archived',
+        archivedAt: now,
+        archivedReason: 'superseded',
+        updatedAt: now,
+      })
+      .where(eq(userFacts.id, existing.id));
+
+    const factKey = computeFactKey(input.fact);
+    const [newRow] = await db
+      .insert(userFacts)
+      .values({
+        userId,
+        category: input.category,
+        fact: input.fact,
+        factKey,
+        muscleGroup: input.muscleGroup ?? null,
+        confirmations: 1,
+        supersedesId: existing.id,
+        context: input.context ?? null,
+        sourceTurnId: sourceTurnId ?? null,
+        durability: lifecycle.durability,
+        expiresAt: lifecycle.expiresAt,
+        reviewAfter: lifecycle.reviewAfter,
+        onExpiry: lifecycle.onExpiry,
+        phaseNote: input.phaseNote ?? null,
+        phaseAt: input.phaseNote != null ? now : null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    return { outcome: 'created', fact: toUserFact(newRow) };
   }
 
   async deleteFact(userId: string, factId: string): Promise<boolean> {

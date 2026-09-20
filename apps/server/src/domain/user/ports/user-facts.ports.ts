@@ -47,6 +47,7 @@ export type {
   FactOnExpiry,
   FactStatus,
 } from '@domain/user/services/fact-lifecycle';
+export { FACT_DURABILITIES, FACT_ON_EXPIRY } from '@domain/user/services/fact-lifecycle';
 import type {
   FactArchivedReason,
   FactDurability,
@@ -88,11 +89,23 @@ export interface UserFact {
   context: string | null;
 }
 
-/** Input to an idempotent upsert — one fact extracted by the summariser. */
-export interface UpsertFactInput {
+/**
+ * Input to a summariser `update` operation (AC-FL-4): the new statement that
+ * supersedes a known active fact — the old row is archived (reason
+ * `superseded`) and a NEW row is created linked via supersedes_id.
+ */
+export interface SupersedeFactInput {
+  /** The active fact being superseded, verbatim from the summariser's known-facts list. */
+  factId: string;
   category: FactCategory;
   fact: string;
   muscleGroup?: string | null;
+  durability: FactDurability;
+  ttlDays?: number;
+  reviewInDays?: number;
+  phaseNote?: string | null;
+  onExpiry?: FactOnExpiry;
+  context?: string | null;
 }
 
 /**
@@ -160,14 +173,6 @@ export const USER_FACTS_SERVICE_TOKEN = Symbol('UserFactsService');
 
 export interface IUserFactsService {
   /**
-   * Idempotent upsert of extracted facts (D-C): normalises each fact's text into a
-   * `factKey`, and upserts on the unique (userId, category, factKey) index — a repeat
-   * increments `confirmations` and `updatedAt` without rewriting `fact`. Returns the
-   * number of rows written or confirmed.
-   */
-  upsertMany(userId: string, facts: UpsertFactInput[], sourceTurnId?: string): Promise<number>;
-
-  /**
    * Facts for prompt rendering (block 2), ordered by category then recency, capped.
    * AC-FL-1: archived and expired facts are excluded — `now` is the run clock
    * (ctx.now), passed by the caller, never read from the DB or a fresh clock.
@@ -191,15 +196,50 @@ export interface IUserFactsService {
    * defaulting to `now`) is skipped. Bounds and the `permanent` gate are applied here
    * via `resolveLifecycle`; throws `PermanentFactRefusal` when the gate does not open.
    */
-  rememberFact(userId: string, input: RememberFactInput, now: Date): Promise<RememberFactOutcome>;
+  rememberFact(
+    userId: string,
+    input: RememberFactInput,
+    now: Date,
+    /** Provenance: the summary turn the extraction came from (fact-lifecycle Task 1). */
+    sourceTurnId?: string,
+  ): Promise<RememberFactOutcome>;
 
   /**
-   * Archives one fact — the user's "that's not true / it's fine now" (AC-FL-2): the
-   * row, its history and its confirmation counter stay; `closed_by_user_at` is set;
-   * it never renders and is never re-asked (AC-FL-3). Idempotent: an already-archived
-   * fact returns unchanged. Null when the id matches no fact of this user.
+   * A summariser `confirm` (AC-FL-4): bumps `confirmations` and `updatedAt` on the
+   * ACTIVE row — the stored text is never rewritten (D-C). False when the id matches
+   * no active fact of this user (already closed, deleted or invented — skip silently).
    */
-  retractFact(userId: string, input: { factId: string }, now: Date): Promise<UserFact | null>;
+  confirmFact(userId: string, factId: string, now: Date): Promise<boolean>;
+
+  /**
+   * A summariser `update` (AC-FL-4): archives the target row (reason `superseded`,
+   * `archived_at` = `now`) and creates a NEW active row linked via supersedes_id —
+   * the lifecycle bounds apply as in {@link rememberFact}. Null when the target is
+   * missing; `skipped_stale_evidence` when the target is user-closed and the
+   * evidence is not newer than that closure (a closed fact is never re-added, AC-FL-3).
+   */
+  supersedeFact(
+    userId: string,
+    input: SupersedeFactInput,
+    evidenceAt: Date,
+    now: Date,
+    sourceTurnId?: string,
+  ): Promise<RememberFactOutcome | null>;
+
+  /**
+   * Archives one fact — the user's "that's not true / it's fine now" (AC-FL-2, or the
+   * summariser's `retract` op, AC-FL-4): the row, its history and its confirmation
+   * counter stay; `closed_by_user_at` is set; it never renders and is never re-asked
+   * (AC-FL-3). `evidenceAt` (default `now`) is WHEN the retraction was stated — the
+   * summariser path passes the episode clock so the stale-evidence guard holds; a
+   * short `reason` (the summariser's rationale) lands in `context`. Idempotent: an
+   * already-archived fact returns unchanged. Null when the id matches no fact.
+   */
+  retractFact(
+    userId: string,
+    input: { factId: string; evidenceAt?: Date; reason?: string },
+    now: Date,
+  ): Promise<UserFact | null>;
 
   /**
    * Deletes one fact ENTIRELY — the user's "I don't want you storing that"

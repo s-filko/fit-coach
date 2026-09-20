@@ -175,12 +175,12 @@ no trace). The tool exposes both; the model picks by intent and asks when the re
 **Files:** `apps/server/src/infra/ai/prompts/summarizer/v4.ts` (+ schema), `graph/nodes/compact.node.ts`
 (passes the active facts in, applies the returned operations), tests.
 
-- [ ] **Step 1: Tests first** — known facts reach the summariser prompt; `confirm` bumps the counter
+- [x] **Step 1: Tests first** — known facts reach the summariser prompt; `confirm` bumps the counter
   without rewriting text; `update` supersedes with a link; `retract` archives with a reason; a
   user-closed fact is never re-added; extraction failure stays non-fatal.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `feat(memory): summariser v4 returns fact operations, not blind upserts (AC-FL-4)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 2: Implement.**
+- [x] **Step 3: Commit** — `feat(memory): summariser v4 returns fact operations, not blind upserts (AC-FL-4)`
+- [x] **Step 4: STOP** for orchestrator review.
 
 **Verification:** as Task 1.
 

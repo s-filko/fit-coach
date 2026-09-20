@@ -1,4 +1,4 @@
-import { EpisodeSummarySchema, type EpisodeSummary } from '../episode';
+import { EpisodeSummarySchema, EpisodeSummaryV4Schema, type EpisodeSummary } from '../episode';
 
 describe('EpisodeSummarySchema (ADR-0013 §3.3, D-C)', () => {
   it('round-trips a full summary', () => {
@@ -100,5 +100,66 @@ describe('EpisodeSummarySchema (ADR-0013 §3.3, D-C)', () => {
     it('rejects a fact entry missing the fact text', () => {
       expect(() => EpisodeSummarySchema.parse({ ...base, facts: [{ category: 'equipment' }] })).toThrow();
     });
+  });
+});
+
+describe('EpisodeSummaryV4Schema (fact-lifecycle Task 3, AC-FL-4 — operations, not a blind upsert)', () => {
+  const base = {
+    topics: ['plan discussed'],
+    decisions: [],
+    userState: [],
+    trainingFeedback: [],
+    openItems: [],
+  };
+
+  it('parses all four operations with their fields', () => {
+    const summary = {
+      ...base,
+      factOperations: [
+        {
+          op: 'add',
+          category: 'physical_constraint',
+          fact: 'Broken wrist',
+          muscleGroup: 'shoulders_front',
+          durability: 'long_term',
+          reviewInDays: 60,
+          phaseNote: 'in a cast',
+        },
+        { op: 'confirm', factId: '5b0f8a3e-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+        {
+          op: 'update',
+          factId: '5b0f8a3e-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          fact: 'Trains at home with dumbbells up to 20kg',
+          category: 'equipment',
+          durability: 'permanent',
+        },
+        {
+          op: 'retract',
+          factId: '5b0f8a3e-cccc-4ccc-8ccc-cccccccccccc',
+          reason: 'the user said the shoulder is fine now',
+        },
+      ],
+    };
+    expect(EpisodeSummaryV4Schema.parse(summary)).toEqual(summary);
+  });
+
+  it("keeps v3's strictness: an unknown operation or field is rejected", () => {
+    expect(() =>
+      EpisodeSummaryV4Schema.parse({
+        ...base,
+        factOperations: [{ op: 'delete', factId: '5b0f8a3e-dddd-4ddd-8ddd-dddddddddddd' }],
+      }),
+    ).toThrow();
+    expect(() => EpisodeSummaryV4Schema.parse({ ...base, factOperations: [], extra: 1 })).toThrow();
+  });
+
+  it('fact ids must be real uuids — an invented id is a schema rejection, not a silent no-op', () => {
+    expect(() =>
+      EpisodeSummaryV4Schema.parse({ ...base, factOperations: [{ op: 'confirm', factId: 'fact-1' }] }),
+    ).toThrow();
+  });
+
+  it('an empty operations array is the expected common answer', () => {
+    expect(EpisodeSummaryV4Schema.parse({ ...base, factOperations: [] }).factOperations).toEqual([]);
   });
 });

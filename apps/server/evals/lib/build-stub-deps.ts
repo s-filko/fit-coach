@@ -397,22 +397,23 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
       },
       latestLegacySummary: async () => null,
     },
-    // P6 Task 3: facts are never WRITTEN in evals — the summariser stand-in above
-    // returns an empty facts array, so upsertMany is never even called (compact.node
-    // skips the call when facts.length === 0). Reading is the fixture's business
-    // (P6 Task 6): getForPrompt returns the fixture rows as-is (the fixture is
-    // authored in the port's category-then-recency order); getConstraints applies
-    // the real port's subset — physical_constraint with a non-null muscleGroup.
+    // Facts are never WRITTEN in evals — the summariser stand-in above returns
+    // an empty fact_operations array, so the operation application is skipped
+    // entirely (compact.node). Reading is the fixture's business: getForPrompt
+    // returns the fixture rows as-is (the fixture is authored in the port's
+    // category-then-recency order); getConstraints applies the real port's
+    // subset — physical_constraint with a non-null muscleGroup.
     userFacts: {
-      // Task 2 methods are stubs: evals use mocked models that never call the
+      // Write methods are stubs: evals use mocked models that never call the
       // memory tools; they exist only to satisfy the port's surface.
       rememberFact: async () => {
         throw new Error('not implemented in eval stubs');
       },
+      confirmFact: async () => false,
+      supersedeFact: async () => null,
       retractFact: async () => null,
       deleteFact: async () => false,
       listFacts: async () => ({ active: [], archived: [] }),
-      upsertMany: async () => 0,
       getForPrompt: async () => facts,
       getConstraints: async () =>
         facts.filter(fact => fact.category === 'physical_constraint' && fact.muscleGroup !== null),

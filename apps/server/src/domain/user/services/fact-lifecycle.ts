@@ -22,6 +22,10 @@ export type FactStatus = 'active' | 'archived';
 /** Why a fact was archived. */
 export type FactArchivedReason = 'user_closed' | 'expired' | 'superseded';
 
+/** `as const` tuples (not `readonly T[]`) so `z.enum(...)` infers the literal unions. */
+export const FACT_DURABILITIES = ['permanent', 'long_term', 'short'] as const satisfies readonly FactDurability[];
+export const FACT_ON_EXPIRY = ['forget', 'ask_once'] as const satisfies readonly FactOnExpiry[];
+
 /** The single source of the class numbers — clamp bounds and the permanent gate threshold. */
 export const FACT_LIFECYCLE_BOUNDS = {
   /** Short (DOMS, bad sleep, food poisoning): a TTL of 1–14 days. */

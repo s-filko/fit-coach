@@ -46,23 +46,42 @@ describe('UserFactsRepository – integration', () => {
     });
   }
 
-  describe('upsertMany (D-C idempotent upsert)', () => {
-    it('inserting the same normalised fact twice yields one row with confirmations = 2 and unchanged fact text', async () => {
-      await repository.upsertMany(testUserId, [{ category: 'physical_constraint', fact: 'Bad lower back.' }]);
-      await repository.upsertMany(testUserId, [{ category: 'physical_constraint', fact: 'bad lower back' }]);
+
+  /** rememberFact shorthand for legacy-seeding-style assertions (permanent, explicitly stated). */
+  async function remember(
+    userId: string,
+    fact: string,
+    category: string,
+    extra: { muscleGroup?: string; sourceTurnId?: string } = {},
+  ) {
+    return repository.rememberFact(
+      userId,
+      { category: category as never, fact, durability: 'permanent', explicitPermanent: true, ...extra },
+      FAR_FUTURE,
+      extra.sourceTurnId,
+    );
+  }
+
+  describe('rememberFact writes (D-C dedupe on the active partial index)', () => {
+    it('the same normalised fact twice yields ONE row with confirmations = 2 (the text moves with a correction)', async () => {
+      await remember(testUserId, 'Bad lower back.', 'physical_constraint');
+      await remember(testUserId, 'bad lower back', 'physical_constraint');
 
       const facts = await repository.getForPrompt(testUserId, FAR_FUTURE);
-      const matches = facts.filter(f => f.category === 'physical_constraint' && f.fact === 'Bad lower back.');
+      const matches = facts.filter(f => f.category === 'physical_constraint' && f.factKey === 'bad lower back');
 
       expect(matches).toHaveLength(1);
       expect(matches[0]!.confirmations).toBe(2);
-      expect(matches[0]!.fact).toBe('Bad lower back.');
+      // The second write is a correction in Task-2 semantics — the text moved.
+      // D-C ("the text never moves on a repeat") lives in confirmFact now
+      // (the summariser's confirm op) — pinned in the fact-operations describe.
+      expect(matches[0]!.fact).toBe('bad lower back');
     });
 
     it('a different category with the same text yields a second row', async () => {
       const fact = 'Loves squats';
-      await repository.upsertMany(testUserId, [{ category: 'exercise_preference', fact }]);
-      await repository.upsertMany(testUserId, [{ category: 'coaching_preference', fact }]);
+      await remember(testUserId, fact, 'exercise_preference');
+      await remember(testUserId, fact, 'coaching_preference');
 
       const facts = await repository.getForPrompt(testUserId, FAR_FUTURE);
       const matches = facts.filter(f => f.fact === fact);
@@ -77,11 +96,10 @@ describe('UserFactsRepository – integration', () => {
         .insert(conversationTurns)
         .values({ userId: testUserId, phase: 'chat', role: 'user', content: 'колено болит' })
         .returning({ id: conversationTurns.id });
-      await repository.upsertMany(
-        testUserId,
-        [{ category: 'physical_constraint', fact: 'Knee pain on lunges', muscleGroup: 'quads' }],
-        turn!.id,
-      );
+      await remember(testUserId, 'Knee pain on lunges', 'physical_constraint', {
+        muscleGroup: 'quads',
+        sourceTurnId: turn!.id,
+      });
 
       const facts = await repository.getForPrompt(testUserId, FAR_FUTURE);
       const match = facts.find(f => f.fact === 'Knee pain on lunges');
@@ -91,8 +109,8 @@ describe('UserFactsRepository – integration', () => {
       expect(match!.sourceTurnId).toBe(turn!.id);
     });
 
-    it('defaults a new row to durability=permanent, status=active, no dates (AC-FL-1: nothing changes today)', async () => {
-      await repository.upsertMany(testUserId, [{ category: 'equipment', fact: 'Has a barbell' }]);
+    it('defaults a new row to status=active with its lifecycle resolved (AC-FL-1)', async () => {
+      await remember(testUserId, 'Has a barbell', 'equipment');
 
       const facts = await repository.getForPrompt(testUserId, FAR_FUTURE);
       const match = facts.find(f => f.fact === 'Has a barbell');
@@ -116,11 +134,9 @@ describe('UserFactsRepository – integration', () => {
       const userData = createTestUserData({ username: 'user_facts_cap_user' });
       const user = await userRepo.create(userData);
 
-      await repository.upsertMany(user.id, [
-        { category: 'equipment', fact: 'Has a barbell' },
-        { category: 'equipment', fact: 'Has dumbbells' },
-        { category: 'nutrition_preference', fact: 'Vegetarian' },
-      ]);
+      await remember(user.id, 'Has a barbell', 'equipment');
+      await remember(user.id, 'Has dumbbells', 'equipment');
+      await remember(user.id, 'Vegetarian', 'nutrition_preference');
 
       const capped = await repository.getForPrompt(user.id, FAR_FUTURE, 2);
       expect(capped).toHaveLength(2);
@@ -178,11 +194,9 @@ describe('UserFactsRepository – integration', () => {
       const userData = createTestUserData({ username: 'user_facts_constraints_user' });
       const user = await userRepo.create(userData);
 
-      await repository.upsertMany(user.id, [
-        { category: 'physical_constraint', fact: 'Herniated disc', muscleGroup: 'lower_back' },
-        { category: 'physical_constraint', fact: 'Gets tired easily' }, // no muscleGroup
-        { category: 'exercise_preference', fact: 'Prefers barbell rows', muscleGroup: 'back_lats' },
-      ]);
+      await remember(user.id, 'Herniated disc', 'physical_constraint', { muscleGroup: 'lower_back' });
+      await remember(user.id, 'Gets tired easily', 'physical_constraint'); // no muscleGroup
+      await remember(user.id, 'Prefers barbell rows', 'exercise_preference', { muscleGroup: 'back_lats' });
 
       const constraints = await repository.getConstraints(user.id, FAR_FUTURE);
 
@@ -363,17 +377,112 @@ describe('UserFactsRepository – integration', () => {
       expect(again.fact.supersedesId).toBe(closedId);
     });
 
-    it('the summariser upsert still dedupes against ACTIVE rows (partial unique index)', async () => {
-      const userData = createTestUserData({ username: 'user_facts_partial_idx_user' });
+    it('confirmFact bumps the counter WITHOUT rewriting the text (D-C) and skips non-active rows', async () => {
+      const userData = createTestUserData({ username: 'user_facts_confirm_user' });
       const user = await userRepo.create(userData);
       const NOW = new Date('2026-09-21T12:00:00Z');
 
-      await repository.upsertMany(user.id, [{ category: 'equipment', fact: 'Has a barbell.' }]);
-      await repository.upsertMany(user.id, [{ category: 'equipment', fact: 'has a barbell' }]);
+      const created = await remember(user.id, 'Trains at home with dumbbells only', 'equipment');
+      const factId = created.outcome === 'created' ? created.fact.id : null;
+      if (factId === null) throw new Error('expected created');
+      const before = (await repository.getForPrompt(user.id, NOW))[0]!;
 
-      const rows = await repository.getForPrompt(user.id, NOW);
-      expect(rows).toHaveLength(1);
-      expect(rows[0]!.confirmations).toBe(2);
+      await expect(repository.confirmFact(user.id, factId, NOW)).resolves.toBe(true);
+      await expect(repository.confirmFact(user.id, '00000000-0000-4000-8000-0000000000ff', NOW)).resolves.toBe(false);
+
+      const after = (await repository.getForPrompt(user.id, NOW))[0]!;
+      expect(after.confirmations).toBe(before.confirmations + 1);
+      expect(after.fact).toBe(before.fact); // D-C: the text never moves
+      expect(after.updatedAt).toEqual(NOW); // the run clock, not the DB clock
+
+      // An archived row is never confirmed back to life.
+      await repository.retractFact(user.id, { factId }, NOW);
+      await expect(repository.confirmFact(user.id, factId, NOW)).resolves.toBe(false);
+    });
+
+    it('supersedeFact archives the old row (reason superseded) and creates a NEW linked row', async () => {
+      const userData = createTestUserData({ username: 'user_facts_supersede_op_user' });
+      const user = await userRepo.create(userData);
+      const T0 = new Date('2026-09-21T12:00:00Z');
+
+      const created = await remember(user.id, 'Dumbbells up to 12kg', 'equipment');
+      const oldId = created.outcome === 'created' ? created.fact.id : null;
+      if (oldId === null) throw new Error('expected created');
+
+      const result = await repository.supersedeFact(
+        user.id,
+        { factId: oldId, category: 'equipment', fact: 'Dumbbells up to 20kg', durability: 'short', ttlDays: 14 },
+        T0,
+        T0,
+      );
+
+      expect(result?.outcome).toBe('created');
+      const listing = await repository.listFacts(user.id, true, T0);
+      expect(listing.active.map(f => f.id)).not.toContain(oldId);
+      const old = listing.archived.find(f => f.id === oldId);
+      expect(old).toMatchObject({ status: 'archived', archivedReason: 'superseded', fact: 'Dumbbells up to 12kg' });
+      const fresh = listing.active.find(f => f.fact === 'Dumbbells up to 20kg');
+      expect(fresh?.supersedesId).toBe(oldId);
+    });
+
+    it('supersedeFact never re-adds a user-closed fact from stale evidence (AC-FL-3)', async () => {
+      const userData = createTestUserData({ username: 'user_facts_supersede_stale_user' });
+      const user = await userRepo.create(userData);
+      const T0 = new Date('2026-09-21T09:00:00Z');
+      const T1 = new Date('2026-09-21T18:00:00Z'); // closure
+      const T2 = new Date('2026-09-21T20:00:00Z'); // run clock
+
+      const created = await remember(user.id, 'Shoulder tweak', 'physical_constraint', { muscleGroup: 'shoulders_front' });
+      const factId = created.outcome === 'created' ? created.fact.id : null;
+      if (factId === null) throw new Error('expected created');
+      await repository.retractFact(user.id, { factId }, T1);
+
+      const stale = await repository.supersedeFact(
+        user.id,
+        { factId, category: 'physical_constraint', fact: 'Shoulder fully recovered', durability: 'short', ttlDays: 5 },
+        T0, // evidence predates the closure
+        T2,
+      );
+      expect(stale).toMatchObject({ outcome: 'skipped_stale_evidence' });
+      const listing = await repository.listFacts(user.id, true, T2);
+      expect(listing.active).toEqual([]);
+    });
+
+    it('retractFact stamps the closure at the EVIDENCE time (the summariser clock), updatedAt at the run clock', async () => {
+      const userData = createTestUserData({ username: 'user_facts_retract_evidence_user' });
+      const user = await userRepo.create(userData);
+      const T0 = new Date('2026-09-21T09:00:00Z');
+      const T2 = new Date('2026-09-21T20:00:00Z');
+
+      const created = await remember(user.id, 'Knee pain when running', 'physical_constraint', { muscleGroup: 'quads' });
+      const factId = created.outcome === 'created' ? created.fact.id : null;
+      if (factId === null) throw new Error('expected created');
+
+      const retracted = await repository.retractFact(
+        user.id,
+        { factId, evidenceAt: T0, reason: 'the user said the knee is fine now' },
+        T2,
+      );
+
+      expect(retracted).toMatchObject({ status: 'archived', archivedReason: 'user_closed', closedByUserAt: T0 });
+      expect(retracted?.updatedAt).toEqual(T2);
+      expect(retracted?.context).toBe('the user said the knee is fine now');
+
+      // The stale-evidence guard now measures against T0 (the retraction's own
+      // time), not T2 — evidence from BEFORE the retraction is stale even though
+      // the run clock is hours later.
+      const stale = await repository.rememberFact(
+        user.id,
+        {
+          category: 'physical_constraint',
+          fact: 'Knee pain when running',
+          durability: 'short',
+          ttlDays: 5,
+          evidenceAt: new Date(T0.getTime() - 1000),
+        },
+        T2,
+      );
+      expect(stale.outcome).toBe('skipped_stale_evidence');
     });
 
     it('links a genuinely new statement to the closed fact via supersedesFactId', async () => {

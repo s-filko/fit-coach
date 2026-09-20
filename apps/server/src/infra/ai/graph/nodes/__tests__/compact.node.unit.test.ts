@@ -7,10 +7,11 @@
 import { AIMessage, HumanMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 
-import type { EpisodeSummary, StoredEpisodeSummary } from '@domain/conversation/episode';
+import type { EpisodeSummaryV4, StoredEpisodeSummary } from '@domain/conversation/episode';
 import type { SummaryPort } from '@domain/conversation/ports';
 import type { LlmGateway } from '@domain/ai/ports';
-import type { IUserFactsService } from '@domain/user/ports';
+import type { IUserFactsService, UserFact } from '@domain/user/ports';
+import { PermanentFactRefusal } from '@domain/user/services/fact-lifecycle';
 
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
@@ -22,13 +23,13 @@ const RUN_ID = 'run-2';
 const EPISODE_ID = 'run-1';
 const USER_ID = 'u1';
 
-const FIXED_SUMMARY: EpisodeSummary = {
+const FIXED_SUMMARY = {
   topics: ['plan discussed'],
   decisions: ['upper/lower split'],
   userState: ['mild shoulder discomfort'],
   trainingFeedback: [],
   openItems: ['day 2 not logged'],
-  facts: [],
+  factOperations: [],
 };
 
 /** Run 1's traffic (with ids — RemoveMessage needs them) + run 2's human message. */
@@ -73,7 +74,7 @@ function ctxConfig(now = NOW): RunnableConfig {
 function makeDeps(
   overrides: {
     config?: Partial<EpisodeTunables>;
-    structured?: () => Promise<EpisodeSummary>;
+    structured?: () => Promise<EpisodeSummaryV4>;
     upsertMany?: () => Promise<number>;
   } = {},
 ) {
@@ -87,14 +88,38 @@ function makeDeps(
   const upsertMany = jest
     .fn()
     .mockImplementation(() => (overrides.upsertMany ? overrides.upsertMany() : Promise.resolve(0)));
+  // The fact-operations port (fact-lifecycle Task 3): every method recorded so
+  // the application tests can pin args (both clocks!) and call counts.
+  const rememberFact = jest.fn().mockResolvedValue({ outcome: 'created', fact: null as never });
+  const confirmFact = jest.fn().mockResolvedValue(true);
+  const supersedeFact = jest.fn().mockResolvedValue({ outcome: 'created', fact: null as never });
+  const retractFact = jest.fn().mockResolvedValue(null);
+  const getForPrompt = jest.fn().mockResolvedValue([]);
   const deps = {
     llmGateway: { chat: jest.fn(), structured } as unknown as LlmGateway,
     summaries: { insert, latestLegacySummary } as unknown as SummaryPort,
-    userFacts: { upsertMany, getForPrompt: jest.fn(), getConstraints: jest.fn() } as unknown as IUserFactsService,
+    userFacts: {
+      rememberFact,
+      confirmFact,
+      supersedeFact,
+      retractFact,
+      getForPrompt,
+      getConstraints: jest.fn(),
+    } as unknown as IUserFactsService,
     config: { gapMs: 3 * 3600 * 1000, minTurns: 0, minTokens: 0, keepTurns: 1, ...overrides.config },
     budgetFor: () => 1_000_000,
   };
-  return { deps, insert, latestLegacySummary, structured, upsertMany };
+  return {
+    deps,
+    insert,
+    latestLegacySummary,
+    structured,
+    rememberFact,
+    confirmFact,
+    supersedeFact,
+    retractFact,
+    getForPrompt,
+  };
 }
 
 function removedIds(update: Partial<ConversationStateType>): string[] {
@@ -130,7 +155,7 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
   });
 
   it('BR-LLM-004: summariser failure → no summary, messages still removed', async () => {
-    const { deps, insert, structured, upsertMany } = makeDeps({
+    const { deps, insert, structured, rememberFact } = makeDeps({
       structured: () => Promise.reject(new Error('provider down')),
     });
     const compact = buildCompactStep(deps);
@@ -139,8 +164,8 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
 
     expect(structured).toHaveBeenCalledTimes(1);
     expect(insert).not.toHaveBeenCalled();
-    // P6 Task 3: a failed summariser writes no facts (there is no `summary` to read facts from).
-    expect(upsertMany).not.toHaveBeenCalled();
+    // A failed summariser writes no facts (there is no `summary` to read operations from).
+    expect(rememberFact).not.toHaveBeenCalled();
     expect(removedIds(update)).toEqual(['m0', 'm0a']);
     expect(update.episodeSummaries).toBeUndefined();
   });
@@ -156,39 +181,46 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
     expect(removedIds(update)).toEqual(['m0', 'm0a']); // trimming happened regardless
   });
 
-  // fact-lifecycle plan Task 1: source_turn_id is finally filled at extraction —
-  // a fact is born out of the summarisation, so the mirrored summary turn is its
-  // provenance (coordinator decision 2026-09-21).
-  it('passes the summary turn id as sourceTurnId to upsertMany', async () => {
-    const { deps, insert, upsertMany } = makeDeps({
+  // fact-lifecycle plan Task 1: source_turn_id is filled at extraction — a fact is
+  // born out of the summarisation, so the mirrored summary turn is its provenance
+  // (coordinator decision 2026-09-21). Task 3: the write is now an OPERATION.
+  it('passes the summary turn id as sourceTurnId to an add operation', async () => {
+    const { deps, insert, rememberFact } = makeDeps({
       structured: () =>
-        Promise.resolve({ ...FIXED_SUMMARY, facts: [{ category: 'equipment', fact: 'Has a barbell' }] }),
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            { op: 'add', category: 'equipment', fact: 'Has a barbell', durability: 'short', ttlDays: 5 },
+          ],
+        }),
     });
     insert.mockResolvedValue({ summaryTurnId: 'summary-turn-1' });
     const compact = buildCompactStep(deps);
 
     await compact(channelState(), ctxConfig());
 
-    expect(upsertMany).toHaveBeenCalledWith(
-      USER_ID,
-      [{ category: 'equipment', fact: 'Has a barbell' }],
-      'summary-turn-1',
-    );
+    expect(rememberFact).toHaveBeenCalledTimes(1);
+    expect(rememberFact.mock.calls[0][3]).toBe('summary-turn-1');
   });
 
   // D-E stays intact: fact writing is independent of the summary insert.
-  it('a failed summary insert still writes the facts — with sourceTurnId left undefined', async () => {
-    const { deps, insert, upsertMany } = makeDeps({
+  it('a failed summary insert still applies the operations — with sourceTurnId left undefined', async () => {
+    const { deps, insert, rememberFact } = makeDeps({
       structured: () =>
-        Promise.resolve({ ...FIXED_SUMMARY, facts: [{ category: 'equipment', fact: 'Has a barbell' }] }),
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            { op: 'add', category: 'equipment', fact: 'Has a barbell', durability: 'short', ttlDays: 5 },
+          ],
+        }),
     });
     insert.mockRejectedValue(new Error('db down'));
     const compact = buildCompactStep(deps);
 
     await compact(channelState(), ctxConfig());
 
-    expect(upsertMany).toHaveBeenCalledTimes(1);
-    expect(upsertMany.mock.calls[0][2]).toBeUndefined();
+    expect(rememberFact).toHaveBeenCalledTimes(1);
+    expect(rememberFact.mock.calls[0][3]).toBeUndefined();
   });
 
   it('AC-CC-1: a too-short beyond-tail part is KEPT — no model call, nothing removed, no rotation', async () => {
@@ -323,7 +355,7 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
     expect(messages[1].role).toBe('user');
     expect(opts).toMatchObject({
       profile: 'summarizer',
-      schemaName: 'episode_summary',
+      schemaName: 'episode_summary_v4',
       runId: RUN_ID,
       userId: USER_ID,
     });
@@ -331,85 +363,266 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
   });
 });
 
-describe('buildCompactStep — user facts extraction (P6 Task 3, owner decision 2026-09-17)', () => {
-  it('a summariser returning two facts calls upsertMany once with both', async () => {
-    const summaryWithFacts: EpisodeSummary = {
-      ...FIXED_SUMMARY,
-      facts: [
-        { category: 'physical_constraint', fact: 'Bad shoulder', muscleGroup: 'shoulders_front' },
-        { category: 'equipment', fact: 'Home dumbbells only' },
-      ],
+describe('buildCompactStep — fact operations (fact-lifecycle Task 3, AC-FL-4)', () => {
+  const KNOWN_FACT_ID = '5b0f8a3e-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+  function knownFact(): UserFact {
+    return {
+      id: KNOWN_FACT_ID,
+      userId: USER_ID,
+      category: 'physical_constraint',
+      fact: 'Cannot overhead press, shoulder injury',
+      factKey: 'cannot overhead press, shoulder injury',
+      muscleGroup: 'shoulders_front',
+      confirmations: 3,
+      sourceTurnId: null,
+      createdAt: new Date('2026-09-01T00:00:00Z'),
+      updatedAt: new Date('2026-09-15T00:00:00Z'),
+      durability: 'permanent',
+      expiresAt: null,
+      reviewAfter: null,
+      phaseNote: null,
+      phaseAt: null,
+      onExpiry: null,
+      status: 'active',
+      archivedAt: null,
+      archivedReason: null,
+      closedByUserAt: null,
+      supersedesId: null,
+      context: null,
     };
-    const { deps, upsertMany } = makeDeps({ structured: () => Promise.resolve(summaryWithFacts) });
+  }
+
+  it('the KNOWN active facts reach the summariser prompt (AC-FL-4: it sees what it is operating on)', async () => {
+    const { deps, getForPrompt, structured } = makeDeps();
+    getForPrompt.mockResolvedValue([knownFact()]);
     const compact = buildCompactStep(deps);
 
     await compact(channelState(), ctxConfig());
 
-    expect(upsertMany).toHaveBeenCalledTimes(1);
-    // The third argument is the mirrored summary turn's id (fact-lifecycle Task 1).
-    expect(upsertMany).toHaveBeenCalledWith(USER_ID, summaryWithFacts.facts, 'summary-turn-1');
+    expect(getForPrompt).toHaveBeenCalledWith(USER_ID, NOW);
+    const calls = structured.mock.calls as unknown as [unknown, Array<{ role: string; content: string }>][];
+    const prompt = calls[0][1].find(m => m.role === 'user')!.content;
+    expect(prompt).toContain(KNOWN_FACT_ID);
+    expect(prompt).toContain('Cannot overhead press, shoulder injury');
   });
 
-  it('a summariser returning facts: [] skips the upsertMany call entirely (no pointless round-trip)', async () => {
-    const { deps, upsertMany } = makeDeps({ structured: () => Promise.resolve({ ...FIXED_SUMMARY, facts: [] }) });
+  it('add: rememberFact gets the EPISODE clock as evidenceAt and the RUN clock as now — never ctx.now for both', async () => {
+    // AC-FL-3's two-clock pin: the episode's newest user message (T_EPI) is
+    // hours older than the run (NOW). Passing NOW as the evidence would let an
+    // old restatement re-open a fact the user closed in between.
+    const T_EPI = new Date(NOW.getTime() - 4 * 3600 * 1000);
+    const { deps, rememberFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            {
+              op: 'add',
+              category: 'physical_constraint',
+              fact: 'Broken wrist',
+              muscleGroup: 'shoulders_front',
+              durability: 'long_term',
+              reviewInDays: 60,
+              phaseNote: 'in a cast',
+            },
+          ],
+        }),
+    });
+    const compact = buildCompactStep(deps);
+
+    await compact(channelState({ lastUserMessageAt: T_EPI.toISOString() }), ctxConfig());
+
+    expect(rememberFact).toHaveBeenCalledWith(
+      USER_ID,
+      expect.objectContaining({
+        category: 'physical_constraint',
+        fact: 'Broken wrist',
+        durability: 'long_term',
+        reviewInDays: 60,
+        phaseNote: 'in a cast',
+        evidenceAt: T_EPI, // the EPISODE clock — not NOW
+      }),
+      NOW, // the run clock — every written date
+      'summary-turn-1',
+    );
+  });
+
+  it('add without a known lastUserMessageAt falls back to the run clock (no episode timestamp available)', async () => {
+    const { deps, rememberFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            { op: 'add', category: 'equipment', fact: 'Has a barbell', durability: 'short', ttlDays: 5 },
+          ],
+        }),
+    });
+    const compact = buildCompactStep(deps);
+
+    // phase_boundary forces compaction without the inactivity gap (which needs
+    // lastUserMessageAt to measure) — the exact no-episode-timestamp case.
+    await compact(channelState({ lastUserMessageAt: null, compactReason: 'phase_boundary' }), ctxConfig());
+
+    expect(rememberFact.mock.calls[0][1].evidenceAt).toEqual(NOW);
+  });
+
+  it('confirm: bumps the counter without touching the text — confirmFact with the run clock', async () => {
+    const { deps, confirmFact, rememberFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({ ...FIXED_SUMMARY, factOperations: [{ op: 'confirm', factId: KNOWN_FACT_ID }] }),
+    });
     const compact = buildCompactStep(deps);
 
     await compact(channelState(), ctxConfig());
 
-    expect(upsertMany).not.toHaveBeenCalled();
+    expect(confirmFact).toHaveBeenCalledWith(USER_ID, KNOWN_FACT_ID, NOW);
+    expect(rememberFact).not.toHaveBeenCalled(); // D-C: a confirm never rewrites
   });
 
-  it('D-E: a throwing upsertMany logs error and the compaction result is byte-identical to a run with no facts', async () => {
-    const summaryWithFacts: EpisodeSummary = {
+  it('update: supersedes with a link — supersedeFact carries the episode clock as evidence', async () => {
+    const T_EPI = new Date(NOW.getTime() - 4 * 3600 * 1000); // older than the 3h compaction gap
+    const { deps, supersedeFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            {
+              op: 'update',
+              factId: KNOWN_FACT_ID,
+              category: 'physical_constraint',
+              fact: 'Shoulder recovered, light pressing OK',
+              durability: 'short',
+              ttlDays: 14,
+            },
+          ],
+        }),
+    });
+    const compact = buildCompactStep(deps);
+
+    await compact(channelState({ lastUserMessageAt: T_EPI.toISOString() }), ctxConfig());
+
+    expect(supersedeFact).toHaveBeenCalledWith(
+      USER_ID,
+      expect.objectContaining({ factId: KNOWN_FACT_ID, fact: 'Shoulder recovered, light pressing OK' }),
+      T_EPI,
+      NOW,
+      'summary-turn-1',
+    );
+  });
+
+  it('retract: archives with the evidence clock — a retraction stated in the OLD episode closes at that time', async () => {
+    const T_EPI = new Date(NOW.getTime() - 4 * 3600 * 1000); // older than the 3h compaction gap
+    const { deps, retractFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [{ op: 'retract', factId: KNOWN_FACT_ID, reason: 'the user said it is fine now' }],
+        }),
+    });
+    const compact = buildCompactStep(deps);
+
+    await compact(channelState({ lastUserMessageAt: T_EPI.toISOString() }), ctxConfig());
+
+    expect(retractFact).toHaveBeenCalledWith(
+      USER_ID,
+      { factId: KNOWN_FACT_ID, evidenceAt: T_EPI, reason: 'the user said it is fine now' },
+      NOW,
+    );
+  });
+
+  it('a PermanentFactRefusal on one operation skips it and the rest of the batch still applies', async () => {
+    const { deps, rememberFact, confirmFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            { op: 'add', category: 'physical_constraint', fact: 'Bad back forever', durability: 'permanent' },
+            { op: 'confirm', factId: KNOWN_FACT_ID },
+          ],
+        }),
+    });
+    rememberFact.mockRejectedValueOnce(new PermanentFactRefusal());
+    const compact = buildCompactStep(deps);
+
+    const update = await compact(channelState(), ctxConfig());
+
+    expect(rememberFact).toHaveBeenCalledTimes(1);
+    expect(confirmFact).toHaveBeenCalledTimes(1); // the batch continued
+    expect(removedIds(update)).toEqual(['m0', 'm0a']); // compaction unchanged
+  });
+
+  it('D-E: one operation throwing logs error and the compaction result is byte-identical to a run with no operations', async () => {
+    const withOps: EpisodeSummaryV4 = {
       ...FIXED_SUMMARY,
-      facts: [{ category: 'equipment', fact: 'Has a squat rack' }],
+      factOperations: [{ op: 'add', category: 'equipment', fact: 'Has a squat rack', durability: 'short', ttlDays: 5 }],
     };
-    const { deps: throwingDeps } = makeDeps({
-      structured: () => Promise.resolve(summaryWithFacts),
-      upsertMany: () => Promise.reject(new Error('db down')),
+    const { deps: throwingDeps } = makeDeps({ structured: () => Promise.resolve(withOps) });
+    const { deps: noOpsDeps } = makeDeps({
+      structured: () => Promise.resolve({ ...FIXED_SUMMARY, factOperations: [] }),
     });
-    const { deps: noFactsDeps } = makeDeps({
-      structured: () => Promise.resolve({ ...FIXED_SUMMARY, facts: [] }),
+    (throwingDeps.userFacts as unknown as { rememberFact: jest.Mock }).rememberFact.mockRejectedValue(
+      new Error('db down'),
+    );
+
+    const updateThrowing = await buildCompactStep(throwingDeps)(channelState(), ctxConfig());
+    const updateNoOps = await buildCompactStep(noOpsDeps)(channelState(), ctxConfig());
+
+    expect(removedIds(updateThrowing)).toEqual(removedIds(updateNoOps));
+    expect(updateThrowing.episodeId).toEqual(updateNoOps.episodeId);
+    expect(updateThrowing.episodeStartedAt).toEqual(updateNoOps.episodeStartedAt);
+    expect(updateThrowing.compactReason).toEqual(updateNoOps.compactReason);
+    expect(updateThrowing.episodeSummaries).toHaveLength(1);
+    expect(updateNoOps.episodeSummaries).toHaveLength(1);
+  });
+
+  it('a summariser returning factOperations: [] applies nothing (no pointless port round-trips)', async () => {
+    const { deps, rememberFact, confirmFact, supersedeFact, retractFact } = makeDeps({
+      structured: () => Promise.resolve({ ...FIXED_SUMMARY, factOperations: [] }),
     });
+    const compact = buildCompactStep(deps);
 
-    const updateWithThrowingUpsert = await buildCompactStep(throwingDeps)(channelState(), ctxConfig());
-    const updateWithNoFacts = await buildCompactStep(noFactsDeps)(channelState(), ctxConfig());
+    await compact(channelState(), ctxConfig());
 
-    // The two updates differ only in `summary.facts` inside the stored episode summary
-    // (the extracted facts vs. none) — everything else the caller observes (messages
-    // removed, episodeId/episodeStartedAt/compactReason, and critically that a summary
-    // WAS stored) is identical. A failed fact write must not degrade the compaction
-    // outcome itself.
-    expect(removedIds(updateWithThrowingUpsert)).toEqual(removedIds(updateWithNoFacts));
-    expect(updateWithThrowingUpsert.episodeId).toEqual(updateWithNoFacts.episodeId);
-    expect(updateWithThrowingUpsert.episodeStartedAt).toEqual(updateWithNoFacts.episodeStartedAt);
-    expect(updateWithThrowingUpsert.compactReason).toEqual(updateWithNoFacts.compactReason);
-    expect(updateWithThrowingUpsert.episodeSummaries).toHaveLength(1);
-    expect(updateWithNoFacts.episodeSummaries).toHaveLength(1);
+    expect(rememberFact).not.toHaveBeenCalled();
+    expect(confirmFact).not.toHaveBeenCalled();
+    expect(supersedeFact).not.toHaveBeenCalled();
+    expect(retractFact).not.toHaveBeenCalled();
   });
 
   it('BR-LLM-004: a failed summariser writes no facts and still trims the episode', async () => {
-    const { deps, upsertMany, insert } = makeDeps({
+    const { deps, rememberFact, insert } = makeDeps({
       structured: () => Promise.reject(new Error('provider down')),
     });
     const compact = buildCompactStep(deps);
 
     const update = await compact(channelState(), ctxConfig());
 
-    expect(upsertMany).not.toHaveBeenCalled();
+    expect(rememberFact).not.toHaveBeenCalled();
     expect(insert).not.toHaveBeenCalled();
     expect(removedIds(update)).toEqual(['m0', 'm0a']); // trimming happened regardless
   });
 
   it('AC-CC-1: a too-short beyond-tail part kept verbatim writes no facts (no summariser ran)', async () => {
-    const { deps, upsertMany, structured } = makeDeps({ config: { minTurns: 5 } });
+    const { deps, rememberFact, structured } = makeDeps({ config: { minTurns: 5 } });
     const compact = buildCompactStep(deps);
 
     const update = await compact(channelState(), ctxConfig());
 
     expect(structured).not.toHaveBeenCalled();
-    expect(upsertMany).not.toHaveBeenCalled();
+    expect(rememberFact).not.toHaveBeenCalled();
     expect(update.messages).toBeUndefined();
+  });
+
+  it('a failed known-facts load degrades to summarising without them — compaction itself unchanged', async () => {
+    const { deps, getForPrompt, structured } = makeDeps();
+    getForPrompt.mockRejectedValue(new Error('db down'));
+    const compact = buildCompactStep(deps);
+
+    const update = await compact(channelState(), ctxConfig());
+
+    expect(structured).toHaveBeenCalledTimes(1);
+    expect(removedIds(update)).toEqual(['m0', 'm0a']);
   });
 });
 
