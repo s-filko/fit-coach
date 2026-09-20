@@ -14,6 +14,7 @@ import type { IUserFactsService, RememberFactOutcome, UserFact } from '@domain/u
 
 import { isToolReturnWithUpdate, type ToolOutcome, type ToolReturn } from '@domain/conversation/tool-outcome';
 
+import { buildListFactsTool } from '../list-facts.tool';
 import { buildManageFactTool } from '../manage-fact.tool';
 
 type InvokableTool = {
@@ -239,5 +240,152 @@ describe('manage_fact — operation delete (a SEPARATE operation, never a silent
 
     expect(ret).toMatchObject({ ok: false, kind: 'llm_error' });
     expect(svc.deleteFact).not.toHaveBeenCalled();
+  });
+});
+
+describe('manage_fact — resolving the target WITHOUT a factId (BUG-020)', () => {
+  /** A stateful fake: listFacts returns the rows, retractFact archives in place. */
+  function statefulService(rows: UserFact[]): jest.Mocked<IUserFactsService> {
+    return {
+      upsertMany: jest.fn(),
+      getForPrompt: jest.fn(),
+      getConstraints: jest.fn(),
+      rememberFact: jest.fn(),
+      confirmFact: jest.fn(),
+      supersedeFact: jest.fn(),
+      deleteFact: jest.fn(),
+      listFacts: jest.fn(async () => ({ active: rows.filter(r => r.status === 'active'), archived: [] })),
+      retractFact: jest.fn(async (_u: string, input: { factId: string }) => {
+        const row = rows.find(r => r.id === input.factId);
+        if (row === undefined) {
+          return null;
+        }
+        row.status = 'archived';
+        return row;
+      }),
+    } as unknown as jest.Mocked<IUserFactsService>;
+  }
+
+  const LOWER_BACK_ID = '5b0f8a3e-1111-4111-8111-111111111111';
+  const LEFT_SHOULDER_ID = '5b0f8a3e-2222-4222-8222-222222222222';
+  const RIGHT_SHOULDER_ID = '5b0f8a3e-3333-4333-8333-333333333333';
+
+  function seedRows(): UserFact[] {
+    return [
+      makeFact({
+        id: LOWER_BACK_ID,
+        category: 'physical_constraint',
+        fact: 'User has a lower back injury — no direct loading of the lower back',
+      }),
+      makeFact({ id: LEFT_SHOULDER_ID, category: 'physical_constraint', fact: 'Left shoulder injury' }),
+      makeFact({ id: RIGHT_SHOULDER_ID, category: 'physical_constraint', fact: 'Right shoulder injury' }),
+    ];
+  }
+
+  it("THE MODEL'S REAL PATH: the id comes out of list_facts' rendered text and archives the fact", async () => {
+    const rows = seedRows();
+    const svc = statefulService(rows);
+    const listTool = buildListFactsTool({ userFactsService: svc }) as unknown as InvokableTool;
+    const manageTool = buildTool(svc);
+
+    // Step 1: the model asks what is remembered.
+    const listing = await listTool.invoke({}, makeConfig());
+    const listingOutcome = (
+      isToolReturnWithUpdate(listing as ToolReturn) ? (listing as { outcome: ToolOutcome }).outcome : listing
+    ) as ToolOutcome;
+    const listingText = listingOutcome.ok ? listingOutcome.summary : '';
+
+    // Step 2: the id is parsed OUT OF THE RENDERED TEXT — never read from the fixture.
+    const ids = [...listingText.matchAll(/- id ([0-9a-f-]{36}):/g)].map(m => m[1]);
+    expect(ids).toContain(LOWER_BACK_ID); // the id WAS obtainable — the BUG-020 gap, closed
+    const targetId = ids.find(id => id === LOWER_BACK_ID)!;
+
+    // Step 3: retract with that id — the fact ends archived.
+    const ret = outcomeOf(await manageTool.invoke({ operation: 'retract', factId: targetId }, makeConfig()));
+    expect(ret).toMatchObject({ ok: true });
+    expect(rows.find(r => r.id === LOWER_BACK_ID)?.status).toBe('archived');
+  });
+
+  it('retract by factQuery with ONE match archives it — no id needed', async () => {
+    const rows = seedRows();
+    const svc = statefulService(rows);
+    const manageTool = buildTool(svc);
+
+    const ret = outcomeOf(await manageTool.invoke({ operation: 'retract', factQuery: 'lower back' }, makeConfig()));
+
+    expect(ret).toMatchObject({ ok: true });
+    expect(svc.retractFact).toHaveBeenCalledWith('u1', { factId: LOWER_BACK_ID }, NOW);
+    expect(rows.find(r => r.id === LOWER_BACK_ID)?.status).toBe('archived');
+  });
+
+  it('retract by factQuery with TWO matches lists the candidates with ids and archives NOTHING', async () => {
+    const rows = seedRows();
+    const svc = statefulService(rows);
+    const manageTool = buildTool(svc);
+
+    const ret = outcomeOf(await manageTool.invoke({ operation: 'retract', factQuery: 'shoulder' }, makeConfig()));
+
+    expect(ret).toMatchObject({ ok: false, kind: 'llm_error' });
+    expect(!ret.ok && ret.message).toContain(LEFT_SHOULDER_ID);
+    expect(!ret.ok && ret.message).toContain(RIGHT_SHOULDER_ID);
+    expect(!ret.ok && ret.message).toContain('Left shoulder injury');
+    expect(svc.retractFact).not.toHaveBeenCalled();
+    expect(rows.every(r => r.status === 'active')).toBe(true);
+  });
+
+  it('retract by factQuery with NO match says so — never guesses', async () => {
+    const svc = statefulService(seedRows());
+    const manageTool = buildTool(svc);
+
+    const ret = outcomeOf(await manageTool.invoke({ operation: 'retract', factQuery: 'knee pain' }, makeConfig()));
+
+    expect(ret).toMatchObject({ ok: false, kind: 'llm_error' });
+    expect(svc.retractFact).not.toHaveBeenCalled();
+  });
+
+  it('delete by factQuery WITHOUT confirmed deletes nothing — the consent gate comes first', async () => {
+    const rows = seedRows();
+    const svc = statefulService(rows);
+    const manageTool = buildTool(svc);
+
+    const ret = outcomeOf(
+      await manageTool.invoke({ operation: 'delete', factQuery: 'lower back', confirmed: false }, makeConfig()),
+    );
+
+    expect(ret).toMatchObject({ ok: false, kind: 'user_error' });
+    expect(svc.deleteFact).not.toHaveBeenCalled();
+    expect(rows.every(r => r.status === 'active')).toBe(true);
+  });
+
+  it('delete by factQuery with confirmed=true and ONE match deletes it', async () => {
+    const rows = seedRows();
+    const svc = statefulService(rows);
+    svc.deleteFact.mockImplementation(async (_u: string, factId: string) => {
+      const idx = rows.findIndex(r => r.id === factId);
+      if (idx === -1) {
+        return false;
+      }
+      rows.splice(idx, 1);
+      return true;
+    });
+    const manageTool = buildTool(svc);
+
+    const ret = outcomeOf(
+      await manageTool.invoke({ operation: 'delete', factQuery: 'lower back', confirmed: true }, makeConfig()),
+    );
+
+    expect(ret).toMatchObject({ ok: true });
+    expect(svc.deleteFact).toHaveBeenCalledWith('u1', LOWER_BACK_ID);
+    expect(rows.some(r => r.id === LOWER_BACK_ID)).toBe(false);
+  });
+
+  it('neither factId nor factQuery is still the missing-id llm_error', async () => {
+    const svc = statefulService(seedRows());
+    const manageTool = buildTool(svc);
+
+    const ret = outcomeOf(await manageTool.invoke({ operation: 'retract' }, makeConfig()));
+
+    expect(ret).toMatchObject({ ok: false, kind: 'llm_error' });
+    expect(svc.listFacts).not.toHaveBeenCalled();
   });
 });

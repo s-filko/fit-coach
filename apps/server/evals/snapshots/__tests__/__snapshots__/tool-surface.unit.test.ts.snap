@@ -97,7 +97,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) cha
     },
   },
   {
-    "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is ARCHIVED: kept in history, never used or asked about again. operation "delete": the user explicitly does not want a fact STORED at all ("erase that", privacy) — the fact is removed entirely, no trace. retract and delete are DIFFERENT operations: if it is unclear which the user means, DO NOT call the tool — ask them first ("should I stop using this fact, or erase it completely?"). For delete, set confirmed=true ONLY after the user explicitly confirmed permanent erasure.",
+    "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is ARCHIVED: kept in history, never used or asked about again. operation "delete": the user explicitly does not want a fact STORED at all ("erase that", privacy) — the fact is removed entirely, no trace. For retract/delete, identify the fact EITHER by factId (copied verbatim from a list_facts line, which starts with "- id <uuid>:") OR by factQuery — the distinctive words of what the user called it (e.g. "lower back"); if several facts match the query you will get their ids back — re-call with the right one. Never tell the user a fact was removed unless the tool call succeeded. retract and delete are DIFFERENT operations: if it is unclear which the user means, DO NOT call the tool — ask them first ("should I stop using this fact, or erase it completely?"). For delete, set confirmed=true ONLY after the user explicitly confirmed permanent erasure.",
     "name": "manage_fact",
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -147,6 +147,11 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) cha
           "description": "For retract/delete, and for save when CORRECTING an existing fact: the fact id, verbatim from list_facts.",
           "format": "uuid",
           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "factQuery": {
+          "description": "For retract/delete without a factId: what the user called the fact, in its own distinctive words (e.g. "lower back").",
+          "minLength": 3,
           "type": "string",
         },
         "muscleGroup": {
@@ -200,7 +205,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) cha
     },
   },
   {
-    "description": "List the durable facts remembered about the user — use it to answer "what do you remember about me", before correcting or retracting a fact (copy ids verbatim), and before saving to avoid duplicates. Every ACTIVE fact is listed, grouped by category, with its durability class, confirmation count and last-updated date. Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.",
+    "description": "List the durable facts remembered about the user — use it to answer "what do you remember about me", and to get a fact's id before correcting or retracting it. Every line starts with the fact's id ("- id <uuid>: ..."): copy that id VERBATIM into manage_fact's factId — never invent or abbreviate it. Each fact is listed grouped by category, with its durability class, confirmation count and last-updated date. Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.",
     "name": "list_facts",
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -630,7 +635,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) pla
     },
   },
   {
-    "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is ARCHIVED: kept in history, never used or asked about again. operation "delete": the user explicitly does not want a fact STORED at all ("erase that", privacy) — the fact is removed entirely, no trace. retract and delete are DIFFERENT operations: if it is unclear which the user means, DO NOT call the tool — ask them first ("should I stop using this fact, or erase it completely?"). For delete, set confirmed=true ONLY after the user explicitly confirmed permanent erasure.",
+    "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is ARCHIVED: kept in history, never used or asked about again. operation "delete": the user explicitly does not want a fact STORED at all ("erase that", privacy) — the fact is removed entirely, no trace. For retract/delete, identify the fact EITHER by factId (copied verbatim from a list_facts line, which starts with "- id <uuid>:") OR by factQuery — the distinctive words of what the user called it (e.g. "lower back"); if several facts match the query you will get their ids back — re-call with the right one. Never tell the user a fact was removed unless the tool call succeeded. retract and delete are DIFFERENT operations: if it is unclear which the user means, DO NOT call the tool — ask them first ("should I stop using this fact, or erase it completely?"). For delete, set confirmed=true ONLY after the user explicitly confirmed permanent erasure.",
     "name": "manage_fact",
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -680,6 +685,11 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) pla
           "description": "For retract/delete, and for save when CORRECTING an existing fact: the fact id, verbatim from list_facts.",
           "format": "uuid",
           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "factQuery": {
+          "description": "For retract/delete without a factId: what the user called the fact, in its own distinctive words (e.g. "lower back").",
+          "minLength": 3,
           "type": "string",
         },
         "muscleGroup": {
@@ -733,7 +743,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) pla
     },
   },
   {
-    "description": "List the durable facts remembered about the user — use it to answer "what do you remember about me", before correcting or retracting a fact (copy ids verbatim), and before saving to avoid duplicates. Every ACTIVE fact is listed, grouped by category, with its durability class, confirmation count and last-updated date. Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.",
+    "description": "List the durable facts remembered about the user — use it to answer "what do you remember about me", and to get a fact's id before correcting or retracting it. Every line starts with the fact's id ("- id <uuid>: ..."): copy that id VERBATIM into manage_fact's factId — never invent or abbreviate it. Each fact is listed grouped by category, with its durability class, confirmation count and last-updated date. Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.",
     "name": "list_facts",
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -841,7 +851,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) reg
     },
   },
   {
-    "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is ARCHIVED: kept in history, never used or asked about again. operation "delete": the user explicitly does not want a fact STORED at all ("erase that", privacy) — the fact is removed entirely, no trace. retract and delete are DIFFERENT operations: if it is unclear which the user means, DO NOT call the tool — ask them first ("should I stop using this fact, or erase it completely?"). For delete, set confirmed=true ONLY after the user explicitly confirmed permanent erasure.",
+    "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is ARCHIVED: kept in history, never used or asked about again. operation "delete": the user explicitly does not want a fact STORED at all ("erase that", privacy) — the fact is removed entirely, no trace. For retract/delete, identify the fact EITHER by factId (copied verbatim from a list_facts line, which starts with "- id <uuid>:") OR by factQuery — the distinctive words of what the user called it (e.g. "lower back"); if several facts match the query you will get their ids back — re-call with the right one. Never tell the user a fact was removed unless the tool call succeeded. retract and delete are DIFFERENT operations: if it is unclear which the user means, DO NOT call the tool — ask them first ("should I stop using this fact, or erase it completely?"). For delete, set confirmed=true ONLY after the user explicitly confirmed permanent erasure.",
     "name": "manage_fact",
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -891,6 +901,11 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) reg
           "description": "For retract/delete, and for save when CORRECTING an existing fact: the fact id, verbatim from list_facts.",
           "format": "uuid",
           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "factQuery": {
+          "description": "For retract/delete without a factId: what the user called the fact, in its own distinctive words (e.g. "lower back").",
+          "minLength": 3,
           "type": "string",
         },
         "muscleGroup": {
@@ -944,7 +959,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) reg
     },
   },
   {
-    "description": "List the durable facts remembered about the user — use it to answer "what do you remember about me", before correcting or retracting a fact (copy ids verbatim), and before saving to avoid duplicates. Every ACTIVE fact is listed, grouped by category, with its durability class, confirmation count and last-updated date. Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.",
+    "description": "List the durable facts remembered about the user — use it to answer "what do you remember about me", and to get a fact's id before correcting or retracting it. Every line starts with the fact's id ("- id <uuid>: ..."): copy that id VERBATIM into manage_fact's factId — never invent or abbreviate it. Each fact is listed grouped by category, with its durability class, confirmation count and last-updated date. Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.",
     "name": "list_facts",
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1195,7 +1210,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) ses
     },
   },
   {
-    "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is ARCHIVED: kept in history, never used or asked about again. operation "delete": the user explicitly does not want a fact STORED at all ("erase that", privacy) — the fact is removed entirely, no trace. retract and delete are DIFFERENT operations: if it is unclear which the user means, DO NOT call the tool — ask them first ("should I stop using this fact, or erase it completely?"). For delete, set confirmed=true ONLY after the user explicitly confirmed permanent erasure.",
+    "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is ARCHIVED: kept in history, never used or asked about again. operation "delete": the user explicitly does not want a fact STORED at all ("erase that", privacy) — the fact is removed entirely, no trace. For retract/delete, identify the fact EITHER by factId (copied verbatim from a list_facts line, which starts with "- id <uuid>:") OR by factQuery — the distinctive words of what the user called it (e.g. "lower back"); if several facts match the query you will get their ids back — re-call with the right one. Never tell the user a fact was removed unless the tool call succeeded. retract and delete are DIFFERENT operations: if it is unclear which the user means, DO NOT call the tool — ask them first ("should I stop using this fact, or erase it completely?"). For delete, set confirmed=true ONLY after the user explicitly confirmed permanent erasure.",
     "name": "manage_fact",
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1245,6 +1260,11 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) ses
           "description": "For retract/delete, and for save when CORRECTING an existing fact: the fact id, verbatim from list_facts.",
           "format": "uuid",
           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "factQuery": {
+          "description": "For retract/delete without a factId: what the user called the fact, in its own distinctive words (e.g. "lower back").",
+          "minLength": 3,
           "type": "string",
         },
         "muscleGroup": {
@@ -1298,7 +1318,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) ses
     },
   },
   {
-    "description": "List the durable facts remembered about the user — use it to answer "what do you remember about me", before correcting or retracting a fact (copy ids verbatim), and before saving to avoid duplicates. Every ACTIVE fact is listed, grouped by category, with its durability class, confirmation count and last-updated date. Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.",
+    "description": "List the durable facts remembered about the user — use it to answer "what do you remember about me", and to get a fact's id before correcting or retracting it. Every line starts with the fact's id ("- id <uuid>: ..."): copy that id VERBATIM into manage_fact's factId — never invent or abbreviate it. Each fact is listed grouped by category, with its durability class, confirmation count and last-updated date. Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.",
     "name": "list_facts",
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1582,7 +1602,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) tra
     },
   },
   {
-    "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is ARCHIVED: kept in history, never used or asked about again. operation "delete": the user explicitly does not want a fact STORED at all ("erase that", privacy) — the fact is removed entirely, no trace. retract and delete are DIFFERENT operations: if it is unclear which the user means, DO NOT call the tool — ask them first ("should I stop using this fact, or erase it completely?"). For delete, set confirmed=true ONLY after the user explicitly confirmed permanent erasure.",
+    "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is ARCHIVED: kept in history, never used or asked about again. operation "delete": the user explicitly does not want a fact STORED at all ("erase that", privacy) — the fact is removed entirely, no trace. For retract/delete, identify the fact EITHER by factId (copied verbatim from a list_facts line, which starts with "- id <uuid>:") OR by factQuery — the distinctive words of what the user called it (e.g. "lower back"); if several facts match the query you will get their ids back — re-call with the right one. Never tell the user a fact was removed unless the tool call succeeded. retract and delete are DIFFERENT operations: if it is unclear which the user means, DO NOT call the tool — ask them first ("should I stop using this fact, or erase it completely?"). For delete, set confirmed=true ONLY after the user explicitly confirmed permanent erasure.",
     "name": "manage_fact",
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1632,6 +1652,11 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) tra
           "description": "For retract/delete, and for save when CORRECTING an existing fact: the fact id, verbatim from list_facts.",
           "format": "uuid",
           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "factQuery": {
+          "description": "For retract/delete without a factId: what the user called the fact, in its own distinctive words (e.g. "lower back").",
+          "minLength": 3,
           "type": "string",
         },
         "muscleGroup": {
@@ -1685,7 +1710,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) tra
     },
   },
   {
-    "description": "List the durable facts remembered about the user — use it to answer "what do you remember about me", before correcting or retracting a fact (copy ids verbatim), and before saving to avoid duplicates. Every ACTIVE fact is listed, grouped by category, with its durability class, confirmation count and last-updated date. Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.",
+    "description": "List the durable facts remembered about the user — use it to answer "what do you remember about me", and to get a fact's id before correcting or retracting it. Every line starts with the fact's id ("- id <uuid>: ..."): copy that id VERBATIM into manage_fact's factId — never invent or abbreviate it. Each fact is listed grouped by category, with its durability class, confirmation count and last-updated date. Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.",
     "name": "list_facts",
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
