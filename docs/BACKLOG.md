@@ -642,3 +642,32 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 - [ ] No test pins `finish_reason: 'length'` arriving together with tool calls — the skip-retry branch
       cannot fire there (`isEmptyAIResponse` requires no tool calls), but that is verified by reading,
       not by a test. Source: close-out-review, R3 (2026-09-20).
+
+## fact-lifecycle (wave A) close-out review advisories (2026-09-21)
+
+- [ ] `npm run test:scenarios` (and `test:integration`) end with a native abort —
+      `libc++abi: terminating … mutex lock failed` — AFTER a fully green run, so the command exits 134
+      while every test passed. Reproduced identically on the base commit, so it predates this wave, but
+      it means the exit code of the agent self-check is meaningless and the suite could never be wired
+      into CI as-is. Likely the embedding model's (onnxruntime) teardown.
+      Source: orchestrator, Task 1 acceptance (2026-09-21).
+- [ ] The AC-FL-3 end-to-end scenario test uses an in-memory fake of `IUserFactsService` that
+      re-implements the stale-evidence rule itself, so the test would still pass if the real repository
+      diverged. The real path is covered by the DB integration suite, but the two rules are written
+      twice. Source: orchestrator, Task 3 acceptance (2026-09-21).
+- [ ] `USER_FACTS_V1` is now unused in production code (v2 renders every block) and is kept only by the
+      repo's prompt-version convention plus its own unit test — unlike the phase `v1.ts` files, no
+      snapshot test pins it. Decide whether the convention should require a snapshot or allow removal.
+      Source: orchestrator, Task 1 acceptance (2026-09-21).
+- [ ] The SQL visibility filter and `isActiveForPrompt` are now twins by construction (both check
+      status, durability and expiry) but still live in two languages. If a third read path appears,
+      give them one shared description instead of a third copy.
+      Source: close-out-review, R2 (2026-09-21), partially addressed in `38f84746`.
+- [ ] **Model behaviour, not code (evidence for wave B):** in the 2026-09-21 dev smoke the coach
+      answered a failed tool call with a confident claim that the action had been performed — twice,
+      including "факт помечен как неприменимый" while the row was still `active`. The tool could not be
+      called at all then (BUG-020), but nothing in the run forced the model to either retry or admit the
+      failure. This is the exact case the wave-B course-check layer exists for; it is also the
+      BUG-014/BUG-015 family. Worth one deterministic check in the consolidated eval pass: a tool that
+      returns an error must never be followed by a success claim.
+      Source: orchestrator dev smoke (2026-09-21).
