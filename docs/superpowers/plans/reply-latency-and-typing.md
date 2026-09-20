@@ -60,7 +60,7 @@ whole call. Meanwhile the bot sends the Telegram "typing" action once, so after 
 - [x] **Step 2: Implement.** `reasoning_effort` is an OpenAI-compatible extra: pass it via the
   ChatOpenAI `modelKwargs` (verify the built request body in the test, not just the field).
 - [x] **Step 3: Commit** — `feat(ai): output cap and reasoning depth are configuration (BUG-019, AC-RL-1)`
-- [x] **Step 4: STOP** for orchestrator review.
+- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-20** (`0bb3c930`, GLM worker via Orca). `LLM_MAX_TOKENS` (16384) and `LLM_REASONING_EFFORT` (`low|high|max|off`, default `low`; `off` omits the field for providers that reject it — prod's Gemini via OpenRouter) with per-profile overrides; `reasoning_effort` rides in `modelKwargs` at the single ChatOpenAI site, asserted on the real `invocationParams()`. Worker raised the default-vs-absent conflict in the spec and was answered (option B + `off`). Orchestrator re-ran: test:unit 897/897, L0 96/96, type-check clean.
 
 **Verification:** `npx jest --ci src/infra/ai src/config` → pass; `npm run test:unit` → green;
 `npm run evals -- --level L0` → green; format + type-check clean.
@@ -77,7 +77,7 @@ whole call. Meanwhile the bot sends the Telegram "typing" action once, so after 
   response still retries once as today; a normal response logs `finish_reason` + completion tokens at info.
 - [x] **Step 2: Implement.**
 - [x] **Step 3: Commit** — `fix(ai): truncated answers are logged, not blindly re-run (BUG-019, AC-RL-2)`
-- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-20** (`0bb3c930`, GLM worker via Orca). `LLM_MAX_TOKENS` (16384) and `LLM_REASONING_EFFORT` (`low|high|max|off`, default `low`; `off` omits the field for providers that reject it — prod's Gemini via OpenRouter) with per-profile overrides; `reasoning_effort` rides in `modelKwargs` at the single ChatOpenAI site, asserted on the real `invocationParams()`. Worker raised the default-vs-absent conflict in the spec and was answered (option B + `off`). Orchestrator re-ran: test:unit 897/897, L0 96/96, type-check clean.
+- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-20** (`094f5569`, GLM worker via Orca). Chosen site: `agent.node` (it sees `response_metadata.finish_reason`, knows phase/userId and owns the retry; `handleLLMEnd`'s debug payload carries bodies and must stay debug). One info line per call (finish reason + token counts, no bodies); `length` adds a warn naming the cap; an empty `length` answer returns the catalog text with zero retries; empty `stop` keeps the one-shot nudge retry. Orchestrator re-ran: test:unit 903/903, L0 96/96.
 
 **Verification:** `npx jest --ci src/infra/ai` → pass; `npm run test:unit` → green; L0 green;
 format + type-check clean.
@@ -95,7 +95,7 @@ format + type-check clean.
   reply path; no timer survives the call.
 - [x] **Step 2: Implement.**
 - [x] **Step 3: Commit** — `feat(bot): keep the typing indicator alive while the reply is produced (BUG-019, AC-RL-3)`
-- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-20** (`094f5569`, GLM worker via Orca). Chosen site: `agent.node` (it sees `response_metadata.finish_reason`, knows phase/userId and owns the retry; `handleLLMEnd`'s debug payload carries bodies and must stay debug). One info line per call (finish reason + token counts, no bodies); `length` adds a warn naming the cap; an empty `length` answer returns the catalog text with zero retries; empty `stop` keeps the one-shot nudge retry. Orchestrator re-ran: test:unit 903/903, L0 96/96.
+- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-20** (`8c6fc778`, GLM worker via Orca). `apps/bot/typing-keepalive.ts` — `withTypingIndicator(bot, chatId, fn)` (a wrapper, so no call site can leak a timer): one pulse immediately (fire-and-forget), then every `TYPING_INTERVAL_MS` 5500 ms, ceiling `TYPING_CEILING_MS` 420000 ms, both timers cleared in `finally` on success and error, a failing `sendChatAction` logged and ignored. Wired into all three handler sites. Orchestrator re-ran: apps/bot 22/22 (6 new), tsc clean; apps/server test:unit 903/903, format + type-check clean.
 
 **Verification:** `npx jest --ci` in `apps/bot` → pass; `npm run test:unit` in `apps/server` → green;
 format + type-check clean in both.
