@@ -175,6 +175,20 @@ export class TrainingService implements ITrainingService {
     const { exerciseId } = opts ?? {};
 
     if (exerciseId) {
+      // An id that is neither in the session nor in its plan must be a real catalog exercise. The
+      // model can invent a well-formed UUID (2026-09-20: treadmill warm-up lost to an FK violation),
+      // so reject it here — before any state changes — with a recovery cue the model can act on.
+      const knownToSession =
+        session.exercises.some(ex => ex.exerciseId === exerciseId) ||
+        (session.sessionPlanJson?.exercises.some(ex => ex.exerciseId === exerciseId) ?? false);
+      if (!knownToSession && !(await this.exerciseRepo.findById(exerciseId))) {
+        throw new Error(
+          `Unknown exerciseId ${exerciseId}: it is not in the exercise catalog. ` +
+            'Call search_exercises and copy the ID verbatim from the results, ' +
+            'or pass exerciseName instead. Never invent an id.',
+        );
+      }
+
       // Auto-complete current in_progress exercise if switching to a different one
       const currentInProgress = session.exercises.find(ex => ex.status === 'in_progress');
       let autoCompleted: AutoCompletedExercise | undefined;

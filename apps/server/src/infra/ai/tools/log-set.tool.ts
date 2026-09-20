@@ -131,7 +131,8 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
       name: 'log_set',
       description: [
         'Log a completed set for the current exercise.',
-        'Always provide exerciseId (from SESSION PLAN or exercise catalog).',
+        'Identify the exercise with exerciseId ONLY when you have its exact UUID — copied verbatim from the SESSION PLAN or from a search_exercises result ("ID:..." line).',
+        'If the exercise is not in the plan and you do not have its exact UUID, pass exerciseName instead (the server resolves it in the catalog) — never invent or guess a UUID.',
         'For strength/weighted exercises: provide reps and weight (in kg).',
         'For bodyweight exercises: provide reps only.',
         'For cardio duration (bike, elliptical): provide durationSeconds only.',
@@ -145,8 +146,15 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
             .string()
             .uuid()
             .optional()
-            .describe('Exercise UUID from the session plan. Preferred over exerciseName.'),
-          exerciseName: z.string().optional().describe('Exercise name — only if exerciseId is unknown.'),
+            .describe(
+              'Exercise UUID copied verbatim from the session plan or search_exercises results. Never invent one.',
+            ),
+          exerciseName: z
+            .string()
+            .optional()
+            .describe(
+              'Exercise name — use when the exercise is not in the session plan and its exact UUID is unknown.',
+            ),
           reps: z.number().int().positive().optional().describe('Number of repetitions performed.'),
           weight: z
             .number()
