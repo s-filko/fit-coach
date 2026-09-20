@@ -12,11 +12,10 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-20 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-— none —
+- `fact-lifecycle.md` — Fact Lifecycle — Storage, Conversational Tools, Summariser Operations Implementation Plan (branch: `plan/fact-lifecycle`, last commit 2026-09-21)
 
 **Planned**
 - `course-check-and-constraints.md` — Course Check and Constraint Handling Implementation Plan
-- `fact-lifecycle.md` — Fact Lifecycle — Storage, Conversational Tools, Summariser Operations Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 

@@ -1,6 +1,6 @@
 # Fact Lifecycle — Storage, Conversational Tools, Summariser Operations Implementation Plan
 
-- Status: planned
+- Status: in progress
 - Branch: plan/fact-lifecycle
 - After: reply-latency-and-typing
 
@@ -133,7 +133,7 @@ class bounds, expiry/review predicates against a passed-in `now`), `infra/ai/pro
   fact is never returned; review-date predicates; rendering shows date + confirmations.
 - [x] **Step 2: Implement**, including `source_turn_id` finally being filled at extraction.
 - [x] **Step 3: Commit** — `feat(memory): fact durability classes, expiry and archive (AC-FL-1)`
-- [x] **Step 4: STOP** for orchestrator review.
+- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-21** (`9e949a18`, GLM worker via Orca). Migration `0006` adds the lifecycle columns additively — existing rows land on `permanent`/`active` with no dates, so nothing changes behaviourally today. The class numbers live once, in the new pure `domain/user/services/fact-lifecycle.ts` (short 1–14 d, long-term 14–182 d, `permanent` gated by an explicit user statement or ≥ 3 confirmations), together with the `now`-taking predicates; `getForPrompt` / `getConstraints` now take the run clock and exclude archived + expired rows (the SQL filter is the twin of `isActiveForPrompt`). Rendering moved to `USER_FACTS_V2` (date + confirmation count + long-term phase note); `USER_FACTS_V1` is kept unused, per the repo's prompt-version convention. `source_turn_id` is finally filled at extraction from the mirrored summary turn — the worker escalated that no other turn id is reachable at compact time and was answered A, with a narrow grant of `summary.ports.ts` + `drizzle-summary.service.ts`; the D-E independence (facts still written when the summary insert throws) is pinned by a test. Orchestrator re-ran everything itself: jest subset 24 suites / 165 tests, `test:unit` 107 suites / 946 tests, L0 96/96, `test:scenarios` 4 suites / 221 tests against the real `fitcoach_test`. `test:scenarios` exits 134 (`mutex lock failed` in native teardown) after a fully green run — reproduced identically on base `fce6b9ff`, so pre-existing and not from this diff (backlog).
 
 **Verification:** `npx jest --ci src/domain/user src/infra/db src/infra/ai/prompts` → pass;
 `npm run test:unit` → green; `npm run evals -- --level L0` → green; `npm run test:scenarios` → green.
