@@ -211,8 +211,8 @@ The orchestrator relays to a fresh session at clean boundaries (owner rule 2026-
   (16384, was a hard-coded 4096) and `LLM_REASONING_EFFORT` (`low|high|max|off`, default `low`) are
   configuration; truncated answers are logged and never re-run blindly; the bot re-pulses the Telegram
   typing action every 5.5 s while a reply is produced. Review clean after one ADR reconciliation.
-  **Owner action before any prod deploy:** pick `LLM_REASONING_EFFORT` for `.env.prod` (prod runs Gemini
-  via OpenRouter, which may reject the field — `off` omits it). Worktree
+  No prod action: **prod is frozen** (owner, 2026-09-20 — unused, 8 days behind on `a2809b0f`, old schema;
+  only stable versions go there, and dev is not usable yet). Plans end at the dev deploy. Worktree
   `/Users/filko/orca/workspaces/fit_coach/reply-latency-and-typing` and branch
   `plan/reply-latency-and-typing` ready to clean up (owner-gated); run `run_609e642a70fa` has one idle
   worker terminal.

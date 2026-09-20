@@ -106,9 +106,10 @@ format + type-check clean in both.
 ### Task 4: Close-out (orchestrator)
 
 - [ ] One combined close-out review; `- Status: done`; `state.mjs --write`; merge, push, deploy dev, health 200.
-- [ ] **Before any prod deploy:** decide `LLM_REASONING_EFFORT` for prod (`.env.prod`). The default `low` is now
-  sent on every call, and prod runs `google/gemini-3-flash-preview` through OpenRouter — set `off` if that provider
-  rejects the field. Owner action; dev is unaffected.
+- [x] ~~Prod step~~ — dropped: **prod is frozen** (owner, 2026-09-20 — unused, only stable versions ever go there).
+  Noted for whenever that changes: the default `low` is sent on every call and prod runs
+  `google/gemini-3-flash-preview` through OpenRouter, so `LLM_REASONING_EFFORT=off` is the switch if that
+  provider rejects the field. No action now.
 - [ ] Dev smoke by the owner: a plan-creation exchange in Telegram — the typing indicator stays alive
   and the reply arrives materially faster than the 189 s run in BUG-019. Record the new `latency_ms`
   from `conversation_runs`. If it is still too slow, the owner decides on GLM-5.2 with reasoning off.
