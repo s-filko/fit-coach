@@ -9,7 +9,7 @@ import type { IUserFactsService } from '@domain/user/ports';
 
 import { ctxOf } from '@infra/ai/graph/state';
 
-import { rejectOnFactConflict } from './fact-constraint-guard';
+import { guardFactConstraints } from './fact-constraint-guard';
 import { userIdOf } from './format-exercise-summary';
 
 export interface SaveWorkoutPlanToolDeps {
@@ -101,6 +101,7 @@ export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
 
       // Validate all exerciseIds exist in DB before saving, and resolve their
       // muscles in the same call for the constraint check below.
+      let advisory: string | null = null;
       const allIds = input.sessionTemplates.flatMap(t => t.exercises.map(e => e.exerciseId));
       const uniqueIds = [...new Set(allIds)];
       if (uniqueIds.length > 0) {
@@ -114,12 +115,14 @@ export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
           );
         }
 
-        // Hard validation (D-G): a physical_constraint fact's muscle group among
-        // an exercise's PRIMARY muscles rejects the call — nothing is persisted.
-        const rejection = await rejectOnFactConflict(userFactsService, userId, found, ctxOf(config as never).now);
-        if (rejection) {
-          return rejection;
+        // Constraint guard (D-G, narrowed by AC-FL-6): a PERMANENT constraint's
+        // muscle group among an exercise's PRIMARY muscles rejects the call —
+        // nothing is persisted. Any other conflict is an advisory on the result.
+        const verdict = await guardFactConstraints(userFactsService, userId, found, ctxOf(config as never).now);
+        if (verdict.rejection) {
+          return verdict.rejection;
         }
+        ({ advisory } = verdict);
       }
 
       await workoutPlanRepository.create(userId, {
@@ -137,7 +140,9 @@ export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
 
       return {
         outcome: ok(
-          'Plan saved. Now write a brief confirmation to the user in their language — congratulate them and say you are ready to start training.',
+          advisory === null
+            ? 'Plan saved. Now write a brief confirmation to the user in their language — congratulate them and say you are ready to start training.'
+            : `Plan saved.\n${advisory}\nThen write a brief confirmation to the user in their language.`,
         ),
         update: {
           pendingTransition: {

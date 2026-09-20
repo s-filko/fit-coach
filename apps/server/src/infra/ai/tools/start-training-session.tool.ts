@@ -8,7 +8,7 @@ import type { IUserFactsService } from '@domain/user/ports';
 
 import { ctxOf } from '@infra/ai/graph/state';
 
-import { rejectOnFactConflict } from './fact-constraint-guard';
+import { guardFactConstraints } from './fact-constraint-guard';
 import { userIdOf } from './format-exercise-summary';
 
 export interface StartTrainingSessionToolDeps {
@@ -38,6 +38,7 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
 
       // Validate all exerciseIds exist in DB before creating the session, and
       // resolve their muscles in the same call for the constraint check below.
+      let advisory: string | null = null;
       const allIds = input.exercises.map((e: { exerciseId: string }) => e.exerciseId);
       const uniqueIds = [...new Set(allIds)];
       if (uniqueIds.length > 0) {
@@ -51,12 +52,14 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
           );
         }
 
-        // Hard validation (D-G): a physical_constraint fact's muscle group among
-        // an exercise's PRIMARY muscles rejects the call — nothing is persisted.
-        const rejection = await rejectOnFactConflict(userFactsService, userId, found, ctxOf(config as never).now);
-        if (rejection) {
-          return rejection;
+        // Constraint guard (D-G, narrowed by AC-FL-6): a PERMANENT constraint's
+        // muscle group among an exercise's PRIMARY muscles rejects the call —
+        // nothing is persisted. Any other conflict is an advisory on the result.
+        const verdict = await guardFactConstraints(userFactsService, userId, found, ctxOf(config as never).now);
+        if (verdict.rejection) {
+          return verdict.rejection;
         }
+        ({ advisory } = verdict);
       }
 
       try {
@@ -86,6 +89,7 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
             [
               `Session created (ID: ${session.id}).`,
               `${exerciseCount} exercises, est. ${duration} min.`,
+              ...(advisory === null ? [] : [`\n${advisory}\n`]),
               'Now write a brief energetic message to the user in their language',
               '— confirm the session started and motivate them for the workout.',
             ].join(' '),

@@ -1,7 +1,7 @@
 import type { ExerciseWithMuscles } from '@domain/training/types';
 import type { IUserFactsService, UserFact } from '@domain/user/ports';
 
-import { rejectOnFactConflict } from '../fact-constraint-guard';
+import { guardFactConstraints } from '../fact-constraint-guard';
 
 const NOW = new Date('2026-09-20T12:00:00Z');
 
@@ -49,47 +49,83 @@ const makeExercise = (overrides: Partial<ExerciseWithMuscles> = {}): ExerciseWit
   ...overrides,
 });
 
-describe('rejectOnFactConflict — shared tool guard (D-G)', () => {
+describe('guardFactConstraints — shared tool guard (D-G, AC-FL-6)', () => {
   it('fetches constraints via getConstraints for the given user', async () => {
     const getConstraints = jest.fn().mockResolvedValue([]);
 
-    await rejectOnFactConflict({ getConstraints }, 'u1', [makeExercise()], NOW);
+    await guardFactConstraints({ getConstraints }, 'u1', [makeExercise()], NOW);
 
     expect(getConstraints).toHaveBeenCalledWith('u1', NOW); // AC-FL-1: the run clock, threaded by the caller
   });
 
-  it('returns null when there is no conflict', async () => {
+  it('no conflict → neither rejection nor advisory', async () => {
     const fact = makeFact({ muscleGroup: 'lower_back' });
     const exercise = makeExercise({ muscleGroups: [{ muscleGroup: 'chest', involvement: 'primary' }] });
 
-    await expect(
-      rejectOnFactConflict({ getConstraints: async () => [fact] }, 'u1', [exercise], NOW),
-    ).resolves.toBeNull();
-  });
-
-  it('returns the userError outcome both tools return verbatim on a conflict', async () => {
-    const fact = makeFact();
-    const exercise = makeExercise();
-
-    const rejection = await rejectOnFactConflict({ getConstraints: async () => [fact] }, 'u1', [exercise], NOW);
-
-    expect(rejection).toEqual({
-      ok: false,
-      kind: 'user_error',
-      message:
-        'Cannot proceed: "Squat" primarily trains the quads, ' +
-        'but the user has a physical constraint: "User has a quad injury — avoid quad-dominant exercises.". ' +
-        'Remove or replace that exercise and explain the substitution to the user.',
+    await expect(guardFactConstraints({ getConstraints: async () => [fact] }, 'u1', [exercise], NOW)).resolves.toEqual({
+      rejection: null,
+      advisory: null,
     });
   });
 
+  it('a permanent conflict → the userError outcome both tools return verbatim, no advisory', async () => {
+    const verdict = await guardFactConstraints(
+      { getConstraints: async () => [makeFact()] },
+      'u1',
+      [makeExercise()],
+      NOW,
+    );
+
+    expect(verdict).toEqual({
+      rejection: {
+        ok: false,
+        kind: 'user_error',
+        message:
+          'Cannot proceed: "Squat" primarily trains the quads, ' +
+          'but the user has a physical constraint: "User has a quad injury — avoid quad-dominant exercises.". ' +
+          'Remove or replace that exercise and explain the substitution to the user.',
+      },
+      advisory: null,
+    });
+  });
+
+  it.each(['long_term', 'short'] as const)(
+    'a %s conflict → no rejection, an advisory naming the fact and every conflicting exercise',
+    async durability => {
+      const fact = makeFact({ durability });
+      const exercises = [
+        makeExercise({ id: 'ex-1', name: 'Squat' }),
+        makeExercise({ id: 'ex-2', name: 'Leg Press' }),
+        makeExercise({ id: 'ex-3', name: 'Lunge' }),
+      ];
+
+      const verdict = await guardFactConstraints({ getConstraints: async () => [fact] }, 'u1', exercises, NOW);
+
+      expect(verdict.rejection).toBeNull();
+      expect(verdict.advisory).toContain(fact.fact);
+      for (const name of ['Squat', 'Leg Press', 'Lunge']) {
+        expect(verdict.advisory).toContain(name);
+      }
+    },
+  );
+
+  it('a permanent fact alongside a short one → rejection (the advisory is not produced)', async () => {
+    const facts = [makeFact({ id: 'a', durability: 'short' }), makeFact({ id: 'b', durability: 'permanent' })];
+
+    const verdict = await guardFactConstraints({ getConstraints: async () => facts }, 'u1', [makeExercise()], NOW);
+
+    expect(verdict.rejection).not.toBeNull();
+    expect(verdict.advisory).toBeNull();
+  });
+
   it('accepts a Pick<IUserFactsService, "getConstraints"> — the narrow contract the tools hold', async () => {
-    // The tools' dependency is the full IUserFactsService; the guard must be
-    // satisfied with a Pick — proves the narrow contract at compile time.
     const factsService: Pick<IUserFactsService, 'getConstraints'> = {
       getConstraints: async () => [],
     };
 
-    await expect(rejectOnFactConflict(factsService, 'u1', [], NOW)).resolves.toBeNull();
+    await expect(guardFactConstraints(factsService, 'u1', [], NOW)).resolves.toEqual({
+      rejection: null,
+      advisory: null,
+    });
   });
 });

@@ -135,7 +135,7 @@ const makeExerciseWithMuscles = (
   muscleGroups,
 });
 
-const makeConstraintFact = (muscleGroup: UserFact['muscleGroup']): UserFact => ({
+const makeConstraintFact = (muscleGroup: UserFact['muscleGroup'], overrides: Partial<UserFact> = {}): UserFact => ({
   id: 'fact-1',
   userId: 'u1',
   category: 'physical_constraint',
@@ -158,6 +158,7 @@ const makeConstraintFact = (muscleGroup: UserFact['muscleGroup']): UserFact => (
   context: null,
   createdAt: new Date(),
   updatedAt: new Date(),
+  ...overrides,
 });
 
 const makeUserFactsService = (constraints: UserFact[] = []): jest.Mocked<IUserFactsService> =>
@@ -268,6 +269,125 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
 
     expect(isToolReturnWithUpdate(result)).toBe(true);
     expect(repo.create).toHaveBeenCalledTimes(1);
+  });
+
+  // AC-FL-6: only a `permanent` constraint blocks; everything else advises.
+  describe('non-permanent constraints advise instead of blocking (AC-FL-6)', () => {
+    const DEADLIFT = { id: '11111111-1111-4111-8111-111111111111', name: 'Conventional Deadlift' };
+    const ROW = { id: '22222222-2222-4222-8222-222222222222', name: 'Barbell Row' };
+    const HYPER = { id: '33333333-3333-4333-8333-333333333333', name: 'Hyperextension' };
+    const lowerBackPrimary = [{ muscleGroup: 'lower_back' as const, involvement: 'primary' as const }];
+
+    /** MINIMAL_PLAN with three extra lower-back-primary exercises. */
+    const planWithThreeProblemExercises = () => ({
+      ...MINIMAL_PLAN,
+      sessionTemplates: [
+        MINIMAL_PLAN.sessionTemplates[0],
+        {
+          ...MINIMAL_PLAN.sessionTemplates[1],
+          exercises: [DEADLIFT, ROW, HYPER].map(e => ({
+            exerciseId: e.id,
+            exerciseName: e.name,
+            energyCost: 'high',
+            targetSets: 3,
+            targetReps: '8',
+            restSeconds: 90,
+            estimatedDuration: 10,
+          })),
+        },
+      ],
+    });
+    const catalogWithThreeProblemExercises = () => {
+      const exerciseRepository = makeExerciseRepository();
+      exerciseRepository.findByIdsWithMuscles.mockResolvedValue([
+        makeExerciseWithMuscles([{ muscleGroup: 'chest', involvement: 'primary' }]),
+        ...[DEADLIFT, ROW, HYPER].map(e => makeExerciseWithMuscles(lowerBackPrimary, e.id, e.name)),
+      ]);
+      return exerciseRepository;
+    };
+
+    it.each(['long_term', 'short'] as const)(
+      'a %s constraint no longer rejects: the plan is saved and the result names the fact and EVERY conflicting exercise',
+      async durability => {
+        const repo = makeWorkoutPlanRepo();
+        const fact = makeConstraintFact('lower_back', {
+          durability,
+          fact: 'Lower back is sore after a fall',
+          phaseNote: durability === 'long_term' ? 'three weeks into recovery' : null,
+        });
+        const { saveWorkoutPlan } = buildTools(repo, makeUserFactsService([fact]), catalogWithThreeProblemExercises());
+
+        const result = (await saveWorkoutPlan.invoke(planWithThreeProblemExercises(), makeConfig('u1'))) as ToolReturn;
+
+        expect(repo.create).toHaveBeenCalledTimes(1); // persisted
+        expect(isToolReturnWithUpdate(result)).toBe(true); // the transition is still requested
+        const text = renderedContent(result);
+        expect(text).toContain('Plan saved');
+        expect(text).toContain('ADVISORY');
+        expect(text).toContain('Lower back is sore after a fall');
+        expect(text).toContain(durability);
+        for (const name of [DEADLIFT.name, ROW.name, HYPER.name]) {
+          expect(text).toContain(name); // not just the first
+        }
+        expect(text).not.toContain('Bench Press'); // an exercise without a conflict is not reported
+        expect(text).toMatch(/must address/i);
+        if (durability === 'long_term') {
+          expect(text).toContain('three weeks into recovery');
+        }
+      },
+    );
+
+    it('a permanent constraint still rejects, listing every conflicting exercise; nothing is persisted', async () => {
+      const repo = makeWorkoutPlanRepo();
+      const { saveWorkoutPlan } = buildTools(
+        repo,
+        makeUserFactsService([makeConstraintFact('lower_back', { durability: 'permanent' })]),
+        catalogWithThreeProblemExercises(),
+      );
+
+      const result = (await saveWorkoutPlan.invoke(planWithThreeProblemExercises(), makeConfig('u1'))) as ToolReturn;
+
+      expect(result).toMatchObject({ ok: false, kind: 'user_error' });
+      const { message } = result as { message: string };
+      for (const name of [DEADLIFT.name, ROW.name, HYPER.name]) {
+        expect(message).toContain(name);
+      }
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('a permanent constraint wins over a non-permanent one: rejected, and only the permanent fact is quoted', async () => {
+      const repo = makeWorkoutPlanRepo();
+      const { saveWorkoutPlan } = buildTools(
+        repo,
+        makeUserFactsService([
+          makeConstraintFact('lower_back', { id: 'f-short', durability: 'short', fact: 'Sore back today' }),
+          makeConstraintFact('lower_back', { id: 'f-perm', durability: 'permanent', fact: 'Fused spine' }),
+        ]),
+        catalogWithThreeProblemExercises(),
+      );
+
+      const result = (await saveWorkoutPlan.invoke(planWithThreeProblemExercises(), makeConfig('u1'))) as ToolReturn;
+
+      expect(result).toMatchObject({ ok: false, kind: 'user_error' });
+      expect((result as { message: string }).message).toContain('Fused spine');
+      expect((result as { message: string }).message).not.toContain('Sore back today');
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('a non-permanent constraint with no intersecting exercise leaves the summary byte-identical (no advisory)', async () => {
+      const { saveWorkoutPlan } = buildTools(
+        makeWorkoutPlanRepo(),
+        makeUserFactsService([makeConstraintFact('abs', { durability: 'long_term' })]),
+      );
+
+      const result = (await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig('u1'))) as ToolReturn;
+
+      expect(isToolReturnWithUpdate(result) ? result.outcome : result).toEqual({
+        ok: true,
+        summary:
+          'Plan saved. Now write a brief confirmation to the user in their language — congratulate them and say you are ready to start training.',
+      });
+    });
   });
 
   it('clean path keeps the byte-identical success summary', async () => {
