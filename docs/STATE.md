@@ -207,6 +207,15 @@ The orchestrator relays to a fresh session at clean boundaries (owner rule 2026-
   "привет" after a pause (AC-CC-5) closes BUG-018. Worktree `/Users/filko/orca/workspaces/fit_coach/chat-continuity`
   and branch `plan/chat-continuity` ready to clean up (owner-gated); run `run_b49c61f61663` keeps one
   idle worker terminal.
+- **`reply-latency-and-typing` (BUG-019) — done, merged to `dev` (2026-09-20)**: `LLM_MAX_TOKENS`
+  (16384, was a hard-coded 4096) and `LLM_REASONING_EFFORT` (`low|high|max|off`, default `low`) are
+  configuration; truncated answers are logged and never re-run blindly; the bot re-pulses the Telegram
+  typing action every 5.5 s while a reply is produced. Review clean after one ADR reconciliation.
+  **Owner action before any prod deploy:** pick `LLM_REASONING_EFFORT` for `.env.prod` (prod runs Gemini
+  via OpenRouter, which may reject the field — `off` omits it). Worktree
+  `/Users/filko/orca/workspaces/fit_coach/reply-latency-and-typing` and branch
+  `plan/reply-latency-and-typing` ready to clean up (owner-gated); run `run_609e642a70fa` has one idle
+  worker terminal.
 - **Test DB:** `fitcoach_test` (local container `fitcoach-db`); `.env.test` no longer sets
   `RUN_DB_TESTS` (backup `apps/server/.env.test.bak-20260920`, owner may ask to delete). Never
   run tests in two worktrees against it at once; workers never touch a DB by hand.

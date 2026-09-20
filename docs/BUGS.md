@@ -1051,7 +1051,7 @@ Unit tests per task and the mocked-model scenario (gap → "привет" → re
 
 ## BUG-019 — Replies take minutes: mandatory reasoning truncated by a 4096-token cap, then a blind full retry; the bot looks dead while waiting
 
-**Status:** Open — fix planned in `docs/superpowers/plans/reply-latency-and-typing.md`
+**Status:** Fixed in code (2026-09-20, plan `reply-latency-and-typing`: AC-RL-1..3) — closes after the dev deploy and the owner's own Telegram check (a plan-creation exchange: live typing, reply materially faster than 189 s)
 **Severity:** High (usability — the owner stopped waiting for an answer)
 **Found during:** owner's use of `@MyFitAiCoachDevBot`, 2026-09-20 04:57 UTC (plan_creation; the reply arrived after 3 min 9 s / ~4 min as perceived)
 **Component:** `apps/server/src/infra/ai/model.factory.ts` (`DEFAULT_MAX_TOKENS = 4096`), `apps/server/src/infra/ai/graph/nodes/agent.node.ts` (empty-response retry), `apps/bot` (one-shot typing action)
