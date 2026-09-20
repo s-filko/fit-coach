@@ -1,7 +1,7 @@
-# Fact Lifecycle and Course Check Implementation Plan
+# Fact Lifecycle — Storage, Conversational Tools, Summariser Operations Implementation Plan
 
 - Status: planned
-- Branch: plan/fact-lifecycle-and-course-check
+- Branch: plan/fact-lifecycle
 - After: reply-latency-and-typing
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and superpowers:test-driven-development. One plan task per worker session; stop after the task.
@@ -83,7 +83,11 @@ user override.
   result ("saved; note the constraint X — explain or replace"), which the coach must address. The
   user can always override in words.
 
-**Spec:** ADR-0009 (fact categories and storage), ADR-0013 §3.3/§6 (compaction, tool outcomes).
+**Wave A of two (split by the owner, 2026-09-21).** This plan gives memory a lifecycle and hands the
+user control of it; it changes no coaching behaviour. Wave B (`course-check-and-constraints`) adds the
+course-check layer and narrows the hard constraint block — behavioural, measured separately.
+
+**Spec:** ADR-0009 (fact categories and storage), ADR-0013 §3.3 (compaction).
 **Both need amendments; the orchestrator escalates the texts to the owner — no worker edits them.**
 
 **Acceptance criteria:**
@@ -96,12 +100,6 @@ user override.
   linked to the closed one.
 - **AC-FL-4** — the summariser receives the known facts and returns operations (add / confirm /
   update / retract) instead of a blind upsert.
-- **AC-FL-5** — the course check runs only on its events, its directive is persisted and reused while
-  its fingerprint holds, and a failed call never blocks a reply.
-- **AC-FL-6** — `save_workout_plan` / `start_training_session` hard-reject only `permanent`
-  constraints; other conflicts come back as an advisory the coach must address, and the plan is saved.
-- **AC-FL-7** — scenario cases compare "prompt-only" against "with the course check" on the same
-  journeys, so the layer is kept or dropped on evidence.
 - **AC-FL-8** — the user can review and control their own memory: on request the coach lists every
   active fact (grouped by category, each with its date, confirmation count and durability class) and,
   if asked, the archived ones with their closure reason; the user can have a fact corrected, archived
@@ -186,67 +184,10 @@ no trace). The tool exposes both; the model picks by intent and asks when the re
 
 ---
 
-### Task 4: The course check and its directive (AC-FL-5)
+### Task 4: Close-out (orchestrator)
 
-**Files:** `apps/server/src/infra/ai/course-check/` (the structured call on its own profile, the
-fingerprint, the pure event predicate), `graph/state.ts` (the persisted directive),
-`graph/nodes/prepare.node.ts` or `agent.node.ts` (the firing point), `prompts/blocks/course-directive.v1.ts`,
-`.env.example` (profile + on/off switch), tests.
-
-- [ ] **Step 1: Tests first** (mocked model) — fires on each event and on nothing else; a stable
-  fingerprint reuses the stored directive with zero calls; a changed fact set refires; a failed or
-  malformed call leaves the run untouched and logs a warn; the directive renders as one block; the
-  user's current message always outranks the stored directive.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `feat(ai): course-check directive at key points (AC-FL-5)`
-- [ ] **Step 4: STOP** for orchestrator review.
-
-**Verification:** as Task 1, plus the call-count assertions named above.
-
----
-
-### Task 5: The hard block shrinks to permanent constraints (AC-FL-6)
-
-**Files:** `domain/user/services/fact-conflicts.ts`, `infra/ai/tools/fact-constraint-guard.ts`,
-`save-workout-plan.tool.ts`, `start-training-session.tool.ts`, tests.
-
-- [ ] **Step 1: Tests first** — a `permanent` constraint still rejects (nothing persisted); a
-  long-term or short constraint no longer rejects: the call succeeds and the result carries an
-  advisory naming the fact and the exercise; an advisory lists **all** conflicting exercises, not just
-  the first; no constraint → unchanged.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `fix(training): only permanent constraints block a write; the rest advise (AC-FL-6)`
-- [ ] **Step 4: STOP** for orchestrator review.
-
-**Verification:** as Task 1.
-
----
-
-### Task 6: Journey cases for stale, closed and recurring facts (AC-FL-7)
-
-**Files:** `apps/server/evals/scenarios/` (new scenario modules reusing the Task 1–5 machinery),
-`tests/integration/scenarios/`, `evals/levels/l3.ts` if the live layer needs the new steps.
-
-- [ ] **Step 1:** author journeys: (a) a long-term injury whose review date comes up — one specific
-  question, the answer updates the fact; (b) the user says "it's fine now" — the fact is closed and
-  never asked again, and a later compaction of older evidence does not resurrect it; (c) a short state
-  that expires silently vs one that asks once; (d) the same short state recurring three times → a
-  pattern fact; (e) a plan containing an exercise that hits a non-permanent constraint → saved with an
-  advisory the coach relays; (f) the user asks what the coach remembers, then has one fact corrected
-  and one deleted outright — the listing reflects both on the next ask.
-- [ ] **Step 2:** the same journeys are runnable with the course check on and off, so the owner can
-  compare (AC-FL-7) — the comparison itself is an owner-launched live run, never a task.
-- [ ] **Step 3: Commit** — `test(ai): journeys for fact lifecycle and the course check (AC-FL-7)`
-- [ ] **Step 4: STOP** for orchestrator review.
-
-**Verification:** `npm run test:scenarios` → green; L0 green.
-
----
-
-### Task 7: Close-out (orchestrator)
-
-- [ ] One combined close-out review; ADR-0009 + ADR-0013 amendments (durability classes, fact
-  operations at compaction, the course-check directive, the narrowed hard block) — **texts escalated
-  to the owner before merge**; `- Status: done`; `state.mjs --write`; merge, push, deploy dev, health 200.
-- [ ] Dev smoke by the owner: state an injury, be asked about it at the right time, close it with
-  "it's fine now", and confirm it never comes back.
+- [ ] One combined close-out review; the ADR-0009 / ADR-0013 §3.3 amendment texts (durability classes,
+  fact operations at compaction, user-controlled memory) — **escalated to the owner before merge**;
+  `- Status: done`; `state.mjs --write`; merge, push, deploy dev, health 200, migration applied.
+- [ ] Dev smoke by the owner: ask the coach what it remembers, correct one fact, delete another, state
+  an injury and close it with "it's fine now" — it must not come back.

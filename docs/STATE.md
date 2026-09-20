@@ -15,7 +15,8 @@ _Generated 2026-09-20 from docs/superpowers/plans/ + git. Never hand-edit; regen
 — none —
 
 **Planned**
-- `fact-lifecycle-and-course-check.md` — Fact Lifecycle and Course Check Implementation Plan
+- `course-check-and-constraints.md` — Course Check and Constraint Handling Implementation Plan
+- `fact-lifecycle.md` — Fact Lifecycle — Storage, Conversational Tools, Summariser Operations Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 
