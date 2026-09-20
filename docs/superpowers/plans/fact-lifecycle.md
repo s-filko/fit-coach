@@ -1,6 +1,6 @@
 # Fact Lifecycle — Storage, Conversational Tools, Summariser Operations Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/fact-lifecycle
 - After: reply-latency-and-typing
 
@@ -189,8 +189,55 @@ no trace). The tool exposes both; the model picks by intent and asks when the re
 
 ### Task 4: Close-out (orchestrator)
 
-- [ ] One combined close-out review; the ADR-0009 / ADR-0013 §3.3 amendment texts (durability classes,
-  fact operations at compaction, user-controlled memory) — **escalated to the owner before merge**;
-  `- Status: done`; `state.mjs --write`; merge, push, deploy dev, health 200, migration applied.
-- [ ] Dev smoke by the owner: ask the coach what it remembers, correct one fact, delete another, state
-  an injury and close it with "it's fine now" — it must not come back.
+- [x] One combined close-out review; the ADR-0009 / ADR-0013 §3.3 amendment texts (durability classes,
+  fact operations at compaction, user-controlled memory) — **written by the orchestrator, not escalated;
+  see the decision table below**; `- Status: done`; `state.mjs --write`; merge, push, deploy dev, health 200,
+  migration applied.
+- [x] Dev smoke: run by the orchestrator through the bot API (the owner asked for it on 2026-09-21
+  instead of doing it by hand), on a throwaway user — ask the coach what it remembers, correct one fact,
+  delete another, state an injury and close it with "it's fine now", then read the `user_facts` columns
+  directly.
+
+## Review
+
+- Review: 2026-09-21 | clean after one fix round | one combined agent over the whole wave diff (R1–R4 in
+  one pass, per the owner's one-review-per-phase rule).
+- **First pass: 3 blocking, 3 advisory.** All three blocking findings were verified in the code by the
+  orchestrator before being sent back, and all three were real:
+  1. **A `permanent` fact stated in a compacted episode was silently dropped.** The v4 prompt asks the
+     model for `durability: "permanent"` on an irreversible condition, but the operation schema carried no
+     explicit-permanence flag and `supersedeFact` hardcoded `{ explicit: false, confirmations: 1 }`, so the
+     gate could never open and `PermanentFactRefusal` was logged at info and forgotten. The one class of
+     fact whose loss actually matters. Fixed in two halves: the flag is carried through schema, prompt and
+     both write paths, and a refused permanent is now stored as `long_term` at the class-minimum review
+     date with a context note instead of being dropped (the live tool path keeps refusing and asking).
+  2. **Deleting a fact that had history raised a foreign-key violation** — `supersedes_id` was
+     `ON DELETE no action`, and those links are created on every correction of a closed fact, i.e. exactly
+     the facts a user asks to erase. AC-FL-8 promises no trace. Migration `0008` makes the link
+     `ON DELETE SET NULL`.
+  3. **`rememberFact` could surface a raw unique violation** — select-then-branch is not atomic and the
+     partial unique index was the only guard; the tool caught only `PermanentFactRefusal`. Now the `23505`
+     is caught by code (never message text), the row re-read, and the call falls through to the same update
+     path, so the caller always gets a normal outcome.
+- Advisories, all fixed in the same commit: the SQL visibility filter now checks durability so it cannot
+  drift from `isActiveForPrompt`; the schema comment describes the select-then-branch write instead of
+  calling it an idempotent upsert; and the three "a made-up id is a schema rejection" comments now say what
+  is true — the schema checks UUID format only, an invented well-formed id is a later no-op.
+- Re-run by the orchestrator after the fix (`38f84746`): `npx jest --ci src/infra/ai` 59 suites / 488
+  tests, subset 26 / 172, `test:unit` 111 / 983, L0 96/96, the FULL integration suite 21 suites / 389 tests
+  on the real `fitcoach_test`, type-check clean.
+
+## Decided without the owner (2026-09-21)
+
+The owner went to sleep mid-wave and authorised deciding on his behalf, marking what was decided, and
+reporting it in the morning ("если не то — откачусь или пофиксим"). Each row is independently reversible.
+
+| # | Decision | Why | How to undo |
+|---|---|---|---|
+| D-1 | The ADR-0009 / ADR-0013 §3.3 amendment texts were **written and merged by the orchestrator** instead of being escalated for approval before merge | The plan required escalation, but the owner was asleep and asked for decisions to be made | Both amendments are self-contained sections marked with this table; edit or revert them without touching code |
+| D-2 | A refused `permanent` from the summariser is **downgraded to `long_term`**, not dropped | Losing an irreversible constraint is the worst outcome of this wave; the alternative was silence | Delete `rememberFromEpisode` / `supersedeFromEpisode` in `compact.node.ts` and call the port directly again |
+| D-3 | The explicit-permanence flag is **model-asserted** (the summariser sets it when the user said it in their own words) rather than code-inferred | Nothing in the code can see "the user stated it explicitly" — only the transcript can | Drop the flag from the operation schema; the gate then falls back to the ≥ 3 confirmations rule |
+| D-4 | `supersedes_id` became `ON DELETE SET NULL` (migration `0008`) instead of blocking the delete or cascading | The history link is optional by nature; a hard delete must not be refused, and must not take other facts with it | Regenerate the constraint as `no action` |
+| D-5 | The close-out review ran as **one combined agent covering all four zones**, on Sonnet, not four zone agents | The owner's standing cost rule (one review per phase; combined agent for anything but a large architectural change) and a nearly exhausted quota | Re-run `close-out-review` in full on the merged branch |
+| D-6 | The dev smoke was run by the orchestrator through the bot API on a **throwaway user** (`smoke_factlife`), not by the owner by hand, and it wrote a fixture row to the dev DB | The owner explicitly asked for it | Delete the smoke user's rows; the owner can still repeat the smoke by hand |
+| D-7 | Branches, worktrees and Orca sessions were **not** cleaned up | The deletion hook needs a human approval that nobody could give at night, and deletion stays owner-gated | Nothing to undo — they are reported as ready to clean up |

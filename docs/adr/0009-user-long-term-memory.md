@@ -40,6 +40,79 @@ Implement a **passive always-on memory extraction layer** that listens to every 
 
 ---
 
+## Amendment 2026-09-21 — fact lifecycle (supersedes parts of the Decision above)
+
+> **Decided without the owner (2026-09-21).** The owner was away and authorised deciding on his
+> behalf and marking what was decided. This amendment records what the `fact-lifecycle` plan
+> (wave A) shipped; it is reversible — the plan's decision table lists it.
+
+The **passive per-turn extraction layer** and the `remember_fact`-in-every-subgraph mechanism
+described above were superseded twice, both times by the owner:
+
+- **2026-09-17** — extraction moved to summarisation only: facts come from the summariser's
+  structured output at compaction, `remember_fact` was dropped, `user_facts` stayed.
+- **2026-09-20** — the conversational half was deliberately restored: the case the 09-17 decision
+  did not cover is "the user says something important now and it must stick now". Facts are now
+  written **both** at compaction and in conversation, through one tool.
+
+### Durability: the model judges, the code bounds
+
+Every fact carries a durability class, and the class decides whether it ages:
+
+| Class | Dates | Meaning |
+|---|---|---|
+| `permanent` | none | Irreversible condition (missing limb, irreversible diagnosis). Never re-asked. |
+| `long_term` | `review_after` + `phase_note` / `phase_at` | Fracture, surgery, a months-long recovery. The coach re-asks when the date arrives, with a specific question. |
+| `short` | `expires_at` + `on_expiry` | A state that resolves in days (soreness, bad sleep, a tweak). On expiry it is either forgotten silently (`forget`) or asked about once (`ask_once`). |
+
+The **model** picks the class, the TTL / review distance and `on_expiry`; the **code** clamps them
+(short 1–14 days, long-term 14–182 days) and refuses `permanent` unless the user stated the
+irreversibility explicitly or the fact already carries ≥ 3 confirmations. Those numbers live in
+exactly one module, `domain/user/services/fact-lifecycle.ts`, and nothing else restates them.
+
+### Closure: the user's word wins, and the archive is kept
+
+- `status` is `active | archived`; `archived_reason` is `user_closed | expired | superseded`.
+- **Retract and delete are two operations and are never silently swapped.** Retract archives (the
+  row, its history and its confirmation counter survive); delete removes the row entirely. The
+  coach asks which is meant when the request is ambiguous.
+- A closed fact is **never re-opened in place**. Newer evidence creates a **new** row linked to the
+  closed one through `supersedes_id`, and the closed row keeps its archive — that record is what a
+  later recurrence promotion (a short state that keeps coming back becomes a
+  `physiological_pattern`) will count.
+- A closed fact key is re-created **only from evidence newer than the closure**. The comparison
+  uses the evidence clock, not the run clock — see ADR-0013 §3.3's 2026-09-21 amendment.
+
+### User-controlled memory
+
+`list_facts` answers "what do you remember about me": active facts grouped by category, each with
+its date, confirmation count and durability class, and the archived ones with their closure reason
+when asked. The `## User Facts` prompt block cannot serve this — it is capped and ordered for
+steering, not for review. `manage_fact` (`save | retract | delete`) is how a correction, a closure
+or an erasure is carried out during a conversation.
+
+### Storage
+
+One table, extended — no new table and no rewrite. `user_facts` gained `durability`, `expires_at`,
+`review_after`, `phase_note`, `phase_at`, `on_expiry`, `status`, `archived_at`, `archived_reason`,
+`closed_by_user_at`, `supersedes_id` and `context` (migration `0006`, additive: existing rows
+became `permanent` / `active` with no dates, which changes nothing behaviourally). Uniqueness of
+`(user_id, category, fact_key)` now holds **among active rows only** — a partial unique index
+(migration `0007`), because a Postgres UNIQUE constraint cannot be partial and closed history must
+be able to keep its key.
+
+Reads (`getForPrompt`, `getConstraints`) take the run clock as data and exclude archived and
+expired rows; the prompt block (`USER_FACTS_V2`) renders each fact with its date and confirmation
+count, so the model can tell yesterday from six months ago.
+
+### What this amendment does NOT change
+
+The hard rejection of an exercise whose primary muscles hit a `physical_constraint` fact (P6, D-G)
+still applies to **every** active constraint fact. Narrowing that block to `permanent` and turning
+the rest into advisory guidance is wave B (`course-check-and-constraints`), measured separately.
+
+---
+
 ## Fact Categories
 
 | Category | Description | Example (stored form) |

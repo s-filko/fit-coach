@@ -12,7 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-20 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `fact-lifecycle.md` — Fact Lifecycle — Storage, Conversational Tools, Summariser Operations Implementation Plan (branch: `plan/fact-lifecycle`, last commit 2026-09-21)
+— none —
 
 **Planned**
 - `course-check-and-constraints.md` — Course Check and Constraint Handling Implementation Plan
@@ -22,6 +22,7 @@ _Generated 2026-09-20 from docs/superpowers/plans/ + git. Never hand-edit; regen
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
 - `chat-continuity.md` — Chat Continuity — Compaction Keeps the Recent Conversation, the Reply Answers the Latest Message Implementation Plan
+- `fact-lifecycle.md` — Fact Lifecycle — Storage, Conversational Tools, Summariser Operations Implementation Plan
 - `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
 - `ports-layout-consistency.md` — Ports Layout Consistency Implementation Plan
