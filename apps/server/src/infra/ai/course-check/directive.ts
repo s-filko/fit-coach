@@ -41,3 +41,16 @@ export interface StoredCourseDirective {
   /** ISO — ctx.now of the generating run (observability only, never a predicate input). */
   generatedAt: string;
 }
+
+/**
+ * The last FAILED attempt (call error or malformed answer) — persisted next to
+ * the directive so a provider outage backs off instead of costing one failed
+ * call per turn. The cooldown covers only this fingerprint: changed inputs are
+ * a new question and may fire at once.
+ */
+export interface CourseCheckFailure {
+  /** The fingerprint the attempt failed on. */
+  fingerprint: string;
+  /** ISO — ctx.now of the failing run (a predicate input, from the run clock). */
+  at: string;
+}

@@ -12,7 +12,7 @@ import type {
 } from '@domain/training/ports';
 import type { IUserFactsService, IUserService } from '@domain/user/ports';
 
-import { buildCourseCheckStep } from '@infra/ai/course-check/course-check.step';
+import { buildCourseCheckStep, DEFAULT_RETRY_COOLDOWN_MS } from '@infra/ai/course-check/course-check.step';
 
 import type { TokenBudgetOverride } from '@config/llm-budget-overrides';
 
@@ -52,6 +52,11 @@ export interface ConversationGraphDeps {
    * absent means enabled (the layer is the shipped behaviour).
    */
   courseCheckEnabled?: boolean;
+  /**
+   * COURSE_CHECK_RETRY_COOLDOWN_MINUTES in ms — how long a failed check is not
+   * retried on the same fingerprint. Optional like the switch; absent = 15 min.
+   */
+  courseCheckRetryCooldownMs?: number;
   /** LLM_BUDGET_<PHASE>_<PART> overrides (P4 context-budget plan Task 3), resolved once here. */
   budgetOverrides?: Record<string, TokenBudgetOverride>;
   checkpointer: BaseCheckpointSaver;
@@ -87,7 +92,11 @@ function buildGraph(deps: ConversationGraphDeps) {
     llmGateway,
     userFacts,
     trainingService,
-    config: { enabled: deps.courseCheckEnabled ?? true, gapMs: episodeConfig.gapMs },
+    config: {
+      enabled: deps.courseCheckEnabled ?? true,
+      gapMs: episodeConfig.gapMs,
+      retryCooldownMs: deps.courseCheckRetryCooldownMs ?? DEFAULT_RETRY_COOLDOWN_MS,
+    },
   });
 
   // prepare routes to 'route' normally and short-circuits dead training

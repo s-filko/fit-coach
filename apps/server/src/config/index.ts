@@ -61,6 +61,10 @@ export const EnvSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform(v => v === 'true'),
+  // How long a FAILED course check is not re-attempted on the same inputs
+  // (minutes) — a provider outage must make the layer quieter, not cost one
+  // failed call per turn. New inputs are never covered by it.
+  COURSE_CHECK_RETRY_COOLDOWN_MINUTES: z.coerce.number().positive().default(15),
   // Inference tunables (BUG-019 / AC-RL-1) — same tunables-not-secrets class as
   // EPISODE_*. GLM-5.3 always reasons and reasoning spends the same output budget,
   // so the old hard-coded 4096 cap starved the answer entirely; the cap must leave

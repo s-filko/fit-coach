@@ -113,6 +113,7 @@ export async function registerInfraServices(container: Container = getGlobalCont
     budgetOverrides: config.LLM_BUDGETS,
     // AC-FL-5 (course-check plan Task 1): the layer's on/off switch, resolved once here.
     courseCheckEnabled: config.COURSE_CHECK_ENABLED,
+    courseCheckRetryCooldownMs: config.COURSE_CHECK_RETRY_COOLDOWN_MINUTES * 60_000,
     checkpointer,
   });
   // The compiled graph under its token: infra-internal, but the scenario

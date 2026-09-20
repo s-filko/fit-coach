@@ -16,7 +16,7 @@
 //
 // Everything else returns null — no model call, the run costs what it costs
 // today. No I/O, no clock reads: `now` and `lastUserMessageAt` are data.
-import type { StoredCourseDirective } from './directive';
+import type { CourseCheckFailure, StoredCourseDirective } from './directive';
 
 export type CourseCheckEvent = 'fingerprint_changed' | 'long_gap';
 
@@ -31,13 +31,34 @@ export interface CourseCheckEventInput {
   lastUserMessageAt: Date | null;
   /** EPISODE_GAP_HOURS × 3_600_000, threaded from the episode config. */
   gapMs: number;
+  /** state.courseCheckFailure — the last failed attempt; null when the last one succeeded. */
+  failure: CourseCheckFailure | null;
+  /** COURSE_CHECK_RETRY_COOLDOWN_MINUTES in ms, threaded as data like `gapMs`. */
+  cooldownMs: number;
+}
+
+/**
+ * True while a failed attempt on THIS fingerprint is still cooling down. Only
+ * the same fingerprint is covered: changed inputs are a new question.
+ */
+function coolingDown(input: CourseCheckEventInput): boolean {
+  const { failure, fingerprint, now, cooldownMs } = input;
+  if (failure === null || failure.fingerprint !== fingerprint) {
+    return false;
+  }
+  return now.getTime() - new Date(failure.at).getTime() < cooldownMs;
 }
 
 /**
  * The event that fires the check this run, or null. Fingerprint first: a
- * changed fingerprint explains itself, and nothing-stored is its edge case.
+ * changed fingerprint explains itself, and nothing-stored is its edge case. A
+ * failed attempt on the same fingerprint backs off for the cooldown — the
+ * stored directive keeps rendering, the run costs what it costs today.
  */
 export function courseCheckEvent(input: CourseCheckEventInput): CourseCheckEvent | null {
+  if (coolingDown(input)) {
+    return null;
+  }
   if (input.stored === null || input.stored.fingerprint !== input.fingerprint) {
     return 'fingerprint_changed';
   }

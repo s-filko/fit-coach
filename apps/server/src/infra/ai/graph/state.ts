@@ -11,7 +11,7 @@ import type { CompactReason, StoredEpisodeSummary } from '@domain/conversation/e
 import type { TransitionRequest } from '@domain/conversation/transitions';
 import type { User } from '@domain/user/services/user.service';
 
-import type { StoredCourseDirective } from '@infra/ai/course-check/directive';
+import type { CourseCheckFailure, StoredCourseDirective } from '@infra/ai/course-check/directive';
 import type { RunMetricsCollector } from '@infra/ai/run-metrics';
 
 export const ConversationState = Annotation.Root({
@@ -43,6 +43,10 @@ export const ConversationState = Annotation.Root({
   // holds, cleared to null when the layer is switched off. Plain JSON, so the
   // checkpointer round-trips it without adapters.
   courseDirective: Annotation<StoredCourseDirective | null>({ reducer: (_, v) => v, default: () => null }),
+  // The last failed course-check attempt (fingerprint + when): the cooldown
+  // input that keeps a provider outage from costing a failed call per turn.
+  // Cleared by the next success or when the layer is switched off.
+  courseCheckFailure: Annotation<CourseCheckFailure | null>({ reducer: (_, v) => v, default: () => null }),
 });
 
 export type ConversationStateType = typeof ConversationState.State;

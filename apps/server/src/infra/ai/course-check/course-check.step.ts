@@ -7,8 +7,11 @@
  * fingerprint changes.
  *
  * Failure discipline (the AC's "never blocks a reply"): a failed or malformed
- * call logs a warn and returns {} — the run continues exactly as it would
- * without the layer, and a previously stored directive is NOT overwritten.
+ * call logs a warn and records the failed attempt (fingerprint + run time) —
+ * the run continues exactly as it would without the layer, a previously stored
+ * directive is NOT overwritten, and the same fingerprint is not re-attempted
+ * until the cooldown passes (a provider outage gets quieter, not chattier;
+ * changed inputs fire at once).
  * Degraded reads degrade to what is known: a failed facts load is an empty
  * list, a failed plan load is "no plan" — the check still runs on the rest.
  *
@@ -44,25 +47,41 @@ export interface CourseCheckStepDeps {
     enabled: boolean;
     /** EPISODE_GAP_HOURS × 3_600_000 — the long-gap event's threshold, threaded as data. */
     gapMs: number;
+    /** A failed check is not re-attempted on the same fingerprint for this long (ms), threaded as data. */
+    retryCooldownMs: number;
   };
 }
+
+/** COURSE_CHECK_RETRY_COOLDOWN_MINUTES default (15 min) — used when the composition root passes none. */
+export const DEFAULT_RETRY_COOLDOWN_MS = 15 * 60_000;
 
 export type CourseCheckStep = (
   state: ConversationStateType,
   config: RunnableConfig,
 ) => Promise<Partial<ConversationStateType>>;
 
+/**
+ * A failed attempt leaves the directive channel untouched (the previous one
+ * keeps rendering) and remembers WHAT failed and WHEN, so the same fingerprint
+ * is not re-attempted every turn while the provider is down.
+ */
+function failed(fingerprint: string, now: Date): Partial<ConversationStateType> {
+  return { courseCheckFailure: { fingerprint, at: now.toISOString() } };
+}
+
 export function buildCourseCheckStep(deps: CourseCheckStepDeps): CourseCheckStep {
   const { llmGateway, userFacts, trainingService } = deps;
   // Destructured up front — the closure's `config` parameter is the LangGraph
   // RunnableConfig and shadows nothing (same discipline as the compact step).
-  const { enabled, gapMs } = deps.config;
+  const { enabled, gapMs, retryCooldownMs } = deps.config;
 
   return async function courseCheckStep(state, config): Promise<Partial<ConversationStateType>> {
     if (!enabled) {
       // Off means off: a stored directive stops rendering — cleared once, then
       // the channel stays empty without further state writes.
-      return state.courseDirective === null ? {} : { courseDirective: null };
+      return state.courseDirective === null && state.courseCheckFailure === null
+        ? {}
+        : { courseDirective: null, courseCheckFailure: null };
     }
 
     const ctx = ctxOf(config as never);
@@ -93,6 +112,8 @@ export function buildCourseCheckStep(deps: CourseCheckStepDeps): CourseCheckStep
       now,
       lastUserMessageAt: state.lastUserMessageAt !== null ? new Date(state.lastUserMessageAt) : null,
       gapMs,
+      failure: state.courseCheckFailure,
+      cooldownMs: retryCooldownMs,
     });
     if (event === null) {
       return {};
@@ -119,17 +140,20 @@ export function buildCourseCheckStep(deps: CourseCheckStepDeps): CourseCheckStep
           { userId, runId, phase: state.phase, event, err: parsed.error },
           'Course check returned a malformed directive — ignoring it',
         );
-        return {};
+        return failed(fingerprint, now);
       }
       const directive = parsed.data;
       log.info({ userId, runId, phase: state.phase, event }, 'Course-check directive generated');
-      return { courseDirective: { fingerprint, directive, generatedAt: now.toISOString() } };
+      return {
+        courseDirective: { fingerprint, directive, generatedAt: now.toISOString() },
+        courseCheckFailure: null,
+      };
     } catch (err) {
       log.warn(
         { err, userId, runId, phase: state.phase, event },
         'Course check failed — the run continues without a new directive',
       );
-      return {};
+      return failed(fingerprint, now);
     }
   };
 }

@@ -202,6 +202,37 @@ describe('course check through the graph (AC-FL-5)', () => {
     expect(directiveBlocks(lastModelInput())).toHaveLength(0);
   });
 
+  it('back-off through the checkpointer: after a failure, ordinary turns on the same inputs cost ONE call in total, the stale directive keeps rendering, new inputs fire at once', async () => {
+    const { deps, facts, structured } = makeHarness();
+    const graph = buildConversationGraph(deps);
+
+    await turn(graph, 1, 0, 'Привет');
+    expect(structured).toHaveBeenCalledTimes(1);
+
+    // The inputs move and the provider goes down: one failed attempt …
+    facts.push(fact('f2', 'Trains at home with dumbbells'));
+    structured.mockRejectedValue(new Error('provider down'));
+    await turn(graph, 2, 1, 'Я тренируюсь дома');
+    expect(structured).toHaveBeenCalledTimes(2);
+
+    // … then five ordinary turns inside the cooldown cost nothing more, and
+    // every one of them still carries the previously stored directive.
+    for (let n = 3; n <= 7; n++) {
+      await turn(graph, n, 1 + (n - 2) / 60, 'Ок');
+      expect(directiveBlocks(lastModelInput())).toHaveLength(1);
+      expect(String(directiveBlocks(lastModelInput())[0]!.content)).toContain('Build muscle 3×/week');
+    }
+    expect(structured).toHaveBeenCalledTimes(2);
+    expect(logFns.warn).toHaveBeenCalledTimes(1);
+
+    // New inputs are not covered by the cooldown.
+    facts.push(fact('f3', 'No barbell'));
+    structured.mockResolvedValue({ ...DIRECTIVE, vector: 'Home dumbbell training' });
+    await turn(graph, 8, 1.2, 'И штанги нет');
+    expect(structured).toHaveBeenCalledTimes(3);
+    expect(String(directiveBlocks(lastModelInput())[0]!.content)).toContain('Home dumbbell training');
+  });
+
   it('a malformed answer is ignored the same way — the run is untouched', async () => {
     const { deps, structured } = makeHarness();
     structured.mockResolvedValue({ topics: [] });

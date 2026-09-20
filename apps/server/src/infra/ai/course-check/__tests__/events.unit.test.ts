@@ -13,6 +13,7 @@ import { courseCheckEvent } from '../events';
 
 const NOW = new Date('2026-09-21T12:00:00Z');
 const GAP_MS = 3 * 3_600_000; // EPISODE_GAP_HOURS × 3_600_000, threaded as data
+const COOLDOWN_MS = 15 * 60_000; // COURSE_CHECK_RETRY_COOLDOWN_MINUTES, threaded as data
 
 function input(overrides: Partial<Parameters<typeof courseCheckEvent>[0]> = {}) {
   return {
@@ -21,6 +22,8 @@ function input(overrides: Partial<Parameters<typeof courseCheckEvent>[0]> = {}) 
     now: NOW,
     lastUserMessageAt: new Date('2026-09-21T11:00:00Z'),
     gapMs: GAP_MS,
+    failure: null,
+    cooldownMs: COOLDOWN_MS,
     ...overrides,
   };
 }
@@ -50,5 +53,29 @@ describe('courseCheckEvent (AC-FL-5: fires on its events, on nothing else)', () 
 
   it('no lastUserMessageAt and a stored directive → null (the first-ever run is covered by nothing-stored)', () => {
     expect(courseCheckEvent(input({ lastUserMessageAt: null }))).toBeNull();
+  });
+
+  describe('back-off after a failed attempt (the cooldown covers only the failed fingerprint)', () => {
+    const failedAt = (msAgo: number) => ({ fingerprint: 'fp-2', at: new Date(NOW.getTime() - msAgo).toISOString() });
+
+    it('same fingerprint inside the cooldown → null, even though the stored directive is stale', () => {
+      expect(courseCheckEvent(input({ fingerprint: 'fp-2', failure: failedAt(60_000) }))).toBeNull();
+      expect(courseCheckEvent(input({ fingerprint: 'fp-2', stored: null, failure: failedAt(60_000) }))).toBeNull();
+    });
+
+    it('same fingerprint once the cooldown has elapsed → fires again (>=, same edge as the gap)', () => {
+      expect(courseCheckEvent(input({ fingerprint: 'fp-2', failure: failedAt(COOLDOWN_MS - 1) }))).toBeNull();
+      expect(courseCheckEvent(input({ fingerprint: 'fp-2', failure: failedAt(COOLDOWN_MS) }))).toBe(
+        'fingerprint_changed',
+      );
+    });
+
+    it('a different fingerprint inside the cooldown → fires at once', () => {
+      expect(courseCheckEvent(input({ fingerprint: 'fp-3', failure: failedAt(60_000) }))).toBe('fingerprint_changed');
+    });
+
+    it('no remembered failure → unchanged behaviour', () => {
+      expect(courseCheckEvent(input({ fingerprint: 'fp-2', failure: null }))).toBe('fingerprint_changed');
+    });
   });
 });

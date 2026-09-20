@@ -34,6 +34,7 @@ const NOW = new Date('2026-09-21T12:00:00Z');
 const RUN_ID = 'run-2';
 const USER_ID = 'u1';
 const GAP_MS = 3 * 3_600_000;
+const COOLDOWN_MS = 15 * 60_000;
 const PLAN_ID = 'plan-1';
 
 const DIRECTIVE: CourseCheckDirective = {
@@ -84,6 +85,7 @@ function state(overrides: Partial<ConversationStateType> = {}): ConversationStat
     lastUserMessageAt: new Date(NOW.getTime() - 3_600_000).toISOString(), // ordinary cadence
     compactReason: null,
     courseDirective: null,
+    courseCheckFailure: null,
     ...overrides,
   };
 }
@@ -122,7 +124,7 @@ function makeDeps(overrides: DepsOverrides = {}): CourseCheckStepDeps {
     trainingService: {
       getActivePlan: jest.fn(() => Promise.resolve({ id: PLAN_ID })),
     } as unknown as ITrainingService,
-    config: { enabled: overrides.enabled ?? true, gapMs: GAP_MS },
+    config: { enabled: overrides.enabled ?? true, gapMs: GAP_MS, retryCooldownMs: COOLDOWN_MS },
   };
 }
 
@@ -241,7 +243,9 @@ describe('buildCourseCheckStep (AC-FL-5)', () => {
     const updates = await step(state({ courseDirective: stored }), ctxConfig());
 
     expect(deps.llmGateway.structured).toHaveBeenCalledTimes(1);
-    expect(updates).toEqual({}); // no courseDirective key — the stored one stays
+    expect(updates).toEqual({
+      courseCheckFailure: { fingerprint: expectedFingerprint([fact()], 'chat'), at: NOW.toISOString() },
+    });
     expect(logFns.warn).toHaveBeenCalledTimes(1);
     expect(logFns.warn.mock.calls[0]?.[1]).toMatch(/failed/i);
   });
@@ -257,7 +261,9 @@ describe('buildCourseCheckStep (AC-FL-5)', () => {
 
     const updates = await step(state(), ctxConfig());
 
-    expect(updates).toEqual({});
+    expect(updates).toEqual({
+      courseCheckFailure: { fingerprint: expectedFingerprint([fact()], 'chat'), at: NOW.toISOString() },
+    });
     expect(logFns.warn).toHaveBeenCalledTimes(1);
   });
 
@@ -270,7 +276,9 @@ describe('buildCourseCheckStep (AC-FL-5)', () => {
 
     const updates = await step(state(), ctxConfig());
 
-    expect(updates).toEqual({});
+    expect(updates).toEqual({
+      courseCheckFailure: { fingerprint: expectedFingerprint([fact()], 'chat'), at: NOW.toISOString() },
+    });
     expect(logFns.warn).toHaveBeenCalledTimes(1);
     expect(logFns.warn.mock.calls[0]?.[1]).toMatch(/malformed/i);
   });
@@ -283,7 +291,7 @@ describe('buildCourseCheckStep (AC-FL-5)', () => {
       state({ courseDirective: { fingerprint: 'x', directive: DIRECTIVE, generatedAt: NOW.toISOString() } }),
       ctxConfig(),
     );
-    expect(clears).toEqual({ courseDirective: null });
+    expect(clears).toEqual({ courseDirective: null, courseCheckFailure: null });
     expect(deps.llmGateway.structured).not.toHaveBeenCalled();
 
     const stays = await step(state(), ctxConfig());
@@ -409,7 +417,39 @@ describe('buildCourseCheckStep (AC-FL-5)', () => {
     expect(current.courseDirective?.directive).toEqual(DIRECTIVE);
   });
 
-  it('a failed refire never overwrites the stored directive, and the next run retries', async () => {
+  // --- Back-off: a provider outage gets quieter, not chattier ---
+
+  /** Carry a step's updates into the next run's state — what the checkpointer does between runs. */
+  function carry(prev: ConversationStateType, updates: Partial<ConversationStateType>): ConversationStateType {
+    return { ...prev, ...updates };
+  }
+
+  it('a failed call followed by N ordinary turns on the same fingerprint issues exactly ONE model call', async () => {
+    const stored = storedFor([fact()]);
+    const newFacts = [fact(), fact({ id: 'f2', factKey: 'k2', fact: 'Trains at home', category: 'equipment' })];
+    const deps = makeDeps({ facts: newFacts, structured: () => Promise.reject(new Error('provider down')) });
+    const step = buildCourseCheckStep(deps);
+    let current = state({ courseDirective: stored });
+
+    current = carry(current, await step(current, ctxConfig())); // the one failed attempt
+    expect(current.courseCheckFailure).toEqual({
+      fingerprint: expectedFingerprint(newFacts, 'chat'),
+      at: NOW.toISOString(),
+    });
+    for (let i = 1; i <= 6; i++) {
+      // ordinary turns, a few minutes apart, all inside the cooldown
+      const updates = await step(current, ctxConfig(new Date(NOW.getTime() + i * 60_000)));
+      expect(updates).toEqual({});
+      current = carry(current, updates);
+    }
+
+    expect(deps.llmGateway.structured).toHaveBeenCalledTimes(1);
+    expect(logFns.warn).toHaveBeenCalledTimes(1);
+    // The previously stored directive was never touched — it keeps rendering.
+    expect(current.courseDirective).toEqual(stored);
+  });
+
+  it('after the cooldown elapses the same fingerprint retries once — and a success clears the failure', async () => {
     const stored = storedFor([fact()]);
     const newFacts = [fact(), fact({ id: 'f2', factKey: 'k2', fact: 'Trains at home', category: 'equipment' })];
     const structured = jest
@@ -418,15 +458,91 @@ describe('buildCourseCheckStep (AC-FL-5)', () => {
       .mockResolvedValueOnce(DIRECTIVE);
     const deps = makeDeps({ facts: newFacts, structured });
     const step = buildCourseCheckStep(deps);
+    let current = state({ courseDirective: stored });
 
-    const failed = await step(state({ courseDirective: stored }), ctxConfig());
-    expect(failed).toEqual({});
-    expect(logFns.warn).toHaveBeenCalledTimes(1);
+    current = carry(current, await step(current, ctxConfig()));
+    expect(structured).toHaveBeenCalledTimes(1);
 
-    // The stored fingerprint is still stale, so the event still holds: one retry, then it settles.
-    const retried = await step(state({ courseDirective: stored }), ctxConfig());
-    expect(retried.courseDirective?.fingerprint).toBe(expectedFingerprint(newFacts, 'chat'));
+    // One millisecond before the cooldown ends: still quiet.
+    const almost = new Date(NOW.getTime() + COOLDOWN_MS - 1);
+    expect(await step(current, ctxConfig(almost))).toEqual({});
+    expect(structured).toHaveBeenCalledTimes(1);
+
+    // At the cooldown: one retry, which succeeds and settles everything.
+    const later = new Date(NOW.getTime() + COOLDOWN_MS);
+    const retried = await step(current, ctxConfig(later));
     expect(structured).toHaveBeenCalledTimes(2);
+    expect(retried.courseDirective?.directive).toEqual(DIRECTIVE);
+    expect(retried.courseCheckFailure).toBeNull();
+  });
+
+  it('a retry that fails again restarts the cooldown from the new failure', async () => {
+    const stored = storedFor([fact()]);
+    const newFacts = [fact(), fact({ id: 'f2', factKey: 'k2', fact: 'Trains at home', category: 'equipment' })];
+    const deps = makeDeps({ facts: newFacts, structured: () => Promise.reject(new Error('provider down')) });
+    const step = buildCourseCheckStep(deps);
+    let current = state({ courseDirective: stored });
+
+    current = carry(current, await step(current, ctxConfig()));
+    const retryAt = new Date(NOW.getTime() + COOLDOWN_MS);
+    current = carry(current, await step(current, ctxConfig(retryAt)));
+    expect(deps.llmGateway.structured).toHaveBeenCalledTimes(2);
+    expect(current.courseCheckFailure?.at).toBe(retryAt.toISOString());
+
+    // Half a cooldown after the SECOND failure: quiet again.
+    const updates = await step(current, ctxConfig(new Date(retryAt.getTime() + COOLDOWN_MS / 2)));
+    expect(updates).toEqual({});
+    expect(deps.llmGateway.structured).toHaveBeenCalledTimes(2);
+  });
+
+  it('a NEW fingerprint during the cooldown fires immediately — the cooldown covers only the one that failed', async () => {
+    const stored = storedFor([fact()]);
+    const failedFacts = [fact(), fact({ id: 'f2', factKey: 'k2', fact: 'Trains at home', category: 'equipment' })];
+    const movedFacts = [...failedFacts, fact({ id: 'f3', factKey: 'k3', fact: 'No barbell', category: 'equipment' })];
+    const deps = makeDeps({ facts: failedFacts, structured: () => Promise.reject(new Error('provider down')) });
+    const step = buildCourseCheckStep(deps);
+    let current = state({ courseDirective: stored });
+    current = carry(current, await step(current, ctxConfig()));
+    expect(deps.llmGateway.structured).toHaveBeenCalledTimes(1);
+
+    // The inputs moved again one minute later — well inside the cooldown.
+    (deps.userFacts.getForPrompt as jest.Mock).mockResolvedValue(movedFacts);
+    (deps.llmGateway.structured as jest.Mock).mockResolvedValueOnce(DIRECTIVE);
+    const updates = await step(current, ctxConfig(new Date(NOW.getTime() + 60_000)));
+
+    expect(deps.llmGateway.structured).toHaveBeenCalledTimes(2);
+    expect(updates.courseDirective?.fingerprint).toBe(
+      courseCheckFingerprint({
+        facts: movedFacts,
+        goal: 'Build muscle 3×/week',
+        phase: 'chat',
+        activePlanId: PLAN_ID,
+        now: new Date(NOW.getTime() + 60_000),
+      }),
+    );
+  });
+
+  it('a malformed answer backs off exactly like a thrown error', async () => {
+    const stored = storedFor([fact()]);
+    const newFacts = [fact(), fact({ id: 'f2', factKey: 'k2', fact: 'Trains at home', category: 'equipment' })];
+    const deps = makeDeps({ facts: newFacts, structured: () => Promise.resolve({ topics: [] } as never) });
+    const step = buildCourseCheckStep(deps);
+    let current = state({ courseDirective: stored });
+
+    current = carry(current, await step(current, ctxConfig()));
+    await step(current, ctxConfig(new Date(NOW.getTime() + 60_000)));
+    await step(current, ctxConfig(new Date(NOW.getTime() + 120_000)));
+
+    expect(deps.llmGateway.structured).toHaveBeenCalledTimes(1);
+  });
+
+  it('switching the layer off clears a remembered failure along with the directive', async () => {
+    const deps = makeDeps({ enabled: false });
+    const step = buildCourseCheckStep(deps);
+
+    const updates = await step(state({ courseCheckFailure: { fingerprint: 'x', at: NOW.toISOString() } }), ctxConfig());
+
+    expect(updates).toEqual({ courseDirective: null, courseCheckFailure: null });
   });
 
   it('a failed long-gap call leaves a stable-fingerprint directive in place', async () => {
@@ -440,7 +556,9 @@ describe('buildCourseCheckStep (AC-FL-5)', () => {
       ctxConfig(),
     );
 
-    expect(updates).toEqual({});
+    expect(updates).toEqual({
+      courseCheckFailure: { fingerprint: expectedFingerprint([fact()], 'chat'), at: NOW.toISOString() },
+    });
     expect(logFns.warn).toHaveBeenCalledTimes(1);
   });
 
