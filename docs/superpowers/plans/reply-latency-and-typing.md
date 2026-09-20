@@ -72,11 +72,11 @@ whole call. Meanwhile the bot sends the Telegram "typing" action once, so after 
 **Files:** `apps/server/src/infra/ai/llm-log-handler.ts` (or the gateway — whichever sees
 `response_metadata.finish_reason`), `apps/server/src/infra/ai/graph/nodes/agent.node.ts`, their tests.
 
-- [ ] **Step 1: Tests first** — a `length` response logs a warn naming the truncation and does NOT
+- [x] **Step 1: Tests first** — a `length` response logs a warn naming the truncation and does NOT
   trigger the identical retry (the user gets the `empty_reply` catalog text); an empty `stop`
   response still retries once as today; a normal response logs `finish_reason` + completion tokens at info.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `fix(ai): truncated answers are logged, not blindly re-run (BUG-019, AC-RL-2)`
+- [x] **Step 2: Implement.**
+- [x] **Step 3: Commit** — `fix(ai): truncated answers are logged, not blindly re-run (BUG-019, AC-RL-2)`
 - [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-20** (`0bb3c930`, GLM worker via Orca). `LLM_MAX_TOKENS` (16384) and `LLM_REASONING_EFFORT` (`low|high|max|off`, default `low`; `off` omits the field for providers that reject it — prod's Gemini via OpenRouter) with per-profile overrides; `reasoning_effort` rides in `modelKwargs` at the single ChatOpenAI site, asserted on the real `invocationParams()`. Worker raised the default-vs-absent conflict in the spec and was answered (option B + `off`). Orchestrator re-ran: test:unit 897/897, L0 96/96, type-check clean.
 
 **Verification:** `npx jest --ci src/infra/ai` → pass; `npm run test:unit` → green; L0 green;
