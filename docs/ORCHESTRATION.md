@@ -62,6 +62,12 @@ from `~/.zshrc` apply **[verified]**. Slots are configured in Orca → Settings 
 - Compare `launch.effective` in the start receipt with what was requested, and trust the
   worker's own report of its model, not the requested flags.
 - The `cursor` slot is the corporate profile (`claude-ct`) — never use it for this repo.
+- **Launching an orchestrator session (relay) always passes the model explicitly.** `claude-personal`
+  defaults to **Sonnet**, so `orca terminal create … --command "claude-personal --model opus
+  --permission-mode auto '<start prompt>'"` is the only correct form — orchestration is review and
+  judgement, and the owner rejected a Sonnet orchestrator (2026-09-21). Verify the banner with
+  `orca terminal read --terminal <handle> --screen` (there is no `--tail`) before handing over.
+  This bullet is the single normative statement of the rule; the memory note points here.
 - Never print `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY`. To check env, print
   `[ -n "$ANTHROPIC_AUTH_TOKEN" ] && echo set` — never the value.
 
