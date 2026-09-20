@@ -632,3 +632,13 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 - [ ] Long pauses read as hours in the time-gap note (`time-gap.v1.ts`: two weeks → "336 h"); days
       would be friendlier to the model once the note is tuned in the consolidated eval pass.
       Source: orchestrator at Task 2 acceptance (2026-09-20).
+
+## reply-latency close-out review advisories (2026-09-20)
+
+- [ ] The per-phase `outputReserve` values (`infra/ai/context/budget.ts`, ADR-0013 §3.4 table, 1.5k–4k)
+      were sized against the retired 4096-token output cap; the cap is now `LLM_MAX_TOKENS` (16384) and
+      reasoning spends the same budget. Re-tune them with the consolidated eval pass.
+      Source: close-out-review, R3 (2026-09-20).
+- [ ] No test pins `finish_reason: 'length'` arriving together with tool calls — the skip-retry branch
+      cannot fire there (`isEmptyAIResponse` requires no tool calls), but that is verified by reading,
+      not by a test. Source: close-out-review, R3 (2026-09-20).

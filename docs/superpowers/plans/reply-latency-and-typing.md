@@ -1,8 +1,9 @@
 # Reply Latency and Live Typing (BUG-019) Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/reply-latency-and-typing
 - After: chat-continuity
+- Review: 2026-09-20 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and superpowers:test-driven-development. One plan task per worker session; stop after the task.
 
@@ -25,7 +26,7 @@ whole call. Meanwhile the bot sends the Telegram "typing" action once, so after 
 
 **Acceptance criteria:**
 - **AC-RL-1** — the output-token cap and the reasoning depth are configuration, not constants:
-  `LLM_MAX_TOKENS` (default 16384) and `LLM_REASONING_EFFORT` (default `low`, sent only when set),
+  `LLM_MAX_TOKENS` (default 16384) and `LLM_REASONING_EFFORT` (`low|high|max|off`, default `low`; `off` omits the field),
   both overridable per profile; `.env.example` documents them; unit tests pin that the built
   `ChatOpenAI` carries them.
 - **AC-RL-2** — a truncated answer is visible and is not re-run blindly: every model response logs
@@ -105,6 +106,27 @@ format + type-check clean in both.
 ### Task 4: Close-out (orchestrator)
 
 - [ ] One combined close-out review; `- Status: done`; `state.mjs --write`; merge, push, deploy dev, health 200.
+- [ ] **Before any prod deploy:** decide `LLM_REASONING_EFFORT` for prod (`.env.prod`). The default `low` is now
+  sent on every call, and prod runs `google/gemini-3-flash-preview` through OpenRouter — set `off` if that provider
+  rejects the field. Owner action; dev is unaffected.
 - [ ] Dev smoke by the owner: a plan-creation exchange in Telegram — the typing indicator stays alive
   and the reply arrives materially faster than the 189 s run in BUG-019. Record the new `latency_ms`
   from `conversation_runs`. If it is still too slow, the owner decides on GLM-5.2 with reasoning off.
+
+## Review
+
+2026-09-20 — first pass **blocked** (one combined agent, R1–R4 lenses); the single blocking finding
+is closed in the close-out commit.
+
+Blocking, closed:
+- R4 `docs/adr/0013-llm-core-target-architecture.md` §7 still said "today one singleton at
+  `maxTokens: 4096` serves everything (`model.factory.ts:117-125`)" — false after this plan (and the
+  line pointer never existed). Replaced with a 2026-09-20 amendment describing the two new knobs.
+  Factual reconciliation with already-approved code, no behaviour change.
+
+Advisory:
+- The AC-RL-1 bullet contradicted the resolved design ("sent only when set") — fixed in place.
+- Task 4 gained an explicit prod step: choose `LLM_REASONING_EFFORT` for `.env.prod` before deploying prod.
+- → `docs/BACKLOG.md` § reply-latency close-out review advisories: per-phase `outputReserve` values were
+  sized against the retired 4096 cap; and no test pins `finish_reason: 'length'` together with tool calls
+  (behaviour unchanged by inspection — `isEmptyAIResponse` requires no tool calls).
