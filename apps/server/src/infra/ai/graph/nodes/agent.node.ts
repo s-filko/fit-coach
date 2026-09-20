@@ -160,8 +160,9 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     const model = getModel(spec.modelProfile).bindTools(tools);
 
     // P6 Task 4 (D-F): facts are loaded once per run here, not per block
-    // render — the block itself is pure and takes already-loaded data.
-    const userFacts = await deps.userFacts.getForPrompt(userId);
+    // render — the block itself is pure and takes already-loaded data. AC-FL-1:
+    // the run clock (ctx.now) decides what is expired — never the DB clock.
+    const userFacts = await deps.userFacts.getForPrompt(userId, now);
 
     // ADR-0013 §3.4 block 2a (D-F) + block 3 (D-A/D-B) + INV-LLM-004 (Task 3,
     // order extended by Task 4): assembleContext renders spec.contextBlocks at

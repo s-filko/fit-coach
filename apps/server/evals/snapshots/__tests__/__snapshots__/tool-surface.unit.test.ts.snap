@@ -96,6 +96,124 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) cha
       "type": "object",
     },
   },
+  {
+    "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is ARCHIVED: kept in history, never used or asked about again. operation "delete": the user explicitly does not want a fact STORED at all ("erase that", privacy) — the fact is removed entirely, no trace. retract and delete are DIFFERENT operations: if it is unclear which the user means, DO NOT call the tool — ask them first ("should I stop using this fact, or erase it completely?"). For delete, set confirmed=true ONLY after the user explicitly confirmed permanent erasure.",
+    "name": "manage_fact",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "description": "For save: the fact category.",
+          "enum": [
+            "physical_constraint",
+            "exercise_preference",
+            "exercise_dislike",
+            "physiological_pattern",
+            "coaching_preference",
+            "schedule_constraint",
+            "equipment",
+            "nutrition_preference",
+          ],
+          "type": "string",
+        },
+        "confirmed": {
+          "description": "For delete: true ONLY after the user explicitly confirmed permanent erasure.",
+          "type": "boolean",
+        },
+        "context": {
+          "description": "For save: a short "how we learned this".",
+          "type": "string",
+        },
+        "durability": {
+          "description": "For save: how long the fact holds (see the tool description for how to choose).",
+          "enum": [
+            "permanent",
+            "long_term",
+            "short",
+          ],
+          "type": "string",
+        },
+        "explicitPermanent": {
+          "description": "For save + permanent: true when the user explicitly stated irreversibility.",
+          "type": "boolean",
+        },
+        "fact": {
+          "description": "For save: the fact in one clear sentence.",
+          "minLength": 3,
+          "type": "string",
+        },
+        "factId": {
+          "description": "For retract/delete, and for save when CORRECTING an existing fact: the fact id, verbatim from list_facts.",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "muscleGroup": {
+          "description": "For save: the muscle group, when the fact is anatomical.",
+          "type": "string",
+        },
+        "onExpiry": {
+          "description": "For save + short: what happens on expiry.",
+          "enum": [
+            "forget",
+            "ask_once",
+          ],
+          "type": "string",
+        },
+        "operation": {
+          "description": "What to do with the fact.",
+          "enum": [
+            "save",
+            "retract",
+            "delete",
+          ],
+          "type": "string",
+        },
+        "phaseNote": {
+          "description": "For save + long_term: the recovery phase in the user’s words.",
+          "type": "string",
+        },
+        "reviewInDays": {
+          "description": "For save + long_term: days until you should re-ask about it (14–182).",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+        "supersedesFactId": {
+          "description": "For save: id of the CLOSED fact this statement replaces (from list_facts).",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "ttlDays": {
+          "description": "For save + short: days until it expires (1–14).",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+      },
+      "required": [
+        "operation",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "List the durable facts remembered about the user — use it to answer "what do you remember about me", before correcting or retracting a fact (copy ids verbatim), and before saving to avoid duplicates. Every ACTIVE fact is listed, grouped by category, with its durability class, confirmation count and last-updated date. Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.",
+    "name": "list_facts",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "includeArchived": {
+          "description": "Include archived (closed) facts with their closure reason.",
+          "type": "boolean",
+        },
+      },
+      "type": "object",
+    },
+  },
 ]
 `;
 
@@ -511,6 +629,124 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) pla
       "type": "object",
     },
   },
+  {
+    "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is ARCHIVED: kept in history, never used or asked about again. operation "delete": the user explicitly does not want a fact STORED at all ("erase that", privacy) — the fact is removed entirely, no trace. retract and delete are DIFFERENT operations: if it is unclear which the user means, DO NOT call the tool — ask them first ("should I stop using this fact, or erase it completely?"). For delete, set confirmed=true ONLY after the user explicitly confirmed permanent erasure.",
+    "name": "manage_fact",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "description": "For save: the fact category.",
+          "enum": [
+            "physical_constraint",
+            "exercise_preference",
+            "exercise_dislike",
+            "physiological_pattern",
+            "coaching_preference",
+            "schedule_constraint",
+            "equipment",
+            "nutrition_preference",
+          ],
+          "type": "string",
+        },
+        "confirmed": {
+          "description": "For delete: true ONLY after the user explicitly confirmed permanent erasure.",
+          "type": "boolean",
+        },
+        "context": {
+          "description": "For save: a short "how we learned this".",
+          "type": "string",
+        },
+        "durability": {
+          "description": "For save: how long the fact holds (see the tool description for how to choose).",
+          "enum": [
+            "permanent",
+            "long_term",
+            "short",
+          ],
+          "type": "string",
+        },
+        "explicitPermanent": {
+          "description": "For save + permanent: true when the user explicitly stated irreversibility.",
+          "type": "boolean",
+        },
+        "fact": {
+          "description": "For save: the fact in one clear sentence.",
+          "minLength": 3,
+          "type": "string",
+        },
+        "factId": {
+          "description": "For retract/delete, and for save when CORRECTING an existing fact: the fact id, verbatim from list_facts.",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "muscleGroup": {
+          "description": "For save: the muscle group, when the fact is anatomical.",
+          "type": "string",
+        },
+        "onExpiry": {
+          "description": "For save + short: what happens on expiry.",
+          "enum": [
+            "forget",
+            "ask_once",
+          ],
+          "type": "string",
+        },
+        "operation": {
+          "description": "What to do with the fact.",
+          "enum": [
+            "save",
+            "retract",
+            "delete",
+          ],
+          "type": "string",
+        },
+        "phaseNote": {
+          "description": "For save + long_term: the recovery phase in the user’s words.",
+          "type": "string",
+        },
+        "reviewInDays": {
+          "description": "For save + long_term: days until you should re-ask about it (14–182).",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+        "supersedesFactId": {
+          "description": "For save: id of the CLOSED fact this statement replaces (from list_facts).",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "ttlDays": {
+          "description": "For save + short: days until it expires (1–14).",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+      },
+      "required": [
+        "operation",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "List the durable facts remembered about the user — use it to answer "what do you remember about me", before correcting or retracting a fact (copy ids verbatim), and before saving to avoid duplicates. Every ACTIVE fact is listed, grouped by category, with its durability class, confirmation count and last-updated date. Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.",
+    "name": "list_facts",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "includeArchived": {
+          "description": "Include archived (closed) facts with their closure reason.",
+          "type": "boolean",
+        },
+      },
+      "type": "object",
+    },
+  },
 ]
 `;
 
@@ -601,6 +837,124 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) reg
       "required": [
         "timezone",
       ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is ARCHIVED: kept in history, never used or asked about again. operation "delete": the user explicitly does not want a fact STORED at all ("erase that", privacy) — the fact is removed entirely, no trace. retract and delete are DIFFERENT operations: if it is unclear which the user means, DO NOT call the tool — ask them first ("should I stop using this fact, or erase it completely?"). For delete, set confirmed=true ONLY after the user explicitly confirmed permanent erasure.",
+    "name": "manage_fact",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "description": "For save: the fact category.",
+          "enum": [
+            "physical_constraint",
+            "exercise_preference",
+            "exercise_dislike",
+            "physiological_pattern",
+            "coaching_preference",
+            "schedule_constraint",
+            "equipment",
+            "nutrition_preference",
+          ],
+          "type": "string",
+        },
+        "confirmed": {
+          "description": "For delete: true ONLY after the user explicitly confirmed permanent erasure.",
+          "type": "boolean",
+        },
+        "context": {
+          "description": "For save: a short "how we learned this".",
+          "type": "string",
+        },
+        "durability": {
+          "description": "For save: how long the fact holds (see the tool description for how to choose).",
+          "enum": [
+            "permanent",
+            "long_term",
+            "short",
+          ],
+          "type": "string",
+        },
+        "explicitPermanent": {
+          "description": "For save + permanent: true when the user explicitly stated irreversibility.",
+          "type": "boolean",
+        },
+        "fact": {
+          "description": "For save: the fact in one clear sentence.",
+          "minLength": 3,
+          "type": "string",
+        },
+        "factId": {
+          "description": "For retract/delete, and for save when CORRECTING an existing fact: the fact id, verbatim from list_facts.",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "muscleGroup": {
+          "description": "For save: the muscle group, when the fact is anatomical.",
+          "type": "string",
+        },
+        "onExpiry": {
+          "description": "For save + short: what happens on expiry.",
+          "enum": [
+            "forget",
+            "ask_once",
+          ],
+          "type": "string",
+        },
+        "operation": {
+          "description": "What to do with the fact.",
+          "enum": [
+            "save",
+            "retract",
+            "delete",
+          ],
+          "type": "string",
+        },
+        "phaseNote": {
+          "description": "For save + long_term: the recovery phase in the user’s words.",
+          "type": "string",
+        },
+        "reviewInDays": {
+          "description": "For save + long_term: days until you should re-ask about it (14–182).",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+        "supersedesFactId": {
+          "description": "For save: id of the CLOSED fact this statement replaces (from list_facts).",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "ttlDays": {
+          "description": "For save + short: days until it expires (1–14).",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+      },
+      "required": [
+        "operation",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "List the durable facts remembered about the user — use it to answer "what do you remember about me", before correcting or retracting a fact (copy ids verbatim), and before saving to avoid duplicates. Every ACTIVE fact is listed, grouped by category, with its durability class, confirmation count and last-updated date. Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.",
+    "name": "list_facts",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "includeArchived": {
+          "description": "Include archived (closed) facts with their closure reason.",
+          "type": "boolean",
+        },
+      },
       "type": "object",
     },
   },
@@ -837,6 +1191,124 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) ses
       "required": [
         "timezone",
       ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is ARCHIVED: kept in history, never used or asked about again. operation "delete": the user explicitly does not want a fact STORED at all ("erase that", privacy) — the fact is removed entirely, no trace. retract and delete are DIFFERENT operations: if it is unclear which the user means, DO NOT call the tool — ask them first ("should I stop using this fact, or erase it completely?"). For delete, set confirmed=true ONLY after the user explicitly confirmed permanent erasure.",
+    "name": "manage_fact",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "description": "For save: the fact category.",
+          "enum": [
+            "physical_constraint",
+            "exercise_preference",
+            "exercise_dislike",
+            "physiological_pattern",
+            "coaching_preference",
+            "schedule_constraint",
+            "equipment",
+            "nutrition_preference",
+          ],
+          "type": "string",
+        },
+        "confirmed": {
+          "description": "For delete: true ONLY after the user explicitly confirmed permanent erasure.",
+          "type": "boolean",
+        },
+        "context": {
+          "description": "For save: a short "how we learned this".",
+          "type": "string",
+        },
+        "durability": {
+          "description": "For save: how long the fact holds (see the tool description for how to choose).",
+          "enum": [
+            "permanent",
+            "long_term",
+            "short",
+          ],
+          "type": "string",
+        },
+        "explicitPermanent": {
+          "description": "For save + permanent: true when the user explicitly stated irreversibility.",
+          "type": "boolean",
+        },
+        "fact": {
+          "description": "For save: the fact in one clear sentence.",
+          "minLength": 3,
+          "type": "string",
+        },
+        "factId": {
+          "description": "For retract/delete, and for save when CORRECTING an existing fact: the fact id, verbatim from list_facts.",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "muscleGroup": {
+          "description": "For save: the muscle group, when the fact is anatomical.",
+          "type": "string",
+        },
+        "onExpiry": {
+          "description": "For save + short: what happens on expiry.",
+          "enum": [
+            "forget",
+            "ask_once",
+          ],
+          "type": "string",
+        },
+        "operation": {
+          "description": "What to do with the fact.",
+          "enum": [
+            "save",
+            "retract",
+            "delete",
+          ],
+          "type": "string",
+        },
+        "phaseNote": {
+          "description": "For save + long_term: the recovery phase in the user’s words.",
+          "type": "string",
+        },
+        "reviewInDays": {
+          "description": "For save + long_term: days until you should re-ask about it (14–182).",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+        "supersedesFactId": {
+          "description": "For save: id of the CLOSED fact this statement replaces (from list_facts).",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "ttlDays": {
+          "description": "For save + short: days until it expires (1–14).",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+      },
+      "required": [
+        "operation",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "List the durable facts remembered about the user — use it to answer "what do you remember about me", before correcting or retracting a fact (copy ids verbatim), and before saving to avoid duplicates. Every ACTIVE fact is listed, grouped by category, with its durability class, confirmation count and last-updated date. Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.",
+    "name": "list_facts",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "includeArchived": {
+          "description": "Include archived (closed) facts with their closure reason.",
+          "type": "boolean",
+        },
+      },
       "type": "object",
     },
   },
@@ -1106,6 +1578,124 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) tra
       "required": [
         "timezone",
       ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is ARCHIVED: kept in history, never used or asked about again. operation "delete": the user explicitly does not want a fact STORED at all ("erase that", privacy) — the fact is removed entirely, no trace. retract and delete are DIFFERENT operations: if it is unclear which the user means, DO NOT call the tool — ask them first ("should I stop using this fact, or erase it completely?"). For delete, set confirmed=true ONLY after the user explicitly confirmed permanent erasure.",
+    "name": "manage_fact",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "description": "For save: the fact category.",
+          "enum": [
+            "physical_constraint",
+            "exercise_preference",
+            "exercise_dislike",
+            "physiological_pattern",
+            "coaching_preference",
+            "schedule_constraint",
+            "equipment",
+            "nutrition_preference",
+          ],
+          "type": "string",
+        },
+        "confirmed": {
+          "description": "For delete: true ONLY after the user explicitly confirmed permanent erasure.",
+          "type": "boolean",
+        },
+        "context": {
+          "description": "For save: a short "how we learned this".",
+          "type": "string",
+        },
+        "durability": {
+          "description": "For save: how long the fact holds (see the tool description for how to choose).",
+          "enum": [
+            "permanent",
+            "long_term",
+            "short",
+          ],
+          "type": "string",
+        },
+        "explicitPermanent": {
+          "description": "For save + permanent: true when the user explicitly stated irreversibility.",
+          "type": "boolean",
+        },
+        "fact": {
+          "description": "For save: the fact in one clear sentence.",
+          "minLength": 3,
+          "type": "string",
+        },
+        "factId": {
+          "description": "For retract/delete, and for save when CORRECTING an existing fact: the fact id, verbatim from list_facts.",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "muscleGroup": {
+          "description": "For save: the muscle group, when the fact is anatomical.",
+          "type": "string",
+        },
+        "onExpiry": {
+          "description": "For save + short: what happens on expiry.",
+          "enum": [
+            "forget",
+            "ask_once",
+          ],
+          "type": "string",
+        },
+        "operation": {
+          "description": "What to do with the fact.",
+          "enum": [
+            "save",
+            "retract",
+            "delete",
+          ],
+          "type": "string",
+        },
+        "phaseNote": {
+          "description": "For save + long_term: the recovery phase in the user’s words.",
+          "type": "string",
+        },
+        "reviewInDays": {
+          "description": "For save + long_term: days until you should re-ask about it (14–182).",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+        "supersedesFactId": {
+          "description": "For save: id of the CLOSED fact this statement replaces (from list_facts).",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+          "type": "string",
+        },
+        "ttlDays": {
+          "description": "For save + short: days until it expires (1–14).",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer",
+        },
+      },
+      "required": [
+        "operation",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "List the durable facts remembered about the user — use it to answer "what do you remember about me", before correcting or retracting a fact (copy ids verbatim), and before saving to avoid duplicates. Every ACTIVE fact is listed, grouped by category, with its durability class, confirmation count and last-updated date. Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.",
+    "name": "list_facts",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "includeArchived": {
+          "description": "Include archived (closed) facts with their closure reason.",
+          "type": "boolean",
+        },
+      },
       "type": "object",
     },
   },

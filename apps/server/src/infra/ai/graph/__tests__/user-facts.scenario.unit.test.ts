@@ -20,57 +20,241 @@
 import { AIMessage, type BaseMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import { MemorySaver } from '@langchain/langgraph';
 
-import type { UpsertFactInput, UserFact, IUserFactsService } from '@domain/user/ports';
+import type {
+  FactsListing,
+  IUserFactsService,
+  RememberFactInput,
+  RememberFactOutcome,
+  SupersedeFactInput,
+  UserFact,
+} from '@domain/user/ports';
 
 import { OpenAiLlmGateway } from '@infra/ai/llm.gateway';
 import type { ExerciseWithMuscles } from '@domain/training/types';
 import { computeFactKey } from '@domain/user/services/fact-key';
+import { isActiveForPrompt } from '@domain/user/services/fact-lifecycle';
 
 import { buildConversationGraph, type ConversationGraphDeps } from '../conversation.graph';
 import { USER, ctxConfig } from './graph-test-support';
 
-/** In-memory `IUserFactsService` with the Drizzle port's semantics (D-C/D-G). */
+/**
+ * In-memory `IUserFactsService` with the Drizzle port's semantics (D-C/D-G,
+ * AC-FL-1..4) — including the two-clock AC-FL-3 guard: a user-closed key is
+ * only re-created from evidence NEWER than the closure.
+ */
 class InMemoryUserFactsService implements IUserFactsService {
   readonly rows: UserFact[] = [];
-  readonly upsertCalls: Array<{ userId: string; facts: UpsertFactInput[] }> = [];
+  readonly upsertCalls: Array<{ userId: string; facts: unknown[]; sourceTurnId?: string }> = [];
 
-  async upsertMany(userId: string, facts: UpsertFactInput[]): Promise<number> {
-    this.upsertCalls.push({ userId, facts: [...facts] });
-    for (const input of facts) {
-      const factKey = computeFactKey(input.fact);
-      // D-C: upsert on the unique (userId, category, factKey) — a repeat
-      // increments confirmations/updatedAt, never rewrites `fact`.
-      const existing = this.rows.find(
-        r => r.userId === userId && r.category === input.category && r.factKey === factKey,
-      );
-      if (existing) {
-        existing.confirmations += 1;
-        existing.updatedAt = new Date();
-      } else {
-        this.rows.push({
-          id: `fact-${this.rows.length + 1}`,
-          userId,
-          category: input.category,
-          fact: input.fact,
-          factKey,
-          muscleGroup: input.muscleGroup ?? null,
-          confirmations: 1,
-          sourceTurnId: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
+  private nextId = 1;
+
+  /** Deterministic REAL uuids — the v4 schema rejects invented id shapes. */
+  private id(): string {
+    const id = this.nextId;
+    this.nextId += 1;
+    return `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`;
+  }
+
+  async rememberFact(
+    userId: string,
+    input: RememberFactInput,
+    now: Date,
+    sourceTurnId?: string,
+  ): Promise<RememberFactOutcome> {
+    const factKey = computeFactKey(input.fact);
+    const keyMatches = this.rows.filter(
+      r => r.userId === userId && r.category === input.category && r.factKey === factKey,
+    );
+    const byId = input.factId !== undefined ? this.rows.filter(r => r.id === input.factId) : [];
+    const candidates = byId.length > 0 ? byId : keyMatches;
+    const existing = candidates.find(r => r.status === 'active') ?? candidates[candidates.length - 1] ?? null;
+
+    const evidenceAt = input.evidenceAt ?? now;
+    if (existing !== null && existing.status === 'archived') {
+      const closureAt = existing.closedByUserAt ?? existing.archivedAt;
+      if (closureAt !== null && evidenceAt.getTime() <= closureAt.getTime()) {
+        return { outcome: 'skipped_stale_evidence', fact: existing };
+      }
+      // Newer evidence: a NEW row linked to the closed one — never un-archived.
+      const row: UserFact = {
+        id: this.id(),
+        userId,
+        category: input.category,
+        fact: input.fact,
+        factKey,
+        muscleGroup: input.muscleGroup ?? null,
+        confirmations: 1,
+        sourceTurnId: sourceTurnId ?? null,
+        createdAt: now,
+        updatedAt: now,
+        durability: input.durability,
+        expiresAt: null,
+        reviewAfter: null,
+        phaseNote: input.phaseNote ?? null,
+        phaseAt: null,
+        onExpiry: null,
+        status: 'active',
+        archivedAt: null,
+        archivedReason: null,
+        closedByUserAt: null,
+        supersedesId: input.supersedesFactId ?? existing.id,
+        context: input.context ?? null,
+      };
+      this.rows.push(row);
+      return { outcome: 'created', fact: row };
+    }
+
+    if (existing !== null) {
+      // D-C with a correction exception: an in-place update rewrites and bumps.
+      existing.fact = input.fact;
+      existing.factKey = factKey;
+      existing.confirmations += 1;
+      existing.updatedAt = now;
+      return { outcome: 'updated', fact: existing };
+    }
+
+    const row: UserFact = {
+      id: this.id(),
+      userId,
+      category: input.category,
+      fact: input.fact,
+      factKey,
+      muscleGroup: input.muscleGroup ?? null,
+      confirmations: 1,
+      sourceTurnId: sourceTurnId ?? null,
+      createdAt: now,
+      updatedAt: now,
+      durability: input.durability,
+      expiresAt: null,
+      reviewAfter: null,
+      phaseNote: input.phaseNote ?? null,
+      phaseAt: null,
+      onExpiry: null,
+      status: 'active',
+      archivedAt: null,
+      archivedReason: null,
+      closedByUserAt: null,
+      supersedesId: input.supersedesFactId ?? null,
+      context: input.context ?? null,
+    };
+    this.rows.push(row);
+    return { outcome: 'created', fact: row };
+  }
+
+  async confirmFact(userId: string, factId: string, now: Date): Promise<boolean> {
+    const row = this.rows.find(r => r.id === factId && r.userId === userId && r.status === 'active');
+    if (row === undefined) {
+      return false;
+    }
+    row.confirmations += 1; // D-C: the text never moves
+    row.updatedAt = now;
+    return true;
+  }
+
+  async supersedeFact(
+    userId: string,
+    input: SupersedeFactInput,
+    evidenceAt: Date,
+    now: Date,
+  ): Promise<RememberFactOutcome | null> {
+    const old = this.rows.find(r => r.id === input.factId && r.userId === userId);
+    if (old === undefined) {
+      return null;
+    }
+    if (old.status === 'archived') {
+      const closureAt = old.closedByUserAt ?? old.archivedAt;
+      if (closureAt !== null && evidenceAt.getTime() <= closureAt.getTime()) {
+        return { outcome: 'skipped_stale_evidence', fact: old };
       }
     }
-    return facts.length;
+    old.status = 'archived';
+    old.archivedAt = now;
+    old.archivedReason = 'superseded';
+    old.updatedAt = now;
+    const row: UserFact = {
+      id: this.id(),
+      userId,
+      category: input.category,
+      fact: input.fact,
+      factKey: computeFactKey(input.fact),
+      muscleGroup: input.muscleGroup ?? null,
+      confirmations: 1,
+      sourceTurnId: null,
+      createdAt: now,
+      updatedAt: now,
+      durability: input.durability,
+      expiresAt: null,
+      reviewAfter: null,
+      phaseNote: input.phaseNote ?? null,
+      phaseAt: null,
+      onExpiry: null,
+      status: 'active',
+      archivedAt: null,
+      archivedReason: null,
+      closedByUserAt: null,
+      supersedesId: old.id,
+      context: input.context ?? null,
+    };
+    this.rows.push(row);
+    return { outcome: 'created', fact: row };
   }
 
-  async getForPrompt(userId: string, cap = 50): Promise<UserFact[]> {
-    return this.rows.filter(r => r.userId === userId).slice(0, cap);
+  async retractFact(
+    userId: string,
+    input: { factId: string; evidenceAt?: Date; reason?: string },
+    now: Date,
+  ): Promise<UserFact | null> {
+    const row = this.rows.find(r => r.id === input.factId && r.userId === userId);
+    if (row === undefined) {
+      return null;
+    }
+    if (row.status === 'archived') {
+      return row; // idempotent
+    }
+    row.status = 'archived';
+    row.archivedAt = now;
+    row.archivedReason = 'user_closed';
+    row.closedByUserAt = input.evidenceAt ?? now;
+    if (input.reason != null) {
+      row.context = input.reason;
+    }
+    row.updatedAt = now;
+    return row;
   }
 
-  async getConstraints(userId: string): Promise<UserFact[]> {
-    return this.rows.filter(r => r.userId === userId && r.category === 'physical_constraint' && r.muscleGroup !== null);
+  async deleteFact(userId: string, factId: string): Promise<boolean> {
+    const idx = this.rows.findIndex(r => r.id === factId && r.userId === userId);
+    if (idx === -1) {
+      return false;
+    }
+    this.rows.splice(idx, 1);
+    return true;
   }
+
+  async listFacts(userId: string, includeArchived: boolean, now: Date): Promise<FactsListing> {
+    const rows = this.rows.filter(r => r.userId === userId);
+    return {
+      active: rows.filter(r => isActiveForPrompt(r, now)),
+      archived: includeArchived ? rows.filter(r => r.status === 'archived') : [],
+    };
+  }
+
+  async getForPrompt(userId: string, now: Date, cap = 50): Promise<UserFact[]> {
+    this.promptCalls.push({ userId, now });
+    return this.rows.filter(r => r.userId === userId && isActiveForPrompt(r, now)).slice(0, cap);
+  }
+
+  async getConstraints(userId: string, now: Date): Promise<UserFact[]> {
+    return this.rows.filter(
+      r =>
+        r.userId === userId &&
+        r.category === 'physical_constraint' &&
+        r.muscleGroup !== null &&
+        isActiveForPrompt(r, now),
+    );
+  }
+
+  readonly promptCalls: Array<{ userId: string; now: Date }> = [];
 }
 
 // The catalog: one exercise whose PRIMARY muscles include lower_back, one
@@ -165,18 +349,30 @@ function sessionArgs(exerciseId: string): Record<string, unknown> {
   };
 }
 
-/** A complete EpisodeSummary payload rendered as a ```json fence (BUG-017). */
-function fencedSummary(fact: string): string {
+/** A complete v4 EpisodeSummary payload rendered as a ```json fence (BUG-017). */
+function fencedOperations(factOperations: unknown[]): string {
   const payload = {
     topics: ['lower back injury discussed'],
     decisions: [],
     userState: ['recovering from a lower back injury'],
     trainingFeedback: [],
     openItems: [],
-    facts: [{ category: 'physical_constraint', fact, muscleGroup: 'lower_back' }],
+    factOperations,
   };
   return `\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
 }
+
+const ADD_INJURY = [
+  {
+    op: 'add',
+    category: 'physical_constraint',
+    fact: 'User has a lower back injury — no direct loading of the lower back',
+    muscleGroup: 'lower_back',
+    durability: 'permanent',
+  },
+];
+/** The second compaction restates the SAME fact — v4 says confirm by id, not re-add. */
+const CONFIRM_INJURY = [{ op: 'confirm', factId: '00000000-0000-4000-8000-000000000001' }];
 
 const INJURY_MESSAGE = 'У меня травма поясницы, врач запретил нагрузку на низ спины.';
 
@@ -269,7 +465,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
       // Run 4 (chat): plain-text reply.
       () => new AIMessage({ content: 'Продолжаем.', tool_calls: [] }),
     );
-    structuredAnswers.push(fencedSummary(FACT_V1), fencedSummary(FACT_V2));
+    structuredAnswers.push(fencedOperations(ADD_INJURY), fencedOperations(CONFIRM_INJURY));
 
     // --- Step 1: the user states a lower-back injury in an episode.
     await graph.invoke(
@@ -280,7 +476,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
     expect(run1Input.some(m => m._getType() === 'human' && String(m.content).includes('поясницы'))).toBe(true);
 
     // --- Step 2: compaction — the summariser answers INSIDE a ```json fence
-    // through the REAL gateway; the summary is stored and the fact upserted.
+    // through the REAL gateway; the summary is stored and the add operation applied.
     await graph.invoke(
       { phase: 'chat', messages: [new HumanMessage('Спасибо, до связи.')] },
       ctxConfig({ runId: 'run-2', now: T1 }),
@@ -290,7 +486,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
     expect(summariesInsert.mock.calls[0][0]).toMatchObject({
       userId: 'u1',
       structured: {
-        facts: [{ category: 'physical_constraint', fact: FACT_V1, muscleGroup: 'lower_back' }],
+        factOperations: ADD_INJURY,
       },
     });
     // One fact, confirmed once; getConstraints returns the physical_constraint
@@ -301,7 +497,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
       muscleGroup: 'lower_back',
       confirmations: 1,
     });
-    await expect(facts.getConstraints('u1')).resolves.toHaveLength(1);
+    await expect(facts.getConstraints('u1', T1)).resolves.toHaveLength(1);
     // The fenced answer cost exactly ONE provider call — BUG-017's recovery,
     // not the old blind retry.
     expect(modelFactory.__structuredCalls()).toBe(1);
@@ -354,10 +550,190 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
     );
 
     expect(summariesInsert).toHaveBeenCalledTimes(2);
-    expect(facts.upsertCalls).toHaveLength(2);
-    expect(facts.rows).toHaveLength(1);
-    expect(facts.rows[0]!.confirmations).toBe(2);
-    expect(facts.rows[0]!.fact).toBe(FACT_V1); // the stored text is never rewritten (D-C)
+    expect(facts.rows).toHaveLength(1); // confirm did not duplicate the row
+    expect(facts.rows[0]!.confirmations).toBe(2); // the counter bumped...
+    expect(facts.rows[0]!.fact).toBe(FACT_V1); // ...but the stored text is never rewritten (D-C)
     expect(modelFactory.__structuredCalls()).toBe(2);
+  });
+
+  it('AC-FL-1: expired and archived facts never reach the prompt; the facts clock is the run clock', async () => {
+    const T0 = new Date('2026-09-19T10:00:00Z');
+    const facts = new InMemoryUserFactsService();
+    const deps = makeDeps(facts);
+    const graph = buildConversationGraph(deps);
+
+    const { __recorded: recorded, __script: script, __structuredAnswers: structuredAnswers } = modelFactory;
+    recorded.length = 0;
+    script.length = 0;
+    structuredAnswers.length = 0;
+    script.push(() => new AIMessage({ content: 'Продолжаем.', tool_calls: [] }));
+
+    // One live permanent fact, one short fact whose TTL is up, one archived
+    // fact — only the live one may render.
+    facts.rows.push(
+      {
+        id: 'live-1',
+        userId: 'u1',
+        category: 'equipment',
+        fact: 'Home dumbbells only',
+        factKey: 'home dumbbells only',
+        muscleGroup: null,
+        confirmations: 2,
+        sourceTurnId: null,
+        createdAt: new Date('2026-09-01T00:00:00Z'),
+        updatedAt: new Date('2026-09-10T00:00:00Z'),
+        durability: 'permanent',
+        expiresAt: null,
+        reviewAfter: null,
+        phaseNote: null,
+        phaseAt: null,
+        onExpiry: null,
+        status: 'active',
+        archivedAt: null,
+        archivedReason: null,
+        closedByUserAt: null,
+        supersedesId: null,
+        context: null,
+      },
+      {
+        id: 'expired-1',
+        userId: 'u1',
+        category: 'physiological_pattern',
+        fact: 'Sore legs after squats',
+        factKey: 'sore legs after squats',
+        muscleGroup: null,
+        confirmations: 1,
+        sourceTurnId: null,
+        createdAt: new Date('2026-09-05T00:00:00Z'),
+        updatedAt: new Date('2026-09-05T00:00:00Z'),
+        durability: 'short',
+        expiresAt: new Date(T0.getTime() - 86_400_000), // TTL up a day before the run
+        reviewAfter: null,
+        phaseNote: null,
+        phaseAt: null,
+        onExpiry: 'forget',
+        status: 'active',
+        archivedAt: null,
+        archivedReason: null,
+        closedByUserAt: null,
+        supersedesId: null,
+        context: null,
+      },
+      {
+        id: 'archived-1',
+        userId: 'u1',
+        category: 'physical_constraint',
+        fact: 'Old shoulder tweak',
+        factKey: 'old shoulder tweak',
+        muscleGroup: 'shoulders_front',
+        confirmations: 1,
+        sourceTurnId: null,
+        createdAt: new Date('2026-08-01T00:00:00Z'),
+        updatedAt: new Date('2026-08-20T00:00:00Z'),
+        durability: 'short',
+        expiresAt: null,
+        reviewAfter: null,
+        phaseNote: null,
+        phaseAt: null,
+        onExpiry: 'forget',
+        status: 'archived',
+        archivedAt: new Date('2026-09-01T00:00:00Z'),
+        archivedReason: 'user_closed',
+        closedByUserAt: new Date('2026-09-01T00:00:00Z'),
+        supersedesId: null,
+        context: null,
+      },
+    );
+
+    await graph.invoke(
+      { phase: 'chat', messages: [new HumanMessage('Что ты помнишь обо мне?')] },
+      ctxConfig({ runId: 'run-1', now: T0 }),
+    );
+
+    // The facts were loaded against the RUN's clock, not a fresh one.
+    expect(facts.promptCalls).toEqual([{ userId: 'u1', now: T0 }]);
+
+    const systemMessages = recorded[0]!.filter(m => m._getType() === 'system').map(m => String(m.content));
+    const factsBlock = systemMessages.find(c => c.includes('## User Facts'));
+    expect(factsBlock).toBeDefined();
+    expect(factsBlock).toContain('Home dumbbells only');
+    expect(factsBlock).toContain('2× confirmed'); // AC-FL-1: the confirmation count renders
+    expect(factsBlock).not.toContain('Sore legs after squats'); // expired — hidden
+    expect(factsBlock).not.toContain('Old shoulder tweak'); // archived — never rendered
+  });
+
+  it('AC-FL-3 end to end: a fact the user closed is NOT resurrected by compacting an OLDER episode', async () => {
+    const T0 = new Date('2026-09-19T10:00:00Z'); // the episode's user message (the evidence)
+    const T1 = new Date('2026-09-20T10:00:00Z'); // the user closes the fact
+    const T2 = new Date('2026-09-21T10:00:00Z'); // the compaction run (well after the closure)
+    const facts = new InMemoryUserFactsService();
+    const deps = makeDeps(facts);
+    const graph = buildConversationGraph(deps);
+
+    const { __recorded: recorded, __script: script, __structuredAnswers: structuredAnswers } = modelFactory;
+    const callsBefore = modelFactory.__structuredCalls();
+    recorded.length = 0;
+    script.length = 0;
+    structuredAnswers.length = 0;
+    script.push(
+      // Run 1 (chat): the injury is discussed; plain-text reply.
+      () => new AIMessage({ content: 'Понял, учту.', tool_calls: [] }),
+      // Run 2 (chat): the compaction run; plain-text reply.
+      () => new AIMessage({ content: 'Хорошо.', tool_calls: [] }),
+    );
+    // The compaction's summariser returns the injury as an ADD — exactly the
+    // "blind upsert" v3 would have done. v4 + evidenceAt must refuse it.
+    structuredAnswers.push(
+      fencedOperations([
+        {
+          op: 'add',
+          category: 'physical_constraint',
+          fact: 'User has a lower back injury — no direct loading of the lower back',
+          muscleGroup: 'lower_back',
+          durability: 'permanent',
+        },
+      ]),
+    );
+
+    // --- Run 1 creates the episode that mentions the injury.
+    await graph.invoke(
+      { phase: 'chat', messages: [new HumanMessage(INJURY_MESSAGE)] },
+      ctxConfig({ runId: 'run-1', now: T0 }),
+    );
+    expect(facts.rows).toHaveLength(0); // nothing written yet — extraction is compaction's job
+
+    // --- The user closes the fact at T1 (the manage_fact retract path, Task 2).
+    const stated = await facts.rememberFact(
+      'u1',
+      {
+        category: 'physical_constraint',
+        fact: 'User has a lower back injury — no direct loading of the lower back',
+        muscleGroup: 'lower_back',
+        durability: 'short',
+        ttlDays: 7,
+      },
+      T0,
+    );
+    const closedId = stated.outcome === 'created' ? stated.fact.id : null;
+    if (closedId === null) {
+      throw new Error('expected created');
+    }
+    await facts.retractFact('u1', { factId: closedId }, T1);
+    expect(facts.rows[0]!.status).toBe('archived');
+
+    // --- Run 2 at T2 compacts the T0 episode; its evidence (state.lastUserMessageAt
+    // = T0, the previous run's stamp) PREDATES the T1 closure.
+    await graph.invoke(
+      { phase: 'chat', messages: [new HumanMessage('Спасибо, до связи.')] },
+      ctxConfig({ runId: 'run-2', now: T2 }),
+    );
+
+    // The summariser ran and returned the add — but the closed fact did NOT come back
+    // (the call counter is cumulative across this file's tests — assert the delta).
+    expect(modelFactory.__structuredCalls()).toBe(callsBefore + 1);
+    const active = facts.rows.filter(r => r.status === 'active');
+    expect(active).toEqual([]); // skipped_stale_evidence — T0 evidence vs T1 closure
+    expect(facts.rows[0]!.status).toBe('archived'); // the closure is intact
+    expect(facts.rows).toHaveLength(1); // no resurrection row was created
   });
 });

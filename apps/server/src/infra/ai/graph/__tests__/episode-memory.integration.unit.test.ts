@@ -131,7 +131,7 @@ describe('episode memory across runs (AC-1341, INV-LLM-001/002)', () => {
       userState: [],
       trainingFeedback: [],
       openItems: [],
-      facts: [],
+      factOperations: [],
     });
     const graph = buildConversationGraph(deps);
     __recorded.length = 0;

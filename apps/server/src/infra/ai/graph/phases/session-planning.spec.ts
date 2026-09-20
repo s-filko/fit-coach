@@ -73,7 +73,7 @@ export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec
         userFactsService: deps.userFacts,
       }),
       buildRequestTransitionTool('session_planning'),
-      ...buildSharedTools({ userService }),
+      ...buildSharedTools({ userService, userFacts: deps.userFacts }),
     ],
     toolPolicy: SESSION_PLANNING_TOOL_POLICY,
     // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).

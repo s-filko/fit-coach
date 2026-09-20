@@ -35,7 +35,7 @@ export function buildChatSpec(deps: ConversationGraphDeps): PhaseSpec<ChatData> 
     tools: [
       buildUpdateProfileTool({ userService }),
       buildRequestTransitionTool('chat'),
-      ...buildSharedTools({ userService }),
+      ...buildSharedTools({ userService, userFacts: deps.userFacts }),
     ],
     toolPolicy: CHAT_TOOL_POLICY,
     // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).

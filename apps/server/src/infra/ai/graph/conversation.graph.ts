@@ -36,7 +36,10 @@ export interface ConversationGraphDeps {
   runService: IConversationRunService;
   transcript: TranscriptPort;
   summaries: SummaryPort;
-  /** P6 Task 3: the only fact-writing path — no per-turn fact tool exists or may exist (owner decision 2026-09-17). */
+  /**
+   * Facts: compaction applies the summariser's operations; conversation writes
+   * go through manage_fact (fact-lifecycle Tasks 2-3).
+   */
   userFacts: IUserFactsService;
   llmGateway: LlmGateway;
   /** The D-L episode tunables, resolved from env at the composition root. */

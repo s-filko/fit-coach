@@ -6,6 +6,8 @@ import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } fr
 import { SessionRecommendationSchema } from '@domain/training/session-planning.types';
 import type { IUserFactsService } from '@domain/user/ports';
 
+import { ctxOf } from '@infra/ai/graph/state';
+
 import { rejectOnFactConflict } from './fact-constraint-guard';
 import { userIdOf } from './format-exercise-summary';
 
@@ -51,7 +53,7 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
 
         // Hard validation (D-G): a physical_constraint fact's muscle group among
         // an exercise's PRIMARY muscles rejects the call — nothing is persisted.
-        const rejection = await rejectOnFactConflict(userFactsService, userId, found);
+        const rejection = await rejectOnFactConflict(userFactsService, userId, found, ctxOf(config as never).now);
         if (rejection) {
           return rejection;
         }

@@ -110,11 +110,16 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
     appendSystemNote: async () => undefined,
   },
   summaries: {
-    insert: async () => undefined,
+    insert: async () => ({ summaryTurnId: 'summary-turn-1' }),
     latestLegacySummary: async () => null,
   },
   userFacts: {
-    upsertMany: jest.fn().mockResolvedValue(0),
+    rememberFact: jest.fn(),
+    confirmFact: jest.fn(),
+    supersedeFact: jest.fn(),
+    retractFact: jest.fn(),
+    deleteFact: jest.fn(),
+    listFacts: jest.fn().mockResolvedValue({ active: [], archived: [] }),
     getForPrompt: jest.fn().mockResolvedValue([]),
     getConstraints: jest.fn().mockResolvedValue([]),
   },

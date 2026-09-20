@@ -40,7 +40,7 @@ import {
   fullDepth,
   type RenderableBlock,
   renderBlock,
-  USER_FACTS_V1,
+  USER_FACTS_V2,
 } from '@infra/ai/prompts/blocks';
 
 import { estimateTokens } from './token-estimator';
@@ -127,7 +127,7 @@ export async function resolveBudget<D>(input: ResolveBudgetInput<D>): Promise<Re
 
   // The same render assembleContext uses for block 2a — measuring the actual text kept in sync with what is sent.
   const factsTokensOf = (facts: UserFact[]): number =>
-    facts.length > 0 ? estimateTokens(renderBlock(USER_FACTS_V1, { facts })) : 0;
+    facts.length > 0 ? estimateTokens(renderBlock(USER_FACTS_V2, { facts })) : 0;
   const summaryTokensOf = (summaries: StoredEpisodeSummary[]): number =>
     summaries.length > 0
       ? estimateTokens(renderBlock(EPISODE_SUMMARIES_V1, { summaries, now: blockCtx.now, timezone: blockCtx.timezone }))

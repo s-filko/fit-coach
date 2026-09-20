@@ -29,7 +29,7 @@ export function buildRegistrationSpec(deps: ConversationGraphDeps): PhaseSpec<Re
     tools: [
       buildSaveProfileFieldsTool({ userService }),
       buildCompleteRegistrationTool({ userService }),
-      ...buildSharedTools({ userService }),
+      ...buildSharedTools({ userService, userFacts: deps.userFacts }),
     ],
     toolPolicy: REGISTRATION_TOOL_POLICY,
     // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).

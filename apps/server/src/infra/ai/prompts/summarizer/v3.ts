@@ -10,10 +10,11 @@ export interface SummarizerV3Context {
 
 /**
  * Episode summariser v3 (P6 Task 2, owner decision 2026-09-17): v2's five
- * fields plus a sixth, `facts` — the ONLY source of durable `user_facts` rows.
- * There is no per-turn fact-writing tool; extraction happens here, in the
- * summariser's one structured call, and is written to `user_facts` by the
- * `compact` node (Task 3), not by this prompt.
+ * fields plus a sixth, `facts` — a blind upsert list the `compact` node wrote
+ * to `user_facts` verbatim. SUPERSEDED by v4 (fact-lifecycle plan Task 3,
+ * AC-FL-4): v4's summariser sees the known active facts and returns fact
+ * OPERATIONS (add / confirm / update / retract) instead — kept beside v4 for
+ * version history, like every old prompt version in this repo.
  *
  * D-D: `StoredEpisodeSummary`'s rendering (`episodeParagraph`,
  * `episode-summaries.v1.ts`) names its five original fields explicitly and

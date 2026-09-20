@@ -1,6 +1,7 @@
 // Database schema definitions
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   boolean,
   check,
   index,
@@ -13,6 +14,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   vector,
 } from 'drizzle-orm/pg-core';
@@ -166,10 +168,22 @@ export const conversationSummaries = pgTable(
   },
 );
 
-// Durable user facts extracted at compaction (ADR-0009 table shape and FactCategory
-// values; mechanism superseded 2026-09-17 — see refactor-p6-facts-and-progress-blocks
-// Task 1 and Task 3). Idempotent upsert on (user_id, category, fact_key) with a
-// confirmation counter (D-C); `fact` text is never overwritten once written.
+// Enums for user_facts lifecycle (fact-lifecycle plan Task 1, AC-FL-1) — the
+// owner's durability model (2026-09-20). The class bounds themselves live in
+// code: @domain/user/services/fact-lifecycle (FACT_LIFECYCLE_BOUNDS).
+export const factDurabilityEnum = pgEnum('fact_durability', ['permanent', 'long_term', 'short']);
+export const factOnExpiryEnum = pgEnum('fact_on_expiry', ['forget', 'ask_once']);
+export const factStatusEnum = pgEnum('fact_status', ['active', 'archived']);
+export const factArchivedReasonEnum = pgEnum('fact_archived_reason', ['user_closed', 'expired', 'superseded']);
+
+// Durable user facts (ADR-0009 table shape and FactCategory values). Writes are
+// select-then-branch in the repository (fact-lifecycle Tasks 2-3): a new active
+// row, an in-place correction, a superseding row, or an archival — never a blind
+// upsert. Uniqueness of (user_id, category, fact_key) holds among ACTIVE rows
+// only (the partial index), so closed history keeps its key.
+// Lifecycle columns (AC-FL-1): existing rows migrate with defaults that change
+// nothing today — durability=permanent (no dates, never expires), status=active,
+// every date/closure column null.
 export const userFacts = pgTable(
   'user_facts',
   {
@@ -183,16 +197,35 @@ export const userFacts = pgTable(
     muscleGroup: text('muscle_group'),
     confirmations: integer('confirmations').notNull().default(1),
     sourceTurnId: uuid('source_turn_id').references(() => conversationTurns.id),
+    durability: factDurabilityEnum('durability').notNull().default('permanent'),
+    expiresAt: timestamp('expires_at'),
+    reviewAfter: timestamp('review_after'),
+    phaseNote: text('phase_note'),
+    phaseAt: timestamp('phase_at'),
+    onExpiry: factOnExpiryEnum('on_expiry'),
+    status: factStatusEnum('status').notNull().default('active'),
+    archivedAt: timestamp('archived_at'),
+    archivedReason: factArchivedReasonEnum('archived_reason'),
+    closedByUserAt: timestamp('closed_by_user_at'),
+    // The history link is optional by nature (close-out finding 3): erasing the
+    // superseded row must succeed — AC-FL-8's "removed entirely, no trace" — so
+    // the link nulls instead of raising an FK violation.
+    supersedesId: uuid('supersedes_id').references((): AnyPgColumn => userFacts.id, {
+      onDelete: 'set null',
+    }),
+    context: text('context'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   table => ({
     userIdx: index('idx_user_facts_user').on(table.userId),
-    userCategoryFactKeyUnique: unique('uq_user_facts_user_category_fact_key').on(
-      table.userId,
-      table.category,
-      table.factKey,
-    ),
+    // fact-lifecycle Task 2 fix (AC-FL-3): the uniqueness of (user_id, category,
+    // fact_key) holds among ACTIVE rows only — a closed row keeps its key and
+    // its history, and newer evidence creates a NEW row linked via supersedes_id.
+    // A Postgres UNIQUE constraint cannot be partial, hence a partial unique index.
+    activeUserCategoryFactKeyUnique: uniqueIndex('uq_user_facts_active_user_category_fact_key')
+      .on(table.userId, table.category, table.factKey)
+      .where(sql`status = 'active'`),
   }),
 );
 

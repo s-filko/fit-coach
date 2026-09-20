@@ -114,7 +114,9 @@ export function contextsForModule(moduleId: string, fixture: EvalFixture): unkno
     case 'phase.training':
       return { ...base, session: buildFixtureSession(fixture, FIXED_NOW), previousSession: null };
     case 'summarizer':
-      return { phase: 'training', transcript: FIXTURE_TRANSCRIPT };
+      // v4 sees the known active facts (fact-lifecycle Task 3, AC-FL-4) — empty
+      // renders the "none yet" line; the L0 forbidden-string scan stays clean.
+      return { phase: 'training', transcript: FIXTURE_TRANSCRIPT, knownFacts: [] };
     case 'block.episode_summaries':
       return { summaries: [FIXTURE_EPISODE_SUMMARY], now: FIXED_NOW, timezone: 'Europe/Berlin' };
     case 'block.post_tool_nudge':

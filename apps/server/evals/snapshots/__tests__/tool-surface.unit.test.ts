@@ -36,7 +36,7 @@ type PhaseName = 'registration' | 'chat' | 'plan_creation' | 'session_planning' 
  */
 function phaseTools(phase: PhaseName): StructuredToolInterface[] {
   const { deps } = buildStubDeps(COMPLETE_PROFILE);
-  const shared = () => buildSharedTools({ userService: deps.userService });
+  const shared = () => buildSharedTools({ userService: deps.userService, userFacts: deps.userFacts });
   switch (phase) {
     case 'registration':
       return [
