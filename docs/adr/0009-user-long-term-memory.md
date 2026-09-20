@@ -105,6 +105,28 @@ Reads (`getForPrompt`, `getConstraints`) take the run clock as data and exclude 
 expired rows; the prompt block (`USER_FACTS_V2`) renders each fact with its date and confirmation
 count, so the model can tell yesterday from six months ago.
 
+### Amendment 2026-09-21 (wave B) — the hard block is only for `permanent`
+
+> Decided without the owner (2026-09-21), same authorisation as the amendment above; reversible.
+
+Wave A's note below said the hard rejection still applied to every active constraint fact. Wave B
+narrowed it, for the reason the plan measured against the real catalog: a muscle label expresses
+neither movement nor load, so a `lower_back` constraint **blocked** Conventional Deadlift and
+Hyperextension (the rehab exercise) while **allowing** Romanian Deadlift, Barbell Back Squat and
+Barbell Row, where `lower_back` is only secondary. A hard gate on a soft, model-assigned label is
+honest for exactly one class.
+
+- A `permanent` constraint still rejects `save_workout_plan` / `start_training_session`, and nothing
+  is persisted on rejection. In a mixed set only the permanent facts are quoted.
+- A `long_term` or `short` constraint no longer rejects: the write succeeds and the tool result
+  carries an **advisory** naming each fact (with its durability and phase note) and **every**
+  conflicting exercise, which the coach must address in its reply.
+- The user's word still decides, as always.
+
+The code keeps the two halves apart: `findFactConflicts` reports every conflict, `blockingConflicts`
+keeps only the permanent ones (`domain/user/services/fact-conflicts.ts`, where the catalog evidence
+above is recorded so the narrowing is not "fixed" back by someone reading only the code).
+
 ### What this amendment does NOT change
 
 The hard rejection of an exercise whose primary muscles hit a `physical_constraint` fact (P6, D-G)

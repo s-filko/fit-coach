@@ -1,6 +1,6 @@
 # Course Check and Constraint Handling Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/course-check-and-constraints
 - After: fact-lifecycle
 
@@ -227,6 +227,43 @@ fingerprint, the pure event predicate), `graph/state.ts` (the persisted directiv
   30 review days would fail journey (a) on a live run. **The third finding became its own task below.**
 
 **Verification:** `npm run test:scenarios` → green; L0 green.
+
+---
+
+## Review
+
+- Review: 2026-09-21 | clean | one combined agent over the whole wave diff (R1–R4 in one pass, the
+  owner's one-review-per-phase rule). **Zero blocking findings in all four zones**, first pass.
+- The reviewer did not merely fail to find defects; it traced by hand the three ways this design could
+  break and showed why it does not: the "unsettled" fingerprint differs from the stored one only while
+  the due `ask_once` facts are still active, so once archived the next run's hash collapses back and
+  nothing re-fires; a failed call records the failure WITHOUT archiving those facts, so a one-shot
+  question is never lost to an outage and never asked twice; and `isReviewDue`'s component is monotonic
+  (false→true only), so it cannot thrash the fingerprint turn to turn. It also confirmed `loadConfig()`
+  re-reads `process.env` per `registerInfraServices()`, which is what makes the AC-FL-7 on/off
+  comparison actually switch, and that a mixed permanent + non-permanent conflict set rejects on the
+  permanent facts alone and never double-reports.
+- Three advisories, all recorded in `BACKLOG.md` rather than fixed here: the SQL expiry filter is a
+  second statement of `isExpired` (a behavioural, not compile-time, coupling — same family as the
+  `visibleAt` twin); and the deterministic test harness routes a structured call to the course-check
+  answer queue by matching the prompt's literal opening sentence, so rewording that sentence would
+  misroute every journey's course-check call (loud failure, but nothing ties the two strings together).
+
+## Decided without the owner (2026-09-21)
+
+Same authorisation as wave A: the owner was away and asked for decisions to be made and marked. Each
+row is independently reversible.
+
+| # | Decision | Why | How to undo |
+|---|---|---|---|
+| B-1 | The ADR-0013 §3.3 and ADR-0009 amendment texts for this wave were written and merged by the orchestrator, not escalated first | The owner was asleep and asked for decisions to be made | Both are self-contained sections naming this table |
+| B-2 | A failed course check backs off for `COURSE_CHECK_RETRY_COOLDOWN_MINUTES` (default 15) instead of retrying every turn | Without it a provider outage costs one failed call per ordinary turn — the exact thing this wave's central promise forbids | Remove the cooldown guard in `events.ts` |
+| B-3 | Expiry is performed by the course-check step: `ask_once` becomes one question then archives `expired`, `forget` archives silently | The flag existed since wave A but nothing ever wrote `expired`, so "ask once" was dead weight | Drop the archive calls; the flag goes back to being inert |
+| B-4 | A fact expired longer ago than `COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS` (default 7) is archived silently whatever its flag | The owner's own rule: asking about four-day-old DOMS is noise, a months-old tweak more so | Raise the window, or set it to infinity |
+| B-5 | The expiry question is NOT persisted in the stored directive | Otherwise "ask exactly once" becomes "keep asking until something unrelated changes" | Persist the whole directive again |
+| B-6 | Journey (d) stops at the `supersedes_id` chain with an `it.todo`; the recurrence → `physiological_pattern` promotion is left unimplemented | It does not exist anywhere in the code, and its three design questions are product calls for the owner (`BACKLOG.md`) | Nothing to undo — the gap is recorded, not hidden |
+| B-7 | The `fl-*` journeys are selectable but are NOT in the default L3 run | They would cross the live-call ceiling; the AC-FL-7 comparison is an owner-launched run anyway | Add them to the default set |
+| B-8 | Executor changed mid-plan: GLM → Sonnet | GLM's weekly quota was exhausted (resets 2026-09-24) and its worker died mid-verification | — |
 
 ---
 
