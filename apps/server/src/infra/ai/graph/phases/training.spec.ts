@@ -83,7 +83,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
     buildFinishTrainingTool({ trainingService }),
     buildDeleteLastSetsTool({ trainingService }),
     buildUpdateLastSetTool({ trainingService }),
-    ...buildSharedTools({ userService }),
+    ...buildSharedTools({ userService, userFacts: deps.userFacts }),
   ];
 
   return {

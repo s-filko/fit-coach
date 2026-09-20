@@ -92,6 +92,24 @@ class InMemoryUserFactsService implements IUserFactsService {
         isActiveForPrompt(r, now),
     );
   }
+
+  // Task 2's surface, with the repository's semantics — unused by this file's
+  // scenarios (mocked models never call the memory tools), but the port demands them.
+  async rememberFact(): Promise<never> {
+    throw new Error('not used in this scenario');
+  }
+
+  async retractFact(): Promise<never> {
+    throw new Error('not used in this scenario');
+  }
+
+  async deleteFact(): Promise<never> {
+    throw new Error('not used in this scenario');
+  }
+
+  async listFacts(): Promise<never> {
+    throw new Error('not used in this scenario');
+  }
 }
 
 // The catalog: one exercise whose PRIMARY muscles include lower_back, one

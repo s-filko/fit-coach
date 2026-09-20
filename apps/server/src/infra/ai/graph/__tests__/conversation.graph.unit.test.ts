@@ -114,6 +114,10 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
     latestLegacySummary: async () => null,
   },
   userFacts: {
+    rememberFact: jest.fn(),
+    retractFact: jest.fn(),
+    deleteFact: jest.fn(),
+    listFacts: jest.fn().mockResolvedValue({ active: [], archived: [] }),
     upsertMany: jest.fn().mockResolvedValue(0),
     getForPrompt: jest.fn().mockResolvedValue([]),
     getConstraints: jest.fn().mockResolvedValue([]),

@@ -41,7 +41,7 @@ export function buildPlanCreationSpec(deps: ConversationGraphDeps): PhaseSpec<Pl
         userFactsService: deps.userFacts,
       }),
       buildRequestTransitionTool('plan_creation'),
-      ...buildSharedTools({ userService }),
+      ...buildSharedTools({ userService, userFacts: deps.userFacts }),
     ],
     toolPolicy: PLAN_CREATION_TOOL_POLICY,
     // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).

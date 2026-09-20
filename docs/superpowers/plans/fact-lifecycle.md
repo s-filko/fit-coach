@@ -156,13 +156,13 @@ Archive and delete are **two operations**: `retract` (not true / no longer appli
 history and the recurrence counter) and `delete` (the user does not want it stored — the row is gone,
 no trace). The tool exposes both; the model picks by intent and asks when the request is ambiguous.
 
-- [ ] **Step 1: Tests first** — add/update/retract paths; user closure sets `closed_by_user_at` and
+- [x] **Step 1: Tests first** — add/update/retract paths; user closure sets `closed_by_user_at` and
   archives; a closed fact key is not re-created from older evidence but is from newer; bounds enforced
   on the tool input; `retract` never deletes a row and `delete` leaves none; the listing returns the
   documented shape and excludes archived facts unless asked.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `feat(memory): the coach can list, add, update, retract and delete facts in conversation (AC-FL-2, AC-FL-3, AC-FL-8)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 2: Implement.**
+- [x] **Step 3: Commit** — `feat(memory): the coach can list, add, update, retract and delete facts in conversation (AC-FL-2, AC-FL-3, AC-FL-8)`
+- [x] **Step 4: STOP** for orchestrator review.
 
 **Verification:** as Task 1, plus `npx jest --ci src/infra/ai/tools`.
 

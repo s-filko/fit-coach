@@ -1,3 +1,4 @@
+import { PermanentFactRefusal } from '../../../src/domain/user/services/fact-lifecycle';
 import { UserFactsRepository } from '../../../src/infra/db/repositories/user-facts.repository';
 import { DrizzleUserRepository } from '../../../src/infra/db/repositories/user.repository';
 import { db } from '../../../src/infra/db/drizzle';
@@ -208,4 +209,216 @@ describe('UserFactsRepository – integration', () => {
     });
   });
 
+  describe('rememberFact (fact-lifecycle Task 2, AC-FL-2/AC-FL-3) — tool writes', () => {
+    it('creates a fact with the class bounds clamped end to end (short 90d TTL -> 14d)', async () => {
+      const userData = createTestUserData({ username: 'user_facts_remember_user' });
+      const user = await userRepo.create(userData);
+      const NOW = new Date('2026-09-21T12:00:00Z');
+
+      const result = await repository.rememberFact(
+        user.id,
+        { category: 'physiological_pattern', fact: 'Sore legs after squats', durability: 'short', ttlDays: 90 },
+        NOW,
+      );
+
+      expect(result.outcome).toBe('created');
+      if (result.outcome !== 'created') return;
+      expect(result.fact.expiresAt).toEqual(new Date(NOW.getTime() + 14 * 86_400_000));
+      expect(result.fact.confirmations).toBe(1);
+      expect(result.fact.status).toBe('active');
+    });
+
+    it('clamps a long-term review below the 2-week floor up to 14 days', async () => {
+      const userData = createTestUserData({ username: 'user_facts_remember_lt_user' });
+      const user = await userRepo.create(userData);
+      const NOW = new Date('2026-09-21T12:00:00Z');
+
+      const result = await repository.rememberFact(
+        user.id,
+        { category: 'physical_constraint', fact: 'Broken wrist', durability: 'long_term', reviewInDays: 3, phaseNote: 'in a cast' },
+        NOW,
+      );
+
+      if (result.outcome !== 'created') throw new Error('expected created');
+      expect(result.fact.reviewAfter).toEqual(new Date(NOW.getTime() + 14 * 86_400_000));
+      expect(result.fact.phaseNote).toBe('in a cast');
+      expect(result.fact.phaseAt).toEqual(NOW);
+    });
+
+    it('refuses permanent without the gate (PermanentFactRefusal), allows it with explicitPermanent', async () => {
+      const userData = createTestUserData({ username: 'user_facts_perm_user' });
+      const user = await userRepo.create(userData);
+      const NOW = new Date('2026-09-21T12:00:00Z');
+
+      await expect(
+        repository.rememberFact(user.id, { category: 'equipment', fact: 'Has a prosthesis', durability: 'permanent' }, NOW),
+      ).rejects.toThrow(PermanentFactRefusal);
+
+      const allowed = await repository.rememberFact(
+        user.id,
+        { category: 'equipment', fact: 'Has a prosthesis', durability: 'permanent', explicitPermanent: true },
+        NOW,
+      );
+      expect(allowed.outcome).toBe('created');
+      if (allowed.outcome !== 'created') return;
+      expect(allowed.fact.expiresAt).toBeNull();
+      expect(allowed.fact.reviewAfter).toBeNull();
+    });
+
+    it('an existing ACTIVE fact with the same key is UPDATED in place: text rewritten, confirmations bumped', async () => {
+      const userData = createTestUserData({ username: 'user_facts_update_user' });
+      const user = await userRepo.create(userData);
+      const NOW = new Date('2026-09-21T12:00:00Z');
+
+      const first = await repository.rememberFact(user.id, { category: 'equipment', fact: 'Has dumbbells up to 12kg', durability: 'short', ttlDays: 7 }, NOW);
+      if (first.outcome !== 'created') throw new Error('expected created');
+
+      // A correction: DIFFERENT text (a new factKey), referenced by id.
+      const updated = await repository.rememberFact(
+        user.id,
+        { category: 'equipment', fact: 'Has dumbbells up to 20kg', durability: 'short', ttlDays: 7, factId: first.fact.id },
+        new Date(NOW.getTime() + 86_400_000),
+      );
+
+      expect(updated.outcome).toBe('updated');
+      if (updated.outcome !== 'updated') return;
+      expect(updated.fact.fact).toBe('Has dumbbells up to 20kg'); // a correction REWRITES the text (unlike compaction)
+      expect(updated.fact.confirmations).toBe(2);
+      expect(updated.fact.status).toBe('active');
+
+      const rows = await repository.getForPrompt(user.id, NOW);
+      expect(rows.filter(r => r.factKey === 'has dumbbells up to 20kg')).toHaveLength(1); // one row, not two
+
+      // A repeat with NO id and the same wording dedupes on the unique key — an update, not a duplicate.
+      const repeat = await repository.rememberFact(user.id, { category: 'equipment', fact: 'Has dumbbells up to 20kg', durability: 'short', ttlDays: 7 }, NOW);
+      expect(repeat.outcome).toBe('updated');
+      if (repeat.outcome !== 'updated') return;
+      expect(repeat.fact.confirmations).toBe(3);
+      expect((await repository.listFacts(user.id, false, NOW)).active).toHaveLength(1);
+    });
+
+    it('AC-FL-3: a user-closed key is NOT re-created from older evidence, but IS from newer', async () => {
+      const userData = createTestUserData({ username: 'user_facts_closed_key_user' });
+      const user = await userRepo.create(userData);
+      const T0 = new Date('2026-09-21T12:00:00Z');
+      const CLOSED_AT = new Date('2026-09-21T18:00:00Z');
+
+      await repository.rememberFact(user.id, { category: 'physical_constraint', fact: 'Shoulder hurts', durability: 'short', ttlDays: 7 }, T0);
+      const closed = await repository.retractFact(user.id, { factId: (await repository.getForPrompt(user.id, T0))[0]!.id }, CLOSED_AT);
+      expect(closed).toMatchObject({ status: 'archived', archivedReason: 'user_closed', closedByUserAt: CLOSED_AT });
+
+      // Evidence OLDER than the closure (a summariser replaying an old turn): skipped.
+      const stale = await repository.rememberFact(user.id, { category: 'physical_constraint', fact: 'Shoulder hurts', durability: 'short', ttlDays: 7 }, new Date(CLOSED_AT.getTime() - 3_600_000));
+      expect(stale.outcome).toBe('skipped_stale_evidence');
+
+      // Evidence NEWER than the closure: the fact comes back (reactivated, counter kept).
+      const fresh = await repository.rememberFact(user.id, { category: 'physical_constraint', fact: 'Shoulder hurts', durability: 'short', ttlDays: 7 }, new Date(CLOSED_AT.getTime() + 3_600_000));
+      expect(fresh.outcome).toBe('reactivated');
+      if (fresh.outcome !== 'reactivated') return;
+      expect(fresh.fact.status).toBe('active');
+      expect(fresh.fact.closedByUserAt).toBeNull();
+      expect(fresh.fact.confirmations).toBe(2);
+    });
+
+    it('links a genuinely new statement to the closed fact via supersedesFactId', async () => {
+      const userData = createTestUserData({ username: 'user_facts_supersede_user' });
+      const user = await userRepo.create(userData);
+      const T0 = new Date('2026-09-21T12:00:00Z');
+
+      await repository.rememberFact(user.id, { category: 'physical_constraint', fact: 'Right shoulder injured', durability: 'short', ttlDays: 7 }, T0);
+      const closedId = (await repository.getForPrompt(user.id, T0))[0]!.id;
+      await repository.retractFact(user.id, { factId: closedId }, new Date(T0.getTime() + 3_600_000));
+
+      const replaced = await repository.rememberFact(
+        user.id,
+        { category: 'physical_constraint', fact: 'Left shoulder injured after the fall', durability: 'long_term', reviewInDays: 30, supersedesFactId: closedId },
+        new Date(T0.getTime() + 7_200_000),
+      );
+
+      expect(replaced.outcome).toBe('created');
+      if (replaced.outcome !== 'created') return;
+      expect(replaced.fact.supersedesId).toBe(closedId);
+      expect(replaced.fact.id).not.toBe(closedId); // a NEW row — the closed one keeps its history
+    });
+  });
+
+  describe('retractFact / deleteFact (AC-FL-2: two distinct operations, never swapped)', () => {
+    it('retract archives and KEEPS the row, the history and the counter; never deletes', async () => {
+      const userData = createTestUserData({ username: 'user_facts_retract_user' });
+      const user = await userRepo.create(userData);
+      const NOW = new Date('2026-09-21T12:00:00Z');
+
+      const created = await repository.rememberFact(user.id, { category: 'exercise_dislike', fact: 'Hates burpees', durability: 'short', ttlDays: 5 }, NOW);
+      if (created.outcome !== 'created') throw new Error('expected created');
+
+      const retracted = await repository.retractFact(user.id, { factId: created.fact.id }, NOW);
+
+      expect(retracted).toMatchObject({ status: 'archived', archivedReason: 'user_closed', closedByUserAt: NOW, confirmations: 1 });
+      // The row is still there — invisible to the prompt, visible to a listing with archived.
+      await expect(repository.getForPrompt(user.id, NOW)).resolves.toHaveLength(0);
+      const listed = await repository.listFacts(user.id, true, NOW);
+      expect(listed.archived.map(f => f.id)).toContain(created.fact.id);
+    });
+
+    it('retract is idempotent: an already-archived fact comes back unchanged', async () => {
+      const userData = createTestUserData({ username: 'user_facts_retract_idem_user' });
+      const user = await userRepo.create(userData);
+      const NOW = new Date('2026-09-21T12:00:00Z');
+
+      const created = await repository.rememberFact(user.id, { category: 'equipment', fact: 'Borrowed a barbell', durability: 'short', ttlDays: 5 }, NOW);
+      if (created.outcome !== 'created') throw new Error('expected created');
+      await repository.retractFact(user.id, { factId: created.fact.id }, NOW);
+      const again = await repository.retractFact(user.id, { factId: created.fact.id }, new Date(NOW.getTime() + 3_600_000));
+
+      expect(again).toMatchObject({ status: 'archived' });
+      expect(again?.archivedAt).toEqual(NOW); // the first closure is kept, not re-stamped
+    });
+
+    it('retract of an unknown id returns null; delete of an unknown id returns false', async () => {
+      const userData = createTestUserData({ username: 'user_facts_missing_user' });
+      const user = await userRepo.create(userData);
+
+      await expect(repository.retractFact(user.id, { factId: '00000000-0000-0000-0000-0000000000aa' }, new Date())).resolves.toBeNull();
+      await expect(repository.deleteFact(user.id, '00000000-0000-0000-0000-0000000000ab')).resolves.toBe(false);
+    });
+
+    it('delete removes the row ENTIRELY — no trace, not even in the archived listing', async () => {
+      const userData = createTestUserData({ username: 'user_facts_delete_user' });
+      const user = await userRepo.create(userData);
+      const NOW = new Date('2026-09-21T12:00:00Z');
+
+      const created = await repository.rememberFact(user.id, { category: 'nutrition_preference', fact: 'Allergic to shrimp', durability: 'permanent', explicitPermanent: true }, NOW);
+      if (created.outcome !== 'created') throw new Error('expected created');
+
+      await expect(repository.deleteFact(user.id, created.fact.id)).resolves.toBe(true);
+      await expect(repository.getForPrompt(user.id, NOW)).resolves.toHaveLength(0);
+      const listed = await repository.listFacts(user.id, true, NOW);
+      expect(listed.active).toHaveLength(0);
+      expect(listed.archived).toHaveLength(0); // gone, not archived
+      await expect(repository.deleteFact(user.id, created.fact.id)).resolves.toBe(false);
+    });
+  });
+
+  describe('listFacts (AC-FL-8: the review listing)', () => {
+    it('returns active facts (expired excluded) and archived only when asked, with the closure reason', async () => {
+      const userData = createTestUserData({ username: 'user_facts_list_user' });
+      const user = await userRepo.create(userData);
+      const NOW = new Date('2026-09-21T12:00:00Z');
+
+      const live = await repository.rememberFact(user.id, { category: 'equipment', fact: 'Has a barbell', durability: 'permanent', explicitPermanent: true }, NOW);
+      await repository.rememberFact(user.id, { category: 'physiological_pattern', fact: 'Sore legs', durability: 'short', ttlDays: 1 }, new Date(NOW.getTime() - 3 * 86_400_000)); // expired by NOW
+      const closed = live.outcome === 'created' ? live.fact : null;
+      if (!closed) throw new Error('expected created');
+      await repository.retractFact(user.id, { factId: closed.id }, NOW);
+
+      const activeOnly = await repository.listFacts(user.id, false, NOW);
+      expect(activeOnly.active.map(f => f.id)).toEqual([]); // the expired short fact is out, the closed one is out
+      expect(activeOnly.archived).toEqual([]);
+
+      const withArchived = await repository.listFacts(user.id, true, NOW);
+      expect(withArchived.active).toEqual([]);
+      expect(withArchived.archived.map(f => f.id)).toEqual([closed.id]);
+      expect(withArchived.archived[0]).toMatchObject({ archivedReason: 'user_closed' });
+    });
+  });
 });

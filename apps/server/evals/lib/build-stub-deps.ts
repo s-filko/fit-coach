@@ -404,6 +404,14 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
     // authored in the port's category-then-recency order); getConstraints applies
     // the real port's subset — physical_constraint with a non-null muscleGroup.
     userFacts: {
+      // Task 2 methods are stubs: evals use mocked models that never call the
+      // memory tools; they exist only to satisfy the port's surface.
+      rememberFact: async () => {
+        throw new Error('not implemented in eval stubs');
+      },
+      retractFact: async () => null,
+      deleteFact: async () => false,
+      listFacts: async () => ({ active: [], archived: [] }),
       upsertMany: async () => 0,
       getForPrompt: async () => facts,
       getConstraints: async () =>

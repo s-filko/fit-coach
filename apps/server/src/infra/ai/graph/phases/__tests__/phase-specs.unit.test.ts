@@ -40,11 +40,27 @@ function specOf(phase: ConversationPhase): PhaseSpec {
   return spec;
 }
 
+// fact-lifecycle Task 2 (AC-FL-2/AC-FL-8): the memory tools ride with the
+// shared tool set, so every phase can list, save, retract and delete facts.
 const TOOL_NAMES: Record<ConversationPhase, string[]> = {
-  registration: ['save_profile_fields', 'complete_registration', 'save_timezone'],
-  chat: ['update_profile', 'request_transition', 'save_timezone'],
-  plan_creation: ['search_exercises', 'save_workout_plan', 'request_transition', 'save_timezone'],
-  session_planning: ['search_exercises', 'start_training_session', 'request_transition', 'save_timezone'],
+  registration: ['save_profile_fields', 'complete_registration', 'save_timezone', 'manage_fact', 'list_facts'],
+  chat: ['update_profile', 'request_transition', 'save_timezone', 'manage_fact', 'list_facts'],
+  plan_creation: [
+    'search_exercises',
+    'save_workout_plan',
+    'request_transition',
+    'save_timezone',
+    'manage_fact',
+    'list_facts',
+  ],
+  session_planning: [
+    'search_exercises',
+    'start_training_session',
+    'request_transition',
+    'save_timezone',
+    'manage_fact',
+    'list_facts',
+  ],
   training: [
     'search_exercises',
     'log_set',
@@ -53,6 +69,8 @@ const TOOL_NAMES: Record<ConversationPhase, string[]> = {
     'delete_last_sets',
     'update_last_set',
     'save_timezone',
+    'manage_fact',
+    'list_facts',
   ],
 };
 
@@ -110,6 +128,9 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
       'complete_current_exercise',
       'finish_training',
       'save_timezone',
+      // fact-lifecycle Task 2: memory control is never session-gated.
+      'manage_fact',
+      'list_facts',
     ]);
   });
 
