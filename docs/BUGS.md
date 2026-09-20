@@ -1076,7 +1076,16 @@ roughly halves per-call latency and cuts the number of tool round-trips.
 
 ## BUG-020 — `list_facts` never prints the fact id, so the coach can neither retract nor delete a fact — and says it did
 
-**Status:** Fixed 2026-09-21 (`5e59391c`, merged in `a45e76cd`) — pending live re-smoke
+**Status:** Fixed and verified live 2026-09-21 (`5e59391c`, merged in `a45e76cd`, dev `deb4bb01`)
+
+### Live verification (dev, same throwaway user)
+
+A fresh short fact was stated («после приседаний побаливает правое колено») and stored as
+`durability=short, on_expiry=ask_once, expires_at=+7d`. On «колено уже нормально, прошло, больше не
+учитывай» the coach called `manage_fact retract` and the row ended `status='archived'`,
+`archived_reason='user_closed'`, `closed_by_user_at` set — archived, not deleted. A separate explicit
+«удали полностью, подтверждаю» removed its row entirely (0 rows). The two operations are distinct in
+practice, not only in the schema.
 **Severity:** High — it breaks AC-FL-2 / AC-FL-8 in the only way the user can see, and the coach reports success it did not achieve
 **Found during:** Orchestrator dev smoke on `bd75508e`, throwaway user `smoke_factlife`
 **Component:** `apps/server/src/infra/ai/tools/list-facts.tool.ts` (`activeLine` / `archivedLine`), `infra/ai/tools/manage-fact.tool.ts`
