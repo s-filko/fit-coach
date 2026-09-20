@@ -54,13 +54,13 @@ whole call. Meanwhile the bot sends the Telegram "typing" action once, so after 
 `apps/server/src/config/llm-profiles.ts` (per-profile overrides), `apps/server/src/infra/ai/model.factory.ts`,
 `apps/server/.env.example`, their tests.
 
-- [ ] **Step 1: Tests first** — the factory passes `maxTokens` from config (default 16384) and, when
+- [x] **Step 1: Tests first** — the factory passes `maxTokens` from config (default 16384) and, when
   `LLM_REASONING_EFFORT` is set, a `reasoning_effort` model kwarg; unset → the field is absent from the
   request; a profile override wins over the global value.
-- [ ] **Step 2: Implement.** `reasoning_effort` is an OpenAI-compatible extra: pass it via the
+- [x] **Step 2: Implement.** `reasoning_effort` is an OpenAI-compatible extra: pass it via the
   ChatOpenAI `modelKwargs` (verify the built request body in the test, not just the field).
-- [ ] **Step 3: Commit** — `feat(ai): output cap and reasoning depth are configuration (BUG-019, AC-RL-1)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 3: Commit** — `feat(ai): output cap and reasoning depth are configuration (BUG-019, AC-RL-1)`
+- [x] **Step 4: STOP** for orchestrator review.
 
 **Verification:** `npx jest --ci src/infra/ai src/config` → pass; `npm run test:unit` → green;
 `npm run evals -- --level L0` → green; format + type-check clean.

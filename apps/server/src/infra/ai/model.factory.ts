@@ -4,7 +4,6 @@ import { LLMLogHandler } from '@infra/ai/llm-log-handler';
 
 import { loadConfig } from '@config/index';
 
-const DEFAULT_MAX_TOKENS = 4096;
 const models = new Map<string, ChatOpenAI>();
 
 /**
@@ -21,13 +20,19 @@ export function getModel(profile = 'default'): ChatOpenAI {
   const config = loadConfig();
   const override = config.LLM_PROFILES[profile] ?? {};
 
+  // BUG-019 / AC-RL-1: the cap and the reasoning depth are configuration.
+  // reasoning_effort is an OpenAI-compatible extra ChatOpenAI has no typed field
+  // for — it rides in modelKwargs; 'off' omits it for providers that reject it.
+  const reasoningEffort = override.reasoningEffort ?? config.LLM_REASONING_EFFORT;
+
   const model = new ChatOpenAI({
     model: override.model ?? config.LLM_MODEL,
     temperature: override.temperature ?? config.LLM_TEMPERATURE,
-    maxTokens: override.maxTokens ?? DEFAULT_MAX_TOKENS,
+    maxTokens: override.maxTokens ?? config.LLM_MAX_TOKENS,
     apiKey: config.LLM_API_KEY,
     configuration: config.LLM_API_URL ? { baseURL: config.LLM_API_URL } : undefined,
     callbacks: [new LLMLogHandler()],
+    modelKwargs: reasoningEffort === 'off' ? undefined : { reasoning_effort: reasoningEffort },
   });
 
   models.set(profile, model);

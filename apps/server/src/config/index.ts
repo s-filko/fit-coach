@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { parseLlmBudgetOverrides, type TokenBudgetOverride } from './llm-budget-overrides';
-import { type LlmProfileOverride, parseLlmProfiles } from './llm-profiles';
+import { type LlmProfileOverride, parseLlmProfiles, REASONING_EFFORTS } from './llm-profiles';
 
 /**
  * Environment variables schema (config layer).
@@ -53,6 +53,13 @@ export const EnvSchema = z.object({
   // D-A/D-12). How long a waiter for the per-userId run mutex waits before
   // rejecting with ThreadBusyError (HTTP 409).
   LLM_RUN_MUTEX_WAIT_MS: z.coerce.number().default(20000),
+  // Inference tunables (BUG-019 / AC-RL-1) — same tunables-not-secrets class as
+  // EPISODE_*. GLM-5.3 always reasons and reasoning spends the same output budget,
+  // so the old hard-coded 4096 cap starved the answer entirely; the cap must leave
+  // room for both. 'off' omits reasoning_effort from the request for providers
+  // that reject the field (e.g. Gemini via OpenRouter).
+  LLM_MAX_TOKENS: z.coerce.number().int().positive().default(16384),
+  LLM_REASONING_EFFORT: z.enum(REASONING_EFFORTS).default('low'),
   LLM_TEMPERATURE: z
     .string()
     .transform(v => {
