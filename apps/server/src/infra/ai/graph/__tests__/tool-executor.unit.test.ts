@@ -248,7 +248,7 @@ describe('buildToolExecutor (AC-1332)', () => {
     );
   });
 
-  it('AC-1332: a schema-rejection error gets the search_exercises recovery hint appended', async () => {
+  it('AC-1332: an EXERCISE-ID schema rejection keeps the search_exercises recovery hint', async () => {
     const boom = fakeTool(
       'save_workout_plan',
       jest
@@ -265,6 +265,30 @@ describe('buildToolExecutor (AC-1332)', () => {
     expect(String(toolMsg.content)).toContain('did not match expected schema');
     expect(String(toolMsg.content)).toContain('UUID copied verbatim from the search_exercises results');
     expect(String(toolMsg.content)).toContain('save_workout_plan again');
+  });
+
+  it('a NON-exercise schema rejection gets the generic cue — the search_exercises sentence never appears (2026-09-21 live smoke)', async () => {
+    // The smoke's exact shape: manage_fact with an invalid enum value for
+    // `operation`. The old hardcoded hint pointed the model at search_exercises
+    // ids — nonsense here — and the model gave up on the retraction.
+    const boom = fakeTool(
+      'manage_fact',
+      jest
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            "Received tool input did not match expected schema\n\n✖ Invalid enum value. Expected 'add' | 'confirm' | 'update' | 'retract', received 'forget'\n  → at operation",
+          ),
+        ),
+    );
+    const executor = buildToolExecutor(asTools(boom), { llmErrorBudget: Infinity });
+    const update = await executor(stateWithCalls([{ name: 'manage_fact', args: {}, id: 'c1' }]), CONFIG);
+    const toolMsg = update.messages.find(m => m._getType() === 'tool') as ToolMessage;
+    expect(String(toolMsg.content)).toContain('did not match expected schema');
+    expect(String(toolMsg.content)).toContain('manage_fact again'); // the cue names the failed tool
+    expect(String(toolMsg.content)).toContain('allowed values'); // a generic, schema-pointed cue
+    expect(String(toolMsg.content)).not.toContain('search_exercises'); // never the irrelevant sentence
+    expect(String(toolMsg.content)).not.toContain('UUID copied verbatim');
   });
 
   it('AC-1332: a non-schema tool error passes through without the hint', async () => {

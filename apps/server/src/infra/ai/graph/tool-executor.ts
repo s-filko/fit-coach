@@ -159,11 +159,20 @@ export function buildToolExecutor(
         ret = await targetTool.invoke(call.args, toolConfig);
       } catch (err) {
         let message = err instanceof Error ? err.message : String(err);
-        // A schema rejection carries no recovery cue unless we add one: ids are
-        // UUIDs the model must copy verbatim from search_exercises results
-        // (dev-smoke 2026-09-17: the model invented exerciseIds and gave up).
+        // A schema rejection carries no recovery cue unless we add one. The Zod
+        // text above the cue already names the offending field, so the cue only
+        // says how to fix and re-call — it must never invent a cause. The ONE
+        // tool-specific cue that is real: an exercise-id rejection (dev-smoke
+        // 2026-09-17: the model invented exerciseIds and gave up) keeps the
+        // search_exercises sentence. Anything else gets the generic cue — the
+        // 2026-09-21 live smoke showed a hardcoded hint pointing a manage_fact
+        // enum error at search_exercises ids is worse than no hint: the model
+        // abandoned the call and reported success it did not have.
         if (message.includes('did not match expected schema')) {
-          message += `\nFix the arguments and call ${call.name} again: every id must be a UUID copied verbatim from the search_exercises results (the "ID:..." line), never invented or abbreviated.`;
+          const exerciseIdRejected = /exerciseId/i.test(message);
+          message += exerciseIdRejected
+            ? `\nFix the arguments and call ${call.name} again: every id must be a UUID copied verbatim from the search_exercises results (the "ID:..." line), never invented or abbreviated.`
+            : `\nFix the arguments and call ${call.name} again: correct the field named in the error above, using its exact name and allowed values from the tool's schema.`;
         }
         log.warn({ userId: ctx.userId, tool: call.name, err: message, args: call.args }, 'Tool invocation failed');
         newMessages.push(toToolMessage(llmError(message), call.id ?? ''));
