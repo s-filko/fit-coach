@@ -671,3 +671,24 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       BUG-014/BUG-015 family. Worth one deterministic check in the consolidated eval pass: a tool that
       returns an error must never be followed by a success claim.
       Source: orchestrator dev smoke (2026-09-21).
+
+## Recurrence → `physiological_pattern` promotion is unimplemented (2026-09-21)
+
+- [ ] The owner's durability model (2026-09-20) says a short state that keeps recurring is promoted to
+      a `physiological_pattern` fact — "that is how the archive turns into knowledge instead of
+      garbage". **Nothing performs that promotion.** Verified 2026-09-21 by the wave-B Task 3 worker and
+      confirmed by the orchestrator: `recur|promot` matches only two *comments*
+      (`user-facts.repository.ts`, `user-facts.ports.ts`, both saying "wave B's recurrence promotion
+      counts exactly that archive"); there is no detector, no writer, the course-check prompt sees only
+      ACTIVE facts and never the archive, and summariser v4's operations (`add|confirm|update|retract`)
+      have no `pattern` op.
+      What DOES exist and makes it possible: a closed key re-stated later creates a new row linked by
+      `supersedes_id` while the old row keeps its archive, so N occurrences leave an N-row chain that a
+      promotion could count. Journey (d) of `course-check-and-constraints` Task 3 asserts that chain and
+      stops there, with an `it.todo` marking the missing ending.
+      **Three owner decisions before this can be planned:** (1) who promotes — code at the Nth
+      occurrence, or a course-check directive telling the coach to save it through `manage_fact`;
+      (2) identity — `fact_key` is normalised text, so three differently-worded statements of the same
+      ache do not share a key (category + `muscle_group` grouping is cheap but coarse; model-judged
+      identity is accurate but costs a call); (3) the threshold and the window (3 within N days?).
+      Source: wave-B Task 3 `ask` + orchestrator decision to keep it out of that plan (2026-09-21).
