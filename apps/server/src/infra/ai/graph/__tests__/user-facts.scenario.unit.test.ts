@@ -414,6 +414,10 @@ function makeDeps(userFacts: InMemoryUserFactsService): ConversationGraphDeps {
     // keepTurns 0: the scenario's compactions must fold everything into
     // summaries (the fact pipeline under test) — the tail would defer them.
     episodeConfig: { gapMs: 60_000, minTurns: 0, minTokens: 0, keepTurns: 0 },
+    // Course check OFF (course-check plan Task 1): this scenario scripts a
+    // FIFO of structured answers for the compactions — the course check would
+    // consume them out of order. Its own journeys are Task 3's (AC-FL-7).
+    courseCheckEnabled: false,
     checkpointer: new MemorySaver(),
   } as unknown as ConversationGraphDeps;
 }

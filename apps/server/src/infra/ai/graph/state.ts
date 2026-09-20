@@ -11,6 +11,7 @@ import type { CompactReason, StoredEpisodeSummary } from '@domain/conversation/e
 import type { TransitionRequest } from '@domain/conversation/transitions';
 import type { User } from '@domain/user/services/user.service';
 
+import type { StoredCourseDirective } from '@infra/ai/course-check/directive';
 import type { RunMetricsCollector } from '@infra/ai/run-metrics';
 
 export const ConversationState = Annotation.Root({
@@ -36,6 +37,12 @@ export const ConversationState = Annotation.Root({
   episodeStartedAt: Annotation<string | null>({ reducer: (_, v) => v, default: () => null }),
   lastUserMessageAt: Annotation<string | null>({ reducer: (_, v) => v, default: () => null }),
   compactReason: Annotation<CompactReason | null>({ reducer: (_, v) => v, default: () => null }),
+  // The course-check directive (course-check plan Task 1, AC-FL-5): written by
+  // the course-check step inside `prepare` when one of its events fires,
+  // rendered by the agent node as one prompt block while its fingerprint
+  // holds, cleared to null when the layer is switched off. Plain JSON, so the
+  // checkpointer round-trips it without adapters.
+  courseDirective: Annotation<StoredCourseDirective | null>({ reducer: (_, v) => v, default: () => null }),
 });
 
 export type ConversationStateType = typeof ConversationState.State;

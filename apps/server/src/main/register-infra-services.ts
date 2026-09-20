@@ -111,6 +111,8 @@ export async function registerInfraServices(container: Container = getGlobalCont
     },
     // LLM_BUDGET_* overrides (P4 context-budget plan Task 3), resolved once here.
     budgetOverrides: config.LLM_BUDGETS,
+    // AC-FL-5 (course-check plan Task 1): the layer's on/off switch, resolved once here.
+    courseCheckEnabled: config.COURSE_CHECK_ENABLED,
     checkpointer,
   });
   // The compiled graph under its token: infra-internal, but the scenario

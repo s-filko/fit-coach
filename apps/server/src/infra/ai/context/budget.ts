@@ -16,8 +16,8 @@
  *   (b) if `total` is still over `sum - outputReserve`, step domain blocks
  *       down their `depths` (largest block first);
  *   (c) drop episode summaries oldest first;
- *   (d) the D-D floor (keep block 1 and `current` only — facts and summaries
- *       both drop here too).
+ *   (d) the D-D floor (keep block 1 and `current` only — facts, the course
+ *       directive (AC-FL-5) and summaries all drop here too).
  *
  * Block 1 (`systemTokens`, the rendered phase prompt) is never touched or
  * reported as cut — `system` over its own budget is reported by the caller
@@ -34,8 +34,10 @@ import { type BaseMessage, trimMessages } from '@langchain/core/messages';
 import type { StoredEpisodeSummary, TokenBudget } from '@domain/conversation/episode';
 import type { UserFact } from '@domain/user/ports';
 
+import type { CourseCheckDirective } from '@infra/ai/course-check/directive';
 import {
   type ContextBlockCtx,
+  COURSE_DIRECTIVE_V1,
   EPISODE_SUMMARIES_V1,
   fullDepth,
   type RenderableBlock,
@@ -52,6 +54,13 @@ export interface ResolveBudgetInput<D> {
   systemTokens: number;
   /** IUserFactsService.getForPrompt output, category-then-recency order — (0) truncates from the tail. */
   facts: UserFact[];
+  /**
+   * AC-FL-5 (course-check plan Task 1): the stored course-check directive —
+   * measured through the SAME render call as block 2a (COURSE_DIRECTIVE_V1),
+   * counted in every running total, never truncated (it is one compact block),
+   * dropped only at the D-D floor. Optional: absent means no directive.
+   */
+  directive?: CourseCheckDirective | null;
   /** state.episodeSummaries, oldest first — (c) drops from the front. */
   summaries: StoredEpisodeSummary[];
   /** Domain blocks (D-A) with the phase's loaded data folded in via `data`/`ctx` below. */
@@ -128,6 +137,11 @@ export async function resolveBudget<D>(input: ResolveBudgetInput<D>): Promise<Re
   // The same render assembleContext uses for block 2a — measuring the actual text kept in sync with what is sent.
   const factsTokensOf = (facts: UserFact[]): number =>
     facts.length > 0 ? estimateTokens(renderBlock(USER_FACTS_V2, { facts })) : 0;
+  // Block 2a′ (AC-FL-5): the directive's measure — same render call, same contract.
+  let directiveTokens = 0;
+  if (input.directive != null) {
+    directiveTokens = estimateTokens(renderBlock(COURSE_DIRECTIVE_V1, { directive: input.directive }));
+  }
   const summaryTokensOf = (summaries: StoredEpisodeSummary[]): number =>
     summaries.length > 0
       ? estimateTokens(renderBlock(EPISODE_SUMMARIES_V1, { summaries, now: blockCtx.now, timezone: blockCtx.timezone }))
@@ -143,7 +157,13 @@ export async function resolveBudget<D>(input: ResolveBudgetInput<D>): Promise<Re
   function totalNow(facts: UserFact[], history: BaseMessage[], summaries: StoredEpisodeSummary[]): number {
     const domainNow = blockTokens.reduce((n, t) => n + t, 0);
     return (
-      systemTokens + factsTokensOf(facts) + summaryTokensOf(summaries) + domainNow + estimate(history) + currentTokens
+      systemTokens +
+      factsTokensOf(facts) +
+      directiveTokens +
+      summaryTokensOf(summaries) +
+      domainNow +
+      estimate(history) +
+      currentTokens
     );
   }
 
@@ -226,6 +246,7 @@ export async function resolveBudget<D>(input: ResolveBudgetInput<D>): Promise<Re
     facts = [];
     history = [];
     summaries = [];
+    directiveTokens = 0; // AC-FL-5: the directive drops at the floor too.
     cuts.push('floor');
   }
 
