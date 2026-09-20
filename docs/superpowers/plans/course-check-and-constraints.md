@@ -1,6 +1,6 @@
 # Course Check and Constraint Handling Implementation Plan
 
-- Status: planned
+- Status: in progress
 - Branch: plan/course-check-and-constraints
 - After: fact-lifecycle
 
@@ -120,13 +120,37 @@ fingerprint, the pure event predicate), `graph/state.ts` (the persisted directiv
 `graph/nodes/prepare.node.ts` or `agent.node.ts` (the firing point), `prompts/blocks/course-directive.v1.ts`,
 `.env.example` (profile + on/off switch), tests.
 
-- [ ] **Step 1: Tests first** (mocked model) — fires on each event and on nothing else; a stable
+- [x] **Step 1: Tests first** (mocked model) — fires on each event and on nothing else; a stable
   fingerprint reuses the stored directive with zero calls; a changed fact set refires; a failed or
   malformed call leaves the run untouched and logs a warn; the directive renders as one block; the
   user's current message always outranks the stored directive.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `feat(ai): course-check directive at key points (AC-FL-5)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 2: Implement.**
+- [x] **Step 3: Commit** — `feat(ai): course-check directive at key points (AC-FL-5)`
+- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-21** (`fa5d1505` + review fix
+  `bfd8ae39`). **Executor change mid-task:** the GLM worker implemented it and then died on
+  `Weekly/Monthly Limit Exhausted` (resets 2026-09-24) during verification, with the work uncommitted;
+  it was abandoned on positive proof (429 in its transcript, final turn without `worker_done`) and a
+  Sonnet worker took the working tree over, reviewed it as its own, finished and committed it.
+  The check fires from `prepare` on two events only — a changed fingerprint (facts set, goal, phase,
+  active plan; "entering planning" and "before a durable write" ride on phase/`activePlanId` being
+  fingerprint components, so it fires on the first run AFTER either moves, not literally before the
+  write — accepted as the plan's own design) and a long gap. An ordinary turn costs exactly what it
+  cost before: the stored directive rides until its fingerprint changes.
+  **One review finding, fixed in `bfd8ae39`:** a failed call kept the stored directive (correct) but
+  left the fingerprint mismatched, so the check re-fired every subsequent turn while the provider was
+  down — one failed model call per ordinary turn, which is precisely what this task's central promise
+  forbids. A failure now records `{fingerprint, at}` in its own persisted channel and the predicate
+  stays silent for that fingerprint until `COURSE_CHECK_RETRY_COOLDOWN_MINUTES` (default 15, threaded
+  as data) has passed; a genuinely new fingerprint is not covered by the cooldown, the stale directive
+  keeps rendering, and success clears the failure.
+  Both the event predicate and the cooldown are pinned by mutation: breaking `events.ts` to always
+  refire fails 8 tests across three levels, removing the cooldown guard fails 7. Orchestrator re-ran on
+  the committed tree: `npx jest --ci src/infra/ai` 65 suites / 557 tests, `npm run test:unit` 118 /
+  1056, L0 96/96, `npm run test:scenarios` 4 / 221 (exit 0, no teardown abort this run — the 134 abort
+  recorded in the backlog is intermittent).
+  Two smaller decisions accepted as reported: the `course_check` profile needs no registration
+  (profiles are free-form, `LLM_PROFILE_COURSE_CHECK_*` falls back to globals, documented in
+  `.env.example`), and the layer has an on/off switch.
 
 **Verification:** as Task 1, plus the call-count assertions named above.
 
