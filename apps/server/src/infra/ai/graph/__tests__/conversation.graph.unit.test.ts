@@ -110,7 +110,7 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
     appendSystemNote: async () => undefined,
   },
   summaries: {
-    insert: async () => undefined,
+    insert: async () => ({ summaryTurnId: 'summary-turn-1' }),
     latestLegacySummary: async () => null,
   },
   userFacts: {

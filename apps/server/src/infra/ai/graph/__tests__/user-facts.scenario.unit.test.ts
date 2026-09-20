@@ -25,17 +25,19 @@ import type { UpsertFactInput, UserFact, IUserFactsService } from '@domain/user/
 import { OpenAiLlmGateway } from '@infra/ai/llm.gateway';
 import type { ExerciseWithMuscles } from '@domain/training/types';
 import { computeFactKey } from '@domain/user/services/fact-key';
+import { isActiveForPrompt } from '@domain/user/services/fact-lifecycle';
 
 import { buildConversationGraph, type ConversationGraphDeps } from '../conversation.graph';
 import { USER, ctxConfig } from './graph-test-support';
 
-/** In-memory `IUserFactsService` with the Drizzle port's semantics (D-C/D-G). */
+/** In-memory `IUserFactsService` with the Drizzle port's semantics (D-C/D-G, AC-FL-1). */
 class InMemoryUserFactsService implements IUserFactsService {
   readonly rows: UserFact[] = [];
-  readonly upsertCalls: Array<{ userId: string; facts: UpsertFactInput[] }> = [];
+  readonly upsertCalls: Array<{ userId: string; facts: UpsertFactInput[]; sourceTurnId?: string }> = [];
+  readonly promptCalls: Array<{ userId: string; now: Date }> = [];
 
-  async upsertMany(userId: string, facts: UpsertFactInput[]): Promise<number> {
-    this.upsertCalls.push({ userId, facts: [...facts] });
+  async upsertMany(userId: string, facts: UpsertFactInput[], sourceTurnId?: string): Promise<number> {
+    this.upsertCalls.push({ userId, facts: [...facts], sourceTurnId });
     for (const input of facts) {
       const factKey = computeFactKey(input.fact);
       // D-C: upsert on the unique (userId, category, factKey) — a repeat
@@ -55,21 +57,40 @@ class InMemoryUserFactsService implements IUserFactsService {
           factKey,
           muscleGroup: input.muscleGroup ?? null,
           confirmations: 1,
-          sourceTurnId: null,
+          sourceTurnId: sourceTurnId ?? null,
           createdAt: new Date(),
           updatedAt: new Date(),
+          durability: 'permanent',
+          expiresAt: null,
+          reviewAfter: null,
+          phaseNote: null,
+          phaseAt: null,
+          onExpiry: null,
+          status: 'active',
+          archivedAt: null,
+          archivedReason: null,
+          closedByUserAt: null,
+          supersedesId: null,
+          context: null,
         });
       }
     }
     return facts.length;
   }
 
-  async getForPrompt(userId: string, cap = 50): Promise<UserFact[]> {
-    return this.rows.filter(r => r.userId === userId).slice(0, cap);
+  async getForPrompt(userId: string, now: Date, cap = 50): Promise<UserFact[]> {
+    this.promptCalls.push({ userId, now });
+    return this.rows.filter(r => r.userId === userId && isActiveForPrompt(r, now)).slice(0, cap);
   }
 
-  async getConstraints(userId: string): Promise<UserFact[]> {
-    return this.rows.filter(r => r.userId === userId && r.category === 'physical_constraint' && r.muscleGroup !== null);
+  async getConstraints(userId: string, now: Date): Promise<UserFact[]> {
+    return this.rows.filter(
+      r =>
+        r.userId === userId &&
+        r.category === 'physical_constraint' &&
+        r.muscleGroup !== null &&
+        isActiveForPrompt(r, now),
+    );
   }
 }
 
@@ -301,7 +322,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
       muscleGroup: 'lower_back',
       confirmations: 1,
     });
-    await expect(facts.getConstraints('u1')).resolves.toHaveLength(1);
+    await expect(facts.getConstraints('u1', T1)).resolves.toHaveLength(1);
     // The fenced answer cost exactly ONE provider call — BUG-017's recovery,
     // not the old blind retry.
     expect(modelFactory.__structuredCalls()).toBe(1);
@@ -359,5 +380,111 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
     expect(facts.rows[0]!.confirmations).toBe(2);
     expect(facts.rows[0]!.fact).toBe(FACT_V1); // the stored text is never rewritten (D-C)
     expect(modelFactory.__structuredCalls()).toBe(2);
+  });
+
+  it('AC-FL-1: expired and archived facts never reach the prompt; the facts clock is the run clock', async () => {
+    const T0 = new Date('2026-09-19T10:00:00Z');
+    const facts = new InMemoryUserFactsService();
+    const deps = makeDeps(facts);
+    const graph = buildConversationGraph(deps);
+
+    const { __recorded: recorded, __script: script, __structuredAnswers: structuredAnswers } = modelFactory;
+    recorded.length = 0;
+    script.length = 0;
+    structuredAnswers.length = 0;
+    script.push(() => new AIMessage({ content: 'Продолжаем.', tool_calls: [] }));
+
+    // One live permanent fact, one short fact whose TTL is up, one archived
+    // fact — only the live one may render.
+    facts.rows.push(
+      {
+        id: 'live-1',
+        userId: 'u1',
+        category: 'equipment',
+        fact: 'Home dumbbells only',
+        factKey: 'home dumbbells only',
+        muscleGroup: null,
+        confirmations: 2,
+        sourceTurnId: null,
+        createdAt: new Date('2026-09-01T00:00:00Z'),
+        updatedAt: new Date('2026-09-10T00:00:00Z'),
+        durability: 'permanent',
+        expiresAt: null,
+        reviewAfter: null,
+        phaseNote: null,
+        phaseAt: null,
+        onExpiry: null,
+        status: 'active',
+        archivedAt: null,
+        archivedReason: null,
+        closedByUserAt: null,
+        supersedesId: null,
+        context: null,
+      },
+      {
+        id: 'expired-1',
+        userId: 'u1',
+        category: 'physiological_pattern',
+        fact: 'Sore legs after squats',
+        factKey: 'sore legs after squats',
+        muscleGroup: null,
+        confirmations: 1,
+        sourceTurnId: null,
+        createdAt: new Date('2026-09-05T00:00:00Z'),
+        updatedAt: new Date('2026-09-05T00:00:00Z'),
+        durability: 'short',
+        expiresAt: new Date(T0.getTime() - 86_400_000), // TTL up a day before the run
+        reviewAfter: null,
+        phaseNote: null,
+        phaseAt: null,
+        onExpiry: 'forget',
+        status: 'active',
+        archivedAt: null,
+        archivedReason: null,
+        closedByUserAt: null,
+        supersedesId: null,
+        context: null,
+      },
+      {
+        id: 'archived-1',
+        userId: 'u1',
+        category: 'physical_constraint',
+        fact: 'Old shoulder tweak',
+        factKey: 'old shoulder tweak',
+        muscleGroup: 'shoulders_front',
+        confirmations: 1,
+        sourceTurnId: null,
+        createdAt: new Date('2026-08-01T00:00:00Z'),
+        updatedAt: new Date('2026-08-20T00:00:00Z'),
+        durability: 'short',
+        expiresAt: null,
+        reviewAfter: null,
+        phaseNote: null,
+        phaseAt: null,
+        onExpiry: 'forget',
+        status: 'archived',
+        archivedAt: new Date('2026-09-01T00:00:00Z'),
+        archivedReason: 'user_closed',
+        closedByUserAt: new Date('2026-09-01T00:00:00Z'),
+        supersedesId: null,
+        context: null,
+      },
+    );
+
+    await graph.invoke(
+      { phase: 'chat', messages: [new HumanMessage('Что ты помнишь обо мне?')] },
+      ctxConfig({ runId: 'run-1', now: T0 }),
+    );
+
+    // The facts were loaded against the RUN's clock, not a fresh one.
+    expect(facts.promptCalls).toEqual([{ userId: 'u1', now: T0 }]);
+
+    const systemMessages = recorded[0]!.filter(m => m._getType() === 'system').map(m => String(m.content));
+    const factsBlock = systemMessages.find(c => c.includes('## User Facts'));
+    expect(factsBlock).toBeDefined();
+    expect(factsBlock).toContain('Home dumbbells only');
+    expect(factsBlock).toContain('2× confirmed'); // AC-FL-1: the confirmation count renders
+    expect(factsBlock).not.toContain('Sore legs after squats'); // expired — hidden
+    expect(factsBlock).not.toContain('Old shoulder tweak'); // archived — never rendered
   });
 });

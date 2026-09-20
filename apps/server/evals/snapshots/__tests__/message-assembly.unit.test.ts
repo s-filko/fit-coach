@@ -100,7 +100,7 @@ async function captureInvocation(
   // appear.
   const { deps } = buildStubDeps(phase.fixture);
   if (userFacts) {
-    (deps.userFacts as { getForPrompt: (userId: string, cap?: number) => Promise<UserFact[]> }).getForPrompt =
+    (deps.userFacts as unknown as { getForPrompt: (userId: string, now: Date, cap?: number) => Promise<UserFact[]> }).getForPrompt =
       async () => userFacts;
   }
 
@@ -180,6 +180,18 @@ describe('message assembly (pre-wiring truth, refactor-p2-context-assembler Task
       muscleGroup: null,
       confirmations: 1,
       sourceTurnId: null,
+    durability: 'permanent',
+    expiresAt: null,
+    reviewAfter: null,
+    phaseNote: null,
+    phaseAt: null,
+    onExpiry: null,
+    status: 'active',
+    archivedAt: null,
+    archivedReason: null,
+    closedByUserAt: null,
+    supersedesId: null,
+    context: null,
       createdAt: new Date('2026-09-01T00:00:00Z'),
       updatedAt: new Date('2026-09-01T00:00:00Z'),
     };

@@ -48,13 +48,19 @@ export function toSummaryTurnRow(input: InsertSummaryInput): SummaryTurnRow {
 
 /** SummaryPort adapter. `insert` writes both rows in one transaction (all or nothing). */
 export class DrizzleSummaryService implements SummaryPort {
-  async insert(input: InsertSummaryInput): Promise<void> {
+  async insert(input: InsertSummaryInput): Promise<{ summaryTurnId: string }> {
     const { db } = await import('@infra/db/drizzle');
     const { conversationSummaries, conversationTurns } = await import('@infra/db/schema');
     const summaryRow = toSummaryInsert(input);
-    await db.transaction(async tx => {
+    return db.transaction(async tx => {
       await tx.insert(conversationSummaries).values(summaryRow);
-      await tx.insert(conversationTurns).values(toSummaryTurnRow(input));
+      // The mirrored turn row's id is the fact-extraction provenance
+      // (fact-lifecycle plan Task 1) — read inside the same transaction.
+      const [turn] = await tx
+        .insert(conversationTurns)
+        .values(toSummaryTurnRow(input))
+        .returning({ id: conversationTurns.id });
+      return { summaryTurnId: turn.id };
     });
   }
 

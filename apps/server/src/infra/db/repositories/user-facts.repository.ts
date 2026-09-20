@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
 
 import type { FactCategory, IUserFactsService, UpsertFactInput, UserFact } from '@domain/user/ports';
 import { computeFactKey } from '@domain/user/services/fact-key';
@@ -16,9 +16,30 @@ function toUserFact(row: typeof userFacts.$inferSelect): UserFact {
     muscleGroup: row.muscleGroup,
     confirmations: row.confirmations,
     sourceTurnId: row.sourceTurnId,
+    durability: row.durability,
+    expiresAt: row.expiresAt,
+    reviewAfter: row.reviewAfter,
+    phaseNote: row.phaseNote,
+    phaseAt: row.phaseAt,
+    onExpiry: row.onExpiry,
+    status: row.status,
+    archivedAt: row.archivedAt,
+    archivedReason: row.archivedReason,
+    closedByUserAt: row.closedByUserAt,
+    supersedesId: row.supersedesId,
+    context: row.context,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+/**
+ * The AC-FL-1 read filter (the SQL twin of `isActiveForPrompt`): active rows
+ * only, and nothing whose TTL is up at the caller's `now` (the run clock —
+ * passed in as data, never the DB clock or a fresh `new Date()`).
+ */
+function visibleAt(now: Date) {
+  return and(eq(userFacts.status, 'active'), or(isNull(userFacts.expiresAt), gt(userFacts.expiresAt, now)));
 }
 
 /** Drizzle implementation of {@link IUserFactsService} (ADR-0009 table shape, D-B/D-C). */
@@ -51,21 +72,21 @@ export class UserFactsRepository implements IUserFactsService {
     return count;
   }
 
-  async getForPrompt(userId: string, cap = 50): Promise<UserFact[]> {
+  async getForPrompt(userId: string, now: Date, cap = 50): Promise<UserFact[]> {
     const rows = await db
       .select()
       .from(userFacts)
-      .where(eq(userFacts.userId, userId))
+      .where(and(eq(userFacts.userId, userId), visibleAt(now)))
       .orderBy(asc(userFacts.category), desc(userFacts.createdAt))
       .limit(cap);
     return rows.map(toUserFact);
   }
 
-  async getConstraints(userId: string): Promise<UserFact[]> {
+  async getConstraints(userId: string, now: Date): Promise<UserFact[]> {
     const rows = await db
       .select()
       .from(userFacts)
-      .where(and(eq(userFacts.userId, userId), eq(userFacts.category, 'physical_constraint')));
+      .where(and(eq(userFacts.userId, userId), eq(userFacts.category, 'physical_constraint'), visibleAt(now)));
     return rows.filter(row => row.muscleGroup !== null).map(toUserFact);
   }
 }

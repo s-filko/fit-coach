@@ -128,12 +128,12 @@ course-check layer and narrows the hard constraint block — behavioural, measur
 class bounds, expiry/review predicates against a passed-in `now`), `infra/ai/prompts/blocks/user-facts.v1.ts`
 (→ v2 if the rendering changes shape), their tests.
 
-- [ ] **Step 1: Tests first** — bounds clamping per class; `permanent` refused without the explicit
+- [x] **Step 1: Tests first** — bounds clamping per class; `permanent` refused without the explicit
   flag / confirmation threshold; an expired short fact is not returned for the prompt; an archived
   fact is never returned; review-date predicates; rendering shows date + confirmations.
-- [ ] **Step 2: Implement**, including `source_turn_id` finally being filled at extraction.
-- [ ] **Step 3: Commit** — `feat(memory): fact durability classes, expiry and archive (AC-FL-1)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 2: Implement**, including `source_turn_id` finally being filled at extraction.
+- [x] **Step 3: Commit** — `feat(memory): fact durability classes, expiry and archive (AC-FL-1)`
+- [x] **Step 4: STOP** for orchestrator review.
 
 **Verification:** `npx jest --ci src/domain/user src/infra/db src/infra/ai/prompts` → pass;
 `npm run test:unit` → green; `npm run evals -- --level L0` → green; `npm run test:scenarios` → green.

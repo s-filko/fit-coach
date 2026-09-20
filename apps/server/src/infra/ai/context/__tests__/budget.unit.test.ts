@@ -12,6 +12,8 @@ import { AIMessage, type BaseMessage, HumanMessage, SystemMessage, ToolMessage }
 import type { StoredEpisodeSummary } from '@domain/conversation/episode';
 import type { UserFact } from '@domain/user/ports';
 
+import { USER_FACTS_V2, renderBlock } from '@infra/ai/prompts/blocks';
+
 import { resolveBudget, trimHistory } from '../budget';
 import { estimateMessages, estimateTokens } from '../token-estimator';
 
@@ -66,6 +68,18 @@ const FACT = (id: string, overrides: Partial<UserFact> = {}): UserFact => ({
   muscleGroup: null,
   confirmations: 1,
   sourceTurnId: null,
+  durability: 'permanent' as const,
+  expiresAt: null,
+  reviewAfter: null,
+  phaseNote: null,
+  phaseAt: null,
+  onExpiry: null,
+  status: 'active' as const,
+  archivedAt: null,
+  archivedReason: null,
+  closedByUserAt: null,
+  supersedesId: null,
+  context: null,
   createdAt: new Date('2026-09-01T00:00:00Z'),
   updatedAt: new Date('2026-09-01T00:00:00Z'),
   ...overrides,
@@ -321,11 +335,12 @@ describe('resolveBudget — (0) facts truncation, P6 Task 4 (deliberate extensio
     const history = turn(0);
     const historyTokens = estimateMessages(history);
 
-    // sumMinusReserve = system(0) + longTerm(65) + domain(0) + history(historyTokens) - 0.
-    // All three facts together don't fit; the two most-confirmed/most-recent do
-    // (measured against the same USER_FACTS_V1 render resolveBudget uses) — so a
-    // facts cut, not a history cut (history's own budget already covers it), is
-    // what must make this fit.
+    // The longTerm budget is measured against the SAME USER_FACTS_V2 render
+    // resolveBudget uses: exactly enough for the two most-confirmed/most-recent
+    // facts, one token short of all three — so a facts cut, not a history cut
+    // (history's own budget already covers it), is what must make this fit.
+    const currentTokens = estimateMessages([human('hi', 'cur')]);
+    const twoFit = estimateTokens(renderBlock(USER_FACTS_V2, { facts: [oldestTie, newestTie] }));
     const result = await resolveBudget({
       systemTokens: 0,
       facts: [leastConfirmed, oldestTie, newestTie],
@@ -333,7 +348,13 @@ describe('resolveBudget — (0) facts truncation, P6 Task 4 (deliberate extensio
       blocks: [],
       history,
       current: [human('hi', 'cur')],
-      budget: baseBudget({ system: 0, domain: 0, longTerm: 65, history: historyTokens, outputReserve: 0 }),
+      budget: baseBudget({
+        system: 0,
+        domain: 0,
+        longTerm: twoFit + currentTokens,
+        history: historyTokens,
+        outputReserve: 0,
+      }),
       data: {},
       blockCtx: BLOCK_CTX,
       estimate: estimateMessages,

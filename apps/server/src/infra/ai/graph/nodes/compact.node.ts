@@ -194,15 +194,20 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
         endedAt: ctx.now.toISOString(),
         summary,
       };
+      // fact-lifecycle plan Task 1: the mirrored summary turn row is the honest
+      // provenance of the facts this summarisation extracts — facts are born
+      // out of it, so they cite its id as source_turn_id. Left undefined when
+      // the insert fails; the fact write below stays independent regardless (D-E).
+      let summaryTurnId: string | undefined;
       try {
-        await summaries.insert({
+        ({ summaryTurnId } = await summaries.insert({
           userId,
           runId,
           episodeId: stored.episodeId,
           phaseAtEnd: stored.phaseAtEnd,
           structured: summary,
           rendered: episodeParagraph(stored, ctx.now, ctx.user.timezone ?? null),
-        });
+        }));
       } catch (err) {
         log.error({ err, userId, runId }, 'Episode summary insert failed — the run continues without it');
       }
@@ -215,7 +220,7 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
       // to write — no pointless round-trip for the (common) empty-facts case.
       if (summary.facts.length > 0) {
         try {
-          await userFacts.upsertMany(userId, summary.facts);
+          await userFacts.upsertMany(userId, summary.facts, summaryTurnId);
         } catch (err) {
           log.error({ err, userId, runId }, 'User facts upsert failed — the run continues without it');
         }

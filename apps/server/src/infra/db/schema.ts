@@ -1,6 +1,7 @@
 // Database schema definitions
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   boolean,
   check,
   index,
@@ -166,10 +167,21 @@ export const conversationSummaries = pgTable(
   },
 );
 
+// Enums for user_facts lifecycle (fact-lifecycle plan Task 1, AC-FL-1) — the
+// owner's durability model (2026-09-20). The class bounds themselves live in
+// code: @domain/user/services/fact-lifecycle (FACT_LIFECYCLE_BOUNDS).
+export const factDurabilityEnum = pgEnum('fact_durability', ['permanent', 'long_term', 'short']);
+export const factOnExpiryEnum = pgEnum('fact_on_expiry', ['forget', 'ask_once']);
+export const factStatusEnum = pgEnum('fact_status', ['active', 'archived']);
+export const factArchivedReasonEnum = pgEnum('fact_archived_reason', ['user_closed', 'expired', 'superseded']);
+
 // Durable user facts extracted at compaction (ADR-0009 table shape and FactCategory
 // values; mechanism superseded 2026-09-17 — see refactor-p6-facts-and-progress-blocks
 // Task 1 and Task 3). Idempotent upsert on (user_id, category, fact_key) with a
 // confirmation counter (D-C); `fact` text is never overwritten once written.
+// Lifecycle columns (AC-FL-1): existing rows migrate with defaults that change
+// nothing today — durability=permanent (no dates, never expires), status=active,
+// every date/closure column null.
 export const userFacts = pgTable(
   'user_facts',
   {
@@ -183,6 +195,18 @@ export const userFacts = pgTable(
     muscleGroup: text('muscle_group'),
     confirmations: integer('confirmations').notNull().default(1),
     sourceTurnId: uuid('source_turn_id').references(() => conversationTurns.id),
+    durability: factDurabilityEnum('durability').notNull().default('permanent'),
+    expiresAt: timestamp('expires_at'),
+    reviewAfter: timestamp('review_after'),
+    phaseNote: text('phase_note'),
+    phaseAt: timestamp('phase_at'),
+    onExpiry: factOnExpiryEnum('on_expiry'),
+    status: factStatusEnum('status').notNull().default('active'),
+    archivedAt: timestamp('archived_at'),
+    archivedReason: factArchivedReasonEnum('archived_reason'),
+    closedByUserAt: timestamp('closed_by_user_at'),
+    supersedesId: uuid('supersedes_id').references((): AnyPgColumn => userFacts.id),
+    context: text('context'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

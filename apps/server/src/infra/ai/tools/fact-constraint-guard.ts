@@ -17,6 +17,9 @@ export type FactConstraintRejection = Extract<ToolOutcome, { ok: false; kind: 'u
  * Fetches the user's physical constraints and checks them against exercises
  * (as resolved by `exerciseRepository.findByIdsWithMuscles`).
  *
+ * `now` is the run clock (ctx.now) — AC-FL-1: archived and expired constraints
+ * never reject a call.
+ *
  * Returns the `userError` outcome the tool returns verbatim when an exercise's
  * PRIMARY muscle group hits a `physical_constraint` fact, or null when the
  * call may proceed. Nothing is persisted on rejection — the caller returns
@@ -26,8 +29,9 @@ export async function rejectOnFactConflict(
   factsService: Pick<IUserFactsService, 'getConstraints'>,
   userId: string,
   exercises: ExerciseWithMuscles[],
+  now: Date,
 ): Promise<FactConstraintRejection | null> {
-  const facts = await factsService.getConstraints(userId);
+  const facts = await factsService.getConstraints(userId, now);
   const conflict = checkFactConflicts({ facts, exercises });
   return conflict === null ? null : (userError(factConflictMessage(conflict)) as FactConstraintRejection);
 }

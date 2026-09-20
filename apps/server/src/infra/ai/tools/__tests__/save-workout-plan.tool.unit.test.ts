@@ -82,9 +82,14 @@ const makeWorkoutPlanRepo = (): jest.Mocked<IWorkoutPlanRepository> =>
     archive: jest.fn(),
   }) as unknown as jest.Mocked<IWorkoutPlanRepository>;
 
-const makeConfig = (userId = 'u1'): RunnableConfig => ({
-  configurable: { userId, thread_id: userId },
-});
+const makeConfig = (userId = 'u1'): RunnableConfig =>
+  // `context` is the LangGraph run context the graph threads to tools (not a
+  // stock RunnableConfig field — hence the cast); ctxOf reads `now` from it for
+  // the facts constraint check (fact-lifecycle Task 1).
+  ({
+    configurable: { userId, thread_id: userId },
+    context: { runId: 'run-test', userId, now: new Date('2026-09-20T12:00:00Z') },
+  }) as unknown as RunnableConfig;
 
 const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> =>
   ({
@@ -139,6 +144,18 @@ const makeConstraintFact = (muscleGroup: UserFact['muscleGroup']): UserFact => (
   muscleGroup,
   confirmations: 1,
   sourceTurnId: null,
+  durability: 'permanent',
+  expiresAt: null,
+  reviewAfter: null,
+  phaseNote: null,
+  phaseAt: null,
+  onExpiry: null,
+  status: 'active',
+  archivedAt: null,
+  archivedReason: null,
+  closedByUserAt: null,
+  supersedesId: null,
+  context: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 });

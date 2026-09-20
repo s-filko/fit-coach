@@ -77,7 +77,9 @@ function makeDeps(
     upsertMany?: () => Promise<number>;
   } = {},
 ) {
-  const insert = jest.fn<Promise<void>, Parameters<SummaryPort['insert']>[0][]>().mockResolvedValue(undefined);
+  const insert = jest
+    .fn<Promise<{ summaryTurnId: string }>, Parameters<SummaryPort['insert']>[0][]>()
+    .mockResolvedValue({ summaryTurnId: 'summary-turn-1' });
   const latestLegacySummary = jest.fn().mockResolvedValue(null);
   const structured = jest
     .fn()
@@ -152,6 +154,41 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
 
     expect(insert).toHaveBeenCalledTimes(1);
     expect(removedIds(update)).toEqual(['m0', 'm0a']); // trimming happened regardless
+  });
+
+  // fact-lifecycle plan Task 1: source_turn_id is finally filled at extraction —
+  // a fact is born out of the summarisation, so the mirrored summary turn is its
+  // provenance (coordinator decision 2026-09-21).
+  it('passes the summary turn id as sourceTurnId to upsertMany', async () => {
+    const { deps, insert, upsertMany } = makeDeps({
+      structured: () =>
+        Promise.resolve({ ...FIXED_SUMMARY, facts: [{ category: 'equipment', fact: 'Has a barbell' }] }),
+    });
+    insert.mockResolvedValue({ summaryTurnId: 'summary-turn-1' });
+    const compact = buildCompactStep(deps);
+
+    await compact(channelState(), ctxConfig());
+
+    expect(upsertMany).toHaveBeenCalledWith(
+      USER_ID,
+      [{ category: 'equipment', fact: 'Has a barbell' }],
+      'summary-turn-1',
+    );
+  });
+
+  // D-E stays intact: fact writing is independent of the summary insert.
+  it('a failed summary insert still writes the facts — with sourceTurnId left undefined', async () => {
+    const { deps, insert, upsertMany } = makeDeps({
+      structured: () =>
+        Promise.resolve({ ...FIXED_SUMMARY, facts: [{ category: 'equipment', fact: 'Has a barbell' }] }),
+    });
+    insert.mockRejectedValue(new Error('db down'));
+    const compact = buildCompactStep(deps);
+
+    await compact(channelState(), ctxConfig());
+
+    expect(upsertMany).toHaveBeenCalledTimes(1);
+    expect(upsertMany.mock.calls[0][2]).toBeUndefined();
   });
 
   it('AC-CC-1: a too-short beyond-tail part is KEPT — no model call, nothing removed, no rotation', async () => {
@@ -309,7 +346,8 @@ describe('buildCompactStep — user facts extraction (P6 Task 3, owner decision 
     await compact(channelState(), ctxConfig());
 
     expect(upsertMany).toHaveBeenCalledTimes(1);
-    expect(upsertMany).toHaveBeenCalledWith(USER_ID, summaryWithFacts.facts);
+    // The third argument is the mirrored summary turn's id (fact-lifecycle Task 1).
+    expect(upsertMany).toHaveBeenCalledWith(USER_ID, summaryWithFacts.facts, 'summary-turn-1');
   });
 
   it('a summariser returning facts: [] skips the upsertMany call entirely (no pointless round-trip)', async () => {

@@ -41,7 +41,7 @@ import {
   renderBlock,
   renderBlocks,
   type RenderedBlock,
-  USER_FACTS_V1,
+  USER_FACTS_V2,
 } from '@infra/ai/prompts/blocks';
 import { SECTION_SEPARATOR } from '@infra/ai/prompts/compose';
 
@@ -113,7 +113,7 @@ export async function assembleContext<D>(input: AssembleInput<D>): Promise<Assem
   // Block 2a: `## User Facts` — long-term memory (D-F), rendered ahead of the
   // episode-summaries block (ADR-0013 §3.4: block 2's long-term slot precedes
   // episode memory). Empty facts render nothing, same contract as summaries.
-  const userFactsText = facts.length > 0 ? renderBlock(USER_FACTS_V1, { facts }) : null;
+  const userFactsText = facts.length > 0 ? renderBlock(USER_FACTS_V2, { facts }) : null;
   const summariesText =
     summaries.length > 0
       ? renderBlock(EPISODE_SUMMARIES_V1, { summaries, now: input.now, timezone: input.timezone })

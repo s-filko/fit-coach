@@ -1,6 +1,7 @@
 import { COMPLETE_PROFILE, EMPTY_PROFILE } from '../../fixtures/personas';
 import { buildStubDeps } from '../build-stub-deps';
 
+const NOW = new Date('2026-09-20T12:00:00Z');
 describe('buildStubDeps', () => {
   it('returns a user matching the fixture', async () => {
     const { deps } = buildStubDeps(COMPLETE_PROFILE);
@@ -72,7 +73,7 @@ describe('buildStubDeps', () => {
         { category: 'exercise_preference', fact: 'Предпочитает гантели штангам' },
       ],
     });
-    const facts = await deps.userFacts.getForPrompt('u');
+    const facts = await deps.userFacts.getForPrompt('u', NOW);
     expect(facts.map(f => [f.category, f.fact, f.muscleGroup])).toEqual([
       ['physical_constraint', 'Травмировано правое плечо', 'shoulders_front'],
       ['exercise_preference', 'Предпочитает гантели штангам', null],
@@ -89,13 +90,13 @@ describe('buildStubDeps', () => {
         { category: 'exercise_preference', fact: 'Предпочитает гантели штангам', muscleGroup: 'biceps' },
       ],
     });
-    const constraints = await deps.userFacts.getConstraints('u');
+    const constraints = await deps.userFacts.getConstraints('u', NOW);
     expect(constraints.map(f => f.fact)).toEqual(['Боль в колене']);
   });
 
   it('returns no facts for facts-free fixtures — nothing moves for existing datasets', async () => {
     const { deps } = buildStubDeps(COMPLETE_PROFILE);
-    expect(await deps.userFacts.getForPrompt('u')).toEqual([]);
-    expect(await deps.userFacts.getConstraints('u')).toEqual([]);
+    expect(await deps.userFacts.getForPrompt('u', NOW)).toEqual([]);
+    expect(await deps.userFacts.getConstraints('u', NOW)).toEqual([]);
   });
 });
