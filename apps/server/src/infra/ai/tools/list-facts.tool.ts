@@ -27,11 +27,13 @@ function day(date: Date): string {
 }
 
 function activeLine(fact: UserFact): string {
-  return `- ${fact.fact} — ${fact.durability}, ${fact.confirmations}× confirmed, updated ${day(fact.updatedAt)}`;
+  // BUG-020: the id LEADS the line in summariser v4's exact shape — the model
+  // must be able to copy it from this listing into manage_fact's factId.
+  return `- id ${fact.id}: ${fact.fact} — ${fact.durability}, ${fact.confirmations}× confirmed, updated ${day(fact.updatedAt)}`;
 }
 
 function archivedLine(fact: UserFact): string {
-  return `- ${fact.fact} — closed ${day(fact.archivedAt ?? fact.updatedAt)} (reason: ${fact.archivedReason})`;
+  return `- id ${fact.id}: ${fact.fact} — closed ${day(fact.archivedAt ?? fact.updatedAt)} (reason: ${fact.archivedReason})`;
 }
 
 /** Grouped by category in the port's category-then-recency order, one section per category. */
@@ -79,8 +81,9 @@ export function buildListFactsTool(deps: ListFactsToolDeps) {
     {
       name: 'list_facts',
       description: [
-        'List the durable facts remembered about the user — use it to answer "what do you remember about me", before correcting or retracting a fact (copy ids verbatim), and before saving to avoid duplicates.',
-        'Every ACTIVE fact is listed, grouped by category, with its durability class, confirmation count and last-updated date.',
+        'List the durable facts remembered about the user — use it to answer "what do you remember about me", and to get a fact\'s id before correcting or retracting it.',
+        'Every line starts with the fact\'s id ("- id <uuid>: ..."): copy that id VERBATIM into manage_fact\'s factId — never invent or abbreviate it.',
+        'Each fact is listed grouped by category, with its durability class, confirmation count and last-updated date.',
         'Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.',
       ].join(' '),
       schema: z.object({

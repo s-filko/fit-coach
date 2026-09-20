@@ -98,12 +98,16 @@ describe('list_facts (AC-FL-8)', () => {
     expect(svc.listFacts).toHaveBeenCalledWith('u1', true, NOW);
   });
 
-  it('renders each active fact with category, date, confirmation count and durability class', async () => {
+  it('renders each active fact with its ID FIRST on the line, plus category, date, count and class (BUG-020)', async () => {
     const svc = makeFactsService({
       active: [
-        fact({ id: 'f1', confirmations: 2, updatedAt: new Date('2026-09-10T00:00:00Z') }),
         fact({
-          id: 'f2',
+          id: '5b0f8a3e-1111-4111-8111-111111111111',
+          confirmations: 2,
+          updatedAt: new Date('2026-09-10T00:00:00Z'),
+        }),
+        fact({
+          id: '5b0f8a3e-2222-4222-8222-222222222222',
           category: 'physical_constraint',
           fact: 'Sore shoulder',
           durability: 'short',
@@ -117,8 +121,10 @@ describe('list_facts (AC-FL-8)', () => {
 
     const text = summaryOf(await tool.invoke({}, makeConfig()));
 
+    // The id leads the line, in summariser v4's exact shape — copyable, not prose.
+    expect(text).toContain('- id 5b0f8a3e-1111-4111-8111-111111111111: Trains at home with dumbbells only');
+    expect(text).toContain('- id 5b0f8a3e-2222-4222-8222-222222222222: Sore shoulder');
     expect(text).toContain('equipment');
-    expect(text).toContain('Trains at home with dumbbells only');
     expect(text).toContain('2× confirmed'); // the confirmation count renders
     expect(text).toContain('permanent'); // the durability class renders
     expect(text).toContain('2026-09-10'); // the date renders
@@ -151,6 +157,8 @@ describe('list_facts (AC-FL-8)', () => {
     expect(asked).toContain('Old shoulder tweak');
     expect(asked).toContain('user_closed');
     expect(asked).toContain('2026-09-01');
+    // Archived lines carry their id too — retract/delete need it there as well.
+    expect(asked).toContain('- id a1: Old shoulder tweak');
   });
 
   it('no facts at all renders a friendly empty answer, not an error', async () => {
