@@ -215,21 +215,33 @@ export async function seedScenarioRows(past: Scenario['past'], t0: Date): Promis
     await seedWorkout(userId, workout, planId, exerciseIds, t0);
   }
 
-  // Facts through the real repository. Pre-Task-3 this was the blind upsert;
-  // now the write path is rememberFact — seeded history facts are permanent
-  // and explicitly stated (the fixture authors them as standing truths).
+  // Facts through the real repository (the write path is rememberFact). A fact
+  // without a `durability` is a permanent, explicitly stated standing truth —
+  // what every pre-lifecycle scenario means by one. A fact WITH a durability
+  // keeps its class, and the CODE computes its dates from `at` (the moment it
+  // was stated, default T0) via the class bounds — the seed never writes a date.
   const factsRepo = new UserFactsRepository();
   for (const f of past.facts) {
+    const statedAt = f.at !== undefined ? resolveRelativeTime(f.at, t0) : t0;
+    const lifecycle =
+      f.durability === undefined || f.durability === 'permanent'
+        ? { durability: 'permanent' as const, explicitPermanent: true }
+        : {
+            durability: f.durability,
+            ...(f.ttlDays !== undefined ? { ttlDays: f.ttlDays } : {}),
+            ...(f.reviewInDays !== undefined ? { reviewInDays: f.reviewInDays } : {}),
+            ...(f.phaseNote !== undefined ? { phaseNote: f.phaseNote } : {}),
+            ...(f.onExpiry !== undefined ? { onExpiry: f.onExpiry } : {}),
+          };
     await factsRepo.rememberFact(
       userId,
       {
         category: f.category,
         fact: f.fact,
         ...(f.muscleGroup !== undefined && f.muscleGroup !== null ? { muscleGroup: f.muscleGroup } : {}),
-        durability: 'permanent',
-        explicitPermanent: true,
+        ...lifecycle,
       },
-      t0,
+      statedAt,
     );
   }
 
@@ -276,9 +288,7 @@ export async function seedCheckpointState(
     {
       phase: 'chat',
       activeSessionId: null,
-      ...(conversation?.messages.length
-        ? { messages: toBaseMessages(bindSeedMessages(conversation.messages)) }
-        : {}),
+      ...(conversation?.messages.length ? { messages: toBaseMessages(bindSeedMessages(conversation.messages)) } : {}),
       ...(episodeSummaries.length > 0 ? { episodeSummaries } : {}),
       ...(conversation?.lastUserMessageAt !== undefined
         ? { lastUserMessageAt: resolveRelativeTime(conversation.lastUserMessageAt, t0).toISOString() }

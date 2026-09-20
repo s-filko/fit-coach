@@ -1,3 +1,5 @@
+import { eq } from 'drizzle-orm';
+
 import { PermanentFactRefusal } from '../../../src/domain/user/services/fact-lifecycle';
 import { UserFactsRepository } from '../../../src/infra/db/repositories/user-facts.repository';
 import { DrizzleUserRepository } from '../../../src/infra/db/repositories/user.repository';
@@ -45,7 +47,6 @@ describe('UserFactsRepository – integration', () => {
       ...values,
     });
   }
-
 
   /** rememberFact shorthand for legacy-seeding-style assertions (permanent, explicitly stated). */
   async function remember(
@@ -163,9 +164,7 @@ describe('UserFactsRepository – integration', () => {
       });
 
       await expect(repository.getForPrompt(user.id, NOW)).resolves.toHaveLength(0);
-      await expect(repository.getForPrompt(user.id, new Date(NOW.getTime() - 2 * 86_400_000))).resolves.toHaveLength(
-        1,
-      );
+      await expect(repository.getForPrompt(user.id, new Date(NOW.getTime() - 2 * 86_400_000))).resolves.toHaveLength(1);
     });
 
     it('AC-FL-1: an archived fact is never returned, whatever its dates', async () => {
@@ -249,7 +248,13 @@ describe('UserFactsRepository – integration', () => {
 
       const result = await repository.rememberFact(
         user.id,
-        { category: 'physical_constraint', fact: 'Broken wrist', durability: 'long_term', reviewInDays: 3, phaseNote: 'in a cast' },
+        {
+          category: 'physical_constraint',
+          fact: 'Broken wrist',
+          durability: 'long_term',
+          reviewInDays: 3,
+          phaseNote: 'in a cast',
+        },
         NOW,
       );
 
@@ -265,7 +270,11 @@ describe('UserFactsRepository – integration', () => {
       const NOW = new Date('2026-09-21T12:00:00Z');
 
       await expect(
-        repository.rememberFact(user.id, { category: 'equipment', fact: 'Has a prosthesis', durability: 'permanent' }, NOW),
+        repository.rememberFact(
+          user.id,
+          { category: 'equipment', fact: 'Has a prosthesis', durability: 'permanent' },
+          NOW,
+        ),
       ).rejects.toThrow(PermanentFactRefusal);
 
       const allowed = await repository.rememberFact(
@@ -284,13 +293,23 @@ describe('UserFactsRepository – integration', () => {
       const user = await userRepo.create(userData);
       const NOW = new Date('2026-09-21T12:00:00Z');
 
-      const first = await repository.rememberFact(user.id, { category: 'equipment', fact: 'Has dumbbells up to 12kg', durability: 'short', ttlDays: 7 }, NOW);
+      const first = await repository.rememberFact(
+        user.id,
+        { category: 'equipment', fact: 'Has dumbbells up to 12kg', durability: 'short', ttlDays: 7 },
+        NOW,
+      );
       if (first.outcome !== 'created') throw new Error('expected created');
 
       // A correction: DIFFERENT text (a new factKey), referenced by id.
       const updated = await repository.rememberFact(
         user.id,
-        { category: 'equipment', fact: 'Has dumbbells up to 20kg', durability: 'short', ttlDays: 7, factId: first.fact.id },
+        {
+          category: 'equipment',
+          fact: 'Has dumbbells up to 20kg',
+          durability: 'short',
+          ttlDays: 7,
+          factId: first.fact.id,
+        },
         new Date(NOW.getTime() + 86_400_000),
       );
 
@@ -304,7 +323,11 @@ describe('UserFactsRepository – integration', () => {
       expect(rows.filter(r => r.factKey === 'has dumbbells up to 20kg')).toHaveLength(1); // one row, not two
 
       // A repeat with NO id and the same wording dedupes on the unique key — an update, not a duplicate.
-      const repeat = await repository.rememberFact(user.id, { category: 'equipment', fact: 'Has dumbbells up to 20kg', durability: 'short', ttlDays: 7 }, NOW);
+      const repeat = await repository.rememberFact(
+        user.id,
+        { category: 'equipment', fact: 'Has dumbbells up to 20kg', durability: 'short', ttlDays: 7 },
+        NOW,
+      );
       expect(repeat.outcome).toBe('updated');
       if (repeat.outcome !== 'updated') return;
       expect(repeat.fact.confirmations).toBe(3);
@@ -319,7 +342,11 @@ describe('UserFactsRepository – integration', () => {
       const T2 = new Date('2026-09-21T20:00:00Z'); // this run's clock (always > T1)
       const T3 = new Date('2026-09-21T19:00:00Z'); // a genuinely newer statement
 
-      await repository.rememberFact(user.id, { category: 'physical_constraint', fact: 'Shoulder hurts', durability: 'short', ttlDays: 7 }, T0);
+      await repository.rememberFact(
+        user.id,
+        { category: 'physical_constraint', fact: 'Shoulder hurts', durability: 'short', ttlDays: 7 },
+        T0,
+      );
       const closedId = (await repository.getForPrompt(user.id, T0))[0]!.id;
       const closed = await repository.retractFact(user.id, { factId: closedId }, T1);
       expect(closed).toMatchObject({ status: 'archived', archivedReason: 'user_closed', closedByUserAt: T1 });
@@ -367,11 +394,19 @@ describe('UserFactsRepository – integration', () => {
       const T1 = new Date('2026-09-21T18:00:00Z');
       const T2 = new Date('2026-09-21T20:00:00Z');
 
-      await repository.rememberFact(user.id, { category: 'equipment', fact: 'Borrowed a barbell', durability: 'short', ttlDays: 5 }, T0);
+      await repository.rememberFact(
+        user.id,
+        { category: 'equipment', fact: 'Borrowed a barbell', durability: 'short', ttlDays: 5 },
+        T0,
+      );
       const closedId = (await repository.getForPrompt(user.id, T0))[0]!.id;
       await repository.retractFact(user.id, { factId: closedId }, T1);
 
-      const again = await repository.rememberFact(user.id, { category: 'equipment', fact: 'Borrowed a barbell', durability: 'short', ttlDays: 5 }, T2);
+      const again = await repository.rememberFact(
+        user.id,
+        { category: 'equipment', fact: 'Borrowed a barbell', durability: 'short', ttlDays: 5 },
+        T2,
+      );
       expect(again.outcome).toBe('created');
       if (again.outcome !== 'created') return;
       expect(again.fact.supersedesId).toBe(closedId);
@@ -432,7 +467,9 @@ describe('UserFactsRepository – integration', () => {
       const T1 = new Date('2026-09-21T18:00:00Z'); // closure
       const T2 = new Date('2026-09-21T20:00:00Z'); // run clock
 
-      const created = await remember(user.id, 'Shoulder tweak', 'physical_constraint', { muscleGroup: 'shoulders_front' });
+      const created = await remember(user.id, 'Shoulder tweak', 'physical_constraint', {
+        muscleGroup: 'shoulders_front',
+      });
       const factId = created.outcome === 'created' ? created.fact.id : null;
       if (factId === null) throw new Error('expected created');
       await repository.retractFact(user.id, { factId }, T1);
@@ -454,7 +491,9 @@ describe('UserFactsRepository – integration', () => {
       const T0 = new Date('2026-09-21T09:00:00Z');
       const T2 = new Date('2026-09-21T20:00:00Z');
 
-      const created = await remember(user.id, 'Knee pain when running', 'physical_constraint', { muscleGroup: 'quads' });
+      const created = await remember(user.id, 'Knee pain when running', 'physical_constraint', {
+        muscleGroup: 'quads',
+      });
       const factId = created.outcome === 'created' ? created.fact.id : null;
       if (factId === null) throw new Error('expected created');
 
@@ -490,13 +529,23 @@ describe('UserFactsRepository – integration', () => {
       const user = await userRepo.create(userData);
       const T0 = new Date('2026-09-21T12:00:00Z');
 
-      await repository.rememberFact(user.id, { category: 'physical_constraint', fact: 'Right shoulder injured', durability: 'short', ttlDays: 7 }, T0);
+      await repository.rememberFact(
+        user.id,
+        { category: 'physical_constraint', fact: 'Right shoulder injured', durability: 'short', ttlDays: 7 },
+        T0,
+      );
       const closedId = (await repository.getForPrompt(user.id, T0))[0]!.id;
       await repository.retractFact(user.id, { factId: closedId }, new Date(T0.getTime() + 3_600_000));
 
       const replaced = await repository.rememberFact(
         user.id,
-        { category: 'physical_constraint', fact: 'Left shoulder injured after the fall', durability: 'long_term', reviewInDays: 30, supersedesFactId: closedId },
+        {
+          category: 'physical_constraint',
+          fact: 'Left shoulder injured after the fall',
+          durability: 'long_term',
+          reviewInDays: 30,
+          supersedesFactId: closedId,
+        },
         new Date(T0.getTime() + 7_200_000),
       );
 
@@ -513,12 +562,21 @@ describe('UserFactsRepository – integration', () => {
       const user = await userRepo.create(userData);
       const NOW = new Date('2026-09-21T12:00:00Z');
 
-      const created = await repository.rememberFact(user.id, { category: 'exercise_dislike', fact: 'Hates burpees', durability: 'short', ttlDays: 5 }, NOW);
+      const created = await repository.rememberFact(
+        user.id,
+        { category: 'exercise_dislike', fact: 'Hates burpees', durability: 'short', ttlDays: 5 },
+        NOW,
+      );
       if (created.outcome !== 'created') throw new Error('expected created');
 
       const retracted = await repository.retractFact(user.id, { factId: created.fact.id }, NOW);
 
-      expect(retracted).toMatchObject({ status: 'archived', archivedReason: 'user_closed', closedByUserAt: NOW, confirmations: 1 });
+      expect(retracted).toMatchObject({
+        status: 'archived',
+        archivedReason: 'user_closed',
+        closedByUserAt: NOW,
+        confirmations: 1,
+      });
       // The row is still there — invisible to the prompt, visible to a listing with archived.
       await expect(repository.getForPrompt(user.id, NOW)).resolves.toHaveLength(0);
       const listed = await repository.listFacts(user.id, true, NOW);
@@ -530,10 +588,18 @@ describe('UserFactsRepository – integration', () => {
       const user = await userRepo.create(userData);
       const NOW = new Date('2026-09-21T12:00:00Z');
 
-      const created = await repository.rememberFact(user.id, { category: 'equipment', fact: 'Borrowed a barbell', durability: 'short', ttlDays: 5 }, NOW);
+      const created = await repository.rememberFact(
+        user.id,
+        { category: 'equipment', fact: 'Borrowed a barbell', durability: 'short', ttlDays: 5 },
+        NOW,
+      );
       if (created.outcome !== 'created') throw new Error('expected created');
       await repository.retractFact(user.id, { factId: created.fact.id }, NOW);
-      const again = await repository.retractFact(user.id, { factId: created.fact.id }, new Date(NOW.getTime() + 3_600_000));
+      const again = await repository.retractFact(
+        user.id,
+        { factId: created.fact.id },
+        new Date(NOW.getTime() + 3_600_000),
+      );
 
       expect(again).toMatchObject({ status: 'archived' });
       expect(again?.archivedAt).toEqual(NOW); // the first closure is kept, not re-stamped
@@ -543,7 +609,9 @@ describe('UserFactsRepository – integration', () => {
       const userData = createTestUserData({ username: 'user_facts_missing_user' });
       const user = await userRepo.create(userData);
 
-      await expect(repository.retractFact(user.id, { factId: '00000000-0000-0000-0000-0000000000aa' }, new Date())).resolves.toBeNull();
+      await expect(
+        repository.retractFact(user.id, { factId: '00000000-0000-0000-0000-0000000000aa' }, new Date()),
+      ).resolves.toBeNull();
       await expect(repository.deleteFact(user.id, '00000000-0000-0000-0000-0000000000ab')).resolves.toBe(false);
     });
 
@@ -552,7 +620,16 @@ describe('UserFactsRepository – integration', () => {
       const user = await userRepo.create(userData);
       const NOW = new Date('2026-09-21T12:00:00Z');
 
-      const created = await repository.rememberFact(user.id, { category: 'nutrition_preference', fact: 'Allergic to shrimp', durability: 'permanent', explicitPermanent: true }, NOW);
+      const created = await repository.rememberFact(
+        user.id,
+        {
+          category: 'nutrition_preference',
+          fact: 'Allergic to shrimp',
+          durability: 'permanent',
+          explicitPermanent: true,
+        },
+        NOW,
+      );
       if (created.outcome !== 'created') throw new Error('expected created');
 
       await expect(repository.deleteFact(user.id, created.fact.id)).resolves.toBe(true);
@@ -570,8 +647,16 @@ describe('UserFactsRepository – integration', () => {
       const user = await userRepo.create(userData);
       const NOW = new Date('2026-09-21T12:00:00Z');
 
-      const live = await repository.rememberFact(user.id, { category: 'equipment', fact: 'Has a barbell', durability: 'permanent', explicitPermanent: true }, NOW);
-      await repository.rememberFact(user.id, { category: 'physiological_pattern', fact: 'Sore legs', durability: 'short', ttlDays: 1 }, new Date(NOW.getTime() - 3 * 86_400_000)); // expired by NOW
+      const live = await repository.rememberFact(
+        user.id,
+        { category: 'equipment', fact: 'Has a barbell', durability: 'permanent', explicitPermanent: true },
+        NOW,
+      );
+      await repository.rememberFact(
+        user.id,
+        { category: 'physiological_pattern', fact: 'Sore legs', durability: 'short', ttlDays: 1 },
+        new Date(NOW.getTime() - 3 * 86_400_000),
+      ); // expired by NOW
       const closed = live.outcome === 'created' ? live.fact : null;
       if (!closed) throw new Error('expected created');
       await repository.retractFact(user.id, { factId: closed.id }, NOW);
@@ -599,7 +684,13 @@ describe('UserFactsRepository – integration', () => {
 
       const superseded = await repository.supersedeFact(
         user.id,
-        { factId: oldId, category: 'physical_constraint', fact: 'Knee fully rehabbed', durability: 'short', ttlDays: 5 },
+        {
+          factId: oldId,
+          category: 'physical_constraint',
+          fact: 'Knee fully rehabbed',
+          durability: 'short',
+          ttlDays: 5,
+        },
         T0,
         T0,
       );
@@ -619,13 +710,21 @@ describe('UserFactsRepository – integration', () => {
       const user = await userRepo.create(userData);
       const T0 = new Date('2026-09-21T12:00:00Z');
 
-      const created = await remember(user.id, 'Recovering shoulder', 'physical_constraint', { muscleGroup: 'shoulders_front' });
+      const created = await remember(user.id, 'Recovering shoulder', 'physical_constraint', {
+        muscleGroup: 'shoulders_front',
+      });
       const oldId = created.outcome === 'created' ? created.fact.id : null;
       if (oldId === null) throw new Error('expected created');
 
       const result = await repository.supersedeFact(
         user.id,
-        { factId: oldId, category: 'physical_constraint', fact: 'Shoulder permanently limited after surgery', durability: 'permanent', explicitPermanent: true },
+        {
+          factId: oldId,
+          category: 'physical_constraint',
+          fact: 'Shoulder permanently limited after surgery',
+          durability: 'permanent',
+          explicitPermanent: true,
+        },
         T0,
         T0,
       );
@@ -653,6 +752,161 @@ describe('UserFactsRepository – integration', () => {
       });
 
       await expect(repository.getForPrompt(user.id, NOW)).resolves.toHaveLength(1);
+    });
+  });
+
+  // Expiry, performed (course-check plan, expiry task): the explicit "due" read and the guarded archive.
+  describe('getExpiredActive / archiveExpired', () => {
+    const NOW = new Date('2026-09-21T12:00:00Z');
+    const DAY = 86_400_000;
+
+    async function freshUser(name: string): Promise<string> {
+      const user = await userRepo.create(createTestUserData({ username: name, firstName: 'Exp', lastName: 'Tester' }));
+      return user.id;
+    }
+
+    it('returns exactly the ACTIVE short facts whose TTL is up (<=): both on_expiry kinds, nothing else', async () => {
+      const userId = await freshUser('expiry_read_user');
+      const short = (fact: string, expiresAt: Date, onExpiry: 'forget' | 'ask_once', extra = {}) =>
+        seedFact(userId, { category: 'physical_constraint', fact, durability: 'short', expiresAt, onExpiry, ...extra });
+      await short('ask expired', new Date(NOW.getTime() - DAY), 'ask_once');
+      await short('forget expired', new Date(NOW.getTime() - 2 * DAY), 'forget');
+      await short('expires exactly now', NOW, 'forget');
+      await short('not yet', new Date(NOW.getTime() + DAY), 'ask_once');
+      await short('already archived', new Date(NOW.getTime() - DAY), 'ask_once', {
+        status: 'archived',
+        archivedAt: NOW,
+        archivedReason: 'user_closed',
+      });
+      await seedFact(userId, {
+        category: 'physical_constraint',
+        fact: 'long-term never expires',
+        durability: 'long_term',
+        expiresAt: new Date(NOW.getTime() - DAY),
+        reviewAfter: new Date(NOW.getTime() + DAY),
+      });
+
+      const due = await repository.getExpiredActive(userId, NOW);
+
+      expect(due.map(f => f.fact)).toEqual(['forget expired', 'ask expired', 'expires exactly now']); // oldest expiry first
+    });
+
+    it('leaves the prompt and the guard untouched: expired rows are hidden from getForPrompt/getConstraints before AND after they are archived', async () => {
+      const userId = await freshUser('expiry_hidden_user');
+      await seedFact(userId, {
+        category: 'physical_constraint',
+        fact: 'tweaked shoulder',
+        muscleGroup: 'shoulders_front',
+        durability: 'short',
+        expiresAt: new Date(NOW.getTime() - DAY),
+        onExpiry: 'ask_once',
+      });
+
+      expect(await repository.getForPrompt(userId, NOW)).toEqual([]);
+      expect(await repository.getConstraints(userId, NOW)).toEqual([]);
+      const [row] = await repository.getExpiredActive(userId, NOW);
+      await repository.archiveExpired(userId, row!.id, NOW);
+      expect(await repository.getForPrompt(userId, NOW)).toEqual([]);
+      expect(await repository.getConstraints(userId, NOW)).toEqual([]);
+    });
+
+    it('archiveExpired writes archived / expired with the run clock, NOT a user closure, and is idempotent', async () => {
+      const userId = await freshUser('expiry_archive_user');
+      await seedFact(userId, {
+        category: 'physical_constraint',
+        fact: 'sore back today',
+        durability: 'short',
+        expiresAt: new Date(NOW.getTime() - DAY),
+        onExpiry: 'forget',
+      });
+      const [row] = await repository.getExpiredActive(userId, NOW);
+
+      expect(await repository.archiveExpired(userId, row!.id, NOW)).toBe(true);
+      expect(await repository.archiveExpired(userId, row!.id, new Date(NOW.getTime() + DAY))).toBe(false);
+
+      const [after] = (await repository.listFacts(userId, true, NOW)).archived;
+      expect(after).toMatchObject({ status: 'archived', archivedReason: 'expired', closedByUserAt: null });
+      expect(after!.archivedAt).toEqual(NOW); // the first archive is kept, never re-stamped
+      expect(await repository.getExpiredActive(userId, NOW)).toEqual([]);
+    });
+
+    it('the guard lives in the write: a fact not expired, of another user, or re-stated since is NOT archived', async () => {
+      const userId = await freshUser('expiry_guard_user');
+      const otherId = await freshUser('expiry_guard_other');
+      await seedFact(userId, {
+        category: 'physical_constraint',
+        fact: 'renewed since',
+        durability: 'short',
+        expiresAt: new Date(NOW.getTime() + DAY), // TTL renewed after the list was read
+        onExpiry: 'forget',
+      });
+      await seedFact(userId, {
+        category: 'physical_constraint',
+        fact: 'expired but someone else asks',
+        durability: 'short',
+        expiresAt: new Date(NOW.getTime() - DAY),
+        onExpiry: 'forget',
+      });
+      const rows = await db.select().from(userFactsTable).where(eq(userFactsTable.userId, userId));
+      const renewed = rows.find(r => r.fact === 'renewed since')!;
+      const expired = rows.find(r => r.fact === 'expired but someone else asks')!;
+
+      expect(await repository.archiveExpired(userId, renewed.id, NOW)).toBe(false);
+      expect(await repository.archiveExpired(otherId, expired.id, NOW)).toBe(false);
+      expect((await repository.listFacts(userId, true, NOW)).archived).toEqual([]);
+    });
+
+    it('an EXPIRED archive counts from the expiry date: a restatement made after the expiry (before the archive ran) is NEW evidence, an older one is stale', async () => {
+      const userId = await freshUser('expiry_closure_user');
+      const expiresAt = new Date(NOW.getTime() - 3 * DAY);
+      await seedFact(userId, {
+        category: 'physical_constraint',
+        fact: 'shoulder ache after pressing',
+        durability: 'short',
+        expiresAt,
+        onExpiry: 'forget',
+      });
+      const [row] = await repository.getExpiredActive(userId, NOW);
+      await repository.archiveExpired(userId, row!.id, NOW); // archived_at = NOW, three days AFTER the expiry
+
+      const input = {
+        category: 'physical_constraint' as const,
+        fact: 'shoulder ache after pressing',
+        durability: 'short' as const,
+      };
+      // Stated one day after the expiry — after the subject ended, before the archive ran: genuinely new.
+      const fresh = await repository.rememberFact(
+        userId,
+        { ...input, evidenceAt: new Date(NOW.getTime() - 2 * DAY) },
+        NOW,
+      );
+      expect(fresh.outcome).toBe('created');
+      expect(fresh.fact.supersedesId).toBe(row!.id);
+    });
+
+    it('…while evidence from BEFORE the expiry is old news about the ended subject and is skipped', async () => {
+      const userId = await freshUser('expiry_stale_user');
+      await seedFact(userId, {
+        category: 'physical_constraint',
+        fact: 'hip tightness',
+        durability: 'short',
+        expiresAt: new Date(NOW.getTime() - 3 * DAY),
+        onExpiry: 'forget',
+      });
+      const [row] = await repository.getExpiredActive(userId, NOW);
+      await repository.archiveExpired(userId, row!.id, NOW);
+
+      const stale = await repository.rememberFact(
+        userId,
+        {
+          category: 'physical_constraint',
+          fact: 'hip tightness',
+          durability: 'short',
+          evidenceAt: new Date(NOW.getTime() - 4 * DAY),
+        },
+        NOW,
+      );
+      expect(stale.outcome).toBe('skipped_stale_evidence');
     });
   });
 });

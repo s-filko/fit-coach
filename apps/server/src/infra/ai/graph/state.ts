@@ -11,6 +11,7 @@ import type { CompactReason, StoredEpisodeSummary } from '@domain/conversation/e
 import type { TransitionRequest } from '@domain/conversation/transitions';
 import type { User } from '@domain/user/services/user.service';
 
+import type { CourseCheckFailure, StoredCourseDirective } from '@infra/ai/course-check/directive';
 import type { RunMetricsCollector } from '@infra/ai/run-metrics';
 
 export const ConversationState = Annotation.Root({
@@ -36,6 +37,22 @@ export const ConversationState = Annotation.Root({
   episodeStartedAt: Annotation<string | null>({ reducer: (_, v) => v, default: () => null }),
   lastUserMessageAt: Annotation<string | null>({ reducer: (_, v) => v, default: () => null }),
   compactReason: Annotation<CompactReason | null>({ reducer: (_, v) => v, default: () => null }),
+  // The course-check directive (course-check plan Task 1, AC-FL-5): written by
+  // the course-check step inside `prepare` when one of its events fires,
+  // rendered by the agent node as one prompt block while its fingerprint
+  // holds, cleared to null when the layer is switched off. Plain JSON, so the
+  // checkpointer round-trips it without adapters.
+  courseDirective: Annotation<StoredCourseDirective | null>({ reducer: (_, v) => v, default: () => null }),
+  // The last failed course-check attempt (fingerprint + when): the cooldown
+  // input that keeps a provider outage from costing a failed call per turn.
+  // Cleared by the next success or when the layer is switched off.
+  courseCheckFailure: Annotation<CourseCheckFailure | null>({ reducer: (_, v) => v, default: () => null }),
+  // The expiry questions ASKED THIS RUN (course-check expiry): set by the
+  // course-check step when the run's directive carries them, rendered by the
+  // agent node next to the stored directive's questions, cleared by `commit` at
+  // the end of the run — never part of the persisted directive, because the
+  // fact they are about is archived in the same run and the question belongs to it.
+  courseExpiryQuestions: Annotation<string[]>({ reducer: (_, v) => v, default: () => [] }),
 });
 
 export type ConversationStateType = typeof ConversationState.State;

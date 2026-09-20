@@ -12,6 +12,12 @@ import type {
 } from '@domain/training/ports';
 import type { IUserFactsService, IUserService } from '@domain/user/ports';
 
+import {
+  buildCourseCheckStep,
+  DEFAULT_EXPIRY_ASK_WINDOW_MS,
+  DEFAULT_RETRY_COOLDOWN_MS,
+} from '@infra/ai/course-check/course-check.step';
+
 import type { TokenBudgetOverride } from '@config/llm-budget-overrides';
 
 import { buildCompactionFlagHandler } from './handlers/compaction-flag.handler';
@@ -44,6 +50,22 @@ export interface ConversationGraphDeps {
   llmGateway: LlmGateway;
   /** The D-L episode tunables, resolved from env at the composition root. */
   episodeConfig: EpisodeTunables;
+  /**
+   * AC-FL-5 (course-check plan Task 1): COURSE_CHECK_ENABLED, resolved once at
+   * the composition root. Optional so existing test fixtures keep compiling;
+   * absent means enabled (the layer is the shipped behaviour).
+   */
+  courseCheckEnabled?: boolean;
+  /**
+   * COURSE_CHECK_RETRY_COOLDOWN_MINUTES in ms — how long a failed check is not
+   * retried on the same fingerprint. Optional like the switch; absent = 15 min.
+   */
+  courseCheckRetryCooldownMs?: number;
+  /**
+   * COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS in ms — an ask_once fact expired longer
+   * ago than this is archived silently, never asked about. Absent = 7 days.
+   */
+  courseCheckExpiryAskWindowMs?: number;
   /** LLM_BUDGET_<PHASE>_<PART> overrides (P4 context-budget plan Task 3), resolved once here. */
   budgetOverrides?: Record<string, TokenBudgetOverride>;
   checkpointer: BaseCheckpointSaver;
@@ -73,11 +95,29 @@ function buildGraph(deps: ConversationGraphDeps) {
   const budgetFor = (phase: ConversationPhase): number =>
     specs.find(s => s.name === phase)?.budget.history ?? Number.POSITIVE_INFINITY;
   const compactStep = buildCompactStep({ llmGateway, summaries, userFacts, config: episodeConfig, budgetFor });
+  // AC-FL-5: the course-check step — same gap threshold as compaction and the
+  // time-gap note (threaded from episodeConfig, never re-read from env).
+  const courseCheckStep = buildCourseCheckStep({
+    llmGateway,
+    userFacts,
+    trainingService,
+    config: {
+      enabled: deps.courseCheckEnabled ?? true,
+      gapMs: episodeConfig.gapMs,
+      retryCooldownMs: deps.courseCheckRetryCooldownMs ?? DEFAULT_RETRY_COOLDOWN_MS,
+      expiryAskWindowMs: deps.courseCheckExpiryAskWindowMs ?? DEFAULT_EXPIRY_ASK_WINDOW_MS,
+    },
+  });
 
   // prepare routes to 'route' normally and short-circuits dead training
   // states to 'commit' (D-E); route fans out to the phase nodes; every phase
   // falls into commit. Adding a phase = adding a spec (INV-LLM-005).
-  const prepareNode = buildPrepareNode({ userService, trainingService, compact: compactStep });
+  const prepareNode = buildPrepareNode({
+    userService,
+    trainingService,
+    compact: compactStep,
+    courseCheck: courseCheckStep,
+  });
   const routeNode = buildRouteNode();
   const commitNode = buildCommitNode({
     transcript,

@@ -5,7 +5,9 @@
  * function builds the message array every phase sends to the model, in ONE
  * fixed order for every phase — the phase system prompt (block 1), the
  * `## User Facts` block (block 2a, when the user has facts — D-F, long-term
- * memory ahead of episode memory), the `## Previous episodes` block (block
+ * memory ahead of episode memory), the `## Course Directive` block (block 2a′,
+ * when a course-check directive is stored — AC-FL-5, course-check plan Task 1),
+ * the `## Previous episodes` block (block
  * 2b, when summaries exist), the rendered domain context blocks (block 3,
  * when any render non-null), the interleaved episode history from the
  * checkpointed `messages` channel (block 4), and this run's current
@@ -33,8 +35,10 @@ import type { BudgetReport } from '@domain/conversation/ports';
 import type { UserFact } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
 
+import type { CourseCheckDirective } from '@infra/ai/course-check/directive';
 import {
   type ContextBlockCtx,
+  COURSE_DIRECTIVE_V1,
   EPISODE_SUMMARIES_V1,
   fullDepth,
   type RenderableBlock,
@@ -53,6 +57,14 @@ export interface AssembleInput<D = unknown> {
   systemPrompt: string;
   /** IUserFactsService.getForPrompt output, loaded once per run — empty array renders no block (D-F). */
   userFacts: UserFact[];
+  /**
+   * AC-FL-5 (course-check plan Task 1): state.courseDirective's payload — the
+   * persisted course-check directive, rendered as ONE block right after
+   * `## User Facts`. Null/absent renders no block; its tokens ride in
+   * `budgetReport.longTerm` (the long-term steering slot) and it drops only
+   * at the D-D floor.
+   */
+  courseDirective?: CourseCheckDirective | null;
   /** state.episodeSummaries, oldest first — empty array renders no block. */
   episodeSummaries: StoredEpisodeSummary[];
   /**
@@ -99,6 +111,7 @@ export async function assembleContext<D>(input: AssembleInput<D>): Promise<Assem
   const resolved = await resolveBudget<D>({
     systemTokens,
     facts: input.userFacts,
+    directive: input.courseDirective ?? null,
     summaries: input.episodeSummaries,
     blocks: contextBlocks,
     data: input.blockData as D,
@@ -114,6 +127,14 @@ export async function assembleContext<D>(input: AssembleInput<D>): Promise<Assem
   // episode-summaries block (ADR-0013 §3.4: block 2's long-term slot precedes
   // episode memory). Empty facts render nothing, same contract as summaries.
   const userFactsText = facts.length > 0 ? renderBlock(USER_FACTS_V2, { facts }) : null;
+  // Block 2a′ (AC-FL-5): the persisted course-check directive, directly after
+  // the facts it was computed from — absent when no directive is stored or
+  // when the D-D floor dropped it (floored ⇒ resolveBudget cut everything but
+  // block 1 + current, so the directive renders nothing either).
+  const directiveText =
+    input.courseDirective != null && !resolved.cuts.includes('floor')
+      ? renderBlock(COURSE_DIRECTIVE_V1, { directive: input.courseDirective })
+      : null;
   const summariesText =
     summaries.length > 0
       ? renderBlock(EPISODE_SUMMARIES_V1, { summaries, now: input.now, timezone: input.timezone })
@@ -140,10 +161,12 @@ export async function assembleContext<D>(input: AssembleInput<D>): Promise<Assem
       : '';
 
   // Fixed order, identical for every phase (ADR-0013 §3.4): block 1, block 2a
-  // (facts, long-term memory), block 2b (episode summaries), block 3 (domain).
+  // (facts, long-term memory), block 2a′ (course directive), block 2b
+  // (episode summaries), block 3 (domain).
   const messages: BaseMessage[] = [
     new SystemMessage(input.systemPrompt),
     ...(userFactsText ? [new SystemMessage(userFactsText)] : []),
+    ...(directiveText ? [new SystemMessage(directiveText)] : []),
     ...(summariesText ? [new SystemMessage(summariesText)] : []),
     ...(domainText ? [new SystemMessage(domainText)] : []),
     ...history,
@@ -158,7 +181,9 @@ export async function assembleContext<D>(input: AssembleInput<D>): Promise<Assem
   const budgetReport: BudgetReport = {
     estimator: TOKEN_ESTIMATOR_ID,
     system: systemTokens,
-    longTerm: userFactsText ? estimateTokens(userFactsText) : 0,
+    // The long-term steering slot: facts + the course directive (AC-FL-5) —
+    // both measured through their own renderBlock call, floor-dropped alike.
+    longTerm: (userFactsText ? estimateTokens(userFactsText) : 0) + (directiveText ? estimateTokens(directiveText) : 0),
     summary: summariesText ? estimateTokens(summariesText) : 0,
     domain: domainTokens,
     blocks: renderedBlocks.map(b => ({ id: b.id, tokens: b.tokens, depth: b.depth })),

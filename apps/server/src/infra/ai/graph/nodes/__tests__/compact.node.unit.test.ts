@@ -52,6 +52,9 @@ function channelState(overrides: Partial<ConversationStateType> = {}): Conversat
     episodeStartedAt: '2026-09-18T08:00:00Z',
     lastUserMessageAt: new Date(NOW.getTime() - 4 * 3600 * 1000).toISOString(), // gap met
     compactReason: null,
+    courseDirective: null,
+    courseCheckFailure: null,
+    courseExpiryQuestions: [],
     ...overrides,
   };
 }

@@ -252,6 +252,25 @@ export interface IUserFactsService {
   deleteFact(userId: string, factId: string): Promise<boolean>;
 
   /**
+   * Expiry, performed (course-check plan, expiry task): every ACTIVE short fact
+   * whose TTL is up at `now` — both `on_expiry` kinds, still stored as active.
+   * The one explicit "due" read: `getForPrompt` / `getConstraints` keep
+   * excluding these rows, so the prompt and the hard guard are untouched. What
+   * each one gets is `expiryAction` (fact-lifecycle.ts): a question then the
+   * archive, or the silent archive.
+   */
+  getExpiredActive(userId: string, now: Date): Promise<UserFact[]>;
+
+  /**
+   * Archives one EXPIRED fact (`archived_reason: 'expired'`, `archived_at` =
+   * `now`; `closed_by_user_at` stays null — the user did not say it). Guarded
+   * in the write itself: only an active short fact whose TTL is up at `now` is
+   * touched, so a fact re-stated (TTL renewed) or already archived is left
+   * alone. Idempotent; false when nothing was archived.
+   */
+  archiveExpired(userId: string, factId: string, now: Date): Promise<boolean>;
+
+  /**
    * The review listing (AC-FL-8): every active fact (expired excluded) plus the
    * archived set with its closure reasons, only when `includeArchived`.
    */

@@ -12,6 +12,7 @@ import { Command } from '@langchain/langgraph';
 import type { ITrainingService } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 
+import type { CourseCheckStep } from '@infra/ai/course-check/course-check.step';
 import { type ConversationStateType, ctxOf } from '@infra/ai/graph/state';
 import { langOf, t } from '@infra/ai/messages';
 
@@ -26,10 +27,16 @@ export interface PrepareNodeDeps {
   trainingService: ITrainingService;
   /** The compact step (ADR-0013 §4.1): runs before the phase sync, at most once per run. */
   compact: CompactStep;
+  /**
+   * AC-FL-5 (course-check plan Task 1): the course-check step — after the
+   * phase sync (the fingerprint reads the run's effective phase), at most one
+   * structured call per run, zero on an ordinary turn.
+   */
+  courseCheck: CourseCheckStep;
 }
 
 export function buildPrepareNode(deps: PrepareNodeDeps) {
-  const { userService, trainingService, compact } = deps;
+  const { userService, trainingService, compact, courseCheck } = deps;
 
   return async function prepareNode(
     state: ConversationStateType,
@@ -100,6 +107,12 @@ export function buildPrepareNode(deps: PrepareNodeDeps) {
       updates.phase = 'registration';
     }
 
-    return new Command({ goto: 'route', update: { ...updates, ...compactUpdates } });
+    // Course check (AC-FL-5) — AFTER the phase sync so the fingerprint reads
+    // the run's effective phase. The dead-training short-circuits above skip
+    // it deliberately: no prompt is rendered on those runs, and the event
+    // (fingerprint/gap) is still true on the next run that does render one.
+    const courseUpdates = await courseCheck({ ...state, phase: updates.phase ?? state.phase }, config);
+
+    return new Command({ goto: 'route', update: { ...updates, ...compactUpdates, ...courseUpdates } });
   };
 }

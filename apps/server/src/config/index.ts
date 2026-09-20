@@ -53,6 +53,24 @@ export const EnvSchema = z.object({
   // D-A/D-12). How long a waiter for the per-userId run mutex waits before
   // rejecting with ThreadBusyError (HTTP 409).
   LLM_RUN_MUTEX_WAIT_MS: z.coerce.number().default(20000),
+  // Course check (course-check plan Task 1, AC-FL-5): the сверка-course layer
+  // on/off switch — AC-FL-7's comparison runs the same journeys with it on and
+  // off. Off also stops a stored directive from rendering (the channel is
+  // cleared on the next run). Backed by the `course_check` LLM profile.
+  COURSE_CHECK_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform(v => v === 'true'),
+  // How long a FAILED course check is not re-attempted on the same inputs
+  // (minutes) — a provider outage must make the layer quieter, not cost one
+  // failed call per turn. New inputs are never covered by it.
+  COURSE_CHECK_RETRY_COOLDOWN_MINUTES: z.coerce.number().positive().default(15),
+  // Staleness bound of the expiry question: an ask_once fact that expired MORE
+  // than this many days ago is archived silently instead of asked about (a
+  // months-old tweak is noise, as four-day-old soreness already is). Days, not
+  // hours: short TTLs are 1-14 days, so a week past the TTL is a check-in and
+  // more is history.
+  COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS: z.coerce.number().positive().default(7),
   // Inference tunables (BUG-019 / AC-RL-1) — same tunables-not-secrets class as
   // EPISODE_*. GLM-5.3 always reasons and reasoning spends the same output budget,
   // so the old hard-coded 4096 cap starved the answer entirely; the cap must leave

@@ -398,4 +398,93 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
       expect(isType(messages[2], 'human')).toBe(true);
     });
   });
+
+  // course-check plan Task 1 (AC-FL-5): the persisted directive renders as ONE
+  // prompt block — its own SystemMessage directly after `## User Facts`, ahead
+  // of episode memory — and is measured by resolveBudget through the SAME
+  // render call (its tokens ride in `longTerm`, the long-term steering slot).
+  describe('block 2a′ — course directive (course-check plan Task 1, AC-FL-5)', () => {
+    const FACT_ROW = {
+      id: 'fact-1',
+      userId: 'u1',
+      category: 'physical_constraint' as const,
+      fact: 'Left shoulder aches when pressing',
+      factKey: 'left shoulder aches when pressing',
+      muscleGroup: 'shoulders_front',
+      confirmations: 2,
+      sourceTurnId: null,
+      durability: 'long_term' as const,
+      expiresAt: null,
+      reviewAfter: null,
+      phaseNote: null,
+      phaseAt: null,
+      onExpiry: null,
+      status: 'active' as const,
+      archivedAt: null,
+      archivedReason: null,
+      closedByUserAt: null,
+      supersedesId: null,
+      context: null,
+      createdAt: new Date('2026-09-01T00:00:00Z'),
+      updatedAt: new Date('2026-09-01T00:00:00Z'),
+    };
+    const userFactsFixture = () => [FACT_ROW];
+
+    const DIRECTIVE = {
+      vector: 'Build muscle 3×/week, upper/lower split',
+      constraints: ['Left shoulder: no heavy overhead pressing'],
+      questions: ['How does the shoulder feel today?'],
+      suspectFacts: [],
+      exerciseVerdicts: [],
+    };
+
+    it('renders as one SystemMessage right after the user-facts block, before summaries', async () => {
+      const { messages, budgetReport } = await assembleContext(
+        input({
+          userFacts: userFactsFixture(),
+          courseDirective: DIRECTIVE,
+          episodeSummaries: [EPISODE_SUMMARY],
+        }),
+      );
+
+      // [system, facts, directive, summaries, human]
+      expect(messages).toHaveLength(5);
+      expect(String(messages[1].content)).toContain('## User Facts');
+      expect(String(messages[2].content)).toContain('## Course Directive');
+      expect(String(messages[2].content)).toContain('Build muscle 3×/week');
+      expect(String(messages[2].content)).toMatch(/outrank|always wins|takes precedence/i);
+      expect(String(messages[3].content)).toContain('## Previous episodes');
+      expect(isType(messages[4], 'human')).toBe(true);
+      expect(budgetReport.messages).toBe(5);
+    });
+
+    it('its tokens are counted in longTerm (the long-term steering slot — facts + directive)', async () => {
+      const without = await assembleContext(input({ userFacts: userFactsFixture() }));
+      const withDirective = await assembleContext(input({ userFacts: userFactsFixture(), courseDirective: DIRECTIVE }));
+
+      expect(withDirective.budgetReport.longTerm).toBeGreaterThan(without.budgetReport.longTerm);
+    });
+
+    it('no directive → the shape is exactly today’s (no empty block, no extra message)', async () => {
+      const { messages } = await assembleContext(input({ courseDirective: null }));
+
+      expect(messages).toEqual([new SystemMessage(SYSTEM), new HumanMessage(USER_MESSAGE)]);
+    });
+
+    it('D-D floor drops the directive along with facts and summaries (INV-LLM-004 (d))', async () => {
+      const { messages, budgetReport } = await assembleContext(
+        input({
+          userFacts: userFactsFixture(),
+          courseDirective: DIRECTIVE,
+          current: [new HumanMessage('u'.repeat(20000))],
+          budget: { system: 50, longTerm: 10, domain: 10, history: 10, outputReserve: 1 },
+        }),
+      );
+
+      expect(budgetReport.cuts).toContain('floor');
+      expect(messages).toHaveLength(2); // block 1 + current only
+      expect(String(messages[0].content)).toBe(SYSTEM);
+      expect(messages.some(m => String(m.content).includes('## Course Directive'))).toBe(false);
+    });
+  });
 });

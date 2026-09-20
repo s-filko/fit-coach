@@ -63,6 +63,9 @@ function stateOf(overrides: Partial<Parameters<ReturnType<typeof buildCommitNode
     episodeStartedAt: null,
     lastUserMessageAt: null,
     compactReason: null,
+    courseDirective: null,
+    courseCheckFailure: null,
+    courseExpiryQuestions: [],
     ...overrides,
   };
 }

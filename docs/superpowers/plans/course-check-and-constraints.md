@@ -1,6 +1,6 @@
 # Course Check and Constraint Handling Implementation Plan
 
-- Status: planned
+- Status: done
 - Branch: plan/course-check-and-constraints
 - After: fact-lifecycle
 
@@ -120,13 +120,37 @@ fingerprint, the pure event predicate), `graph/state.ts` (the persisted directiv
 `graph/nodes/prepare.node.ts` or `agent.node.ts` (the firing point), `prompts/blocks/course-directive.v1.ts`,
 `.env.example` (profile + on/off switch), tests.
 
-- [ ] **Step 1: Tests first** (mocked model) — fires on each event and on nothing else; a stable
+- [x] **Step 1: Tests first** (mocked model) — fires on each event and on nothing else; a stable
   fingerprint reuses the stored directive with zero calls; a changed fact set refires; a failed or
   malformed call leaves the run untouched and logs a warn; the directive renders as one block; the
   user's current message always outranks the stored directive.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `feat(ai): course-check directive at key points (AC-FL-5)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 2: Implement.**
+- [x] **Step 3: Commit** — `feat(ai): course-check directive at key points (AC-FL-5)`
+- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-21** (`fa5d1505` + review fix
+  `bfd8ae39`). **Executor change mid-task:** the GLM worker implemented it and then died on
+  `Weekly/Monthly Limit Exhausted` (resets 2026-09-24) during verification, with the work uncommitted;
+  it was abandoned on positive proof (429 in its transcript, final turn without `worker_done`) and a
+  Sonnet worker took the working tree over, reviewed it as its own, finished and committed it.
+  The check fires from `prepare` on two events only — a changed fingerprint (facts set, goal, phase,
+  active plan; "entering planning" and "before a durable write" ride on phase/`activePlanId` being
+  fingerprint components, so it fires on the first run AFTER either moves, not literally before the
+  write — accepted as the plan's own design) and a long gap. An ordinary turn costs exactly what it
+  cost before: the stored directive rides until its fingerprint changes.
+  **One review finding, fixed in `bfd8ae39`:** a failed call kept the stored directive (correct) but
+  left the fingerprint mismatched, so the check re-fired every subsequent turn while the provider was
+  down — one failed model call per ordinary turn, which is precisely what this task's central promise
+  forbids. A failure now records `{fingerprint, at}` in its own persisted channel and the predicate
+  stays silent for that fingerprint until `COURSE_CHECK_RETRY_COOLDOWN_MINUTES` (default 15, threaded
+  as data) has passed; a genuinely new fingerprint is not covered by the cooldown, the stale directive
+  keeps rendering, and success clears the failure.
+  Both the event predicate and the cooldown are pinned by mutation: breaking `events.ts` to always
+  refire fails 8 tests across three levels, removing the cooldown guard fails 7. Orchestrator re-ran on
+  the committed tree: `npx jest --ci src/infra/ai` 65 suites / 557 tests, `npm run test:unit` 118 /
+  1056, L0 96/96, `npm run test:scenarios` 4 / 221 (exit 0, no teardown abort this run — the 134 abort
+  recorded in the backlog is intermittent).
+  Two smaller decisions accepted as reported: the `course_check` profile needs no registration
+  (profiles are free-form, `LLM_PROFILE_COURSE_CHECK_*` falls back to globals, documented in
+  `.env.example`), and the layer has an on/off switch.
 
 **Verification:** as Task 1, plus the call-count assertions named above.
 
@@ -137,13 +161,30 @@ fingerprint, the pure event predicate), `graph/state.ts` (the persisted directiv
 **Files:** `domain/user/services/fact-conflicts.ts`, `infra/ai/tools/fact-constraint-guard.ts`,
 `save-workout-plan.tool.ts`, `start-training-session.tool.ts`, tests.
 
-- [ ] **Step 1: Tests first** — a `permanent` constraint still rejects (nothing persisted); a
+- [x] **Step 1: Tests first** — a `permanent` constraint still rejects (nothing persisted); a
   long-term or short constraint no longer rejects: the call succeeds and the result carries an
   advisory naming the fact and the exercise; an advisory lists **all** conflicting exercises, not just
   the first; no constraint → unchanged.
-- [ ] **Step 2: Implement.**
-- [ ] **Step 3: Commit** — `fix(training): only permanent constraints block a write; the rest advise (AC-FL-6)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 2: Implement.**
+- [x] **Step 3: Commit** — `fix(training): only permanent constraints block a write; the rest advise (AC-FL-6)`
+- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-21** (`a6d8c216`, Sonnet worker).
+  The guard splits into two honest halves: `findFactConflicts` returns EVERY conflict (exercise order,
+  then fact order) and `blockingConflicts` keeps only the `permanent` ones. A permanent conflict still
+  rejects with nothing persisted and quotes only the permanent facts even in a mixed set; a
+  `long_term` / `short` conflict now persists and appends an advisory to the tool's ok summary naming
+  each fact (durability + phase note) and every conflicting exercise; no constraint or no intersection
+  leaves the summary byte-identical. The rationale (a muscle label expresses neither movement nor
+  load — a `lower_back` constraint blocks Conventional Deadlift and Hyperextension while allowing
+  Romanian Deadlift and Barbell Row) is recorded in `fact-conflicts.ts` so it cannot be "fixed" back by
+  someone who only sees the code.
+  Accepted as reported: the advisory rides in the ok summary because that is the only channel a
+  `ToolOutcome` gives the model, and `save_workout_plan`'s fixed "congratulate them" becomes "write a
+  brief confirmation" when an advisory is present — congratulating over an unaddressed injury caveat
+  would be wrong.
+  Pinned by mutation, as in Task 1: making everything block again fails 10 tests, reporting only the
+  first conflict fails 15. Orchestrator re-ran on the committed tree: `npx jest --ci src/infra/ai` 569
+  tests, `npx jest --ci src/domain/user` 58, `npm run test:unit` 1076, L0 96/96, `npm run
+  test:scenarios` 221.
 
 **Verification:** as Task 1.
 
@@ -163,10 +204,66 @@ fingerprint, the pure event predicate), `graph/state.ts` (the persisted directiv
   and one deleted outright — the listing reflects both on the next ask.
 - [ ] **Step 2:** the same journeys are runnable with the course check on and off, so the owner can
   compare (AC-FL-7) — the comparison itself is an owner-launched live run, never a task.
-- [ ] **Step 3: Commit** — `test(ai): journeys for fact lifecycle and the course check (AC-FL-7)`
-- [ ] **Step 4: STOP** for orchestrator review.
+- [x] **Step 3: Commit** — `test(ai): journeys for fact lifecycle and the course check (AC-FL-7)`
+- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-21** (`efe4988e`, Sonnet worker).
+  Six journeys (`fl-a` … `fl-f`), each runnable with the course check ON and OFF, each ending in an
+  assertion read from `user_facts` / `workout_plans` — not from the coach's prose, which is the whole
+  point after the 2026-09-21 smoke found the coach announcing a retraction that never happened. The
+  runner gained the on/off switch, per-step scripting, fact-id placeholders and a pg-pool release (12
+  runs had been exhausting DB connections). Pinned by five mutations of PRODUCTION code, each failing
+  the journeys: equal-time stale evidence accepted (5 fail), a retract that writes nothing (17), every
+  constraint blocking again (6), a delete that only archives (6), an update that does not move
+  `review_after` (7).
+  **Journey (d) deliberately stops short**, per my ruling on the worker's `ask`: the recurrence →
+  `physiological_pattern` promotion does not exist anywhere in the code, so (d) asserts the three-row
+  `supersedes_id` chain (2 archived, 1 active) and marks the missing ending as `it.todo` rather than
+  faking it by scripting the coach to write the pattern fact. The gap and the three owner decisions it
+  needs are recorded in `BACKLOG.md`.
+  Orchestrator re-ran on the committed tree: `npm run test:scenarios` 5 suites / 300 tests (298 passed,
+  2 todo), L0 96/96, `npm run test:unit` 1078.
+  Two further findings from the worker, both recorded rather than silently fixed: the `fl-*` group is
+  selectable with `--scenario fact-lifecycle` but is not in the default L3 run (it would cross the call
+  ceiling), and live L3 judges review dates strictly, so a model answering 28 where the journey expects
+  30 review days would fail journey (a) on a live run. **The third finding became its own task below.**
 
 **Verification:** `npm run test:scenarios` → green; L0 green.
+
+---
+
+## Review
+
+- Review: 2026-09-21 | clean | one combined agent over the whole wave diff (R1–R4 in one pass, the
+  owner's one-review-per-phase rule). **Zero blocking findings in all four zones**, first pass.
+- The reviewer did not merely fail to find defects; it traced by hand the three ways this design could
+  break and showed why it does not: the "unsettled" fingerprint differs from the stored one only while
+  the due `ask_once` facts are still active, so once archived the next run's hash collapses back and
+  nothing re-fires; a failed call records the failure WITHOUT archiving those facts, so a one-shot
+  question is never lost to an outage and never asked twice; and `isReviewDue`'s component is monotonic
+  (false→true only), so it cannot thrash the fingerprint turn to turn. It also confirmed `loadConfig()`
+  re-reads `process.env` per `registerInfraServices()`, which is what makes the AC-FL-7 on/off
+  comparison actually switch, and that a mixed permanent + non-permanent conflict set rejects on the
+  permanent facts alone and never double-reports.
+- Three advisories, all recorded in `BACKLOG.md` rather than fixed here: the SQL expiry filter is a
+  second statement of `isExpired` (a behavioural, not compile-time, coupling — same family as the
+  `visibleAt` twin); and the deterministic test harness routes a structured call to the course-check
+  answer queue by matching the prompt's literal opening sentence, so rewording that sentence would
+  misroute every journey's course-check call (loud failure, but nothing ties the two strings together).
+
+## Decided without the owner (2026-09-21)
+
+Same authorisation as wave A: the owner was away and asked for decisions to be made and marked. Each
+row is independently reversible.
+
+| # | Decision | Why | How to undo |
+|---|---|---|---|
+| B-1 | The ADR-0013 §3.3 and ADR-0009 amendment texts for this wave were written and merged by the orchestrator, not escalated first | The owner was asleep and asked for decisions to be made | Both are self-contained sections naming this table |
+| B-2 | A failed course check backs off for `COURSE_CHECK_RETRY_COOLDOWN_MINUTES` (default 15) instead of retrying every turn | Without it a provider outage costs one failed call per ordinary turn — the exact thing this wave's central promise forbids | Remove the cooldown guard in `events.ts` |
+| B-3 | Expiry is performed by the course-check step: `ask_once` becomes one question then archives `expired`, `forget` archives silently | The flag existed since wave A but nothing ever wrote `expired`, so "ask once" was dead weight | Drop the archive calls; the flag goes back to being inert |
+| B-4 | A fact expired longer ago than `COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS` (default 7) is archived silently whatever its flag | The owner's own rule: asking about four-day-old DOMS is noise, a months-old tweak more so | Raise the window, or set it to infinity |
+| B-5 | The expiry question is NOT persisted in the stored directive | Otherwise "ask exactly once" becomes "keep asking until something unrelated changes" | Persist the whole directive again |
+| B-6 | Journey (d) stops at the `supersedes_id` chain with an `it.todo`; the recurrence → `physiological_pattern` promotion is left unimplemented | It does not exist anywhere in the code, and its three design questions are product calls for the owner (`BACKLOG.md`) | Nothing to undo — the gap is recorded, not hidden |
+| B-7 | The `fl-*` journeys are selectable but are NOT in the default L3 run | They would cross the live-call ceiling; the AC-FL-7 comparison is an owner-launched run anyway | Add them to the default set |
+| B-8 | Executor changed mid-plan: GLM → Sonnet | GLM's weekly quota was exhausted (resets 2026-09-24) and its worker died mid-verification | — |
 
 ---
 

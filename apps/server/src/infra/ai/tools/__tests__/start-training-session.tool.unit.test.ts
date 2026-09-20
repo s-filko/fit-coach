@@ -105,7 +105,7 @@ const makeExerciseWithMuscles = (
   muscleGroups,
 });
 
-const makeConstraintFact = (muscleGroup: UserFact['muscleGroup']): UserFact => ({
+const makeConstraintFact = (muscleGroup: UserFact['muscleGroup'], overrides: Partial<UserFact> = {}): UserFact => ({
   id: 'fact-1',
   userId: 'u1',
   category: 'physical_constraint',
@@ -128,6 +128,7 @@ const makeConstraintFact = (muscleGroup: UserFact['muscleGroup']): UserFact => (
   context: null,
   createdAt: new Date(),
   updatedAt: new Date(),
+  ...overrides,
 });
 
 const makeUserFactsService = (constraints: UserFact[] = []): jest.Mocked<IUserFactsService> =>
@@ -259,6 +260,97 @@ describe('start-training-session.tool — start_training_session', () => {
 
     expect(isToolReturnWithUpdate(result)).toBe(true);
     expect(trainingService.startSession).toHaveBeenCalledTimes(1);
+  });
+
+  // AC-FL-6: only a `permanent` constraint blocks; everything else advises.
+  describe('non-permanent constraints advise instead of blocking (AC-FL-6)', () => {
+    const DEADLIFT = { id: '11111111-1111-4111-8111-111111111111', name: 'Conventional Deadlift' };
+    const ROW = { id: '22222222-2222-4222-8222-222222222222', name: 'Barbell Row' };
+    const HYPER = { id: '33333333-3333-4333-8333-333333333333', name: 'Hyperextension' };
+    const lowerBackPrimary = [{ muscleGroup: 'lower_back' as const, involvement: 'primary' as const }];
+
+    const sessionWithThreeProblemExercises = () => ({
+      ...MINIMAL_SESSION_PLAN,
+      exercises: [DEADLIFT, ROW, HYPER].map(e => ({
+        exerciseId: e.id,
+        exerciseName: e.name,
+        targetSets: 3,
+        targetReps: '8',
+        restSeconds: 90,
+      })),
+    });
+    const catalogWithThreeProblemExercises = () => {
+      const exerciseRepository = makeExerciseRepository();
+      exerciseRepository.findByIdsWithMuscles.mockResolvedValue(
+        [DEADLIFT, ROW, HYPER].map(e => makeExerciseWithMuscles(lowerBackPrimary, e.id, e.name)),
+      );
+      return exerciseRepository;
+    };
+
+    it.each(['long_term', 'short'] as const)(
+      'a %s constraint no longer rejects: the session starts and the result names the fact and EVERY conflicting exercise',
+      async durability => {
+        const trainingService = makeTrainingService('session-adv');
+        const fact = makeConstraintFact('lower_back', { durability, fact: 'Lower back is sore after a fall' });
+        const { startTrainingSession } = buildTools(
+          trainingService,
+          makeWorkoutPlanRepo(),
+          makeUserFactsService([fact]),
+          catalogWithThreeProblemExercises(),
+        );
+
+        const result = (await startTrainingSession.invoke(
+          sessionWithThreeProblemExercises(),
+          makeConfig('u1'),
+        )) as ToolReturn;
+
+        expect(trainingService.startSession).toHaveBeenCalledTimes(1); // persisted
+        expect(isToolReturnWithUpdate(result) ? result.update.activeSessionId : undefined).toBe('session-adv');
+        const text = renderedContent(result);
+        expect(text).toContain('Session created (ID: session-adv)');
+        expect(text).toContain('ADVISORY');
+        expect(text).toContain('Lower back is sore after a fall');
+        for (const name of [DEADLIFT.name, ROW.name, HYPER.name]) {
+          expect(text).toContain(name); // not just the first
+        }
+        expect(text).toMatch(/must address/i);
+      },
+    );
+
+    it('a permanent constraint still rejects, listing every conflicting exercise; nothing is persisted', async () => {
+      const trainingService = makeTrainingService();
+      const { startTrainingSession } = buildTools(
+        trainingService,
+        makeWorkoutPlanRepo(),
+        makeUserFactsService([makeConstraintFact('lower_back', { durability: 'permanent' })]),
+        catalogWithThreeProblemExercises(),
+      );
+
+      const result = (await startTrainingSession.invoke(
+        sessionWithThreeProblemExercises(),
+        makeConfig('u1'),
+      )) as ToolReturn;
+
+      expect(result).toMatchObject({ ok: false, kind: 'user_error' });
+      for (const name of [DEADLIFT.name, ROW.name, HYPER.name]) {
+        expect((result as { message: string }).message).toContain(name);
+      }
+      expect(trainingService.startSession).not.toHaveBeenCalled();
+      expect(isToolReturnWithUpdate(result)).toBe(false);
+    });
+
+    it('a non-permanent constraint with no intersecting exercise leaves the summary free of any advisory', async () => {
+      const { startTrainingSession } = buildTools(
+        makeTrainingService('session-1'),
+        makeWorkoutPlanRepo(),
+        makeUserFactsService([makeConstraintFact('abs', { durability: 'short' })]),
+      );
+
+      const result = (await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig('u1'))) as ToolReturn;
+
+      expect(renderedContent(result)).not.toContain('ADVISORY');
+      expect(renderedContent(result)).toContain('Session created (ID: session-1)');
+    });
   });
 
   it('returns error string when userId is missing', async () => {

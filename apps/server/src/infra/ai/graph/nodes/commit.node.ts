@@ -172,6 +172,8 @@ export function buildCommitNode(deps: CommitNodeDeps) {
       activeSessionId,
       compactReason,
       lastUserMessageAt: ctx.now.toISOString(),
+      // The run's one-shot expiry questions have been asked; the checkpoint at rest never carries them.
+      courseExpiryQuestions: [],
     };
   };
 }
