@@ -1046,3 +1046,28 @@ After a 6 h gap the owner wrote "привет". The model did greet ("Hi filko! 
 ### Regression test
 
 Unit tests per task and the mocked-model scenario (gap → "привет" → reply answers it) in the plan above; fixed only when the owner's own Telegram "привет" after a pause gets an answer.
+
+---
+
+## BUG-019 — Replies take minutes: mandatory reasoning truncated by a 4096-token cap, then a blind full retry; the bot looks dead while waiting
+
+**Status:** Open — fix planned in `docs/superpowers/plans/reply-latency-and-typing.md`
+**Severity:** High (usability — the owner stopped waiting for an answer)
+**Found during:** owner's use of `@MyFitAiCoachDevBot`, 2026-09-20 04:57 UTC (plan_creation; the reply arrived after 3 min 9 s / ~4 min as perceived)
+**Component:** `apps/server/src/infra/ai/model.factory.ts` (`DEFAULT_MAX_TOKENS = 4096`), `apps/server/src/infra/ai/graph/nodes/agent.node.ts` (empty-response retry), `apps/bot` (one-shot typing action)
+
+**Evidence (dev, run 05:00:47.120945):** `latency_ms` 188738, `tokens_in` 30160, `tokens_out` 12125,
+4 × `search_exercises`, `outcome ok`. Server log: the first model call ran 04:57:38 → 04:59:47 (129 s)
+and produced no text — `LLM returned empty response — retrying once` — the retry then answered in 60 s.
+
+**Root cause:** GLM-5.3 on Z.AI *always* reasons (docs: "GLM-5.3 always operates with reasoning
+enabled … Disabling reasoning is no longer supported"; depth via `reasoning_effort` low/high/max) and
+reasoning spends the same output budget. With `maxTokens: 4096` hard-coded, a long reasoning pass
+hits the cap, the answer comes back with empty content, and `agent.node` re-runs the whole call
+blindly — the wasted 129 s. Nothing logs `finish_reason`, so the truncation is invisible.
+
+**Measured 2026-09-20 (5 probe calls, direct Z.AI coding endpoint):** short prompt — 5.3 as-is 13.7 s
+(1057 reasoning chars) / 5.3 `reasoning_effort=low` 9.5 s (no reasoning) / 5.2 `thinking disabled`
+8.8 s. Realistic prompt (~4.5 k prompt tokens + the `search_exercises` tool) — 5.3 as-is 8.8 s,
+285 completion tokens, 5 tool calls / 5.3 `low` 5.0 s, 65 completion tokens, 3 tool calls. Low effort
+roughly halves per-call latency and cuts the number of tool round-trips.
