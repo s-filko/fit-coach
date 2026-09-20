@@ -219,10 +219,10 @@ delete their own facts; the hard block survives only for `permanent`.
 **Not to re-litigate:** prod is frozen (plans end at the dev deploy). Live model runs (L3, eval
 sweeps, comparisons) are owner-launched only.
 
-**Ready to clean up — owner-gated, delete nothing:** worktrees/branches
-`plan/training-journey-scenarios`, `plan/chat-continuity`, `plan/reply-latency-and-typing`; idle worker
-terminals in runs `run_f05123509d74`, `run_b49c61f61663`, `run_609e642a70fa`; backup
-`apps/server/.env.test.bak-20260920`.
+**Cleanup done (2026-09-21, by the amended CLAUDE.md § Rules):** worktrees, branches (local and
+remote) and leftover agent tabs of `training-journey-scenarios`, `chat-continuity` and
+`reply-latency-and-typing` are gone, plus seven older merged `plan/*` branches. Only
+`plan/fact-lifecycle` (live) remains. `apps/server/.env.test.bak-20260920` still waits on the owner.
 
 - **Test DB:** `fitcoach_test` (local container `fitcoach-db`). Never run tests in two worktrees against
   it at once; workers never touch a DB by hand.
