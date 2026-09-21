@@ -82,13 +82,13 @@ Read `log-set.tool.ts`, `format-exercise-summary.ts`, `set-data.types.ts` and th
 integration file if the executor needs the real DB). Read `tool-executor.ts`, `tool-policy.ts`,
 `phases/training.spec.ts`, `delete-last-sets.tool.ts` and the existing `tool-policy.unit.test.ts`.
 
-- [ ] **AC-LSR-3**: seed an exercise with two wrong sets; execute ONE batch that deletes them and logs
+- [x] **AC-LSR-3**: seed an exercise with two wrong sets; execute ONE batch that deletes them and logs
   the four corrected sets (the shape RULE 10 currently forbids); assert the session ends with exactly
   the corrected sets. Today the priority order writes first and deletes after, so the corrected sets
   disappear — that is the RED to capture.
-- [ ] Do **not** modify `tool-policy.unit.test.ts:67-76`; it pins the present order and belongs to the
+- [x] Do **not** modify `tool-policy.unit.test.ts:67-76`; it pins the present order and belongs to the
   remediation step. Note in the evidence table that it will have to change.
-- [ ] **Verify:** the repro `--testMatch` command; plus `npm run test:unit` to show existing suites stay green.
+- [x] **Verify:** the repro `--testMatch` command; plus `npm run test:unit` to show existing suites stay green.
 
 ### Task 3: "Previous session" selection and dating (AC-LSR-4)
 
@@ -137,4 +137,5 @@ short note in this plan.
 |---|---|---|---|---|
 | AC-LSR-1 | `cd apps/server && NODE_ENV=test npx jest --testMatch='**/__tests__/**/*.repro.test.ts'` — `log-set.tool.repro.test.ts` | 1 | `stores a 45-second plank, logged the documented bodyweight way…` fails at `expect(storedSetData()).toMatchObject({ duration: 45 })`: received `{"type":"functional_reps","reps":45}`. Positive control (`durationSeconds:1200` → `cardio_duration`) passes. Input is `{exerciseName:'Plank', reps:45}` — the only path the `log_set` description documents for bodyweight ("reps only"); a fix must either teach the tool/prompt a hold path or resolve isometric exercises tool-side. | `dcf989bb` |
 | AC-LSR-2 | same command — `format-exercise-summary.repro.test.ts` | 1 | Two failures on the string from real `TrainingService.ensureCurrentExercise` (0 sets → `skipped`) fed to `formatExerciseSummary`: `not.toMatch(/completed/i)` (received `Exercise 'Seated Calf Raise Machine' completed.`) and `not.toMatch(/RPE/)` (received `…list the sets, analyze RPE trend…` after an empty `Sets performed:`). Controls pass: domain writes `skipped` for 0 sets; an exercise with sets still reads `completed`. | `dcf989bb` |
-| — | `cd apps/server && npm run test:unit` | 0 | 121 suites / 1151 tests green; `git diff` shows no production change (two new files only). | `dcf989bb` |
+| AC-LSR-3 | `cd apps/server && RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch='**/tests/integration/**/*.repro.test.ts'` — `tests/integration/services/tool-ordering.repro.test.ts` (real executor + `buildTrainingToolPolicy` + real `log_set`/`delete_last_sets` + real `TrainingService` and repositories over `fitcoach_test`; nothing stubbed) | 1 | `one batch [delete_last_sets, 4 x log_set] leaves exactly the corrected sets` fails at `expect(await storedSets(sessionId)).toEqual(CORRECTED_SETS)`: two seeded wrong sets (10×100) survive and the two 120×12 corrected sets are gone — final state `[10×100, 10×100, 12×110, 12×110]` vs expected `[12×110, 12×110, 12×120, 12×120]`. Control passes: the same deletion and the same four `log_set` calls sent as two batches in that order leave exactly the corrected sets. **Remediation note:** `tool-policy.unit.test.ts:67-76` (`should sort correction tools after transitions but before finish`, asserts `sorted[0]=log_set`, `sorted[2]=delete_last_sets`) pins the present order and must change together with the fix; `tool-executor.unit.test.ts` (AC-1332 ordering) uses `TRAINING_TOOL_PRIORITY` and should be rechecked. Not touched here. | `57a42c8e` (Task 1 commit on top of `dcf989bb`; no production change) |
+| — | `cd apps/server && npm run test:unit` | 0 | 121 suites / 1151 tests green; `git diff` shows no production change (repro files only). Re-run after Task 2 with the same result. | `dcf989bb` / `57a42c8e` |
