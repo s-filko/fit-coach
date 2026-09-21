@@ -42,11 +42,11 @@
 
 **Interfaces:** Exercise TrainingService.logSetWithContext/startSession/beginSession and buildPrepareNode or the real MemorySaver graph. Use real DB for row invariants. Mock only the model and a rejected repository read for fault injection.
 
-- [ ] Add AC-RRP-1: seed a catalog exercise, user and active session; log twice by exact catalog name; assert one session_exercises row, set numbers [1,2], one active exercise. Add a different-name switch case and a by-ID positive control. Key assertion: `expect(details.exercises).toHaveLength(1); expect(details.exercises[0].sets.map(s => s.setNumber)).toEqual([1, 2]);`.
-- [ ] Add AC-RRP-2: make the session read reject with a sentinel error; assert the invocation rejects or explicitly reports a technical failure WITHOUT committed chat transition; missing/completed controls must retain existing recovery. Do not assert a particular future error class. For the current direct node contract, `await expect(prepare(state, config)).rejects.toThrow('database unavailable')` pins propagation; verify no session-ended success is produced.
-- [ ] Add AC-RRP-3: `a = startSession(userId,{status:'planning'}); b = startSession(userId,{status:'planning'}); await beginSession(a.id); await expect(beginSession(b.id)).rejects.toThrow();` then assert active row count <= 1. Clean both fixture sessions even when the expectation fails.
-- [ ] Run `RUN_DB_TESTS=1 NODE_ENV=test npx jest --runInBand --testMatch='**/review-training.repro.test.ts'` and `NODE_ENV=test npx jest --runInBand --testMatch='**/review-prepare.repro.test.ts'` for files actually created. Capture exact RED assertions.
-- [ ] Run existing `npm run test:unit -- --silent --verbose=false` and `npm run test:scenarios -- --silent --verbose=false`; record output; commit tests/evidence only. Send worker_done and STOP.
+- [x] Add AC-RRP-1: seed a catalog exercise, user and active session; log twice by exact catalog name; assert one session_exercises row, set numbers [1,2], one active exercise. Add a different-name switch case and a by-ID positive control. Key assertion: `expect(details.exercises).toHaveLength(1); expect(details.exercises[0].sets.map(s => s.setNumber)).toEqual([1, 2]);`.
+- [x] Add AC-RRP-2: make the session read reject with a sentinel error; assert the invocation rejects or explicitly reports a technical failure WITHOUT committed chat transition; missing/completed controls must retain existing recovery. Do not assert a particular future error class. For the current direct node contract, `await expect(prepare(state, config)).rejects.toThrow('database unavailable')` pins propagation; verify no session-ended success is produced.
+- [x] Add AC-RRP-3: `a = startSession(userId,{status:'planning'}); b = startSession(userId,{status:'planning'}); await beginSession(a.id); await expect(beginSession(b.id)).rejects.toThrow();` then assert active row count <= 1. Clean both fixture sessions even when the expectation fails.
+- [x] Run `RUN_DB_TESTS=1 NODE_ENV=test npx jest --runInBand --testMatch='**/review-training.repro.test.ts'` and `NODE_ENV=test npx jest --runInBand --testMatch='**/review-prepare.repro.test.ts'` for files actually created. Capture exact RED assertions.
+- [x] Run existing `npm run test:unit -- --silent --verbose=false` and `npm run test:scenarios -- --silent --verbose=false`; record output; commit tests/evidence only. Send worker_done and STOP.
 
 ### Task 2: Bot identity and stale-user recovery (RED only, after Task 1 review)
 
@@ -91,3 +91,32 @@ The following is the concrete follow-on plan. It does not authorize a worker to 
 Baseline: 3f4430b4. Previous review: 1112 server unit tests, 22 bot tests, 59 snapshots; check-all exited 0 with 810 lint warnings. These are historical context, not this plan's fresh verification.
 
 Workers append per task: baseline SHA, files, exact commands, exit code, relevant assertion, positive controls, ordinary-suite result and commit SHA. Coordinator records acceptance separately. No clean review or done status until the corresponding work is actually accepted.
+
+### Task 1 evidence (worker: Claude Sonnet 5 / `claude-sonnet-5`, 2026-09-21)
+
+Baseline SHA: 3f4430b4 (branch HEAD before work: 75588b42). Tests commit: be103c32. Production diff: empty (`git diff 75588b42..HEAD -- apps/server/src` shows only the new `__tests__/review-prepare.repro.test.ts`).
+
+| Command (from `apps/server`) | Exit | Result |
+|---|---|---|
+| `RUN_DB_TESTS=1 NODE_ENV=test npx jest --runInBand --testMatch='**/review-training.repro.test.ts'` | 1 | 5 tests: 2 controls pass, 3 RED (below) |
+| `NODE_ENV=test npx jest --runInBand --testMatch='**/review-prepare.repro.test.ts'` | 1 | 5 tests: 3 controls pass, 2 RED (below) |
+| `npm run test:unit -- --silent --verbose=false` | 0 | 118 suites, 1112 tests, 59 snapshots passed |
+| `npm run test:scenarios -- --silent --verbose=false` | 134 | 5 suites, 306 passed + 1 todo. All tests pass; the process then aborts at exit with `libc++abi: terminating due to uncaught exception of type std::__1::system_error: mutex lock failed` (reproduced on a 2nd run; the repro files are not in this suite's testMatch, so this is teardown noise of the unchanged baseline, not caused by Task 1) |
+
+A first run of each repro file failed on test-side setup (TS2551 wrong property name `exerciseName` → `exercise.name`; `goto` is returned as an array, not a string). Those were fixture bugs, fixed before any RED was recorded; the RED below is the behavioral output of the final files.
+
+**AC-RRP-1 — CONFIRMED (real DB), `review-training.repro.test.ts`**
+- Positive control (by exerciseId, two sets) PASS: 1 session exercise, set numbers [1,2].
+- `two sets with the same exerciseName yield ONE session exercise...` RED: `expect(details.exercises).toHaveLength(1)` — Received length 2; two `session_exercises` rows for Barbell Bench Press (orderIndex 0 and 1), each with one set, `setNumber: 1`, both `status: in_progress`.
+- `switching to another exercise by name completes the previous one...` RED: `expect(bench.status).toBe('completed')` — Received `in_progress` (name path never runs the auto-complete switch logic; the earlier `length 2` assertion passed).
+
+**AC-RRP-3 — CONFIRMED (real DB), `review-training.repro.test.ts`**
+- Positive control (single begin) PASS.
+- `the second begin of two planning sessions is refused...` RED: expected `{secondBegin:'refused', inProgress:1}`, received `{secondBegin:'accepted', inProgress:2}` — both planning sessions of one user are `in_progress`.
+
+**AC-RRP-2 — CONFIRMED (real `buildPrepareNode`, stubbed collaborators), `review-prepare.repro.test.ts`**
+- Controls PASS: session `null` → `goto commit`, `session_ended`; `completed` → same; `in_progress` → `goto route`, no transition.
+- `the failure propagates instead of being swallowed` RED: `rejects.toThrow('database unavailable')` — "Received promise resolved instead of rejected", resolved to `goto: ['commit']`, `pendingTransition: {reason:'session_ended', toPhase:'chat'}` and the reply "Your training session has been completed. Ready for a new workout?".
+- `never produces a committed session_ended transition...` RED: outcome `{rejected:false, goto:'commit', pendingTransition:{reason:'session_ended',toPhase:'chat'}}` — an infrastructure failure is committed as a domain fact. Scope note: node-level with a stubbed training service read; graph-level (MemorySaver) run not added.
+
+**AC-RRP-7** for Task 1: all three findings reproduce with behavioral assertion failures; none unconfirmed/retracted. **AC-RRP-8** for Task 1: unit suite green, scenario tests green (exit-code caveat above); production diff empty.
