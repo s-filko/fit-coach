@@ -100,12 +100,19 @@ components:
   - 200 `{ data: { content: string, timestamp: string, registrationComplete?: boolean } }`
   - 401 `{ error: { message: string } }`
   - 403 `{ error: { message: string } }`
-  - 404 `{ error: { message: "User not found" } }`
-  - 500 `{ error: { message: "Processing failed" } }`
+  - 404 `{ error: { code: "USER_NOT_FOUND" } }`
+  - 409 `{ error: { code: "THREAD_BUSY" } }`
+  - 500 `{ error: { code: "CORE_ERROR" } }`
+  - 503 `{ error: { code: "LLM_UNAVAILABLE" } }`
 
   Response fields:
   - `content` (string): AI-generated response message
   - `timestamp` (string): ISO 8601 timestamp of the response
+
+  Error bodies carry the `code` only — never exception text or a stack (INV-LLM-006). The full
+  table of codes and their meanings lives in `ARCHITECTURE.md`; `USER_NOT_FOUND` was added
+  2026-09-21 (AC-RRP-5) so the bot's existing recovery — clear the cached id, re-upsert on the
+  next message — is actually reachable, which a 500 never made it.
 
   Notes:
   - **All conversational phases (registration, chat, plan_creation, session_planning, training) interact exclusively through this `/api/bot/chat` endpoint.**

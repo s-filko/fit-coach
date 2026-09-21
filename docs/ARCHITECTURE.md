@@ -326,6 +326,7 @@ Standing exceptions (each names the task that closes it):
   |---|---|---|
   | 503 | `LLM_UNAVAILABLE` | The provider (or the network path to it) failed or timed out; run row `outcome: 'llm_unavailable'` |
   | 409 | `THREAD_BUSY` | The per-user run mutex rejected the request after `LLM_RUN_MUTEX_WAIT_MS`; the graph was never entered, so **no run row is written** (D-D) |
+  | 404 | `USER_NOT_FOUND` | The `userId` has no row; the graph was never entered, so no run row is written. The bot answers this by clearing its cached id, so the next message re-upserts the user (AC-RRP-5, 2026-09-21) |
   | 500 | `CORE_ERROR` | Anything else (a bug, an unexpected exception); run row `outcome: 'core_error'` |
 
   `req.log.error({ err })` still carries the original message for logs — only the response
