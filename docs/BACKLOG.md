@@ -36,6 +36,20 @@ Rules:
       standard before planning; needs an ADR-0009 / ADR-0013 amendment. Related: the near-duplicate-facts entry in
       § P6 facts (Group 1) close-out review advisories. Source: owner review of the P6 dev smoke
       (2026-09-19).
+- [ ] **Eval cases from real sessions — the safety net for correcting prompts in small strokes (owner,
+      2026-09-21).** The owner's way of working on prompts is one small change at a time, "они не станут
+      рабочими с одного редактирования, но и не сломать чтобы" — which needs a fixed set to run before
+      and after each stroke, otherwise an improvement and a coincidence look alike. First candidate set
+      is the 2026-09-21 training session: report sets in `session_planning` → the reply must not claim
+      they were logged (BUG-022); "напомни прошлый вес" → the most recent real session, with its date
+      (BUG-030); "две планки по 45" → stored as a duration (BUG-023); a correction → delete and re-log
+      in one turn (BUG-027); the reply in the user's language with no internal rule numbers (BUG-028).
+      Mechanics exist: `npm run evals:export -- --since <date>` produces expectation-less drafts
+      (BR-EVAL-003), a human adds the expectations. The same set on two models also answers "is it the
+      model or the code" with numbers rather than opinion. Cheaper and more reliable once
+      `llm-io-audit-trail` Task 4 stores real requests. Source: owner review of the 2026-09-21 dev
+      training session.
+
 - [ ] Connector layer on top of P1's `LlmGateway`: profiles become full connectors —
       each carries its own `API_URL` + `API_KEY` (provider/token pair), so the app talks to
       any provider through one interface with per-task routing (strong model for content,
@@ -83,6 +97,19 @@ Rules:
       **Not scoped as a plan yet** — it spans prompt design, bot UX and tool ergonomics, so it wants
       the owner's call on direction before it becomes one. Source: P5 Task 6 latency calibration +
       owner instruction (2026-09-19).
+
+- [ ] **Off-catalog exercises: how should they be created at all? (owner, 2026-09-21).** The catalog has
+      no dumbbell calf raise, so three sets done standing with two 25 kg dumbbells were logged against
+      **`Standing Calf Raise Machine` at 50 kg** — a machine load is not comparable to dumbbells, and the
+      next session will read that 50 kg as a working weight on the machine. The planned
+      `Seated Calf Raise Machine` stayed in the session as `skipped`. Today the only paths are
+      `exerciseId` (catalog) or `exerciseName` (resolved against the catalog, `ensureCurrentExercise`),
+      so anything absent silently lands on the nearest catalog row. To think through: when a user does
+      an exercise the catalog lacks, do we create a real catalog entry, a per-user/ad-hoc one, or a
+      variant of an existing exercise (same movement, different equipment)? Who approves it, what does it
+      carry (equipment, muscles, how the load is expressed), and how do the progression blocks compare
+      loads across equipment. May grow into an ADR. Source: owner review of the 2026-09-21 dev training
+      session (session `fa293e20`, runs `48d59d0e` / `a5a49e13` / `ef6030d6`).
 
 - [ ] **Decompose `ITrainingService` (16 methods) by role**: rule-3 review (ARCHITECTURE.md,
       recorded as a standing exception) found one contract serving two different consumers —

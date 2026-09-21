@@ -35,7 +35,9 @@ curl https://fitcoach-dev.filko.dev/health   # → 200
 
 ## LLM
 
-- **Dev (since 2026-09-14): direct Z.AI** `https://api.z.ai/api/coding/paas/v4/` with the **Z.AI subscription token** (the same subscription that powers Claude Code), model `glm-5.3`. Zero per-token cost; quota shared with Claude Code sessions.
+- **Dev (since 2026-09-21): OpenRouter** `https://openrouter.ai/api/v1/`, model `google/gemini-3.8-flash` (Google AI Studio PAYG BYOK — `is_byok: true`). Model choice is explicitly **undecided** (owner, 2026-09-21): the cheaper model exposed defects a stronger one used to absorb — see BUG-022…BUG-030 and the memory rule "weak model reveals, does not create".
+- **Dev until 2026-09-21: direct Z.AI** `https://api.z.ai/api/coding/paas/v4/` with the **Z.AI subscription token** (the same subscription that powers Claude Code), model `glm-5.3`. Zero per-token cost; quota shared with Claude Code sessions. Still the fallback route.
+- **`LLM_REASONING_EFFORT=off` does not disable reasoning — it omits the parameter**, leaving the depth to the model. On `.env.dev` it was `off` until 2026-09-21 and Gemini reasoned freely: 15 952 output tokens / 55.8 s on a two-set confirmation (run `2ec8c9b2`). Probes on the live dev key, same prompt: no parameter → 264 completion / 248 reasoning tokens; `reasoning_effort: "low"` → 23–25 completion / 0 reasoning. Dev now runs `low` (changed 2026-09-21, `.env.dev.bak.*` keeps the previous file).
 - **Z.AI subscription is unusable through OpenRouter** (verified 2026-09-13): it only authorizes the coding endpoint, OpenRouter BYOK calls the standard one — GLM via OpenRouter is billed to credits at list price (`is_byok: false`). Keep this in mind before switching back.
 - **Prod: OpenRouter** (`https://openrouter.ai/api/v1/`) with Google AI Studio PAYG BYOK — that BYOK **does** work (`is_byok: true`), model `google/gemini-3-flash-preview`.
 - Check per-request BYOK via `usage.is_byok` in a completion response, not via `curl /key` alone (byok_usage lags and missed the 09-09 mis-annotation).
