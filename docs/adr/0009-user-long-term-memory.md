@@ -76,6 +76,16 @@ exactly one module, `domain/user/services/fact-lifecycle.ts`, and nothing else r
 - **Retract and delete are two operations and are never silently swapped.** Retract archives (the
   row, its history and its confirmation counter survive); delete removes the row entirely. The
   coach asks which is meant when the request is ambiguous.
+  > **Superseded 2026-09-21 by the owner** (recorded by the orchestrator on his instruction, the same
+  > authorisation as the amendments around it). Nothing is ever removed. `delete` archives too, with
+  > its own reason `user_deleted`, and the user is TOLD the fact was deleted — from where he stands it
+  > is: never used, never asked about, and not listed even when he asks what used to be remembered
+  > (`user_closed` rows still appear in that listing). Because both roads now end in the same place for
+  > the user, the confirmation gate and the ask-which-you-mean rule are gone: making him choose between
+  > outcomes he cannot tell apart is friction, not consent. The internal distinction survives for the
+  > archive's own sake — a future recurrence count reads it. In the owner's words: «Я не хочу, чтобы
+  > что-то удалялось, но для пользователя это должно звучать, как удалил, и оно не всплывает больше.»
+  > A real erasure (a legal demand, someone else's data) is a separate, unbuilt capability.
 - A closed fact is **never re-opened in place**. Newer evidence creates a **new** row linked to the
   closed one through `supersedes_id`, and the closed row keeps its archive — that record is what a
   later recurrence promotion (a short state that keeps coming back becomes a
