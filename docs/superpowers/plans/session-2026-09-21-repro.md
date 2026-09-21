@@ -2,7 +2,7 @@
 
 > **For agentic workers:** Use superpowers:executing-plans and test-driven-development. The owner explicitly requires the reproduction stage BEFORE any fix; this overrides the usual one-test/one-fix interleaving. Execute only the dispatched task. The coordinator reviews the RED evidence before dispatching remediation.
 
-- Status: planned
+- Status: in progress
 - Branch: plan/session-2026-09-21-repro
 
 **Goal (owner, 2026-09-22):** "агент пишет тесты которые повторяют эти ошибки (если еще не написаны);
