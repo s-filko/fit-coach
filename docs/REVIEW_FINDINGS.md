@@ -33,6 +33,19 @@ Entry format:
 Wording in a zone prompt or in `SKILL.md` that misleads, contradicts the severity contract,
 or is inert for the kind of diff under review.
 
+- [×1] R1's "Declared boundaries" check (ADR-0013: domain must not import `@langchain/*`,
+  INV-CONV-004) had zero instances to bind to on a test-only diff — every new file sat in infra
+  `__tests__` or `tests/integration`. The zone does not say whether a boundary check with no
+  matching file should be reported as "verified clean" or omitted silently, so the reviewer had to
+  invent a convention.
+  Runs: session-2026-09-21-repro (2026-09-22).
+
+- [×1] R2's search recipe (`grep -rn "<name>" apps/ scripts/`) finds name-level duplication, but the
+  most consequential duplication on this diff was assertion-level: two tests independently proving
+  the same domain fact through different mock harnesses. `git grep "status.*skipped"` surfaced it,
+  a name search did not. Worth adding "grep the assertion, not just the helper name".
+  Runs: session-2026-09-21-repro (2026-09-22).
+
 - [×1] A plan's predicted evidence counts were wrong where the close-out asks the executor to
   record actuals: Task 1 Step 4 predicted "24 snapshots … 6 blocks" but the suite has 23
   (five block `it`s, not six), and the close-out instruction says to record the snapshot
@@ -277,6 +290,15 @@ backs it. Each entry names the proposed wording and where it would live
 
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
+
+- [×1] R3's "describe/it names carry BR/AC references per `docs/CONTRIBUTING_AI.md`" has no slot for
+  `BUG-0NN`, which was this plan's owner-designated source of truth, nor for plan-local `AC-LSR-N`
+  acceptance ids that are not durable `AC-####` specs. The six repro files do carry `BUG-0NN` in
+  their `describe()` names and both ids in their header docblocks — satisfying CONTRIBUTING_AI.md's
+  actual text — but a literal reading of the zone's paraphrase would flag every bug-reproduction file.
+  Either the zone wording or the ID catalogue should acknowledge `BUG-0NN` as a valid test-naming
+  citation for reproduction plans.
+  Runs: session-2026-09-21-repro (2026-09-22).
 
 - [×3] `CONTRIBUTING_AI.md`'s DRY bullet reads as production-only ("no copy-paste, no
   reinvention of what the repo already has"); R2 applied it to duplicated test fixtures
