@@ -119,6 +119,16 @@ export class TrainingService implements ITrainingService {
     if (session.status !== 'planning') {
       throw new Error(`Cannot begin session in '${session.status}' status`);
     }
+
+    // INV-TRAINING-002: one in_progress session per user — same refusal (and same stale-session
+    // handling) as startSession. The partial unique index is the guarantee under a race; this check
+    // gives the ordinary case a readable error.
+    await this.autoCloseTimedOutSessions(session.userId);
+    const activeSession = await this.sessionRepo.findActiveByUserId(session.userId);
+    if (activeSession && activeSession.id !== sessionId) {
+      throw new Error('You already have an active session. Please complete or skip it first.');
+    }
+
     return this.sessionRepo.update(sessionId, {
       status: 'in_progress',
       startedAt: new Date(),
@@ -172,99 +182,68 @@ export class TrainingService implements ITrainingService {
       throw new Error('Session not found');
     }
 
-    const { exerciseId } = opts ?? {};
-
-    if (exerciseId) {
-      // An id that is neither in the session nor in its plan must be a real catalog exercise. The
-      // model can invent a well-formed UUID (2026-09-20: treadmill warm-up lost to an FK violation),
-      // so reject it here — before any state changes — with a recovery cue the model can act on.
-      const knownToSession =
-        session.exercises.some(ex => ex.exerciseId === exerciseId) ||
-        (session.sessionPlanJson?.exercises.some(ex => ex.exerciseId === exerciseId) ?? false);
-      if (!knownToSession && !(await this.exerciseRepo.findById(exerciseId))) {
-        throw new Error(
-          `Unknown exerciseId ${exerciseId}: it is not in the exercise catalog. ` +
-            'Call search_exercises and copy the ID verbatim from the results, ' +
-            'or pass exerciseName instead. Never invent an id.',
-        );
+    // An exerciseName is resolved to a catalog id FIRST; from here on the id and the name callers
+    // share ONE path (existing-row reuse, switch/auto-complete, skipActivityUpdate). A second path
+    // is how a name-logged set once forked the session into one row per set (AC-RRP-1).
+    let exerciseId = opts?.exerciseId;
+    let resolvedFromCatalog = false;
+    if (!exerciseId) {
+      // We cannot guess which exercise the user is doing — only a name (off-plan exercise) is acceptable.
+      if (!opts?.exerciseName) {
+        throw new Error('exerciseId is required to log a set. AI must identify the exercise being performed.');
       }
-
-      // Auto-complete current in_progress exercise if switching to a different one
-      const currentInProgress = session.exercises.find(ex => ex.status === 'in_progress');
-      let autoCompleted: AutoCompletedExercise | undefined;
-
-      if (currentInProgress && currentInProgress.exerciseId !== exerciseId) {
-        const newStatus = currentInProgress.sets.length > 0 ? 'completed' : 'skipped';
-        await this.sessionExerciseRepo.update(currentInProgress.id, { status: newStatus });
-        autoCompleted = buildExerciseSummary(currentInProgress);
-      }
-
-      // Check if this exercise already exists in the session
-      const existing = session.exercises.find(ex => ex.exerciseId === exerciseId);
-      if (existing) {
-        if (existing.status !== 'in_progress') {
-          await this.sessionExerciseRepo.update(existing.id, { status: 'in_progress' });
-        }
-        return { exercise: { ...existing, status: 'in_progress' }, autoCompleted };
-      }
-
-      // Not yet in session — create it (from plan or ad-hoc)
-      const planEx = session.sessionPlanJson?.exercises.find(ex => ex.exerciseId === exerciseId);
-      const created = await this.sessionExerciseRepo.create(sessionId, {
-        exerciseId,
-        orderIndex: session.exercises.length,
-        targetSets: planEx?.targetSets,
-        targetReps: planEx?.targetReps,
-        targetWeight: planEx?.targetWeight ?? undefined,
-      });
-      await this.sessionExerciseRepo.update(created.id, { status: 'in_progress' });
-      if (!opts?.skipActivityUpdate) {
-        await this.sessionRepo.updateActivity(sessionId);
-      }
-      return { exercise: { ...created, status: 'in_progress' }, autoCompleted };
+      exerciseId = await this.resolveExerciseIdByName(opts.exerciseName);
+      resolvedFromCatalog = true;
     }
 
-    // No exerciseId — only acceptable if exerciseName provided (off-plan exercise)
-    // We cannot guess which exercise the user is doing
-    if (!opts?.exerciseName) {
-      throw new Error('exerciseId is required to log a set. AI must identify the exercise being performed.');
+    // An id that is neither in the session nor in its plan must be a real catalog exercise. The
+    // model can invent a well-formed UUID (2026-09-20: treadmill warm-up lost to an FK violation),
+    // so reject it here — before any state changes — with a recovery cue the model can act on.
+    // An id that came out of a catalog lookup is a catalog id by construction.
+    const knownToSession =
+      session.exercises.some(ex => ex.exerciseId === exerciseId) ||
+      (session.sessionPlanJson?.exercises.some(ex => ex.exerciseId === exerciseId) ?? false);
+    if (!resolvedFromCatalog && !knownToSession && !(await this.exerciseRepo.findById(exerciseId))) {
+      throw new Error(
+        `Unknown exerciseId ${exerciseId}: it is not in the exercise catalog. ` +
+          'Call search_exercises and copy the ID verbatim from the results, ' +
+          'or pass exerciseName instead. Never invent an id.',
+      );
     }
 
-    // Off-plan exercise by name — try exact match first, fall back to embedding search
-    const exerciseName = opts.exerciseName ?? '';
-    let resolvedExerciseId: string | undefined;
+    // Auto-complete current in_progress exercise if switching to a different one
+    const currentInProgress = session.exercises.find(ex => ex.status === 'in_progress');
+    let autoCompleted: AutoCompletedExercise | undefined;
 
-    const exactMatches = await this.exerciseRepo.search(exerciseName, 1);
-    const exactMatch = exactMatches.find(ex => ex.name.toLowerCase() === exerciseName.toLowerCase());
-    if (exactMatch) {
-      resolvedExerciseId = exactMatch.id;
-    } else if (this.embeddingService) {
-      // Semantic fallback: embed the exercise name and find the closest match
-      const queryVector = await this.embeddingService.embed(exerciseName);
-      const semanticMatches = await this.exerciseRepo.searchByEmbedding(queryVector, { limit: 1 });
-      const [topMatch] = semanticMatches;
-      if (topMatch) {
-        resolvedExerciseId = topMatch.id;
+    if (currentInProgress && currentInProgress.exerciseId !== exerciseId) {
+      const newStatus = currentInProgress.sets.length > 0 ? 'completed' : 'skipped';
+      await this.sessionExerciseRepo.update(currentInProgress.id, { status: newStatus });
+      autoCompleted = buildExerciseSummary(currentInProgress);
+    }
+
+    // Check if this exercise already exists in the session
+    const existing = session.exercises.find(ex => ex.exerciseId === exerciseId);
+    if (existing) {
+      if (existing.status !== 'in_progress') {
+        await this.sessionExerciseRepo.update(existing.id, { status: 'in_progress' });
       }
-    } else {
-      // No embedding service — reuse the ilike result from exact match attempt
-      const [topIlike] = exactMatches;
-      if (topIlike) {
-        resolvedExerciseId = topIlike.id;
-      }
+      return { exercise: { ...existing, status: 'in_progress' }, autoCompleted };
     }
 
-    if (!resolvedExerciseId) {
-      throw new Error(`Exercise "${exerciseName}" not found in DB. Cannot log set for unknown exercise.`);
-    }
-
+    // Not yet in session — create it (from plan or ad-hoc)
+    const planEx = session.sessionPlanJson?.exercises.find(ex => ex.exerciseId === exerciseId);
     const created = await this.sessionExerciseRepo.create(sessionId, {
-      exerciseId: resolvedExerciseId,
+      exerciseId,
       orderIndex: session.exercises.length,
+      targetSets: planEx?.targetSets,
+      targetReps: planEx?.targetReps,
+      targetWeight: planEx?.targetWeight ?? undefined,
     });
     await this.sessionExerciseRepo.update(created.id, { status: 'in_progress' });
-    await this.sessionRepo.updateActivity(sessionId);
-    return { exercise: { ...created, status: 'in_progress' } };
+    if (!opts?.skipActivityUpdate) {
+      await this.sessionRepo.updateActivity(sessionId);
+    }
+    return { exercise: { ...created, status: 'in_progress' }, autoCompleted };
   }
 
   async completeSession(sessionId: string, durationMinutes?: number, completedAt?: Date): Promise<WorkoutSession> {
@@ -484,6 +463,39 @@ export class TrainingService implements ITrainingService {
   }
 
   // --- Private helpers ---
+
+  /**
+   * Resolves an exercise name to a catalog id: exact (case-insensitive) match first, then the
+   * semantic fallback (embedding search), then the ilike hit when no embedding service is wired.
+   * A name that matches nothing fails with the existing "not found" rejection.
+   */
+  private async resolveExerciseIdByName(exerciseName: string): Promise<string> {
+    const exactMatches = await this.exerciseRepo.search(exerciseName, 1);
+    const exactMatch = exactMatches.find(ex => ex.name.toLowerCase() === exerciseName.toLowerCase());
+    let resolvedExerciseId: string | undefined;
+    if (exactMatch) {
+      resolvedExerciseId = exactMatch.id;
+    } else if (this.embeddingService) {
+      // Semantic fallback: embed the exercise name and find the closest match
+      const queryVector = await this.embeddingService.embed(exerciseName);
+      const semanticMatches = await this.exerciseRepo.searchByEmbedding(queryVector, { limit: 1 });
+      const [topMatch] = semanticMatches;
+      if (topMatch) {
+        resolvedExerciseId = topMatch.id;
+      }
+    } else {
+      // No embedding service — reuse the ilike result from exact match attempt
+      const [topIlike] = exactMatches;
+      if (topIlike) {
+        resolvedExerciseId = topIlike.id;
+      }
+    }
+
+    if (!resolvedExerciseId) {
+      throw new Error(`Exercise "${exerciseName}" not found in DB. Cannot log set for unknown exercise.`);
+    }
+    return resolvedExerciseId;
+  }
 
   private async autoCloseTimedOutSessions(userId: string): Promise<void> {
     const cutoffTime = new Date(Date.now() - SESSION_TIMEOUT_MS);

@@ -377,6 +377,10 @@ export const workoutSessions = pgTable(
     userStatusIdx: index('idx_workout_sessions_user_status').on(table.userId, table.status),
     activityIdx: index('idx_workout_sessions_activity').on(table.userId, table.status, table.lastActivityAt),
     abandonedIdx: index('idx_workout_sessions_abandoned').on(table.status, table.lastActivityAt),
+    // INV-TRAINING-002: at most one in_progress session per user, enforced by the database.
+    oneInProgressPerUser: uniqueIndex('uq_workout_sessions_one_in_progress_per_user')
+      .on(table.userId)
+      .where(sql`${table.status} = 'in_progress'`),
   }),
 );
 

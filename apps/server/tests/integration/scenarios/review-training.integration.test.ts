@@ -1,18 +1,15 @@
 /**
- * Review regression proof — Task 1 (docs/superpowers/plans/review-regression-proof.md).
+ * Regression tests for the 2026-09-21 review findings AC-RRP-1 and AC-RRP-3
+ * (docs/superpowers/plans/review-regression-proof.md) — promoted from
+ * review-training.repro.test.ts once the fixes landed.
  *
- * REPRODUCTIONS on UNCHANGED production code: AC-RRP-1 (exerciseName logging
- * fragments one exercise into many rows) and AC-RRP-3 (two planning sessions
- * can both be begun for one user). Real fitcoach_test DB, real repositories,
- * real TrainingService; nothing is mocked. The failing tests below are
- * intentionally RED until the remediation plan fixes the behavior — they are
- * not skipped, not test.failing and not inverted. Positive controls (by-ID
- * logging, a single begin) pass and prove the harness itself is sound.
+ * AC-RRP-1: logging by exerciseName resolves to the catalog id first and shares
+ * the exerciseId path — one session_exercises row per exercise, set numbers
+ * 1..n, previous exercise auto-completed on a switch.
+ * AC-RRP-3 (INV-TRAINING-002): beginSession refuses a second in_progress session
+ * for one user, and the partial unique index makes that hold under a race.
  *
- * File name is *.repro.test.ts on purpose: outside every default suite, run
- * explicitly:
- *   RUN_DB_TESTS=1 NODE_ENV=test npx jest --runInBand --testMatch='**\/review-training.repro.test.ts'
- * When a fix lands the file is promoted to *.integration.test.ts.
+ * Real fitcoach_test DB, real repositories, real TrainingService; nothing is mocked.
  */
 import { inArray } from 'drizzle-orm';
 
@@ -32,7 +29,7 @@ import { createTestUserData } from '../../shared/test-factories';
 const BENCH = 'Barbell Bench Press';
 const SQUAT = 'Barbell Back Squat';
 
-describe('review repro — training persistence (AC-RRP-1, AC-RRP-3)', () => {
+describe('training persistence — exerciseName logging and one active session (AC-RRP-1, AC-RRP-3)', () => {
   let service: TrainingService;
   let userRepo: DrizzleUserRepository;
   let sessionRepo: WorkoutSessionRepository;
@@ -101,6 +98,30 @@ describe('review repro — training persistence (AC-RRP-1, AC-RRP-3)', () => {
       expect(details!.exercises.filter(e => e.status === 'in_progress')).toHaveLength(1);
     });
 
+    it('a name that matches no catalog exercise is rejected and creates no session exercise', async () => {
+      const userId = await newUser('name_unknown');
+      const session = await service.startSession(userId, {});
+
+      await expect(
+        service.logSetWithContext(session.id, { exerciseName: 'Zzzz Not A Real Exercise', setData: strength(10) }),
+      ).rejects.toThrow(/not found in DB/);
+
+      const details = await service.getSessionDetails(session.id);
+      expect(details!.exercises).toHaveLength(0);
+    });
+
+    it('a name and its catalog id are the same exercise: mixing them adds sets to ONE row', async () => {
+      const userId = await newUser('name_then_id');
+      const session = await service.startSession(userId, {});
+
+      await service.logSetWithContext(session.id, { exerciseName: BENCH, setData: strength(10) });
+      await service.logSetWithContext(session.id, { exerciseId: benchId, setData: strength(8) });
+
+      const details = await service.getSessionDetails(session.id);
+      expect(details!.exercises).toHaveLength(1);
+      expect(details!.exercises[0].sets.map(s => s.setNumber)).toEqual([1, 2]);
+    });
+
     it('switching to another exercise by name completes the previous one; exactly one stays in_progress', async () => {
       const userId = await newUser('name_switch');
       const session = await service.startSession(userId, {});
@@ -140,6 +161,30 @@ describe('review repro — training persistence (AC-RRP-1, AC-RRP-3)', () => {
       const rows = await sessionRepo.findRecentByUserId(userId, 10);
       const inProgress = rows.filter(r => r.status === 'in_progress');
       expect({ secondBegin, inProgress: inProgress.length }).toEqual({ secondBegin: 'refused', inProgress: 1 });
+    });
+
+    it('two beginSession calls racing for the same user: exactly one wins, one in_progress row remains', async () => {
+      const userId = await newUser('race_begin');
+      const a = await service.startSession(userId, { status: 'planning' });
+      const b = await service.startSession(userId, { status: 'planning' });
+
+      const outcomes = await Promise.allSettled([service.beginSession(a.id), service.beginSession(b.id)]);
+
+      const rows = await sessionRepo.findRecentByUserId(userId, 10);
+      expect(outcomes.filter(o => o.status === 'fulfilled')).toHaveLength(1);
+      expect(outcomes.filter(o => o.status === 'rejected')).toHaveLength(1);
+      expect(rows.filter(r => r.status === 'in_progress')).toHaveLength(1);
+      expect(rows.filter(r => r.status === 'planning')).toHaveLength(1);
+    });
+
+    it('the database itself refuses a second in_progress row, bypassing the service', async () => {
+      const userId = await newUser('db_index');
+      const a = await service.startSession(userId, { status: 'planning' });
+      const b = await service.startSession(userId, { status: 'planning' });
+      await sessionRepo.update(a.id, { status: 'in_progress', startedAt: new Date() });
+
+      // The lifecycle handler writes through the repository, not the service — the index must still hold.
+      await expect(sessionRepo.update(b.id, { status: 'in_progress', startedAt: new Date() })).rejects.toThrow();
     });
   });
 });
