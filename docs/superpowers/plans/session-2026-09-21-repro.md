@@ -121,13 +121,60 @@ existing scenario harness.
 **Files:** `apps/server/evals/datasets/drafts/session-2026-09-21.jsonl` (drafts, not a live run) and a
 short note in this plan.
 
-- [ ] For BUG-022 (false "logged" confirmation in `session_planning`), BUG-024 (warm-up never logged),
+- [x] For BUG-022 (false "logged" confirmation in `session_planning`), BUG-024 (warm-up never logged),
   BUG-026 (invented provenance explanation), BUG-028 (rule numbers and wrong language): write one eval
   case each — input, session state, and the expectation in the framework's shape
   (`PROMPT_EVAL_FRAMEWORK.md`). State for each what a deterministic test could and could not verify.
-- [ ] **Do not run any model.** Whether these are ever executed is the owner's call (cost).
-- [ ] **Verify:** `npm run test:unit` stays green; the drafts parse (a `node --experimental-strip-types`
+- [x] **Do not run any model.** Whether these are ever executed is the owner's call (cost).
+- [x] **Verify:** `npm run test:unit` stays green; the drafts parse (a `node --experimental-strip-types`
   or existing lint/parse path is enough).
+
+#### Task 5 result — drafts and what each can and cannot catch (AC-LSR-7)
+
+`apps/server/evals/datasets/drafts/session-2026-09-21.jsonl` — four L1-shaped cases (`EvalCaseSchema`),
+tagged `draft`, authored not run. The runner only scans the five phase directories (`EVAL_PHASES`) plus
+what `--phase <dir>` names, so `drafts/` is never part of a sweep; loading it needs an explicit
+`--phase drafts --dataset session-2026-09-21` **and** `RUN_LLM_EVALS=1`. Nothing was run (`RUN_LLM_EVALS` /
+`EVALS_FULL_RUN` unset). Cost if the owner ever runs it: 4 cases × n=1 = 4 coach calls (+ tool rounds), which
+still needs the written §7a argument. `judge` entries `LS-J1…J4` are **proposed** criteria — they do not exist
+in `PROMPT_EVAL_FRAMEWORK.md` §5.1 (and the repo has no L2 judge implementation yet); they are defined below
+and become real only when the owner adopts them. Seed messages are reconstructed from what the bugs record
+(see each case) — replace them with the exported turns of the named run before promotion.
+
+| Case | Finding | Input (from the bug) | Deterministic gate in the case | Proposed judge criterion |
+|---|---|---|---|---|
+| LS-0001 | BUG-022 | phase `session_planning`; three earlier human turns of the failed runs (450/454/458) sit in the seed; input "второй подход повторил" (run `6d2be9db`) | `mustNotMatch` a positive claim of saving (`записал/зафиксировал/сохранил/внёс/занёс`, `logged/recorded/saved`, negation-guarded); `tools.mustNot log_set`; language ru | **LS-J1** the reply neither states nor implies the reported sets were recorded (5 = says plainly that nothing is stored yet / how it will be; 1 = "зафиксировал"-class claim or an oblique equivalent) |
+| LS-0002 | BUG-024 | phase `training`, active session `lower_a`; seed "начинаю с пробежки на беговой дорожке"; input "закончил 2км за 13:45" | `tools.must log_set` with `args.distanceKm = 2` | **LS-J2** the warm-up is logged with its distance and time (825 s) before any confirmation; a text-only echo scores 1 |
+| LS-0003 | BUG-026 | phase `chat`; seed carries the `search_exercises` result with the real catalog ids of Leg Extension / Leg Curl, the recap request, and an AI recap whose shape the bug describes (ids for five exercises, none for those two); input "не все записи имеют айди" (run `c7d071ed`) | `mustNotMatch` the live wording of the invented mechanism (`справочник`, `обращался напрямую`, `в этой ветке`, `не подтянулись`, `в эту сводку истории`) | **LS-J3** when challenged on provenance the reply states what is in context (or "у меня этого нет") and offers no explanation of why data is missing that is not visible in context |
+| LS-0004 | BUG-028 | phase `training`, two `log_set` @ 120 kg seeded as tool traffic; input "ты не записал все, первых два подхода 110 вторых 2 120 по 12, все рпе в конце 9" (run `ef7f3998`) | `language ru` (Cyrillic-ratio heuristic), `telegram_html`, `mustNotMatch` rule numbers / protocol wording (`Rule N`, `per (our) protocol`, `по правилу`, `по протоколу`, `правило №N`) | **LS-J4** single-language reply in the user's language, no rule numbers, no "per protocol" register (also scores TR-3 for the correction itself) |
+
+Regex sanity was checked without any model: each gate flags the live wording quoted in its bug and lets a
+plain honest wording through (`node` one-off, recorded in the evidence table).
+
+**What a deterministic test could and could not verify**
+
+- **LS-0001 (BUG-022).** *Could:* the rendered `session_planning` prompt (L0, no model) carries the
+  "never state or imply that performed sets were recorded" rule once it is written; the phase's tool set has
+  no `log_set` (already structural); a scripted-model scenario can prove that *if* a `log_set` follows the
+  transition the rows exist in `session_sets`. *Could not:* whether the model, given "второй подход повторил",
+  claims or hints that something was saved — that is a property of a sampled reply. The `mustNotMatch` gate is
+  only a floor (a paraphrase such as "всё учтено" passes it); the judge closes the gap.
+- **LS-0002 (BUG-024).** *Could:* the training prompt carries the pre-session-work rule; a scripted `log_set`
+  with `exerciseName` + `distanceKm` persists a `cardio_distance` row (the persistence path works — journey C
+  already exercises it). *Could not:* whether the model chooses to call `log_set` for a warm-up report. Only a
+  live run distinguishes "logged" from "narrated". Note the live warm-up was reported while the phase was
+  `session_planning` (no `log_set` there); this case pins the training-phase half (report at session start),
+  the planning-phase half falls under LS-0001's remediation ("logged after the transition").
+- **LS-0003 (BUG-026).** *Could:* the assembled model input contains the Leg Extension / Leg Curl ids
+  (`assembledInput` is already captured by L1 and `user-facts-block-present`-style checks exist), and the
+  prompt carries the provenance rule. *Could not:* recognise an invented mechanism in general. The regexes
+  match this one live wording; a fresh fabrication with different words passes. Only a judged run (or the owner
+  reading it) sees "explains why data is missing without evidence".
+- **LS-0004 (BUG-028).** *Could:* the language heuristic and rule-number regexes on a reply; a prompt-render
+  check that the rule "never mention rule numbers or protocol wording" is present. *Could not:* bilingual
+  replies with a dominant Cyrillic ratio pass the heuristic; paraphrases of "per our protocol" pass the
+  regexes; whether a reply *reads* as an excuse for a round-trip is a judgement. BUG-027's fix removes RULE 10
+  and with it most of this leak — the case stays as a guard for the register and the language.
 
 ---
 
@@ -141,4 +188,5 @@ short note in this plan.
 | AC-LSR-4 | `cd apps/server && RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch='**/tests/integration/**/previous-session.repro.test.ts'` — `tests/integration/scenarios/previous-session.repro.test.ts` (real `buildTrainingSpec().loadContext` + real repositories over `fitcoach_test`; block rendered by `TRAINING_PREVIOUS_SESSION_V1` with pinned `now` 2026-09-21; explicit fixture dates) | 1 | 3 failures, 1 control green. (a) selection: `expect(previous?.sessionKey).toBe('hist_20260916_lower')` — received `"lower_a"` (the 2026-02-20 session). (b) block content: `toContain('Barbell Bench Press')` fails — the block shows only the old session's Back Squat 52/59/66/66 and Pull-ups. (c) dating, independent of selection: the block rendered for the session it was given (2026-02-20) does not match its own date (`/2026-02-20\|20\.02\.2026\|Feb… 20\|20 Feb/`). Control passes: the block header is `=== PREVIOUS SESSION (same template — 213d ago) ===`. **Nuance for BUG-030:** the block already prints a *relative* age (`213d ago`) — it does not print no time at all; what is missing is the calendar date, so the date fix should add it next to (not instead of) the age. **Fixture deviation:** `fitcoach_test` seeds only four exercises (`setup.ts`), so Back Squat / Bench Press stand in for Leg Extension / Leg Curl, and keys keep the live `..._lower` names. | `c395d7ce` (Task 2 on `57a42c8e`, `dcf989bb`; no production change) |
 | AC-LSR-5 | `cd apps/server && RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch='**/tests/integration/services/transcript-order.repro.test.ts'` — `tests/integration/services/transcript-order.repro.test.ts` (real `DrizzleTranscriptService.appendRunMessages` → real `evals/lib/export-query` `fetchRunsSince`; formulation B, agreed with the coordinator) | 1 | `expect(await readByReader()).toEqual(produced)` fails: the reader returns the run reversed (`ai:step-10 final reply, tool_result:step-09…, … , ai:, human:step-01 user message`) instead of `human:step-01 …, ai:, tool_call:tool_a, …, ai:step-10 final reply`. Soundness preconditions pass before it: the ordinary `UPDATE` rewrite (reverse produced order, `SET content = content`) moved the physical order, and sorting the rows by the produced position the test stores restores the produced sequence. **Root cause, measured:** `SELECT count(DISTINCT created_at), count(*) FROM conversation_turns WHERE run_id = $1` → **1 distinct of 10** rows for a run written through the real append path (one INSERT statement → one `now()`); `id` is a random uuid, so nothing else carries order. **Why plain read-back cannot be the probe:** on a freshly written table Postgres returns tied rows in insertion order — a first plain probe (10 rows, also with 12 other runs around it) PASSED, so the read-order assertion alone would fail only by luck of physical layout; the probe removes that luck instead (no elevated privileges, no `VACUUM FULL`). Any fix that persists order (seq column, distinct timestamps) turns it green. | `6d74f836` |
 | AC-LSR-6 | `cd apps/server && RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch='**/tests/integration/scenarios/failed-run-transcript.repro.test.ts'` — `tests/integration/scenarios/failed-run-transcript.repro.test.ts` (real `registerInfraServices` wiring: real graph, adapter, repositories, PostgresSaver; only the ChatModel is replaced — it answers, or throws once) | 134 (see note) | `a run that fails inside the graph leaves its user message in the transcript` fails at `expect(await humanTurnTexts(failedUserId)).toContain('накинул 10кг и сделал еще подход на 12')` — `Received array: []`. Preconditions pass first: `runScenario` rejects, and `conversation_runs.outcome = 'core_error'` (the failed run IS recorded, its message is not). Control passes: a completed run leaves its user message in `conversation_turns`. **Exit-code note:** exit 134 is a native abort at process shutdown (`libc++abi: terminating due to uncaught exception of type std::__1::system_error: mutex lock failed`) that the untouched `harness.integration.test.ts` produces identically (all its tests pass, exit 134) — pre-existing, caused by the ONNX embedding pipeline that `registerInfraServices` loads; the jest report itself is `1 failed, 1 passed`. | `6d74f836` |
+| AC-LSR-7 | `cd apps/server && node -e "const l=require('fs').readFileSync('evals/datasets/drafts/session-2026-09-21.jsonl','utf8').split('\\n').filter(Boolean);l.forEach(x=>JSON.parse(x));console.log(l.length,'lines, each valid JSON')"` and `npx tsx <scratch>/parse-drafts.ts` (`parseCases` from `evals/schema/case.schema.ts` + compile of every `mustNotMatch` with the runner's `(?i)` translation) | 0 | `4 lines, each valid JSON`; `4 cases parse against EvalCaseSchema: LS-0001, LS-0002, LS-0003, LS-0004`; `all mustNotMatch patterns compile`. Regex sanity (node one-off, no model): LS-0001 / LS-0003 / LS-0004 gates flag the live wording quoted in BUG-022/026/028 and pass a plain honest wording. No model was run (`RUN_LLM_EVALS`, `EVALS_FULL_RUN` unset). Eval-only by nature — stated, not faked; see "Task 5 result". | `0b4ca1dc` |
 | — | `cd apps/server && npm run test:unit` | 0 | 121 suites / 1151 tests green; `git diff` shows no production change (repro files only). Re-run after Task 2 with the same result. | `dcf989bb` / `57a42c8e` |
