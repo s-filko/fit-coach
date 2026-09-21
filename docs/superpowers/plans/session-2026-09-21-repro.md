@@ -67,13 +67,13 @@ graph wiring and repositories; stub only external model/Telegram I/O. RED probes
 Read `log-set.tool.ts`, `format-exercise-summary.ts`, `set-data.types.ts` and the existing
 `log-set.tool.unit.test.ts` first.
 
-- [ ] **AC-LSR-1**: log a plank hold of 45 s the way the training prompt describes a bodyweight
+- [x] **AC-LSR-1**: log a plank hold of 45 s the way the training prompt describes a bodyweight
   exercise, and assert the stored `setData` carries a duration. Include the positive control that
   a cardio duration still works today, so the failure isolates the isometric path.
-- [ ] **AC-LSR-2**: build the auto-complete summary for an exercise with 0 sets (the shape
+- [x] **AC-LSR-2**: build the auto-complete summary for an exercise with 0 sets (the shape
   `ensureCurrentExercise` produces when it marks `skipped`) and assert the text does not claim
   `completed` and does not ask for an RPE trend.
-- [ ] **Verify:** `cd apps/server && npx jest --testMatch='**/__tests__/**/*.repro.test.ts'` — record
+- [x] **Verify:** `cd apps/server && npx jest --testMatch='**/__tests__/**/*.repro.test.ts'` — record
   the exact failures in the evidence table below.
 
 ### Task 2: Correction batch destroys the corrected sets (AC-LSR-3)
@@ -135,4 +135,6 @@ short note in this plan.
 
 | AC | Command | Exit | Failing assertion | Baseline SHA |
 |---|---|---|---|---|
-| | | | | |
+| AC-LSR-1 | `cd apps/server && NODE_ENV=test npx jest --testMatch='**/__tests__/**/*.repro.test.ts'` — `log-set.tool.repro.test.ts` | 1 | `stores a 45-second plank, logged the documented bodyweight way…` fails at `expect(storedSetData()).toMatchObject({ duration: 45 })`: received `{"type":"functional_reps","reps":45}`. Positive control (`durationSeconds:1200` → `cardio_duration`) passes. Input is `{exerciseName:'Plank', reps:45}` — the only path the `log_set` description documents for bodyweight ("reps only"); a fix must either teach the tool/prompt a hold path or resolve isometric exercises tool-side. | `dcf989bb` |
+| AC-LSR-2 | same command — `format-exercise-summary.repro.test.ts` | 1 | Two failures on the string from real `TrainingService.ensureCurrentExercise` (0 sets → `skipped`) fed to `formatExerciseSummary`: `not.toMatch(/completed/i)` (received `Exercise 'Seated Calf Raise Machine' completed.`) and `not.toMatch(/RPE/)` (received `…list the sets, analyze RPE trend…` after an empty `Sets performed:`). Controls pass: domain writes `skipped` for 0 sets; an exercise with sets still reads `completed`. | `dcf989bb` |
+| — | `cd apps/server && npm run test:unit` | 0 | 121 suites / 1151 tests green; `git diff` shows no production change (two new files only). | `dcf989bb` |
