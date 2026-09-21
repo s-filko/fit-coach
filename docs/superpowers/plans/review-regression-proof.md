@@ -2,7 +2,7 @@
 
 > **For agentic workers:** Use superpowers:executing-plans and test-driven-development. The owner explicitly requires the reproduction stage BEFORE fixes; this overrides the usual one-test/one-fix interleaving. Execute only the dispatched task. The coordinator reviews the RED evidence before dispatching remediation.
 
-- Status: planned
+- Status: in progress
 - Branch: plan/review-regression-proof
 
 **Goal:** Turn the six findings from the 2026-09-21 review into reproducible behavioral evidence, then remediate confirmed defects in separately reviewed steps.
@@ -101,7 +101,7 @@ Baseline SHA: 3f4430b4 (branch HEAD before work: 75588b42). Tests commit: be103c
 | `RUN_DB_TESTS=1 NODE_ENV=test npx jest --runInBand --testMatch='**/review-training.repro.test.ts'` | 1 | 5 tests: 2 controls pass, 3 RED (below) |
 | `NODE_ENV=test npx jest --runInBand --testMatch='**/review-prepare.repro.test.ts'` | 1 | 5 tests: 3 controls pass, 2 RED (below) |
 | `npm run test:unit -- --silent --verbose=false` | 0 | 118 suites, 1112 tests, 59 snapshots passed |
-| `npm run test:scenarios -- --silent --verbose=false` | 134 | 5 suites, 306 passed + 1 todo. All tests pass; the process then aborts at exit with `libc++abi: terminating due to uncaught exception of type std::__1::system_error: mutex lock failed` (reproduced on a 2nd run; the repro files are not in this suite's testMatch, so this is teardown noise of the unchanged baseline, not caused by Task 1) |
+| `npm run test:scenarios -- --silent --verbose=false` | 134 | 5 suites, 306 passed + 1 todo. All tests pass; the process then aborts at exit with `libc++abi: terminating due to uncaught exception of type std::__1::system_error: mutex lock failed` (reproduced on a 2nd run; the repro files are not in this suite's testMatch, so the cause is outside the repro assertions; baseline comparison has not yet been performed) |
 
 A first run of each repro file failed on test-side setup (TS2551 wrong property name `exerciseName` → `exercise.name`; `goto` is returned as an array, not a string). Those were fixture bugs, fixed before any RED was recorded; the RED below is the behavioral output of the final files.
 
@@ -119,4 +119,8 @@ A first run of each repro file failed on test-side setup (TS2551 wrong property 
 - `the failure propagates instead of being swallowed` RED: `rejects.toThrow('database unavailable')` — "Received promise resolved instead of rejected", resolved to `goto: ['commit']`, `pendingTransition: {reason:'session_ended', toPhase:'chat'}` and the reply "Your training session has been completed. Ready for a new workout?".
 - `never produces a committed session_ended transition...` RED: outcome `{rejected:false, goto:'commit', pendingTransition:{reason:'session_ended',toPhase:'chat'}}` — an infrastructure failure is committed as a domain fact. Scope note: node-level with a stubbed training service read; graph-level (MemorySaver) run not added.
 
-**AC-RRP-7** for Task 1: all three findings reproduce with behavioral assertion failures; none unconfirmed/retracted. **AC-RRP-8** for Task 1: unit suite green, scenario tests green (exit-code caveat above); production diff empty.
+**AC-RRP-7** for Task 1: all three findings reproduce with behavioral assertion failures; none unconfirmed/retracted. **AC-RRP-8** for Task 1: unit suite green, scenario assertions pass but process exits 134 (verification limitation above); production diff empty.
+
+### Coordinator checkpoint — Task 1
+
+Reviewed both test files and confirmed no production diff. Independently reran both explicit repro files: exit 1, five intended failing assertions and five passing controls. Worker reports model claude-sonnet-5. Existing scenario command exit 134 remains a verification limitation until a clean independent run; no claim that this is harmless.
