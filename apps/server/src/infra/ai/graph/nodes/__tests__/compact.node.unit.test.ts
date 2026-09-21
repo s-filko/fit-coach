@@ -828,3 +828,83 @@ describe('BACKLOG (a): id-less RemoveMessage fails loud instead of silently no-o
     expect(update.compactReason).toBeUndefined();
   });
 });
+
+/** The manual pass's run context: the same run, flagged compact-only (`/compact`). */
+function manualConfig(): RunnableConfig {
+  const base = ctxConfig() as unknown as { context: object };
+  return { ...base, context: { ...base.context, compactOnly: true } } as never;
+}
+
+describe('buildCompactStep — manual pass (/compact)', () => {
+  /** The user's freshest turn is the LAST message; no human was appended for this pass. */
+  function manualState(overrides: Partial<ConversationStateType> = {}): ConversationStateType {
+    return channelState({
+      messages: [
+        new HumanMessage({ content: 'Составь план на грудь', id: 'm1' }),
+        new AIMessage({ content: 'Готовим план', id: 'm2', tool_calls: [] }),
+        new HumanMessage({ content: 'Колено болит', id: 'm3' }), // the freshest turn, unanswered
+      ],
+      lastUserMessageAt: NOW.toISOString(), // no gap — nothing automatic could fire
+      ...overrides,
+    });
+  }
+
+  it('folds the whole channel including the freshest user turn — no tail, whatever keepTurns says', async () => {
+    const { deps, structured, insert } = makeDeps({ config: { keepTurns: 6 } });
+    const compact = buildCompactStep(deps);
+
+    const update = await compact(manualState(), manualConfig());
+
+    expect(removedIds(update)).toEqual(['m1', 'm2', 'm3']);
+    expect(JSON.stringify(structured.mock.calls[0]![1])).toContain('Колено болит');
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(update.episodeId).toBe(RUN_ID);
+  });
+
+  it('the SAME state under an ordinary run keeps the current (last-human) turn out of reach', async () => {
+    // Pins that splitEpisode's automatic-path invariant is untouched: only the
+    // manual pass treats the whole channel as foldable.
+    const { deps } = makeDeps({ config: { keepTurns: 0 } });
+    const compact = buildCompactStep(deps);
+
+    const update = await compact(manualState({ compactReason: 'phase_boundary' }), ctxConfig());
+
+    expect(removedIds(update)).toEqual(['m1', 'm2']);
+  });
+
+  it('a short conversation is a clean no-op — no model call, no update at all', async () => {
+    const { deps, structured, insert, latestLegacySummary } = makeDeps({ config: { minTurns: 3 } });
+    const compact = buildCompactStep(deps);
+
+    await expect(compact(manualState(), manualConfig())).resolves.toEqual({});
+
+    expect(structured).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+    expect(latestLegacySummary).not.toHaveBeenCalled();
+  });
+
+  it('applies the summariser’s fact operations (evidence clock = the previous run’s stamp)', async () => {
+    const { deps, rememberFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [{ op: 'add', category: 'physical_constraint', fact: 'knee hurts', durability: 'long_term' }],
+        }),
+    });
+    const compact = buildCompactStep(deps);
+
+    await compact(manualState(), manualConfig());
+
+    expect(rememberFact).toHaveBeenCalledTimes(1);
+  });
+
+  it('BR-LLM-004 does NOT apply: a summariser failure throws, and nothing is returned to remove', async () => {
+    const { deps, insert, rememberFact } = makeDeps({ structured: () => Promise.reject(new Error('provider down')) });
+    const compact = buildCompactStep(deps);
+
+    await expect(compact(manualState(), manualConfig())).rejects.toThrow('provider down');
+
+    expect(insert).not.toHaveBeenCalled();
+    expect(rememberFact).not.toHaveBeenCalled();
+  });
+});

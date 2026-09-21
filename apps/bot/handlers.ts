@@ -126,6 +126,28 @@ export function registerBotHandlers(bot: TelegramBot) {
                 return;
             }
 
+            if (userText === '/compact') {
+                try {
+                    const outcome = await withTypingIndicator(bot, chatId, async () => {
+                        const user = await registerOrGetUser(msg);
+                        const res = await api.post('/api/bot/chat/compact', { userId: user.id });
+                        return (res.data?.data?.outcome as 'compacted' | 'nothing_to_compact' | undefined) ?? 'nothing_to_compact';
+                    });
+                    const isRu = languageCode === 'ru';
+                    const reply = outcome === 'compacted'
+                        ? (isRu ? 'Разговор сохранён в память.' : 'The conversation so far has been folded into memory.')
+                        : (isRu ? 'Пока нечего сохранять в память.' : 'Nothing to fold into memory yet.');
+                    await bot.sendMessage(chatId, reply);
+                } catch (error) {
+                    if (isNotFound(error)) {
+                        userIdByChatId.delete(chatId);
+                    }
+                    log.error({ err: error }, '/compact failed');
+                    await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), languageCode));
+                }
+                return;
+            }
+
             if (userText === '/start') {
                 try {
                     await withTypingIndicator(bot, chatId, async () => {

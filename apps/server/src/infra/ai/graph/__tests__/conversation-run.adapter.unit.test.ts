@@ -219,4 +219,58 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
       text: 'Контекст диалога очищен.', // ru user (makeUser)
     });
   });
+
+  describe('compact (manual /compact)', () => {
+    it('runs the graph compact-only: flagged context, no message appended, no run row, no transcript rows', async () => {
+      const seen: { input?: unknown; config?: unknown } = {};
+      const graph = {
+        invoke: async (input: unknown, config: unknown) => {
+          Object.assign(seen, { input, config });
+          return { episodeId: (config as { context: { runId: string } }).context.runId };
+        },
+      };
+      const { deps, recordRun, appendSystemNote } = makeDeps(graph, makeUser());
+      const runner = buildConversationRunner(deps);
+
+      await expect(runner.compact(UID)).resolves.toBe('compacted');
+
+      const { context, configurable } = seen.config as {
+        context: { compactOnly: boolean; userId: string };
+        configurable: { thread_id: string };
+      };
+      expect(context.compactOnly).toBe(true);
+      expect(context.userId).toBe(UID);
+      expect(configurable.thread_id).toBe(UID);
+      expect(seen.input).toEqual({ messages: [] }); // nothing appended: no HumanMessage
+      expect(recordRun).not.toHaveBeenCalled();
+      expect(appendSystemNote).not.toHaveBeenCalled();
+    });
+
+    it('nothing folded (the episode id did not move) → nothing_to_compact', async () => {
+      const graph = { invoke: async () => ({ episodeId: 'an-older-episode' }) };
+      const { deps } = makeDeps(graph, makeUser());
+
+      await expect(buildConversationRunner(deps).compact(UID)).resolves.toBe('nothing_to_compact');
+    });
+
+    it('a provider failure rethrows typed (503), a bug as CoreError — the message never rides the error', async () => {
+      const providerDown = { invoke: async () => Promise.reject(Object.assign(new Error('secret'), { status: 503 })) };
+      const bug = { invoke: async () => Promise.reject(new Error('secret')) };
+
+      await expect(
+        buildConversationRunner(makeDeps(providerDown, makeUser()).deps).compact(UID),
+      ).rejects.toBeInstanceOf(LlmUnavailableError);
+      await expect(buildConversationRunner(makeDeps(bug, makeUser()).deps).compact(UID)).rejects.toBeInstanceOf(
+        CoreError,
+      );
+    });
+
+    it('an unknown user throws before the graph is entered', async () => {
+      const invoke = jest.fn();
+      const { deps } = makeDeps({ invoke }, null);
+
+      await expect(buildConversationRunner(deps).compact(UID)).rejects.toThrow('not found');
+      expect(invoke).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -94,6 +94,13 @@ export interface RunResult {
   runId: string;
 }
 
+/**
+ * What a manual `/compact` did: `compacted` — the conversation so far was
+ * folded into memory; `nothing_to_compact` — it was too short, nothing was
+ * touched and no model was called.
+ */
+export type CompactOutcome = 'compacted' | 'nothing_to_compact';
+
 export const CONVERSATION_RUN_PORT_TOKEN = Symbol('ConversationRunPort');
 
 export interface ConversationRunPort {
@@ -104,4 +111,13 @@ export interface ConversationRunPort {
    * in the transcript. The route talks to this port only.
    */
   clearContext(userId: string): Promise<void>;
+  /**
+   * Manual compaction (`/compact`): runs the existing compaction with reason
+   * `manual` over the WHOLE conversation — the episode summary is written and
+   * the summariser's fact operations are applied — and does nothing else (no
+   * reply, no transcript rows, `lastUserMessageAt` untouched). Throws a typed
+   * error (`LlmUnavailableError` / `CoreError` / `ThreadBusyError`) on failure,
+   * with nothing removed — unlike the automatic triggers, which degrade.
+   */
+  compact(userId: string): Promise<CompactOutcome>;
 }

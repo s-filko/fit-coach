@@ -1,6 +1,6 @@
 /**
  * `withRunMutex` (D-A, D-12, ADR-0013 §6/§11): a decorator around
- * `ConversationRunPort` that serialises `run` and `clearContext` calls per
+ * `ConversationRunPort` that serialises `run`, `clearContext` and `compact` calls per
  * `userId` through the in-process keyed mutex (`keyed-mutex.ts`). Composed at
  * the composition root (`register-infra-services.ts`) — the adapter itself
  * (`conversation-run.adapter.ts`) is untouched and knows nothing about
@@ -21,7 +21,7 @@
  * `pg_advisory_xact_lock(hashtext(userId))` at this same seam — not
  * implemented here.
  */
-import type { ConversationRunPort, RunInput, RunResult } from '@domain/conversation/ports';
+import type { CompactOutcome, ConversationRunPort, RunInput, RunResult } from '@domain/conversation/ports';
 
 import { createKeyedMutex } from '@infra/conversation/keyed-mutex';
 
@@ -38,6 +38,10 @@ export function withRunMutex(port: ConversationRunPort, opts: WithRunMutexOption
     },
     clearContext(userId: string): Promise<void> {
       return mutex.run(userId, () => port.clearContext(userId));
+    },
+    // Same key as `run`: a compaction rewrites the checkpointed channel.
+    compact(userId: string): Promise<CompactOutcome> {
+      return mutex.run(userId, () => port.compact(userId));
     },
   };
 }

@@ -26,6 +26,7 @@ import type { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import { type BaseMessage, HumanMessage } from '@langchain/core/messages';
 
 import {
+  type CompactOutcome,
   type ConversationPhase,
   type ConversationRunPort,
   type ConversationRunRecord,
@@ -153,6 +154,54 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
         } catch (recordErr) {
           log.error({ err: recordErr, runId }, 'Failed to record the failed run');
         }
+        throw toConversationError(err);
+      }
+    },
+
+    /**
+     * Manual compaction (`/compact`): the same graph in a compact-only pass —
+     * `prepare` runs the compact step with reason 'manual' and ends the run
+     * (ctx.compactOnly), so no agent, no commit, no transcript rows, no run
+     * row, `lastUserMessageAt` untouched. Failures throw typed like `run`;
+     * the compact step throws before anything is removed.
+     */
+    async compact(userId: string): Promise<CompactOutcome> {
+      const user = await userService.getUser(userId);
+      if (!user) {
+        throw new Error(`User ${userId} not found`);
+      }
+
+      const runId = randomUUID();
+      const ctx = {
+        runId,
+        userId,
+        user,
+        now: new Date(),
+        client: 'telegram' as const,
+        trigger: 'system' as const,
+        metrics: new RunMetricsCollector(runId),
+        compactOnly: true,
+      };
+
+      try {
+        const result = (await graph.invoke(
+          // An empty (but present) channel update: the pass appends no message.
+          { messages: [] },
+          {
+            configurable: { thread_id: userId },
+            metadata: { runId, userId },
+            context: ctx,
+            callbacks: [ctx.metrics.handler(), ...(extraCallbacks ?? [])],
+            recursionLimit: 50,
+          },
+        )) as { episodeId?: string };
+        // The compact step starts a new episode (episodeId = this run's id)
+        // exactly when it folded something; a no-op leaves the id alone.
+        const outcome: CompactOutcome = result.episodeId === runId ? 'compacted' : 'nothing_to_compact';
+        log.info({ userId, runId, outcome }, 'Manual compaction finished');
+        return outcome;
+      } catch (err) {
+        log.error({ err, userId, runId }, 'Manual compaction failed');
         throw toConversationError(err);
       }
     },

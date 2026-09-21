@@ -20,7 +20,7 @@ describe('withRunMutex (D-A, D-12, AC-1351)', () => {
       runId: 'r1',
     });
     const clearContext = jest.fn<Promise<void>, [string]>().mockResolvedValue(undefined);
-    const inner: ConversationRunPort = { run, clearContext };
+    const inner: ConversationRunPort = { run, clearContext, compact: jest.fn() };
 
     const decorated = withRunMutex(inner, { waitMs: 1000 });
 
@@ -45,7 +45,7 @@ describe('withRunMutex (D-A, D-12, AC-1351)', () => {
       ends.push(Date.now());
       return { text: input.text, phase: 'chat', runId: input.text };
     });
-    const inner: ConversationRunPort = { run, clearContext: jest.fn() };
+    const inner: ConversationRunPort = { run, clearContext: jest.fn(), compact: jest.fn() };
     const decorated = withRunMutex(inner, { waitMs: 1000 });
 
     const first = decorated.run({ userId: 'u1', text: 'first' });
@@ -70,7 +70,7 @@ describe('withRunMutex (D-A, D-12, AC-1351)', () => {
       }
       return { text: 'ok', phase: 'chat', runId: input.userId };
     });
-    const inner: ConversationRunPort = { run, clearContext: jest.fn() };
+    const inner: ConversationRunPort = { run, clearContext: jest.fn(), compact: jest.fn() };
     const decorated = withRunMutex(inner, { waitMs: 1000 });
 
     const first = decorated.run({ userId: 'u1', text: 'a' });
@@ -92,7 +92,7 @@ describe('withRunMutex (D-A, D-12, AC-1351)', () => {
       }
       return { text: input.text, phase: 'chat', runId: input.text };
     });
-    const inner: ConversationRunPort = { run, clearContext: jest.fn() };
+    const inner: ConversationRunPort = { run, clearContext: jest.fn(), compact: jest.fn() };
     const decorated = withRunMutex(inner, { waitMs: 20 });
 
     const first = decorated.run({ userId: 'u1', text: 'first' });
@@ -122,7 +122,7 @@ describe('withRunMutex (D-A, D-12, AC-1351)', () => {
       await recordRun();
       return { text: input.text, phase: 'chat', runId: input.text };
     });
-    const inner: ConversationRunPort = { run, clearContext: jest.fn() };
+    const inner: ConversationRunPort = { run, clearContext: jest.fn(), compact: jest.fn() };
     const decorated = withRunMutex(inner, { waitMs: 20 });
 
     const first = decorated.run({ userId: 'u1', text: 'first' });
@@ -149,7 +149,7 @@ describe('withRunMutex (D-A, D-12, AC-1351)', () => {
     const clearContext = jest.fn<Promise<void>, [string]>().mockImplementation(async () => {
       order.push('clear');
     });
-    const inner: ConversationRunPort = { run, clearContext };
+    const inner: ConversationRunPort = { run, clearContext, compact: jest.fn() };
     const decorated = withRunMutex(inner, { waitMs: 1000 });
 
     const runPromise = decorated.run({ userId: 'u1', text: 'x' });
@@ -160,5 +160,32 @@ describe('withRunMutex (D-A, D-12, AC-1351)', () => {
     await Promise.all([runPromise, clearPromise]);
 
     expect(order).toEqual(['run-start', 'run-end', 'clear']);
+  });
+
+  it('compact is wrapped by the same mutex key as run — it must not race a run on the same userId', async () => {
+    const order: string[] = [];
+    const gate = deferred<void>();
+
+    const run = jest.fn<Promise<RunResult>, [RunInput]>().mockImplementation(async () => {
+      order.push('run-start');
+      await gate.promise;
+      order.push('run-end');
+      return { text: 'ok', phase: 'chat', runId: 'r' };
+    });
+    const compact = jest.fn<Promise<'compacted'>, [string]>().mockImplementation(async () => {
+      order.push('compact');
+      return 'compacted';
+    });
+    const inner: ConversationRunPort = { run, clearContext: jest.fn(), compact };
+    const decorated = withRunMutex(inner, { waitMs: 1000 });
+
+    const runPromise = decorated.run({ userId: 'u1', text: 'x' });
+    await new Promise(resolve => setTimeout(resolve, 5));
+    const compactPromise = decorated.compact('u1');
+
+    gate.resolve();
+    await Promise.all([runPromise, compactPromise]);
+
+    expect(order).toEqual(['run-start', 'run-end', 'compact']);
   });
 });
