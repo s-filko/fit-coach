@@ -1,3 +1,4 @@
+import { ActiveSessionExistsError } from '@domain/training/errors';
 import type {
   AutoCompletedExercise,
   CompletedSetDetail,
@@ -86,15 +87,12 @@ export class TrainingService implements ITrainingService {
   }
 
   async startSession(userId: string, dto: CreateSessionDto): Promise<WorkoutSession> {
-    // 1. Auto-close timed-out sessions
-    await this.autoCloseTimedOutSessions(userId);
-
-    // 2. Check for active session (only if starting a training session, not planning)
-    if (dto.status !== 'planning') {
-      const activeSession = await this.sessionRepo.findActiveByUserId(userId);
-      if (activeSession) {
-        throw new Error('You already have an active session. Please complete or skip it first.');
-      }
+    // 1-2. Auto-close timed-out sessions, then refuse when one is still active
+    // (only when starting a training session, not planning)
+    if (dto.status === 'planning') {
+      await this.autoCloseTimedOutSessions(userId);
+    } else {
+      await this.assertNoActiveSession(userId);
     }
 
     // 3. Create new session
@@ -120,14 +118,10 @@ export class TrainingService implements ITrainingService {
       throw new Error(`Cannot begin session in '${session.status}' status`);
     }
 
-    // INV-TRAINING-002: one in_progress session per user — same refusal (and same stale-session
-    // handling) as startSession. The partial unique index is the guarantee under a race; this check
-    // gives the ordinary case a readable error.
-    await this.autoCloseTimedOutSessions(session.userId);
-    const activeSession = await this.sessionRepo.findActiveByUserId(session.userId);
-    if (activeSession && activeSession.id !== sessionId) {
-      throw new Error('You already have an active session. Please complete or skip it first.');
-    }
+    // INV-TRAINING-002: one in_progress session per user. The partial unique index is the guarantee
+    // under a race (the repository turns the loser's violation into the same ActiveSessionExistsError);
+    // this check gives the ordinary case its readable refusal.
+    await this.assertNoActiveSession(session.userId, sessionId);
 
     return this.sessionRepo.update(sessionId, {
       status: 'in_progress',
@@ -463,6 +457,18 @@ export class TrainingService implements ITrainingService {
   }
 
   // --- Private helpers ---
+
+  /**
+   * INV-TRAINING-002, the one place the refusal is written: stale sessions are auto-closed first, then
+   * any active session other than `exceptSessionId` (the one being begun) refuses the caller.
+   */
+  private async assertNoActiveSession(userId: string, exceptSessionId?: string): Promise<void> {
+    await this.autoCloseTimedOutSessions(userId);
+    const activeSession = await this.sessionRepo.findActiveByUserId(userId);
+    if (activeSession && activeSession.id !== exceptSessionId) {
+      throw new ActiveSessionExistsError();
+    }
+  }
 
   /**
    * Resolves an exercise name to a catalog id: exact (case-insensitive) match first, then the

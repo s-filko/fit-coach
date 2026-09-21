@@ -13,6 +13,7 @@
  */
 import { inArray } from 'drizzle-orm';
 
+import { ActiveSessionExistsError } from '@domain/training/errors';
 import { TrainingService } from '@domain/training/services/training.service';
 
 import { db } from '@infra/db/drizzle';
@@ -154,13 +155,29 @@ describe('training persistence — exerciseName logging and one active session (
       await service.beginSession(a.id);
 
       let secondBegin: 'refused' | 'accepted' = 'accepted';
-      await service.beginSession(b.id).catch(() => {
+      let refusal: unknown;
+      await service.beginSession(b.id).catch((err: unknown) => {
         secondBegin = 'refused';
+        refusal = err;
       });
 
       const rows = await sessionRepo.findRecentByUserId(userId, 10);
       const inProgress = rows.filter(r => r.status === 'in_progress');
       expect({ secondBegin, inProgress: inProgress.length }).toEqual({ secondBegin: 'refused', inProgress: 1 });
+      expect(refusal).toBeInstanceOf(ActiveSessionExistsError);
+    });
+
+    it('startSession and beginSession refuse with the very same domain error', async () => {
+      const userId = await newUser('same_refusal');
+      await service.startSession(userId, {}); // in_progress
+      const planning = await service.startSession(userId, { status: 'planning' });
+
+      const fromStart = await service.startSession(userId, {}).catch((err: unknown) => err);
+      const fromBegin = await service.beginSession(planning.id).catch((err: unknown) => err);
+
+      expect(fromStart).toBeInstanceOf(ActiveSessionExistsError);
+      expect(fromBegin).toBeInstanceOf(ActiveSessionExistsError);
+      expect((fromBegin as Error).message).toBe((fromStart as Error).message);
     });
 
     it('two beginSession calls racing for the same user: exactly one wins, one in_progress row remains', async () => {
@@ -172,19 +189,50 @@ describe('training persistence — exerciseName logging and one active session (
 
       const rows = await sessionRepo.findRecentByUserId(userId, 10);
       expect(outcomes.filter(o => o.status === 'fulfilled')).toHaveLength(1);
-      expect(outcomes.filter(o => o.status === 'rejected')).toHaveLength(1);
+      const rejected = outcomes.filter((o): o is PromiseRejectedResult => o.status === 'rejected');
+      expect(rejected).toHaveLength(1);
+      // Whichever way the loser lost (readable check or the index), it is the domain error — never a driver error.
+      expect(rejected[0].reason).toBeInstanceOf(ActiveSessionExistsError);
       expect(rows.filter(r => r.status === 'in_progress')).toHaveLength(1);
       expect(rows.filter(r => r.status === 'planning')).toHaveLength(1);
     });
 
-    it('the database itself refuses a second in_progress row, bypassing the service', async () => {
+    it('the race loser — past the readable check, refused by the index — gets the same domain error, never a driver error', async () => {
+      const userId = await newUser('loser_path');
+      const a = await service.startSession(userId, { status: 'planning' });
+      const b = await service.startSession(userId, { status: 'planning' });
+      // Both callers read "no active session" before either wrote: the check is blind, only the index can refuse.
+      const blindRepo = Object.assign(Object.create(sessionRepo) as WorkoutSessionRepository, {
+        findActiveByUserId: async () => null,
+      });
+      const blindService = new TrainingService(
+        new WorkoutPlanRepository(),
+        blindRepo,
+        new ExerciseRepository(),
+        new SessionExerciseRepository(),
+        new SessionSetRepository(),
+        userRepo,
+      );
+      await blindService.beginSession(a.id);
+
+      const loser = await blindService.beginSession(b.id).catch((err: unknown) => err);
+
+      expect(loser).toBeInstanceOf(ActiveSessionExistsError);
+      expect((loser as Error).name).not.toMatch(/Drizzle|Database/);
+      const rows = await sessionRepo.findRecentByUserId(userId, 10);
+      expect(rows.filter(r => r.status === 'in_progress')).toHaveLength(1);
+    });
+
+    it('the database itself refuses a second in_progress row, bypassing the service — as the domain error', async () => {
       const userId = await newUser('db_index');
       const a = await service.startSession(userId, { status: 'planning' });
       const b = await service.startSession(userId, { status: 'planning' });
       await sessionRepo.update(a.id, { status: 'in_progress', startedAt: new Date() });
 
       // The lifecycle handler writes through the repository, not the service — the index must still hold.
-      await expect(sessionRepo.update(b.id, { status: 'in_progress', startedAt: new Date() })).rejects.toThrow();
+      await expect(sessionRepo.update(b.id, { status: 'in_progress', startedAt: new Date() })).rejects.toBeInstanceOf(
+        ActiveSessionExistsError,
+      );
     });
   });
 });
