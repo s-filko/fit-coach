@@ -54,9 +54,9 @@
 
 **Interfaces:** registerBotHandlers with a fake Telegram emitter and mocked axios transport; actual server route + buildConversationRunner with missing IUserService user. Do not mock the route's returned status to 404: that would assume the fix.
 
-- [ ] AC-RRP-4: send message A then B from distinct msg.from.id in one group chat; drain handlers. Assert B is rejected before conversation processing OR its chat request uses its own registered user ID, never A's. A separate private-chat case must succeed.
-- [ ] AC-RRP-5: invoke actual runner through actual /api/bot/chat route for missing user; assert HTTP 404. In the bot fixture, a real-shaped 404 clears the cache and the next message upserts; keep server status mismatch as the RED proof and cache branch as the positive control. Do not auto-retry mutations.
-- [ ] Run from bot: `npx jest --runInBand --testMatch='**/review-handlers.repro.test.ts'`; from server: `RUN_DB_TESTS=1 NODE_ENV=test npx jest --runInBand --testMatch='**/review-user-recovery.repro.test.ts'`. Record assertion-level RED, then run bot default tests and server unit/scenario suites. Commit tests/evidence only; worker_done and STOP.
+- [x] AC-RRP-4: send message A then B from distinct msg.from.id in one group chat; drain handlers. Assert B is rejected before conversation processing OR its chat request uses its own registered user ID, never A's. A separate private-chat case must succeed.
+- [x] AC-RRP-5: invoke actual runner through actual /api/bot/chat route for missing user; assert HTTP 404. In the bot fixture, a real-shaped 404 clears the cache and the next message upserts; keep server status mismatch as the RED proof and cache branch as the positive control. Do not auto-retry mutations.
+- [x] Run from bot: `npx jest --runInBand --testMatch='**/review-handlers.repro.test.ts'`; from server: `RUN_DB_TESTS=1 NODE_ENV=test npx jest --runInBand --testMatch='**/review-user-recovery.repro.test.ts'`. Record assertion-level RED, then run bot default tests and server unit/scenario suites. Commit tests/evidence only; worker_done and STOP.
 
 ### Task 3: Memory deletion evidence (RED only, after Task 2 review)
 
@@ -124,3 +124,28 @@ A first run of each repro file failed on test-side setup (TS2551 wrong property 
 ### Coordinator checkpoint — Task 1
 
 Reviewed both test files and confirmed no production diff. Independently reran both explicit repro files: exit 1, five intended failing assertions and five passing controls. Worker reports model claude-sonnet-5. Existing scenario command exit 134 remains a verification limitation until a clean independent run; no claim that this is harmless.
+
+### Task 2 evidence (worker: Claude Sonnet 5 / `claude-sonnet-5`, 2026-09-21)
+
+Base HEAD before work: c1cd8e03. Tests commit: 7bb9d11c. Files: `apps/bot/__tests__/review-handlers.repro.test.ts`, `apps/server/tests/integration/review-user-recovery.repro.test.ts`. No production file changed (`git diff c1cd8e03..HEAD --stat` lists only the two new test files and this plan).
+
+| Command | Exit | Result |
+|---|---|---|
+| `cd apps/bot && npx jest --runInBand --testMatch='**/review-handlers.repro.test.ts'` | 1 | 4 tests: 3 controls pass, 1 RED |
+| `cd apps/server && RUN_DB_TESTS=1 NODE_ENV=test npx jest --runInBand --testMatch='**/review-user-recovery.repro.test.ts'` | 134 | 2 tests: 1 control pass, 1 RED; jest reports `Tests: 1 failed, 1 passed`, then the process aborts at exit with the same `libc++abi: mutex lock failed` teardown noise as Task 1 (so the exit code is 134, not 1) |
+| `cd apps/bot && npx jest` (default suite) | 0 | 4 suites, 22 tests passed |
+| `cd apps/server && npm run test:unit -- --silent --verbose=false` | 0 | 118 suites, 1112 tests, 59 snapshots passed |
+| `cd apps/server && npm run test:scenarios -- --silent --verbose=false` | 134 | 5 suites, 306 passed + 1 todo; same known teardown abort |
+
+Also: `npm run type-check` (server) exit 0, `npx tsc --noEmit` (bot) exit 0, eslint 0 errors on the new server file (a first max-len error was fixed before commit). Mocking: bot test replaces only `axios.create` (real `AxiosError`/`isAxiosError`), the logger, and the fake bot's `sendMessage`/`sendChatAction`; the real `registerBotHandlers` is driven through a fake `EventEmitter` and per-test `jest.isolateModules` (handlers.ts keeps its cache at module level). Server test does NOT override `CONVERSATION_RUN_PORT_TOKEN`: the real `buildConversationRunner` (behind `withRunMutex`) and real route answer; only the model beneath the gateway is scripted (`installScriptedModel`).
+
+**AC-RRP-4 — CONFIRMED, `review-handlers.repro.test.ts`**
+- RED `never sends sender B's message under sender A's internal userId`: group chat -100, sender 111 then sender 222; `expect(bCalls.map(c => c.userId)).not.toContain(aCall.userId)` fails — Expected not `"internal-111-1"`, Received `["internal-111-1"]`. The bot cached the first sender's id under `chatId` and sent B's message as A. Either rejecting B or using `internal-222-*` would pass; no policy chosen.
+- Controls PASS: a private chat registers once and every chat request carries its own id; two private chats keep two identities (`internal-111-1`, `internal-222-2`).
+
+**AC-RRP-5 — CONFIRMED (server status), bot recovery branch is a control**
+- RED `a userId that does not exist -> HTTP 404` (real route + real runner, random UUID): `expect(res.statusCode).toBe(404)` — Expected 404, Received 500 (runner throws a plain `Error('User ... not found')`, the route maps it to 500 `CORE_ERROR`).
+- Control PASS (server): an existing user through the same route + runner + auth returns 200 with content.
+- Control PASS (bot): a real-shaped `AxiosError` 404 on `/api/bot/chat` -> exactly one chat attempt for that message (no auto-retry), one error text sent, and the NEXT message re-upserts the user (`userUpserts == ['111','111']`) and sends under the new id `internal-111-2`. So the bot contract is intact; the only defect is that the server never produces the 404.
+
+**AC-RRP-7** for Task 2: both findings reproduce with behavioral assertion failures; none unconfirmed. **AC-RRP-8** for Task 2: bot default 22/22, server unit 1112/1112, scenario assertions pass (exit 134 limitation as in Task 1); production diff empty.
