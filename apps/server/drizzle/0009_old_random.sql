@@ -1,0 +1,1 @@
+ALTER TYPE "public"."fact_archived_reason" ADD VALUE 'user_deleted' BEFORE 'expired';

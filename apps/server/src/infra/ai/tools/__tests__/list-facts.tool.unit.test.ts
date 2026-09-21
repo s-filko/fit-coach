@@ -54,7 +54,7 @@ function makeFactsService(rows: { active: UserFact[]; archived: UserFact[] }): j
     getConstraints: jest.fn(),
     rememberFact: jest.fn(),
     retractFact: jest.fn(),
-    deleteFact: jest.fn(),
+    forgetFact: jest.fn(),
     // The real port's contract: archived rows come back ONLY when asked.
     listFacts: jest.fn(async (_userId: string, includeArchived: boolean) => ({
       active: rows.active,

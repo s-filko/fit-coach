@@ -281,7 +281,7 @@ export const FactRowExpectSchema = z.object({
   fact: z.string().min(1),
   status: z.enum(['active', 'archived']).optional(),
   count: z.number().int().nonnegative().optional(),
-  archivedReason: z.enum(['user_closed', 'expired', 'superseded']).nullable().optional(),
+  archivedReason: z.enum(['user_closed', 'user_deleted', 'expired', 'superseded']).nullable().optional(),
   /** true = `closed_by_user_at` set, false = null. */
   closedByUser: z.boolean().optional(),
   durability: z.enum(['permanent', 'long_term', 'short']).optional(),

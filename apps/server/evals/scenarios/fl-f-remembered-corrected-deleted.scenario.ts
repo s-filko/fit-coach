@@ -9,11 +9,14 @@ import { pastWith } from './fl-shared';
  *
  * The user asks what the coach remembers (`list_facts`); says the knee is
  * actually the RIGHT one (a correction: same row, rewritten text, one more
- * confirmation) and asks to erase the sleep note entirely (`delete`: no row,
- * no trace — a different operation from a retraction, never silently swapped).
- * The next listing reflects both. The ending is in the database: the corrected
- * row carries the new text under the same id, and nothing at all matches the
- * deleted one — not even an archived row.
+ * confirmation) and asks to erase the sleep note entirely (`delete`). Owner
+ * decision 2026-09-21: nothing is ever removed — `delete` ARCHIVES the row with
+ * its own reason (`user_deleted`) while the coach tells the user it is gone, and
+ * a deleted fact is not shown again, not even when the listing asks for archived
+ * facts. The next listing (with `includeArchived`) reflects both. The ending is
+ * in the database: the corrected row carries the new text under the same id, and
+ * the deleted one is an ARCHIVED `user_deleted` row (history kept for any
+ * recurrence count) that no listing shows.
  */
 
 export const KNEE_OLD = 'Left knee: recovering from a meniscus repair';
@@ -89,7 +92,7 @@ export const scenario: Scenario = {
         {
           toolCall: {
             name: 'manage_fact',
-            args: { operation: 'delete', factQuery: 'Sleeps badly', confirmed: true },
+            args: { operation: 'delete', factQuery: 'Sleeps badly' },
           },
         },
         { text: 'Поправил: правое колено. Запись про сон удалена полностью.' },
@@ -102,9 +105,16 @@ export const scenario: Scenario = {
             { fact: KNEE_NEW, status: 'active', count: 1, confirmations: 2, supersedes: false },
             { fact: KNEE_OLD, count: 0 },
             { fact: EQUIPMENT_FACT, status: 'active' },
+            // Deleted = ARCHIVED under its own reason, the user's word stamped — never removed.
+            {
+              fact: SLEEP_FACT,
+              status: 'archived',
+              count: 1,
+              archivedReason: 'user_deleted',
+              closedByUser: true,
+              confirmations: 1,
+            },
           ],
-          // Deleted OUTRIGHT: not active, not archived — no row at all.
-          factsAbsent: [SLEEP_FACT],
         },
       },
     },
@@ -112,7 +122,8 @@ export const scenario: Scenario = {
       action: 'user',
       text: 'Что ты помнишь теперь?',
       script: [
-        { toolCall: { name: 'list_facts', args: {} } },
+        // includeArchived: the deleted fact must STILL not surface.
+        { toolCall: { name: 'list_facts', args: { includeArchived: true } } },
         { text: 'Теперь: домашний зал со штангой и восстановление правого колена.' },
       ],
       expect: {
@@ -123,8 +134,10 @@ export const scenario: Scenario = {
           facts: [
             { fact: KNEE_NEW, status: 'active', count: 1 },
             { fact: EQUIPMENT_FACT, status: 'active' },
+            // Asking again changes nothing: still exactly one archived user_deleted row.
+            { fact: SLEEP_FACT, status: 'archived', count: 1, archivedReason: 'user_deleted' },
           ],
-          factsAbsent: [SLEEP_FACT, KNEE_OLD],
+          factsAbsent: [KNEE_OLD], // the old text is gone (rewritten in place), not archived
         },
       },
     },

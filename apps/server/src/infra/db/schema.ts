@@ -174,7 +174,12 @@ export const conversationSummaries = pgTable(
 export const factDurabilityEnum = pgEnum('fact_durability', ['permanent', 'long_term', 'short']);
 export const factOnExpiryEnum = pgEnum('fact_on_expiry', ['forget', 'ask_once']);
 export const factStatusEnum = pgEnum('fact_status', ['active', 'archived']);
-export const factArchivedReasonEnum = pgEnum('fact_archived_reason', ['user_closed', 'expired', 'superseded']);
+export const factArchivedReasonEnum = pgEnum('fact_archived_reason', [
+  'user_closed',
+  'user_deleted',
+  'expired',
+  'superseded',
+]);
 
 // Durable user facts (ADR-0009 table shape and FactCategory values). Writes are
 // select-then-branch in the repository (fact-lifecycle Tasks 2-3): a new active

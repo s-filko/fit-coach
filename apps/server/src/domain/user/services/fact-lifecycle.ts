@@ -19,8 +19,13 @@ export type FactOnExpiry = 'forget' | 'ask_once';
 /** A fact is active or archived — archiving is the only soft closure (AC-FL-2). */
 export type FactStatus = 'active' | 'archived';
 
-/** Why a fact was archived. */
-export type FactArchivedReason = 'user_closed' | 'expired' | 'superseded';
+/**
+ * Why a fact was archived. `user_closed` = "no longer true" (the user's word);
+ * `user_deleted` = "I do not want it stored" — from the user's side it is GONE:
+ * nothing is ever removed (history is what recurrence counting reads), but a
+ * deleted fact is never surfaced again, not even in the archived listing.
+ */
+export type FactArchivedReason = 'user_closed' | 'user_deleted' | 'expired' | 'superseded';
 
 /** `as const` tuples (not `readonly T[]`) so `z.enum(...)` infers the literal unions. */
 export const FACT_DURABILITIES = ['permanent', 'long_term', 'short'] as const satisfies readonly FactDurability[];
