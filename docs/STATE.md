@@ -18,6 +18,7 @@ _Generated 2026-09-21 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `llm-io-audit-trail.md` — LLM I/O Audit Trail — Nothing the User Wrote, the Model Answered, or the API Received Is Lost Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
+- `session-2026-09-21-repro.md` — Live-Session Findings (BUG-022…BUG-030) — Reproduction Before Remediation Implementation Plan
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
@@ -75,16 +76,20 @@ _Generated 2026-09-21 from docs/superpowers/plans/ + git. Never hand-edit; regen
 on dev (`fa293e20`, model `google/gemini-3.8-flash`) produced nine bugs, **BUG-022…BUG-030**, with
 evidence in `BUGS.md`. Order of work set by the owner:
 
-1. `llm-io-audit-trail` (planned, above) — observability first: the user's message, the model's
-   answer and the exact API request must survive every run. Four runs that day left no trace of what
-   the user wrote, and BUG-022 was first written up wrong because the DB transcript and the context
-   the model saw disagree.
-2. Prompt defects in **small strokes, one BUG per change**, each verified against an eval set rather
+1. **`session-2026-09-21-repro` first (owner, 2026-09-22): reproduction before remediation.** No fix
+   starts until a test catches the defect on unchanged production. Coverage was checked before the
+   plan was written — `durationSeconds` is untested, and `tool-policy.unit.test.ts:67-76` currently
+   *pins* the ordering defect behind BUG-027. The plan also states which findings (BUG-022/024/026/028)
+   no deterministic test can catch; those become eval-case drafts, with no model run.
+2. `llm-io-audit-trail` — observability: the user's message, the model's answer and the exact API
+   request must survive every run. Four runs on 2026-09-21 left no trace of what the user wrote, and
+   BUG-022 was first written up wrong because the DB transcript and the context the model saw disagree.
+3. Prompt defects in **small strokes, one BUG per change**, each verified against an eval set rather
    than by impression (`BACKLOG.md` § Ideas — eval cases from real sessions). Heaviest first:
    BUG-030 (the "previous session" is picked by exact `session_key` and dated nowhere — a seven-month-old
    workout was quoted as last time), BUG-022 (session planning confirms sets it cannot log),
    BUG-024, BUG-023.
-3. Code defects independent of the model: BUG-027 (deletion runs unconfirmed because tool priorities
+4. Code defects independent of the model: BUG-027 (deletion runs unconfirmed because tool priorities
    put `log_set` before `delete_last_sets`), BUG-025, BUG-029 (folded into the audit-trail plan).
 
 **Model choice is deliberately open.** Dev moved to `google/gemini-3.8-flash` via OpenRouter; the
