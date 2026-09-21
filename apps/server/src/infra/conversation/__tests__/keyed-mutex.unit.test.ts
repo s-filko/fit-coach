@@ -109,7 +109,7 @@ describe('createKeyedMutex (D-12, ADR-0013 §6)', () => {
   });
 
   it('ADR-0013 §6: HTTP_STATUS_BY_CODE covers every declared ConversationErrorCode', () => {
-    const codes: ConversationErrorCode[] = ['LLM_UNAVAILABLE', 'THREAD_BUSY', 'CORE_ERROR'];
+    const codes: ConversationErrorCode[] = ['LLM_UNAVAILABLE', 'THREAD_BUSY', 'USER_NOT_FOUND', 'CORE_ERROR'];
 
     for (const code of codes) {
       expect(HTTP_STATUS_BY_CODE[code]).toBeDefined();

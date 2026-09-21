@@ -1,23 +1,16 @@
 /**
- * Review regression proof — Task 2, server half of AC-RRP-5
- * (docs/superpowers/plans/review-regression-proof.md).
+ * Missing user through the real runner and chat routes (AC-RRP-5) — promoted from
+ * review-user-recovery.repro.test.ts.
  *
- * REPRODUCTION on UNCHANGED production code: POST /api/bot/chat for a userId
- * that no longer exists. The bot's recovery contract (apps/bot/handlers.ts —
- * `isNotFound`: a 404 clears its userId cache so the next message re-upserts)
- * is only reachable if the server answers 404. The REAL route and the REAL
- * runner (buildConversationRunner behind withRunMutex, wired by
- * registerInfraServices) are used; the status is never stubbed. Today the
- * runner throws a plain `Error('User … not found')`, which the route maps to
- * 500 CORE_ERROR — the bot then keeps the stale id forever.
+ * The bot's recovery contract (apps/bot/handlers.ts — `isNotFound`: a 404 clears its cached
+ * userId so the next message re-registers) is only reachable if the server answers 404. The REAL
+ * routes and the REAL runner (buildConversationRunner behind withRunMutex, wired by
+ * registerInfraServices) are used; the status is never stubbed. The runner throws a typed
+ * UserNotFoundError (code USER_NOT_FOUND, ADR-0013 §6 family); the body carries only the code.
  *
- * Only the model beneath the gateway is scripted (the missing-user run never
- * reaches it; the positive control does). The control proves the same route +
- * runner + auth path returns 200 for an existing user.
- *
- * *.repro.test.ts is outside every default suite. Run explicitly:
- *   RUN_DB_TESTS=1 NODE_ENV=test npx jest --runInBand --testMatch='**\/review-user-recovery.repro.test.ts'
- * Promoted to *.integration.test.ts when the fix lands.
+ * Only the model beneath the gateway is scripted (a missing-user run never reaches it; the
+ * positive control does). The control proves the same route + runner + auth path returns 200
+ * for an existing user.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -38,7 +31,7 @@ import { installScriptedModel } from './scenarios/scripted-model';
 // Must precede the graph wiring (registerInfraServices) — see scripted-model.ts.
 installScriptedModel();
 
-describe('review repro — missing user through the real runner and chat route (AC-RRP-5)', () => {
+describe('missing user through the real runner and chat routes (AC-RRP-5)', () => {
   let app: Awaited<ReturnType<typeof buildServer>>;
   let conversationRun: { clearContext(userId: string): Promise<void> };
   const createdUserIds: string[] = [];
@@ -84,10 +77,25 @@ describe('review repro — missing user through the real runner and chat route (
     expect(typeof res.json().data.content).toBe('string');
   });
 
-  it('a userId that does not exist → HTTP 404 (the status the bot recovers from)', async () => {
-    const res = await postChat(randomUUID(), 'hi');
+  it('a userId that does not exist → HTTP 404 with a code-only body (the status the bot recovers from)', async () => {
+    const missing = randomUUID();
 
-    // Unchanged code: 500 { error: { code: 'CORE_ERROR' } } — the not-found fact is a generic core error.
+    const res = await postChat(missing, 'hi');
+
     expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: { code: 'USER_NOT_FOUND' } });
+    expect(res.body).not.toContain(missing); // INV-LLM-006: no exception text, no id echo
+  });
+
+  it('/chat/compact for a userId that does not exist answers the same typed 404', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/bot/chat/compact',
+      headers: { 'x-api-key': process.env.BOT_API_KEY! },
+      payload: { userId: randomUUID() },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: { code: 'USER_NOT_FOUND' } });
   });
 });

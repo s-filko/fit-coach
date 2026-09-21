@@ -1,6 +1,6 @@
 import { errorTextFor } from '../error-text';
 
-const CODES = ['LLM_UNAVAILABLE', 'THREAD_BUSY', 'CORE_ERROR'] as const;
+const CODES = ['LLM_UNAVAILABLE', 'THREAD_BUSY', 'USER_NOT_FOUND', 'CORE_ERROR'] as const;
 
 describe('errorTextFor (AC-1354, D-F)', () => {
     it.each(CODES)('AC-1354: %s — ru returns the ru string, en/undefined/other returns the en string', (code) => {

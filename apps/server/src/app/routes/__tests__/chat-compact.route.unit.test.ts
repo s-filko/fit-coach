@@ -11,7 +11,7 @@ import { registerErrorHandler } from '@app/middlewares/error';
 import botSecurityPlugin from '@app/plugins/bot-security.plugin';
 import chatRoutesPlugin from '@app/plugins/chat-routes.plugin';
 
-import { CoreError, LlmUnavailableError, ThreadBusyError } from '@domain/conversation/ports';
+import { CoreError, LlmUnavailableError, ThreadBusyError, UserNotFoundError } from '@domain/conversation/ports';
 
 import { loadConfig } from '@config/index';
 
@@ -75,6 +75,7 @@ describe('POST /api/bot/chat/compact', () => {
   it.each([
     [new LlmUnavailableError('secret provider detail'), 503, 'LLM_UNAVAILABLE'],
     [new ThreadBusyError('secret detail'), 409, 'THREAD_BUSY'],
+    [new UserNotFoundError('secret-user-id'), 404, 'USER_NOT_FOUND'],
     [new CoreError('secret detail'), 500, 'CORE_ERROR'],
     [new Error('secret detail'), 500, 'CORE_ERROR'],
   ])('maps %p to %i with a code-only body', async (err, status, code) => {

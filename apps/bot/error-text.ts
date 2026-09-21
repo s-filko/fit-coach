@@ -13,7 +13,7 @@
  * `langOf`.
  */
 
-export type ConversationErrorCode = 'LLM_UNAVAILABLE' | 'THREAD_BUSY' | 'CORE_ERROR';
+export type ConversationErrorCode = 'LLM_UNAVAILABLE' | 'THREAD_BUSY' | 'USER_NOT_FOUND' | 'CORE_ERROR';
 
 interface Bilingual {
     en: string;
@@ -28,6 +28,11 @@ const TEXTS: Record<ConversationErrorCode, Bilingual> = {
     THREAD_BUSY: {
         en: "You already have a message being processed. Please wait for that reply before sending another.",
         ru: 'Твоё предыдущее сообщение ещё обрабатывается. Пожалуйста, дождись ответа перед тем, как отправить новое.',
+    },
+    // The handler clears its cached id on the 404 that carries this code, so a resend re-registers.
+    USER_NOT_FOUND: {
+        en: 'Something got out of sync on my side. Please send your message again.',
+        ru: 'Что-то рассинхронизировалось на моей стороне. Пожалуйста, отправь сообщение ещё раз.',
     },
     CORE_ERROR: {
         en: 'Something went wrong on our side. Please try again in a minute.',

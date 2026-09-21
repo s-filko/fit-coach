@@ -1,25 +1,16 @@
 /**
- * Review regression proof — Task 2, AC-RRP-4 and the bot half of AC-RRP-5
- * (docs/superpowers/plans/review-regression-proof.md).
+ * Bot identity and stale-user recovery (AC-RRP-4, bot half of AC-RRP-5) — promoted from
+ * review-handlers.repro.test.ts.
  *
- * The REAL `registerBotHandlers` runs against a fake Telegram emitter; only the
- * external IO is mocked: axios (the server transport) and the bot's
- * sendMessage / sendChatAction. `axios.isAxiosError` and `AxiosError` stay real.
+ * The REAL `registerBotHandlers` runs against a fake Telegram emitter; only the external IO is
+ * mocked: axios (the server transport) and the bot's sendMessage / sendChatAction.
+ * `axios.isAxiosError` and `AxiosError` stay real.
  *
- * AC-RRP-4 (RED on unchanged code): the userId cache in handlers.ts is keyed by
- * `chatId`, not by sender. In a group chat the first sender's internal userId is
- * cached for the whole chat, so a second sender's messages are sent to
- * /api/bot/chat under the FIRST sender's identity. Either outcome that keeps
- * identities apart passes: B rejected before any chat request, or B's request
- * carrying B's own registered id. No group policy is chosen here.
- *
- * Controls (PASS on unchanged code): private chats stay valid, and a real-shaped
- * 404 clears the cache so the next message re-upserts (no auto-retry).
- *
- * *.repro.test.ts is outside the default suite (jest.config.cjs matches only
- * *.unit.test.ts). Run explicitly:
- *   npx jest --runInBand --testMatch='**\/review-handlers.repro.test.ts'
- * The RED test is promoted to *.unit.test.ts when the fix lands.
+ * AC-RRP-4: the bot serves PRIVATE chats only (owner decision 2026-09-21). In any other chat it
+ * makes no API call at all and answers once per chat, so one sender's words can never be sent
+ * under another sender's internal userId. The identity cache is keyed by the sender, not the chat.
+ * Controls: private chats stay valid, and a real-shaped 404 clears the cache so the next message
+ * re-upserts (no auto-retry of the failed message).
  */
 import { EventEmitter } from 'events';
 
@@ -112,28 +103,54 @@ function message(opts: { chatId: number; type: 'private' | 'group'; fromId: numb
 }
 
 function notFound(): AxiosError {
-    const response = { status: 404, statusText: 'Not Found', data: { error: { message: 'User not found' } }, headers: {}, config: {} } as AxiosResponse;
+    const response = { status: 404, statusText: 'Not Found', data: { error: { code: 'USER_NOT_FOUND' } }, headers: {}, config: {} } as AxiosResponse;
     return new AxiosError('Request failed with status code 404', 'ERR_BAD_REQUEST', undefined, undefined, response);
 }
 
-describe('review repro — bot identity and stale-user recovery (AC-RRP-4, AC-RRP-5 bot half)', () => {
-    describe('AC-RRP-4 — two senders in one group chat', () => {
-        it("never sends sender B's message under sender A's internal userId", async () => {
+describe('bot identity and stale-user recovery (AC-RRP-4, AC-RRP-5 bot half)', () => {
+    describe('AC-RRP-4 — non-private chats are refused, quietly', () => {
+        it('two senders in one group: no API call at all, exactly one notice for the chat', async () => {
             const h = setup();
-            const groupA = message({ chatId: -100, type: 'group', fromId: 111, text: 'from A' });
-            const groupB = message({ chatId: -100, type: 'group', fromId: 222, text: 'from B' });
 
-            await h.deliver(groupA);
-            await h.deliver(groupB);
+            await h.deliver(message({ chatId: -100, type: 'group', fromId: 111, text: 'from A' }));
+            await h.deliver(message({ chatId: -100, type: 'group', fromId: 222, text: 'from B' }));
+            await h.deliver(message({ chatId: -100, type: 'group', fromId: 111, text: '/start' }));
 
-            const aCall = h.chatCalls.find((c) => c.message === 'from A');
-            const bCalls = h.chatCalls.filter((c) => c.message === 'from B');
-            expect(aCall?.userId).toMatch(/^internal-111-/);
-            // Rejected before conversation processing (no B call) passes; B under its own id passes; B under A's id fails.
-            expect(bCalls.map((c) => c.userId)).not.toContain(aCall?.userId);
-            for (const c of bCalls) {
-                expect(c.userId).toMatch(/^internal-222-/);
-            }
+            expect(mockPost).not.toHaveBeenCalled();
+            expect(h.userUpserts).toEqual([]);
+            expect(h.chatCalls).toEqual([]);
+            expect(h.bot.sendMessage).toHaveBeenCalledTimes(1);
+            expect(h.bot.sendMessage).toHaveBeenCalledWith(-100, expect.stringContaining('private chat'));
+            expect(h.bot.sendChatAction).not.toHaveBeenCalled();
+        });
+
+        it('every non-private chat type is refused, each chat gets its own single notice, in the sender language', async () => {
+            const h = setup();
+            const send = (chatId: number, type: string, lang?: string) =>
+                h.deliver({
+                    ...message({ chatId, type: 'group', fromId: 1, text: 'hello' }),
+                    chat: { id: chatId, type },
+                    from: { id: 1, is_bot: false, first_name: 'x', language_code: lang },
+                } as TelegramBot.Message);
+
+            await send(-1, 'group');
+            await send(-2, 'supergroup', 'ru');
+            await send(-3, 'channel');
+            await send(-1, 'group');
+            await send(-2, 'supergroup', 'ru');
+
+            expect(mockPost).not.toHaveBeenCalled();
+            expect(h.bot.sendMessage.mock.calls.map((c) => c[0])).toEqual([-1, -2, -3]);
+            expect(h.bot.sendMessage.mock.calls[1][1]).toContain('личном чате');
+        });
+
+        it('a refused group does not disturb the private chat of the same person', async () => {
+            const h = setup();
+
+            await h.deliver(message({ chatId: -100, type: 'group', fromId: 111, text: 'in group' }));
+            await h.deliver(message({ chatId: 111, type: 'private', fromId: 111, text: 'in private' }));
+
+            expect(h.chatCalls).toEqual([{ userId: 'internal-111-1', message: 'in private' }]);
         });
     });
 
@@ -158,6 +175,18 @@ describe('review repro — bot identity and stale-user recovery (AC-RRP-4, AC-RR
             expect(h.chatCalls.map((c) => c.userId)).toEqual(['internal-111-1', 'internal-222-2']);
         });
 
+        it('the identity cache follows the SENDER, not the chat id', async () => {
+            const h = setup();
+
+            // Same sender id arriving under two different chat ids (private chats coincide with the
+            // sender in production; this pins that the key is the sender, not that coincidence).
+            await h.deliver(message({ chatId: 500, type: 'private', fromId: 111, text: 'one' }));
+            await h.deliver(message({ chatId: 501, type: 'private', fromId: 111, text: 'two' }));
+
+            expect(h.userUpserts).toEqual(['111']);
+            expect(h.chatCalls.map((c) => c.userId)).toEqual(['internal-111-1', 'internal-111-1']);
+        });
+
         it('a real-shaped chat 404 clears the cache; the next message re-upserts; the failed message is not retried', async () => {
             let fail = true;
             const h = setup({
@@ -174,7 +203,8 @@ describe('review repro — bot identity and stale-user recovery (AC-RRP-4, AC-RR
             // The first chat request hit the 404: user was upserted once, no second attempt was made.
             expect(h.userUpserts).toEqual(['111']);
             expect(h.chatCalls).toEqual([{ userId: 'internal-111-1', message: 'first' }]);
-            expect(h.bot.sendMessage).toHaveBeenCalledTimes(1); // the error text
+            expect(h.bot.sendMessage).toHaveBeenCalledTimes(1); // the error text — the typed one, not the generic fallback
+            expect(h.bot.sendMessage).toHaveBeenCalledWith(500, expect.stringContaining('send your message again'));
 
             await h.deliver(message({ chatId: 500, type: 'private', fromId: 111, text: 'second' }));
 
