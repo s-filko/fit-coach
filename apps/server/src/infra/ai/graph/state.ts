@@ -65,6 +65,13 @@ export const RunContext = Annotation.Root({
   client: Annotation<'telegram' | 'webapp'>(),
   trigger: Annotation<'user_message' | 'system'>(),
   metrics: Annotation<RunMetricsCollector>(),
+  /**
+   * The manual-compaction pass (`/compact`): `prepare` runs the compact step
+   * with reason 'manual' and ends the run — no agent, no commit. No message
+   * was appended, so there is no "current run": the whole channel is
+   * foldable. Absent on every ordinary run.
+   */
+  compactOnly: Annotation<boolean | undefined>(),
 });
 
 export type RunContextType = typeof RunContext.State;

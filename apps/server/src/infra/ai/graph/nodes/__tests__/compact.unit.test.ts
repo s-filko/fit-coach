@@ -263,6 +263,55 @@ describe('planCompaction (AC-CC-1 — the verbatim tail; D-I — the cut never s
   });
 });
 
+describe('planCompaction — manual (/compact keeps NO tail)', () => {
+  const history: BaseMessage[] = [
+    human('h1', 'первый вопрос'),
+    ai('a1', 'первый ответ'),
+    human('h2', 'второй вопрос'),
+    ...toolTurn('t2'),
+    ai('a2', 'второй ответ'),
+  ];
+  const base = { history, reason: 'manual' as const, historyBudget: 1_000_000, estimate: estimateMessages };
+
+  it('removes everything up to now, however large keepTurns is — an explicit command is not a surprise truncation', () => {
+    const { removed, kept } = planCompaction({ ...base, keepTurns: 6, minTurns: 0, minTokens: 0 });
+
+    expect(removed).toEqual(history);
+    expect(kept).toEqual([]);
+  });
+
+  it('the same history under an automatic trigger DOES keep its tail', () => {
+    const { removed, kept } = planCompaction({
+      ...base,
+      reason: 'inactivity',
+      keepTurns: 1,
+      minTurns: 0,
+      minTokens: 0,
+    });
+
+    expect(kept).toEqual(history.slice(2));
+    expect(removed).toEqual(history.slice(0, 2));
+  });
+
+  it('keeps the min-turns / min-tokens guard: a too-short conversation removes nothing', () => {
+    expect(planCompaction({ ...base, keepTurns: 0, minTurns: 3, minTokens: 0 })).toEqual({
+      removed: [],
+      kept: history,
+    });
+    expect(planCompaction({ ...base, keepTurns: 0, minTurns: 0, minTokens: 1_000_000 })).toEqual({
+      removed: [],
+      kept: history,
+    });
+  });
+
+  it('an empty channel removes nothing', () => {
+    expect(planCompaction({ ...base, history: [], keepTurns: 0, minTurns: 0, minTokens: 0 })).toEqual({
+      removed: [],
+      kept: [],
+    });
+  });
+});
+
 describe('isShortEpisode (D-B — too short to summarise: compaction defers)', () => {
   const oneTurn: BaseMessage[] = [human('h1', 'ок'), ai('a1', 'хорошо')];
   const twoTurns: BaseMessage[] = [...oneTurn, human('h2', 'а план?'), ai('a2', 'вот план')];
