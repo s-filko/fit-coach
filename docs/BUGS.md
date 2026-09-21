@@ -1544,8 +1544,13 @@ Two independent defects produce this:
    often carry their own date (`hist_20260916_lower`, `upper_a_press_20260920_v2`,
    `upper_short_vsculpt_20260917`), so the lookup either finds nothing or, as here, reaches
    arbitrarily far back. The user's actual leg sessions — 09-09, 09-12, 09-16 — were invisible.
-2. **`buildPreviousSessionSection` renders no date.** Nothing in the block says when that session
-   happened, so neither the model nor the user can tell February from last Thursday.
+2. **The block dates the session only as a relative age, and the model ignored it.** Corrected
+   2026-09-22 while reproducing this bug: `TRAINING_PREVIOUS_SESSION_V1` does print an age in the
+   header — the probe's own output reads `=== PREVIOUS SESSION (same template — 213d ago) ===` — but
+   no calendar date, and `buildPreviousSessionSection` itself carries none. So the context did say the
+   data was 213 days old, and the coach still offered it as "в прошлый раз" and "максимальный рабочий
+   вес прошлой тренировки". The selection defect is the root cause; the reply that hides a seven-month
+   gap from the user is a second, behavioural half that a correct selection alone will not fix.
 
 ### Impact
 
@@ -1558,8 +1563,10 @@ Two independent defects produce this:
 ### Fix plan
 
 Select the previous session by relevance and recency — the last completed session containing the
-exercise in question (or sharing muscle groups), not by exact `session_key` — and render the date
-and "N days ago" in the block. Overlaps with the planned muscle-centric progress blocks
+exercise in question (or sharing muscle groups), not by exact `session_key` — and render the calendar
+date next to the existing relative age. Separately, the training prompt must pass that age on to the
+user whenever it quotes past numbers ("три недели назад ты делал…"), since the age was already in
+context and was dropped. Overlaps with the planned muscle-centric progress blocks
 (`refactor-p6-progress-and-drafts`, `PLAN-muscle-centric-history.md`); the date is needed regardless
 of which selection wins.
 
