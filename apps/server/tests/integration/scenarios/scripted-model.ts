@@ -9,6 +9,8 @@
  * - `chat` (the agent node's `getModel(profile).bindTools(tools).invoke`):
  *   answers come FIFO from the step scripts; when the queue is empty the
  *   fallback is a plain text reply, so an under-scripted journey still runs.
+ *   `failNextChat(error)` makes the NEXT chat call throw instead (once) — the failed-run
+ *   scenarios' provider/model failure; the queued answers are left untouched.
  * - `structured` (the gateway's `getModel(profile).withConfig(...).invoke`):
  *   two KINDS share this path and are routed by their prompt — the
  *   course-check call (its system prompt opens "You are the course-check
@@ -70,6 +72,7 @@ export interface StructuredInput {
 // jest.mock factories may only reference variables prefixed with `mock`.
 const mockState = {
   chatScript: [] as AIMessage[],
+  chatFailure: null as Error | null,
   summaryScript: [] as string[],
   courseScript: [] as string[],
   chatInputs: [] as BaseMessage[][],
@@ -89,6 +92,8 @@ function toAIMessage(message: ScriptedChatMessage): AIMessage {
 export interface ScriptedModelHandle {
   /** Queues one step's scripted chat answers (FIFO across the whole journey). */
   enqueueChat(script: ScriptedChatMessage[]): void;
+  /** Makes the next chat call throw `error` (once); later calls answer from the queue again. */
+  failNextChat(error: Error): void;
   /** Queues scripted raw structured answers (the summariser path). */
   enqueueStructuredAnswers(rawContents: string[]): void;
   /** Queues scripted raw course-check answers (the directive path). */
@@ -118,6 +123,11 @@ export function installScriptedModel(): ScriptedModelHandle {
       bindTools: () => model,
       invoke: async (messages: BaseMessage[]) => {
         mockState.chatInputs.push(messages);
+        if (mockState.chatFailure !== null) {
+          const failure = mockState.chatFailure;
+          mockState.chatFailure = null;
+          throw failure;
+        }
         const next = mockState.chatScript.shift();
         if (next === undefined) {
           return new AIMessage({ content: 'Хорошо.', tool_calls: [] });
@@ -150,6 +160,9 @@ export function installScriptedModel(): ScriptedModelHandle {
     enqueueChat(script) {
       mockState.chatScript.push(...script.map(toAIMessage));
     },
+    failNextChat(error) {
+      mockState.chatFailure = error;
+    },
     enqueueStructuredAnswers(rawContents) {
       mockState.summaryScript.push(...rawContents);
     },
@@ -158,6 +171,7 @@ export function installScriptedModel(): ScriptedModelHandle {
     },
     reset() {
       mockState.chatScript = [];
+      mockState.chatFailure = null;
       mockState.summaryScript = [];
       mockState.courseScript = [];
       mockState.chatInputs = [];

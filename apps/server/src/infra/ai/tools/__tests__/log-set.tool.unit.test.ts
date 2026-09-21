@@ -1,54 +1,19 @@
-import type { RunnableConfig } from '@langchain/core/runnables';
-
 import { isToolReturnWithUpdate, type ToolReturn } from '@domain/conversation/tool-outcome';
-import type { ITrainingService } from '@domain/training/ports';
 import type { SessionSet } from '@domain/training/types';
 
 import { LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX, toToolMessage } from '@infra/ai/tools/outcome';
 
-import { buildLogSetTool } from '../log-set.tool';
+import { makeDeps, makeTrainingService } from './log-set-test-support';
 
 /** Renders a tool return exactly as the executor will (Task 5 contract). */
 function renderedContent(ret: ToolReturn): string {
   return String(toToolMessage(isToolReturnWithUpdate(ret) ? ret.outcome : ret, 'test-id').content);
 }
 
-type InvokableTool = {
-  name: string;
-  invoke: (input: Record<string, unknown>, config?: RunnableConfig) => Promise<unknown>;
-};
-
 // Flat input fields used in the new log_set schema (no nested setData object)
 const FLAT_SET_INPUT = { reps: 10, weight: 80 };
 // Expected setData built by the tool handler from flat fields
 const EXPECTED_SET_DATA = { type: 'strength' as const, reps: 10, weight: 80, weightUnit: 'kg' as const };
-
-const makeTrainingService = (): jest.Mocked<ITrainingService> =>
-  ({
-    startSession: jest.fn(),
-    getSessionDetails: jest.fn(),
-    completeSession: jest.fn(),
-    skipSession: jest.fn(),
-    getTrainingHistory: jest.fn(),
-    addExerciseToSession: jest.fn(),
-    logSet: jest.fn(),
-    completeCurrentExercise: jest.fn(),
-    ensureCurrentExercise: jest.fn(),
-    logSetWithContext: jest.fn(),
-  }) as unknown as jest.Mocked<ITrainingService>;
-
-/** The executor puts activeSessionId into configurable alongside userId. */
-const makeConfig = (userId = 'u1', sessionId: string | null = 'session-1'): RunnableConfig => ({
-  configurable: { userId, thread_id: userId, activeSessionId: sessionId },
-});
-
-const makeDeps = (trainingService: jest.Mocked<ITrainingService>, sessionId: string | null = 'session-1') => {
-  const logSet = buildLogSetTool({ trainingService }) as unknown as InvokableTool;
-  const tools = [logSet];
-  const byName = (_name: string) => logSet;
-  const config = makeConfig('u1', sessionId);
-  return { tools, byName, config };
-};
 
 describe('log-set.tool — log_set', () => {
   it('calls logSetWithContext with flat fields converted to setData object', async () => {

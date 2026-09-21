@@ -12,19 +12,12 @@
  * Real training PhaseSpec.loadContext over real repositories; the block is rendered by the phase's
  * own previous-session block. Dates are explicit; "now" is pinned, nothing is relative to the clock.
  */
-import { TrainingService } from '@domain/training/services/training.service';
-
 import { buildTrainingSpec } from '@infra/ai/graph/phases/training.spec';
 import { TRAINING_PREVIOUS_SESSION_V1 } from '@infra/ai/prompts/blocks';
 import { db } from '@infra/db/drizzle';
-import { ExerciseRepository } from '@infra/db/repositories/exercise.repository';
-import { SessionExerciseRepository } from '@infra/db/repositories/session-exercise.repository';
-import { SessionSetRepository } from '@infra/db/repositories/session-set.repository';
-import { DrizzleUserRepository } from '@infra/db/repositories/user.repository';
-import { WorkoutPlanRepository } from '@infra/db/repositories/workout-plan.repository';
-import { WorkoutSessionRepository } from '@infra/db/repositories/workout-session.repository';
 import { workoutSessions } from '@infra/db/schema';
 
+import { buildRealTrainingService } from '../../helpers/training-service';
 import { createTestUserData } from '../../shared/test-factories';
 
 /** Midday UTC keeps the calendar date identical in every plausible user timezone. */
@@ -89,11 +82,15 @@ function datePattern(isoDate: string): RegExp {
 }
 
 describe('training previous-session block (BUG-030)', () => {
-  const sessionRepo = new WorkoutSessionRepository();
-  const sessionExerciseRepo = new SessionExerciseRepository();
-  const sessionSetRepo = new SessionSetRepository();
-  const exerciseRepo = new ExerciseRepository();
-  let trainingService: TrainingService;
+  // One wiring for the whole file; the repositories are stateless, so building it at describe time is safe.
+  const {
+    service: trainingService,
+    userRepo,
+    exerciseRepo,
+    sessionRepo,
+    sessionExerciseRepo,
+    sessionSetRepo,
+  } = buildRealTrainingService();
   let loadContext: ReturnType<typeof buildTrainingSpec>['loadContext'];
   let userId: string;
   let currentSessionId: string;
@@ -130,16 +127,6 @@ describe('training previous-session block (BUG-030)', () => {
   };
 
   beforeAll(async () => {
-    const userRepo = new DrizzleUserRepository();
-    trainingService = new TrainingService(
-      new WorkoutPlanRepository(),
-      sessionRepo,
-      exerciseRepo,
-      sessionExerciseRepo,
-      sessionSetRepo,
-      userRepo,
-    );
-
     const all = await exerciseRepo.findAll();
     for (const name of ['Barbell Back Squat', 'Barbell Bench Press', 'Pull-ups']) {
       const found = all.find(e => e.name === name);

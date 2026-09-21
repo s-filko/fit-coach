@@ -8,24 +8,14 @@
  * the seconds as `reps`, and the tool stores "45 reps". Live evidence: session fa293e20, 2026-09-21
  * (Plank 45 / Side Plank 30 stored as functional_reps).
  */
-import type { RunnableConfig } from '@langchain/core/runnables';
-
-import type { ITrainingService } from '@domain/training/ports';
 import type { SessionSet } from '@domain/training/types';
 
-import { buildLogSetTool } from '../log-set.tool';
-
-type InvokableTool = {
-  invoke: (input: Record<string, unknown>, config?: RunnableConfig) => Promise<unknown>;
-};
-
-const config: RunnableConfig = {
-  configurable: { userId: 'u1', thread_id: 'u1', activeSessionId: 'session-1' },
-};
+import { makeDeps, makeTrainingService } from './log-set-test-support';
 
 /** Echoes the setData it is given back as the stored set, so the test reads what the tool decided. */
 function makeTool() {
-  const logSetWithContext = jest.fn().mockImplementation(async (_sessionId: string, input: { setData: unknown }) => ({
+  const trainingService = makeTrainingService();
+  trainingService.logSetWithContext.mockImplementation(async (_sessionId, input) => ({
     set: {
       id: 'set-1',
       sessionExerciseId: 'ex-1',
@@ -38,29 +28,27 @@ function makeTool() {
     } as SessionSet,
     setNumber: 1,
   }));
-  const trainingService = {
-    getSessionDetails: jest.fn().mockResolvedValue(null),
-    logSetWithContext,
-  } as unknown as ITrainingService;
-  const tool = buildLogSetTool({ trainingService }) as unknown as InvokableTool;
-  const storedSetData = (): Record<string, unknown> => logSetWithContext.mock.calls[0][1].setData;
-  return { tool, storedSetData };
+  const { byName, config } = makeDeps(trainingService);
+  const tool = byName('log_set');
+  const invoke = (input: Record<string, unknown>) => tool.invoke(input, config);
+  const storedSetData = (): Record<string, unknown> => trainingService.logSetWithContext.mock.calls[0][1].setData;
+  return { invoke, storedSetData };
 }
 
 describe('log_set — timed isometric hold (BUG-023)', () => {
   it('control: a cardio duration is stored as a duration', async () => {
-    const { tool, storedSetData } = makeTool();
+    const { invoke, storedSetData } = makeTool();
 
-    await tool.invoke({ exerciseName: 'Stationary Bike', durationSeconds: 1200 }, config);
+    await invoke({ exerciseName: 'Stationary Bike', durationSeconds: 1200 });
 
     expect(storedSetData()).toMatchObject({ type: 'cardio_duration', duration: 1200 });
   });
 
   it('stores a 45-second plank, logged the documented bodyweight way, as a duration and not as reps', async () => {
-    const { tool, storedSetData } = makeTool();
+    const { invoke, storedSetData } = makeTool();
 
     // "For bodyweight exercises: provide reps only." — the only documented path for a plank.
-    await tool.invoke({ exerciseName: 'Plank', reps: 45 }, config);
+    await invoke({ exerciseName: 'Plank', reps: 45 });
 
     expect(storedSetData()).toMatchObject({ duration: 45 });
     expect(storedSetData()).not.toMatchObject({ type: 'functional_reps' });

@@ -20,13 +20,9 @@ import { buildToolExecutor } from '@infra/ai/graph/tool-executor';
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
 import { buildDeleteLastSetsTool } from '@infra/ai/tools/delete-last-sets.tool';
 import { buildLogSetTool } from '@infra/ai/tools/log-set.tool';
-import { ExerciseRepository } from '@infra/db/repositories/exercise.repository';
-import { SessionExerciseRepository } from '@infra/db/repositories/session-exercise.repository';
-import { SessionSetRepository } from '@infra/db/repositories/session-set.repository';
 import { DrizzleUserRepository } from '@infra/db/repositories/user.repository';
-import { WorkoutPlanRepository } from '@infra/db/repositories/workout-plan.repository';
-import { WorkoutSessionRepository } from '@infra/db/repositories/workout-session.repository';
 
+import { buildRealTrainingService } from '../../helpers/training-service';
 import { createTestUserData } from '../../shared/test-factories';
 
 type Call = { name: string; args: Record<string, unknown>; id: string };
@@ -45,25 +41,15 @@ const CORRECTED_SETS = [
 
 describe('correction batch: delete_last_sets + corrected log_set calls (BUG-027)', () => {
   let service: TrainingService;
-  let sessionRepo: WorkoutSessionRepository;
   let benchPressId: string;
   let userRepo: DrizzleUserRepository;
   let run: (sessionId: string, calls: Call[]) => Promise<void>;
 
   beforeAll(async () => {
-    userRepo = new DrizzleUserRepository();
-    const exerciseRepo = new ExerciseRepository();
-    sessionRepo = new WorkoutSessionRepository();
-    service = new TrainingService(
-      new WorkoutPlanRepository(),
-      sessionRepo,
-      exerciseRepo,
-      new SessionExerciseRepository(),
-      new SessionSetRepository(),
-      userRepo,
-    );
+    const wiring = buildRealTrainingService();
+    ({ service, userRepo } = wiring);
 
-    const bench = (await exerciseRepo.findAll()).find(e => e.name === 'Barbell Bench Press');
+    const bench = (await wiring.exerciseRepo.findAll()).find(e => e.name === 'Barbell Bench Press');
     if (!bench) {
       throw new Error('Seed exercise not found — run with RUN_DB_TESTS=1 against an initialised fitcoach_test');
     }

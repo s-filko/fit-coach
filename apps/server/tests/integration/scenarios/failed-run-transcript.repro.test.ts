@@ -10,8 +10,8 @@
  * checkpoint, and it is what made the next run log 120 kg.
  *
  * Real production wiring (registerInfraServices), real graph, adapter, repositories and
- * PostgresSaver; only the ChatModel beneath the gateway is replaced — it answers a scripted text
- * or throws, exactly like the scripted model of the other scenario tests.
+ * PostgresSaver; only the ChatModel beneath the gateway is replaced, by the shared scripted model
+ * (scripted-model.ts) — it answers a scripted text, or throws once via `failNextChat`.
  */
 import { and, eq } from 'drizzle-orm';
 
@@ -21,23 +21,7 @@ import { conversationRuns, conversationTurns } from '@infra/db/schema';
 import { runScenario } from '../../../evals/lib/run-scenario';
 import type { Scenario } from '../../../evals/schema/scenario.schema';
 
-// jest.mock factories may only reference variables prefixed with `mock`.
-const mockModelState = { failNextCall: false };
-
-jest.mock('@infra/ai/model.factory', () => {
-  const model = {
-    bindTools: () => model,
-    invoke: async () => {
-      if (mockModelState.failNextCall) {
-        mockModelState.failNextCall = false;
-        throw new Error('simulated model failure');
-      }
-      return new (jest.requireActual('@langchain/core/messages').AIMessage)({ content: 'Хорошо.', tool_calls: [] });
-    },
-    withConfig: () => ({ invoke: async () => ({ content: '{}' }) }),
-  };
-  return { getModel: () => model };
-});
+import { installScriptedModel, type ScriptedModelHandle } from './scripted-model';
 
 const OK_MESSAGE = 'привет, начинаю тренировку';
 const LOST_MESSAGE = 'накинул 10кг и сделал еще подход на 12';
@@ -77,7 +61,11 @@ describe('a run whose graph throws still leaves the user message in conversation
   let userId: string;
   let failure: unknown;
 
+  let model: ScriptedModelHandle;
+
   beforeAll(async () => {
+    model = installScriptedModel();
+    model.enqueueChat([{ text: 'Хорошо.' }]);
     const ok = await runScenario(scenarioFor('failed-run-transcript-repro-ok', OK_MESSAGE), {
       onSeeded: world => {
         ({ userId } = world);
@@ -92,7 +80,7 @@ describe('a run whose graph throws still leaves the user message in conversation
 
   it('a run that fails inside the graph leaves its user message in the transcript', async () => {
     let failedUserId = '';
-    mockModelState.failNextCall = true;
+    model.failNextChat(new Error('simulated model failure'));
     try {
       await runScenario(scenarioFor('failed-run-transcript-repro-fail', LOST_MESSAGE), {
         onSeeded: world => {

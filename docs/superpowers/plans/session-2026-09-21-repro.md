@@ -76,6 +76,18 @@ Read `log-set.tool.ts`, `format-exercise-summary.ts`, `set-data.types.ts` and th
 - [x] **Verify:** `cd apps/server && npx jest --testMatch='**/__tests__/**/*.repro.test.ts'` — record
   the exact failures in the evidence table below.
 
+**De-duplication note (close-out R2, owner ruling 2026-09-22: no duplication accepted).**
+`log-set.tool.unit.test.ts` no longer declares its own `InvokableTool` / `makeTrainingService` /
+`makeConfig` / `makeDeps`: they moved to `src/infra/ai/tools/__tests__/log-set-test-support.ts`, which both
+it and `log-set.tool.repro.test.ts` import (the repro keeps only its echo-the-setData step).
+`training-service-hardening.unit.test.ts` lost its factories (`makeSessionSet`, `makeExerciseWithDetails`,
+`makeSession`, `createMocks`) to `src/domain/training/services/__tests__/training-service-test-support.ts`;
+`format-exercise-summary.repro.test.ts` builds on them instead of its own `makeExercise`/`switchAwayFrom`
+and dropped its two control tests (the domain fact is proven by the hardening suite). The
+"defect is in the text" guard is now one line inside the probe: it asserts the status the domain wrote
+(`skipped`) before reading the text. Same assertions, same RED (see the re-run rows below).
+
+
 ### Task 2: Correction batch destroys the corrected sets (AC-LSR-3)
 
 **Files:** `apps/server/src/infra/ai/graph/__tests__/tool-ordering.repro.test.ts` (or an
@@ -90,6 +102,11 @@ integration file if the executor needs the real DB). Read `tool-executor.ts`, `t
   remediation step. Note in the evidence table that it will have to change.
 - [x] **Verify:** the repro `--testMatch` command; plus `npm run test:unit` to show existing suites stay green.
 
+**De-duplication note.** `tool-ordering.repro.test.ts` now gets its `TrainingService` from the new
+integration factory `tests/helpers/training-service.ts` (`buildRealTrainingService()`, optional
+`sessionRepo` override) — see the Task 3 note for the other callers.
+
+
 ### Task 3: "Previous session" selection and dating (AC-LSR-4)
 
 **Files:** `apps/server/tests/integration/scenarios/previous-session.repro.test.ts`. Read
@@ -103,6 +120,16 @@ existing scenario harness.
   its date. Today it reflects the old one and prints no date.
 - [x] **Verify:** `RUN_DB_TESTS=1 npx jest --testMatch='**/tests/integration/**/*.repro.test.ts'`.
 
+**De-duplication note.** `previous-session.repro.test.ts` uses `buildRealTrainingService()` instead of
+hand-wiring six repositories. The same factory replaced the copies in
+`tests/integration/services/training.service.integration.test.ts` and
+`tests/integration/scenarios/review-training.integration.test.ts` (both its main wiring and the
+`blindService` variant, through the `sessionRepo` override) — five hand-built copies became one. Not routed
+(deliberately): the mocked-repository `TrainingService` in
+`training-service-log-set-with-context.unit.test.ts` — a unit-level mock wiring with different defaults, not
+the real-DB wiring; and production `register-infra-services.ts`.
+
+
 ### Task 4: The transcript loses order and loses messages (AC-LSR-5, AC-LSR-6)
 
 **Files:** `apps/server/src/infra/conversation/__tests__/transcript-order.repro.test.ts`,
@@ -115,6 +142,13 @@ existing scenario harness.
   equals the produced order for a run whose rows are distinguishable), not dependent on luck.
 - [x] **AC-LSR-6**: a graph that throws must still leave the user's message in `conversation_turns`.
 - [x] **Verify:** the repro `--testMatch` commands.
+
+**De-duplication note.** `failed-run-transcript.repro.test.ts` no longer mocks `@infra/ai/model.factory`
+itself: it uses the shared `scripted-model.ts`, which gained the missing capability —
+`failNextChat(error)` (throw once, cleared by `reset()`, queued answers untouched). The other scenario
+tests are unaffected (`npm run test:scenarios` green). `transcript-order.repro.test.ts` was already free of
+the duplicated wiring (it needs no `TrainingService`).
+
 
 ### Task 5: What no deterministic test can catch (AC-LSR-7)
 
@@ -183,12 +217,13 @@ plain honest wording through (`node` one-off, recorded in the evidence table).
 | AC | Command | Exit | Failing assertion | Baseline SHA |
 |---|---|---|---|---|
 | AC-LSR-1 | `cd apps/server && NODE_ENV=test npx jest --testMatch='**/__tests__/**/*.repro.test.ts'` — `log-set.tool.repro.test.ts` | 1 | `stores a 45-second plank, logged the documented bodyweight way…` fails at `expect(storedSetData()).toMatchObject({ duration: 45 })`: received `{"type":"functional_reps","reps":45}`. Positive control (`durationSeconds:1200` → `cardio_duration`) passes. Input is `{exerciseName:'Plank', reps:45}` — the only path the `log_set` description documents for bodyweight ("reps only"); a fix must either teach the tool/prompt a hold path or resolve isometric exercises tool-side. | `dcf989bb` |
-| AC-LSR-2 | same command — `format-exercise-summary.repro.test.ts` | 1 | Two failures on the string from real `TrainingService.ensureCurrentExercise` (0 sets → `skipped`) fed to `formatExerciseSummary`: `not.toMatch(/completed/i)` (received `Exercise 'Seated Calf Raise Machine' completed.`) and `not.toMatch(/RPE/)` (received `…list the sets, analyze RPE trend…` after an empty `Sets performed:`). Controls pass: domain writes `skipped` for 0 sets; an exercise with sets still reads `completed`. | `dcf989bb` |
+| AC-LSR-2 | same command — `format-exercise-summary.repro.test.ts` | 1 | Two failures on the string from real `TrainingService.ensureCurrentExercise` (0 sets → `skipped`) fed to `formatExerciseSummary`: `not.toMatch(/completed/i)` (received `Exercise 'Seated Calf Raise Machine' completed.`) and `not.toMatch(/RPE/)` (received `…list the sets, analyze RPE trend…` after an empty `Sets performed:`). Attribution to the TEXT (not the domain classification) is guarded inside each probe by re-reading the status the domain wrote (`update('se-seated', {status:'skipped'})`); the two stand-alone control tests were removed in the de-duplication pass (see Task 1 note). | `dcf989bb` |
 | AC-LSR-3 | `cd apps/server && RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch='**/tests/integration/**/*.repro.test.ts'` — `tests/integration/services/tool-ordering.repro.test.ts` (real executor + `buildTrainingToolPolicy` + real `log_set`/`delete_last_sets` + real `TrainingService` and repositories over `fitcoach_test`; nothing stubbed) | 1 | `one batch [delete_last_sets, 4 x log_set] leaves exactly the corrected sets` fails at `expect(await storedSets(sessionId)).toEqual(CORRECTED_SETS)`: two seeded wrong sets (10×100) survive and the two 120×12 corrected sets are gone — final state `[10×100, 10×100, 12×110, 12×110]` vs expected `[12×110, 12×110, 12×120, 12×120]`. Control passes: the same deletion and the same four `log_set` calls sent as two batches in that order leave exactly the corrected sets. **Remediation note:** `tool-policy.unit.test.ts:67-76` (`should sort correction tools after transitions but before finish`, asserts `sorted[0]=log_set`, `sorted[2]=delete_last_sets`) pins the present order and must change together with the fix; `tool-executor.unit.test.ts` (AC-1332 ordering) uses `TRAINING_TOOL_PRIORITY` and should be rechecked. Not touched here. | `57a42c8e` (Task 1 commit on top of `dcf989bb`; no production change) |
 | AC-LSR-4 | `cd apps/server && RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch='**/tests/integration/**/previous-session.repro.test.ts'` — `tests/integration/scenarios/previous-session.repro.test.ts` (real `buildTrainingSpec().loadContext` + real repositories over `fitcoach_test`; block rendered by `TRAINING_PREVIOUS_SESSION_V1` with pinned `now` 2026-09-21; explicit fixture dates) | 1 | 3 failures, 1 control green. (a) selection: `expect(previous?.sessionKey).toBe('hist_20260916_lower')` — received `"lower_a"` (the 2026-02-20 session). (b) block content: `toContain('Barbell Bench Press')` fails — the block shows only the old session's Back Squat 52/59/66/66 and Pull-ups. (c) dating, independent of selection: the block rendered for the session it was given (2026-02-20) does not match its own date (`/2026-02-20\|20\.02\.2026\|Feb… 20\|20 Feb/`). Control passes: the block header is `=== PREVIOUS SESSION (same template — 213d ago) ===`. **Nuance for BUG-030:** the block already prints a *relative* age (`213d ago`) — it does not print no time at all; what is missing is the calendar date, so the date fix should add it next to (not instead of) the age. **Fixture deviation:** `fitcoach_test` seeds only four exercises (`setup.ts`), so Back Squat / Bench Press stand in for Leg Extension / Leg Curl, and keys keep the live `..._lower` names. | `c395d7ce` (Task 2 on `57a42c8e`, `dcf989bb`; no production change) |
 | AC-LSR-5 | `cd apps/server && RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch='**/tests/integration/services/transcript-order.repro.test.ts'` — `tests/integration/services/transcript-order.repro.test.ts` (real `DrizzleTranscriptService.appendRunMessages` → real `evals/lib/export-query` `fetchRunsSince`; formulation B, agreed with the coordinator) | 1 | `expect(await readByReader()).toEqual(produced)` fails: the reader returns the run reversed (`ai:step-10 final reply, tool_result:step-09…, … , ai:, human:step-01 user message`) instead of `human:step-01 …, ai:, tool_call:tool_a, …, ai:step-10 final reply`. Soundness preconditions pass before it: the ordinary `UPDATE` rewrite (reverse produced order, `SET content = content`) moved the physical order, and sorting the rows by the produced position the test stores restores the produced sequence. **Root cause, measured:** `SELECT count(DISTINCT created_at), count(*) FROM conversation_turns WHERE run_id = $1` → **1 distinct of 10** rows for a run written through the real append path (one INSERT statement → one `now()`); `id` is a random uuid, so nothing else carries order. **Why plain read-back cannot be the probe:** on a freshly written table Postgres returns tied rows in insertion order — a first plain probe (10 rows, also with 12 other runs around it) PASSED, so the read-order assertion alone would fail only by luck of physical layout; the probe removes that luck instead (no elevated privileges, no `VACUUM FULL`). Any fix that persists order (seq column, distinct timestamps) turns it green. | `6d74f836` |
 | AC-LSR-6 | `cd apps/server && RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch='**/tests/integration/scenarios/failed-run-transcript.repro.test.ts'` — `tests/integration/scenarios/failed-run-transcript.repro.test.ts` (real `registerInfraServices` wiring: real graph, adapter, repositories, PostgresSaver; only the ChatModel is replaced — it answers, or throws once) | 134 (see note) | `a run that fails inside the graph leaves its user message in the transcript` fails at `expect(await humanTurnTexts(failedUserId)).toContain('накинул 10кг и сделал еще подход на 12')` — `Received array: []`. Preconditions pass first: `runScenario` rejects, and `conversation_runs.outcome = 'core_error'` (the failed run IS recorded, its message is not). Control passes: a completed run leaves its user message in `conversation_turns`. **Exit-code note:** exit 134 is a native abort at process shutdown (`libc++abi: terminating due to uncaught exception of type std::__1::system_error: mutex lock failed`) that the untouched `harness.integration.test.ts` produces identically (all its tests pass, exit 134) — pre-existing, caused by the ONNX embedding pipeline that `registerInfraServices` loads; the jest report itself is `1 failed, 1 passed`. | `6d74f836` |
 | AC-LSR-7 | `cd apps/server && node -e "const l=require('fs').readFileSync('evals/datasets/drafts/session-2026-09-21.jsonl','utf8').split('\\n').filter(Boolean);l.forEach(x=>JSON.parse(x));console.log(l.length,'lines, each valid JSON')"` and `npx tsx <scratch>/parse-drafts.ts` (`parseCases` from `evals/schema/case.schema.ts` + compile of every `mustNotMatch` with the runner's `(?i)` translation) | 0 | `4 lines, each valid JSON`; `4 cases parse against EvalCaseSchema: LS-0001, LS-0002, LS-0003, LS-0004`; `all mustNotMatch patterns compile`. Regex sanity (node one-off, no model): LS-0001 / LS-0003 / LS-0004 gates flag the live wording quoted in BUG-022/026/028 and pass a plain honest wording. No model was run (`RUN_LLM_EVALS`, `EVALS_FULL_RUN` unset). Eval-only by nature — stated, not faked; see "Task 5 result". | `0b4ca1dc` |
+| — | **De-duplication re-run (2026-09-22)**: `cd apps/server && NODE_ENV=test npx jest --testMatch='**/__tests__/**/*.repro.test.ts'` and `RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch='**/tests/integration/**/*.repro.test.ts'` | 1 / 134 (native shutdown abort, as before) | Every probe fails at the SAME assertion with the SAME received value as before the refactor: AC-LSR-1 `toMatchObject({duration:45})` ← `{type:functional_reps, reps:45}`; AC-LSR-2 `not.toMatch(/completed/i)` and `not.toMatch(/RPE/)` ← "Exercise 'Seated Calf Raise Machine' completed. … analyze RPE trend …"; AC-LSR-3 `toEqual(CORRECTED_SETS)` ← `[10×100, 10×100, 12×110, 12×110]`; AC-LSR-4 selection `'lower_a'` vs `'hist_20260916_lower'`, block lacks `Barbell Bench Press`, block lacks its own date; AC-LSR-5 `toEqual(produced)` ← reader returns the run reversed; AC-LSR-6 `toContain('накинул 10кг…')` ← `[]` (preconditions: run rejected, `core_error`). Controls still green (AC-LSR-1 cardio duration, AC-LSR-3 two-batch, AC-LSR-4 relative age, AC-LSR-6 completed run). 6 failed / 3 passed in the DB command, 3 failed / 1 passed in the unit command (was 3 / 3: the two AC-LSR-2 controls were removed). Also green: `npm run test:unit` (121 suites, 1151 tests), `npm run test:scenarios` (7 suites, 338 passed, 1 todo; exit 134 = the known shutdown abort), `training.service.integration.test.ts` (8 passed). Production diff vs `dcf989bb` (`apps/server/src` outside `__tests__`, `apps/bot`, `apps/webapp`): empty. | `d5e01229` |
 | — | `cd apps/server && npm run test:unit` | 0 | 121 suites / 1151 tests green; `git diff` shows no production change (repro files only). Re-run after Task 2 with the same result. | `dcf989bb` / `57a42c8e` |
 
 ## Review
