@@ -20,7 +20,7 @@ export interface FactRowSnapshot {
   id: string;
   fact: string;
   status: 'active' | 'archived';
-  archivedReason: 'user_closed' | 'expired' | 'superseded' | null;
+  archivedReason: 'user_closed' | 'user_deleted' | 'expired' | 'superseded' | null;
   closedByUserAt: Date | null;
   durability: 'permanent' | 'long_term' | 'short';
   onExpiry: 'forget' | 'ask_once' | null;

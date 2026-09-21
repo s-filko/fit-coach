@@ -87,4 +87,11 @@ describe('user_facts schema (ADR-0009 table shape, D-B, D-C)', () => {
       expect(column.notNull).toBe(false);
     }
   });
+
+  it('archived_reason knows why a fact was archived — including user_deleted, the "do not store it" road (owner decision 2026-09-21)', () => {
+    expect(userFacts.archivedReason.enumValues).toEqual(
+      expect.arrayContaining(['user_closed', 'user_deleted', 'expired', 'superseded']),
+    );
+    expect(userFacts.archivedReason.enumValues).toHaveLength(4);
+  });
 });

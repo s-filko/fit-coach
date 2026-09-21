@@ -412,7 +412,7 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
       confirmFact: async () => false,
       supersedeFact: async () => null,
       retractFact: async () => null,
-      deleteFact: async () => false,
+      forgetFact: async () => null,
       listFacts: async () => ({ active: [], archived: [] }),
       getForPrompt: async () => facts,
       getExpiredActive: async () => [],

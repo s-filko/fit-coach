@@ -222,20 +222,28 @@ class InMemoryUserFactsService implements IUserFactsService {
     return row;
   }
 
-  async deleteFact(userId: string, factId: string): Promise<boolean> {
-    const idx = this.rows.findIndex(r => r.id === factId && r.userId === userId);
-    if (idx === -1) {
-      return false;
+  async forgetFact(userId: string, input: { factId: string; evidenceAt?: Date }, now: Date): Promise<UserFact | null> {
+    const row = this.rows.find(r => r.id === input.factId && r.userId === userId);
+    if (row === undefined) {
+      return null;
     }
-    this.rows.splice(idx, 1);
-    return true;
+    if (row.archivedReason !== 'user_deleted') {
+      row.closedByUserAt = row.closedByUserAt ?? input.evidenceAt ?? now;
+      if (row.status === 'active') {
+        row.status = 'archived';
+        row.archivedAt = now;
+      }
+      row.archivedReason = 'user_deleted';
+      row.updatedAt = now;
+    }
+    return row;
   }
 
   async listFacts(userId: string, includeArchived: boolean, now: Date): Promise<FactsListing> {
     const rows = this.rows.filter(r => r.userId === userId);
     return {
       active: rows.filter(r => isActiveForPrompt(r, now)),
-      archived: includeArchived ? rows.filter(r => r.status === 'archived') : [],
+      archived: includeArchived ? rows.filter(r => r.status === 'archived' && r.archivedReason !== 'user_deleted') : [],
     };
   }
 

@@ -556,7 +556,7 @@ describe('UserFactsRepository – integration', () => {
     });
   });
 
-  describe('retractFact / deleteFact (AC-FL-2: two distinct operations, never swapped)', () => {
+  describe('retractFact / forgetFact (AC-FL-2; delete = archive, owner decision 2026-09-21)', () => {
     it('retract archives and KEEPS the row, the history and the counter; never deletes', async () => {
       const userData = createTestUserData({ username: 'user_facts_retract_user' });
       const user = await userRepo.create(userData);
@@ -605,21 +605,24 @@ describe('UserFactsRepository – integration', () => {
       expect(again?.archivedAt).toEqual(NOW); // the first closure is kept, not re-stamped
     });
 
-    it('retract of an unknown id returns null; delete of an unknown id returns false', async () => {
+    it('retract and forget of an unknown id return null', async () => {
       const userData = createTestUserData({ username: 'user_facts_missing_user' });
       const user = await userRepo.create(userData);
 
       await expect(
         repository.retractFact(user.id, { factId: '00000000-0000-0000-0000-0000000000aa' }, new Date()),
       ).resolves.toBeNull();
-      await expect(repository.deleteFact(user.id, '00000000-0000-0000-0000-0000000000ab')).resolves.toBe(false);
+      await expect(
+        repository.forgetFact(user.id, { factId: '00000000-0000-0000-0000-0000000000ab' }, new Date()),
+      ).resolves.toBeNull();
     });
 
-    it('delete removes the row ENTIRELY — no trace, not even in the archived listing', async () => {
-      const userData = createTestUserData({ username: 'user_facts_delete_user' });
-      const user = await userRepo.create(userData);
-      const NOW = new Date('2026-09-21T12:00:00Z');
+    /** Raw rows of the user — the table itself, not a filtered read. */
+    const rowsOf = (userId: string) => db.select().from(userFactsTable).where(eq(userFactsTable.userId, userId));
 
+    it('forget ARCHIVES as user_deleted with the user’s word stamped — the row is never removed', async () => {
+      const user = await userRepo.create(createTestUserData({ username: 'user_facts_delete_user' }));
+      const NOW = new Date('2026-09-21T12:00:00Z');
       const created = await repository.rememberFact(
         user.id,
         {
@@ -632,12 +635,129 @@ describe('UserFactsRepository – integration', () => {
       );
       if (created.outcome !== 'created') throw new Error('expected created');
 
-      await expect(repository.deleteFact(user.id, created.fact.id)).resolves.toBe(true);
-      await expect(repository.getForPrompt(user.id, NOW)).resolves.toHaveLength(0);
-      const listed = await repository.listFacts(user.id, true, NOW);
-      expect(listed.active).toHaveLength(0);
-      expect(listed.archived).toHaveLength(0); // gone, not archived
-      await expect(repository.deleteFact(user.id, created.fact.id)).resolves.toBe(false);
+      const forgotten = await repository.forgetFact(user.id, { factId: created.fact.id }, NOW);
+
+      expect(forgotten).toMatchObject({
+        status: 'archived',
+        archivedReason: 'user_deleted',
+        closedByUserAt: NOW,
+        archivedAt: NOW,
+        confirmations: 1,
+      });
+      const rows = await rowsOf(user.id);
+      expect(rows).toHaveLength(1); // nothing removed: the history a recurrence count reads is still there
+      expect(rows[0]).toMatchObject({ fact: 'Allergic to shrimp', status: 'archived', archivedReason: 'user_deleted' });
+    });
+
+    it('a forgotten fact is invisible EVERYWHERE: prompt, hard guard, and the listing in BOTH modes', async () => {
+      const user = await userRepo.create(createTestUserData({ username: 'user_facts_forget_hidden_user' }));
+      const NOW = new Date('2026-09-21T12:00:00Z');
+      const created = await repository.rememberFact(
+        user.id,
+        {
+          category: 'physical_constraint',
+          fact: 'Fused lumbar vertebrae',
+          muscleGroup: 'lower_back',
+          durability: 'permanent',
+          explicitPermanent: true,
+        },
+        NOW,
+      );
+      if (created.outcome !== 'created') throw new Error('expected created');
+      await expect(repository.getConstraints(user.id, NOW)).resolves.toHaveLength(1); // it DID bind before
+
+      await repository.forgetFact(user.id, { factId: created.fact.id }, NOW);
+
+      await expect(repository.getForPrompt(user.id, NOW)).resolves.toEqual([]);
+      await expect(repository.getConstraints(user.id, NOW)).resolves.toEqual([]); // no exercise is blocked by it any more
+      await expect(repository.listFacts(user.id, false, NOW)).resolves.toEqual({ active: [], archived: [] });
+      await expect(repository.listFacts(user.id, true, NOW)).resolves.toEqual({ active: [], archived: [] }); // even when asked for archived
+    });
+
+    it('retract vs forget in the archived listing: user_closed still shows, user_deleted never does', async () => {
+      const user = await userRepo.create(createTestUserData({ username: 'user_facts_two_roads_user' }));
+      const NOW = new Date('2026-09-21T12:00:00Z');
+      const make = async (fact: string) => {
+        const r = await repository.rememberFact(
+          user.id,
+          { category: 'equipment', fact, durability: 'short', ttlDays: 5 },
+          NOW,
+        );
+        if (r.outcome !== 'created') throw new Error('expected created');
+        return r.fact.id;
+      };
+      const closedId = await make('Has a kettlebell');
+      const deletedId = await make('Has a rowing machine');
+      await repository.retractFact(user.id, { factId: closedId }, NOW);
+      await repository.forgetFact(user.id, { factId: deletedId }, NOW);
+
+      const { archived } = await repository.listFacts(user.id, true, NOW);
+
+      expect(archived.map(f => [f.fact, f.archivedReason])).toEqual([['Has a kettlebell', 'user_closed']]);
+    });
+
+    it('forget is idempotent, and it UPGRADES an already-archived fact: only the reason moves, the archive stamps stay', async () => {
+      const user = await userRepo.create(createTestUserData({ username: 'user_facts_forget_upgrade_user' }));
+      const NOW = new Date('2026-09-21T12:00:00Z');
+      const created = await repository.rememberFact(
+        user.id,
+        { category: 'equipment', fact: 'Borrowed a barbell', durability: 'short', ttlDays: 5 },
+        NOW,
+      );
+      if (created.outcome !== 'created') throw new Error('expected created');
+      await repository.retractFact(user.id, { factId: created.fact.id }, NOW); // "no longer true" first…
+      const later = new Date(NOW.getTime() + 3_600_000);
+
+      const upgraded = await repository.forgetFact(user.id, { factId: created.fact.id }, later); // …then "forget it entirely"
+
+      expect(upgraded).toMatchObject({
+        status: 'archived',
+        archivedReason: 'user_deleted',
+        archivedAt: NOW,
+        closedByUserAt: NOW,
+      });
+      expect((await repository.listFacts(user.id, true, later)).archived).toEqual([]); // now hidden from the listing too
+      const again = await repository.forgetFact(
+        user.id,
+        { factId: created.fact.id },
+        new Date(later.getTime() + 60_000),
+      );
+      expect(again?.updatedAt).toEqual(later); // idempotent: not re-stamped
+    });
+
+    it('a genuinely NEWER statement after a deletion creates a NEW active fact linked to the deleted row; older evidence is refused', async () => {
+      const user = await userRepo.create(createTestUserData({ username: 'user_facts_forget_restate_user' }));
+      const NOW = new Date('2026-09-21T12:00:00Z');
+      const first = await repository.rememberFact(
+        user.id,
+        {
+          category: 'physical_constraint',
+          fact: 'Left shoulder aches after pressing',
+          durability: 'short',
+          ttlDays: 5,
+        },
+        NOW,
+      );
+      if (first.outcome !== 'created') throw new Error('expected created');
+      await repository.forgetFact(user.id, { factId: first.fact.id }, NOW);
+      const input = {
+        category: 'physical_constraint' as const,
+        fact: 'Left shoulder aches after pressing',
+        durability: 'short' as const,
+        ttlDays: 5,
+      };
+
+      const stale = await repository.rememberFact(
+        user.id,
+        { ...input, evidenceAt: new Date(NOW.getTime() - 60_000) },
+        NOW,
+      );
+      expect(stale.outcome).toBe('skipped_stale_evidence');
+
+      const restated = await repository.rememberFact(user.id, input, new Date(NOW.getTime() + 2 * 86_400_000));
+      expect(restated.outcome).toBe('created');
+      expect(restated.fact).toMatchObject({ status: 'active', supersedesId: first.fact.id });
+      expect(await rowsOf(user.id)).toHaveLength(2); // the deleted row is still there, beside the new one
     });
   });
 
@@ -673,7 +793,7 @@ describe('UserFactsRepository – integration', () => {
   });
 
   describe('close-out review fixes', () => {
-    it('finding 3: deleting the TARGET of a supersede link succeeds — the survivor keeps its row, supersedes_id nulled (AC-FL-8)', async () => {
+    it('finding 3: forgetting the TARGET of a supersede link hides it from the user but keeps the chain — the survivor still points at it', async () => {
       const userData = createTestUserData({ username: 'user_facts_fk_delete_user' });
       const user = await userRepo.create(userData);
       const T0 = new Date('2026-09-21T12:00:00Z');
@@ -697,12 +817,16 @@ describe('UserFactsRepository – integration', () => {
       const survivorId = superseded?.outcome === 'created' ? superseded.fact.id : null;
       if (survivorId === null) throw new Error('expected created');
 
-      // The erase-me case: a history-carrying fact is exactly what a user asks to delete.
-      await expect(repository.deleteFact(user.id, oldId)).resolves.toBe(true);
+      // The erase-me case: a history-carrying fact is exactly what a user asks to delete. Nothing is
+      // removed now, so the link survives — the chain a recurrence count reads stays intact.
+      await expect(repository.forgetFact(user.id, { factId: oldId }, T0)).resolves.toMatchObject({
+        archivedReason: 'user_deleted',
+      });
       const listing = await repository.listFacts(user.id, true, T0);
-      const survivor = [...listing.active, ...listing.archived].find(f => f.id === survivorId);
+      expect(listing.archived.map(f => f.id)).not.toContain(oldId); // hidden from the user's view…
+      const survivor = listing.active.find(f => f.id === survivorId);
       expect(survivor).toBeDefined();
-      expect(survivor?.supersedesId).toBeNull(); // SET NULL, not an FK error
+      expect(survivor?.supersedesId).toBe(oldId); // …but not unlinked
     });
 
     it('finding 2: supersedeFact with explicitPermanent stores the new row permanent', async () => {

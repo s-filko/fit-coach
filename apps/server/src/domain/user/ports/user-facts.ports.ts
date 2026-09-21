@@ -244,12 +244,18 @@ export interface IUserFactsService {
   ): Promise<UserFact | null>;
 
   /**
-   * Deletes one fact ENTIRELY — the user's "I don't want you storing that"
-   * (AC-FL-8): no row, no trace, not even in the archived listing. A distinct
-   * operation from {@link retractFact}; never a silent substitute. False when the
-   * id matches no fact of this user.
+   * The user's "I don't want you storing that" (owner decision 2026-09-21,
+   * reversing AC-FL-8's erase): NOTHING is ever removed, but for the user the
+   * fact is gone. The row is archived with `archived_reason: 'user_deleted'` (its
+   * own reason, so history still tells "no longer true" from "do not store") and
+   * `closed_by_user_at`; it never renders, never blocks, is never asked about and
+   * — unlike a `user_closed` row — is not shown even in the archived listing.
+   * History stays for any future recurrence count; a genuinely NEWER statement
+   * still creates a new fact the normal way. An already-archived fact (retracted,
+   * expired, superseded) is upgraded to `user_deleted` — the user now wants it
+   * gone from the listing too. Idempotent; null when the id matches no fact.
    */
-  deleteFact(userId: string, factId: string): Promise<boolean>;
+  forgetFact(userId: string, input: { factId: string; evidenceAt?: Date }, now: Date): Promise<UserFact | null>;
 
   /**
    * Expiry, performed (course-check plan, expiry task): every ACTIVE short fact
@@ -272,7 +278,9 @@ export interface IUserFactsService {
 
   /**
    * The review listing (AC-FL-8): every active fact (expired excluded) plus the
-   * archived set with its closure reasons, only when `includeArchived`.
+   * archived set with its closure reasons, only when `includeArchived` — and even
+   * then NEVER a `user_deleted` row: what the user asked to be forgotten must not
+   * surface in "what do you remember about me".
    */
   listFacts(userId: string, includeArchived: boolean, now: Date): Promise<FactsListing>;
 }

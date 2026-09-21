@@ -384,12 +384,38 @@ export class UserFactsRepository implements IUserFactsService {
     return { outcome: 'created', fact: toUserFact(newRow) };
   }
 
-  async deleteFact(userId: string, factId: string): Promise<boolean> {
-    const rows = await db
-      .delete(userFacts)
-      .where(and(eq(userFacts.id, factId), eq(userFacts.userId, userId)))
-      .returning({ id: userFacts.id });
-    return rows.length > 0;
+  async forgetFact(userId: string, input: { factId: string; evidenceAt?: Date }, now: Date): Promise<UserFact | null> {
+    const [existingRow] = await db
+      .select()
+      .from(userFacts)
+      .where(and(eq(userFacts.id, input.factId), eq(userFacts.userId, userId)));
+    if (existingRow === undefined) {
+      return null;
+    }
+    const existing = toUserFact(existingRow);
+    if (existing.archivedReason === 'user_deleted') {
+      return existing; // idempotent: the first deletion is kept, never re-stamped
+    }
+    // The user's word, stamped WHEN IT WAS STATED (same evidence clock as retractFact).
+    const closureAt = input.evidenceAt ?? now;
+    const [row] = await db
+      .update(userFacts)
+      .set(
+        existing.status === 'archived'
+          ? // Already archived (retracted, expired, superseded): only the reason moves — the archive
+            // stamps stay — and the user's word is recorded if it was not already.
+            { archivedReason: 'user_deleted', closedByUserAt: existing.closedByUserAt ?? closureAt, updatedAt: now }
+          : {
+              status: 'archived',
+              archivedAt: now,
+              archivedReason: 'user_deleted',
+              closedByUserAt: closureAt,
+              updatedAt: now,
+            },
+      )
+      .where(eq(userFacts.id, existing.id))
+      .returning();
+    return toUserFact(row);
   }
 
   async listFacts(userId: string, includeArchived: boolean, now: Date): Promise<FactsListing> {
@@ -401,7 +427,10 @@ export class UserFactsRepository implements IUserFactsService {
     const facts = rows.map(toUserFact);
     return {
       active: facts.filter(fact => isActiveForPrompt(fact, now)),
-      archived: includeArchived ? facts.filter(fact => fact.status === 'archived') : [],
+      // A user_deleted row is never listed, archived listing included: the promise "it does not surface again".
+      archived: includeArchived
+        ? facts.filter(fact => fact.status === 'archived' && fact.archivedReason !== 'user_deleted')
+        : [],
     };
   }
 }
