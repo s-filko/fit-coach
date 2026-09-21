@@ -1466,9 +1466,20 @@ alike. There is no sequence column, so the order the conversation actually had i
 
 ### Evidence
 
-All 14 rows of run `2ec8c9b2` carry `created_at = 2026-09-21 09:29:41.007256`. A plain
-`ORDER BY created_at` prints the assistant's reply before the tool results it is based on and the
-user's message in the middle of the batch. The same holds for every run of session `fa293e20`.
+All 14 rows of run `2ec8c9b2` carry `created_at = 2026-09-21 09:29:41.007256` (measured again while
+reproducing: `count(DISTINCT created_at) = 1` over 10 rows of a written run).
+
+**Corrected 2026-09-22, and the correction matters.** The first write-up said a plain
+`ORDER BY created_at` returns an arbitrary order. It does not, *today*: Postgres returns tied rows in
+heap order, which on a freshly written table equals insertion order — so a naive read looks right by
+accident. The shuffle this bug was first noticed through came from adding a secondary key
+(`ORDER BY created_at, id`), which is what any reader does when it wants a stable sort.
+
+The defect is therefore latent, not intermittent: **nothing persists the order**. The repro
+(AC-LSR-5, `tool-ordering`/`transcript-order` probes) makes it deterministic by rewriting the rows
+the way an ordinary `UPDATE`, a `VACUUM FULL`, a dump/restore or replication would, after which the
+real `export-query` reader returns the run fully reversed — the final AI reply first, the user's
+message last.
 
 ### Impact
 
