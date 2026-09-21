@@ -36,6 +36,7 @@ import {
   type RunInput,
   type RunResult,
   type TranscriptPort,
+  UserNotFoundError,
 } from '@domain/conversation/ports';
 import type { IUserService } from '@domain/user/ports';
 
@@ -83,7 +84,7 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
     async run(input: RunInput): Promise<RunResult> {
       const user = await userService.getUser(input.userId);
       if (!user) {
-        throw new Error(`User ${input.userId} not found`);
+        throw new UserNotFoundError(input.userId);
       }
 
       const runId = randomUUID();
@@ -168,7 +169,7 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
     async compact(userId: string): Promise<CompactOutcome> {
       const user = await userService.getUser(userId);
       if (!user) {
-        throw new Error(`User ${userId} not found`);
+        throw new UserNotFoundError(userId);
       }
 
       const runId = randomUUID();

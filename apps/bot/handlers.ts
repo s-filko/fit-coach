@@ -33,11 +33,46 @@ const api = axios.create({
     }
 });
 
-// D-H: userId cache per chatId, in memory, no TTL. Populated on /start (and
-// kept fresh by every registerOrGetUser call); cleared on a chat 404 so the
-// next message re-upserts through the server instead of retrying against a
-// stale id (self-healing — the master plan's own wording).
-const userIdByChatId = new Map<number, string>();
+// D-H: internal userId cache per SENDER (Telegram `from.id`), in memory, no TTL. Populated on
+// /start (and kept fresh by every registerOrGetUser call); cleared on a chat 404 so the next
+// message re-upserts through the server instead of retrying against a stale id (self-healing —
+// the master plan's own wording). Keyed by the sender, never the chat: an identity must follow
+// the person who wrote the message, and a chat-keyed cache is only right while a chat has exactly
+// one sender (AC-RRP-4).
+const userIdBySenderId = new Map<number, string>();
+
+// The bot serves private chats only (owner decision 2026-09-21): a personal coach whose memory
+// and training data belong to one person. In any other chat it makes no API call and answers
+// once per chat, so a busy group is not spammed. Bounded so a bot added to many groups cannot
+// grow the set without limit; the oldest entry is forgotten first (worst case: one extra notice).
+const NON_PRIVATE_NOTICE_LIMIT = 1000;
+const noticedNonPrivateChats = new Set<number>();
+
+function nonPrivateChatNotice(languageCode: string | undefined): string {
+    return languageCode === 'ru'
+        ? 'Я работаю только в личном чате — напиши мне в личные сообщения.'
+        : 'I only work in a private chat — please message me directly.';
+}
+
+async function refuseNonPrivateChat(bot: TelegramBot, msg: TelegramBot.Message): Promise<void> {
+    const chatId = msg.chat.id;
+    if (noticedNonPrivateChats.has(chatId)) {
+        return;
+    }
+    noticedNonPrivateChats.add(chatId);
+    if (noticedNonPrivateChats.size > NON_PRIVATE_NOTICE_LIMIT) {
+        const oldest = noticedNonPrivateChats.values().next().value;
+        if (oldest !== undefined) {
+            noticedNonPrivateChats.delete(oldest);
+        }
+    }
+    log.info({ chatId, chatType: msg.chat.type }, 'non-private chat — answering once that only private chats are served');
+    try {
+        await bot.sendMessage(chatId, nonPrivateChatNotice(msg.from?.language_code));
+    } catch (err) {
+        log.warn({ err: String(err), chatId }, 'could not send the private-chat-only notice');
+    }
+}
 
 const chatQueue = createChatQueue();
 
@@ -60,8 +95,7 @@ async function registerOrGetUser(msg: TelegramBot.Message) {
         throw new Error('Cannot determine user information');
     }
 
-    const chatId = msg.chat.id;
-    const cached = userIdByChatId.get(chatId);
+    const cached = userIdBySenderId.get(msg.from.id);
     if (cached) {
         return { id: cached, firstName: msg.from.first_name, username: msg.from.username };
     }
@@ -80,13 +114,19 @@ async function registerOrGetUser(msg: TelegramBot.Message) {
         throw new Error('Invalid response from server: missing data.id');
     }
 
-    userIdByChatId.set(chatId, userId);
+    userIdBySenderId.set(msg.from.id, userId);
     return { id: userId, firstName: msg.from.first_name, username: msg.from.username };
 }
 
 export function registerBotHandlers(bot: TelegramBot) {
     bot.on('message', async (msg) => {
         const chatId = msg.chat.id;
+
+        // Private chats only: no API call, no identity lookup, no queue for anything else.
+        if (msg.chat.type !== 'private') {
+            await refuseNonPrivateChat(bot, msg);
+            return;
+        }
 
         // D-G: serialise everything for one chatId so the bot never fires a
         // second HTTP request while the first is still in flight (client-side
@@ -118,7 +158,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                     await bot.sendMessage(chatId, '🧹 Context cleared. Starting fresh!');
                 } catch (error) {
                     if (isNotFound(error)) {
-                        userIdByChatId.delete(chatId);
+                        userIdBySenderId.delete(msg.from.id);
                     }
                     log.error({ err: error }, '/clear_context failed');
                     await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), languageCode));
@@ -140,7 +180,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                     await bot.sendMessage(chatId, reply);
                 } catch (error) {
                     if (isNotFound(error)) {
-                        userIdByChatId.delete(chatId);
+                        userIdBySenderId.delete(msg.from.id);
                     }
                     log.error({ err: error }, '/compact failed');
                     await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), languageCode));
@@ -175,7 +215,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                     });
                 } catch (error) {
                     if (isNotFound(error)) {
-                        userIdByChatId.delete(chatId);
+                        userIdBySenderId.delete(msg.from.id);
                     }
                     log.error({
                         err: error,
@@ -218,7 +258,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                 });
             } catch (error) {
                 if (isNotFound(error)) {
-                    userIdByChatId.delete(chatId);
+                    userIdBySenderId.delete(msg.from.id);
                 }
                 log.error({
                     err: error,

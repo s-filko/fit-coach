@@ -5,7 +5,7 @@
  * (INV-LLM-006). Pure domain: no imports with runtime effect outside `node:`.
  */
 
-export type ConversationErrorCode = 'LLM_UNAVAILABLE' | 'THREAD_BUSY' | 'CORE_ERROR';
+export type ConversationErrorCode = 'LLM_UNAVAILABLE' | 'THREAD_BUSY' | 'USER_NOT_FOUND' | 'CORE_ERROR';
 
 /**
  * The provider (or the network path to it) failed or timed out. Mapped to
@@ -44,6 +44,21 @@ export class ThreadBusyError extends Error {
 }
 
 /**
+ * The userId of a run/compact request does not exist (never registered, or the row is gone).
+ * Mapped to HTTP 404 — the status the bot's stale-id recovery reacts to (clear the cached id,
+ * re-register on the next message). Thrown before the graph is entered; no run row is written.
+ * The message (with the id) is for logs only — the response body carries just the `code`.
+ */
+export class UserNotFoundError extends Error {
+  readonly code: ConversationErrorCode = 'USER_NOT_FOUND';
+
+  constructor(userId: string) {
+    super(`User ${userId} not found`);
+    this.name = 'UserNotFoundError';
+  }
+}
+
+/**
  * Anything else: a bug, an unexpected exception, or (D-C) a `ToolSystemError`
  * raised when the tool executor's error budget was exhausted by a system
  * error. Mapped to HTTP 500. The run row records `outcome: 'core_error'`.
@@ -61,7 +76,7 @@ export class CoreError extends Error {
   }
 }
 
-export type ConversationError = LlmUnavailableError | ThreadBusyError | CoreError;
+export type ConversationError = LlmUnavailableError | ThreadBusyError | UserNotFoundError | CoreError;
 
 /**
  * Single source of truth for `code → HTTP status`, shared by the chat routes,
@@ -72,5 +87,6 @@ export type ConversationError = LlmUnavailableError | ThreadBusyError | CoreErro
 export const HTTP_STATUS_BY_CODE = {
   LLM_UNAVAILABLE: 503,
   THREAD_BUSY: 409,
+  USER_NOT_FOUND: 404,
   CORE_ERROR: 500,
 } as const satisfies Record<ConversationErrorCode, number>;

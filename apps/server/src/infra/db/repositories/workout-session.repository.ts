@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, isNotNull, lt } from 'drizzle-orm';
 
+import { ActiveSessionExistsError } from '@domain/training/errors';
 import type { IWorkoutSessionRepository } from '@domain/training/ports';
 import type {
   CreateSessionDto,
@@ -11,6 +12,25 @@ import type {
 
 import { db } from '@infra/db/drizzle';
 import { exerciseMuscleGroups, exercises, sessionExercises, sessionSets, workoutSessions } from '@infra/db/schema';
+
+/** The partial unique index behind INV-TRAINING-002 (migration 0010). */
+const ONE_IN_PROGRESS_INDEX = 'uq_workout_sessions_one_in_progress_per_user';
+
+/**
+ * Postgres unique-violation on the one-active-session index — matched by SQLSTATE `23505` and the index
+ * name, never by message text. Drizzle (>= 0.44) wraps driver errors in a DrizzleQueryError whose
+ * `cause` is the pg error, so the whole `cause` chain is inspected, not just the top-level `code`.
+ */
+function isActiveSessionViolation(err: unknown): boolean {
+  for (let current = err, depth = 0; typeof current === 'object' && current !== null && depth < 5; depth++) {
+    const { code, constraint, cause } = current as { code?: unknown; constraint?: unknown; cause?: unknown };
+    if (code === '23505' && constraint === ONE_IN_PROGRESS_INDEX) {
+      return true;
+    }
+    current = cause;
+  }
+  return false;
+}
 
 export class WorkoutSessionRepository implements IWorkoutSessionRepository {
   async create(userId: string, session: CreateSessionDto): Promise<WorkoutSession> {
@@ -145,6 +165,8 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
   }
 
   async update(sessionId: string, updates: Partial<WorkoutSession>): Promise<WorkoutSession> {
+    // A concurrent begin/start that lost the race against the one-in_progress index gets the same
+    // domain error the service's sequential check throws — never a driver-shaped failure.
     const [updated] = await db
       .update(workoutSessions)
       .set({
@@ -152,7 +174,10 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
         updatedAt: new Date(),
       })
       .where(eq(workoutSessions.id, sessionId))
-      .returning();
+      .returning()
+      .catch((err: unknown) => {
+        throw isActiveSessionViolation(err) ? new ActiveSessionExistsError() : err;
+      });
 
     return {
       ...updated,

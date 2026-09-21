@@ -70,7 +70,11 @@ export function buildPrepareNode(deps: PrepareNodeDeps) {
     // timeout: a session stays in_progress until explicitly closed (the
     // training loader lets the model decide on stale sessions).
     if (state.phase === 'training' && state.activeSessionId) {
-      const session = await trainingService.getSessionDetails(state.activeSessionId).catch(() => null);
+      // A REJECTED read is an infrastructure failure, not a domain fact: it propagates (the run
+      // adapter records it and throws a typed error → HTTP status + code, ADR-0013 §6) and commits
+      // nothing. Only a read that RETURNS null (no such session) or a finished session ends the
+      // training phase — never turn "could not look" into "the session ended" (AC-RRP-2).
+      const session = await trainingService.getSessionDetails(state.activeSessionId);
       const isSessionEnded = !session || session.status === 'completed' || session.status === 'skipped';
       if (isSessionEnded) {
         log.info(

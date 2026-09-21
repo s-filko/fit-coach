@@ -91,7 +91,10 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
     const { deps } = makeDeps({ invoke }, null);
     const runner = buildConversationRunner(deps);
 
-    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toThrow('not found');
+    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toMatchObject({
+      name: 'UserNotFoundError',
+      code: 'USER_NOT_FOUND',
+    });
     expect(invoke).not.toHaveBeenCalled();
   });
 
@@ -269,7 +272,7 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
       const invoke = jest.fn();
       const { deps } = makeDeps({ invoke }, null);
 
-      await expect(buildConversationRunner(deps).compact(UID)).rejects.toThrow('not found');
+      await expect(buildConversationRunner(deps).compact(UID)).rejects.toMatchObject({ code: 'USER_NOT_FOUND' });
       expect(invoke).not.toHaveBeenCalled();
     });
   });
