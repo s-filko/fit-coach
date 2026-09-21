@@ -118,7 +118,7 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
     confirmFact: jest.fn(),
     supersedeFact: jest.fn(),
     retractFact: jest.fn(),
-    deleteFact: jest.fn(),
+    forgetFact: jest.fn(),
     listFacts: jest.fn().mockResolvedValue({ active: [], archived: [] }),
     getForPrompt: jest.fn().mockResolvedValue([]),
     getConstraints: jest.fn().mockResolvedValue([]),

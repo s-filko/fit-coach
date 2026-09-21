@@ -29,6 +29,7 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 import type { LlmGateway } from '@domain/ai/ports';
 import type { ChatMsg } from '@domain/ai/types';
 import {
+  type CompactReason,
   type EpisodeSummaryV4,
   EpisodeSummaryV4Schema,
   type FactOperation,
@@ -85,12 +86,20 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
   return async function compactStep(state, config): Promise<Partial<ConversationStateType>> {
     const ctx = ctxOf(config as never);
     const { userId, runId } = ctx;
-    const { history } = splitEpisode(state.messages);
+    // The manual pass (`/compact`) appended NO HumanMessage, so there is no
+    // "current run" for splitEpisode to protect: cutting at the last human
+    // message would leave the user's freshest turn unfolded and, in a short
+    // conversation, an empty history. The whole channel is foldable. The
+    // automatic paths keep splitEpisode's invariant untouched (one appended
+    // human per run; compaction never cuts into it).
+    const manual = ctx.compactOnly === true;
+    const history = manual ? [...state.messages] : splitEpisode(state.messages).history;
 
     // D-E: live-thread import, exactly once — the first P4 run sees an empty
     // history and no episode summaries, and imports the legacy rolling
-    // summary as the one prior episode so users keep their context.
-    if (history.length === 0 && state.episodeSummaries.length === 0) {
+    // summary as the one prior episode so users keep their context. Never on
+    // the manual pass: an empty channel there is simply nothing to compact.
+    if (!manual && history.length === 0 && state.episodeSummaries.length === 0) {
       const legacy: LegacySummary | null = await summaries.latestLegacySummary(userId).catch((err: unknown) => {
         log.error({ err, userId }, 'Legacy summary read failed — skipping the one-time import');
         return null;
@@ -120,18 +129,23 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
     }
 
     const historyBudget = budgetFor(state.phase);
-    const reason = decideCompactReason({
-      state,
-      history,
-      now: ctx.now,
-      gapMs,
-      historyBudget,
-      estimate: estimateMessages,
-    });
+    const reason: CompactReason | null = manual
+      ? 'manual'
+      : decideCompactReason({
+          state,
+          history,
+          now: ctx.now,
+          gapMs,
+          historyBudget,
+          estimate: estimateMessages,
+        });
     if (reason === null) {
       return {};
     }
     if (history.length === 0) {
+      if (manual) {
+        return {};
+      }
       // The flag fired but there is no episode to end — consume it, that is all.
       return { compactReason: null };
     }
@@ -147,6 +161,12 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
     });
 
     if (removed.length === 0) {
+      if (manual) {
+        // Too short to summarise: a clean no-op — no model call, nothing
+        // touched (the pending automatic flag, if any, is left for its own run).
+        log.info({ userId, runId, history: history.length }, 'Manual compaction: nothing to compact');
+        return {};
+      }
       // AC-CC-1: the beyond-tail part is too short to summarise (D-B) — it
       // stays verbatim and rides along until a later compaction can summarise
       // it (supersedes D-B's trim-without-summary). The episode does not
@@ -165,6 +185,9 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
     // trigger retries once the id gap is fixed upstream.
     const idlessCount = removed.filter(m => !m.id).length;
     if (idlessCount > 0) {
+      if (manual) {
+        throw new Error(`Manual compaction refused — ${idlessCount} history message(s) have no id`);
+      }
       log.error(
         { userId, runId, reason, idlessCount, removed: removed.length },
         'Compaction skipped this run — one or more history messages have no id; RemoveMessage requires one',
@@ -208,6 +231,16 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
         userId,
       });
     } catch (err) {
+      // The two paths differ ON PURPOSE — do not unify them. An automatic
+      // trigger fires inside a reply the user is waiting for, so a silent
+      // trim without a summary (BR-LLM-004) beats breaking that reply. A
+      // manual /compact has no reply to protect: the user asked for the fold,
+      // so a failed summariser must throw — nothing has been removed (the
+      // updates above are only returned on success) and the user is told
+      // honestly instead of losing their conversation to a promised summary.
+      if (manual) {
+        throw err;
+      }
       log.warn({ err, userId, runId, reason }, 'Episode summariser failed — trimming without a summary (BR-LLM-004)');
     }
 

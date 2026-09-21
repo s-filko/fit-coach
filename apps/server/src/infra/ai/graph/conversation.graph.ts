@@ -129,7 +129,7 @@ function buildGraph(deps: ConversationGraphDeps) {
   });
 
   const graph = new StateGraph(ConversationState, RunContext)
-    .addNode('prepare', prepareNode, { ends: ['route', 'commit'] })
+    .addNode('prepare', prepareNode, { ends: ['route', 'commit', END] })
     .addNode('route', routeNode, { ends: specs.map(s => s.name) })
     .addNode('commit', commitNode)
     .addEdge(START, 'prepare')

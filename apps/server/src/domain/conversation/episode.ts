@@ -102,8 +102,14 @@ export interface StoredEpisodeSummary {
   summary: EpisodeSummary | EpisodeSummaryV4;
 }
 
-/** Why an episode ended (BR-LLM-001..003). Precedence: phase_boundary > inactivity > budget. */
-export type CompactReason = 'inactivity' | 'phase_boundary' | 'budget';
+/**
+ * Why an episode ended (BR-LLM-001..003). Precedence: manual > phase_boundary >
+ * inactivity > budget. `manual` is the user's own `/compact`: never computed,
+ * only requested — it keeps no verbatim tail (an explicit command is not a
+ * surprise truncation, BUG-018) and, unlike the automatic triggers, fails
+ * loudly when the summariser fails.
+ */
+export type CompactReason = 'inactivity' | 'phase_boundary' | 'budget' | 'manual';
 
 /**
  * Per-phase token budget (ADR-0013 §3.4 table). P4 adds it as data and reads

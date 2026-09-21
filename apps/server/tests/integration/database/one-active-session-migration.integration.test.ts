@@ -1,5 +1,5 @@
 /**
- * Migration 0009 (INV-TRAINING-002): the partial unique index is preceded by a hand-written guard that
+ * Migration 0010 (INV-TRAINING-002): the partial unique index is preceded by a hand-written guard that
  * ABORTS, naming the users, when duplicates already exist — it must never delete or close history.
  *
  * Everything below runs inside one transaction on a dedicated connection and is ROLLED BACK: the
@@ -12,7 +12,7 @@ import { Pool, type PoolClient } from 'pg';
 
 const INDEX = 'uq_workout_sessions_one_in_progress_per_user';
 
-describe('migration 0009 — one in_progress session per user', () => {
+describe('migration 0010 — one in_progress session per user', () => {
   let pool: Pool;
   let client: PoolClient;
   let migrationSql: string;
@@ -25,7 +25,7 @@ describe('migration 0009 — one in_progress session per user', () => {
       database: process.env.DB_NAME!,
       port: Number(process.env.DB_PORT),
     });
-    migrationSql = await readFile(path.resolve(process.cwd(), 'drizzle/0009_living_salo.sql'), 'utf8');
+    migrationSql = await readFile(path.resolve(process.cwd(), 'drizzle/0010_living_salo.sql'), 'utf8');
   });
 
   beforeEach(async () => {

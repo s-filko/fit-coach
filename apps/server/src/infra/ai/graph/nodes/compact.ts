@@ -113,6 +113,18 @@ export function planCompaction(input: PlanCompactionInput): { removed: BaseMessa
   const turns = splitTurns(history);
   const tailCount = Math.max(0, Math.min(keepTurns, turns.length));
 
+  if (reason === 'manual') {
+    // An explicit /compact keeps NO tail: the keep-recent rule protects the
+    // user from a SURPRISE truncation (BUG-018), and this one is asked for.
+    // The min-turns/min-tokens guard stays — a too-short conversation is a
+    // clean no-op with no model call, which also keeps the command from being
+    // spammed into a pile of summariser calls.
+    if (history.length === 0 || isShortEpisode(history, { minTurns, minTokens, estimate })) {
+      return { removed: [], kept: [...history] };
+    }
+    return { removed: [...history], kept: [] };
+  }
+
   if (reason === 'budget') {
     const removed: BaseMessage[] = [];
     let kept = [...history];

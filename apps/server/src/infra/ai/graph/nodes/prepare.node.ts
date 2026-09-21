@@ -7,7 +7,7 @@
  */
 import { AIMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
-import { Command } from '@langchain/langgraph';
+import { Command, END } from '@langchain/langgraph';
 
 import type { ITrainingService } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
@@ -45,6 +45,14 @@ export function buildPrepareNode(deps: PrepareNodeDeps) {
     const ctx = ctxOf(config as never);
     const { userId, user } = ctx;
     const lang = langOf(user?.languageCode);
+
+    // Manual compaction (`/compact`): the compact step and nothing else — no
+    // phase sync, no course check, no agent, no commit (so no transcript rows
+    // and `lastUserMessageAt` stays). Whatever compaction returns is the whole
+    // update; an empty one is the "nothing to compact" outcome.
+    if (ctx.compactOnly === true) {
+      return new Command({ goto: END, update: await compact(state, config) });
+    }
 
     // Always reset — a stale blocked transition must not leak into this run.
     const updates: Partial<ConversationStateType> = { pendingTransition: null };

@@ -528,10 +528,23 @@ describe('journey (f) — what is remembered, then one fact corrected and one de
     expect(listing).not.toContain(SLEEP_FACT);
   });
 
-  it.each(MODES)('[%s] the correction kept the row (same id); the deletion left no row', mode => {
-    const before = runOf(journeyF, mode).result.steps[0]!.facts.find(f => f.fact === KNEE_OLD)!;
-    const after = runOf(journeyF, mode).result.steps[2]!.facts;
-    expect(after.find(f => f.fact === KNEE_NEW)!.id).toBe(before.id);
-    expect(after.some(f => f.fact === SLEEP_FACT)).toBe(false);
+  it.each(MODES)(
+    '[%s] the correction kept the row (same id); the deletion ARCHIVED its row — nothing was removed',
+    mode => {
+      const first = runOf(journeyF, mode).result.steps[0]!.facts;
+      const after = runOf(journeyF, mode).result.steps[2]!.facts;
+      expect(after.find(f => f.fact === KNEE_NEW)!.id).toBe(first.find(f => f.fact === KNEE_OLD)!.id);
+      // Same number of rows before and after: the "deleted" fact is still there, under its own reason.
+      expect(after).toHaveLength(first.length);
+      expect(after.find(f => f.fact === SLEEP_FACT)).toMatchObject({
+        id: first.find(f => f.fact === SLEEP_FACT)!.id,
+        status: 'archived',
+        archivedReason: 'user_deleted',
+      });
+    },
+  );
+
+  it.each(MODES)('[%s] the deleted fact does not surface even in the listing that asks for archived facts', mode => {
+    expect(lastListing(mode, 2)).not.toContain(SLEEP_FACT);
   });
 });

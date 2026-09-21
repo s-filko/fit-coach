@@ -58,6 +58,7 @@ describe('POST /api/bot/chat concurrency — AC-1351', () => {
       return { text: `reply for ${input.userId}`, phase: 'chat', runId };
     },
     clearContext: async () => undefined,
+    compact: async () => 'nothing_to_compact' as const,
   });
 
   beforeAll(async () => {
