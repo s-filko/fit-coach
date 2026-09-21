@@ -87,6 +87,18 @@ and dropped its two control tests (the domain fact is proven by the hardening su
 "defect is in the text" guard is now one line inside the probe: it asserts the status the domain wrote
 (`skipped`) before reading the text. Same assertions, same RED (see the re-run rows below).
 
+**Second de-duplication pass (R2 re-run).** `training-service-log-set-with-context.unit.test.ts` was the last
+hand-rolled copy of that shape; it now uses `training-service-test-support.ts` for everything:
+`makeSessionSet({ setNumber })` (the one factory; the file's positional variant is gone), `createMocks()`
+(its `mockSessionRepo` / set / exercise repository literals are gone — one factory remains) and
+`makeSessionExercise(...)`, a new export of the same module. The latter is the row-only layer:
+`makeExerciseWithDetails` now composes `makeSessionExercise()` plus its optional catalog/sets layer, so the
+two are genuinely one shape (values of `makeExerciseWithDetails` unchanged). The file's default resolved
+session for `findByIdWithDetails` was dead — every test spies `ensureCurrentExercise` and `logSet`, and
+`logSet` never reads it — so it was dropped rather than carried into the shared factory; the three tests
+assert exactly what they asserted before. `grep` shows one `makeSessionSet`, one session-repository mock
+literal and one `makeSessionExercise` under `services/__tests__/`.
+
 
 ### Task 2: Correction batch destroys the corrected sets (AC-LSR-3)
 
@@ -125,9 +137,7 @@ hand-wiring six repositories. The same factory replaced the copies in
 `tests/integration/services/training.service.integration.test.ts` and
 `tests/integration/scenarios/review-training.integration.test.ts` (both its main wiring and the
 `blindService` variant, through the `sessionRepo` override) — five hand-built copies became one. Not routed
-(deliberately): the mocked-repository `TrainingService` in
-`training-service-log-set-with-context.unit.test.ts` — a unit-level mock wiring with different defaults, not
-the real-DB wiring; and production `register-infra-services.ts`.
+(deliberately): production `register-infra-services.ts`.
 
 
 ### Task 4: The transcript loses order and loses messages (AC-LSR-5, AC-LSR-6)

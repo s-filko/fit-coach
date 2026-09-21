@@ -9,7 +9,12 @@ import type {
   IWorkoutSessionRepository,
 } from '@domain/training/ports';
 import { TrainingService } from '@domain/training/services/training.service';
-import type { SessionExerciseWithDetails, SessionSet, WorkoutSessionWithDetails } from '@domain/training/types';
+import type {
+  SessionExercise,
+  SessionExerciseWithDetails,
+  SessionSet,
+  WorkoutSessionWithDetails,
+} from '@domain/training/types';
 
 // ---------------------------------------------------------------------------
 // Factories
@@ -27,9 +32,8 @@ export const makeSessionSet = (overrides: Partial<SessionSet> = {}): SessionSet 
   ...overrides,
 });
 
-export const makeExerciseWithDetails = (
-  overrides: Partial<SessionExerciseWithDetails> = {},
-): SessionExerciseWithDetails => ({
+/** The session-exercise row alone (no catalog details, no sets). */
+export const makeSessionExercise = (overrides: Partial<SessionExercise> = {}): SessionExercise => ({
   id: 'se-default',
   sessionId: 'session-1',
   exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
@@ -41,6 +45,14 @@ export const makeExerciseWithDetails = (
   actualRepsRange: null,
   userFeedback: null,
   createdAt: new Date(),
+  ...overrides,
+});
+
+/** The row plus its optional layer: the catalog exercise and the logged sets. */
+export const makeExerciseWithDetails = (
+  overrides: Partial<SessionExerciseWithDetails> = {},
+): SessionExerciseWithDetails => ({
+  ...makeSessionExercise(),
   exercise: {
     id: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
     name: 'Bench Press',
