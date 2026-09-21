@@ -2,8 +2,9 @@
 
 > **For agentic workers:** Use superpowers:executing-plans and test-driven-development. The owner explicitly requires the reproduction stage BEFORE any fix; this overrides the usual one-test/one-fix interleaving. Execute only the dispatched task. The coordinator reviews the RED evidence before dispatching remediation.
 
-- Status: in progress
+- Status: done
 - Branch: plan/session-2026-09-21-repro
+- Review: 2026-09-22 | clean | R1,R2,R3,R4
 
 **Goal (owner, 2026-09-22):** "агент пишет тесты которые повторяют эти ошибки (если еще не написаны);
 когда мы видим что ошибка тестом отлавливается, только потом начинаем фикс." Turn the 2026-09-21
@@ -239,8 +240,10 @@ plain honest wording through (`node` one-off, recorded in the evidence table).
 ## Review
 
 Close-out review 2026-09-22, four zones (R1, R2, R3, R4), each dispatched cold and isolated.
-**Verdict: blocked** — three blocking findings in R2 are open, so no `- Review:` header line is
-written. R1 and R3 returned no blocking findings.
+First pass: **blocked** — three blocking findings in R2. All were closed (`05ab64c7`), R2 was re-run
+alone, confirmed the fixes genuine and raised one further duplicate, which was closed too
+(`5c5ebe30`). **Final verdict: clean.** R1, R3 and R4 returned no blocking findings; R4's single
+finding was closed during the first pass.
 
 ### Blocking
 
@@ -302,3 +305,31 @@ assertions, no `skip`/`test.failing`, no rigged fixtures; every control passes a
 defect; the AC-LSR-5 heap-order rewrite is sound and its two soundness preconditions are asserted in
 the test rather than claimed in prose; `test:unit` 121 suites / 1151 tests green; the production diff
 is empty.
+
+
+### Second pass (2026-09-22, R2 alone)
+
+The owner's ruling closed all three findings without exception: "я не терплю дубли, дубли это то что
+потом аукнется как дистрактор и как поддержка непонятно чего и ради чего". The coordinator's dissent
+on the third finding is therefore withdrawn — and R2's re-review judged the fix "a genuine
+improvement, not just compliance".
+
+What moved (`05ab64c7`): the `log_set` plumbing into `log-set-test-support.ts` (shared with the unit
+test); `failNextChat(error)` into `scripted-model.ts`, so the probe uses the one shared model mock;
+the domain fixture factories into `training-service-test-support.ts`, with the two duplicated control
+tests replaced by an in-probe guard; and `buildRealTrainingService()` in `tests/helpers/`, collapsing
+five hand-built wirings into one.
+
+R2's re-review found one duplicate the first pass had missed — `training-service-log-set-with-context.unit.test.ts`
+still hand-rolled `makeSessionSet` and the `mockSessionRepo` literal that the new support module was
+created to own. Closed in `5c5ebe30`: the file dropped from ~140 to ~40 lines, `makeExerciseWithDetails`
+now composes `makeSessionExercise`, and the assertions are byte-identical to before the migration
+(verified by diffing every `it(`/`expect(` line against `dcf989bb`).
+
+**Proof re-verified by the coordinator after each de-duplication commit**, since refactoring the
+scaffolding is exactly how a reproduction can be lost without anyone noticing: unit probes 3 failed /
+1 passed, DB probes 6 failed / 3 passed — same test names, same assertions, same received values;
+`test:unit` 1151 green; `test:scenarios` 338 green; production diff outside `__tests__` empty.
+
+A third R2 pass was not dispatched: the remaining check is mechanical (one `makeSessionSet`, one
+session-repo mock literal under `services/__tests__/`) and was verified directly by grep.
