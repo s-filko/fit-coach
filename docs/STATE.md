@@ -12,7 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-21 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `session-2026-09-21-repro.md` — Live-Session Findings (BUG-022…BUG-030) — Reproduction Before Remediation Implementation Plan (branch: `plan/session-2026-09-21-repro`, last commit 2026-09-22)
+— none —
 
 **Planned**
 - `llm-io-audit-trail.md` — LLM I/O Audit Trail — Nothing the User Wrote, the Model Answered, or the API Received Is Lost Implementation Plan
@@ -47,6 +47,7 @@ _Generated 2026-09-21 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `reply-latency-and-typing.md` — Reply Latency and Live Typing (BUG-019) Implementation Plan
 - `review-regression-proof.md` — Review Findings — Reproduction Before Remediation Implementation Plan
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
+- `session-2026-09-21-repro.md` — Live-Session Findings (BUG-022…BUG-030) — Reproduction Before Remediation Implementation Plan
 - `structured-output-fenced-json.md` — Structured Output — Fenced-JSON Recovery and the User-Facts Scenario Test Implementation Plan
 - `structured-output-json-object-mode.md` — Structured Output — Provider Mode `json_object` for the Z.AI Route Implementation Plan
 - `training-journey-scenarios.md` — Training Journey Scenarios — Deterministic over the Real Test DB + Live L3 Implementation Plan
