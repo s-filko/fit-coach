@@ -17,14 +17,11 @@ import { ActiveSessionExistsError } from '@domain/training/errors';
 import { TrainingService } from '@domain/training/services/training.service';
 
 import { db } from '@infra/db/drizzle';
-import { ExerciseRepository } from '@infra/db/repositories/exercise.repository';
-import { SessionExerciseRepository } from '@infra/db/repositories/session-exercise.repository';
-import { SessionSetRepository } from '@infra/db/repositories/session-set.repository';
 import { DrizzleUserRepository } from '@infra/db/repositories/user.repository';
-import { WorkoutPlanRepository } from '@infra/db/repositories/workout-plan.repository';
 import { WorkoutSessionRepository } from '@infra/db/repositories/workout-session.repository';
 import { users } from '@infra/db/schema';
 
+import { buildRealTrainingService } from '../../helpers/training-service';
 import { createTestUserData } from '../../shared/test-factories';
 
 const BENCH = 'Barbell Bench Press';
@@ -38,19 +35,10 @@ describe('training persistence — exerciseName logging and one active session (
   const createdUserIds: string[] = [];
 
   beforeAll(async () => {
-    const exerciseRepo = new ExerciseRepository();
-    userRepo = new DrizzleUserRepository();
-    sessionRepo = new WorkoutSessionRepository();
-    service = new TrainingService(
-      new WorkoutPlanRepository(),
-      sessionRepo,
-      exerciseRepo,
-      new SessionExerciseRepository(),
-      new SessionSetRepository(),
-      userRepo,
-    );
+    const wiring = buildRealTrainingService();
+    ({ service, userRepo, sessionRepo } = wiring);
 
-    const all = await exerciseRepo.findAll();
+    const all = await wiring.exerciseRepo.findAll();
     const bench = all.find(e => e.name === BENCH);
     if (!bench || !all.some(e => e.name === SQUAT)) {
       throw new Error('Seed exercises missing — fixture problem, not a reproduction');
@@ -205,14 +193,7 @@ describe('training persistence — exerciseName logging and one active session (
       const blindRepo = Object.assign(Object.create(sessionRepo) as WorkoutSessionRepository, {
         findActiveByUserId: async () => null,
       });
-      const blindService = new TrainingService(
-        new WorkoutPlanRepository(),
-        blindRepo,
-        new ExerciseRepository(),
-        new SessionExerciseRepository(),
-        new SessionSetRepository(),
-        userRepo,
-      );
+      const { service: blindService } = buildRealTrainingService({ sessionRepo: blindRepo });
       await blindService.beginSession(a.id);
 
       const loser = await blindService.beginSession(b.id).catch((err: unknown) => err);
