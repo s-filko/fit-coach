@@ -71,6 +71,11 @@ export const recordLlmCall: RecordLlmCall = async input => {
     }),
   );
 
+  // No unique constraint on (run_id, call_index) — a deliberate decision, not an
+  // oversight. A recorder error is swallowed by design (D-F-style), so a unique
+  // violation on a rare race would turn into a LOST call record; a duplicated
+  // index instead costs nothing an audit trail cannot survive, since created_at
+  // still orders same-index rows within a run.
   const [{ maxIndex }] = await db
     .select({ maxIndex: max(llmCalls.callIndex) })
     .from(llmCalls)
