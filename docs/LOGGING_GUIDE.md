@@ -399,9 +399,11 @@ gone.
 - **How to run it**: `npm run db:prune-llm-calls` from `apps/server` — dry-run by
   default (counts what each of the two statements would drop, changes nothing); pass
   `-- --apply` to actually null the payloads, and `-- --days N` to override the
-  configured window for one run. The `llm_calls` statement always runs before the
-  `prompt_blobs` one — the blob pass depends on it. No in-app scheduler: install it as a
-  nightly cron job on the host, the same operating model as `db:prune-checkpoints`.
+  configured window for one run. Both statements share that same window — the
+  `prompt_blobs` pass judges a row "live" by `request IS NOT NULL AND` still inside it,
+  the identical predicate in dry run and apply, so a dry run's blob count matches what
+  `--apply` actually nulls instead of under-reporting it. No in-app scheduler: install
+  it as a nightly cron job on the host, the same operating model as `db:prune-checkpoints`.
 
 ---
 

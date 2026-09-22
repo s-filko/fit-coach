@@ -7,8 +7,10 @@
  * Run: npm run db:prune-llm-calls [-- --days N] [-- --apply]
  * `--days` overrides LLM_CALLS_RETENTION_DAYS for this run only; the default
  * is the configured window, read once here so the number lives in one place.
- * The two statements (llm_calls, then prompt_blobs) run IN ORDER — the blob
- * pass depends on llm_calls already having been pruned this run.
+ * Both statements (llm_calls, then prompt_blobs) share that same `days` —
+ * the blob pass's own liveness check needs it too (prune-llm-calls.ts's
+ * header explains why), so the two no longer depend on running in a
+ * particular order, only on the same window.
  */
 import { pool } from '@infra/db/drizzle';
 
@@ -36,7 +38,7 @@ async function run(): Promise<void> {
   );
 
   for (const statement of statements) {
-    // eslint-disable-next-line no-await-in-loop -- must run in order: blobs depends on calls having run first
+    // eslint-disable-next-line no-await-in-loop -- run sequentially, one log line per statement
     const result = await pool.query(statement.sql, statement.params);
     const count = apply ? (result.rowCount ?? 0) : Number(result.rows[0]?.count ?? 0);
     log.info(

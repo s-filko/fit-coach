@@ -1,9 +1,10 @@
 import { buildPruneLlmCallsStatements } from '../prune-llm-calls';
 
 describe('buildPruneLlmCallsStatements (AC-AT-6)', () => {
-  it('returns two statements, llm_calls first then prompt_blobs — the blob pass depends on the calls pass', () => {
+  it('returns two statements, llm_calls then prompt_blobs, both parametrized by the same days', () => {
     const { statements } = buildPruneLlmCallsStatements({ days: 30 });
     expect(statements.map(s => s.table)).toEqual(['llm_calls', 'prompt_blobs']);
+    expect(statements.map(s => s.params)).toEqual([[30], [30]]);
   });
 
   describe('llm_calls statement', () => {
@@ -33,11 +34,12 @@ describe('buildPruneLlmCallsStatements (AC-AT-6)', () => {
   });
 
   describe('prompt_blobs statement', () => {
-    it('dry run: counts blobs unreferenced by any unpruned row, changes nothing', () => {
+    it('dry run: counts blobs no live row (request present, inside the window) still references', () => {
       const [, blobs] = buildPruneLlmCallsStatements({ days: 30 }).statements;
       expect(blobs!.sql).toMatch(/^SELECT count\(\*\) FROM prompt_blobs/i);
       expect(blobs!.sql).not.toMatch(/UPDATE|DELETE/i);
-      expect(blobs!.sql).toContain('request IS NOT NULL');
+      expect(blobs!.sql).toContain('llm_calls.request IS NOT NULL');
+      expect(blobs!.params).toEqual([30]);
     });
 
     it('apply: nulls content only, never deletes the blob row', () => {
@@ -47,11 +49,22 @@ describe('buildPruneLlmCallsStatements (AC-AT-6)', () => {
       expect(blobs!.sql).not.toMatch(/hash\s*=|created_at\s*=/i);
     });
 
-    it('is independent of `days` — it runs on whatever llm_calls looks like after statement 1, not its own cutoff', () => {
-      const a = buildPruneLlmCallsStatements({ days: 7, apply: true }).statements[1]!;
-      const b = buildPruneLlmCallsStatements({ days: 90, apply: true }).statements[1]!;
-      expect(a.sql).toBe(b.sql);
-      expect(a.params).toEqual([]);
+    it('review defect 1: uses NOT EXISTS, never NOT IN — a NULL array element must not silently disable the whole prune', () => {
+      const [, blobs] = buildPruneLlmCallsStatements({ days: 30, apply: true }).statements;
+      expect(blobs!.sql).toMatch(/NOT EXISTS/i);
+      expect(blobs!.sql).not.toMatch(/NOT IN\s*\(/i);
+      expect(blobs!.sql).toContain('h IS NOT NULL');
+    });
+
+    it('review defect 2: takes `days` and applies the SAME cutoff dry run and apply use, so a live row that has not been pruned yet still counts as a referencer only when it is genuinely inside the window', () => {
+      const dryRun = buildPruneLlmCallsStatements({ days: 15 }).statements[1]!;
+      const apply = buildPruneLlmCallsStatements({ days: 15, apply: true }).statements[1]!;
+      expect(dryRun.params).toEqual([15]);
+      expect(apply.params).toEqual([15]);
+      // Same liveness predicate in both modes — only the outer SELECT-count vs UPDATE differs.
+      const referencedClause = /WHERE h IS NOT NULL[\s\S]*?created_at >= now\(\) - make_interval\(days => \$1::int\)/i;
+      expect(dryRun.sql).toMatch(referencedClause);
+      expect(apply.sql).toMatch(referencedClause);
     });
   });
 
