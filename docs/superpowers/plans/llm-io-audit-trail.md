@@ -245,11 +245,11 @@ trusted.
 
 **Files:** a script under `apps/server/scripts/` (or an `npm run` entry), `docs/LOGGING_GUIDE.md`, tests.
 
-- [ ] **Step 1: Tests first** — given a run id (or a session id, or a user + time window) the output
+- [x] **Step 1: Tests first** — given a run id (or a session id, or a user + time window) the output
   interleaves user messages, model answers, tool calls and results in `seq` order, and can include the
   request payloads on a flag.
-- [ ] **Step 2**: implement, document the invocation.
-- [ ] **Step 3**: verify — `npm run test:unit`; a manual run against dev by the orchestrator.
+- [x] **Step 2**: implement, document the invocation.
+- [x] **Step 3**: verify — `npm run test:unit`; a manual run against dev by the orchestrator.
 
 ---
 

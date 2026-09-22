@@ -407,6 +407,50 @@ gone.
 
 ---
 
+## Reading a Run or a Session Back (AC-AT-5)
+
+`npm run print-transcript` (from `apps/server`) is the one command that reconstructs what actually
+happened, from the durable record above — not from logs. It is written for a PERSON reconstructing
+an incident, not for a machine: full sentences, no JSON dump, and every gap this plan closed (a
+missing answer, a pruned payload, a pre-`seq` row) is printed as a stated fact, never a silent
+absence.
+
+```bash
+npm run print-transcript -- --run <runId>
+npm run print-transcript -- --session <workoutSessionId>
+npm run print-transcript -- --user <userId> --since <ISO> --until <ISO>
+npm run print-transcript -- --run <runId> --payloads   # + the exact request/response sent
+```
+
+- **`--run`** prints one run: its `conversation_runs` summary (phase, model, tokens, outcome), then
+  every `conversation_turns` row and `llm_calls` invocation, interleaved by when each actually
+  happened (`created_at`, `seq` as the tiebreak — AC-AT-4) — not turns first and calls appended,
+  since an API call is recorded before the turns it produced are committed (Task 4/BUG-022's own
+  lesson: seeing the calls precede the transcript write is the truthful order).
+- **`--session <id>`** resolves a `workout_sessions` row to its user and `[startedAt, completedAt]`
+  (falling back to `createdAt`/`lastActivityAt`/`updatedAt` for an in-progress or abandoned session),
+  then prints every run in that window, oldest first.
+- **`--user --since --until`** is the same window query directly, for anything not tied to a
+  training session.
+- **A failed run prints as failed** — its `outcome`, `error_class` and `error_message` (AC-AT-2),
+  right in the run header, not buried.
+- **A user message with no model answer prints `NO ANSWER RECORDED (BUG-022)`** — the exact defect
+  this plan started from — instead of just... not showing a reply and leaving the reader to notice.
+- **A row written before AC-AT-4 (no `seq`) is flagged**, not silently reordered or dropped: `seq —`
+  in place of a number, plus one warning line per run that has any.
+- **`--payloads` resolves `prompt_hashes` back through `prompt_blobs`.** A pruned call
+  (`request`/`response` nulled — AC-AT-6) prints `request: [aged out — retention pruned this
+  payload]`; a pruned blob prints `[payload aged out — retention pruned this prompt, hash <hash>]`
+  — never an empty string, never a crash. The static rules block (and any other prompt block reused
+  across calls) is printed in full only the FIRST time it appears in the whole invocation; every
+  later reference — same call, another call, another run in a session listing — points back to it
+  instead of repeating a multi-kilobyte block verbatim.
+- **Off by default** because a run's request can carry the whole conversation history (AC-AT-6's own
+  volume note: 100–250 KB per run) — without the flag, an `llm_calls` line shows only its model,
+  latency and error, if any.
+
+---
+
 ## What to NEVER log
 
 ### Automatic redaction (Pino `redact`)
