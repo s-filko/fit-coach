@@ -119,6 +119,20 @@ reading `conversation_turns` *to build a prompt*) and leaves the port's surface 
   in the catch block.
 - [x] **Step 3**: verify — `npm run test:unit`, `RUN_DB_TESTS=1 npm run test:integration`.
 
+**Recorded at Task 2 review (orchestrator, 2026-09-22).** Two things the task correctly left alone,
+written down so the close-out does not rediscover them as gaps:
+- **A failed manual compaction still leaves no trace in `conversation_runs`.** The adapter's
+  `compact()` has its own catch that logs and rethrows without calling `recordRun`, so it is not a
+  non-`ok` run row missing a cause — it is no row at all. AC-AT-2 is satisfied as written (the one
+  path that records a failed run now records why), but the goal of this plan is not, for that path.
+  Worth a decision at close-out: either `compact()` records its own failed run, or the plan states
+  that manual compaction is deliberately outside the run log.
+- **`error_message` puts raw provider text in a durable table**, which is what AC-AT-2 asks for, and
+  is the deliberate opposite of INV-LLM-006, which keeps exception text out of HTTP bodies. The
+  difference is intended (internal record vs. user-facing response). What was not checked is whether
+  a provider error can carry an echo of the request; if it can, 500 characters of a failed call's
+  payload land in `conversation_runs`. One look before this plan closes.
+
 ### Task 3: Turn order is recoverable (AC-AT-4, closes BUG-029)
 
 **Files:** migration for `conversation_turns` (`seq`), `schema.ts`,
