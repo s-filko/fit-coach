@@ -85,14 +85,14 @@ promoted. This paragraph is the single statement of the rename rule; Tasks 1 and
 `apps/server/src/infra/conversation/drizzle-transcript.service.ts`,
 `apps/server/src/domain/conversation/ports/*`, their tests.
 
-- [ ] **Step 1: the red test already exists** — `failed-run-transcript.repro.test.ts` (§ Red tests
+- [x] **Step 1: the red test already exists** — `failed-run-transcript.repro.test.ts` (§ Red tests
   already on `dev`) proves the loss: a run whose model call throws leaves no `human` row. **Extend it,
   do not duplicate it**, with the *exactly-once* half of AC-AT-1 — assert the **count** of matching
   `human` rows is 1 (it asserts `toContain` today), for both the successful and the failed run, so a
   commit node that re-writes the message fails the test.
-- [ ] **Step 2**: persist the inbound message before `graph.invoke`, and stop the commit node from
+- [x] **Step 2**: persist the inbound message before `graph.invoke`, and stop the commit node from
   re-writing it (the run id makes the row identifiable).
-- [ ] **Step 3**: verify — `cd apps/server && npm run test:unit` and
+- [x] **Step 3**: verify — `cd apps/server && npm run test:unit` and
   `RUN_DB_TESTS=1 npm run test:integration`.
 
 ### Task 2: A failed run says why (AC-AT-2)

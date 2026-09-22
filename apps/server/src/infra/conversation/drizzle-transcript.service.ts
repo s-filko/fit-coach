@@ -67,7 +67,10 @@ export function toTurnRows(input: AppendRunMessagesInput): TurnRow[] {
   return rows;
 }
 
-/** TranscriptPort adapter — appends only; no reads (INV-LLM-001). */
+/**
+ * TranscriptPort adapter — appends only; its one read is the AC-AT-1 dedup
+ * below, not a domain read (INV-LLM-001 is about the prompt, not this).
+ */
 export class DrizzleTranscriptService implements TranscriptPort {
   async appendRunMessages(input: AppendRunMessagesInput): Promise<void> {
     const rows = toTurnRows(input);
@@ -76,7 +79,27 @@ export class DrizzleTranscriptService implements TranscriptPort {
     }
     const { db } = await import('@infra/db/drizzle');
     const { conversationTurns } = await import('@infra/db/schema');
-    await db.insert(conversationTurns).values(rows);
+    const { and, eq } = await import('drizzle-orm');
+
+    let toInsert = rows;
+    if (rows.some(r => r.kind === 'human')) {
+      // AC-AT-1: the adapter persists the run's human message before
+      // graph.invoke, keyed by run_id. When commit later projects the same
+      // run's messages, its own human row is the one already there —
+      // skip it so the message is never written twice.
+      const [existing] = await db
+        .select({ id: conversationTurns.id })
+        .from(conversationTurns)
+        .where(and(eq(conversationTurns.runId, input.runId), eq(conversationTurns.kind, 'human')))
+        .limit(1);
+      if (existing) {
+        toInsert = rows.filter(r => r.kind !== 'human');
+      }
+    }
+    if (toInsert.length === 0) {
+      return;
+    }
+    await db.insert(conversationTurns).values(toInsert);
   }
 
   async appendSystemNote(input: {
