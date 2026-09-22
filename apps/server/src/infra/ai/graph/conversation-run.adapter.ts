@@ -44,6 +44,7 @@ import { runAiText } from '@infra/ai/graph/episode';
 import { langOf, t } from '@infra/ai/messages';
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
+import { classifyError } from '@shared/classify-error';
 import { createLogger } from '@shared/logger';
 
 const log = createLogger('conversation-run-adapter');
@@ -77,6 +78,18 @@ export interface ConversationRunnerDeps {
   extraCallbacks?: BaseCallbackHandler[];
 }
 
+/** Best-effort read of the checkpointed phase, before invoke touches anything — never fails the run. */
+async function readPhase(graph: ConversationRunnerDeps['graph'], userId: string): Promise<ConversationPhase> {
+  try {
+    const st = await (
+      graph as { getState?: (c: unknown) => Promise<{ values?: { phase?: ConversationPhase } }> }
+    ).getState?.({ configurable: { thread_id: userId } });
+    return st?.values?.phase ?? 'chat';
+  } catch {
+    return 'chat';
+  }
+}
+
 export function buildConversationRunner(deps: ConversationRunnerDeps): ConversationRunPort {
   const { graph, userService, runService, checkpointer, transcript, extraCallbacks } = deps;
 
@@ -89,6 +102,9 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
 
       const runId = randomUUID();
       const metrics = new RunMetricsCollector(runId);
+      // Read once, before invoke changes anything — reused below for the
+      // pre-persist row and, on failure, for the run record's phaseIn.
+      const phase = await readPhase(graph, input.userId);
       const ctx = {
         runId,
         userId: input.userId,
@@ -98,6 +114,22 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
         trigger: input.trigger ?? 'user_message',
         metrics,
       };
+
+      // INV-LLM-009: persist the inbound message before the graph runs, keyed by
+      // runId, so it survives a throw at any point. The commit node (D-K)
+      // dedupes its own human row against this one by runId — no duplicate
+      // on a successful run.
+      try {
+        await transcript.appendRunMessages({
+          userId: input.userId,
+          runId,
+          phase,
+          episodeId: runId,
+          messages: [{ kind: 'human', text: input.text }],
+        });
+      } catch (err) {
+        log.error({ err, runId }, 'Failed to persist the inbound message before the run');
+      }
 
       try {
         const result = (await graph.invoke(
@@ -123,21 +155,11 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
       } catch (err) {
         // Best-effort failed-run row (D-F): AC-1301's "one row per POST" becomes true.
         try {
-          let phaseIn: ConversationRunRecord['phaseIn'] = 'chat';
-          try {
-            const st = await (
-              graph as { getState?: (c: unknown) => Promise<{ values?: { phase?: ConversationRunRecord['phaseIn'] } }> }
-            ).getState?.({ configurable: { thread_id: input.userId } });
-            if (st?.values?.phase) {
-              phaseIn = st.values.phase;
-            }
-          } catch {
-            // state read is best-effort
-          }
+          const { errorClass, errorMessage } = classifyError(err);
           const record: ConversationRunRecord = {
             runId,
             userId: input.userId,
-            phaseIn,
+            phaseIn: phase,
             phaseOut: null,
             trigger: ctx.trigger,
             client: ctx.client,
@@ -150,6 +172,8 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
             transition: null,
             outcome: isProviderError(err) ? 'llm_unavailable' : 'core_error',
             budgetReport: null,
+            errorClass,
+            errorMessage,
           };
           await runService.recordRun(record);
         } catch (recordErr) {
@@ -210,18 +234,7 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
     /** D-F: delete the thread, note it in the transcript — nothing else. */
     async clearContext(userId: string): Promise<void> {
       // The note's phase = the thread's last phase — read before the thread is gone.
-      let phase: ConversationPhase = 'chat';
-      try {
-        const st = await (
-          graph as { getState?: (c: unknown) => Promise<{ values?: { phase?: ConversationPhase } }> }
-        ).getState?.({ configurable: { thread_id: userId } });
-        const { phase: lastPhase } = st?.values ?? {};
-        if (lastPhase) {
-          phase = lastPhase;
-        }
-      } catch {
-        // best-effort — the default phase carries the note
-      }
+      const phase = await readPhase(graph, userId);
       const user = await userService.getUser(userId);
       const { languageCode } = user ?? { languageCode: null as string | null };
       const lang = langOf(languageCode);

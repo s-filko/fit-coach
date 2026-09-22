@@ -24,7 +24,7 @@ describe('drizzle-summary row mapping (D-K, D-G)', () => {
   });
 
   it('mirrors the summary into a kind=summary role=summary turn row (a P3 rollback reads the latest one)', () => {
-    const row = toSummaryTurnRow(INPUT);
+    const row = toSummaryTurnRow(INPUT, 6);
     expect(row).toMatchObject({
       userId: 'u-1',
       phase: 'training',
@@ -33,6 +33,9 @@ describe('drizzle-summary row mapping (D-K, D-G)', () => {
       role: 'summary',
       content: INPUT.rendered,
       payload: INPUT.structured,
+      // INV-LLM-010: the caller resolves this run's next seq — never left null,
+      // never renumbered from 1 — so a compacting run's rows stay uniformly seq'd.
+      seq: 6,
     });
   });
 });

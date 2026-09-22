@@ -69,6 +69,14 @@ export interface ConversationRunRecord {
   transition: { toPhase: string; reason?: string } | null;
   outcome: ConversationRunOutcome;
   budgetReport: BudgetReport | null;
+  /**
+   * INV-LLM-009: the cause of a non-'ok' run — the thrown value's class name and a
+   * truncated message, set for every failure path that reaches the adapter's
+   * catch. Optional (not just nullable) so an 'ok' run's record, built by the
+   * commit node, never has to name them: absent is null at the DB row.
+   */
+  errorClass?: string | null;
+  errorMessage?: string | null;
 }
 
 export const CONVERSATION_RUN_SERVICE_TOKEN = Symbol('ConversationRunService');

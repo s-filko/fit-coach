@@ -1,0 +1,1 @@
+ALTER TABLE "llm_calls" ALTER COLUMN "request" DROP NOT NULL;

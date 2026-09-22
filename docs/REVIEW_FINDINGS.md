@@ -154,6 +154,15 @@ or is inert for the kind of diff under review.
   `CONTRIBUTING_AI.md`) is outside its grep and presumably R4's — a one-line note in the R2
   zone file saying so would stop a future R2 reviewer spending time deciding whether to flag it.
   Runs: refactor-p6-facts-and-progress-blocks (2026-09-19).
+- [×1] R2's "search before judging" has no stopping rule, and on a 69-file branch the search
+  space is large enough that where the reviewer stops decides what the zone finds. This run's
+  R2 prioritised by itself — verify each prior round's fix landed, count call sites for every
+  new exported symbol, then hunt the specific shapes earlier rounds had already caught — and
+  says so explicitly: the brief does not distinguish "thorough" from "exhaustive", so a
+  stricter pass (every inline object literal in every changed test checked against every
+  existing fixture) would have to be scoped by the orchestrator. Worth either a stated
+  prioritisation in the brief or an explicit budget.
+  Runs: llm-io-audit-trail (2026-09-22).
 
 ## Blind spots
 
@@ -366,14 +375,17 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   by an owner-installed cron; the rows themselves are never deleted." With those,
   `LOGGING_GUIDE.md` would cite durable IDs instead of plan-scoped `AC-AT-*`.
   Runs: llm-io-audit-trail (2026-09-22).
-- [×1] R3's "describe/it names carry BR/AC references per `docs/CONTRIBUTING_AI.md`" has no slot for
+- [×2] R3's "describe/it names carry BR/AC references per `docs/CONTRIBUTING_AI.md`" has no slot for
   `BUG-0NN`, which was this plan's owner-designated source of truth, nor for plan-local `AC-LSR-N`
   acceptance ids that are not durable `AC-####` specs. The six repro files do carry `BUG-0NN` in
   their `describe()` names and both ids in their header docblocks — satisfying CONTRIBUTING_AI.md's
   actual text — but a literal reading of the zone's paraphrase would flag every bug-reproduction file.
   Either the zone wording or the ID catalogue should acknowledge `BUG-0NN` as a valid test-naming
-  citation for reproduction plans.
-  Runs: session-2026-09-21-repro (2026-09-22).
+  citation for reproduction plans. Seen again from the other side: the only matching text in that
+  doc (`CONTRIBUTING_AI.md:181`, "Reference BR-CONV-001..BR-CONV-007 in code and tests") is scoped
+  to one rule family, so the bullet's citation does not support a general naming mandate for any
+  id — if one is wanted, it needs its own bullet in `CONTRIBUTING_AI.md`.
+  Runs: session-2026-09-21-repro (2026-09-22), llm-io-audit-trail (2026-09-22).
 
 - [×3] `CONTRIBUTING_AI.md`'s DRY bullet reads as production-only ("no copy-paste, no
   reinvention of what the repo already has"); R2 applied it to duplicated test fixtures
@@ -714,3 +726,29 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   blocking-citation list (AC/BR/INV/SUPERPOWERS_INTEGRATION/ADR) excludes it, so a premature
   "Fixed" could only be advisory. Proposed: allow "an explicit rule in a durable doc's own header"
   as a citable source, or promote that rule to a numbered rule. Runs: structured-output-json-object-mode (2026-09-19).
+- [×1] When a task's acceptance check is "grep for X returns nothing outside Y", the grep root
+  has to be the repository root, or the check has to enumerate every directory the string can
+  live in. This run's check was `grep -rn 'AC-AT-' docs/ apps/`, which is narrower than the claim
+  it proved — `deploy/` is neither, and the one surviving citation was there, found only because
+  a reviewer grepped from the root. A clean result from a hand-picked subset reads exactly like a
+  clean result from the whole repo. Proposed as a principle in `docs/CONTRIBUTING_AI.md` beside
+  the ID conventions, or as a line in `close-out-review` § What a fix owes.
+  Runs: llm-io-audit-trail (2026-09-22).
+- [×1] Retiring a plan-scoped id onto a durable one is only safe when the two cover the same
+  mechanism, and nothing checks that. `AC-AT-6` bundled two: `llm_calls`/`prompt_blobs` payload
+  retention (which BR-LLM-011 governs) and capturing container logs before a deploy recreates the
+  containers (which no durable rule covers — `deploy.sh:61-83` implements it, and dockerd's
+  json-file log is keyed to the container id, so the loss is silent). A mechanical swap put
+  BR-LLM-011 on both halves and the re-run caught it. Proposed, either: mint a rule for the
+  deploy-time half in ADR-0013 §8 or a CICD-adjacent note; or, as the general form, a line in
+  `close-out-review` § What a fix owes — "before retiring an id onto another, read the target
+  rule's own text and confirm it covers the cited behaviour; an id that covers two mechanisms
+  needs two targets."
+  Runs: llm-io-audit-trail (2026-09-22).
+- [×1] A fix may cite a plan step for the *principle* it establishes while applying it at a site
+  that step never enumerated — here, Task C Step 4 named two item classes and stated "a durable id
+  or the behaviour itself is the better citation", and the `deploy.sh` fix applied that sentence
+  somewhere else. The reviewer judged it fair and did not raise it, but nothing says whether a
+  citation is held to the letter of what a step enumerated or to the principle it sets. Worth one
+  sentence in `close-out-review` § What a fix owes if the stricter reading is ever wanted.
+  Runs: llm-io-audit-trail (2026-09-22).

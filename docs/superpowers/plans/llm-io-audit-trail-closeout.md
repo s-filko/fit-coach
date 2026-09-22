@@ -1,8 +1,9 @@
 # LLM I/O Audit Trail — Close-out Remediation Implementation Plan
 
-- Status: in progress
+- Status: done
 - Branch: plan/llm-io-audit-trail
 - After: llm-io-audit-trail
+- Review: 2026-09-22 | clean | R1,R2,R3,R4
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and superpowers:test-driven-development. One plan task per worker session; stop after the task.
 
@@ -54,14 +55,14 @@ cannot be closed by a test:
 
 **Files:** `apps/server/src/infra/ai/llm-log-handler.ts`, its unit test.
 
-- [ ] **Step 1: test first.** The guard at `llm-log-handler.unit.test.ts` pins one model, so it
+- [x] **Step 1: test first.** The guard at `llm-log-handler.unit.test.ts` pins one model, so it
   can only see keys LangChain defines for that model. Drive it over more than one — at minimum
   the configured model and a reasoning model (`o`-series or `gpt-5*`), whose
   `invocationParams()` differs. Confirm it fails before the fix.
-- [ ] **Step 2:** `@langchain/openai` `completions.js:59` sets `max_completion_tokens` instead of
+- [x] **Step 2:** `@langchain/openai` `completions.js:59` sets `max_completion_tokens` instead of
   `max_tokens` when `isReasoningModel(model)` (`utils/misc.js:5`). Record it. Check the same
   file for any other model-conditional parameter while you are there — close the class.
-- [ ] **Step 3:** the four suites.
+- [x] **Step 3:** the four suites.
 
 ### Task B: Remove what the round-2 fixes duplicated (AC-CO-2)
 
@@ -69,14 +70,14 @@ cannot be closed by a test:
 `apps/server/src/infra/ai/llm-log-handler.ts`,
 `apps/server/tests/integration/services/{print-transcript,transcript-order}.integration.test.ts`.
 
-- [ ] **Step 1:** `personas.ts` duplicates `evals/scenarios/fl-shared.ts` — import it instead.
+- [x] **Step 1:** `personas.ts` duplicates `evals/scenarios/fl-shared.ts` — import it instead.
   `review-memory-delete.integration.test.ts` already imports across those two trees, so the
   precedent exists. Before deleting, grep both trees for other users of either fixture.
-- [ ] **Step 2:** `OpenAIMessage` restates `RecordedRequestMessage` — import the recorder's type.
+- [x] **Step 2:** `OpenAIMessage` restates `RecordedRequestMessage` — import the recorder's type.
   Then grep the whole repo for any third restatement of that shape.
-- [ ] **Step 3:** five inline `ConversationRunRecord` literals across two test files; a spread
+- [x] **Step 3:** five inline `ConversationRunRecord` literals across two test files; a spread
   base already exists at `transcript-order.integration.test.ts:155`. Use it for all five.
-- [ ] **Step 4:** `npx tsc --noEmit` plus the four suites. No new test — if the suites pass, the
+- [x] **Step 4:** `npx tsc --noEmit` plus the four suites. No new test — if the suites pass, the
   behaviour is unchanged, which is the whole claim.
 
 ### Task C: Make the durable layer true again (AC-CO-3) — orchestrator, not a worker
@@ -90,13 +91,22 @@ end-to-end, grep for inbound references to anything renumbered or renamed, fix, 
 That procedure is the acceptance criterion — every one of these eleven exists because a
 previous edit skipped it.
 
-- [ ] **Step 1:** the four ADR/ARCHITECTURE statements that contradict the code or each other.
-- [ ] **Step 2:** `DB_SETUP.md`'s reattached Purpose block, which carries law P4 retired.
-- [ ] **Step 3:** `CICD.md`'s shifted step references and the missing crontab line in § 7b.
-- [ ] **Step 4:** the two `print-transcript.ts` comments, and the eleven "close-out R2 finding N"
+- [x] **Step 1:** the four ADR/ARCHITECTURE statements that contradict the code or each other.
+- [x] **Step 2:** `DB_SETUP.md`'s reattached Purpose block, which carries law P4 retired.
+- [x] **Step 3:** `CICD.md`'s shifted step references and the missing crontab line in § 7b.
+- [x] **Step 4:** the two `print-transcript.ts` comments, and the eleven "close-out R2 finding N"
   citations across `src/` and `tests/` — now that § Round 2 exists they could resolve, but a
   durable id or the behaviour itself is the better citation.
-- [ ] **Step 5:** `grep -rn 'AC-AT-' docs/ apps/` returns nothing outside the two plan files.
+- [x] **Step 5:** `grep -rn 'AC-AT-' docs/ apps/` returns nothing outside the two plan files —
+  ~90 sites, not the handful this line implied. **Owner decision, 2026-09-22: mint the missing
+  durable ids and rewrite every citation** (the alternative, keeping plan-scoped ids in code, was
+  declined). The orchestrator has amended ADR-0013 §8 with **INV-LLM-009** (the inbound message and
+  a failed run's cause survive the failure — AC-AT-1/AC-AT-2) and **INV-LLM-010** (a run's row order
+  is recoverable via `run_id` + `seq` — AC-AT-4). The full map a worker applies:
+  `AC-AT-1`/`AC-AT-2` → INV-LLM-009, `AC-AT-3` → INV-LLM-008, `AC-AT-4` → INV-LLM-010,
+  `AC-AT-6` → BR-LLM-011, and `AC-AT-5` (the `print-transcript` CLI — tooling, no invariant) → a
+  statement of what the command does. Two mentions stay and are not defects: `BUGS.md` and
+  `REVIEW_FINDINGS.md` name the plan explicitly when they discuss the id itself.
 
 ### Task D: Fourth close-out review (AC-CO-4) — orchestrator, never delegated
 

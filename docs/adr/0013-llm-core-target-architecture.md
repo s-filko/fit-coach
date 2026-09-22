@@ -99,7 +99,8 @@ Each decision is expanded below with invariants (`INV-LLM-###`), business rules 
 | Working              | messages of the current run (agent ↔ tools loop)                                                                         | subgraph `messages` (inherits parent channel)             | agent/tools nodes         | recursion limit     |
 | Episode (short-term) | messages of the current episode incl. tool calls/results, `episodeSummaries[]` (≤3), `phase`, `activeSessionId`, `draft` | parent state, PostgresSaver, `thread_id = userId`         | `commit`, `compact`       | token budget (D-03) |
 | Long-term            | profile, plans, sessions, sets (progress); `user_facts`; episode summaries mirrored to DB                                | Postgres domain tables                                    | domain services via tools | schema              |
-| Transcript / runs    | every message and every run's metadata                                                                                   | `conversation_turns` (+ new columns), `conversation_runs` | `commit`                  | retention policy    |
+| Transcript / runs    | every message and every run's metadata                                                                                   | `conversation_turns` (+ new columns), `conversation_runs` | three writers: `commit`; the run adapter (inbound `human` row, failed run, `system_note`s); `DrizzleSummaryService` (mirrored `summary` row) | retention policy |
+| API exchange         | the exact request sent to the model and the answer received, per invocation                                              | `llm_calls`, `prompt_blobs`                               | the LLM callback handler (`LLMLogHandler`) | retention policy (BR-LLM-011) |
 
 INV-LLM-001: The prompt's dialogue history is derived only from the checkpointed `messages` channel; no node reads `conversation_turns` to build a prompt.
 INV-LLM-002: Every tool call and tool result of a completed run is present in `messages` until compacted; compaction is the only way messages leave the channel.
@@ -368,15 +369,82 @@ Rejected: keeping `LLMService` "until the mini-app redesign" — it is the only 
 
 ## 8. Observability and run records (D-11)
 
-`conversation_runs` (new): `run_id, thread_id (user_id), phase_in, phase_out, trigger, client, model, prompt_versions jsonb, tokens_in, tokens_out, latency_ms, tool_calls jsonb [{name, argsHash, outcomeKind}], transition jsonb, outcome ('ok'|'llm_unavailable'|'core_error'|'budget_exhausted'), budget_report jsonb, created_at`.
+`conversation_runs` (new): `run_id, thread_id (user_id), phase_in, phase_out, trigger, client, model, prompt_versions jsonb, tokens_in, tokens_out, latency_ms, tool_calls jsonb [{name, argsHash, outcomeKind}], transition jsonb, outcome ('ok'|'llm_unavailable'|'core_error'|'budget_exhausted'), budget_report jsonb, error_class, error_message, created_at`.
 
-`conversation_turns` gains: `run_id, thread_episode_id, kind ('human'|'ai'|'tool_call'|'tool_result'|'system_note'|'summary'), payload jsonb` (tool call args / structured summary), while `content` stays for text. Existing rows are kept; `phase` stays for analytics.
+`conversation_turns` gains: `run_id, seq, thread_episode_id, kind ('human'|'ai'|'tool_call'|'tool_result'|'system_note'|'summary'), payload jsonb` (tool call args / structured summary), while `content` stays for text. Existing rows are kept; `phase` stays for analytics.
 
 The LLM `info` log line carries `runId, phase, promptVersions, model, tokens, latencyMs`; the full replay payload stays at `debug` (BUG-003 behaviour preserved). LangSmith/OTel tracing is optional and not required by this ADR.
 
-P0 implementation note (2026-09-12): the `info` line ("Conversation run recorded") is emitted by the persist node next to the row write — the module boundary keeps the LLM callback `debug`-only while feeding the run-metrics accumulator. Constraint discovered during execution: LangChain strips `configurable` from the options callback handlers receive (`runnables/base.js` deletes it from callOptions), so run identity must travel via config `metadata`, which is inherited by nested runs — P3's run context must not assume `configurable` reaches callbacks.
+P0 implementation note (2026-09-12): the `info` line ("Conversation run recorded") is emitted next to the row write — by the persist node then, by `nodes/commit.node.ts:130` since P3 absorbed that node. (The rest of this note originally also confined the LLM callback to `debug`; the amendment below retired that clause — see point 2.) Constraint discovered during execution: LangChain strips `configurable` from the options callback handlers receive (`runnables/base.js` deletes it from callOptions), so run identity must travel via config `metadata`, which is inherited by nested runs — P3's run context must not assume `configurable` reaches callbacks.
 
 INV-LLM-007: A run is reproducible offline from `(conversation_runs.prompt_versions, the run's input messages from conversation_turns, the domain snapshot referenced by the eval fixture)`. This is what makes the eval framework possible.
+
+**Amendment 2026-09-22 (`llm-io-audit-trail`, owner-approved at close-out).** Three statements above
+were written before the audit trail existed. Each is corrected where it stands; the retired wording
+is quoted below only where its correction is unreadable without it.
+
+1. **The API exchange is a durable tier of its own.** `llm_calls` (`run_id, call_index, model,
+   request jsonb, response jsonb, latency_ms, error_class, error_message, prompt_hashes text[],
+   created_at`) stores one row per model invocation, and `prompt_blobs` (`hash, content`) stores each
+   distinct system message once, referenced by hash from the request. §8 previously enumerated
+   `conversation_runs` and `conversation_turns` as the whole durable model of a run; it is now those
+   two plus these.
+
+2. **The LLM callback is a durable writer, and its write is part of the call.** The P0 note said the
+   module boundary "keeps the LLM callback `debug`-only while feeding the run-metrics accumulator".
+   What that boundary actually protected was (a) no shared mutable state in a process-wide singleton
+   — the P0 module maps that AC-1331 removed — and (b) one owner of the run's `info` line. Both still
+   hold: the recorder keys its per-call state on LangChain's own per-call run id, never on a shared
+   "most recent run", and the `info` line stays beside the row write, in the node that performs it
+   (`nodes/commit.node.ts:130`). What the
+   boundary did not anticipate is that there would be anything durable to write from there. There is
+   now, and keeping it at `debug` cost the record twice over: with `LOG_LEVEL=info` on dev nothing was
+   captured at all, and `@langchain/core` does not await callback handlers by default
+   (`callbacks/base.js`: `awaitHandlers = getEnvironmentVariable("LANGCHAIN_CALLBACKS_BACKGROUND") === "false"`),
+   so a queued write died with the container on every deploy. `LLMLogHandler` therefore records into
+   `llm_calls` regardless of `LOG_LEVEL` and sets `awaitHandlers = true`, putting the insert on the
+   synchronous path of the call it observes. **This must not be reverted for latency:** the cost is one
+   indexed insert on a call that takes tens of seconds, the recorder swallows its own errors so it
+   cannot fail a reply (the P0 rule that a failed record never breaks a user response still governs),
+   and what it buys is that the record of an API call is never lost to a restart.
+
+3. **INV-LLM-007 is strengthened, not replaced.** Offline reproduction no longer rests on
+   reconstructing the request from `prompt_versions` plus the run's input messages: the exact request
+   sent is stored. INV-LLM-007 stands for runs recorded before this change; from it onward,
+   reproduction reads `llm_calls.request`.
+
+INV-LLM-008: Every model invocation **made on behalf of a conversation run** — i.e. one whose callback
+metadata carries a `runId` — is persisted to `llm_calls` with the request actually sent and the
+response received, independently of `LOG_LEVEL`, and the write completes before the run's reply is
+returned. A run-less call (a background job, `LlmCallOptions.jobId`) is logged but not recorded: it
+has no run to belong to, and `llm_calls.run_id` is `NOT NULL`. Logs are a hint; the table is the record. The stored request carries no credential or
+transport field — the recorded parameter set is an explicit allow-list, and a build-enforced guard
+fails when a model sends a parameter that is neither recorded nor named as never-recorded.
+
+INV-LLM-009 (owner-approved 2026-09-22): **What the user sent survives the run that failed.** The
+inbound `human` message is written to `conversation_turns` with its `run_id` before the graph runs, and
+a run that ends non-`ok` is written to `conversation_runs` carrying `error_class` and `error_message`
+(the caught value's class and its message truncated to a fixed maximum — never a stack, never the
+exception text in an API body, per INV-LLM-006). Neither write depends on the run reaching `commit`:
+a run that throws, times out or is killed still leaves what the user wrote and why it ended.
+
+INV-LLM-010 (owner-approved 2026-09-22): **The order a run's rows were produced in is recoverable.**
+Every `conversation_turns` row carrying a `run_id` also carries a `seq`, monotonic within that
+`run_id` and assigned by the one policy in `infra/conversation/seq.ts` (`MAX(seq) WHERE run_id` + 1),
+whichever writer inserts it. A writer that cannot number its row writes `run_id` NULL instead — the
+`clearContext` system note is the only such case. Rows written before the column existed carry
+neither and are printed with an explicit warning rather than silently reordered. (Closes BUG-029.)
+
+BR-LLM-011: `llm_calls` and `prompt_blobs` payload columns age out after `LLM_CALLS_RETENTION_DAYS`
+(default 30) via an owner-installed cron; the rows themselves are never deleted, and a `prompt_blobs`
+row keeps its `hash` after its `content` is dropped. Metadata — which call happened, when, on which
+model, how long it took, whether it failed — is kept without limit. **Growth ceiling, measured on dev
+2026-09-22:** ~150 KB stored per run across 2–3 model calls (avg 15 k input tokens, p95 33.5 k), so a
+30-day window projects ~0.4 GB at 10 active users, ~3.6 GB at 100 and ~36 GB at 1000, against 8.9 GB
+free on the VPS at the time of writing. Past roughly a hundred users the window, the disk or both need
+a decision; the per-run and per-call lookups are indexed (`idx_llm_calls_run_id_call_index`,
+`idx_llm_calls_prompt_hashes_gin`, `idx_conversation_turns_run_id`) so query cost is not what bounds
+this — storage is.
 
 ---
 

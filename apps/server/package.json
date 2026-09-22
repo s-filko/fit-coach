@@ -39,6 +39,8 @@
     "db:seed:workouts": "tsx --env-file=.env src/infra/db/seeds/workouts.seed.ts",
     "db:cleanup-orphan-checkpoints": "tsx --env-file-if-exists=.env src/infra/db/scripts/cleanup-orphan-checkpoints.ts",
     "db:prune-checkpoints": "tsx --env-file-if-exists=.env src/infra/db/scripts/prune-checkpoints.cli.ts",
+    "db:prune-llm-calls": "tsx --env-file-if-exists=.env src/infra/db/scripts/prune-llm-calls.cli.ts",
+    "print-transcript": "tsx --env-file-if-exists=.env scripts/print-transcript.ts",
     "db:sync": "tsx --env-file=.env src/infra/db/scripts/sync-user-data.ts",
     "build": "rimraf dist && tsup src/index.ts --format esm --dts --sourcemap --out-dir dist --clean",
     "start": "node --env-file=.env.production dist/index.js",

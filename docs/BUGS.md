@@ -1180,7 +1180,7 @@ rule in the **chat** prompt) reproduced in the session-planning prompt, which ne
 ### Flow
 
 Reconstructed from the graph checkpoints (`checkpoint_blobs`, channel `__start__`, thread
-`60af022f-…`), which keep the inbound message even when the run fails — `conversation_turns` does not:
+`60af022f-…`), which at the time were the only place the inbound message survived a failed run:
 
 ```
 450 "начинаю с пробежки на беговой дорожке"        → run failed (core_error 08:51)
@@ -1199,8 +1199,14 @@ first two at 110 kg — reported in a phase that cannot log and answered with a 
 The user's "ты не записал все" then forced a delete-and-relog of the whole exercise (runs `ef7f3998`
 + `c04bfd68`, two extra round-trips mid-workout).
 
-Note for anyone investigating from the transcript: `conversation_turns` holds none of the failed
-runs' messages, so the DB transcript and the context the model actually saw diverge (see BUG-029).
+Note for anyone investigating from the transcript: **this changed on 2026-09-22.** The
+`llm-io-audit-trail` plan's AC-AT-1 made the conversation-run adapter persist the inbound `human`
+row *before* `graph.invoke`, so a run that throws now leaves the user's message in
+`conversation_turns` exactly once — pinned by
+`tests/integration/scenarios/failed-run-transcript.integration.test.ts`. Start from the transcript,
+not the checkpoints. The runs listed above predate that fix and are still only in `checkpoint_blobs`.
+**The loss half of this bug is therefore closed; this entry stays `Open` for its prompt half** —
+session planning confirming sets it never logged.
 
 ### Impact
 
@@ -1453,8 +1459,8 @@ numbers or protocol wording.
 
 ## BUG-029 — Turn order inside a run is unrecoverable: every row shares one `created_at`
 
-**Status:** Open
-**Severity:** Medium — corrupts exported eval drafts and every manual transcript review
+**Status:** Fixed (2026-09-22, `llm-io-audit-trail` Task 3 — lands on `dev` with that plan's merge)
+**Severity:** Medium — corrupted exported eval drafts and every manual transcript review
 **Found during:** Live dev training session 2026-09-21 (owner review)
 **Component:** `apps/server/src/infra/conversation/drizzle-transcript.service.ts:70-79`, `apps/server/src/infra/db/schema.ts:90-104`, `apps/server/evals/lib/export-query.ts:41,79`
 
@@ -1501,15 +1507,24 @@ Seen on 2026-09-21: "накинул 10кг и сделал еще подход �
 said so). Anyone investigating an incident must read the checkpoint, not only the turns — or the
 transcript must be written before the graph runs, which is what the audit-trail plan proposes.
 
-### Fix plan
+### Fix
 
-Add a monotonic per-run `seq` written by `toTurnRows`, order by `(created_at, seq)` wherever turns are
-read, and migrate. No LLM read path is affected (INV-LLM-001: the transcript is append-only).
+Migration `0012` adds `conversation_turns.seq`; `toTurnRows` takes a start value and
+`appendRunMessages` seeds it from `MAX(seq)` for that `run_id`, so numbering survives the two separate
+inserts a run now performs (the adapter's pre-persisted `human` row, then the commit node's
+projection). `evals/lib/export-query.ts` orders by `(created_at, seq)` — **in that order**: putting
+`seq` first sliced a multi-run export by sequence position and sorted every pre-migration `NULL` seq
+behind every new row, so a truncating limit dropped exactly the historical data this fix exists to
+recover. `drizzle-summary.service.ts` numbers its mirrored summary row into the same sequence, found
+at close-out review. No LLM read path is affected (INV-LLM-001: the transcript is append-only).
 
 ### Regression test
 
-Unit: `toTurnRows` numbers rows in message order. Integration: a run's rows read back in the order
-they were produced.
+`tests/integration/services/transcript-order.integration.test.ts` — promoted from the reproduction
+test written before any fix (`session-2026-09-21-repro`, AC-LSR-5). It rewrites every row in reverse
+produced order so physical layout can no longer supply the right answer by luck, and asserts the real
+reader returns the produced order; a second case spans several runs including one with `NULL` seq and
+a truncating limit. Unit: `drizzle-transcript.service.unit.test.ts` pins `toTurnRows` numbering.
 
 ---
 

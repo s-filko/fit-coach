@@ -120,14 +120,15 @@ Located at `deploy/deploy.sh`. Executed on the VPS by GitHub Actions via SSH.
 4. Export DEPLOY_ENV, DB_USER, DB_PASSWORD, DB_NAME
 5. Create data/{env}/postgres directory
 6. Backup database (pg_dump) if DB container is running
-7. Read VERSION file, compute GIT_SHA and BUILD_TIME
-8. Export GIT_SHA, APP_VERSION, BUILD_TIME
-9. docker compose build (with build args)
-10. docker compose up -d
-11. Health check: 12 attempts × 5s = 60s timeout
-12. On failure: print last 30 lines of server logs, exit 1
-13. Prune Docker images and builder cache older than 72h
-14. Release deploy lock (trap on EXIT)
+7. Capture the running containers' logs to `logs/{env}/{service}_{ts}.log` before they are recreated (a deploy replaces the container, and dockerd deletes the old one's json-file log with it); a failed capture never aborts the deploy
+8. Read VERSION file, compute GIT_SHA and BUILD_TIME
+9. Export GIT_SHA, APP_VERSION, BUILD_TIME
+10. docker compose build (with build args)
+11. docker compose up -d
+12. Health check: 12 attempts × 5s = 60s timeout
+13. On failure: print last 30 lines of server logs, exit 1
+14. Prune Docker images and builder cache older than 72h
+15. Release deploy lock (trap on EXIT)
 ```
 
 ### Deploy lock
@@ -139,12 +140,15 @@ Located at `deploy/deploy.sh`. Executed on the VPS by GitHub Actions via SSH.
 
 ### Self-update race condition
 
-`deploy.sh` updates itself via `git reset --hard` (step 3), but bash continues executing
+`deploy.sh` updates itself in the `git reset --hard` step, but bash continues executing
 the **old version** loaded into memory. This means:
 
 - Changes to `deploy.sh` take effect on the **second** deploy after the commit
-- Changes to `docker-compose.yml` take effect immediately (read from disk at step 9)
-- Changes to `Dockerfile` and `docker-entrypoint.sh` take effect immediately (built at step 9)
+- Changes to `docker-compose.yml` take effect immediately (read from disk by `docker compose build` / `up -d`)
+- Changes to `Dockerfile` and `docker-entrypoint.sh` take effect immediately (built by `docker compose build`)
+
+(Steps are named, not numbered, here on purpose: inserting one into the flow above renumbers
+every later step, and a citation by number silently starts pointing at the wrong one.)
 
 This is a known and accepted limitation. Workaround: push a no-op commit to trigger
 a second deploy.
@@ -333,7 +337,8 @@ LangGraph's `checkpoint_blobs` table holds the checkpointed `messages` channel a
 and grows unbounded — there is no in-app scheduler for cleanup (owner-run only, per BR-LLM-005).
 
 - Script: `apps/server/src/infra/db/scripts/prune-checkpoints.ts` (pure SQL builder,
-  `buildPruneStatements`) + `prune-checkpoints.cli.ts` (the runnable entry point).
+  `buildPruneStatements`) + `prune-checkpoints.cli.ts` (thin options over the shared
+  `prune-cli-runner.ts`, which both prune CLIs use).
 - `npm run db:prune-checkpoints` — dry-run by default (prints what would be deleted, deletes
   nothing); pass `-- --apply` to actually delete. `-- --days N` overrides the default 14-day
   cutoff.
@@ -343,6 +348,29 @@ and grows unbounded — there is no in-app scheduler for cleanup (owner-run only
 - The owner installs the cron job; the app does not:
   ```
   0 4 * * * cd /srv/docker/fitcoach && docker exec fitcoach-prod-server npm run db:prune-checkpoints -- --apply
+  ```
+
+## 7b. LLM call payload pruning (BR-LLM-011)
+
+`llm_calls` and `prompt_blobs` hold the exact request sent to the model and the answer received.
+The rows are never deleted — which call happened, when, on which model, how long it took and
+whether it failed is kept without limit — but their payload columns age out, on the same
+owner-run basis as checkpoint pruning.
+
+- Script: `apps/server/src/infra/db/scripts/prune-llm-calls.ts` (pure SQL builder,
+  `buildPruneLlmCallsStatements`) + `prune-llm-calls.cli.ts` over the shared `prune-cli-runner.ts`.
+- `npm run db:prune-llm-calls` — dry-run by default; `-- --apply` performs it. The window comes
+  from `LLM_CALLS_RETENTION_DAYS` (default 30) and `-- --days N` overrides it.
+- Two statements, in order: `llm_calls.request`/`response` are nulled past the window, then a
+  `prompt_blobs` row's `content` is nulled once no unpruned call still references its hash via
+  `llm_calls.prompt_hashes`. The hash row itself survives, so which prompt versions ever existed
+  stays answerable.
+- Growth to watch: ~150 KB per run across 2–3 model calls, i.e. ~3.6 GB per 30-day window at
+  100 active users (BR-LLM-011). Storage, not query cost, is what bounds this.
+- The owner installs this cron job too; the app does not. An hour after § 7a's, so the two
+  never run against the database at once:
+  ```
+  0 5 * * * cd /srv/docker/fitcoach && docker exec fitcoach-prod-server npm run db:prune-llm-calls -- --apply
   ```
 
 ## 8. Networking and HTTPS

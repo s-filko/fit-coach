@@ -84,7 +84,8 @@ apps/server/src/
     ai/
       model.factory.ts          # Single ChatOpenAI construction site (getModel(profile), AC-1313)
       llm.gateway.ts            # OpenAiLlmGateway — LlmGateway port implementation (ADR-0013 §7 D-10)
-      llm-log-handler.ts        # LLM boundary callback: debug logging only (run metrics live in the per-run collector)
+      llm-log-handler.ts        # LLM boundary callback: debug logging + the llm_calls record (run metrics live in the per-run collector)
+      llm-call-recorder.ts      # Writes one llm_calls row per invocation; dedupes system prompts into prompt_blobs by content hash
       run-metrics.ts            # RunMetricsCollector — per-run instance carried in run context (ADR-0013 §8; no module state, AC-1331)
       embedding.service.ts      # Local all-MiniLM-L6-v2 via @huggingface/transformers (ONNX)
       embedding-text.util.ts    # buildEmbeddingText() — composite text for exercise embeddings
@@ -157,10 +158,15 @@ apps/server/src/
         summarizer/v1.ts             # Legacy end-of-phase summariser (not used by the graph since P4; kept with its snapshot tests)
         summarizer/v2.ts             # Episode summariser — structured EpisodeSummary from the rendered transcript (no previousSummary)
         summarizer/v3.ts             # current: v2 plus a typed `facts` array (category, fact, muscleGroup?) consumed by the compact step (P6)
+    observability/
+      transcript-reader.ts      # Reads a run/session/user window from conversation_runs + turns + llm_calls (+ prompt_blobs)
+      transcript-formatter.ts   # Pure renderer: interleaves turns and API calls by (created_at, seq) for a human reader
+      db-target.ts              # Names the database a script opened, and turns a schema-behind error into a sentence
     conversation/
       drizzle-transcript.service.ts             # TranscriptPort impl — projects run messages into conversation_turns (one row per message, run_id always set)
       drizzle-summary.service.ts                # SummaryPort impl — writes conversation_summaries + the mirrored `summary` turn row in one transaction
       drizzle-conversation-run.service.ts       # IConversationRunService impl — writes conversation_runs
+      seq.ts                                    # The one `conversation_turns.seq` policy (MAX(seq) per run_id + 1), shared by both writers above
     di/
       container.ts              # DI container with factory support + lazy initialization
     config/
@@ -368,11 +374,11 @@ These rules are for any AI assistant working in this repo:
 - **Dialogue memory** is the checkpointed LangGraph `messages` channel (PostgresSaver): it survives runs, interleaves as `BaseMessage`s (human / AI with `tool_calls` / tool results) and is the only source of history for every phase (INV-LLM-001/002). One chat across the app — no per-phase history.
 - **Episodes end by rule** — inactivity gap (`EPISODE_GAP_HOURS`, default 3), a committed phase transition (`compaction-flag.handler` → `compactReason`), or history-budget overflow — and the synchronous `compact` step in `prepare` summarises the ended episode into one independent structured summary; at most 3 are kept and rendered by the `## Previous episodes` block. Summaries are context, not data: facts (weights, reps) come from tools only (INV-LLM-003).
 - **User facts (P6)** — durable facts are written **only at compaction**: the `compact` step upserts summariser v3's `facts` array idempotently on the `(user_id, category, fact_key)` unique index of `user_facts` — a repeat increments `confirmations`, never rewrites `fact`; a failed upsert is logged and never fails the compaction. There is no per-turn fact tool: `remember_fact` (ADR-0013 D-14) was **dropped by owner decision 2026-09-17**. Facts render as the `## User Facts` block at block 2, ahead of `## Previous episodes`, budgeted against `longTerm` (ADR-0013 §3.4); zero facts render nothing. A `physical_constraint` fact with a `muscleGroup` is hard-enforced by `save_workout_plan` and `start_training_session` (`checkFactConflicts`, `domain/user/services/fact-conflicts.ts`): an exercise whose **primary** muscles include it is rejected with a `user_error` quoting the fact and nothing is persisted; secondary involvement and other categories do not bind (AC-1361).
-- **Transcript** (`conversation_turns` table) is an append-only projection: the `commit` node writes one row per message (`kind` human/ai/tool_call/tool_result, plus mirrored `summary` rows and `system_note`s), each carrying the run's `run_id`.
+- **Transcript** (`conversation_turns` table) is an append-only projection with **three writers**: the conversation-run adapter persists the run's `human` row before the graph runs (so a run that throws still keeps what the user wrote) and writes `system_note`s from `clearContext`; the `commit` node writes one row per remaining message, skipping the human row already stored for that `run_id`; and `DrizzleSummaryService` mirrors the episode `summary` row from the `compact` step (`kind` human/ai/tool_call/tool_result, plus mirrored `summary` rows and `system_note`s). Every row that belongs to a run carries that run's `run_id` and is numbered into its `seq` sequence through the one policy in `infra/conversation/seq.ts`, so the order a run's rows were produced in stays recoverable (BUG-029). A `system_note` from `clearContext` is the exception and the only one: it belongs to no run, so `appendSystemNote` writes it with `run_id` null and no `seq`.
 - **Clear context**: `POST /api/bot/chat/clear-context` calls `ConversationRunPort.clearContext(userId)` — the adapter deletes the checkpoint thread and appends a `context_cleared` system note; the next message starts fresh.
 - **ADR-0005**: original patterns (superseded — no context service, no sliding window; the legacy `IConversationContextService` was deleted in P4).
 - No breaking change to API: `POST /api/chat` contract unchanged [AC-0110].
-- **Database storage**: `conversation_turns` table with (userId, phase, role, content, runId, kind, payload, createdAt); `user_facts` table — durable user facts with a confirmation counter (P6, migration `0005`); `conversation_summaries` table — structured episode summaries (ADR-0013 §8, written at compaction via `SummaryPort`); `conversation_runs` table — one row per run with model/tokens/latency/outcome (ADR-0013 §8, written by the commit node); `langgraph_checkpoints` table (managed by PostgresSaver).
+- **Database storage**: `conversation_turns` table with (userId, phase, role, content, runId, seq, kind, payload, createdAt) — `seq` is the per-run monotonic order, carried by every row that has a `run_id`; `user_facts` table — durable user facts with a confirmation counter (P6, migration `0005`); `conversation_summaries` table — structured episode summaries (ADR-0013 §8, written at compaction via `SummaryPort`); `conversation_runs` table — one row per run with model/tokens/latency/outcome, plus `error_class`/`error_message` on a non-`ok` run (ADR-0013 §8; written by the commit node, failed runs by the conversation-run adapter); `llm_calls` table — one row per model invocation with the request actually sent, the response, latency and error, written by the LLM callback handler regardless of `LOG_LEVEL`; `prompt_blobs` table — each distinct system message stored once by content hash and referenced from `llm_calls.request`; `langgraph_checkpoints` table (managed by PostgresSaver).
 
 ## LLM Integration
 **Implementation**: `src/infra/ai/model.factory.ts`

@@ -141,6 +141,7 @@ CREATE TABLE conversation_turns (
   role TEXT NOT NULL,             -- 'user' | 'assistant' | 'system' | 'summary'
   content TEXT NOT NULL,
   run_id UUID,                    -- conversation run that produced the turn (nullable, not backfilled)
+  seq INTEGER,                    -- per-run monotonic order; null only on pre-migration rows and rows with no run_id
   kind TEXT NOT NULL DEFAULT 'human',  -- 'human' | 'ai' | 'tool_call' | 'tool_result' | 'system_note' | 'summary'
   payload JSONB,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -149,7 +150,16 @@ CREATE TABLE conversation_turns (
 -- Optimized for loading conversation history by (userId, phase) in chronological order
 CREATE INDEX idx_conversation_turns_user_phase_created
   ON conversation_turns(user_id, phase, created_at);
+
+-- Per-run lookups: the human-row dedup and the MAX(seq) read on every append (BR-LLM-011)
+CREATE INDEX idx_conversation_turns_run_id ON conversation_turns(run_id);
 ```
+
+**Purpose**: The durable record of everything said — read by humans and by the transcript tooling, never by the prompt.
+- **Append-only**: Turns are never updated, only inserted
+- **Not the prompt's history**: since P4 the dialogue the model sees comes from the checkpointed `messages` channel; no node reads this table to build a prompt (ADR-0013 INV-LLM-001). The pre-P4 laws this block used to state — per-phase context isolation and a sliding window of the last 20 turns — were retired with that refactor; `phase` survives as an analytics column
+- **Ordered per run**: rows belonging to a run carry its `run_id` and a `seq` number (`infra/conversation/seq.ts`); only pre-migration rows and rows with no run (a `clearContext` `system_note`) have neither
+- **Cascade delete**: All conversation history deleted when user removed
 
 #### conversation_runs
 One row per conversation run — the measurement base for the LLM core refactor
@@ -176,17 +186,54 @@ CREATE TABLE conversation_runs (
   transition JSONB,
   outcome conversation_run_outcome NOT NULL,
   budget_report JSONB,
+  error_class TEXT,               -- non-'ok' runs only: the thrown value's class
+  error_message TEXT,             -- non-'ok' runs only: truncated to 500 chars
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_conversation_runs_user_created ON conversation_runs(user_id, created_at);
 ```
 
-**Purpose**: Stores all conversation dialogue for context management.
-- **Append-only**: Turns are never updated, only inserted
-- **Phase isolation**: Each phase has separate conversation context
-- **Sliding window**: Queries use LIMIT to load recent turns (default 20)
-- **Cascade delete**: All conversation history deleted when user removed
+#### llm_calls
+One row per model invocation made on behalf of a conversation run — the exact request sent and the
+answer received, written by the LLM callback handler regardless of `LOG_LEVEL` (INV-LLM-008). A
+run-less call (a background job) is logged but not recorded: `run_id` is `NOT NULL`. Payload columns age out (see `LLM_CALLS_RETENTION_DAYS`);
+the rows themselves are never deleted.
+
+```sql
+CREATE TABLE llm_calls (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id UUID NOT NULL,           -- not an FK: a call is recorded before any conversation_runs row need exist
+  call_index INTEGER NOT NULL,    -- 1-based within the run
+  model TEXT NOT NULL,
+  request JSONB,                  -- nullable: the payload ages out, the row does not
+  response JSONB,
+  latency_ms INTEGER NOT NULL,
+  error_class TEXT,
+  error_message TEXT,
+  prompt_hashes TEXT[],           -- prompt_blobs referenced by this request; never nulled by retention
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- The recorder's next-call_index lookup, on the synchronous path of every model call (BR-LLM-011)
+CREATE INDEX idx_llm_calls_run_id_call_index ON llm_calls(run_id, call_index);
+-- The retention prune's blob-liveness check: array containment, not a scan of llm_calls (BR-LLM-011)
+CREATE INDEX idx_llm_calls_prompt_hashes_gin ON llm_calls USING gin(prompt_hashes);
+```
+
+#### prompt_blobs
+Each distinct system message stored once by content hash, referenced from `llm_calls.request` instead
+of being repeated per call. Content is nulled when no unpruned call still references it; the hash row
+stays.
+
+```sql
+CREATE TABLE prompt_blobs (
+  hash TEXT PRIMARY KEY,
+  content TEXT,                   -- nullable: aged out by retention
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
 
 ### Schema Management
 
