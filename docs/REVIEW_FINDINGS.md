@@ -745,3 +745,10 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   rule's own text and confirm it covers the cited behaviour; an id that covers two mechanisms
   needs two targets."
   Runs: llm-io-audit-trail (2026-09-22).
+- [×1] A fix may cite a plan step for the *principle* it establishes while applying it at a site
+  that step never enumerated — here, Task C Step 4 named two item classes and stated "a durable id
+  or the behaviour itself is the better citation", and the `deploy.sh` fix applied that sentence
+  somewhere else. The reviewer judged it fair and did not raise it, but nothing says whether a
+  citation is held to the letter of what a step enumerated or to the principle it sets. Worth one
+  sentence in `close-out-review` § What a fix owes if the stricter reading is ever wanted.
+  Runs: llm-io-audit-trail (2026-09-22).
