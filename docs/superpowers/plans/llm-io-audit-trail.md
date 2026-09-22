@@ -507,3 +507,21 @@ the branch. Per `close-out-review` § Report and route they are recorded here in
   teardown are covered by no test. Owed: `docker exec -it fitcoach-dev-server npm run
   print-transcript -- --run <id> --payloads` on dev, against a real run.
 
+**Discharged on dev, 2026-09-22 (orchestrator), after the merge at `904bafc0`.**
+
+- **The `deploy.sh` log capture: done.** Two deploys, as required — the first ran the previous
+  script and wrote nothing, the second created `/srv/docker/fitcoach/logs/dev/` with
+  `server_20260922_135316.log` (5 773 B) and `bot_20260922_135316.log` (242 B). Both hold the
+  OLD containers' output: the server file opens on the previous container's "Ensuring pgvector
+  extension..." and ends mid-request with a `responseTime` line, which is exactly the evidence
+  the 2026-09-21 09:25 deploy destroyed. Health check green, `/health` → 200 on
+  `https://fitcoach-dev.filko.dev`.
+- **The `print-transcript` CLI: exercised, with one half still unproven.** Run on dev against a
+  real run (`c7d071ed-9129-4782-8512-0927b5a515ca`, 2026-09-21): flag dispatch, the default
+  `--env-file` path, the database banner (`Reading from postgres://db:5432/fitcoach_dev`), the
+  formatter and a clean teardown all work, and the pre-`seq` rows printed with the
+  INV-LLM-010 warning rather than being silently reordered. What it could not show is a resolved
+  request/response: `llm_calls` holds 0 rows, because the recorder began existing on dev with
+  this very deploy and no traffic has arrived since. `--payloads` against a real recorded call
+  needs one live run — owed, and the only piece of this plan not yet seen working in production.
+
