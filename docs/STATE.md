@@ -76,12 +76,12 @@ _Generated 2026-09-21 from docs/superpowers/plans/ + git. Never hand-edit; regen
 on dev (`fa293e20`, model `google/gemini-3.8-flash`) produced nine bugs, **BUG-022…BUG-030**, with
 evidence in `BUGS.md`. Order of work set by the owner:
 
-1. **`session-2026-09-21-repro` first (owner, 2026-09-22): reproduction before remediation.** No fix
+1. **`session-2026-09-21-repro` — DONE (merged and pushed 2026-09-22); its six red tests are listed in § Handoff.** Reproduction before remediation. No fix
    starts until a test catches the defect on unchanged production. Coverage was checked before the
    plan was written — `durationSeconds` is untested, and `tool-policy.unit.test.ts:67-76` currently
    *pins* the ordering defect behind BUG-027. The plan also states which findings (BUG-022/024/026/028)
    no deterministic test can catch; those become eval-case drafts, with no model run.
-2. `llm-io-audit-trail` — observability: the user's message, the model's answer and the exact API
+2. **`llm-io-audit-trail` — IN FLIGHT (Task 1 dispatched 2026-09-22; owner chose it before the fixes).** Observability: the user's message, the model's answer and the exact API
    request must survive every run. Four runs on 2026-09-21 left no trace of what the user wrote, and
    BUG-022 was first written up wrong because the DB transcript and the context the model saw disagree.
 3. Prompt defects in **small strokes, one BUG per change**, each verified against an eval set rather
@@ -219,43 +219,50 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
-## Handoff (orchestrator night shift, 2026-09-21)
+## Handoff (orchestrator shift, 2026-09-22)
 
-**Wave A (`fact-lifecycle`) is done: `Status: done`, merged, deployed to dev and verified live.**
-Dev runs `deb4bb01`; migrations `0006` (lifecycle columns), `0007` (partial unique index over ACTIVE
-rows) and `0008` (`supersedes_id` → `ON DELETE SET NULL`) are applied. Executor: one GLM worker through
-Orca for all tasks (run `run_2bc2e93d5539`, terminal `term_c9999fac`), orchestrator on Opus.
+**Six failing tests against unchanged production are on `dev`** (plan `session-2026-09-21-repro`,
+`Status: done`, review clean, merged and pushed) — one per defect: BUG-023 `log-set.tool.repro`,
+BUG-025 `format-exercise-summary.repro`, BUG-027 `tool-ordering.repro`, BUG-030
+`previous-session.repro`, BUG-029 `transcript-order.repro`, BUG-022 (loss half)
+`failed-run-transcript.repro`. Plus four eval-case drafts for the findings no deterministic test can
+catch. They sit outside the default suites by design:
 
-Close-out review (one combined agent, all four zones) found **three blocking defects, all fixed** —
-a `permanent` fact stated in a compacted episode was silently dropped, deleting a fact that had history
-raised an FK violation, and `rememberFact` could surface a raw unique violation. Details and the
-"Decided without the owner (2026-09-21)" table are in the plan file.
+```
+cd apps/server
+NODE_ENV=test npx jest --testMatch='**/__tests__/**/*.repro.test.ts'
+RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch='**/tests/integration/**/*.repro.test.ts'
+```
 
-**The live dev smoke (orchestrator, through the bot API on throwaway user `smoke_factlife`) found what
-no test could** — two bugs, both fixed and merged the same night:
-- **BUG-020 (High):** `list_facts` never printed the fact id while `manage_fact` required it, so retract
-  and delete were structurally impossible; the coach then claimed a retraction that never happened.
-  Fixed: ids lead every listing line, and `manage_fact` resolves an unambiguous fact by text. Verified
-  live afterwards: a short fact archived with `archived_reason='user_closed'`, an explicit erase removed
-  its row.
-- **BUG-021 (Medium):** the tool schema-rejection hint always talked about `search_exercises`.
+Each is renamed to an ordinary `*.unit.test.ts` / `*.integration.test.ts` when its fix lands.
 
-**Next action: wave B, `docs/superpowers/plans/course-check-and-constraints.md`.** It needs its own
-worktree (one per plan). It is behavioural — the course-check layer plus narrowing the hard constraint
-block to `permanent` — and its measurement against a prompt-only baseline is a model-backed run, which
-is owner-launched.
+**In flight: `llm-io-audit-trail`, Task 1 (AC-AT-1).** Owner chose observability before the fixes
+(2026-09-22). Worktree `/Users/filko/orca/workspaces/fit_coach/llm-io-audit-trail`, branch
+`plan/llm-io-audit-trail` off `dev` `b87c9a11`; Run `run_2285913525cf`, one **Sonnet** worker
+(`launch.effective` claude/sonnet). The plan was amended before dispatch: its Tasks 1 and 3 reuse the
+two merged red tests instead of writing new ones — see its § "Red tests already on `dev`", which also
+states the `.repro.` → `.integration.` rename rule once.
 
-**Not done on purpose (owner-gated, night shift):** nothing was deleted. Ready to clean up when the
-owner says so: worktree `/Users/filko/orca/workspaces/fit_coach/fact-lifecycle` (currently on the merged
-`fix/tool-schema-hint`), branches `plan/fact-lifecycle` and `fix/tool-schema-hint`, the worker terminal
-of run `run_2bc2e93d5539`, and the dev fixture user `smoke_factlife`
-(`e78054ac-578e-40b5-a3e4-a5cee4347820`). One action was refused by the harness and skipped rather than
-worked around: a direct `UPDATE users` on dev to complete the smoke user's profile — the smoke therefore
-ran in the `registration` phase, which is where the memory tools were exercised.
+**Order after it (owner, 2026-09-21, unchanged):** prompt defects in small strokes, BUG-030 first,
+then BUG-022, BUG-024, BUG-023; then the code defects BUG-027 (note `tool-policy.unit.test.ts:67-76`
+currently *pins* the defective ordering and must change with the fix) and BUG-025.
 
-**Open, not blocking:** AC-FL-3's live half (a closed fact not resurrected by compacting an OLDER
-episode) is pinned end-to-end by a scenario test but was not reproduced live — forcing a real compaction
-of an old episode needs a seeded thread. Worth one live check when wave B touches compaction.
+**Leftovers audited and disposed of (owner decisions, 2026-09-22).** The `session-2026-09-21-repro`
+worker, worktree and branch are gone; five content-free `worktree-agent-*` branches (all on
+`a2809b0f`, an ancestor of `origin/main`) deleted; the `orchestrator-fact-lifecycle-opus` tab closed
+after its one undocumented finding was recorded (direct Google AI Studio is not a drop-in replacement
+for the OpenRouter route — `BACKLOG.md` § Findings, pointer in `CLAUDE.md` § LLM). The
+`fact-lifecycle` worktree and its branches were already gone before this shift. Corrected in the same
+pass: `worker-release` does **not** archive a transcript here — `ORCHESTRATION.md` § The cycle now
+states where a worker's history actually survives, and that a finding must be written down before a
+tab is closed. **Kept by owner decision:** the dev fixture user `smoke_factlife`
+(`e78054ac-578e-40b5-a3e4-a5cee4347820`, 63 turns, 1 fact) — live material for eval drafts; and the
+previous orchestrator's own tab, per the relay rule (abandoned, not closed).
+
+**Open, not blocking** (carried over from the `fact-lifecycle` shift): AC-FL-3's live half — a closed
+fact not resurrected by compacting an OLDER episode — is pinned end-to-end by a scenario test but was
+never reproduced live; forcing a real compaction of an old episode needs a seeded thread. Worth one
+live check whenever a plan next touches compaction.
 
 - **Test DB:** `fitcoach_test` (local container `fitcoach-db`). Never run tests in two worktrees against
   it at once; workers never touch a DB by hand.

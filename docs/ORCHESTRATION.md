@@ -181,9 +181,27 @@ orca orchestration worker-read --dispatch <dispatch_id> --source auto --json
 - Every message in a delivery is processed before `--ack`. `worker_done` settles the Task
   and Dispatch; do not follow it with `task-update`.
 - After an accepted `worker_done`: reuse, `worker-retain` (owner asked to keep it), or
-  `worker-release`. Release closes only that worker's terminal and archives its output
-  **[verified]**; it never touches the worktree. If the owner typed into a worker's
-  terminal, Orca marks it `user_takeover` and release keeps it open **[verified]**.
+  `worker-release`. Release closes only that worker's terminal; it never touches the worktree.
+  If the owner typed into a worker's terminal, Orca marks it `user_takeover` and release keeps
+  it open **[verified]**.
+- **Release does not archive the worker's transcript, and nothing in Orca does for this repo's
+  workers** — corrected 2026-09-22, replacing the earlier claim that it archives the output.
+  `worker-read --source auto` returns "an exact hook-reported transcript when available and
+  otherwise labeled terminal output": Orca only holds a transcript if the worker's agent session
+  reports itself through a hook. This repo's workers do not — every dispatch of the
+  `session-2026-09-21-repro` plan answers `Fallback reason: session_not_reported`, and after release
+  all seven report `Archived: false` with `No terminal output returned`, because the terminal
+  scrollback was their only source and it died with the tab **[verified 2026-09-22]**.
+- **The durable record is Claude Code's own session log**, written automatically with no command and
+  no one's action: `~/.claude-personal/projects/-<worktree-path-slug>/<session-uuid>.jsonl` for
+  workers on the `claude-personal` slot (Sonnet/Opus) and `~/.claude/projects/…` for the GLM slot.
+  It is keyed by the worker's working directory and **survives the worktree's deletion** — the repro
+  plan's worker is still there at 2.2 MB, the `fact-lifecycle` GLM worker at 6.8 MB, and the oldest
+  surviving session dates from 58 days back **[verified 2026-09-22]**. So a worker's history is
+  recoverable after cleanup, but by reading a multi-megabyte `.jsonl`, which is not the same as
+  having the finding written down: what matters from a worker session belongs in the plan file, in
+  `BUGS.md` or in `BACKLOG.md` before the tab is closed. Retention rests on an unset
+  `cleanupPeriodDays` default (the owner chose 2026-09-22 to record this and not pin it).
 
 ### Waiting without stalling
 
