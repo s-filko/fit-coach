@@ -209,13 +209,37 @@ beyond this plan.**
 
 ### Task 5: Retention and durable logs (AC-AT-6)
 
-**Files:** config (`LLM_CALLS_RETENTION_DAYS` or equivalent), a prune path, `.env.example`,
-`deploy/docker-compose.yml` (log volume for server and bot), `docs/LOGGING_GUIDE.md`.
+**Files:** config (`LLM_CALLS_RETENTION_DAYS`), a prune path, `.env.example`, `deploy/deploy.sh`
+(log capture before the recreate — **not** `deploy/docker-compose.yml`, see the corrected finding above),
+`docs/LOGGING_GUIDE.md`.
 
 - [x] **Step 1: Tests first** — the prune drops payloads older than the window and keeps the rows'
   metadata; the window is configuration with a documented default.
 - [x] **Step 2**: implement; mount the log volume; document both in `LOGGING_GUIDE.md`.
 - [x] **Step 3**: verify — `npm run test:unit`; the compose change is applied by the orchestrator at deploy.
+
+**Recorded at Task 5 review (orchestrator, 2026-09-22). Three rounds; the theme is silent failure.**
+- *The premise was wrong* — corrected above: no `volumes:` entry can make `json-file` durable, so the
+  fix moved to a capture in `deploy.sh` before the recreate. Found by the worker.
+- *Retention would have preserved the wrong half.* The prune nulled `llm_calls.request` but left
+  `prompt_blobs` untouched forever, on the premise that a blob is one row per prompt version. False
+  here: `assemble-context.ts:167-175` sends up to six system messages and the recorder hashes every
+  one, so besides the static prompt each call mints blobs for the client profile, the previous-episodes
+  block and the domain block. Counted in the repo's own frozen snapshots: 2–3 system messages per
+  assembly, only the first reusable. The bulky, ever-changing context was therefore moving out of the
+  pruned column into a table kept forever. Closed by `llm_calls.prompt_hashes` (written at record time,
+  never nulled) plus a blob prune that nulls content no live row references — same rule as calls: keep
+  the metadata row, drop the payload.
+- *Two SQL defects that fail silently*, both proven on the test DB before being sent back. `NOT IN`
+  over `unnest(prompt_hashes)` guarded the NULL array but not a NULL element, and one NULL makes the
+  predicate NULL for every hash — the prune would have reported zero forever, with no error. And the
+  dry run, which is the CLI default, evaluated blob liveness against rows statement 1 had not yet
+  nulled: it printed `0 blobs` where apply nulled 1, i.e. it told the operator it would not touch what
+  it then touched. Both closed with `NOT EXISTS` and a shared window predicate, each with a test proven
+  red first.
+**Still owed at deploy:** `deploy.sh` changed, and per `CLAUDE.md` the first deploy after that runs the
+PREVIOUS version, so the log capture must be validated by a second manual run on dev before it is
+trusted.
 
 ### Task 6: One command prints the whole exchange (AC-AT-5)
 
