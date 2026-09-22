@@ -734,3 +734,14 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   clean result from the whole repo. Proposed as a principle in `docs/CONTRIBUTING_AI.md` beside
   the ID conventions, or as a line in `close-out-review` § What a fix owes.
   Runs: llm-io-audit-trail (2026-09-22).
+- [×1] Retiring a plan-scoped id onto a durable one is only safe when the two cover the same
+  mechanism, and nothing checks that. `AC-AT-6` bundled two: `llm_calls`/`prompt_blobs` payload
+  retention (which BR-LLM-011 governs) and capturing container logs before a deploy recreates the
+  containers (which no durable rule covers — `deploy.sh:61-83` implements it, and dockerd's
+  json-file log is keyed to the container id, so the loss is silent). A mechanical swap put
+  BR-LLM-011 on both halves and the re-run caught it. Proposed, either: mint a rule for the
+  deploy-time half in ADR-0013 §8 or a CICD-adjacent note; or, as the general form, a line in
+  `close-out-review` § What a fix owes — "before retiring an id onto another, read the target
+  rule's own text and confirm it covers the cited behaviour; an id that covers two mechanisms
+  needs two targets."
+  Runs: llm-io-audit-trail (2026-09-22).

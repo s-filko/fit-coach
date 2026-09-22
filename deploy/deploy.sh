@@ -58,7 +58,9 @@ if docker compose -f "$COMPOSE_FILE" -p "$PROJECT" ps db --status running -q 2>/
     echo "WARNING: Backup failed (database may be empty, continuing)"
 fi
 
-# --- Capture container logs (BR-LLM-011) before they are recreated ---
+# --- Capture container logs before the recreate destroys them ---
+# Rationale and contract: docs/LOGGING_GUIDE.md § "Why a `volumes:` mount cannot fix a
+# lost container log" and § "The fix: capture before recreate, in `deploy.sh`".
 # docker's json-file driver (deploy/docker-compose.yml's `logging:` block) ties
 # each log file to the CONTAINER's own id, under dockerd's data root — a path
 # no service-level `volumes:` mount can redirect. `up -d` below gives server

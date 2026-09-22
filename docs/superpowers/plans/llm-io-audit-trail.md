@@ -466,17 +466,32 @@ run log — was never made and is written down nowhere; `conversation-run.adapte
 only logs and rethrows. The loss is the run-level cause only: the model call itself is still in
 `llm_calls`, which has no FK to `conversation_runs`.
 
-**Both blocking findings are closed** (orchestrator, at the owner's instruction, 2026-09-22):
-`RecordLlmCallRequest` is imported at all four sites and no `as { messages: Array<…> }` restatement
-survives anywhere in `apps/server`; `deploy/deploy.sh:61` cites `BR-LLM-011`, and the grep that
-proves it now runs from the repository root, where the miss would have shown the first time.
-Verified: `tsc --noEmit` clean, lint 0 errors, unit 126/1203, integration 33/555 (+1 todo),
-scenarios 9/343 (+1 todo), repro 2 suites / 4 failures unchanged, `bash -n deploy/deploy.sh` clean.
+**Both blocking findings are closed** (orchestrator, at the owner's instruction, 2026-09-22),
+and the re-run of the two zones that raised them found one more defect in the fix itself.
+
+- R2 is closed and **re-ran clean**: `RecordLlmCallRequest` is imported at all four sites, no
+  `as { messages: Array<…> }` restatement survives anywhere in `apps/server`, and the fix commit
+  introduced nothing.
+- R4's first fix was wrong and **its re-run caught it**. Swapping `AC-AT-6` for `BR-LLM-011` in
+  `deploy/deploy.sh:61` was mechanical: `AC-AT-6` covered two unrelated mechanisms — the
+  `llm_calls`/`prompt_blobs` payload retention, which is what BR-LLM-011 actually governs, and
+  capturing container logs before a deploy recreates the containers, which no durable rule covers
+  at all. The comment now states the behaviour and points at the two `LOGGING_GUIDE.md` sections
+  that hold its rationale and contract, which is what the close-out plan's own Step 4 prescribes
+  when no durable id exists. That no rule exists for the deploy-time half is filed as a meta
+  finding, not invented here.
+
+Verified after both fixes: `tsc --noEmit` clean, lint 0 errors, unit 126/1203, integration 33/555
+(+1 todo), scenarios 9/343 (+1 todo), repro 2 suites / 4 failures unchanged, `bash -n
+deploy/deploy.sh` clean, and `grep -rn 'AC-AT-'` **from the repository root** returns nothing
+outside the two plan files, `BUGS.md` and `REVIEW_FINDINGS.md`.
 
 **Advisories** stay unfixed on this branch, per the zone contract; the BACKLOG entries are the
 owner's call.
 
-**Meta (3)** — filed in `docs/REVIEW_FINDINGS.md`, not acted on here.
+**Meta (4)** — filed in `docs/REVIEW_FINDINGS.md`, not acted on here. The fourth is the
+re-run's: `AC-AT-6` bundled two mechanisms, so retiring it collapsed them onto one id, and the
+deploy-time half still has no durable rule.
 
 ### Deferred — evidence exists only after merge
 
