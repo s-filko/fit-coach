@@ -263,7 +263,9 @@ then expectations added by hand). Tracked in `docs/BACKLOG.md`.
 
 ## Review
 
-**2026-09-22 — verdict: BLOCKED.** Four zones ran in parallel on `b87c9a11...74e3b6dd`
+### Round 1 — 2026-09-22
+
+**Verdict: BLOCKED.** Four zones ran in parallel on `b87c9a11...74e3b6dd`
 (46 files, ~12.7k insertions). No `- Review:` header line is written: its absence is what
 "not passed" looks like. **23 blocking, 28 advisory, 11 meta.** Every blocking finding was
 checked by the orchestrator for the two things severity requires — a `file:line` and a rule
@@ -379,4 +381,70 @@ the "Forbidden data categories" table forbids logging what `llm_calls` now store
 no PII statement covering it (R4).
 
 ### Meta (11) — filed in `docs/REVIEW_FINDINGS.md`, not acted on here
+
+### Round 2 — 2026-09-22
+
+**Verdict: BLOCKED — 16 blocking.** Eight were defects round 1's own fixes introduced; eight
+were the orchestrator's documentation reconciliation. All are closed; recorded here because a
+fix can only be checked against what the finding actually said.
+
+R2 (4, all DRY): `transcript-formatter.ts:14` restated the recorder's request/response types and
+had already diverged — `print-transcript --payloads` printed none of the five params the round-1
+fix had just taught the recorder to store; `drizzle-summary.service.ts:67` copied the `MAX(seq)`
+read; `db-target.ts:38` reinvented the pg cause-chain walk at one level where
+`workout-session.repository.ts:24` walks five; `run-error-cause.integration.test.ts:22` copied a
+20-line persona.
+R3 (2): both deploy-gated and restated, see § Deferred below.
+R4 (10): `ARCHITECTURE.md:371,375,87`; `LLM_CORE_REFACTOR_PLAN.md:41`; `adr/0013:102`;
+`CONTRIBUTING_AI.md:184`; `DB_SETUP.md:137,162,95`; `CICD.md:122`; `BUGS.md:1456` (BUG-029 still
+Open after its fix shipped); `LOGGING_GUIDE.md:328` (the whole feature had no durable id),
+`:333` (retired claims kept beside their replacement), `:452` (a review stamp in a heading).
+R1 (1): `llm-log-handler.ts:217` — ADR-0013 §8 confined the LLM callback to `debug`; the code
+makes it a durable writer. Resolved by the owner-approved §8 amendment, not by a code change.
+
+### Round 3 — 2026-09-22
+
+**Verdict: BLOCKED — 15 blocking, none yet closed.** They are carried into their own plan,
+`llm-io-audit-trail-closeout.md`; this branch does not merge until that plan closes them.
+Again roughly half were introduced by the previous round's fixes, which is what prompted the
+`close-out-review` skill to gain a remediation section (`abc39d9c`).
+
+**Behaviour (1).** `llm-log-handler.ts:76` — INV-LLM-008 claims a build-enforced guard, but
+`@langchain/openai` `completions.js:59` sends `max_completion_tokens` for reasoning models
+(`o\d*`, `gpt-5*`) and `EXTRA_INVOCATION_PARAM_FIELDS` maps only `max_tokens`; the guard is
+pinned to `gpt-4o-mini` so it stays green. Unreachable on today's model, but the invariant
+promises more than the code delivers.
+
+**Code, proven by the existing suites (3).** `personas.ts:8` duplicates
+`evals/scenarios/fl-shared.ts:13` — round 2's shared fixture reinvented an existing one;
+`llm-log-handler.ts:42` `OpenAIMessage` restates `RecordedRequestMessage`, the same defect
+round 2 fixed one file over, in the producer; `print-transcript.integration.test.ts:81,112,161,188`
+plus `transcript-order.integration.test.ts:71` carry five inline `ConversationRunRecord` literals
+where `:155` already defines a spread base.
+
+**Text, closed by re-reading the section and grepping inbound references (11).**
+`adr/0013:397` names `persist.node.ts`, deleted in P3 — the line lives at `commit.node.ts:130`;
+`adr/0013:102` still enumerates two transcript writers where `ARCHITECTURE.md:376` says three;
+`adr/0013:383` asserts the superseded wording is "kept nowhere but git" and quotes it ten lines
+below; `ARCHITECTURE.md:376` over-claims that every writer numbers `seq` and carries `run_id`
+(`appendSystemNote` does neither); `ARCHITECTURE.md:165` omits `seq.ts`; `CICD.md:147` cites
+deploy step numbers the round-2 insertion shifted; `CICD.md:350` documents the second cron
+without the crontab line § 7a gives; `DB_SETUP.md:160` reattached a Purpose block containing law
+P4 retired (phase isolation, sliding window); `print-transcript.ts:12` carries a review stamp —
+an unfixed round-1 finding; `print-transcript.ts:10` cites the plan's superseded 100–250 KB
+estimate against BR-LLM-011's measured ~150 KB; and eleven comments across `src/` and `tests/`
+cite "close-out R2 finding N", which resolved to nothing until this section existed.
+
+### Deferred — evidence exists only after merge
+
+Both are the orchestrator's, both were raised as blocking in rounds 1–3 and cannot be closed on
+the branch. Per `close-out-review` § Report and route they are recorded here instead.
+
+- **AC-AT-6, the `deploy.sh` log capture.** `deploy/deploy.sh:61-83` has no test and no
+  shellcheck gate. Owed: `ssh filko.dev "cd /srv/docker/fitcoach && ./deploy/deploy.sh dev"`
+  **twice** — per `CLAUDE.md` the first deploy after a `deploy.sh` change runs the previous
+  version — then confirm `logs/dev/*.log` exists and holds the pre-recreate output.
+- **AC-AT-5, the `print-transcript` CLI wrapper.** Its flag dispatch, `--env-file` override and
+  teardown are covered by no test. Owed: `docker exec -it fitcoach-dev-server npm run
+  print-transcript -- --run <id> --payloads` on dev, against a real run.
 
