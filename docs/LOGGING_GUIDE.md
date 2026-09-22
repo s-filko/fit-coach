@@ -449,6 +449,46 @@ npm run print-transcript -- --run <runId> --payloads   # + the exact request/res
   volume note: 100–250 KB per run) — without the flag, an `llm_calls` line shows only its model,
   latency and error, if any.
 
+### Which database it reads (review, 2026-09-22)
+
+`package.json`'s script (`tsx --env-file-if-exists=.env ...`) always loads `.env` — setting
+`NODE_ENV=test` in the shell has NO effect on that; `tsx`'s own `--env-file` flag is fixed before
+this file's code ever runs. The command now prints which database it actually opened as its FIRST
+line, always:
+
+```
+Reading from postgres://localhost:5432/fitcoach_dev
+```
+
+so a mismatch is visible immediately instead of surfacing later as a raw driver error. If a query
+fails because a column or table this code expects is missing, the command says so in one sentence
+naming the database, instead of printing a bare Postgres exception — the schema there is behind
+migrations, or it is simply the wrong database.
+
+**To read a different environment, pass `--env-file <path>`** — it overrides whatever `.env` already
+loaded, for this run only:
+
+```bash
+npm run print-transcript -- --run <runId> --env-file .env.test
+```
+
+### Running it against dev, during an incident
+
+The owner's incidents live on the VPS, in the `fitcoach-dev-db` container — not on a laptop. Run the
+command INSIDE the running `fitcoach-dev-server` container, over SSH, so it inherits that
+container's own database connection (`DB_HOST=db` etc., the same environment docker-compose already
+gives it — no `--env-file` needed there, and none of `.env.dev`'s secrets ever have to leave the
+VPS):
+
+```bash
+ssh filko.dev
+docker exec -it fitcoach-dev-server npm run print-transcript -- --run <runId> [--payloads]
+```
+
+The printed `Reading from postgres://...` line there should name the `db` service's own host/port
+inside that container's network, not `localhost` — if it does not, something about the container's
+environment changed and is worth a second look before trusting the rest of the output.
+
 ---
 
 ## What to NEVER log
