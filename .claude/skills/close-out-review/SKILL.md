@@ -73,33 +73,22 @@ Show the owner the full list, blocking findings first.
   owner decides what happens next.
 - **Advisory** — offer to file them in `docs/BACKLOG.md` via the `backlog` skill, which
   classifies before writing. They are not fixed on this branch.
-- **Blocking but not closable here** — a blocking finding whose only possible evidence is
-  produced after merge (a deploy, a run against a durable environment) cannot be cleared by
-  anyone on the branch, and re-raising it every round costs a blocking slot and teaches
-  nothing. Record it once in the `## Review` section as `deferred`, naming who owns it and
-  the exact command owed; it then does not block the verdict. Anything a worker could close
-  on the branch is not deferred, it is open.
+- **Deferred** — a blocking finding whose only possible evidence comes after merge (a deploy,
+  a run against a durable environment) cannot be closed by anyone on the branch. Record it
+  with its owner and the exact command owed; it does not block the verdict. Only genuine
+  impossibility qualifies: anything a worker could close here is open, not deferred.
 
 Write the artifact only as described in the next section.
 
-### Between rounds — how a finding gets closed
+**What a fix owes, when the owner dispatches one.** Not this skill's work, but its business to
+state, because a review is only as good as the closure it gets:
 
-Not this skill's job to do, but its job to ask for, because the next round pays for it. Three
-requirements on whoever fixes, learned the expensive way: on one plan, rounds 2 and 3 were
-each roughly half defects that the previous round's own fixes had introduced.
-
-- **Close the class, not the line.** A finding cites one `file:line` because that is where the
-  reviewer stood, not because that is the extent of it. Search the repo for the same shape and
-  quote the search in the report. A duplicated type was fixed in the file the finding named
-  while the same type stayed restated one file over; a helper was extracted while its older
-  copy stayed 150 lines below in the same file.
-- **Search before creating anything shared.** The search recipe in the R2 zone is written for
-  the reviewer; the fixer needs it more. A "shared" test persona was added that duplicated one
-  already in the repo, so a DRY fix produced a DRY finding.
-- **Editing a durable doc is a change, not typing.** Read the whole section before and after,
-  and grep for inbound references to anything renumbered or renamed. Inserting a step
-  renumbered a list and silently broke two cross-references elsewhere in the same file;
-  inserting a table pushed the section below it under the wrong heading.
+- **The finding cites one `file:line` because that is where the reviewer stood — not because
+  that is the extent of it.** Close the class: search for the same shape and report the search.
+- **Search before creating anything shared.** The R2 zone's search recipe is written for the
+  reviewer; whoever fixes needs it more, or a DRY fix adds a copy of something already there.
+- **Editing a durable doc is a change, not typing.** Read the whole section, and grep for
+  inbound references to anything renumbered or renamed, before and after.
 
 ## Step 5 — Write the artifact
 
@@ -118,18 +107,15 @@ Today's date, the verdict, the zones that ran. Keep the format exactly: it is pa
 passed" looks like; there is no third value to encode (spec section 5).
 
 **In both cases** — append a `## Review` section at the end of the plan: every blocking
-finding and how it was closed, every advisory finding with the backlog entry it became.
+finding and how it was closed, every advisory finding with the backlog entry it became, every
+deferred one with its owner and command. Write it before any fix is dispatched: the record is
+what a fix is checked against, and what a commit or a code comment can cite.
 
-After a `blocked` review is fixed and re-run, keep the one `## Review` section and **append a
-sub-heading for the new round** (`### Round 2 — YYYY-MM-DD`) rather than rewriting what the
-previous round found; replace the `- Review:` header line rather than adding a second — a plan
-carries exactly one header line and one `## Review` section, however many rounds it takes, and
-it is edited in place (`SUPERPOWERS_INTEGRATION.md`, Division of roles).
-
-Round history is kept because the next round is the only check on the last round's fixes, and
-it can only perform that check against what the finding actually said. A round recorded only
-as a summary, or overwritten by the next one, leaves the re-reviewer verifying a paraphrase —
-and leaves any commit or comment that cites "the review finding" pointing at nothing.
+After a `blocked` review is fixed and re-run, update the same section rather than adding a
+second one, and replace any existing `- Review:` line rather than adding a second — a plan
+carries exactly one header line and one `## Review` section, however many times it is
+reviewed. Working documents are edited in place
+(`SUPERPOWERS_INTEGRATION.md`, Division of roles).
 
 ## Step 6 — File what the phase learned about itself
 
