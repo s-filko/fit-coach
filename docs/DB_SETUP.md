@@ -150,7 +150,16 @@ CREATE TABLE conversation_turns (
 -- Optimized for loading conversation history by (userId, phase) in chronological order
 CREATE INDEX idx_conversation_turns_user_phase_created
   ON conversation_turns(user_id, phase, created_at);
+
+-- Per-run lookups: the human-row dedup and the MAX(seq) read on every append (BR-LLM-011)
+CREATE INDEX idx_conversation_turns_run_id ON conversation_turns(run_id);
 ```
+
+**Purpose**: Stores all conversation dialogue for context management.
+- **Append-only**: Turns are never updated, only inserted
+- **Phase isolation**: Each phase has separate conversation context
+- **Sliding window**: Queries use LIMIT to load recent turns (default 20)
+- **Cascade delete**: All conversation history deleted when user removed
 
 #### conversation_runs
 One row per conversation run — the measurement base for the LLM core refactor
@@ -186,8 +195,9 @@ CREATE INDEX idx_conversation_runs_user_created ON conversation_runs(user_id, cr
 ```
 
 #### llm_calls
-One row per model invocation — the exact request sent and the answer received, written by the LLM
-callback handler regardless of `LOG_LEVEL`. Payload columns age out (see `LLM_CALLS_RETENTION_DAYS`);
+One row per model invocation made on behalf of a conversation run — the exact request sent and the
+answer received, written by the LLM callback handler regardless of `LOG_LEVEL` (INV-LLM-008). A
+run-less call (a background job) is logged but not recorded: `run_id` is `NOT NULL`. Payload columns age out (see `LLM_CALLS_RETENTION_DAYS`);
 the rows themselves are never deleted.
 
 ```sql
@@ -204,6 +214,11 @@ CREATE TABLE llm_calls (
   prompt_hashes TEXT[],           -- prompt_blobs referenced by this request; never nulled by retention
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+-- The recorder's next-call_index lookup, on the synchronous path of every model call (BR-LLM-011)
+CREATE INDEX idx_llm_calls_run_id_call_index ON llm_calls(run_id, call_index);
+-- The retention prune's blob-liveness check: array containment, not a scan of llm_calls (BR-LLM-011)
+CREATE INDEX idx_llm_calls_prompt_hashes_gin ON llm_calls USING gin(prompt_hashes);
 ```
 
 #### prompt_blobs
@@ -219,11 +234,6 @@ CREATE TABLE prompt_blobs (
 );
 ```
 
-**Purpose**: Stores all conversation dialogue for context management.
-- **Append-only**: Turns are never updated, only inserted
-- **Phase isolation**: Each phase has separate conversation context
-- **Sliding window**: Queries use LIMIT to load recent turns (default 20)
-- **Cascade delete**: All conversation history deleted when user removed
 
 ### Schema Management
 

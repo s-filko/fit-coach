@@ -334,7 +334,8 @@ LangGraph's `checkpoint_blobs` table holds the checkpointed `messages` channel a
 and grows unbounded — there is no in-app scheduler for cleanup (owner-run only, per BR-LLM-005).
 
 - Script: `apps/server/src/infra/db/scripts/prune-checkpoints.ts` (pure SQL builder,
-  `buildPruneStatements`) + `prune-checkpoints.cli.ts` (the runnable entry point).
+  `buildPruneStatements`) + `prune-checkpoints.cli.ts` (thin options over the shared
+  `prune-cli-runner.ts`, which both prune CLIs use).
 - `npm run db:prune-checkpoints` — dry-run by default (prints what would be deleted, deletes
   nothing); pass `-- --apply` to actually delete. `-- --days N` overrides the default 14-day
   cutoff.
@@ -345,6 +346,24 @@ and grows unbounded — there is no in-app scheduler for cleanup (owner-run only
   ```
   0 4 * * * cd /srv/docker/fitcoach && docker exec fitcoach-prod-server npm run db:prune-checkpoints -- --apply
   ```
+
+## 7b. LLM call payload pruning (BR-LLM-011)
+
+`llm_calls` and `prompt_blobs` hold the exact request sent to the model and the answer received.
+The rows are never deleted — which call happened, when, on which model, how long it took and
+whether it failed is kept without limit — but their payload columns age out, on the same
+owner-run basis as checkpoint pruning.
+
+- Script: `apps/server/src/infra/db/scripts/prune-llm-calls.ts` (pure SQL builder,
+  `buildPruneLlmCallsStatements`) + `prune-llm-calls.cli.ts` over the shared `prune-cli-runner.ts`.
+- `npm run db:prune-llm-calls` — dry-run by default; `-- --apply` performs it. The window comes
+  from `LLM_CALLS_RETENTION_DAYS` (default 30) and `-- --days N` overrides it.
+- Two statements, in order: `llm_calls.request`/`response` are nulled past the window, then a
+  `prompt_blobs` row's `content` is nulled once no unpruned call still references its hash via
+  `llm_calls.prompt_hashes`. The hash row itself survives, so which prompt versions ever existed
+  stays answerable.
+- Growth to watch: ~150 KB per run across 2–3 model calls, i.e. ~3.6 GB per 30-day window at
+  100 active users (BR-LLM-011). Storage, not query cost, is what bounds this.
 
 ## 8. Networking and HTTPS
 

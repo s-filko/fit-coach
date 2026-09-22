@@ -324,8 +324,9 @@ LLM request/response content itself stays at `debug` (BUG-003 replay behaviour).
 `json-file` driver captures up to 10 MB × 3 files per container, and that is it — the
 log lines above are for debugging a live process, not for answering "what did we send
 the model on 2026-09-21?" days later. **The authoritative record of every model
-invocation lives in Postgres, in `llm_calls` (+ `prompt_blobs`), not in the log**, since
-INV-LLM-008 (ADR-0013 §8): logs are a hint, the tables are the record. If you need to know what a run said,
+invocation a conversation run makes lives in Postgres, in `llm_calls` (+ `prompt_blobs`), not in
+the log**, since INV-LLM-008 (ADR-0013 §8): logs are a hint, the tables are the record. (A
+background job's call carries no `runId` and is logged only — the same invariant says so.) If you need to know what a run said,
 sent, or received, query the database; treat a log line as a hint, never as the source.
 
 ### Why a `volumes:` mount cannot fix a lost container log
@@ -444,7 +445,7 @@ npm run print-transcript -- --run <runId> --payloads   # + the exact request/res
   later reference — same call, another call, another run in a session listing — points back to it
   instead of repeating a multi-kilobyte block verbatim.
 - **Off by default** because a run's request can carry the whole conversation history (BR-LLM-011's own
-  volume note: 100–250 KB per run) — without the flag, an `llm_calls` line shows only its model,
+  measured volume: ~150 KB per run across 2–3 model calls) — without the flag, an `llm_calls` line shows only its model,
   latency and error, if any.
 
 ### Which database it reads

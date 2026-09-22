@@ -1180,7 +1180,7 @@ rule in the **chat** prompt) reproduced in the session-planning prompt, which ne
 ### Flow
 
 Reconstructed from the graph checkpoints (`checkpoint_blobs`, channel `__start__`, thread
-`60af022f-…`), which keep the inbound message even when the run fails — `conversation_turns` does not:
+`60af022f-…`), which at the time were the only place the inbound message survived a failed run:
 
 ```
 450 "начинаю с пробежки на беговой дорожке"        → run failed (core_error 08:51)
@@ -1199,8 +1199,14 @@ first two at 110 kg — reported in a phase that cannot log and answered with a 
 The user's "ты не записал все" then forced a delete-and-relog of the whole exercise (runs `ef7f3998`
 + `c04bfd68`, two extra round-trips mid-workout).
 
-Note for anyone investigating from the transcript: `conversation_turns` holds none of the failed
-runs' messages, so the DB transcript and the context the model actually saw diverge (see BUG-029).
+Note for anyone investigating from the transcript: **this changed on 2026-09-22.** The
+`llm-io-audit-trail` plan's AC-AT-1 made the conversation-run adapter persist the inbound `human`
+row *before* `graph.invoke`, so a run that throws now leaves the user's message in
+`conversation_turns` exactly once — pinned by
+`tests/integration/scenarios/failed-run-transcript.integration.test.ts`. Start from the transcript,
+not the checkpoints. The runs listed above predate that fix and are still only in `checkpoint_blobs`.
+**The loss half of this bug is therefore closed; this entry stays `Open` for its prompt half** —
+session planning confirming sets it never logged.
 
 ### Impact
 
