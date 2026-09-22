@@ -421,6 +421,20 @@ has no run to belong to, and `llm_calls.run_id` is `NOT NULL`. Logs are a hint; 
 transport field — the recorded parameter set is an explicit allow-list, and a build-enforced guard
 fails when a model sends a parameter that is neither recorded nor named as never-recorded.
 
+INV-LLM-009 (owner-approved 2026-09-22): **What the user sent survives the run that failed.** The
+inbound `human` message is written to `conversation_turns` with its `run_id` before the graph runs, and
+a run that ends non-`ok` is written to `conversation_runs` carrying `error_class` and `error_message`
+(the caught value's class and its message truncated to a fixed maximum — never a stack, never the
+exception text in an API body, per INV-LLM-006). Neither write depends on the run reaching `commit`:
+a run that throws, times out or is killed still leaves what the user wrote and why it ended.
+
+INV-LLM-010 (owner-approved 2026-09-22): **The order a run's rows were produced in is recoverable.**
+Every `conversation_turns` row carrying a `run_id` also carries a `seq`, monotonic within that
+`run_id` and assigned by the one policy in `infra/conversation/seq.ts` (`MAX(seq) WHERE run_id` + 1),
+whichever writer inserts it. A writer that cannot number its row writes `run_id` NULL instead — the
+`clearContext` system note is the only such case. Rows written before the column existed carry
+neither and are printed with an explicit warning rather than silently reordered. (Closes BUG-029.)
+
 BR-LLM-011: `llm_calls` and `prompt_blobs` payload columns age out after `LLM_CALLS_RETENTION_DAYS`
 (default 30) via an owner-installed cron; the rows themselves are never deleted, and a `prompt_blobs`
 row keeps its `hash` after its `content` is dropped. Metadata — which call happened, when, on which

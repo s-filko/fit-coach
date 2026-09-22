@@ -96,7 +96,16 @@ previous edit skipped it.
 - [x] **Step 4:** the two `print-transcript.ts` comments, and the eleven "close-out R2 finding N"
   citations across `src/` and `tests/` — now that § Round 2 exists they could resolve, but a
   durable id or the behaviour itself is the better citation.
-- [ ] **Step 5:** `grep -rn 'AC-AT-' docs/ apps/` returns nothing outside the two plan files.
+- [ ] **Step 5:** `grep -rn 'AC-AT-' docs/ apps/` returns nothing outside the two plan files —
+  ~90 sites, not the handful this line implied. **Owner decision, 2026-09-22: mint the missing
+  durable ids and rewrite every citation** (the alternative, keeping plan-scoped ids in code, was
+  declined). The orchestrator has amended ADR-0013 §8 with **INV-LLM-009** (the inbound message and
+  a failed run's cause survive the failure — AC-AT-1/AC-AT-2) and **INV-LLM-010** (a run's row order
+  is recoverable via `run_id` + `seq` — AC-AT-4). The full map a worker applies:
+  `AC-AT-1`/`AC-AT-2` → INV-LLM-009, `AC-AT-3` → INV-LLM-008, `AC-AT-4` → INV-LLM-010,
+  `AC-AT-6` → BR-LLM-011, and `AC-AT-5` (the `print-transcript` CLI — tooling, no invariant) → a
+  statement of what the command does. Two mentions stay and are not defects: `BUGS.md` and
+  `REVIEW_FINDINGS.md` name the plan explicitly when they discuss the id itself.
 
 ### Task D: Fourth close-out review (AC-CO-4) — orchestrator, never delegated
 
