@@ -44,6 +44,7 @@ import { runAiText } from '@infra/ai/graph/episode';
 import { langOf, t } from '@infra/ai/messages';
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
+import { classifyError } from '@shared/classify-error';
 import { createLogger } from '@shared/logger';
 
 const log = createLogger('conversation-run-adapter');
@@ -52,18 +53,6 @@ const log = createLogger('conversation-run-adapter');
 function isProviderError(err: unknown): boolean {
   const status = (err as { status?: number } | null)?.status;
   return typeof status === 'number' && (status === 429 || status >= 500);
-}
-
-/** AC-AT-2: run rows keep the error message short — the class name always survives untruncated. */
-const ERROR_MESSAGE_MAX_CHARS = 500;
-
-/** AC-AT-2: the failed run's cause, for every failure path that reaches the catch below. */
-function classifyError(err: unknown): { errorClass: string; errorMessage: string } {
-  const errorClass = err instanceof Error ? err.constructor.name : typeof err;
-  const message = err instanceof Error ? err.message : String(err);
-  const errorMessage =
-    message.length > ERROR_MESSAGE_MAX_CHARS ? `${message.slice(0, ERROR_MESSAGE_MAX_CHARS)}…` : message;
-  return { errorClass, errorMessage };
 }
 
 /**
@@ -245,18 +234,7 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
     /** D-F: delete the thread, note it in the transcript — nothing else. */
     async clearContext(userId: string): Promise<void> {
       // The note's phase = the thread's last phase — read before the thread is gone.
-      let phase: ConversationPhase = 'chat';
-      try {
-        const st = await (
-          graph as { getState?: (c: unknown) => Promise<{ values?: { phase?: ConversationPhase } }> }
-        ).getState?.({ configurable: { thread_id: userId } });
-        const { phase: lastPhase } = st?.values ?? {};
-        if (lastPhase) {
-          phase = lastPhase;
-        }
-      } catch {
-        // best-effort — the default phase carries the note
-      }
+      const phase = await readPhase(graph, userId);
       const user = await userService.getUser(userId);
       const { languageCode } = user ?? { languageCode: null as string | null };
       const lang = langOf(languageCode);

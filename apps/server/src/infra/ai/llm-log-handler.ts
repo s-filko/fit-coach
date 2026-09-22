@@ -21,6 +21,7 @@ import type { BaseMessage } from '@langchain/core/messages';
 
 import { loadConfig } from '@config/index';
 
+import { classifyError } from '@shared/classify-error';
 import { createLogger } from '@shared/logger';
 
 import { recordLlmCall, type RecordLlmCall, type RecordLlmCallRequest } from './llm-call-recorder';
@@ -97,17 +98,6 @@ export function buildReplayPayload(
     payload.reasoningEffort = reasoningEffort;
   }
   return payload;
-}
-
-/**
- * The thrown value's class name and message — mirrors conversation-run.adapter's classifyError
- * (AC-AT-2), one call site each, too small to be worth sharing across layers.
- */
-function classifyError(err: unknown): { errorClass: string; errorMessage: string } {
-  if (err instanceof Error) {
-    return { errorClass: err.constructor.name, errorMessage: err.message };
-  }
-  return { errorClass: typeof err, errorMessage: String(err) };
 }
 
 interface PendingCall {

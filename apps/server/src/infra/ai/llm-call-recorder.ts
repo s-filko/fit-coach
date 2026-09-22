@@ -43,9 +43,6 @@ export interface RecordLlmCallInput {
 
 export type RecordLlmCall = (input: RecordLlmCallInput) => Promise<void>;
 
-/** Run rows keep the error message short (Task 2's precedent) — the class name always survives untruncated. */
-const ERROR_MESSAGE_MAX_CHARS = 500;
-
 /**
  * AC-AT-3: one `llm_calls` row per call — `call_index` continues from this
  * run's own max (the Task 3 pattern: no in-memory per-run counter, so a
@@ -58,7 +55,10 @@ const ERROR_MESSAGE_MAX_CHARS = 500;
  * answerable after `request` itself is pruned. The insert is an upsert, not
  * insert-if-absent: AC-AT-6's blob-prune can null a blob's `content` once no
  * unpruned row references it any more, and identical content later hashing
- * to the same key must restore it, not leave it stuck null. Never throws
+ * to the same key must restore it, not leave it stuck null. `errorMessage`
+ * arrives already truncated — @shared/classify-error is the one place that
+ * decides the length policy, shared with conversation_runs.error_message —
+ * so it is stored as given, never re-truncated here. Never throws
  * (D-F-style): the caller (a LangChain callback) must never fail the run
  * over this.
  */
@@ -94,11 +94,6 @@ export const recordLlmCall: RecordLlmCall = async input => {
     .from(llmCalls)
     .where(eq(llmCalls.runId, input.runId));
 
-  const errorMessage =
-    input.errorMessage && input.errorMessage.length > ERROR_MESSAGE_MAX_CHARS
-      ? `${input.errorMessage.slice(0, ERROR_MESSAGE_MAX_CHARS)}…`
-      : (input.errorMessage ?? null);
-
   await db.insert(llmCalls).values({
     runId: input.runId,
     callIndex: (maxIndex ?? 0) + 1,
@@ -108,6 +103,6 @@ export const recordLlmCall: RecordLlmCall = async input => {
     promptHashes,
     latencyMs: input.latencyMs,
     errorClass: input.errorClass ?? null,
-    errorMessage,
+    errorMessage: input.errorMessage ?? null,
   });
 };
