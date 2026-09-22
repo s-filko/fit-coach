@@ -95,6 +95,19 @@ promoted. This paragraph is the single statement of the rename rule; Tasks 1 and
 - [x] **Step 3**: verify — `cd apps/server && npm run test:unit` and
   `RUN_DB_TESTS=1 npm run test:integration`.
 
+**Recorded at Task 1 review (orchestrator, 2026-09-22).** The pre-persisted `human` row is stamped
+with the phase read from the checkpoint *before* `invoke`, while `commit` stamps the rest of the run
+with `state.phase` *after* `prepare` may have changed it. So a run that changes phase now produces a
+transcript row set that is no longer phase-homogeneous — the user's message carries the phase it was
+received in, the answer the phase it was answered in. That is the truthful reading and it is kept, but
+it is a change no reader expected before: do not assume all rows of a `run_id` share one `phase`.
+Two checks that did **not** hold up and cost nothing to re-verify: `episodeId` never reaches the
+database (`conversation_turns` has no such column, `toTurnRows` drops it), so the pre-persist passing
+`episodeId: runId` is inert; and the `/compact` path does not pre-persist, because `compactOnly` is
+set only in the adapter's separate `compact()` method, so ADR-0013's "no transcript rows" contract for
+manual compaction still holds. The dedup read does not breach INV-LLM-001 (ADR-0013 §104 forbids
+reading `conversation_turns` *to build a prompt*) and leaves the port's surface read-free.
+
 ### Task 2: A failed run says why (AC-AT-2)
 
 **Files:** migration for `conversation_runs` (`error_class`, `error_message`),
