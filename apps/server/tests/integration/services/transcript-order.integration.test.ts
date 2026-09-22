@@ -29,6 +29,7 @@ import { conversationRuns, conversationTurns } from '@infra/db/schema';
 
 import { fetchRunsSince } from '../../../evals/lib/export-query';
 import { createTestUserData } from '../../shared/test-factories';
+import { BASE_CONVERSATION_RUN_RECORD } from './conversation-run-record.fixture';
 
 /** A run shaped like the live ones: user message, tool round-trips, final reply. Every row is distinguishable. */
 const messages = [
@@ -69,21 +70,15 @@ describe('order of the rows of one run is recoverable from the database (BUG-029
     await new DrizzleTranscriptService().appendRunMessages({ ...input, messages: [messages[0]!] });
     await new DrizzleTranscriptService().appendRunMessages(input);
     await new DrizzleConversationRunService().recordRun({
+      ...BASE_CONVERSATION_RUN_RECORD,
       runId,
       userId: user.id,
       phaseIn: 'training',
-      phaseOut: null,
-      trigger: 'user_message',
-      client: 'telegram',
       model: 'test-model',
-      promptVersions: {},
       tokensIn: 1,
       tokensOut: 1,
       latencyMs: 10,
-      toolCalls: null,
-      transition: null,
       outcome: 'ok',
-      budgetReport: null,
     });
   });
 
@@ -153,20 +148,14 @@ describe('fetchRunsSince orders whole runs oldest-first, not by a shared-pool se
     const user = await new DrizzleUserRepository().create(createTestUserData({ username: `ord_limit_${Date.now()}` }));
 
     const baseRun = {
+      ...BASE_CONVERSATION_RUN_RECORD,
       userId: user.id,
       phaseIn: 'chat' as const,
-      phaseOut: null,
-      trigger: 'user_message' as const,
-      client: 'telegram' as const,
       model: null,
-      promptVersions: {},
       tokensIn: null,
       tokensOut: null,
       latencyMs: 10,
-      toolCalls: null,
-      transition: null,
       outcome: 'ok' as const,
-      budgetReport: null,
     };
     const baseTurn = { userId: user.id, phase: 'chat' as const, kind: 'human' as const, role: 'user' as const };
 

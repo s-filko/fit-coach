@@ -26,6 +26,7 @@ import {
 } from '@infra/observability/transcript-reader';
 
 import { createTestUserData } from '../../shared/test-factories';
+import { BASE_CONVERSATION_RUN_RECORD } from './conversation-run-record.fixture';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -79,21 +80,15 @@ async function seedNormalRun(userId: string): Promise<string> {
   });
 
   await new DrizzleConversationRunService().recordRun({
+    ...BASE_CONVERSATION_RUN_RECORD,
     runId,
     userId,
     phaseIn: 'training',
-    phaseOut: null,
-    trigger: 'user_message',
-    client: 'telegram',
     model: 'z-ai/glm-5.3',
-    promptVersions: {},
     tokensIn: 100,
     tokensOut: 10,
     latencyMs: 600,
-    toolCalls: null,
-    transition: null,
     outcome: 'ok',
-    budgetReport: null,
   });
 
   return runId;
@@ -110,21 +105,15 @@ async function seedFailedRun(userId: string): Promise<string> {
     messages: [{ kind: 'human', text: 'накинул 10кг и сделал еще подход на 12' }],
   });
   await new DrizzleConversationRunService().recordRun({
+    ...BASE_CONVERSATION_RUN_RECORD,
     runId,
     userId,
     phaseIn: 'training',
-    phaseOut: null,
-    trigger: 'user_message',
-    client: 'telegram',
     model: null,
-    promptVersions: {},
     tokensIn: null,
     tokensOut: null,
     latencyMs: 50,
-    toolCalls: null,
-    transition: null,
     outcome: 'core_error',
-    budgetReport: null,
     errorClass: 'CoreError',
     errorMessage: 'model call threw',
   });
@@ -159,21 +148,15 @@ async function seedRunWithPrunedPayloads(userId: string): Promise<string> {
   ]);
 
   await new DrizzleConversationRunService().recordRun({
+    ...BASE_CONVERSATION_RUN_RECORD,
     runId,
     userId,
     phaseIn: 'training',
-    phaseOut: null,
-    trigger: 'user_message',
-    client: 'telegram',
     model: 'z-ai/glm-5.3',
-    promptVersions: {},
     tokensIn: 10,
     tokensOut: 5,
     latencyMs: 600,
-    toolCalls: null,
-    transition: null,
     outcome: 'ok',
-    budgetReport: null,
   });
   return runId;
 }
@@ -186,21 +169,15 @@ async function seedPreMigrationRun(userId: string): Promise<string> {
     { userId, phase: 'chat', role: 'assistant', content: 'legacy ответ', runId, kind: 'ai', seq: null },
   ]);
   await new DrizzleConversationRunService().recordRun({
+    ...BASE_CONVERSATION_RUN_RECORD,
     runId,
     userId,
     phaseIn: 'chat',
-    phaseOut: null,
-    trigger: 'user_message',
-    client: 'telegram',
     model: 'z-ai/glm-5.3',
-    promptVersions: {},
     tokensIn: 10,
     tokensOut: 5,
     latencyMs: 200,
-    toolCalls: null,
-    transition: null,
     outcome: 'ok',
-    budgetReport: null,
   });
   return runId;
 }

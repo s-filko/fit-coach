@@ -69,14 +69,14 @@ cannot be closed by a test:
 `apps/server/src/infra/ai/llm-log-handler.ts`,
 `apps/server/tests/integration/services/{print-transcript,transcript-order}.integration.test.ts`.
 
-- [ ] **Step 1:** `personas.ts` duplicates `evals/scenarios/fl-shared.ts` — import it instead.
+- [x] **Step 1:** `personas.ts` duplicates `evals/scenarios/fl-shared.ts` — import it instead.
   `review-memory-delete.integration.test.ts` already imports across those two trees, so the
   precedent exists. Before deleting, grep both trees for other users of either fixture.
-- [ ] **Step 2:** `OpenAIMessage` restates `RecordedRequestMessage` — import the recorder's type.
+- [x] **Step 2:** `OpenAIMessage` restates `RecordedRequestMessage` — import the recorder's type.
   Then grep the whole repo for any third restatement of that shape.
-- [ ] **Step 3:** five inline `ConversationRunRecord` literals across two test files; a spread
+- [x] **Step 3:** five inline `ConversationRunRecord` literals across two test files; a spread
   base already exists at `transcript-order.integration.test.ts:155`. Use it for all five.
-- [ ] **Step 4:** `npx tsc --noEmit` plus the four suites. No new test — if the suites pass, the
+- [x] **Step 4:** `npx tsc --noEmit` plus the four suites. No new test — if the suites pass, the
   behaviour is unchanged, which is the whole claim.
 
 ### Task C: Make the durable layer true again (AC-CO-3) — orchestrator, not a worker

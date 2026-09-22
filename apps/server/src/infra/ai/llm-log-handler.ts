@@ -24,7 +24,12 @@ import { loadConfig } from '@config/index';
 import { classifyError } from '@shared/classify-error';
 import { createLogger } from '@shared/logger';
 
-import { recordLlmCall, type RecordLlmCall, type RecordLlmCallRequest } from './llm-call-recorder';
+import {
+  type RecordedRequestMessage,
+  recordLlmCall,
+  type RecordLlmCall,
+  type RecordLlmCallRequest,
+} from './llm-call-recorder';
 
 const log = createLogger('llm');
 
@@ -39,14 +44,7 @@ function config(): ReturnType<typeof loadConfig> {
   return cached;
 }
 
-interface OpenAIMessage {
-  role: string;
-  content: unknown;
-  tool_calls?: unknown;
-  tool_call_id?: string;
-}
-
-function messageToOpenAI(msg: BaseMessage): OpenAIMessage {
+function messageToOpenAI(msg: BaseMessage): RecordedRequestMessage {
   const type = msg._getType();
   let role: string;
   if (type === 'human') {
@@ -56,7 +54,7 @@ function messageToOpenAI(msg: BaseMessage): OpenAIMessage {
   } else {
     role = type;
   }
-  const base: OpenAIMessage = { role, content: msg.content };
+  const base: RecordedRequestMessage = { role, content: msg.content };
   if (type === 'ai' && 'tool_calls' in msg && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
     base.tool_calls = msg.tool_calls;
   }
