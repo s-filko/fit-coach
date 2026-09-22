@@ -435,6 +435,39 @@ an unfixed round-1 finding; `print-transcript.ts:10` cites the plan's superseded
 estimate against BR-LLM-011's measured ~150 KB; and eleven comments across `src/` and `tests/`
 cite "close-out R2 finding N", which resolved to nothing until this section existed.
 
+### Round 4 — 2026-09-22
+
+**Verdict: BLOCKED — 2 blocking, 2 advisory.** All four zones ran on the branch as the
+close-out plan left it (Tasks A, B and C closed round 3's fifteen). **R1 returned nothing**,
+including on the ADR-0013 §8 amendment: it checked that edit against `SUPERPOWERS_INTEGRATION.md`
+rule 3 and found the owner's decision recorded in the close-out plan, so the edit satisfies the
+rule rather than violating it. **R3 returned no blocking finding** and re-ran all four suites
+itself with matching counts. The two blocking findings are both the same shape as findings the
+previous round closed — one file over, in a directory the closure's own check did not look at.
+
+**Blocking (2).**
+1. R2 — `llm-call-recorder.integration.test.ts:66` (also `:77`, `:112`, and
+   `llm-invocation-wiring.integration.test.ts:70`) restate `RecordedRequestMessage` inline as
+   `as { messages: Array<{ role: string; content?: string }> }`, though both files already import
+   from `@infra/ai/llm-call-recorder`. DRY (`CONTRIBUTING_AI.md` § Principles & Boundaries). This
+   is round 3's `OpenAIMessage` finding, which Task B fixed in the producer and not in the tests
+   that read what it produces.
+2. R4 — `deploy/deploy.sh:61` still reads `# --- Capture container logs (AC-AT-6) ... ---`, the
+   last plan-scoped citation in the repo. Task C Step 5's own verification command was
+   `grep -rn 'AC-AT-' docs/ apps/`, and `deploy/` is neither: the check was narrower than the
+   claim it was meant to prove. Confirmed by a repo-root grep, which returns this one line.
+   `AC-AT-6` → `BR-LLM-011`.
+
+**Advisory (2), neither new to this branch.** R2: `print-transcript.ts:41` is a fourth
+hand-rolled `indexOf` flag parser — the existing `BACKLOG.md` "Evals tooling duplication trio"
+entry should be widened rather than a new one opened. R3: Task 2's flagged owner decision —
+whether `compact()` records its own failed run, or manual compaction is stated to be outside the
+run log — was never made and is written down nowhere; `conversation-run.adapter.ts:228` still
+only logs and rethrows. The loss is the run-level cause only: the model call itself is still in
+`llm_calls`, which has no FK to `conversation_runs`.
+
+**Meta (3)** — filed in `docs/REVIEW_FINDINGS.md`, not acted on here.
+
 ### Deferred — evidence exists only after merge
 
 Both are the orchestrator's, both were raised as blocking in rounds 1–3 and cannot be closed on
