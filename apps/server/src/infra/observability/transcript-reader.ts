@@ -56,6 +56,28 @@ export interface RunTranscript {
   llmCalls: LlmCallRecord[];
 }
 
+/**
+ * The 12-field `conversation_runs` row → `RunSummary` projection — one place, used by both the
+ * single-run and the windowed fetch below (close-out R2 finding 5; `loadTurnsAndCalls` above was
+ * factored out for exactly the same reason).
+ */
+function toRunSummary(runRow: typeof conversationRuns.$inferSelect): RunSummary {
+  return {
+    runId: runRow.runId,
+    userId: runRow.userId,
+    createdAt: runRow.createdAt,
+    phaseIn: runRow.phaseIn,
+    phaseOut: runRow.phaseOut,
+    model: runRow.model,
+    outcome: runRow.outcome,
+    errorClass: runRow.errorClass,
+    errorMessage: runRow.errorMessage,
+    tokensIn: runRow.tokensIn,
+    tokensOut: runRow.tokensOut,
+    latencyMs: runRow.latencyMs,
+  };
+}
+
 async function loadTurnsAndCalls(runId: string): Promise<Pick<RunTranscript, 'turns' | 'llmCalls'>> {
   const [turns, calls] = await Promise.all([
     db
@@ -98,28 +120,26 @@ export async function fetchRunTranscript(runId: string): Promise<RunTranscript> 
   const { turns, llmCalls: calls } = await loadTurnsAndCalls(runId);
   return {
     runId,
-    run: runRow
-      ? {
-          runId: runRow.runId,
-          userId: runRow.userId,
-          createdAt: runRow.createdAt,
-          phaseIn: runRow.phaseIn,
-          phaseOut: runRow.phaseOut,
-          model: runRow.model,
-          outcome: runRow.outcome,
-          errorClass: runRow.errorClass,
-          errorMessage: runRow.errorMessage,
-          tokensIn: runRow.tokensIn,
-          tokensOut: runRow.tokensOut,
-          latencyMs: runRow.latencyMs,
-        }
-      : null,
+    run: runRow ? toRunSummary(runRow) : null,
     turns,
     llmCalls: calls,
   };
 }
 
-/** Every run of `userId` whose own `created_at` falls in `[since, until]`, oldest first. */
+function transcriptTimestamp(rt: Pick<RunTranscript, 'run' | 'turns'>): Date {
+  return rt.run?.createdAt ?? rt.turns[0]?.createdAt ?? new Date(0);
+}
+
+/**
+ * Every run of `userId` active in `[since, until]`, oldest first — including a run whose
+ * `conversation_runs` row was never written (close-out R2 finding 8: `commit.node.ts:99-131`
+ * swallows a `recordRun` failure, and a process killed before that point reaches neither path;
+ * AC-AT-1 still guarantees the inbound message was persisted, keyed by `run_id`, before the graph
+ * ran). Such a run is discovered from `conversation_turns` instead — the only one of the three
+ * tables carrying `user_id` directly — and windowed by ITS OWN `created_at`, since there is no run
+ * row to window by. `RunTranscript.run` is `null` for exactly this case; `--run` already returns it
+ * that way, this just makes `--session`/`--user` find it too.
+ */
 export async function fetchRunsForUserWindow(userId: string, since: Date, until: Date): Promise<RunTranscript[]> {
   const runRows = await db
     .select()
@@ -130,33 +150,36 @@ export async function fetchRunsForUserWindow(userId: string, since: Date, until:
         gte(conversationRuns.createdAt, since),
         lte(conversationRuns.createdAt, until),
       ),
-    )
-    .orderBy(asc(conversationRuns.createdAt));
+    );
 
-  return Promise.all(
-    runRows.map(async runRow => {
+  const knownRunIds = new Set(runRows.map(r => r.runId));
+
+  const orphanRunIdRows = await db
+    .selectDistinct({ runId: conversationTurns.runId })
+    .from(conversationTurns)
+    .where(
+      and(
+        eq(conversationTurns.userId, userId),
+        gte(conversationTurns.createdAt, since),
+        lte(conversationTurns.createdAt, until),
+      ),
+    );
+  const orphanRunIds = orphanRunIdRows
+    .map(row => row.runId)
+    .filter((runId): runId is string => runId !== null && !knownRunIds.has(runId));
+
+  const results = await Promise.all([
+    ...runRows.map(async runRow => {
       const { turns, llmCalls: calls } = await loadTurnsAndCalls(runRow.runId);
-      return {
-        runId: runRow.runId,
-        run: {
-          runId: runRow.runId,
-          userId: runRow.userId,
-          createdAt: runRow.createdAt,
-          phaseIn: runRow.phaseIn,
-          phaseOut: runRow.phaseOut,
-          model: runRow.model,
-          outcome: runRow.outcome,
-          errorClass: runRow.errorClass,
-          errorMessage: runRow.errorMessage,
-          tokensIn: runRow.tokensIn,
-          tokensOut: runRow.tokensOut,
-          latencyMs: runRow.latencyMs,
-        },
-        turns,
-        llmCalls: calls,
-      };
+      return { runId: runRow.runId, run: toRunSummary(runRow), turns, llmCalls: calls };
     }),
-  );
+    ...orphanRunIds.map(async runId => {
+      const { turns, llmCalls: calls } = await loadTurnsAndCalls(runId);
+      return { runId, run: null, turns, llmCalls: calls };
+    }),
+  ]);
+
+  return results.sort((a, b) => transcriptTimestamp(a).getTime() - transcriptTimestamp(b).getTime());
 }
 
 /** A training session's user + the time span it was active in — the window `--session` resolves to. */

@@ -338,5 +338,42 @@ describe('print-transcript (AC-AT-5)', () => {
     it('resolveSessionWindow returns null for a session id that does not exist', async () => {
       await expect(resolveSessionWindow(randomUUID())).resolves.toBeNull();
     });
+
+    it('close-out R2 finding 8: fetchRunsForUserWindow also finds a run whose conversation_runs row was never written, interleaved in order with rows that were', async () => {
+      const user = await seedUser('orphan');
+      const since = new Date('2026-09-21T00:00:00.000Z');
+      const until = new Date('2026-09-21T23:59:59.000Z');
+
+      // A normal run, pinned to the middle of the window.
+      const normalRunId = await seedNormalRun(user.id);
+      await db
+        .update(conversationRuns)
+        .set({ createdAt: new Date('2026-09-21T12:00:00.000Z') })
+        .where(eq(conversationRuns.runId, normalRunId));
+
+      // AC-AT-1's preservation case: the inbound message was persisted (transcript.appendRunMessages,
+      // before the graph ran), but the process was killed before commit.node.ts's recordRun — no
+      // conversation_runs row ever exists for this run_id. Pinned earlier in the window than the
+      // normal run, to prove ordering interleaves them rather than always sorting orphans last.
+      const orphanRunId = randomUUID();
+      await new DrizzleTranscriptService().appendRunMessages({
+        userId: user.id,
+        runId: orphanRunId,
+        phase: 'training',
+        episodeId: orphanRunId,
+        messages: [{ kind: 'human', text: 'оборвалось на середине' }],
+      });
+      await db
+        .update(conversationTurns)
+        .set({ createdAt: new Date('2026-09-21T08:00:00.000Z') })
+        .where(eq(conversationTurns.runId, orphanRunId));
+
+      const runs = await fetchRunsForUserWindow(user.id, since, until);
+
+      expect(runs.map(r => r.runId)).toEqual([orphanRunId, normalRunId]);
+      const orphan = runs.find(r => r.runId === orphanRunId)!;
+      expect(orphan.run).toBeNull();
+      expect(orphan.turns.map(t => t.content)).toEqual(['оборвалось на середине']);
+    });
   });
 });
