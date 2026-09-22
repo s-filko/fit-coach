@@ -15,6 +15,7 @@ _Generated 2026-09-22 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `llm-io-audit-trail.md` — LLM I/O Audit Trail — Nothing the User Wrote, the Model Answered, or the API Received Is Lost Implementation Plan (branch: `plan/llm-io-audit-trail`, last commit 2026-09-22)
 
 **Planned**
+- `llm-io-audit-trail-closeout.md` — LLM I/O Audit Trail — Close-out Remediation Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 
@@ -218,53 +219,45 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
-## Handoff (orchestrator shift, 2026-09-22)
+## Handoff (orchestrator shift, 2026-09-22 — second relay)
 
-**Six failing tests against unchanged production are on `dev`** (plan `session-2026-09-21-repro`,
-`Status: done`, review clean, merged and pushed) — one per defect: BUG-023 `log-set.tool.repro`,
-BUG-025 `format-exercise-summary.repro`, BUG-027 `tool-ordering.repro`, BUG-030
-`previous-session.repro`, BUG-029 `transcript-order.repro`, BUG-022 (loss half)
-`failed-run-transcript.repro`. Plus four eval-case drafts for the findings no deterministic test can
-catch. They sit outside the default suites by design:
+**`llm-io-audit-trail` is code-complete and does not merge yet.** Branch
+`plan/llm-io-audit-trail`, 33 commits, worktree
+`/Users/filko/orca/workspaces/fit_coach/llm-io-audit-trail`, tree clean, no live workers.
+All four suites green (unit 126/1202, integration 33/555, scenarios 9/343); the repro glob
+stays at 2 suites / 4 failures and must — those reds are BUG-027 and BUG-030, other plans.
 
-```
-cd apps/server
-NODE_ENV=test npx jest --testMatch='**/__tests__/**/*.repro.test.ts'
-RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch='**/tests/integration/**/*.repro.test.ts'
-```
+**Close-out review ran three times: 23 blocking, then 16, then 15.** Roughly half of each later
+round were defects introduced by the previous round's own fixes. Rounds 1–3 are recorded in the
+plan's `## Review`; **read findings there, never from a summary** — round 3 could only check
+round 2's fixes against a paraphrase, because round 2 had not been written down, and eleven code
+comments citing "close-out R2 finding N" pointed at nothing until that section existed.
 
-Each is renamed to an ordinary `*.unit.test.ts` / `*.integration.test.ts` when its fix lands.
+**Next: `llm-io-audit-trail-closeout.md`** — the fifteen open findings, grouped by what closure
+actually costs, which is the useful fact: **one** changes behaviour and needs a failing test first
+(the parameter allow-list misses `max_completion_tokens`, which LangChain sends for reasoning
+models, and the guard is pinned to one model so it stays green); **three** are code with no
+behaviour change, proven by the existing suites; **eleven are text**, where the closure check is
+re-reading the section and grepping inbound references, not a test. Task C is the orchestrator's,
+Task D never delegated.
 
-**In flight: `llm-io-audit-trail`, Task 1 (AC-AT-1).** Owner chose observability before the fixes
-(2026-09-22). Worktree `/Users/filko/orca/workspaces/fit_coach/llm-io-audit-trail`, branch
-`plan/llm-io-audit-trail` off `dev` `b87c9a11`; Run `run_2285913525cf`, one **Sonnet** worker
-(`launch.effective` claude/sonnet). The plan was amended before dispatch: its Tasks 1 and 3 reuse the
-two merged red tests instead of writing new ones — see its § "Red tests already on `dev`", which also
-states the `.repro.` → `.integration.` rename rule once.
+**Two verifications are deferred, not open** — their evidence exists only after merge, and they
+are recorded with owner and command in the plan's `## Deferred`: the `deploy.sh` log capture
+(needs *two* dev deploys, since the first runs the previous script) and a live `print-transcript`
+run. The `close-out-review` skill gained that state, plus a statement of what a fix owes, in
+`abc39d9c` — three rounds of evidence went into two small edits, deliberately not organised
+around "rounds", which is a shape that only exists when a review keeps failing.
 
-**Order after it (owner, 2026-09-21, unchanged):** prompt defects in small strokes, BUG-030 first,
-then BUG-022, BUG-024, BUG-023; then the code defects BUG-027 (note `tool-policy.unit.test.ts:67-76`
-currently *pins* the defective ordering and must change with the fix) and BUG-025.
+**Owner rules that shaped this shift:** ask one question at a time; do not stop and wait when
+standing rules already settle the matter; a fix closes the class, not the cited line; and when a
+skill is improved, improve it for every future review, not for the run that hurt.
 
-**Leftovers audited and disposed of (owner decisions, 2026-09-22).** The `session-2026-09-21-repro`
-worker, worktree and branch are gone; five content-free `worktree-agent-*` branches (all on
-`a2809b0f`, an ancestor of `origin/main`) deleted; the `orchestrator-fact-lifecycle-opus` tab closed
-after its one undocumented finding was recorded (direct Google AI Studio is not a drop-in replacement
-for the OpenRouter route — `BACKLOG.md` § Findings, pointer in `CLAUDE.md` § LLM). The
-`fact-lifecycle` worktree and its branches were already gone before this shift. Corrected in the same
-pass: `worker-release` does **not** archive a transcript here — `ORCHESTRATION.md` § The cycle now
-states where a worker's history actually survives, and that a finding must be written down before a
-tab is closed. **Kept by owner decision:** the dev fixture user `smoke_factlife`
-(`e78054ac-578e-40b5-a3e4-a5cee4347820`, 63 turns, 1 fact) — live material for eval drafts; and the
-previous orchestrator's own tab, per the relay rule (abandoned, not closed).
+**Open, not blocking** (carried from earlier shifts): AC-FL-3's live half — a closed fact not
+resurrected by compacting an OLDER episode — is pinned by a scenario test but never reproduced
+live; worth one check when a plan next touches compaction.
 
-**Open, not blocking** (carried over from the `fact-lifecycle` shift): AC-FL-3's live half — a closed
-fact not resurrected by compacting an OLDER episode — is pinned end-to-end by a scenario test but was
-never reproduced live; forcing a real compaction of an old episode needs a seeded thread. Worth one
-live check whenever a plan next touches compaction.
-
-- **Test DB:** `fitcoach_test` (local container `fitcoach-db`). Never run tests in two worktrees against
-  it at once; workers never touch a DB by hand.
+- **Test DB:** `fitcoach_test` (local container `fitcoach-db`). Never run tests in two worktrees
+  against it at once; workers never touch a DB by hand.
 
 ## Blocked / waiting on owner
 
