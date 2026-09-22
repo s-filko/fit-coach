@@ -18,32 +18,14 @@ import { conversationRuns, conversationTurns } from '@infra/db/schema';
 import { runScenario } from '../../../evals/lib/run-scenario';
 import type { Scenario } from '../../../evals/schema/scenario.schema';
 
+import { buildAlexScenario } from './personas';
 import { installScriptedModel, type ScriptedModelHandle } from './scripted-model';
 
 const OK_MESSAGE = 'привет, начинаю тренировку';
 const LOST_MESSAGE = 'накинул 10кг и сделал еще подход на 12';
 
-const scenarioFor = (id: string, text: string): Scenario => ({
-  id,
-  description: 'BUG-022 loss half: one run that succeeds, one whose model call throws',
-  past: {
-    user: {
-      languageCode: 'ru',
-      timezone: 'Europe/Berlin',
-      firstName: 'Alex',
-      age: 30,
-      gender: 'male',
-      height: 180,
-      weight: 80,
-      fitnessLevel: 'intermediate',
-      fitnessGoal: 'strength',
-      registrationCompleted: true,
-    },
-    workouts: [],
-    facts: [],
-  },
-  steps: [{ action: 'user', text, script: [{ text: 'Хорошо.' }], expect: {} }],
-});
+const scenarioFor = (id: string, text: string): Scenario =>
+  buildAlexScenario(id, 'BUG-022 loss half: one run that succeeds, one whose model call throws', text);
 
 /** Human-message rows the transcript holds for the user, by text. */
 async function humanTurnTexts(userId: string): Promise<string[]> {

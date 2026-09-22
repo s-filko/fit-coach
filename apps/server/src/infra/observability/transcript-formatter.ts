@@ -4,6 +4,8 @@
  * Judged for readability, not machine-parseability (owner, 2026-09-22): a person reconstructing
  * what happened reads this, not a script.
  */
+import type { RecordedRequestMessage, RecordLlmCallRequest, RecordLlmCallResponse } from '@infra/ai/llm-call-recorder';
+
 import type { LlmCallRecord, RunTranscript, TurnRecord } from './transcript-reader';
 
 export interface FormatOptions {
@@ -11,26 +13,9 @@ export interface FormatOptions {
   includePayloads: boolean;
 }
 
-type RequestMessage = {
-  role: string;
-  content?: unknown;
-  contentHash?: string;
-  tool_calls?: unknown;
-  tool_call_id?: string;
-};
-type RequestPayload = {
-  model?: string;
-  temperature?: unknown;
-  reasoningEffort?: unknown;
-  tools?: unknown[];
-  messages?: RequestMessage[];
-};
-type ResponsePayload = {
-  text?: string;
-  finishReason?: string | null;
-  usage?: { promptTokens: number; completionTokens: number } | null;
-  toolCalls?: unknown;
-};
+type RequestMessage = RecordedRequestMessage;
+type RequestPayload = RecordLlmCallRequest;
+type ResponsePayload = RecordLlmCallResponse;
 
 const time = (d: Date): string => d.toISOString();
 
@@ -105,6 +90,11 @@ function formatCallDetail(c: LlmCallRecord, blobs: Map<string, string | null>, s
     const extras = [
       `temperature=${req.temperature === undefined ? 'default' : String(req.temperature)}`,
       req.reasoningEffort !== undefined ? `reasoningEffort=${String(req.reasoningEffort)}` : null,
+      req.maxTokens !== undefined ? `maxTokens=${String(req.maxTokens)}` : null,
+      req.topP !== undefined ? `topP=${String(req.topP)}` : null,
+      req.stop !== undefined ? `stop=${JSON.stringify(req.stop)}` : null,
+      req.responseFormat !== undefined ? `responseFormat=${JSON.stringify(req.responseFormat)}` : null,
+      req.toolChoice !== undefined ? `toolChoice=${JSON.stringify(req.toolChoice)}` : null,
       req.tools && req.tools.length > 0 ? `tools=${req.tools.length}` : null,
     ].filter((x): x is string => x !== null);
     lines.push(`    request: model=${req.model} ${extras.join(' ')}`);

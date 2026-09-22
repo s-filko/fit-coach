@@ -13,23 +13,21 @@ import type {
 import { db } from '@infra/db/drizzle';
 import { exerciseMuscleGroups, exercises, sessionExercises, sessionSets, workoutSessions } from '@infra/db/schema';
 
+import { findInErrorCauseChain } from '@shared/pg-error-cause';
+
 /** The partial unique index behind INV-TRAINING-002 (migration 0010). */
 const ONE_IN_PROGRESS_INDEX = 'uq_workout_sessions_one_in_progress_per_user';
 
 /**
  * Postgres unique-violation on the one-active-session index — matched by SQLSTATE `23505` and the index
- * name, never by message text. Drizzle (>= 0.44) wraps driver errors in a DrizzleQueryError whose
- * `cause` is the pg error, so the whole `cause` chain is inspected, not just the top-level `code`.
+ * name, never by message text.
  */
 function isActiveSessionViolation(err: unknown): boolean {
-  for (let current = err, depth = 0; typeof current === 'object' && current !== null && depth < 5; depth++) {
-    const { code, constraint, cause } = current as { code?: unknown; constraint?: unknown; cause?: unknown };
-    if (code === '23505' && constraint === ONE_IN_PROGRESS_INDEX) {
-      return true;
-    }
-    current = cause;
-  }
-  return false;
+  return (
+    findInErrorCauseChain(err, level =>
+      level.code === '23505' && level.constraint === ONE_IN_PROGRESS_INDEX ? true : null,
+    ) === true
+  );
 }
 
 export class WorkoutSessionRepository implements IWorkoutSessionRepository {

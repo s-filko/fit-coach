@@ -17,29 +17,11 @@ import { conversationRuns } from '@infra/db/schema';
 import { runScenario } from '../../../evals/lib/run-scenario';
 import type { Scenario } from '../../../evals/schema/scenario.schema';
 
+import { buildAlexScenario } from './personas';
 import { installScriptedModel, type ScriptedModelHandle } from './scripted-model';
 
-const scenarioFor = (id: string, text: string): Scenario => ({
-  id,
-  description: 'AC-AT-2: one run that succeeds, one whose model call throws',
-  past: {
-    user: {
-      languageCode: 'ru',
-      timezone: 'Europe/Berlin',
-      firstName: 'Alex',
-      age: 30,
-      gender: 'male',
-      height: 180,
-      weight: 80,
-      fitnessLevel: 'intermediate',
-      fitnessGoal: 'strength',
-      registrationCompleted: true,
-    },
-    workouts: [],
-    facts: [],
-  },
-  steps: [{ action: 'user', text, script: [{ text: 'Хорошо.' }], expect: {} }],
-});
+const scenarioFor = (id: string, text: string): Scenario =>
+  buildAlexScenario(id, 'AC-AT-2: one run that succeeds, one whose model call throws', text);
 
 /** The user's most recent conversation_runs row. */
 async function latestRunRow(userId: string) {

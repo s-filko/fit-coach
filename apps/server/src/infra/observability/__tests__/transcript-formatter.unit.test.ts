@@ -228,6 +228,34 @@ describe('formatRunTranscript (AC-AT-5)', () => {
       expect(out).toContain('[system] [same prompt as shown earlier, hash hash-1]');
     });
 
+    it('prints request params beyond temperature/reasoningEffort/tools — maxTokens and toolChoice, as actually stored', () => {
+      const rt: RunTranscript = {
+        runId: 'run-1',
+        run: baseRun,
+        turns: [],
+        llmCalls: [
+          call({
+            request: {
+              model: 'z-ai/glm-5.3',
+              messages: [{ role: 'user', content: 'следующий подход' }],
+              maxTokens: 512,
+              toolChoice: 'auto',
+              topP: 0.9,
+              stop: ['\n\n'],
+              responseFormat: { type: 'json_object' },
+            },
+          }),
+        ],
+      };
+      const out = formatRunTranscript(rt, new Map(), { includePayloads: true });
+
+      expect(out).toContain('maxTokens=512');
+      expect(out).toContain('toolChoice="auto"');
+      expect(out).toContain('topP=0.9');
+      expect(out).toContain('stop=["\\n\\n"]');
+      expect(out).toContain('responseFormat={"type":"json_object"}');
+    });
+
     it('without --payloads, calls show only metadata — no request/response text at all', () => {
       const rt: RunTranscript = { runId: 'run-1', run: baseRun, turns: [], llmCalls: [call()] };
       const out = formatRunTranscript(rt, new Map([['hash-1', 'RULES: only discuss fitness.']]), {

@@ -7,6 +7,8 @@
  * "this is the wrong database" — the schema here is behind migrations (a column/table this code
  * expects does not exist yet in the one it opened).
  */
+import { findInErrorCauseChain } from '@shared/pg-error-cause';
+
 export interface DatabaseTargetInfo {
   host: string;
   port: number;
@@ -26,22 +28,12 @@ const SCHEMA_BEHIND_CODES = new Set(['42703', '42P01']);
  * against a database whose migrations have not caught up, most often because it was the wrong
  * database in the first place) never to surface as a bare driver error again.
  */
-function asCoded(value: unknown): { code?: string; message?: string } | null {
-  return typeof value === 'object' && value !== null ? (value as { code?: string; message?: string }) : null;
-}
-
-/**
- * drizzle-orm wraps the real driver error in `.cause` (a DrizzleQueryError) — the Postgres error
- * code (and the specific "column X does not exist" message) lives one level down, not on `err`
- * itself. A raw driver error (no wrapper) is matched directly, first.
- */
 function findCodedError(err: unknown): { code?: string; message?: string } | null {
-  const outer = asCoded(err);
-  if (outer?.code) {
-    return outer;
-  }
-  const cause = outer && 'cause' in outer ? (outer as { cause?: unknown }).cause : undefined;
-  return asCoded(cause);
+  return findInErrorCauseChain(err, level =>
+    level.code
+      ? { code: level.code as string, message: typeof level.message === 'string' ? level.message : undefined }
+      : null,
+  );
 }
 
 export function describeSchemaError(err: unknown, target: DatabaseTargetInfo): string | null {

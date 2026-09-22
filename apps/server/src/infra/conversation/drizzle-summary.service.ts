@@ -54,23 +54,19 @@ export class DrizzleSummaryService implements SummaryPort {
   async insert(input: InsertSummaryInput): Promise<{ summaryTurnId: string }> {
     const { db } = await import('@infra/db/drizzle');
     const { conversationSummaries, conversationTurns } = await import('@infra/db/schema');
-    const { eq, max } = await import('drizzle-orm');
+    const { nextSeqForRun } = await import('./seq');
     const summaryRow = toSummaryInsert(input);
     return db.transaction(async tx => {
       await tx.insert(conversationSummaries).values(summaryRow);
-      // Close-out R2 finding 6: the summary is this run's own next turn — auto-compaction can
-      // fire mid-run (compact.node.ts), alongside the run's other, already-seq'd turns — so it
-      // is numbered the same way appendRunMessages numbers a run's other turns (MAX(seq) WHERE
-      // run_id, +1), never left null. Read inside the same transaction, both for this and for
-      // the existing reason: the mirrored turn row's id is the fact-extraction provenance
-      // (fact-lifecycle plan Task 1).
-      const [{ maxSeq }] = await tx
-        .select({ maxSeq: max(conversationTurns.seq) })
-        .from(conversationTurns)
-        .where(eq(conversationTurns.runId, input.runId));
+      // The summary is this run's own next turn — auto-compaction can fire mid-run
+      // (compact.node.ts), alongside the run's other, already-seq'd turns — so it is numbered the
+      // same way appendRunMessages numbers a run's other turns, never left null. Read inside the
+      // same transaction, both for this and for the existing reason: the mirrored turn row's id
+      // is the fact-extraction provenance (fact-lifecycle plan Task 1).
+      const seq = await nextSeqForRun(tx, input.runId);
       const [turn] = await tx
         .insert(conversationTurns)
-        .values(toSummaryTurnRow(input, (maxSeq ?? 0) + 1))
+        .values(toSummaryTurnRow(input, seq))
         .returning({ id: conversationTurns.id });
       return { summaryTurnId: turn.id };
     });

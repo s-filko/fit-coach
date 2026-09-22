@@ -94,7 +94,8 @@ export class DrizzleTranscriptService implements TranscriptPort {
     }
     const { db } = await import('@infra/db/drizzle');
     const { conversationTurns } = await import('@infra/db/schema');
-    const { and, eq, max } = await import('drizzle-orm');
+    const { and, eq } = await import('drizzle-orm');
+    const { nextSeqForRun } = await import('./seq');
 
     let { messages } = input;
     if (messages.some(m => m.kind === 'human')) {
@@ -120,12 +121,9 @@ export class DrizzleTranscriptService implements TranscriptPort {
     // pre-persisted human message, then commit's projection of the rest) —
     // continue numbering from whatever this run_id already has, so seq stays
     // monotonic across both inserts instead of restarting at 1 each call.
-    const [{ maxSeq }] = await db
-      .select({ maxSeq: max(conversationTurns.seq) })
-      .from(conversationTurns)
-      .where(eq(conversationTurns.runId, input.runId));
+    const startSeq = await nextSeqForRun(db, input.runId);
 
-    const rows = toTurnRows({ ...input, messages }, (maxSeq ?? 0) + 1);
+    const rows = toTurnRows({ ...input, messages }, startSeq);
     await db.insert(conversationTurns).values(rows);
   }
 
