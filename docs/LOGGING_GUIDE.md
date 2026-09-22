@@ -330,10 +330,8 @@ sent, or received, query the database; treat a log line as a hint, never as the 
 
 ### Why a `volumes:` mount cannot fix a lost container log
 
-The plan that started this work assumed "no log volume is mounted" was why the
-2026-09-21 09:25 deploy erased that morning's evidence, and that mounting one would fix
-it. That premise was wrong, and it is corrected here so nobody rediscovers it by trying
-the same fix: Docker's `json-file` driver (configured in `deploy/docker-compose.yml`'s
+Mounting a volume does not make a container's log durable, and it is worth stating why,
+because it is the first fix everyone reaches for. Docker's `json-file` driver (configured in `deploy/docker-compose.yml`'s
 `logging:` block, 10m × 3 files, on every service) writes to
 `/var/lib/docker/containers/<container-id>/<container-id>-json.log` — a path under
 **dockerd's own data root, keyed by container id**. No `volumes:` entry in a compose
@@ -378,10 +376,10 @@ gone.
   Configured in `apps/server/src/config/index.ts` (`EnvSchema`), documented in
   `apps/server/.env.example`. To change it, set `LLM_CALLS_RETENTION_DAYS=<n>` in the
   environment's real `.env.<env>` file (never `.env.example` itself) and redeploy.
-- **`prompt_blobs` ages out too, on the same "keep the row, drop the payload" rule —
-  not "never pruned".** A first version of this guide claimed a blob is "one row per
-  distinct prompt version, not per call" and left it alone entirely; that is true only
-  of the one static rules block. `assemble-context.ts` pushes up to six `SystemMessage`s
+- **`prompt_blobs` ages out too, on the same "keep the row, drop the payload" rule.**
+  It is tempting to treat a blob as one row per distinct prompt version and leave the
+  table alone; that holds only for the one static rules block.
+  `assemble-context.ts` pushes up to six `SystemMessage`s
   per call — per-profile, per-episode and per-workout blocks that change on nearly every
   call — and the recorder hashes every one of them into its own blob, so most blobs are
   NOT reusable across calls the way the static one is. Leaving them all forever would
@@ -449,7 +447,7 @@ npm run print-transcript -- --run <runId> --payloads   # + the exact request/res
   volume note: 100–250 KB per run) — without the flag, an `llm_calls` line shows only its model,
   latency and error, if any.
 
-### Which database it reads (review, 2026-09-22)
+### Which database it reads
 
 `package.json`'s script (`tsx --env-file-if-exists=.env ...`) always loads `.env` — setting
 `NODE_ENV=test` in the shell has NO effect on that; `tsx`'s own `--env-file` flag is fixed before

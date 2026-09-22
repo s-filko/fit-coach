@@ -1453,8 +1453,8 @@ numbers or protocol wording.
 
 ## BUG-029 — Turn order inside a run is unrecoverable: every row shares one `created_at`
 
-**Status:** Open
-**Severity:** Medium — corrupts exported eval drafts and every manual transcript review
+**Status:** Fixed (2026-09-22, `llm-io-audit-trail` Task 3 — lands on `dev` with that plan's merge)
+**Severity:** Medium — corrupted exported eval drafts and every manual transcript review
 **Found during:** Live dev training session 2026-09-21 (owner review)
 **Component:** `apps/server/src/infra/conversation/drizzle-transcript.service.ts:70-79`, `apps/server/src/infra/db/schema.ts:90-104`, `apps/server/evals/lib/export-query.ts:41,79`
 
@@ -1501,15 +1501,24 @@ Seen on 2026-09-21: "накинул 10кг и сделал еще подход �
 said so). Anyone investigating an incident must read the checkpoint, not only the turns — or the
 transcript must be written before the graph runs, which is what the audit-trail plan proposes.
 
-### Fix plan
+### Fix
 
-Add a monotonic per-run `seq` written by `toTurnRows`, order by `(created_at, seq)` wherever turns are
-read, and migrate. No LLM read path is affected (INV-LLM-001: the transcript is append-only).
+Migration `0012` adds `conversation_turns.seq`; `toTurnRows` takes a start value and
+`appendRunMessages` seeds it from `MAX(seq)` for that `run_id`, so numbering survives the two separate
+inserts a run now performs (the adapter's pre-persisted `human` row, then the commit node's
+projection). `evals/lib/export-query.ts` orders by `(created_at, seq)` — **in that order**: putting
+`seq` first sliced a multi-run export by sequence position and sorted every pre-migration `NULL` seq
+behind every new row, so a truncating limit dropped exactly the historical data this fix exists to
+recover. `drizzle-summary.service.ts` numbers its mirrored summary row into the same sequence, found
+at close-out review. No LLM read path is affected (INV-LLM-001: the transcript is append-only).
 
 ### Regression test
 
-Unit: `toTurnRows` numbers rows in message order. Integration: a run's rows read back in the order
-they were produced.
+`tests/integration/services/transcript-order.integration.test.ts` — promoted from the reproduction
+test written before any fix (`session-2026-09-21-repro`, AC-LSR-5). It rewrites every row in reverse
+produced order so physical layout can no longer supply the right answer by luck, and asserts the real
+reader returns the produced order; a second case spans several runs including one with `NULL` seq and
+a truncating limit. Unit: `drizzle-transcript.service.unit.test.ts` pins `toTurnRows` numbering.
 
 ---
 

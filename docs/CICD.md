@@ -120,14 +120,15 @@ Located at `deploy/deploy.sh`. Executed on the VPS by GitHub Actions via SSH.
 4. Export DEPLOY_ENV, DB_USER, DB_PASSWORD, DB_NAME
 5. Create data/{env}/postgres directory
 6. Backup database (pg_dump) if DB container is running
-7. Read VERSION file, compute GIT_SHA and BUILD_TIME
-8. Export GIT_SHA, APP_VERSION, BUILD_TIME
-9. docker compose build (with build args)
-10. docker compose up -d
-11. Health check: 12 attempts × 5s = 60s timeout
-12. On failure: print last 30 lines of server logs, exit 1
-13. Prune Docker images and builder cache older than 72h
-14. Release deploy lock (trap on EXIT)
+7. Capture the running containers' logs to `logs/{env}/{service}_{ts}.log` before they are recreated (a deploy replaces the container, and dockerd deletes the old one's json-file log with it); a failed capture never aborts the deploy
+8. Read VERSION file, compute GIT_SHA and BUILD_TIME
+9. Export GIT_SHA, APP_VERSION, BUILD_TIME
+10. docker compose build (with build args)
+11. docker compose up -d
+12. Health check: 12 attempts × 5s = 60s timeout
+13. On failure: print last 30 lines of server logs, exit 1
+14. Prune Docker images and builder cache older than 72h
+15. Release deploy lock (trap on EXIT)
 ```
 
 ### Deploy lock

@@ -141,6 +141,7 @@ CREATE TABLE conversation_turns (
   role TEXT NOT NULL,             -- 'user' | 'assistant' | 'system' | 'summary'
   content TEXT NOT NULL,
   run_id UUID,                    -- conversation run that produced the turn (nullable, not backfilled)
+  seq INTEGER,                    -- per-run monotonic order; null only on pre-migration rows and rows with no run_id
   kind TEXT NOT NULL DEFAULT 'human',  -- 'human' | 'ai' | 'tool_call' | 'tool_result' | 'system_note' | 'summary'
   payload JSONB,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -176,10 +177,46 @@ CREATE TABLE conversation_runs (
   transition JSONB,
   outcome conversation_run_outcome NOT NULL,
   budget_report JSONB,
+  error_class TEXT,               -- non-'ok' runs only: the thrown value's class
+  error_message TEXT,             -- non-'ok' runs only: truncated to 500 chars
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_conversation_runs_user_created ON conversation_runs(user_id, created_at);
+```
+
+#### llm_calls
+One row per model invocation — the exact request sent and the answer received, written by the LLM
+callback handler regardless of `LOG_LEVEL`. Payload columns age out (see `LLM_CALLS_RETENTION_DAYS`);
+the rows themselves are never deleted.
+
+```sql
+CREATE TABLE llm_calls (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id UUID NOT NULL,           -- not an FK: a call is recorded before any conversation_runs row need exist
+  call_index INTEGER NOT NULL,    -- 1-based within the run
+  model TEXT NOT NULL,
+  request JSONB,                  -- nullable: the payload ages out, the row does not
+  response JSONB,
+  latency_ms INTEGER NOT NULL,
+  error_class TEXT,
+  error_message TEXT,
+  prompt_hashes TEXT[],           -- prompt_blobs referenced by this request; never nulled by retention
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+#### prompt_blobs
+Each distinct system message stored once by content hash, referenced from `llm_calls.request` instead
+of being repeated per call. Content is nulled when no unpruned call still references it; the hash row
+stays.
+
+```sql
+CREATE TABLE prompt_blobs (
+  hash TEXT PRIMARY KEY,
+  content TEXT,                   -- nullable: aged out by retention
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
 ```
 
 **Purpose**: Stores all conversation dialogue for context management.
