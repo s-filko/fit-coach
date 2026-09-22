@@ -146,6 +146,20 @@ written down so the close-out does not rediscover them as gaps:
 - [x] **Step 2**: add the column and the ordering.
 - [x] **Step 3**: verify — `npm run test:unit`, `RUN_DB_TESTS=1 npm run test:integration`.
 
+**Recorded at Task 3 review (orchestrator, 2026-09-22).** The task shipped with `fetchRunsSince`
+ordering by `(seq, created_at)`. That query spans every run since the cutoff and carries
+`limit * 4`, so sorting by `seq` first sliced the result across runs by sequence position, and a
+`NULL` seq sorts last in Postgres ASC — every pre-migration row, i.e. the 2026-09-21 session this
+export exists to recover, behind every new row and first to be cut. Fixed to `(created_at, seq)` in
+`a7e2ab5c`, with a multi-run test including a `NULL`-seq run, proven red on the shipped ordering
+first. **The lesson for the rest of this plan:** the promoted single-run test passes under both
+orderings, so a test that examines one run cannot check a query that spans many. Where a reader is
+global, test it globally, and with a truncating limit.
+Left alone deliberately: the BUG-016 fallback query (turns whose `run_id` is `NULL`, window-joined by
+timestamp) still orders by `created_at` only. Every row that reaches it predates `run_id` threading
+and therefore has no `seq` either, so adding one would be inert — noted so the close-out does not
+read it as an oversight.
+
 ### Task 4: Every API exchange is stored (AC-AT-3)
 
 **Files:** migration for `llm_calls` (+ a prompt-blob table keyed by content hash),
