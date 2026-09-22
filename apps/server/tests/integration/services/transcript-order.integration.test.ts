@@ -25,7 +25,7 @@ import { DrizzleConversationRunService } from '@infra/conversation/drizzle-conve
 import { DrizzleTranscriptService, toTurnRows } from '@infra/conversation/drizzle-transcript.service';
 import { db } from '@infra/db/drizzle';
 import { DrizzleUserRepository } from '@infra/db/repositories/user.repository';
-import { conversationTurns } from '@infra/db/schema';
+import { conversationRuns, conversationTurns } from '@infra/db/schema';
 
 import { fetchRunsSince } from '../../../evals/lib/export-query';
 import { createTestUserData } from '../../shared/test-factories';
@@ -120,5 +120,99 @@ describe('order of the rows of one run is recoverable from the database (BUG-029
 
     // The probe: the reader's order is the produced order.
     expect(await readByReader()).toEqual(produced);
+  });
+});
+
+/**
+ * AC-AT-4 review fix (2026-09-22): `fetchRunsSince`'s turns query spans every run since the cutoff
+ * and is capped by `limit * 4`, THEN bucketed per run — it is not a single-run read. Ordering that
+ * shared pool by `seq` first (nulls last in ASC) sorts every pre-migration row — no `seq` at all —
+ * behind every seq'd row, so a truncating LIMIT drops old, seq-less runs before it touches any newer
+ * one: exactly backwards from "oldest first, whole runs." `createdAt` has to lead; `seq` is only the
+ * tiebreak within a tied timestamp. The single-run test above cannot see this — it never lets the
+ * LIMIT bite across more than one run.
+ */
+describe('fetchRunsSince orders whole runs oldest-first, not by a shared-pool seq tiebreak (AC-AT-4 review fix)', () => {
+  const SINCE = new Date('2099-06-01T00:00:00.000Z');
+  const at = (offsetMs: number): Date => new Date(SINCE.getTime() + offsetMs);
+
+  let historicalRunId: string;
+  let runAId: string;
+  let runBId: string;
+
+  beforeAll(async () => {
+    const user = await new DrizzleUserRepository().create(createTestUserData({ username: `ord_limit_${Date.now()}` }));
+
+    const baseRun = {
+      userId: user.id,
+      phaseIn: 'chat' as const,
+      phaseOut: null,
+      trigger: 'user_message' as const,
+      client: 'telegram' as const,
+      model: null,
+      promptVersions: {},
+      tokensIn: null,
+      tokensOut: null,
+      latencyMs: 10,
+      toolCalls: null,
+      transition: null,
+      outcome: 'ok' as const,
+      budgetReport: null,
+    };
+    const baseTurn = { userId: user.id, phase: 'chat' as const, kind: 'human' as const, role: 'user' as const };
+
+    // The historical run: OLDEST, and — like every pre-migration row — its turns carry no seq at all.
+    historicalRunId = randomUUID();
+    await db.insert(conversationRuns).values({ ...baseRun, runId: historicalRunId, createdAt: at(0) });
+    await db.insert(conversationTurns).values(
+      ['h-1', 'h-2', 'h-3'].map((content, i) => ({
+        ...baseTurn,
+        runId: historicalRunId,
+        content,
+        seq: null,
+        createdAt: at(i * 1000),
+      })),
+    );
+
+    // Two newer runs, each fully seq'd (as every run is today) — 5 turns each, same timestamp per
+    // run so their own order depends entirely on seq, the way a real run's commit-node INSERT would.
+    runAId = randomUUID();
+    await db.insert(conversationRuns).values({ ...baseRun, runId: runAId, createdAt: at(60_000) });
+    await db.insert(conversationTurns).values(
+      ['a-1', 'a-2', 'a-3', 'a-4', 'a-5'].map((content, i) => ({
+        ...baseTurn,
+        runId: runAId,
+        content,
+        seq: i + 1,
+        createdAt: at(60_000),
+      })),
+    );
+
+    runBId = randomUUID();
+    await db.insert(conversationRuns).values({ ...baseRun, runId: runBId, createdAt: at(120_000) });
+    await db.insert(conversationTurns).values(
+      ['b-1', 'b-2', 'b-3', 'b-4', 'b-5'].map((content, i) => ({
+        ...baseTurn,
+        runId: runBId,
+        content,
+        seq: i + 1,
+        createdAt: at(120_000),
+      })),
+    );
+  });
+
+  // 3 runs, 13 turns total — `fetchRunsSince(SINCE, 3)`'s turns query caps at 3*4=12, one short, so
+  // the LIMIT must decide which run's tail it cuts. Oldest-first means the newest run (B) loses a
+  // row, never the historical one.
+  it('keeps the historical (seq-less) run whole and orders runs oldest-first when the LIMIT bites', async () => {
+    const result = await fetchRunsSince(SINCE, 3);
+
+    expect(result.map(r => r.runId)).toEqual([historicalRunId, runAId, runBId]);
+
+    const historical = result.find(r => r.runId === historicalRunId)!;
+    expect(historical.turns.map(t => t.content)).toEqual(['h-1', 'h-2', 'h-3']);
+
+    const runA = result.find(r => r.runId === runAId)!;
+    expect(runA.turns.map(t => t.content)).toEqual(['a-1', 'a-2', 'a-3', 'a-4', 'a-5']);
   });
 });
