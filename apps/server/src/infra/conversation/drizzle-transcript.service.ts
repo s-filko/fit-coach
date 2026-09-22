@@ -9,6 +9,8 @@ export interface TurnRow {
   role: 'user' | 'assistant' | 'system' | 'summary';
   content: string;
   payload: Record<string, unknown> | null;
+  /** AC-AT-4: this row's position in the run, closes BUG-029. */
+  seq: number;
 }
 
 /**
@@ -16,12 +18,26 @@ export interface TurnRow {
  * derived so a P3 rollback — which reads history as `role IN ('user','assistant')`
  * and context as the latest `role='summary'` row — sees only real user/assistant
  * text, never tool plumbing.
+ *
+ * `startSeq` (AC-AT-4, default 1) numbers the OUTPUT rows `startSeq..startSeq+n-1`
+ * in message order. It exists because a run's messages reach the table through
+ * TWO `appendRunMessages` calls (AC-AT-1: the adapter pre-persists the human
+ * message before `graph.invoke`, commit projects the rest) — each call to this
+ * function only ever sees its own slice, so numbering has to be seeded from
+ * outside, by whatever `seq` the run already has in the database, or every
+ * call would restart at 1 and the order would still be unrecoverable across
+ * the two inserts. `appendRunMessages` below is what resolves that seed.
  */
-export function toTurnRows(input: AppendRunMessagesInput): TurnRow[] {
+export function toTurnRows(input: AppendRunMessagesInput, startSeq = 1): TurnRow[] {
   const rows: TurnRow[] = [];
+  let seq = startSeq;
+  const push = (row: Omit<TurnRow, 'seq'>): void => {
+    rows.push({ ...row, seq });
+    seq += 1;
+  };
   for (const message of input.messages) {
     if (message.kind === 'human') {
-      rows.push({
+      push({
         userId: input.userId,
         phase: input.phase,
         runId: input.runId,
@@ -31,7 +47,7 @@ export function toTurnRows(input: AppendRunMessagesInput): TurnRow[] {
         payload: null,
       });
     } else if (message.kind === 'ai') {
-      rows.push({
+      push({
         userId: input.userId,
         phase: input.phase,
         runId: input.runId,
@@ -42,7 +58,7 @@ export function toTurnRows(input: AppendRunMessagesInput): TurnRow[] {
           message.toolCalls !== undefined && message.toolCalls.length > 0 ? { tool_calls: message.toolCalls } : null,
       });
       for (const call of message.toolCalls ?? []) {
-        rows.push({
+        push({
           userId: input.userId,
           phase: input.phase,
           runId: input.runId,
@@ -53,7 +69,7 @@ export function toTurnRows(input: AppendRunMessagesInput): TurnRow[] {
         });
       }
     } else {
-      rows.push({
+      push({
         userId: input.userId,
         phase: input.phase,
         runId: input.runId,
@@ -73,33 +89,44 @@ export function toTurnRows(input: AppendRunMessagesInput): TurnRow[] {
  */
 export class DrizzleTranscriptService implements TranscriptPort {
   async appendRunMessages(input: AppendRunMessagesInput): Promise<void> {
-    const rows = toTurnRows(input);
-    if (rows.length === 0) {
+    if (input.messages.length === 0) {
       return;
     }
     const { db } = await import('@infra/db/drizzle');
     const { conversationTurns } = await import('@infra/db/schema');
-    const { and, eq } = await import('drizzle-orm');
+    const { and, eq, max } = await import('drizzle-orm');
 
-    let toInsert = rows;
-    if (rows.some(r => r.kind === 'human')) {
+    let { messages } = input;
+    if (messages.some(m => m.kind === 'human')) {
       // AC-AT-1: the adapter persists the run's human message before
       // graph.invoke, keyed by run_id. When commit later projects the same
-      // run's messages, its own human row is the one already there —
-      // skip it so the message is never written twice.
+      // run's messages, its own human message is the one already there —
+      // drop it before numbering so it is never written twice and never
+      // wastes a seq slot.
       const [existing] = await db
         .select({ id: conversationTurns.id })
         .from(conversationTurns)
         .where(and(eq(conversationTurns.runId, input.runId), eq(conversationTurns.kind, 'human')))
         .limit(1);
       if (existing) {
-        toInsert = rows.filter(r => r.kind !== 'human');
+        messages = messages.filter(m => m.kind !== 'human');
       }
     }
-    if (toInsert.length === 0) {
+    if (messages.length === 0) {
       return;
     }
-    await db.insert(conversationTurns).values(toInsert);
+
+    // AC-AT-4: this run's messages arrive through up to two calls (the
+    // pre-persisted human message, then commit's projection of the rest) —
+    // continue numbering from whatever this run_id already has, so seq stays
+    // monotonic across both inserts instead of restarting at 1 each call.
+    const [{ maxSeq }] = await db
+      .select({ maxSeq: max(conversationTurns.seq) })
+      .from(conversationTurns)
+      .where(eq(conversationTurns.runId, input.runId));
+
+    const rows = toTurnRows({ ...input, messages }, (maxSeq ?? 0) + 1);
+    await db.insert(conversationTurns).values(rows);
   }
 
   async appendSystemNote(input: {

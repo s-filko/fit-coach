@@ -38,7 +38,11 @@ export async function fetchRunsSince(since: Date, limit: number): Promise<Export
     })
     .from(conversationTurns)
     .where(and(gte(conversationTurns.createdAt, since), isNotNull(conversationTurns.runId)))
-    .orderBy(asc(conversationTurns.createdAt))
+    // AC-AT-4: seq (nulls last) is the recoverable order within a run — closes
+    // BUG-029, where tied created_at left this ORDER BY at the mercy of
+    // physical row layout. createdAt stays as the tiebreak for pre-migration
+    // rows, whose seq is null, so their relative order is unchanged from before.
+    .orderBy(asc(conversationTurns.seq), asc(conversationTurns.createdAt))
     .limit(limit * 4);
 
   const byRun = new Map<string, ExportedRun['turns']>();

@@ -100,6 +100,11 @@ export const conversationTurns = pgTable(
     runId: uuid('run_id'),
     kind: conversationTurnKindEnum('kind').notNull().default('human'),
     payload: jsonb('payload'),
+    // AC-AT-4: per-run monotonic order (closes BUG-029). Nullable — rows written
+    // before this column existed, and system notes (no run_id), have none; no
+    // backfill, since a run is one-shot and never receives more rows after a
+    // deploy, so no pre-migration run is ever mixed with post-migration seq'd rows.
+    seq: integer('seq'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   table => {

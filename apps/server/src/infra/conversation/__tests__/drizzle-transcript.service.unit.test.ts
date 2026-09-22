@@ -103,4 +103,32 @@ describe('toTurnRows — transcript projection per message (D-K, ADR-0013 §8)',
   it('returns an empty array for an empty run', () => {
     expect(toTurnRows({ ...INPUT, messages: [] })).toEqual([]);
   });
+
+  it('AC-AT-4: numbers its rows 1..n in message order by default', () => {
+    const rows = toTurnRows({
+      ...INPUT,
+      messages: [
+        { kind: 'human', text: 'hi' },
+        // The ai message + its one tool call project to TWO rows (D-K) — the
+        // row count, not the message count, is what seq numbers.
+        { kind: 'ai', text: '', toolCalls: [{ id: 'a', name: 'log_set', args: {} }] },
+        { kind: 'tool_result', toolCallId: 'a', text: 'done', status: 'ok' },
+      ],
+    });
+    expect(rows.map(r => r.seq)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('AC-AT-4: startSeq continues the numbering instead of restarting at 1', () => {
+    const rows = toTurnRows(
+      {
+        ...INPUT,
+        messages: [
+          { kind: 'ai', text: 'answer' },
+          { kind: 'ai', text: 'more' },
+        ],
+      },
+      5,
+    );
+    expect(rows.map(r => r.seq)).toEqual([5, 6]);
+  });
 });

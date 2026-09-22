@@ -138,13 +138,13 @@ written down so the close-out does not rediscover them as gaps:
 **Files:** migration for `conversation_turns` (`seq`), `schema.ts`,
 `drizzle-transcript.service.ts` (`toTurnRows`), `apps/server/evals/lib/export-query.ts`, tests.
 
-- [ ] **Step 1: the red test already exists** — `transcript-order.repro.test.ts` (§ Red tests already
+- [x] **Step 1: the red test already exists** — `transcript-order.repro.test.ts` (§ Red tests already
   on `dev`) proves the order is unrecoverable through the real reader `fetchRunsSince`, which *is* the
   eval export's query, after the rows are physically reordered. **Extend it, do not duplicate it**,
   with the one assertion `seq` newly makes possible: `toTurnRows` numbers its rows `1..n` in message
   order.
-- [ ] **Step 2**: add the column and the ordering.
-- [ ] **Step 3**: verify — `npm run test:unit`, `RUN_DB_TESTS=1 npm run test:integration`.
+- [x] **Step 2**: add the column and the ordering.
+- [x] **Step 3**: verify — `npm run test:unit`, `RUN_DB_TESTS=1 npm run test:integration`.
 
 ### Task 4: Every API exchange is stored (AC-AT-3)
 

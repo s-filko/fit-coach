@@ -1,21 +1,21 @@
 /**
- * REPRODUCTION (RED) — AC-LSR-5 / BUG-029. Runs only via an explicit --testMatch (needs the local
- * fitcoach_test database); promoted to a regular integration test when the fix lands.
+ * AC-AT-4 / BUG-029. The order a run's rows were produced in is recoverable from the database via a
+ * per-run monotonic `seq`, written by `toTurnRows`/`appendRunMessages`. Before this, the table stored
+ * no order at all — one INSERT per run gave every row the same `created_at` (DEFAULT now()), and
+ * `evals/lib/export-query.ts`'s `ORDER BY created_at` tied rows however the engine happened to see
+ * them. Live evidence of the original loss: all 14 rows of run 2ec8c9b2 shared created_at
+ * 2026-09-21 09:29:41.007256.
  *
- * The requirement: the order a run's rows were produced in is recoverable from the database.
- * Today it is not stored at all — appendRunMessages inserts every row of a run in ONE statement,
- * so created_at (DEFAULT now(), the transaction timestamp) is identical for all of them, and the
- * table has no sequence column (id is a random uuid). ORDER BY created_at, which
- * evals/lib/export-query.ts uses, therefore orders tied rows however the engine happens to see them.
- * Live evidence: all 14 rows of run 2ec8c9b2 share created_at 2026-09-21 09:29:41.007256.
+ * Why a plain read-back would not have failed on the original bug: on a freshly written table
+ * Postgres returns tied rows in physical (insertion) order, so the correct-looking result was an
+ * accident of layout, not a guarantee — a plain UPDATE, VACUUM FULL, a dump/restore or replication
+ * all change physical order. This test removes that luck: after the run is written through the real
+ * append path, every row is rewritten with an ordinary UPDATE of a harmless column, in REVERSE
+ * produced order, and the real reader (`fetchRunsSince`) must still return the produced order.
  *
- * Why the plain read-back does not fail here: on a freshly written table Postgres returns tied rows
- * in physical (insertion) order, so the correct-looking result is an accident of layout, not a
- * guarantee. A plain UPDATE, VACUUM FULL, a dump/restore or replication all change physical order.
- * This probe does not create the defect — it removes the luck that hides it: after the run is
- * written through the real append path, every row is rewritten with an ordinary UPDATE of a harmless
- * column, in REVERSE produced order, and the real reader (fetchRunsSince) must still return the
- * produced order. Any fix that persists the order (a seq column, distinct timestamps) turns it green.
+ * The run is written through the SAME two calls production now makes (AC-AT-1, Task 1): the adapter
+ * pre-persists the human message before `graph.invoke`, then commit projects the whole run, its own
+ * human row deduped away — `seq` has to stay monotonic across both, not restart at 1 in each call.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -60,6 +60,13 @@ describe('order of the rows of one run is recoverable from the database (BUG-029
     const input = { userId: user.id, runId, phase: 'training' as const, episodeId: runId, messages };
     produced = toTurnRows(input).map(label);
 
+    // AC-AT-1's split (Task 1): the adapter pre-persists the human message in
+    // its own call, before graph.invoke; commit later projects the WHOLE
+    // run's messages, its own human row deduped away by drizzle-transcript's
+    // appendRunMessages. Write it exactly that way — two calls, not one — or
+    // a call-scoped seq would give both calls' first row seq 1 and this probe
+    // could go green by the same luck it exists to remove.
+    await new DrizzleTranscriptService().appendRunMessages({ ...input, messages: [messages[0]!] });
     await new DrizzleTranscriptService().appendRunMessages(input);
     await new DrizzleConversationRunService().recordRun({
       runId,
@@ -86,6 +93,12 @@ describe('order of the rows of one run is recoverable from the database (BUG-029
     const run = (await fetchRunsSince(new Date(0), 50)).find(r => r.runId === runId);
     return (run?.turns ?? []).map(label);
   };
+
+  it('AC-AT-4: seq is monotonic 1..n across the two calls that write a run today, in produced order', async () => {
+    const bySeq = [...(await rowsOfRun())].sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
+    expect(bySeq.map(r => r.seq)).toEqual(produced.map((_, i) => i + 1));
+    expect(bySeq.map(label)).toEqual(produced);
+  });
 
   it('after an ordinary rewrite of the rows the reader still returns the produced order', async () => {
     // Rewrite every row in REVERSE produced order: each UPDATE writes a new tuple version, so the
