@@ -108,4 +108,50 @@ describe('LLMLogHandler — logging (metrics live in the collector) and the AC-A
     expect(JSON.stringify(payload)).not.toContain(SECRET);
     expect(JSON.stringify(model.apiKey)).toContain(SECRET); // fixture soundness: the key really is set on the model
   });
+
+  it('close-out R2 finding 7: records the full set of parameters actually sent, not a hand-picked subset', () => {
+    // Two profiles differing ONLY in maxTokens — a hand-picked extraction (model/messages/
+    // temperature/reasoningEffort) stores byte-identical payloads for both, silently losing which
+    // one a call actually used.
+    const shortModel = new ChatOpenAI({ apiKey: 'sk-test', model: 'gpt-4o-mini', maxTokens: 200, topP: 0.9 });
+    const longModel = new ChatOpenAI({ apiKey: 'sk-test', model: 'gpt-4o-mini', maxTokens: 4000, topP: 0.9 });
+    const messages = [new SystemMessage('You are the coach.'), new HumanMessage('привет')];
+    const callOptions = { tools: [], stop: ['STOP'] } as never;
+
+    const shortPayload = buildReplayPayload(
+      messages,
+      { options: {}, invocation_params: shortModel.invocationParams(callOptions) },
+      loadConfig(),
+    );
+    const longPayload = buildReplayPayload(
+      messages,
+      { options: {}, invocation_params: longModel.invocationParams(callOptions) },
+      loadConfig(),
+    );
+
+    expect(shortPayload).not.toEqual(longPayload);
+    expect(shortPayload).toMatchObject({ maxTokens: 200, topP: 0.9, stop: ['STOP'] });
+    expect(longPayload).toMatchObject({ maxTokens: 4000, topP: 0.9, stop: ['STOP'] });
+
+    const responseFormatModel = new ChatOpenAI({
+      apiKey: 'sk-test',
+      model: 'gpt-4o-mini',
+      modelKwargs: { response_format: { type: 'json_object' } },
+    });
+    const toolChoicePayload = buildReplayPayload(
+      messages,
+      {
+        options: {},
+        invocation_params: responseFormatModel.invocationParams({
+          tools: [{ type: 'function', function: { name: 'log_set', parameters: {} } }],
+          tool_choice: 'auto',
+        } as never),
+      },
+      loadConfig(),
+    );
+    expect(toolChoicePayload).toMatchObject({
+      responseFormat: { type: 'json_object' },
+      toolChoice: 'auto',
+    });
+  });
 });

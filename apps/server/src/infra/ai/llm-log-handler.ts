@@ -66,14 +66,28 @@ function messageToOpenAI(msg: BaseMessage): OpenAIMessage {
   return base;
 }
 
+// Close-out R2 finding 7: `invocation_params` fields beyond model/temperature/tools/reasoning_effort
+// that a profile or call may set and that must be stored, mapped snake_case → the same camelCase
+// convention `reasoningEffort` already uses. None of these is ever a credential — invocation_params
+// is LangChain's per-call request shape, never the client's transport config (see the credentials
+// test) — so copying whichever of these are present is as safe as the fields already copied above.
+type ExtraInvocationField = 'maxTokens' | 'responseFormat' | 'topP' | 'stop' | 'toolChoice';
+
+const EXTRA_INVOCATION_PARAM_FIELDS: ReadonlyArray<[ExtraInvocationField, string]> = [
+  ['maxTokens', 'max_tokens'],
+  ['responseFormat', 'response_format'],
+  ['topP', 'top_p'],
+  ['stop', 'stop'],
+  ['toolChoice', 'tool_choice'],
+];
+
 /**
- * The exact request payload an invocation sends (BUG-003 / AC-AT-3) — model,
- * messages, temperature, tools, reasoning effort. Built from LangChain's own
- * `invocation_params`/`options`, never from transport config: an API key or
- * Authorization header lives on the client, not in these, so neither this
- * function nor anything it returns can carry one (see the credentials test).
- * The ONE construction site — the debug log and the DB record both call this,
- * never rebuild the shape themselves.
+ * The exact request payload an invocation sends (BUG-003 / AC-AT-3) — the full set of parameters
+ * LangChain actually built for the call, not a hand-picked subset. Built from LangChain's own
+ * `invocation_params`/`options`, never from transport config: an API key or Authorization header
+ * lives on the client, not in these, so neither this function nor anything it returns can carry one
+ * (see the credentials test). The ONE construction site — the debug log and the DB record both call
+ * this, never rebuild the shape themselves.
  */
 export function buildReplayPayload(
   flatMessages: BaseMessage[],
@@ -96,6 +110,12 @@ export function buildReplayPayload(
   const reasoningEffort = invocationParams?.['reasoning_effort'];
   if (reasoningEffort !== undefined) {
     payload.reasoningEffort = reasoningEffort;
+  }
+  for (const [field, invocationKey] of EXTRA_INVOCATION_PARAM_FIELDS) {
+    const value = invocationParams?.[invocationKey];
+    if (value !== undefined) {
+      payload[field] = value;
+    }
   }
   return payload;
 }
