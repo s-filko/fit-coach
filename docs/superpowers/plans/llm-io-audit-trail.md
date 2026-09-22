@@ -25,8 +25,14 @@ all.
 - The exact API payload is already assembled — `llm-log-handler.ts:84-105` builds `replayPayload`
   (`model`, OpenAI-shaped `messages`, `temperature`, `tools`) and logs the answer — but only when
   `LOG_LEVEL` is `debug`/`trace`. Dev runs `info`, so nothing is captured.
-- Container logs are the only sink and they are ephemeral: no log volume is mounted in
-  `deploy/docker-compose.yml`, so the 2026-09-21 09:25 deploy erased the evidence of that morning.
+- Container logs are the only sink and they are ephemeral. **Corrected 2026-09-22, at Task 5:** the
+  reason is not a missing volume. Every service already runs the `json-file` driver (10m × 3), which
+  writes to `/var/lib/docker/containers/<container-id>/*.log` — a path keyed to the container's own
+  id that no per-service `volumes:` entry can relocate. The 2026-09-21 09:25 deploy erased that
+  morning because recreating a container gives it a new id and dockerd deletes the old one's log
+  directory with it. Mounting a volume would therefore have changed nothing; the app writes to stdout
+  only (`logger.ts` is a bare `pino()`, `pino-pretty` in development). Found by the worker, verified
+  against the compose file and the logger by the orchestrator.
 - All rows of a run share one `created_at` (single INSERT, `DEFAULT now()`), so turn order is already
   unrecoverable — BUG-029.
 - Volume to budget for: 20–60 k input tokens per run ≈ 100–250 KB of JSON; one training session
