@@ -73,13 +73,41 @@ function messageToOpenAI(msg: BaseMessage): OpenAIMessage {
 // test) — so copying whichever of these are present is as safe as the fields already copied above.
 type ExtraInvocationField = 'maxTokens' | 'responseFormat' | 'topP' | 'stop' | 'toolChoice';
 
-const EXTRA_INVOCATION_PARAM_FIELDS: ReadonlyArray<[ExtraInvocationField, string]> = [
+export const EXTRA_INVOCATION_PARAM_FIELDS: ReadonlyArray<[ExtraInvocationField, string]> = [
   ['maxTokens', 'max_tokens'],
   ['responseFormat', 'response_format'],
   ['topP', 'top_p'],
   ['stop', 'stop'],
   ['toolChoice', 'tool_choice'],
 ];
+
+// Close-out R2 finding 7 (round 2): `model`/`temperature`/`tools`/`reasoning_effort` are recorded
+// too, but by the bespoke logic below (`tools` in particular comes from `options`, not
+// `invocation_params`, though the two carry the same content) rather than the EXTRA_ table above.
+// Listed here so the guard test (llm-log-handler.unit.test.ts) can compute full invocation_params
+// coverage from production code, without hand-duplicating this file's own extraction logic.
+export const BASE_RECORDED_INVOCATION_PARAM_KEYS: ReadonlySet<string> = new Set([
+  'model',
+  'temperature',
+  'tools',
+  'reasoning_effort',
+]);
+
+/**
+ * `invocation_params` keys LangChain's ChatOpenAI can populate that buildReplayPayload must NEVER
+ * copy into a stored request — this is the credential/transport boundary, kept explicit rather than
+ * left as "whatever the whitelist above doesn't mention" so a reviewer can read the whole boundary
+ * in one place, and so the guard test can name a genuinely new, undecided key instead of always
+ * treating one of these as an omission.
+ */
+export const NEVER_RECORD_INVOCATION_PARAM_KEYS: ReadonlyMap<string, string> = new Map([
+  [
+    'stream',
+    // Wire-protocol shape (SSE vs one response), not content the model was asked — and always
+    // `false` here (this codebase never requests streaming), so it would never even vary.
+    'transport: whether the HTTP response streams, not part of what was asked',
+  ],
+]);
 
 /**
  * The exact request payload an invocation sends (BUG-003 / AC-AT-3) — the full set of parameters
