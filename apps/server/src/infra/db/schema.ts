@@ -193,10 +193,12 @@ export const llmCalls = pgTable('llm_calls', {
   callIndex: integer('call_index').notNull(),
   model: text('model').notNull(),
   // The request actually sent (messages, tools, temperature, reasoning effort) — the system
-  // message's `content` is replaced with `{ contentHash }` pointing at prompt_blobs.
-  request: jsonb('request').notNull(),
-  // Null until the call succeeds; a failed call still has `request` (D-F-style: the cause, not the
-  // reply, is missing).
+  // message's `content` is replaced with `{ contentHash }` pointing at prompt_blobs. Nullable since
+  // AC-AT-6: the prune drops the payload after LLM_CALLS_RETENTION_DAYS, keeping every other column
+  // (this row's metadata) forever — it is never absent for a fresh, unpruned call.
+  request: jsonb('request'),
+  // Null until the call succeeds, or once the prune has dropped it — a failed-but-unpruned call still
+  // has `request` (D-F-style: the cause, not the reply, is missing).
   response: jsonb('response'),
   latencyMs: integer('latency_ms').notNull(),
   errorClass: text('error_class'),

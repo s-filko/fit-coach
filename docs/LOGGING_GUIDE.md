@@ -318,6 +318,83 @@ LLM request/response content itself stays at `debug` (BUG-003 replay behaviour).
 
 ---
 
+## The Durable Record vs. the Log (AC-AT-6)
+
+**Pino logs (this whole document, so far) are ephemeral.** They go to stdout, Docker's
+`json-file` driver captures up to 10 MB × 3 files per container, and that is it — the
+log lines above are for debugging a live process, not for answering "what did we send
+the model on 2026-09-21?" days later. **The authoritative record of every model
+invocation lives in Postgres, in `llm_calls` (+ `prompt_blobs`), not in the log**, since
+the LLM I/O Audit Trail plan (AC-AT-1..AC-AT-4). If you need to know what a run said,
+sent, or received, query the database; treat a log line as a hint, never as the source.
+
+### Why a `volumes:` mount cannot fix a lost container log
+
+The plan that started this work assumed "no log volume is mounted" was why the
+2026-09-21 09:25 deploy erased that morning's evidence, and that mounting one would fix
+it. That premise was wrong, and it is corrected here so nobody rediscovers it by trying
+the same fix: Docker's `json-file` driver (configured in `deploy/docker-compose.yml`'s
+`logging:` block, 10m × 3 files, on every service) writes to
+`/var/lib/docker/containers/<container-id>/<container-id>-json.log` — a path under
+**dockerd's own data root, keyed by container id**. No `volumes:` entry in a compose
+service can relocate it; a bind mount only reaches paths you name inside *that*
+container's filesystem, and this file lives outside every container, managed by the
+daemon. What actually erases the evidence is the deploy itself: `docker compose up -d`
+recreates `server` and `bot` with **new** container ids, the **old** containers are
+removed, and dockerd deletes the old id's log directory with them — evidence gone,
+silently, the moment the recreate completes.
+
+### The fix: capture before recreate, in `deploy.sh`
+
+`deploy/deploy.sh` now captures each running service's current logs to a host file
+**before** rebuilding and restarting containers — the same shape, and same place in the
+script, as the existing database backup:
+
+- **What**: `docker compose logs <service>` output — whatever `json-file` still has
+  retained (up to the 30 MB rolling window) — for `server` and `bot`.
+- **When**: right after the database backup, before `docker compose build`/`up -d`.
+- **Where**: `${REPO_DIR}/logs/<env>/<service>_<timestamp>.log` on the VPS host (e.g.
+  `/srv/docker/fitcoach/logs/dev/server_20260922_093000.log`) — a plain file, not a
+  container volume; nothing container-side needs to change for this to work.
+- **Failure mode**: a capture failure or a service that isn't running yet (first
+  deploy) is logged and skipped — it never aborts the deploy, matching the DB backup's
+  own guard.
+- **Retention of the capture files themselves**: not automated by this plan: they are
+  the "before we blew away the old container" snapshot, not a permanent log archive.
+  Prune `${REPO_DIR}/logs/<env>/` by hand (or a future cron) if disk pressure calls for
+  it.
+
+### `llm_calls` retention (the durable record's own aging policy)
+
+Unlike the ephemeral log capture above, `llm_calls` rows are never deleted — only the
+heavy `request`/`response` JSON columns age out. Every other column — `run_id`,
+`call_index`, `model`, `latency_ms`, `error_class`, `error_message`, `created_at` — is
+kept forever, so "this run made this call, on this model, at this time, taking this
+long, and it did or didn't fail" survives even after the payload is gone.
+
+- **What ages out**: `llm_calls.request` and `llm_calls.response` — nulled, not the row.
+- **Window**: `LLM_CALLS_RETENTION_DAYS`, default **30** — a plain integer, days.
+  Configured in `apps/server/src/config/index.ts` (`EnvSchema`), documented in
+  `apps/server/.env.example`. To change it, set `LLM_CALLS_RETENTION_DAYS=<n>` in the
+  environment's real `.env.<env>` file (never `.env.example` itself) and redeploy.
+- **`prompt_blobs` is never pruned by this.** A blob is shared by every call across
+  every run whose system prompt hashed to it — the entire point of AC-AT-3's dedup —
+  and once a row's `request` is nulled it no longer records which hash it referenced,
+  so "is this blob still referenced" can only be answered by scanning every *unpruned*
+  row's `request` for that hash; a blob referenced only by since-pruned rows is
+  indistinguishable from one that was orphaned the moment it was written. A blob's
+  storage cost is one row per distinct prompt *version* (already deduplicated), not one
+  per call, so it doesn't grow with call volume the way `request`/`response` do —
+  retaining every `prompt_blobs` row forever is the safe, cheap choice. See
+  `apps/server/src/infra/db/scripts/prune-llm-calls.ts`'s header for the full reasoning.
+- **How to run it**: `npm run db:prune-llm-calls` from `apps/server` — dry-run by
+  default (counts what would be dropped, changes nothing); pass `-- --apply` to
+  actually null the payloads, and `-- --days N` to override the configured window for
+  one run. No in-app scheduler: install it as a nightly cron job on the host, the same
+  operating model as the existing `db:prune-checkpoints`.
+
+---
+
 ## What to NEVER log
 
 ### Automatic redaction (Pino `redact`)

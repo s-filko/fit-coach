@@ -58,6 +58,29 @@ if docker compose -f "$COMPOSE_FILE" -p "$PROJECT" ps db --status running -q 2>/
     echo "WARNING: Backup failed (database may be empty, continuing)"
 fi
 
+# --- Capture container logs (AC-AT-6) before they are recreated ---
+# docker's json-file driver (deploy/docker-compose.yml's `logging:` block) ties
+# each log file to the CONTAINER's own id, under dockerd's data root — a path
+# no service-level `volumes:` mount can redirect. `up -d` below gives server
+# and bot NEW container ids; the OLD containers are removed, and dockerd's
+# log directory goes with them. That is what actually erased the 2026-09-21
+# 09:25 morning's evidence — not a missing volume mount. `docker compose logs`
+# reads whatever json-file still has retained (10m x 3 files) and writing it
+# to a host file BEFORE the recreate is the fix. A capture failure must not
+# abort the deploy (same guard as the DB backup above); a service that is not
+# running yet (first deploy) is skipped, not an error.
+LOG_DIR="${REPO_DIR}/logs/${DEPLOY_ENV}"
+mkdir -p "$LOG_DIR"
+LOG_TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+for SERVICE in server bot; do
+  if docker compose -f "$COMPOSE_FILE" -p "$PROJECT" ps "$SERVICE" --status running -q 2>/dev/null | grep -q .; then
+    LOG_FILE="${LOG_DIR}/${SERVICE}_${LOG_TIMESTAMP}.log"
+    docker compose -f "$COMPOSE_FILE" -p "$PROJECT" logs --no-color "$SERVICE" > "$LOG_FILE" 2>&1 && \
+      echo "Captured ${SERVICE} logs: ${LOG_FILE}" || \
+      echo "WARNING: Log capture failed for ${SERVICE} (continuing)"
+  fi
+done
+
 # --- Build and deploy ---
 GIT_SHA=$(git rev-parse --short HEAD)
 APP_VERSION=$(cat VERSION 2>/dev/null || echo "0.0.0")

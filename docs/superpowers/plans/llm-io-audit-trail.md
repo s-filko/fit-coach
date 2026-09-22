@@ -212,10 +212,10 @@ beyond this plan.**
 **Files:** config (`LLM_CALLS_RETENTION_DAYS` or equivalent), a prune path, `.env.example`,
 `deploy/docker-compose.yml` (log volume for server and bot), `docs/LOGGING_GUIDE.md`.
 
-- [ ] **Step 1: Tests first** — the prune drops payloads older than the window and keeps the rows'
+- [x] **Step 1: Tests first** — the prune drops payloads older than the window and keeps the rows'
   metadata; the window is configuration with a documented default.
-- [ ] **Step 2**: implement; mount the log volume; document both in `LOGGING_GUIDE.md`.
-- [ ] **Step 3**: verify — `npm run test:unit`; the compose change is applied by the orchestrator at deploy.
+- [x] **Step 2**: implement; mount the log volume; document both in `LOGGING_GUIDE.md`.
+- [x] **Step 3**: verify — `npm run test:unit`; the compose change is applied by the orchestrator at deploy.
 
 ### Task 6: One command prints the whole exchange (AC-AT-5)
 
