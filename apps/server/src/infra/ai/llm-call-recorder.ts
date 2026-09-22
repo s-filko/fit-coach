@@ -73,7 +73,7 @@ export type RecordLlmCall = (input: RecordLlmCallInput) => Promise<void>;
 export const recordLlmCall: RecordLlmCall = async input => {
   const { db } = await import('@infra/db/drizzle');
   const { llmCalls, promptBlobs } = await import('@infra/db/schema');
-  const { eq, max } = await import('drizzle-orm');
+  const { sql } = await import('drizzle-orm');
 
   const promptHashes: string[] = [];
   const messages = await Promise.all(
@@ -97,14 +97,16 @@ export const recordLlmCall: RecordLlmCall = async input => {
   // violation on a rare race would turn into a LOST call record; a duplicated
   // index instead costs nothing an audit trail cannot survive, since created_at
   // still orders same-index rows within a run.
-  const [{ maxIndex }] = await db
-    .select({ maxIndex: max(llmCalls.callIndex) })
-    .from(llmCalls)
-    .where(eq(llmCalls.runId, input.runId));
-
+  //
+  // As-users-grow hardening: callIndex used to be a separate SELECT max(...)
+  // round trip before this INSERT — on the synchronous path of every model
+  // call, against a forever-growing table. It is now a scalar subquery inside
+  // this single INSERT (idx_llm_calls_run_id_call_index, schema.ts, makes the
+  // max an index lookup): one round trip, and the race window between reading
+  // the max and inserting is a single statement instead of two.
   await db.insert(llmCalls).values({
     runId: input.runId,
-    callIndex: (maxIndex ?? 0) + 1,
+    callIndex: sql<number>`(SELECT coalesce(max(call_index), 0) + 1 FROM llm_calls WHERE run_id = ${input.runId})`,
     model: input.model,
     request: { ...input.request, messages },
     response: input.response,

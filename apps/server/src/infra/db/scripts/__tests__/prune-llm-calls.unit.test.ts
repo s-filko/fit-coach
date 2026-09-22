@@ -53,7 +53,12 @@ describe('buildPruneLlmCallsStatements (AC-AT-6)', () => {
       const [, blobs] = buildPruneLlmCallsStatements({ days: 30, apply: true }).statements;
       expect(blobs!.sql).toMatch(/NOT EXISTS/i);
       expect(blobs!.sql).not.toMatch(/NOT IN\s*\(/i);
-      expect(blobs!.sql).toContain('h IS NOT NULL');
+    });
+
+    it('as-users-grow: the referenced-check is array containment (`@>`), not `unnest(...) = ...` — the shape the planner can serve from the GIN index on llm_calls.prompt_hashes', () => {
+      const [, blobs] = buildPruneLlmCallsStatements({ days: 30, apply: true }).statements;
+      expect(blobs!.sql).toContain('llm_calls.prompt_hashes @> ARRAY[prompt_blobs.hash]');
+      expect(blobs!.sql).not.toMatch(/unnest/i);
     });
 
     it('review defect 2: takes `days` and applies the SAME cutoff dry run and apply use, so a live row that has not been pruned yet still counts as a referencer only when it is genuinely inside the window', () => {
@@ -62,7 +67,8 @@ describe('buildPruneLlmCallsStatements (AC-AT-6)', () => {
       expect(dryRun.params).toEqual([15]);
       expect(apply.params).toEqual([15]);
       // Same liveness predicate in both modes — only the outer SELECT-count vs UPDATE differs.
-      const referencedClause = /WHERE h IS NOT NULL[\s\S]*?created_at >= now\(\) - make_interval\(days => \$1::int\)/i;
+      const referencedClause =
+        /WHERE llm_calls\.prompt_hashes @> ARRAY\[prompt_blobs\.hash\][\s\S]*?created_at >= now\(\) - make_interval\(days => \$1::int\)/i;
       expect(dryRun.sql).toMatch(referencedClause);
       expect(apply.sql).toMatch(referencedClause);
     });

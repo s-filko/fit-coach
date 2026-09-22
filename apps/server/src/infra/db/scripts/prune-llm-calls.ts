@@ -75,15 +75,22 @@ function callsStatement(apply: boolean): PruneLlmCallsStatement {
  * silently turning the whole prune into a permanent no-op with no error.
  * `NOT EXISTS` has no such trap: a row contributing NULL simply satisfies
  * neither side of the correlation and is skipped, regardless of NULLs on
- * either side. The explicit `h IS NOT NULL` below is belt-and-suspenders,
- * not load-bearing for that reason — kept because a NULL can never legitimately
- * match a hash anyway.
+ * either side.
+ *
+ * As-users-grow hardening: this correlation is the product of two
+ * forever-growing tables (`llm_calls` × `prompt_blobs`), the only one of the
+ * plan's three lookups that degrades super-linearly. The join predicate is
+ * `prompt_hashes @> ARRAY[prompt_blobs.hash]` (array containment), not
+ * `unnest(...) = ...` — the former is what lets the planner use the GIN index
+ * on `llm_calls.prompt_hashes` (idx_llm_calls_prompt_hashes_gin, schema.ts);
+ * `unnest`+`=` cannot be indexed the same way. Verified with EXPLAIN against a
+ * seeded table — see the worker report for the quoted plan (Bitmap Index Scan
+ * on the GIN index, not a Seq Scan).
  */
 function blobsStatement(apply: boolean): PruneLlmCallsStatement {
   const referenced = `
-    SELECT 1 FROM llm_calls, unnest(llm_calls.prompt_hashes) AS h
-    WHERE h IS NOT NULL
-      AND h = prompt_blobs.hash
+    SELECT 1 FROM llm_calls
+    WHERE llm_calls.prompt_hashes @> ARRAY[prompt_blobs.hash]
       AND llm_calls.request IS NOT NULL
       AND llm_calls.${NOT_STALE}`;
   const sql = apply

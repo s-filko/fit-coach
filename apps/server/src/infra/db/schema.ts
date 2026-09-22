@@ -114,6 +114,11 @@ export const conversationTurns = pgTable(
         table.phase,
         table.createdAt,
       ),
+      // As-users-grow hardening: DrizzleTranscriptService.appendRunMessages runs a
+      // human-row dedup SELECT and a MAX(seq) SELECT per call, both filtered by
+      // run_id alone — unindexed, this table (append-only, never deleted) scans in
+      // full twice per run. seq semantics (per-run 1..n) are untouched — index only.
+      runIdIdx: index('idx_conversation_turns_run_id').on(table.runId),
     };
   },
 );
@@ -194,28 +199,47 @@ export const promptBlobs = pgTable('prompt_blobs', {
 // AC-AT-3: one row per model invocation, independent of LOG_LEVEL — run_id is a plain uuid, not a
 // FK, for the same reason as conversation_turns.run_id: the row is written mid-run, before (or
 // without) a conversation_runs row ever existing (D-F: a run that never reaches commit has none).
-export const llmCalls = pgTable('llm_calls', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  runId: uuid('run_id').notNull(),
-  callIndex: integer('call_index').notNull(),
-  model: text('model').notNull(),
-  // The request actually sent (messages, tools, temperature, reasoning effort) — every system
-  // message's `content` is replaced with `{ contentHash }` pointing at prompt_blobs. Nullable since
-  // AC-AT-6: the prune drops the payload after LLM_CALLS_RETENTION_DAYS, keeping every other column
-  // (this row's metadata) forever — it is never absent for a fresh, unpruned call.
-  request: jsonb('request'),
-  // Null until the call succeeds, or once the prune has dropped it — a failed-but-unpruned call still
-  // has `request` (D-F-style: the cause, not the reply, is missing).
-  response: jsonb('response'),
-  // AC-AT-6: every prompt_blobs hash this call's request referenced, written once at record time —
-  // NEVER nulled by the prune (it is metadata: a few short hashes, not the bulky text they point at)
-  // so a blob's liveness stays answerable by a join even after `request` itself is gone.
-  promptHashes: text('prompt_hashes').array(),
-  latencyMs: integer('latency_ms').notNull(),
-  errorClass: text('error_class'),
-  errorMessage: text('error_message'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const llmCalls = pgTable(
+  'llm_calls',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    runId: uuid('run_id').notNull(),
+    callIndex: integer('call_index').notNull(),
+    model: text('model').notNull(),
+    // The request actually sent (messages, tools, temperature, reasoning effort) — every system
+    // message's `content` is replaced with `{ contentHash }` pointing at prompt_blobs. Nullable since
+    // AC-AT-6: the prune drops the payload after LLM_CALLS_RETENTION_DAYS, keeping every other column
+    // (this row's metadata) forever — it is never absent for a fresh, unpruned call.
+    request: jsonb('request'),
+    // Null until the call succeeds, or once the prune has dropped it — a failed-but-unpruned call still
+    // has `request` (D-F-style: the cause, not the reply, is missing).
+    response: jsonb('response'),
+    // AC-AT-6: every prompt_blobs hash this call's request referenced, written once at record time —
+    // NEVER nulled by the prune (it is metadata: a few short hashes, not the bulky text they point at)
+    // so a blob's liveness stays answerable by a join even after `request` itself is gone.
+    promptHashes: text('prompt_hashes').array(),
+    latencyMs: integer('latency_ms').notNull(),
+    errorClass: text('error_class'),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  table => {
+    return {
+      // As-users-grow hardening: llm-call-recorder.ts's next-call_index lookup
+      // (`max(call_index) WHERE run_id = $1`) is on the synchronous path of every
+      // model call. Composite so the max is an index-only lookup, never a scan of
+      // this forever-growing table. No unique constraint on (run_id, call_index) —
+      // see the recorder's own comment: a violation would mean a lost audit row.
+      runIdCallIndexIdx: index('idx_llm_calls_run_id_call_index').on(table.runId, table.callIndex),
+      // As-users-grow hardening: prune-llm-calls.ts's blob-liveness NOT EXISTS
+      // correlates over `unnest(prompt_hashes)` per prompt_blobs row — the product
+      // of two forever-growing tables. A GIN index is the ordinary answer for array
+      // containment; the predicate is rephrased to `@>` in blobsStatement so the
+      // planner can actually pick it (see prune-llm-calls.ts's EXPLAIN-verified note).
+      promptHashesGinIdx: index('idx_llm_calls_prompt_hashes_gin').using('gin', table.promptHashes),
+    };
+  },
+);
 
 // Enums for user_facts lifecycle (fact-lifecycle plan Task 1, AC-FL-1) — the
 // owner's durability model (2026-09-20). The class bounds themselves live in
