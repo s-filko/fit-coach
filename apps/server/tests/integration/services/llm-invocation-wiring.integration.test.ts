@@ -14,17 +14,19 @@
  * `llm.gateway.unit.test.ts` and `scripted-model.ts` both mock the same module) — the model itself,
  * `OpenAiLlmGateway`, `LLMLogHandler` and `recordLlmCall` are all real.
  *
- * Found empirically: `gateway.chat()` resolving does NOT mean the record has landed.
- * `@langchain/core`'s callback manager runs a handler that doesn't opt into `awaitHandlers`
- * through a background queue (`consumeCallback`, `singletons/callbacks.ts`) rather than awaiting it
- * inline — by design, so a slow/failing handler (a tracer, or this recorder) never adds latency or
- * risk to the model call it is watching. `awaitAllCallbacks()` is LangChain's own documented drain
- * for exactly this — the same call apps make before a serverless function exits — used here to wait
- * for the record instead of a bespoke poll.
+ * Found while writing this test, then fixed at the source, not here: LangChain's default
+ * (`LANGCHAIN_CALLBACKS_BACKGROUND` unset, same as this repo) queues a handler's callbacks in the
+ * background (`consumeCallback`, `singletons/callbacks.ts`) — `gateway.chat()` resolves before the
+ * record is written, and a deploy stopping the process mid-queue loses it, silently. For the one
+ * table whose whole purpose is a trustworthy record, that is not "stored". `LLMLogHandler`'s
+ * constructor now sets `this.awaitHandlers = true` (the supported per-handler override, base.js —
+ * not the env var, which would change every handler's behaviour) so handleLLMEnd/handleLLMError run
+ * INSIDE the call, before it resolves. This test asserts exactly that: no drain, no
+ * `awaitAllCallbacks()` — if the row isn't there the instant `gateway.chat()` returns, that IS the
+ * failure (a test that drains would stay green even if the override were reverted).
  */
 import { randomUUID } from 'node:crypto';
 
-import { awaitAllCallbacks } from '@langchain/core/callbacks/promises';
 import { eq } from 'drizzle-orm';
 
 // eslint-disable-next-line import/order -- the mock factory must precede the imports it intercepts
@@ -58,10 +60,8 @@ describe('a real chat model call, through the real gateway, writes an llm_calls 
     // Fixture soundness: the real callback path really answered through the fake model.
     expect(result).toEqual({ content: 'Отлично, продолжаем!' });
 
-    // The record is written by a callback LangChain runs in the background (see header) —
-    // drain it before asserting, or this reads the row before it exists.
-    await awaitAllCallbacks();
-
+    // No drain here (see header) — awaitHandlers = true means the row exists the
+    // instant gateway.chat() resolves, or it never will for this call.
     const [row] = await db.select().from(llmCalls).where(eq(llmCalls.runId, runId));
     expect(row).toBeDefined();
     expect(row!.errorClass).toBeNull();

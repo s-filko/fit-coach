@@ -133,6 +133,19 @@ export class LLMLogHandler extends BaseCallbackHandler {
 
   constructor(private readonly recordCall: RecordLlmCall = recordLlmCall) {
     super();
+    // AC-AT-3: LangChain's default (LANGCHAIN_CALLBACKS_BACKGROUND unset, same as
+    // this repo) queues a handler's callbacks in the background — the call resolves
+    // before handleLLMEnd/handleLLMError, and this recorder's write, ever runs. For
+    // the one table whose whole purpose is a trustworthy record, "probably written
+    // shortly afterwards" is not "stored": a deploy stops the process, and whatever
+    // is still queued is gone, silently. This is the supported PER-HANDLER override
+    // (base.js's `awaitHandlers`) — deliberately not the LANGCHAIN_CALLBACKS_BACKGROUND
+    // env var, which would change every handler's behaviour, including any future
+    // one that has no reason to block the call it watches. The cost is one insert
+    // (single-digit ms) on a call that takes tens of seconds; the recorder already
+    // swallows its own errors (see handleLLMEnd/handleLLMError below), so awaiting
+    // it cannot turn a recording failure into a reply failure.
+    this.awaitHandlers = true;
   }
 
   handleChatModelStart(
