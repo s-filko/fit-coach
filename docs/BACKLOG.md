@@ -73,6 +73,28 @@ Rules:
 
 ## Findings
 
+- [ ] **Direct Google AI Studio is not a drop-in replacement for the OpenRouter route (parked by the
+      owner, 2026-09-22).** On 2026-09-21 dev was switched from OpenRouter BYOK to the Google AI
+      Studio endpoint directly and rolled back the same evening: the application's own requests came
+      back `400`, while the identical route through OpenRouter works. Verified during that attempt,
+      so nobody repeats it: the key is valid (the endpoint listed 58 models), the model name is
+      accepted both as `gemini-3.8-flash` and as `models/gemini-3.8-flash`, and a direct `curl`
+      carrying tools, a strict response schema and a 16 384-token ceiling each returned `200`. So the
+      key, the model name and those three request features are all ruled out. **Not established:**
+      which field the SDK adds to the request that direct Google rejects and OpenRouter tolerates —
+      that is the one open question, and it is answered by probing fields one at a time against the
+      live endpoint, never by switching the server. Functionally there is nothing to gain: OpenRouter
+      BYOK already calls the owner's own Google key (`usage.is_byok: true`), so the only difference
+      is the intermediary's markup. State as verified on 2026-09-22: dev is on
+      `LLM_API_URL=https://openrouter.ai/api/v1/`, `google/gemini-3.8-flash`,
+      `LLM_REASONING_EFFORT=low`, `LLM_STRUCTURED_OUTPUT_MODE=json_schema`; no `.env.dev` backup on
+      the VPS contains a direct-Google URL, i.e. the rollback was complete. Backup names mislead —
+      `.env.dev.bak-20260921-aistudio` and `-aistudio2` differ from the live file **only** in
+      `LLM_REASONING_EFFORT` and are OpenRouter configs; `-llm` is the Z.AI route (the documented
+      fallback) and `-model` predates the model change. Related: the connector-layer idea in
+      § Ideas, whose failover chains would make such a switch reversible in one setting.
+      Source: orchestrator session 2026-09-21, recovered from its terminal before it was closed.
+
 - [ ] **BOT UX — `plan_creation` makes the user wait minutes in silence (owner priority, 2026-09-19).**
       The owner's position: a bot must answer in seconds, or tell the user it is working. Today it
       does neither — it holds the HTTP connection open and stays silent. Measured on dev

@@ -33,6 +33,22 @@ Entry format:
 Wording in a zone prompt or in `SKILL.md` that misleads, contradicts the severity contract,
 or is inert for the kind of diff under review.
 
+- [×1] R1's "always blocking" clause — any durable spec under `docs/` outside `docs/superpowers/`
+  edited in this diff — collides with the plan, which explicitly assigned `docs/LOGGING_GUIDE.md`
+  to Tasks 5 and 6, and with the plan's own Global Constraints, which reserve a narrower list
+  (`docs/adr/**`, `docs/domain/**`, `ARCHITECTURE.md`, `API_SPEC.md`, `LLM_CORE_REFACTOR_PLAN.md`,
+  `STATE.md`, `BUGS.md`). R1 ruled the 173-line addition authorized and did not block. The clause
+  should say "a durable spec the plan reserves to the orchestrator", or name the list, so the
+  reviewer is not choosing between its mandate and the plan.
+  Runs: llm-io-audit-trail (2026-09-22).
+- [×1] R3's mandate says "verification commands were run ... if the evidence is absent, that is
+  blocking", but two tasks here state verifications only the orchestrator can perform (a dev
+  deploy, a manual dev run), and `SUPERPOWERS_INTEGRATION.md:176` itself sequences AC verification
+  after merge and deploy. A pre-merge reviewer cannot satisfy the rule by any available means, so
+  those findings are structural rather than closable on the branch. The skill should say what
+  evidence a deploy-gated verification needs — a recorded dry run, an explicit deferral line in
+  the plan, or a scheduled post-deploy re-review.
+  Runs: llm-io-audit-trail (2026-09-22).
 - [×1] R1's "Declared boundaries" check (ADR-0013: domain must not import `@langchain/*`,
   INV-CONV-004) had zero instances to bind to on a test-only diff — every new file sat in infra
   `__tests__` or `tests/integration`. The zone does not say whether a boundary check with no
@@ -79,7 +95,7 @@ or is inert for the kind of diff under review.
   reading would have passed three blocking findings. Briefs should name the worktree path and
   say that claimed output is a claim, not evidence.
   Runs: ports-layout-consistency (2026-09-14).
-- [×2] R4's brief says "If the diff edits a durable spec, that is R1's finding, not yours" —
+- [×3] R4's brief says "If the diff edits a durable spec, that is R1's finding, not yours" —
   but ARCHITECTURE.md is itself listed in DOCUMENTATION_GUIDE § AI Execution Order step 4 as
   architectural truth, and the fix diff edits it. R4 judged the edit to be living-layout
   maintenance (the fix R4 itself demanded) rather than a silent law change, so it kept the
@@ -92,8 +108,12 @@ or is inert for the kind of diff under review.
   *edited* ARCHITECTURE.md's rule section (R1's territory) while leaving other parts of the
   same file — the module tree and the DI "Import Strategy" line — contradicting the new rules.
   R4 read those unedited parts as in-zone staleness; the boundary as written does not assign a
-  file that is partly edited and partly left behind.
-  Runs: refactor-p0-dead-code (2026-09-12, re-run), refactor-p0-dead-code (2026-09-12, third run), ports-layout-consistency (2026-09-14).
+  file that is partly edited and partly left behind. Fourth occurrence, inverted: the plan
+  assigned `docs/LOGGING_GUIDE.md` to two worker tasks, so a worker wrote 173 lines into a
+  durable doc. R4 reviewed that content anyway and noted that if R1 read the edit as its own
+  the findings duplicate, and if R1 read the plan's reserved list literally they are covered by
+  nobody.
+  Runs: refactor-p0-dead-code (2026-09-12, re-run), refactor-p0-dead-code (2026-09-12, third run), ports-layout-consistency (2026-09-14), llm-io-audit-trail (2026-09-22).
 - [×1] R3's brief asserted that "the current checkout is dev with the branch already merged, so
   HEAD reflects the post-change state", and R3 ran all verification against HEAD rather than the
   branch tip under review. Here the two differ by one merge commit that touches nothing R3 reads,
@@ -140,6 +160,28 @@ or is inert for the kind of diff under review.
 What fell between the zones — a real problem no zone's mandate covered, usually surfaced by
 a wider reader (the final whole-branch review) or noticed after the fact.
 
+- [×1] Schema, indexing and unbounded-growth concerns have no owning zone: R1 reads for shape,
+  R2 for duplication, R3 for logic, R4 for doc currency. The missing `run_id` index on
+  `llm_calls` — queried on every model call, now synchronously — was the most operationally
+  consequential finding of this run after the ADR boundary, and could only be filed advisory.
+  The same gap covers the deploy-time log capture writing unbounded files under an AC whose own
+  title is "retention is configured, not accidental".
+  Runs: llm-io-audit-trail (2026-09-22).
+- [×1] Nothing in the repo states that a helper extracted during a task must be applied at every
+  pre-existing site of the same code in the same file. DRY as written ("Search for an existing
+  helper before adding one") addresses whoever adds the second copy, not whoever extracts a
+  helper and leaves the older copy standing — the more common shape in a refactor-heavy plan.
+  Runs: llm-io-audit-trail (2026-09-22).
+- [×1] An AC's wording can be the only thing making a defect citable, and it dies at close-out.
+  Here AC-AT-3's "the request payload actually sent" was the sole basis for blocking on a stored
+  request that silently drops `max_tokens`; once the plan closes, the next change to
+  `buildReplayPayload` has nothing to violate.
+  Runs: llm-io-audit-trail (2026-09-22).
+- [×1] Pre-existing doc rot inside a document the branch operates in has no grading rule. R4
+  defaulted to advisory for `CICD.md`'s `drizzle-kit push` sections, which this branch's five
+  migrations directly contradict — so the branch merges leaving the most misleading page in
+  `docs/` untouched for the next schema change.
+  Runs: llm-io-audit-trail (2026-09-22).
 - [×2] A known-and-accepted carve-out (FEAT-0003's stale LLMService diagram is P7-owned)
   lives only in the master plan's phase map; the review brief's known-and-accepted list is
   assembled ad hoc each round, so the same carve-out must be re-derived or gets re-flagged.
@@ -291,6 +333,39 @@ backs it. Each entry names the proposed wording and where it would live
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
 
+- [×1] Nothing states where DB persistence may live *inside* infra. `ARCHITECTURE.md:362` only
+  says "Keep DB logic in repositories; do not call Drizzle directly from controllers or domain
+  services", and neither `infra/ai/llm-call-recorder.ts` nor `infra/observability/transcript-reader.ts`
+  is either. Proposed, for `CONTRIBUTING_AI.md` or as `INV-ARCH-###` in `ARCHITECTURE.md`
+  § Data Access: "Each table has exactly one writing module in `infra/`; any other module reads
+  it through that module or through a named read-model query file that declares the table it
+  owns a view of. A second module holding a table's column knowledge is a finding." That would
+  make the `llm_calls` split — recorder writes, reader reads, prune builds SQL, formatter decodes
+  the payload — citable.
+  Runs: llm-io-audit-trail (2026-09-22).
+- [×1] The YAGNI line ("No abstraction with a single call site") has no written exemption for a
+  pure module extracted so it can be unit-tested without a DB, yet that is established repo
+  convention (`prune-checkpoints.ts` / `.cli.ts`). Every single-call-site judgement in this run
+  turned on an unwritten exception. Proposed, appended to the YAGNI bullet in
+  `CONTRIBUTING_AI.md` § Principles & Boundaries: "A pure module split out of an I/O entry point
+  so it can be unit-tested without a database or network is not a speculative abstraction, even
+  with one call site. The exemption covers the split, not each function inside it."
+  Runs: llm-io-audit-trail (2026-09-22).
+- [×1] No invariant requires a `conversation_turns` writer to supply the per-run ordering column,
+  so `drizzle-summary.service.ts` writing a `run_id` row without `seq` violated only a
+  plan-scoped AC. Proposed for `docs/domain/conversation.spec.md`: "INV-CONV-0xx — every
+  `conversation_turns` row carrying a `run_id` also carries a `seq`, unique and monotonic within
+  that `run_id`; a writer that cannot number its row must write `run_id` as NULL."
+  Runs: llm-io-audit-trail (2026-09-22).
+- [×1] No invariant covers the durable record of LLM I/O, so the strongest documentation finding
+  had to be argued from a process rule. Proposed for `docs/domain/ai.spec.md`: "INV-AI-002 —
+  Every model invocation is persisted to `llm_calls` with the request actually sent and the
+  response received, independently of `LOG_LEVEL`, and the write completes before the run's reply
+  is returned; logs are a hint, never the record." And beside `BR-LLM-005`: "BR-LLM-00X —
+  `llm_calls`/`prompt_blobs` payload columns age out after `LLM_CALLS_RETENTION_DAYS` (default 30)
+  by an owner-installed cron; the rows themselves are never deleted." With those,
+  `LOGGING_GUIDE.md` would cite durable IDs instead of plan-scoped `AC-AT-*`.
+  Runs: llm-io-audit-trail (2026-09-22).
 - [×1] R3's "describe/it names carry BR/AC references per `docs/CONTRIBUTING_AI.md`" has no slot for
   `BUG-0NN`, which was this plan's owner-designated source of truth, nor for plan-local `AC-LSR-N`
   acceptance ids that are not durable `AC-####` specs. The six repro files do carry `BUG-0NN` in
