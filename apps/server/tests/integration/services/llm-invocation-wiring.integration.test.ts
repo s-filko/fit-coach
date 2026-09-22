@@ -29,6 +29,9 @@ import { randomUUID } from 'node:crypto';
 
 import { eq } from 'drizzle-orm';
 
+// Type-only, so it is erased at compile time and loads no module before the mock factory below.
+import type { RecordLlmCallRequest } from '@infra/ai/llm-call-recorder';
+
 // eslint-disable-next-line import/order -- the mock factory must precede the imports it intercepts
 jest.mock('@infra/ai/model.factory', () => {
   const { FakeListChatModel } = jest.requireActual('@langchain/core/utils/testing');
@@ -67,9 +70,7 @@ describe('a real chat model call, through the real gateway, writes an llm_calls 
     expect(row!.errorClass).toBeNull();
     expect(row!.latencyMs).toBeGreaterThanOrEqual(0);
 
-    const request = row!.request as {
-      messages: Array<{ role: string; content?: string; contentHash?: string }>;
-    };
+    const request = row!.request as RecordLlmCallRequest;
     const userMessage = request.messages.find(m => m.role === 'user');
     expect(userMessage?.content).toBe('следующий подход');
 

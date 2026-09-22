@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto';
 
 import { eq } from 'drizzle-orm';
 
-import { recordLlmCall, type RecordLlmCallInput } from '@infra/ai/llm-call-recorder';
+import { recordLlmCall, type RecordLlmCallInput, type RecordLlmCallRequest } from '@infra/ai/llm-call-recorder';
 import { db } from '@infra/db/drizzle';
 import { llmCalls, promptBlobs } from '@infra/db/schema';
 
@@ -63,7 +63,7 @@ describe('recordLlmCall (INV-LLM-008)', () => {
     expect(row!.response).toBeNull();
     expect(row!.errorClass).toBe('LlmUnavailableError');
     expect(row!.errorMessage).toBe('upstream 503');
-    const request = row!.request as { messages: Array<{ role: string; content?: string }> };
+    const request = row!.request as RecordLlmCallRequest;
     expect(request.messages.find(m => m.role === 'user')?.content).toBe('следующий подход');
   });
 
@@ -74,7 +74,7 @@ describe('recordLlmCall (INV-LLM-008)', () => {
 
     const rows = await callsOfRun(runId);
     const hashes = rows.map(r => {
-      const request = r.request as { messages: Array<{ role: string; content?: string; contentHash?: string }> };
+      const request = r.request as RecordLlmCallRequest;
       const system = request.messages.find(m => m.role === 'system')!;
       expect(system.content).toBeUndefined(); // never duplicated into the row
       expect(system.contentHash).toBeTruthy();
@@ -109,7 +109,7 @@ describe('recordLlmCall (INV-LLM-008)', () => {
     expect((await callsOfRun(runB)).map(r => r.callIndex)).toEqual([1, 2]);
 
     const hashOf = (row: (typeof llmCalls.$inferSelect)[][number]) => {
-      const request = row.request as { messages: Array<{ role: string; contentHash?: string }> };
+      const request = row.request as RecordLlmCallRequest;
       return request.messages.find(m => m.role === 'system')!.contentHash;
     };
     const allHashes = [...(await callsOfRun(runA)), ...(await callsOfRun(runB))].map(hashOf);

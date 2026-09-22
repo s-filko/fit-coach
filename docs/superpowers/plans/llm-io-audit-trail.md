@@ -466,6 +466,16 @@ run log — was never made and is written down nowhere; `conversation-run.adapte
 only logs and rethrows. The loss is the run-level cause only: the model call itself is still in
 `llm_calls`, which has no FK to `conversation_runs`.
 
+**Both blocking findings are closed** (orchestrator, at the owner's instruction, 2026-09-22):
+`RecordLlmCallRequest` is imported at all four sites and no `as { messages: Array<…> }` restatement
+survives anywhere in `apps/server`; `deploy/deploy.sh:61` cites `BR-LLM-011`, and the grep that
+proves it now runs from the repository root, where the miss would have shown the first time.
+Verified: `tsc --noEmit` clean, lint 0 errors, unit 126/1203, integration 33/555 (+1 todo),
+scenarios 9/343 (+1 todo), repro 2 suites / 4 failures unchanged, `bash -n deploy/deploy.sh` clean.
+
+**Advisories** stay unfixed on this branch, per the zone contract; the BACKLOG entries are the
+owner's call.
+
 **Meta (3)** — filed in `docs/REVIEW_FINDINGS.md`, not acted on here.
 
 ### Deferred — evidence exists only after merge

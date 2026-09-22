@@ -58,7 +58,7 @@ if docker compose -f "$COMPOSE_FILE" -p "$PROJECT" ps db --status running -q 2>/
     echo "WARNING: Backup failed (database may be empty, continuing)"
 fi
 
-# --- Capture container logs (AC-AT-6) before they are recreated ---
+# --- Capture container logs (BR-LLM-011) before they are recreated ---
 # docker's json-file driver (deploy/docker-compose.yml's `logging:` block) ties
 # each log file to the CONTAINER's own id, under dockerd's data root — a path
 # no service-level `volumes:` mount can redirect. `up -d` below gives server
