@@ -1,5 +1,5 @@
 /**
- * llm_calls / prompt_blobs retention SQL builder (AC-AT-6) — pure, no I/O:
+ * llm_calls / prompt_blobs retention SQL builder (BR-LLM-011) — pure, no I/O:
  * mirrors `prune-checkpoints.ts`'s split (pure builder + CLI runner). `days`
  * is a parameter, not a hardcoded default here — the one default that
  * matters is `LLM_CALLS_RETENTION_DAYS` in `@config/index`, and the CLI

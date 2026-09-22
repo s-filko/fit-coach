@@ -1,5 +1,5 @@
 /**
- * AC-AT-3, end to end: every other test for the record either injects the recorder
+ * INV-LLM-008, end to end: every other test for the record either injects the recorder
  * (llm-log-handler.unit.test.ts, DB-free by design) or called `recordLlmCall` directly
  * (llm-call-recorder.integration.test.ts) — neither exercises the actual chain a production call
  * makes: a real LangChain chat model → its own emitted callbacks → LLMLogHandler (bound at
@@ -39,7 +39,7 @@ jest.mock('@infra/ai/model.factory', () => {
   return { getModel: () => model };
 });
 
-describe('a real chat model call, through the real gateway, writes an llm_calls row (AC-AT-3)', () => {
+describe('a real chat model call, through the real gateway, writes an llm_calls row (INV-LLM-008)', () => {
   it('records the request, the response and a reference to the deduped system prompt', async () => {
     const { OpenAiLlmGateway } = await import('@infra/ai/llm.gateway');
     const { db } = await import('@infra/db/drizzle');
@@ -73,7 +73,7 @@ describe('a real chat model call, through the real gateway, writes an llm_calls 
     const userMessage = request.messages.find(m => m.role === 'user');
     expect(userMessage?.content).toBe('следующий подход');
 
-    // The system prompt is a reference, not inline text (AC-AT-3 dedup).
+    // The system prompt is a reference, not inline text (INV-LLM-008 dedup).
     const systemMessage = request.messages.find(m => m.role === 'system')!;
     expect(systemMessage.content).toBeUndefined();
     expect(systemMessage.contentHash).toBeTruthy();

@@ -18,7 +18,7 @@ export interface SummaryTurnRow {
   role: 'summary';
   content: string;
   payload: InsertSummaryInput['structured'];
-  /** AC-AT-4: this run's next turn, not a system note — see `insert` for how `seq` is resolved. */
+  /** INV-LLM-010: this run's next turn, not a system note — see `insert` for how `seq` is resolved. */
   seq: number;
 }
 

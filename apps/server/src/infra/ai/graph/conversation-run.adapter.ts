@@ -115,7 +115,7 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
         metrics,
       };
 
-      // AC-AT-1: persist the inbound message before the graph runs, keyed by
+      // INV-LLM-009: persist the inbound message before the graph runs, keyed by
       // runId, so it survives a throw at any point. The commit node (D-K)
       // dedupes its own human row against this one by runId — no duplicate
       // on a successful run.

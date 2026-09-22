@@ -96,7 +96,7 @@ previous edit skipped it.
 - [x] **Step 4:** the two `print-transcript.ts` comments, and the eleven "close-out R2 finding N"
   citations across `src/` and `tests/` — now that § Round 2 exists they could resolve, but a
   durable id or the behaviour itself is the better citation.
-- [ ] **Step 5:** `grep -rn 'AC-AT-' docs/ apps/` returns nothing outside the two plan files —
+- [x] **Step 5:** `grep -rn 'AC-AT-' docs/ apps/` returns nothing outside the two plan files —
   ~90 sites, not the handful this line implied. **Owner decision, 2026-09-22: mint the missing
   durable ids and rewrite every citation** (the alternative, keeping plan-scoped ids in code, was
   declined). The orchestrator has amended ADR-0013 §8 with **INV-LLM-009** (the inbound message and

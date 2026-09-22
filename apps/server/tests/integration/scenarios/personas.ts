@@ -2,7 +2,7 @@ import type { Scenario } from '../../../evals/schema/scenario.schema';
 import { pastWith } from '../../../evals/scenarios/fl-shared';
 
 /**
- * The seeded persona shared by the failed-run scenarios (AC-AT-1/AC-AT-2): a registered user with
+ * The seeded persona shared by the failed-run scenarios (INV-LLM-009): a registered user with
  * no history, so the only thing that varies between scenarios is the one step's message and whether
  * the scripted model throws. Same seeded user as the fact-lifecycle journeys (`fl-shared.ts`).
  */

@@ -1,5 +1,5 @@
 /**
- * AC-AT-1 / BUG-022 (loss half). The inbound message is persisted before the graph runs, keyed by
+ * INV-LLM-009 / BUG-022 (loss half). The inbound message is persisted before the graph runs, keyed by
  * run_id, so a run whose model call throws still leaves it in conversation_turns — exactly once,
  * even though the commit node projects the same message again at the end of a successful run.
  * Live evidence of the original loss: 2026-09-21, "накинул 10кг и сделал еще подход на 12" — that
@@ -36,7 +36,7 @@ async function humanTurnTexts(userId: string): Promise<string[]> {
   return rows.map(r => r.content);
 }
 
-/** How many human-message rows exist for this user with this exact text — the exactly-once half of AC-AT-1. */
+/** How many human-message rows exist for this user with this exact text — the exactly-once half of INV-LLM-009. */
 async function humanTurnCount(userId: string, text: string): Promise<number> {
   const rows = await db
     .select({ content: conversationTurns.content })

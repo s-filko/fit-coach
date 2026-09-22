@@ -88,7 +88,7 @@ export const EnvSchema = z.object({
       return n;
     })
     .pipe(z.number().min(0).max(2)),
-  // AC-AT-6: how long llm_calls keeps the full request/response payload before
+  // BR-LLM-011: how long llm_calls keeps the full request/response payload before
   // the prune drops it — the row's metadata (run_id, call_index, model,
   // latency, error) is never pruned, only these two columns null out. Same
   // tunables-not-secrets class as COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS.

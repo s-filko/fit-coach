@@ -1,5 +1,5 @@
 /**
- * AC-AT-5: `print-transcript`'s reader (real DB) + formatter, asserted on the produced OUTPUT, not
+ * `print-transcript`'s reader (real DB) + formatter, asserted on the produced OUTPUT, not
  * internal state — this is a printing tool, its contract is what a person reads. Per the Task
  * 3/4/5 lesson (a global operation needs a global test): seeds SEVERAL distinct runs — a normal one
  * with a tool round trip, a failed one, one with already-pruned payloads, and a pre-migration run
@@ -34,7 +34,7 @@ async function seedUser(tag: string) {
   return new DrizzleUserRepository().create(createTestUserData({ username: `print_transcript_${tag}_${Date.now()}` }));
 }
 
-/** A normal completed run: pre-persisted human message (AC-AT-1), a tool round trip, two llm_calls, a run row. */
+/** A normal completed run: pre-persisted human message (INV-LLM-009), a tool round trip, two llm_calls, a run row. */
 async function seedNormalRun(userId: string): Promise<string> {
   const runId = randomUUID();
   const transcript = new DrizzleTranscriptService();
@@ -94,7 +94,7 @@ async function seedNormalRun(userId: string): Promise<string> {
   return runId;
 }
 
-/** AC-AT-1/AC-AT-2 shape: the human message survives, the model call never answers, the run records why. */
+/** INV-LLM-009 shape: the human message survives, the model call never answers, the run records why. */
 async function seedFailedRun(userId: string): Promise<string> {
   const runId = randomUUID();
   await new DrizzleTranscriptService().appendRunMessages({
@@ -120,7 +120,7 @@ async function seedFailedRun(userId: string): Promise<string> {
   return runId;
 }
 
-/** AC-AT-6 already-pruned state, seeded directly (not via the prune) — one call whose whole request/response was dropped, one whose request survives but references an already-pruned blob. */
+/** BR-LLM-011 already-pruned state, seeded directly (not via the prune) — one call whose whole request/response was dropped, one whose request survives but references an already-pruned blob. */
 async function seedRunWithPrunedPayloads(userId: string): Promise<string> {
   const runId = randomUUID();
   const prunedHash = 'p'.repeat(64);
@@ -161,7 +161,7 @@ async function seedRunWithPrunedPayloads(userId: string): Promise<string> {
   return runId;
 }
 
-/** A pre-AC-AT-4 row, written directly with seq NULL — no toTurnRows, no recordLlmCall, matching a row from before the migration. */
+/** A pre-INV-LLM-010 row, written directly with seq NULL — no toTurnRows, no recordLlmCall, matching a row from before the migration. */
 async function seedPreMigrationRun(userId: string): Promise<string> {
   const runId = randomUUID();
   await db.insert(conversationTurns).values([
@@ -188,7 +188,7 @@ async function transcriptFor(runId: string, includePayloads = false): Promise<st
   return formatTranscripts([rt], blobs, { includePayloads });
 }
 
-describe('print-transcript (AC-AT-5)', () => {
+describe('print-transcript', () => {
   it('a normal run with a tool round trip prints human, tool call/result and answer in order', async () => {
     const user = await seedUser('normal');
     const runId = await seedNormalRun(user.id);
@@ -217,7 +217,7 @@ describe('print-transcript (AC-AT-5)', () => {
     expect(out).toContain('BUG-022');
   });
 
-  it('AC-AT-6: a run with pruned payloads prints "aged out" for both a fully pruned call and a pruned blob reference — never empty or a crash', async () => {
+  it('BR-LLM-011: a run with pruned payloads prints "aged out" for both a fully pruned call and a pruned blob reference — never empty or a crash', async () => {
     const user = await seedUser('pruned');
     const runId = await seedRunWithPrunedPayloads(user.id);
 
@@ -228,13 +228,13 @@ describe('print-transcript (AC-AT-5)', () => {
     expect(out).toContain('response: "ok" finishReason=stop');
   });
 
-  it('AC-AT-4: a pre-migration run with NULL seq is warned about, not dropped or silently reordered', async () => {
+  it('INV-LLM-010: a pre-migration run with NULL seq is warned about, not dropped or silently reordered', async () => {
     const user = await seedUser('legacy');
     const runId = await seedPreMigrationRun(user.id);
 
     const out = await transcriptFor(runId);
 
-    expect(out).toContain('predate AC-AT-4');
+    expect(out).toContain('predate INV-LLM-010');
     expect(out).toContain('legacy сообщение');
     expect(out).toContain('legacy ответ');
     expect(out).toContain('seq —');
@@ -316,7 +316,7 @@ describe('print-transcript (AC-AT-5)', () => {
       await expect(resolveSessionWindow(randomUUID())).resolves.toBeNull();
     });
 
-    it('AC-AT-5: fetchRunsForUserWindow also finds a run whose conversation_runs row was never written, interleaved in order with rows that were', async () => {
+    it('fetchRunsForUserWindow also finds a run whose conversation_runs row was never written, interleaved in order with rows that were', async () => {
       const user = await seedUser('orphan');
       const since = new Date('2026-09-21T00:00:00.000Z');
       const until = new Date('2026-09-21T23:59:59.000Z');
@@ -328,7 +328,7 @@ describe('print-transcript (AC-AT-5)', () => {
         .set({ createdAt: new Date('2026-09-21T12:00:00.000Z') })
         .where(eq(conversationRuns.runId, normalRunId));
 
-      // AC-AT-1's preservation case: the inbound message was persisted (transcript.appendRunMessages,
+      // INV-LLM-009's preservation case: the inbound message was persisted (transcript.appendRunMessages,
       // before the graph ran), but the process was killed before commit.node.ts's recordRun — no
       // conversation_runs row ever exists for this run_id. Pinned earlier in the window than the
       // normal run, to prove ordering interleaves them rather than always sorting orphans last.

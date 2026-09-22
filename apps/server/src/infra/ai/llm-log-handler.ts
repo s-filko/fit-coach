@@ -1,6 +1,6 @@
 /**
  * The LLM boundary callback: debug logging of every model invocation (BUG-003
- * replay payload) AND — since AC-AT-3 — its durable record, independent of
+ * replay payload) AND — since INV-LLM-008 — its durable record, independent of
  * LOG_LEVEL. Run metrics live in the per-run collector's handler (run
  * context) since refactor-p3-run-context-commit; this handler logs and
  * records.
@@ -11,7 +11,7 @@
  * state (AC-1331: no shared mutable state that could leak across runs). A
  * call whose metadata carries no runId (a background job — llm.gateway.ports
  * `LlmCallOptions.jobId`) is logged but never recorded to `llm_calls`: the
- * table's `run_id` is not nullable, and "one row per model call" (AC-AT-3) is
+ * table's `run_id` is not nullable, and "one row per model call" (INV-LLM-008) is
  * scoped to conversation runs, the transcript of record this plan protects.
  */
 
@@ -115,7 +115,7 @@ export const NEVER_RECORD_INVOCATION_PARAM_KEYS: ReadonlyMap<string, string> = n
 ]);
 
 /**
- * The exact request payload an invocation sends (BUG-003 / AC-AT-3) — the full set of parameters
+ * The exact request payload an invocation sends (BUG-003 / INV-LLM-008) — the full set of parameters
  * LangChain actually built for the call, not a hand-picked subset. Built from LangChain's own
  * `invocation_params`/`options`, never from transport config: an API key or Authorization header
  * lives on the client, not in these, so neither this function nor anything it returns can carry one
@@ -176,7 +176,7 @@ export class LLMLogHandler extends BaseCallbackHandler {
 
   constructor(private readonly recordCall: RecordLlmCall = recordLlmCall) {
     super();
-    // AC-AT-3: LangChain's default (LANGCHAIN_CALLBACKS_BACKGROUND unset, same as
+    // INV-LLM-008: LangChain's default (LANGCHAIN_CALLBACKS_BACKGROUND unset, same as
     // this repo) queues a handler's callbacks in the background — the call resolves
     // before handleLLMEnd/handleLLMError, and this recorder's write, ever runs. For
     // the one table whose whole purpose is a trustworthy record, "probably written
@@ -214,7 +214,7 @@ export class LLMLogHandler extends BaseCallbackHandler {
     const cfg = config();
     const isDebug = cfg.LOG_LEVEL === 'debug' || cfg.LOG_LEVEL === 'trace';
 
-    // AC-AT-3: built unconditionally — the DB record does not wait on LOG_LEVEL,
+    // INV-LLM-008: built unconditionally — the DB record does not wait on LOG_LEVEL,
     // only the extra debug log line below does.
     const replayPayload = buildReplayPayload(flat, extraParams, cfg);
 

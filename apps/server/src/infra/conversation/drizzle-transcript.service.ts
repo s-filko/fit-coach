@@ -9,7 +9,7 @@ export interface TurnRow {
   role: 'user' | 'assistant' | 'system' | 'summary';
   content: string;
   payload: Record<string, unknown> | null;
-  /** AC-AT-4: this row's position in the run, closes BUG-029. */
+  /** INV-LLM-010: this row's position in the run, closes BUG-029. */
   seq: number;
 }
 
@@ -19,9 +19,9 @@ export interface TurnRow {
  * and context as the latest `role='summary'` row — sees only real user/assistant
  * text, never tool plumbing.
  *
- * `startSeq` (AC-AT-4, default 1) numbers the OUTPUT rows `startSeq..startSeq+n-1`
+ * `startSeq` (INV-LLM-010, default 1) numbers the OUTPUT rows `startSeq..startSeq+n-1`
  * in message order. It exists because a run's messages reach the table through
- * TWO `appendRunMessages` calls (AC-AT-1: the adapter pre-persists the human
+ * TWO `appendRunMessages` calls (INV-LLM-009: the adapter pre-persists the human
  * message before `graph.invoke`, commit projects the rest) — each call to this
  * function only ever sees its own slice, so numbering has to be seeded from
  * outside, by whatever `seq` the run already has in the database, or every
@@ -84,7 +84,7 @@ export function toTurnRows(input: AppendRunMessagesInput, startSeq = 1): TurnRow
 }
 
 /**
- * TranscriptPort adapter — appends only; its one read is the AC-AT-1 dedup
+ * TranscriptPort adapter — appends only; its one read is the INV-LLM-009 dedup
  * below, not a domain read (INV-LLM-001 is about the prompt, not this).
  */
 export class DrizzleTranscriptService implements TranscriptPort {
@@ -99,7 +99,7 @@ export class DrizzleTranscriptService implements TranscriptPort {
 
     let { messages } = input;
     if (messages.some(m => m.kind === 'human')) {
-      // AC-AT-1: the adapter persists the run's human message before
+      // INV-LLM-009: the adapter persists the run's human message before
       // graph.invoke, keyed by run_id. When commit later projects the same
       // run's messages, its own human message is the one already there —
       // drop it before numbering so it is never written twice and never
@@ -117,7 +117,7 @@ export class DrizzleTranscriptService implements TranscriptPort {
       return;
     }
 
-    // AC-AT-4: this run's messages arrive through up to two calls (the
+    // INV-LLM-010: this run's messages arrive through up to two calls (the
     // pre-persisted human message, then commit's projection of the rest) —
     // continue numbering from whatever this run_id already has, so seq stays
     // monotonic across both inserts instead of restarting at 1 each call.

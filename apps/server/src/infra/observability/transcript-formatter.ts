@@ -1,5 +1,5 @@
 /**
- * AC-AT-5: pure formatting for `print-transcript` — no I/O, so this is unit-testable with
+ * Pure formatting for `print-transcript` — no I/O, so this is unit-testable with
  * hand-built fixtures and integration-tested end to end via transcript-reader.ts's real queries.
  * Judged for readability, not machine-parseability (owner, 2026-09-22): a person reconstructing
  * what happened reads this, not a script.
@@ -9,7 +9,7 @@ import type { RecordedRequestMessage, RecordLlmCallRequest, RecordLlmCallRespons
 import type { LlmCallRecord, RunTranscript, TurnRecord } from './transcript-reader';
 
 export interface FormatOptions {
-  /** Resolve and print the request/response payloads (large; off by default — AC-AT-5). */
+  /** Resolve and print the request/response payloads (large; off by default). */
   includePayloads: boolean;
 }
 
@@ -56,7 +56,7 @@ function formatCallLine(c: LlmCallRecord): string {
  * One resolved request message line — a system message with a hash prints what happened to it,
  * never an empty string. `seenHashes` is shared across the whole invocation (every call, every run):
  * the static rules block and per-run context blocks alike are stored once per distinct hash
- * (AC-AT-3/AC-AT-6's whole point) and are usually referenced again by the very next call in the same
+ * (INV-LLM-008/BR-LLM-011's whole point) and are usually referenced again by the very next call in the same
  * run — printing the full text again every time would make a multi-call run's output dominated by
  * repeats of its own system prompt. First reference prints it in full; every later one, anywhere in
  * this run, points back to it instead.
@@ -141,7 +141,7 @@ function hasVisibleAnswer(turns: TurnRecord[]): boolean {
 type TimelineItem = { at: Date; isCall: boolean; render: () => string[] };
 
 /**
- * Turns and calls, interleaved by when they actually happened — AC-AT-5's "in the order it
+ * Turns and calls, interleaved by when they actually happened — print-transcript's "in the order it
  * happened", across both tables, not just within one.
  */
 function buildTimeline(
@@ -185,7 +185,7 @@ export function formatRunTranscript(
 
   if (rt.turns.some(t => t.seq === null)) {
     lines.push(
-      '  ⚠ some rows below predate AC-AT-4 (no seq) — their order among same-timestamp rows is not guaranteed',
+      '  ⚠ some rows below predate INV-LLM-010 (no seq) — their order among same-timestamp rows is not guaranteed',
     );
   }
 

@@ -23,7 +23,7 @@ import {
 
 import { loadConfig } from '@config/index';
 
-describe('LLMLogHandler — logging (metrics live in the collector) and the AC-AT-3 record, DB-free here', () => {
+describe('LLMLogHandler — logging (metrics live in the collector) and the INV-LLM-008 record, DB-free here', () => {
   it('logs a model start/end without touching any metrics state', async () => {
     const recordCall = jest.fn().mockResolvedValue(undefined);
     const handler = new LLMLogHandler(recordCall);
@@ -61,7 +61,7 @@ describe('LLMLogHandler — logging (metrics live in the collector) and the AC-A
     expect(recordCall).not.toHaveBeenCalled();
   });
 
-  it('AC-AT-3 D-F-style: a recorder that throws is logged and swallowed, never rejects', async () => {
+  it('INV-LLM-008 D-F-style: a recorder that throws is logged and swallowed, never rejects', async () => {
     const recordCall = jest.fn().mockRejectedValue(new Error('db down'));
     const handler = new LLMLogHandler(recordCall);
 
@@ -70,7 +70,7 @@ describe('LLMLogHandler — logging (metrics live in the collector) and the AC-A
     expect(recordCall).toHaveBeenCalledTimes(1);
   });
 
-  it('AC-AT-3: a failing call still records the request, with the error and no response', async () => {
+  it('INV-LLM-008: a failing call still records the request, with the error and no response', async () => {
     const recordCall = jest.fn().mockResolvedValue(undefined);
     const handler = new LLMLogHandler(recordCall);
 
@@ -93,7 +93,7 @@ describe('LLMLogHandler — logging (metrics live in the collector) and the AC-A
     expect(record.errorMessage).toBe('upstream timeout');
   });
 
-  it('AC-AT-3: never stores credentials — a model configured with an API key leaks it nowhere in the built payload', () => {
+  it('INV-LLM-008: never stores credentials — a model configured with an API key leaks it nowhere in the built payload', () => {
     const SECRET = 'sk-SECRET-TEST-VALUE-do-not-store-abc123';
     // A real ChatOpenAI, not a stub: invocationParams() is the SAME method LangChain
     // calls to build extraParams.invocation_params for the callback — proving the

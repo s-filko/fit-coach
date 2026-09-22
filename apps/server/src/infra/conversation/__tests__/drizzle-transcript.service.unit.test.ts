@@ -104,7 +104,7 @@ describe('toTurnRows — transcript projection per message (D-K, ADR-0013 §8)',
     expect(toTurnRows({ ...INPUT, messages: [] })).toEqual([]);
   });
 
-  it('AC-AT-4: numbers its rows 1..n in message order by default', () => {
+  it('INV-LLM-010: numbers its rows 1..n in message order by default', () => {
     const rows = toTurnRows({
       ...INPUT,
       messages: [
@@ -118,7 +118,7 @@ describe('toTurnRows — transcript projection per message (D-K, ADR-0013 §8)',
     expect(rows.map(r => r.seq)).toEqual([1, 2, 3, 4]);
   });
 
-  it('AC-AT-4: startSeq continues the numbering instead of restarting at 1', () => {
+  it('INV-LLM-010: startSeq continues the numbering instead of restarting at 1', () => {
     const rows = toTurnRows(
       {
         ...INPUT,

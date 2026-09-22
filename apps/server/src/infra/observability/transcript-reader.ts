@@ -1,5 +1,5 @@
 /**
- * AC-AT-5: read-only fetches for `print-transcript` — the one command that reconstructs a run or a
+ * Read-only fetches for `print-transcript` — the one command that reconstructs a run or a
  * session from the durable record this plan built (conversation_runs/conversation_turns from Tasks
  * 1–3, llm_calls/prompt_blobs from Tasks 4–6). No writes; INV-LLM-001 is unaffected (this never
  * builds a prompt, it prints one that already happened).
@@ -91,7 +91,7 @@ async function loadTurnsAndCalls(runId: string): Promise<Pick<RunTranscript, 'tu
       })
       .from(conversationTurns)
       .where(eq(conversationTurns.runId, runId))
-      // AC-AT-4: (created_at, seq) — the ordering this plan made recoverable, never seq alone
+      // INV-LLM-010: (created_at, seq) — the ordering this plan made recoverable, never seq alone
       // (Task 3's own review finding: seq restarts at 1 per run, so it is only ever a same-timestamp
       // tiebreak, and NULLS LAST here is exactly "a pre-migration row's order among ties is not
       // guaranteed", not silently reordered ahead of anything).
@@ -134,7 +134,7 @@ function transcriptTimestamp(rt: Pick<RunTranscript, 'run' | 'turns'>): Date {
  * Every run of `userId` active in `[since, until]`, oldest first — including a run whose
  * `conversation_runs` row was never written (`commit.node.ts:99-131`
  * swallows a `recordRun` failure, and a process killed before that point reaches neither path;
- * AC-AT-1 still guarantees the inbound message was persisted, keyed by `run_id`, before the graph
+ * INV-LLM-009 still guarantees the inbound message was persisted, keyed by `run_id`, before the graph
  * ran). Such a run is discovered from `conversation_turns` instead — the only one of the three
  * tables carrying `user_id` directly — and windowed by ITS OWN `created_at`, since there is no run
  * row to window by. `RunTranscript.run` is `null` for exactly this case; `--run` already returns it
@@ -200,7 +200,7 @@ export async function resolveSessionWindow(
 /**
  * Every distinct hash referenced anywhere in `calls`' requests, resolved in one query. A missing
  * key (not in the returned map) means the hash was never stored at all — should not happen; a
- * present key with a `null` value means the row exists but AC-AT-6's prune already dropped its
+ * present key with a `null` value means the row exists but BR-LLM-011's prune already dropped its
  * content.
  */
 export async function resolvePromptBlobs(calls: LlmCallRecord[]): Promise<Map<string, string | null>> {

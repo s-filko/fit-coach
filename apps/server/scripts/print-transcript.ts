@@ -1,5 +1,5 @@
 /**
- * AC-AT-5: one command that prints everything about a run or a session — the durable record this
+ * One command that prints everything about a run or a session — the durable record this
  * whole plan built (Tasks 1–6), not the ephemeral log. Read-only.
  *
  * Run: npm run print-transcript -- --run <runId> [--payloads] [--env-file <path>]

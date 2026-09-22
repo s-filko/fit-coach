@@ -1,5 +1,5 @@
 /**
- * AC-AT-2: a non-'ok' run carries its cause. `conversation_runs` stores the
+ * INV-LLM-009: a non-'ok' run carries its cause. `conversation_runs` stores the
  * error class and a truncated message for every failure path that reaches
  * the adapter's catch (both `isProviderError` branches — provider outage and
  * a plain bug); an 'ok' run leaves both null.
@@ -21,7 +21,7 @@ import { buildAlexScenario } from './personas';
 import { installScriptedModel, type ScriptedModelHandle } from './scripted-model';
 
 const scenarioFor = (id: string, text: string): Scenario =>
-  buildAlexScenario(id, 'AC-AT-2: one run that succeeds, one whose model call throws', text);
+  buildAlexScenario(id, 'INV-LLM-009: one run that succeeds, one whose model call throws', text);
 
 /** The user's most recent conversation_runs row. */
 async function latestRunRow(userId: string) {
@@ -29,7 +29,7 @@ async function latestRunRow(userId: string) {
   return rows[rows.length - 1] ?? null;
 }
 
-describe('a non-ok run carries its cause (AC-AT-2)', () => {
+describe('a non-ok run carries its cause (INV-LLM-009)', () => {
   let model: ScriptedModelHandle;
 
   beforeAll(() => {

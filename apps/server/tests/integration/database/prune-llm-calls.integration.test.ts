@@ -1,5 +1,5 @@
 /**
- * AC-AT-6: the prune drops `llm_calls.request`/`response` past the retention window and keeps every
+ * BR-LLM-011: the prune drops `llm_calls.request`/`response` past the retention window and keeps every
  * other column — `run_id`, `call_index`, `model`, `latency_ms`, `error_class`, `error_message`,
  * `created_at`, `prompt_hashes` — forever. Per the Task 3/4 lesson (a global operation needs a
  * global test): seeds rows across FOUR runs with mixed ages, not one, and checks the cutoff is
@@ -65,7 +65,7 @@ const blobFor = async (hash: string) => {
   return blob!;
 };
 
-describe('llm_calls / prompt_blobs retention (AC-AT-6)', () => {
+describe('llm_calls / prompt_blobs retention (BR-LLM-011)', () => {
   const runOld1 = randomUUID();
   const runOld2 = randomUUID();
   const runRecent = randomUUID();
@@ -162,7 +162,7 @@ describe('llm_calls / prompt_blobs retention (AC-AT-6)', () => {
  * `prompt_hashes` held a NULL element. No error; the count just reports zero. `NOT EXISTS` has no
  * such trap. This seeds exactly that shape and asserts the unreferenced blobs still get pruned.
  */
-describe("prompt_blobs prune survives a NULL element inside a live row's prompt_hashes (AC-AT-6 review defect 1)", () => {
+describe("prompt_blobs prune survives a NULL element inside a live row's prompt_hashes (BR-LLM-011 review defect 1)", () => {
   const liveRunWithNullElement = randomUUID();
   const referencedHash = 'c'.repeat(64);
   const unreferencedHashOne = 'd'.repeat(64);
@@ -217,7 +217,7 @@ describe("prompt_blobs prune survives a NULL element inside a live row's prompt_
  * dry run under-reporting exactly what apply does. Both statements now share the same `days`-gated
  * liveness predicate, so the counts must agree.
  */
-describe('the dry-run blob count matches what --apply actually nulls (AC-AT-6 review defect 2)', () => {
+describe('the dry-run blob count matches what --apply actually nulls (BR-LLM-011 review defect 2)', () => {
   const oldRun = randomUUID();
   const onlyOldRunReferences = 'f'.repeat(64);
 

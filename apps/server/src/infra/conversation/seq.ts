@@ -3,7 +3,7 @@ import type { db } from '@infra/db/drizzle';
 type Executor = Pick<typeof db, 'select'>;
 
 /**
- * AC-AT-4: this run's next `conversation_turns.seq` — `MAX(seq) WHERE run_id` + 1, never left null.
+ * INV-LLM-010: this run's next `conversation_turns.seq` — `MAX(seq) WHERE run_id` + 1, never left null.
  * One policy, called from inside whatever transaction the caller is already in (`db` or a `tx`),
  * so `appendRunMessages` and the summary mirror-turn insert cannot disagree about how numbering
  * works — two copies of this read would, and the order of a run's rows is the whole point.

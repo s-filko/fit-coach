@@ -38,7 +38,7 @@ export async function fetchRunsSince(since: Date, limit: number): Promise<Export
     })
     .from(conversationTurns)
     .where(and(gte(conversationTurns.createdAt, since), isNotNull(conversationTurns.runId)))
-    // AC-AT-4: createdAt stays first — this query spans every run since the
+    // INV-LLM-010: createdAt stays first — this query spans every run since the
     // cutoff (bucketed into runs below) and is capped by `limit * 4`, so the
     // ORDER BY decides which whole runs the LIMIT keeps, oldest first, not
     // just row order inside one run. seq is the tiebreak WITHIN a tied

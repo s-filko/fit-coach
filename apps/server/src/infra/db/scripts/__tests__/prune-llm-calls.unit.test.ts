@@ -1,6 +1,6 @@
 import { buildPruneLlmCallsStatements } from '../prune-llm-calls';
 
-describe('buildPruneLlmCallsStatements (AC-AT-6)', () => {
+describe('buildPruneLlmCallsStatements (BR-LLM-011)', () => {
   it('returns two statements, llm_calls then prompt_blobs, both parametrized by the same days', () => {
     const { statements } = buildPruneLlmCallsStatements({ days: 30 });
     expect(statements.map(s => s.table)).toEqual(['llm_calls', 'prompt_blobs']);

@@ -70,7 +70,7 @@ export interface ConversationRunRecord {
   outcome: ConversationRunOutcome;
   budgetReport: BudgetReport | null;
   /**
-   * AC-AT-2: the cause of a non-'ok' run — the thrown value's class name and a
+   * INV-LLM-009: the cause of a non-'ok' run — the thrown value's class name and a
    * truncated message, set for every failure path that reaches the adapter's
    * catch. Optional (not just nullable) so an 'ok' run's record, built by the
    * commit node, never has to name them: absent is null at the DB row.

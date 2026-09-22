@@ -37,7 +37,7 @@ const aiTurn = (content: string, seq: number | null, offsetMs = 0): TurnRecord =
   createdAt: at(offsetMs),
 });
 
-describe('formatRunTranscript (AC-AT-5)', () => {
+describe('formatRunTranscript (print-transcript)', () => {
   it('renders a normal run: human message, ai answer, in order, no warnings', () => {
     const rt: RunTranscript = {
       runId: 'run-1',
@@ -54,7 +54,7 @@ describe('formatRunTranscript (AC-AT-5)', () => {
     expect(out).toContain('AI: Здравствуй!');
     expect(out.indexOf('HUMAN: привет')).toBeLessThan(out.indexOf('AI: Здравствуй!'));
     expect(out).not.toContain('NO ANSWER');
-    expect(out).not.toContain('predate AC-AT-4');
+    expect(out).not.toContain('predate INV-LLM-010');
   });
 
   it('renders tool calls and results between the ai turn that requested them and the ai turn that answers', () => {
@@ -139,7 +139,7 @@ describe('formatRunTranscript (AC-AT-5)', () => {
     expect(formatRunTranscript(rt, new Map(), { includePayloads: false })).toContain('NO ANSWER RECORDED');
   });
 
-  it('AC-AT-4: warns when a row predates seq, without dropping or silently reordering it', () => {
+  it('INV-LLM-010: warns when a row predates seq, without dropping or silently reordering it', () => {
     const rt: RunTranscript = {
       runId: 'run-1',
       run: baseRun,
@@ -149,7 +149,7 @@ describe('formatRunTranscript (AC-AT-5)', () => {
 
     const out = formatRunTranscript(rt, new Map(), { includePayloads: false });
 
-    expect(out).toContain('predate AC-AT-4');
+    expect(out).toContain('predate INV-LLM-010');
     expect(out).toContain('legacy row');
     expect(out).toContain('legacy reply');
     expect(out).toContain('seq —');
@@ -186,7 +186,7 @@ describe('formatRunTranscript (AC-AT-5)', () => {
       expect(out).toContain('response: "Отлично!" finishReason=stop tokensIn=50 tokensOut=5');
     });
 
-    it('AC-AT-6: prints that a pruned blob aged out, with its hash, never an empty string or a crash', () => {
+    it('BR-LLM-011: prints that a pruned blob aged out, with its hash, never an empty string or a crash', () => {
       const rt: RunTranscript = { runId: 'run-1', run: baseRun, turns: [], llmCalls: [call()] };
       const out = formatRunTranscript(rt, new Map([['hash-1', null]]), { includePayloads: true });
 

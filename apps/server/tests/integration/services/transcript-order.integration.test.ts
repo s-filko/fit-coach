@@ -1,5 +1,5 @@
 /**
- * AC-AT-4 / BUG-029. The order a run's rows were produced in is recoverable from the database via a
+ * INV-LLM-010 / BUG-029. The order a run's rows were produced in is recoverable from the database via a
  * per-run monotonic `seq`, written by `toTurnRows`/`appendRunMessages`. Before this, the table stored
  * no order at all — one INSERT per run gave every row the same `created_at` (DEFAULT now()), and
  * `evals/lib/export-query.ts`'s `ORDER BY created_at` tied rows however the engine happened to see
@@ -13,7 +13,7 @@
  * append path, every row is rewritten with an ordinary UPDATE of a harmless column, in REVERSE
  * produced order, and the real reader (`fetchRunsSince`) must still return the produced order.
  *
- * The run is written through the SAME two calls production now makes (AC-AT-1, Task 1): the adapter
+ * The run is written through the SAME two calls production now makes (INV-LLM-009, Task 1): the adapter
  * pre-persists the human message before `graph.invoke`, then commit projects the whole run, its own
  * human row deduped away — `seq` has to stay monotonic across both, not restart at 1 in each call.
  */
@@ -61,7 +61,7 @@ describe('order of the rows of one run is recoverable from the database (BUG-029
     const input = { userId: user.id, runId, phase: 'training' as const, episodeId: runId, messages };
     produced = toTurnRows(input).map(label);
 
-    // AC-AT-1's split (Task 1): the adapter pre-persists the human message in
+    // INV-LLM-009's split (Task 1): the adapter pre-persists the human message in
     // its own call, before graph.invoke; commit later projects the WHOLE
     // run's messages, its own human row deduped away by drizzle-transcript's
     // appendRunMessages. Write it exactly that way — two calls, not one — or
@@ -98,7 +98,7 @@ describe('order of the rows of one run is recoverable from the database (BUG-029
     return (run?.turns ?? []).map(label);
   };
 
-  it('AC-AT-4: seq is monotonic 1..n across the two calls that write a run today, in produced order', async () => {
+  it('INV-LLM-010: seq is monotonic 1..n across the two calls that write a run today, in produced order', async () => {
     const bySeq = [...(await rowsOfRun())].sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
     expect(bySeq.map(r => r.seq)).toEqual(produced.map((_, i) => i + 1));
     expect(bySeq.map(label)).toEqual(produced);
@@ -128,7 +128,7 @@ describe('order of the rows of one run is recoverable from the database (BUG-029
 });
 
 /**
- * AC-AT-4, the cross-run half: `fetchRunsSince`'s turns query spans every run since the cutoff
+ * INV-LLM-010, the cross-run half: `fetchRunsSince`'s turns query spans every run since the cutoff
  * and is capped by `limit * 4`, THEN bucketed per run — it is not a single-run read. Ordering that
  * shared pool by `seq` first (nulls last in ASC) sorts every pre-migration row — no `seq` at all —
  * behind every seq'd row, so a truncating LIMIT drops old, seq-less runs before it touches any newer
@@ -136,7 +136,7 @@ describe('order of the rows of one run is recoverable from the database (BUG-029
  * tiebreak within a tied timestamp. The single-run test above cannot see this — it never lets the
  * LIMIT bite across more than one run.
  */
-describe('fetchRunsSince orders whole runs oldest-first, not by a shared-pool seq tiebreak (AC-AT-4)', () => {
+describe('fetchRunsSince orders whole runs oldest-first, not by a shared-pool seq tiebreak (INV-LLM-010)', () => {
   const SINCE = new Date('2099-06-01T00:00:00.000Z');
   const at = (offsetMs: number): Date => new Date(SINCE.getTime() + offsetMs);
 

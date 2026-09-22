@@ -1,5 +1,5 @@
 /**
- * AC-AT-3: every model invocation is stored, independent of LOG_LEVEL. `run_id` carries no FK (like
+ * INV-LLM-008: every model invocation is stored, independent of LOG_LEVEL. `run_id` carries no FK (like
  * `conversation_turns.run_id`, Task 1) — a call is recorded mid-run, before any `conversation_runs`
  * row necessarily exists — so these tests use bare `randomUUID()` run ids, no seeded user or run row.
  *
@@ -38,7 +38,7 @@ const baseCall = (runId: string, overrides: Partial<RecordLlmCallInput> = {}): R
 const callsOfRun = (runId: string) =>
   db.select().from(llmCalls).where(eq(llmCalls.runId, runId)).orderBy(llmCalls.callIndex);
 
-describe('recordLlmCall (AC-AT-3)', () => {
+describe('recordLlmCall (INV-LLM-008)', () => {
   it('two calls in one run get indexes 1 and 2, same run_id', async () => {
     const runId = randomUUID();
     await recordLlmCall(baseCall(runId));
@@ -96,7 +96,7 @@ describe('recordLlmCall (AC-AT-3)', () => {
     expect(serialized).not.toMatch(/authorization|api[-_]?key|bearer /i);
   });
 
-  it("AC-AT-4 lesson applied: two runs' calls interleaved in the same table neither share call_index nor duplicate the shared prompt blob", async () => {
+  it("INV-LLM-010 lesson applied: two runs' calls interleaved in the same table neither share call_index nor duplicate the shared prompt blob", async () => {
     const runA = randomUUID();
     const runB = randomUUID();
 

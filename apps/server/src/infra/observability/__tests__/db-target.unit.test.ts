@@ -2,7 +2,7 @@ import { describeSchemaError, formatDatabaseTarget } from '../db-target';
 
 const TARGET = { host: 'db', port: 5432, database: 'fitcoach_dev' };
 
-describe('formatDatabaseTarget (AC-AT-5 — which database, printed unconditionally)', () => {
+describe('formatDatabaseTarget (print-transcript — which database, printed unconditionally)', () => {
   it('names the host, port and database, so a reader never has to guess which one answered', () => {
     expect(formatDatabaseTarget(TARGET)).toBe('Reading from postgres://db:5432/fitcoach_dev');
   });
@@ -13,7 +13,7 @@ describe('formatDatabaseTarget (AC-AT-5 — which database, printed unconditiona
   });
 });
 
-describe('describeSchemaError (AC-AT-5 — a friendly sentence when the schema is behind)', () => {
+describe('describeSchemaError (print-transcript — a friendly sentence when the schema is behind)', () => {
   it('returns a sentence naming the database for an undefined_column error (42703)', () => {
     const err = { code: '42703', message: 'column "error_class" does not exist' };
     const message = describeSchemaError(err, TARGET);

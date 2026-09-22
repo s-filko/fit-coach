@@ -115,7 +115,7 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
     expect(record.outcome).toBe('core_error');
     expect(record.phaseOut).toBeNull();
     expect(record.userId).toBe(UID);
-    // AC-AT-2: the run carries its cause.
+    // INV-LLM-009: the run carries its cause.
     expect(record.errorClass).toBe('Error');
     expect(record.errorMessage).toBe('boom');
   });
@@ -163,12 +163,12 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
     await expect(rejection).rejects.toBeInstanceOf(LlmUnavailableError);
     await expect(rejection).rejects.toMatchObject({ code: 'LLM_UNAVAILABLE' });
     expect(recordRun.mock.calls[0][0].outcome).toBe('llm_unavailable');
-    // AC-AT-2: the cause is recorded on this failure path too, not only core_error's.
+    // INV-LLM-009: the cause is recorded on this failure path too, not only core_error's.
     expect(recordRun.mock.calls[0][0].errorClass).toBe('Error');
     expect(recordRun.mock.calls[0][0].errorMessage).toBe('upstream');
   });
 
-  it('AC-AT-2: a long error message is truncated on the run record', async () => {
+  it('INV-LLM-009: a long error message is truncated on the run record', async () => {
     const longMessage = 'x'.repeat(2000);
     const { deps, recordRun } = makeDeps(
       {
@@ -186,7 +186,7 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
     expect(record.errorMessage.length).toBeLessThan(longMessage.length);
   });
 
-  it('AC-AT-2: a non-Error throw still records a class and a message', async () => {
+  it('INV-LLM-009: a non-Error throw still records a class and a message', async () => {
     const { deps, recordRun } = makeDeps(
       {
         invoke: async () => {

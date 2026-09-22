@@ -3,7 +3,7 @@ import { BASE_ENV } from './base-env.fixture';
 
 const BASE = BASE_ENV;
 
-describe('LLM_CALLS_RETENTION_DAYS (AC-AT-6 — the prune window is config, not a hardcoded number)', () => {
+describe('LLM_CALLS_RETENTION_DAYS (BR-LLM-011 — the prune window is config, not a hardcoded number)', () => {
   it('defaults to 30 days', () => {
     expect(EnvSchema.parse(BASE).LLM_CALLS_RETENTION_DAYS).toBe(30);
   });

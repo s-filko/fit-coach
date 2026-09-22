@@ -1,5 +1,5 @@
 /**
- * CLI entry for llm_calls/prompt_blobs retention (AC-AT-6). Dry-run by
+ * CLI entry for llm_calls/prompt_blobs retention (BR-LLM-011). Dry-run by
  * default; pass --apply to actually drop payloads. A nightly cron job,
  * owner-installed (docs/LOGGING_GUIDE.md), same operating model as
  * db:prune-checkpoints — no in-app scheduler.

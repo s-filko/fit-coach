@@ -100,7 +100,7 @@ export const conversationTurns = pgTable(
     runId: uuid('run_id'),
     kind: conversationTurnKindEnum('kind').notNull().default('human'),
     payload: jsonb('payload'),
-    // AC-AT-4: per-run monotonic order (closes BUG-029). Nullable — rows written
+    // INV-LLM-010: per-run monotonic order (closes BUG-029). Nullable — rows written
     // before this column existed, and system notes (no run_id), have none; no
     // backfill, since a run is one-shot and never receives more rows after a
     // deploy, so no pre-migration run is ever mixed with post-migration seq'd rows.
@@ -146,7 +146,7 @@ export const conversationRuns = pgTable(
     transition: jsonb('transition'),
     outcome: conversationRunOutcomeEnum('outcome').notNull(),
     budgetReport: jsonb('budget_report'),
-    // AC-AT-2: the cause of a non-'ok' run — null for 'ok' (D-F remainder)
+    // INV-LLM-009: the cause of a non-'ok' run — null for 'ok' (D-F remainder)
     errorClass: text('error_class'),
     errorMessage: text('error_message'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -181,10 +181,10 @@ export const conversationSummaries = pgTable(
   },
 );
 
-// AC-AT-3: a distinct-content-hash-addressed system prompt, stored once and referenced from
+// INV-LLM-008: a distinct-content-hash-addressed system prompt, stored once and referenced from
 // llm_calls — assemble-context.ts pushes up to six SystemMessages per call (the static rules text,
 // but also the per-profile, per-episode and per-workout blocks, which change on nearly every call),
-// so most blobs are NOT the reusable static one. `content` is nullable since AC-AT-6's blob-prune:
+// so most blobs are NOT the reusable static one. `content` is nullable since BR-LLM-011's blob-prune:
 // once no unpruned llm_calls row still references a hash (via prompt_hashes below), the CONTENT is
 // dropped — never the row (`hash`/`createdAt` survive, so which prompt versions ever existed is
 // still answerable, matching the "keep the metadata" rule this plan already applies to llm_calls
@@ -196,7 +196,7 @@ export const promptBlobs = pgTable('prompt_blobs', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
-// AC-AT-3: one row per model invocation, independent of LOG_LEVEL — run_id is a plain uuid, not a
+// INV-LLM-008: one row per model invocation, independent of LOG_LEVEL — run_id is a plain uuid, not a
 // FK, for the same reason as conversation_turns.run_id: the row is written mid-run, before (or
 // without) a conversation_runs row ever existing (D-F: a run that never reaches commit has none).
 export const llmCalls = pgTable(
@@ -208,13 +208,13 @@ export const llmCalls = pgTable(
     model: text('model').notNull(),
     // The request actually sent (messages, tools, temperature, reasoning effort) — every system
     // message's `content` is replaced with `{ contentHash }` pointing at prompt_blobs. Nullable since
-    // AC-AT-6: the prune drops the payload after LLM_CALLS_RETENTION_DAYS, keeping every other column
+    // BR-LLM-011: the prune drops the payload after LLM_CALLS_RETENTION_DAYS, keeping every other column
     // (this row's metadata) forever — it is never absent for a fresh, unpruned call.
     request: jsonb('request'),
     // Null until the call succeeds, or once the prune has dropped it — a failed-but-unpruned call still
     // has `request` (D-F-style: the cause, not the reply, is missing).
     response: jsonb('response'),
-    // AC-AT-6: every prompt_blobs hash this call's request referenced, written once at record time —
+    // BR-LLM-011: every prompt_blobs hash this call's request referenced, written once at record time —
     // NEVER nulled by the prune (it is metadata: a few short hashes, not the bulky text they point at)
     // so a blob's liveness stays answerable by a join even after `request` itself is gone.
     promptHashes: text('prompt_hashes').array(),
