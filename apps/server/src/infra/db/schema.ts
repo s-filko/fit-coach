@@ -136,6 +136,9 @@ export const conversationRuns = pgTable(
     transition: jsonb('transition'),
     outcome: conversationRunOutcomeEnum('outcome').notNull(),
     budgetReport: jsonb('budget_report'),
+    // AC-AT-2: the cause of a non-'ok' run — null for 'ok' (D-F remainder)
+    errorClass: text('error_class'),
+    errorMessage: text('error_message'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   table => {

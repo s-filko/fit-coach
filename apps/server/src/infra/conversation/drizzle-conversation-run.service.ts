@@ -22,6 +22,9 @@ export class DrizzleConversationRunService implements IConversationRunService {
       transition: record.transition,
       outcome: record.outcome,
       budgetReport: record.budgetReport,
+      // AC-AT-2: null for an 'ok' run — the commit node never sets these (optional on the type).
+      errorClass: record.errorClass ?? null,
+      errorMessage: record.errorMessage ?? null,
     });
   }
 }

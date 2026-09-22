@@ -54,6 +54,18 @@ function isProviderError(err: unknown): boolean {
   return typeof status === 'number' && (status === 429 || status >= 500);
 }
 
+/** AC-AT-2: run rows keep the error message short — the class name always survives untruncated. */
+const ERROR_MESSAGE_MAX_CHARS = 500;
+
+/** AC-AT-2: the failed run's cause, for every failure path that reaches the catch below. */
+function classifyError(err: unknown): { errorClass: string; errorMessage: string } {
+  const errorClass = err instanceof Error ? err.constructor.name : typeof err;
+  const message = err instanceof Error ? err.message : String(err);
+  const errorMessage =
+    message.length > ERROR_MESSAGE_MAX_CHARS ? `${message.slice(0, ERROR_MESSAGE_MAX_CHARS)}…` : message;
+  return { errorClass, errorMessage };
+}
+
 /**
  * Typed rethrow (ADR-0013 §6, INV-LLM-006): the route maps this to an HTTP
  * status and a body carrying only `code`. `err` rides `cause` for the log
@@ -154,6 +166,7 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
       } catch (err) {
         // Best-effort failed-run row (D-F): AC-1301's "one row per POST" becomes true.
         try {
+          const { errorClass, errorMessage } = classifyError(err);
           const record: ConversationRunRecord = {
             runId,
             userId: input.userId,
@@ -170,6 +183,8 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
             transition: null,
             outcome: isProviderError(err) ? 'llm_unavailable' : 'core_error',
             budgetReport: null,
+            errorClass,
+            errorMessage,
           };
           await runService.recordRun(record);
         } catch (recordErr) {

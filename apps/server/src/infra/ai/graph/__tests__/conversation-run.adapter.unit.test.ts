@@ -115,6 +115,9 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
     expect(record.outcome).toBe('core_error');
     expect(record.phaseOut).toBeNull();
     expect(record.userId).toBe(UID);
+    // AC-AT-2: the run carries its cause.
+    expect(record.errorClass).toBe('Error');
+    expect(record.errorMessage).toBe('boom');
   });
 
   it('ADR-0013 §6/INV-LLM-006: the thrown CoreError carries a fixed message, not the original — the original rides cause', async () => {
@@ -160,6 +163,45 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
     await expect(rejection).rejects.toBeInstanceOf(LlmUnavailableError);
     await expect(rejection).rejects.toMatchObject({ code: 'LLM_UNAVAILABLE' });
     expect(recordRun.mock.calls[0][0].outcome).toBe('llm_unavailable');
+    // AC-AT-2: the cause is recorded on this failure path too, not only core_error's.
+    expect(recordRun.mock.calls[0][0].errorClass).toBe('Error');
+    expect(recordRun.mock.calls[0][0].errorMessage).toBe('upstream');
+  });
+
+  it('AC-AT-2: a long error message is truncated on the run record', async () => {
+    const longMessage = 'x'.repeat(2000);
+    const { deps, recordRun } = makeDeps(
+      {
+        invoke: async () => {
+          throw new Error(longMessage);
+        },
+      },
+      makeUser(),
+    );
+    const runner = buildConversationRunner(deps);
+
+    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toBeInstanceOf(CoreError);
+    const [[record]] = recordRun.mock.calls;
+    expect(record.errorClass).toBe('Error');
+    expect(record.errorMessage.length).toBeLessThan(longMessage.length);
+  });
+
+  it('AC-AT-2: a non-Error throw still records a class and a message', async () => {
+    const { deps, recordRun } = makeDeps(
+      {
+        invoke: async () => {
+          // eslint-disable-next-line @typescript-eslint/only-throw-error
+          throw 'plain string failure';
+        },
+      },
+      makeUser(),
+    );
+    const runner = buildConversationRunner(deps);
+
+    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toBeInstanceOf(CoreError);
+    const [[record]] = recordRun.mock.calls;
+    expect(record.errorClass).toBeTruthy();
+    expect(record.errorMessage).toContain('plain string failure');
   });
 
   it('D-F: a failed recordRun never masks the original error (still a typed CoreError)', async () => {

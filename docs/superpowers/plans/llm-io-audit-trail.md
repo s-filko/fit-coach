@@ -113,11 +113,11 @@ reading `conversation_turns` *to build a prompt*) and leaves the port's surface 
 **Files:** migration for `conversation_runs` (`error_class`, `error_message`),
 `apps/server/src/infra/db/schema.ts`, `conversation-run.adapter.ts`, `conversation-run.ports.ts`, tests.
 
-- [ ] **Step 1: Tests first** — a throwing graph records the error class and a truncated message on the
+- [x] **Step 1: Tests first** — a throwing graph records the error class and a truncated message on the
   run row; an `ok` run leaves both null.
-- [ ] **Step 2**: generate the migration (`npm run drizzle:generate`), extend the record type, fill it
+- [x] **Step 2**: generate the migration (`npm run drizzle:generate`), extend the record type, fill it
   in the catch block.
-- [ ] **Step 3**: verify — `npm run test:unit`, `RUN_DB_TESTS=1 npm run test:integration`.
+- [x] **Step 3**: verify — `npm run test:unit`, `RUN_DB_TESTS=1 npm run test:integration`.
 
 ### Task 3: Turn order is recoverable (AC-AT-4, closes BUG-029)
 
