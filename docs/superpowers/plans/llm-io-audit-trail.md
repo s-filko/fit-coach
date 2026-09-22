@@ -258,3 +258,125 @@ trusted.
 With Task 4 in place, eval drafts can be built from real requests instead of reconstructed from
 turns — the 2026-09-21 session is the first candidate set (`npm run evals:export -- --since 2026-09-21`,
 then expectations added by hand). Tracked in `docs/BACKLOG.md`.
+
+---
+
+## Review
+
+**2026-09-22 — verdict: BLOCKED.** Four zones ran in parallel on `b87c9a11...74e3b6dd`
+(46 files, ~12.7k insertions). No `- Review:` header line is written: its absence is what
+"not passed" looks like. **23 blocking, 28 advisory, 11 meta.** Every blocking finding was
+checked by the orchestrator for the two things severity requires — a `file:line` and a rule
+that actually says what is claimed. None were demoted. One near-miss worth recording: the
+orchestrator first read `SUPERPOWERS_INTEGRATION.md` rule 7 by its title ("Review precedes
+close-out") and was about to demote eight R4 findings as mis-cited; the rule's full text says
+"All four zones block, documentation included: a durable spec that has drifted from the code
+actively misleads the next agent", so the citations stand.
+
+**Nothing here is fixed on this branch by the reviewer.** The owner decides what happens next.
+
+### Blocking — R1, architectural integrity (1)
+
+1. `apps/server/src/infra/ai/llm-log-handler.ts:217` — **ADR-0013 §8** (line 377) draws this
+   boundary in words: "the module boundary keeps the LLM callback `debug`-only while feeding
+   the run-metrics accumulator". `handleLLMEnd`/`handleLLMError` are now durable writers into
+   `llm_calls`/`prompt_blobs`, and `awaitHandlers = true` (`:148`) puts that write on the
+   synchronous reply path — the precise property the boundary existed to prevent. §8's durable
+   model still enumerates only `conversation_runs`/`conversation_turns`; two new tables sit
+   outside it. **The code is not wrong — the ADR is out of date.** Resolution is an owner-level
+   ADR-0013 §8 amendment, not a code change; `docs/adr/**` is owner-reserved.
+
+### Blocking — R2, duplication (5)
+
+2. `conversation-run.adapter.ts:93` — DRY. Task 1 extracted `readPhase`, but the identical
+   `getState` cast + try/catch + `'chat'` default remains inline at `:249-258` in the same file.
+3. `prune-llm-calls.cli.ts:25` — DRY. Near-verbatim copy of `prune-checkpoints.cli.ts:16`;
+   only the labels, the default source and the dry-run count expression differ.
+4. `llm-log-handler.ts:106` — DRY. A second `classifyError` beside
+   `conversation-run.adapter.ts:61`; both new on this branch, both under `src/infra/ai/`, and the
+   JSDoc concedes the copy while justifying it as "across layers", which they are not.
+5. `llm-call-recorder.ts:47` — DRY. A second `ERROR_MESSAGE_MAX_CHARS = 500` and truncation
+   beside `conversation-run.adapter.ts:58,64-65`: one policy in two places, free to diverge.
+6. `transcript-reader.ts:102` — DRY. The 12-field run-row projection is copy-pasted at `:139`;
+   `loadTurnsAndCalls` was factored out one screen above for exactly this reason.
+
+### Blocking — R3, correctness and proof (5)
+
+7. `drizzle-summary.service.ts:37-47` — **AC-AT-4**. `toSummaryTurnRow` writes a
+   `conversation_turns` row with a `run_id` and **no `seq`**, and `compact.node.ts:260` calls it
+   inside an ordinary auto-compaction run. That run mixes seq'd and NULL-seq rows under one
+   `run_id`, so "per-run monotonic seq used wherever turns are read" does not hold, and
+   `transcript-formatter.ts:196` prints "rows predate AC-AT-4" about a row written today.
+   `schema.ts:104-107` claims the only seq-less cases are pre-migration rows and system notes.
+8. `llm-log-handler.ts:87-98` — **AC-AT-3**. The stored request keeps only `model`, `messages`,
+   `temperature`, `reasoning_effort`, cherry-picked from `invocation_params`. `max_tokens` is
+   sent on every call (`model.factory.ts:31`) and never recorded; likewise `response_format`,
+   `top_p`, `stop`, `tool_choice`. Two profiles differing only in `maxTokens` store byte-identical
+   requests. Against the goal line — "что мы отправляли в точности по апи" — this is the plan's
+   own headline promise, unmet. Uncaught because the one real-model test drives
+   `FakeListChatModel`, whose `invocationParams()` is empty.
+9. `transcript-reader.ts:123-134` — **AC-AT-5**. `fetchRunsForUserWindow`, which backs both
+   `--session` and `--user`, enumerates from `conversation_runs` only. A run whose turns and
+   calls exist but whose run row was never written is invisible through every selector except
+   `--run` — and that is exactly the run AC-AT-1 exists to preserve (`commit.node.ts:99-131`
+   swallows a `recordRun` failure; a process killed mid-run reaches neither path).
+10. `deploy/deploy.sh:61-83` — **SUPERPOWERS rule 2** ("A task without a verification path is
+    not done"). The AC-AT-6 log capture has no test, no shellcheck gate and no recorded run;
+    Task 5's stated command is `npm run test:unit`, which does not touch `deploy.sh`.
+11. `docs/superpowers/plans/llm-io-audit-trail.md:252` — **SUPERPOWERS rule 2**. Task 6 states
+    "a manual run against dev by the orchestrator" and no evidence exists. The CLI wrapper
+    `scripts/print-transcript.ts` is the only AC-AT-5 code with no automated coverage, so that
+    manual run is the whole of its proof.
+
+### Blocking — R4, documentation currency (12)
+
+All twelve are documentation-only; none implies a code change. Rule 7 makes drift blocking.
+
+12. `docs/ARCHITECTURE.md:371` — "the `commit` node writes one row per message" is false; the
+    adapter pre-persists the human row and commit dedupes it. Two writers, one named.
+13. `docs/ARCHITECTURE.md:375` — the storage enumeration lacks `seq`, lacks
+    `error_class`/`error_message`, and omits `llm_calls`/`prompt_blobs` entirely.
+14. `docs/ARCHITECTURE.md:87` — the module tree still labels `llm-log-handler.ts` "debug logging
+    only" and omits every new module this branch added.
+15. `docs/LLM_CORE_REFACTOR_PLAN.md:41` — "`LLMLogHandler` stays `debug`-only" — the second
+    durable place stating retired behaviour.
+16. `docs/adr/0013-llm-core-target-architecture.md:102` — §3.1's memory-tier table names `commit`
+    as the sole transcript writer and has no row for the API-exchange tier this branch created.
+17. `docs/CONTRIBUTING_AI.md:184` — "called by the graph's `commit`/`compact` steps — never from
+    a route": the adapter now calls `appendRunMessages` outside the graph.
+18. `docs/DB_SETUP.md:137,162,95` — the documented DDL has no `seq`, no `error_*`, and no entry
+    for the two new tables. A DDL block that diverges from `schema.ts` is read as law.
+19. `docs/CICD.md:122` — the 14-step deploy flow has nothing between "6. Backup database" and
+    "7. Read VERSION file", where the log capture now lives.
+20. `docs/BUGS.md:1456` — **BUG-029 still reads `Status: Open`** though `seq`, the
+    `(created_at, seq)` ordering and the regression test it demands all shipped.
+21. `docs/LOGGING_GUIDE.md:328` — **SUPERPOWERS rule 1**: the whole audit trail has no durable
+    ID. No `BR-*` for retention (checkpoint pruning has `BR-LLM-005`), no `INV-*` for "every
+    invocation recorded regardless of `LOG_LEVEL`", no ADR for `awaitHandlers = true`. The guide
+    cites plan-scoped `AC-AT-*` eight times, so a durable doc depends on IDs that die at close-out.
+22. `docs/LOGGING_GUIDE.md:333` — process history inside a durable guide ("The plan that started
+    this work assumed… that premise was wrong"; "A first version of this guide claimed…"): a
+    retired claim kept beside its replacement, which `DOCUMENTATION_GUIDE.md:16-19` forbids.
+23. `docs/LOGGING_GUIDE.md:452` — the heading `### Which database it reads (review, 2026-09-22)`
+    stamps a review event into a durable doc's table of contents (Status layer rule 4). The same
+    marker appears in shipped source at `scripts/print-transcript.ts:12`.
+
+### Advisory (28) — not fixed on this branch
+
+Merged across zones; the missing-index finding was raised independently by R1 and R3 and is
+recorded once. Headline items: `llm_calls`, `prompt_blobs` and `conversation_turns` carry no
+`run_id` index while the recorder runs `SELECT max(call_index) … WHERE run_id = $1` on every
+call, now synchronously (R1+R3); `pending` in the log handler has no TTL, so an invocation that
+never ends leaks its 100–250 KB payload for the process lifetime (R3); the `max(seq)` read and
+insert are not transactional (R3); the commit-node dedup drops *every* human row and is correct
+only because `splitEpisode` guarantees one (R3); `llm-call-recorder.integration.test.ts:90`
+builds the payload in the test and then asserts it, so it cannot fail for the reason it names
+(R3); `--run --payloads` parses `--payloads` as the run id (R3); the eval export still omits
+`seq` from its projection, so a consumer that re-sorts is back to the BUG-029 tie (R3);
+`argValue` is a fourth hand-rolled copy (R2); `CICD.md` still presents `drizzle-kit push` as
+live in ten places, pre-existing but directly contradicted by this branch's five migrations (R4);
+the "Forbidden data categories" table forbids logging what `llm_calls` now stores durably, with
+no PII statement covering it (R4).
+
+### Meta (11) — filed in `docs/REVIEW_FINDINGS.md`, not acted on here
+
