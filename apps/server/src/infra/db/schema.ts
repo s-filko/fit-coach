@@ -177,10 +177,17 @@ export const conversationSummaries = pgTable(
 );
 
 // AC-AT-3: a distinct-content-hash-addressed system prompt, stored once and referenced from
-// llm_calls — the training system prompt (~3.5k tokens) repeats in every call of a run otherwise.
+// llm_calls — assemble-context.ts pushes up to six SystemMessages per call (the static rules text,
+// but also the per-profile, per-episode and per-workout blocks, which change on nearly every call),
+// so most blobs are NOT the reusable static one. `content` is nullable since AC-AT-6's blob-prune:
+// once no unpruned llm_calls row still references a hash (via prompt_hashes below), the CONTENT is
+// dropped — never the row (`hash`/`createdAt` survive, so which prompt versions ever existed is
+// still answerable, matching the "keep the metadata" rule this plan already applies to llm_calls
+// itself). A hash whose content was dropped and is later produced again (identical text → identical
+// sha256) gets its content restored by the recorder's upsert — see llm-call-recorder.ts.
 export const promptBlobs = pgTable('prompt_blobs', {
   hash: text('hash').primaryKey(),
-  content: text('content').notNull(),
+  content: text('content'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -192,7 +199,7 @@ export const llmCalls = pgTable('llm_calls', {
   runId: uuid('run_id').notNull(),
   callIndex: integer('call_index').notNull(),
   model: text('model').notNull(),
-  // The request actually sent (messages, tools, temperature, reasoning effort) — the system
+  // The request actually sent (messages, tools, temperature, reasoning effort) — every system
   // message's `content` is replaced with `{ contentHash }` pointing at prompt_blobs. Nullable since
   // AC-AT-6: the prune drops the payload after LLM_CALLS_RETENTION_DAYS, keeping every other column
   // (this row's metadata) forever — it is never absent for a fresh, unpruned call.
@@ -200,6 +207,10 @@ export const llmCalls = pgTable('llm_calls', {
   // Null until the call succeeds, or once the prune has dropped it — a failed-but-unpruned call still
   // has `request` (D-F-style: the cause, not the reply, is missing).
   response: jsonb('response'),
+  // AC-AT-6: every prompt_blobs hash this call's request referenced, written once at record time —
+  // NEVER nulled by the prune (it is metadata: a few short hashes, not the bulky text they point at)
+  // so a blob's liveness stays answerable by a join even after `request` itself is gone.
+  promptHashes: text('prompt_hashes').array(),
   latencyMs: integer('latency_ms').notNull(),
   errorClass: text('error_class'),
   errorMessage: text('error_message'),

@@ -368,30 +368,40 @@ script, as the existing database backup:
 
 Unlike the ephemeral log capture above, `llm_calls` rows are never deleted — only the
 heavy `request`/`response` JSON columns age out. Every other column — `run_id`,
-`call_index`, `model`, `latency_ms`, `error_class`, `error_message`, `created_at` — is
-kept forever, so "this run made this call, on this model, at this time, taking this
-long, and it did or didn't fail" survives even after the payload is gone.
+`call_index`, `model`, `latency_ms`, `error_class`, `error_message`, `created_at`,
+`prompt_hashes` — is kept forever, so "this run made this call, on this model, at this
+time, taking this long, and it did or didn't fail" survives even after the payload is
+gone.
 
 - **What ages out**: `llm_calls.request` and `llm_calls.response` — nulled, not the row.
 - **Window**: `LLM_CALLS_RETENTION_DAYS`, default **30** — a plain integer, days.
   Configured in `apps/server/src/config/index.ts` (`EnvSchema`), documented in
   `apps/server/.env.example`. To change it, set `LLM_CALLS_RETENTION_DAYS=<n>` in the
   environment's real `.env.<env>` file (never `.env.example` itself) and redeploy.
-- **`prompt_blobs` is never pruned by this.** A blob is shared by every call across
-  every run whose system prompt hashed to it — the entire point of AC-AT-3's dedup —
-  and once a row's `request` is nulled it no longer records which hash it referenced,
-  so "is this blob still referenced" can only be answered by scanning every *unpruned*
-  row's `request` for that hash; a blob referenced only by since-pruned rows is
-  indistinguishable from one that was orphaned the moment it was written. A blob's
-  storage cost is one row per distinct prompt *version* (already deduplicated), not one
-  per call, so it doesn't grow with call volume the way `request`/`response` do —
-  retaining every `prompt_blobs` row forever is the safe, cheap choice. See
+- **`prompt_blobs` ages out too, on the same "keep the row, drop the payload" rule —
+  not "never pruned".** A first version of this guide claimed a blob is "one row per
+  distinct prompt version, not per call" and left it alone entirely; that is true only
+  of the one static rules block. `assemble-context.ts` pushes up to six `SystemMessage`s
+  per call — per-profile, per-episode and per-workout blocks that change on nearly every
+  call — and the recorder hashes every one of them into its own blob, so most blobs are
+  NOT reusable across calls the way the static one is. Leaving them all forever would
+  have moved the bulky, ever-changing context OUT of the column being pruned and INTO a
+  table kept permanently — the opposite of retention. The fix: `llm_calls.prompt_hashes`
+  (every hash a call's request referenced) is written once at record time and is NEVER
+  nulled by the prune, so a blob's liveness stays a join away even after `request`
+  itself is gone. Once no row whose `request` is still present references a hash any
+  more, that blob's `content` is nulled — never the row (`hash`/`created_at` survive,
+  so which prompt versions ever existed stays answerable). A blob referenced by both a
+  pruned row and a still-live one keeps its content; sharing a hash never costs the live
+  row its context. Content that comes back later (identical text hashes to the same key)
+  is restored by the recorder's upsert, not left stuck null. See
   `apps/server/src/infra/db/scripts/prune-llm-calls.ts`'s header for the full reasoning.
 - **How to run it**: `npm run db:prune-llm-calls` from `apps/server` — dry-run by
-  default (counts what would be dropped, changes nothing); pass `-- --apply` to
-  actually null the payloads, and `-- --days N` to override the configured window for
-  one run. No in-app scheduler: install it as a nightly cron job on the host, the same
-  operating model as the existing `db:prune-checkpoints`.
+  default (counts what each of the two statements would drop, changes nothing); pass
+  `-- --apply` to actually null the payloads, and `-- --days N` to override the
+  configured window for one run. The `llm_calls` statement always runs before the
+  `prompt_blobs` one — the blob pass depends on it. No in-app scheduler: install it as a
+  nightly cron job on the host, the same operating model as `db:prune-checkpoints`.
 
 ---
 

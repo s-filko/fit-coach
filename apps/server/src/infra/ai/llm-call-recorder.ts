@@ -50,22 +50,35 @@ const ERROR_MESSAGE_MAX_CHARS = 500;
  * AC-AT-3: one `llm_calls` row per call — `call_index` continues from this
  * run's own max (the Task 3 pattern: no in-memory per-run counter, so a
  * shared-singleton caller never needs to track run-scoped state itself).
- * The system message, if any, is stored once per distinct content hash in
- * `prompt_blobs` and referenced, not repeated. Never throws (D-F-style):
- * the caller (a LangChain callback) must never fail the run over this.
+ * EVERY system message (assemble-context.ts pushes up to six — the static
+ * rules text, but also per-profile/per-episode/per-workout blocks that
+ * change on nearly every call) is stored once per distinct content hash in
+ * `prompt_blobs` and referenced, not repeated; their hashes are ALSO written
+ * to this row's own `prompt_hashes` (AC-AT-6), so a blob's liveness stays
+ * answerable after `request` itself is pruned. The insert is an upsert, not
+ * insert-if-absent: AC-AT-6's blob-prune can null a blob's `content` once no
+ * unpruned row references it any more, and identical content later hashing
+ * to the same key must restore it, not leave it stuck null. Never throws
+ * (D-F-style): the caller (a LangChain callback) must never fail the run
+ * over this.
  */
 export const recordLlmCall: RecordLlmCall = async input => {
   const { db } = await import('@infra/db/drizzle');
   const { llmCalls, promptBlobs } = await import('@infra/db/schema');
   const { eq, max } = await import('drizzle-orm');
 
+  const promptHashes: string[] = [];
   const messages = await Promise.all(
     input.request.messages.map(async message => {
       if (message.role !== 'system' || typeof message.content !== 'string') {
         return message;
       }
       const hash = createHash('sha256').update(message.content).digest('hex');
-      await db.insert(promptBlobs).values({ hash, content: message.content }).onConflictDoNothing();
+      promptHashes.push(hash);
+      await db
+        .insert(promptBlobs)
+        .values({ hash, content: message.content })
+        .onConflictDoUpdate({ target: promptBlobs.hash, set: { content: message.content } });
       const { content: _content, ...rest } = message;
       return { ...rest, contentHash: hash };
     }),
@@ -92,6 +105,7 @@ export const recordLlmCall: RecordLlmCall = async input => {
     model: input.model,
     request: { ...input.request, messages },
     response: input.response,
+    promptHashes,
     latencyMs: input.latencyMs,
     errorClass: input.errorClass ?? null,
     errorMessage,
