@@ -1,7 +1,7 @@
 # LLM I/O Audit Trail — Close-out Remediation Implementation Plan
 
-- Status: planned
-- Branch: plan/llm-io-audit-trail (continues on the existing branch — this plan does not create one)
+- Status: in progress
+- Branch: plan/llm-io-audit-trail
 - After: llm-io-audit-trail
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and superpowers:test-driven-development. One plan task per worker session; stop after the task.
