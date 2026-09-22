@@ -166,13 +166,13 @@ read it as an oversight.
 `schema.ts`, `apps/server/src/infra/ai/llm-log-handler.ts` (or a sibling recorder that shares the
 payload construction), the run-context wiring that carries `runId`, tests.
 
-- [ ] **Step 1: Tests first** — one row per model call with the payload actually sent (messages, tools,
+- [x] **Step 1: Tests first** — one row per model call with the payload actually sent (messages, tools,
   temperature, reasoning effort) and the response (text, tool calls, `finish_reason`, usage); two calls
   in one run get indexes 1 and 2 and the same `run_id`; an identical system prompt across calls is
   stored once and referenced; a failing call still records the request and the error.
-- [ ] **Step 2**: implement the recorder. Writing must not fail the run: a recorder error is logged and
+- [x] **Step 2**: implement the recorder. Writing must not fail the run: a recorder error is logged and
   swallowed.
-- [ ] **Step 3**: verify — `npm run test:unit`, `RUN_DB_TESTS=1 npm run test:integration`.
+- [x] **Step 3**: verify — `npm run test:unit`, `RUN_DB_TESTS=1 npm run test:integration`.
 
 ### Task 5: Retention and durable logs (AC-AT-6)
 

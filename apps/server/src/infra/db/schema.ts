@@ -176,6 +176,34 @@ export const conversationSummaries = pgTable(
   },
 );
 
+// AC-AT-3: a distinct-content-hash-addressed system prompt, stored once and referenced from
+// llm_calls — the training system prompt (~3.5k tokens) repeats in every call of a run otherwise.
+export const promptBlobs = pgTable('prompt_blobs', {
+  hash: text('hash').primaryKey(),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// AC-AT-3: one row per model invocation, independent of LOG_LEVEL — run_id is a plain uuid, not a
+// FK, for the same reason as conversation_turns.run_id: the row is written mid-run, before (or
+// without) a conversation_runs row ever existing (D-F: a run that never reaches commit has none).
+export const llmCalls = pgTable('llm_calls', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  runId: uuid('run_id').notNull(),
+  callIndex: integer('call_index').notNull(),
+  model: text('model').notNull(),
+  // The request actually sent (messages, tools, temperature, reasoning effort) — the system
+  // message's `content` is replaced with `{ contentHash }` pointing at prompt_blobs.
+  request: jsonb('request').notNull(),
+  // Null until the call succeeds; a failed call still has `request` (D-F-style: the cause, not the
+  // reply, is missing).
+  response: jsonb('response'),
+  latencyMs: integer('latency_ms').notNull(),
+  errorClass: text('error_class'),
+  errorMessage: text('error_message'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // Enums for user_facts lifecycle (fact-lifecycle plan Task 1, AC-FL-1) — the
 // owner's durability model (2026-09-20). The class bounds themselves live in
 // code: @domain/user/services/fact-lifecycle (FACT_LIFECYCLE_BOUNDS).
