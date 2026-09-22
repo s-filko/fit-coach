@@ -87,14 +87,16 @@ describe('order of the rows of one run is recoverable from the database (BUG-029
     });
   });
 
-  // `orderBy(random())` is deliberate (as-users-grow hardening, 2026-09-22): this plan adds
+  // `orderBy(ctid)` is deliberate (as-users-grow hardening, 2026-09-22): this plan adds
   // idx_conversation_turns_run_id, so an equality filter on run_id can now be served by a Bitmap
-  // Heap Scan instead of a Seq Scan — the "fixture soundness 1" check below stopped being able to
-  // assume physical (heap/page) order differs from produced order, since a scan strategy is a
-  // planner choice, not a guarantee, and this table is small enough that a Bitmap Heap Scan's
-  // single-page tuple order can coincide with produced order by accident. Forcing genuine
-  // randomness here removes the dependency on which scan Postgres happens to pick.
-  const rowsOfRun = () => db.select().from(conversationTurns).where(eq(conversationTurns.runId, runId)).orderBy(sql`random()`);
+  // Heap Scan instead of a Seq Scan, and the whole point of this test is to read PHYSICAL
+  // (heap/page) order deliberately — not whatever order a scan happens to hand back. Which scan
+  // Postgres picks is a planner choice, not a guarantee, so an unordered `SELECT` can no longer be
+  // trusted to reflect tuple layout. `ctid` is Postgres's physical tuple location, so ordering by it
+  // asks for heap order directly instead of hoping a scan strategy produces it. Fixture soundness 1
+  // below proves the rewrite loop actually moved the tuples: it only holds if `rowsOfRun()` is truly
+  // reading physical order.
+  const rowsOfRun = () => db.select().from(conversationTurns).where(eq(conversationTurns.runId, runId)).orderBy(sql`ctid`);
 
   const readByReader = async (): Promise<string[]> => {
     const run = (await fetchRunsSince(new Date(0), 50)).find(r => r.runId === runId);
