@@ -32,6 +32,21 @@ all.
 - Volume to budget for: 20–60 k input tokens per run ≈ 100–250 KB of JSON; one training session
   ≈ 20 runs ≈ 2–5 MB; the system prompt (3 495 tokens in the training phase) repeats in every call.
 
+**Red tests already on `dev` (from `session-2026-09-21-repro`, merged 2026-09-22).** Two of that
+plan's six failing tests belong to this plan and *are* its Step 1 — do not write a second test for a
+defect one of them already catches (owner rule: no duplication).
+
+| Plan task | Red test | Repro AC | Bug |
+|---|---|---|---|
+| Task 1 | `tests/integration/scenarios/failed-run-transcript.repro.test.ts` | AC-LSR-6 | BUG-022 (loss half) |
+| Task 3 | `tests/integration/services/transcript-order.repro.test.ts` | AC-LSR-5 | BUG-029 |
+
+Both live outside the default suites by design; run them with
+`RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch='**/tests/integration/**/*.repro.test.ts'`.
+When the fix turns one green, **rename it** to `<name>.integration.test.ts` in the same directory so
+it joins `npm run test:integration`, and drop the `REPRODUCTION (RED)` header sentence about being
+promoted. This paragraph is the single statement of the rename rule; Tasks 1 and 3 point here.
+
 **Acceptance criteria:**
 - **AC-AT-1** — the inbound user message is persisted **before** the graph runs; a run that throws at
   any point still leaves that message in `conversation_turns`, exactly once (no duplicate when the
@@ -70,8 +85,11 @@ all.
 `apps/server/src/infra/conversation/drizzle-transcript.service.ts`,
 `apps/server/src/domain/conversation/ports/*`, their tests.
 
-- [ ] **Step 1: Tests first** — a graph that throws still leaves exactly one `human` turn row for the
-  run; a successful run leaves exactly one (not two) for the same message.
+- [ ] **Step 1: the red test already exists** — `failed-run-transcript.repro.test.ts` (§ Red tests
+  already on `dev`) proves the loss: a run whose model call throws leaves no `human` row. **Extend it,
+  do not duplicate it**, with the *exactly-once* half of AC-AT-1 — assert the **count** of matching
+  `human` rows is 1 (it asserts `toContain` today), for both the successful and the failed run, so a
+  commit node that re-writes the message fails the test.
 - [ ] **Step 2**: persist the inbound message before `graph.invoke`, and stop the commit node from
   re-writing it (the run id makes the row identifiable).
 - [ ] **Step 3**: verify — `cd apps/server && npm run test:unit` and
@@ -93,8 +111,11 @@ all.
 **Files:** migration for `conversation_turns` (`seq`), `schema.ts`,
 `drizzle-transcript.service.ts` (`toTurnRows`), `apps/server/evals/lib/export-query.ts`, tests.
 
-- [ ] **Step 1: Tests first** — `toTurnRows` numbers rows in message order; reading a run's rows back
-  returns the order they were produced in; the eval export orders by `(created_at, seq)`.
+- [ ] **Step 1: the red test already exists** — `transcript-order.repro.test.ts` (§ Red tests already
+  on `dev`) proves the order is unrecoverable through the real reader `fetchRunsSince`, which *is* the
+  eval export's query, after the rows are physically reordered. **Extend it, do not duplicate it**,
+  with the one assertion `seq` newly makes possible: `toTurnRows` numbers its rows `1..n` in message
+  order.
 - [ ] **Step 2**: add the column and the ordering.
 - [ ] **Step 3**: verify — `npm run test:unit`, `RUN_DB_TESTS=1 npm run test:integration`.
 
