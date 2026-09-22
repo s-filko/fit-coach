@@ -174,6 +174,33 @@ payload construction), the run-context wiring that carries `runId`, tests.
   swallowed.
 - [x] **Step 3**: verify — `npm run test:unit`, `RUN_DB_TESTS=1 npm run test:integration`.
 
+**Recorded at Task 4 review (orchestrator, 2026-09-22). Two rounds, and the second one matters
+beyond this plan.**
+- *Round 1 — the seam was untested.* The task shipped with the handler proven against an injected
+  recorder and the recorder proven when called directly, but nothing exercising the chain that has to
+  work in production: real model call → LangChain callback → handler → recorder → row. The scenario
+  harness cannot cover it — `scripted-model.ts` mocks `model.factory` with a plain object carrying an
+  `invoke` method, not a `BaseChatModel`, so it emits no callbacks at all. Closed with
+  `llm-invocation-wiring.integration.test.ts` driving `FakeListChatModel` (a real `BaseChatModel` from
+  `@langchain/core/utils/testing`, no network) through the real gateway and asserting the written row.
+- *Round 2 — **@langchain/core does not await callback handlers by default**, and the first fix made
+  the test tolerate that instead of fixing it.* `callbacks/base.js:62` sets
+  `awaitHandlers = getEnvironmentVariable("LANGCHAIN_CALLBACKS_BACKGROUND") === "false"`, the variable
+  is set nowhere in this repo, and nothing in `src/` calls `awaitAllCallbacks`. So the `llm_calls`
+  insert was fire-and-forget: it could land after the reply and after the `conversation_runs` row, or
+  never — `deploy.sh` stops the containers and whatever sat in that queue was gone, silently. AC-AT-3
+  read "every model invocation is stored"; the shipped behaviour was "probably stored shortly
+  afterwards". Fixed at the source in `85d0942f` — `LLMLogHandler` sets `this.awaitHandlers = true`
+  (the per-handler override, deliberately not the env var, which would bind every future handler), and
+  the test's `awaitAllCallbacks()` drain was removed, because a drained test stays green when the fix
+  is reverted. Proven in both directions, by the worker and independently by the orchestrator:
+  override in place → the row exists the moment `gateway.chat()` resolves; override removed → the same
+  test fails with the row missing.
+  **Do not revert `awaitHandlers = true` for latency.** The cost is one insert on a call that takes
+  tens of seconds, the recorder swallows its own errors so it cannot fail a reply, and the thing being
+  bought is that a record of an API call is never lost to a restart. This belongs in a durable spec at
+  close-out, not only here.
+
 ### Task 5: Retention and durable logs (AC-AT-6)
 
 **Files:** config (`LLM_CALLS_RETENTION_DAYS` or equivalent), a prune path, `.env.example`,
