@@ -12,8 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-22 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `llm-io-audit-trail-closeout.md` — LLM I/O Audit Trail — Close-out Remediation Implementation Plan (branch: `plan/llm-io-audit-trail`, last commit 2026-09-22)
-- `llm-io-audit-trail.md` — LLM I/O Audit Trail — Nothing the User Wrote, the Model Answered, or the API Received Is Lost Implementation Plan (branch: `plan/llm-io-audit-trail`, last commit 2026-09-22)
+— none —
 
 **Planned**
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
@@ -24,6 +23,8 @@ _Generated 2026-09-22 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `chat-continuity.md` — Chat Continuity — Compaction Keeps the Recent Conversation, the Reply Answers the Latest Message Implementation Plan
 - `course-check-and-constraints.md` — Course Check and Constraint Handling Implementation Plan
 - `fact-lifecycle.md` — Fact Lifecycle — Storage, Conversational Tools, Summariser Operations Implementation Plan
+- `llm-io-audit-trail-closeout.md` — LLM I/O Audit Trail — Close-out Remediation Implementation Plan
+- `llm-io-audit-trail.md` — LLM I/O Audit Trail — Nothing the User Wrote, the Model Answered, or the API Received Is Lost Implementation Plan
 - `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
 - `ports-layout-consistency.md` — Ports Layout Consistency Implementation Plan
@@ -219,42 +220,54 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
-## Handoff (orchestrator shift, 2026-09-22 — second relay)
+## Handoff (orchestrator shift, 2026-09-22 — third relay)
 
-**`llm-io-audit-trail` is code-complete and does not merge yet.** Branch
-`plan/llm-io-audit-trail`, 33 commits, worktree
-`/Users/filko/orca/workspaces/fit_coach/llm-io-audit-trail`, tree clean, no live workers.
-All four suites green (unit 126/1202, integration 33/555, scenarios 9/343); the repro glob
-stays at 2 suites / 4 failures and must — those reds are BUG-027 and BUG-030, other plans.
+**`llm-io-audit-trail` and `llm-io-audit-trail-closeout` are both `done` and merged into `dev`**
+(merge commit on `dev`, branch `plan/llm-io-audit-trail` still present, worktree
+`/Users/filko/orca/workspaces/fit_coach/llm-io-audit-trail` still present, no live workers —
+cleanup pending the deferred checks below). Review header on both plans:
+`2026-09-22 | clean | R1,R2,R3,R4`. All four suites green at merge (unit 126/1203,
+integration 33/555, scenarios 9/343); the repro glob stays at 2 suites / 4 failures and must —
+those reds are BUG-027 and BUG-030, other plans.
 
-**Close-out review ran three times: 23 blocking, then 16, then 15.** Roughly half of each later
-round were defects introduced by the previous round's own fixes. Rounds 1–3 are recorded in the
-plan's `## Review`; **read findings there, never from a summary** — round 3 could only check
-round 2's fixes against a paraphrase, because round 2 had not been written down, and eleven code
-comments citing "close-out R2 finding N" pointed at nothing until that section existed.
+**Two verifications are still owed on dev**, recorded in the plan's `## Deferred` with their
+exact commands: the `deploy.sh` log capture — **two** dev deploys, because the first runs the
+previous script — then confirm `logs/dev/*.log` holds pre-recreate output; and one live
+`print-transcript --run <id> --payloads` against a real dev run. Neither could be closed on the
+branch; both are the orchestrator's.
 
-**Next: `llm-io-audit-trail-closeout.md`** — the fifteen open findings, grouped by what closure
-actually costs, which is the useful fact: **one** changes behaviour and needs a failing test first
-(the parameter allow-list misses `max_completion_tokens`, which LangChain sends for reasoning
-models, and the guard is pinned to one model so it stays green); **three** are code with no
-behaviour change, proven by the existing suites; **eleven are text**, where the closure check is
-re-reading the section and grepping inbound references, not a test. Task C is the orchestrator's,
-Task D never delegated.
+**What the close-out cost, and why it is worth writing down.** Four review rounds plus three
+re-runs: 23 blocking, 16, 15, then 2, then 1. Every round after the first was dominated by
+defects the previous round's own fixes had introduced, including two of mine as orchestrator —
+a citation swapped onto a rule that governs a different mechanism, and a verification grep
+(`docs/ apps/`) narrower than the claim it proved, which left the last plan-scoped id in
+`deploy/`. Both were caught by a re-run of the zone that had raised the original finding, not by
+the fix's author. The lesson is filed as rules in `docs/REVIEW_FINDINGS.md` (grep from the repo
+root; an id covering two mechanisms needs two targets), and the practice that worked is: after a
+fix, re-run the zone that found it, with the fix commit named as the highest-risk object.
 
-**Two verifications are deferred, not open** — their evidence exists only after merge, and they
-are recorded with owner and command in the plan's `## Deferred`: the `deploy.sh` log capture
-(needs *two* dev deploys, since the first runs the previous script) and a live `print-transcript`
-run. The `close-out-review` skill gained that state, plus a statement of what a fix owes, in
-`abc39d9c` — three rounds of evidence went into two small edits, deliberately not organised
-around "rounds", which is a shape that only exists when a review keeps failing.
+**Durable ids minted 2026-09-22 with the owner's approval** (ADR-0013 §8): **INV-LLM-009** (the
+inbound message and a failed run's cause survive a run that never reaches `commit`) and
+**INV-LLM-010** (`run_id` + monotonic `seq` from the one policy in `infra/conversation/seq.ts`;
+a writer that cannot number writes `run_id` NULL). They replaced the plan-scoped `AC-AT-*` ids
+in ~130 code citations. `AC-AT-*` now appears nowhere outside the two plan files, `BUGS.md` and
+`REVIEW_FINDINGS.md` — check it from the repository root, not from `docs/ apps/`.
 
-**Owner rules that shaped this shift:** ask one question at a time; do not stop and wait when
-standing rules already settle the matter; a fix closes the class, not the cited line; and when a
-skill is improved, improve it for every future review, not for the run that hurt.
-
-**Open, not blocking** (carried from earlier shifts): AC-FL-3's live half — a closed fact not
-resurrected by compacting an OLDER episode — is pinned by a scenario test but never reproduced
-live; worth one check when a plan next touches compaction.
+**Open, not blocking:**
+- Pre-P4 law still stands in docs this branch did not touch: the retired "sliding window, 20
+  turns" model is stated in `API_SPEC.md:140`, `CONVERSATION_CONTEXT_ARCHITECTURE.md:126`,
+  `FEAT-0003`, `FEAT-0006:252` and `FEAT-0009:11`. `docs/domain/conversation.spec.md` says the
+  P7 rewrite owns this; nobody has decided whether it waits that long. Not raised to the owner
+  as a backlog entry yet.
+- Two advisories from round 4, unfixed by the zone contract: `print-transcript.ts:41` is a
+  fourth hand-rolled flag parser (widen `BACKLOG.md`'s "Evals tooling duplication trio" entry
+  rather than opening a new one), and Task 2's flagged owner decision — whether `compact()`
+  records its own failed run, or manual compaction is declared outside the run log — was never
+  made and is written down nowhere; `conversation-run.adapter.ts:228` still only logs and
+  rethrows. Only the run-level cause is lost: the model call itself is in `llm_calls`.
+- Carried from earlier shifts: AC-FL-3's live half — a closed fact not resurrected by compacting
+  an OLDER episode — is pinned by a scenario test but never reproduced live; worth one check
+  when a plan next touches compaction.
 
 - **Test DB:** `fitcoach_test` (local container `fitcoach-db`). Never run tests in two worktrees
   against it at once; workers never touch a DB by hand.
