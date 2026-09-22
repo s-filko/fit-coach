@@ -71,10 +71,17 @@ function messageToOpenAI(msg: BaseMessage): OpenAIMessage {
 // convention `reasoningEffort` already uses. None of these is ever a credential — invocation_params
 // is LangChain's per-call request shape, never the client's transport config (see the credentials
 // test) — so copying whichever of these are present is as safe as the fields already copied above.
+//
+// `maxTokens` has two possible wire keys, never both at once: `@langchain/openai`
+// completions.js:59 (isReasoningModel, utils/misc.js:5) sends `max_completion_tokens` for `o`-series
+// / `gpt-5*` models and `max_tokens` for every other model (round 3, behaviour 1). The same file's
+// only other model-conditional key is `reasoning_effort` (completions.js:58), already covered by
+// BASE_RECORDED_INVOCATION_PARAM_KEYS below.
 type ExtraInvocationField = 'maxTokens' | 'responseFormat' | 'topP' | 'stop' | 'toolChoice';
 
 export const EXTRA_INVOCATION_PARAM_FIELDS: ReadonlyArray<[ExtraInvocationField, string]> = [
   ['maxTokens', 'max_tokens'],
+  ['maxTokens', 'max_completion_tokens'],
   ['responseFormat', 'response_format'],
   ['topP', 'top_p'],
   ['stop', 'stop'],

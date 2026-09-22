@@ -54,14 +54,14 @@ cannot be closed by a test:
 
 **Files:** `apps/server/src/infra/ai/llm-log-handler.ts`, its unit test.
 
-- [ ] **Step 1: test first.** The guard at `llm-log-handler.unit.test.ts` pins one model, so it
+- [x] **Step 1: test first.** The guard at `llm-log-handler.unit.test.ts` pins one model, so it
   can only see keys LangChain defines for that model. Drive it over more than one — at minimum
   the configured model and a reasoning model (`o`-series or `gpt-5*`), whose
   `invocationParams()` differs. Confirm it fails before the fix.
-- [ ] **Step 2:** `@langchain/openai` `completions.js:59` sets `max_completion_tokens` instead of
+- [x] **Step 2:** `@langchain/openai` `completions.js:59` sets `max_completion_tokens` instead of
   `max_tokens` when `isReasoningModel(model)` (`utils/misc.js:5`). Record it. Check the same
   file for any other model-conditional parameter while you are there — close the class.
-- [ ] **Step 3:** the four suites.
+- [x] **Step 3:** the four suites.
 
 ### Task B: Remove what the round-2 fixes duplicated (AC-CO-2)
 

@@ -161,44 +161,52 @@ describe('LLMLogHandler — logging (metrics live in the collector) and the AC-A
     });
   });
 
-  it('close-out R2 finding 7 (round 2): the whitelist is self-alerting — a new invocation_params key fails the build, naming it', () => {
-    // Mirrors model.factory.ts's real construction shape (apiKey, model, temperature, maxTokens,
-    // configuration.baseURL, modelKwargs.reasoning_effort), plus every other dimension this repo
-    // currently records, all set at once so every one of them shows up as a DEFINED key on
-    // invocationParams() — a key LangChain leaves unset never reaches this accounting, since only
-    // what a call could actually send needs a decision.
-    const model = new ChatOpenAI({
-      apiKey: 'sk-test',
-      model: 'gpt-4o-mini',
-      temperature: 0.7,
-      maxTokens: 500,
-      topP: 0.9,
-      configuration: { baseURL: 'https://example.invalid/v1' },
-      modelKwargs: { reasoning_effort: 'low', response_format: { type: 'json_object' } },
-    });
-    const invocationParams = model.invocationParams({
-      tools: [{ type: 'function', function: { name: 'log_set', parameters: {} } }],
-      tool_choice: 'auto',
-      stop: ['STOP'],
-    } as never) as Record<string, unknown>;
+  // round 3, behaviour 1 (llm-io-audit-trail.md § Review): pinned to 'gpt-4o-mini' alone, this
+  // guard can only ever see the keys LangChain defines for a non-reasoning model. It must also
+  // run against a reasoning model (`o`-series / `gpt-5*`) — completions.js:59 sends
+  // `max_completion_tokens` instead of `max_tokens` there (isReasoningModel, utils/misc.js:5),
+  // a second invocation_params key the whitelist never accounted for.
+  it.each(['gpt-4o-mini', 'o3-mini'])(
+    'close-out R2 finding 7 (round 2), driven over %s (round 3, behaviour 1): the whitelist is self-alerting — a new invocation_params key fails the build, naming it',
+    model => {
+      // Mirrors model.factory.ts's real construction shape (apiKey, model, temperature, maxTokens,
+      // configuration.baseURL, modelKwargs.reasoning_effort), plus every other dimension this repo
+      // currently records, all set at once so every one of them shows up as a DEFINED key on
+      // invocationParams() — a key LangChain leaves unset never reaches this accounting, since only
+      // what a call could actually send needs a decision.
+      const chatModel = new ChatOpenAI({
+        apiKey: 'sk-test',
+        model,
+        temperature: 0.7,
+        maxTokens: 500,
+        topP: 0.9,
+        configuration: { baseURL: 'https://example.invalid/v1' },
+        modelKwargs: { reasoning_effort: 'low', response_format: { type: 'json_object' } },
+      });
+      const invocationParams = chatModel.invocationParams({
+        tools: [{ type: 'function', function: { name: 'log_set', parameters: {} } }],
+        tool_choice: 'auto',
+        stop: ['STOP'],
+      } as never) as Record<string, unknown>;
 
-    const definedKeys = Object.entries(invocationParams)
-      .filter(([, value]) => value !== undefined)
-      .map(([key]) => key);
-    const recordedKeys = new Set([
-      ...BASE_RECORDED_INVOCATION_PARAM_KEYS,
-      ...EXTRA_INVOCATION_PARAM_FIELDS.map(([, invocationKey]) => invocationKey),
-    ]);
-    const unaccounted = definedKeys.filter(
-      key => !recordedKeys.has(key) && !NEVER_RECORD_INVOCATION_PARAM_KEYS.has(key),
-    );
-
-    if (unaccounted.length > 0) {
-      throw new Error(
-        `buildReplayPayload does not account for invocation_params key(s): ${unaccounted.join(', ')}. ` +
-          'Add each to EXTRA_INVOCATION_PARAM_FIELDS in llm-log-handler.ts to record it, or to ' +
-          'NEVER_RECORD_INVOCATION_PARAM_KEYS with a reason if it must never be stored.',
+      const definedKeys = Object.entries(invocationParams)
+        .filter(([, value]) => value !== undefined)
+        .map(([key]) => key);
+      const recordedKeys = new Set([
+        ...BASE_RECORDED_INVOCATION_PARAM_KEYS,
+        ...EXTRA_INVOCATION_PARAM_FIELDS.map(([, invocationKey]) => invocationKey),
+      ]);
+      const unaccounted = definedKeys.filter(
+        key => !recordedKeys.has(key) && !NEVER_RECORD_INVOCATION_PARAM_KEYS.has(key),
       );
-    }
-  });
+
+      if (unaccounted.length > 0) {
+        throw new Error(
+          `buildReplayPayload does not account for invocation_params key(s): ${unaccounted.join(', ')} (model ${model}). ` +
+            'Add each to EXTRA_INVOCATION_PARAM_FIELDS in llm-log-handler.ts to record it, or to ' +
+            'NEVER_RECORD_INVOCATION_PARAM_KEYS with a reason if it must never be stored.',
+        );
+      }
+    },
+  );
 });
