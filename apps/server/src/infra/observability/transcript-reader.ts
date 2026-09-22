@@ -58,8 +58,8 @@ export interface RunTranscript {
 
 /**
  * The 12-field `conversation_runs` row → `RunSummary` projection — one place, used by both the
- * single-run and the windowed fetch below (close-out R2 finding 5; `loadTurnsAndCalls` above was
- * factored out for exactly the same reason).
+ * single-run and the windowed fetch below. Two copies of a 12-field projection drift field by
+ * field; `loadTurnsAndCalls` above is shared for the same reason.
  */
 function toRunSummary(runRow: typeof conversationRuns.$inferSelect): RunSummary {
   return {
@@ -132,7 +132,7 @@ function transcriptTimestamp(rt: Pick<RunTranscript, 'run' | 'turns'>): Date {
 
 /**
  * Every run of `userId` active in `[since, until]`, oldest first — including a run whose
- * `conversation_runs` row was never written (close-out R2 finding 8: `commit.node.ts:99-131`
+ * `conversation_runs` row was never written (`commit.node.ts:99-131`
  * swallows a `recordRun` failure, and a process killed before that point reaches neither path;
  * AC-AT-1 still guarantees the inbound message was persisted, keyed by `run_id`, before the graph
  * ran). Such a run is discovered from `conversation_turns` instead — the only one of the three

@@ -1,5 +1,5 @@
 /**
- * AC-AT-5 review (2026-09-22): `print-transcript` picked a database silently — `.env` vs `.env.test`
+ * AC-AT-5: `print-transcript` used to pick a database silently — `.env` vs `.env.test`
  * vs `.env.dev` look identical until a query fails with a raw Postgres error naming a column that
  * does exist, just not in whichever database this happened to open. Two small, DB-free helpers close
  * that: which database a connection actually points at, printed unconditionally so nobody mistakes

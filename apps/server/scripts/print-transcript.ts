@@ -7,9 +7,10 @@
  *      npm run print-transcript -- --user <userId> --since <ISO> --until <ISO> [--payloads] [--env-file <path>]
  *
  * `--payloads` resolves the request/response actually sent — off by default, since a run's request
- * can carry the whole conversation history (AC-AT-6's own volume note: 100–250 KB per run).
+ * can carry the whole conversation history (BR-LLM-011 measures ~150 KB per run across its 2–3
+ * model calls).
  *
- * `--env-file <path>` picks which environment to read (review, 2026-09-22): the npm script wraps
+ * `--env-file <path>` picks which environment to read: the npm script wraps
  * this in `tsx --env-file-if-exists=.env`, so with no flag it reads whatever `.env` already means —
  * unchanged default behaviour for anyone used to it. `NODE_ENV=test` alone does NOT change that:
  * tsx's own `--env-file` is a fixed CLI flag, evaluated before this file's code ever runs, so setting

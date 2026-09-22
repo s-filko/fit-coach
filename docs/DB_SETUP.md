@@ -155,10 +155,10 @@ CREATE INDEX idx_conversation_turns_user_phase_created
 CREATE INDEX idx_conversation_turns_run_id ON conversation_turns(run_id);
 ```
 
-**Purpose**: Stores all conversation dialogue for context management.
+**Purpose**: The durable record of everything said — read by humans and by the transcript tooling, never by the prompt.
 - **Append-only**: Turns are never updated, only inserted
-- **Phase isolation**: Each phase has separate conversation context
-- **Sliding window**: Queries use LIMIT to load recent turns (default 20)
+- **Not the prompt's history**: since P4 the dialogue the model sees comes from the checkpointed `messages` channel; no node reads this table to build a prompt (ADR-0013 INV-LLM-001). The pre-P4 laws this block used to state — per-phase context isolation and a sliding window of the last 20 turns — were retired with that refactor; `phase` survives as an analytics column
+- **Ordered per run**: rows belonging to a run carry its `run_id` and a `seq` number (`infra/conversation/seq.ts`); only pre-migration rows and rows with no run (a `clearContext` `system_note`) have neither
 - **Cascade delete**: All conversation history deleted when user removed
 
 #### conversation_runs

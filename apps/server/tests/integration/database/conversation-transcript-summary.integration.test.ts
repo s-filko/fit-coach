@@ -81,7 +81,7 @@ describe('DrizzleTranscriptService / DrizzleSummaryService – integration', () 
     const mirrored = turnRows.filter(r => r.kind === 'summary');
     expect(mirrored).toHaveLength(1);
     expect(mirrored[0]).toMatchObject({ role: 'summary', content: 'plan_creation (today): plan discussed', payload: structured });
-    // Close-out R2 finding 6: this run_id already has 5 seq'd rows (the appendRunMessages test
+    // AC-AT-4: this run_id already has 5 seq'd rows (the appendRunMessages test
     // above, same runId) — the mirrored summary row must continue that SAME run's seq sequence,
     // never leave it null, or a compacting run ends up with a mix of seq'd and seq-less rows.
     expect(mirrored[0]?.runId).toBe('11111111-1111-4111-8111-111111111110');

@@ -128,7 +128,7 @@ describe('order of the rows of one run is recoverable from the database (BUG-029
 });
 
 /**
- * AC-AT-4 review fix (2026-09-22): `fetchRunsSince`'s turns query spans every run since the cutoff
+ * AC-AT-4, the cross-run half: `fetchRunsSince`'s turns query spans every run since the cutoff
  * and is capped by `limit * 4`, THEN bucketed per run — it is not a single-run read. Ordering that
  * shared pool by `seq` first (nulls last in ASC) sorts every pre-migration row — no `seq` at all —
  * behind every seq'd row, so a truncating LIMIT drops old, seq-less runs before it touches any newer
@@ -136,7 +136,7 @@ describe('order of the rows of one run is recoverable from the database (BUG-029
  * tiebreak within a tied timestamp. The single-run test above cannot see this — it never lets the
  * LIMIT bite across more than one run.
  */
-describe('fetchRunsSince orders whole runs oldest-first, not by a shared-pool seq tiebreak (AC-AT-4 review fix)', () => {
+describe('fetchRunsSince orders whole runs oldest-first, not by a shared-pool seq tiebreak (AC-AT-4)', () => {
   const SINCE = new Date('2099-06-01T00:00:00.000Z');
   const at = (offsetMs: number): Date => new Date(SINCE.getTime() + offsetMs);
 

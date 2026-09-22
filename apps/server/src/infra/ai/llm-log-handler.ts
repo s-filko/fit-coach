@@ -64,7 +64,7 @@ function messageToOpenAI(msg: BaseMessage): RecordedRequestMessage {
   return base;
 }
 
-// Close-out R2 finding 7: `invocation_params` fields beyond model/temperature/tools/reasoning_effort
+// INV-LLM-008's allow-list: `invocation_params` fields beyond model/temperature/tools/reasoning_effort
 // that a profile or call may set and that must be stored, mapped snake_case → the same camelCase
 // convention `reasoningEffort` already uses. None of these is ever a credential — invocation_params
 // is LangChain's per-call request shape, never the client's transport config (see the credentials
@@ -72,7 +72,7 @@ function messageToOpenAI(msg: BaseMessage): RecordedRequestMessage {
 //
 // `maxTokens` has two possible wire keys, never both at once: `@langchain/openai`
 // completions.js:59 (isReasoningModel, utils/misc.js:5) sends `max_completion_tokens` for `o`-series
-// / `gpt-5*` models and `max_tokens` for every other model (round 3, behaviour 1). The same file's
+// / `gpt-5*` models and `max_tokens` for every other model. The same file's
 // only other model-conditional key is `reasoning_effort` (completions.js:58), already covered by
 // BASE_RECORDED_INVOCATION_PARAM_KEYS below.
 type ExtraInvocationField = 'maxTokens' | 'responseFormat' | 'topP' | 'stop' | 'toolChoice';
@@ -86,7 +86,7 @@ export const EXTRA_INVOCATION_PARAM_FIELDS: ReadonlyArray<[ExtraInvocationField,
   ['toolChoice', 'tool_choice'],
 ];
 
-// Close-out R2 finding 7 (round 2): `model`/`temperature`/`tools`/`reasoning_effort` are recorded
+// `model`/`temperature`/`tools`/`reasoning_effort` are recorded
 // too, but by the bespoke logic below (`tools` in particular comes from `options`, not
 // `invocation_params`, though the two carry the same content) rather than the EXTRA_ table above.
 // Listed here so the guard test (llm-log-handler.unit.test.ts) can compute full invocation_params

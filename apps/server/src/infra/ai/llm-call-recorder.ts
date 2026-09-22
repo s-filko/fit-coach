@@ -21,9 +21,9 @@ export interface RecordLlmCallRequest {
   temperature?: unknown;
   tools?: unknown[];
   reasoningEffort?: unknown;
-  // Close-out R2 finding 7: the request must record what was actually sent, not a hand-picked
-  // subset — these are the other invocation_params LangChain builds per call, sent whenever the
-  // profile/call sets them (never fabricated, never a credential).
+  // INV-LLM-008: the stored request is what was actually sent, not a hand-picked subset — these
+  // are the other invocation_params LangChain builds per call, recorded whenever the profile/call
+  // sets them (never fabricated, never a credential).
   maxTokens?: unknown;
   responseFormat?: unknown;
   topP?: unknown;

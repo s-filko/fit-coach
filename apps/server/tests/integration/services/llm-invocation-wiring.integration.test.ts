@@ -1,5 +1,5 @@
 /**
- * AC-AT-3 review fix (2026-09-22): every earlier test for the record either injected the recorder
+ * AC-AT-3, end to end: every other test for the record either injects the recorder
  * (llm-log-handler.unit.test.ts, DB-free by design) or called `recordLlmCall` directly
  * (llm-call-recorder.integration.test.ts) — neither exercises the actual chain a production call
  * makes: a real LangChain chat model → its own emitted callbacks → LLMLogHandler (bound at

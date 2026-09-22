@@ -115,7 +115,7 @@ describe('LLMLogHandler — logging (metrics live in the collector) and the AC-A
     expect(JSON.stringify(model.apiKey)).toContain(SECRET); // fixture soundness: the key really is set on the model
   });
 
-  it('close-out R2 finding 7: records the full set of parameters actually sent, not a hand-picked subset', () => {
+  it('INV-LLM-008: records the full set of parameters actually sent, not a hand-picked subset', () => {
     // Two profiles differing ONLY in maxTokens — a hand-picked extraction (model/messages/
     // temperature/reasoningEffort) stores byte-identical payloads for both, silently losing which
     // one a call actually used.
@@ -161,13 +161,13 @@ describe('LLMLogHandler — logging (metrics live in the collector) and the AC-A
     });
   });
 
-  // round 3, behaviour 1 (llm-io-audit-trail.md § Review): pinned to 'gpt-4o-mini' alone, this
-  // guard can only ever see the keys LangChain defines for a non-reasoning model. It must also
-  // run against a reasoning model (`o`-series / `gpt-5*`) — completions.js:59 sends
-  // `max_completion_tokens` instead of `max_tokens` there (isReasoningModel, utils/misc.js:5),
-  // a second invocation_params key the whitelist never accounted for.
+  // Pinned to one model, this guard can only ever see the keys LangChain defines for that model —
+  // which is how `max_completion_tokens` stayed unaccounted for while the guard was green:
+  // completions.js:59 sends it instead of `max_tokens` for a reasoning model (isReasoningModel,
+  // utils/misc.js:5). INV-LLM-008 promises the allow-list holds for every model the product can
+  // run, so the guard runs over both classes.
   it.each(['gpt-4o-mini', 'o3-mini'])(
-    'close-out R2 finding 7 (round 2), driven over %s (round 3, behaviour 1): the whitelist is self-alerting — a new invocation_params key fails the build, naming it',
+    'INV-LLM-008, over %s: the whitelist is self-alerting — a new invocation_params key fails the build, naming it',
     model => {
       // Mirrors model.factory.ts's real construction shape (apiKey, model, temperature, maxTokens,
       // configuration.baseURL, modelKwargs.reasoning_effort), plus every other dimension this repo

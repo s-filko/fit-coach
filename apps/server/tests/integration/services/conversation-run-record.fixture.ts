@@ -3,7 +3,7 @@ import type { ConversationRunRecord } from '@domain/conversation/ports';
 /**
  * The fields every `ConversationRunRecord` literal in this directory's tests sets identically —
  * `phaseIn`/`model`/`tokensIn`/`tokensOut`/`latencyMs`/`outcome` vary per scenario, `runId`/`userId`
- * per run; everything else here does not (round 3, code finding 3).
+ * per run; everything else here does not.
  */
 export const BASE_CONVERSATION_RUN_RECORD: Pick<
   ConversationRunRecord,

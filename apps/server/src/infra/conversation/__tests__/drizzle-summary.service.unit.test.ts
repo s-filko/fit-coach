@@ -33,7 +33,7 @@ describe('drizzle-summary row mapping (D-K, D-G)', () => {
       role: 'summary',
       content: INPUT.rendered,
       payload: INPUT.structured,
-      // Close-out R2 finding 6: the caller resolves this run's next seq — never left null,
+      // AC-AT-4: the caller resolves this run's next seq — never left null,
       // never renumbered from 1 — so a compacting run's rows stay uniformly seq'd.
       seq: 6,
     });

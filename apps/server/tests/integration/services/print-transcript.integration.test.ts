@@ -316,7 +316,7 @@ describe('print-transcript (AC-AT-5)', () => {
       await expect(resolveSessionWindow(randomUUID())).resolves.toBeNull();
     });
 
-    it('close-out R2 finding 8: fetchRunsForUserWindow also finds a run whose conversation_runs row was never written, interleaved in order with rows that were', async () => {
+    it('AC-AT-5: fetchRunsForUserWindow also finds a run whose conversation_runs row was never written, interleaved in order with rows that were', async () => {
       const user = await seedUser('orphan');
       const since = new Date('2026-09-21T00:00:00.000Z');
       const until = new Date('2026-09-21T23:59:59.000Z');

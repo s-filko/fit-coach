@@ -1,7 +1,7 @@
 /**
- * Close-out review (2026-09-22, R2 finding 3): `prune-llm-calls.cli.ts` was a near-verbatim copy of
- * `prune-checkpoints.cli.ts` — same flag parsing, same statement loop, same `.catch`/`.finally`
- * shape. One shared runner; each caller supplies only what actually differs between them (the
+ * The one CLI shape behind both pruning scripts (BR-LLM-005 checkpoints, BR-LLM-011 payloads):
+ * same flag parsing, same statement loop, same `.catch`/`.finally` shape, so the two cannot drift
+ * into answering `--apply` or `--days` differently. Each caller supplies only what differs (the
  * statement builder, the default window, and how a result's row count and its log line read).
  */
 import type { QueryResult } from 'pg';

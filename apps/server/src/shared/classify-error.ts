@@ -1,9 +1,8 @@
 /**
- * Close-out review (2026-09-22, R2 finding 4/5): `conversation-run.adapter.ts` and
- * `llm-log-handler.ts` each grew their own `classifyError` + a 500-char truncation constant —
- * one policy (what a stored error looks like) in two places, free to diverge. `conversation_runs`
- * and `llm_calls` both truncate a caught value's message to `ERROR_MESSAGE_MAX_CHARS` the same way;
- * this is the one place that decides how.
+ * The one policy for what a stored error looks like. `conversation-run.adapter.ts` (writing
+ * `conversation_runs.error_class`/`error_message`) and `llm-log-handler.ts` (writing the same pair
+ * on `llm_calls`) both classify a caught value and truncate its message to `ERROR_MESSAGE_MAX_CHARS`
+ * through here — a second copy would let the two tables disagree about the same failure.
  */
 
 /** Run rows keep the error message short — the class name always survives untruncated. */

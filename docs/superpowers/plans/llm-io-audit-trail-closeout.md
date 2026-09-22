@@ -90,10 +90,10 @@ end-to-end, grep for inbound references to anything renumbered or renamed, fix, 
 That procedure is the acceptance criterion — every one of these eleven exists because a
 previous edit skipped it.
 
-- [ ] **Step 1:** the four ADR/ARCHITECTURE statements that contradict the code or each other.
-- [ ] **Step 2:** `DB_SETUP.md`'s reattached Purpose block, which carries law P4 retired.
-- [ ] **Step 3:** `CICD.md`'s shifted step references and the missing crontab line in § 7b.
-- [ ] **Step 4:** the two `print-transcript.ts` comments, and the eleven "close-out R2 finding N"
+- [x] **Step 1:** the four ADR/ARCHITECTURE statements that contradict the code or each other.
+- [x] **Step 2:** `DB_SETUP.md`'s reattached Purpose block, which carries law P4 retired.
+- [x] **Step 3:** `CICD.md`'s shifted step references and the missing crontab line in § 7b.
+- [x] **Step 4:** the two `print-transcript.ts` comments, and the eleven "close-out R2 finding N"
   citations across `src/` and `tests/` — now that § Round 2 exists they could resolve, but a
   durable id or the behaviour itself is the better citation.
 - [ ] **Step 5:** `grep -rn 'AC-AT-' docs/ apps/` returns nothing outside the two plan files.

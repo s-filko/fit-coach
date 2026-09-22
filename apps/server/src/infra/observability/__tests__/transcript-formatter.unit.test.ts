@@ -186,7 +186,7 @@ describe('formatRunTranscript (AC-AT-5)', () => {
       expect(out).toContain('response: "Отлично!" finishReason=stop tokensIn=50 tokensOut=5');
     });
 
-    it('review of AC-AT-6: prints that a pruned blob aged out, with its hash, never an empty string or a crash', () => {
+    it('AC-AT-6: prints that a pruned blob aged out, with its hash, never an empty string or a crash', () => {
       const rt: RunTranscript = { runId: 'run-1', run: baseRun, turns: [], llmCalls: [call()] };
       const out = formatRunTranscript(rt, new Map([['hash-1', null]]), { includePayloads: true });
 

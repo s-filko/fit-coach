@@ -140,12 +140,15 @@ Located at `deploy/deploy.sh`. Executed on the VPS by GitHub Actions via SSH.
 
 ### Self-update race condition
 
-`deploy.sh` updates itself via `git reset --hard` (step 3), but bash continues executing
+`deploy.sh` updates itself in the `git reset --hard` step, but bash continues executing
 the **old version** loaded into memory. This means:
 
 - Changes to `deploy.sh` take effect on the **second** deploy after the commit
-- Changes to `docker-compose.yml` take effect immediately (read from disk at step 9)
-- Changes to `Dockerfile` and `docker-entrypoint.sh` take effect immediately (built at step 9)
+- Changes to `docker-compose.yml` take effect immediately (read from disk by `docker compose build` / `up -d`)
+- Changes to `Dockerfile` and `docker-entrypoint.sh` take effect immediately (built by `docker compose build`)
+
+(Steps are named, not numbered, here on purpose: inserting one into the flow above renumbers
+every later step, and a citation by number silently starts pointing at the wrong one.)
 
 This is a known and accepted limitation. Workaround: push a no-op commit to trigger
 a second deploy.
@@ -364,6 +367,11 @@ owner-run basis as checkpoint pruning.
   stays answerable.
 - Growth to watch: ~150 KB per run across 2–3 model calls, i.e. ~3.6 GB per 30-day window at
   100 active users (BR-LLM-011). Storage, not query cost, is what bounds this.
+- The owner installs this cron job too; the app does not. An hour after § 7a's, so the two
+  never run against the database at once:
+  ```
+  0 5 * * * cd /srv/docker/fitcoach && docker exec fitcoach-prod-server npm run db:prune-llm-calls -- --apply
+  ```
 
 ## 8. Networking and HTTPS
 

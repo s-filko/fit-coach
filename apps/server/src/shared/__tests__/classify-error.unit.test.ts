@@ -1,6 +1,6 @@
 import { classifyError, ERROR_MESSAGE_MAX_CHARS } from '../classify-error';
 
-describe('classifyError (shared by conversation_runs and llm_calls — close-out R2 dedup)', () => {
+describe('classifyError (the one error-shape policy, shared by conversation_runs and llm_calls)', () => {
   it('names the constructor and keeps the message, for an Error subclass', () => {
     class UpstreamError extends Error {}
     const { errorClass, errorMessage } = classifyError(new UpstreamError('upstream 503'));
