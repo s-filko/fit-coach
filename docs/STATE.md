@@ -82,7 +82,7 @@ evidence in `BUGS.md`. Order of work set by the owner:
    plan was written — `durationSeconds` is untested, and `tool-policy.unit.test.ts:67-76` currently
    *pins* the ordering defect behind BUG-027. The plan also states which findings (BUG-022/024/026/028)
    no deterministic test can catch; those become eval-case drafts, with no model run.
-2. **`llm-io-audit-trail` — IN FLIGHT (Task 1 dispatched 2026-09-22; owner chose it before the fixes).** Observability: the user's message, the model's answer and the exact API
+2. **`llm-io-audit-trail` — DONE (merged, deployed to dev 2026-09-22; only the live `--payloads` check remains, see § Handoff).** Observability: the user's message, the model's answer and the exact API
    request must survive every run. Four runs on 2026-09-21 left no trace of what the user wrote, and
    BUG-022 was first written up wrong because the DB transcript and the context the model saw disagree.
 3. Prompt defects in **small strokes, one BUG per change**, each verified against an eval set rather
