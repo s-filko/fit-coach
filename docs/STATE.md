@@ -223,18 +223,16 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
 ## Handoff (orchestrator shift, 2026-09-22 — third relay)
 
 **`llm-io-audit-trail` and `llm-io-audit-trail-closeout` are both `done` and merged into `dev`**
-(merge commit on `dev`, branch `plan/llm-io-audit-trail` still present, worktree
-`/Users/filko/orca/workspaces/fit_coach/llm-io-audit-trail` still present, no live workers —
-cleanup pending the deferred checks below). Review header on both plans:
+(merge commit on `dev`; branch and worktree removed, no live workers — cleanup done 2026-09-23).
+Review header on both plans:
 `2026-09-22 | clean | R1,R2,R3,R4`. All four suites green at merge (unit 126/1203,
 integration 33/555, scenarios 9/343); the repro glob stays at 2 suites / 4 failures and must —
 those reds are BUG-027 and BUG-030, other plans.
 
-**Two verifications are still owed on dev**, recorded in the plan's `## Deferred` with their
-exact commands: the `deploy.sh` log capture — **two** dev deploys, because the first runs the
-previous script — then confirm `logs/dev/*.log` holds pre-recreate output; and one live
-`print-transcript --run <id> --payloads` against a real dev run. Neither could be closed on the
-branch; both are the orchestrator's.
+**One verification is still owed on dev** (plan `## Deferred`): the `deploy.sh` log capture is
+discharged (`bbba5ffa`), and so is `print-transcript` itself against a real run — only
+`--payloads` is unproven, because `llm_calls` on dev was empty until the recorder deployed. One
+live dev run, then `print-transcript --run <id> --payloads` against it, closes it.
 
 **What the close-out cost, and why it is worth writing down.** Four review rounds plus three
 re-runs: 23 blocking, 16, 15, then 2, then 1. Every round after the first was dominated by
@@ -261,10 +259,9 @@ in ~130 code citations. `AC-AT-*` now appears nowhere outside the two plan files
   as a backlog entry yet.
 - Two advisories from round 4, unfixed by the zone contract: `print-transcript.ts:41` is a
   fourth hand-rolled flag parser (widen `BACKLOG.md`'s "Evals tooling duplication trio" entry
-  rather than opening a new one), and Task 2's flagged owner decision — whether `compact()`
-  records its own failed run, or manual compaction is declared outside the run log — was never
-  made and is written down nowhere; `conversation-run.adapter.ts:228` still only logs and
-  rethrows. Only the run-level cause is lost: the model call itself is in `llm_calls`.
+  rather than opening a new one). Task 2's flagged owner decision is **made (2026-09-23)**:
+  manual compaction is outside the run log, stated in ADR-0013 §8 as the scope of INV-LLM-009;
+  no code change.
 - Carried from earlier shifts: AC-FL-3's live half — a closed fact not resurrected by compacting
   an OLDER episode — is pinned by a scenario test but never reproduced live; worth one check
   when a plan next touches compaction.

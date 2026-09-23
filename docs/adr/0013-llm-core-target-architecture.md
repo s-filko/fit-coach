@@ -428,6 +428,14 @@ a run that ends non-`ok` is written to `conversation_runs` carrying `error_class
 exception text in an API body, per INV-LLM-006). Neither write depends on the run reaching `commit`:
 a run that throws, times out or is killed still leaves what the user wrote and why it ended.
 
+Scope of INV-LLM-009 (owner decision 2026-09-23): **manual compaction is outside the run log.** The
+adapter's `compact()` (`POST /api/bot/compact`, the bot's `/compact`) carries no user message, writes
+no transcript rows and writes no `conversation_runs` row — on success or on failure; a failure is
+logged and mapped to its HTTP code per INV-LLM-006. Recording only the failures would add a run kind
+that never succeeds and skew `outcome` statistics. The summariser's model call is still recorded in
+`llm_calls` under the pass's generated `run_id` (INV-LLM-008), which has no `conversation_runs` row to
+join — expected for this path, since `llm_calls.run_id` has no foreign key.
+
 INV-LLM-010 (owner-approved 2026-09-22): **The order a run's rows were produced in is recoverable.**
 Every `conversation_turns` row carrying a `run_id` also carries a `seq`, monotonic within that
 `run_id` and assigned by the one policy in `infra/conversation/seq.ts` (`MAX(seq) WHERE run_id` + 1),

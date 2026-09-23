@@ -134,6 +134,8 @@ written down so the close-out does not rediscover them as gaps:
   path that records a failed run now records why), but the goal of this plan is not, for that path.
   Worth a decision at close-out: either `compact()` records its own failed run, or the plan states
   that manual compaction is deliberately outside the run log.
+  **Decided by the owner 2026-09-23: outside the run log**, stated in ADR-0013 §8 as the scope of
+  INV-LLM-009; no code change.
 - **`error_message` puts raw provider text in a durable table**, which is what AC-AT-2 asks for, and
   is the deliberate opposite of INV-LLM-006, which keeps exception text out of HTTP bodies. The
   difference is intended (internal record vs. user-facing response). What was not checked is whether
