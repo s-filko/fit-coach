@@ -5,7 +5,7 @@
 > syntax. Red files (`*.repro.test.ts`) are committed **failing** on purpose — never "fix" a red
 > test by changing its assertion.
 
-- Status: planned
+- Status: in progress
 - Branch: plan/coach-baseline
 
 **Goal:** a clean test runner and the coach roadmap's safety net: two red scenario tests that pin
@@ -229,9 +229,13 @@ const ctx = { now: NOW, timezone: 'Asia/Manila', user: null };
 const context = spec.contextBlocks.map(b => b.render(loaded.data, ctx, 0)).filter(Boolean).join('\n');
 ```
 
-- [ ] **Step 1: Write the tests.** Control (passes today): `context` contains
-  `Barbell Bench Press` and the 2026-09-17 date. Red 1: `context` contains `Overhead Press`.
-  Red 2: `context` matches `datePattern('2026-09-23')`.
+- [ ] **Step 1: Write the tests.** Control (passes today): `loaded.data.previousSession` is the
+  `upper_a` session completed 2026-09-17 and `context` contains `Barbell Bench Press`. Red 1:
+  `context` contains `Overhead Press`. Red 2: `context` names yesterday's session by
+  `datePattern('2026-09-23')` **or** by the relative form `humanTimeAgo` gives for it.
+  *(Amended during execution, 2026-09-24: no training block renders a calendar date —
+  `humanTimeAgo` gives "7d ago (Thu)" — so a literal date in the control would be red. Absolute
+  dates in blocks are roadmap R1.2, unit U2.)*
 - [ ] **Step 2: Run red.**
   `RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch='**/overlapping-load.repro.test.ts'`
   Expected: control green; both reds FAIL because the text lacks the overhead press (not a
