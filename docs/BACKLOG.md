@@ -750,3 +750,11 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       for optional fields under strict `json_schema`, but only a live provider run proves the provider
       accepts it. Worth confirming on the first live course-check run.
       Source: wave-B Task 3b worker note (2026-09-21).
+
+## coach-baseline close-out review advisories (2026-09-25)
+
+- [ ] Move embedding-session teardown into the DI container: `embedding.service.ts` keeps a module-level `liveInstances` registry and `disposeAllEmbeddingServices()` whose only caller is `src/app/test/setup.ts`, so DI-created instances are tracked outside the container; a container shutdown/dispose hook would own the lifecycle and also serve graceful shutdown. Source: coach-baseline close-out review R1 (2026-09-25).
+- [ ] Document the `forceExit: false` failure mode: a future leaked handle now makes jest hang (reported by `detectOpenHandles`, ended only by a CI timeout) instead of exiting — the intended trade-off for AC-CB-1, but nowhere written down for whoever meets the hang. Source: coach-baseline close-out review R3 (2026-09-25).
+- [ ] Harden `overlapping-load.repro.test.ts` Red 1 before U3 turns it green: `toContain('Overhead Press')` could pass without the level-2 block (e.g. a substitutes list); tie the exercise name to yesterday's date. Source: coach-baseline close-out review R3 (2026-09-25).
+- [ ] Two `SeedSession` types of different shapes: `recent-history-status.integration.test.ts:31` and `tests/integration/scenarios/session-seed.ts:12`; the separate seeding loop is justified (the shared seeder cannot express `skipped`/`planning` or custom timestamps), the duplicate type name is a trap — rename one or widen the shared seeder. Source: coach-baseline close-out review R2 (2026-09-25).
+

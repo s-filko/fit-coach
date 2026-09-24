@@ -5,7 +5,7 @@
 > syntax. Red files (`*.repro.test.ts`) are committed **failing** on purpose — never "fix" a red
 > test by changing its assertion.
 
-- Status: in progress
+- Status: done
 - Branch: plan/coach-baseline
 - Review: 2026-09-25 | clean | R1,R2,R3,R4
 
@@ -357,7 +357,9 @@ pre-existing unit repros for BUG-023/BUG-025): BUG-027, BUG-030, BUG-023, BUG-02
 Deviation during execution: Task 3's control and Red 2 amended (blocks render a relative age,
 not a calendar date) — see Task 3 Step 1.
 
-Advisory (routing pending the owner):
+Advisory — routed by the owner 2026-09-25: items 2, 4, 8 fixed on this branch; 1, 3, 5, 6 filed in
+`docs/BACKLOG.md` § coach-baseline close-out review advisories; 7 and 9 need no action (9 is
+corrected above); 10 is a durable-spec change, filed as a rule candidate in `REVIEW_FINDINGS.md`.
 1. R1 `embedding.service.ts:15,91,102` — module-level `liveInstances` registry and
    `disposeAllEmbeddingServices` (only caller `src/app/test/setup.ts`) put test teardown into a
    production module and track DI-created instances outside the container; cleaner as a
@@ -365,13 +367,14 @@ Advisory (routing pending the owner):
 2. R3 `embedding.service.ts:45,91-97` — `dispose()` races an in-flight load: `warmUp()` is
    fire-and-forget; if `afterAll` runs before the model loads, `dispose()` sees no pipeline, then
    the load completes and re-registers — the native session outlives the process again
-   (intermittent 134).
+   (intermittent 134). **Fixed** `b3966854` — `dispose()` awaits an in-flight load (red-first unit test).
 3. R3 `jest.config.cjs:74` — with `forceExit: false` a future leaked handle makes jest hang
    instead of exiting; right trade-off for AC-CB-1, but a new failure mode to document.
 4. R3 `workout-session.repository.ts:145` — the filtered query still orders by `createdAt`
    while `daysSinceLastWorkout` takes `recentSessions[0]`; imported `hist_…` sessions can have
    `createdAt` later than `completedAt`, so with two real workouts the wrong one can rank last.
-   The test seeds one real workout only. Pre-existing ordering, outside the plan's fix spec.
+   The test seeds one real workout only. **Fixed** `f126ef2a` — with `realWorkoutsOnly` the order is
+   `completedAt DESC`; unfiltered order unchanged (red-first: second real workout seeded).
 5. R3 `overlapping-load.repro.test.ts` Red 1 — `toContain('Overhead Press')` could turn green
    without U3 (e.g. a substitutes list); tie the name to yesterday's date to harden it.
 6. R2 `recent-history-status.integration.test.ts:31,118` vs `session-seed.ts:12,46` — a second
@@ -380,10 +383,13 @@ Advisory (routing pending the owner):
 7. R2 `workout-session.ports.ts:21-24` — `realWorkoutsOnly` checked against the YAGNI flag
    rule: not a violation (adds predicates to one query). Recorded so it is not re-raised.
 8. R4 `src/app/test/setup.ts:162` — comment says "jest's forceExit aborts it", but `forceExit`
-   is now `false`.
+   is now `false`. **Fixed** `35ce5ae5`.
 9. R4 plan lines 34 / Task 5 — failing-suite counts (2 / 4) wrong; corrected in this section.
 10. R4 `docs/domain/training.spec.md` — the owner's "real workout" rule has no `BR-TRAINING-*`;
     durable-spec change, owner decision (filed as a rule candidate in `REVIEW_FINDINGS.md`).
+
+After the fixes the orchestrator re-ran: `test:unit` 1204, `test:integration` 559,
+`test:scenarios` 343 — all exit 0, no `libc++abi` line.
 
 Meta (filed in `docs/REVIEW_FINDINGS.md`): repro-count-from-memory (blind spot); AC id in
 test `describe` (rule candidate); BR for real workout (rule candidate).
