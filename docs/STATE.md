@@ -17,6 +17,7 @@ _Generated 2026-09-24 from docs/superpowers/plans/ + git. Never hand-edit; regen
 **Planned**
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
+- `smoke-test.md` — Smoke Test Implementation Plan
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
@@ -239,7 +240,10 @@ ordered by `completedAt`); two new reds pin BUG-022 (→ U5) and the hidden over
 Review `2026-09-25 | clean`; advisories 2/4/8 fixed on the branch, the rest in `BACKLOG.md`. The
 repro glob now shows **6** failing suites (BUG-023/025/027/030 + the two new reds). Open for the
 owner: `BR-TRAINING-*` for the "real workout" rule (rule candidate in `REVIEW_FINDINGS.md`).
-After the live check: next roadmap unit per § 4 priority (U5 needs the loop walkthrough gate).
+**The live check is replaced by the smoke test (owner, 2026-09-25):** plan `smoke-test` (spec
+`docs/superpowers/specs/2026-09-25-smoke-test-design.md`) — `npm run smoke` plays one workout on the
+live model over `fitcoach_test`; its first run closes U1. Then next roadmap unit per § 4 priority
+(U5 needs the loop walkthrough gate).
 
 **Backlog triage done with the owner 2026-09-24** (recommendations; only roadmap acceptance is
 decided). Open owner decisions, to be asked one at a time, recommendation first:
