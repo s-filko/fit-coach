@@ -1,7 +1,7 @@
-import { and, desc, eq, inArray, isNotNull, lt } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 
 import { ActiveSessionExistsError } from '@domain/training/errors';
-import type { IWorkoutSessionRepository } from '@domain/training/ports';
+import type { IWorkoutSessionRepository, RecentSessionsFilter } from '@domain/training/ports';
 import type {
   CreateSessionDto,
   Involvement,
@@ -123,12 +123,30 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     } as WorkoutSessionWithDetails;
   }
 
-  async findRecentByUserId(userId: string, limit: number): Promise<WorkoutSession[]> {
+  async findRecentByUserId(userId: string, limit: number, filter?: RecentSessionsFilter): Promise<WorkoutSession[]> {
+    // One query: the EXISTS predicate sits in the WHERE, so `limit` counts real workouts only.
+    const conditions = [eq(workoutSessions.userId, userId)];
+    if (filter?.realWorkoutsOnly) {
+      conditions.push(
+        eq(workoutSessions.status, 'completed'),
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(sessionExercises)
+            .innerJoin(sessionSets, eq(sessionSets.sessionExerciseId, sessionExercises.id))
+            .where(eq(sessionExercises.sessionId, workoutSessions.id)),
+        ),
+      );
+    }
+    // realWorkoutsOnly: every row is completed (non-null completedAt), and an imported session's
+    // createdAt does not track when it actually happened — order by completedAt (review advisory
+    // 4), not createdAt. Without the filter, keep createdAt DESC exactly (getActiveSession depends
+    // on it seeing planning/in_progress rows in that order).
     const sessions = await db
       .select()
       .from(workoutSessions)
-      .where(eq(workoutSessions.userId, userId))
-      .orderBy(desc(workoutSessions.createdAt))
+      .where(and(...conditions))
+      .orderBy(filter?.realWorkoutsOnly ? desc(workoutSessions.completedAt) : desc(workoutSessions.createdAt))
       .limit(limit);
 
     return sessions.map(s => ({
@@ -138,8 +156,12 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     })) as WorkoutSession[];
   }
 
-  async findRecentByUserIdWithDetails(userId: string, limit: number): Promise<WorkoutSessionWithDetails[]> {
-    const sessions = await this.findRecentByUserId(userId, limit);
+  async findRecentByUserIdWithDetails(
+    userId: string,
+    limit: number,
+    filter?: RecentSessionsFilter,
+  ): Promise<WorkoutSessionWithDetails[]> {
+    const sessions = await this.findRecentByUserId(userId, limit, filter);
     const detailed = await Promise.all(sessions.map(s => this.findByIdWithDetails(s.id)));
     return detailed.filter((s): s is WorkoutSessionWithDetails => s !== null);
   }

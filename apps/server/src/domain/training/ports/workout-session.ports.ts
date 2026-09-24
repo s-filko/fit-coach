@@ -18,12 +18,21 @@ export const SESSION_SET_REPOSITORY_TOKEN = Symbol('SessionSetRepository');
 
 // --- Repository Interfaces ---
 
+export interface RecentSessionsFilter {
+  /** Only real workouts: status 'completed' AND at least one session_sets row (owner, 2026-09-24). */
+  realWorkoutsOnly?: boolean;
+}
+
 export interface IWorkoutSessionRepository {
   create(userId: string, session: CreateSessionDto): Promise<WorkoutSession>;
   findById(sessionId: string): Promise<WorkoutSession | null>;
   findByIdWithDetails(sessionId: string): Promise<WorkoutSessionWithDetails | null>;
-  findRecentByUserId(userId: string, limit: number): Promise<WorkoutSession[]>;
-  findRecentByUserIdWithDetails(userId: string, limit: number): Promise<WorkoutSessionWithDetails[]>;
+  findRecentByUserId(userId: string, limit: number, filter?: RecentSessionsFilter): Promise<WorkoutSession[]>;
+  findRecentByUserIdWithDetails(
+    userId: string,
+    limit: number,
+    filter?: RecentSessionsFilter,
+  ): Promise<WorkoutSessionWithDetails[]>;
   findActiveByUserId(userId: string): Promise<WorkoutSession | null>;
   update(sessionId: string, updates: Partial<WorkoutSession>): Promise<WorkoutSession>;
   complete(sessionId: string, completedAt: Date, durationMinutes: number): Promise<WorkoutSession>;

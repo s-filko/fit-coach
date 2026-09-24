@@ -131,7 +131,9 @@ describe('SessionPlanningContextBuilder', () => {
       expect(context.daysSinceLastWorkout).toBeGreaterThanOrEqual(0);
 
       expect(mockPlanRepo.findActiveByUserId).toHaveBeenCalledWith('user-1');
-      expect(mockSessionRepo.findRecentByUserIdWithDetails).toHaveBeenCalledWith('user-1', 5);
+      expect(mockSessionRepo.findRecentByUserIdWithDetails).toHaveBeenCalledWith('user-1', 5, {
+        realWorkoutsOnly: true,
+      });
     });
 
     it('should handle user with no plan and no history', async () => {
@@ -175,7 +177,9 @@ describe('SessionPlanningContextBuilder', () => {
       const builder = new SessionPlanningContextBuilder(mockPlanRepo, mockSessionRepo);
       await builder.buildContext('user-1', 10);
 
-      expect(mockSessionRepo.findRecentByUserIdWithDetails).toHaveBeenCalledWith('user-1', 10);
+      expect(mockSessionRepo.findRecentByUserIdWithDetails).toHaveBeenCalledWith('user-1', 10, {
+        realWorkoutsOnly: true,
+      });
     });
   });
 });

@@ -48,6 +48,7 @@ import {
   KNEE_OLD,
   SLEEP_FACT,
 } from '../../../evals/scenarios/fl-f-remembered-corrected-deleted.scenario';
+import { REAL_TIMER_APIS } from '../../helpers/real-timers';
 
 import { resolveFactPlaceholders } from './fact-placeholders';
 import { installScriptedModel, type ScriptedModelHandle, type StructuredInput } from './scripted-model';
@@ -60,41 +61,6 @@ const REVIEW_DUE_MARK = '[REVIEW DUE — ask about it now]';
 
 /** The journeys' relative dates ('-20d', '+3d') resolve against this T0. */
 const T0 = new Date('2026-09-21T10:00:00.000Z');
-
-/** jest's `FakeableAPI` minus 'Date' — the union itself is not exported by @types/jest. */
-type RealTimerApi =
-  | 'setTimeout'
-  | 'clearTimeout'
-  | 'setInterval'
-  | 'clearInterval'
-  | 'setImmediate'
-  | 'clearImmediate'
-  | 'nextTick'
-  | 'queueMicrotask'
-  | 'performance'
-  | 'hrtime'
-  | 'requestAnimationFrame'
-  | 'cancelAnimationFrame'
-  | 'requestIdleCallback'
-  | 'cancelIdleCallback';
-
-/** Timer APIs that must stay REAL — pg, PostgresSaver and the ONNX embedding pipeline schedule work through them. */
-const REAL_TIMER_APIS: RealTimerApi[] = [
-  'setTimeout',
-  'clearTimeout',
-  'setInterval',
-  'clearInterval',
-  'setImmediate',
-  'clearImmediate',
-  'nextTick',
-  'queueMicrotask',
-  'performance',
-  'hrtime',
-  'requestAnimationFrame',
-  'cancelAnimationFrame',
-  'requestIdleCallback',
-  'cancelIdleCallback',
-];
 
 type Mode = 'on' | 'off';
 const MODES: Mode[] = ['on', 'off'];

@@ -29,7 +29,10 @@ export class SessionPlanningContextBuilder {
   async buildContext(userId: string, recentSessionsLimit = 5): Promise<SessionPlanningContextData> {
     const [activePlan, recentSessions] = await Promise.all([
       this.workoutPlanRepo.findActiveByUserId(userId),
-      this.workoutSessionRepo.findRecentByUserIdWithDetails(userId, recentSessionsLimit),
+      // Real workouts only (BUG-031): skipped/unfinished/empty sessions are not "recent training".
+      this.workoutSessionRepo.findRecentByUserIdWithDetails(userId, recentSessionsLimit, {
+        realWorkoutsOnly: true,
+      }),
     ]);
 
     let daysSinceLastWorkout: number | null = null;

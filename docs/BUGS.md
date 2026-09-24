@@ -1600,3 +1600,50 @@ of which selection wins.
 
 Scenario over the real test DB: leg sessions on three recent dates plus one old session sharing the
 `session_key` → "напомни прошлый вес" cites the most recent one and states its date.
+
+---
+
+## BUG-031 — Recent history and "days since last workout" count skipped and unfinished sessions
+
+**Status:** fixed (coach-baseline Task 4, AC-CB-4; red test commit 7d66012d)
+**Severity:** Medium — the model is shown phantom "recent workouts" that never happened, and rest-day math is built on them
+**Found during:** coach-baseline plan review (roadmap U1, R0.3 + R1.1), 2026-09-24
+**Component:** `apps/server/src/infra/db/repositories/workout-session.repository.ts:126` (`findRecentByUserId` — filters by user only), callers `apps/server/src/domain/training/services/session-planning-context.builder.ts:32` and `apps/server/src/infra/ai/graph/phases/chat.spec.ts:46`
+
+### Description
+
+`findRecentByUserId` selects recent `workout_sessions` rows by user only — no status filter, no
+contents filter. Everything the user starts or skips therefore enters "recent sessions" in both
+history callers: `skipped` rows, `planning` rows that never became a workout, `in_progress` rows,
+and sessions that ended `completed` with **zero logged sets** (an explicit "закончил" with nothing
+logged ends `completed` via `completeSession`, `training.service.ts:243`, so the status alone does
+not exclude them).
+
+`daysSinceLastWorkout` (`session-planning-context.builder.ts:34-40`) is computed from
+`recentSessions[0].completedAt ?? createdAt`, so the first non-completed row by recency drives the
+"days since" figure the coach reasons with — a session created minutes ago yields "0 days since
+last workout" after an actual week of rest.
+
+**Owner decision (2026-09-24):** a *real workout* = `status = 'completed'` **and** at least one
+`session_sets` row. Only real workouts may appear in the recent history of `session_planning` and
+`chat`; `daysSinceLastWorkout` is computed from the last real workout's `completedAt`.
+
+Not affected (unchanged on purpose): `getActiveSession` (`training.service.ts:282`) needs `planning`
+rows from the same query, and `getTrainingHistory` (`training.service.ts:288`) feeds the frozen
+mini-app route — both keep today's behaviour.
+
+### Fix plan
+
+Optional `RecentSessionsFilter { realWorkoutsOnly?: boolean }` argument on
+`findRecentByUserId` / `findRecentByUserIdWithDetails`; when set, the repository adds
+`status = 'completed'` plus an `EXISTS (session_sets …)` predicate in the same query, so `limit`
+counts real workouts only. The two history callers pass `{ realWorkoutsOnly: true }`; no `filter`
+keeps today's behaviour exactly. Links: AC-CB-4 (coach-baseline plan), roadmap R0.3 + R1.1.
+
+### Regression test
+
+`tests/integration/database/recent-history-status.integration.test.ts` — promoted from the
+reproduction test written before the fix: a user with one real completed workout plus an
+empty completed, a skipped, a planning and an in_progress session → both history loaders return
+exactly the real one, `daysSinceLastWorkout` comes from its `completedAt`, and `getActiveSession`
+still returns the `in_progress` session (control).

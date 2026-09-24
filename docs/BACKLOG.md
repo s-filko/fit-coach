@@ -197,14 +197,6 @@ Rules:
 - [ ] **Inline `setNumericField`** in llm-profiles.ts (one call site; the field parameter
       splits the body in two — the plan's own snippet had the branches inline). Source:
       refactor-P1 close-out review R2 (2026-09-16).
-- [ ] **Integration runner exits 134 after an all-green run**: `RUN_DB_TESTS=1
-npm run test:integration` (apps/server) crashes in jest global teardown
-      (`src/app/test/teardown.ts`, DB-pool close) with libc++ `mutex lock failed` AFTER
-      printing 122/122 passed — the non-zero exit can fail CI/cleanup even when tests pass.
-      The plain unit run (`npx jest --ci`) crashes identically after an all-green summary —
-      proven pre-existing at the base commit by the P2 review (temp worktree, same crash).
-      Reproduced on clean `dev`, pre-existing, not a P2 regression. Source: refactor-P2
-      Task 8 verification + close-out review R3 (2026-09-16).
 - [ ] L0 eval checks named by `PROMPT_EVAL_FRAMEWORK.md` §4.1 but not implemented in the
       P0 harness: version discipline, message-catalog completeness (section presence shipped
       in refactor-p2-prompt-modules). Both need artefacts the harness does not build yet —
@@ -694,12 +686,6 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 
 ## fact-lifecycle (wave A) close-out review advisories (2026-09-21)
 
-- [ ] `npm run test:scenarios` (and `test:integration`) end with a native abort —
-      `libc++abi: terminating … mutex lock failed` — AFTER a fully green run, so the command exits 134
-      while every test passed. Reproduced identically on the base commit, so it predates this wave, but
-      it means the exit code of the agent self-check is meaningless and the suite could never be wired
-      into CI as-is. Likely the embedding model's (onnxruntime) teardown.
-      Source: orchestrator, Task 1 acceptance (2026-09-21).
 - [ ] The AC-FL-3 end-to-end scenario test uses an in-memory fake of `IUserFactsService` that
       re-implements the stale-evidence rule itself, so the test would still pass if the real repository
       diverged. The real path is covered by the DB integration suite, but the two rules are written
@@ -764,3 +750,11 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       for optional fields under strict `json_schema`, but only a live provider run proves the provider
       accepts it. Worth confirming on the first live course-check run.
       Source: wave-B Task 3b worker note (2026-09-21).
+
+## coach-baseline close-out review advisories (2026-09-25)
+
+- [ ] Move embedding-session teardown into the DI container: `embedding.service.ts` keeps a module-level `liveInstances` registry and `disposeAllEmbeddingServices()` whose only caller is `src/app/test/setup.ts`, so DI-created instances are tracked outside the container; a container shutdown/dispose hook would own the lifecycle and also serve graceful shutdown. Source: coach-baseline close-out review R1 (2026-09-25).
+- [ ] Document the `forceExit: false` failure mode: a future leaked handle now makes jest hang (reported by `detectOpenHandles`, ended only by a CI timeout) instead of exiting — the intended trade-off for AC-CB-1, but nowhere written down for whoever meets the hang. Source: coach-baseline close-out review R3 (2026-09-25).
+- [ ] Harden `overlapping-load.repro.test.ts` Red 1 before U3 turns it green: `toContain('Overhead Press')` could pass without the level-2 block (e.g. a substitutes list); tie the exercise name to yesterday's date. Source: coach-baseline close-out review R3 (2026-09-25).
+- [ ] Two `SeedSession` types of different shapes: `recent-history-status.integration.test.ts:31` and `tests/integration/scenarios/session-seed.ts:12`; the separate seeding loop is justified (the shared seeder cannot express `skipped`/`planning` or custom timestamps), the duplicate type name is a trap — rename one or widen the shared seeder. Source: coach-baseline close-out review R2 (2026-09-25).
+

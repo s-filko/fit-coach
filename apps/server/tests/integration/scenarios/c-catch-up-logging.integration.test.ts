@@ -36,6 +36,7 @@ import {
   type TaggedAssertion,
 } from '../../../evals/schema/scenario.schema';
 import { explicitScenario, scenario } from '../../../evals/scenarios/c-catch-up-logging.scenario';
+import { REAL_TIMER_APIS } from '../../helpers/real-timers';
 
 import { installScriptedModel, type ScriptedModelHandle } from './scripted-model';
 
@@ -44,42 +45,6 @@ const T0 = new Date('2026-09-20T10:00:00.000Z');
 
 /** The offset `log_set` stamps a stale-session set with (format-exercise-summary.ts). */
 const RETRO_SET_OFFSET_MS = 5 * 60_000;
-
-/** jest's `FakeableAPI` minus 'Date' — the union itself is not exported by @types/jest. */
-type RealTimerApi =
-  | 'setTimeout'
-  | 'clearTimeout'
-  | 'setInterval'
-  | 'clearInterval'
-  | 'setImmediate'
-  | 'clearImmediate'
-  | 'nextTick'
-  | 'queueMicrotask'
-  | 'performance'
-  | 'hrtime'
-  | 'requestAnimationFrame'
-  | 'cancelAnimationFrame'
-  | 'requestIdleCallback'
-  | 'cancelIdleCallback';
-
-/** Timer APIs that must stay REAL — pg, PostgresSaver and the ONNX embedding
- * pipeline schedule work through them; only `Date` is faked. */
-const REAL_TIMER_APIS: RealTimerApi[] = [
-  'setTimeout',
-  'clearTimeout',
-  'setInterval',
-  'clearInterval',
-  'setImmediate',
-  'clearImmediate',
-  'nextTick',
-  'queueMicrotask',
-  'performance',
-  'hrtime',
-  'requestAnimationFrame',
-  'cancelAnimationFrame',
-  'requestIdleCallback',
-  'cancelIdleCallback',
-];
 
 function textOf(m: BaseMessage | undefined): string {
   const content = m?.content;

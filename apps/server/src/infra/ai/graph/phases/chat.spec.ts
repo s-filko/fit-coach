@@ -43,7 +43,8 @@ export function buildChatSpec(deps: ConversationGraphDeps): PhaseSpec<ChatData> 
     loadContext: async (input: LoadInput, deps: ConversationGraphDeps) => {
       const [activePlan, recentSessions] = await Promise.all([
         deps.workoutPlanRepo.findActiveByUserId(input.userId),
-        deps.workoutSessionRepo.findRecentByUserIdWithDetails(input.userId, 5),
+        // Real workouts only (BUG-031): skipped/unfinished/empty sessions are not "recent training".
+        deps.workoutSessionRepo.findRecentByUserIdWithDetails(input.userId, 5, { realWorkoutsOnly: true }),
       ]);
       return {
         ok: true as const,

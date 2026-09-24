@@ -14,21 +14,14 @@
  */
 import { buildTrainingSpec } from '@infra/ai/graph/phases/training.spec';
 import { TRAINING_PREVIOUS_SESSION_V1 } from '@infra/ai/prompts/blocks';
-import { db } from '@infra/db/drizzle';
-import { workoutSessions } from '@infra/db/schema';
 
 import { buildRealTrainingService } from '../../helpers/training-service';
 import { createTestUserData } from '../../shared/test-factories';
+import { createSessionSeeder, datePattern, type SeedSession } from './session-seed';
 
 /** Midday UTC keeps the calendar date identical in every plausible user timezone. */
 const NOW = new Date('2026-09-21T09:30:00.000Z');
 const TODAY_KEY = 'lower_a';
-
-interface SeedSession {
-  key: string;
-  date: string;
-  exercises: Array<{ name: string; sets: Array<{ reps: number; weight: number }> }>;
-}
 
 /**
  * The test DB seeds four exercises only (setup.ts), so the live session's exercises are mapped onto
@@ -71,16 +64,6 @@ const RECENT: SeedSession[] = [
 ];
 const [, , MOST_RECENT] = RECENT;
 
-/** ISO, DD.MM.YYYY, "Sep 16" and "16 Sep(tember)" all count as "states the date". */
-function datePattern(isoDate: string): RegExp {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  const month = new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
-  const mon = month.slice(0, 3);
-  const dd = String(d).padStart(2, '0');
-  const mm = String(m).padStart(2, '0');
-  return new RegExp(`${isoDate}|${dd}\\.${mm}\\.${y}|${mon}[a-z]* 0?${d}\\b|\\b0?${d} ${mon}`, 'i');
-}
-
 describe('training previous-session block (BUG-030)', () => {
   // One wiring for the whole file; the repositories are stateless, so building it at describe time is safe.
   const {
@@ -94,37 +77,8 @@ describe('training previous-session block (BUG-030)', () => {
   let loadContext: ReturnType<typeof buildTrainingSpec>['loadContext'];
   let userId: string;
   let currentSessionId: string;
+  let seedSession: ReturnType<typeof createSessionSeeder>;
   const exerciseIds = new Map<string, string>();
-
-  const seedSession = async (
-    status: 'completed' | 'in_progress',
-    s: { key: string; date: string; exercises?: SeedSession['exercises'] },
-  ): Promise<string> => {
-    const at = new Date(`${s.date}T12:00:00.000Z`);
-    const [row] = await db
-      .insert(workoutSessions)
-      .values({
-        userId,
-        sessionKey: s.key,
-        status,
-        startedAt: at,
-        completedAt: status === 'completed' ? new Date(at.getTime() + 60 * 60 * 1000) : null,
-        lastActivityAt: at,
-        createdAt: at,
-        updatedAt: at,
-      })
-      .returning();
-    for (const [i, ex] of (s.exercises ?? []).entries()) {
-      const se = await sessionExerciseRepo.create(row.id, { exerciseId: exerciseIds.get(ex.name)!, orderIndex: i });
-      for (const set of ex.sets) {
-        await sessionSetRepo.create(se.id, {
-          setData: { type: 'strength', reps: set.reps, weight: set.weight, weightUnit: 'kg' },
-          createdAt: at,
-        });
-      }
-    }
-    return row.id;
-  };
 
   beforeAll(async () => {
     const all = await exerciseRepo.findAll();
@@ -139,6 +93,7 @@ describe('training previous-session block (BUG-030)', () => {
     }
 
     userId = (await userRepo.create(createTestUserData({ username: `prev_sess_repro_${Date.now()}` }))).id;
+    seedSession = createSessionSeeder({ userId, exerciseIds, sessionExerciseRepo, sessionSetRepo });
     await seedSession('completed', OLD_SAME_KEY);
     for (const s of RECENT) {
       await seedSession('completed', s);
