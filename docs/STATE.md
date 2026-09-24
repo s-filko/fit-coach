@@ -15,13 +15,13 @@ _Generated 2026-09-24 from docs/superpowers/plans/ + git. Never hand-edit; regen
 — none —
 
 **Planned**
-- `coach-baseline.md` — Coach Baseline (Roadmap U1) Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
 - `chat-continuity.md` — Chat Continuity — Compaction Keeps the Recent Conversation, the Reply Answers the Latest Message Implementation Plan
+- `coach-baseline.md` — Coach Baseline (Roadmap U1) Implementation Plan
 - `course-check-and-constraints.md` — Course Check and Constraint Handling Implementation Plan
 - `fact-lifecycle.md` — Fact Lifecycle — Storage, Conversational Tools, Summariser Operations Implementation Plan
 - `llm-io-audit-trail-closeout.md` — LLM I/O Audit Trail — Close-out Remediation Implementation Plan
@@ -229,11 +229,17 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
 
 ## Handoff (orchestrator shift, 2026-09-24 — fourth relay)
 
-**Next action: dispatch `coach-baseline` (roadmap U1) via `delegate-implementation`.** Plan written
-2026-09-24: `docs/superpowers/plans/coach-baseline.md` (`Status: planned`, 4 worker tasks + the
-orchestrator's close-out/live check). No worktree, branch or live worker exists for it yet.
-Owner decisions taken for it (2026-09-24): open decision 4 below — the exit-134 runner fix — is
-the plan's Task 1; a "real workout" for history and days-since = `completed` **and** ≥1 logged set.
+**`coach-baseline` (roadmap U1) is `done` and merged into `dev` (2026-09-25); deployed to dev; the
+owner's live check (plan Task 5, 4 messages) is the only thing left before U1 is marked `done` in the
+roadmap § 6.** Executed in parallel: four numbered worktrees (`coach-baseline-t1..t4`, Sonnet for
+t1/t2, GLM for t3/t4), DB-backed test runs serialised by `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh`.
+Results: the exit-134 runner abort is gone (root cause: an unreleased onnxruntime session killed by
+jest `forceExit`); BUG-031 fixed (history and days-since count only `completed` sessions with ≥1 set,
+ordered by `completedAt`); two new reds pin BUG-022 (→ U5) and the hidden overlapping load (→ U3).
+Review `2026-09-25 | clean`; advisories 2/4/8 fixed on the branch, the rest in `BACKLOG.md`. The
+repro glob now shows **6** failing suites (BUG-023/025/027/030 + the two new reds). Open for the
+owner: `BR-TRAINING-*` for the "real workout" rule (rule candidate in `REVIEW_FINDINGS.md`).
+After the live check: next roadmap unit per § 4 priority (U5 needs the loop walkthrough gate).
 
 **Backlog triage done with the owner 2026-09-24** (recommendations; only roadmap acceptance is
 decided). Open owner decisions, to be asked one at a time, recommendation first:
