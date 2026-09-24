@@ -21,46 +21,12 @@ import { db } from '@infra/db/drizzle';
 import { WorkoutPlanRepository } from '@infra/db/repositories/workout-plan.repository';
 import { workoutSessions } from '@infra/db/schema';
 
+import { REAL_TIMER_APIS } from '../../helpers/real-timers';
 import { buildRealTrainingService } from '../../helpers/training-service';
 import { createTestUserData } from '../../shared/test-factories';
 
 /** Mid-morning UTC keeps the calendar date identical in every plausible user timezone. */
 const NOW = new Date('2026-09-24T09:30:00.000Z');
-
-/** jest's `FakeableAPI` minus 'Date' — the union itself is not exported by @types/jest. */
-type RealTimerApi =
-  | 'setTimeout'
-  | 'clearTimeout'
-  | 'setInterval'
-  | 'clearInterval'
-  | 'setImmediate'
-  | 'clearImmediate'
-  | 'nextTick'
-  | 'queueMicrotask'
-  | 'performance'
-  | 'hrtime'
-  | 'requestAnimationFrame'
-  | 'cancelAnimationFrame'
-  | 'requestIdleCallback'
-  | 'cancelIdleCallback';
-
-/** Timer APIs that must stay REAL — pg schedules work through them; only `Date` is faked. */
-const REAL_TIMER_APIS: RealTimerApi[] = [
-  'setTimeout',
-  'clearTimeout',
-  'setInterval',
-  'clearInterval',
-  'setImmediate',
-  'clearImmediate',
-  'nextTick',
-  'queueMicrotask',
-  'performance',
-  'hrtime',
-  'requestAnimationFrame',
-  'cancelAnimationFrame',
-  'requestIdleCallback',
-  'cancelIdleCallback',
-];
 
 interface SeedSession {
   key: string;

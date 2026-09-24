@@ -32,6 +32,8 @@ import { runScenario, type ScenarioRunResult } from '../../../evals/lib/run-scen
 import { ScenarioSchema, type Scenario } from '../../../evals/schema/scenario.schema';
 import { pastWith, summary } from '../../../evals/scenarios/fl-shared';
 
+import { REAL_TIMER_APIS } from '../../helpers/real-timers';
+
 import { resolveFactPlaceholders } from './fact-placeholders';
 import { installScriptedModel, type ScriptedModelHandle, type StructuredInput } from './scripted-model';
 
@@ -124,39 +126,6 @@ const scenario: Scenario = {
     },
   ],
 };
-
-/** Timer APIs that must stay REAL — pg, PostgresSaver and the ONNX embedding pipeline schedule work through them. */
-type RealTimerApi =
-  | 'setTimeout'
-  | 'clearTimeout'
-  | 'setInterval'
-  | 'clearInterval'
-  | 'setImmediate'
-  | 'clearImmediate'
-  | 'nextTick'
-  | 'queueMicrotask'
-  | 'performance'
-  | 'hrtime'
-  | 'requestAnimationFrame'
-  | 'cancelAnimationFrame'
-  | 'requestIdleCallback'
-  | 'cancelIdleCallback';
-const REAL_TIMER_APIS: RealTimerApi[] = [
-  'setTimeout',
-  'clearTimeout',
-  'setInterval',
-  'clearInterval',
-  'setImmediate',
-  'clearImmediate',
-  'nextTick',
-  'queueMicrotask',
-  'performance',
-  'hrtime',
-  'requestAnimationFrame',
-  'cancelAnimationFrame',
-  'requestIdleCallback',
-  'cancelIdleCallback',
-];
 
 interface StepRecord {
   /** Every chat-model input of the step, one entry per model call. */

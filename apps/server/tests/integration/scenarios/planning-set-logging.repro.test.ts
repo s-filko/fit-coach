@@ -14,47 +14,12 @@ import { sessionExercises, sessionSets, workoutSessions } from '@infra/db/schema
 import { runScenario, type ScenarioRunResult } from '../../../evals/lib/run-scenario';
 import { ScenarioSchema, type Scenario } from '../../../evals/schema/scenario.schema';
 import { BENCH_PRESS_ID, sharedPast, setupSteps } from '../../../evals/scenarios/b-full-workout.scenario';
+import { REAL_TIMER_APIS } from '../../helpers/real-timers';
 
 import { installScriptedModel, type ScriptedModelHandle } from './scripted-model';
 
 /** The scenario's weekday labels in the imported setup steps are pinned to this T0. */
 const T0 = new Date('2026-09-20T10:00:00.000Z');
-
-/** jest's `FakeableAPI` minus 'Date' — the union itself is not exported by @types/jest. */
-type RealTimerApi =
-  | 'setTimeout'
-  | 'clearTimeout'
-  | 'setInterval'
-  | 'clearInterval'
-  | 'setImmediate'
-  | 'clearImmediate'
-  | 'nextTick'
-  | 'queueMicrotask'
-  | 'performance'
-  | 'hrtime'
-  | 'requestAnimationFrame'
-  | 'cancelAnimationFrame'
-  | 'requestIdleCallback'
-  | 'cancelIdleCallback';
-
-/** Timer APIs that must stay REAL — pg, PostgresSaver and the ONNX embedding
- * pipeline schedule work through them; only `Date` is faked. */
-const REAL_TIMER_APIS: RealTimerApi[] = [
-  'setTimeout',
-  'clearTimeout',
-  'setInterval',
-  'clearInterval',
-  'setImmediate',
-  'clearImmediate',
-  'nextTick',
-  'queueMicrotask',
-  'performance',
-  'hrtime',
-  'requestAnimationFrame',
-  'cancelAnimationFrame',
-  'requestIdleCallback',
-  'cancelIdleCallback',
-];
 
 const SET_REPORT = 'второй подход повторил 110×12';
 

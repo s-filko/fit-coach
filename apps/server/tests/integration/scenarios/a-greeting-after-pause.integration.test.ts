@@ -32,47 +32,12 @@ import {
   GREETING_TEXT,
   scenario,
 } from '../../../evals/scenarios/a-greeting-after-pause.scenario';
+import { REAL_TIMER_APIS } from '../../helpers/real-timers';
 
 import { installScriptedModel, type ScriptedModelHandle } from './scripted-model';
 
 /** The scenario's weekday labels are pinned to this T0 (see the scenario file). */
 const T0 = new Date('2026-09-20T10:00:00.000Z');
-
-/** jest's `FakeableAPI` minus 'Date' — the union itself is not exported by @types/jest. */
-type RealTimerApi =
-  | 'setTimeout'
-  | 'clearTimeout'
-  | 'setInterval'
-  | 'clearInterval'
-  | 'setImmediate'
-  | 'clearImmediate'
-  | 'nextTick'
-  | 'queueMicrotask'
-  | 'performance'
-  | 'hrtime'
-  | 'requestAnimationFrame'
-  | 'cancelAnimationFrame'
-  | 'requestIdleCallback'
-  | 'cancelIdleCallback';
-
-/** Timer APIs that must stay REAL — pg, PostgresSaver and the ONNX embedding
- * pipeline schedule work through them; only `Date` is faked. */
-const REAL_TIMER_APIS: RealTimerApi[] = [
-  'setTimeout',
-  'clearTimeout',
-  'setInterval',
-  'clearInterval',
-  'setImmediate',
-  'clearImmediate',
-  'nextTick',
-  'queueMicrotask',
-  'performance',
-  'hrtime',
-  'requestAnimationFrame',
-  'cancelAnimationFrame',
-  'requestIdleCallback',
-  'cancelIdleCallback',
-];
 
 /** Duck-typed (_getType, not instanceof): jest.resetModules re-evaluates @langchain/core. */
 function typeOf(m: BaseMessage | undefined): string {
