@@ -9,12 +9,13 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-09-22 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-09-24 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
 — none —
 
 **Planned**
+- `coach-baseline.md` — Coach Baseline (Roadmap U1) Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 
@@ -228,9 +229,11 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
 
 ## Handoff (orchestrator shift, 2026-09-24 — fourth relay)
 
-**Next action: write the plan for roadmap unit U1 `coach-baseline`** (R0.1–R0.4 + R1.1, no gate)
-per `docs/superpowers/specs/2026-09-24-coach-roadmap.md` § 0. The owner accepted the roadmap on
-2026-09-24; no worktree, branch or live worker exists for it yet.
+**Next action: dispatch `coach-baseline` (roadmap U1) via `delegate-implementation`.** Plan written
+2026-09-24: `docs/superpowers/plans/coach-baseline.md` (`Status: planned`, 4 worker tasks + the
+orchestrator's close-out/live check). No worktree, branch or live worker exists for it yet.
+Owner decisions taken for it (2026-09-24): open decision 4 below — the exit-134 runner fix — is
+the plan's Task 1; a "real workout" for history and days-since = `completed` **and** ≥1 logged set.
 
 **Backlog triage done with the owner 2026-09-24** (recommendations; only roadmap acceptance is
 decided). Open owner decisions, to be asked one at a time, recommendation first:
@@ -238,8 +241,7 @@ decided). Open owner decisions, to be asked one at a time, recommendation first:
    drafts overlap U7 `propose_session` (recommended: close).
 2. Bundle BUG-027 + BUG-025 (code defects, no model) into one small plan outside the roadmap.
 3. Fold BUG-023 (isometric holds stored as reps) into U4 `set-kind` and pull U4 forward.
-4. Fix the native abort (exit 134) at the end of `test:scenarios` / `test:integration` early —
-   the roadmap's red → green method depends on a clean runner.
+4. ~~Fix the native abort (exit 134) early~~ — **decided 2026-09-24:** Task 1 of `coach-baseline`.
 5. Backlog cleanup: drop the "User-fact lifecycle" idea (delivered by `fact-lifecycle` +
    `course-check-and-constraints`) and the "Production Docker image hardening" idea (duplicate of
    HB-02); route close-out advisories — doc drift to P7, code ones to the plan that next touches
