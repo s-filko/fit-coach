@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-import type { ExerciseType, Involvement, MuscleGroup } from '@domain/training/types';
+import { exerciseTypeEnum, muscleGroupEnum } from '@infra/db/schema';
+import type { Involvement } from '@domain/training/types';
 
 import { EvalPhaseSchema, FixtureFactSchema, FixtureUserSchema, StateMessageSchema } from './case.schema';
 
@@ -117,45 +118,14 @@ export const assertionLiveOnly = (a: ScenarioAssertion): boolean => typeof a !==
 // --- past: the world a scenario starts from ---
 
 /**
- * Mirrors `MuscleGroup` (`src/domain/training/types.ts`) as a runtime tuple —
- * zod needs actual values to validate against; the type import above keeps
- * this list from silently diverging (same convention as
- * `search-exercises.tool.ts`'s `MUSCLE_GROUPS`).
+ * The muscle group / exercise type enums, straight from the DB schema
+ * (`@infra/db/schema`, the pgEnums' own `enumValues`) — the single runtime
+ * source, not a third hand-copied list (the other two, kept as-is, are
+ * `search-exercises.tool.ts`'s `MUSCLE_GROUPS` and
+ * `save-workout-plan.tool.ts`; a hand-copied list can silently drop a value
+ * that a type annotation alone would not catch).
  */
-const MUSCLE_GROUPS: [MuscleGroup, ...MuscleGroup[]] = [
-  'chest',
-  'back_lats',
-  'back_traps',
-  'shoulders_front',
-  'shoulders_side',
-  'shoulders_rear',
-  'quads',
-  'hamstrings',
-  'glutes',
-  'calves',
-  'biceps',
-  'triceps',
-  'forearms',
-  'abs',
-  'lower_back',
-  'core',
-  'cardio_system',
-  'full_body',
-  'lower_body_endurance',
-  'core_stability',
-];
-
-/** Mirrors `ExerciseType` (`src/domain/training/types.ts`) — see `MUSCLE_GROUPS` above. */
-const EXERCISE_TYPES: [ExerciseType, ...ExerciseType[]] = [
-  'strength',
-  'cardio_distance',
-  'cardio_duration',
-  'functional_reps',
-  'isometric',
-  'interval',
-];
-
-const MuscleGroupSchema = z.enum(MUSCLE_GROUPS);
+const MuscleGroupSchema = z.enum(muscleGroupEnum.enumValues);
 const InvolvementSchema: z.ZodType<Involvement> = z.enum(['primary', 'secondary']);
 
 /**
@@ -165,7 +135,7 @@ const InvolvementSchema: z.ZodType<Involvement> = z.enum(['primary', 'secondary'
  */
 const CatalogExerciseSchema = z.object({
   name: z.string().min(1),
-  exerciseType: z.enum(EXERCISE_TYPES),
+  exerciseType: z.enum(exerciseTypeEnum.enumValues),
   category: z.enum(['compound', 'isolation', 'cardio', 'functional', 'mobility']).optional(),
   muscles: z.array(z.object({ group: MuscleGroupSchema, involvement: InvolvementSchema })).min(1),
 });
