@@ -73,6 +73,12 @@ _Generated 2026-09-22 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 ## Next (dispatch order)
 
+**Coach roadmap (owner brainstorm 2026-09-23/24) — draft awaiting owner acceptance.** Entry point:
+`docs/superpowers/specs/2026-09-24-coach-roadmap.md` § 0 "Start here" — self-contained, for a fresh
+session. It orders two design specs (session-planning redesign, load advisor) into small steps, each
+red-first and live-checked on dev, grouped into units U1–U14; first unit `coach-baseline`. It absorbs
+item 3 below for BUG-030 and BUG-022 (roadmap R1.3a and R2.1); BUG-023/024/025/027 stay as listed.
+
 **Dispatch first — the 2026-09-21 live-session review (owner, 2026-09-21).** A real training session
 on dev (`fa293e20`, model `google/gemini-3.8-flash`) produced nine bugs, **BUG-022…BUG-030**, with
 evidence in `BUGS.md`. Order of work set by the owner:
