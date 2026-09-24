@@ -175,7 +175,7 @@ far, their value compounds with time.
 
 | Unit | Status |
 |---|---|
-| U1 | next |
+| U1 | done (2026-09-25 — live check by `npm run smoke` run 2, see plan `coach-baseline` § Review) |
 | U2–U14 | not started |
 
 Update this table when a unit's live check passes; mirror the change in `docs/STATE.md`.

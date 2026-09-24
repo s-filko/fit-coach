@@ -1226,6 +1226,16 @@ were recorded, and those sets exist in `session_sets` once training starts.
 
 ---
 
+**Reproduced live 2026-09-25 by the smoke test** (`npm run smoke`, run 1, GLM via Z.AI over
+`fitcoach_test`; plan `smoke-test`). With the planner still asking its first question, the user
+reported four sets ("жим 80 на 8", "ещё подход, 80 на 8", "жим над головой 50 на 8", "ещё раз 50 на 8").
+No tool was called on any of them — the planner only rewrote the plan ("Жим лёжа — 5×8 @ 80 кг").
+Then "всё, закончил" was answered "Хорошая работа — жим 80×8 и жим стоя 50×8", and in chat
+"что я делал на этой неделе?" was answered "Сегодня — ты сделал жим лёжа 80×8 и жим над головой
+50×8" while `session_sets` held nothing for the day. So the false claim survives the phase change
+and reaches the history answer, sourced from the conversation rather than the domain tables.
+Deterministic red: `planning-set-logging.repro.test.ts` (AC-CB-2). Fix owner: roadmap U5.
+
 ## BUG-023 — Isometric holds are stored as repetitions: 45-second planks become "45 reps"
 
 **Status:** Open

@@ -393,3 +393,13 @@ After the fixes the orchestrator re-ran: `test:unit` 1204, `test:integration` 55
 
 Meta (filed in `docs/REVIEW_FINDINGS.md`): repro-count-from-memory (blind spot); AC id in
 test `describe` (rule candidate); BR for real workout (rule candidate).
+
+**Live check (Task 5) — passed 2026-09-25, replaced by the smoke test (owner).** Instead of the owner's
+four bot messages, `npm run smoke` (plan `smoke-test`) ran on the live model (GLM via Z.AI) over
+`fitcoach_test` with a completed-but-empty `upper` session three days before T0 and the last real
+workouts at −6 d (lower) and −11 d (upper). Run 2: the coach said "последняя тренировка была 6 дней
+назад — ноги", "верх тела не тренировался уже 11 дней", and answered "что я делал на этой неделе?"
+with today's logged sets and "последняя тренировка была в прошлую пятницу — ноги" — the empty
+session never appeared and no day count was taken from it. Run 1 additionally reproduced BUG-022
+live (evidence in `BUGS.md`).
+

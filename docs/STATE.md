@@ -230,20 +230,16 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
 
 ## Handoff (orchestrator shift, 2026-09-24 — fourth relay)
 
-**`coach-baseline` (roadmap U1) is `done` and merged into `dev` (2026-09-25); deployed to dev; the
-owner's live check (plan Task 5, 4 messages) is the only thing left before U1 is marked `done` in the
-roadmap § 6.** Executed in parallel: four numbered worktrees (`coach-baseline-t1..t4`, Sonnet for
-t1/t2, GLM for t3/t4), DB-backed test runs serialised by `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh`.
-Results: the exit-134 runner abort is gone (root cause: an unreleased onnxruntime session killed by
-jest `forceExit`); BUG-031 fixed (history and days-since count only `completed` sessions with ≥1 set,
-ordered by `completedAt`); two new reds pin BUG-022 (→ U5) and the hidden overlapping load (→ U3).
-Review `2026-09-25 | clean`; advisories 2/4/8 fixed on the branch, the rest in `BACKLOG.md`. The
-repro glob now shows **6** failing suites (BUG-023/025/027/030 + the two new reds). Open for the
+**Roadmap U1 `coach-baseline` is complete (2026-09-25)** — merged, deployed to dev, live check passed via
+the smoke test (plan § Review). Review `2026-09-25 | clean`; advisories in `BACKLOG.md`. The repro
+glob shows **6** failing suites (BUG-023/025/027/030 + BUG-022 and hidden-load reds). Open for the
 owner: `BR-TRAINING-*` for the "real workout" rule (rule candidate in `REVIEW_FINDINGS.md`).
-**The live check is replaced by the smoke test (owner, 2026-09-25):** plan `smoke-test` (spec
-`docs/superpowers/specs/2026-09-25-smoke-test-design.md`) — `npm run smoke` plays one workout on the
-live model over `fitcoach_test`; its first run closes U1. Then next roadmap unit per § 4 priority
-(U5 needs the loop walkthrough gate).
+
+**In flight: plan `smoke-test`** (worktree `smoke-test-t1`, branch `plan/smoke-test`) — `npm run smoke`
+plays one workout on the live model over `fitcoach_test`; Tasks 1–3 done, two live runs made
+(run 2: 34/0 checks), remaining: exit 134 at the end of the evals process, then close-out. Local
+`apps/server/.env` gained `LLM_STRUCTURED_OUTPUT_MODE=json_object` (Z.AI route) on 2026-09-25.
+Next after it: roadmap U5 `transition-handoff` (gate: the loop walkthrough with the owner).
 
 **Backlog triage done with the owner 2026-09-24** (recommendations; only roadmap acceptance is
 decided). Open owner decisions, to be asked one at a time, recommendation first:

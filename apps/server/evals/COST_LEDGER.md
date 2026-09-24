@@ -29,3 +29,5 @@ Manual fallback workflow: `RUN_LLM_EVALS=1 npm run evals -- … --quota-before
 | 2026-09-18 | npm run evals -- --level L1 --phase chat --dataset transitions-smoke --samples 1 | L1 chat/transitions-smoke (1×1) | 2 | 3222 | 186 | 27568 | 27566 | -2 | -0.0% |
 | 2026-09-18 | npm run evals -- --level L1 --phase session_planning --dataset transitions-smoke --samples 1 | L1 session_planning/transitions-smoke (1×1) | 2 | 7269 | 1127 | 27566 | 27561 | -5 | -0.0% |
 | 2026-09-18 | npm run evals -- --level L1 --phase training --dataset transitions-smoke --samples 1 | L1 training/transitions-smoke (1×1) | 2 | 11055 | 376 | 27561 | 27555 | -6 | -0.0% |
+| 2026-09-25 | npm run smoke (run 1) | L3 smoke (8 user steps × 1) — U1 live check | ≈8 agent turns + tool hops + course check/summariser (L3 does not meter) | n/a | n/a | n/a | n/a | n/a | n/a |
+| 2026-09-25 | npm run smoke (run 2) | L3 smoke (9 user steps × 1) — U1 live check, passed 34/0 | ≈9 agent turns + tool hops + course check/summariser (L3 does not meter) | n/a | n/a | n/a | n/a | n/a | n/a |
