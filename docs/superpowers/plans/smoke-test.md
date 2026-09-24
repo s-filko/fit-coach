@@ -111,4 +111,40 @@ registration), new `tests/integration/scenarios/smoke-seed.integration.test.ts`.
 
 ## Review
 
-_(filled at close-out)_
+2026-09-25 — one combined reviewer covering R1–R4 (owner economy rule). Verdict **blocked** (1 blocking).
+Orchestrator acceptance before review: check-all, unit 1213, integration 570, scenarios 355 — exit 0.
+Live runs (Task 4): run 1 — scenario defects + exit 134 + course-check ZodError (local `.env` lacked
+`LLM_STRUCTURED_OUTPUT_MODE=json_object`, added 2026-09-25); run 2 — 34/0, still exit 134; run 3
+after `70d901e3` — 34/0, exit 0, no `libc++abi`. U1's live check judged from run 2/3 transcripts
+(see plan `coach-baseline` § Review). Run 1 reproduced BUG-022 live (`BUGS.md`).
+
+Deviations: Task 1's "import the domain unions" became the DB enums' `enumValues` (`db6c0a94`) — zod
+needs runtime values; the domain unions are types only. The BUG-031 `delivered.mustNotMatch` was
+removed (L3 does not evaluate `seen`; an English block label never occurs in a Russian reply) —
+BUG-031 is judged from the transcript (D5).
+
+Blocking:
+1. R3 `evals/lib/__tests__/reporter.unit.test.ts:43`, `tests/integration/scenarios/scenario-world-seed.integration.test.ts:85`
+   — SUPERPOWERS_INTEGRATION rule 4: the suites proving AC-SM-2 / AC-SM-1 carry no AC id in
+   `describe`/`it` names. *(closure pending)*
+
+Advisory:
+2. R3 `evals/run.ts:239` — `dbPoolMayBeOpen` is set only after `runL3` returns `'ran'`; a throw
+   mid-run leaves the pool open (exit only after pg's idle timeout, or never with a checked-out
+   client); a rejecting `pool.end()` runs cleanup twice ("Called end on pool more than once").
+3. R3 `evals/schema/scenario.schema.ts:173` — a set with both `reps` and `durationSeconds` matches
+   the duration branch and `reps` is stripped silently; `.strict()` branches would reject it.
+4. R1 `scenario.schema.ts:3` — infra dependency via DB enums (recorded above as a deviation).
+5. R2 `scenario.schema.ts:139` — category list and `InvolvementSchema` values hand-copied (category
+   also in `search-exercises.tool.ts:36`, `types.ts:64`, `exercises.seed.ts:15`); pre-existing copies.
+6. R2 `evals/lib/scenario-world.ts:125` — `toSetData` returns `Record<string, unknown>` with literal
+   type strings instead of the domain `SetData` / `setDataTypes`; shapes match today, drift would
+   not be caught at compile time.
+7. R3 `l3.ts`, `reporter.ts` — evaluation semantics unchanged (confirmation, no action).
+8. R4 `evals/datasets/README.md:115-138` — § Smoke omits: model from `.env` and the Z.AI
+   `json_object` requirement; the shared `fitcoach_test` and `db-test-lock.sh`; the report file
+   name is `<scenarioId>-<ISO>.md` for every L3 run.
+9. R4 — no durable-layer gap (confirmation, no action).
+
+Meta: CLI teardown paths untested beyond the live success path (rule candidate); zones do not
+state the severity of a missing AC id in a test name (prompt defect).
