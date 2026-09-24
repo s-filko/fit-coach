@@ -50,19 +50,43 @@ function argValue(flag: string, fallback: string): string {
 }
 
 /**
- * Every exit point in `main()` funnels through here (success, guard refusal
- * or failure alike): a live L3 run can load the shared embedding pipeline's
- * native ONNX session (search_exercises), and an unreleased session outlives
- * `process.exit()`'s teardown and aborts with `libc++abi … mutex lock
- * failed` (exit 134) instead of the intended code — the same root cause
- * `src/app/test/setup.ts`'s `afterAll` releases for jest (coach-baseline
- * Task 1). `disposeAllEmbeddingServices()` is a no-op when nothing was ever
- * loaded (the common case: L0/L1, or an L3 gate refusal before any model
- * call), so this costs nothing on the paths that never touch embeddings.
+ * Set right after a live L3 run actually reaches `runL3`'s `'ran'` outcome —
+ * the only path in this file that ever imports `@infra/db/drizzle` (a lazy
+ * import inside `run-scenario.ts`, gated behind all of `runL3`'s checks), so
+ * checking it before importing that module in `exitAfterCleanup` avoids
+ * opening a brand-new DB pool on exit paths that never had one (L0, L1, an
+ * L3 gate refusal before any DB access).
  */
-async function exitAfterCleanup(code: number): Promise<never> {
+let dbPoolMayBeOpen = false;
+
+/**
+ * Every exit point in `main()` funnels through here (success, guard refusal
+ * or failure alike).
+ *
+ * It does NOT call `process.exit()`. A live L3 run loads the shared
+ * embedding pipeline's native ONNX session (search_exercises) — a throwaway
+ * repro (load the same pipeline, dispose it, then `process.exit()`)
+ * reproduced exit 134 (`libc++abi … mutex lock failed`) every time, and
+ * removing the `process.exit()` call — `disposeAllEmbeddingServices()`
+ * resolving only means the JS-visible teardown call returned, not that the
+ * native thread pool has actually unwound — fixed it every time: Node's
+ * normal, un-forced exit lets that finish before the process actually ends.
+ * Same fix jest already relies on (`jest.config.cjs`'s `forceExit: false` +
+ * `src/app/test/setup.ts`'s `afterAll`). Setting `process.exitCode` and
+ * returning is how a Node script exits with a specific code WITHOUT forcing
+ * it.
+ *
+ * The DB pool (opened only by an actual L3 run) is closed explicitly rather
+ * than left to its own idle timeout — that alone still exits cleanly, just
+ * ~10 s slower per a throwaway repro of the same shape.
+ */
+async function exitAfterCleanup(code: number): Promise<void> {
   await disposeAllEmbeddingServices();
-  process.exit(code);
+  if (dbPoolMayBeOpen) {
+    const { pool } = await import('@infra/db/drizzle');
+    await pool.end();
+  }
+  process.exitCode = code;
 }
 
 function ledgerText(): string {
@@ -211,6 +235,9 @@ async function main(): Promise<void> {
         await exitAfterCleanup(3);
         return;
       }
+      // Only reached past every gate: `runL3` has lazily imported
+      // `@infra/db/drizzle` by now (see `dbPoolMayBeOpen`'s own comment).
+      dbPoolMayBeOpen = true;
       perPhaseResults.set('scenarios', outcome.results);
       // AC-SM-2: the readable per-step transcript — stdout and file, one
       // formatter for every L3 run (see reporter.formatScenarioTranscript).
