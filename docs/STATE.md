@@ -73,7 +73,7 @@ _Generated 2026-09-22 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 ## Next (dispatch order)
 
-**Coach roadmap (owner brainstorm 2026-09-23/24) — draft awaiting owner acceptance.** Entry point:
+**Coach roadmap (owner brainstorm 2026-09-23/24) — accepted by the owner 2026-09-24; next: plan U1 `coach-baseline`.** Entry point:
 `docs/superpowers/specs/2026-09-24-coach-roadmap.md` § 0 "Start here" — self-contained, for a fresh
 session. It orders two design specs (session-planning redesign, load advisor) into small steps, each
 red-first and live-checked on dev, grouped into units U1–U14; first unit `coach-baseline`. It absorbs

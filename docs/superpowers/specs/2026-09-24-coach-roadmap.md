@@ -1,6 +1,8 @@
 # Roadmap — Session planning redesign and load advisor
 
-> **Status: draft for owner acceptance, 2026-09-24; no plan written yet.** This document
+> **Status: accepted by the owner 2026-09-24; no plan written yet.** Acceptance covers the
+> step order, the units and the rules in section 2; decisions tagged **[proposed]** in the two
+> design specs still need the owner's confirmation per the gates in section 5. This document
 > is self-contained: a fresh session starts here and needs nothing from the brainstorm that
 > produced it. It orders two design specs into small, independently verifiable steps and
 > groups them into plan-sized units.
