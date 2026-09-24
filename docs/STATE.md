@@ -226,6 +226,29 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
+## Handoff (orchestrator shift, 2026-09-24 — fourth relay)
+
+**Next action: write the plan for roadmap unit U1 `coach-baseline`** (R0.1–R0.4 + R1.1, no gate)
+per `docs/superpowers/specs/2026-09-24-coach-roadmap.md` § 0. The owner accepted the roadmap on
+2026-09-24; no worktree, branch or live worker exists for it yet.
+
+**Backlog triage done with the owner 2026-09-24** (recommendations; only roadmap acceptance is
+decided). Open owner decisions, to be asked one at a time, recommendation first:
+1. Close `refactor-p6-progress-and-drafts` as superseded — its muscle blocks are U3, its structured
+   drafts overlap U7 `propose_session` (recommended: close).
+2. Bundle BUG-027 + BUG-025 (code defects, no model) into one small plan outside the roadmap.
+3. Fold BUG-023 (isometric holds stored as reps) into U4 `set-kind` and pull U4 forward.
+4. Fix the native abort (exit 134) at the end of `test:scenarios` / `test:integration` early —
+   the roadmap's red → green method depends on a clean runner.
+5. Backlog cleanup: drop the "User-fact lifecycle" idea (delivered by `fact-lifecycle` +
+   `course-check-and-constraints`) and the "Production Docker image hardening" idea (duplicate of
+   HB-02); route close-out advisories — doc drift to P7, code ones to the plan that next touches
+   the file.
+Sequencing agreed as recommendation: prompt bugs (BUG-024/028/026/013/006) wait until after
+roadmap Stage 3 (R3.4 rewrites `session_planning`); consolidated eval pass (AC-1344/1361/1364) and
+P7 after U7; HB-02..HB-07 as one hygiene batch (HB-03 timeouts first; all verified still open in
+code 2026-09-24; HB-06's `created_at` half is done by BUG-029).
+
 ## Handoff (orchestrator shift, 2026-09-22 — third relay)
 
 **`llm-io-audit-trail` and `llm-io-audit-trail-closeout` are both `done` and merged into `dev`**
