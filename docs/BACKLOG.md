@@ -197,14 +197,6 @@ Rules:
 - [ ] **Inline `setNumericField`** in llm-profiles.ts (one call site; the field parameter
       splits the body in two — the plan's own snippet had the branches inline). Source:
       refactor-P1 close-out review R2 (2026-09-16).
-- [ ] **Integration runner exits 134 after an all-green run**: `RUN_DB_TESTS=1
-npm run test:integration` (apps/server) crashes in jest global teardown
-      (`src/app/test/teardown.ts`, DB-pool close) with libc++ `mutex lock failed` AFTER
-      printing 122/122 passed — the non-zero exit can fail CI/cleanup even when tests pass.
-      The plain unit run (`npx jest --ci`) crashes identically after an all-green summary —
-      proven pre-existing at the base commit by the P2 review (temp worktree, same crash).
-      Reproduced on clean `dev`, pre-existing, not a P2 regression. Source: refactor-P2
-      Task 8 verification + close-out review R3 (2026-09-16).
 - [ ] L0 eval checks named by `PROMPT_EVAL_FRAMEWORK.md` §4.1 but not implemented in the
       P0 harness: version discipline, message-catalog completeness (section presence shipped
       in refactor-p2-prompt-modules). Both need artefacts the harness does not build yet —
@@ -694,12 +686,6 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 
 ## fact-lifecycle (wave A) close-out review advisories (2026-09-21)
 
-- [ ] `npm run test:scenarios` (and `test:integration`) end with a native abort —
-      `libc++abi: terminating … mutex lock failed` — AFTER a fully green run, so the command exits 134
-      while every test passed. Reproduced identically on the base commit, so it predates this wave, but
-      it means the exit code of the agent self-check is meaningless and the suite could never be wired
-      into CI as-is. Likely the embedding model's (onnxruntime) teardown.
-      Source: orchestrator, Task 1 acceptance (2026-09-21).
 - [ ] The AC-FL-3 end-to-end scenario test uses an in-memory fake of `IUserFactsService` that
       re-implements the stale-evidence rule itself, so the test would still pass if the real repository
       diverged. The real path is covered by the DB integration suite, but the two rules are written

@@ -157,3 +157,11 @@ export async function setupTestDI(): Promise<void> {
 beforeAll(async () => {
   await setupTestDI();
 });
+
+// Releases any embedding pipeline this test file's process loaded — otherwise its native ONNX
+// session's thread pool outlives the process and jest's forceExit aborts it instead of joining
+// cleanly (libc++abi: mutex lock failed). See EmbeddingService.dispose.
+afterAll(async () => {
+  const { disposeAllEmbeddingServices } = await import('@infra/ai/embedding.service');
+  await disposeAllEmbeddingServices();
+});

@@ -8,6 +8,11 @@ const MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
 const EMBEDDING_DIMS = 384;
 
 type PipelineFn = (texts: string | string[], opts?: Record<string, unknown>) => Promise<{ data: Float32Array }>;
+type DisposablePipeline = PipelineFn & { dispose: () => Promise<unknown> };
+
+// Test-only: every instance that has loaded its native ONNX session, so a test run can release
+// them all before the process exits (see disposeAllEmbeddingServices below).
+const liveInstances = new Set<EmbeddingService>();
 
 /**
  * Local embedding service using all-MiniLM-L6-v2 via @huggingface/transformers (ONNX).
@@ -37,6 +42,7 @@ export class EmbeddingService implements IEmbeddingService {
       const { pipeline } = await import('@huggingface/transformers');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
       this.pipeline = (await pipeline('feature-extraction', MODEL_ID, { dtype: 'fp32' })) as any;
+      liveInstances.add(this);
       log.info({ model: MODEL_ID, ms: Date.now() - start }, 'Embedding model loaded');
     })();
 
@@ -75,4 +81,24 @@ export class EmbeddingService implements IEmbeddingService {
       log.error({ err }, 'Embedding model warm-up failed');
     }
   }
+
+  /**
+   * Releases the native ONNX session. Test-only: a long-lived server process never calls this
+   * (the model is cached for the process lifetime by design); a jest run must call it, or the
+   * session's native thread pool outlives the process and aborts on exit (libc++abi mutex lock
+   * failed) instead of joining cleanly.
+   */
+  async dispose(): Promise<void> {
+    liveInstances.delete(this);
+    if (this.pipeline) {
+      await (this.pipeline as DisposablePipeline).dispose();
+      this.pipeline = null;
+    }
+    this.initPromise = null;
+  }
+}
+
+/** Test-only: releases every embedding pipeline loaded in this process (see EmbeddingService.dispose). */
+export async function disposeAllEmbeddingServices(): Promise<void> {
+  await Promise.all([...liveInstances].map(service => service.dispose()));
 }
