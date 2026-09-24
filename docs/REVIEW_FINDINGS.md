@@ -163,6 +163,7 @@ or is inert for the kind of diff under review.
   existing fixture) would have to be scoped by the orchestrator. Worth either a stated
   prioritisation in the brief or an explicit budget.
   Runs: llm-io-audit-trail (2026-09-22).
+- [×1] A plan stated "exactly N failing" for the repro glob from memory rather than from a command it had run; the baseline (2) and the close-out expectation (4) both missed the unit repro probes for BUG-023/BUG-025 (real: 4 before, 6 after). Proposed: a plan quoting a count of failing suites gets it from a run and names the command. Runs: coach-baseline 2026-09-25 (R3).
 
 ## Blind spots
 
@@ -332,6 +333,7 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   zones may not edit (R4: "who actually escalates it, and where is that recorded?"). One line in
   the skill — mechanism drift is R4's; the orchestrator escalates read-only-spec findings to the
   owner at close-out — would settle both. Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19).
+- [×1] Zone R3 says test names carry BR/AC refs "per `docs/CONTRIBUTING_AI.md`", but that file has no such rule, so missing AC refs (`planning-set-logging`, `recent-history-status`) cannot be graded. Proposed wording for CONTRIBUTING_AI Principles: "Every `describe` of a test that proves an AC names that AC id." Runs: coach-baseline 2026-09-25 (R3).
 
 ## Rule candidates
 
@@ -752,3 +754,4 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   citation is held to the letter of what a step enumerated or to the principle it sets. Worth one
   sentence in `close-out-review` § What a fix owes if the stricter reading is ever wanted.
   Runs: llm-io-audit-trail (2026-09-22).
+- [×1] The owner's rule "real workout = `completed` with ≥1 logged set" (2026-09-24) is enforced by code but lives only in `BUGS.md` BUG-031 and a port JSDoc. Proposed `BR-TRAINING-0xx` in `docs/domain/training.spec.md`: "Recent training history and days-since-last-workout consider only real workouts: status `completed` with at least one logged set." Needs owner approval (durable spec). Runs: coach-baseline 2026-09-25 (R4).
