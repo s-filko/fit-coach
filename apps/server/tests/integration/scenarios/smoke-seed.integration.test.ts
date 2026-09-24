@@ -86,4 +86,21 @@ describe('smoke scenario — format and seeded world (AC-SM-3)', () => {
       expect(row.status).toBe('completed');
     }
   });
+
+  it("gives every HISTORY workout a hist_ key, never the plan's own session keys (fix for the first live run)", async () => {
+    const rows = await db
+      .select({ sessionKey: workoutSessions.sessionKey })
+      .from(workoutSessions)
+      .where(eq(workoutSessions.userId, world.userId));
+    expect(rows.length).toBe(past.workouts!.length);
+    for (const row of rows) {
+      expect(row.sessionKey).toMatch(/^hist_\d{8}_(upper|lower|cardio)$/);
+      // The plan's own keys ('upper_a'/'lower_a') must stay free for the LIVE
+      // session the scripted steps create — the first live run's
+      // persisted.session checks hit the seeded empty session instead of the
+      // new one because both shared 'upper_a'.
+      expect(row.sessionKey).not.toBe('upper_a');
+      expect(row.sessionKey).not.toBe('lower_a');
+    }
+  });
 });

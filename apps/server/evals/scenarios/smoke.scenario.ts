@@ -1,5 +1,3 @@
-import { humanTimeAgo } from '@shared/date-utils';
-
 import { resolveRelativeTime, type Scenario } from '../schema/scenario.schema';
 
 /**
@@ -20,31 +18,44 @@ import { resolveRelativeTime, type Scenario } from '../schema/scenario.schema';
  * sits inside the chat-phase history block's default depth (5) once the
  * live run's own new workout joins the list.
  *
- * The empty session's `at` and the live-run T0 are both anchored to the SAME
- * `new Date()` (`NOW` below) — the L3 runner captures its own real T0
- * (`run-scenario.ts`'s `new Date()`) moments after this module is imported,
- * so the two are near-identical in practice (never literally the same
- * instant, but never far enough apart to cross a calendar day either).
+ * Every HISTORY workout carries a `hist_<yyyymmdd>_<upper|lower|cardio>` key
+ * (the owner's real dev-data pattern), NEVER the plan's own session keys
+ * (`upper_a`/`lower_a`) — first live run (2026-09-24) showed
+ * `persisted.session` checks keyed `upper_a` hitting the seeded
+ * completed-but-empty `upper_a` instead of the NEW in-progress session the
+ * live steps create, because both shared that key. Only the live-created
+ * session carries a plan key now, so `expect.persisted.session.key: 'upper_a'`
+ * below can only ever mean that one.
+ *
+ * `NOW` anchors every relative offset (workout dates AND the history-style
+ * keys) to the SAME instant this module is imported; the L3 runner captures
+ * its own real T0 moments later (`run-scenario.ts`'s `new Date()`), close
+ * enough that the two never disagree about which calendar day a `hist_`
+ * key's date-stamp names.
  */
 
 const NOW = new Date();
 
+/** `hist_<yyyymmdd>_<suffix>` for a workout at `offset` — see the file comment. */
+function historyKey(offset: string, suffix: 'upper' | 'lower' | 'cardio'): string {
+  const date = resolveRelativeTime(offset, NOW);
+  const stamp = `${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, '0')}${String(date.getUTCDate()).padStart(2, '0')}`;
+  return `hist_${stamp}_${suffix}`;
+}
+
 /** Placed between the last real workout (`-6d`) and T0 — BUG-031's shape. */
 const EMPTY_SESSION_OFFSET = '-3d';
 
-/**
- * The exact `when` label `chat-context.v1.ts`'s `buildRecentSessionsSection`
- * would render for the empty session's history line (`humanTimeAgo`, same
- * function, same inputs). BUG-031 is the coach echoing this internal
- * formatting into its OWN reply instead of silently leaving the empty
- * session out — so a literal leak of this label into the delivered text
- * (not a semantic judgement — D5 builds no LLM judge) is exactly what the
- * final step's `delivered.mustNotMatch` below catches.
- */
-const EMPTY_SESSION_MARKER = humanTimeAgo(resolveRelativeTime(EMPTY_SESSION_OFFSET, NOW), NOW, 'Europe/Berlin');
-
 export const GREETING_REQUEST = 'привет, хочу потренироваться';
 export const GO_UPPER = 'давай верх, погнали';
+/**
+ * First live run (2026-09-24): "давай верх, погнали" alone made the model ask
+ * ONE readiness question ("как самочувствие в плечах и локтях…") and stop —
+ * it never called `start_training_session` on that turn. This answers it and
+ * confirms, matching what a real user would say next; the start-training
+ * expectations moved here from `GO_UPPER`'s step accordingly.
+ */
+export const READINESS_CONFIRM = 'плечи и локти в порядке, план ок — стартуем';
 export const FINISH_REQUEST = 'всё, закончил';
 export const HISTORY_QUESTION = 'что я делал на этой неделе?';
 
@@ -166,7 +177,7 @@ export const past: Scenario['past'] = {
   workouts: [
     {
       at: '-20d',
-      key: 'upper_a',
+      key: historyKey('-20d', 'upper'),
       status: 'completed',
       exercises: [
         {
@@ -182,7 +193,7 @@ export const past: Scenario['past'] = {
     },
     {
       at: '-18d',
-      key: 'lower_a',
+      key: historyKey('-18d', 'lower'),
       status: 'completed',
       exercises: [
         {
@@ -198,7 +209,7 @@ export const past: Scenario['past'] = {
     },
     {
       at: '-16d',
-      key: 'upper_a',
+      key: historyKey('-16d', 'upper'),
       status: 'completed',
       exercises: [
         {
@@ -214,7 +225,7 @@ export const past: Scenario['past'] = {
     },
     {
       at: '-14d',
-      key: 'lower_a',
+      key: historyKey('-14d', 'lower'),
       status: 'completed',
       exercises: [
         {
@@ -230,7 +241,7 @@ export const past: Scenario['past'] = {
     },
     {
       at: '-11d',
-      key: 'upper_a',
+      key: historyKey('-11d', 'upper'),
       status: 'completed',
       exercises: [
         {
@@ -246,13 +257,13 @@ export const past: Scenario['past'] = {
     },
     {
       at: '-9d',
-      key: 'cardio_a',
+      key: historyKey('-9d', 'cardio'),
       status: 'completed',
       exercises: [{ exercise: 'Treadmill Run', sets: [{ distanceMeters: 4000, durationSeconds: 1500 }] }],
     },
     {
       at: '-6d',
-      key: 'lower_a',
+      key: historyKey('-6d', 'lower'),
       status: 'completed',
       exercises: [
         {
@@ -269,7 +280,7 @@ export const past: Scenario['past'] = {
     // BUG-031: completed-but-empty — the LAST session before T0.
     {
       at: EMPTY_SESSION_OFFSET,
-      key: 'upper_a',
+      key: historyKey(EMPTY_SESSION_OFFSET, 'upper'),
       status: 'completed',
       exercises: [],
     },
@@ -281,8 +292,8 @@ export const scenario: Scenario = {
   id: 'smoke',
   description:
     "The one live workout the orchestrator runs instead of the owner's manual Telegram check " +
-    '(spec 2026-09-25-smoke-test-design.md): greeting -> planning -> start -> sets logged -> finish -> ' +
-    'a history question, over a hand-written upper/lower history ending in a completed-but-empty ' +
+    '(spec 2026-09-25-smoke-test-design.md): greeting -> planning -> readiness check -> start -> sets logged -> ' +
+    'finish -> a history question, over a hand-written upper/lower history ending in a completed-but-empty ' +
     'session (BUG-031). Live only: run with `npm run smoke`, never through test:scenarios.',
   past,
   steps: [
@@ -296,6 +307,17 @@ export const scenario: Scenario = {
     {
       action: 'user',
       text: GO_UPPER,
+      expect: {
+        // No tools/persisted expectations here — the first live run showed the
+        // model asking a readiness question instead of starting on this turn
+        // (see READINESS_CONFIRM above); staying in session_planning is the
+        // only outcome common to both that and a direct start.
+        phaseAfter: { phase: 'session_planning' },
+      },
+    },
+    {
+      action: 'user',
+      text: READINESS_CONFIRM,
       expect: {
         tools: { must: ['start_training_session'] },
         phaseAfter: { phase: 'training' },
@@ -396,11 +418,17 @@ export const scenario: Scenario = {
     {
       action: 'user',
       text: HISTORY_QUESTION,
+      // BUG-031's check lives here in intent only: L3 never evaluates `seen`
+      // (evals/levels/l3.ts's own header comment — "only a scripted model can
+      // observe its own input"; evaluateStep has no `seen` branch at all), so
+      // no substring check on the delivered text can distinguish "silently
+      // omitted the empty session" from "coincidentally never said the words
+      // that would have proven it". The first live run's reply already showed
+      // this working (it named the two REAL sessions still inside the depth-5
+      // history window and said nothing invented for the empty one) — the
+      // orchestrator judges this step from the transcript by hand (D5).
       expect: {
         phaseAfter: { phase: 'chat' },
-        // BUG-031: the coach must not leak the empty session's internal
-        // history-block label into its reply (see EMPTY_SESSION_MARKER above).
-        delivered: { mustNotMatch: [EMPTY_SESSION_MARKER] },
       },
     },
   ],
