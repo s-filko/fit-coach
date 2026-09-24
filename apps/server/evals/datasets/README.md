@@ -112,3 +112,27 @@ durabilities, so a date expectation can fail on a legitimate model choice;
 read the detail before calling it a regression. The deterministic layer
 (`tests/integration/scenarios/fact-lifecycle.integration.test.ts`) already runs
 every journey with the check on AND off against a scripted model.
+
+## Smoke — one live workout over the test DB
+
+`npm run smoke` is the one-command L3 run of the `smoke` scenario (spec:
+`docs/superpowers/specs/2026-09-25-smoke-test-design.md`): it seeds a
+hand-written realistic history into `fitcoach_test`, plays a fixed user
+script (greeting → planning → one workout → finish → a history question)
+against the real model, checks every step, and prints the whole conversation.
+It exists to replace the owner's manual check in the Telegram bot — same
+gates as L3 (`RUN_LLM_EVALS=1`, `_test` DB only, shared call ceiling).
+
+    npm run smoke
+
+- Cost: ≈ user steps × 1–3 model calls (one agent call per user turn plus
+  tool hops), inside the standard `EVALS_CALL_CEILING` gate; record the run
+  in `evals/COST_LEDGER.md` afterwards like any L3 run.
+- Output: the per-step transcript (user text, delivered coach reply, tools
+  called, phase after, each check ✓/✗) goes to stdout AND to
+  `evals/reports/smoke-<ISO>.md` (gitignored) — this applies to every L3 run,
+  not only the smoke.
+- How to add a bug (D3/D4): edit `evals/scenarios/smoke.scenario.ts` (the
+  history fixture and/or the user steps) so a run shows the bug, pin it with
+  a permanent red test as usual (`*.repro.test.ts` / the regular suites — the
+  smoke itself protects nothing), fix, then re-run the smoke to confirm.

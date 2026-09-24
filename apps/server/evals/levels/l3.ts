@@ -37,7 +37,7 @@ import { install as installFakeClock } from '@sinonjs/fake-timers';
 
 import { assertScenarioTestDatabase, isScenarioTestDatabase } from '../lib/scenario-db-guard';
 import { guardDecision, planCallCount } from '../lib/run-guard';
-import type { CheckResult } from '../lib/reporter';
+import type { CheckResult, ScenarioTranscript } from '../lib/reporter';
 import type { RunScenarioOptions, ScenarioRunResult, ScenarioStepObservation } from '../lib/run-scenario';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import { evaluateFactExpectations, evaluatePlanExpectations } from '../lib/persisted-expectations';
@@ -282,7 +282,18 @@ export interface L3Deps {
 export type L3Outcome =
   | { status: 'skipped'; message: string }
   | { status: 'refused'; message: string }
-  | { status: 'ran'; results: CheckResult[]; plannedCalls: number; knownBugs: number };
+  | {
+      status: 'ran';
+      results: CheckResult[];
+      /**
+       * Per-scenario run + checks (AC-SM-2): what run.ts formats into the
+       * per-step transcript — printed to stdout and written to
+       * evals/reports/<scenario>-<ISO>.md. Every L3 run, not only the smoke.
+       */
+      transcripts: ScenarioTranscript[];
+      plannedCalls: number;
+      knownBugs: number;
+    };
 
 /**
  * Runs the journeys live: gates (flag → `_test` DB → call ceiling), installs
@@ -323,15 +334,24 @@ export async function runL3(scenarios: Scenario[], samples = 1, deps: L3Deps = {
   // the deterministic layer's jest.setSystemTime; timers stay real.
   const clock = installFakeClock({ now: new Date(), toFake: ['Date'], shouldAdvanceTime: true });
   const results: CheckResult[] = [];
+  const transcripts: ScenarioTranscript[] = [];
   try {
     for (const scenario of scenarios) {
       for (let sample = 0; sample < samples; sample += 1) {
         const result = await run(scenario, { onAdvance: now => clock.setSystemTime(now) });
-        results.push(...evaluateScenario(scenario, result, samples > 1 ? `[${sample + 1}]` : ''));
+        const checks = evaluateScenario(scenario, result, samples > 1 ? `[${sample + 1}]` : '');
+        results.push(...checks);
+        transcripts.push({ scenarioId: scenario.id, steps: scenario.steps, observations: result.steps, checks });
       }
     }
   } finally {
     clock.uninstall();
   }
-  return { status: 'ran', results, plannedCalls, knownBugs: results.filter(r => r.knownBug !== undefined).length };
+  return {
+    status: 'ran',
+    results,
+    transcripts,
+    plannedCalls,
+    knownBugs: results.filter(r => r.knownBug !== undefined).length,
+  };
 }
