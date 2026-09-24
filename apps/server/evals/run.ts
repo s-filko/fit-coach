@@ -22,6 +22,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { disposeAllEmbeddingServices } from '@infra/ai/embedding.service';
+
 import { EVAL_PHASES, runL0 } from './levels/l0';
 import { loadCases, runL1 } from './levels/l1';
 import { loadScenarios, runL3 } from './levels/l3';
@@ -47,6 +49,22 @@ function argValue(flag: string, fallback: string): string {
   return index >= 0 ? (process.argv[index + 1] ?? fallback) : fallback;
 }
 
+/**
+ * Every exit point in `main()` funnels through here (success, guard refusal
+ * or failure alike): a live L3 run can load the shared embedding pipeline's
+ * native ONNX session (search_exercises), and an unreleased session outlives
+ * `process.exit()`'s teardown and aborts with `libc++abi … mutex lock
+ * failed` (exit 134) instead of the intended code — the same root cause
+ * `src/app/test/setup.ts`'s `afterAll` releases for jest (coach-baseline
+ * Task 1). `disposeAllEmbeddingServices()` is a no-op when nothing was ever
+ * loaded (the common case: L0/L1, or an L3 gate refusal before any model
+ * call), so this costs nothing on the paths that never touch embeddings.
+ */
+async function exitAfterCleanup(code: number): Promise<never> {
+  await disposeAllEmbeddingServices();
+  process.exit(code);
+}
+
 function ledgerText(): string {
   return existsSync(LEDGER_PATH) ? readFileSync(LEDGER_PATH, 'utf8') : '';
 }
@@ -61,7 +79,8 @@ async function main(): Promise<void> {
 
   if (dataset !== '' && phase === 'all') {
     console.error('--dataset requires --phase <phase> — a dataset lives in one phase directory');
-    process.exit(2);
+    await exitAfterCleanup(2);
+    return;
   }
 
   // Results per phase, so --baseline writes one file per phase even with --phase all
@@ -78,7 +97,8 @@ async function main(): Promise<void> {
     if (level === 'L1') {
       if (process.env['RUN_LLM_EVALS'] !== '1') {
         console.log('L1 skipped: set RUN_LLM_EVALS=1 to run evals against a real model.');
-        process.exit(0);
+        await exitAfterCleanup(0);
+        return;
       }
 
       // D-P red button: count the calls before any model is reached.
@@ -95,7 +115,8 @@ async function main(): Promise<void> {
         console.log(guard.message);
       }
       if (!guard.ok) {
-        process.exit(3);
+        await exitAfterCleanup(3);
+        return;
       }
 
       // D-R/D-Q quota gate + pre-run estimate banner.
@@ -106,7 +127,8 @@ async function main(): Promise<void> {
           'L1 requires --quota-before <n> (the Z.AI dashboard number): no quota endpoint is readable (D-R). ' +
             'Complete the ledger row afterwards with: npm run evals:ledger -- --after <n>',
         );
-        process.exit(2);
+        await exitAfterCleanup(2);
+        return;
       }
       const weeklyLimit = process.env['EVALS_WEEKLY_LIMIT'] ? Number(process.env['EVALS_WEEKLY_LIMIT']) : undefined;
       const ledger = parseLedgerTable(ledgerText());
@@ -161,7 +183,8 @@ async function main(): Promise<void> {
     } else if (level === 'L3') {
       if (baselineMode !== '') {
         console.error('L3 does not support --baseline (scenarios are not a per-phase baseline source).');
-        process.exit(2);
+        await exitAfterCleanup(2);
+        return;
       }
       const scenarioId = argValue('--scenario', '');
       let scenarios;
@@ -169,7 +192,8 @@ async function main(): Promise<void> {
         scenarios = loadScenarios(scenarioId || undefined);
       } catch (err) {
         console.error(err instanceof Error ? err.message : String(err));
-        process.exit(2);
+        await exitAfterCleanup(2);
+        return;
       }
       const outcome = await runL3(scenarios, samples, {
         onPlanned: info =>
@@ -179,11 +203,13 @@ async function main(): Promise<void> {
       });
       if (outcome.status === 'skipped') {
         console.log(outcome.message);
-        process.exit(0);
+        await exitAfterCleanup(0);
+        return;
       }
       if (outcome.status === 'refused') {
         console.error(outcome.message);
-        process.exit(3);
+        await exitAfterCleanup(3);
+        return;
       }
       perPhaseResults.set('scenarios', outcome.results);
       // AC-SM-2: the readable per-step transcript — stdout and file, one
@@ -199,7 +225,8 @@ async function main(): Promise<void> {
       }
     } else {
       console.error(`Level ${level} is not implemented yet (P0 ships L0, L1 and L3).`);
-      process.exit(2);
+      await exitAfterCleanup(2);
+      return;
     }
   }
 
@@ -223,7 +250,8 @@ async function main(): Promise<void> {
         diff = compareToBaseline(baselineVersion, p, phaseResults, dataset || undefined);
       } catch (err) {
         console.error(err instanceof Error ? err.message : String(err));
-        process.exit(2);
+        await exitAfterCleanup(2);
+        return;
       }
       console.log(
         `vs baseline ${baselineVersion}/${p}: ${diff.regressions.length} regressions, ${diff.improvements.length} improvements, ${diff.missing.length} missing, ${diff.added.length} new checks`,
@@ -236,7 +264,10 @@ async function main(): Promise<void> {
 
   const report = buildReport(level, results);
   printReport(report);
-  process.exit(exitCodeFor(report));
+  await exitAfterCleanup(exitCodeFor(report));
 }
 
-void main();
+void main().catch(async err => {
+  console.error(err);
+  await exitAfterCleanup(1);
+});
