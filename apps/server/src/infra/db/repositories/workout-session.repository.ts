@@ -138,11 +138,15 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
         ),
       );
     }
+    // realWorkoutsOnly: every row is completed (non-null completedAt), and an imported session's
+    // createdAt does not track when it actually happened — order by completedAt (review advisory
+    // 4), not createdAt. Without the filter, keep createdAt DESC exactly (getActiveSession depends
+    // on it seeing planning/in_progress rows in that order).
     const sessions = await db
       .select()
       .from(workoutSessions)
       .where(and(...conditions))
-      .orderBy(desc(workoutSessions.createdAt))
+      .orderBy(filter?.realWorkoutsOnly ? desc(workoutSessions.completedAt) : desc(workoutSessions.createdAt))
       .limit(limit);
 
     return sessions.map(s => ({

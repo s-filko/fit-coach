@@ -40,10 +40,14 @@ interface SeedSession {
 }
 
 /**
- * The five sessions of one user, oldest first. The real workout was imported into history
- * (`hist_…` key, as real imported sessions are), so its createdAt is LATER than its completedAt —
- * which also proves daysSinceLastWorkout reads completedAt, not createdAt. The in_progress
- * session's lastActivityAt is fresh so getActiveSession's 2-hour auto-close leaves it alone.
+ * The six sessions of one user, oldest first. Both real workouts were imported into history
+ * (`hist_…` key, as real imported sessions are), each with a createdAt that does NOT track its
+ * completedAt — `hist_20260921_lower` was imported FIRST (earliest createdAt) even though it was
+ * completed LATER than `hist_20260920_upper` (imported after it). This proves two things at once:
+ * daysSinceLastWorkout reads completedAt, not createdAt (AC-CB-4), and ordering "recent" by
+ * completedAt DESC — not createdAt DESC (review advisory 4) — is what puts the truly most
+ * recently completed workout first when there is more than one. The in_progress session's
+ * lastActivityAt is fresh so getActiveSession's 2-hour auto-close leaves it alone.
  */
 const SEEDS: SeedSession[] = [
   {
@@ -53,6 +57,15 @@ const SEEDS: SeedSession[] = [
     startedAt: '2026-09-20T04:00:00.000Z',
     completedAt: '2026-09-20T05:00:00.000Z',
     lastActivityAt: '2026-09-20T05:00:00.000Z',
+    withSet: true,
+  },
+  {
+    key: 'hist_20260921_lower',
+    status: 'completed',
+    createdAt: '2026-09-18T10:00:00.000Z',
+    startedAt: '2026-09-21T05:00:00.000Z',
+    completedAt: '2026-09-21T06:00:00.000Z',
+    lastActivityAt: '2026-09-21T06:00:00.000Z',
     withSet: true,
   },
   {
@@ -83,7 +96,7 @@ const SEEDS: SeedSession[] = [
     lastActivityAt: '2026-09-24T08:00:00.000Z',
   },
 ];
-const [REAL] = SEEDS;
+const [REAL, REAL_LATER_COMPLETED] = SEEDS;
 const IN_PROGRESS = SEEDS[SEEDS.length - 1];
 
 describe('recent history counts only real workouts (BUG-031)', () => {
@@ -100,6 +113,7 @@ describe('recent history counts only real workouts (BUG-031)', () => {
   const chatSpec = buildChatSpec({ userService: {}, userFacts: {} } as never);
   let userId: string;
   let realId: string;
+  let realLaterCompletedId: string;
   let inProgressId: string;
 
   beforeAll(async () => {
@@ -138,6 +152,9 @@ describe('recent history counts only real workouts (BUG-031)', () => {
       if (seed === REAL) {
         realId = row.id;
       }
+      if (seed === REAL_LATER_COMPLETED) {
+        realLaterCompletedId = row.id;
+      }
       if (seed === IN_PROGRESS) {
         inProgressId = row.id;
       }
@@ -148,20 +165,23 @@ describe('recent history counts only real workouts (BUG-031)', () => {
     jest.useRealTimers();
   });
 
-  it('session_planning context: recentSessions is exactly the real workout', async () => {
+  it('session_planning context: recentSessions is both real workouts, most recently COMPLETED first (review advisory 4)', async () => {
     const { recentSessions } = await contextBuilder.buildContext(userId);
 
-    expect(recentSessions.map(s => s.id)).toEqual([realId]);
+    // hist_20260921_lower completed 09-21 (after hist_20260920_upper's 09-20) but was imported
+    // FIRST (createdAt 09-18, before the other's 09-22) — ordering by createdAt would reverse this.
+    expect(recentSessions.map(s => s.id)).toEqual([realLaterCompletedId, realId]);
   });
 
-  it("session_planning context: daysSinceLastWorkout is 4, from the real workout's completedAt", async () => {
+  it("session_planning context: daysSinceLastWorkout is 3, from the LATEST real workout's completedAt (review advisory 4)", async () => {
     const { daysSinceLastWorkout } = await contextBuilder.buildContext(userId);
 
-    // NOW is 2026-09-24T09:30Z, completedAt is 2026-09-20T05:00Z → 4; its createdAt (09-22) would say 1.
-    expect(daysSinceLastWorkout).toBe(4);
+    // NOW is 2026-09-24T09:30Z, the latest completedAt (hist_20260921_lower) is 2026-09-21T06:00Z
+    // → 3; the other real workout's completedAt (09-20) would say 4, its createdAt (09-22) would say 1.
+    expect(daysSinceLastWorkout).toBe(3);
   });
 
-  it('chat loadContext: data.recentSessions is exactly the real workout', async () => {
+  it('chat loadContext: data.recentSessions is both real workouts, most recently completed first', async () => {
     const loaded = await chatSpec.loadContext({ userId, user: null, activeSessionId: inProgressId }, {
       workoutPlanRepo: new WorkoutPlanRepository(),
       workoutSessionRepo: sessionRepo,
@@ -170,7 +190,7 @@ describe('recent history counts only real workouts (BUG-031)', () => {
       throw new Error(`loadContext failed: ${loaded.reply}`);
     }
 
-    expect(loaded.data.recentSessions.map(s => s.id)).toEqual([realId]);
+    expect(loaded.data.recentSessions.map(s => s.id)).toEqual([realLaterCompletedId, realId]);
   });
 
   it('control: getActiveSession still returns the in_progress session', async () => {
