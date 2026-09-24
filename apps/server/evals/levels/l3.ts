@@ -53,6 +53,7 @@ import { scenario as journeyFlC } from '../scenarios/fl-c-short-states.scenario'
 import { scenario as journeyFlD } from '../scenarios/fl-d-recurring-short-state.scenario';
 import { scenario as journeyFlE } from '../scenarios/fl-e-advisory-plan.scenario';
 import { scenario as journeyFlF } from '../scenarios/fl-f-remembered-corrected-deleted.scenario';
+import { scenario as smokeScenario } from '../scenarios/smoke.scenario';
 
 /** Every authored training journey, in run order — what a plain L3 run executes. */
 const ALL_SCENARIOS: Scenario[] = [journeyA, journeyB, journeyC, journeyCExplicit];
@@ -69,14 +70,15 @@ const ALL_SCENARIOS: Scenario[] = [journeyA, journeyB, journeyC, journeyCExplici
  * `persisted.plans`) is what is compared; `seen` is skipped live.
  */
 export const FACT_LIFECYCLE_GROUP = 'fact-lifecycle';
-const FACT_LIFECYCLE_SCENARIOS: Scenario[] = [
-  journeyFlA,
-  journeyFlB,
-  journeyFlC,
-  journeyFlD,
-  journeyFlE,
-  journeyFlF,
-];
+const FACT_LIFECYCLE_SCENARIOS: Scenario[] = [journeyFlA, journeyFlB, journeyFlC, journeyFlD, journeyFlE, journeyFlF];
+
+/**
+ * The smoke scenario (smoke-test plan, AC-SM-3) — selectable ONLY by id
+ * (`--scenario smoke`, what `npm run smoke` passes), never part of
+ * `ALL_SCENARIOS`'s default run: it has no deterministic twin and is meant
+ * to run alone (spec § 5, D5).
+ */
+const SMOKE_SCENARIOS: Scenario[] = [smokeScenario];
 
 /** Loads the authored journeys; an id narrows to exactly that one, `fact-lifecycle` to that group. */
 export function loadScenarios(scenarioId?: string): Scenario[] {
@@ -86,9 +88,10 @@ export function loadScenarios(scenarioId?: string): Scenario[] {
   if (scenarioId === FACT_LIFECYCLE_GROUP) {
     return FACT_LIFECYCLE_SCENARIOS;
   }
-  const found = [...ALL_SCENARIOS, ...FACT_LIFECYCLE_SCENARIOS].filter(s => s.id === scenarioId);
+  const everyScenario = [...ALL_SCENARIOS, ...FACT_LIFECYCLE_SCENARIOS, ...SMOKE_SCENARIOS];
+  const found = everyScenario.filter(s => s.id === scenarioId);
   if (found.length === 0) {
-    const available = [...ALL_SCENARIOS, ...FACT_LIFECYCLE_SCENARIOS].map(s => s.id).join(', ');
+    const available = everyScenario.map(s => s.id).join(', ');
     throw new Error(`Unknown scenario '${scenarioId}'. Available: ${available}, or '${FACT_LIFECYCLE_GROUP}'`);
   }
   return found;
@@ -126,7 +129,10 @@ function sessionProjection(session: WorkoutSessionWithDetails): {
       sets: ex.sets.map(s => ({
         ...(JSON.parse(JSON.stringify({ reps: (s.setData as { reps?: number }).reps })) as Record<string, number>),
         ...(s.setData.type === 'strength'
-          ? (JSON.parse(JSON.stringify({ weight: (s.setData as { weight?: number }).weight })) as Record<string, number>)
+          ? (JSON.parse(JSON.stringify({ weight: (s.setData as { weight?: number }).weight })) as Record<
+              string,
+              number
+            >)
           : {}),
       })),
     })),
@@ -139,10 +145,9 @@ function normalizeExpectedExercises(
 ): Array<{ exercise: string; sets: Array<Record<string, number>> }> {
   return exercises.map(ex => ({
     exercise: ex.exercise,
-    sets: ex.sets.map(s => JSON.parse(JSON.stringify({ reps: s.reps, weight: s.weight, rpe: s.rpe })) as Record<
-      string,
-      number
-    >),
+    sets: ex.sets.map(
+      s => JSON.parse(JSON.stringify({ reps: s.reps, weight: s.weight, rpe: s.rpe })) as Record<string, number>,
+    ),
   }));
 }
 
@@ -160,8 +165,12 @@ function evaluateStep(
 
   // A user step must have produced a successful run row at all.
   if (step.action === 'user') {
-    add('run.outcome', obs.runRow !== null && obs.runRow.outcome === 'ok', undefined,
-      obs.runRow ? `outcome ${obs.runRow.outcome}` : 'no conversation_runs row');
+    add(
+      'run.outcome',
+      obs.runRow !== null && obs.runRow.outcome === 'ok',
+      undefined,
+      obs.runRow ? `outcome ${obs.runRow.outcome}` : 'no conversation_runs row',
+    );
   }
 
   // tools — from the conversation_runs row (the deterministic layer's recorder
@@ -169,41 +178,61 @@ function evaluateStep(
   const called = obs.runRow?.toolCalls?.map(c => c.name) ?? [];
   if (expect.tools) {
     for (const entry of expect.tools.must ?? []) {
-      add(`tools.must:${assertionText(entry)}`, called.includes(assertionText(entry)),
+      add(
+        `tools.must:${assertionText(entry)}`,
+        called.includes(assertionText(entry)),
         assertionKnownBug(entry) ?? expect.tools?.knownBug,
-        called.length > 0 ? `called: ${called.join(', ')}` : 'no tool calls');
+        called.length > 0 ? `called: ${called.join(', ')}` : 'no tool calls',
+      );
     }
     for (const entry of expect.tools.mustNot ?? []) {
-      add(`tools.mustNot:${assertionText(entry)}`, !called.includes(assertionText(entry)),
+      add(
+        `tools.mustNot:${assertionText(entry)}`,
+        !called.includes(assertionText(entry)),
         assertionKnownBug(entry) ?? expect.tools?.knownBug,
-        called.includes(assertionText(entry)) ? `${assertionText(entry)} was called` : undefined);
+        called.includes(assertionText(entry)) ? `${assertionText(entry)} was called` : undefined,
+      );
     }
   }
 
   // delivered — including liveOnly entries (they exist for this layer).
   if (expect.delivered) {
     for (const entry of expect.delivered.mustMatch ?? []) {
-      add(`delivered.mustMatch:"${assertionText(entry)}"`, obs.delivered.includes(assertionText(entry)),
+      add(
+        `delivered.mustMatch:"${assertionText(entry)}"`,
+        obs.delivered.includes(assertionText(entry)),
         assertionKnownBug(entry) ?? expect.delivered?.knownBug,
-        obs.delivered.length > 0 ? undefined : 'no delivered text');
+        obs.delivered.length > 0 ? undefined : 'no delivered text',
+      );
     }
     for (const entry of expect.delivered.mustNotMatch ?? []) {
-      add(`delivered.mustNotMatch:"${assertionText(entry)}"`, !obs.delivered.includes(assertionText(entry)),
+      add(
+        `delivered.mustNotMatch:"${assertionText(entry)}"`,
+        !obs.delivered.includes(assertionText(entry)),
         assertionKnownBug(entry) ?? expect.delivered?.knownBug,
-        obs.delivered.includes(assertionText(entry)) ? `delivered text contains "${assertionText(entry)}"` : undefined);
+        obs.delivered.includes(assertionText(entry)) ? `delivered text contains "${assertionText(entry)}"` : undefined,
+      );
     }
   }
 
   if (expect.phaseAfter) {
-    add('phaseAfter', obs.phase === expect.phaseAfter.phase, expect.phaseAfter.knownBug,
-      `expected ${expect.phaseAfter.phase}, got ${obs.phase}`);
+    add(
+      'phaseAfter',
+      obs.phase === expect.phaseAfter.phase,
+      expect.phaseAfter.knownBug,
+      `expected ${expect.phaseAfter.phase}, got ${obs.phase}`,
+    );
   }
 
   // persisted — the plane that proves the model chose the right action.
   if (expect.persisted) {
     if (expect.persisted.turnRecorded === true) {
-      add('persisted.turnRecorded', obs.turnCount > 0, expect.persisted.knownBug,
-        obs.turnCount > 0 ? undefined : `turnCount ${obs.turnCount}`);
+      add(
+        'persisted.turnRecorded',
+        obs.turnCount > 0,
+        expect.persisted.knownBug,
+        obs.turnCount > 0 ? undefined : `turnCount ${obs.turnCount}`,
+      );
     }
     // The fact-lifecycle plane (AC-FL-7): rows, not prose — evaluated by the SAME
     // pure functions the deterministic layer uses.
@@ -215,36 +244,57 @@ function evaluateStep(
     }
     const expected = expect.persisted.session;
     if (expected) {
-      const session = expected.key !== undefined
-        ? obs.sessions.find(s => s.sessionKey === expected.key)
-        : obs.sessions[0];
+      const session =
+        expected.key !== undefined ? obs.sessions.find(s => s.sessionKey === expected.key) : obs.sessions[0];
       if (!session) {
-        add('persisted.session', false, expect.persisted.knownBug,
-          `no ${expected.key ?? 'newest'} session in the step's DB snapshot`);
+        add(
+          'persisted.session',
+          false,
+          expect.persisted.knownBug,
+          `no ${expected.key ?? 'newest'} session in the step's DB snapshot`,
+        );
       } else {
         const projection = sessionProjection(session);
         if (expected.status !== undefined) {
-          add('persisted.session.status', projection.status === expected.status,
-            expect.persisted.knownBug, `expected ${expected.status}, got ${projection.status}`);
+          add(
+            'persisted.session.status',
+            projection.status === expected.status,
+            expect.persisted.knownBug,
+            `expected ${expected.status}, got ${projection.status}`,
+          );
         }
         if (expected.hasStartedAt !== undefined) {
-          add('persisted.session.hasStartedAt', projection.hasStartedAt === expected.hasStartedAt,
-            expect.persisted.knownBug, `startedAt ${projection.hasStartedAt ? 'present' : 'absent'}`);
+          add(
+            'persisted.session.hasStartedAt',
+            projection.hasStartedAt === expected.hasStartedAt,
+            expect.persisted.knownBug,
+            `startedAt ${projection.hasStartedAt ? 'present' : 'absent'}`,
+          );
         }
         if (expected.hasCompletedAt !== undefined) {
-          add('persisted.session.hasCompletedAt', projection.hasCompletedAt === expected.hasCompletedAt,
-            expect.persisted.knownBug, `completedAt ${projection.hasCompletedAt ? 'present' : 'absent'}`);
+          add(
+            'persisted.session.hasCompletedAt',
+            projection.hasCompletedAt === expected.hasCompletedAt,
+            expect.persisted.knownBug,
+            `completedAt ${projection.hasCompletedAt ? 'present' : 'absent'}`,
+          );
         }
         if (expected.durationMinutes !== undefined) {
-          add('persisted.session.durationMinutes', projection.durationMinutes === expected.durationMinutes,
-            expect.persisted.knownBug, `expected ${expected.durationMinutes}, got ${projection.durationMinutes}`);
+          add(
+            'persisted.session.durationMinutes',
+            projection.durationMinutes === expected.durationMinutes,
+            expect.persisted.knownBug,
+            `expected ${expected.durationMinutes}, got ${projection.durationMinutes}`,
+          );
         }
         if (expected.exercises !== undefined) {
           const wanted = normalizeExpectedExercises(expected.exercises);
-          add('persisted.session.exercises',
+          add(
+            'persisted.session.exercises',
             JSON.stringify(projection.exercises) === JSON.stringify(wanted),
             expect.persisted.knownBug,
-            `expected ${JSON.stringify(wanted)}, got ${JSON.stringify(projection.exercises)}`);
+            `expected ${JSON.stringify(wanted)}, got ${JSON.stringify(projection.exercises)}`,
+          );
         }
       }
     }
@@ -257,8 +307,12 @@ export function evaluateScenario(scenario: Scenario, result: ScenarioRunResult, 
   scenario.steps.forEach((step, stepIndex) => {
     const obs = result.steps[stepIndex];
     if (!obs) {
-      out.push({ case: `${scenario.id}${sampleLabel}::step ${stepIndex}`, check: 'observed', passed: false,
-        detail: 'no observation for this step' });
+      out.push({
+        case: `${scenario.id}${sampleLabel}::step ${stepIndex}`,
+        check: 'observed',
+        passed: false,
+        detail: 'no observation for this step',
+      });
       return;
     }
     evaluateStep(`${scenario.id}${sampleLabel}::step ${stepIndex}`, step, obs, result.t0, out);
@@ -303,7 +357,10 @@ export type L3Outcome =
 export async function runL3(scenarios: Scenario[], samples = 1, deps: L3Deps = {}): Promise<L3Outcome> {
   const env = deps.env ?? process.env;
   if (env['RUN_LLM_EVALS'] !== '1') {
-    return { status: 'skipped', message: 'L3 skipped: set RUN_LLM_EVALS=1 to run scenario evals against a real model.' };
+    return {
+      status: 'skipped',
+      message: 'L3 skipped: set RUN_LLM_EVALS=1 to run scenario evals against a real model.',
+    };
   }
 
   // Test-DB safety first: the runner seeds and mutates real rows.
