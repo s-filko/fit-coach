@@ -1605,7 +1605,7 @@ Scenario over the real test DB: leg sessions on three recent dates plus one old 
 
 ## BUG-031 — Recent history and "days since last workout" count skipped and unfinished sessions
 
-**Status:** open
+**Status:** fixed (coach-baseline Task 4, AC-CB-4; red test commit 7d66012d)
 **Severity:** Medium — the model is shown phantom "recent workouts" that never happened, and rest-day math is built on them
 **Found during:** coach-baseline plan review (roadmap U1, R0.3 + R1.1), 2026-09-24
 **Component:** `apps/server/src/infra/db/repositories/workout-session.repository.ts:126` (`findRecentByUserId` — filters by user only), callers `apps/server/src/domain/training/services/session-planning-context.builder.ts:32` and `apps/server/src/infra/ai/graph/phases/chat.spec.ts:46`

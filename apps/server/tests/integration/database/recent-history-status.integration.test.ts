@@ -1,6 +1,6 @@
 /**
- * REPRODUCTION (RED) — AC-CB-4 / BUG-031. Runs only via an explicit --testMatch (needs the local
- * fitcoach_test database); promoted to a regular integration test when the fix lands.
+ * AC-CB-4 / BUG-031 regression test — needs the local fitcoach_test database.
+ * Promoted from the reproduction test written before the fix.
  *
  * "Recent sessions" for the session_planning and chat phases is findRecentByUserIdWithDetails —
  * findRecentByUserId filtered by user only, so skipped, planning and in_progress rows enter the
@@ -18,8 +18,8 @@
 import { SessionPlanningContextBuilder } from '@domain/training/services/session-planning-context.builder';
 import { buildChatSpec } from '@infra/ai/graph/phases/chat.spec';
 import { db } from '@infra/db/drizzle';
-import { workoutSessions } from '@infra/db/schema';
 import { WorkoutPlanRepository } from '@infra/db/repositories/workout-plan.repository';
+import { workoutSessions } from '@infra/db/schema';
 
 import { buildRealTrainingService } from '../../helpers/training-service';
 import { createTestUserData } from '../../shared/test-factories';
@@ -117,7 +117,7 @@ const SEEDS: SeedSession[] = [
     lastActivityAt: '2026-09-24T08:00:00.000Z',
   },
 ];
-const REAL = SEEDS[0];
+const [REAL] = SEEDS;
 const IN_PROGRESS = SEEDS[SEEDS.length - 1];
 
 describe('recent history counts only real workouts (BUG-031)', () => {
