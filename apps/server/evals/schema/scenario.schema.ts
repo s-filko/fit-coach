@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { ExerciseType, Involvement, MuscleGroup } from '@domain/training/types';
+
 import { EvalPhaseSchema, FixtureFactSchema, FixtureUserSchema, StateMessageSchema } from './case.schema';
 
 /**
@@ -114,12 +116,93 @@ export const assertionLiveOnly = (a: ScenarioAssertion): boolean => typeof a !==
 
 // --- past: the world a scenario starts from ---
 
-/** One recorded set of a seeded workout. */
-const WorkoutSetSchema = z.object({
+/**
+ * Mirrors `MuscleGroup` (`src/domain/training/types.ts`) as a runtime tuple —
+ * zod needs actual values to validate against; the type import above keeps
+ * this list from silently diverging (same convention as
+ * `search-exercises.tool.ts`'s `MUSCLE_GROUPS`).
+ */
+const MUSCLE_GROUPS: [MuscleGroup, ...MuscleGroup[]] = [
+  'chest',
+  'back_lats',
+  'back_traps',
+  'shoulders_front',
+  'shoulders_side',
+  'shoulders_rear',
+  'quads',
+  'hamstrings',
+  'glutes',
+  'calves',
+  'biceps',
+  'triceps',
+  'forearms',
+  'abs',
+  'lower_back',
+  'core',
+  'cardio_system',
+  'full_body',
+  'lower_body_endurance',
+  'core_stability',
+];
+
+/** Mirrors `ExerciseType` (`src/domain/training/types.ts`) — see `MUSCLE_GROUPS` above. */
+const EXERCISE_TYPES: [ExerciseType, ...ExerciseType[]] = [
+  'strength',
+  'cardio_distance',
+  'cardio_duration',
+  'functional_reps',
+  'isometric',
+  'interval',
+];
+
+const MuscleGroupSchema = z.enum(MUSCLE_GROUPS);
+const InvolvementSchema: z.ZodType<Involvement> = z.enum(['primary', 'secondary']);
+
+/**
+ * A catalog exercise (smoke-test plan, AC-SM-1): seeded with real muscle rows
+ * (`exercise_muscle_groups`) instead of today's generic fallback. Names not in
+ * the catalog keep the fallback; the four setup exercises keep their ids.
+ */
+const CatalogExerciseSchema = z.object({
+  name: z.string().min(1),
+  exerciseType: z.enum(EXERCISE_TYPES),
+  category: z.enum(['compound', 'isolation', 'cardio', 'functional', 'mobility']).optional(),
+  muscles: z.array(z.object({ group: MuscleGroupSchema, involvement: InvolvementSchema })).min(1),
+});
+
+export type CatalogExercise = z.infer<typeof CatalogExerciseSchema>;
+
+/** Today's strength shape (unchanged, stays the default variant). */
+const StrengthWorkoutSetSchema = z.object({
   reps: z.number().int().positive(),
   weight: z.number().optional(),
   rpe: z.number().optional(),
 });
+
+/** A duration-only set (e.g. a plank) — mapped onto `isometric`/`cardio_duration` setData by the exercise's type. */
+const DurationWorkoutSetSchema = z.object({
+  durationSeconds: z.number().int().positive(),
+  rpe: z.number().optional(),
+});
+
+/** A distance set (e.g. a run) — mapped onto `cardio_distance` setData. */
+const DistanceWorkoutSetSchema = z.object({
+  distanceMeters: z.number().positive(),
+  durationSeconds: z.number().int().positive().optional(),
+  rpe: z.number().optional(),
+});
+
+/**
+ * One recorded set of a seeded workout — a union discriminated by which keys
+ * are present (no literal tag field). `DistanceWorkoutSetSchema` is tried
+ * before `DurationWorkoutSetSchema`: both accept a lone `durationSeconds`,
+ * but only the distance schema also accepts `distanceMeters`, and zod's
+ * default "strip unknown keys" parsing would otherwise silently drop it if
+ * the duration schema were tried first.
+ */
+const WorkoutSetSchema = z.union([DistanceWorkoutSetSchema, DurationWorkoutSetSchema, StrengthWorkoutSetSchema]);
+
+export type WorkoutSet = z.infer<typeof WorkoutSetSchema>;
 
 const WorkoutExerciseSchema = z.object({
   /** Exercise name — the runner resolves it to an id (`ON CONFLICT` seeds). */
@@ -131,11 +214,23 @@ const WorkoutExerciseSchema = z.object({
  * A dated workout in the past. `at` is mandatory: the repository orders
  * history by `createdAt`, so a seed without an explicit timestamp lands at
  * "now" and every age-based assertion goes wrong.
+ *
+ * `status` defaults to `completed`; `skipped` seeds no `completedAt`.
+ * `exercises: []` with the default `completed` status is the
+ * completed-but-empty case (BUG-031).
  */
 const WorkoutSchema = z.object({
   at: RelativeTimeSchema,
   /** `workout_sessions.sessionKey`, e.g. `upper_a` (`findLastCompletedByUserAndKey`). */
   key: z.string().min(1),
+  /**
+   * `.optional()`, not `.default()`: zod v4 infers a `.default()` field as
+   * REQUIRED in the object's output type, which would force every existing
+   * scenario module's workout literals to spell out `status` even though
+   * they mean today's implicit "completed" — `scenario-world.ts` applies the
+   * default (`workout.status ?? 'completed'`).
+   */
+  status: z.enum(['completed', 'skipped']).optional(),
   exercises: z.array(WorkoutExerciseSchema).default([]),
 });
 
@@ -208,6 +303,12 @@ export type ScenarioFact = z.infer<typeof ScenarioFactSchema>;
 const ScenarioPastSchema = z.object({
   user: FixtureUserSchema,
   plan: PlanSchema.optional(),
+  /**
+   * Exercises with real muscle mappings, seeded before workouts reference
+   * them (AC-SM-1). `.optional()`, not `.default()` — see the note on
+   * `WorkoutSchema.status`; `scenario-world.ts` applies `past.catalog ?? []`.
+   */
+  catalog: z.array(CatalogExerciseSchema).optional(),
   workouts: z.array(WorkoutSchema).default([]),
   facts: z.array(ScenarioFactSchema).default([]),
   conversation: ConversationPastSchema.optional(),
