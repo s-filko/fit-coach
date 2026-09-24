@@ -4,7 +4,7 @@
 > Execute only your task. **No live model call** in any worker task — the one live run is the
 > orchestrator's (Task 4).
 
-- Status: planned
+- Status: in progress
 - Branch: plan/smoke-test
 
 **Goal:** one command, `npm run smoke`, that seeds a realistic hand-written history into
