@@ -89,6 +89,13 @@ export class EmbeddingService implements IEmbeddingService {
    * failed) instead of joining cleanly.
    */
   async dispose(): Promise<void> {
+    // warmUp() is fire-and-forget: an in-flight load must finish (so `this.pipeline` and the
+    // registry entry it sets are actually there to release) before we can release anything —
+    // otherwise the load completes after dispose() returns and re-registers a session nobody
+    // will ever dispose again.
+    if (this.initPromise) {
+      await this.initPromise.catch(() => {});
+    }
     liveInstances.delete(this);
     if (this.pipeline) {
       await (this.pipeline as DisposablePipeline).dispose();
