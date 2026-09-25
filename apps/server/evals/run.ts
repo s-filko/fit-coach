@@ -50,50 +50,78 @@ function argValue(flag: string, fallback: string): string {
 }
 
 /**
- * Set right after a live L3 run actually reaches `runL3`'s `'ran'` outcome —
- * the only path in this file that ever imports `@infra/db/drizzle` (a lazy
- * import inside `run-scenario.ts`, gated behind all of `runL3`'s checks), so
- * checking it before importing that module in `exitAfterCleanup` avoids
- * opening a brand-new DB pool on exit paths that never had one (L0, L1, an
- * L3 gate refusal before any DB access).
+ * The two real teardown effects `runWithCleanup` performs — injectable so the
+ * wrapper can be unit tested with fakes (close-out review advisory 2), never
+ * touching a live embedding pipeline or a real Postgres pool.
  */
-let dbPoolMayBeOpen = false;
+export interface CleanupDeps {
+  disposeEmbeddings: () => Promise<void>;
+  /** Closes the DB pool. Only called when `operation` reported one might be open. */
+  closePool: () => Promise<void>;
+}
 
-/**
- * Every exit point in `main()` funnels through here (success, guard refusal
- * or failure alike).
- *
- * It does NOT call `process.exit()`. A live L3 run loads the shared
- * embedding pipeline's native ONNX session (search_exercises) — a throwaway
- * repro (load the same pipeline, dispose it, then `process.exit()`)
- * reproduced exit 134 (`libc++abi … mutex lock failed`) every time, and
- * removing the `process.exit()` call — `disposeAllEmbeddingServices()`
- * resolving only means the JS-visible teardown call returned, not that the
- * native thread pool has actually unwound — fixed it every time: Node's
- * normal, un-forced exit lets that finish before the process actually ends.
- * Same fix jest already relies on (`jest.config.cjs`'s `forceExit: false` +
- * `src/app/test/setup.ts`'s `afterAll`). Setting `process.exitCode` and
- * returning is how a Node script exits with a specific code WITHOUT forcing
- * it.
- *
- * The DB pool (opened only by an actual L3 run) is closed explicitly rather
- * than left to its own idle timeout — that alone still exits cleanly, just
- * ~10 s slower per a throwaway repro of the same shape.
- */
-async function exitAfterCleanup(code: number): Promise<void> {
-  await disposeAllEmbeddingServices();
-  if (dbPoolMayBeOpen) {
+const realCleanupDeps: CleanupDeps = {
+  disposeEmbeddings: disposeAllEmbeddingServices,
+  closePool: async () => {
     const { pool } = await import('@infra/db/drizzle');
     await pool.end();
+  },
+};
+
+/**
+ * Runs `operation` and returns the exit code it resolves to (or
+ * `fallbackErrorCode` if it throws), and — no matter which, including a throw
+ * from ANYWHERE inside `operation`, not just its normal-completion path —
+ * disposes the embedding pipeline and, if `operation` ever called the
+ * `markPoolMayBeOpen` callback it's given, closes the DB pool. Both run
+ * exactly once each, in a `finally`, so neither can be skipped by an early
+ * `return`/`throw` inside `operation` and neither can fire twice — a
+ * rejecting `closePool()` is caught right here, not left to propagate and
+ * make an outer handler retry it (pg rejects a second `pool.end()` with
+ * "Called end on pool more than once").
+ *
+ * Exit 134 (close-out review, first two live runs): a live L3 run loads the
+ * shared embedding pipeline's native ONNX session (search_exercises) — a
+ * throwaway repro (load it, dispose it, then `process.exit()`) reproduced
+ * `libc++abi … mutex lock failed` every time. `disposeEmbeddings()`
+ * resolving only means the JS-visible teardown call returned, not that the
+ * native thread pool has actually unwound; `process.exit()` tears the
+ * process down before it can. The caller therefore sets `process.exitCode`
+ * from this function's return value and never calls `process.exit()` —
+ * Node's normal, un-forced exit lets that native unwind finish on its own,
+ * the same mechanism jest already relies on (`jest.config.cjs`'s
+ * `forceExit: false` + `src/app/test/setup.ts`'s `afterAll`).
+ */
+export async function runWithCleanup(
+  operation: (markPoolMayBeOpen: () => void) => Promise<number>,
+  deps: CleanupDeps,
+  fallbackErrorCode = 1,
+): Promise<number> {
+  let poolMayBeOpen = false;
+  let code: number;
+  try {
+    code = await operation(() => {
+      poolMayBeOpen = true;
+    });
+  } catch (err) {
+    console.error(err);
+    code = fallbackErrorCode;
+  } finally {
+    await deps.disposeEmbeddings();
+    if (poolMayBeOpen) {
+      await deps.closePool().catch(err => {
+        console.error('DB pool cleanup failed:', err);
+      });
+    }
   }
-  process.exitCode = code;
+  return code;
 }
 
 function ledgerText(): string {
   return existsSync(LEDGER_PATH) ? readFileSync(LEDGER_PATH, 'utf8') : '';
 }
 
-async function main(): Promise<void> {
+async function main(markPoolMayBeOpen: () => void): Promise<number> {
   const level = argValue('--level', 'L0').toUpperCase();
   const phase = argValue('--phase', 'all');
   // L3's default is one pass per journey — a live journey is many turns long.
@@ -103,8 +131,7 @@ async function main(): Promise<void> {
 
   if (dataset !== '' && phase === 'all') {
     console.error('--dataset requires --phase <phase> — a dataset lives in one phase directory');
-    await exitAfterCleanup(2);
-    return;
+    return 2;
   }
 
   // Results per phase, so --baseline writes one file per phase even with --phase all
@@ -121,8 +148,7 @@ async function main(): Promise<void> {
     if (level === 'L1') {
       if (process.env['RUN_LLM_EVALS'] !== '1') {
         console.log('L1 skipped: set RUN_LLM_EVALS=1 to run evals against a real model.');
-        await exitAfterCleanup(0);
-        return;
+        return 0;
       }
 
       // D-P red button: count the calls before any model is reached.
@@ -139,8 +165,7 @@ async function main(): Promise<void> {
         console.log(guard.message);
       }
       if (!guard.ok) {
-        await exitAfterCleanup(3);
-        return;
+        return 3;
       }
 
       // D-R/D-Q quota gate + pre-run estimate banner.
@@ -151,8 +176,7 @@ async function main(): Promise<void> {
           'L1 requires --quota-before <n> (the Z.AI dashboard number): no quota endpoint is readable (D-R). ' +
             'Complete the ledger row afterwards with: npm run evals:ledger -- --after <n>',
         );
-        await exitAfterCleanup(2);
-        return;
+        return 2;
       }
       const weeklyLimit = process.env['EVALS_WEEKLY_LIMIT'] ? Number(process.env['EVALS_WEEKLY_LIMIT']) : undefined;
       const ledger = parseLedgerTable(ledgerText());
@@ -207,8 +231,7 @@ async function main(): Promise<void> {
     } else if (level === 'L3') {
       if (baselineMode !== '') {
         console.error('L3 does not support --baseline (scenarios are not a per-phase baseline source).');
-        await exitAfterCleanup(2);
-        return;
+        return 2;
       }
       const scenarioId = argValue('--scenario', '');
       let scenarios;
@@ -216,28 +239,29 @@ async function main(): Promise<void> {
         scenarios = loadScenarios(scenarioId || undefined);
       } catch (err) {
         console.error(err instanceof Error ? err.message : String(err));
-        await exitAfterCleanup(2);
-        return;
+        return 2;
       }
       const outcome = await runL3(scenarios, samples, {
-        onPlanned: info =>
+        // Fires exactly once `runL3` has passed every gate and is about to
+        // lazily import `run-scenario.ts` (which opens the real DB pool) —
+        // BEFORE that import and BEFORE the scenario loop, so a throw
+        // anywhere after this point (including the import itself, or mid-run)
+        // still leaves `runWithCleanup` knowing to close the pool.
+        onPlanned: info => {
           console.log(
             `planned model calls: ${info.plannedCalls} (${info.userSteps} user steps × ${info.samples} samples, ceiling ${info.ceiling})`,
-          ),
+          );
+          markPoolMayBeOpen();
+        },
       });
       if (outcome.status === 'skipped') {
         console.log(outcome.message);
-        await exitAfterCleanup(0);
-        return;
+        return 0;
       }
       if (outcome.status === 'refused') {
         console.error(outcome.message);
-        await exitAfterCleanup(3);
-        return;
+        return 3;
       }
-      // Only reached past every gate: `runL3` has lazily imported
-      // `@infra/db/drizzle` by now (see `dbPoolMayBeOpen`'s own comment).
-      dbPoolMayBeOpen = true;
       perPhaseResults.set('scenarios', outcome.results);
       // AC-SM-2: the readable per-step transcript — stdout and file, one
       // formatter for every L3 run (see reporter.formatScenarioTranscript).
@@ -252,8 +276,7 @@ async function main(): Promise<void> {
       }
     } else {
       console.error(`Level ${level} is not implemented yet (P0 ships L0, L1 and L3).`);
-      await exitAfterCleanup(2);
-      return;
+      return 2;
     }
   }
 
@@ -277,8 +300,7 @@ async function main(): Promise<void> {
         diff = compareToBaseline(baselineVersion, p, phaseResults, dataset || undefined);
       } catch (err) {
         console.error(err instanceof Error ? err.message : String(err));
-        await exitAfterCleanup(2);
-        return;
+        return 2;
       }
       console.log(
         `vs baseline ${baselineVersion}/${p}: ${diff.regressions.length} regressions, ${diff.improvements.length} improvements, ${diff.missing.length} missing, ${diff.added.length} new checks`,
@@ -291,10 +313,9 @@ async function main(): Promise<void> {
 
   const report = buildReport(level, results);
   printReport(report);
-  await exitAfterCleanup(exitCodeFor(report));
+  return exitCodeFor(report);
 }
 
-void main().catch(async err => {
-  console.error(err);
-  await exitAfterCleanup(1);
+void runWithCleanup(main, realCleanupDeps).then(code => {
+  process.exitCode = code;
 });
