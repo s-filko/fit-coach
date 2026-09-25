@@ -34,6 +34,11 @@
  * launches it manually (see evals/datasets/README.md § L3).
  */
 import { install as installFakeClock } from '@sinonjs/fake-timers';
+import { and, inArray, isNull } from 'drizzle-orm';
+
+import { EmbeddingService, disposeAllEmbeddingServices } from '@infra/ai/embedding.service';
+import { db } from '@infra/db/drizzle';
+import { exercises } from '@infra/db/schema';
 
 import { assertScenarioTestDatabase, isScenarioTestDatabase } from '../lib/scenario-db-guard';
 import { guardDecision, planCallCount } from '../lib/run-guard';
@@ -42,6 +47,30 @@ import type { RunScenarioOptions, ScenarioRunResult, ScenarioStepObservation } f
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import { evaluateFactExpectations, evaluatePlanExpectations } from '../lib/persisted-expectations';
 import { assertionKnownBug, assertionText, type Scenario } from '../schema/scenario.schema';
+
+/**
+ * Fails loudly if the live run left a catalog exercise without an embedding
+ * (close-out review correction, 2026-09-25): `search_exercises` filters
+ * `embedding IS NOT NULL`, so a scenario-seeded exercise missing one is
+ * silently invisible to the model — this is the L3-side replacement for the
+ * Jest guard test that cannot run there (the real ONNX pipeline crashes
+ * inside Jest's runtime in this environment).
+ */
+async function assertCatalogEmbedded(scenario: Scenario): Promise<void> {
+  const names = scenario.past.catalog?.map(c => c.name) ?? [];
+  if (names.length === 0) {
+    return;
+  }
+  const unembedded = await db
+    .select({ name: exercises.name })
+    .from(exercises)
+    .where(and(inArray(exercises.name, names), isNull(exercises.embedding)));
+  if (unembedded.length > 0) {
+    throw new Error(
+      `L3 seed left ${unembedded.length} catalog exercise(s) without an embedding, invisible to search_exercises: ${unembedded.map(u => u.name).join(', ')}`,
+    );
+  }
+}
 
 import { scenario as journeyA } from '../scenarios/a-greeting-after-pause.scenario';
 import { scenario as journeyB } from '../scenarios/b-full-workout.scenario';
@@ -390,12 +419,17 @@ export async function runL3(scenarios: Scenario[], samples = 1, deps: L3Deps = {
   // Date-only fake clock: advance steps jump it via onAdvance, exactly like
   // the deterministic layer's jest.setSystemTime; timers stay real.
   const clock = installFakeClock({ now: new Date(), toFake: ['Date'], shouldAdvanceTime: true });
+  // Only the live L3 path embeds scenario-seeded exercises (see
+  // `RunScenarioOptions.embeddingService`'s doc comment) — one instance, one
+  // model load, shared across every scenario/sample this run drives.
+  const embeddingService = new EmbeddingService();
   const results: CheckResult[] = [];
   const transcripts: ScenarioTranscript[] = [];
   try {
     for (const scenario of scenarios) {
       for (let sample = 0; sample < samples; sample += 1) {
-        const result = await run(scenario, { onAdvance: now => clock.setSystemTime(now) });
+        const result = await run(scenario, { onAdvance: now => clock.setSystemTime(now), embeddingService });
+        await assertCatalogEmbedded(scenario);
         const checks = evaluateScenario(scenario, result, samples > 1 ? `[${sample + 1}]` : '');
         results.push(...checks);
         transcripts.push({ scenarioId: scenario.id, steps: scenario.steps, observations: result.steps, checks });
@@ -403,6 +437,7 @@ export async function runL3(scenarios: Scenario[], samples = 1, deps: L3Deps = {
     }
   } finally {
     clock.uninstall();
+    await disposeAllEmbeddingServices();
   }
   return {
     status: 'ran',

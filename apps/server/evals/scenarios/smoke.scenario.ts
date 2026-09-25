@@ -373,19 +373,13 @@ export const scenario: Scenario = {
       },
     },
     { action: 'advance', at: '+5m' },
-    // BUG-033 (close-out review live-smoke finding, 2026-09-25): search_exercises
-    // finds nothing for these Russian exercise names although Leg Extension /
-    // Leg Curl are in the catalog — nothing gets logged live. Tagged, not
-    // removed: still exercises the transition-handoff behaviour (training
-    // stays training across these turns); BUG-033 is a separate, non-U5 defect.
     {
       action: 'user',
       text: 'разгибания 55 на 10',
       expect: {
-        tools: { must: [{ text: 'log_set', knownBug: 'BUG-033' }] },
+        tools: { must: ['log_set'] },
         phaseAfter: { phase: 'training' },
         persisted: {
-          knownBug: 'BUG-033',
           session: {
             key: 'lower_a',
             status: 'in_progress',
@@ -408,10 +402,9 @@ export const scenario: Scenario = {
       action: 'user',
       text: 'ещё раз 55 на 10',
       expect: {
-        tools: { must: [{ text: 'log_set', knownBug: 'BUG-033' }] },
+        tools: { must: ['log_set'] },
         phaseAfter: { phase: 'training' },
         persisted: {
-          knownBug: 'BUG-033',
           session: {
             key: 'lower_a',
             status: 'in_progress',
@@ -440,7 +433,7 @@ export const scenario: Scenario = {
       action: 'user',
       text: 'сгибания 50 на 10',
       expect: {
-        tools: { must: [{ text: 'log_set', knownBug: 'BUG-033' }] },
+        tools: { must: ['log_set'] },
         phaseAfter: { phase: 'training' },
       },
     },
@@ -449,10 +442,9 @@ export const scenario: Scenario = {
       action: 'user',
       text: 'ещё раз 50 на 10',
       expect: {
-        tools: { must: [{ text: 'log_set', knownBug: 'BUG-033' }] },
+        tools: { must: ['log_set'] },
         phaseAfter: { phase: 'training' },
         persisted: {
-          knownBug: 'BUG-033',
           session: {
             key: 'lower_a',
             status: 'in_progress',
