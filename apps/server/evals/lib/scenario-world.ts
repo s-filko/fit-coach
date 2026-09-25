@@ -18,11 +18,19 @@ import type { StoredEpisodeSummary } from '@domain/conversation/episode';
 import type { CompiledConversationGraph } from '@infra/ai/graph/conversation.graph';
 import { UserFactsRepository } from '@infra/db/repositories/user-facts.repository';
 import { db } from '@infra/db/drizzle';
-import { exercises, sessionExercises, sessionSets, users, workoutPlans, workoutSessions } from '@infra/db/schema';
-import type { WorkoutPlanJson } from '@domain/training/types';
+import {
+  exerciseMuscleGroups,
+  exercises,
+  sessionExercises,
+  sessionSets,
+  users,
+  workoutPlans,
+  workoutSessions,
+} from '@infra/db/schema';
+import type { ExerciseType, WorkoutPlanJson } from '@domain/training/types';
 
 import { bindSeedMessages } from '../schema/case.schema';
-import { resolveRelativeTime, type Scenario } from '../schema/scenario.schema';
+import { resolveRelativeTime, type CatalogExercise, type Scenario, type WorkoutSet } from '../schema/scenario.schema';
 
 import { toBaseMessages } from './seed-messages';
 
@@ -50,22 +58,32 @@ function exerciseNamesOf(past: Scenario['past']): string[] {
   return [...names];
 }
 
+/** An exercise's resolved id plus the type its seeded sets must map onto. */
+export interface ResolvedExercise {
+  id: string;
+  exerciseType: ExerciseType;
+}
+
 /**
- * Resolves exercise names to ids. Names already in the catalog (the test
- * setup's four) are reused; anything else is seeded as a generic strength
- * exercise — `ON CONFLICT (name) DO NOTHING` keeps a repeat run idempotent
- * within one schema lifetime.
+ * Resolves exercise names to ids. A name in `catalog` is seeded with its real
+ * exercise type/category and muscle rows (`exercise_muscle_groups`, AC-SM-1);
+ * anything else (including the test setup's four) keeps today's generic
+ * strength fallback. `ON CONFLICT (name) DO NOTHING` keeps a repeat run
+ * idempotent within one schema lifetime.
  */
-async function resolveExerciseIds(names: string[]): Promise<Map<string, string>> {
+async function resolveExerciseIds(names: string[], catalog: CatalogExercise[]): Promise<Map<string, ResolvedExercise>> {
+  const catalogByName = new Map(catalog.map(entry => [entry.name, entry]));
+
   for (const name of names) {
+    const entry = catalogByName.get(name);
     await db
       .insert(exercises)
       .values({
         id: randomUUID(),
         name,
-        category: 'compound',
-        equipment: 'barbell',
-        exerciseType: 'strength',
+        category: entry?.category ?? 'compound',
+        equipment: entry ? 'none' : 'barbell',
+        exerciseType: entry?.exerciseType ?? 'strength',
         description: 'Scenario seed exercise',
         energyCost: 'medium',
         complexity: 'intermediate',
@@ -75,14 +93,59 @@ async function resolveExerciseIds(names: string[]): Promise<Map<string, string>>
       .onConflictDoNothing({ target: exercises.name });
   }
   const rows = await db
-    .select({ id: exercises.id, name: exercises.name })
+    .select({ id: exercises.id, name: exercises.name, exerciseType: exercises.exerciseType })
     .from(exercises)
     .where(inArray(exercises.name, names));
-  return new Map(rows.map(r => [r.name, r.id]));
+
+  const resolved = new Map<string, ResolvedExercise>();
+  for (const row of rows) {
+    resolved.set(row.name, { id: row.id, exerciseType: row.exerciseType });
+    const entry = catalogByName.get(row.name);
+    if (!entry) {
+      continue;
+    }
+    for (const muscle of entry.muscles) {
+      await db
+        .insert(exerciseMuscleGroups)
+        .values({ exerciseId: row.id, muscleGroup: muscle.group, involvement: muscle.involvement })
+        .onConflictDoNothing();
+    }
+  }
+  return resolved;
+}
+
+/**
+ * Maps a seeded `WorkoutSet` onto the real `setData` shape
+ * (`src/domain/training/set-data.types.ts`). Which variant it is follows
+ * from which keys are present, not a literal tag — `distanceMeters` means
+ * `cardio_distance`; a lone `durationSeconds` means `cardio_duration` when
+ * the exercise IS that type, `isometric` otherwise (a plank, the common
+ * case); anything else is today's strength shape.
+ */
+function toSetData(set: WorkoutSet, exerciseType: ExerciseType): Record<string, unknown> {
+  if ('distanceMeters' in set) {
+    return {
+      type: 'cardio_distance',
+      distance: set.distanceMeters,
+      distanceUnit: 'meters',
+      duration: set.durationSeconds ?? 0,
+    };
+  }
+  if ('durationSeconds' in set) {
+    return {
+      type: exerciseType === 'cardio_duration' ? 'cardio_duration' : 'isometric',
+      duration: set.durationSeconds,
+    };
+  }
+  return {
+    type: 'strength',
+    reps: set.reps,
+    ...(set.weight !== undefined ? { weight: set.weight } : {}),
+  };
 }
 
 /** Builds the `planJson` the `save_workout_plan` tool would have written. */
-function toPlanJson(past: Scenario['past'], exerciseIds: Map<string, string>): WorkoutPlanJson {
+function toPlanJson(past: Scenario['past'], exerciseIds: Map<string, ResolvedExercise>): WorkoutPlanJson {
   return {
     goal: 'General fitness',
     trainingStyle: 'balanced strength training',
@@ -101,7 +164,7 @@ function toPlanJson(past: Scenario['past'], exerciseIds: Map<string, string>): W
       energyCost: 'high',
       estimatedDuration: 60,
       exercises: session.exercises.map(ex => ({
-        exerciseId: exerciseIds.get(ex.exercise)!,
+        exerciseId: exerciseIds.get(ex.exercise)!.id,
         exerciseName: ex.exercise,
         energyCost: 'high',
         targetSets: ex.sets,
@@ -114,38 +177,48 @@ function toPlanJson(past: Scenario['past'], exerciseIds: Map<string, string>): W
   };
 }
 
-/** Seeds one dated workout: session row + exercises + sets, all timestamped. */
+/**
+ * Seeds one dated workout: session row + exercises + sets, all timestamped.
+ * `skipped` seeds no `completedAt`/`durationMinutes`; child rows (exercises,
+ * sets) still stamp with a real timestamp (the workout's own started-at +
+ * fixed duration), since a skipped workout can still carry logged exercises.
+ */
 async function seedWorkout(
   userId: string,
   workout: Scenario['past']['workouts'][number],
   planId: string | null,
-  exerciseIds: Map<string, string>,
+  exerciseIds: Map<string, ResolvedExercise>,
   t0: Date,
 ): Promise<void> {
   const startedAt = resolveRelativeTime(workout.at, t0);
-  const completedAt = new Date(startedAt.getTime() + SEEDED_WORKOUT_MINUTES * 60_000);
+  const status = workout.status ?? 'completed';
+  const finishedAt = new Date(startedAt.getTime() + SEEDED_WORKOUT_MINUTES * 60_000);
+  const completedAt = status === 'skipped' ? null : finishedAt;
+  const childTimestamp = completedAt ?? startedAt;
+
   const [session] = await db
     .insert(workoutSessions)
     .values({
       userId,
       planId,
       sessionKey: workout.key,
-      status: 'completed',
+      status,
       startedAt,
       completedAt,
-      durationMinutes: SEEDED_WORKOUT_MINUTES,
+      durationMinutes: status === 'skipped' ? null : SEEDED_WORKOUT_MINUTES,
       createdAt: startedAt,
-      updatedAt: completedAt,
-      lastActivityAt: completedAt,
+      updatedAt: childTimestamp,
+      lastActivityAt: childTimestamp,
     })
     .returning();
 
   for (const [orderIndex, ex] of workout.exercises.entries()) {
+    const resolved = exerciseIds.get(ex.exercise)!;
     const [sessionExercise] = await db
       .insert(sessionExercises)
       .values({
         sessionId: session.id,
-        exerciseId: exerciseIds.get(ex.exercise)!,
+        exerciseId: resolved.id,
         orderIndex,
         status: 'completed',
         targetSets: ex.sets.length || null,
@@ -157,13 +230,9 @@ async function seedWorkout(
         sessionExerciseId: sessionExercise.id,
         setNumber: setIndex + 1,
         rpe: set.rpe ?? null,
-        createdAt: completedAt,
-        completedAt,
-        setData: {
-          type: 'strength',
-          reps: set.reps,
-          ...(set.weight !== undefined ? { weight: set.weight } : {}),
-        },
+        createdAt: childTimestamp,
+        completedAt: childTimestamp,
+        setData: toSetData(set, resolved.exerciseType),
       });
     }
   }
@@ -193,7 +262,7 @@ export async function seedScenarioRows(past: Scenario['past'], t0: Date): Promis
     updatedAt: t0,
   });
 
-  const exerciseIds = await resolveExerciseIds(exerciseNamesOf(past));
+  const exerciseIds = await resolveExerciseIds(exerciseNamesOf(past), past.catalog ?? []);
 
   let planId: string | null = null;
   if (past.plan) {

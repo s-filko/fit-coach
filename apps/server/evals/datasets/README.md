@@ -112,3 +112,40 @@ durabilities, so a date expectation can fail on a legitimate model choice;
 read the detail before calling it a regression. The deterministic layer
 (`tests/integration/scenarios/fact-lifecycle.integration.test.ts`) already runs
 every journey with the check on AND off against a scripted model.
+
+## Smoke — one live workout over the test DB
+
+`npm run smoke` is the one-command L3 run of the `smoke` scenario (spec:
+`docs/superpowers/specs/2026-09-25-smoke-test-design.md`): it seeds a
+hand-written realistic history into `fitcoach_test`, plays a fixed user
+script (greeting → planning → one workout → finish → a history question)
+against the real model, checks every step, and prints the whole conversation.
+It exists to replace the owner's manual check in the Telegram bot — same
+gates as L3 (`RUN_LLM_EVALS=1`, `_test` DB only, shared call ceiling).
+
+    npm run smoke
+
+- Model: whichever provider `apps/server/.env` routes to (not `.env.test` —
+  `npm run smoke` loads `.env` itself, matching the L3 command above) — this
+  is a matter of env vars, not code. On the Z.AI route the model needs
+  `LLM_STRUCTURED_OUTPUT_MODE=json_object` in `.env` (Z.AI has no
+  `json_schema` support; the course-check call fails with a `ZodError`
+  without it — the first live run hit exactly this).
+- DB: it seeds the shared local `fitcoach_test` — the Postgres container
+  from the repo root must be up (`docker compose up -d db`) first, same as
+  any L3 run. If another worktree may be running `RUN_DB_TESTS=1` tests
+  concurrently (all worktrees share this one database, reset per jest run),
+  run the smoke through the same lock those use:
+  `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh npm run smoke`.
+- Cost: ≈ user steps × 1–3 model calls (one agent call per user turn plus
+  tool hops), inside the standard `EVALS_CALL_CEILING` gate; record the run
+  in `evals/COST_LEDGER.md` afterwards like any L3 run.
+- Output: the per-step transcript (user text, delivered coach reply, tools
+  called, phase after, each check ✓/✗) goes to stdout AND to
+  `evals/reports/<scenarioId>-<ISO>.md` (gitignored) — `smoke-<ISO>.md` for
+  this scenario; every L3 run writes one, named after whichever scenario ran,
+  not only the smoke.
+- How to add a bug (D3/D4): edit `evals/scenarios/smoke.scenario.ts` (the
+  history fixture and/or the user steps) so a run shows the bug, pin it with
+  a permanent red test as usual (`*.repro.test.ts` / the regular suites — the
+  smoke itself protects nothing), fix, then re-run the smoke to confirm.

@@ -15,10 +15,14 @@
  *
  * L3 (live scenarios, owner-launched only): the same journeys the
  * deterministic layer runs, with the REAL model over the test DB — see
- * evals/datasets/README.md § L3 for the manual launch command.
+ * evals/datasets/README.md § L3 for the manual launch command. Every L3 run
+ * also prints a per-step transcript and writes it to evals/reports/ (AC-SM-2);
+ * `npm run smoke` is the one-command L3 run of the smoke scenario.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { disposeAllEmbeddingServices } from '@infra/ai/embedding.service';
 
 import { EVAL_PHASES, runL0 } from './levels/l0';
 import { loadCases, runL1 } from './levels/l1';
@@ -33,21 +37,32 @@ import {
   type CostRecord,
 } from './lib/cost-ledger';
 import { readQuota } from './lib/quota';
+import { runWithCleanup, type CleanupDeps } from './lib/run-cleanup';
 import { guardDecision, planCallCount } from './lib/run-guard';
-import { buildReport, type CheckResult, exitCodeFor, printReport } from './lib/reporter';
+import { buildReport, type CheckResult, exitCodeFor, formatScenarioTranscript, printReport } from './lib/reporter';
 
 const LEDGER_PATH = join(process.cwd(), 'evals', 'COST_LEDGER.md');
+/** AC-SM-2: every L3 run's per-step transcripts land here as <scenario>-<ISO>.md (gitignored). */
+const REPORTS_DIR = join(process.cwd(), 'evals', 'reports');
 
 function argValue(flag: string, fallback: string): string {
   const index = process.argv.indexOf(flag);
   return index >= 0 ? (process.argv[index + 1] ?? fallback) : fallback;
 }
 
+const realCleanupDeps: CleanupDeps = {
+  disposeEmbeddings: disposeAllEmbeddingServices,
+  closePool: async () => {
+    const { pool } = await import('@infra/db/drizzle');
+    await pool.end();
+  },
+};
+
 function ledgerText(): string {
   return existsSync(LEDGER_PATH) ? readFileSync(LEDGER_PATH, 'utf8') : '';
 }
 
-async function main(): Promise<void> {
+async function main(markPoolMayBeOpen: () => void): Promise<number> {
   const level = argValue('--level', 'L0').toUpperCase();
   const phase = argValue('--phase', 'all');
   // L3's default is one pass per journey — a live journey is many turns long.
@@ -57,7 +72,7 @@ async function main(): Promise<void> {
 
   if (dataset !== '' && phase === 'all') {
     console.error('--dataset requires --phase <phase> — a dataset lives in one phase directory');
-    process.exit(2);
+    return 2;
   }
 
   // Results per phase, so --baseline writes one file per phase even with --phase all
@@ -74,7 +89,7 @@ async function main(): Promise<void> {
     if (level === 'L1') {
       if (process.env['RUN_LLM_EVALS'] !== '1') {
         console.log('L1 skipped: set RUN_LLM_EVALS=1 to run evals against a real model.');
-        process.exit(0);
+        return 0;
       }
 
       // D-P red button: count the calls before any model is reached.
@@ -91,7 +106,7 @@ async function main(): Promise<void> {
         console.log(guard.message);
       }
       if (!guard.ok) {
-        process.exit(3);
+        return 3;
       }
 
       // D-R/D-Q quota gate + pre-run estimate banner.
@@ -102,7 +117,7 @@ async function main(): Promise<void> {
           'L1 requires --quota-before <n> (the Z.AI dashboard number): no quota endpoint is readable (D-R). ' +
             'Complete the ledger row afterwards with: npm run evals:ledger -- --after <n>',
         );
-        process.exit(2);
+        return 2;
       }
       const weeklyLimit = process.env['EVALS_WEEKLY_LIMIT'] ? Number(process.env['EVALS_WEEKLY_LIMIT']) : undefined;
       const ledger = parseLedgerTable(ledgerText());
@@ -157,7 +172,7 @@ async function main(): Promise<void> {
     } else if (level === 'L3') {
       if (baselineMode !== '') {
         console.error('L3 does not support --baseline (scenarios are not a per-phase baseline source).');
-        process.exit(2);
+        return 2;
       }
       const scenarioId = argValue('--scenario', '');
       let scenarios;
@@ -165,26 +180,44 @@ async function main(): Promise<void> {
         scenarios = loadScenarios(scenarioId || undefined);
       } catch (err) {
         console.error(err instanceof Error ? err.message : String(err));
-        process.exit(2);
+        return 2;
       }
       const outcome = await runL3(scenarios, samples, {
-        onPlanned: info =>
+        // Fires exactly once `runL3` has passed every gate and is about to
+        // lazily import `run-scenario.ts` (which opens the real DB pool) —
+        // BEFORE that import and BEFORE the scenario loop, so a throw
+        // anywhere after this point (including the import itself, or mid-run)
+        // still leaves `runWithCleanup` knowing to close the pool.
+        onPlanned: info => {
           console.log(
             `planned model calls: ${info.plannedCalls} (${info.userSteps} user steps × ${info.samples} samples, ceiling ${info.ceiling})`,
-          ),
+          );
+          markPoolMayBeOpen();
+        },
       });
       if (outcome.status === 'skipped') {
         console.log(outcome.message);
-        process.exit(0);
+        return 0;
       }
       if (outcome.status === 'refused') {
         console.error(outcome.message);
-        process.exit(3);
+        return 3;
       }
       perPhaseResults.set('scenarios', outcome.results);
+      // AC-SM-2: the readable per-step transcript — stdout and file, one
+      // formatter for every L3 run (see reporter.formatScenarioTranscript).
+      mkdirSync(REPORTS_DIR, { recursive: true });
+      for (const transcript of outcome.transcripts) {
+        const body = formatScenarioTranscript(transcript);
+        console.log(body);
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const reportPath = join(REPORTS_DIR, `${transcript.scenarioId}-${stamp}.md`);
+        writeFileSync(reportPath, `# L3 transcript: ${transcript.scenarioId} (${stamp})\n\n${body}\n`);
+        console.log(`transcript written to ${reportPath}`);
+      }
     } else {
       console.error(`Level ${level} is not implemented yet (P0 ships L0, L1 and L3).`);
-      process.exit(2);
+      return 2;
     }
   }
 
@@ -208,7 +241,7 @@ async function main(): Promise<void> {
         diff = compareToBaseline(baselineVersion, p, phaseResults, dataset || undefined);
       } catch (err) {
         console.error(err instanceof Error ? err.message : String(err));
-        process.exit(2);
+        return 2;
       }
       console.log(
         `vs baseline ${baselineVersion}/${p}: ${diff.regressions.length} regressions, ${diff.improvements.length} improvements, ${diff.missing.length} missing, ${diff.added.length} new checks`,
@@ -221,7 +254,9 @@ async function main(): Promise<void> {
 
   const report = buildReport(level, results);
   printReport(report);
-  process.exit(exitCodeFor(report));
+  return exitCodeFor(report);
 }
 
-void main();
+void runWithCleanup(main, realCleanupDeps).then(code => {
+  process.exitCode = code;
+});
