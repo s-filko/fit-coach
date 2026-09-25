@@ -367,7 +367,7 @@ const withOneSet = (set: object): unknown => ({
   },
 });
 
-describe('WorkoutSetSchema (close-out review advisory 3 — strict branches)', () => {
+describe('WorkoutSetSchema (AC-SM-1 — strict branches)', () => {
   it('accepts a strength set (reps + optional weight/rpe)', () => {
     expect(() => ScenarioSchema.parse(withOneSet({ reps: 8, weight: 80, rpe: 8 }))).not.toThrow();
   });
