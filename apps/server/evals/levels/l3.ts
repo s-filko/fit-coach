@@ -37,8 +37,6 @@ import { install as installFakeClock } from '@sinonjs/fake-timers';
 import { and, inArray, isNull } from 'drizzle-orm';
 
 import { EmbeddingService, disposeAllEmbeddingServices } from '@infra/ai/embedding.service';
-import { db } from '@infra/db/drizzle';
-import { exercises } from '@infra/db/schema';
 
 import { assertScenarioTestDatabase, isScenarioTestDatabase } from '../lib/scenario-db-guard';
 import { guardDecision, planCallCount } from '../lib/run-guard';
@@ -61,6 +59,10 @@ async function assertCatalogEmbedded(scenario: Scenario): Promise<void> {
   if (names.length === 0) {
     return;
   }
+  // Lazy: `@infra/db/drizzle` opens a pool and runs `SELECT 1` at import, so a
+  // static import made every L3 unit test (no DB in CI) crash the Jest process.
+  const { db } = await import('@infra/db/drizzle');
+  const { exercises } = await import('@infra/db/schema');
   const unembedded = await db
     .select({ name: exercises.name })
     .from(exercises)
@@ -415,6 +417,10 @@ export async function runL3(scenarios: Scenario[], samples = 1, deps: L3Deps = {
   deps.onPlanned?.({ plannedCalls, userSteps, samples, ceiling });
 
   const run = deps.runScenarioFn ?? (await import('../lib/run-scenario')).runScenario;
+  // The catalog check reads what the REAL runner seeded, from the real DB. An
+  // injected runner (unit tests) seeds nothing, and the query would reach for a
+  // database CI does not have — the 2026-09-26 dev deploy failed on exactly that.
+  const checkCatalog = deps.runScenarioFn ? async (): Promise<void> => undefined : assertCatalogEmbedded;
 
   // Date-only fake clock: advance steps jump it via onAdvance, exactly like
   // the deterministic layer's jest.setSystemTime; timers stay real.
@@ -429,7 +435,7 @@ export async function runL3(scenarios: Scenario[], samples = 1, deps: L3Deps = {
     for (const scenario of scenarios) {
       for (let sample = 0; sample < samples; sample += 1) {
         const result = await run(scenario, { onAdvance: now => clock.setSystemTime(now), embeddingService });
-        await assertCatalogEmbedded(scenario);
+        await checkCatalog(scenario);
         const checks = evaluateScenario(scenario, result, samples > 1 ? `[${sample + 1}]` : '');
         results.push(...checks);
         transcripts.push({ scenarioId: scenario.id, steps: scenario.steps, observations: result.steps, checks });
