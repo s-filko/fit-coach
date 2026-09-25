@@ -157,6 +157,11 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
         }
       }
       for (const ex of notStartedMuscles) {
+        // The catalog name is the truth for an id (D19): a plan's exerciseName can disagree with its
+        // exerciseId (live 2026-09-25: "Treadmill" carrying Rowing Machine's id).
+        if (ex.name) {
+          nameById.set(ex.id, ex.name);
+        }
         for (const mg of ex.muscleGroups ?? []) {
           todayMuscleSet.add(mg.muscleGroup);
         }

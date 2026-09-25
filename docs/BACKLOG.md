@@ -73,6 +73,14 @@ Rules:
 
 ## Findings
 
+- [ ] **A saved session plan can name one exercise and carry another's id (found 2026-09-26,
+      training-exercise-history live check).** The owner's 2026-09-25 plan (`e9e76f10`) lists
+      "Treadmill" with Rowing Machine's `exerciseId` (`bf6a2f9e…`). Nothing at plan save
+      (`save_workout_plan` / `start_training_session`) checks `exerciseName` against the catalog row of
+      `exerciseId`, so the coach may announce one exercise while logging and history resolve another.
+      Training's history block now labels by catalog name (plan D19); the save-time check is open.
+      Candidate for U7 `session-proposal` (R3.1 moves ID validation to the proposal).
+
 - [ ] **Direct Google AI Studio is not a drop-in replacement for the OpenRouter route (parked by the
       owner, 2026-09-22).** On 2026-09-21 dev was switched from OpenRouter BYOK to the Google AI
       Studio endpoint directly and rolled back the same evening: the application's own requests came

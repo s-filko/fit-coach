@@ -120,6 +120,11 @@ questions per the standing autonomy order):**
   phase whose response time is already dominated by the model call. Revisit only if profiling
   shows it matters.
 
+- **D19 — a not-started plan exercise is labelled with its catalog name, not the plan's
+  `exerciseName`** (found in the dev live check, fixed post-review by the orchestrator). The 2026-09-25
+  plan listed "Treadmill" under Rowing Machine's id; the block showed "Treadmill — no completed
+  record" while the history it looked up was the rowing machine's. The name/id mismatch at plan
+  save time is a separate finding in `BACKLOG.md`.
 ## Acceptance criteria
 
 | AC | Criterion | Verification |
@@ -191,6 +196,21 @@ questions per the standing autonomy order):**
 - `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh npm run test:scenarios`
 - `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh npm run test:integration`
 - `node ../../scripts/state.mjs --check` (from repo root: `node scripts/state.mjs --check`)
+
+## Live check (dev, 2026-09-26, zero LLM calls)
+
+After the dev deploy, the phase's own `loadContext` + the two new blocks were run inside
+`fitcoach-dev-server` over the real dev DB for the owner's two sessions where BUG-030 showed live:
+
+- `fa293e20` (`lower_a`, 2026-09-21): Leg Curl → `last done 2026-09-16 · 5d ago — 3 × 12 @ 59 kg`,
+  Leg Extension the same — exactly the history the coach denied ("было 40–45 кг", "не было"). The
+  2026-02-20 `lower_a` session no longer appears. Old data is dated where it is the only record
+  (Standing Calf Raise → `2026-04-24 · 150d ago`).
+- `e9e76f10` (`upper_a_20260925`, 2026-09-25): lat pulldown 09-15, lateral raise and rope pushdown
+  09-20, chest-supported row `2026-04-21 · 157d ago`; RECENT WORKOUTS lists 09-21 and 09-20 with
+  overlaps. Before the fix this session had no history block at all.
+- Found: D19 (plan name/id mismatch) — fixed. Retro-rendering an old session shows later sessions as
+  "-4d ago" — an artefact of pinning `now` in the past, impossible in a live turn.
 
 ## Not in scope
 
