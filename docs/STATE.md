@@ -54,6 +54,7 @@ _Generated 2026-09-25 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `smoke-test.md` — Smoke Test Implementation Plan
 - `structured-output-fenced-json.md` — Structured Output — Fenced-JSON Recovery and the User-Facts Scenario Test Implementation Plan
 - `structured-output-json-object-mode.md` — Structured Output — Provider Mode `json_object` for the Z.AI Route Implementation Plan
+- `training-exercise-history.md` — Training Exercise History (BUG-030, Roadmap R1.3a) Implementation Plan
 - `training-journey-scenarios.md` — Training Journey Scenarios — Deterministic over the Real Test DB + Live L3 Implementation Plan
 - `transition-handoff.md` — Transition Hand-off (Roadmap U5) Implementation Plan
 
@@ -229,6 +230,18 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
 4. **HB-02** (production Docker image) — its own plan, sequenced after HB-01;
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
+
+## Handoff (training-exercise-history, 2026-09-26) — BUG-030 fixed, deployed to dev
+
+Owner order 2026-09-26: fix BUG-030 end to end without questions. Plan `training-exercise-history`
+(roadmap R1.3a) is `done`, reviewed clean and merged into `dev`. The training phase no longer picks one
+"previous session" by exact `session_key`: `training.exercise_history` shows each of today's exercises
+(planned or started) with its last real performance and its date, and `training.recent_workouts` shows
+the real workouts of the last 7 days with overlaps on today's muscles; prompt `training` v6 makes the
+coach state the age of quoted numbers and never deny work it simply cannot see. **For the owner to
+review:** decisions D1–D18 in the plan (taken under the autonomy order), incl. D16 — a factual ADR-0013
+§10 cell update. Roadmap U3 is now R1.3b only. Not covered: an exercise that is neither in today's
+session nor in the last 7 days (would need a history lookup tool).
 
 ## Handoff (session-investigation-0925 + transition-handoff, 2026-09-26) — deployed to dev, owner's live check pending
 

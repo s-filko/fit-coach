@@ -3,8 +3,11 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and
 > test-driven-development. Red tests first, then the fix.
 
-- Status: planned
+- Status: done
 - Branch: plan/training-exercise-history
+- Review: 2026-09-26 | clean | R1,R2,R3,R4
+
+**Review note:** one combined reviewer; first pass blocked on 5 — two DRY, one missing block test, two stale docs — fixed in 02b60716, 9d716806; R2/R3/R4 re-run clean.
 
 **Goal:** the training phase sees the user's real history. For every exercise of today's session
 (planned or started) the coach gets its **last real performance, dated**, found by exercise — not
@@ -77,8 +80,8 @@ questions per the standing autonomy order):**
   reaching `findLastPerformancesByExercise` or `findByIdsWithMuscles` and failing the turn.
 - **D12 — `findLastPerformancesByExercise`'s DISTINCT ON tie-break.** Same-`completedAt` ties
   (same anchor session) now break on `desc(orderIndex), desc(id)` — deterministic, never changes
-  *which session* wins (only which of that session's own rows does, an edge case that cannot
-  occur today since a session has one `session_exercises` row per exercise).
+  *which session* wins (only which of that session's own rows does, an edge case the schema does
+  not prevent — no unique `(session_id, exercise_id)` constraint — and the tie-break handles it).
 - **D13 — window semantics, made explicit.** `training.recent_workouts`'s "last 7 days" is
   `calendarDaysAgo(...) <= 7` — a workout exactly 7 calendar days old (in the resolved timezone)
   is IN the window, one 8 days old is not; "last 7 days" is read as "today back through 7 days
