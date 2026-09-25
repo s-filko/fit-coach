@@ -62,7 +62,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -142,7 +144,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -259,7 +263,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -286,9 +292,7 @@ No recent sessions.",
 exports[`message assembly (pre-wiring truth, refactor-p2-context-assembler Task 1) plan_creation / plain 1`] = `
 [
   {
-    "content": "Current Date: 2026-09-13
-
-=== YOUR TASK ===
+    "content": "=== YOUR TASK ===
 
 Help the client create a comprehensive long-term workout plan:
 
@@ -376,7 +380,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -401,9 +407,7 @@ Fitness Goal: strength",
 exports[`message assembly (pre-wiring truth, refactor-p2-context-assembler Task 1) plan_creation / post-tool 1`] = `
 [
   {
-    "content": "Current Date: 2026-09-13
-
-=== YOUR TASK ===
+    "content": "=== YOUR TASK ===
 
 Help the client create a comprehensive long-term workout plan:
 
@@ -491,7 +495,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -553,9 +559,7 @@ Fitness Goal: strength",
 exports[`message assembly (pre-wiring truth, refactor-p2-context-assembler Task 1) plan_creation / with-summary 1`] = `
 [
   {
-    "content": "Current Date: 2026-09-13
-
-=== YOUR TASK ===
+    "content": "=== YOUR TASK ===
 
 Help the client create a comprehensive long-term workout plan:
 
@@ -643,7 +647,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -741,7 +747,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -821,7 +829,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -938,7 +948,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -957,8 +969,7 @@ training (today): Topics: training plan discussed. Decisions: upper/lower split,
 exports[`message assembly (pre-wiring truth, refactor-p2-context-assembler Task 1) session_planning / plain 1`] = `
 [
   {
-    "content": "Current Date: 2026-09-13
-No previous workouts
+    "content": "No previous workouts
 
 === YOUR TASK ===
 
@@ -1069,7 +1080,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -1107,8 +1120,7 @@ No muscle group data — fully rested.",
 exports[`message assembly (pre-wiring truth, refactor-p2-context-assembler Task 1) session_planning / post-tool 1`] = `
 [
   {
-    "content": "Current Date: 2026-09-13
-No previous workouts
+    "content": "No previous workouts
 
 === YOUR TASK ===
 
@@ -1219,7 +1231,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -1294,8 +1308,7 @@ No muscle group data — fully rested.",
 exports[`message assembly (pre-wiring truth, refactor-p2-context-assembler Task 1) session_planning / with-summary 1`] = `
 [
   {
-    "content": "Current Date: 2026-09-13
-No previous workouts
+    "content": "No previous workouts
 
 === YOUR TASK ===
 
@@ -1406,7 +1419,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -1566,7 +1581,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -1718,7 +1735,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -1907,7 +1926,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
