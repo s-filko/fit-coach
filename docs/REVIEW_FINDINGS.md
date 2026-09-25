@@ -164,6 +164,7 @@ or is inert for the kind of diff under review.
   prioritisation in the brief or an explicit budget.
   Runs: llm-io-audit-trail (2026-09-22).
 - [×1] A plan stated "exactly N failing" for the repro glob from memory rather than from a command it had run; the baseline (2) and the close-out expectation (4) both missed the unit repro probes for BUG-023/BUG-025 (real: 4 before, 6 after). Proposed: a plan quoting a count of failing suites gets it from a run and names the command. Runs: coach-baseline 2026-09-25 (R3).
+- [×1] The zones do not say whether a missing AC id in a test name (SUPERPOWERS_INTEGRATION rule 4) is blocking or advisory; it meets the formal bar (file:line + named rule) yet costs two renames. A severity note in `r3-correctness.md` would make verdicts consistent. Runs: smoke-test 2026-09-25 (R3).
 
 ## Blind spots
 
@@ -334,6 +335,7 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   the skill — mechanism drift is R4's; the orchestrator escalates read-only-spec findings to the
   owner at close-out — would settle both. Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19).
 - [×1] Zone R3 says test names carry BR/AC refs "per `docs/CONTRIBUTING_AI.md`", but that file has no such rule, so missing AC refs (`planning-set-logging`, `recent-history-status`) cannot be graded. Proposed wording for CONTRIBUTING_AI Principles: "Every `describe` of a test that proves an AC names that AC id." Runs: coach-baseline 2026-09-25 (R3).
+- [×1] R3 checks AC-to-test mapping but not teardown coverage of CLI entry points; the smoke's `exitAfterCleanup` was proven only by live runs. Proposed for CONTRIBUTING_AI: "A CLI entry point that owns process-level resources (DB pools, native sessions) proves its teardown on the success, refusal and thrown-error paths; a live run covers only the first." Runs: smoke-test 2026-09-25 (R3).
 
 ## Rule candidates
 

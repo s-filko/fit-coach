@@ -758,3 +758,8 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 - [ ] Harden `overlapping-load.repro.test.ts` Red 1 before U3 turns it green: `toContain('Overhead Press')` could pass without the level-2 block (e.g. a substitutes list); tie the exercise name to yesterday's date. Source: coach-baseline close-out review R3 (2026-09-25).
 - [ ] Two `SeedSession` types of different shapes: `recent-history-status.integration.test.ts:31` and `tests/integration/scenarios/session-seed.ts:12`; the separate seeding loop is justified (the shared seeder cannot express `skipped`/`planning` or custom timestamps), the duplicate type name is a trap — rename one or widen the shared seeder. Source: coach-baseline close-out review R2 (2026-09-25).
 
+## smoke-test close-out review advisories (2026-09-25)
+
+- [ ] One runtime source for the exercise category list and involvement values: `['compound','isolation','cardio','functional','mobility']` is typed by hand in `evals/schema/scenario.schema.ts:139`, `search-exercises.tool.ts:36` (`CATEGORIES`), `src/domain/training/types.ts:64` and `infra/db/seeds/exercises.seed.ts:15`; `InvolvementSchema`'s values are only type-checked against `Involvement`. Same class `db6c0a94` fixed for muscle groups and exercise types (whose two production copies in `save-workout-plan.tool.ts:22` / `search-exercises.tool.ts:13` also remain). Source: smoke-test close-out review R2 (2026-09-25).
+- [ ] Type `evals/lib/scenario-world.ts` `toSetData` against the domain `SetData` / `setDataTypes` (`src/domain/training/set-data.types.ts`) instead of `Record<string, unknown>` with literal type strings, so a domain setData change breaks the seeder at compile time. Source: smoke-test close-out review R2 (2026-09-25).
+
