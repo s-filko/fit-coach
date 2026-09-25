@@ -4,8 +4,9 @@
 > Execute only your task. **No live model call** in any worker task — the one live run is the
 > orchestrator's (Task 4).
 
-- Status: in progress
+- Status: done
 - Branch: plan/smoke-test
+- Review: 2026-09-25 | clean | R1,R2,R3,R4
 
 **Goal:** one command, `npm run smoke`, that seeds a realistic hand-written history into
 `fitcoach_test`, plays a fixed user script of one workout start → finish against the live model,
@@ -111,7 +112,9 @@ registration), new `tests/integration/scenarios/smoke-seed.integration.test.ts`.
 
 ## Review
 
-2026-09-25 — one combined reviewer covering R1–R4 (owner economy rule). Verdict **blocked** (1 blocking).
+2026-09-25 — one combined reviewer covering R1–R4 (owner economy rule). First verdict **blocked** (1 blocking);
+after fixes, R3 re-run **clean**. Owner routing: blocking 1 + advisories 2, 3, 8 fixed on the branch;
+5, 6 in `BACKLOG.md` § smoke-test close-out review advisories; 4, 7, 9 need no action.
 Orchestrator acceptance before review: check-all, unit 1213, integration 570, scenarios 355 — exit 0.
 Live runs (Task 4): run 1 — scenario defects + exit 134 + course-check ZodError (local `.env` lacked
 `LLM_STRUCTURED_OUTPUT_MODE=json_object`, added 2026-09-25); run 2 — 34/0, still exit 134; run 3
@@ -126,14 +129,18 @@ BUG-031 is judged from the transcript (D5).
 Blocking:
 1. R3 `evals/lib/__tests__/reporter.unit.test.ts:43`, `tests/integration/scenarios/scenario-world-seed.integration.test.ts:85`
    — SUPERPOWERS_INTEGRATION rule 4: the suites proving AC-SM-2 / AC-SM-1 carry no AC id in
-   `describe`/`it` names. *(closure pending)*
+   `describe`/`it` names. **Fixed** `8770b70e`.
 
 Advisory:
 2. R3 `evals/run.ts:239` — `dbPoolMayBeOpen` is set only after `runL3` returns `'ran'`; a throw
    mid-run leaves the pool open (exit only after pg's idle timeout, or never with a checked-out
    client); a rejecting `pool.end()` runs cleanup twice ("Called end on pool more than once").
+   **Fixed** `6ead3d9f` (`runWithCleanup`, one try/finally, `onPlanned` marks the pool before the
+   DB-opening import), then `66f22b62`: moved to `evals/lib/run-cleanup.ts` — importing `run.ts` from
+   the test ran the whole CLI (a full L0 inside every `test:unit`, found by the R3 re-run) — and a
+   rejecting dispose no longer skips `closePool`.
 3. R3 `evals/schema/scenario.schema.ts:173` — a set with both `reps` and `durationSeconds` matches
-   the duration branch and `reps` is stripped silently; `.strict()` branches would reject it.
+   the duration branch and `reps` is stripped silently; `.strict()` branches would reject it. **Fixed** `c814ff60`.
 4. R1 `scenario.schema.ts:3` — infra dependency via DB enums (recorded above as a deviation).
 5. R2 `scenario.schema.ts:139` — category list and `InvolvementSchema` values hand-copied (category
    also in `search-exercises.tool.ts:36`, `types.ts:64`, `exercises.seed.ts:15`); pre-existing copies.
@@ -143,8 +150,13 @@ Advisory:
 7. R3 `l3.ts`, `reporter.ts` — evaluation semantics unchanged (confirmation, no action).
 8. R4 `evals/datasets/README.md:115-138` — § Smoke omits: model from `.env` and the Z.AI
    `json_object` requirement; the shared `fitcoach_test` and `db-test-lock.sh`; the report file
-   name is `<scenarioId>-<ISO>.md` for every L3 run.
+   name is `<scenarioId>-<ISO>.md` for every L3 run. **Fixed** `3e93c3ac`.
 9. R4 — no durable-layer gap (confirmation, no action).
 
 Meta: CLI teardown paths untested beyond the live success path (rule candidate); zones do not
 state the severity of a missing AC id in a test name (prompt defect).
+
+R3 re-run (2026-09-25, fix commits as highest-risk objects): clean — every exit path verified, `.strict()`
+breaks no scenario module. Its advisories: the run.ts import side effect and the unguarded dispose —
+both fixed in `66f22b62` (owner); suites renamed to AC ids. Final orchestrator acceptance: unit 1224
+(no L0 inside), scenarios 355, check-all clean, `evals/run.ts --level L0` exit 0.
