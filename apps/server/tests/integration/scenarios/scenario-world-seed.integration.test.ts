@@ -82,7 +82,7 @@ beforeAll(async () => {
   world = await seedScenarioRows(past, T0);
 });
 
-describe('scenario world seeding — catalog, workout status, duration/distance sets', () => {
+describe('scenario world seeding — catalog, workout status, duration/distance sets (AC-SM-1)', () => {
   it('inserts the catalog exercises with their muscle rows', async () => {
     const rows = await db
       .select({

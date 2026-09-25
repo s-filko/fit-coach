@@ -1,11 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
-import {
-  formatScenarioTranscript,
-  summarizeChecks,
-  type CheckResult,
-  type ScenarioTranscript,
-} from '../reporter';
+import { formatScenarioTranscript, summarizeChecks, type CheckResult, type ScenarioTranscript } from '../reporter';
 
 function fabrication(): ScenarioTranscript {
   return {
@@ -34,13 +29,18 @@ function fabrication(): ScenarioTranscript {
       { case: 'smoke::step 0', check: 'tools.must:start_training_session', passed: true },
       { case: 'smoke::step 0', check: 'phaseAfter', passed: false, detail: 'expected training, got chat' },
       { case: 'smoke::step 2', check: 'tools.must:finish_training', passed: true },
-      { case: 'smoke::step 2', check: 'delivered.mustNotMatch:"вторник"', passed: false, knownBug: 'BUG-031',
-        detail: 'delivered text contains "вторник"' },
+      {
+        case: 'smoke::step 2',
+        check: 'delivered.mustNotMatch:"вторник"',
+        passed: false,
+        knownBug: 'BUG-031',
+        detail: 'delivered text contains "вторник"',
+      },
     ],
   };
 }
 
-describe('formatScenarioTranscript', () => {
+describe('formatScenarioTranscript (AC-SM-2)', () => {
   it('renders a user step: user text, delivered coach reply, tools, phase', () => {
     const text = formatScenarioTranscript(fabrication());
     expect(text).toContain('#0 user: привет, хочу потренироваться');
@@ -69,7 +69,9 @@ describe('formatScenarioTranscript', () => {
     const text = formatScenarioTranscript(fabrication());
     expect(text).toContain('  ✓ tools.must:start_training_session');
     expect(text).toContain('  ✗ phaseAfter — expected training, got chat');
-    expect(text).toContain('  ✗ delivered.mustNotMatch:"вторник" — delivered text contains "вторник" [known bug BUG-031]');
+    expect(text).toContain(
+      '  ✗ delivered.mustNotMatch:"вторник" — delivered text contains "вторник" [known bug BUG-031]',
+    );
     // each check line sits under its own step, not lumped at the end
     const step0Block = text.split('#0 user:')[1]?.split('#1 (advance)')[0] ?? '';
     expect(step0Block).toContain('✓ tools.must:start_training_session');
