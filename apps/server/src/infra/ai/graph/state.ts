@@ -8,6 +8,7 @@ import type { BaseMessage } from '@langchain/core/messages';
 import { Annotation, type LangGraphRunnableConfig, messagesStateReducer } from '@langchain/langgraph';
 
 import type { CompactReason, StoredEpisodeSummary } from '@domain/conversation/episode';
+import type { ConversationPhase } from '@domain/conversation/phases';
 import type { TransitionRequest } from '@domain/conversation/transitions';
 import type { User } from '@domain/user/services/user.service';
 
@@ -72,6 +73,25 @@ export const RunContext = Annotation.Root({
    * foldable. Absent on every ordinary run.
    */
   compactOnly: Annotation<boolean | undefined>(),
+  /**
+   * transition-handoff plan Task 2 (D-3): hop facts for THIS run only, never
+   * checkpointed — mutated in place on the same ctx object across both commit
+   * calls of a hop, exactly like `metrics`. `phasePath` gets one phase pushed
+   * per commit call (the phase it committed FROM); its length is the
+   * "already hopped" guard (max 1 hop, no revisit) and, once > 1, is D-2's
+   * `transition.path`. `hopping` is the commit → route conditional edge's
+   * signal, set on every commit call. `hopBoundaryIndex` is where in
+   * `current` the second phase's messages start — the looping commit's
+   * transcript-projection cutoff and `runAiText`'s delivery cutoff; unset on
+   * a run with no hop. `hopTransition` is the request that triggered the hop
+   * — the final commit's own `pendingTransition` is already null by then, so
+   * its run row reads the toPhase/reason from here. All absent/undefined
+   * until commit first runs.
+   */
+  phasePath: Annotation<ConversationPhase[] | undefined>(),
+  hopping: Annotation<boolean | undefined>(),
+  hopBoundaryIndex: Annotation<number | undefined>(),
+  hopTransition: Annotation<TransitionRequest | undefined>(),
 });
 
 export type RunContextType = typeof RunContext.State;

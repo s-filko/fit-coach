@@ -38,11 +38,16 @@ export function splitEpisode(messages: BaseMessage[]): { history: BaseMessage[];
  * alongside tool calls arrives too, and nothing from earlier runs is
  * re-sent. A run with a single AI message delivers exactly that message's
  * text; no AI text at all → ''.
+ *
+ * `fromIndex` (transition-handoff plan Task 2): cuts `current` at this index
+ * before collecting texts — the looping commit's hop boundary, so a hand-off
+ * run delivers only the SECOND phase's reply. Default 0 = the whole run
+ * (today's behaviour, unchanged when no hop happened).
  */
-export function runAiText(messages: BaseMessage[]): string {
+export function runAiText(messages: BaseMessage[], fromIndex = 0): string {
   const { current } = splitEpisode(messages);
   const texts: string[] = [];
-  for (const m of current) {
+  for (const m of current.slice(fromIndex)) {
     if (m?._getType() === 'ai') {
       const text = textOf(m.content);
       if (text !== '') {

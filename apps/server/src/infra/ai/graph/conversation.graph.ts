@@ -1,4 +1,4 @@
-import { type BaseCheckpointSaver, END, START, StateGraph } from '@langchain/langgraph';
+import { type BaseCheckpointSaver, END, type LangGraphRunnableConfig, START, StateGraph } from '@langchain/langgraph';
 
 import { LlmGateway } from '@domain/ai/ports';
 import type { ConversationPhase } from '@domain/conversation/phases';
@@ -28,7 +28,7 @@ import { buildPrepareNode } from './nodes/prepare.node';
 import { buildRouteNode } from './nodes/route.node';
 import { buildPhaseSubgraph } from './phase-subgraph.factory';
 import { buildPhaseSpecs } from './phases';
-import { ConversationState, RunContext } from './state';
+import { ConversationState, type ConversationStateType, RunContext } from './state';
 
 export const CONVERSATION_GRAPH_TOKEN = Symbol('ConversationGraph');
 
@@ -76,6 +76,23 @@ export interface ConversationGraphDeps {
    */
   transitionHandoffTargets?: ReadonlySet<ConversationPhase>;
   checkpointer: BaseCheckpointSaver;
+}
+
+/**
+ * Conditional edge after `commit` (transition-handoff plan Task 2, AC-TH-1):
+ * `route` when `commit` just set `ctx.hopping` (a committed transition to a
+ * hand-off target, on the FIRST commit of the run only — commit.node.ts
+ * enforces max 1 hop), END otherwise — today's behaviour, byte-for-byte, when
+ * the flag is off. `prepare` is skipped entirely on the hop.
+ *
+ * Reads `config.context` directly (not `ctxOf`, which throws): LangGraph's
+ * own `updateState` (checkpoint seeding in tests and the eval scenario
+ * runner) re-evaluates outgoing branches with no run context at all — a
+ * missing context here just means "not mid-run", so END is the safe default.
+ */
+function afterCommit(_state: ConversationStateType, config: LangGraphRunnableConfig): 'route' | typeof END {
+  const ctx = config.context as { hopping?: boolean } | undefined;
+  return ctx?.hopping ? 'route' : END;
 }
 
 /** Applies a phase's LLM_BUDGET_* override (partial) over its PhaseSpec.budget default. */
@@ -133,6 +150,8 @@ function buildGraph(deps: ConversationGraphDeps) {
     // handler fails. The legacy phase-summary handler is gone (P4 Task 4);
     // its file dies in Task 7.
     onTransition: [buildCompactionFlagHandler(), buildSessionLifecycleHandler({ trainingService, workoutSessionRepo })],
+    // transition-handoff plan Task 2 (D-1): same targets tool-executor uses.
+    transitionHandoffTargets: deps.transitionHandoffTargets,
   });
 
   const graph = new StateGraph(ConversationState, RunContext)
@@ -140,7 +159,10 @@ function buildGraph(deps: ConversationGraphDeps) {
     .addNode('route', routeNode, { ends: specs.map(s => s.name) })
     .addNode('commit', commitNode)
     .addEdge(START, 'prepare')
-    .addEdge('commit', END);
+    // transition-handoff plan Task 2 (AC-TH-1): `commit` sets ctx.hopping when
+    // it just committed a transition to a hand-off target — the ONLY way back
+    // to `route` this run; `prepare` is never re-entered on a hop.
+    .addConditionalEdges('commit', afterCommit, { route: 'route', [END]: END });
 
   for (const spec of specs) {
     graph.addNode(spec.name, buildPhaseSubgraph(spec, deps)).addEdge(spec.name, 'commit');

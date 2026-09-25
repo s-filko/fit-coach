@@ -105,7 +105,10 @@ describe('buildPhaseSubgraph (ADR-0013 §4.1)', () => {
       schema: z.object({}),
       func: async () => ({
         outcome: ok('Session created'),
-        update: { pendingTransition: { toPhase: 'training', reason: 'session_planning_complete' } },
+        update: {
+          pendingTransition: { toPhase: 'training', reason: 'session_planning_complete' },
+          activeSessionId: 'sess-handoff',
+        },
       }),
     }) as unknown as DynamicStructuredTool<{ name: string }>;
 
@@ -119,19 +122,22 @@ describe('buildPhaseSubgraph (ADR-0013 §4.1)', () => {
 
     const deps = { ...makeDeps(), transitionHandoffTargets: new Set(['training' as const]) };
     const subgraph = buildPhaseSubgraph(makeSpec([handoffTool]), deps);
-    const result = (await subgraph.invoke({ messages: [new HumanMessage('сделал 2 подхода 110х12')] }, {
-      configurable: { thread_id: 'factory-handoff-test' },
-      recursionLimit: 10,
-      context: {
-        runId: 'run-factory-handoff',
-        userId: 'u1',
-        user: FRESH_USER as never,
-        now: new Date(0),
-        client: 'telegram' as const,
-        trigger: 'user_message' as const,
-        metrics: new RunMetricsCollector('run-factory-handoff'),
-      },
-    } as never)) as { pendingTransition?: { toPhase: string }; messages: BaseMessage[] };
+    const result = (await subgraph.invoke(
+      { messages: [new HumanMessage('сделал 2 подхода 110х12')], phase: 'session_planning' },
+      {
+        configurable: { thread_id: 'factory-handoff-test' },
+        recursionLimit: 10,
+        context: {
+          runId: 'run-factory-handoff',
+          userId: 'u1',
+          user: FRESH_USER as never,
+          now: new Date(0),
+          client: 'telegram' as const,
+          trigger: 'user_message' as const,
+          metrics: new RunMetricsCollector('run-factory-handoff'),
+        },
+      } as never,
+    )) as { pendingTransition?: { toPhase: string }; messages: BaseMessage[] };
 
     // Only ONE model call — the phase that hands off never gets a second turn.
     expect(mockInvoke).toHaveBeenCalledTimes(1);
