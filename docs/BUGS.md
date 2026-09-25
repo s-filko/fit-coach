@@ -1720,7 +1720,7 @@ Four sets were not logged. The coach stayed mostly honest («не сохрани
 
 ## BUG-034 — A successful tool call is answered with "Couldn't save the data": the per-run error budget counts errors from the whole chat history
 
-**Status:** Open — red test pending (plan `session-investigation-0925`, AC-SI-1)
+**Status:** Fixed in code (2026-09-26, plan `session-investigation-0925` task R1, `5fe61768`; regression: `tool-executor.unit.test.ts` (AC-1332 block, AC-SI-1a/1b) and `tests/integration/scenarios/set-error-recovery.integration.test.ts` (AC-SI-1c)) — closes after the dev deploy and the owner's live Telegram check
 **Severity:** Critical — 17 of 69 runs in the owner's 2026-09-25 session replied "not saved" while 15 of them had saved the set; the coach's own reply after the tool was never generated
 **Found during:** owner's live dev training session 2026-09-25 07:58–09:33 UTC (`glm-5.3-flash`)
 **Component:** `apps/server/src/infra/ai/graph/tool-executor.ts:207` (`countLlmErrors(state.messages)`), `tool-policy.ts:43` (contract: "per run"), `phases/training.spec.ts:59` (`llmErrorBudget: 1`)
@@ -1746,7 +1746,7 @@ turn later, as the answer to "что?"/"??" — the owner's "он отвечае
 
 ## BUG-035 — A fractional RPE ("рпе 9-10" → 9.5) crashes `log_set`: the tool schema allows decimals, the column is integer
 
-**Status:** Open — red test pending (AC-SI-2)
+**Status:** Fixed in code (2026-09-26, plan `session-investigation-0925` task R2, `a1dc7949`; regression: `tests/integration/services/log-set.integration.test.ts` (AC-SI-2), `log-set`/`update-last-set` unit tests) — closes after the dev deploy and the owner's live Telegram check
 **Severity:** High — the set is not saved, raw SQL reaches the model, and the model stops sending RPE for the rest of the session
 **Found during:** owner's live dev session 2026-09-25, runs `0c4ddb4b`, `dcccd492`
 **Component:** `apps/server/src/infra/ai/tools/log-set.tool.ts:183`, `update-last-set.tool.ts:73` (`z.number().min(1).max(10)`), `infra/db/schema.ts:497` (`rpe: integer`)
@@ -1759,7 +1759,7 @@ repository, so the schema and the column type were never exercised together. No 
 
 ## BUG-036 — The catalog fallback speaks English to a user who writes Russian
 
-**Status:** Open — red test pending (AC-SI-3)
+**Status:** Fixed in code (2026-09-26, plan `session-investigation-0925` task R3, `edcc3db5`; regression: `messages/__tests__/catalog.unit.test.ts` (AC-SI-3), `language.v2`, `set-language.tool` and bot `handlers` unit tests) — closes after the dev deploy and the owner's live Telegram check
 **Severity:** Medium
 **Found during:** owner's live dev session 2026-09-25 (all 17 BUG-034 replies)
 **Component:** `apps/server/src/infra/ai/messages/catalog.ts:23` (`langOf` reads only Telegram `language_code`)
@@ -1771,7 +1771,7 @@ Every persona in the scenarios and the smoke uses `languageCode: 'ru'`, so this 
 
 ## BUG-037 — On an exercise switch the reply leads with the recap of the finished exercise instead of the set the user just reported
 
-**Status:** Open — red test pending (AC-SI-4); expected behaviour set by the owner 2026-09-25
+**Status:** Fixed in code (2026-09-26, plan `session-investigation-0925` task R4, `a7a08812`; regression: `log-set.tool.unit.test.ts`, `format-exercise-summary.unit.test.ts`, `training.v5.unit.test.ts` (AC-SI-4)) — closes after the dev deploy and the owner's live Telegram check
 **Severity:** High — the owner's second complaint of the session
 **Found during:** owner's live dev session 2026-09-25, runs `7853c472`, `92351633`, `cca871bd`, `7a29f509`
 **Component:** `apps/server/src/infra/ai/tools/format-exercise-summary.ts:46`, `prompts/phases/training/v3.ts:34` (rule 4a/4b)
@@ -1786,7 +1786,7 @@ smoke read the replies as correct.
 
 ## BUG-038 — Budget compaction churns: near the cap every run summarises a 2–4 exchange fragment, and the fragments mislead
 
-**Status:** Open — red test pending (AC-SI-5)
+**Status:** Fixed in code (2026-09-26, plan `session-investigation-0925` task R5 + R2, `b0f0aeb6`, `a1dc7949`; regression: `compact.unit.test.ts`, `compact.node.unit.test.ts` (AC-SI-5a), `episode-summaries.v2.unit.test.ts` (AC-SI-5c), renderTranscript over real `log_set` output (AC-SI-5b)) — closes after the dev deploy and the owner's live Telegram check
 **Severity:** High — stale "open items" and wrong exercise names sit in `## Previous episodes`; 9 summariser calls in 30 minutes
 **Found during:** owner's live dev session 2026-09-25, summaries at 09:03:22 … 09:27:45
 **Component:** `apps/server/src/infra/ai/graph/nodes/compact.ts` (`planCompaction` budget branch, `renderTranscript`), `prompts/blocks/episode-summaries.v1.ts`

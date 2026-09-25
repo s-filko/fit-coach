@@ -12,7 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-25 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `session-investigation-0925.md` — Live Session 2026-09-25 — Investigation and Red Tests Before Remediation Implementation Plan (branch: `plan/session-investigation-0925`, last commit 2026-09-25)
+- `session-investigation-0925.md` — Live Session 2026-09-25 — Investigation and Red Tests Before Remediation Implementation Plan (branch: `plan/session-investigation-0925`, last commit 2026-09-26)
 - `transition-handoff.md` — Transition Hand-off (Roadmap U5) Implementation Plan (branch: `plan/transition-handoff`, last commit 2026-09-25)
 
 **Planned**
@@ -229,14 +229,16 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
-## Handoff (session-investigation-0925, 2026-09-25) — waiting on the owner
+## Handoff (session-investigation-0925, 2026-09-26) — fixes landed, close-out in progress
 
 The owner's live dev session of 2026-09-25 was investigated (plan `session-investigation-0925`, findings F1–F9,
-**BUG-034…038** in `BUGS.md`). Red tests exist for every code/spec finding (evidence table in the plan); default
-suites stay green; no production change. **Stopped at the owner gate:** no fix starts until the owner approves the
-findings and the red tests. Task worktrees `session-investigation-0925-t1..t4` are merged into the plan branch and
-clean, workers released — ready to clean up on the owner's word. F5 = BUG-030 (open), F6 = BUG-032 (fix on
-`plan/transition-handoff`).
+**BUG-034…038** in `BUGS.md`). Red tests were written first and approved by the owner (2026-09-25); all five fixes
+R1–R5 are merged into the plan branch with their regression tests (unit 137/1332, bot 6/36, integration +
+scenarios 41/592). **The branch contains `plan/transition-handoff` (U5) merged in** so R1/R3/R4 could build on it
+(`- After: transition-handoff`): this plan reaches `dev` only after U5 does. Close-out review 2026-09-26 blocked on
+two DRY helpers and STATE staleness; fixes in progress (plan `## Review`). Remaining after `clean`: merge (after
+U5), dev deploy with migration `0017`, set the owner's profile `language_code = 'ru'` on dev (owner request
+2026-09-25), then the owner's Telegram check. F5 = BUG-030 (open), F6 = BUG-032 (U5).
 
 ## Handoff (orchestrator shift, 2026-09-25 — fifth relay)
 
