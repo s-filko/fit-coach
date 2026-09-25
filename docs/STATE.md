@@ -228,7 +228,12 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
-## Handoff (orchestrator shift, 2026-09-24 — fourth relay)
+## Handoff (orchestrator shift, 2026-09-25 — fifth relay)
+
+No live Orca runs, workers or plan worktrees (all released/removed 2026-09-25). Open owner decisions
+1, 2, 3, 5 of the 2026-09-24 triage below are still unasked — ask them one at a time when the unit
+they affect comes up, not before U5.
+
 
 **Roadmap U1 `coach-baseline` is complete (2026-09-25)** — merged, deployed to dev, live check passed via
 the smoke test (plan § Review). Review `2026-09-25 | clean`; advisories in `BACKLOG.md`. The repro
