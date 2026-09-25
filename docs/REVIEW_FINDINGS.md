@@ -363,7 +363,7 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   paragraph about it.
   Third run: R4 found the close-out doc task (written before the code) missed CONTRIBUTING_AI.md run-row semantics, ARCHITECTURE.md reply semantics and prompt tree, ADR-0013 §5.1 and BUG-032. Proposed principle for CONTRIBUTING_AI.md: "A plan's close-out doc task is written from the diff, not from the plan: before `Status: done`, grep the durable layer for every symbol the diff changes and list each hit in the close-out task."
   Runs: refactor-p3-run-context-commit (2026-09-17), refactor-p4-episode-memory (2026-09-18), transition-handoff (2026-09-25).
-- [×2] R3's "describe/it names carry BR/AC references per `docs/CONTRIBUTING_AI.md`" has no slot for
+- [×3] R3's "describe/it names carry BR/AC references per `docs/CONTRIBUTING_AI.md`" has no slot for
   `BUG-0NN`, which was this plan's owner-designated source of truth, nor for plan-local `AC-LSR-N`
   acceptance ids that are not durable `AC-####` specs. The six repro files do carry `BUG-0NN` in
   their `describe()` names and both ids in their header docblocks — satisfying CONTRIBUTING_AI.md's
@@ -373,7 +373,12 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   doc (`CONTRIBUTING_AI.md:181`, "Reference BR-CONV-001..BR-CONV-007 in code and tests") is scoped
   to one rule family, so the bullet's citation does not support a general naming mandate for any
   id — if one is wanted, it needs its own bullet in `CONTRIBUTING_AI.md`.
-  Runs: session-2026-09-21-repro (2026-09-22), llm-io-audit-trail (2026-09-22).
+  Third run (R4 side): `DOCUMENTATION_GUIDE.md:55` states the AC format as `AC-####`, while plans mint
+  plan-scoped `AC-<SLUG>-N` (AC-CC-*, AC-RL-*, AC-CB-*, AC-RRP-*, AC-SI-*) and R4's own uniqueness grep
+  (`AC-[0-9]{4}`) silently misses all of them. Proposed: the guide's ID Conventions line reads
+  `AC-####` for durable/cross-cutting criteria and `AC-<SLUG>-N` for plan-scoped ones, and the zone grep
+  matches both shapes.
+  Runs: session-2026-09-21-repro (2026-09-22), llm-io-audit-trail (2026-09-22), session-investigation-0925 (2026-09-26).
 - [×2] A helper extracted into a shared module leaves its pre-existing call sites untouched,
   and no rule says that is unfinished. On this branch Task 2 moved the domain renderers into
   `prompts/blocks/` and only `training/v1.ts` was repointed; `chat/v1.ts`, `plan_creation/v1.ts`

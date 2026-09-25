@@ -194,3 +194,48 @@ dev deploy by the orchestrator, then one owner check in Telegram.
 - **Note for close-out review:** `messages/catalog.ts`'s doc comment ("Catalog language driven by Telegram's
   `language_code`") is now stale — `langOf`/`ctx.user.languageCode` has always been the profile, not raw Telegram;
   `catalog.ts` itself is outside this task's file ownership, so it was left as found rather than edited.
+
+## Review
+
+Close-out review 2026-09-26, four zones, diff `git diff plan/transition-handoff HEAD` (U5's own code is
+reviewed by its plan). **Verdict: blocked** — 4 blocking, 4 advisory. Findings relayed verbatim.
+
+### Blocking
+
+1. **R2** | `apps/server/src/infra/ai/tools/log-set.tool.ts:24-27` and `update-last-set.tool.ts:16-19` |
+   `docs/CONTRIBUTING_AI.md` "Principles & Boundaries" (DRY) | "`roundRpeToHalf` is defined byte-identically
+   in both files (`Math.round(rpe * 2) / 2`), both added by R2 (BUG-035) for the same purpose … Belongs in one
+   shared module (e.g. `apps/server/src/shared/` alongside `pg-error-cause.ts`, which these same two files
+   already both import)." — **open**
+2. **R2** | `log-set.tool.ts:28-35` and `update-last-set.tool.ts:20-27` | DRY | "`isDatabaseFailure` is
+   defined byte-identically in both files … Same fix as above: extract once, e.g. next to
+   `findInErrorCauseChain` in `apps/server/src/shared/pg-error-cause.ts`." — **open**
+3. **R4** | `docs/STATE.md:11-61` | `SUPERPOWERS_INTEGRATION.md:134`, `:136` | "The AUTO block is out of sync
+   with git facts — `node scripts/state.mjs --check` fails right now." — **open**
+4. **R4** | `docs/STATE.md:232-238` | `SUPERPOWERS_INTEGRATION.md:134` | "The hand-written 'Handoff
+   (session-investigation-0925…) — waiting on the owner' note still says '**Stopped at the owner gate:** no
+   fix starts until the owner approves…' and lists task worktrees t1..t4 as 'ready to clean up on the owner's
+   word.' … STATE.md was never touched again after `52c0ecb4` despite this major status change." — **open**
+
+### Advisory
+
+1. **R4** | `docs/BUGS.md:1723,1749,1762,1774,1789` | "BUG-034..038 all still read `Status: Open — red test
+   pending (AC-SI-N)`, but … every one has a landed fix with commit SHA and a promoted regression test."
+2. **R4** | `apps/server/src/infra/ai/messages/catalog.ts:22` | "Doc comment 'Catalog language driven by
+   Telegram's `language_code`; English fallback.' is stale after R3."
+3. **R4** | `apps/server/evals/scenarios/smoke.scenario.ts:501-508` | "The comment above the 'рпе 9-10' step
+   still describes the pre-fix bug as live."
+4. **R4** | `docs/CICD.md:80-83` | "doesn't mention the new `paths-ignore: ['docs/**', '**.md']` … in
+   `.github/workflows/deploy-dev.yml`." — orchestrator note: that workflow change is `dev`'s own commit
+   `29ade08e` (R3 confirmed), not this plan's; it belongs to whoever next touches CI docs.
+
+### Zones with nothing blocking
+
+- **R1** — no findings; boundaries and ADR-0013 §11 intact.
+- **R3** — no findings; every AC-SI-1..7 traced to a passing test, every fix to its production call site;
+  re-ran unit 137/1332, bot 6/36, scenarios 15/373 (+1 todo), the two new DB integration tests.
+
+### Meta
+
+- R4's AC-id-format observation merged into the existing `[×3]` rule candidate in `docs/REVIEW_FINDINGS.md`.
+- R1's `meta` line reported no gap ("no prompt or mandate gap noticed") — nothing to file.
