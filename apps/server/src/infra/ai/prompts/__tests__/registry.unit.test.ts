@@ -18,8 +18,8 @@ describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVer
     expect(versions['phase.training']).toBe('v3');
     expect(versions['directive.identity']).toBeUndefined(); // training has no identity directive
     expect(versions['directive.tool-reply']).toBe('v1');
-    expect(versions['block.episode_summaries']).toBe('v1');
-    const { 'phase.training': _phaseVersion, ...rest } = versions;
+    expect(versions['block.episode_summaries']).toBe('v2');
+    const { 'phase.training': _phaseVersion, 'block.episode_summaries': _episodeSummariesVersion, ...rest } = versions;
     expect(Object.values(rest).every(v => v === 'v1')).toBe(true);
   });
 
@@ -34,7 +34,7 @@ describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVer
     for (const phase of Object.keys(PHASE_PROMPTS) as ConversationPhase[]) {
       const versions = promptVersionsForPhase(phase);
       expect(versions[PHASE_PROMPTS[phase].current.id]).toBeDefined();
-      expect(versions['block.episode_summaries']).toBe('v1');
+      expect(versions['block.episode_summaries']).toBe('v2');
       expect(versions['block.post_tool_nudge']).toBe('v1');
     }
   });

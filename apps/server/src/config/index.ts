@@ -49,6 +49,11 @@ export const EnvSchema = z.object({
   // turns verbatim; only what precedes the tail is summarised — a part too
   // short to summarise is kept, never dropped.
   EPISODE_KEEP_TURNS: z.coerce.number().default(6),
+  // AC-SI-5a (session-investigation-0925, BUG-038 part 1): a budget-triggered
+  // compaction cuts to at most this fraction of the history budget, not
+  // just-fits — without headroom, near-cap runs re-trigger compaction on
+  // almost every turn (F7).
+  EPISODE_BUDGET_LOW_WATER: z.coerce.number().default(0.6),
   // Same class as EPISODE_*/LLM_BUDGET_* above: a tunable, not a secret (P5,
   // D-A/D-12). How long a waiter for the per-userId run mutex waits before
   // rejecting with ThreadBusyError (HTTP 409).

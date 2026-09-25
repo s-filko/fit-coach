@@ -108,6 +108,7 @@ export async function registerInfraServices(container: Container = getGlobalCont
       minTurns: config.EPISODE_MIN_TURNS,
       minTokens: config.EPISODE_MIN_TOKENS,
       keepTurns: config.EPISODE_KEEP_TURNS,
+      budgetLowWater: config.EPISODE_BUDGET_LOW_WATER,
     },
     // LLM_BUDGET_* overrides (P4 context-budget plan Task 3), resolved once here.
     budgetOverrides: config.LLM_BUDGETS,

@@ -3,7 +3,7 @@
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) block.episode_summaries / present 1`] = `
 "## Previous episodes
 Context only. Numbers below are not authoritative — use tools and the current state.
-training (today): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported."
+training (today 20:00): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported."
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) block.post_tool_nudge 1`] = `"IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools."`;

@@ -263,6 +263,135 @@ describe('planCompaction (AC-CC-1 — the verbatim tail; D-I — the cut never s
   });
 });
 
+/**
+ * AC-SI-5a (session-investigation-0925, BUG-038 part 1): promoted from
+ * compaction-churn.repro.test.ts. Live bug: the budget branch cut to
+ * "just fits" with no headroom, so near the history cap almost every
+ * following run re-triggered compaction (F7).
+ */
+describe('planCompaction — budget lowWaterMark (AC-SI-5a: headroom after a budget cut)', () => {
+  const NOW_5A = new Date('2026-09-25T09:33:00.000Z');
+  const HISTORY_BUDGET = 8000;
+  const LOW_WATER = 0.6; // EPISODE_BUDGET_LOW_WATER default
+
+  function humanId(id: string, text: string): HumanMessage {
+    return new HumanMessage({ content: text, id });
+  }
+
+  /** One ordinary training turn (~300 estimated tokens). */
+  function ordinaryTurn(i: number): BaseMessage[] {
+    return [
+      humanId(`h${i}`, 'x'.repeat(600)),
+      new AIMessage({ id: `a${i}`, content: 'y'.repeat(600), tool_calls: [] }),
+    ];
+  }
+
+  it('omitted lowWaterMark reproduces the old just-fits behaviour: the very next ordinary turn re-triggers', () => {
+    let history: BaseMessage[] = [];
+    let i = 0;
+    let compactedOnce = false;
+    let guard = 0;
+    while (!compactedOnce) {
+      guard += 1;
+      if (guard > 1000) {
+        throw new Error('did not reach a first budget compaction within 1000 turns — check turn sizing');
+      }
+      const withTurn = [...history, ...ordinaryTurn(i++)];
+      if (estimateMessages(withTurn) > HISTORY_BUDGET) {
+        const { kept } = planCompaction({
+          history: withTurn,
+          reason: 'budget',
+          historyBudget: HISTORY_BUDGET,
+          estimate: estimateMessages,
+          keepTurns: 4,
+          minTurns: 0,
+          minTokens: 0,
+          // no lowWaterMark — old just-fits behaviour.
+        });
+        history = kept;
+        compactedOnce = true;
+      } else {
+        history = withTurn;
+      }
+    }
+
+    const nextTurn = [...history, ...ordinaryTurn(i)];
+    expect(estimateMessages(nextTurn)).toBeGreaterThan(HISTORY_BUDGET);
+  });
+
+  it('after the first budget compaction with EPISODE_BUDGET_LOW_WATER headroom, 5 following ordinary turns compact at most once more', () => {
+    let history: BaseMessage[] = [];
+    let i = 0;
+
+    // Prime the history up to and including the first budget compaction.
+    let compactedOnce = false;
+    let guard = 0;
+    while (!compactedOnce) {
+      guard += 1;
+      if (guard > 1000) {
+        throw new Error('did not reach a first budget compaction within 1000 turns — check turn sizing');
+      }
+      const withTurn = [...history, ...ordinaryTurn(i++)];
+      const reason = decideCompactReason({
+        state: { compactReason: null, lastUserMessageAt: null },
+        history: withTurn,
+        now: NOW_5A,
+        gapMs: Number.MAX_SAFE_INTEGER,
+        historyBudget: HISTORY_BUDGET,
+        estimate: estimateMessages,
+      });
+      if (reason === 'budget') {
+        const { kept } = planCompaction({
+          history: withTurn,
+          reason: 'budget',
+          historyBudget: HISTORY_BUDGET,
+          estimate: estimateMessages,
+          keepTurns: 4,
+          minTurns: 0,
+          minTokens: 0,
+          lowWaterMark: LOW_WATER,
+        });
+        history = kept;
+        compactedOnce = true;
+      } else {
+        history = withTurn;
+      }
+    }
+
+    const RUNS_TO_OBSERVE = 5;
+    let compactionsObserved = 0;
+    for (let run = 0; run < RUNS_TO_OBSERVE; run++) {
+      const withTurn = [...history, ...ordinaryTurn(i++)];
+      const reason = decideCompactReason({
+        state: { compactReason: null, lastUserMessageAt: null },
+        history: withTurn,
+        now: NOW_5A,
+        gapMs: Number.MAX_SAFE_INTEGER,
+        historyBudget: HISTORY_BUDGET,
+        estimate: estimateMessages,
+      });
+      if (reason === 'budget') {
+        compactionsObserved++;
+        const { kept } = planCompaction({
+          history: withTurn,
+          reason: 'budget',
+          historyBudget: HISTORY_BUDGET,
+          estimate: estimateMessages,
+          keepTurns: 4,
+          minTurns: 0,
+          minTokens: 0,
+          lowWaterMark: LOW_WATER,
+        });
+        history = kept;
+      } else {
+        history = withTurn;
+      }
+    }
+
+    expect(compactionsObserved).toBeLessThanOrEqual(1);
+  });
+});
+
 describe('planCompaction — manual (/compact keeps NO tail)', () => {
   const history: BaseMessage[] = [
     human('h1', 'первый вопрос'),

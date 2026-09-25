@@ -17,14 +17,23 @@ import type { PromptModule } from '@infra/ai/prompts/types';
 
 import { COURSE_DIRECTIVE_V1 } from './course-directive.v1';
 import { EPISODE_SUMMARIES_V1 } from './episode-summaries.v1';
+import { EPISODE_SUMMARIES_V2 } from './episode-summaries.v2';
 import { POST_TOOL_NUDGE_V1 } from './post-tool-nudge.v1';
 import type { ContextBlockCtx, RenderableBlock, RenderedBlock } from './types';
 import { USER_FACTS_V1 } from './user-facts.v1';
 import { USER_FACTS_V2 } from './user-facts.v2';
 
-export { COURSE_DIRECTIVE_V1, EPISODE_SUMMARIES_V1, POST_TOOL_NUDGE_V1, USER_FACTS_V1, USER_FACTS_V2 };
-export { episodeParagraph } from './episode-summaries.v1';
-export type { EpisodeSummariesContext } from './episode-summaries.v1';
+export {
+  COURSE_DIRECTIVE_V1,
+  EPISODE_SUMMARIES_V1,
+  EPISODE_SUMMARIES_V2,
+  POST_TOOL_NUDGE_V1,
+  USER_FACTS_V1,
+  USER_FACTS_V2,
+};
+// The current version (v2, AC-SI-5c) — every production caller renders through it.
+export { episodeParagraph } from './episode-summaries.v2';
+export type { EpisodeSummariesContext } from './episode-summaries.v2';
 export { TIME_GAP_V1 } from './time-gap.v1';
 export type { TimeGapContext } from './time-gap.v1';
 export type { CourseDirectiveContext } from './course-directive.v1';

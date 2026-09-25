@@ -89,6 +89,15 @@ export interface PlanCompactionInput {
   /** D-B inputs: a too-short beyond-tail part is kept, never dropped. */
   minTurns: number;
   minTokens: number;
+  /**
+   * EPISODE_BUDGET_LOW_WATER (AC-SI-5a, BUG-038 part 1): the budget branch
+   * cuts to at most `historyBudget * lowWaterMark`, not just-fits-under
+   * `historyBudget` — leaving headroom so ordinary turns right after a
+   * compaction don't cross the cap again and re-trigger every run. Omitted
+   * (or 1) reproduces the old just-fits behaviour exactly — direct callers
+   * that don't pass it are unaffected.
+   */
+  lowWaterMark?: number;
 }
 
 /**
@@ -99,9 +108,10 @@ export interface PlanCompactionInput {
  * is too short to summarise by D-B's measure, in which case nothing is
  * removed this run and the part rides along until a later compaction can
  * summarise it. budget keeps its existing token-driven loop — the minimum
- * number of OLDEST whole turns until the kept history fits — which respects
- * the tail by construction: the cut reaches the last `keepTurns` turns only
- * when the tail alone exceeds the budget (then oldest-first). Whatever the
+ * number of OLDEST whole turns until the kept history fits at or under
+ * `historyBudget * (lowWaterMark ?? 1)` (AC-SI-5a) — which respects the tail
+ * by construction: the cut reaches the last `keepTurns` turns only when the
+ * tail alone exceeds the target (then oldest-first). Whatever the
  * budget removes is ALWAYS summarised by the caller (AC-CC-1, ADR-0013 §3.3
  * amendment 2026-09-20): no D-B trim-without-summary remains on any trigger.
  * The cut is turn-safe by construction: turns are never split, so tool calls
@@ -109,7 +119,7 @@ export interface PlanCompactionInput {
  * trigger).
  */
 export function planCompaction(input: PlanCompactionInput): { removed: BaseMessage[]; kept: BaseMessage[] } {
-  const { history, reason, historyBudget, estimate, keepTurns, minTurns, minTokens } = input;
+  const { history, reason, historyBudget, estimate, keepTurns, minTurns, minTokens, lowWaterMark } = input;
   const turns = splitTurns(history);
   const tailCount = Math.max(0, Math.min(keepTurns, turns.length));
 
@@ -126,9 +136,10 @@ export function planCompaction(input: PlanCompactionInput): { removed: BaseMessa
   }
 
   if (reason === 'budget') {
+    const target = historyBudget * (lowWaterMark ?? 1);
     const removed: BaseMessage[] = [];
     let kept = [...history];
-    while (turns.length > 0 && estimate(kept) > historyBudget) {
+    while (turns.length > 0 && estimate(kept) > target) {
       removed.push(...turns.shift()!);
       kept = turns.flat();
     }

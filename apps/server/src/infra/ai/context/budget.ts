@@ -38,7 +38,7 @@ import type { CourseCheckDirective } from '@infra/ai/course-check/directive';
 import {
   type ContextBlockCtx,
   COURSE_DIRECTIVE_V1,
-  EPISODE_SUMMARIES_V1,
+  EPISODE_SUMMARIES_V2,
   fullDepth,
   type RenderableBlock,
   renderBlock,
@@ -144,7 +144,7 @@ export async function resolveBudget<D>(input: ResolveBudgetInput<D>): Promise<Re
   }
   const summaryTokensOf = (summaries: StoredEpisodeSummary[]): number =>
     summaries.length > 0
-      ? estimateTokens(renderBlock(EPISODE_SUMMARIES_V1, { summaries, now: blockCtx.now, timezone: blockCtx.timezone }))
+      ? estimateTokens(renderBlock(EPISODE_SUMMARIES_V2, { summaries, now: blockCtx.now, timezone: blockCtx.timezone }))
       : 0;
 
   const blockDepths: Record<string, number> = {};

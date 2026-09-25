@@ -309,6 +309,45 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
     expect(removedIds(update)).toEqual(['m0', 'm0a', 'm1', 'm2']);
   });
 
+  /**
+   * AC-SI-5a (session-investigation-0925, BUG-038 part 1): config.budgetLowWater
+   * (EPISODE_BUDGET_LOW_WATER) must reach planCompaction's lowWaterMark — a
+   * budget cut with headroom removes MORE than a just-fits cut over the same
+   * history. 4 turns of 24 estimated tokens each (96 total); budgetFor = 73
+   * triggers 'budget' (96 > 73). Just-fits (budgetLowWater omitted) removes
+   * only the oldest turn (72 <= 73); with budgetLowWater 0.5 (target 36.5) it
+   * removes the oldest 3 turns (24 <= 36.5).
+   */
+  it('AC-SI-5a: config.budgetLowWater threads into the budget cut — more headroom removes more', async () => {
+    function budgetTurn(i: number): [HumanMessage, AIMessage] {
+      return [
+        new HumanMessage({ id: `bh${i}`, content: 'x'.repeat(40) }),
+        new AIMessage({ id: `ba${i}`, content: 'y'.repeat(40), tool_calls: [] }),
+      ];
+    }
+    const budgetHistoryState = channelState({
+      messages: [
+        ...budgetTurn(0),
+        ...budgetTurn(1),
+        ...budgetTurn(2),
+        ...budgetTurn(3),
+        new HumanMessage({ content: 'сейчас', id: 'cur' }),
+      ],
+      lastUserMessageAt: null,
+    });
+
+    const { deps: justFitsDeps } = makeDeps();
+    (justFitsDeps as { budgetFor: () => number }).budgetFor = () => 73;
+    const justFitsUpdate = await buildCompactStep(justFitsDeps)(budgetHistoryState, ctxConfig());
+
+    const { deps: lowWaterDeps } = makeDeps({ config: { budgetLowWater: 0.5 } });
+    (lowWaterDeps as { budgetFor: () => number }).budgetFor = () => 73;
+    const lowWaterUpdate = await buildCompactStep(lowWaterDeps)(budgetHistoryState, ctxConfig());
+
+    expect(removedIds(justFitsUpdate)).toEqual(['bh0', 'ba0']);
+    expect(removedIds(lowWaterUpdate)).toEqual(['bh0', 'ba0', 'bh1', 'ba1', 'bh2', 'ba2']);
+  });
+
   // Close-out review fix (ADR-0013 §3.3 amendment, 2026-09-20): at ANY
   // trigger a too-short part is never dropped — a budget cut is ALWAYS
   // summarised, so one huge oldest turn (D-B "short" by turns) or a tiny

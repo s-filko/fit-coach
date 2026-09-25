@@ -265,7 +265,7 @@ WRONG (tool call without text — this will break the app):
   {
     "content": "## Previous episodes
 Context only. Numbers below are not authoritative — use tools and the current state.
-training (today): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
+training (today 20:00): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
     "type": "system",
   },
   {
@@ -649,7 +649,7 @@ WRONG (tool call without text — this will break the app):
   {
     "content": "## Previous episodes
 Context only. Numbers below are not authoritative — use tools and the current state.
-training (today): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
+training (today 20:00): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
     "type": "system",
   },
   {
@@ -944,7 +944,7 @@ WRONG (tool call without text — this will break the app):
   {
     "content": "## Previous episodes
 Context only. Numbers below are not authoritative — use tools and the current state.
-training (today): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
+training (today 20:00): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
     "type": "system",
   },
   {
@@ -1412,7 +1412,7 @@ WRONG (tool call without text — this will break the app):
   {
     "content": "## Previous episodes
 Context only. Numbers below are not authoritative — use tools and the current state.
-training (today): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
+training (today 20:00): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
     "type": "system",
   },
   {
@@ -1913,7 +1913,7 @@ WRONG (tool call without text — this will break the app):
   {
     "content": "## Previous episodes
 Context only. Numbers below are not authoritative — use tools and the current state.
-training (today): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
+training (today 20:00): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
     "type": "system",
   },
   {

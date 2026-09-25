@@ -3,7 +3,7 @@
  * refactor-p2-prompt-modules Task 1 and never regenerated in that plan.
  * Fake timers pin `new Date()` inside the old builders to FIXED_NOW.
  */
-import { EPISODE_SUMMARIES_V1, POST_TOOL_NUDGE_V1, renderBlock } from '@infra/ai/prompts/blocks';
+import { EPISODE_SUMMARIES_V2, POST_TOOL_NUDGE_V1, renderBlock } from '@infra/ai/prompts/blocks';
 import { compose, sectionText } from '@infra/ai/prompts/compose';
 import { CHAT_PROMPT, CHAT_V1 } from '@infra/ai/prompts/phases/chat';
 import { PLAN_CREATION_PROMPT, PLAN_CREATION_V1 } from '@infra/ai/prompts/phases/plan_creation';
@@ -210,7 +210,7 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
 
   it('block.episode_summaries / present', () => {
     expect(
-      renderBlock(EPISODE_SUMMARIES_V1, {
+      renderBlock(EPISODE_SUMMARIES_V2, {
         summaries: [FIXTURE_EPISODE_SUMMARY],
         now: FIXED_NOW,
         timezone: 'Europe/Berlin',
@@ -219,7 +219,7 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
   });
 
   it('block.episode_summaries / empty renders nothing', () => {
-    expect(renderBlock(EPISODE_SUMMARIES_V1, { summaries: [], now: FIXED_NOW, timezone: null })).toBe('');
+    expect(renderBlock(EPISODE_SUMMARIES_V2, { summaries: [], now: FIXED_NOW, timezone: null })).toBe('');
   });
 
   it('block.post_tool_nudge', () => {
