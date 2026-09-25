@@ -230,16 +230,17 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
-## Handoff (session-investigation-0925, 2026-09-26) — fixes landed, close-out in progress
+## Handoff (session-investigation-0925 + transition-handoff, 2026-09-26) — deployed to dev, owner's live check pending
 
-The owner's live dev session of 2026-09-25 was investigated (plan `session-investigation-0925`, findings F1–F9,
-**BUG-034…038** in `BUGS.md`). Red tests were written first and approved by the owner (2026-09-25); all five fixes
-R1–R5 are merged into the plan branch with their regression tests (unit 137/1332, bot 6/36, integration +
-scenarios 41/592). **The branch contains `plan/transition-handoff` (U5) merged in** so R1/R3/R4 could build on it
-(`- After: transition-handoff`): this plan reaches `dev` only after U5 does. Close-out review 2026-09-26 blocked on
-two DRY helpers and STATE staleness; fixes in progress (plan `## Review`). Remaining after `clean`: merge (after
-U5), dev deploy with migration `0017`, set the owner's profile `language_code = 'ru'` on dev (owner request
-2026-09-25), then the owner's Telegram check. F5 = BUG-030 (open), F6 = BUG-032 (U5).
+Both plans are `done`, reviewed clean and merged into `dev` (`28db24ba`), deployed by CI: migration `0017`
+(`session_sets.rpe numeric(3,1)`) applied, `TRANSITION_HANDOFF_TARGETS=training,session_planning` set in
+`.env.dev` (backup `.env.dev.bak.*`) and the server recreated, the owner's profile `language_code = 'ru'` (owner
+request 2026-09-25), bot restarted to drop its cached language. The first CI run failed: U5's static
+`@infra/db/drizzle` import in `evals/levels/l3.ts` ran `SELECT 1` inside L3 unit tests (no DB in CI) — fixed by a
+lazy import (`28db24ba`). **Next:** the owner's live Telegram training session; BUG-022/032/034..038 close on it.
+Cleanup owed on the owner's word: worktree `transition-handoff` (its session `transition-handoff-3e` is live) and
+this plan's worktree (the orchestrator runs in it); the uncommitted `COST_LEDGER.md` rows (smoke runs 6–7) sit in
+the main dev checkout, written by the U5 session.
 
 ## Handoff (orchestrator shift, 2026-09-25 — fifth relay)
 
