@@ -118,8 +118,11 @@ every journey with the check on AND off against a scripted model.
 `npm run smoke` is the one-command L3 run of the `smoke` scenario (spec:
 `docs/superpowers/specs/2026-09-25-smoke-test-design.md`): it seeds a
 hand-written realistic history into `fitcoach_test`, plays a fixed user
-script (greeting → planning → one workout → finish → a history question)
-against the real model, checks every step, and prints the whole conversation.
+script (greeting → planning → one workout — including a range-RPE set "рпе
+9-10" (F2) and a mid-training "when last did I bench" over the seeded history
+(F5/BUG-030), by a Russian-writing persona on an `en` account (F3) — → finish
+→ a history question) against the real model, checks every step, and prints
+the whole conversation.
 It exists to replace the owner's manual check in the Telegram bot — same
 gates as L3 (`RUN_LLM_EVALS=1`, `_test` DB only, shared call ceiling).
 
