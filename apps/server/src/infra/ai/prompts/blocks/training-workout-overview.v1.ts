@@ -143,7 +143,13 @@ export function buildPreviousSessionSection(session: WorkoutSessionWithDetails):
     .join('\n\n');
 }
 
-function formatSetData(setData: WorkoutSessionWithDetails['exercises'][number]['sets'][number]['setData']): string {
+/**
+ * Exported for `training-exercise-history.v1.ts` (EXERCISE HISTORY / RECENT WORKOUTS) — one set
+ * formatter, not copied.
+ */
+export function formatSetData(
+  setData: WorkoutSessionWithDetails['exercises'][number]['sets'][number]['setData'],
+): string {
   switch (setData.type) {
     case 'strength':
       return `${setData.reps} reps${setData.weight != null ? ` @ ${setData.weight} ${setData.weightUnit ?? 'kg'}` : ''}`;
@@ -195,9 +201,14 @@ RULES:
 `;
 }
 
-export interface TrainingClientData {
-  previousSession: WorkoutSessionWithDetails | null;
-}
+/**
+ * `render` never reads `data` (session-independent — ctx.user only), so this carries no fields.
+ * training-exercise-history plan: was `{ previousSession }` only because `TrainingData` happened to
+ * have that field; kept structurally open (`Record<string, never>` would reject any caller's
+ * extra properties) since every caller passes it the full `TrainingData` object regardless.
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- see comment above
+export interface TrainingClientData {}
 
 /** `=== CLIENT ===` — name and goal. Session-independent, so it uses ctx.user only. */
 export const TRAINING_CLIENT_V1: ContextBlock<TrainingClientData> = {

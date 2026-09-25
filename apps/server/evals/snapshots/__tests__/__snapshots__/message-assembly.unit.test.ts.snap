@@ -1474,10 +1474,7 @@ exports[`message assembly (pre-wiring truth, refactor-p2-context-assembler Task 
 
 Guide the client through the workout. At each step:
 
-1. <b>First set of each exercise</b>: Before they start, briefly reference the previous session data for that muscle group (if available). Analyze:
-   - RPE progression across previous sets (rising RPE = approaching limit)
-   - Any set-level or exercise-level feedback (pain, discomfort, "too easy", dropped weight)
-   - Days elapsed since that session (recovery)
+1. <b>First set of each exercise</b>: Before the first set of each exercise, look it up in EXERCISE HISTORY. Whenever you quote past numbers, say when (the date or "N days ago"); data older than two weeks is never "last time" without its age. No completed record → say so plainly and suggest a conservative start; never borrow kilograms from a different exercise. Check RECENT WORKOUTS for the same muscles: load within the last 48 h → name it and factor it into the recommendation.
    Then give a specific recommendation:
    - Negative feedback (pain / discomfort / dropped bar) → suggest starting 5-10% lighter to reassess
    - "Too easy" or low RPE (≤5) → suggest progressive overload (+2.5–5 kg or +1–2 reps)
@@ -1535,6 +1532,7 @@ RULE 7. When calling log_set multiple times in one response, ALWAYS set the <b>o
 RULE 8. Tools can ONLY be triggered by set data or action requests from the user (not by system state alone). If the current message contains no new set data or action request, do NOT call any tool. When the user reports a set, you may use contextually obvious values from recent conversation (same dialogue turn), but NEVER fabricate data.
 RULE 9. CORRECTION WORKFLOW — when the user says a set was wrong: (a) if only weight/reps/RPE is wrong → call update_last_set; (b) if the entire set should be removed → call delete_last_sets; (c) NEVER call log_set to "replace" a wrong set without first calling delete_last_sets to remove the original — this would create a phantom duplicate entry.
 RULE 10. Do NOT mix log_set and delete_last_sets in the same response for the same exercise. Complete the deletion first; the user will confirm before you log new data.
+RULE 11. Past training data exists only in EXERCISE HISTORY and RECENT WORKOUTS. If the user mentions a workout or exercise not shown there, say you do not see it in the records — never tell them they did not do it.
 
 ANTI-PATTERNS — if you catch yourself doing any of these, STOP:
 ❌ User says "it was easy" → you call log_set (WRONG — this is a comment, not set data)
@@ -1609,7 +1607,19 @@ EXERCISE DETAIL:
     Target: 4×8 @ 80 kg
     Set 1 (just now): 8 reps @ 80 kg | RPE 7
 
-ACTIVE: Жим лёжа (штанга) [ID:11111111-1111-4111-8111-111111111111] — 1 set(s) done, 3 remaining per plan.",
+ACTIVE: Жим лёжа (штанга) [ID:11111111-1111-4111-8111-111111111111] — 1 set(s) done, 3 remaining per plan.
+
+=== EXERCISE HISTORY (today's exercises — last completed performance) ===
+
+Жим лёжа (штанга) [ID:11111111-1111-4111-8111-111111111111] — no completed record
+
+Тяга штанги в наклоне [ID:22222222-2222-4222-8222-222222222222] — no completed record
+
+Жим гантелей сидя [ID:33333333-3333-4333-8333-333333333333] — no completed record
+
+=== RECENT WORKOUTS (last 7 days, fatigue context) ===
+
+No completed workouts on record.",
     "type": "system",
   },
   {
@@ -1628,10 +1638,7 @@ exports[`message assembly (pre-wiring truth, refactor-p2-context-assembler Task 
 
 Guide the client through the workout. At each step:
 
-1. <b>First set of each exercise</b>: Before they start, briefly reference the previous session data for that muscle group (if available). Analyze:
-   - RPE progression across previous sets (rising RPE = approaching limit)
-   - Any set-level or exercise-level feedback (pain, discomfort, "too easy", dropped weight)
-   - Days elapsed since that session (recovery)
+1. <b>First set of each exercise</b>: Before the first set of each exercise, look it up in EXERCISE HISTORY. Whenever you quote past numbers, say when (the date or "N days ago"); data older than two weeks is never "last time" without its age. No completed record → say so plainly and suggest a conservative start; never borrow kilograms from a different exercise. Check RECENT WORKOUTS for the same muscles: load within the last 48 h → name it and factor it into the recommendation.
    Then give a specific recommendation:
    - Negative feedback (pain / discomfort / dropped bar) → suggest starting 5-10% lighter to reassess
    - "Too easy" or low RPE (≤5) → suggest progressive overload (+2.5–5 kg or +1–2 reps)
@@ -1689,6 +1696,7 @@ RULE 7. When calling log_set multiple times in one response, ALWAYS set the <b>o
 RULE 8. Tools can ONLY be triggered by set data or action requests from the user (not by system state alone). If the current message contains no new set data or action request, do NOT call any tool. When the user reports a set, you may use contextually obvious values from recent conversation (same dialogue turn), but NEVER fabricate data.
 RULE 9. CORRECTION WORKFLOW — when the user says a set was wrong: (a) if only weight/reps/RPE is wrong → call update_last_set; (b) if the entire set should be removed → call delete_last_sets; (c) NEVER call log_set to "replace" a wrong set without first calling delete_last_sets to remove the original — this would create a phantom duplicate entry.
 RULE 10. Do NOT mix log_set and delete_last_sets in the same response for the same exercise. Complete the deletion first; the user will confirm before you log new data.
+RULE 11. Past training data exists only in EXERCISE HISTORY and RECENT WORKOUTS. If the user mentions a workout or exercise not shown there, say you do not see it in the records — never tell them they did not do it.
 
 ANTI-PATTERNS — if you catch yourself doing any of these, STOP:
 ❌ User says "it was easy" → you call log_set (WRONG — this is a comment, not set data)
@@ -1763,7 +1771,19 @@ EXERCISE DETAIL:
     Target: 4×8 @ 80 kg
     Set 1 (just now): 8 reps @ 80 kg | RPE 7
 
-ACTIVE: Жим лёжа (штанга) [ID:11111111-1111-4111-8111-111111111111] — 1 set(s) done, 3 remaining per plan.",
+ACTIVE: Жим лёжа (штанга) [ID:11111111-1111-4111-8111-111111111111] — 1 set(s) done, 3 remaining per plan.
+
+=== EXERCISE HISTORY (today's exercises — last completed performance) ===
+
+Жим лёжа (штанга) [ID:11111111-1111-4111-8111-111111111111] — no completed record
+
+Тяга штанги в наклоне [ID:22222222-2222-4222-8222-222222222222] — no completed record
+
+Жим гантелей сидя [ID:33333333-3333-4333-8333-333333333333] — no completed record
+
+=== RECENT WORKOUTS (last 7 days, fatigue context) ===
+
+No completed workouts on record.",
     "type": "system",
   },
   {
@@ -1819,10 +1839,7 @@ exports[`message assembly (pre-wiring truth, refactor-p2-context-assembler Task 
 
 Guide the client through the workout. At each step:
 
-1. <b>First set of each exercise</b>: Before they start, briefly reference the previous session data for that muscle group (if available). Analyze:
-   - RPE progression across previous sets (rising RPE = approaching limit)
-   - Any set-level or exercise-level feedback (pain, discomfort, "too easy", dropped weight)
-   - Days elapsed since that session (recovery)
+1. <b>First set of each exercise</b>: Before the first set of each exercise, look it up in EXERCISE HISTORY. Whenever you quote past numbers, say when (the date or "N days ago"); data older than two weeks is never "last time" without its age. No completed record → say so plainly and suggest a conservative start; never borrow kilograms from a different exercise. Check RECENT WORKOUTS for the same muscles: load within the last 48 h → name it and factor it into the recommendation.
    Then give a specific recommendation:
    - Negative feedback (pain / discomfort / dropped bar) → suggest starting 5-10% lighter to reassess
    - "Too easy" or low RPE (≤5) → suggest progressive overload (+2.5–5 kg or +1–2 reps)
@@ -1880,6 +1897,7 @@ RULE 7. When calling log_set multiple times in one response, ALWAYS set the <b>o
 RULE 8. Tools can ONLY be triggered by set data or action requests from the user (not by system state alone). If the current message contains no new set data or action request, do NOT call any tool. When the user reports a set, you may use contextually obvious values from recent conversation (same dialogue turn), but NEVER fabricate data.
 RULE 9. CORRECTION WORKFLOW — when the user says a set was wrong: (a) if only weight/reps/RPE is wrong → call update_last_set; (b) if the entire set should be removed → call delete_last_sets; (c) NEVER call log_set to "replace" a wrong set without first calling delete_last_sets to remove the original — this would create a phantom duplicate entry.
 RULE 10. Do NOT mix log_set and delete_last_sets in the same response for the same exercise. Complete the deletion first; the user will confirm before you log new data.
+RULE 11. Past training data exists only in EXERCISE HISTORY and RECENT WORKOUTS. If the user mentions a workout or exercise not shown there, say you do not see it in the records — never tell them they did not do it.
 
 ANTI-PATTERNS — if you catch yourself doing any of these, STOP:
 ❌ User says "it was easy" → you call log_set (WRONG — this is a comment, not set data)
@@ -1960,7 +1978,19 @@ EXERCISE DETAIL:
     Target: 4×8 @ 80 kg
     Set 1 (just now): 8 reps @ 80 kg | RPE 7
 
-ACTIVE: Жим лёжа (штанга) [ID:11111111-1111-4111-8111-111111111111] — 1 set(s) done, 3 remaining per plan.",
+ACTIVE: Жим лёжа (штанга) [ID:11111111-1111-4111-8111-111111111111] — 1 set(s) done, 3 remaining per plan.
+
+=== EXERCISE HISTORY (today's exercises — last completed performance) ===
+
+Жим лёжа (штанга) [ID:11111111-1111-4111-8111-111111111111] — no completed record
+
+Тяга штанги в наклоне [ID:22222222-2222-4222-8222-222222222222] — no completed record
+
+Жим гантелей сидя [ID:33333333-3333-4333-8333-333333333333] — no completed record
+
+=== RECENT WORKOUTS (last 7 days, fatigue context) ===
+
+No completed workouts on record.",
     "type": "system",
   },
   {

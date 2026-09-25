@@ -366,12 +366,18 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
       // Real names — chat.subgraph.ts:58, training.subgraph.ts:338.
       findRecentByUserIdWithDetails: async () => fixture.sessions ?? [],
       findRecentByUserId: async () => fixture.sessions ?? [],
-      findLastCompletedByUserAndKey: async () => null,
+      // training.spec.ts's loader (BUG-030 fix): no eval fixture asserts on exercise-history
+      // content today, so "nothing on record" is the safe default here.
+      findLastPerformancesByExercise: async () => [],
     },
     exerciseRepository: {
       searchByEmbedding: async () => [],
       // Resolves the catalog UUIDs the stub plan proposes — see CATALOG above.
       findByIds: async (ids: string[] = []) => ids.map(id => ({ id, name: CATALOG.get(id) ?? 'Exercise' })),
+      // training.spec.ts's loader: muscle groups for today's not-yet-started plan exercises.
+      // No eval fixture asserts on muscle overlap, so empty groups are a safe default.
+      findByIdsWithMuscles: async (ids: string[] = []) =>
+        ids.map(id => ({ id, name: CATALOG.get(id) ?? 'Exercise', muscleGroups: [] })),
     },
     embeddingService: {
       embed: async () => new Array(1536).fill(0),
