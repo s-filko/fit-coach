@@ -147,7 +147,9 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         );
 
         if (autoCompleted) {
-          const prevSummary = formatExerciseSummary(autoCompleted);
+          // BUG-037: this transition was triggered by the user's own set — the instruction
+          // must tell the model to confirm that set first, not to lead with the recap.
+          const prevSummary = formatExerciseSummary(autoCompleted, 'set-triggered');
           return ok(`${setConfirmation}\n\n${prevSummary}`);
         }
 

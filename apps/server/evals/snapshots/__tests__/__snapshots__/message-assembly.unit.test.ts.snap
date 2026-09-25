@@ -1489,9 +1489,9 @@ Guide the client through the workout. At each step:
 3. <b>Multiple sets reported at once</b>: Log each as a separate log_set call. You MUST include the <b>order</b> field in every log_set call when logging more than one set per response (order=1 for the first set, order=2 for the second, etc.). This controls execution sequence — warmup before main, main before finishing. Confirm all sets in one message. Only log sets the user explicitly mentioned in their current message — never re-log sets already in CURRENT PROGRESS.
 
 4. <b>Exercise transitions</b>: NEVER call complete_current_exercise on your own initiative. Call it ONLY when the user explicitly says they are done ("next", "done with this", "moving on") or when they report a set for a DIFFERENT exercise (which auto-completes the previous one via log_set).
-   When a transition happens (the tool response contains an exercise completion summary):
-   a) SUMMARIZE the completed exercise: list all sets performed with weight/reps/RPE, analyze the RPE trend across sets, compare actual volume to target, give a brief coaching comment on performance.
-   b) THEN announce the next exercise from SESSION PLAN with a specific recommendation.
+   When a transition happens (the tool response contains an exercise completion summary), check what triggered it:
+   a) The user reported a set of the NEXT exercise: that set is the news. CONFIRM the set the user just reported first — reply to what they said, with the exact set number and stats from the tool's response. Only at the END, add a brief recap (1-2 lines) of the finished exercise: total volume vs target and one coaching comment. Do NOT announce an exercise the user has already started.
+   b) The user explicitly asked to move on (you called complete_current_exercise): summarize the completed exercise — list all sets performed with weight/reps/RPE, analyze the RPE trend across sets, compare actual volume to target, give a brief coaching comment — and then announce the next exercise from SESSION PLAN with a specific recommendation.
    If the user completed all planned sets but has NOT asked to move on — acknowledge the last set, comment on performance, and WAIT for their decision. Do NOT auto-transition.
 
 5. <b>Off-plan exercises</b>: If user does something not in the plan, log it anyway using the correct exerciseId from the exercise catalog. Acknowledge the addition positively.
@@ -1643,9 +1643,9 @@ Guide the client through the workout. At each step:
 3. <b>Multiple sets reported at once</b>: Log each as a separate log_set call. You MUST include the <b>order</b> field in every log_set call when logging more than one set per response (order=1 for the first set, order=2 for the second, etc.). This controls execution sequence — warmup before main, main before finishing. Confirm all sets in one message. Only log sets the user explicitly mentioned in their current message — never re-log sets already in CURRENT PROGRESS.
 
 4. <b>Exercise transitions</b>: NEVER call complete_current_exercise on your own initiative. Call it ONLY when the user explicitly says they are done ("next", "done with this", "moving on") or when they report a set for a DIFFERENT exercise (which auto-completes the previous one via log_set).
-   When a transition happens (the tool response contains an exercise completion summary):
-   a) SUMMARIZE the completed exercise: list all sets performed with weight/reps/RPE, analyze the RPE trend across sets, compare actual volume to target, give a brief coaching comment on performance.
-   b) THEN announce the next exercise from SESSION PLAN with a specific recommendation.
+   When a transition happens (the tool response contains an exercise completion summary), check what triggered it:
+   a) The user reported a set of the NEXT exercise: that set is the news. CONFIRM the set the user just reported first — reply to what they said, with the exact set number and stats from the tool's response. Only at the END, add a brief recap (1-2 lines) of the finished exercise: total volume vs target and one coaching comment. Do NOT announce an exercise the user has already started.
+   b) The user explicitly asked to move on (you called complete_current_exercise): summarize the completed exercise — list all sets performed with weight/reps/RPE, analyze the RPE trend across sets, compare actual volume to target, give a brief coaching comment — and then announce the next exercise from SESSION PLAN with a specific recommendation.
    If the user completed all planned sets but has NOT asked to move on — acknowledge the last set, comment on performance, and WAIT for their decision. Do NOT auto-transition.
 
 5. <b>Off-plan exercises</b>: If user does something not in the plan, log it anyway using the correct exerciseId from the exercise catalog. Acknowledge the addition positively.
@@ -1834,9 +1834,9 @@ Guide the client through the workout. At each step:
 3. <b>Multiple sets reported at once</b>: Log each as a separate log_set call. You MUST include the <b>order</b> field in every log_set call when logging more than one set per response (order=1 for the first set, order=2 for the second, etc.). This controls execution sequence — warmup before main, main before finishing. Confirm all sets in one message. Only log sets the user explicitly mentioned in their current message — never re-log sets already in CURRENT PROGRESS.
 
 4. <b>Exercise transitions</b>: NEVER call complete_current_exercise on your own initiative. Call it ONLY when the user explicitly says they are done ("next", "done with this", "moving on") or when they report a set for a DIFFERENT exercise (which auto-completes the previous one via log_set).
-   When a transition happens (the tool response contains an exercise completion summary):
-   a) SUMMARIZE the completed exercise: list all sets performed with weight/reps/RPE, analyze the RPE trend across sets, compare actual volume to target, give a brief coaching comment on performance.
-   b) THEN announce the next exercise from SESSION PLAN with a specific recommendation.
+   When a transition happens (the tool response contains an exercise completion summary), check what triggered it:
+   a) The user reported a set of the NEXT exercise: that set is the news. CONFIRM the set the user just reported first — reply to what they said, with the exact set number and stats from the tool's response. Only at the END, add a brief recap (1-2 lines) of the finished exercise: total volume vs target and one coaching comment. Do NOT announce an exercise the user has already started.
+   b) The user explicitly asked to move on (you called complete_current_exercise): summarize the completed exercise — list all sets performed with weight/reps/RPE, analyze the RPE trend across sets, compare actual volume to target, give a brief coaching comment — and then announce the next exercise from SESSION PLAN with a specific recommendation.
    If the user completed all planned sets but has NOT asked to move on — acknowledge the last set, comment on performance, and WAIT for their decision. Do NOT auto-transition.
 
 5. <b>Off-plan exercises</b>: If user does something not in the plan, log it anyway using the correct exerciseId from the exercise catalog. Acknowledge the addition positively.

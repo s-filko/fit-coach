@@ -13,7 +13,13 @@ import {
   SESSION_PLANNING_V1,
   SESSION_PLANNING_V2,
 } from '@infra/ai/prompts/phases/session_planning';
-import { TRAINING_PROMPT, TRAINING_V1, TRAINING_V2, TRAINING_V3 } from '@infra/ai/prompts/phases/training';
+import {
+  TRAINING_PROMPT,
+  TRAINING_V1,
+  TRAINING_V2,
+  TRAINING_V3,
+  TRAINING_V4,
+} from '@infra/ai/prompts/phases/training';
 import { SUMMARIZER_V1, SUMMARIZER_V2, SUMMARIZER_V3 } from '@infra/ai/prompts/summarizer';
 
 import { ALL_FIXTURES } from '../../fixtures/personas';
@@ -217,6 +223,20 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
     });
 
     it(`phase.training v4 / ${name}`, () => {
+      const ctx = {
+        now: FIXED_NOW,
+        timezone: user.timezone ?? null,
+        client: 'telegram' as const,
+        user,
+        lastMessageTime: null,
+      };
+      expect(compose(TRAINING_V4.render(ctx))).toMatchSnapshot();
+    });
+
+    // v5 (session-investigation-0925 R4, BUG-037): rule 4 splits the exercise-transition
+    // reply order by trigger — set-triggered answers the reported set first; v4 above
+    // stays pinned to its frozen export.
+    it(`phase.training v5 / ${name}`, () => {
       const ctx = {
         now: FIXED_NOW,
         timezone: user.timezone ?? null,
