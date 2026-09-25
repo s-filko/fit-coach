@@ -118,3 +118,12 @@ the expected behaviour and what it catches), `apps/server/evals/scenarios/smoke.
 
 | AC | Command | Exit | Failing assertion | SHA |
 |---|---|---|---|---|
+
+## Judge rubrics for the 2026-09-25 drafts (Task 4)
+
+Used by `evals/datasets/drafts/session-2026-09-25.jsonl` (LS-0005…LS-0008); drafts only, no model run.
+
+- **SI-J1** — the reply confirms the set the user just reported first; the recap of the finished exercise comes last and is brief.
+- **SI-J2** — asked "when / how much last time", the coach cites the date and numbers of the last logged performance, or says plainly it cannot see them — never "no records" when history exists.
+- **SI-J3** — challenged "how did you decide?", the coach explains the recommendation being challenged or asks which one — never answers about a different number.
+- **SI-J4** — pushed "I thought the target was 12", the coach states the planned target (3×8-10) — never adopts the user's number as its own earlier claim.
