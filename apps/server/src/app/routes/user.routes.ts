@@ -21,7 +21,12 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
         body: createUserBody,
         security: [{ ApiKeyAuth: [] }],
         response: {
-          200: z.object({ data: z.object({ id: z.string().uuid().or(z.string()) }) }),
+          // BUG-036 + owner language rule (R3): languageCode is additive — the
+          // bot caches it alongside the id it already caches and uses it as
+          // the profile language, instead of msg.from.language_code.
+          200: z.object({
+            data: z.object({ id: z.string().uuid().or(z.string()), languageCode: z.string().nullish() }),
+          }),
           401: z.object({ error: z.object({ message: z.string() }) }),
           403: z.object({ error: z.object({ message: z.string() }) }),
         },
@@ -38,7 +43,7 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
           languageCode?: string;
         },
       );
-      return reply.send({ data: { id: user.id } });
+      return reply.send({ data: { id: user.id, languageCode: user.languageCode } });
     },
   );
 

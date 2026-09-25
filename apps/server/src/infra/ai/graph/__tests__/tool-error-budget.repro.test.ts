@@ -1,6 +1,6 @@
 /**
- * REPRODUCTION (RED) — session-investigation-0925 plan, Task 1, F1 + F3 /
- * AC-SI-1(a,b), AC-SI-3. Runs only via an explicit --testMatch; promoted into
+ * REPRODUCTION (RED) — session-investigation-0925 plan, Task 1, F1 /
+ * AC-SI-1(a,b). Runs only via an explicit --testMatch; promoted into
  * `tool-executor.unit.test.ts` (the AC-1332 budget block) when the fix lands.
  * Do NOT edit tool-executor.unit.test.ts — its AC-1332 budget test is the
  * home test at promotion.
@@ -13,10 +13,11 @@
  * none of its own; (b) a batch that adds ZERO new errors can still push the
  * running total over budget and end the run.
  *
- * F3 (messages/catalog.ts langOf): the catalog fallback language is driven
- * ONLY by Telegram's `language_code`, never by what the user actually wrote —
- * the owner's account is `en` but the owner writes Russian, so every
- * budget-exhaustion fallback in the dev session (F1) came back in English.
+ * F3 / AC-SI-3 (R3, BUG-036 + owner language rule): originally reproduced
+ * here too, expecting the fallback language to be DETECTED from what the
+ * user wrote — the owner's actual rule is the opposite (profile only, never
+ * per-message detection). Promoted, in its corrected form, to
+ * `messages/__tests__/catalog.unit.test.ts` and removed from this file.
  *
  * Helpers below mirror tool-executor.unit.test.ts's fakeTool/stateWithCalls/
  * configWith (not exported there, so reproduced verbatim here per the plan's
@@ -129,33 +130,5 @@ describe('tool-executor error budget — reproduction (F1 / AC-SI-1a, AC-SI-1b)'
     // (2 + 0 = 2 > 1) and ends the run — this assertion fails today.
     const last = result.messages[result.messages.length - 1];
     expect(last).not.toBeInstanceOf(AIMessage);
-  });
-});
-
-describe('tool-executor catalog fallback language — reproduction (F3 / AC-SI-3)', () => {
-  it("AC-SI-3: a user with languageCode 'en' who writes Russian gets the catalog fallback in Russian, not English", async () => {
-    const failing = fakeTool('log_set', jest.fn().mockRejectedValue(new Error('DB rejected the set')));
-    // budget 0: the single error this batch produces is already over budget,
-    // so the run ends here — no second scripted turn needed for this repro.
-    const executor = buildToolExecutor(asTools(failing), { llmErrorBudget: 0 });
-
-    // The owner's real shape (F3 evidence): Telegram language_code is 'en',
-    // but the message the user actually wrote is Russian.
-    const russianTurn = new HumanMessage('сколько подходов осталось?');
-
-    const result = (await executor(
-      stateWithCalls([{ name: 'log_set', args: { reps: 8 }, id: 'r1' }], {
-        messages: [russianTurn],
-        languageCode: 'en',
-      }),
-      configWith('en'),
-    )) as { messages: BaseMessage[] };
-
-    const last = result.messages[result.messages.length - 1] as AIMessage;
-    // Desired: the fallback matches what the user actually wrote in (Russian
-    // — Cyrillic characters). Production picks the language from
-    // ctx.user.languageCode alone ('en') and never looks at the message the
-    // user actually sent — this assertion fails today (content is English).
-    expect(String(last.content)).toMatch(/[а-яё]/i);
   });
 });

@@ -54,6 +54,24 @@ describe('POST /api/bot/user – integration', () => {
       expect(json.data.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     });
 
+    // BUG-036 + owner language rule (R3): languageCode is additive on this
+    // response — the bot reads the profile language from here, not from
+    // msg.from.language_code.
+    it('should return the seeded languageCode in the response (BUG-036, R3)', async () => {
+      const payload = createTestUserData({ languageCode: 'ru' });
+      const validKey = createTestApiKey();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/bot/user',
+        headers: { 'x-api-key': validKey },
+        payload,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data.languageCode).toBe('ru');
+    });
+
     it('should return same user id for same provider account (upsert behavior)', async () => {
       const payload = createTestUserData();
       const validKey = createTestApiKey();

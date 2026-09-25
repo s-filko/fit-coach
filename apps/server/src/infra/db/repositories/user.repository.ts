@@ -104,6 +104,10 @@ function createUpdateData(updates: Partial<User>): Record<string, unknown> {
     'height',
     'weight',
     'fitnessGoal',
+    // BUG-036 + owner language rule (R3): the only writer is set_language,
+    // via userService.updateProfileData — Telegram never reaches this path
+    // again after the user is created.
+    'languageCode',
   ];
 
   updateableFields.forEach(field => {

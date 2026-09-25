@@ -179,6 +179,25 @@ describe('IUserService – contract unit tests (with mocks)', () => {
       expect(result).toEqual(existingUser);
     });
 
+    it(
+      'BUG-036 + owner language rule (R3): an existing user is returned UNTOUCHED — a new languageCode in the ' +
+        'upsert input never overwrites the stored profile language',
+      async () => {
+        const provider = 'telegram';
+        const providerUserId = 'user123';
+        const existingUser = { id: 'existing-user-id', username: 'existing', languageCode: 'ru' };
+
+        mockRepository.findByProvider.mockResolvedValue(existingUser as any);
+
+        const result = await userService.upsertUser({ provider, providerUserId, languageCode: 'en' });
+
+        expect(mockRepository.create).not.toHaveBeenCalled();
+        expect(mockRepository.updateProfileData).not.toHaveBeenCalled();
+        expect(result).toEqual(existingUser);
+        expect(result.languageCode).toBe('ru');
+      },
+    );
+
     it('should create new user if not found by provider', async () => {
       // Arrange
       const provider = 'telegram';
