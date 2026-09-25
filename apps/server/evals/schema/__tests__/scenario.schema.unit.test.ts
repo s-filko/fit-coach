@@ -357,3 +357,39 @@ describe('liveOnly tag (Task 5b — the L3 layer checks it, the deterministic la
     expect(entries.map(assertionKnownBug)).toEqual([null, 'BUG-9001/AC-X-9', null, 'BUG-9002/AC-X-9']);
   });
 });
+
+/** A `past.workouts` entry with `exercise: 'Test'` and the given single set — for the set-shape tests below. */
+const withOneSet = (set: object): unknown => ({
+  ...validScenario,
+  past: {
+    ...validScenario.past,
+    workouts: [{ at: '-1d', key: 'upper_a', exercises: [{ exercise: 'Test', sets: [set] }] }],
+  },
+});
+
+describe('WorkoutSetSchema (close-out review advisory 3 — strict branches)', () => {
+  it('accepts a strength set (reps + optional weight/rpe)', () => {
+    expect(() => ScenarioSchema.parse(withOneSet({ reps: 8, weight: 80, rpe: 8 }))).not.toThrow();
+  });
+
+  it('accepts a duration-only set (e.g. a plank)', () => {
+    expect(() => ScenarioSchema.parse(withOneSet({ durationSeconds: 60 }))).not.toThrow();
+  });
+
+  it('accepts a distance set, with or without a duration', () => {
+    expect(() => ScenarioSchema.parse(withOneSet({ distanceMeters: 3000 }))).not.toThrow();
+    expect(() => ScenarioSchema.parse(withOneSet({ distanceMeters: 3000, durationSeconds: 900 }))).not.toThrow();
+  });
+
+  it('rejects a set mixing reps with durationSeconds — a real shape, not silently stripped to one branch', () => {
+    expect(() => ScenarioSchema.parse(withOneSet({ reps: 8, durationSeconds: 60 }))).toThrow();
+  });
+
+  it('rejects a set mixing reps with distanceMeters', () => {
+    expect(() => ScenarioSchema.parse(withOneSet({ reps: 8, distanceMeters: 3000 }))).toThrow();
+  });
+
+  it('rejects an empty set (matches none of the three shapes)', () => {
+    expect(() => ScenarioSchema.parse(withOneSet({}))).toThrow();
+  });
+});

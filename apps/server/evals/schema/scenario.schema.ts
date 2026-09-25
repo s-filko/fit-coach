@@ -142,33 +142,46 @@ const CatalogExerciseSchema = z.object({
 
 export type CatalogExercise = z.infer<typeof CatalogExerciseSchema>;
 
-/** Today's strength shape (unchanged, stays the default variant). */
-const StrengthWorkoutSetSchema = z.object({
-  reps: z.number().int().positive(),
-  weight: z.number().optional(),
-  rpe: z.number().optional(),
-});
+/**
+ * Today's strength shape (unchanged, stays the default variant).
+ *
+ * `.strict()` on all three branches (close-out review advisory 3): zod's
+ * default "strip unknown keys" parsing would otherwise let a MIXED set — say
+ * `{ reps: 8, durationSeconds: 60 }` — match `DurationWorkoutSetSchema` and
+ * silently drop `reps` instead of the union rejecting it outright.
+ */
+const StrengthWorkoutSetSchema = z
+  .object({
+    reps: z.number().int().positive(),
+    weight: z.number().optional(),
+    rpe: z.number().optional(),
+  })
+  .strict();
 
 /** A duration-only set (e.g. a plank) — mapped onto `isometric`/`cardio_duration` setData by the exercise's type. */
-const DurationWorkoutSetSchema = z.object({
-  durationSeconds: z.number().int().positive(),
-  rpe: z.number().optional(),
-});
+const DurationWorkoutSetSchema = z
+  .object({
+    durationSeconds: z.number().int().positive(),
+    rpe: z.number().optional(),
+  })
+  .strict();
 
 /** A distance set (e.g. a run) — mapped onto `cardio_distance` setData. */
-const DistanceWorkoutSetSchema = z.object({
-  distanceMeters: z.number().positive(),
-  durationSeconds: z.number().int().positive().optional(),
-  rpe: z.number().optional(),
-});
+const DistanceWorkoutSetSchema = z
+  .object({
+    distanceMeters: z.number().positive(),
+    durationSeconds: z.number().int().positive().optional(),
+    rpe: z.number().optional(),
+  })
+  .strict();
 
 /**
  * One recorded set of a seeded workout — a union discriminated by which keys
  * are present (no literal tag field). `DistanceWorkoutSetSchema` is tried
  * before `DurationWorkoutSetSchema`: both accept a lone `durationSeconds`,
- * but only the distance schema also accepts `distanceMeters`, and zod's
- * default "strip unknown keys" parsing would otherwise silently drop it if
- * the duration schema were tried first.
+ * but only the distance schema also accepts `distanceMeters`, and without
+ * `.strict()` zod's default "strip unknown keys" parsing would otherwise
+ * silently drop it if the duration schema were tried first.
  */
 const WorkoutSetSchema = z.union([DistanceWorkoutSetSchema, DurationWorkoutSetSchema, StrengthWorkoutSetSchema]);
 
