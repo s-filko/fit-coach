@@ -64,8 +64,12 @@ components:
 }
 ```
 
+- `languageCode` seeds the profile language only when the user is created; an existing
+  user's profile language is never overwritten by it (it changes only through the
+  `set_language` tool, on the user's explicit request — owner rule 2026-09-25).
 - Responses:
-  - 200 `{ data: { id: string } }`
+  - 200 `{ data: { id: string, languageCode: string | null } }` — `languageCode` is the
+    profile language (the bot uses it for its own fixed texts)
   - 400 `{ error: { message: string } }`
   - 401 `{ error: { message: string } }`
   - 403 `{ error: { message: string } }`
