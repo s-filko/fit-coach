@@ -19,7 +19,10 @@ export type MessageKey =
 
 export type Lang = 'en' | 'ru';
 
-/** Catalog language driven by Telegram's `language_code`; English fallback. */
+/**
+ * Catalog language driven by the user's PROFILE language (`users.language_code`); English fallback.
+ * Telegram only seeds the profile at creation; `set_language` changes it afterwards.
+ */
 export function langOf(languageCode: string | null | undefined): Lang {
   return languageCode === 'ru' ? 'ru' : 'en';
 }

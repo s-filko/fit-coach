@@ -21,3 +21,15 @@ export function findInErrorCauseChain<T>(
   }
   return null;
 }
+
+/**
+ * A Postgres/driver-level failure (matched by SQLSTATE `code`, never message text) — never the model's fault.
+ * A SQLSTATE class/code is exactly five upper-case alphanumeric characters, e.g. `23505` or `57P01`.
+ */
+export function isDatabaseFailure(err: unknown): boolean {
+  return (
+    findInErrorCauseChain(err, level =>
+      typeof level.code === 'string' && /^[0-9A-Z]{5}$/.test(level.code) ? true : null,
+    ) === true
+  );
+}

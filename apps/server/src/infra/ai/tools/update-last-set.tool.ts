@@ -8,23 +8,10 @@ import type { ITrainingService } from '@domain/training/ports';
 import { sessionIdOf, userIdOf } from '@infra/ai/tools/format-exercise-summary';
 
 import { createLogger } from '@shared/logger';
-import { findInErrorCauseChain } from '@shared/pg-error-cause';
+import { isDatabaseFailure } from '@shared/pg-error-cause';
+import { roundRpeToHalf } from '@shared/rpe';
 
 const log = createLogger('training-tools');
-
-/** Rounds to the nearest half-point; RPE is only ever meaningful in 0.5 steps. */
-function roundRpeToHalf(rpe: number): number {
-  return Math.round(rpe * 2) / 2;
-}
-
-/** A Postgres/driver-level failure (matched by SQLSTATE `code`, never message text) — never the model's fault. */
-function isDatabaseFailure(err: unknown): boolean {
-  return (
-    findInErrorCauseChain(err, level =>
-      typeof level.code === 'string' && /^[0-9A-Z]{5}$/.test(level.code) ? true : null,
-    ) === true
-  );
-}
 
 export interface UpdateLastSetToolDeps {
   trainingService: ITrainingService;

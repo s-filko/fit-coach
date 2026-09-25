@@ -498,12 +498,12 @@ export const scenario: Scenario = {
         },
       },
     },
-    // F2 (AC-SI-6): RPE reported as a RANGE — "рпе 9-10". The Zod schema
-    // accepts fractional RPE, the DB column is integer, so a model that sends
-    // `rpe: 9.5` kills the INSERT (raw SQL error back to the model, RPE then
-    // dropped from every later call). The stored value (9, 9.5 or 10) is the
-    // model's own interpretation and is not asserted here — the point is that
-    // the set SAVES; the transcript shows which way it went.
+    // F2 (AC-SI-6): RPE reported as a RANGE — "рпе 9-10". Regression check for
+    // BUG-035 (fixed): `session_sets.rpe` is `numeric(3,1)` and the tools
+    // round to the nearest 0.5 within 1–10, so a fractional RPE saves fine.
+    // The stored value (9, 9.5 or 10) is the model's own interpretation and
+    // is not asserted here — the point is that the set SAVES; the transcript
+    // shows which way it went.
     { action: 'advance', at: '+19m' },
     {
       action: 'user',
