@@ -31,6 +31,16 @@ export interface SeedSession {
   exercises: Array<{ name: string; sets: Array<{ reps: number; weight: number }> }>;
 }
 
+/**
+ * `session_plan_json.exercises` entry (AC-EH-2: an exercise that is only planned, never started,
+ * still gets its exercise-history entry). Resolved through the same name→id map as `exercises`.
+ */
+export interface SeedPlanExercise {
+  name: string;
+  targetSets?: number;
+  targetReps?: string;
+}
+
 /** ISO, DD.MM.YYYY, "Sep 16" and "16 Sep(tember)" all count as "states the date". */
 export function datePattern(isoDate: string): RegExp {
   const [y, m, d] = isoDate.split('-').map(Number);
@@ -43,13 +53,14 @@ export function datePattern(isoDate: string): RegExp {
 
 export type SessionSeeder = (
   status: 'completed' | 'in_progress',
-  s: { key: string; date: string; exercises?: SeedSession['exercises'] },
+  s: { key: string; date: string; exercises?: SeedSession['exercises']; plan?: SeedPlanExercise[] },
 ) => Promise<string>;
 
 /**
  * Seeds one workout_sessions row (started at date T12:00Z, completed +1h when completed) with its
- * session_exercises and sets; exercises are resolved through the caller's name→id map. Returns the
- * session id.
+ * session_exercises and sets; exercises are resolved through the caller's name→id map. `plan`
+ * (optional) seeds `session_plan_json.exercises` — planned exercises the loader sees even when
+ * they never got a `session_exercises` row (AC-EH-2). Returns the session id.
  */
 export function createSessionSeeder(repos: {
   userId: string;
@@ -70,6 +81,21 @@ export function createSessionSeeder(repos: {
         lastActivityAt: at,
         createdAt: at,
         updatedAt: at,
+        sessionPlanJson: s.plan
+          ? {
+              sessionKey: s.key,
+              sessionName: s.key,
+              reasoning: 'seed',
+              estimatedDuration: 30,
+              exercises: s.plan.map(p => ({
+                exerciseId: repos.exerciseIds.get(p.name)!,
+                exerciseName: p.name,
+                targetSets: p.targetSets ?? 3,
+                targetReps: p.targetReps ?? '8-10',
+                restSeconds: 90,
+              })),
+            }
+          : null,
       })
       .returning();
     for (const [i, ex] of (s.exercises ?? []).entries()) {

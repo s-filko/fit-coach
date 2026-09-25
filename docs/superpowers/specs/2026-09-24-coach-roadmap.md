@@ -66,7 +66,8 @@ dev check. **Rollback**: how to turn it off.
 ### Stage 0 — Safety net (no production change)
 
 Existing assets to reuse, not rebuild:
-- `tests/integration/scenarios/previous-session.repro.test.ts` — BUG-030 red (AC-LSR-4).
+- `tests/integration/scenarios/previous-session.integration.test.ts` (promoted from the
+  `.repro.test.ts` red by plan `training-exercise-history`, now green) — BUG-030 / AC-LSR-4.
 - `evals/datasets/drafts/session-2026-09-21.jsonl` — LS-0001 (BUG-022), LS-0002 (BUG-024),
   … drafts, never run.
 - `evals/datasets/session_planning/one-question-first.jsonl` (10 cases) — **pins the "ask
@@ -88,7 +89,7 @@ Existing assets to reuse, not rebuild:
 |---|---|---|---|---|---|
 | R1.1 | Status filter in recent-history queries (callers: `session-planning-context.builder.ts:32`, `chat.spec.ts:46`) | history and "days since" count only real workouts | R0.3 green | "что я делал на этой неделе?" → only real workouts | revert (pure query fix) |
 | R1.2 | One set formatter for every history block (today two: `session-planning-recent-history.v1.ts` drops non-strength data, `training-workout-overview.v1.ts` `formatSetData` does not); absolute date + "N days ago"; no template labels (`sessionKey`) in blocks | cardio/isometric visible in planning; dates unambiguous | block unit tests + prompt snapshots updated deliberately | "что я делал на прошлой неделе по кардио?" → correct distance/time | new block versions |
-| R1.3a | **Level 2 — exercise level, keyed by muscles** (owner). For the current exercise in `training`: every recent exercise that loaded **any** of its muscles (primary or secondary, labelled), newest first, dated. The same exercise is the **load anchor**; others are fatigue context only (kg do not transfer until R4.1). Replaces `findLastCompletedByUserAndKey` (`training.spec.ts:105`) | yesterday's overlapping load never hidden; BUG-030 gone | AC-LSR-4 and R0.2 green | yesterday heavy shoulders/triceps, today bench → last bench numbers with date **and** yesterday named | block version |
+| R1.3a | **Delivered by plan `training-exercise-history`** (BUG-030 fix, owner autonomy order 2026-09-26) — `training.exercise_history` (per-exercise anchor, unbounded in time) + `training.recent_workouts` (7-day fatigue window, muscle-overlap labels) replace `findLastCompletedByUserAndKey`. AC-LSR-4 and R0.2 green. | yesterday's overlapping load never hidden; BUG-030 gone | AC-LSR-4 and R0.2 green | yesterday heavy shoulders/triceps, today bench → last bench numbers with date **and** yesterday named | block version |
 | R1.3b | **Level 1 — overview, what to train today.** In `session_planning`: the last 2–3 whole sessions in order + per-muscle status over a recent window (last trained, sets, primary/secondary) | today's focus is chosen from the whole picture | block tests | "что сегодня?" → reasoning cites the right sessions and neglected muscles | block version |
 | R1.4 | Set kind (warm-up / working) in `log_set` + migration | warm-ups stop polluting working-set data | unit + integration | log a warm-up then a working set → stored with different kinds | column is additive; prompt version |
 
@@ -142,7 +143,7 @@ built. Do that first, in plain language, with the R0.1 scenario as the example.
 |---|---|---|---|
 | U1 | `coach-baseline` | R0.1–R0.4, R1.1 | — |
 | U2 | `history-formatting` | R1.2 | U1 |
-| U3 | `muscle-centric-history` | R1.3a, R1.3b (+ retire `PLAN-muscle-centric-history.md`) | U2 |
+| U3 | `muscle-centric-history` | R1.3b only — R1.3a delivered by plan `training-exercise-history` (+ retire `PLAN-muscle-centric-history.md`) | U2 |
 | U4 | `set-kind` | R1.4 | U1 |
 | U5 | `transition-handoff` | R2.0–R2.2 | U1 |
 | U6 | `interim-delivery` | R2.3–R2.4 | U5 |

@@ -204,7 +204,7 @@ const WorkoutExerciseSchema = z.object({
  */
 const WorkoutSchema = z.object({
   at: RelativeTimeSchema,
-  /** `workout_sessions.sessionKey`, e.g. `upper_a` (`findLastCompletedByUserAndKey`). */
+  /** `workout_sessions.sessionKey`, e.g. `upper_a` (session-planning proposal grouping). */
   key: z.string().min(1),
   /**
    * `.optional()`, not `.default()`: zod v4 infers a `.default()` field as

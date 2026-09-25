@@ -66,6 +66,8 @@ export {
   buildPreviousSessionSection,
   buildStaleSessionSection,
   buildWorkoutOverview,
+  formatExerciseSets,
+  formatSetData,
   TRAINING_CLIENT_V1,
   TRAINING_PREVIOUS_SESSION_V1,
   TRAINING_STALE_SESSION_V1,
@@ -75,6 +77,13 @@ export {
   type TrainingStaleSessionData,
   type TrainingWorkoutOverviewData,
 } from './training-workout-overview.v1';
+export {
+  TRAINING_EXERCISE_HISTORY_V1,
+  TRAINING_RECENT_WORKOUTS_V1,
+  type ExerciseHistoryEntry,
+  type TrainingExerciseHistoryData,
+  type TrainingRecentWorkoutsData,
+} from './training-exercise-history.v1';
 
 /** A block renders as one composed string — its own SystemMessage at a fixed position. */
 export function renderBlock<TCtx>(module: PromptModule<TCtx>, ctx: TCtx): string {

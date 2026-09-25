@@ -118,6 +118,31 @@ export function buildWorkoutOverview(session: WorkoutSessionWithDetails, now: Da
   return parts.join('\n\n');
 }
 
+/**
+ * One exercise's set lines (`  Set N: ...`) plus an optional `  Overall feedback: "..."` line, or
+ * `  No sets logged.` — everything after the caller's own `Name [ID:...]` header line. Shared by
+ * `buildPreviousSessionSection` (legacy, byte-identical) and `training-exercise-history.v1.ts`'s
+ * EXERCISE HISTORY block (close-out review R2 — was duplicated between the two).
+ */
+export function formatExerciseSets(
+  sets: WorkoutSessionWithDetails['exercises'][number]['sets'],
+  userFeedback: string | null,
+): string {
+  if (sets.length === 0) {
+    return '  No sets logged.';
+  }
+
+  const setsText = sets.map(s => {
+    const base = formatSetData(s.setData);
+    const rpe = s.rpe ? ` | RPE ${s.rpe}` : '';
+    const fb = s.userFeedback ? ` | "${s.userFeedback}"` : '';
+    return `  Set ${s.setNumber}: ${base}${rpe}${fb}`;
+  });
+
+  const feedbackLine = userFeedback ? `\n  Overall feedback: "${userFeedback}"` : '';
+  return `${setsText.join('\n')}${feedbackLine}`;
+}
+
 export function buildPreviousSessionSection(session: WorkoutSessionWithDetails): string {
   if (session.exercises.length === 0) {
     return 'No exercise data from previous session.';
@@ -126,24 +151,18 @@ export function buildPreviousSessionSection(session: WorkoutSessionWithDetails):
   return session.exercises
     .map(ex => {
       const header = `${ex.exercise.name} [ID:${ex.exerciseId}]`;
-      if (ex.sets.length === 0) {
-        return `${header}\n  No sets logged.`;
-      }
-
-      const setsText = ex.sets.map(s => {
-        const base = formatSetData(s.setData);
-        const rpe = s.rpe ? ` | RPE ${s.rpe}` : '';
-        const fb = s.userFeedback ? ` | "${s.userFeedback}"` : '';
-        return `  Set ${s.setNumber}: ${base}${rpe}${fb}`;
-      });
-
-      const exerciseFb = ex.userFeedback ? `\n  Overall feedback: "${ex.userFeedback}"` : '';
-      return `${header}\n${setsText.join('\n')}${exerciseFb}`;
+      return `${header}\n${formatExerciseSets(ex.sets, ex.userFeedback)}`;
     })
     .join('\n\n');
 }
 
-function formatSetData(setData: WorkoutSessionWithDetails['exercises'][number]['sets'][number]['setData']): string {
+/**
+ * Exported for `training-exercise-history.v1.ts` (EXERCISE HISTORY / RECENT WORKOUTS) — one set
+ * formatter, not copied.
+ */
+export function formatSetData(
+  setData: WorkoutSessionWithDetails['exercises'][number]['sets'][number]['setData'],
+): string {
   switch (setData.type) {
     case 'strength':
       return `${setData.reps} reps${setData.weight != null ? ` @ ${setData.weight} ${setData.weightUnit ?? 'kg'}` : ''}`;
@@ -195,9 +214,14 @@ RULES:
 `;
 }
 
-export interface TrainingClientData {
-  previousSession: WorkoutSessionWithDetails | null;
-}
+/**
+ * `render` never reads `data` (session-independent — ctx.user only), so this carries no fields.
+ * training-exercise-history plan: was `{ previousSession }` only because `TrainingData` happened to
+ * have that field; kept structurally open (`Record<string, never>` would reject any caller's
+ * extra properties) since every caller passes it the full `TrainingData` object regardless.
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- see comment above
+export interface TrainingClientData {}
 
 /** `=== CLIENT ===` — name and goal. Session-independent, so it uses ctx.user only. */
 export const TRAINING_CLIENT_V1: ContextBlock<TrainingClientData> = {

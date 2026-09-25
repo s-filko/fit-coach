@@ -1,11 +1,12 @@
-import { and, desc, eq, exists, inArray, isNotNull, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNotNull, lt, ne, sql } from 'drizzle-orm';
 
 import { ActiveSessionExistsError } from '@domain/training/errors';
-import type { IWorkoutSessionRepository, RecentSessionsFilter } from '@domain/training/ports';
+import type { ExerciseLastPerformance, IWorkoutSessionRepository, RecentSessionsFilter } from '@domain/training/ports';
 import type {
   CreateSessionDto,
   Involvement,
   MuscleGroup,
+  SessionExerciseWithDetails,
   WorkoutSession,
   WorkoutSessionWithDetails,
 } from '@domain/training/types';
@@ -30,7 +31,64 @@ function isActiveSessionViolation(err: unknown): boolean {
   );
 }
 
+/** One `session_exercises` row left-joined with its `exercises` row — what both hydration call sites select. */
+interface JoinedSessionExerciseRow {
+  session_exercises: typeof sessionExercises.$inferSelect;
+  exercises: typeof exercises.$inferSelect | null;
+}
+
 export class WorkoutSessionRepository implements IWorkoutSessionRepository {
+  /**
+   * Shared by `findByIdWithDetails` and `findLastPerformancesByExercise` (close-out review R2):
+   * given already-joined session_exercises+exercises rows, batches the muscle-group and set
+   * fetches (two queries total, never N+1) and assembles each into `SessionExerciseWithDetails`,
+   * keyed by session_exercise id. A row whose exercise was not found (should not happen under the
+   * FK, defensive) is left out of the map — callers already filter on map-miss.
+   */
+  private async hydrateSessionExercises(
+    rows: JoinedSessionExerciseRow[],
+  ): Promise<Map<string, SessionExerciseWithDetails>> {
+    const exerciseIdsForMuscles = rows.map(r => r.exercises?.id).filter((id): id is string => id !== undefined);
+    const muscleGroupsList =
+      exerciseIdsForMuscles.length > 0
+        ? await db
+            .select()
+            .from(exerciseMuscleGroups)
+            .where(inArray(exerciseMuscleGroups.exerciseId, exerciseIdsForMuscles))
+        : [];
+
+    const sessionExerciseIds = rows.map(r => r.session_exercises.id);
+    const sets =
+      sessionExerciseIds.length > 0
+        ? await db
+            .select()
+            .from(sessionSets)
+            .where(inArray(sessionSets.sessionExerciseId, sessionExerciseIds))
+            .orderBy(sessionSets.setNumber)
+        : [];
+
+    const result = new Map<string, SessionExerciseWithDetails>();
+    for (const row of rows) {
+      if (!row.exercises) {
+        continue;
+      }
+      result.set(row.session_exercises.id, {
+        ...row.session_exercises,
+        exercise: {
+          ...row.exercises,
+          muscleGroups: muscleGroupsList
+            .filter(mg => mg.exerciseId === row.exercises!.id)
+            .map(mg => ({
+              muscleGroup: mg.muscleGroup as MuscleGroup,
+              involvement: mg.involvement as Involvement,
+            })),
+        },
+        sets: sets.filter(s => s.sessionExerciseId === row.session_exercises.id),
+      } as SessionExerciseWithDetails);
+    }
+    return result;
+  }
+
   async create(userId: string, session: CreateSessionDto): Promise<WorkoutSession> {
     const [created] = await db
       .insert(workoutSessions)
@@ -72,7 +130,7 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
       return null;
     }
 
-    // Get session exercises with exercise details
+    // Get session exercises with exercise details, in plan order.
     const sessionExercisesList = await db
       .select()
       .from(sessionExercises)
@@ -80,46 +138,13 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
       .where(eq(sessionExercises.sessionId, sessionId))
       .orderBy(sessionExercises.orderIndex);
 
-    // Get exercise IDs to fetch muscle groups
-    const exerciseIdsForMuscles = sessionExercisesList
-      .map(se => se.exercises?.id)
-      .filter((id): id is string => id !== undefined);
-
-    // Get muscle groups for all exercises
-    const muscleGroupsList =
-      exerciseIdsForMuscles.length > 0
-        ? await db
-            .select()
-            .from(exerciseMuscleGroups)
-            .where(inArray(exerciseMuscleGroups.exerciseId, exerciseIdsForMuscles))
-        : [];
-
-    // Get all sets for these exercises
-    const sessionExerciseIds = sessionExercisesList.map(se => se.session_exercises.id);
-    const sets =
-      sessionExerciseIds.length > 0
-        ? await db
-            .select()
-            .from(sessionSets)
-            .where(inArray(sessionSets.sessionExerciseId, sessionExerciseIds))
-            .orderBy(sessionSets.setNumber)
-        : [];
+    const hydrated = await this.hydrateSessionExercises(sessionExercisesList);
 
     return {
       ...session,
-      exercises: sessionExercisesList.map(se => ({
-        ...se.session_exercises,
-        exercise: {
-          ...se.exercises!,
-          muscleGroups: muscleGroupsList
-            .filter(mg => mg.exerciseId === se.exercises!.id)
-            .map(mg => ({
-              muscleGroup: mg.muscleGroup as MuscleGroup,
-              involvement: mg.involvement as Involvement,
-            })),
-        },
-        sets: sets.filter(s => s.sessionExerciseId === se.session_exercises.id).map(s => s),
-      })),
+      exercises: sessionExercisesList
+        .map(se => hydrated.get(se.session_exercises.id))
+        .filter((ex): ex is SessionExerciseWithDetails => ex !== undefined),
     } as WorkoutSessionWithDetails;
   }
 
@@ -263,25 +288,77 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     return timedOutSessions.length;
   }
 
-  async findLastCompletedByUserAndKey(userId: string, sessionKey: string): Promise<WorkoutSessionWithDetails | null> {
-    const [session] = await db
-      .select()
-      .from(workoutSessions)
+  async findLastPerformancesByExercise(
+    userId: string,
+    exerciseIds: string[],
+    excludeSessionId: string,
+  ): Promise<ExerciseLastPerformance[]> {
+    if (exerciseIds.length === 0) {
+      return [];
+    }
+
+    // One query for the pick: DISTINCT ON (exercise_id), newest completed session first — the
+    // anchor is per exercise (BUG-030 D2), not per session_key, and never N+1 over sessions.
+    const anchors = await db
+      .selectDistinctOn([sessionExercises.exerciseId], {
+        sessionExerciseId: sessionExercises.id,
+        exerciseId: sessionExercises.exerciseId,
+        completedAt: workoutSessions.completedAt,
+      })
+      .from(sessionExercises)
+      .innerJoin(workoutSessions, eq(sessionExercises.sessionId, workoutSessions.id))
       .where(
         and(
           eq(workoutSessions.userId, userId),
           eq(workoutSessions.status, 'completed'),
-          eq(workoutSessions.sessionKey, sessionKey),
+          ne(workoutSessions.id, excludeSessionId),
+          inArray(sessionExercises.exerciseId, exerciseIds),
           isNotNull(workoutSessions.completedAt),
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(sessionSets)
+              .where(eq(sessionSets.sessionExerciseId, sessionExercises.id)),
+          ),
         ),
       )
-      .orderBy(desc(workoutSessions.completedAt))
-      .limit(1);
+      // DISTINCT ON keeps the first row per exerciseId under this order — completedAt DESC picks
+      // the anchor, orderIndex/id DESC only break an exact-timestamp tie deterministically
+      // (close-out review advisory 7); they never affect which *session* wins.
+      .orderBy(
+        sessionExercises.exerciseId,
+        desc(workoutSessions.completedAt),
+        desc(sessionExercises.orderIndex),
+        desc(sessionExercises.id),
+      );
 
-    if (!session) {
-      return null;
+    if (anchors.length === 0) {
+      return [];
     }
 
-    return this.findByIdWithDetails(session.id);
+    // Hydrate the winning session_exercises rows through the same batched path as
+    // findByIdWithDetails (close-out review R2) — no N+1 over the anchor ids.
+    const sessionExerciseIds = anchors.map(a => a.sessionExerciseId);
+    const rows = await db
+      .select()
+      .from(sessionExercises)
+      .leftJoin(exercises, eq(sessionExercises.exerciseId, exercises.id))
+      .where(inArray(sessionExercises.id, sessionExerciseIds));
+
+    const hydrated = await this.hydrateSessionExercises(rows);
+
+    return anchors
+      .map(anchor => {
+        const sessionExercise = hydrated.get(anchor.sessionExerciseId);
+        if (!sessionExercise) {
+          return null;
+        }
+        return {
+          exerciseId: anchor.exerciseId,
+          completedAt: anchor.completedAt!,
+          sessionExercise,
+        };
+      })
+      .filter((p): p is ExerciseLastPerformance => p !== null);
   }
 }

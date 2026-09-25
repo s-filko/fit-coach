@@ -5,6 +5,7 @@ import type {
   CreateSessionExerciseDto,
   CreateSessionSetDto,
   SessionExercise,
+  SessionExerciseWithDetails,
   SessionSet,
   WorkoutSession,
   WorkoutSessionWithDetails,
@@ -23,6 +24,18 @@ export interface RecentSessionsFilter {
   realWorkoutsOnly?: boolean;
 }
 
+/**
+ * One exercise's last real performance (BUG-030 D2, training-exercise-history plan): the newest
+ * `session_exercises` row for that exercise with >= 1 `session_sets` row, in a completed session
+ * other than today's — unbounded in time, on purpose (old data beats none, as long as its age is
+ * visible in the block that renders it).
+ */
+export interface ExerciseLastPerformance {
+  exerciseId: string;
+  completedAt: Date;
+  sessionExercise: SessionExerciseWithDetails;
+}
+
 export interface IWorkoutSessionRepository {
   create(userId: string, session: CreateSessionDto): Promise<WorkoutSession>;
   findById(sessionId: string): Promise<WorkoutSession | null>;
@@ -39,7 +52,16 @@ export interface IWorkoutSessionRepository {
   updateActivity(sessionId: string): Promise<void>;
   findTimedOut(cutoffTime: Date): Promise<WorkoutSession[]>;
   autoCloseTimedOut(userId: string, cutoffTime: Date): Promise<number>;
-  findLastCompletedByUserAndKey(userId: string, sessionKey: string): Promise<WorkoutSessionWithDetails | null>;
+  /**
+   * The last real (completed, >= 1 set) performance of each exercise id, anchored by exercise —
+   * not by session_key (BUG-030). At most one entry per exercise id, excluding `excludeSessionId`
+   * (today's own session).
+   */
+  findLastPerformancesByExercise(
+    userId: string,
+    exerciseIds: string[],
+    excludeSessionId: string,
+  ): Promise<ExerciseLastPerformance[]>;
 }
 
 export interface ISessionExerciseRepository {
