@@ -229,10 +229,15 @@ export const scenario: Scenario = {
             `[ID:${BENCH_PRESS_ID}] Barbell Bench Press: 3×8-10 @ 80 kg`,
             `[ID:${PULL_UPS_ID}] Pull-ups: 3×6-8`,
             'ACTIVE: none — log any set to start an exercise',
-            '=== PREVIOUS SESSION (same template — 4d ago (Wed)) ===',
-            `Barbell Bench Press [ID:${BENCH_PRESS_ID}]`,
+            // BUG-030 fix (training-exercise-history plan): the same-key "previous session" block
+            // is replaced by per-exercise history (anchored 2026-09-16, 4d before T0) and the
+            // 7-day fatigue-context feed.
+            "=== EXERCISE HISTORY (today's exercises — last completed performance) ===",
+            `Barbell Bench Press [ID:${BENCH_PRESS_ID}] — last done 2026-09-16 · 4d ago (Wed)`,
             '  Set 1: 8 reps @ 80 kg',
             '  Set 2: 8 reps @ 80 kg',
+            `Pull-ups [ID:${PULL_UPS_ID}] — no completed record`,
+            '=== RECENT WORKOUTS (last 7 days, fatigue context) ===',
             // AC-CC-1 (fixed): the transition keeps the "да, поехали" turn verbatim.
             LETS_GO,
             START_FINAL_TEXT,

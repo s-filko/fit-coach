@@ -1,22 +1,21 @@
 /**
- * REPRODUCTION (RED) — AC-CB-3 / roadmap R0.2. Runs only via the repro glob (needs the local
- * fitcoach_test database); promoted to a regular scenario test when U3 `muscle-centric-history`
- * lands.
+ * BUG-030 (hidden-overlap half) / roadmap R0.2, AC-CB-3 — promoted from the overlapping-load repro
+ * (training-exercise-history plan, Task 1).
  *
- * Training shows exactly one "previous session", chosen by exact session_key
- * (findLastCompletedByUserAndKey, training.spec.ts). Yesterday's hard session on OVERLAPPING
- * muscles (Overhead Press: shoulders_front + triceps; today's Bench Press works the same
- * muscles as secondary) sits under a different key, so the model never sees it — it cannot
- * factor yesterday's load into today's coaching.
+ * The old training context showed exactly one "previous session", chosen by exact session_key
+ * (findLastCompletedByUserAndKey). Yesterday's hard session on OVERLAPPING muscles (Overhead
+ * Press: shoulders_front + triceps; today's Bench Press works the same muscles as secondary) sat
+ * under a different key, so the model never saw it — it could not factor yesterday's load into
+ * today's coaching.
  *
- * Real training PhaseSpec.loadContext over real repositories; every context block of the phase
- * is rendered and joined — this is what the model sees. Dates are explicit; "now" is pinned,
- * nothing is relative to the clock.
+ * The fix (D3): `training.recent_workouts` shows every real (completed, >= 1 set) workout in the
+ * last 7 days regardless of key, labelling any exercise that shares a muscle group with today's
+ * exercises. `training.exercise_history` still anchors Bench Press on its own last performance
+ * (D2), unbounded in time — here that anchor happens to be exactly 7 days old.
  *
- * Control deviation from the plan (coordinator-approved 2026-09-24): no training context block
- * ever renders a calendar date — humanTimeAgo renders the 2026-09-17 anchor as "7d ago (Thu)" —
- * so the control pins the anchor via loaded.data.previousSession (key + completedAt), and Red 2
- * accepts either the calendar date or the relative form humanTimeAgo gives for 2026-09-23.
+ * Real training PhaseSpec.loadContext over real repositories; every context block of the phase is
+ * rendered and joined — this is what the model sees. Dates are explicit; "now" is pinned, nothing
+ * is relative to the clock.
  */
 import { buildTrainingSpec, type TrainingData } from '@infra/ai/graph/phases/training.spec';
 import { db } from '@infra/db/drizzle';
@@ -36,7 +35,7 @@ const OVERHEAD_PRESS_ID = '2f2f7a26-1bd0-4702-829a-71d4a3f5e001';
 
 const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-describe('training context: hidden overlapping load (AC-CB-3, R0.2)', () => {
+describe('training context: hidden overlapping load (BUG-030, AC-CB-3/AC-EH-4, R0.2)', () => {
   // One wiring for the whole file; the repositories are stateless, so building it at describe time is safe.
   const {
     service: trainingService,
@@ -56,7 +55,6 @@ describe('training context: hidden overlapping load (AC-CB-3, R0.2)', () => {
   } as never);
   let userId: string;
   let todayId: string;
-  let shouldersCompletedAt: Date;
 
   beforeAll(async () => {
     // Overhead Press: shoulders_front primary, triceps secondary — overlaps Bench Press
@@ -98,13 +96,14 @@ describe('training context: hidden overlapping load (AC-CB-3, R0.2)', () => {
 
     userId = (await userRepo.create(createTestUserData({ username: `overlap_load_repro_${Date.now()}` }))).id;
     const seedSession = createSessionSeeder({ userId, exerciseIds, sessionExerciseRepo, sessionSetRepo });
-    // The load anchor: last completed upper_a — the only session the exact-key lookup can find.
+    // The exercise-history anchor: last completed Bench Press, exactly 7 days before NOW.
     await seedSession('completed', {
       key: 'upper_a',
       date: '2026-09-17',
       exercises: [{ name: 'Barbell Bench Press', sets: Array.from({ length: 3 }, () => ({ reps: 8, weight: 80 })) }],
     });
-    // Yesterday's hard session on overlapping muscles, under a different key — invisible today.
+    // Yesterday's hard session on overlapping muscles, under a different key — the old lookup
+    // never saw it; the new fatigue-context block always includes every real workout in 7 days.
     await seedSession('completed', {
       key: 'shoulders_b',
       date: '2026-09-23',
@@ -118,9 +117,6 @@ describe('training context: hidden overlapping load (AC-CB-3, R0.2)', () => {
     });
     const [bench] = await sessionExerciseRepo.findBySessionId(todayId);
     await sessionExerciseRepo.update(bench.id, { status: 'in_progress' });
-
-    shouldersCompletedAt =
-      (await sessionRepo.findLastCompletedByUserAndKey(userId, 'shoulders_b'))!.completedAt!;
   });
 
   /** Everything the model sees in the training phase, via the phase's own context blocks. */
@@ -128,6 +124,7 @@ describe('training context: hidden overlapping load (AC-CB-3, R0.2)', () => {
     const loaded = await spec.loadContext({ userId, user: null, activeSessionId: todayId }, {
       trainingService,
       workoutSessionRepo: sessionRepo,
+      exerciseRepository: exerciseRepo,
     } as never);
     if (!loaded.ok) {
       throw new Error(`loadContext failed: ${loaded.reply}`);
@@ -140,24 +137,34 @@ describe('training context: hidden overlapping load (AC-CB-3, R0.2)', () => {
     return { data: loaded.data, context };
   };
 
-  it('control: the same-template anchor (upper_a, 2026-09-17) is what the context shows', async () => {
+  it('control: the exercise-history anchor (Bench Press, 2026-09-17) is what the context shows', async () => {
     const { data, context } = await loadAndRender();
 
-    expect(data.previousSession?.sessionKey).toBe('upper_a');
-    expect(data.previousSession?.completedAt?.toISOString().slice(0, 10)).toBe('2026-09-17');
+    const benchEntry = data.exerciseHistory.find(e => e.exerciseName === 'Barbell Bench Press');
+    expect(benchEntry?.completedAt?.toISOString().slice(0, 10)).toBe('2026-09-17');
     expect(context).toContain('Barbell Bench Press');
   });
 
-  it("names yesterday's overlapping session's exercise (Overhead Press)", async () => {
+  it("names yesterday's overlapping session's exercise (Overhead Press) in RECENT WORKOUTS", async () => {
     const { context } = await loadAndRender();
 
+    expect(context).toContain('=== RECENT WORKOUTS (last 7 days, fatigue context) ===');
     expect(context).toContain('Overhead Press');
   });
 
   it("says when yesterday's overlapping session was (2026-09-23 / its relative form)", async () => {
-    const { context } = await loadAndRender();
-    const when = humanTimeAgo(shouldersCompletedAt, NOW, TIMEZONE);
+    const { data, context } = await loadAndRender();
+    const overhead = data.recentWorkouts.find(s => s.exercises.some(ex => ex.exercise.name === 'Overhead Press'));
+    const when = humanTimeAgo(overhead!.completedAt ?? overhead!.createdAt, NOW, TIMEZONE);
 
     expect(context).toMatch(new RegExp(`${datePattern('2026-09-23').source}|${escapeRegExp(when)}`));
+  });
+
+  it('labels the overlap with today (shoulders_front, triceps) on the Overhead Press line', async () => {
+    const { context } = await loadAndRender();
+
+    expect(context).toContain('overlaps today:');
+    expect(context).toMatch(/overlaps today:.*shoulders_front \(primary\)/);
+    expect(context).toMatch(/overlaps today:.*triceps \(secondary\)/);
   });
 });

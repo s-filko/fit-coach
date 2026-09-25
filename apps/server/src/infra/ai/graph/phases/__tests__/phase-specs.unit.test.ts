@@ -16,6 +16,7 @@ const SESSION_ROW = {
   status: 'in_progress',
   completedAt: null,
   createdAt: new Date('2026-09-01T09:00:00Z'),
+  exercises: [],
 };
 
 /** Minimal deps cast: each loader reads only the services it closes over. */
@@ -25,8 +26,9 @@ function stubDeps(overrides: Record<string, unknown> = {}): ConversationGraphDep
     workoutPlanRepo: { findActiveByUserId: async () => ({ id: 'plan-1', name: 'Plan' }) },
     workoutSessionRepo: {
       findRecentByUserIdWithDetails: async () => [SESSION_ROW],
-      findLastCompletedByUserAndKey: async () => null,
+      findLastPerformancesByExercise: async () => [],
     },
+    exerciseRepository: { findByIdsWithMuscles: async () => [] },
     trainingService: { getSessionDetails: async () => SESSION_ROW },
     ...overrides,
   } as unknown as ConversationGraphDeps;
@@ -205,16 +207,77 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
     expect(loaded).toEqual({ ok: false, reply: 'training_session_not_found' });
   });
 
-  it('training loader returns the session and its previous completed sibling (D-M)', async () => {
-    const previous = { id: 'session-0', sessionKey: 'Upper A' };
-    const deps = stubDeps({ workoutSessionRepo: { findLastCompletedByUserAndKey: async () => previous } });
+  it('training loader returns the session with empty history/recent-workouts when there is nothing to show (D-M)', async () => {
+    const deps = stubDeps();
     const loaded = await specOf('training').loadContext(
       { userId: 'u1', user: null, activeSessionId: 'session-1' },
       deps,
     );
+    // findRecentByUserIdWithDetails's stub echoes SESSION_ROW itself — today's own session,
+    // excluded by id (D3) — so recentWorkouts comes back empty here.
     expect(loaded).toEqual({
       ok: true,
-      data: { session: SESSION_ROW, previousSession: previous },
+      data: { session: SESSION_ROW, exerciseHistory: [], recentWorkouts: [], todayMuscles: [] },
+    });
+  });
+
+  it('training loader anchors exercise history by exercise id, not session_key (BUG-030 D2/D3)', async () => {
+    const session = {
+      ...SESSION_ROW,
+      sessionPlanJson: {
+        sessionKey: 'upper_a',
+        sessionName: 'Upper A',
+        reasoning: 'progressive overload',
+        estimatedDuration: 45,
+        exercises: [
+          { exerciseId: 'ex-1', exerciseName: 'Bench Press', targetSets: 3, targetReps: '8', restSeconds: 90 },
+        ],
+      },
+    };
+    const performance = {
+      exerciseId: 'ex-1',
+      completedAt: new Date('2026-08-20T10:00:00Z'),
+      sessionExercise: { id: 'se-old', exerciseId: 'ex-1', sets: [] },
+    };
+    const deps = stubDeps({
+      trainingService: { getSessionDetails: async () => session },
+      workoutSessionRepo: {
+        findRecentByUserIdWithDetails: async () => [],
+        findLastPerformancesByExercise: async (userId: string, ids: string[], excludeSessionId: string) => {
+          expect(userId).toBe('u1');
+          expect(ids).toEqual(['ex-1']);
+          expect(excludeSessionId).toBe('session-1');
+          return [performance];
+        },
+      },
+      exerciseRepository: {
+        findByIdsWithMuscles: async (ids: string[]) => {
+          expect(ids).toEqual(['ex-1']);
+          return [{ id: 'ex-1', muscleGroups: [{ muscleGroup: 'chest', involvement: 'primary' }] }];
+        },
+      },
+    });
+
+    const loaded = await specOf('training').loadContext(
+      { userId: 'u1', user: null, activeSessionId: 'session-1' },
+      deps,
+    );
+
+    expect(loaded).toEqual({
+      ok: true,
+      data: {
+        session,
+        exerciseHistory: [
+          {
+            exerciseId: 'ex-1',
+            exerciseName: 'Bench Press',
+            performance: performance.sessionExercise,
+            completedAt: performance.completedAt,
+          },
+        ],
+        recentWorkouts: [],
+        todayMuscles: ['chest'],
+      },
     });
   });
 });
