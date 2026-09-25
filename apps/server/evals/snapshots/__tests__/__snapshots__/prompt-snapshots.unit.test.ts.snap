@@ -4606,7 +4606,7 @@ FIRST MESSAGE RULE: If WORKOUT OVERVIEW shows ACTIVE: none and no sets logged ye
 
 Do NOT include internal IDs in your response text. Exercise IDs are for tool calls only.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
@@ -4728,7 +4728,7 @@ FIRST MESSAGE RULE: If WORKOUT OVERVIEW shows ACTIVE: none and no sets logged ye
 
 Do NOT include internal IDs in your response text. Exercise IDs are for tool calls only.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
@@ -4850,7 +4850,7 @@ FIRST MESSAGE RULE: If WORKOUT OVERVIEW shows ACTIVE: none and no sets logged ye
 
 Do NOT include internal IDs in your response text. Exercise IDs are for tool calls only.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
