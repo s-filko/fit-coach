@@ -176,3 +176,27 @@ enables the flag for its run.
 - [ ] Close-out review (one review for the phase), `Status: done`, merge to `dev`, push, deploy dev,
   set `TRANSITION_HANDOFF_TARGETS=training,session_planning` in `.env.dev` and recreate
   `fitcoach-dev-server` (`docker compose up -d`, not `docker restart`). Prod stays frozen.
+
+## Task 7 — The coach knows the current time (BUG-032, owner priority 2026-09-25)
+
+Added mid-plan by the owner ("есть что-то поважнее, тренер не знает текущее время") — a small prompt fix,
+kept in this branch per the no-micro-plans rule. Dispatched **before** Task 4.
+
+**Files:** `apps/server/src/infra/ai/prompts/directives/` (a new versioned directive or `timezone.v2`),
+the directive lists in `directives/index.ts`, the phase modules that render `Current Date`
+(`phases/session_planning/v2.ts:98-106`, `phases/plan_creation/v2.ts:74`), `shared/date-utils.ts`
+(weekday formatting if needed), L0 prompt snapshots.
+
+- [ ] Every phase (registration, chat, plan_creation, session_planning, training) gets one line:
+  `NOW (user's local time): <Weekday> <YYYY-MM-DD> <HH:MM> (<IANA zone>)` from `ctx.now` and
+  `user.timezone`; unknown timezone → the same in UTC, marked as UTC.
+- [ ] The line is the **last** system section (after the stable prefix) — it changes every minute, and a
+  change early in the prompt would break provider prompt caching for everything after it.
+- [ ] `Current Date:` lines in session_planning / plan_creation drop the duplicated date (keep
+  `days since last workout`).
+- [ ] Prompt versions bumped per the prompt-module convention; L0 snapshots regenerated; a unit test pins
+  the line for a Manila user at a fixed instant (weekday and 24h time correct across the UTC date line,
+  e.g. 2026-09-25T20:30Z → `Saturday 2026-09-26 04:30 (Asia/Manila)`).
+
+**Verify:** `npm run test:unit` (snapshots), `npm run check-all`; through the lock `npm run test:scenarios`.
+

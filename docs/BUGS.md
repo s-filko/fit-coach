@@ -1657,3 +1657,31 @@ reproduction test written before the fix: a user with one real completed workout
 empty completed, a skipped, a planning and an in_progress session → both history loaders return
 exactly the real one, `daysSinceLastWorkout` comes from its `completedAt`, and `getActiveSession`
 still returns the `in_progress` session (control).
+
+## BUG-032 — The coach does not know the current time (and in two phases not even the date)
+
+**Status:** Open — fix is Task 7 of plan `transition-handoff`
+**Severity:** High — every time-of-day and "this week" statement is a guess
+**Found during:** owner's live dev chat 2026-09-25 06:20 UTC (model `glm-5.3-flash`): asked «который час?», the coach
+answered «Часы у меня в системе не показывают текущее время — я вижу только дату: 25 сентября».
+**Component:** `apps/server/src/infra/ai/prompts/directives/timezone.v1.ts`,
+`prompts/phases/session_planning/v2.ts:98-106`, `prompts/phases/plan_creation/v2.ts:74`
+
+### Description
+
+- `session_planning` and `plan_creation` render only `Current Date: YYYY-MM-DD` — no local time, no weekday,
+  although `formatInUserTz` (`shared/date-utils.ts:34`) already returns `time`.
+- `chat` and `training` render **no current date or time at all**; past sessions carry relative labels
+  (`humanTimeAgo`), sets carry "N min ago".
+- `TIMEZONE_V1` tells the model "Use it for all date/time references" but gives it no "now" to use.
+
+Consequences seen: "который час?" unanswerable; the model has to derive the weekday itself — the
+2026-09-25 Flash smoke run put last Saturday into "this week" (Friday 25th), a mistake a stated weekday
+prevents. Not "just the model": the fact is simply absent from the prompt.
+
+### Fix (plan `transition-handoff` Task 7)
+
+One "now" line in every phase: local weekday, date and time with the zone name, e.g.
+`NOW (user's local time): Friday 2026-09-25 14:20 (Asia/Manila)`; UTC with a note when the timezone is
+unknown. Rendered as the LAST system section (it changes every minute — keep it after the stable prefix
+so provider prompt caching is not broken). Prompt versions bumped, L0 snapshots updated.
