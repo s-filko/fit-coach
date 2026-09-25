@@ -20,7 +20,7 @@ import type {
 
 import { calendarDaysAgo, formatInUserTz, humanTimeAgo } from '@shared/date-utils';
 
-import { formatSetData } from './training-workout-overview.v1';
+import { formatExerciseSets, formatSetData } from './training-workout-overview.v1';
 import type { ContextBlock, ContextBlockCtx } from './types';
 
 const RECENT_WORKOUTS_WINDOW_DAYS = 7;
@@ -34,9 +34,15 @@ export interface ExerciseHistoryEntry {
   completedAt: Date | null;
 }
 
-/** `ctx.timezone`, falling back to the user's own — never the caller's clock. */
-function resolveTz(ctx: ContextBlockCtx): string | null {
-  return ctx.timezone ?? ctx.user?.timezone ?? null;
+/**
+ * `ctx.timezone`, falling back to the user's own, then to `'UTC'` explicitly (close-out review
+ * advisory 8) — `formatInUserTz` already falls back to UTC internally when given `null`, but
+ * `humanTimeAgo`'s no-tz path uses the *process's* local clock instead, not UTC. Resolving to a
+ * concrete `'UTC'` string here, once, keeps the date and the age in `formatDateAge` and the
+ * window cut in `TRAINING_RECENT_WORKOUTS_V1` reading the same calendar day.
+ */
+function resolveTz(ctx: ContextBlockCtx): string {
+  return ctx.timezone ?? ctx.user?.timezone ?? 'UTC';
 }
 
 /** D5: "2026-09-16 · 5d ago (Wed)" — calendar date in the user's timezone, plus humanTimeAgo. */
@@ -87,15 +93,7 @@ export const TRAINING_EXERCISE_HISTORY_V1: ContextBlock<TrainingExerciseHistoryD
       }
 
       const when = formatDateAge(entry.completedAt, ctx);
-      const setsText = entry.performance.sets.map(s => {
-        const rpe = s.rpe ? ` | RPE ${s.rpe}` : '';
-        const fb = s.userFeedback ? ` | "${s.userFeedback}"` : '';
-        return `  Set ${s.setNumber}: ${formatSetData(s.setData)}${rpe}${fb}`;
-      });
-      const exerciseFb = entry.performance.userFeedback
-        ? `\n  Overall feedback: "${entry.performance.userFeedback}"`
-        : '';
-      return `${header} — last done ${when}\n${setsText.join('\n')}${exerciseFb}`;
+      return `${header} — last done ${when}\n${formatExerciseSets(entry.performance.sets, entry.performance.userFeedback)}`;
     });
 
     return `=== EXERCISE HISTORY (today's exercises — last completed performance) ===\n\n${blocks.join('\n\n')}`;

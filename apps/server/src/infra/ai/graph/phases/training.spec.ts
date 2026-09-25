@@ -55,6 +55,18 @@ interface SessionLike {
   exercises?: Array<{ status?: string; sets?: unknown[] }>;
 }
 
+/** Generic UUID shape (any version/variant) — matches every real exerciseId the catalog issues. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A bad legacy `session_plan_json` row (empty string, missing, or a placeholder that was never a
+ * real catalog id) must not fail the turn — dropped before it ever reaches a DB query
+ * (close-out review advisory 6).
+ */
+function isValidExerciseId(id: unknown): id is string {
+  return typeof id === 'string' && UUID_RE.test(id);
+}
+
 /**
  * The ADR-0011 policy over the phase's toolset. A function (not a constant)
  * because the availability filter derives the allowed names from the tools it
@@ -114,15 +126,18 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
       const startedById = new Map(session.exercises.map(ex => [ex.exerciseId, ex]));
 
       // Today's exercises (BUG-030 D2/step 3): plan order first, then off-plan exercises the user
-      // actually started — an exercise that is only planned still gets its history (AC-EH-2).
-      const planExerciseIds = plan?.exercises.map(p => p.exerciseId) ?? [];
+      // actually started — an exercise that is only planned still gets its history (AC-EH-2). A
+      // bad legacy plan row is filtered out here, before it reaches planExerciseIds/nameById or
+      // any DB query.
+      const validPlanExercises = (plan?.exercises ?? []).filter(p => isValidExerciseId(p.exerciseId));
+      const planExerciseIds = validPlanExercises.map(p => p.exerciseId);
       const offPlanStartedIds = session.exercises
         .filter(ex => !planExerciseIds.includes(ex.exerciseId))
         .map(ex => ex.exerciseId);
       const todayExerciseIds = [...new Set([...planExerciseIds, ...offPlanStartedIds])];
 
       const nameById = new Map<string, string>();
-      for (const p of plan?.exercises ?? []) {
+      for (const p of validPlanExercises) {
         nameById.set(p.exerciseId, p.exerciseName ?? 'Exercise');
       }
       for (const ex of session.exercises) {

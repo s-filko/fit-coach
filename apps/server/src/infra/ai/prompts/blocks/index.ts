@@ -66,6 +66,7 @@ export {
   buildPreviousSessionSection,
   buildStaleSessionSection,
   buildWorkoutOverview,
+  formatExerciseSets,
   formatSetData,
   TRAINING_CLIENT_V1,
   TRAINING_PREVIOUS_SESSION_V1,

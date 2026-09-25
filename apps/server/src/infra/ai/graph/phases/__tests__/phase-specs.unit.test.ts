@@ -222,6 +222,7 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
   });
 
   it('training loader anchors exercise history by exercise id, not session_key (BUG-030 D2/D3)', async () => {
+    const EXERCISE_ID = 'aaaaaaaa-1111-4111-8111-111111111111';
     const session = {
       ...SESSION_ROW,
       sessionPlanJson: {
@@ -230,14 +231,14 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
         reasoning: 'progressive overload',
         estimatedDuration: 45,
         exercises: [
-          { exerciseId: 'ex-1', exerciseName: 'Bench Press', targetSets: 3, targetReps: '8', restSeconds: 90 },
+          { exerciseId: EXERCISE_ID, exerciseName: 'Bench Press', targetSets: 3, targetReps: '8', restSeconds: 90 },
         ],
       },
     };
     const performance = {
-      exerciseId: 'ex-1',
+      exerciseId: EXERCISE_ID,
       completedAt: new Date('2026-08-20T10:00:00Z'),
-      sessionExercise: { id: 'se-old', exerciseId: 'ex-1', sets: [] },
+      sessionExercise: { id: 'se-old', exerciseId: EXERCISE_ID, sets: [] },
     };
     const deps = stubDeps({
       trainingService: { getSessionDetails: async () => session },
@@ -245,15 +246,15 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
         findRecentByUserIdWithDetails: async () => [],
         findLastPerformancesByExercise: async (userId: string, ids: string[], excludeSessionId: string) => {
           expect(userId).toBe('u1');
-          expect(ids).toEqual(['ex-1']);
+          expect(ids).toEqual([EXERCISE_ID]);
           expect(excludeSessionId).toBe('session-1');
           return [performance];
         },
       },
       exerciseRepository: {
         findByIdsWithMuscles: async (ids: string[]) => {
-          expect(ids).toEqual(['ex-1']);
-          return [{ id: 'ex-1', muscleGroups: [{ muscleGroup: 'chest', involvement: 'primary' }] }];
+          expect(ids).toEqual([EXERCISE_ID]);
+          return [{ id: EXERCISE_ID, muscleGroups: [{ muscleGroup: 'chest', involvement: 'primary' }] }];
         },
       },
     });
@@ -269,7 +270,7 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
         session,
         exerciseHistory: [
           {
-            exerciseId: 'ex-1',
+            exerciseId: EXERCISE_ID,
             exerciseName: 'Bench Press',
             performance: performance.sessionExercise,
             completedAt: performance.completedAt,
@@ -279,5 +280,41 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
         todayMuscles: ['chest'],
       },
     });
+  });
+
+  it('training loader drops a bad legacy plan row (empty/non-UUID exerciseId) before any DB query (close-out review advisory 6)', async () => {
+    const session = {
+      ...SESSION_ROW,
+      sessionPlanJson: {
+        sessionKey: 'upper_a',
+        sessionName: 'Upper A',
+        reasoning: 'progressive overload',
+        estimatedDuration: 45,
+        exercises: [
+          { exerciseId: '', exerciseName: 'Legacy empty id', targetSets: 3, targetReps: '8', restSeconds: 90 },
+          { exerciseId: 'not-a-uuid', exerciseName: 'Legacy bad id', targetSets: 3, targetReps: '8', restSeconds: 90 },
+        ],
+      },
+    };
+    const findLastPerformancesByExercise = jest.fn().mockResolvedValue([]);
+    const findByIdsWithMuscles = jest.fn().mockResolvedValue([]);
+    const deps = stubDeps({
+      trainingService: { getSessionDetails: async () => session },
+      workoutSessionRepo: { findRecentByUserIdWithDetails: async () => [], findLastPerformancesByExercise },
+      exerciseRepository: { findByIdsWithMuscles },
+    });
+
+    const loaded = await specOf('training').loadContext(
+      { userId: 'u1', user: null, activeSessionId: 'session-1' },
+      deps,
+    );
+
+    expect(loaded).toEqual({
+      ok: true,
+      data: { session, exerciseHistory: [], recentWorkouts: [], todayMuscles: [] },
+    });
+    // Neither bad id ever reached a DB call — the turn does not fail on a legacy plan row.
+    expect(findLastPerformancesByExercise).not.toHaveBeenCalled();
+    expect(findByIdsWithMuscles).not.toHaveBeenCalled();
   });
 });

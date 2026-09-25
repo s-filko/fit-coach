@@ -112,7 +112,18 @@ export function contextsForModule(moduleId: string, fixture: EvalFixture): unkno
     case 'phase.session_planning':
       return { ...base, context: buildSessionPlanningContext(fixture, FIXED_NOW) };
     case 'phase.training':
-      return { ...base, session: buildFixtureSession(fixture, FIXED_NOW), previousSession: null };
+      // `previousSession` (old same-session_key lookup) is gone (BUG-030 fix); `session` alone
+      // still feeds legacy TRAINING_V1's WORKOUT OVERVIEW rendering (byte-identity tests) — the
+      // empty history/recent-workouts/muscles below are the "nothing to show" equivalent of the
+      // old `previousSession: null` and are what TRAINING_V6 (current) actually reads, ignored by
+      // V1 (it never declared those fields).
+      return {
+        ...base,
+        session: buildFixtureSession(fixture, FIXED_NOW),
+        exerciseHistory: [],
+        recentWorkouts: [],
+        todayMuscles: [],
+      };
     case 'summarizer':
       // v4 sees the known active facts (fact-lifecycle Task 3, AC-FL-4) — empty
       // renders the "none yet" line; the L0 forbidden-string scan stays clean.
