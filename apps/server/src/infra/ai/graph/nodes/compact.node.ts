@@ -62,6 +62,15 @@ export interface EpisodeTunables {
   minTokens: number;
   /** EPISODE_KEEP_TURNS — the verbatim tail every trigger keeps (AC-CC-1). */
   keepTurns: number;
+  /**
+   * EPISODE_BUDGET_LOW_WATER (AC-SI-5a, BUG-038 part 1): a budget-triggered
+   * cut targets at most this fraction of `historyBudget`, not just-fits —
+   * the headroom keeps ordinary turns right after a compaction from crossing
+   * the cap again and re-triggering compaction every run. Optional — omitted
+   * reproduces the old just-fits behaviour (equivalent to 1), so existing
+   * callers that build this config without it are unaffected.
+   */
+  budgetLowWater?: number;
 }
 
 export interface CompactStepDeps {
@@ -81,7 +90,7 @@ export type CompactStep = (
 
 export function buildCompactStep(deps: CompactStepDeps): CompactStep {
   const { llmGateway, summaries, userFacts, config, budgetFor } = deps;
-  const { gapMs, minTurns, minTokens, keepTurns } = config;
+  const { gapMs, minTurns, minTokens, keepTurns, budgetLowWater = 1 } = config;
 
   return async function compactStep(state, config): Promise<Partial<ConversationStateType>> {
     const ctx = ctxOf(config as never);
@@ -158,6 +167,7 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
       keepTurns,
       minTurns,
       minTokens,
+      lowWaterMark: budgetLowWater,
     });
 
     if (removed.length === 0) {

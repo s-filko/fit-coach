@@ -229,7 +229,7 @@ describe('resolveBudget — INV-LLM-004 resolution order', () => {
     const oldest = SUMMARY('old', '2026-09-01T00:00:00Z');
     const newest = SUMMARY('new', '2026-09-18T00:00:00Z');
     // Both summaries render to 50 estimated tokens, one alone to 40 (measured via the
-    // same EPISODE_SUMMARIES_V1 render assembleContext uses) — a longTerm budget of 45
+    // same EPISODE_SUMMARIES_V2 render assembleContext uses) — a longTerm budget of 45
     // leaves room for exactly one summary but not two.
     const result = await resolveBudget({
       systemTokens: 0,

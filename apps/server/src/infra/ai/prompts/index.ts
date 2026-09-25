@@ -1,6 +1,6 @@
 import type { ConversationPhase } from '@domain/conversation/ports';
 
-import { EPISODE_SUMMARIES_V1, POST_TOOL_NUDGE_V1 } from './blocks';
+import { EPISODE_SUMMARIES_V2, POST_TOOL_NUDGE_V1 } from './blocks';
 import { promptVersionsOf } from './compose';
 import { CHAT_PROMPT } from './phases/chat';
 import { PLAN_CREATION_PROMPT } from './phases/plan_creation';
@@ -27,7 +27,7 @@ export const PHASE_PROMPTS: Record<ConversationPhase, PhasePromptEntry<unknown>>
 
 export const STANDALONE_PROMPTS: readonly PromptModule<unknown>[] = [
   SUMMARIZER_PROMPT as PromptModule<unknown>,
-  EPISODE_SUMMARIES_V1 as PromptModule<unknown>,
+  EPISODE_SUMMARIES_V2 as PromptModule<unknown>,
   POST_TOOL_NUDGE_V1 as PromptModule<unknown>,
 ];
 
@@ -38,7 +38,7 @@ export const STANDALONE_PROMPTS: readonly PromptModule<unknown>[] = [
  */
 export function promptVersionsForPhase(phase: ConversationPhase): Record<string, string> {
   const versions = promptVersionsOf(PHASE_PROMPTS[phase].current);
-  versions[EPISODE_SUMMARIES_V1.id] = EPISODE_SUMMARIES_V1.version;
+  versions[EPISODE_SUMMARIES_V2.id] = EPISODE_SUMMARIES_V2.version;
   versions[POST_TOOL_NUDGE_V1.id] = POST_TOOL_NUDGE_V1.version;
   return versions;
 }
