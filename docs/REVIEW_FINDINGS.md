@@ -327,6 +327,10 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   Runs: refactor-p4-episode-memory (2026-09-18).
 - [×1] Zone R3 says test names carry BR/AC refs "per `docs/CONTRIBUTING_AI.md`", but that file has no such rule, so missing AC refs (`planning-set-logging`, `recent-history-status`) cannot be graded. Proposed wording for CONTRIBUTING_AI Principles: "Every `describe` of a test that proves an AC names that AC id." Runs: coach-baseline 2026-09-25 (R3).
 - [×1] R3 checks AC-to-test mapping but not teardown coverage of CLI entry points; the smoke's `exitAfterCleanup` was proven only by live runs. Proposed for CONTRIBUTING_AI: "A CLI entry point that owns process-level resources (DB pools, native sessions) proves its teardown on the success, refusal and thrown-error paths; a live run covers only the first." Runs: smoke-test 2026-09-25 (R3).
+- [×1] For hand-off paths the review verified only what gets delivered (scripted text on the blocked turn), not what the model is told in that turn (tool-result wording, tool description) — R3 found both stale on the re-run. Proposed: a hand-off change's review checks the tool-result text and tool description the model sees on every branch of the hand-off decision.
+  Runs: transition-handoff (2026-09-25).
+- [×1] R2's brief for an extracted infra helper named "existing backfill scripts" as search scope; the real overlap was a repository method (`ExerciseRepository.updateEmbedding`). Proposed: R2 prompts name `src/infra/db/repositories` and `src/domain/**/ports` as search scope for extracted infra helpers.
+  Runs: transition-handoff (2026-09-25).
 
 ## Rule candidates
 
@@ -753,4 +757,6 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
 - [×1] A plan's Global Constraint "flag off must be today's behaviour" carries no AC/BR/INV id, so R3 could report a flag-off regression (commit now carries `compactReason` forward) only as advisory. Proposed for `SUPERPOWERS_INTEGRATION.md` or `CONTRIBUTING_AI.md`: "A feature flag's off state must be proven unchanged by at least one test per changed node; a plan that states a flag-off invariant gives it an AC id."
   Runs: transition-handoff (2026-09-25).
 - [×1] Frozen prompt versions (`phases/*/vN.ts`, pinned by AC-1321 snapshots) are copied whole by convention, which conflicts with DRY as written. Proposed for `CONTRIBUTING_AI.md` "Principles & Boundaries": "DRY exception: a new prompt version under infra/ai/prompts/phases/ is a full copy of its predecessor; frozen versions are never refactored to share code with the current one."
+  Runs: transition-handoff (2026-09-25).
+- [×1] When a fix commit reverts an approach (here embedding under Jest), nothing requires checking that what the abandoned approach changed (dropping the `embedBatch` call, a "because of Jest" comment) was reverted too. Proposed for `CONTRIBUTING_AI.md`: "A fix that abandons an approach reverts every change that approach made."
   Runs: transition-handoff (2026-09-25).
