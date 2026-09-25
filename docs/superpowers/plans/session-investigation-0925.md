@@ -4,7 +4,7 @@
 > investigation → reproduction → red tests → **owner approval** → fix. This plan covers only the red tests. Execute
 > only the dispatched task; no production code changes.
 
-- Status: planned
+- Status: in progress
 - Branch: plan/session-investigation-0925
 
 **Goal (owner, 2026-09-25, verbatim):** «найти, воспроизвести, понять, почему она в текущих тестах не отловилась …

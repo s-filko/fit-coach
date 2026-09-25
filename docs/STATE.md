@@ -12,6 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-25 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
+- `session-investigation-0925.md` — Live Session 2026-09-25 — Investigation and Red Tests Before Remediation Implementation Plan (branch: `plan/session-investigation-0925`, last commit 2026-09-25)
 - `transition-handoff.md` — Transition Hand-off (Roadmap U5) Implementation Plan (branch: `plan/transition-handoff`, last commit 2026-09-25)
 
 **Planned**
