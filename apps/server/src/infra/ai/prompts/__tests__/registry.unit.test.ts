@@ -19,7 +19,15 @@ describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVer
     expect(versions['directive.identity']).toBeUndefined(); // training has no identity directive
     expect(versions['directive.tool-reply']).toBe('v1');
     expect(versions['block.episode_summaries']).toBe('v2');
-    const { 'phase.training': _phaseVersion, 'block.episode_summaries': _episodeSummariesVersion, ...rest } = versions;
+    // BUG-036 + owner language rule (R3): training reaches DIRECTIVES_WITHOUT_IDENTITY_V2,
+    // which carries LANGUAGE_V2 (no "from Telegram" wording) — the only v2 directive.
+    expect(versions['directive.language']).toBe('v2');
+    const {
+      'phase.training': _phaseVersion,
+      'block.episode_summaries': _episodeSummariesVersion,
+      'directive.language': _languageVersion,
+      ...rest
+    } = versions;
     expect(Object.values(rest).every(v => v === 'v1')).toBe(true);
   });
 

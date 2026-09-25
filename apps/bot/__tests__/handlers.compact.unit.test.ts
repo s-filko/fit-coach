@@ -132,6 +132,45 @@ describe('bot /compact handler (unit)', () => {
         );
     });
 
+    it('BUG-036 + owner language rule (R3): the PROFILE language decides the reply, not the per-message Telegram code', async () => {
+        // /api/bot/user now additively returns the profile language (ru) even
+        // though this message's own Telegram language_code is 'en' — the
+        // owner's case exactly (a profile switched away from what Telegram says).
+        mockPost.mockResolvedValueOnce({ data: { data: { id: 'u7', languageCode: 'ru' } } });
+        mockPost.mockResolvedValueOnce({ data: { data: { outcome: 'compacted' } } });
+
+        const msg: TelegramBot.Message = {
+            message_id: 7,
+            date: Date.now(),
+            chat: { id: 700, type: 'private' },
+            from: { id: 700, is_bot: false, first_name: 'Owner', language_code: 'en' },
+            text: '/compact',
+        };
+
+        bot.emit('message', msg);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect(bot.sendMessage).toHaveBeenCalledWith(700, 'Разговор сохранён в память.');
+
+        // A second message from the same sender: registerOrGetUser now hits the
+        // cache (no second /api/bot/user call) — the cached profile language
+        // still decides the error text, not msg.from.language_code ('en').
+        const axiosError = new axios.AxiosError('Busy', '409', undefined, undefined, {
+            status: 409,
+            data: { error: { code: 'THREAD_BUSY' } },
+        } as never);
+        mockPost.mockRejectedValueOnce(axiosError);
+
+        bot.emit('message', msg);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect(mockPost).toHaveBeenCalledTimes(3); // one /user call total, two /compact calls
+        expect(bot.sendMessage).toHaveBeenCalledWith(
+            700,
+            expect.stringContaining('Твоё предыдущее сообщение ещё обрабатывается'),
+        );
+    });
+
     it('clears cached userId on 404', async () => {
         // First /compact call caches userId
         mockPost.mockResolvedValueOnce({ data: { data: { id: 'u6' } } });

@@ -39,7 +39,28 @@ const api = axios.create({
 // the master plan's own wording). Keyed by the sender, never the chat: an identity must follow
 // the person who wrote the message, and a chat-keyed cache is only right while a chat has exactly
 // one sender (AC-RRP-4).
-const userIdBySenderId = new Map<number, string>();
+//
+// BUG-036 + owner language rule (R3): cached alongside the id is the PROFILE
+// language (`/api/bot/user`'s `data.languageCode`, additive) — the only
+// source of truth for the user's language after account creation. Telegram's
+// per-message `language_code` is never read again once a profile is known.
+interface CachedUser {
+    id: string;
+    languageCode: string | undefined;
+}
+const userIdBySenderId = new Map<number, CachedUser>();
+
+/**
+ * The known language for a sender: the cached profile language if this
+ * sender has been registered before (in this process), else Telegram's code
+ * — the only signal available before a profile exists (same rationale as
+ * `nonPrivateChatNotice` below).
+ */
+function knownLanguageCode(msg: TelegramBot.Message): string | undefined {
+    const senderId = msg.from?.id;
+    const cached = senderId !== undefined ? userIdBySenderId.get(senderId) : undefined;
+    return cached?.languageCode ?? msg.from?.language_code;
+}
 
 // The bot serves private chats only (owner decision 2026-09-21): a personal coach whose memory
 // and training data belong to one person. In any other chat it makes no API call and answers
@@ -48,6 +69,10 @@ const userIdBySenderId = new Map<number, string>();
 const NON_PRIVATE_NOTICE_LIMIT = 1000;
 const noticedNonPrivateChats = new Set<number>();
 
+// BUG-036 + owner language rule (R3): this one text is the sole exception to
+// "the profile decides" — no user is registered yet at this point (the bot
+// makes no API call for a non-private chat), so no profile language exists
+// to read. Telegram's per-message code is the only signal available here.
 function nonPrivateChatNotice(languageCode: string | undefined): string {
     return languageCode === 'ru'
         ? 'Я работаю только в личном чате — напиши мне в личные сообщения.'
@@ -97,7 +122,7 @@ async function registerOrGetUser(msg: TelegramBot.Message) {
 
     const cached = userIdBySenderId.get(msg.from.id);
     if (cached) {
-        return { id: cached, firstName: msg.from.first_name, username: msg.from.username };
+        return { id: cached.id, firstName: msg.from.first_name, username: msg.from.username, languageCode: cached.languageCode };
     }
 
     const userResponse = await api.post('/api/bot/user', {
@@ -114,8 +139,13 @@ async function registerOrGetUser(msg: TelegramBot.Message) {
         throw new Error('Invalid response from server: missing data.id');
     }
 
-    userIdBySenderId.set(msg.from.id, userId);
-    return { id: userId, firstName: msg.from.first_name, username: msg.from.username };
+    // BUG-036 + owner language rule (R3): languageCode is the PROFILE
+    // language (additive on /api/bot/user) — on a first-ever message it
+    // equals Telegram's code (just seeded), but stays correct afterwards
+    // even after the user switches it with set_language.
+    const languageCode: string | undefined = userResponse.data?.data?.languageCode ?? undefined;
+    userIdBySenderId.set(msg.from.id, { id: userId, languageCode });
+    return { id: userId, firstName: msg.from.first_name, username: msg.from.username, languageCode };
 }
 
 export function registerBotHandlers(bot: TelegramBot) {
@@ -133,7 +163,6 @@ export function registerBotHandlers(bot: TelegramBot) {
         // politeness — the server's per-userId mutex is the real guarantee).
         await chatQueue.enqueue(chatId, async () => {
             const userText = msg.text;
-            const languageCode = msg.from?.language_code;
             log.info({
                 username: msg.from?.username,
                 chatId,
@@ -161,7 +190,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                         userIdBySenderId.delete(msg.from.id);
                     }
                     log.error({ err: error }, '/clear_context failed');
-                    await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), languageCode));
+                    await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), knownLanguageCode(msg)));
                 }
                 return;
             }
@@ -173,7 +202,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                         const res = await api.post('/api/bot/chat/compact', { userId: user.id });
                         return (res.data?.data?.outcome as 'compacted' | 'nothing_to_compact' | undefined) ?? 'nothing_to_compact';
                     });
-                    const isRu = languageCode === 'ru';
+                    const isRu = knownLanguageCode(msg) === 'ru';
                     const reply = outcome === 'compacted'
                         ? (isRu ? 'Разговор сохранён в память.' : 'The conversation so far has been folded into memory.')
                         : (isRu ? 'Пока нечего сохранять в память.' : 'Nothing to fold into memory yet.');
@@ -183,7 +212,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                         userIdBySenderId.delete(msg.from.id);
                     }
                     log.error({ err: error }, '/compact failed');
-                    await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), languageCode));
+                    await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), knownLanguageCode(msg)));
                 }
                 return;
             }
@@ -225,7 +254,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                             responseData: error.response?.data,
                         }),
                     }, '/start command failed');
-                    await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), languageCode));
+                    await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), knownLanguageCode(msg)));
                 }
                 return;
             }
@@ -268,7 +297,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                         responseData: error.response?.data,
                     }),
                 }, 'message processing failed');
-                await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), languageCode));
+                await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), knownLanguageCode(msg)));
             }
         });
     });

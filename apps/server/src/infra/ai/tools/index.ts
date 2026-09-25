@@ -8,6 +8,7 @@ import type { IUserFactsService, IUserService } from '@domain/user/ports';
 
 import { buildListFactsTool } from '@infra/ai/tools/list-facts.tool';
 import { buildManageFactTool } from '@infra/ai/tools/manage-fact.tool';
+import { buildSetLanguageTool } from '@infra/ai/tools/set-language.tool';
 import { buildSaveTimezoneTool } from '@infra/ai/tools/timezone.tool';
 
 export {
@@ -31,6 +32,7 @@ export {
 } from '@infra/ai/tools/start-training-session.tool';
 export { buildListFactsTool, type ListFactsToolDeps } from '@infra/ai/tools/list-facts.tool';
 export { buildManageFactTool, type ManageFactToolDeps } from '@infra/ai/tools/manage-fact.tool';
+export { buildSetLanguageTool, type SetLanguageToolDeps } from '@infra/ai/tools/set-language.tool';
 export { buildSaveTimezoneTool, type TimezoneToolDeps } from '@infra/ai/tools/timezone.tool';
 export { buildUpdateLastSetTool, type UpdateLastSetToolDeps } from '@infra/ai/tools/update-last-set.tool';
 export { buildUpdateProfileTool, type UpdateProfileToolDeps } from '@infra/ai/tools/update-profile.tool';
@@ -42,13 +44,16 @@ export interface SharedToolsDeps {
 }
 
 /**
- * Tools every phase gets (ADR-0013 §11): save_timezone, plus the memory tools
- * (fact-lifecycle Task 2) — listing and controlling the user's facts is not
- * phase-specific ("what do you remember about me" can come up anywhere).
+ * Tools every phase gets (ADR-0013 §11): save_timezone, set_language
+ * (BUG-036 + owner language rule, R3), plus the memory tools (fact-lifecycle
+ * Task 2) — listing and controlling the user's facts is not phase-specific
+ * ("what do you remember about me" can come up anywhere), and neither is an
+ * explicit language switch.
  */
 export function buildSharedTools(deps: SharedToolsDeps) {
   return [
     buildSaveTimezoneTool(deps),
+    buildSetLanguageTool(deps),
     buildManageFactTool({ userFactsService: deps.userFacts }),
     buildListFactsTool({ userFactsService: deps.userFacts }),
   ];

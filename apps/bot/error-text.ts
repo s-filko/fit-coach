@@ -11,6 +11,11 @@
  * mirrored exactly: `languageCode === 'ru'` selects ru, everything else
  * (including `undefined`/unset) falls back to en — same as the server's
  * `langOf`.
+ *
+ * BUG-036 + owner language rule (R3): callers pass the user's PROFILE
+ * language (cached from `/api/bot/user`'s `data.languageCode` — see
+ * `handlers.ts`), never `msg.from.language_code` directly. This function
+ * itself stays source-agnostic; it only maps whatever string it is given.
  */
 
 export type ConversationErrorCode = 'LLM_UNAVAILABLE' | 'THREAD_BUSY' | 'USER_NOT_FOUND' | 'CORE_ERROR';

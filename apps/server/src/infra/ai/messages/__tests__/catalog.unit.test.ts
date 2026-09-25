@@ -27,6 +27,22 @@ describe('message catalog (refactor-p3-tool-executor Task 3)', () => {
     }
   });
 
+  it(
+    'AC-SI-3 (BUG-036 + owner language rule, R3): langOf is driven by the profile language alone — ' +
+      'never by what the user happens to write, and never by a raw Telegram code once the profile diverges from it',
+    () => {
+      // The owner's real fix direction (not the original repro's, which expected
+      // detection from message content): once the profile says 'ru' — e.g. after
+      // set_language — the catalog is Russian, full stop, even if some other
+      // per-request signal (like a raw Telegram language_code) still says 'en'.
+      // langOf only ever sees the profile value; there is nothing else to read.
+      expect(langOf('ru')).toBe('ru');
+      expect(t('tool_error_budget_exhausted', langOf('ru'))).toBe(
+        'Не удалось записать данные после нескольких попыток. Попробуй переформулировать: укажи упражнение, вес и количество повторений чётко.',
+      );
+    },
+  );
+
   it('keeps the ru literals byte-identical to today’s training.subgraph strings', () => {
     expect(t('tool_error_budget_exhausted', 'ru')).toBe(
       'Не удалось записать данные после нескольких попыток. Попробуй переформулировать: укажи упражнение, вес и количество повторений чётко.',

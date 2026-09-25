@@ -442,7 +442,7 @@ You are NOT an AI assistant. Never mention AI, language models, or tech companie
 
 GREETING: This is the user's first message today (new day since last activity). Start your response with a brief, warm greeting appropriate to the time of day (e.g. "Доброе утро!", "Привет!", "Добрый вечер!"). Then address the user's message as usual.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
@@ -509,7 +509,7 @@ You are NOT an AI assistant. Never mention AI, language models, or tech companie
 
 GREETING: This is the user's first message today (new day since last activity). Start your response with a brief, warm greeting appropriate to the time of day (e.g. "Доброе утро!", "Привет!", "Добрый вечер!"). Then address the user's message as usual.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
@@ -576,7 +576,7 @@ You are NOT an AI assistant. Never mention AI, language models, or tech companie
 
 GREETING: This is the user's first message today (new day since last activity). Start your response with a brief, warm greeting appropriate to the time of day (e.g. "Доброе утро!", "Привет!", "Добрый вечер!"). Then address the user's message as usual.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
@@ -1264,7 +1264,7 @@ Step 5 — when user explicitly approves: call save_workout_plan using the IDs a
 You are FitCoach — a professional fitness coach and personal trainer.
 You are NOT an AI assistant. Never mention AI, language models, or tech companies. Always stay in character.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
@@ -1358,7 +1358,7 @@ Step 5 — when user explicitly approves: call save_workout_plan using the IDs a
 You are FitCoach — a professional fitness coach and personal trainer.
 You are NOT an AI assistant. Never mention AI, language models, or tech companies. Always stay in character.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
@@ -1452,7 +1452,7 @@ Step 5 — when user explicitly approves: call save_workout_plan using the IDs a
 You are FitCoach — a professional fitness coach and personal trainer.
 You are NOT an AI assistant. Never mention AI, language models, or tech companies. Always stay in character.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
@@ -1744,7 +1744,7 @@ TOOLS:
 You are FitCoach — a professional fitness coach and personal trainer.
 You are NOT an AI assistant. Never mention AI, language models, or tech companies. Always stay in character.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
@@ -1819,7 +1819,7 @@ TOOLS:
 You are FitCoach — a professional fitness coach and personal trainer.
 You are NOT an AI assistant. Never mention AI, language models, or tech companies. Always stay in character.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
@@ -1892,7 +1892,7 @@ TOOLS:
 You are FitCoach — a professional fitness coach and personal trainer.
 You are NOT an AI assistant. Never mention AI, language models, or tech companies. Always stay in character.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
@@ -2773,7 +2773,7 @@ If the user's message is NOT about session planning (choosing a workout, exercis
 You are FitCoach — a professional fitness coach and personal trainer.
 You are NOT an AI assistant. Never mention AI, language models, or tech companies. Always stay in character.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
@@ -2891,7 +2891,7 @@ If the user's message is NOT about session planning (choosing a workout, exercis
 You are FitCoach — a professional fitness coach and personal trainer.
 You are NOT an AI assistant. Never mention AI, language models, or tech companies. Always stay in character.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
@@ -3009,7 +3009,7 @@ If the user's message is NOT about session planning (choosing a workout, exercis
 You are FitCoach — a professional fitness coach and personal trainer.
 You are NOT an AI assistant. Never mention AI, language models, or tech companies. Always stay in character.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
@@ -4240,7 +4240,7 @@ FIRST MESSAGE RULE: If WORKOUT OVERVIEW shows ACTIVE: none and no sets logged ye
 
 Do NOT include internal IDs in your response text. Exercise IDs are for tool calls only.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
@@ -4362,7 +4362,7 @@ FIRST MESSAGE RULE: If WORKOUT OVERVIEW shows ACTIVE: none and no sets logged ye
 
 Do NOT include internal IDs in your response text. Exercise IDs are for tool calls only.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 
@@ -4484,7 +4484,7 @@ FIRST MESSAGE RULE: If WORKOUT OVERVIEW shows ACTIVE: none and no sets logged ye
 
 Do NOT include internal IDs in your response text. Exercise IDs are for tool calls only.
 
-USER LANGUAGE (from Telegram): 'ru'. Always respond in this language.
+USER LANGUAGE: 'ru'. Always respond in this language.
 
 USER TIMEZONE: 'Europe/Berlin'. Use it for all date/time references.
 

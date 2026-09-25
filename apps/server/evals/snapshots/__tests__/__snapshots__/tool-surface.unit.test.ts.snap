@@ -97,6 +97,28 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) cha
     },
   },
   {
+    "description": "Switch the user's language. Call this ONLY when the user EXPLICITLY asks to change the language you reply in (e.g. "ответь мне по-русски", "switch to English", "speak English with me from now on"). Never call it just because the user wrote this particular message in a different language — that must never change anything; the reply language always follows the profile, not the message.",
+    "name": "set_language",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "language": {
+          "description": "The language to switch the profile to.",
+          "enum": [
+            "ru",
+            "en",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "language",
+      ],
+      "type": "object",
+    },
+  },
+  {
     "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is never used or asked about again. operation "delete": the user does not want a fact stored ("erase that", "forget it", privacy) — it is never used, asked about or shown again, and you tell the user it was deleted. If it is unclear whether the user means retract or delete, just pick the closer one — from where they stand both end the same way, so do not ask. For retract/delete, identify the fact EITHER by factId (copied verbatim from a list_facts line, which starts with "- id <uuid>:") OR by factQuery — the distinctive words of what the user called it (e.g. "lower back"); if several facts match the query you will get their ids back — re-call with the right one. Never tell the user a fact was retracted or deleted unless the tool call succeeded.",
     "name": "manage_fact",
     "schema": {
@@ -631,6 +653,28 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) pla
     },
   },
   {
+    "description": "Switch the user's language. Call this ONLY when the user EXPLICITLY asks to change the language you reply in (e.g. "ответь мне по-русски", "switch to English", "speak English with me from now on"). Never call it just because the user wrote this particular message in a different language — that must never change anything; the reply language always follows the profile, not the message.",
+    "name": "set_language",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "language": {
+          "description": "The language to switch the profile to.",
+          "enum": [
+            "ru",
+            "en",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "language",
+      ],
+      "type": "object",
+    },
+  },
+  {
     "description": "Manage the durable facts you remember about the user. operation "save": store a fact the user just stated, or CORRECT an existing one (same meaning, new details — pass the corrected text). Pick durability by what the user described: "permanent" only for irreversible conditions (say so only when the user stated it explicitly — otherwise the call is rejected); "long_term" for injuries/recoveries measured in weeks or months (pass reviewInDays and a short phaseNote); "short" for states that resolve in days (pass ttlDays and on_expiry: "forget" for things that certainly pass like soreness or bad sleep, "ask_once" for a tweak or pain under load that may leave a trace). operation "retract": the user says a fact is no longer true or applies ("that is fine now", "stop using that") — the fact is never used or asked about again. operation "delete": the user does not want a fact stored ("erase that", "forget it", privacy) — it is never used, asked about or shown again, and you tell the user it was deleted. If it is unclear whether the user means retract or delete, just pick the closer one — from where they stand both end the same way, so do not ask. For retract/delete, identify the fact EITHER by factId (copied verbatim from a list_facts line, which starts with "- id <uuid>:") OR by factQuery — the distinctive words of what the user called it (e.g. "lower back"); if several facts match the query you will get their ids back — re-call with the right one. Never tell the user a fact was retracted or deleted unless the tool call succeeded.",
     "name": "manage_fact",
     "schema": {
@@ -838,6 +882,28 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) reg
       },
       "required": [
         "timezone",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Switch the user's language. Call this ONLY when the user EXPLICITLY asks to change the language you reply in (e.g. "ответь мне по-русски", "switch to English", "speak English with me from now on"). Never call it just because the user wrote this particular message in a different language — that must never change anything; the reply language always follows the profile, not the message.",
+    "name": "set_language",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "language": {
+          "description": "The language to switch the profile to.",
+          "enum": [
+            "ru",
+            "en",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "language",
       ],
       "type": "object",
     },
@@ -1193,6 +1259,28 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) ses
       },
       "required": [
         "timezone",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Switch the user's language. Call this ONLY when the user EXPLICITLY asks to change the language you reply in (e.g. "ответь мне по-русски", "switch to English", "speak English with me from now on"). Never call it just because the user wrote this particular message in a different language — that must never change anything; the reply language always follows the profile, not the message.",
+    "name": "set_language",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "language": {
+          "description": "The language to switch the profile to.",
+          "enum": [
+            "ru",
+            "en",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "language",
       ],
       "type": "object",
     },
@@ -1581,6 +1669,28 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) tra
       },
       "required": [
         "timezone",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Switch the user's language. Call this ONLY when the user EXPLICITLY asks to change the language you reply in (e.g. "ответь мне по-русски", "switch to English", "speak English with me from now on"). Never call it just because the user wrote this particular message in a different language — that must never change anything; the reply language always follows the profile, not the message.",
+    "name": "set_language",
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "language": {
+          "description": "The language to switch the profile to.",
+          "enum": [
+            "ru",
+            "en",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "language",
       ],
       "type": "object",
     },

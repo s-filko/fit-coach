@@ -227,6 +227,19 @@ describe('DrizzleUserRepository – repository unit', () => {
       expect(result!.height).toBe(165); // Unchanged
     });
 
+    it('BUG-036 + owner language rule (R3): includes languageCode in the update — the only writer is set_language', async () => {
+      const userId = 'test-user-123';
+      const languageUpdate = { languageCode: 'ru' };
+
+      await repository.updateProfileData(userId, languageUpdate);
+
+      const updateCall = mockDb.update.mock.results[0].value;
+      expect(updateCall.set).toHaveBeenCalledWith({
+        updatedAt: expect.any(Date),
+        languageCode: 'ru',
+      });
+    });
+
     it('should update multiple fields selectively', async () => {
       const userId = 'test-user-123';
       const selectiveUpdate = {
