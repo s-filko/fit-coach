@@ -9,7 +9,7 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-09-24 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-09-25 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
 — none —
@@ -17,7 +17,6 @@ _Generated 2026-09-24 from docs/superpowers/plans/ + git. Never hand-edit; regen
 **Planned**
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
-- `smoke-test.md` — Smoke Test Implementation Plan
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
@@ -51,6 +50,7 @@ _Generated 2026-09-24 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `review-regression-proof.md` — Review Findings — Reproduction Before Remediation Implementation Plan
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 - `session-2026-09-21-repro.md` — Live-Session Findings (BUG-022…BUG-030) — Reproduction Before Remediation Implementation Plan
+- `smoke-test.md` — Smoke Test Implementation Plan
 - `structured-output-fenced-json.md` — Structured Output — Fenced-JSON Recovery and the User-Facts Scenario Test Implementation Plan
 - `structured-output-json-object-mode.md` — Structured Output — Provider Mode `json_object` for the Z.AI Route Implementation Plan
 - `training-journey-scenarios.md` — Training Journey Scenarios — Deterministic over the Real Test DB + Live L3 Implementation Plan
@@ -235,11 +235,15 @@ the smoke test (plan § Review). Review `2026-09-25 | clean`; advisories in `BAC
 glob shows **6** failing suites (BUG-023/025/027/030 + BUG-022 and hidden-load reds). Open for the
 owner: `BR-TRAINING-*` for the "real workout" rule (rule candidate in `REVIEW_FINDINGS.md`).
 
-**In flight: plan `smoke-test`** (worktree `smoke-test-t1`, branch `plan/smoke-test`) — `npm run smoke`
-plays one workout on the live model over `fitcoach_test`; Tasks 1–3 done, two live runs made
-(run 2: 34/0 checks), remaining: exit 134 at the end of the evals process, then close-out. Local
-`apps/server/.env` gained `LLM_STRUCTURED_OUTPUT_MODE=json_object` (Z.AI route) on 2026-09-25.
-Next after it: roadmap U5 `transition-handoff` (gate: the loop walkthrough with the owner).
+**Plan `smoke-test` is `done` and merged into `dev` (2026-09-25).** `npm run smoke` (from `apps/server`;
+run it through `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh` when worktrees test in parallel)
+plays one workout on the live model over the local `fitcoach_test` and writes a per-step transcript to
+`evals/reports/`. The smoke is deliberately mutable (spec D3): a new bug is added to it, pinned by a
+permanent red test, fixed, and confirmed by the next run; the orchestrator reads the replies (no judge).
+Local `apps/server/.env` gained `LLM_STRUCTURED_OUTPUT_MODE=json_object` (Z.AI route). Three runs
+recorded in `COST_LEDGER.md`; run 1 reproduced BUG-022 live.
+**Next: roadmap U5 `transition-handoff`** (fixes BUG-022) — gate: walk the owner through the loop
+(planning spec §8) with the R0.1 example, then the R2.0 provider probe (1–3 calls each).
 
 **Backlog triage done with the owner 2026-09-24** (recommendations; only roadmap acceptance is
 decided). Open owner decisions, to be asked one at a time, recommendation first:
