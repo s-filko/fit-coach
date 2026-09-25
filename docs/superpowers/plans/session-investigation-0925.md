@@ -133,3 +133,35 @@ Used by `evals/datasets/drafts/session-2026-09-25.jsonl` (LS-0005…LS-0008); dr
 - **SI-J2** — asked "when / how much last time", the coach cites the date and numbers of the last logged performance, or says plainly it cannot see them — never "no records" when history exists.
 - **SI-J3** — challenged "how did you decide?", the coach explains the recommendation being challenged or asks which one — never answers about a different number.
 - **SI-J4** — pushed "I thought the target was 12", the coach states the planned target (3×8-10) — never adopts the user's number as its own earlier claim.
+
+## Remediation (owner approval 2026-09-25: «Я тебе доверяю. Давай занимайся этим.»)
+
+Each task turns its own repro green and promotes it into the named home test (the `*.repro.test.ts` file is
+deleted or emptied of that case). No other expectation is weakened.
+
+**Owner rule on language (2026-09-25, verbatim):** «язык в телеграмме не должен быть языком пользователя … в моем
+профиле в нашей системе хранился язык русский и только это было приоритетом … начальное значение мы можем взять из
+телеграмма, но потом когда пользователь поменял язык он должен оставаться в системе не связанным с телеграммом.»
+Facts checked 2026-09-25: `users.language_code` is written from Telegram only at user creation
+(`user.service.ts:34` returns an existing user untouched) — the seeding half already holds. What breaks the rule:
+(1) `directives/language.v1.ts` tells the model `USER LANGUAGE (from Telegram): '<code>'. Always respond in this
+language.` — for the owner, "respond in English" in every phase (the 08:00 episode summary records a "language
+switching issue"); (2) nothing can change the profile language; (3) the bot picks its error-text language from
+`msg.from.language_code` (`apps/bot/handlers.ts:136`), not from the profile. Language must never change behaviour —
+only the language of fixed texts.
+
+**Sequencing:** `plan/transition-handoff` (U5, in close-out) rewrites `tool-executor.ts`, adds training prompt `v4`,
+the directives index and phase specs. R1, R3, R4 start only after U5 is merged into `dev` and this branch is rebased
+onto it. R2 and R5 touch none of those files and start now.
+
+| Task | Bug | Change | Home tests | Start |
+|---|---|---|---|---|
+| R1 | BUG-034 | The budget counts only this run's `llm_error`s (ToolMessages after the last `HumanMessage`); a batch with zero new errors never ends the run | `tool-executor.unit.test.ts` AC-1332 block; `set-error-recovery` → scenario | after U5 |
+| R2 | BUG-035 (+ BUG-038 part 3) | RPE in half points: `session_sets.rpe` → `numeric(3,1)` via `npm run drizzle:generate` (never push); `log_set`/`update_last_set` round to the nearest 0.5 within 1–10; a repository/DB failure is a `system_error` with no SQL text, not an `llm_error`; the `log_set` confirmation names the exercise (`Set 2 logged — Lever Lat Pulldown (Plate-Loaded): 12 reps @ 55 kg.`) so the summariser input names it | `log-set.tool.unit.test.ts`, `update-last-set` unit test, a log_set integration test, renderTranscript over real `log_set` output | now |
+| R3 | BUG-036 + owner language rule | Profile `users.language_code` is the only source of truth, Telegram seeds it once. Directive: `USER LANGUAGE: '<profile>'` (no "from Telegram"); a shared `set_language` tool (explicit user request only, ru/en) available in every phase, writing the profile; catalog texts, directive and bot error texts all read the profile language (the bot takes it from the `/api/bot/user` response). Dev data: the owner's profile set to `ru` by the orchestrator at deploy (owner request 2026-09-25) | `tool-error-budget` AC-SI-3 → catalog unit test; directive unit test; bot `error-text` tests | after U5 |
+| R4 | BUG-037 | Auto-complete tool text and training prompt: confirm the set the user just reported first; the finished-exercise recap last, 1–2 lines; "announce the next exercise" only when the user explicitly moved on (`complete_current_exercise`). New prompt version on top of U5's `v4`; L0/snapshot diffs listed | `log-set.tool.unit.test.ts`, `format-exercise-summary` unit, prompt snapshots | after U5 |
+| R5 | BUG-038 parts 1, 2, 4 | Budget compaction compacts down to a low-water mark (history ≤ 60 % of the history budget, documented tunable `EPISODE_BUDGET_LOW_WATER`, `.env.example` only) so near-cap runs do not re-compact; same-day `## Previous episodes` entries carry the local time (`training (today 16:05)`). Part 3 (names) is R2's. The 5b case of `compaction-churn.repro.test.ts` is dropped by R5 when it promotes 5a/5c — R2 covers it | `compact.unit.test.ts`, `compact.node.unit.test.ts`, `episode-summaries` unit | now |
+
+Verification per task: its home tests, `npm run test:unit`, and through the lock `npm run test:scenarios` (R1, R2,
+R3, R5 touch training tools / graph / memory). Close-out: one combined review for the whole plan (economical-work),
+dev deploy by the orchestrator, then one owner check in Telegram.
