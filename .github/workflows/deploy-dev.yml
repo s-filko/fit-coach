@@ -3,6 +3,12 @@ name: Deploy Dev
 on:
   push:
     branches: [dev]
+    # Docs-only pushes (the orchestrator's STATE/plan/ledger commits) must not
+    # restart dev mid-conversation (owner, 2026-09-25). No runtime file is
+    # markdown — prompts live in .ts modules. A push touching code still deploys.
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   workflow_dispatch:
 
 concurrency:
