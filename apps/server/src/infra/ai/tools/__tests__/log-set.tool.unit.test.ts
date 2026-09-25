@@ -1,6 +1,9 @@
+import { AIMessage, HumanMessage } from '@langchain/core/messages';
+
 import { isToolReturnWithUpdate, type ToolReturn } from '@domain/conversation/tool-outcome';
 import type { SessionSet } from '@domain/training/types';
 
+import { renderTranscript } from '@infra/ai/graph/nodes/compact';
 import { LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX, toToolMessage } from '@infra/ai/tools/outcome';
 
 import { makeDeps, makeTrainingService } from './log-set-test-support';
@@ -102,7 +105,7 @@ describe('log-set.tool — log_set', () => {
     );
   });
 
-  it('returns LLM_ERROR when logSetWithContext throws', async () => {
+  it('returns LLM_ERROR when logSetWithContext throws a non-DB error', async () => {
     const trainingService = makeTrainingService();
     trainingService.logSetWithContext.mockRejectedValue(new Error('Exercise not found'));
 
@@ -117,6 +120,75 @@ describe('log-set.tool — log_set', () => {
 
     expect(renderedContent(result)).toContain(LLM_ERROR_PREFIX);
     expect(renderedContent(result)).toContain('Exercise not found');
+  });
+
+  it('rounds a fractional rpe to the nearest 0.5 before persisting (BUG-035)', async () => {
+    const trainingService = makeTrainingService();
+    const mockSet: SessionSet = {
+      id: 'set-1',
+      sessionExerciseId: 'ex-1',
+      setNumber: 2,
+      rpe: 9.5,
+      userFeedback: null,
+      createdAt: new Date(),
+      completedAt: null,
+      setData: EXPECTED_SET_DATA,
+    };
+    trainingService.logSetWithContext.mockResolvedValue({ set: mockSet, setNumber: 2 });
+
+    const { byName, config } = makeDeps(trainingService);
+    await byName('log_set').invoke(
+      { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', ...FLAT_SET_INPUT, rpe: 9.3 },
+      config,
+    );
+
+    expect(trainingService.logSetWithContext).toHaveBeenCalledWith('session-1', expect.objectContaining({ rpe: 9.5 }));
+  });
+
+  it('returns SYSTEM_ERROR, not LLM_ERROR, when the repository fails with a Postgres error (BUG-035 part 3)', async () => {
+    const trainingService = makeTrainingService();
+    trainingService.logSetWithContext.mockRejectedValue(
+      Object.assign(new Error('invalid input syntax for type numeric: "9.55" in relation "session_sets"'), {
+        code: '22P02',
+      }),
+    );
+
+    const { byName, config } = makeDeps(trainingService);
+    const result = (await byName('log_set').invoke(
+      { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', ...FLAT_SET_INPUT },
+      config,
+    )) as ToolReturn;
+    const content = renderedContent(result);
+
+    expect(content).toContain(SYSTEM_ERROR_PREFIX);
+    expect(content).not.toContain(LLM_ERROR_PREFIX);
+    expect(content).not.toMatch(/session_sets|invalid input syntax/i);
+  });
+
+  it('names the exercise in the confirmation, resolved from the post-write session snapshot (BUG-038 part 3)', async () => {
+    const trainingService = makeTrainingService();
+    const mockSet: SessionSet = {
+      id: 'set-1',
+      sessionExerciseId: 'se-1',
+      setNumber: 2,
+      rpe: null,
+      userFeedback: null,
+      createdAt: new Date(),
+      completedAt: null,
+      setData: { type: 'strength', reps: 12, weight: 55, weightUnit: 'kg' },
+    };
+    trainingService.logSetWithContext.mockResolvedValue({ set: mockSet, setNumber: 2 });
+    trainingService.getSessionDetails.mockResolvedValue({
+      exercises: [{ id: 'se-1', exercise: { name: 'Lever Lat Pulldown (Plate-Loaded)' } }],
+    } as unknown as Awaited<ReturnType<typeof trainingService.getSessionDetails>>);
+
+    const { byName, config } = makeDeps(trainingService);
+    const result = (await byName('log_set').invoke(
+      { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', reps: 12, weight: 55 },
+      config,
+    )) as ToolReturn;
+
+    expect(renderedContent(result)).toBe('Set 2 logged — Lever Lat Pulldown (Plate-Loaded): 12 reps @ 55 kg.');
   });
 });
 
@@ -232,5 +304,52 @@ describe('log-set.tool — P3 incident replay — correction misclassified as ne
 
     // Both calls succeed — 2 DB writes for what should have been 1 set
     expect(trainingService.logSetWithContext).toHaveBeenCalledTimes(2);
+  });
+});
+
+// -------------------------------------------------------------------------
+// session-investigation-0925 R2 (BUG-038 part 3, AC-SI-5b): the summariser
+// transcript must be able to name the exercise, not just its UUID.
+// -------------------------------------------------------------------------
+
+describe('log-set.tool — summariser input names the exercise (BUG-038 part 3)', () => {
+  it('renderTranscript over the REAL log_set confirmation contains the exercise name, not just the UUID', async () => {
+    const trainingService = makeTrainingService();
+    const exerciseId = '11111111-1111-4111-8111-111111111111';
+    const mockSet: SessionSet = {
+      id: 'set-1',
+      sessionExerciseId: 'se-1',
+      setNumber: 2,
+      rpe: null,
+      userFeedback: null,
+      createdAt: new Date(),
+      completedAt: null,
+      setData: { type: 'strength', reps: 12, weight: 55, weightUnit: 'kg' },
+    };
+    trainingService.logSetWithContext.mockResolvedValue({ set: mockSet, setNumber: 2 });
+    trainingService.getSessionDetails.mockResolvedValue({
+      exercises: [{ id: 'se-1', exercise: { name: 'Lever Lat Pulldown (Plate-Loaded)' } }],
+    } as unknown as Awaited<ReturnType<typeof trainingService.getSessionDetails>>);
+
+    const { byName, config } = makeDeps(trainingService);
+    const result = (await byName('log_set').invoke({ exerciseId, reps: 12, weight: 55 }, config)) as ToolReturn;
+    const toolMessage = toToolMessage(isToolReturnWithUpdate(result) ? result.outcome : result, 'tc1');
+
+    // The exact shape the graph appends: the tool call args carry exerciseId only (no
+    // exerciseName — the model already had the UUID) and the REAL confirmation this tool
+    // produced becomes the ToolMessage that renderTranscript sees at compaction time.
+    const removed = [
+      new HumanMessage({ id: 'h1', content: 'ещё подход' }),
+      new AIMessage({
+        id: 'a1',
+        content: '',
+        tool_calls: [{ id: 'tc1', name: 'log_set', args: { exerciseId, reps: 12, weight: 55 }, type: 'tool_call' }],
+      }),
+      toolMessage,
+    ];
+
+    const transcript = renderTranscript(removed);
+
+    expect(transcript).toContain('Lever Lat Pulldown (Plate-Loaded)');
   });
 });

@@ -494,7 +494,7 @@ export const sessionSets = pgTable(
       .references(() => sessionExercises.id, { onDelete: 'cascade' })
       .notNull(),
     setNumber: integer('set_number').notNull(),
-    rpe: integer('rpe'),
+    rpe: numeric('rpe', { precision: 3, scale: 1, mode: 'number' }),
     userFeedback: text('user_feedback'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     completedAt: timestamp('completed_at'),

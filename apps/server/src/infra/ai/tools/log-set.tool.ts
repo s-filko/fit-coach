@@ -14,10 +14,25 @@ import {
 } from '@infra/ai/tools/format-exercise-summary';
 
 import { createLogger } from '@shared/logger';
+import { findInErrorCauseChain } from '@shared/pg-error-cause';
 
 import { userIdOf } from './format-exercise-summary';
 
 const log = createLogger('training-tools');
+
+/** Rounds to the nearest half-point; RPE is only ever meaningful in 0.5 steps. */
+function roundRpeToHalf(rpe: number): number {
+  return Math.round(rpe * 2) / 2;
+}
+
+/** A Postgres/driver-level failure (matched by SQLSTATE `code`, never message text) — never the model's fault. */
+function isDatabaseFailure(err: unknown): boolean {
+  return (
+    findInErrorCauseChain(err, level =>
+      typeof level.code === 'string' && /^[0-9A-Z]{5}$/.test(level.code) ? true : null,
+    ) === true
+  );
+}
 
 export interface LogSetToolDeps {
   trainingService: ITrainingService;
@@ -63,6 +78,8 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         return llmError(`Invalid set data: ${parsed.error.message}`);
       }
 
+      const rpe = input.rpe != null ? roundRpeToHalf(input.rpe) : undefined;
+
       try {
         const session = await trainingService.getSessionDetails(sessionId);
         const lastActivity = session?.lastActivityAt ?? session?.updatedAt ?? session?.createdAt;
@@ -79,11 +96,24 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           exerciseId: input.exerciseId,
           exerciseName: input.exerciseName,
           setData: parsed.data,
-          rpe: input.rpe,
+          rpe,
           feedback: input.feedback,
           createdAt: retroCreatedAt,
           skipActivityUpdate: isRetro,
         });
+
+        // Named for the summariser (renderTranscript over this tool's own confirmation) as much
+        // as for the user — a UUID in the transcript names nothing once the set is compacted away.
+        // The set is already saved at this point: a failure resolving the name degrades the
+        // confirmation text, it must never turn a successful write into a reported error.
+        let exerciseName = input.exerciseName ?? '';
+        try {
+          const finalSession = await trainingService.getSessionDetails(sessionId);
+          const named = finalSession?.exercises.find(se => se.id === set.sessionExerciseId)?.exercise.name;
+          exerciseName = named ?? exerciseName;
+        } catch (nameErr) {
+          log.warn({ err: nameErr, sessionId }, 'log_set: could not resolve exercise name for confirmation');
+        }
 
         const { type } = set.setData;
         let summary = '';
@@ -94,9 +124,10 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           summary = type;
         }
 
-        const rpeNote = input.rpe != null ? ` | RPE ${input.rpe}` : '';
+        const rpeNote = rpe != null ? ` | RPE ${rpe}` : '';
         const retroNote = isRetro ? ' (retro-logged)' : '';
-        const setConfirmation = `Set ${setNumber} logged: ${summary}${rpeNote}${retroNote}.`;
+        const namePart = exerciseName ? ` — ${exerciseName}` : '';
+        const setConfirmation = `Set ${setNumber} logged${namePart}: ${summary}${rpeNote}${retroNote}.`;
 
         log.info(
           {
@@ -122,6 +153,10 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
 
         return ok(setConfirmation);
       } catch (err) {
+        if (isDatabaseFailure(err)) {
+          log.error({ err, sessionId }, 'log_set failed: repository/DB error');
+          return systemError('Could not save the set — a database error occurred. Try again.');
+        }
         const message = err instanceof Error ? err.message : 'Unknown error';
         log.error({ err, sessionId }, 'log_set failed');
         return llmError(message);

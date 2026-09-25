@@ -1,0 +1,1 @@
+ALTER TABLE "session_sets" ALTER COLUMN "rpe" SET DATA TYPE numeric(3, 1);
