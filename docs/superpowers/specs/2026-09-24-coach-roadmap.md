@@ -176,6 +176,7 @@ far, their value compounds with time.
 | Unit | Status |
 |---|---|
 | U1 | done (2026-09-25 — live check by `npm run smoke` run 2, see plan `coach-baseline` § Review) |
-| U2–U14 | not started |
+| U5 | code done, live check on `dev` pending (see plan `transition-handoff` § Review) |
+| U2–U4, U6–U14 | not started |
 
 Update this table when a unit's live check passes; mirror the change in `docs/STATE.md`.
