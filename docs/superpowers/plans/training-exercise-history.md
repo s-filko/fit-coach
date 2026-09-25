@@ -45,6 +45,19 @@ marked **(D)** was taken by the orchestrator under that order.
   RULE (see Task 1 step 5). Directive text otherwise unchanged.
 - **D7 — executor:** one Sonnet subagent for the single task (coupled files: loader, blocks, prompt,
   tests). One combined close-out review (economical-work rule).
+- **D8 — `training.recent_workouts` fallback wording** (not specified by D3): when nothing falls
+  inside the 7-day window, the block names the single most recent real workout's date with
+  "outside the 7-day window, not detailed here" rather than showing nothing; a user with zero real
+  workouts ever gets "No completed workouts on record." Each exercise's sets collapse to a compact
+  summary by grouping consecutive identical sets ("3× 8 reps @ 80 kg" for three equal sets), not a
+  per-set list — that stays in `training.exercise_history` only.
+- **D9 — `todayMuscles`** is a flat set of muscle-group names touched by any of today's exercises
+  (plan or started), independent of involvement in today's own exercise; `training.recent_workouts`
+  labels an overlapping muscle with *its own* involvement in the past exercise (e.g. Overhead
+  Press's own `primary`/`secondary`), not today's. `TrainingClientData` (the `training.client`
+  block) is emptied to `{}` — its `render` never read the `previousSession` field it used to
+  declare; that field only existed because `TrainingData` happened to carry it, and removing
+  `previousSession` from `TrainingData` (D4) would otherwise break the block's structural type.
 
 ## Acceptance criteria
 
