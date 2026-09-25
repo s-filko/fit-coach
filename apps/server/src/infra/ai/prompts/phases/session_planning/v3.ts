@@ -10,6 +10,11 @@ import type { DirectiveContext, PromptModule, Section } from '@infra/ai/prompts/
  * duplicated by the new `directive.current-time` (DEFAULT_DIRECTIVES_V2,
  * last directive), which also gives a time and weekday. Everything else
  * renders the exact wording v2 rendered for it.
+ *
+ * v3 amendment (transition-handoff plan Task 5, AC-TH-7 negative half,
+ * still before v3 ever shipped): STEP 5 gains one sentence — past-day sets
+ * ("вчера делал 110×12") are history, never a session start or today's
+ * `log_set`.
  */
 export interface SessionPlanningPromptContextV3 extends DirectiveContext {
   /** Only what `date`'s days-since line needs — the rest of SessionPlanningContextData moved to blocks. */
@@ -60,6 +65,7 @@ Use search_exercises ONLY if you need exercises not yet found in this conversati
 --- STEP 5: START or CANCEL ---
 
 - When the client explicitly approves the final plan → call \`start_training_session\` with the complete plan. Never call it before confirmation.
+- start_training_session opens TODAY's session — call it only when the user is training now or about to start; sets the user reports from a PAST day ("вчера делал 110×12") are history, so acknowledge them but never start a session for them and never log them into today's session.
 - If the client decides not to train today → call \`request_transition({ toPhase: 'chat' })\`.
 
 If no active plan exists → tell the client they need a workout plan first and call \`request_transition({ toPhase: 'chat' })\`.`;

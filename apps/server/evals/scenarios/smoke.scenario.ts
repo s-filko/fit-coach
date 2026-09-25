@@ -47,15 +47,24 @@ function historyKey(offset: string, suffix: 'upper' | 'lower' | 'cardio'): strin
 const EMPTY_SESSION_OFFSET = '-3d';
 
 export const GREETING_REQUEST = 'привет, хочу потренироваться';
-export const GO_UPPER = 'давай верх, погнали';
+export const GO_LOWER = 'давай низ, погнали';
 /**
- * First live run (2026-09-24): "давай верх, погнали" alone made the model ask
- * ONE readiness question ("как самочувствие в плечах и локтях…") and stop —
- * it never called `start_training_session` on that turn. This answers it and
- * confirms, matching what a real user would say next; the start-training
- * expectations moved here from `GO_UPPER`'s step accordingly.
+ * AC-TH-7's negative half (transition-handoff plan Task 5): past-day sets are
+ * history, never today's session. Reported while still in session_planning —
+ * the coach must acknowledge and stay in planning: no `start_training_session`,
+ * no `log_set` (and with neither called, no `session_sets` row can exist).
+ * The reply's wording is judged from the transcript by hand (D5), like the
+ * BUG-031 step below.
  */
-export const READINESS_CONFIRM = 'плечи и локти в порядке, план ок — стартуем';
+export const PAST_SETS_REPORT = 'вчера на жиме ногами делал 110×12';
+/**
+ * AC-TH-7's positive half, and the step that starts training now
+ * (transition-handoff plan Task 5): a set reported while training NOW opens
+ * the session in the SAME run (the U5 hand-off — `npm run smoke` sets
+ * TRANSITION_HANDOFF_TARGETS=training,session_planning) and training logs
+ * both sets before anything is confirmed to the user.
+ */
+export const TODAY_SETS_REPORT = 'сделал 2 подхода по 110×12 на жиме ногами';
 export const FINISH_REQUEST = 'всё, закончил';
 export const HISTORY_QUESTION = 'что я делал на этой неделе?';
 
@@ -292,9 +301,11 @@ export const scenario: Scenario = {
   id: 'smoke',
   description:
     "The one live workout the orchestrator runs instead of the owner's manual Telegram check " +
-    '(spec 2026-09-25-smoke-test-design.md): greeting -> planning -> readiness check -> start -> sets logged -> ' +
-    'finish -> a history question, over a hand-written upper/lower history ending in a completed-but-empty ' +
-    'session (BUG-031). Live only: run with `npm run smoke`, never through test:scenarios.',
+    '(spec 2026-09-25-smoke-test-design.md): greeting -> planning -> a PAST-day set report (AC-TH-7 negative: ' +
+    'stays in planning, nothing logged) -> a NOW set report that starts training in the same run (AC-TH-7 ' +
+    'positive, the U5 hand-off) -> sets logged -> finish -> a history question, over a hand-written upper/lower ' +
+    'history ending in a completed-but-empty session (BUG-031). Live only: run with `npm run smoke`, never ' +
+    'through test:scenarios.',
   past,
   steps: [
     {
@@ -306,36 +317,76 @@ export const scenario: Scenario = {
     },
     {
       action: 'user',
-      text: GO_UPPER,
+      text: GO_LOWER,
       expect: {
         // No tools/persisted expectations here — the first live run showed the
         // model asking a readiness question instead of starting on this turn
-        // (see READINESS_CONFIRM above); staying in session_planning is the
-        // only outcome common to both that and a direct start.
+        // (see PAST_SETS_REPORT below, which answers it); staying in
+        // session_planning is the only outcome common to both that and a
+        // direct start.
         phaseAfter: { phase: 'session_planning' },
       },
     },
     {
       action: 'user',
-      text: READINESS_CONFIRM,
+      text: PAST_SETS_REPORT,
       expect: {
-        tools: { must: ['start_training_session'] },
+        // AC-TH-7 negative half: yesterday's sets are history — no session
+        // opens, nothing is logged. `mustNot` on both tools IS the
+        // "no session_sets written" check: log_set needs an active session,
+        // and without start_training_session there is none.
+        tools: { mustNot: ['start_training_session', 'log_set'] },
+        phaseAfter: { phase: 'session_planning' },
+      },
+    },
+    {
+      action: 'user',
+      text: TODAY_SETS_REPORT,
+      expect: {
+        // AC-TH-7 positive half + AC-TH-1 live: session_planning's
+        // start_training_session hands off in the same run and training logs
+        // both reported sets before anything is confirmed to the user.
+        tools: { must: ['start_training_session', 'log_set'] },
         phaseAfter: { phase: 'training' },
-        persisted: { session: { key: 'upper_a', status: 'in_progress', hasStartedAt: true } },
+        persisted: {
+          session: {
+            key: 'lower_a',
+            status: 'in_progress',
+            hasStartedAt: true,
+            exercises: [
+              {
+                exercise: 'Leg Press',
+                sets: [
+                  { reps: 12, weight: 110 },
+                  { reps: 12, weight: 110 },
+                ],
+              },
+            ],
+          },
+        },
       },
     },
     { action: 'advance', at: '+5m' },
     {
       action: 'user',
-      text: 'жим 80 на 8',
+      text: 'разгибания 55 на 10',
       expect: {
         tools: { must: ['log_set'] },
         phaseAfter: { phase: 'training' },
         persisted: {
           session: {
-            key: 'upper_a',
+            key: 'lower_a',
             status: 'in_progress',
-            exercises: [{ exercise: 'Bench Press', sets: [{ reps: 8, weight: 80 }] }],
+            exercises: [
+              {
+                exercise: 'Leg Press',
+                sets: [
+                  { reps: 12, weight: 110 },
+                  { reps: 12, weight: 110 },
+                ],
+              },
+              { exercise: 'Leg Extension', sets: [{ reps: 10, weight: 55 }] },
+            ],
           },
         },
       },
@@ -343,20 +394,27 @@ export const scenario: Scenario = {
     { action: 'advance', at: '+9m' },
     {
       action: 'user',
-      text: 'ещё подход, 80 на 8',
+      text: 'ещё раз 55 на 10',
       expect: {
         tools: { must: ['log_set'] },
         phaseAfter: { phase: 'training' },
         persisted: {
           session: {
-            key: 'upper_a',
+            key: 'lower_a',
             status: 'in_progress',
             exercises: [
               {
-                exercise: 'Bench Press',
+                exercise: 'Leg Press',
                 sets: [
-                  { reps: 8, weight: 80 },
-                  { reps: 8, weight: 80 },
+                  { reps: 12, weight: 110 },
+                  { reps: 12, weight: 110 },
+                ],
+              },
+              {
+                exercise: 'Leg Extension',
+                sets: [
+                  { reps: 10, weight: 55 },
+                  { reps: 10, weight: 55 },
                 ],
               },
             ],
@@ -367,7 +425,7 @@ export const scenario: Scenario = {
     { action: 'advance', at: '+13m' },
     {
       action: 'user',
-      text: 'жим над головой 50 на 8',
+      text: 'сгибания 50 на 10',
       expect: {
         tools: { must: ['log_set'] },
         phaseAfter: { phase: 'training' },
@@ -376,27 +434,34 @@ export const scenario: Scenario = {
     { action: 'advance', at: '+17m' },
     {
       action: 'user',
-      text: 'ещё раз 50 на 8',
+      text: 'ещё раз 50 на 10',
       expect: {
         tools: { must: ['log_set'] },
         phaseAfter: { phase: 'training' },
         persisted: {
           session: {
-            key: 'upper_a',
+            key: 'lower_a',
             status: 'in_progress',
             exercises: [
               {
-                exercise: 'Bench Press',
+                exercise: 'Leg Press',
                 sets: [
-                  { reps: 8, weight: 80 },
-                  { reps: 8, weight: 80 },
+                  { reps: 12, weight: 110 },
+                  { reps: 12, weight: 110 },
                 ],
               },
               {
-                exercise: 'Overhead Press',
+                exercise: 'Leg Extension',
                 sets: [
-                  { reps: 8, weight: 50 },
-                  { reps: 8, weight: 50 },
+                  { reps: 10, weight: 55 },
+                  { reps: 10, weight: 55 },
+                ],
+              },
+              {
+                exercise: 'Leg Curl',
+                sets: [
+                  { reps: 10, weight: 50 },
+                  { reps: 10, weight: 50 },
                 ],
               },
             ],
@@ -411,7 +476,7 @@ export const scenario: Scenario = {
       expect: {
         tools: { must: ['finish_training'] },
         phaseAfter: { phase: 'chat' },
-        persisted: { session: { key: 'upper_a', status: 'completed', hasCompletedAt: true } },
+        persisted: { session: { key: 'lower_a', status: 'completed', hasCompletedAt: true } },
       },
     },
     { action: 'advance', at: '+2h' },

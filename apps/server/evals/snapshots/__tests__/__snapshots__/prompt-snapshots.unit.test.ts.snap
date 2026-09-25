@@ -2743,6 +2743,7 @@ Use search_exercises ONLY if you need exercises not yet found in this conversati
 --- STEP 5: START or CANCEL ---
 
 - When the client explicitly approves the final plan → call \`start_training_session\` with the complete plan. Never call it before confirmation.
+- start_training_session opens TODAY's session — call it only when the user is training now or about to start; sets the user reports from a PAST day ("вчера делал 110×12") are history, so acknowledge them but never start a session for them and never log them into today's session.
 - If the client decides not to train today → call \`request_transition({ toPhase: 'chat' })\`.
 
 If no active plan exists → tell the client they need a workout plan first and call \`request_transition({ toPhase: 'chat' })\`.
@@ -2860,6 +2861,7 @@ Use search_exercises ONLY if you need exercises not yet found in this conversati
 --- STEP 5: START or CANCEL ---
 
 - When the client explicitly approves the final plan → call \`start_training_session\` with the complete plan. Never call it before confirmation.
+- start_training_session opens TODAY's session — call it only when the user is training now or about to start; sets the user reports from a PAST day ("вчера делал 110×12") are history, so acknowledge them but never start a session for them and never log them into today's session.
 - If the client decides not to train today → call \`request_transition({ toPhase: 'chat' })\`.
 
 If no active plan exists → tell the client they need a workout plan first and call \`request_transition({ toPhase: 'chat' })\`.
@@ -2977,6 +2979,7 @@ Use search_exercises ONLY if you need exercises not yet found in this conversati
 --- STEP 5: START or CANCEL ---
 
 - When the client explicitly approves the final plan → call \`start_training_session\` with the complete plan. Never call it before confirmation.
+- start_training_session opens TODAY's session — call it only when the user is training now or about to start; sets the user reports from a PAST day ("вчера делал 110×12") are history, so acknowledge them but never start a session for them and never log them into today's session.
 - If the client decides not to train today → call \`request_transition({ toPhase: 'chat' })\`.
 
 If no active plan exists → tell the client they need a workout plan first and call \`request_transition({ toPhase: 'chat' })\`.
