@@ -62,7 +62,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -142,7 +144,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -259,7 +263,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -286,9 +292,7 @@ No recent sessions.",
 exports[`message assembly (pre-wiring truth, refactor-p2-context-assembler Task 1) plan_creation / plain 1`] = `
 [
   {
-    "content": "Current Date: 2026-09-13
-
-=== YOUR TASK ===
+    "content": "=== YOUR TASK ===
 
 Help the client create a comprehensive long-term workout plan:
 
@@ -376,7 +380,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -401,9 +407,7 @@ Fitness Goal: strength",
 exports[`message assembly (pre-wiring truth, refactor-p2-context-assembler Task 1) plan_creation / post-tool 1`] = `
 [
   {
-    "content": "Current Date: 2026-09-13
-
-=== YOUR TASK ===
+    "content": "=== YOUR TASK ===
 
 Help the client create a comprehensive long-term workout plan:
 
@@ -491,7 +495,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -553,9 +559,7 @@ Fitness Goal: strength",
 exports[`message assembly (pre-wiring truth, refactor-p2-context-assembler Task 1) plan_creation / with-summary 1`] = `
 [
   {
-    "content": "Current Date: 2026-09-13
-
-=== YOUR TASK ===
+    "content": "=== YOUR TASK ===
 
 Help the client create a comprehensive long-term workout plan:
 
@@ -643,7 +647,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -741,7 +747,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -821,7 +829,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -938,7 +948,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -957,8 +969,7 @@ training (today 20:00): Topics: training plan discussed. Decisions: upper/lower 
 exports[`message assembly (pre-wiring truth, refactor-p2-context-assembler Task 1) session_planning / plain 1`] = `
 [
   {
-    "content": "Current Date: 2026-09-13
-No previous workouts
+    "content": "No previous workouts
 
 === YOUR TASK ===
 
@@ -1003,7 +1014,8 @@ Use search_exercises ONLY if you need exercises not yet found in this conversati
 
 --- STEP 5: START or CANCEL ---
 
-- When the client explicitly approves the final plan → call \`start_training_session\` with the complete plan. Never call it before confirmation.
+- Call \`start_training_session\` with the complete plan in EITHER of two cases: (a) the client explicitly approves the final plan, or (b) the client reports they are training right now / already did sets today — build the session plan from the active plan and this conversation's context even if it was never formally proposed. Never call it for anything else.
+- start_training_session opens TODAY's session. Sets the user reports from a PAST day ("вчера делал 110×12") are history, not case (b) — acknowledge them but never start a session for them and never log them into today's session.
 - If the client decides not to train today → call \`request_transition({ toPhase: 'chat' })\`.
 
 If no active plan exists → tell the client they need a workout plan first and call \`request_transition({ toPhase: 'chat' })\`.
@@ -1013,7 +1025,7 @@ If no active plan exists → tell the client they need a workout plan first and 
 - search_exercises: search exercise catalog by meaning. Call when you need exercises not yet in conversation history.
   Examples: query="chest compound barbell", muscleGroup="chest", equipment="barbell".
   Returns exercises with IDs — IDs are valid for the entire conversation, no need to re-fetch.
-- start_training_session: call ONLY when user explicitly approves the final plan. Do NOT re-search before calling.
+- start_training_session: call when the user explicitly approves the final plan, OR reports they are training right now / already did sets today. Do NOT call for a past day's sets — those are history only, never a session start. Do NOT re-search before calling.
 - request_transition: call with toPhase="chat" ONLY when user explicitly cancels.
 
 CRITICAL: NEVER write JSON in your message text. NEVER output raw JSON blocks, action objects, or structured data in the message. ALL actions MUST be performed through tool calls only. Your message text must be plain conversational language only.
@@ -1069,7 +1081,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -1107,8 +1121,7 @@ No muscle group data — fully rested.",
 exports[`message assembly (pre-wiring truth, refactor-p2-context-assembler Task 1) session_planning / post-tool 1`] = `
 [
   {
-    "content": "Current Date: 2026-09-13
-No previous workouts
+    "content": "No previous workouts
 
 === YOUR TASK ===
 
@@ -1153,7 +1166,8 @@ Use search_exercises ONLY if you need exercises not yet found in this conversati
 
 --- STEP 5: START or CANCEL ---
 
-- When the client explicitly approves the final plan → call \`start_training_session\` with the complete plan. Never call it before confirmation.
+- Call \`start_training_session\` with the complete plan in EITHER of two cases: (a) the client explicitly approves the final plan, or (b) the client reports they are training right now / already did sets today — build the session plan from the active plan and this conversation's context even if it was never formally proposed. Never call it for anything else.
+- start_training_session opens TODAY's session. Sets the user reports from a PAST day ("вчера делал 110×12") are history, not case (b) — acknowledge them but never start a session for them and never log them into today's session.
 - If the client decides not to train today → call \`request_transition({ toPhase: 'chat' })\`.
 
 If no active plan exists → tell the client they need a workout plan first and call \`request_transition({ toPhase: 'chat' })\`.
@@ -1163,7 +1177,7 @@ If no active plan exists → tell the client they need a workout plan first and 
 - search_exercises: search exercise catalog by meaning. Call when you need exercises not yet in conversation history.
   Examples: query="chest compound barbell", muscleGroup="chest", equipment="barbell".
   Returns exercises with IDs — IDs are valid for the entire conversation, no need to re-fetch.
-- start_training_session: call ONLY when user explicitly approves the final plan. Do NOT re-search before calling.
+- start_training_session: call when the user explicitly approves the final plan, OR reports they are training right now / already did sets today. Do NOT call for a past day's sets — those are history only, never a session start. Do NOT re-search before calling.
 - request_transition: call with toPhase="chat" ONLY when user explicitly cancels.
 
 CRITICAL: NEVER write JSON in your message text. NEVER output raw JSON blocks, action objects, or structured data in the message. ALL actions MUST be performed through tool calls only. Your message text must be plain conversational language only.
@@ -1219,7 +1233,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -1294,8 +1310,7 @@ No muscle group data — fully rested.",
 exports[`message assembly (pre-wiring truth, refactor-p2-context-assembler Task 1) session_planning / with-summary 1`] = `
 [
   {
-    "content": "Current Date: 2026-09-13
-No previous workouts
+    "content": "No previous workouts
 
 === YOUR TASK ===
 
@@ -1340,7 +1355,8 @@ Use search_exercises ONLY if you need exercises not yet found in this conversati
 
 --- STEP 5: START or CANCEL ---
 
-- When the client explicitly approves the final plan → call \`start_training_session\` with the complete plan. Never call it before confirmation.
+- Call \`start_training_session\` with the complete plan in EITHER of two cases: (a) the client explicitly approves the final plan, or (b) the client reports they are training right now / already did sets today — build the session plan from the active plan and this conversation's context even if it was never formally proposed. Never call it for anything else.
+- start_training_session opens TODAY's session. Sets the user reports from a PAST day ("вчера делал 110×12") are history, not case (b) — acknowledge them but never start a session for them and never log them into today's session.
 - If the client decides not to train today → call \`request_transition({ toPhase: 'chat' })\`.
 
 If no active plan exists → tell the client they need a workout plan first and call \`request_transition({ toPhase: 'chat' })\`.
@@ -1350,7 +1366,7 @@ If no active plan exists → tell the client they need a workout plan first and 
 - search_exercises: search exercise catalog by meaning. Call when you need exercises not yet in conversation history.
   Examples: query="chest compound barbell", muscleGroup="chest", equipment="barbell".
   Returns exercises with IDs — IDs are valid for the entire conversation, no need to re-fetch.
-- start_training_session: call ONLY when user explicitly approves the final plan. Do NOT re-search before calling.
+- start_training_session: call when the user explicitly approves the final plan, OR reports they are training right now / already did sets today. Do NOT call for a past day's sets — those are history only, never a session start. Do NOT re-search before calling.
 - request_transition: call with toPhase="chat" ONLY when user explicitly cancels.
 
 CRITICAL: NEVER write JSON in your message text. NEVER output raw JSON blocks, action objects, or structured data in the message. ALL actions MUST be performed through tool calls only. Your message text must be plain conversational language only.
@@ -1406,7 +1422,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -1566,7 +1584,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -1718,7 +1738,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {
@@ -1907,7 +1929,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
     "type": "system",
   },
   {

@@ -116,6 +116,8 @@ export async function registerInfraServices(container: Container = getGlobalCont
     courseCheckEnabled: config.COURSE_CHECK_ENABLED,
     courseCheckRetryCooldownMs: config.COURSE_CHECK_RETRY_COOLDOWN_MINUTES * 60_000,
     courseCheckExpiryAskWindowMs: config.COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS * 86_400_000,
+    // transition-handoff plan Task 1 (D-1): empty set = off, resolved once here.
+    transitionHandoffTargets: new Set(config.TRANSITION_HANDOFF_TARGETS),
     checkpointer,
   });
   // The compiled graph under its token: infra-internal, but the scenario

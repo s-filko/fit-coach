@@ -113,6 +113,11 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
         client: input.client ?? 'telegram',
         trigger: input.trigger ?? 'user_message',
         metrics,
+        // transition-handoff plan Task 2 (D-3): hop facts, mutated in place by
+        // `commit` across both calls of a hop — never checkpointed.
+        phasePath: [] as ConversationPhase[],
+        hopping: false,
+        hopBoundaryIndex: undefined as number | undefined,
       };
 
       // INV-LLM-009: persist the inbound message before the graph runs, keyed by
@@ -148,7 +153,7 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
           // text of this run, in order — text written alongside tool calls is
           // delivered too; earlier runs' texts are never re-sent (ADR-0013
           // §3.2 amended at close-out).
-          text: runAiText(result.messages ?? []),
+          text: runAiText(result.messages ?? [], ctx.hopBoundaryIndex ?? 0),
           phase: result.phase,
           runId,
         };

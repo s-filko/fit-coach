@@ -70,6 +70,30 @@ describe("runAiText (AC-CC-3 — the run's reply: every non-empty AI text of THI
     expect(runAiText([new HumanMessage('q')])).toBe('');
     expect(runAiText([])).toBe('');
   });
+
+  describe('fromIndex (transition-handoff plan Task 2): the hand-off delivery cutoff', () => {
+    it('default (no fromIndex) is the whole run — unchanged when no hop happened', () => {
+      const run = [new HumanMessage('q'), new AIMessage('phase one text'), new AIMessage('phase two text')];
+      expect(runAiText(run)).toBe('phase one text\n\nphase two text');
+    });
+
+    it('fromIndex cuts current at that index — only the phase AFTER the boundary is delivered', () => {
+      const run = [
+        new HumanMessage('сделал 2 подхода 110х12'),
+        new AIMessage('this text must never reach the user'),
+        call,
+        result,
+        new AIMessage('Записал: 110 x 12.'),
+      ];
+      // Boundary = 3 (human, ai, tool — the first phase's whole `current` slice).
+      expect(runAiText(run, 3)).toBe('Записал: 110 x 12.');
+    });
+
+    it('fromIndex 0 is identical to the default', () => {
+      const run = [new HumanMessage('q'), new AIMessage('Ответ')];
+      expect(runAiText(run, 0)).toBe(runAiText(run));
+    });
+  });
 });
 
 describe('toTranscriptMessages (D-K — infra → domain mapping)', () => {

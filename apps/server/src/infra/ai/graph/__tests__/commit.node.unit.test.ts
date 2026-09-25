@@ -35,7 +35,7 @@ function makeConfig() {
   };
 }
 
-function makeDeps(handlers: TransitionHandler[] = []) {
+function makeDeps(handlers: TransitionHandler[] = [], transitionHandoffTargets?: ReadonlySet<'training' | 'chat'>) {
   const transcript: jest.Mocked<TranscriptPort> = {
     appendRunMessages: jest.fn(),
     appendSystemNote: jest.fn(),
@@ -46,6 +46,7 @@ function makeDeps(handlers: TransitionHandler[] = []) {
       transcript,
       runService: { recordRun } as unknown as IConversationRunService,
       onTransition: handlers,
+      transitionHandoffTargets,
     }),
     transcript,
     recordRun,
@@ -216,6 +217,163 @@ describe('buildCommitNode (ADR-0013 §4.1/§4.3/§8; P4 Task 4)', () => {
     const { config } = makeConfig();
 
     await expect(node(stateOf(), config as never)).resolves.toMatchObject({ phase: 'chat' });
+  });
+});
+
+describe('hand-off loop (transition-handoff plan Task 2, D-1/D-3, AC-TH-1/AC-TH-3/AC-TH-4)', () => {
+  it('the looping commit sets ctx.hopping, records NO run row, and returns the hop phase', async () => {
+    const { node, recordRun } = makeDeps([], new Set(['training']));
+    const { config } = makeConfig();
+
+    const result = await node(
+      stateOf({
+        phase: 'session_planning',
+        activeSessionId: 's-plan',
+        pendingTransition: { toPhase: 'training', reason: 'session_planning_complete' },
+      }),
+      config as never,
+    );
+
+    expect((config.context as { hopping?: boolean }).hopping).toBe(true);
+    expect(recordRun).not.toHaveBeenCalled();
+    expect(result.phase).toBe('training');
+    expect(result.pendingTransition).toBeNull();
+  });
+
+  it('flag off (no transitionHandoffTargets): never hops even for the same target', async () => {
+    const { node, recordRun } = makeDeps([]);
+    const { config } = makeConfig();
+
+    const result = await node(
+      stateOf({
+        phase: 'session_planning',
+        activeSessionId: 's-plan',
+        pendingTransition: { toPhase: 'training', reason: 'session_planning_complete' },
+      }),
+      config as never,
+    );
+
+    expect((config.context as { hopping?: boolean }).hopping).toBe(false);
+    expect(recordRun).toHaveBeenCalledTimes(1);
+    expect(result.phase).toBe('training');
+  });
+
+  it('AC-TH-3: the final commit writes ONE run row — phaseIn = first phase, phaseOut = last, transition.path = the phase path, toolCalls of the whole run', async () => {
+    const { node, recordRun, transcript } = makeDeps([], new Set(['training']));
+    const { config } = makeConfig();
+
+    const firstMessages = [
+      new HumanMessage('сделал 2 подхода 110х12'),
+      new AIMessage({
+        id: 'carrier-1',
+        content: '',
+        tool_calls: [{ id: 'c1', name: 'start_training_session', args: {} }],
+      }),
+      new ToolMessage({ tool_call_id: 'c1', content: 'Session created' }),
+    ];
+    await node(
+      stateOf({
+        phase: 'session_planning',
+        activeSessionId: 's-plan',
+        pendingTransition: { toPhase: 'training', reason: 'session_planning_complete' },
+        messages: firstMessages,
+      }),
+      config as never,
+    );
+
+    // The final commit of the SAME run (same ctx object): training's own turn
+    // logged a set and answered — no new pendingTransition of its own.
+    const secondMessages = [
+      ...firstMessages,
+      new AIMessage({ id: 'c2', content: '', tool_calls: [{ id: 'c2', name: 'log_set', args: { weight: 110 } }] }),
+      new ToolMessage({ tool_call_id: 'c2', content: 'Set logged' }),
+      new AIMessage('Записал!'),
+    ];
+    await node(
+      stateOf({
+        phase: 'training',
+        activeSessionId: 's-plan',
+        pendingTransition: null,
+        messages: secondMessages,
+      }),
+      config as never,
+    );
+
+    expect(recordRun).toHaveBeenCalledTimes(1);
+    const [[record]] = recordRun.mock.calls;
+    expect(record.phaseIn).toBe('session_planning');
+    expect(record.phaseOut).toBe('training');
+    expect(record.transition).toEqual({
+      toPhase: 'training',
+      reason: 'session_planning_complete',
+      path: ['session_planning', 'training'],
+    });
+    expect(record.toolCalls).toEqual([
+      { name: 'start_training_session', argsHash: expect.any(String), outcomeKind: 'ok' },
+      { name: 'log_set', argsHash: expect.any(String), outcomeKind: 'ok' },
+    ]);
+
+    // Transcript projected once per message — no duplicates across the hop.
+    expect(transcript.appendRunMessages).toHaveBeenCalledTimes(2);
+    expect(transcript.appendRunMessages.mock.calls[0]?.[0]?.messages).toHaveLength(3);
+    expect(transcript.appendRunMessages.mock.calls[1]?.[0]?.messages).toHaveLength(3);
+  });
+
+  it('AC-TH-4: the final commit keeps the looping commit’s compactReason and activeSessionId when it has no transition of its own', async () => {
+    const setsBoundary: TransitionHandler = async () => ({ compactReason: 'phase_boundary' });
+    const setsSession: TransitionHandler = async () => ({ activeSessionId: 'sess-99' });
+    const { node } = makeDeps([setsBoundary, setsSession], new Set(['training']));
+    const { config } = makeConfig();
+
+    const first = await node(
+      stateOf({
+        phase: 'session_planning',
+        activeSessionId: 's-plan',
+        pendingTransition: { toPhase: 'training', reason: 'x' },
+      }),
+      config as never,
+    );
+    expect(first.compactReason).toBe('phase_boundary');
+    expect(first.activeSessionId).toBe('sess-99');
+
+    // The final commit has no transition of its own (handlers do not run) —
+    // it must not reset either field back to null/unchanged (the bug this fixes).
+    const second = await node(
+      stateOf({
+        phase: 'training',
+        activeSessionId: 'sess-99',
+        pendingTransition: null,
+        compactReason: 'phase_boundary',
+      }),
+      config as never,
+    );
+    expect(second.compactReason).toBe('phase_boundary');
+    expect(second.activeSessionId).toBe('sess-99');
+  });
+
+  it('max 1 hop, no revisit: a second committed transition in the same run does not loop again', async () => {
+    const { node } = makeDeps([], new Set(['training', 'chat']));
+    const { config } = makeConfig();
+
+    await node(
+      stateOf({
+        phase: 'session_planning',
+        activeSessionId: 's1',
+        pendingTransition: { toPhase: 'training', reason: 'x' },
+      }),
+      config as never,
+    );
+    expect((config.context as { hopping?: boolean }).hopping).toBe(true);
+
+    // Same run, second commit call — also targets a configured hand-off phase.
+    const result = await node(
+      stateOf({ phase: 'training', activeSessionId: 's1', pendingTransition: { toPhase: 'chat', reason: 'y' } }),
+      config as never,
+    );
+
+    expect((config.context as { hopping?: boolean }).hopping).toBe(false);
+    // The transition itself still commits normally — the CAP is on looping, not on evaluateTransition.
+    expect(result.phase).toBe('chat');
   });
 });
 

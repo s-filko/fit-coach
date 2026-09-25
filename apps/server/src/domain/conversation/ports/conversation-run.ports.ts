@@ -66,7 +66,13 @@ export interface ConversationRunRecord {
   tokensOut: number | null;
   latencyMs: number;
   toolCalls: Array<{ name: string; argsHash: string; outcomeKind: string }> | null;
-  transition: { toPhase: string; reason?: string } | null;
+  /**
+   * `path` (transition-handoff plan Task 2, D-2): the phases visited by a
+   * same-run hand-off, first to last (e.g. `['session_planning',
+   * 'training']`) — absent on a run with no hop. No migration: the column is
+   * jsonb.
+   */
+  transition: { toPhase: string; reason?: string; path?: ConversationPhase[] } | null;
   outcome: ConversationRunOutcome;
   budgetReport: BudgetReport | null;
   /**

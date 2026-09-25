@@ -8,8 +8,9 @@
 import { AIMessage, type BaseMessage, ToolMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { StructuredToolInterface } from '@langchain/core/tools';
-import { END } from '@langchain/langgraph';
+import { END, type LangGraphRunnableConfig } from '@langchain/langgraph';
 
+import type { ConversationPhase } from '@domain/conversation/phases';
 import {
   isToolReturnWithUpdate,
   llmError,
@@ -19,6 +20,7 @@ import {
 } from '@domain/conversation/tool-outcome';
 import type { TransitionRequest } from '@domain/conversation/transitions';
 
+import { isAcceptedHandoff } from '@infra/ai/graph/handoff';
 import { ctxOf } from '@infra/ai/graph/state';
 import { langOf, t } from '@infra/ai/messages';
 import { outcomeKindOf, toToolMessage } from '@infra/ai/tools/outcome';
@@ -44,6 +46,12 @@ type InvokableTool = {
 export interface ToolExecutorState {
   messages: BaseMessage[];
   activeSessionId?: string | null;
+  /**
+   * Task 2 (owner review of Task 1): the FROM phase evaluateTransition needs.
+   * Optional like `activeSessionId` — production ConversationState always has
+   * it; a test fixture that never touches a hand-off target may omit it.
+   */
+  phase?: ConversationPhase;
 }
 
 export type ToolExecutorUpdate = {
@@ -63,6 +71,8 @@ function normalizeReturn(ret: unknown): ToolReturn {
 export function buildToolExecutor(
   tools: StructuredToolInterface[],
   policy: ToolPolicy,
+  /** transition-handoff plan Task 1 (D-5): targets that get the carrier AIMessage's text emptied. */
+  handoffTargets: ReadonlySet<ConversationPhase> = new Set(),
 ): (state: ToolExecutorState, config: RunnableConfig) => Promise<ToolExecutorUpdate> {
   const toolMap = Object.fromEntries(tools.map(t => [t.name, t])) as Record<string, InvokableTool>;
 
@@ -211,6 +221,33 @@ export function buildToolExecutor(
       return finish(newMessages, updates);
     }
 
+    // Hand-off (D-5): an ACCEPTED committed transition (the shared
+    // isAcceptedHandoff predicate — close-out Blocking 1) to a hand-off
+    // target empties the carrier AIMessage's text — same id, so the reducer
+    // replaces it in place — so nothing this phase wrote reaches the next
+    // phase or the user. Uses the JUST-UPDATED activeSessionId (e.g.
+    // start_training_session sets it in this same batch), not the pre-tool
+    // one, and `ctx.phasePath` read BEFORE this run's commit pushes its own
+    // phase — non-empty means a hop already happened this run (max 1 hop, no
+    // revisit): a SECOND hand-off-shaped transition in the same run must NOT
+    // be silenced, or the run delivers '' (close-out Blocking 1's defect).
+    // `id` is only absent in hand-built test state that bypasses the graph;
+    // production messages always carry one by the time they reach this node
+    // (ADR-0013 §4.1).
+    const alreadyHopped = (ctx.phasePath?.length ?? 0) > 0;
+    if (
+      isAcceptedHandoff(
+        handoffTargets,
+        state.phase,
+        updates.activeSessionId ?? state.activeSessionId,
+        updates.pendingTransition,
+        alreadyHopped,
+      ) &&
+      lastMessage?.id
+    ) {
+      newMessages.push(new AIMessage({ id: lastMessage.id, content: '', tool_calls: lastMessage.tool_calls ?? [] }));
+    }
+
     return finish(newMessages, updates);
   };
 }
@@ -224,8 +261,44 @@ function finish(newMessages: BaseMessage[], updates: ToolStateUpdate): ToolExecu
   };
 }
 
-/** Conditional edge after the executor: 'agent' normally, END when the executor appended a terminal AIMessage. */
-export function afterTools(state: { messages: BaseMessage[] }): 'agent' | typeof END {
-  const last = state.messages[state.messages.length - 1] as Partial<BaseMessage> | undefined;
-  return last?._getType?.() === 'ai' ? END : 'agent';
+/**
+ * Conditional edge after the executor (transition-handoff plan Task 1, gated
+ * by the shared isAcceptedHandoff predicate — close-out Blocking 1): `agent`
+ * normally, `finalize` (mapped from END) when the executor appended a
+ * terminal AIMessage with real text, or `handoff` when the batch committed
+ * an ACCEPTED transition to a hand-off target — the phase that hands off
+ * never gets a second model call, so it has no final text for `finalize` to
+ * validate; the caller must route `handoff` straight to the subgraph's real
+ * END, bypassing `finalize` (phase-subgraph.factory.ts). A target commit
+ * would BLOCK (e.g. no active session, or the run already hopped once) falls
+ * through to today's path — the phase's own agent gets another turn and
+ * writes its own reply, never a silent, replyless run.
+ *
+ * Reads `config.context` directly (like `conversation.graph.ts`'s
+ * `afterCommit`, not `ctxOf`, which throws): a config without a run context
+ * (e.g. LangGraph's own `updateState`, used for checkpoint seeding in tests)
+ * just means "not mid-run" — `alreadyHopped` defaults to false, matching
+ * today's behaviour.
+ */
+export function buildAfterTools(handoffTargets: ReadonlySet<ConversationPhase> = new Set()): (
+  state: {
+    messages: BaseMessage[];
+    phase?: ConversationPhase;
+    activeSessionId?: string | null;
+    pendingTransition?: TransitionRequest | null;
+  },
+  config?: LangGraphRunnableConfig,
+) => 'agent' | 'handoff' | typeof END {
+  return (state, config) => {
+    const ctx = config?.context as { phasePath?: ConversationPhase[] } | undefined;
+    const alreadyHopped = (ctx?.phasePath?.length ?? 0) > 0;
+    if (isAcceptedHandoff(handoffTargets, state.phase, state.activeSessionId, state.pendingTransition, alreadyHopped)) {
+      return 'handoff';
+    }
+    const last = state.messages[state.messages.length - 1] as Partial<BaseMessage> | undefined;
+    return last?._getType?.() === 'ai' ? END : 'agent';
+  };
 }
+
+/** Flag-off default (no hand-off targets) — today's behaviour, byte-for-byte. */
+export const afterTools = buildAfterTools();

@@ -1658,10 +1658,65 @@ empty completed, a skipped, a planning and an in_progress session → both histo
 exactly the real one, `daysSinceLastWorkout` comes from its `completedAt`, and `getActiveSession`
 still returns the `in_progress` session (control).
 
----
+## BUG-032 — The coach does not know the current time (and in two phases not even the date)
 
-> BUG-032 and BUG-033 are recorded on `plan/transition-handoff` (not yet merged into `dev` on 2026-09-25);
-> the numbers are reserved.
+**Status:** Open — fix is Task 7 of plan `transition-handoff`
+**Severity:** High — every time-of-day and "this week" statement is a guess
+**Found during:** owner's live dev chat 2026-09-25 06:20 UTC (model `glm-5.3-flash`): asked «который час?», the coach
+answered «Часы у меня в системе не показывают текущее время — я вижу только дату: 25 сентября».
+**Component:** `apps/server/src/infra/ai/prompts/directives/timezone.v1.ts`,
+`prompts/phases/session_planning/v2.ts:98-106`, `prompts/phases/plan_creation/v2.ts:74`
+
+### Description
+
+- `session_planning` and `plan_creation` render only `Current Date: YYYY-MM-DD` — no local time, no weekday,
+  although `formatInUserTz` (`shared/date-utils.ts:34`) already returns `time`.
+- `chat` and `training` render **no current date or time at all**; past sessions carry relative labels
+  (`humanTimeAgo`), sets carry "N min ago".
+- `TIMEZONE_V1` tells the model "Use it for all date/time references" but gives it no "now" to use.
+
+Consequences seen: "который час?" unanswerable; the model has to derive the weekday itself — the
+2026-09-25 Flash smoke run put last Saturday into "this week" (Friday 25th), a mistake a stated weekday
+prevents. Not "just the model": the fact is simply absent from the prompt.
+
+### Fix (plan `transition-handoff` Task 7)
+
+One "now" line in every phase: local weekday, date and time with the zone name, e.g.
+`NOW (user's local time): Friday 2026-09-25 14:20 (Asia/Manila)`; UTC with a note when the timezone is
+unknown. Rendered as the LAST system section (it changes every minute — keep it after the stable prefix
+so provider prompt caching is not broken). Prompt versions bumped, L0 snapshots updated.
+
+## BUG-033 — The smoke's test catalog has no embeddings, so `search_exercises` finds nothing there; `log_set` name resolution is exact-match
+
+**Status:** Fixed for the smoke (commit 367ceda1); the exact-name half is Open
+**Severity:** Medium — test-environment defect that hid every search path from the live smoke; the name half is a real, smaller product defect
+**Found during:** live smoke 2026-09-25 06:59 UTC on `plan/transition-handoff` (`glm-5.3-flash`, local `fitcoach_test`),
+transcript `evals/reports/smoke-2026-09-25T06-59-24-287Z.md`
+**Component:** `evals/lib/scenario-world.ts` (catalog seeding), `infra/db/repositories/exercise.repository.ts` `searchByEmbedding`
+(filters `embedding IS NOT NULL`), `log_set`'s `exerciseName` resolution
+
+### Description
+
+«разгибания 55 на 10» and «сгибания 50 на 10» were reported during training; neither exercise was in the session plan. The model
+**did** translate: it called `log_set` with `exerciseName: "Leg Extensions"`, then `search_exercises` with `leg extension`,
+`leg curl`, `hamstrings`, `quads` — every search returned nothing. Cause: the scenario seed inserted 13 catalog exercises with
+**0 embeddings** (`select count(embedding) from exercises` = 0 on `fitcoach_test`), and the search is vector-only over rows with an
+embedding. Dev has 65/65 embeddings, so users were not affected by the search half.
+
+The second half is real on every environment: `log_set` with `exerciseName: "Leg Extensions"` failed because the catalog row is
+`Leg Extension` and the name is matched exactly.
+
+Four sets were not logged. The coach stayed mostly honest («не сохранились»), but once promised «Твой подход 50 × 10 я запомнил и
+сразу залогирую» and later listed the unlogged sets as done in the week summary.
+
+### Fix
+
+- Smoke half (commit 367ceda1): the L3 path (`evals/levels/l3.ts`) seeds embeddings for the scenario catalog with the app's
+  `EmbeddingService` and throws if any catalog exercise is left without one. Jest scenario tests do not embed (the real ONNX pipeline
+  crashed inside Jest on that call chain; not investigated).
+- Name half: open — candidate fix is a case/plural-tolerant or embedding fallback in `log_set`'s name resolution. Not in U5.
+
+---
 
 ## BUG-034 — A successful tool call is answered with "Couldn't save the data": the per-run error budget counts errors from the whole chat history
 

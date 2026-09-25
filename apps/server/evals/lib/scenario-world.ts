@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { inArray } from 'drizzle-orm';
 
 import type { StoredEpisodeSummary } from '@domain/conversation/episode';
+import type { IEmbeddingService } from '@domain/training/ports';
 import type { CompiledConversationGraph } from '@infra/ai/graph/conversation.graph';
 import { UserFactsRepository } from '@infra/db/repositories/user-facts.repository';
 import { db } from '@infra/db/drizzle';
@@ -27,6 +28,7 @@ import {
   workoutPlans,
   workoutSessions,
 } from '@infra/db/schema';
+import { embedPendingExercises } from '@infra/db/seeds/embed-pending-exercises';
 import type { ExerciseType, WorkoutPlanJson } from '@domain/training/types';
 
 import { bindSeedMessages } from '../schema/case.schema';
@@ -70,8 +72,25 @@ export interface ResolvedExercise {
  * anything else (including the test setup's four) keeps today's generic
  * strength fallback. `ON CONFLICT (name) DO NOTHING` keeps a repeat run
  * idempotent within one schema lifetime.
+ *
+ * Also embeds any of these exercises still missing one, IF an
+ * `embeddingService` is given (close-out review correction, 2026-09-25): a
+ * scenario-seeded exercise had no embedding, so `search_exercises` (which
+ * filters `embedding IS NOT NULL`) silently found nothing for it —
+ * misdiagnosed as BUG-033 ("Russian names not found") until the orchestrator
+ * checked `select count(embedding) from exercises` on the local test DB.
+ * Left undefined (every Jest scenario test), no embedding is computed at all
+ * — the real ONNX pipeline crashes inside Jest's runtime in this environment
+ * (see `embed-pending-exercises.ts`'s header). Only the live L3 CLI path
+ * passes one, the same `embedPendingExercises`
+ * (`@infra/db/seeds/embed-pending-exercises.ts`) `seed-embeddings.ts`'s
+ * production catalog backfill script uses.
  */
-async function resolveExerciseIds(names: string[], catalog: CatalogExercise[]): Promise<Map<string, ResolvedExercise>> {
+async function resolveExerciseIds(
+  names: string[],
+  catalog: CatalogExercise[],
+  embeddingService?: IEmbeddingService,
+): Promise<Map<string, ResolvedExercise>> {
   const catalogByName = new Map(catalog.map(entry => [entry.name, entry]));
 
   for (const name of names) {
@@ -111,6 +130,11 @@ async function resolveExerciseIds(names: string[], catalog: CatalogExercise[]): 
         .onConflictDoNothing();
     }
   }
+
+  if (embeddingService) {
+    await embedPendingExercises(embeddingService, names);
+  }
+
   return resolved;
 }
 
@@ -241,9 +265,16 @@ async function seedWorkout(
 /**
  * Seeds the scenario's world as real rows. The user is a fresh random UUID per
  * run (isolation); `thread_id` equals `userId`, exactly what the run adapter
- * uses.
+ * uses. `embeddingService`, when given, embeds any newly-seeded exercise
+ * still missing a vector (see `resolveExerciseIds`) — the caller's
+ * already-loaded instance, never a fresh one here. Left undefined, no
+ * embedding is computed (every Jest scenario test).
  */
-export async function seedScenarioRows(past: Scenario['past'], t0: Date): Promise<SeededScenarioWorld> {
+export async function seedScenarioRows(
+  past: Scenario['past'],
+  t0: Date,
+  embeddingService?: IEmbeddingService,
+): Promise<SeededScenarioWorld> {
   const userId = randomUUID();
   await db.insert(users).values({
     id: userId,
@@ -262,7 +293,7 @@ export async function seedScenarioRows(past: Scenario['past'], t0: Date): Promis
     updatedAt: t0,
   });
 
-  const exerciseIds = await resolveExerciseIds(exerciseNamesOf(past), past.catalog ?? []);
+  const exerciseIds = await resolveExerciseIds(exerciseNamesOf(past), past.catalog ?? [], embeddingService);
 
   let planId: string | null = null;
   if (past.plan) {

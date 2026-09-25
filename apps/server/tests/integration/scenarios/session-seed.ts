@@ -3,11 +3,27 @@
  * into workout_sessions with explicit dates, and the "states the date" matcher. Nothing here is
  * relative to the wall clock — callers pin NOW themselves.
  */
+import { eq } from 'drizzle-orm';
+
 import { db } from '@infra/db/drizzle';
-import { workoutSessions } from '@infra/db/schema';
+import { sessionExercises, sessionSets, workoutSessions } from '@infra/db/schema';
 
 import type { SessionExerciseRepository } from '@infra/db/repositories/session-exercise.repository';
 import type { SessionSetRepository } from '@infra/db/repositories/session-set.repository';
+
+/**
+ * Every stored session_sets row's setData for this user, across all their
+ * sessions (close-out review Blocking 4 — was copied verbatim into
+ * handoff-failure.integration.test.ts and planning-set-logging.integration.test.ts).
+ */
+export function storedSets(userId: string) {
+  return db
+    .select({ setData: sessionSets.setData })
+    .from(sessionSets)
+    .innerJoin(sessionExercises, eq(sessionSets.sessionExerciseId, sessionExercises.id))
+    .innerJoin(workoutSessions, eq(sessionExercises.sessionId, workoutSessions.id))
+    .where(eq(workoutSessions.userId, userId));
+}
 
 export interface SeedSession {
   key: string;

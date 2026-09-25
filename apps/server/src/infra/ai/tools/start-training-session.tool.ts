@@ -1,11 +1,13 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { tool } from '@langchain/core/tools';
 
+import type { ConversationPhase } from '@domain/conversation/phases';
 import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
 import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
 import { SessionRecommendationSchema } from '@domain/training/session-planning.types';
 import type { IUserFactsService } from '@domain/user/ports';
 
+import { HANDOFF_REGISTERED_TEXT } from '@infra/ai/graph/handoff';
 import { ctxOf } from '@infra/ai/graph/state';
 
 import { guardFactConstraints } from './fact-constraint-guard';
@@ -17,6 +19,13 @@ export interface StartTrainingSessionToolDeps {
   exerciseRepository: IExerciseRepository;
   /** P6 Task 5: hard validation against physical_constraint facts (D-G). */
   userFactsService: IUserFactsService;
+  /**
+   * transition-handoff plan Task 1 (D-5): when 'training' is a configured
+   * hand-off target, the closing text drops "write a message to the user" —
+   * the phase subgraph ends right after this tool, so the model never gets a
+   * turn to act on that instruction. Absent/empty = today's wording.
+   */
+  transitionHandoffTargets?: ReadonlySet<ConversationPhase>;
 }
 
 const START_TRAINING_SESSION_DESCRIPTION = [
@@ -28,6 +37,7 @@ const START_TRAINING_SESSION_DESCRIPTION = [
 
 export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps) {
   const { trainingService, workoutPlanRepository, exerciseRepository, userFactsService } = deps;
+  const isHandoff = deps.transitionHandoffTargets?.has('training') ?? false;
 
   return tool(
     async (input, config) => {
@@ -84,14 +94,16 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
 
         const exerciseCount = input.exercises.length;
         const duration = input.estimatedDuration;
+        const closingText = isHandoff
+          ? HANDOFF_REGISTERED_TEXT
+          : 'Now write a brief energetic message to the user in their language — confirm the session started and motivate them for the workout.';
         return {
           outcome: ok(
             [
               `Session created (ID: ${session.id}).`,
               `${exerciseCount} exercises, est. ${duration} min.`,
               ...(advisory === null ? [] : [`\n${advisory}\n`]),
-              'Now write a brief energetic message to the user in their language',
-              '— confirm the session started and motivate them for the workout.',
+              closingText,
             ].join(' '),
           ),
           update: {

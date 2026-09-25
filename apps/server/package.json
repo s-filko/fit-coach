@@ -19,7 +19,7 @@
     "evals": "tsx --env-file-if-exists=.env evals/run.ts",
     "evals:export": "tsx --env-file=.env evals/export.ts",
     "evals:ledger": "tsx --env-file-if-exists=.env evals/ledger.ts",
-    "smoke": "DB_NAME=fitcoach_test RUN_LLM_EVALS=1 tsx --env-file-if-exists=.env evals/run.ts --level L3 --scenario smoke",
+    "smoke": "DB_NAME=fitcoach_test RUN_LLM_EVALS=1 TRANSITION_HANDOFF_TARGETS=training,session_planning tsx --env-file-if-exists=.env evals/run.ts --level L3 --scenario smoke",
     "run-server": "node dist/index.js",
     "dev": "mkdir -p ../../logs && tsx watch --env-file=.env src/index.ts 2>&1 | tee -a ../../logs/server.log",
     "db:local:up": "docker compose -f ../../docker-compose.yml up -d db",

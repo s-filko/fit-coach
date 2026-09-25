@@ -5,11 +5,15 @@
  */
 import { EPISODE_SUMMARIES_V2, POST_TOOL_NUDGE_V1, renderBlock } from '@infra/ai/prompts/blocks';
 import { compose, sectionText } from '@infra/ai/prompts/compose';
-import { CHAT_PROMPT, CHAT_V1 } from '@infra/ai/prompts/phases/chat';
-import { PLAN_CREATION_PROMPT, PLAN_CREATION_V1 } from '@infra/ai/prompts/phases/plan_creation';
-import { REGISTRATION_PROMPT } from '@infra/ai/prompts/phases/registration';
-import { SESSION_PLANNING_PROMPT, SESSION_PLANNING_V1 } from '@infra/ai/prompts/phases/session_planning';
-import { TRAINING_PROMPT, TRAINING_V1, TRAINING_V2 } from '@infra/ai/prompts/phases/training';
+import { CHAT_PROMPT, CHAT_V1, CHAT_V2 } from '@infra/ai/prompts/phases/chat';
+import { PLAN_CREATION_PROMPT, PLAN_CREATION_V1, PLAN_CREATION_V2 } from '@infra/ai/prompts/phases/plan_creation';
+import { REGISTRATION_PROMPT, REGISTRATION_V1 } from '@infra/ai/prompts/phases/registration';
+import {
+  SESSION_PLANNING_PROMPT,
+  SESSION_PLANNING_V1,
+  SESSION_PLANNING_V2,
+} from '@infra/ai/prompts/phases/session_planning';
+import { TRAINING_PROMPT, TRAINING_V1, TRAINING_V2, TRAINING_V3 } from '@infra/ai/prompts/phases/training';
 import { SUMMARIZER_V1, SUMMARIZER_V2, SUMMARIZER_V3 } from '@infra/ai/prompts/summarizer';
 
 import { ALL_FIXTURES } from '../../fixtures/personas';
@@ -45,7 +49,7 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
         user,
         lastMessageTime: null,
       };
-      expect(compose(REGISTRATION_PROMPT.current.render(ctx))).toMatchSnapshot();
+      expect(compose(REGISTRATION_V1.render(ctx))).toMatchSnapshot();
     });
 
     it(`phase.chat / ${name}`, () => {
@@ -112,7 +116,7 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
         lastMessageTime: LAST_MESSAGE_YESTERDAY,
         hasActivePlan: fixture.hasActivePlan ?? false,
       };
-      expect(compose(CHAT_PROMPT.current.render(ctx))).toMatchSnapshot();
+      expect(compose(CHAT_V2.render(ctx))).toMatchSnapshot();
     });
 
     it(`phase.plan_creation v2 / ${name}`, () => {
@@ -123,7 +127,7 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
         user,
         lastMessageTime: null,
       };
-      expect(compose(PLAN_CREATION_PROMPT.current.render(ctx))).toMatchSnapshot();
+      expect(compose(PLAN_CREATION_V2.render(ctx))).toMatchSnapshot();
     });
 
     it(`phase.session_planning v2 / ${name}`, () => {
@@ -136,7 +140,7 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
         lastMessageTime: null,
         context: { daysSinceLastWorkout },
       };
-      expect(compose(SESSION_PLANNING_PROMPT.current.render(ctx))).toMatchSnapshot();
+      expect(compose(SESSION_PLANNING_V2.render(ctx))).toMatchSnapshot();
     });
 
     it(`phase.training v2 / ${name}`, () => {
@@ -151,6 +155,68 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
     });
 
     it(`phase.training v3 / ${name}`, () => {
+      const ctx = {
+        now: FIXED_NOW,
+        timezone: user.timezone ?? null,
+        client: 'telegram' as const,
+        user,
+        lastMessageTime: null,
+      };
+      expect(compose(TRAINING_V3.render(ctx))).toMatchSnapshot();
+    });
+
+    // v_next (transition-handoff plan Task 7, BUG-032): every `.current`
+    // phase module gains `directive.current-time` (DEFAULT_DIRECTIVES_V2 /
+    // DIRECTIVES_WITHOUT_IDENTITY_V2), rendered LAST — new snapshots; every
+    // block above stays pinned to its own frozen export, untouched.
+    it(`phase.registration v2 / ${name}`, () => {
+      const ctx = {
+        now: FIXED_NOW,
+        timezone: user.timezone ?? null,
+        client: 'telegram' as const,
+        user,
+        lastMessageTime: null,
+      };
+      expect(compose(REGISTRATION_PROMPT.current.render(ctx))).toMatchSnapshot();
+    });
+
+    it(`phase.chat v3 / ${name}`, () => {
+      const ctx = {
+        now: FIXED_NOW,
+        timezone: user.timezone ?? null,
+        client: 'telegram' as const,
+        user,
+        lastMessageTime: LAST_MESSAGE_YESTERDAY,
+        hasActivePlan: fixture.hasActivePlan ?? false,
+      };
+      expect(compose(CHAT_PROMPT.current.render(ctx))).toMatchSnapshot();
+    });
+
+    it(`phase.plan_creation v3 / ${name}`, () => {
+      const ctx = {
+        now: FIXED_NOW,
+        timezone: user.timezone ?? null,
+        client: 'telegram' as const,
+        user,
+        lastMessageTime: null,
+      };
+      expect(compose(PLAN_CREATION_PROMPT.current.render(ctx))).toMatchSnapshot();
+    });
+
+    it(`phase.session_planning v3 / ${name}`, () => {
+      const { daysSinceLastWorkout } = buildSessionPlanningContext(fixture, FIXED_NOW);
+      const ctx = {
+        now: FIXED_NOW,
+        timezone: user.timezone ?? null,
+        client: 'telegram' as const,
+        user,
+        lastMessageTime: null,
+        context: { daysSinceLastWorkout },
+      };
+      expect(compose(SESSION_PLANNING_PROMPT.current.render(ctx))).toMatchSnapshot();
+    });
+
+    it(`phase.training v4 / ${name}`, () => {
       const ctx = {
         now: FIXED_NOW,
         timezone: user.timezone ?? null,

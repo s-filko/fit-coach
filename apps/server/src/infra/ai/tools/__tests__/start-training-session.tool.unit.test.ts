@@ -5,6 +5,7 @@ import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } fr
 import type { IUserFactsService, UserFact } from '@domain/user/ports/user-facts.ports';
 import type { ExerciseWithMuscles } from '@domain/training/types';
 
+import { HANDOFF_REGISTERED_TEXT } from '@infra/ai/graph/handoff';
 import { toToolMessage } from '@infra/ai/tools/outcome';
 
 import { buildStartTrainingSessionTool } from '../start-training-session.tool';
@@ -394,6 +395,50 @@ describe('start-training-session.tool — start_training_session', () => {
       expect.any(String),
       expect.objectContaining({ planId: undefined }),
     );
+  });
+
+  describe('D-5: closing text depends on TRANSITION_HANDOFF_TARGETS', () => {
+    it('keeps the "write a message" wording when the flag is off (no transitionHandoffTargets)', async () => {
+      const { startTrainingSession } = buildTools(makeTrainingService(), makeWorkoutPlanRepo());
+
+      const result = (await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig())) as ToolReturn;
+
+      const text = renderedContent(result);
+      expect(text).toContain('Now write a brief energetic message');
+      expect(text).not.toContain(HANDOFF_REGISTERED_TEXT);
+    });
+
+    it('keeps the "write a message" wording when training is NOT in transitionHandoffTargets', async () => {
+      const startTrainingSession = buildStartTrainingSessionTool({
+        trainingService: makeTrainingService(),
+        workoutPlanRepository: makeWorkoutPlanRepo(),
+        exerciseRepository: makeExerciseRepository(),
+        userFactsService: makeUserFactsService(),
+        transitionHandoffTargets: new Set(['session_planning']),
+      }) as unknown as InvokableTool;
+
+      const result = (await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig())) as ToolReturn;
+
+      expect(renderedContent(result)).toContain('Now write a brief energetic message');
+    });
+
+    it('switches to the neutral hand-off text when training IS a hand-off target', async () => {
+      const startTrainingSession = buildStartTrainingSessionTool({
+        trainingService: makeTrainingService(),
+        workoutPlanRepository: makeWorkoutPlanRepo(),
+        exerciseRepository: makeExerciseRepository(),
+        userFactsService: makeUserFactsService(),
+        transitionHandoffTargets: new Set(['training']),
+      }) as unknown as InvokableTool;
+
+      const result = (await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig())) as ToolReturn;
+
+      const text = renderedContent(result);
+      expect(text).toContain(HANDOFF_REGISTERED_TEXT);
+      expect(text).not.toContain('write a brief energetic message');
+      // The session facts still render — only the closing instruction changes.
+      expect(text).toContain('Session created (ID: session-1)');
+    });
   });
 
   it('each invocation requests its own session — two users do not overwrite each other', async () => {

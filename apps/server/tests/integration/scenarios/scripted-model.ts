@@ -11,6 +11,12 @@
  *   fallback is a plain text reply, so an under-scripted journey still runs.
  *   `failNextChat(error)` makes the NEXT chat call throw instead (once) — the failed-run
  *   scenarios' provider/model failure; the queued answers are left untouched.
+ *   `enqueueChatThrow(error)` queues a throw AT ITS FIFO POSITION instead —
+ *   for a run where an EARLIER call in the same batch must succeed first
+ *   (transition-handoff plan Task 3: the hop's first call succeeds, the
+ *   second one — after the hop — throws); `failNextChat` cannot express that
+ *   ordering since it always fires on the very next call regardless of what
+ *   is already queued.
  * - `structured` (the gateway's `getModel(profile).withConfig(...).invoke`):
  *   two KINDS share this path and are routed by their prompt — the
  *   course-check call (its system prompt opens "You are the course-check
@@ -69,9 +75,14 @@ export interface StructuredInput {
   messages: BaseMessage[];
 }
 
+/** A FIFO entry that throws instead of answering — see `enqueueChatThrow`. */
+interface ChatThrowEntry {
+  throwError: Error;
+}
+
 // jest.mock factories may only reference variables prefixed with `mock`.
 const mockState = {
-  chatScript: [] as AIMessage[],
+  chatScript: [] as Array<AIMessage | ChatThrowEntry>,
   chatFailure: null as Error | null,
   summaryScript: [] as string[],
   courseScript: [] as string[],
@@ -94,6 +105,8 @@ export interface ScriptedModelHandle {
   enqueueChat(script: ScriptedChatMessage[]): void;
   /** Makes the next chat call throw `error` (once); later calls answer from the queue again. */
   failNextChat(error: Error): void;
+  /** Queues a throw at its FIFO position — unlike `failNextChat`, an earlier queued answer still comes first. */
+  enqueueChatThrow(error: Error): void;
   /** Queues scripted raw structured answers (the summariser path). */
   enqueueStructuredAnswers(rawContents: string[]): void;
   /** Queues scripted raw course-check answers (the directive path). */
@@ -132,6 +145,9 @@ export function installScriptedModel(): ScriptedModelHandle {
         if (next === undefined) {
           return new AIMessage({ content: 'Хорошо.', tool_calls: [] });
         }
+        if ('throwError' in next) {
+          throw next.throwError;
+        }
         if (mockState.resolvePlaceholders === null || next.tool_calls === undefined || next.tool_calls.length === 0) {
           return next;
         }
@@ -162,6 +178,9 @@ export function installScriptedModel(): ScriptedModelHandle {
     },
     failNextChat(error) {
       mockState.chatFailure = error;
+    },
+    enqueueChatThrow(error) {
+      mockState.chatScript.push({ throwError: error });
     },
     enqueueStructuredAnswers(rawContents) {
       mockState.summaryScript.push(...rawContents);

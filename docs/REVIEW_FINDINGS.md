@@ -33,6 +33,42 @@ Entry format:
 Wording in a zone prompt or in `SKILL.md` that misleads, contradicts the severity contract,
 or is inert for the kind of diff under review.
 
+- [×3] R4's brief says "If the diff edits a durable spec, that is R1's finding, not yours" —
+  but ARCHITECTURE.md is itself listed in DOCUMENTATION_GUIDE § AI Execution Order step 4 as
+  architectural truth, and the fix diff edits it. R4 judged the edit to be living-layout
+  maintenance (the fix R4 itself demanded) rather than a silent law change, so it kept the
+  finding. The R1/R4 boundary as written does not distinguish "durable spec's generated/living
+  layout block" from "durable spec's normative rules", and on this branch the fix commit
+  touched both kinds of block in one file. Third run, independently: R4 could not tell whether
+  *incompleteness* of that ARCHITECTURE.md edit (a sibling doc left contradicting the corrected
+  tree) was its finding or R1's, and kept it on the grounds that it is staleness left behind
+  rather than law silently changed. Third occurrence, same seam from a new angle: this diff
+  *edited* ARCHITECTURE.md's rule section (R1's territory) while leaving other parts of the
+  same file — the module tree and the DI "Import Strategy" line — contradicting the new rules.
+  R4 read those unedited parts as in-zone staleness; the boundary as written does not assign a
+  file that is partly edited and partly left behind. Fourth occurrence, inverted: the plan
+  assigned `docs/LOGGING_GUIDE.md` to two worker tasks, so a worker wrote 173 lines into a
+  durable doc. R4 reviewed that content anyway and noted that if R1 read the edit as its own
+  the findings duplicate, and if R1 read the plan's reserved list literally they are covered by
+  nobody.
+  Runs: refactor-p0-dead-code (2026-09-12, re-run), refactor-p0-dead-code (2026-09-12, third run), ports-layout-consistency (2026-09-14), llm-io-audit-trail (2026-09-22).
+- [×2] R3's "describe/it names carry BR/AC references" bullet — and its thin-test-zone list
+  (`drizzle/`, `deploy.sh`, `docker-compose.yml`) — are inert on markdown-only diffs yet read
+  as checklist items to satisfy on every run. Scope both to code-bearing diffs.
+  Runs: mandatory-plan-review (2026-09-12), review-self-improvement (2026-09-12).
+- [×2] R2's mandate is "does the new code duplicate something already in the repo", but a
+  pure-deletion branch has almost no new code — its R2-relevant risk is the inverse: whether
+  deleting one of two duplicate definitions left the surviving copy the wrong one (here, the
+  dead training-intent.types.ts had drifted from the live set-data.types.ts, and the branch
+  happened to keep the richer copy). Nothing in the prompt directs the reviewer to diff the
+  deleted copy against its surviving twin. Suggested addition to the R2 brief: "On a deletion
+  branch, when the removed code duplicated something that survives, diff the two copies and
+  confirm the survivor is not the poorer one." The third run adds the half that fix does not
+  cover: the deletion also *orphaned* exports in the adjacent surviving file
+  (`set-data.types.ts`'s `setDataTypeValues`/`SetDataType` lost their last consumer with the
+  deleted prompt builder), and nothing directs the reviewer to check the survivor for exports
+  the deletion just killed.
+  Runs: refactor-p0-dead-code (2026-09-12), refactor-p0-dead-code (2026-09-12, third run).
 - [×1] R1's "always blocking" clause — any durable spec under `docs/` outside `docs/superpowers/`
   edited in this diff — collides with the plan, which explicitly assigned `docs/LOGGING_GUIDE.md`
   to Tasks 5 and 6, and with the plan's own Global Constraints, which reserve a narrower list
@@ -55,36 +91,16 @@ or is inert for the kind of diff under review.
   matching file should be reported as "verified clean" or omitted silently, so the reviewer had to
   invent a convention.
   Runs: session-2026-09-21-repro (2026-09-22).
-
 - [×1] R2's search recipe (`grep -rn "<name>" apps/ scripts/`) finds name-level duplication, but the
   most consequential duplication on this diff was assertion-level: two tests independently proving
   the same domain fact through different mock harnesses. `git grep "status.*skipped"` surfaced it,
   a name search did not. Worth adding "grep the assertion, not just the helper name".
   Runs: session-2026-09-21-repro (2026-09-22).
-
 - [×1] A plan's predicted evidence counts were wrong where the close-out asks the executor to
   record actuals: Task 1 Step 4 predicted "24 snapshots … 6 blocks" but the suite has 23
   (five block `it`s, not six), and the close-out instruction says to record the snapshot
   count — so the recorded number must be re-derived, not copied from the plan's prose.
   Runs: refactor-p2-prompt-modules (2026-09-16).
-
-- [×2] R3's "describe/it names carry BR/AC references" bullet — and its thin-test-zone list
-  (`drizzle/`, `deploy.sh`, `docker-compose.yml`) — are inert on markdown-only diffs yet read
-  as checklist items to satisfy on every run. Scope both to code-bearing diffs.
-  Runs: mandatory-plan-review (2026-09-12), review-self-improvement (2026-09-12).
-- [×2] R2's mandate is "does the new code duplicate something already in the repo", but a
-  pure-deletion branch has almost no new code — its R2-relevant risk is the inverse: whether
-  deleting one of two duplicate definitions left the surviving copy the wrong one (here, the
-  dead training-intent.types.ts had drifted from the live set-data.types.ts, and the branch
-  happened to keep the richer copy). Nothing in the prompt directs the reviewer to diff the
-  deleted copy against its surviving twin. Suggested addition to the R2 brief: "On a deletion
-  branch, when the removed code duplicated something that survives, diff the two copies and
-  confirm the survivor is not the poorer one." The third run adds the half that fix does not
-  cover: the deletion also *orphaned* exports in the adjacent surviving file
-  (`set-data.types.ts`'s `setDataTypeValues`/`SetDataType` lost their last consumer with the
-  deleted prompt builder), and nothing directs the reviewer to check the survivor for exports
-  the deletion just killed.
-  Runs: refactor-p0-dead-code (2026-09-12), refactor-p0-dead-code (2026-09-12, third run).
 - [×1] Zone briefs named the plan file on `dev` but not the prepared branch worktree, so
   per-file tooling silently failed against the working tree ("No files matching the pattern")
   until the reviewer discovered `../fit_coach-<slug>/` on its own. R3 independently noted the
@@ -95,25 +111,6 @@ or is inert for the kind of diff under review.
   reading would have passed three blocking findings. Briefs should name the worktree path and
   say that claimed output is a claim, not evidence.
   Runs: ports-layout-consistency (2026-09-14).
-- [×3] R4's brief says "If the diff edits a durable spec, that is R1's finding, not yours" —
-  but ARCHITECTURE.md is itself listed in DOCUMENTATION_GUIDE § AI Execution Order step 4 as
-  architectural truth, and the fix diff edits it. R4 judged the edit to be living-layout
-  maintenance (the fix R4 itself demanded) rather than a silent law change, so it kept the
-  finding. The R1/R4 boundary as written does not distinguish "durable spec's generated/living
-  layout block" from "durable spec's normative rules", and on this branch the fix commit
-  touched both kinds of block in one file. Third run, independently: R4 could not tell whether
-  *incompleteness* of that ARCHITECTURE.md edit (a sibling doc left contradicting the corrected
-  tree) was its finding or R1's, and kept it on the grounds that it is staleness left behind
-  rather than law silently changed. Third occurrence, same seam from a new angle: this diff
-  *edited* ARCHITECTURE.md's rule section (R1's territory) while leaving other parts of the
-  same file — the module tree and the DI "Import Strategy" line — contradicting the new rules.
-  R4 read those unedited parts as in-zone staleness; the boundary as written does not assign a
-  file that is partly edited and partly left behind. Fourth occurrence, inverted: the plan
-  assigned `docs/LOGGING_GUIDE.md` to two worker tasks, so a worker wrote 173 lines into a
-  durable doc. R4 reviewed that content anyway and noted that if R1 read the edit as its own
-  the findings duplicate, and if R1 read the plan's reserved list literally they are covered by
-  nobody.
-  Runs: refactor-p0-dead-code (2026-09-12, re-run), refactor-p0-dead-code (2026-09-12, third run), ports-layout-consistency (2026-09-14), llm-io-audit-trail (2026-09-22).
 - [×1] R3's brief asserted that "the current checkout is dev with the branch already merged, so
   HEAD reflects the post-change state", and R3 ran all verification against HEAD rather than the
   branch tip under review. Here the two differ by one merge commit that touches nothing R3 reads,
@@ -138,7 +135,6 @@ or is inert for the kind of diff under review.
   hatch ("duplication is blocking only when an in-branch fix exists that does not violate
   the plan's scope constraints").
   Runs: refactor-p0-run-log (2026-09-12), refactor-p1-legacy-llm-retirement (2026-09-16).
-
 - [×1] A plan's Files list named `domain/training/ports/service.ports.ts` where the tree has
   `training-service.ports.ts` — the executor coped, but a plan-writing phase that does not
   verify cited paths against the tree turns every such reference into executor guesswork that
@@ -148,7 +144,6 @@ or is inert for the kind of diff under review.
   Task 2 is env parsing by design — zone briefs written from memory of the plan rather than
   from its file list inject errors the zone must notice and route to meta on its own.
   Runs: refactor-p1-legacy-llm-retirement (2026-09-16).
-
 - [×1] R2's brief scopes its symbol search to `apps/` and `scripts/`; doc-content
   duplication (here: near-parallel "user facts" sections in `ARCHITECTURE.md` and
   `CONTRIBUTING_AI.md`) is outside its grep and presumably R4's — a one-line note in the R2
@@ -171,6 +166,50 @@ or is inert for the kind of diff under review.
 What fell between the zones — a real problem no zone's mandate covered, usually surfaced by
 a wider reader (the final whole-branch review) or noticed after the fact.
 
+- [×3] A type-only refactor plan with no `AC-####` ids slips through R3's "every AC has a test"
+  check by having no ACs to check — this plan states four prose clauses instead, and defines no
+  tests. `SUPERPOWERS_INTEGRATION.md` rule 2 requires plan tasks to cite the AC they implement;
+  nothing catches a plan that cites none. R1 noticed the same absence and flagged it as outside
+  its zone, so the gap is visible to reviewers but owned by none. Second occurrence: a promoted
+  backlog-finding plan (not a phase-spec task) also carries no ACs by design — R3 correctly
+  treated the absence as inapplicable rather than a gap, but the zone brief still gives no
+  explicit instruction for this plan shape, so the correct call was judgment, not guidance.
+  Runs: ports-layout-consistency (2026-09-14), lint-glob-fix (2026-09-14), structured-output-json-object-mode (2026-09-19).
+- [×3] Code that stops matching the *mechanism* a durable spec names (ADR-0013 §7:
+  "`structured` uses `withStructuredOutput`") is claimed by both R1 ("declared boundaries") and
+  R4 (doc currency) — both raised it as blocking this run. Neither zone file says which owns a
+  mechanism drift that crosses no layer, nor who escalates a blocking finding on a document the
+  zones may not edit (R4: "who actually escalates it, and where is that recorded?"). One line in
+  the skill — mechanism drift is R4's; the orchestrator escalates read-only-spec findings to the
+  owner at close-out — would settle both.
+  Third run: R1 graded code that contradicts BR-LLM-006 / ADR-0013 §4.1 blocking *pending* the owner-approved amendment the plan schedules as a later orchestrator task, and R4 raised the same ADR lines blocking from the doc side; R1 proposed: "Code that departs from a durable rule is blocking at review unless the owner-approved spec amendment is in the same diff; a scheduled-but-undone amendment task does not discharge it."
+  Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19), transition-handoff (2026-09-25).
+- [×2] A known-and-accepted carve-out (FEAT-0003's stale LLMService diagram is P7-owned)
+  lives only in the master plan's phase map; the review brief's known-and-accepted list is
+  assembled ad hoc each round, so the same carve-out must be re-derived or gets re-flagged.
+  Second instance (R4): `LLM_CORE_REFACTOR_PLAN.md` § P6 still describes the dropped
+  `remember_fact` tool and pre-design-doc repository names; the plan's Discrepancies table
+  records it and P7 owns the doc cleanup, but a reviewer with a narrower diff window could
+  misclassify it as new rot.
+  Runs: refactor-p1-legacy-llm-retirement (2026-09-16), refactor-p6-facts-and-progress-blocks (2026-09-19).
+- [×2] A zone prompt contradicting the shared severity contract falls between all four zones:
+  it is not architecture, duplication, correctness, or docs. The wider final review caught it
+  twice in one run (R2's YAGNI citation, R3's verification-evidence citation). Nothing in the
+  phase looks at the phase's own consistency. Runs: mandatory-plan-review (2026-09-12, ×2).
+- [×2] R3's zone asks it to confirm each AC has a test, but AC-1302 is a grep-and-green-checks
+  criterion with no test of its own by design — it asserts an absence. There is no written
+  guidance on how a reviewer discharges "every AC has a test" for absence-shaped ACs. R3
+  treated re-running the grep and the three checks as the equivalent evidence; a line in
+  SUPERPOWERS_INTEGRATION.md § Rules of engagement saying that absence-shaped ACs are verified
+  by re-execution of their stated command rather than by a test would remove the ambiguity.
+  Runs: refactor-p0-dead-code (2026-09-12), refactor-p0-dead-code (2026-09-12, third run).
+- [×2] The plan's normative step code and Architecture prose are not reconciled against the
+  shipped implementation by any zone: refactor-p0-run-log's plan still showed the
+  `configurable`-channel handler that live verification had proved dead (fixed only in the
+  Task 6 deviation prose), so a future agent re-executing the plan text verbatim would
+  reintroduce the zero-token bug. No zone's mandate covers "plan step-code vs shipped code"
+  consistency.
+  Runs: refactor-p0-run-log (2026-09-12, R1+R2).
 - [×1] Schema, indexing and unbounded-growth concerns have no owning zone: R1 reads for shape,
   R2 for duplication, R3 for logic, R4 for doc currency. The missing `run_id` index on
   `llm_calls` — queried on every model call, now synchronously — was the most operationally
@@ -193,15 +232,6 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   migrations directly contradict — so the branch merges leaving the most misleading page in
   `docs/` untouched for the next schema change.
   Runs: llm-io-audit-trail (2026-09-22).
-- [×2] A known-and-accepted carve-out (FEAT-0003's stale LLMService diagram is P7-owned)
-  lives only in the master plan's phase map; the review brief's known-and-accepted list is
-  assembled ad hoc each round, so the same carve-out must be re-derived or gets re-flagged.
-  Second instance (R4): `LLM_CORE_REFACTOR_PLAN.md` § P6 still describes the dropped
-  `remember_fact` tool and pre-design-doc repository names; the plan's Discrepancies table
-  records it and P7 owns the doc cleanup, but a reviewer with a narrower diff window could
-  misclassify it as new rot.
-  Runs: refactor-p1-legacy-llm-retirement (2026-09-16), refactor-p6-facts-and-progress-blocks (2026-09-19).
-
 - [×1] AC-1322's "within ±2 pp of v0" was proven loosely: run 1 exceeded the threshold on
   three checks and the criterion was closed by "did not reproduce on re-run" (n=3, fresh
   samples each run). The plan's Step 3 protocol authorises exactly this, and the evidence JSON
@@ -209,31 +239,11 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   machine-readable report). Rule candidate: when noise is suspected, require either two full
   runs with a computed delta or a larger n before declaring "within ±2 pp".
   Runs: refactor-p2-context-assembler (2026-09-17).
-
 - [×1] R2's mandate excludes plan-sanctioned shapes, which by design left YAGNI coverage over
   the new `prompts/` tree thin: the repeating ~10-line render-context literal across the five
   subgraphs is plan-prescribed and owned by refactor-p2-context-assembler, so it was not
   filed — but nothing tracks that the exclusion was exercised, only that it existed.
   Runs: refactor-p2-prompt-modules (2026-09-16).
-
-- [×2] A zone prompt contradicting the shared severity contract falls between all four zones:
-  it is not architecture, duplication, correctness, or docs. The wider final review caught it
-  twice in one run (R2's YAGNI citation, R3's verification-evidence citation). Nothing in the
-  phase looks at the phase's own consistency. Runs: mandatory-plan-review (2026-09-12, ×2).
-- [×2] R3's zone asks it to confirm each AC has a test, but AC-1302 is a grep-and-green-checks
-  criterion with no test of its own by design — it asserts an absence. There is no written
-  guidance on how a reviewer discharges "every AC has a test" for absence-shaped ACs. R3
-  treated re-running the grep and the three checks as the equivalent evidence; a line in
-  SUPERPOWERS_INTEGRATION.md § Rules of engagement saying that absence-shaped ACs are verified
-  by re-execution of their stated command rather than by a test would remove the ambiguity.
-  Runs: refactor-p0-dead-code (2026-09-12), refactor-p0-dead-code (2026-09-12, third run).
-- [×2] The plan's normative step code and Architecture prose are not reconciled against the
-  shipped implementation by any zone: refactor-p0-run-log's plan still showed the
-  `configurable`-channel handler that live verification had proved dead (fixed only in the
-  Task 6 deviation prose), so a future agent re-executing the plan text verbatim would
-  reintroduce the zero-token bug. No zone's mandate covers "plan step-code vs shipped code"
-  consistency.
-  Runs: refactor-p0-run-log (2026-09-12, R1+R2).
 - [×1] R4's mandate says "IDs are not reused — check any new AC-####/BR-*/INV-* against the
   repo", but the checked-in `node scripts/state.mjs --check` currently fails on this branch
   ("docs/STATE.md AUTO block is stale"). STATE.md is squarely in R4's layer-discipline
@@ -282,15 +292,6 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   demonstrably reads. The skill should say a zone may execute the repo's own lint/type-check
   against the branch tree, and that a passing verification command itself requires verification.
   Runs: ports-layout-consistency (2026-09-14).
-- [×3] A type-only refactor plan with no `AC-####` ids slips through R3's "every AC has a test"
-  check by having no ACs to check — this plan states four prose clauses instead, and defines no
-  tests. `SUPERPOWERS_INTEGRATION.md` rule 2 requires plan tasks to cite the AC they implement;
-  nothing catches a plan that cites none. R1 noticed the same absence and flagged it as outside
-  its zone, so the gap is visible to reviewers but owned by none. Second occurrence: a promoted
-  backlog-finding plan (not a phase-spec task) also carries no ACs by design — R3 correctly
-  treated the absence as inapplicable rather than a gap, but the zone brief still gives no
-  explicit instruction for this plan shape, so the correct call was judgment, not guidance.
-  Runs: ports-layout-consistency (2026-09-14), lint-glob-fix (2026-09-14), structured-output-json-object-mode (2026-09-19).
 - [×1] R2 has no rule for duplication that is *pre-existing and untouched by the branch* but
   which the branch's own rename broke: the eval stub's comment anchoring a hand-mirrored domain
   type cited `service.ports.ts`, a filename this diff renamed. R2 reported it advisory on the
@@ -308,7 +309,6 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   — a reviewer re-running the stated verification command hit a non-zero exit and faced a
   false blocking call.
   Runs: refactor-p0-run-log re-run (2026-09-12), refactor-p2-prompt-modules (2026-09-16).
-
 - [×1] "Every AC has a test" has no procedure for promised test files that simply do not
   exist while the task's broad jest command still passes: the adapter and commit/handler
   test files listed in plan tasks were never written, the old persist.node tests were
@@ -316,7 +316,6 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   Proposed companion rule: a plan task's listed test files must exist at close-out, and
   deleting old behavioural tests requires naming where each `it` moved.
   Runs: refactor-p3-run-context-commit (2026-09-17).
-
 - [×1] The zone rule "every AC has a test; a claimed AC with no test is blocking" misfires
   on this plan's two live/budget-gated ACs: AC-1345 is by definition live-DB evidence and
   AC-1344 is owner-gated with a sanctioned pending state. Rule candidate for the zone file
@@ -326,16 +325,12 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   named artifact is absent." Distinct from the absence-shaped-AC entry above: that one
   discharges by re-executing a stated command, this one by an artifact the plan names.
   Runs: refactor-p4-episode-memory (2026-09-18).
-
-- [×2] Code that stops matching the *mechanism* a durable spec names (ADR-0013 §7:
-  "`structured` uses `withStructuredOutput`") is claimed by both R1 ("declared boundaries") and
-  R4 (doc currency) — both raised it as blocking this run. Neither zone file says which owns a
-  mechanism drift that crosses no layer, nor who escalates a blocking finding on a document the
-  zones may not edit (R4: "who actually escalates it, and where is that recorded?"). One line in
-  the skill — mechanism drift is R4's; the orchestrator escalates read-only-spec findings to the
-  owner at close-out — would settle both. Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19).
 - [×1] Zone R3 says test names carry BR/AC refs "per `docs/CONTRIBUTING_AI.md`", but that file has no such rule, so missing AC refs (`planning-set-logging`, `recent-history-status`) cannot be graded. Proposed wording for CONTRIBUTING_AI Principles: "Every `describe` of a test that proves an AC names that AC id." Runs: coach-baseline 2026-09-25 (R3).
 - [×1] R3 checks AC-to-test mapping but not teardown coverage of CLI entry points; the smoke's `exitAfterCleanup` was proven only by live runs. Proposed for CONTRIBUTING_AI: "A CLI entry point that owns process-level resources (DB pools, native sessions) proves its teardown on the success, refusal and thrown-error paths; a live run covers only the first." Runs: smoke-test 2026-09-25 (R3).
+- [×1] For hand-off paths the review verified only what gets delivered (scripted text on the blocked turn), not what the model is told in that turn (tool-result wording, tool description) — R3 found both stale on the re-run. Proposed: a hand-off change's review checks the tool-result text and tool description the model sees on every branch of the hand-off decision.
+  Runs: transition-handoff (2026-09-25).
+- [×1] R2's brief for an extracted infra helper named "existing backfill scripts" as search scope; the real overlap was a repository method (`ExerciseRepository.updateEmbedding`). Proposed: R2 prompts name `src/infra/db/repositories` and `src/domain/**/ports` as search scope for extracted infra helpers.
+  Runs: transition-handoff (2026-09-25).
 
 ## Rule candidates
 
@@ -346,6 +341,108 @@ backs it. Each entry names the proposed wording and where it would live
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
 
+- [×4] `CONTRIBUTING_AI.md`'s DRY bullet reads as production-only ("no copy-paste, no
+  reinvention of what the repo already has"); R2 applied it to duplicated test fixtures
+  (`USER`, `ctxConfig`) and blocked, but a reviewer could as reasonably have downgraded them.
+  Third run: the same scripted-model test double reimplemented inline in a second file could
+  only be advisory — DRY as written targets a copied *symbol*, not an unexported shape.
+  Proposed line: "DRY applies to test fixtures and harnesses too, including the same test
+  double reimplemented in two files."
+  Fourth run: R2 applied DRY equally to test/fixture code in `tests/integration/scenarios` and noted the zone file does not say whether it should; that choice produced 2 of its 3 blocking findings.
+  Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19), training-journey-scenarios (2026-09-20), transition-handoff (2026-09-25).
+- [×3] A docs-reconcile task's checklist written from the author's memory left five durable
+  docs drifted (API_SPEC.md, three FEAT-* specs, BUGS.md/MANUAL_TEST_PLAN pointers) while
+  every enumerated step was ticked done. Proposed sentence for the factual-bucket definition
+  in `SUPERPOWERS_INTEGRATION.md` rule 3: a docs-reconcile step's file list must be derived
+  mechanically — for every file/symbol the branch deletes or moves, paste
+  `git grep -l -e <deleted-path-stem> -e <renamed-symbol> -- docs` into the plan and tick
+  items only against that list. Second occurrence adds a sharper variant: the drift hit
+  docs that the same branch's own edits cited — CONTRIBUTING_AI's rewritten section still
+  pointed readers at `conversation.spec.md` for verification two lines after declaring the
+  mechanism deleted — so the checklist author did not notice even while editing an adjacent
+  paragraph about it.
+  Third run: R4 found the close-out doc task (written before the code) missed CONTRIBUTING_AI.md run-row semantics, ARCHITECTURE.md reply semantics and prompt tree, ADR-0013 §5.1 and BUG-032. Proposed principle for CONTRIBUTING_AI.md: "A plan's close-out doc task is written from the diff, not from the plan: before `Status: done`, grep the durable layer for every symbol the diff changes and list each hit in the close-out task."
+  Runs: refactor-p3-run-context-commit (2026-09-17), refactor-p4-episode-memory (2026-09-18), transition-handoff (2026-09-25).
+- [×2] R3's "describe/it names carry BR/AC references per `docs/CONTRIBUTING_AI.md`" has no slot for
+  `BUG-0NN`, which was this plan's owner-designated source of truth, nor for plan-local `AC-LSR-N`
+  acceptance ids that are not durable `AC-####` specs. The six repro files do carry `BUG-0NN` in
+  their `describe()` names and both ids in their header docblocks — satisfying CONTRIBUTING_AI.md's
+  actual text — but a literal reading of the zone's paraphrase would flag every bug-reproduction file.
+  Either the zone wording or the ID catalogue should acknowledge `BUG-0NN` as a valid test-naming
+  citation for reproduction plans. Seen again from the other side: the only matching text in that
+  doc (`CONTRIBUTING_AI.md:181`, "Reference BR-CONV-001..BR-CONV-007 in code and tests") is scoped
+  to one rule family, so the bullet's citation does not support a general naming mandate for any
+  id — if one is wanted, it needs its own bullet in `CONTRIBUTING_AI.md`.
+  Runs: session-2026-09-21-repro (2026-09-22), llm-io-audit-trail (2026-09-22).
+- [×2] A helper extracted into a shared module leaves its pre-existing call sites untouched,
+  and no rule says that is unfinished. On this branch Task 2 moved the domain renderers into
+  `prompts/blocks/` and only `training/v1.ts` was repointed; `chat/v1.ts`, `plan_creation/v1.ts`
+  and `session_planning/v1.ts` kept byte-identical copies for three review passes, each pass
+  paying to rediscover them. The plan's own text required the import-back, but a reviewer with
+  no plan would have had nothing to cite. Proposed principle for `docs/CONTRIBUTING_AI.md`
+  § Principles & Boundaries, next to the DRY bullet: "When a helper is extracted into a shared
+  module, every pre-existing call site in the same change is repointed to it. A new shared
+  module standing beside surviving copies is a partial extraction, not an accepted intermediate
+  state." Second occurrence, the type-level variant, from the fix to the fix: `RenderableBlock<D>`
+  and `BudgetBlockInput<D>` were declared field-for-field identically in two modules purely so
+  values could cross a module boundary, i.e. a duplication fix that introduced a duplicate type.
+  The same bullet should cover it: "Do not declare a second interface that is a structural subset
+  of an existing one to decouple two modules; import the canonical type, or narrow it with
+  `Pick`/`Omit`." Runs: refactor-p4-context-budget (2026-09-19, R2 second and third passes).
+- [×2] R1's "always blocking" rule treats any `docs/` edit outside `docs/superpowers/` as
+  blocking unless escalated, but gives the reviewer no positive test for what a *discharged*
+  escalation looks like in the diff. Judging the fix commit required evidence that lives
+  outside the diff entirely — the owner's instruction, in a conversation the reviewer cannot
+  see — and the only in-repo trace is prose in the plan's `## Review` section. Proposed wording
+  for `SUPERPOWERS_INTEGRATION.md` rule 3: "A durable-spec edit made on an execution branch is
+  legitimate only when the plan's `## Review` (or `## Execution notes`) section records, before
+  the edit's commit, the finding that prompted it and the owner's instruction to fix; the commit
+  message references that record. A reviewer treats such an edit as discharged escalation, not a
+  silent edit. An edit with no such record is blocking regardless of how correct it is." This
+  makes the distinction auditable from the branch alone. Independently re-derived by the third
+  run's R1, which had to reconstruct legitimacy from commit timestamps (escalation record at
+  13:49 preceding the edit at 14:15) — confirming the gap is systemic, not incidental. Third
+  run, the standing-delegation variant: the owner delegated an obvious-fix class mid-review and
+  it was recorded as a paragraph in rule 3 of SUPERPOWERS_INTEGRATION.md — edited by the very
+  branch it authorizes, so a future reader cannot distinguish an owner ruling from
+  self-authorization until the branch merges. Same proposal, same fix: the ruling and its
+  provenance must be auditable from the branch (plan record + commit), not from a conversation.
+  Runs: refactor-p0-dead-code (2026-09-12, re-run), refactor-p0-dead-code (2026-09-12, third run), refactor-p1-legacy-llm-retirement (2026-09-16).
+- [×2] A doc-rot fix can legitimately manufacture new doc rot, and no rule makes that blocking.
+  This branch's fix commit corrected `registration.validation.ts`'s location in ARCHITECTURE.md's
+  module tree but left `FEAT-0006:115` stating the old `validation/` path — a divergence created
+  *by the fix*. DOCUMENTATION_GUIDE § Context hygiene ("One current, unambiguous version of
+  everything") reads as a principle, not an obligation attached to an edit. Proposed principle for
+  `docs/CONTRIBUTING_AI.md`: "When a fix corrects a file path or module location in one document,
+  grep the repo for that path and correct or backlog every other occurrence in the same commit. A
+  fix that leaves a sibling statement of the same fact uncorrected has created a divergence, and a
+  reviewer flags it as blocking on the fix commit."
+  Second occurrence, the rename variant: three of R4's four blocking findings on this branch
+  were one failure mode — the diff renamed files and the durable docs citing those paths were
+  not swept. Proposed wording, for the same `CONTRIBUTING_AI.md` § Docs-First Workflow: "When a
+  change renames, moves, or deletes a file that durable docs cite by path, `grep -rn
+  '<old-basename>' docs/` and update every hit in the same change; a stale path in a durable doc
+  is a defect, not a leftover." This makes the sweep a checkable close-out step rather than
+  reviewer judgement. Third run, both halves at once: a deletion branch's reconciliation commit
+  fixed exactly the named findings in exactly the named files instead of re-running the class
+  sweep — the next review round found two more same-class hits (LOGGING_GUIDE, CONTRIBUTING_AI)
+  that a class grep over the deleted identifiers would have caught in the same commit; and the
+  R4-round-1 meta ("a task that deletes a file must grep all durable docs for the deleted
+  identifiers, not just the lines the plan names") was itself the missing written rule.
+  Runs: refactor-p0-dead-code (2026-09-12, third run), ports-layout-consistency (2026-09-14), refactor-p1-legacy-llm-retirement (2026-09-16).
+  Fourth occurrence, the replace variant: a plan's docs-reconcile step enumerated the files to
+  fix by name and missed a bystander durable doc (ARCHITECTURE.md still describing the registry
+  as "PHASE_PROMPTS (+ blocks per phase)" after the branch replaced `blocks` with
+  `layout`+`blocksForLayout`) — R4's meta proposes the same mechanical cure: a pre-close-out
+  grep sweep over docs/ for the names the diff moved, not a hand-written file list.
+  Runs: refactor-p2-context-assembler (2026-09-17).
+- [×2] The plan's per-task verification commands are evidenced only by ticked checkboxes;
+  Task 6 was the only task with pasted command output. Proposed rule for
+  `SUPERPOWERS_INTEGRATION.md` close-out: a plan records one line of actual command output
+  (e.g. the Jest suite summary) per task, so R3's "verification was run" check reads evidence
+  instead of trusting ticks.
+  Second run: R3 could not see Tasks 3–5's verification evidence — it lived only in Orca `worker_done` messages, commit messages held no command output. Proposed for `CONTRIBUTING_AI.md`: "A worker's commit message records each verification command and its summary line (suites/tests passed)."
+  Runs: refactor-p0-run-log (2026-09-12), transition-handoff (2026-09-25).
 - [×1] Nothing states where DB persistence may live *inside* infra. `ARCHITECTURE.md:362` only
   says "Keep DB logic in repositories; do not call Drizzle directly from controllers or domain
   services", and neither `infra/ai/llm-call-recorder.ts` nor `infra/observability/transcript-reader.ts`
@@ -379,25 +476,6 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   by an owner-installed cron; the rows themselves are never deleted." With those,
   `LOGGING_GUIDE.md` would cite durable IDs instead of plan-scoped `AC-AT-*`.
   Runs: llm-io-audit-trail (2026-09-22).
-- [×2] R3's "describe/it names carry BR/AC references per `docs/CONTRIBUTING_AI.md`" has no slot for
-  `BUG-0NN`, which was this plan's owner-designated source of truth, nor for plan-local `AC-LSR-N`
-  acceptance ids that are not durable `AC-####` specs. The six repro files do carry `BUG-0NN` in
-  their `describe()` names and both ids in their header docblocks — satisfying CONTRIBUTING_AI.md's
-  actual text — but a literal reading of the zone's paraphrase would flag every bug-reproduction file.
-  Either the zone wording or the ID catalogue should acknowledge `BUG-0NN` as a valid test-naming
-  citation for reproduction plans. Seen again from the other side: the only matching text in that
-  doc (`CONTRIBUTING_AI.md:181`, "Reference BR-CONV-001..BR-CONV-007 in code and tests") is scoped
-  to one rule family, so the bullet's citation does not support a general naming mandate for any
-  id — if one is wanted, it needs its own bullet in `CONTRIBUTING_AI.md`.
-  Runs: session-2026-09-21-repro (2026-09-22), llm-io-audit-trail (2026-09-22).
-
-- [×3] `CONTRIBUTING_AI.md`'s DRY bullet reads as production-only ("no copy-paste, no
-  reinvention of what the repo already has"); R2 applied it to duplicated test fixtures
-  (`USER`, `ctxConfig`) and blocked, but a reviewer could as reasonably have downgraded them.
-  Third run: the same scripted-model test double reimplemented inline in a second file could
-  only be advisory — DRY as written targets a copied *symbol*, not an unexported shape.
-  Proposed line: "DRY applies to test fixtures and harnesses too, including the same test
-  double reimplemented in two files." Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19), training-journey-scenarios (2026-09-20).
 - [×1] A snapshot test can claim to freeze a specific version while actually rendering a moving
   alias, and nothing catches it. P6 Task 2 found `evals/snapshots/__tests__/prompt-snapshots.unit.test.ts`'s
   two `summarizer v2 / …` tests rendering `SUMMARIZER_PROMPT` — the alias that Task 2 was in the
@@ -426,21 +504,6 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   the answer was only derivable from how `ConversationPhase` happened to be re-exported. Proposed:
   one line in the module-layout preamble stating the convention, so the next plan does not
   re-derive it. Runs: refactor-p5-concurrency-delivery (2026-09-19, R1).
-- [×2] A helper extracted into a shared module leaves its pre-existing call sites untouched,
-  and no rule says that is unfinished. On this branch Task 2 moved the domain renderers into
-  `prompts/blocks/` and only `training/v1.ts` was repointed; `chat/v1.ts`, `plan_creation/v1.ts`
-  and `session_planning/v1.ts` kept byte-identical copies for three review passes, each pass
-  paying to rediscover them. The plan's own text required the import-back, but a reviewer with
-  no plan would have had nothing to cite. Proposed principle for `docs/CONTRIBUTING_AI.md`
-  § Principles & Boundaries, next to the DRY bullet: "When a helper is extracted into a shared
-  module, every pre-existing call site in the same change is repointed to it. A new shared
-  module standing beside surviving copies is a partial extraction, not an accepted intermediate
-  state." Second occurrence, the type-level variant, from the fix to the fix: `RenderableBlock<D>`
-  and `BudgetBlockInput<D>` were declared field-for-field identically in two modules purely so
-  values could cross a module boundary, i.e. a duplication fix that introduced a duplicate type.
-  The same bullet should cover it: "Do not declare a second interface that is a structural subset
-  of an existing one to decouple two modules; import the canonical type, or narrow it with
-  `Pick`/`Omit`." Runs: refactor-p4-context-budget (2026-09-19, R2 second and third passes).
 - [×1] BR-LLM-005 says pruning never deletes the latest checkpoint per `(thread_id,
   checkpoint_ns)`, and says nothing about the blobs those checkpoints reference or about
   checkpoints retained by age rather than by being latest. The gap let a correct-looking query
@@ -469,25 +532,6 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   `ARCHITECTURE.md`) alongside the existing domain/langchain one, so future R1 reviews of an
   app-layer file importing infra have a rule to cite in either direction.
   Runs: lint-glob-fix (2026-09-14).
-- [×2] R1's "always blocking" rule treats any `docs/` edit outside `docs/superpowers/` as
-  blocking unless escalated, but gives the reviewer no positive test for what a *discharged*
-  escalation looks like in the diff. Judging the fix commit required evidence that lives
-  outside the diff entirely — the owner's instruction, in a conversation the reviewer cannot
-  see — and the only in-repo trace is prose in the plan's `## Review` section. Proposed wording
-  for `SUPERPOWERS_INTEGRATION.md` rule 3: "A durable-spec edit made on an execution branch is
-  legitimate only when the plan's `## Review` (or `## Execution notes`) section records, before
-  the edit's commit, the finding that prompted it and the owner's instruction to fix; the commit
-  message references that record. A reviewer treats such an edit as discharged escalation, not a
-  silent edit. An edit with no such record is blocking regardless of how correct it is." This
-  makes the distinction auditable from the branch alone. Independently re-derived by the third
-  run's R1, which had to reconstruct legitimacy from commit timestamps (escalation record at
-  13:49 preceding the edit at 14:15) — confirming the gap is systemic, not incidental. Third
-  run, the standing-delegation variant: the owner delegated an obvious-fix class mid-review and
-  it was recorded as a paragraph in rule 3 of SUPERPOWERS_INTEGRATION.md — edited by the very
-  branch it authorizes, so a future reader cannot distinguish an owner ruling from
-  self-authorization until the branch merges. Same proposal, same fix: the ruling and its
-  provenance must be auditable from the branch (plan record + commit), not from a conversation.
-  Runs: refactor-p0-dead-code (2026-09-12, re-run), refactor-p0-dead-code (2026-09-12, third run), refactor-p1-legacy-llm-retirement (2026-09-16).
 - [×1] The AC/BR-in-test-name convention is real (confirmed by training.subgraph.unit.test.ts
   precedent) but is not written down anywhere central — CONTRIBUTING_AI.md states it in prose
   ("IDs must appear... in tests") while apps/server/TESTING.md, the doc CONTRIBUTING_AI.md defers
@@ -564,34 +608,6 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   specifically, where 'removed the tests' and 'there were no tests' have identical end states but
   very different implications for coverage.
   Runs: refactor-p0-dead-code (2026-09-12, third run).
-- [×2] A doc-rot fix can legitimately manufacture new doc rot, and no rule makes that blocking.
-  This branch's fix commit corrected `registration.validation.ts`'s location in ARCHITECTURE.md's
-  module tree but left `FEAT-0006:115` stating the old `validation/` path — a divergence created
-  *by the fix*. DOCUMENTATION_GUIDE § Context hygiene ("One current, unambiguous version of
-  everything") reads as a principle, not an obligation attached to an edit. Proposed principle for
-  `docs/CONTRIBUTING_AI.md`: "When a fix corrects a file path or module location in one document,
-  grep the repo for that path and correct or backlog every other occurrence in the same commit. A
-  fix that leaves a sibling statement of the same fact uncorrected has created a divergence, and a
-  reviewer flags it as blocking on the fix commit."
-  Second occurrence, the rename variant: three of R4's four blocking findings on this branch
-  were one failure mode — the diff renamed files and the durable docs citing those paths were
-  not swept. Proposed wording, for the same `CONTRIBUTING_AI.md` § Docs-First Workflow: "When a
-  change renames, moves, or deletes a file that durable docs cite by path, `grep -rn
-  '<old-basename>' docs/` and update every hit in the same change; a stale path in a durable doc
-  is a defect, not a leftover." This makes the sweep a checkable close-out step rather than
-  reviewer judgement. Third run, both halves at once: a deletion branch's reconciliation commit
-  fixed exactly the named findings in exactly the named files instead of re-running the class
-  sweep — the next review round found two more same-class hits (LOGGING_GUIDE, CONTRIBUTING_AI)
-  that a class grep over the deleted identifiers would have caught in the same commit; and the
-  R4-round-1 meta ("a task that deletes a file must grep all durable docs for the deleted
-  identifiers, not just the lines the plan names") was itself the missing written rule.
-  Runs: refactor-p0-dead-code (2026-09-12, third run), ports-layout-consistency (2026-09-14), refactor-p1-legacy-llm-retirement (2026-09-16).
-  Fourth occurrence, the replace variant: a plan's docs-reconcile step enumerated the files to
-  fix by name and missed a bystander durable doc (ARCHITECTURE.md still describing the registry
-  as "PHASE_PROMPTS (+ blocks per phase)" after the branch replaced `blocks` with
-  `layout`+`blocksForLayout`) — R4's meta proposes the same mechanical cure: a pre-close-out
-  grep sweep over docs/ for the names the diff moved, not a hand-written file list.
-  Runs: refactor-p2-context-assembler (2026-09-17).
 - [×1] Nothing in the repo says an advisory recorded in a plan's `## Review` section must not also
   be copied into `docs/BACKLOG.md` verbatim — this branch stores all six of its advisories twice
   in near-identical prose with no ID linking the pair, so the two copies must be kept in sync or
@@ -618,12 +634,6 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   structural stub, it is typed against the port (`satisfies`/`: T`) so drift fails type-check
   rather than silently diverging." That would make this class machine-detectable.
   Runs: ports-layout-consistency (2026-09-14).
-- [×1] The plan's per-task verification commands are evidenced only by ticked checkboxes;
-  Task 6 was the only task with pasted command output. Proposed rule for
-  `SUPERPOWERS_INTEGRATION.md` close-out: a plan records one line of actual command output
-  (e.g. the Jest suite summary) per task, so R3's "verification was run" check reads evidence
-  instead of trusting ticks.
-  Runs: refactor-p0-run-log (2026-09-12).
 - [×1] `SUPERPOWERS_INTEGRATION.md` enumerates durable specs (ADRs, domain/feature specs,
   API_SPEC, LLM_CORE_REFACTOR_PLAN, PROMPT_EVAL_FRAMEWORK) — DB_SETUP.md and ARCHITECTURE.md
   are not on the list, so their currency is enforced only by DOCUMENTATION_GUIDE prose; the
@@ -686,18 +696,6 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   done." Related to the ports-layout entry on claimed-vs-real output but distinct: that one
   governs the reviewer's brief, this one the executor's checkbox.
   Runs: refactor-p3-run-context-commit (2026-09-17).
-- [×2] A docs-reconcile task's checklist written from the author's memory left five durable
-  docs drifted (API_SPEC.md, three FEAT-* specs, BUGS.md/MANUAL_TEST_PLAN pointers) while
-  every enumerated step was ticked done. Proposed sentence for the factual-bucket definition
-  in `SUPERPOWERS_INTEGRATION.md` rule 3: a docs-reconcile step's file list must be derived
-  mechanically — for every file/symbol the branch deletes or moves, paste
-  `git grep -l -e <deleted-path-stem> -e <renamed-symbol> -- docs` into the plan and tick
-  items only against that list. Second occurrence adds a sharper variant: the drift hit
-  docs that the same branch's own edits cited — CONTRIBUTING_AI's rewritten section still
-  pointed readers at `conversation.spec.md` for verification two lines after declaring the
-  mechanism deleted — so the checklist author did not notice even while editing an adjacent
-  paragraph about it.
-  Runs: refactor-p3-run-context-commit (2026-09-17), refactor-p4-episode-memory (2026-09-18).
 - [×1] A deps interface narrowing what the implementation may use, hiding real needs behind
   `as`-casts: `ConversationRunnerDeps.graph` declares only `{ invoke }` while `clearContext`
   calls `graph.getState(...)` through an unchecked cast. Proposed wording for
@@ -705,7 +703,6 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   method the implementation calls; widening a dependency through a type cast instead of
   extending the interface is a review finding."
   Runs: refactor-p4-episode-memory (2026-09-18).
-
 - [×1] A plan's STOP verification notes are hand-typed pass counts ("36/36", "tsc clean"),
   not raw command output — a reviewer cannot tell real evidence from a plausible claim
   without re-executing everything (R3 did, and all matched). Proposed principle for
@@ -757,3 +754,9 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   sentence in `close-out-review` § What a fix owes if the stricter reading is ever wanted.
   Runs: llm-io-audit-trail (2026-09-22).
 - [×1] The owner's rule "real workout = `completed` with ≥1 logged set" (2026-09-24) is enforced by code but lives only in `BUGS.md` BUG-031 and a port JSDoc. Proposed `BR-TRAINING-0xx` in `docs/domain/training.spec.md`: "Recent training history and days-since-last-workout consider only real workouts: status `completed` with at least one logged set." Needs owner approval (durable spec). Runs: coach-baseline 2026-09-25 (R4).
+- [×1] A plan's Global Constraint "flag off must be today's behaviour" carries no AC/BR/INV id, so R3 could report a flag-off regression (commit now carries `compactReason` forward) only as advisory. Proposed for `SUPERPOWERS_INTEGRATION.md` or `CONTRIBUTING_AI.md`: "A feature flag's off state must be proven unchanged by at least one test per changed node; a plan that states a flag-off invariant gives it an AC id."
+  Runs: transition-handoff (2026-09-25).
+- [×1] Frozen prompt versions (`phases/*/vN.ts`, pinned by AC-1321 snapshots) are copied whole by convention, which conflicts with DRY as written. Proposed for `CONTRIBUTING_AI.md` "Principles & Boundaries": "DRY exception: a new prompt version under infra/ai/prompts/phases/ is a full copy of its predecessor; frozen versions are never refactored to share code with the current one."
+  Runs: transition-handoff (2026-09-25).
+- [×1] When a fix commit reverts an approach (here embedding under Jest), nothing requires checking that what the abandoned approach changed (dropping the `embedBatch` call, a "because of Jest" comment) was reverted too. Proposed for `CONTRIBUTING_AI.md`: "A fix that abandons an approach reverts every change that approach made."
+  Runs: transition-handoff (2026-09-25).

@@ -143,6 +143,9 @@ gates as L3 (`RUN_LLM_EVALS=1`, `_test` DB only, shared call ceiling).
 - Cost: ≈ user steps × 1–3 model calls (one agent call per user turn plus
   tool hops), inside the standard `EVALS_CALL_CEILING` gate; record the run
   in `evals/COST_LEDGER.md` afterwards like any L3 run.
+- Flag: the script sets `TRANSITION_HANDOFF_TARGETS=training,session_planning`
+  in its own env (process env wins over `--env-file`), so the smoke always
+  exercises the U5 same-run hand-off (AC-TH-7).
 - Output: the per-step transcript (user text, delivered coach reply, tools
   called, phase after, each check ✓/✗) goes to stdout AND to
   `evals/reports/<scenarioId>-<ISO>.md` (gitignored) — `smoke-<ISO>.md` for

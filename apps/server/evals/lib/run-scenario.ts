@@ -25,7 +25,11 @@ import { desc, eq, inArray } from 'drizzle-orm';
 
 import type { ConversationPhase } from '@domain/conversation/phases';
 import { type ConversationRunPort, CONVERSATION_RUN_PORT_TOKEN } from '@domain/conversation/ports';
-import { type IWorkoutSessionRepository, WORKOUT_SESSION_REPOSITORY_TOKEN } from '@domain/training/ports';
+import {
+  type IEmbeddingService,
+  type IWorkoutSessionRepository,
+  WORKOUT_SESSION_REPOSITORY_TOKEN,
+} from '@domain/training/ports';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 import type { CompiledConversationGraph } from '@infra/ai/graph/conversation.graph';
 import { db } from '@infra/db/drizzle';
@@ -95,6 +99,13 @@ export interface RunScenarioOptions {
   /** Called at the start of every step (advance or user), before it runs — per-step scripts queue here. */
   onStepStart?: (stepIndex: number) => void;
   /**
+   * Embeds any scenario-seeded exercise still missing a vector. Left
+   * undefined, no embedding is computed at all (today's Jest behaviour —
+   * the real ONNX pipeline crashes inside Jest's runtime, see
+   * `embed-pending-exercises.ts`). Only the live L3 CLI path passes one.
+   */
+  embeddingService?: IEmbeddingService;
+  /**
    * Called with each step's observation right after the step completes,
    * before the next step starts. The deterministic layer drains the scripted
    * model's recorded inputs here — a multi-step journey cannot attribute
@@ -160,7 +171,7 @@ export async function runScenario(scenario: Scenario, opts: RunScenarioOptions =
   const sessionRepo = container.get<IWorkoutSessionRepository>(WORKOUT_SESSION_REPOSITORY_TOKEN);
 
   const t0 = new Date();
-  const world = await seedScenarioRows(scenario.past, t0);
+  const world = await seedScenarioRows(scenario.past, t0, opts.embeddingService);
   await seedCheckpointState(graph, { userId: world.userId, past: scenario.past, t0 });
   opts.onSeeded?.({ userId: world.userId, planId: world.planId, t0 });
 
@@ -243,11 +254,14 @@ export async function runScenario(scenario: Scenario, opts: RunScenarioOptions =
 /**
  * Every run wires its own PostgresSaver, which owns a pg pool. A journey file
  * that runs the scenario several times (the fact-lifecycle journeys run each
- * one with the course check on AND off) would otherwise leave a pool per run
- * open until the process exits and exhaust the test database's connections
- * ("too many clients already") for every file that follows.
+ * one with the course check on AND off), or a test that wires its own extra
+ * graph beyond what `runScenario` builds (close-out review Blocking 2), would
+ * otherwise leave a pool per run open until the process exits and exhaust the
+ * test database's connections ("too many clients already") for every file
+ * that follows. Exported so callers driving their own graph/container reuse
+ * this instead of copying it.
  */
-async function releaseCheckpointer(graph: CompiledConversationGraph): Promise<void> {
+export async function releaseCheckpointer(graph: CompiledConversationGraph): Promise<void> {
   const checkpointer = (graph as unknown as { checkpointer?: { end?: () => Promise<void> } }).checkpointer;
   await checkpointer?.end?.();
 }

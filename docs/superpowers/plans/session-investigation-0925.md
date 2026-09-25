@@ -6,6 +6,7 @@
 
 - Status: in progress
 - Branch: plan/session-investigation-0925
+- After: transition-handoff
 
 **Goal (owner, 2026-09-25, verbatim):** «найти, воспроизвести, понять, почему она в текущих тестах не отловилась …
 Надо, чтобы все тесты, которые должны были ее поймать, они в итоге поймали. Мы правим тесты. И потом, после моего
@@ -150,7 +151,7 @@ switching issue"); (2) nothing can change the profile language; (3) the bot pick
 `msg.from.language_code` (`apps/bot/handlers.ts:136`), not from the profile. Language must never change behaviour —
 only the language of fixed texts.
 
-**Sequencing:** `plan/transition-handoff` (U5, in close-out) rewrites `tool-executor.ts`, adds training prompt `v4`,
+**Sequencing (updated 2026-09-25):** `plan/transition-handoff` was merged INTO this branch (owner: «давай»; U5 idle, reviewed clean, not yet on `dev`), so R1, R3, R4 build on U5's code; this plan merges into `dev` only after U5 does (`After: transition-handoff`). Original note: U5 rewrites `tool-executor.ts`, adds training prompt `v4`,
 the directives index and phase specs. R1, R3, R4 start only after U5 is merged into `dev` and this branch is rebased
 onto it. R2 and R5 touch none of those files and start now.
 

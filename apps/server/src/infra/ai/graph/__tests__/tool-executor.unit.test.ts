@@ -7,11 +7,12 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import { END } from '@langchain/langgraph';
 
+import type { ConversationPhase } from '@domain/conversation/phases';
 import { ok, systemError } from '@domain/conversation/tool-outcome';
 
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
-import { afterTools, buildToolExecutor } from '../tool-executor';
+import { afterTools, buildAfterTools, buildToolExecutor } from '../tool-executor';
 import { type ToolPolicy, TRAINING_TOOL_PRIORITY } from '../tool-policy';
 
 interface FakeTool {
@@ -357,6 +358,209 @@ describe('buildToolExecutor (AC-1332)', () => {
         cfg,
       );
     }
+  });
+
+  describe('transition hand-off (transition-handoff plan Task 1/2, AC-TH-2)', () => {
+    const CARRIER_ID = 'carrier-ai-1';
+
+    function stateWithCarrier(
+      calls: Array<{ name: string; args: Record<string, unknown>; id: string }>,
+      overrides: { phase?: ConversationPhase; activeSessionId?: string | null } = {},
+    ) {
+      return {
+        messages: [new AIMessage({ id: CARRIER_ID, content: '', tool_calls: calls })],
+        userId: 'user-1',
+        user: { languageCode: null },
+        phase: overrides.phase ?? 'session_planning',
+        activeSessionId: overrides.activeSessionId,
+      };
+    }
+
+    it('empties the carrier AIMessage (same id, keeps tool_calls) when the batch commits an ACCEPTED hand-off transition', async () => {
+      const calls = [{ name: 'start_training_session', args: {}, id: 'a' }];
+      const starter = fakeTool(
+        'start_training_session',
+        jest.fn().mockResolvedValue({
+          outcome: ok('Session created'),
+          update: {
+            pendingTransition: { toPhase: 'training', reason: 'session_planning_complete' },
+            activeSessionId: 's-42',
+          },
+        }),
+      );
+      const executor = buildToolExecutor(asTools(starter), { llmErrorBudget: Infinity }, new Set(['training']));
+
+      const result = (await executor(stateWithCarrier(calls), CONFIG)) as { messages: BaseMessage[] };
+
+      const carrier = result.messages.find(m => m instanceof AIMessage) as AIMessage;
+      expect(carrier).toBeDefined();
+      expect(carrier.id).toBe(CARRIER_ID);
+      expect(carrier.content).toBe('');
+      expect(carrier.tool_calls).toEqual(calls);
+    });
+
+    it('leaves the carrier untouched when the flag is off (no handoffTargets)', async () => {
+      const calls = [{ name: 'start_training_session', args: {}, id: 'a' }];
+      const starter = fakeTool(
+        'start_training_session',
+        jest.fn().mockResolvedValue({
+          outcome: ok('Session created'),
+          update: {
+            pendingTransition: { toPhase: 'training', reason: 'session_planning_complete' },
+            activeSessionId: 's-42',
+          },
+        }),
+      );
+      const executor = buildToolExecutor(asTools(starter), { llmErrorBudget: Infinity });
+
+      const result = (await executor(stateWithCarrier(calls), CONFIG)) as { messages: BaseMessage[] };
+
+      expect(result.messages.some(m => m instanceof AIMessage)).toBe(false);
+    });
+
+    it('leaves the carrier untouched when the transition target is not a hand-off target', async () => {
+      const calls = [{ name: 'request_transition', args: {}, id: 'a' }];
+      const requester = fakeTool(
+        'request_transition',
+        jest.fn().mockResolvedValue({
+          outcome: ok('Transition to chat requested.'),
+          update: { pendingTransition: { toPhase: 'chat', reason: 'user_cancelled' } },
+        }),
+      );
+      const executor = buildToolExecutor(asTools(requester), { llmErrorBudget: Infinity }, new Set(['training']));
+
+      const result = (await executor(stateWithCarrier(calls, { phase: 'chat' }), CONFIG)) as {
+        messages: BaseMessage[];
+      };
+
+      expect(result.messages.some(m => m instanceof AIMessage)).toBe(false);
+    });
+
+    it('owner review of Task 1: leaves the carrier untouched when commit WOULD BLOCK the transition (no active session, BR-CONV-016)', async () => {
+      const calls = [{ name: 'request_transition', args: {}, id: 'a' }];
+      // A hand-off target reached without an active session — evaluateTransition
+      // rejects it (BR-CONV-016), so the silent hand-off must not fire: a
+      // replyless run would leave the user with nothing.
+      const requester = fakeTool(
+        'request_transition',
+        jest.fn().mockResolvedValue({
+          outcome: ok('Transition to training requested.'),
+          update: { pendingTransition: { toPhase: 'training', reason: 'user_wants_training' } },
+        }),
+      );
+      const executor = buildToolExecutor(asTools(requester), { llmErrorBudget: Infinity }, new Set(['training']));
+
+      const result = (await executor(
+        stateWithCarrier(calls, { phase: 'session_planning', activeSessionId: null }),
+        CONFIG,
+      )) as { messages: BaseMessage[] };
+
+      expect(result.messages.some(m => m instanceof AIMessage)).toBe(false);
+    });
+
+    it('owner review of Task 1: leaves the carrier untouched when the FROM phase blocks the target (not in the matrix)', async () => {
+      const calls = [{ name: 'request_transition', args: {}, id: 'a' }];
+      const requester = fakeTool(
+        'request_transition',
+        jest.fn().mockResolvedValue({
+          outcome: ok('Transition to training requested.'),
+          update: { pendingTransition: { toPhase: 'training', reason: 'user_wants_training' } },
+        }),
+      );
+      const executor = buildToolExecutor(asTools(requester), { llmErrorBudget: Infinity }, new Set(['training']));
+
+      // chat -> training is not in TRANSITION_MATRIX at all.
+      const result = (await executor(stateWithCarrier(calls, { phase: 'chat' }), CONFIG)) as {
+        messages: BaseMessage[];
+      };
+
+      expect(result.messages.some(m => m instanceof AIMessage)).toBe(false);
+    });
+
+    it('buildAfterTools returns "handoff" when the transition is ACCEPTED, even with a ToolMessage last', () => {
+      const afterToolsWithHandoff = buildAfterTools(new Set(['training']));
+      const state = {
+        messages: [new ToolMessage({ tool_call_id: 'a', content: 'Session created' })],
+        phase: 'session_planning' as const,
+        activeSessionId: 's-42',
+        pendingTransition: { toPhase: 'training' as const, reason: 'session_planning_complete' },
+      };
+
+      expect(afterToolsWithHandoff(state)).toBe('handoff');
+    });
+
+    it('owner review of Task 1: buildAfterTools falls back to agent/END when commit would BLOCK the transition (no active session)', () => {
+      const afterToolsWithHandoff = buildAfterTools(new Set(['training']));
+      const blockedByNoSession = {
+        messages: [new ToolMessage({ tool_call_id: 'a', content: 'r' })],
+        phase: 'session_planning' as const,
+        activeSessionId: null,
+        pendingTransition: { toPhase: 'training' as const, reason: 'user_wants_training' },
+      };
+      const blockedByMatrix = {
+        messages: [new ToolMessage({ tool_call_id: 'a', content: 'r' })],
+        phase: 'chat' as const,
+        activeSessionId: null,
+        pendingTransition: { toPhase: 'training' as const, reason: 'user_wants_training' },
+      };
+
+      // Neither case reaches END either — the last message is a plain
+      // ToolMessage, so the phase's own agent gets another turn.
+      expect(afterToolsWithHandoff(blockedByNoSession)).toBe('agent');
+      expect(afterToolsWithHandoff(blockedByMatrix)).toBe('agent');
+    });
+
+    describe('close-out review Blocking 1: max 1 hop — an already-hopped run must not be silenced again', () => {
+      const configWithPhasePath = (phasePath: string[]): RunnableConfig =>
+        ({ configurable: { thread_id: 't-1' }, context: { ...CTX, phasePath } }) as never;
+
+      it('buildToolExecutor leaves the carrier untouched when ctx.phasePath shows the run already hopped', async () => {
+        const calls = [{ name: 'start_training_session', args: {}, id: 'a' }];
+        const starter = fakeTool(
+          'start_training_session',
+          jest.fn().mockResolvedValue({
+            outcome: ok('Session created'),
+            update: {
+              pendingTransition: { toPhase: 'training', reason: 'session_planning_complete' },
+              activeSessionId: 's-42',
+            },
+          }),
+        );
+        const executor = buildToolExecutor(asTools(starter), { llmErrorBudget: Infinity }, new Set(['training']));
+
+        // ctx.phasePath already has one entry — commit already hopped once this run.
+        const result = (await executor(stateWithCarrier(calls), configWithPhasePath(['chat']))) as {
+          messages: BaseMessage[];
+        };
+
+        expect(result.messages.some(m => m instanceof AIMessage)).toBe(false);
+      });
+
+      it('buildAfterTools falls back to agent/END when ctx.phasePath shows the run already hopped', () => {
+        const afterToolsWithHandoff = buildAfterTools(new Set(['training']));
+        const state = {
+          messages: [new ToolMessage({ tool_call_id: 'a', content: 'r' })],
+          phase: 'session_planning' as const,
+          activeSessionId: 's-42',
+          pendingTransition: { toPhase: 'training' as const, reason: 'session_planning_complete' },
+        };
+
+        expect(afterToolsWithHandoff(state, configWithPhasePath(['chat']))).toBe('agent');
+        // No context at all (e.g. LangGraph's own updateState) — same as never hopped.
+        expect(afterToolsWithHandoff(state)).toBe('handoff');
+      });
+    });
+
+    it('buildAfterTools falls back to today’s agent/END logic when there is no hand-off transition', () => {
+      const afterToolsWithHandoff = buildAfterTools(new Set(['training']));
+      expect(afterToolsWithHandoff({ messages: [new ToolMessage({ tool_call_id: 'a', content: 'r' })] })).toBe('agent');
+      expect(afterToolsWithHandoff({ messages: [new AIMessage('done')] })).toBe(END);
+    });
+
+    it('buildAfterTools() with no targets is byte-identical to the exported afterTools default', () => {
+      const state = { messages: [new AIMessage('done')] };
+      expect(buildAfterTools()(state)).toBe(afterTools(state));
+    });
   });
 
   it('AC-1332: picks the catalog language from user.languageCode (ru → Russian, null → English)', async () => {
