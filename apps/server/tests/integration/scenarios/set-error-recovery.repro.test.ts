@@ -1,22 +1,28 @@
 /**
- * REPRODUCTION (RED) — session-investigation-0925 plan, Task 1, F1 + F2 /
- * AC-SI-1c, AC-SI-2. Runs only through the DB test lock
- * (`db-test-lock.sh`); promoted into a `log-set` integration test + the
- * scenario suite when the fix lands.
+ * REPRODUCTION (RED) — session-investigation-0925 plan, Task 1 / AC-SI-1c
+ * (F1). Runs only through the DB test lock (`db-test-lock.sh`); promoted
+ * into the scenario suite when R1 lands.
+ *
+ * AC-SI-2 (F2, the fractional-RPE case that used to run alongside this one)
+ * was promoted by R2 into
+ * tests/integration/services/log-set.integration.test.ts (BUG-035:
+ * `session_sets.rpe` is now `numeric(3,1)` and `log_set` rounds to the
+ * nearest 0.5) — that fix also means run N below no longer produces the
+ * `llm_error`s it used to: R2 note for R1 — with the RPE fix landed, run N's
+ * two `log_set(rpe: 9.5)` calls both succeed, so `state.messages` carries no
+ * `llm_error` into run N+1 and the AC-SI-1c assertions below currently pass
+ * on unfixed production too (nothing left for F1's cross-run counting bug to
+ * leak). Left untouched per plan ownership (R1 owns this file/bug); R1 will
+ * need a script that manufactures a run-N error some other way (e.g. an
+ * unresolvable `exerciseId`) to keep this a red F1 reproduction.
  *
  * Over the REAL test DB (real `log_set` tool, real training tool policy —
- * `llmErrorBudget: 1`, tool-policy.ts:43/training.spec.ts:59 — real
- * `session_sets.rpe integer` column), two runs:
+ * `llmErrorBudget: 1`, tool-policy.ts:43/training.spec.ts:59), two runs:
  *
  * - run N: the user reports a set with a fractional RPE ("9-10" → 9.5, the
- *   dev-session shape, F2). `log_set`'s Zod schema accepts 1–10 fractional
- *   values, but the DB column is `integer` — the INSERT throws, the tool
- *   catches it and returns an `llm_error`. The model (scripted, deterministic
- *   here) retries once with the same value — exactly like the real dev
- *   session (0c4ddb4b, dcccd492) — which is the run's SECOND llm_error and
- *   legitimately exhausts training's own budget of 1 (2 > 1) at run N itself.
- *   AC-SI-2 is the evidence from this run: on a fixed column/validation, the
- *   set would SAVE with its RPE — today it does not save at all.
+ *   dev-session shape). The model (scripted, deterministic here) calls
+ *   `log_set` twice with the same value — exactly like the real dev session
+ *   (0c4ddb4b, dcccd492).
  * - run N+1: a plain `log_set` with no RPE — this run's OWN batch has ZERO
  *   errors. AC-SI-1c: the "per run" contract (tool-policy.ts:43) says this
  *   run must not inherit run N's already-settled budget hit. Production
@@ -51,15 +57,13 @@ const past: Scenario['past'] = { ...sharedPast, user: { ...sharedPast.user, lang
 const scenarioDef: Scenario = {
   id: 'set-error-recovery-repro',
   description:
-    'reproduction: a fractional-RPE log_set fails against the real session_sets.rpe integer column (F2), ' +
-    'and the training error budget (llmErrorBudget: 1, "per run") wrongly carries the resulting llm_error ' +
-    'into the next run even though that run has none of its own (F1)',
+    'reproduction: the training error budget (llmErrorBudget: 1, "per run") wrongly carries an earlier ' +
+    "run's llm_error into the next run even though that run has none of its own (F1)",
   past,
   steps: [
     ...setupSteps,
     { action: 'advance', at: '+5m' },
-    // --- run N: fractional RPE, retried once — DB rejects both, training's
-    // OWN budget (2 errors > 1) legitimately ends this run. AC-SI-2 evidence. ---
+    // --- run N: fractional RPE, called twice (kept from the original dev shape). ---
     {
       action: 'user',
       text: RUN_N_TEXT,
@@ -80,7 +84,6 @@ const scenarioDef: Scenario = {
   ],
 };
 
-const RUN_N_INDEX = 4;
 const RUN_N_PLUS_1_INDEX = 5;
 
 async function runJourney(): Promise<{ result: ScenarioRunResult; model: ScriptedModelHandle }> {
@@ -104,7 +107,7 @@ function benchSetsOf(obs: ScenarioStepObservation): Array<{ setData: WorkoutSet;
   return (exercise?.sets ?? []) as unknown as Array<{ setData: WorkoutSet; rpe: number | null }>;
 }
 
-describe('set-error-recovery — reproduction (F1 + F2, AC-SI-1c, AC-SI-2)', () => {
+describe('set-error-recovery — reproduction (F1, AC-SI-1c)', () => {
   let result: ScenarioRunResult;
 
   beforeAll(async () => {
@@ -116,17 +119,6 @@ describe('set-error-recovery — reproduction (F1 + F2, AC-SI-1c, AC-SI-2)', () 
 
   afterAll(() => {
     jest.useRealTimers();
-  });
-
-  describe('AC-SI-2 (F2): log_set with a fractional RPE over the real session_sets.rpe integer column', () => {
-    it('saves the set with its RPE, instead of failing the INSERT and dropping it', () => {
-      const sets = benchSetsOf(result.steps[RUN_N_INDEX]!);
-      // Desired (fix-time): the set is saved and its rpe is not null. Today
-      // the INSERT throws on both attempts — nothing is saved — so this
-      // fails: sets is empty.
-      expect(sets).toHaveLength(1);
-      expect(sets[0]?.rpe).not.toBeNull();
-    });
   });
 
   describe("AC-SI-1c (F1): a run with zero errors of its own must not inherit an earlier run's budget hit", () => {
