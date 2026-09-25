@@ -447,6 +447,14 @@ P2 close-out review batch (refactor-p2-prompt-modules, 2026-09-16):
 
 ## Wishes
 
+- [ ] Strip the `Co-Authored-By: Claude …` trailer from every commit in history — 215 of 852
+      commits carry it (counted 2026-09-25); attribution is now off in both Claude profiles
+      (`~/.claude-personal`, `~/.claude` settings `attribution: {commit: "", pr: ""}`). It is a
+      full history rewrite (`git filter-repo --message-callback`): every SHA changes, so
+      `main`/`dev`/all branches need a force-push, every worktree and Orca session must be
+      re-synced, and SHAs cited in plans, `BUGS.md`, `STATE.md`, `COST_LEDGER.md` go stale
+      (map old→new via filter-repo's `commit-map`). Run only when no plan is in flight. Source:
+      owner request (2026-09-25).
 - [ ] Replace the `§` section sign across `docs/` — owner dislikes the notation; use
       "section N" or named references instead. Touches 10 files, including durable specs
       (`DOCUMENTATION_GUIDE.md`, `adr/0013-llm-core-target-architecture.md`,

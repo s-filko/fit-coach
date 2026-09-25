@@ -165,3 +165,10 @@ onto it. R2 and R5 touch none of those files and start now.
 Verification per task: its home tests, `npm run test:unit`, and through the lock `npm run test:scenarios` (R1, R2,
 R3, R5 touch training tools / graph / memory). Close-out: one combined review for the whole plan (economical-work),
 dev deploy by the orchestrator, then one owner check in Telegram.
+
+### Remediation progress
+
+- **R5 done** (`b0f0aeb6`, merged `0f1e9d63`): low-water mark `EPISODE_BUDGET_LOW_WATER=0.6`; `episode-summaries.v2` labels same-day entries `today HH:MM`; AC-SI-5a/5c promoted, `compaction-churn.repro.test.ts` deleted.
+- **R2 done** (`a1dc7949`, merged `89a9c8d8`): migration `0017` (`session_sets.rpe numeric(3,1)`), RPE rounded to 0.5, DB failures → `system_error` without SQL, `log_set` confirmation names the exercise; AC-SI-2 promoted to `tests/integration/services/log-set.integration.test.ts`. Suites on the merged branch: unit 130/1241, integration + scenarios 37/573 (+1 todo).
+- **Note for R1:** R2 removed the RPE failure that `set-error-recovery.repro.test.ts` AC-SI-1c used as its error source; the case is still red but now for a different reason. R1 must re-seed run N with another genuine `llm_error` (e.g. an unknown `exerciseId`) before judging the fix.
+- **Close-out advisory:** `log_set` now calls `getSessionDetails` a second time only to name the exercise — reuse data from the write path instead.
