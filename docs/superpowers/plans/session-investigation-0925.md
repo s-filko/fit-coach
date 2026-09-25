@@ -173,3 +173,22 @@ dev deploy by the orchestrator, then one owner check in Telegram.
 - **R2 done** (`a1dc7949`, merged `89a9c8d8`): migration `0017` (`session_sets.rpe numeric(3,1)`), RPE rounded to 0.5, DB failures → `system_error` without SQL, `log_set` confirmation names the exercise; AC-SI-2 promoted to `tests/integration/services/log-set.integration.test.ts`. Suites on the merged branch: unit 130/1241, integration + scenarios 37/573 (+1 todo).
 - **Note for R1:** R2 removed the RPE failure that `set-error-recovery.repro.test.ts` AC-SI-1c used as its error source; the case is still red but now for a different reason. R1 must re-seed run N with another genuine `llm_error` (e.g. an unknown `exerciseId`) before judging the fix.
 - **Close-out advisory:** `log_set` now calls `getSessionDetails` a second time only to name the exercise — reuse data from the write path instead.
+- **R3 done** (`edcc3db5`, not yet merged): `language.v2` directive (no "from Telegram"), wired into `DEFAULT_DIRECTIVES_V2` /
+  `DIRECTIVES_WITHOUT_IDENTITY_V2` in `directives/index.ts` only — every live phase reaches it with no phase-file
+  edit; `V1` and the frozen `AC-1321` snapshots untouched. New shared tool `set_language` (ru|en, explicit-request
+  only), registered in `buildSharedTools`. `user.repository.ts`: `languageCode` is now an updateable profile field
+  (only writer is `set_language`); `upsertUser` returning an existing user untouched is now pinned by a test.
+  `POST /api/bot/user` additively returns `languageCode` — **API_SPEC.md needs this documented**, not done by this
+  worker. The bot caches it with the userId and uses it (not `msg.from.language_code`) for error texts and the
+  `/compact` reply; `nonPrivateChatNotice` still uses Telegram's code (no profile exists at that point). AC-SI-3
+  rewritten: the original repro expected the fallback to be DETECTED from message content, which is the opposite of
+  the owner's rule (profile only) — promoted in corrected form to `messages/__tests__/catalog.unit.test.ts`, removed
+  from the repro file (R1's AC-SI-1a/1b cases untouched). Fallout fixes (not this task's own files, needed to keep
+  `test:unit` green): `graph/phases/__tests__/phase-specs.unit.test.ts` tool-name lists gained `set_language`;
+  `prompts/__tests__/registry.unit.test.ts` now expects `directive.language: 'v2'` for training. L0/message-assembly/
+  tool-surface snapshots regenerated (language text everywhere it renders + the new tool on every phase — reviewed
+  diff-by-diff, no other line moved). Suites in this worktree: unit 135/1319 green; scenarios (via db-test-lock)
+  14/372 green (+1 todo); apps/bot 6/36 green.
+- **Note for close-out review:** `messages/catalog.ts`'s doc comment ("Catalog language driven by Telegram's
+  `language_code`") is now stale — `langOf`/`ctx.user.languageCode` has always been the profile, not raw Telegram;
+  `catalog.ts` itself is outside this task's file ownership, so it was left as found rather than edited.
