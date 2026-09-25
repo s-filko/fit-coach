@@ -254,7 +254,13 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
       exerciseRepository: {
         findByIdsWithMuscles: async (ids: string[]) => {
           expect(ids).toEqual([EXERCISE_ID]);
-          return [{ id: EXERCISE_ID, muscleGroups: [{ muscleGroup: 'chest', involvement: 'primary' }] }];
+          return [
+            {
+              id: EXERCISE_ID,
+              name: 'Barbell Bench Press',
+              muscleGroups: [{ muscleGroup: 'chest', involvement: 'primary' }],
+            },
+          ];
         },
       },
     });
@@ -271,7 +277,7 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
         exerciseHistory: [
           {
             exerciseId: EXERCISE_ID,
-            exerciseName: 'Bench Press',
+            exerciseName: 'Barbell Bench Press', // catalog name wins over the plan's 'Bench Press' (D19)
             performance: performance.sessionExercise,
             completedAt: performance.completedAt,
           },
