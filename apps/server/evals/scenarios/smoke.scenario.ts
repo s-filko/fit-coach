@@ -61,7 +61,13 @@ export const HISTORY_QUESTION = 'что я делал на этой неделе
 
 export const past: Scenario['past'] = {
   user: {
-    languageCode: 'ru',
+    // F3 (session-investigation-0925, AC-SI-6): the persona writes Russian but
+    // carries an 'en' account — the owner's real shape. The catalog fallback
+    // (`langOf` reads only Telegram language_code) must answer in Russian
+    // anyway; with 'ru' here that bug is invisible by construction. The schema
+    // (`FixtureUserSchema.languageCode` is a plain string) and the smoke-seed
+    // test (asserts nothing about languageCode) both allow it unchanged.
+    languageCode: 'en',
     timezone: 'Europe/Berlin',
     firstName: 'Alex',
     age: 32,
@@ -292,9 +298,11 @@ export const scenario: Scenario = {
   id: 'smoke',
   description:
     "The one live workout the orchestrator runs instead of the owner's manual Telegram check " +
-    '(spec 2026-09-25-smoke-test-design.md): greeting -> planning -> readiness check -> start -> sets logged -> ' +
-    'finish -> a history question, over a hand-written upper/lower history ending in a completed-but-empty ' +
-    'session (BUG-031). Live only: run with `npm run smoke`, never through test:scenarios.',
+    '(spec 2026-09-25-smoke-test-design.md): greeting -> planning -> readiness check -> start -> sets logged ' +
+    '(one with a range RPE "9-10") -> a mid-training "when last did I bench" (F5/BUG-030) -> finish -> ' +
+    'a history question, over a hand-written upper/lower history ending in a completed-but-empty ' +
+    'session (BUG-031); the persona writes Russian on an \'en\' account (F3). ' +
+    'Live only: run with `npm run smoke`, never through test:scenarios.',
   past,
   steps: [
     {
@@ -364,6 +372,22 @@ export const scenario: Scenario = {
         },
       },
     },
+    // F5 (BUG-030, AC-SI-6): the seeded history holds Bench Press at -11d
+    // (80 kg × 8, two sets, the `hist_*_upper` workout), -16d (77.5) and -20d
+    // (75). Asked mid-training "when last and how much", the coach must cite
+    // the date and the numbers — with an exact-`session_key` lookup (the live
+    // session runs under `upper_a`, the history under `hist_*`) it answers "no
+    // data" instead. L3 has no `seen` plane and the reply wording is the
+    // model's own, so the date/numbers themselves are judged from the
+    // transcript by hand, like HISTORY_QUESTION below.
+    { action: 'advance', at: '+11m' },
+    {
+      action: 'user',
+      text: 'а когда я прошлый раз жал и сколько?',
+      expect: {
+        phaseAfter: { phase: 'training' },
+      },
+    },
     { action: 'advance', at: '+13m' },
     {
       action: 'user',
@@ -402,6 +426,21 @@ export const scenario: Scenario = {
             ],
           },
         },
+      },
+    },
+    // F2 (AC-SI-6): RPE reported as a RANGE — "рпе 9-10". The Zod schema
+    // accepts fractional RPE, the DB column is integer, so a model that sends
+    // `rpe: 9.5` kills the INSERT (raw SQL error back to the model, RPE then
+    // dropped from every later call). The stored value (9, 9.5 or 10) is the
+    // model's own interpretation and is not asserted here — the point is that
+    // the set SAVES; the transcript shows which way it went.
+    { action: 'advance', at: '+19m' },
+    {
+      action: 'user',
+      text: 'последний подход 50 на 8, рпе 9-10',
+      expect: {
+        tools: { must: ['log_set'] },
+        phaseAfter: { phase: 'training' },
       },
     },
     { action: 'advance', at: '+21m' },
