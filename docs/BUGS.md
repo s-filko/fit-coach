@@ -1685,3 +1685,26 @@ One "now" line in every phase: local weekday, date and time with the zone name, 
 `NOW (user's local time): Friday 2026-09-25 14:20 (Asia/Manila)`; UTC with a note when the timezone is
 unknown. Rendered as the LAST system section (it changes every minute — keep it after the stable prefix
 so provider prompt caching is not broken). Prompt versions bumped, L0 snapshots updated.
+
+## BUG-033 — Exercises named in Russian are not found by `search_exercises`, so their sets are never logged
+
+**Status:** Open — found by the U5 live smoke; scope not decided (owner)
+**Severity:** High — a Russian-speaking user's sets for any exercise outside the session plan are silently not stored
+**Found during:** live smoke 2026-09-25 06:59 UTC on `plan/transition-handoff` (`glm-5.3-flash`, local `fitcoach_test`),
+transcript `evals/reports/smoke-2026-09-25T06-59-24-287Z.md`
+**Component:** `apps/server/src/infra/ai/tools/search-exercises.tool.ts` and the exercise search behind it (embedding model
+`Xenova/all-MiniLM-L6-v2`, English-only); `log_set`'s `exerciseName` resolution
+
+### Description
+
+«разгибания 55 на 10» and «сгибания 50 на 10» were reported during training. Neither exercise was in the session plan, so the model
+called `search_exercises` with Russian queries (twice per step) and got nothing back, although `Leg Extension` and `Leg Curl` exist
+in the catalog. Four sets were not logged. The coach stayed mostly honest («не сохранились»), but once promised
+«Твой подход 50 × 10 я запомнил и сразу залогирую» and later listed the unlogged sets as done in the week summary.
+
+Earlier smoke runs never hit this: every reported exercise was in the session plan (UUID copied), so no search happened.
+
+### Not yet known
+
+Whether the miss is the English-only embedding model, the text match, or both — the first step of the fix is a probe of the search
+with the two Russian queries.
