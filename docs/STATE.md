@@ -12,7 +12,6 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-25 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `session-investigation-0925.md` — Live Session 2026-09-25 — Investigation and Red Tests Before Remediation Implementation Plan (branch: `plan/session-investigation-0925`, last commit 2026-09-26)
 - `transition-handoff.md` — Transition Hand-off (Roadmap U5) Implementation Plan (branch: `plan/transition-handoff`, last commit 2026-09-25)
 
 **Planned**
@@ -51,6 +50,7 @@ _Generated 2026-09-25 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `review-regression-proof.md` — Review Findings — Reproduction Before Remediation Implementation Plan
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 - `session-2026-09-21-repro.md` — Live-Session Findings (BUG-022…BUG-030) — Reproduction Before Remediation Implementation Plan
+- `session-investigation-0925.md` — Live Session 2026-09-25 — Investigation and Red Tests Before Remediation Implementation Plan
 - `smoke-test.md` — Smoke Test Implementation Plan
 - `structured-output-fenced-json.md` — Structured Output — Fenced-JSON Recovery and the User-Facts Scenario Test Implementation Plan
 - `structured-output-json-object-mode.md` — Structured Output — Provider Mode `json_object` for the Z.AI Route Implementation Plan
