@@ -1540,10 +1540,10 @@ a truncating limit. Unit: `drizzle-transcript.service.unit.test.ts` pins `toTurn
 
 ## BUG-030 — "Last time you did…" quotes a seven-month-old session: the previous session is picked by exact `session_key`, and the block carries no date
 
-**Status:** Open
+**Status:** fixed (training-exercise-history)
 **Severity:** Critical — weight recommendations, the core of the product, are built on stale data, and the user is told work he did four days ago never happened
 **Found during:** Live dev training session 2026-09-21 (owner: "я уточнил про сгибание разгибание, а он говорит я не делал — я точно делал")
-**Component:** `apps/server/src/infra/ai/graph/phases/training.spec.ts:104-109` (`findLastCompletedByUserAndKey`), `apps/server/src/infra/ai/prompts/blocks/training-workout-overview.v1.ts:120-143` (`buildPreviousSessionSection`)
+**Component:** `apps/server/src/infra/ai/graph/phases/training.spec.ts` (`TrainingData` loader), `apps/server/src/infra/db/repositories/workout-session.repository.ts` (`findLastPerformancesByExercise`), `apps/server/src/infra/ai/prompts/blocks/training-exercise-history.v1.ts` (`training.exercise_history` / `training.recent_workouts`), `apps/server/src/infra/ai/prompts/phases/training/v6.ts`
 
 ### Description
 
@@ -1608,8 +1608,16 @@ of which selection wins.
 
 ### Regression test
 
-Scenario over the real test DB: leg sessions on three recent dates plus one old session sharing the
-`session_key` → "напомни прошлый вес" cites the most recent one and states its date.
+`apps/server/tests/integration/scenarios/previous-session.integration.test.ts` — leg sessions on
+three recent dates plus one old session sharing the `session_key`: the exercise-history anchor is
+the most recent real performance (2026-09-16), not the old same-key one, and states its date; a
+planned-but-never-started exercise still gets its history; an exercise with no history ever renders
+an explicit "no completed record" line.
+
+`apps/server/tests/integration/scenarios/overlapping-load.integration.test.ts` — yesterday's session
+on overlapping muscles, seeded under a different `session_key`, is named with its date in
+`training.recent_workouts` and labelled `overlaps today: ...`; today's exercise-history anchor is
+still shown.
 
 ---
 

@@ -59,6 +59,64 @@ marked **(D)** was taken by the orchestrator under that order.
   declare; that field only existed because `TrainingData` happened to carry it, and removing
   `previousSession` from `TrainingData` (D4) would otherwise break the block's structural type.
 
+**Close-out review follow-up (2026-09-26, BLOCKED verdict — fixed in the same worktree, no owner
+questions per the standing autonomy order):**
+
+- **D10 — one hydrator, one set-formatter (R2).** `WorkoutSessionRepository` gained a private
+  `hydrateSessionExercises(rows)` (join → muscle groups → sets → `SessionExerciseWithDetails`,
+  two batched queries) used by both `findByIdWithDetails` and `findLastPerformancesByExercise` —
+  was duplicated between them. `training-workout-overview.v1.ts` gained an exported
+  `formatExerciseSets(sets, userFeedback)` (per-set lines + optional feedback line) used by both
+  the legacy `buildPreviousSessionSection` and `training.exercise_history` — was duplicated there
+  too. Both extractions are output-preserving: the legacy `TRAINING_V1` byte-identity tests
+  (`training-blocks.v1.unit.test.ts`) pass unchanged.
+- **D11 — bad legacy plan rows never reach a query.** `training.spec.ts` validates every
+  `session_plan_json.exercises[].exerciseId` against a generic UUID shape before it enters
+  `planExerciseIds` (and therefore `todayExerciseIds`/`notStartedPlanIds`/any DB call) — an empty
+  string or a pre-catalog placeholder from an old plan row is dropped silently rather than
+  reaching `findLastPerformancesByExercise` or `findByIdsWithMuscles` and failing the turn.
+- **D12 — `findLastPerformancesByExercise`'s DISTINCT ON tie-break.** Same-`completedAt` ties
+  (same anchor session) now break on `desc(orderIndex), desc(id)` — deterministic, never changes
+  *which session* wins (only which of that session's own rows does, an edge case that cannot
+  occur today since a session has one `session_exercises` row per exercise).
+- **D13 — window semantics, made explicit.** `training.recent_workouts`'s "last 7 days" is
+  `calendarDaysAgo(...) <= 7` — a workout exactly 7 calendar days old (in the resolved timezone)
+  is IN the window, one 8 days old is not; "last 7 days" is read as "today back through 7 days
+  ago" (8 possible calendar-day buckets: 0..7), matching the header text as written. No behaviour
+  change — this documents the boundary the code already had.
+- **D14 — null-timezone fallback, unified to UTC.** `resolveTz` (training-exercise-history.v1.ts)
+  now defaults to `'UTC'` explicitly instead of passing `null` through: `formatInUserTz(date,
+  null)` already fell back to UTC internally, but `humanTimeAgo`'s no-tz path used the *process's*
+  local clock (`@shared/date-utils.ts` `calendarDaysAgo`'s no-tz branch is deliberately
+  local-consistent for its own direct callers and was not touched) — near a UTC midnight in a
+  non-UTC-running process this could put the date line and the age line on different calendar
+  days. Fixed at the point of use (one resolver, not the shared util) so both agree and the 7-day
+  window cut reads the same calendar day too.
+- **D15 — `evals/fixtures/prompt-contexts.ts`'s `'phase.training'` fixture** now returns
+  `exerciseHistory: [], recentWorkouts: [], todayMuscles: []` in place of the stale
+  `previousSession: null` — the "nothing to show" equivalent under the new `TrainingData` shape.
+  Legacy `TRAINING_V1` still only reads `session` from this fixture (its own `previousSession`
+  field is simply absent now, same falsy behaviour as the old explicit `null`).
+- **D16 — docs updated under the owner's 2026-09-26 autonomy order, for owner review**:
+  `docs/BUGS.md` BUG-030 → `Status: fixed (training-exercise-history)`, Component and Regression
+  test sections point at the new code/tests; `docs/superpowers/specs/2026-09-24-coach-roadmap.md`
+  — the Stage 0 asset line now names the promoted (green) integration test, R1.3a's row records
+  delivery by this plan, U3 shrinks to R1.3b only; `docs/adr/0013-llm-core-target-architecture.md`
+  §10's "Exists" cell for progress awareness replaces "previous session by `sessionKey` (BUG-005)"
+  with the factual current mechanism (its "Missing" cell narrows from "per-exercise / per-muscle
+  history" to "per-muscle session_planning overview (R1.3b)"); `docs/ARCHITECTURE.md`'s block list
+  gained `training-exercise-history.v1.ts`.
+- **D17 — `docs/PLAN-muscle-centric-history.md` left untouched, for R1.3b.** It was already
+  planned to be rewritten or deleted on R1.3b's own adoption (per the roadmap doc, §"R1.3a/b
+  realise the two levels..."), not by this plan, which only delivers the level-2 (exercise) half.
+- **D18 — accepted cost, not fixed: up to 7 `findByIdWithDetails` calls per training turn.**
+  `findRecentByUserIdWithDetails(userId, 7, {realWorkoutsOnly: true})` hydrates each of its (at
+  most 7) sessions with its own `findByIdWithDetails` call (`Promise.all` over the recent-session
+  ids, pre-existing code this plan did not touch) — a small, capped fan-out (never unbounded, the
+  `7` is hard-coded at the one D3 call site), acceptable for a per-turn read against a training
+  phase whose response time is already dominated by the model call. Revisit only if profiling
+  shows it matters.
+
 ## Acceptance criteria
 
 | AC | Criterion | Verification |

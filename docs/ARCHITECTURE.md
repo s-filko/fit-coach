@@ -155,6 +155,8 @@ apps/server/src/
           post-tool-nudge.v1.ts      #   post-tool nudge (agent node retry)
           chat-context.v1.ts / client-profile.v1.ts / session-planning-*.v1.ts / training-workout-overview.v1.ts
                                      #   domain context blocks (ADR-0013 §3.4 block 3, D-B): one per moved v1 section, byte-equal at full depth; declared on PhaseSpec.contextBlocks
+          training-exercise-history.v1.ts
+                                     #   training.exercise_history / training.recent_workouts (BUG-030 fix, training-exercise-history plan): per-exercise history anchor + 7-day fatigue window with muscle-overlap labels, replacing training.previous_session (same-session_key lookup)
         summarizer/v1.ts             # Legacy end-of-phase summariser (not used by the graph since P4; kept with its snapshot tests)
         summarizer/v2.ts             # Episode summariser — structured EpisodeSummary from the rendered transcript (no previousSummary)
         summarizer/v3.ts             # current: v2 plus a typed `facts` array (category, fact, muscleGroup?) consumed by the compact step (P6)
