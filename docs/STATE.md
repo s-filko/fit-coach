@@ -17,6 +17,7 @@ _Generated 2026-09-25 from docs/superpowers/plans/ + git. Never hand-edit; regen
 **Planned**
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
+- `transition-handoff.md` — Transition Hand-off (Roadmap U5) Implementation Plan
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
@@ -247,8 +248,9 @@ plays one workout on the live model over the local `fitcoach_test` and writes a 
 permanent red test, fixed, and confirmed by the next run; the orchestrator reads the replies (no judge).
 Local `apps/server/.env` gained `LLM_STRUCTURED_OUTPUT_MODE=json_object` (Z.AI route). Three runs
 recorded in `COST_LEDGER.md`; run 1 reproduced BUG-022 live.
-**Next: roadmap U5 `transition-handoff`** (fixes BUG-022) — gate: walk the owner through the loop
-(planning spec §8) with the R0.1 example, then the R2.0 provider probe (1–3 calls each).
+**Roadmap U5 `transition-handoff`** (fixes BUG-022): gate **passed 2026-09-25** — loop accepted by
+the owner with four foreseen problems folded into the plan; R2.0 probe go on both providers (2 calls,
+`COST_LEDGER.md`). Plan written (`Status: planned`). **Next:** dispatch it (`delegate-implementation`).
 
 **Backlog triage done with the owner 2026-09-24** (recommendations; only roadmap acceptance is
 decided). Open owner decisions, to be asked one at a time, recommendation first:

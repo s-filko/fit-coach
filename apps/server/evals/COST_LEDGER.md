@@ -31,3 +31,5 @@ Manual fallback workflow: `RUN_LLM_EVALS=1 npm run evals -- … --quota-before
 | 2026-09-18 | npm run evals -- --level L1 --phase training --dataset transitions-smoke --samples 1 | L1 training/transitions-smoke (1×1) | 2 | 11055 | 376 | 27561 | 27555 | -6 | -0.0% |
 | 2026-09-25 | npm run smoke (run 1) | L3 smoke (8 user steps × 1) — U1 live check | ≈8 agent turns + tool hops + course check/summariser (L3 does not meter) | n/a | n/a | n/a | n/a | n/a | n/a |
 | 2026-09-25 | npm run smoke (run 2) | L3 smoke (9 user steps × 1) — U1 live check, passed 34/0 | ≈9 agent turns + tool hops + course check/summariser (L3 does not meter) | n/a | n/a | n/a | n/a | n/a | n/a |
+| 2026-09-25 | R2.0 provider probe (scratchpad script, dev container) | U5 gate — history with a tool call absent from the tool set; Gemini `google/gemini-3.8-flash` via OpenRouter, reasoning low: 200, 2× `log_set` | 1 | 331 | 136 | n/a (OpenRouter) | n/a | n/a | n/a |
+| 2026-09-25 | R2.0 provider probe (scratchpad script, local .env) | U5 gate — same history on Z.AI `glm-5.3`: 200, 2× `log_set` | 1 | 420 | 193 | n/a | n/a | n/a | n/a |
