@@ -68,6 +68,13 @@ export interface ConversationGraphDeps {
   courseCheckExpiryAskWindowMs?: number;
   /** LLM_BUDGET_<PHASE>_<PART> overrides (P4 context-budget plan Task 3), resolved once here. */
   budgetOverrides?: Record<string, TokenBudgetOverride>;
+  /**
+   * TRANSITION_HANDOFF_TARGETS (transition-handoff plan Task 1, D-1, AC-TH-2):
+   * phases that get a silent same-run hand-off when a tool batch commits a
+   * transition to them — no second model call in the phase that hands off.
+   * Optional like courseCheckEnabled; absent/empty = off (today's graph).
+   */
+  transitionHandoffTargets?: ReadonlySet<ConversationPhase>;
   checkpointer: BaseCheckpointSaver;
 }
 

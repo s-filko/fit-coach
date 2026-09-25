@@ -11,7 +11,7 @@ import { ok, systemError } from '@domain/conversation/tool-outcome';
 
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
-import { afterTools, buildToolExecutor } from '../tool-executor';
+import { afterTools, buildAfterTools, buildToolExecutor } from '../tool-executor';
 import { type ToolPolicy, TRAINING_TOOL_PRIORITY } from '../tool-policy';
 
 interface FakeTool {
@@ -357,6 +357,91 @@ describe('buildToolExecutor (AC-1332)', () => {
         cfg,
       );
     }
+  });
+
+  describe('transition hand-off (transition-handoff plan Task 1, AC-TH-2)', () => {
+    const CARRIER_ID = 'carrier-ai-1';
+
+    function stateWithCarrier(calls: Array<{ name: string; args: Record<string, unknown>; id: string }>) {
+      return {
+        messages: [new AIMessage({ id: CARRIER_ID, content: '', tool_calls: calls })],
+        userId: 'user-1',
+        user: { languageCode: null },
+      };
+    }
+
+    it('empties the carrier AIMessage (same id, keeps tool_calls) when the batch commits a hand-off target', async () => {
+      const calls = [{ name: 'start_training_session', args: {}, id: 'a' }];
+      const starter = fakeTool(
+        'start_training_session',
+        jest.fn().mockResolvedValue({
+          outcome: ok('Session created'),
+          update: { pendingTransition: { toPhase: 'training', reason: 'session_planning_complete' } },
+        }),
+      );
+      const executor = buildToolExecutor(asTools(starter), { llmErrorBudget: Infinity }, new Set(['training']));
+
+      const result = (await executor(stateWithCarrier(calls), CONFIG)) as { messages: BaseMessage[] };
+
+      const carrier = result.messages.find(m => m instanceof AIMessage) as AIMessage;
+      expect(carrier).toBeDefined();
+      expect(carrier.id).toBe(CARRIER_ID);
+      expect(carrier.content).toBe('');
+      expect(carrier.tool_calls).toEqual(calls);
+    });
+
+    it('leaves the carrier untouched when the flag is off (no handoffTargets)', async () => {
+      const calls = [{ name: 'start_training_session', args: {}, id: 'a' }];
+      const starter = fakeTool(
+        'start_training_session',
+        jest.fn().mockResolvedValue({
+          outcome: ok('Session created'),
+          update: { pendingTransition: { toPhase: 'training', reason: 'session_planning_complete' } },
+        }),
+      );
+      const executor = buildToolExecutor(asTools(starter), { llmErrorBudget: Infinity });
+
+      const result = (await executor(stateWithCarrier(calls), CONFIG)) as { messages: BaseMessage[] };
+
+      expect(result.messages.some(m => m instanceof AIMessage)).toBe(false);
+    });
+
+    it('leaves the carrier untouched when the transition target is not a hand-off target', async () => {
+      const calls = [{ name: 'request_transition', args: {}, id: 'a' }];
+      const requester = fakeTool(
+        'request_transition',
+        jest.fn().mockResolvedValue({
+          outcome: ok('Transition to chat requested.'),
+          update: { pendingTransition: { toPhase: 'chat', reason: 'user_cancelled' } },
+        }),
+      );
+      const executor = buildToolExecutor(asTools(requester), { llmErrorBudget: Infinity }, new Set(['training']));
+
+      const result = (await executor(stateWithCarrier(calls), CONFIG)) as { messages: BaseMessage[] };
+
+      expect(result.messages.some(m => m instanceof AIMessage)).toBe(false);
+    });
+
+    it('buildAfterTools returns "handoff" when pendingTransition targets a hand-off phase, even with a ToolMessage last', () => {
+      const afterToolsWithHandoff = buildAfterTools(new Set(['training']));
+      const state = {
+        messages: [new ToolMessage({ tool_call_id: 'a', content: 'Session created' })],
+        pendingTransition: { toPhase: 'training' as const, reason: 'session_planning_complete' },
+      };
+
+      expect(afterToolsWithHandoff(state)).toBe('handoff');
+    });
+
+    it('buildAfterTools falls back to today’s agent/END logic when there is no hand-off transition', () => {
+      const afterToolsWithHandoff = buildAfterTools(new Set(['training']));
+      expect(afterToolsWithHandoff({ messages: [new ToolMessage({ tool_call_id: 'a', content: 'r' })] })).toBe('agent');
+      expect(afterToolsWithHandoff({ messages: [new AIMessage('done')] })).toBe(END);
+    });
+
+    it('buildAfterTools() with no targets is byte-identical to the exported afterTools default', () => {
+      const state = { messages: [new AIMessage('done')] };
+      expect(buildAfterTools()(state)).toBe(afterTools(state));
+    });
   });
 
   it('AC-1332: picks the catalog language from user.languageCode (ru → Russian, null → English)', async () => {

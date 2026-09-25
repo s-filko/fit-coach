@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { parseLlmBudgetOverrides, type TokenBudgetOverride } from './llm-budget-overrides';
 import { type LlmProfileOverride, parseLlmProfiles, REASONING_EFFORTS } from './llm-profiles';
+import { parseTransitionHandoffTargets } from './transition-handoff-targets';
 
 /**
  * Environment variables schema (config layer).
@@ -93,6 +94,14 @@ export const EnvSchema = z.object({
   // latency, error) is never pruned, only these two columns null out. Same
   // tunables-not-secrets class as COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS.
   LLM_CALLS_RETENTION_DAYS: z.coerce.number().positive().default(30),
+  // Transition hand-off (transition-handoff plan Task 1, D-1, AC-TH-2): comma
+  // list of ConversationPhase targets that get a silent same-run hand-off when
+  // a transition tool commits to them. Empty/unset = off — byte-for-byte
+  // today's graph (Global Constraint). Same tunables-not-secrets exception.
+  TRANSITION_HANDOFF_TARGETS: z
+    .string()
+    .optional()
+    .transform(raw => parseTransitionHandoffTargets(raw)),
 });
 
 export type Env = z.infer<typeof EnvSchema> & {

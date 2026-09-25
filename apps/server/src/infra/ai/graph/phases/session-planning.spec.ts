@@ -71,6 +71,7 @@ export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec
         workoutPlanRepository: deps.workoutPlanRepo,
         exerciseRepository,
         userFactsService: deps.userFacts,
+        transitionHandoffTargets: deps.transitionHandoffTargets,
       }),
       buildRequestTransitionTool('session_planning'),
       ...buildSharedTools({ userService, userFacts: deps.userFacts }),

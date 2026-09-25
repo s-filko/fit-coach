@@ -123,6 +123,49 @@ describe('request-transition.tool — chat variant', () => {
   });
 });
 
+describe('request-transition.tool — chat variant, D-5 hand-off wording', () => {
+  const buildChatTool = (handoffTargets?: Parameters<typeof buildRequestTransitionTool>[1]): InvokableTool =>
+    buildRequestTransitionTool('chat', handoffTargets) as unknown as InvokableTool;
+
+  it('keeps "Transition to X requested." when the flag is off (no handoffTargets)', async () => {
+    const requestTransition = buildChatTool();
+
+    const result = (await requestTransition.invoke({ toPhase: 'session_planning' }, makeConfig())) as ToolReturn;
+
+    expect(renderedContent(result)).toBe('Transition to session_planning requested.');
+  });
+
+  it('keeps "Transition to X requested." when the target is not a hand-off target', async () => {
+    const requestTransition = buildChatTool(new Set(['training']));
+
+    const result = (await requestTransition.invoke({ toPhase: 'plan_creation' }, makeConfig())) as ToolReturn;
+
+    expect(renderedContent(result)).toBe('Transition to plan_creation requested.');
+  });
+
+  it('switches to the neutral hand-off text when the target IS a hand-off target', async () => {
+    const requestTransition = buildChatTool(new Set(['session_planning']));
+
+    const result = (await requestTransition.invoke({ toPhase: 'session_planning' }, makeConfig())) as ToolReturn;
+
+    expect(renderedContent(result)).toBe('Transition registered; the next phase answers the user.');
+  });
+
+  it('still requests the pendingTransition update when hand-off wording applies', async () => {
+    const requestTransition = buildChatTool(new Set(['session_planning']));
+
+    const result = (await requestTransition.invoke(
+      { toPhase: 'session_planning', reason: 'user wants workout' },
+      makeConfig('u1'),
+    )) as ToolReturn;
+
+    expect(isToolReturnWithUpdate(result) ? result.update.pendingTransition : undefined).toEqual({
+      toPhase: 'session_planning',
+      reason: 'user wants workout',
+    });
+  });
+});
+
 describe('request-transition.tool — plan_creation variant', () => {
   it('returns a ToolReturn with update, never a Command object', async () => {
     const requestTransition = buildTool('plan_creation');

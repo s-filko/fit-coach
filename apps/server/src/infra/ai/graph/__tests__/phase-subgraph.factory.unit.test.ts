@@ -96,4 +96,53 @@ describe('buildPhaseSubgraph (ADR-0013 §4.1)', () => {
     const toolMsg = result.messages.find(m => m._getType() === 'tool') as ToolMessage | undefined;
     expect(toolMsg?.content).toContain('fake tool ran');
   });
+
+  it('transition-handoff plan Task 1 (AC-TH-2): a hand-off target ends the subgraph after ONE model call, skipping finalize', async () => {
+    // The tool commits a transition to 'training' — a configured hand-off target.
+    const handoffTool = new DynamicStructuredTool({
+      name: 'fake_handoff_tool',
+      description: 'fake tool that commits a hand-off transition',
+      schema: z.object({}),
+      func: async () => ({
+        outcome: ok('Session created'),
+        update: { pendingTransition: { toPhase: 'training', reason: 'session_planning_complete' } },
+      }),
+    }) as unknown as DynamicStructuredTool<{ name: string }>;
+
+    mockInvoke.mockResolvedValueOnce(
+      new AIMessage({
+        id: 'carrier-1',
+        content: 'this text must never reach the user',
+        tool_calls: [{ id: 'c1', name: 'fake_handoff_tool', args: {}, type: 'tool_call' }],
+      }),
+    );
+
+    const deps = { ...makeDeps(), transitionHandoffTargets: new Set(['training' as const]) };
+    const subgraph = buildPhaseSubgraph(makeSpec([handoffTool]), deps);
+    const result = (await subgraph.invoke({ messages: [new HumanMessage('сделал 2 подхода 110х12')] }, {
+      configurable: { thread_id: 'factory-handoff-test' },
+      recursionLimit: 10,
+      context: {
+        runId: 'run-factory-handoff',
+        userId: 'u1',
+        user: FRESH_USER as never,
+        now: new Date(0),
+        client: 'telegram' as const,
+        trigger: 'user_message' as const,
+        metrics: new RunMetricsCollector('run-factory-handoff'),
+      },
+    } as never)) as { pendingTransition?: { toPhase: string }; messages: BaseMessage[] };
+
+    // Only ONE model call — the phase that hands off never gets a second turn.
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    // The transition survives for `commit` to evaluate.
+    expect(result.pendingTransition).toEqual({ toPhase: 'training', reason: 'session_planning_complete' });
+    // The carrier's text was emptied in place (same id) — nothing delivered.
+    const carrier = result.messages.find(m => m.id === 'carrier-1') as AIMessage;
+    expect(carrier.content).toBe('');
+    // `finalize` was skipped — the run ended without throwing even though the
+    // last message is a ToolMessage, not a non-empty final AIMessage.
+    const last = result.messages[result.messages.length - 1];
+    expect(last._getType()).toBe('tool');
+  });
 });

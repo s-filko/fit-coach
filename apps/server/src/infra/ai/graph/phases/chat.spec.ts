@@ -34,7 +34,7 @@ export function buildChatSpec(deps: ConversationGraphDeps): PhaseSpec<ChatData> 
     prompt: entry as PhasePromptEntry<PromptContextFor<ChatData>>,
     tools: [
       buildUpdateProfileTool({ userService }),
-      buildRequestTransitionTool('chat'),
+      buildRequestTransitionTool('chat', deps.transitionHandoffTargets),
       ...buildSharedTools({ userService, userFacts: deps.userFacts }),
     ],
     toolPolicy: CHAT_TOOL_POLICY,

@@ -10,6 +10,7 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import { END } from '@langchain/langgraph';
 
+import type { ConversationPhase } from '@domain/conversation/phases';
 import {
   isToolReturnWithUpdate,
   llmError,
@@ -63,6 +64,8 @@ function normalizeReturn(ret: unknown): ToolReturn {
 export function buildToolExecutor(
   tools: StructuredToolInterface[],
   policy: ToolPolicy,
+  /** transition-handoff plan Task 1 (D-5): targets that get the carrier AIMessage's text emptied. */
+  handoffTargets: ReadonlySet<ConversationPhase> = new Set(),
 ): (state: ToolExecutorState, config: RunnableConfig) => Promise<ToolExecutorUpdate> {
   const toolMap = Object.fromEntries(tools.map(t => [t.name, t])) as Record<string, InvokableTool>;
 
@@ -211,6 +214,15 @@ export function buildToolExecutor(
       return finish(newMessages, updates);
     }
 
+    // Hand-off (D-5): a committed transition to a hand-off target empties the
+    // carrier AIMessage's text — same id, so the reducer replaces it in place —
+    // so nothing this phase wrote reaches the next phase or the user. `id` is
+    // only absent in hand-built test state that bypasses the graph; production
+    // messages always carry one by the time they reach this node (ADR-0013 §4.1).
+    if (updates.pendingTransition && handoffTargets.has(updates.pendingTransition.toPhase) && lastMessage?.id) {
+      newMessages.push(new AIMessage({ id: lastMessage.id, content: '', tool_calls: lastMessage.tool_calls ?? [] }));
+    }
+
     return finish(newMessages, updates);
   };
 }
@@ -224,8 +236,29 @@ function finish(newMessages: BaseMessage[], updates: ToolStateUpdate): ToolExecu
   };
 }
 
-/** Conditional edge after the executor: 'agent' normally, END when the executor appended a terminal AIMessage. */
-export function afterTools(state: { messages: BaseMessage[] }): 'agent' | typeof END {
-  const last = state.messages[state.messages.length - 1] as Partial<BaseMessage> | undefined;
-  return last?._getType?.() === 'ai' ? END : 'agent';
+/**
+ * Conditional edge after the executor (transition-handoff plan Task 1):
+ * `agent` normally, `finalize`(mapped from END) when the executor appended a
+ * terminal AIMessage with real text, or `handoff` when the batch committed a
+ * transition to a hand-off target — the phase that hands off never gets a
+ * second model call, so it has no final text for `finalize` to validate;
+ * the caller must route `handoff` straight to the subgraph's real END,
+ * bypassing `finalize` (phase-subgraph.factory.ts).
+ */
+export function buildAfterTools(
+  handoffTargets: ReadonlySet<ConversationPhase> = new Set(),
+): (state: {
+  messages: BaseMessage[];
+  pendingTransition?: TransitionRequest | null;
+}) => 'agent' | 'handoff' | typeof END {
+  return state => {
+    if (state.pendingTransition && handoffTargets.has(state.pendingTransition.toPhase)) {
+      return 'handoff';
+    }
+    const last = state.messages[state.messages.length - 1] as Partial<BaseMessage> | undefined;
+    return last?._getType?.() === 'ai' ? END : 'agent';
+  };
 }
+
+/** Flag-off default (no hand-off targets) — today's behaviour, byte-for-byte. */
+export const afterTools = buildAfterTools();
