@@ -1,17 +1,11 @@
 /**
- * REPRODUCTION (RED) — session-investigation-0925 plan, Task 1, F1 + F3 /
- * AC-SI-1(a,b), AC-SI-3. Runs only via an explicit --testMatch; promoted into
- * `tool-executor.unit.test.ts` (the AC-1332 budget block) when the fix lands.
- * Do NOT edit tool-executor.unit.test.ts — its AC-1332 budget test is the
- * home test at promotion.
+ * REPRODUCTION (RED) — session-investigation-0925 plan, Task 1, F3 / AC-SI-3.
+ * Runs only via an explicit --testMatch; promoted at R3 fix time (BUG-036 +
+ * owner language rule) into the catalog language unit test. Do NOT edit
+ * tool-executor.unit.test.ts here — that is R3's home test at promotion.
  *
- * F1 (tool-executor.ts:207): `countLlmErrors` sums `llm_error` ToolMessages
- * over the WHOLE `state.messages` history, with no notion of "this run" (a
- * run boundary is a `HumanMessage`). The training contract
- * (tool-policy.ts:43, `llmErrorBudget: 1`, "per run") is violated two ways:
- * (a) an error from an earlier run still counts against a later run that has
- * none of its own; (b) a batch that adds ZERO new errors can still push the
- * running total over budget and end the run.
+ * AC-SI-1a/1b (F1, BUG-034) were promoted into tool-executor.unit.test.ts's
+ * AC-1332 budget block by R1 and removed from this file.
  *
  * F3 (messages/catalog.ts langOf): the catalog fallback language is driven
  * ONLY by Telegram's `language_code`, never by what the user actually wrote —
@@ -79,58 +73,6 @@ function configWith(languageCode: string | null = null): RunnableConfig {
     context: { ...CTX, user: { languageCode } },
   } as never;
 }
-
-describe('tool-executor error budget — reproduction (F1 / AC-SI-1a, AC-SI-1b)', () => {
-  it("AC-SI-1a: an llm_error from an EARLIER RUN (a HumanMessage sits after it) must not count toward THIS run's budget", async () => {
-    // Training's real contract: llmErrorBudget: 1, "per run" (tool-policy.ts:43).
-    const failing = fakeTool('log_set', jest.fn().mockRejectedValue(new Error('DB rejected the set')));
-    const executor = buildToolExecutor(asTools(failing), { llmErrorBudget: 1 });
-
-    const priorRunError = new ToolMessage({
-      tool_call_id: 'old',
-      content: "LLM_ERROR: an earlier run's failure",
-      status: 'error',
-    });
-    // The run boundary: whatever comes after this HumanMessage is a NEW run.
-    const runBoundary = new HumanMessage('ещё подход');
-
-    const result = (await executor(
-      stateWithCalls([{ name: 'log_set', args: { reps: 8 }, id: 'this-run' }], {
-        messages: [priorRunError, runBoundary],
-      }),
-      configWith(null),
-    )) as { messages: BaseMessage[] };
-
-    // Desired: only THIS run's error (1) counts against budget 1 → within
-    // budget, no terminal catalog message. Production counts the prior run's
-    // error too (2 > 1) and wrongly ends the run — this assertion fails today.
-    const last = result.messages[result.messages.length - 1];
-    expect(last).not.toBeInstanceOf(AIMessage);
-  });
-
-  it('AC-SI-1b: a batch that adds ZERO new errors must never end the run with tool_error_budget_exhausted', async () => {
-    const succeeding = fakeTool('log_set'); // resolves ok() by default
-    const executor = buildToolExecutor(asTools(succeeding), { llmErrorBudget: 1 });
-
-    // Two OLD errors already sit in history (over budget on their own) — but
-    // this batch's own tool call succeeds; zero errors are added right now.
-    const oldErrors: BaseMessage[] = [
-      new ToolMessage({ tool_call_id: 'x', content: 'LLM_ERROR: old 1', status: 'error' }),
-      new ToolMessage({ tool_call_id: 'y', content: 'LLM_ERROR: old 2', status: 'error' }),
-    ];
-
-    const result = (await executor(
-      stateWithCalls([{ name: 'log_set', args: { reps: 8, weight: 80 }, id: 'clean' }], { messages: oldErrors }),
-      configWith(null),
-    )) as { messages: BaseMessage[] };
-
-    // Desired: a batch with zero errors of its own never appends the
-    // terminal catalog message. Production counts the old errors regardless
-    // (2 + 0 = 2 > 1) and ends the run — this assertion fails today.
-    const last = result.messages[result.messages.length - 1];
-    expect(last).not.toBeInstanceOf(AIMessage);
-  });
-});
 
 describe('tool-executor catalog fallback language — reproduction (F3 / AC-SI-3)', () => {
   it("AC-SI-3: a user with languageCode 'en' who writes Russian gets the catalog fallback in Russian, not English", async () => {

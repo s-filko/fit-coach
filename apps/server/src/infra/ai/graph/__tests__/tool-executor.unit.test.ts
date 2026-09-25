@@ -2,7 +2,7 @@
  * Shared tool executor unit tests — AC-1332 (refactor-p3-tool-executor
  * Task 4). Every AC-1332 bullet is an it whose name starts with 'AC-1332:'.
  */
-import { AIMessage, type BaseMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import { END } from '@langchain/langgraph';
@@ -247,6 +247,52 @@ describe('buildToolExecutor (AC-1332)', () => {
     expect((last as AIMessage).content).toBe(
       'Не удалось записать данные после нескольких попыток. Попробуй переформулировать: укажи упражнение, вес и количество повторений чётко.',
     );
+  });
+
+  it("AC-1332/AC-SI-1a (BUG-034): an llm_error from an EARLIER RUN (a HumanMessage sits after it) does not count toward THIS run's budget", async () => {
+    const failing = fakeTool('log_set', jest.fn().mockRejectedValue(new Error('DB rejected the set')));
+    const executor = buildToolExecutor(asTools(failing), { llmErrorBudget: 1 });
+
+    const priorRunError = new ToolMessage({
+      tool_call_id: 'old',
+      content: "LLM_ERROR: an earlier run's failure",
+      status: 'error',
+    });
+    // The run boundary: whatever comes after this HumanMessage is a NEW run.
+    const runBoundary = new HumanMessage('ещё подход');
+
+    const result = (await executor(
+      stateWithCalls([{ name: 'log_set', args: { reps: 8 }, id: 'this-run' }], {
+        messages: [priorRunError, runBoundary],
+      }),
+      CONFIG,
+    )) as { messages: BaseMessage[] };
+
+    // Only THIS run's error (1) counts against budget 1 → within budget, no
+    // terminal catalog message, even though the prior run's error is still
+    // sitting in state.messages.
+    const last = result.messages[result.messages.length - 1];
+    expect(last).not.toBeInstanceOf(AIMessage);
+  });
+
+  it('AC-1332/AC-SI-1b (BUG-034): a batch that adds ZERO new errors never ends the run with tool_error_budget_exhausted', async () => {
+    const succeeding = fakeTool('log_set'); // resolves ok() by default
+    const executor = buildToolExecutor(asTools(succeeding), { llmErrorBudget: 1 });
+
+    // Two OLD errors already sit in history (over budget on their own) — but
+    // this batch's own tool call succeeds; zero errors are added right now.
+    const oldErrors: BaseMessage[] = [
+      new ToolMessage({ tool_call_id: 'x', content: 'LLM_ERROR: old 1', status: 'error' }),
+      new ToolMessage({ tool_call_id: 'y', content: 'LLM_ERROR: old 2', status: 'error' }),
+    ];
+
+    const result = (await executor(
+      stateWithCalls([{ name: 'log_set', args: { reps: 8, weight: 80 }, id: 'clean' }], { messages: oldErrors }),
+      CONFIG,
+    )) as { messages: BaseMessage[] };
+
+    const last = result.messages[result.messages.length - 1];
+    expect(last).not.toBeInstanceOf(AIMessage);
   });
 
   it('AC-1332: an EXERCISE-ID schema rejection keeps the search_exercises recovery hint', async () => {

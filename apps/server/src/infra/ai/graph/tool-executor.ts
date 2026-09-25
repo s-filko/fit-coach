@@ -5,7 +5,7 @@
  * outcome with `toToolMessage` v1, collects `ToolStateUpdate`s and enforces
  * the phase's `ToolPolicy` (ordering, dedup, error budget, system-error stop).
  */
-import { AIMessage, type BaseMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import { END, type LangGraphRunnableConfig } from '@langchain/langgraph';
@@ -115,6 +115,18 @@ export function buildToolExecutor(
       return count;
     };
 
+    // BUG-034 (F1, AC-SI-1a/b): a run's own messages are everything AFTER its
+    // last HumanMessage — an earlier run's llm_errors never carry into this
+    // run's budget (tool-policy.ts's "per run" contract).
+    const messagesThisRun = (msgs: BaseMessage[]): BaseMessage[] => {
+      for (let i = msgs.length - 1; i >= 0; i -= 1) {
+        if (msgs[i] instanceof HumanMessage) {
+          return msgs.slice(i + 1);
+        }
+      }
+      return msgs;
+    };
+
     for (const call of sorted) {
       if (duplicateIds.has(call.id ?? '')) {
         log.warn(
@@ -213,9 +225,13 @@ export function buildToolExecutor(
       return finish(newMessages, updates);
     }
 
-    // Error budget: previous batches plus this one; Infinity never exhausts.
-    const toolErrorCount = countLlmErrors(state.messages) + countLlmErrors(newMessages);
-    if (toolErrorCount > policy.llmErrorBudget) {
+    // Error budget: THIS run's earlier batches plus this one; Infinity never
+    // exhausts. A batch that adds zero new errors of its own never ends the
+    // run — an old, already-over-budget total from earlier in the run is not
+    // grounds to stop once the model started succeeding again.
+    const newBatchErrorCount = countLlmErrors(newMessages);
+    const toolErrorCount = countLlmErrors(messagesThisRun(state.messages)) + newBatchErrorCount;
+    if (newBatchErrorCount > 0 && toolErrorCount > policy.llmErrorBudget) {
       log.warn({ userId: ctx.userId, toolErrorCount }, 'Tool error retry budget exhausted');
       newMessages.push(new AIMessage(t('tool_error_budget_exhausted', lang)));
       return finish(newMessages, updates);
