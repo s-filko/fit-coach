@@ -110,7 +110,9 @@ components:
   - 503 `{ error: { code: "LLM_UNAVAILABLE" } }`
 
   Response fields:
-  - `content` (string): AI-generated response message
+  - `content` (string): AI-generated response message. When the message crosses a phase hand-off
+    (`TRANSITION_HANDOFF_TARGETS`, ADR-0013 §3.2/§4.1 amendments 2026-09-26), `content` holds only the
+    text of the phase the run ended in — one POST, one reply, at most one hop.
   - `timestamp` (string): ISO 8601 timestamp of the response
 
   Error bodies carry the `code` only — never exception text or a stack (INV-LLM-006). The full
@@ -135,6 +137,7 @@ components:
     2. Session planning → LLM calls `start_training_session` tool → session created in DB → phase → training
     3. User: "Did 10 reps with 50kg" → LLM calls `log_set` tool → set saved to DB
     4. User: "Finished" → LLM calls `finish_training` tool → session completed → phase → chat
+    With `TRANSITION_HANDOFF_TARGETS=training,session_planning` (dev, U5) steps 1→2 and 2→3 can happen in **one** POST: the phase a transition leads to answers the same message (e.g. a set reported while planning opens training and is logged in the same reply).
 
 ### Notes
 

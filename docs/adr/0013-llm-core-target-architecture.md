@@ -143,6 +143,15 @@ Rejected: keeping `user` in state "for the LLM to see it" — the assembler rend
 > context. Pinned by `run-context-propagation.unit.test.ts` (context reaches parent,
 > subgraph and tool).
 
+> **Amendment 2026-09-26 (transition hand-off, plan `transition-handoff` / roadmap U5, owner-approved
+> 2026-09-26):** when `TRANSITION_HANDOFF_TARGETS` lists the target phase, a transition is **answered by
+> the phase it leads to, in the same run** (at most one hop). Run output then carries only the texts
+> produced **after the hop boundary** (`ctx.hopBoundaryIndex`); the outgoing phase's text written alongside
+> the hand-off tool call (the carrier) is emptied, so the user receives one reply, from the last phase.
+> Without a hop the AC-CC-3 rule above is unchanged. Run context gains per-run hop facts —
+> `phasePath`, `hopping`, `hopBoundaryIndex`, `hopTransition` — mutated only by `commit`; like
+> `metrics`, they never enter the checkpoint.
+
 **Amendment 2026-09-21 (manual compaction, `/compact`):** compaction gained a fourth trigger, `manual`, reachable only through the bot's `/compact` command → `POST /api/bot/chat/compact` → `ConversationRunPort`, under the same per-user run mutex, as a compact-only pass through the graph (no agent, no commit, no course check, no transcript writes, `lastUserMessageAt` untouched). It differs from the three automatic triggers in exactly two ways, both deliberate. **It keeps no tail:** the keep-recent rule of the 2026-09-20 amendment protects the user from a *surprise* truncation (BUG-018), and an explicit request is not a surprise — so the whole channel is foldable. That also means the manual pass must not use `splitEpisode`'s history/current split: a manual run appends no `HumanMessage`, so cutting at the last human message would leave the user's freshest turn unfolded and, in a short conversation, nothing to fold at all. The automatic paths keep that split and its one-human-per-run invariant untouched. **It fails loudly:** when the summariser fails, the manual pass throws and removes nothing, where an automatic trigger still trims without a summary (BR-LLM-004) — an automatic trigger fires inside a reply the user is waiting for, while a manual one has no reply to protect and must never answer "folded into memory" over a silently dropped conversation. The min-turns / min-tokens guard applies to both, so a too-short conversation is a clean no-op with no model call.
 
 **Amendment 2026-09-21 (course check, wave B; decided without the owner — see the plan's decision table, reversible):** `prepare` gained one more optional step, the **course check**. It is a single structured call on its own cheap profile, fired **by event, never per turn**: the inputs' fingerprint changed (the active fact set, the stated goal, the phase, the active plan, plus any expired `ask_once` fact now due its one question) or the first run after a long gap. It returns a typed **directive** — the current vector in one line, the constraints in force, the questions to ask now, the facts it suspects are stale — which persists in graph state and renders as one prompt block until the fingerprint moves. An ordinary turn therefore costs exactly what it cost before: the stored directive rides, and no call is made. A failed or malformed call never touches the run: the previous directive keeps rendering and the failure is recorded as `{fingerprint, at}`, so the same fingerprint is not retried until `COURSE_CHECK_RETRY_COOLDOWN_MINUTES` has passed — a provider outage makes the system quieter, not chattier. The layer has an on/off switch, and with it off the graph behaves exactly as before.
@@ -220,6 +229,16 @@ START → prepare → route ──Command(goto=phase)──▶ <phase subgraph> 
 
 Subgraphs share the parent's `messages` channel (same key in both schemas), so the working tier is the episode tier — one channel, one reducer. Subgraphs are compiled without their own checkpointer (unchanged); only the parent checkpoints.
 
+> **Amendment 2026-09-26 (transition hand-off, U5, owner-approved 2026-09-26):** with the flag on, the
+> parent graph may loop once: `… → commit ──(accepted hand-off, no hop yet)──▶ route → <next phase
+> subgraph> → commit → END`. The phase subgraph gains a third exit, `tools → handoff → END`, taken when a
+> tool registered an accepted hand-off; it skips `finalize` (the outgoing phase owes no reply). The looping
+> `commit` projects the run's messages incrementally and writes **no** run row — the final `commit` writes
+> the single row; a `commit` without its own transition keeps the incoming `compactReason` and
+> `activeSessionId`. The accept/refuse decision is one predicate, `isAcceptedHandoff(…, alreadyHopped)`
+> (`graph/handoff.ts`), shared by the executor, `afterTools` and `commit`. With the flag off the topology
+> above is exactly as written.
+
 > **Amendment 2026-09-18** (P3 implementation, owner-approved at close-out): step (3) of
 > `commit` is realised as the typed `PhaseTransitionCommitted` event
 > (`domain/conversation/events.ts`) delivered to an ordered list of **awaited**
@@ -261,6 +280,8 @@ INV-LLM-005: Adding a phase means adding a `PhaseSpec`, its prompt module, its t
 
 BR-LLM-006: A transition committed in run N takes effect in run N+1's `route`; the reply of run N is produced by the outgoing phase (unchanged from today) — the eval rubric requires that reply to announce the hand-off.
 
+> **Amended 2026-09-26 (U5, owner-approved):** BR-LLM-006 holds for every transition whose target is **not** in `TRANSITION_HANDOFF_TARGETS`. For a listed target the transition takes effect in the **same** run (one hop at most) and the reply is produced by the **incoming** phase; the outgoing phase's tool result tells it not to write to the user.
+
 ### 4.4 Tools
 
 - Tools are pure adapters over domain services (unchanged principle). They receive `userId`, `activeSessionId`, `runId` from `config.configurable`/run context (LangGraph passes `config` to tools; today only `userId` is passed — `chat.subgraph.ts:78-80`).
@@ -286,7 +307,8 @@ Rejected: a single flat agent with all tools and a "phase" instruction — phase
 apps/server/src/infra/ai/prompts/
   directives/            identity.v1.ts, formatting.telegram.v1.ts, formatting.plain.v1.ts,
                          language.v1.ts, timezone.v1.ts, name-usage.v1.ts, tool-reply.v1.ts,
-                         time-reference.v1.ts, greeting.v1.ts, memory-usage.v1.ts
+                         time-reference.v1.ts, greeting.v1.ts, memory-usage.v1.ts,
+                         current-time.v1.ts (BUG-032, U5), language.v2.ts (BUG-036)
   phases/
     registration/ v1.ts ... vN.ts, index.ts (exports current)
     chat/ ...
@@ -370,6 +392,8 @@ Rejected: keeping `LLMService` "until the mini-app redesign" — it is the only 
 ## 8. Observability and run records (D-11)
 
 `conversation_runs` (new): `run_id, thread_id (user_id), phase_in, phase_out, trigger, client, model, prompt_versions jsonb, tokens_in, tokens_out, latency_ms, tool_calls jsonb [{name, argsHash, outcomeKind}], transition jsonb, outcome ('ok'|'llm_unavailable'|'core_error'|'budget_exhausted'), budget_report jsonb, error_class, error_message, created_at`.
+
+> **Amendment 2026-09-26 (U5):** a run that hops still writes **one** row: `phase_in` = the first phase of `phasePath`, `phase_out` = the last, `transition` = `{ toPhase, reason, path }` (the phase path rides in the existing jsonb — no migration), `prompt_versions` merged across both phases.
 
 `conversation_turns` gains: `run_id, seq, thread_episode_id, kind ('human'|'ai'|'tool_call'|'tool_result'|'system_note'|'summary'), payload jsonb` (tool call args / structured summary), while `content` stays for text. Existing rows are kept; `phase` stays for analytics.
 
