@@ -12,7 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-25 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `transition-handoff.md` — Transition Hand-off (Roadmap U5) Implementation Plan (branch: `plan/transition-handoff`, last commit 2026-09-25)
+— none —
 
 **Planned**
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
@@ -55,6 +55,7 @@ _Generated 2026-09-25 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `structured-output-fenced-json.md` — Structured Output — Fenced-JSON Recovery and the User-Facts Scenario Test Implementation Plan
 - `structured-output-json-object-mode.md` — Structured Output — Provider Mode `json_object` for the Z.AI Route Implementation Plan
 - `training-journey-scenarios.md` — Training Journey Scenarios — Deterministic over the Real Test DB + Live L3 Implementation Plan
+- `transition-handoff.md` — Transition Hand-off (Roadmap U5) Implementation Plan
 
 **Close-out debt (merged but plan not done)**
 — none —

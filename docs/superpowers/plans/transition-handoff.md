@@ -4,9 +4,10 @@
 > test-driven-development. Execute only the task you were dispatched. Steps use checkbox (`- [ ]`)
 > syntax. Never "fix" a red test by changing its assertion.
 
-- Status: in progress
+- Status: done
 - Branch: plan/transition-handoff
 - After: coach-baseline
+- Review: 2026-09-26 | clean | R1,R2,R3,R4
 
 **Goal:** a phase transition is answered by the phase it leads to, in the same run. A set
 reported while planning ("сделал 2 подхода 110×12") opens training, and training logs it before
@@ -262,7 +263,7 @@ Transcript `evals/reports/smoke-2026-09-25T06-59-24-287Z.md` (worktree). Read by
 
 - **Blocking 1 (R3): closed** — one predicate `isAcceptedHandoff(…, alreadyHopped)` in `graph/handoff.ts` used by the executor's carrier emptying, `afterTools` and commit's `shouldHop`; proof `chat-to-planning-handoff.integration.test.ts:205` asserts the delivered planning text, `:229` pins 3 model calls.
 - **Blocking 2–4 (R2): closed** for the whole class — `releaseCheckpointer` exported from `evals/lib/run-scenario.ts:264`; `HANDOFF_REGISTERED_TEXT` at `graph/handoff.ts:33`; `storedSets` in `tests/integration/scenarios/session-seed.ts:19`.
-- **Blocking 5 (R1 + R4, durable docs): open** — Task 6, waiting for the owner's approval of the ADR-0013 / API_SPEC amendment.
+- **Blocking 5 (R1 + R4, durable docs): closed** — ADR-0013 §3.2 (run output after `hopBoundaryIndex`, hop facts in run context), §4.1 (`commit → route` loop, `tools → handoff → END`, looping commit writes no run row), §4.3 (BR-LLM-006 amended for `TRANSITION_HANDOFF_TARGETS`), §5.1 (`current-time.v1`, `language.v2`), §8 (one run row per hop run: `phase_in`/`phase_out` = path ends, `transition.path`, merged `promptVersions`); `API_SPEC.md` (`content` = last phase's text; training flow in one POST); `CONTRIBUTING_AI.md` run-row semantics — amended 2026-09-26, committed `ee42ac02` on `plan/session-investigation-0925`.
 - New advisories (R3): `start-training-session.tool.ts:39,95` and `request-transition.tool.ts:41` pick the hand-off wording from static config, not from whether the hand-off is accepted (a blocked second hand-off tells the model "the next phase answers" → possible empty-reply fallback); `start-training-session.tool.ts:33` description still says "ONLY when the user has explicitly approved", contradicting the reconciled v3 STEP 5; `evals/levels/l3.ts:432` catalog-embedding guard runs after the paid model calls and only over `past.catalog`; L3 loads a second embedding model (~80 MB).
 - New advisories (R2): the "already hopped" read is still written by three callers in two forms (`tool-executor.ts:237,294`, `commit.node.ts:83/117`); `embed-pending-exercises.ts:74` sequential `embed()` kept "because of Jest" although it no longer runs under Jest — `embedBatch` now has no production caller; `embed-pending-exercises.ts:95` repeats `ExerciseRepository.updateEmbedding` (pre-existing, moved); `l3.ts:67` repeats the NULL-embedding selection; `embeddingService` threaded through three layers.
 - Orchestrator re-verification: `npm run test:scenarios` 14 suites / 371 passed + 1 todo.

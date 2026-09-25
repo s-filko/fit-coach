@@ -1158,7 +1158,7 @@ names the offending field); the `search_exercises` sentence only when the reject
 
 ## BUG-022 — Session planning confirms sets it never logged (BUG-009 class, different phase)
 
-**Status:** Open
+**Status:** Fixed in code — `plan/transition-handoff` (roadmap U5); regression test `planning-set-logging.integration.test.ts` (AC-TH-1); live check on `dev` pending
 **Severity:** Critical — false confirmation of saved training data
 **Found during:** Live dev training session 2026-09-21 (owner review)
 **Component:** `apps/server/src/infra/ai/prompts/phases/session_planning/*`
@@ -1660,7 +1660,7 @@ still returns the `in_progress` session (control).
 
 ## BUG-032 — The coach does not know the current time (and in two phases not even the date)
 
-**Status:** Open — fix is Task 7 of plan `transition-handoff`
+**Status:** Fixed in code — `plan/transition-handoff` Task 7; regression test `current-time.v1.unit.test.ts`; live check on `dev` pending
 **Severity:** High — every time-of-day and "this week" statement is a guess
 **Found during:** owner's live dev chat 2026-09-25 06:20 UTC (model `glm-5.3-flash`): asked «который час?», the coach
 answered «Часы у меня в системе не показывают текущее время — я вижу только дату: 25 сентября».
