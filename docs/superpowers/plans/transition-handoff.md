@@ -4,7 +4,7 @@
 > test-driven-development. Execute only the task you were dispatched. Steps use checkbox (`- [ ]`)
 > syntax. Never "fix" a red test by changing its assertion.
 
-- Status: planned
+- Status: in progress
 - Branch: plan/transition-handoff
 - After: coach-baseline
 
