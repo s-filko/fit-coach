@@ -1686,25 +1686,32 @@ One "now" line in every phase: local weekday, date and time with the zone name, 
 unknown. Rendered as the LAST system section (it changes every minute — keep it after the stable prefix
 so provider prompt caching is not broken). Prompt versions bumped, L0 snapshots updated.
 
-## BUG-033 — Exercises named in Russian are not found by `search_exercises`, so their sets are never logged
+## BUG-033 — The smoke's test catalog has no embeddings, so `search_exercises` finds nothing there; `log_set` name resolution is exact-match
 
-**Status:** Open — found by the U5 live smoke; scope not decided (owner)
-**Severity:** High — a Russian-speaking user's sets for any exercise outside the session plan are silently not stored
+**Status:** Fixed for the smoke (commit 367ceda1); the exact-name half is Open
+**Severity:** Medium — test-environment defect that hid every search path from the live smoke; the name half is a real, smaller product defect
 **Found during:** live smoke 2026-09-25 06:59 UTC on `plan/transition-handoff` (`glm-5.3-flash`, local `fitcoach_test`),
 transcript `evals/reports/smoke-2026-09-25T06-59-24-287Z.md`
-**Component:** `apps/server/src/infra/ai/tools/search-exercises.tool.ts` and the exercise search behind it (embedding model
-`Xenova/all-MiniLM-L6-v2`, English-only); `log_set`'s `exerciseName` resolution
+**Component:** `evals/lib/scenario-world.ts` (catalog seeding), `infra/db/repositories/exercise.repository.ts` `searchByEmbedding`
+(filters `embedding IS NOT NULL`), `log_set`'s `exerciseName` resolution
 
 ### Description
 
-«разгибания 55 на 10» and «сгибания 50 на 10» were reported during training. Neither exercise was in the session plan, so the model
-called `search_exercises` with Russian queries (twice per step) and got nothing back, although `Leg Extension` and `Leg Curl` exist
-in the catalog. Four sets were not logged. The coach stayed mostly honest («не сохранились»), but once promised
-«Твой подход 50 × 10 я запомнил и сразу залогирую» and later listed the unlogged sets as done in the week summary.
+«разгибания 55 на 10» and «сгибания 50 на 10» were reported during training; neither exercise was in the session plan. The model
+**did** translate: it called `log_set` with `exerciseName: "Leg Extensions"`, then `search_exercises` with `leg extension`,
+`leg curl`, `hamstrings`, `quads` — every search returned nothing. Cause: the scenario seed inserted 13 catalog exercises with
+**0 embeddings** (`select count(embedding) from exercises` = 0 on `fitcoach_test`), and the search is vector-only over rows with an
+embedding. Dev has 65/65 embeddings, so users were not affected by the search half.
 
-Earlier smoke runs never hit this: every reported exercise was in the session plan (UUID copied), so no search happened.
+The second half is real on every environment: `log_set` with `exerciseName: "Leg Extensions"` failed because the catalog row is
+`Leg Extension` and the name is matched exactly.
 
-### Not yet known
+Four sets were not logged. The coach stayed mostly honest («не сохранились»), but once promised «Твой подход 50 × 10 я запомнил и
+сразу залогирую» and later listed the unlogged sets as done in the week summary.
 
-Whether the miss is the English-only embedding model, the text match, or both — the first step of the fix is a probe of the search
-with the two Russian queries.
+### Fix
+
+- Smoke half (commit 367ceda1): the L3 path (`evals/levels/l3.ts`) seeds embeddings for the scenario catalog with the app's
+  `EmbeddingService` and throws if any catalog exercise is left without one. Jest scenario tests do not embed (the real ONNX pipeline
+  crashed inside Jest on that call chain; not investigated).
+- Name half: open — candidate fix is a case/plural-tolerant or embedding fallback in `log_set`'s name resolution. Not in U5.
