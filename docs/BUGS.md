@@ -1657,3 +1657,102 @@ reproduction test written before the fix: a user with one real completed workout
 empty completed, a skipped, a planning and an in_progress session → both history loaders return
 exactly the real one, `daysSinceLastWorkout` comes from its `completedAt`, and `getActiveSession`
 still returns the `in_progress` session (control).
+
+---
+
+> BUG-032 and BUG-033 are recorded on `plan/transition-handoff` (not yet merged into `dev` on 2026-09-25);
+> the numbers are reserved.
+
+## BUG-034 — A successful tool call is answered with "Couldn't save the data": the per-run error budget counts errors from the whole chat history
+
+**Status:** Open — red test pending (plan `session-investigation-0925`, AC-SI-1)
+**Severity:** Critical — 17 of 69 runs in the owner's 2026-09-25 session replied "not saved" while 15 of them had saved the set; the coach's own reply after the tool was never generated
+**Found during:** owner's live dev training session 2026-09-25 07:58–09:33 UTC (`glm-5.3-flash`)
+**Component:** `apps/server/src/infra/ai/graph/tool-executor.ts:207` (`countLlmErrors(state.messages)`), `tool-policy.ts:43` (contract: "per run"), `phases/training.spec.ts:59` (`llmErrorBudget: 1`)
+
+### Description
+
+The executor counts `llm_error` ToolMessages over the whole `state.messages` channel — every earlier run and phase
+still in history — plus the current batch, and ends the run with `tool_error_budget_exhausted` whenever the sum
+exceeds the budget, **even if the current batch has no error at all**. The session had one `llm_error` in
+session_planning (07:59, placeholder UUID in `start_training_session`) and one at 08:13 (BUG-035); from then on every
+tool-calling run was cut after the tool: e.g. `cef69b0d` — tool result `Set 4 logged: 12 reps @ 55 kg.`, reply
+"Couldn't save the data after several attempts…"; `llm_calls` holds a single call per such run. The state healed only
+at 09:26, when budget compaction summarised the error turns out of the channel.
+
+### Impact
+
+The user is told a set was not saved; the coach's reply to that set (and the exercise recap, BUG-037) is delivered one
+turn later, as the answer to "что?"/"??" — the owner's "он отвечает на старые сообщения".
+
+### Regression test
+
+`tool-error-budget.repro.test.ts` + `set-error-recovery.repro.test.ts` (plan `session-investigation-0925`).
+
+## BUG-035 — A fractional RPE ("рпе 9-10" → 9.5) crashes `log_set`: the tool schema allows decimals, the column is integer
+
+**Status:** Open — red test pending (AC-SI-2)
+**Severity:** High — the set is not saved, raw SQL reaches the model, and the model stops sending RPE for the rest of the session
+**Found during:** owner's live dev session 2026-09-25, runs `0c4ddb4b`, `dcccd492`
+**Component:** `apps/server/src/infra/ai/tools/log-set.tool.ts:183`, `update-last-set.tool.ts:73` (`z.number().min(1).max(10)`), `infra/db/schema.ts:497` (`rpe: integer`)
+
+### Description
+
+The user said "повторил 3й подход уже рпе 9-10"; the model passed `rpe: 9.5`; the INSERT failed and the tool returned
+`LLM_ERROR: Failed query: insert into "session_sets" …`. No scenario or smoke step uses RPE; the unit test mocks the
+repository, so the schema and the column type were never exercised together. No RPE was stored for the whole session.
+
+## BUG-036 — The catalog fallback speaks English to a user who writes Russian
+
+**Status:** Open — red test pending (AC-SI-3)
+**Severity:** Medium
+**Found during:** owner's live dev session 2026-09-25 (all 17 BUG-034 replies)
+**Component:** `apps/server/src/infra/ai/messages/catalog.ts:23` (`langOf` reads only Telegram `language_code`)
+
+### Description
+
+The owner's Telegram `language_code` is `en`; he writes Russian and has the fact "Prefers to communicate in Russian".
+Every persona in the scenarios and the smoke uses `languageCode: 'ru'`, so this never surfaced. Related: BUG-028.
+
+## BUG-037 — On an exercise switch the reply leads with the recap of the finished exercise instead of the set the user just reported
+
+**Status:** Open — red test pending (AC-SI-4); expected behaviour set by the owner 2026-09-25
+**Severity:** High — the owner's second complaint of the session
+**Found during:** owner's live dev session 2026-09-25, runs `7853c472`, `92351633`, `cca871bd`, `7a29f509`
+**Component:** `apps/server/src/infra/ai/tools/format-exercise-summary.ts:46`, `prompts/phases/training/v3.ts:34` (rule 4a/4b)
+
+### Description
+
+The transition happens because the user reports a set of the **next** exercise, yet both the tool text ("Summarize
+this exercise … Then announce the next exercise from SESSION PLAN") and the prompt ("a) SUMMARIZE … b) THEN announce")
+put the old exercise first. Owner's rule (2026-09-25): answer what the user just said first; the recap goes at the end,
+short; the exercise the user already started is not "announced". The spec itself prescribed the wrong order, so the
+smoke read the replies as correct.
+
+## BUG-038 — Budget compaction churns: near the cap every run summarises a 2–4 exchange fragment, and the fragments mislead
+
+**Status:** Open — red test pending (AC-SI-5)
+**Severity:** High — stale "open items" and wrong exercise names sit in `## Previous episodes`; 9 summariser calls in 30 minutes
+**Found during:** owner's live dev session 2026-09-25, summaries at 09:03:22 … 09:27:45
+**Component:** `apps/server/src/infra/ai/graph/nodes/compact.ts` (`planCompaction` budget branch, `renderTranscript`), `prompts/blocks/episode-summaries.v1.ts`
+
+### Description
+
+(1) The budget branch removes the minimum number of oldest turns until the history fits the 8000-token budget — no
+low-water mark — so once the history reaches the cap almost every run compacts again. (2) Each fragment is summarised
+in isolation: a slice ending on the 08:13 failure produced "Open items: set 3 not saved", which stayed in the prompt
+to the end although the set was saved at 08:13:58. (3) The summariser input carries `exerciseId` UUIDs only and the
+`log_set` confirmation names no exercise, so the lat pulldown was summarised as "row". (4) Same-day entries are all
+labelled `training (today)`, with no time. Scenarios never reach the budget; compaction tests check one call, not a
+sequence.
+
+### Related findings from the same session
+
+- **BUG-030** (open) reproduced live: `upper_a_20260925` matched no previous session, so training had no history for
+  any exercise although 09-15/09-20 upper sessions exist; the coach said "по верху данных в истории не сохранилось" and
+  "я не знаю, когда был прошлый раз". The journey scenario missed it because its seed reuses the scripted
+  `session_key` (`upper_a`); the real model mints date-suffixed keys.
+- **BUG-032** (fix on `plan/transition-handoff`) — no current time in the training prompt.
+- **BUG-022/024** — the 2.33 km warm-up was never logged.
+- Model-side misses (misread "как ты определил?" ×3, target reps drifting 8-10/12/13 under pressure) — eval drafts
+  `evals/datasets/drafts/session-2026-09-25.jsonl`.
