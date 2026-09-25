@@ -47,7 +47,15 @@ function historyKey(offset: string, suffix: 'upper' | 'lower' | 'cardio'): strin
 const EMPTY_SESSION_OFFSET = '-3d';
 
 export const GREETING_REQUEST = 'привет, хочу потренироваться';
-export const GO_LOWER = 'давай низ, погнали';
+/**
+ * close-out review live-smoke finding: 'давай низ, погнали' ("погнали" =
+ * "let's go") reads as immediate consent, so the first live run started the
+ * session right here instead of at TODAY_SETS_REPORT — the negative and
+ * positive AC-TH-7 steps below then ran in `training`, not `session_planning`,
+ * so AC-TH-7's "in planning: сделал 2 подхода → training opens" was never
+ * actually exercised. A plain question keeps this step in `session_planning`.
+ */
+export const GO_LOWER = 'давай низ, что посоветуешь?';
 /**
  * AC-TH-7's negative half (transition-handoff plan Task 5): past-day sets are
  * history, never today's session. Reported while still in session_planning —
@@ -319,11 +327,9 @@ export const scenario: Scenario = {
       action: 'user',
       text: GO_LOWER,
       expect: {
-        // No tools/persisted expectations here — the first live run showed the
-        // model asking a readiness question instead of starting on this turn
-        // (see PAST_SETS_REPORT below, which answers it); staying in
-        // session_planning is the only outcome common to both that and a
-        // direct start.
+        // A question, not consent — must NOT start the session on this turn
+        // (close-out review: 'погнали' did, defeating AC-TH-7's setup below).
+        tools: { mustNot: ['start_training_session'] },
         phaseAfter: { phase: 'session_planning' },
       },
     },
@@ -367,13 +373,19 @@ export const scenario: Scenario = {
       },
     },
     { action: 'advance', at: '+5m' },
+    // BUG-033 (close-out review live-smoke finding, 2026-09-25): search_exercises
+    // finds nothing for these Russian exercise names although Leg Extension /
+    // Leg Curl are in the catalog — nothing gets logged live. Tagged, not
+    // removed: still exercises the transition-handoff behaviour (training
+    // stays training across these turns); BUG-033 is a separate, non-U5 defect.
     {
       action: 'user',
       text: 'разгибания 55 на 10',
       expect: {
-        tools: { must: ['log_set'] },
+        tools: { must: [{ text: 'log_set', knownBug: 'BUG-033' }] },
         phaseAfter: { phase: 'training' },
         persisted: {
+          knownBug: 'BUG-033',
           session: {
             key: 'lower_a',
             status: 'in_progress',
@@ -396,9 +408,10 @@ export const scenario: Scenario = {
       action: 'user',
       text: 'ещё раз 55 на 10',
       expect: {
-        tools: { must: ['log_set'] },
+        tools: { must: [{ text: 'log_set', knownBug: 'BUG-033' }] },
         phaseAfter: { phase: 'training' },
         persisted: {
+          knownBug: 'BUG-033',
           session: {
             key: 'lower_a',
             status: 'in_progress',
@@ -427,7 +440,7 @@ export const scenario: Scenario = {
       action: 'user',
       text: 'сгибания 50 на 10',
       expect: {
-        tools: { must: ['log_set'] },
+        tools: { must: [{ text: 'log_set', knownBug: 'BUG-033' }] },
         phaseAfter: { phase: 'training' },
       },
     },
@@ -436,9 +449,10 @@ export const scenario: Scenario = {
       action: 'user',
       text: 'ещё раз 50 на 10',
       expect: {
-        tools: { must: ['log_set'] },
+        tools: { must: [{ text: 'log_set', knownBug: 'BUG-033' }] },
         phaseAfter: { phase: 'training' },
         persisted: {
+          knownBug: 'BUG-033',
           session: {
             key: 'lower_a',
             status: 'in_progress',

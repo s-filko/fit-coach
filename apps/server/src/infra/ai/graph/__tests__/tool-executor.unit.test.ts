@@ -510,6 +510,47 @@ describe('buildToolExecutor (AC-1332)', () => {
       expect(afterToolsWithHandoff(blockedByMatrix)).toBe('agent');
     });
 
+    describe('close-out review Blocking 1: max 1 hop — an already-hopped run must not be silenced again', () => {
+      const configWithPhasePath = (phasePath: string[]): RunnableConfig =>
+        ({ configurable: { thread_id: 't-1' }, context: { ...CTX, phasePath } }) as never;
+
+      it('buildToolExecutor leaves the carrier untouched when ctx.phasePath shows the run already hopped', async () => {
+        const calls = [{ name: 'start_training_session', args: {}, id: 'a' }];
+        const starter = fakeTool(
+          'start_training_session',
+          jest.fn().mockResolvedValue({
+            outcome: ok('Session created'),
+            update: {
+              pendingTransition: { toPhase: 'training', reason: 'session_planning_complete' },
+              activeSessionId: 's-42',
+            },
+          }),
+        );
+        const executor = buildToolExecutor(asTools(starter), { llmErrorBudget: Infinity }, new Set(['training']));
+
+        // ctx.phasePath already has one entry — commit already hopped once this run.
+        const result = (await executor(stateWithCarrier(calls), configWithPhasePath(['chat']))) as {
+          messages: BaseMessage[];
+        };
+
+        expect(result.messages.some(m => m instanceof AIMessage)).toBe(false);
+      });
+
+      it('buildAfterTools falls back to agent/END when ctx.phasePath shows the run already hopped', () => {
+        const afterToolsWithHandoff = buildAfterTools(new Set(['training']));
+        const state = {
+          messages: [new ToolMessage({ tool_call_id: 'a', content: 'r' })],
+          phase: 'session_planning' as const,
+          activeSessionId: 's-42',
+          pendingTransition: { toPhase: 'training' as const, reason: 'session_planning_complete' },
+        };
+
+        expect(afterToolsWithHandoff(state, configWithPhasePath(['chat']))).toBe('agent');
+        // No context at all (e.g. LangGraph's own updateState) — same as never hopped.
+        expect(afterToolsWithHandoff(state)).toBe('handoff');
+      });
+    });
+
     it('buildAfterTools falls back to today’s agent/END logic when there is no hand-off transition', () => {
       const afterToolsWithHandoff = buildAfterTools(new Set(['training']));
       expect(afterToolsWithHandoff({ messages: [new ToolMessage({ tool_call_id: 'a', content: 'r' })] })).toBe('agent');

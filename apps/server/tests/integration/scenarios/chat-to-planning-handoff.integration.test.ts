@@ -13,6 +13,14 @@
  * Real production wiring (registerInfraServices), real graph, adapter,
  * repositories and PostgresSaver; only the ChatModel beneath the gateway is
  * replaced by the shared scripted model (scripted-model.ts).
+ *
+ * close-out review Blocking 1: the second scenario's `start_training_session`
+ * call must NOT be treated as a hand-off (the run already hopped once,
+ * chat → session_planning) — session_planning gets a normal second turn to
+ * write its own closing text, which the run delivers. Before the fix, the
+ * shared `isAcceptedHandoff` predicate did not know about the run's hop
+ * history, silenced session_planning's carrier anyway, and the run delivered
+ * '' — a replyless run the executor's own doc comment forbids.
  */
 import { and, desc, eq } from 'drizzle-orm';
 
@@ -33,6 +41,14 @@ const WHAT_TODAY = 'что делать сегодня?';
 const CHAT_TEXT = 'Давай подберём тренировку.';
 /** The session_planning answer the SAME run delivers (AC-TH-6). */
 const PLANNING_TEXT = 'Сегодня Upper A: жим лёжа 3×8-10 @ 80 кг, подтягивания 3×6-8. Начинаем?';
+/**
+ * session_planning's own closing text after `start_training_session` — the
+ * run already hopped once (chat → session_planning), so this second
+ * hand-off-shaped transition is BLOCKED (close-out Blocking 1): session_planning
+ * gets a normal second turn instead of being silenced, and this is what the
+ * run delivers.
+ */
+const PLANNING_STARTS_TEXT = 'Погнали! Жим лёжа первым — 3×8-10 @ 80 кг.';
 
 const startUpperA = {
   toolCall: {
@@ -82,8 +98,11 @@ const chatToPlanningToTraining: Scenario = {
       text: WHAT_TODAY,
       script: [
         { toolCall: { name: 'request_transition', args: { toPhase: 'session_planning', reason: 'user asks what to train today' } } },
-        // No text — the training hand-off empties it anyway; no training call follows.
+        // No text on the tool-call turn — session_planning gets a REQUIRED second
+        // turn since this second hand-off-shaped transition is blocked (max 1
+        // hop already spent on chat → session_planning); no training call follows.
         startUpperA,
+        { text: PLANNING_STARTS_TEXT },
       ],
       expect: {},
     },
@@ -180,6 +199,11 @@ describe('U5 transition-handoff — chat → session_planning (R2.2, AC-TH-6)', 
   it('max-1-hop: the planning reply that starts the session commits training — but does not hop again', async () => {
     const [step] = doubleTransition.steps;
     expect(step?.phase).toBe('training');
+    // close-out Blocking 1: session_planning's own text IS delivered — the
+    // blocked second hand-off falls through to a normal second turn, never a
+    // silent, replyless run.
+    expect(step?.delivered).toBe(PLANNING_STARTS_TEXT);
+    expect(step?.delivered).not.toBe('');
 
     // The committed transition has its side effects: the session exists, in_progress.
     const [session] = await db
@@ -197,9 +221,12 @@ describe('U5 transition-handoff — chat → session_planning (R2.2, AC-TH-6)', 
     expect(row?.transition).toMatchObject({ toPhase: 'training' });
   });
 
-  it('max-1-hop: training’s model is NOT called in that run — exactly two chat calls (chat, session_planning)', () => {
-    // A second hop would consume a third scripted answer / fallback reply;
-    // the recorded inputs are the direct proof of what the model was asked.
-    expect(doubleTransitionChatInputs).toBe(2);
+  it('max-1-hop: training’s model is NOT called in that run — exactly three chat calls, all chat/session_planning', () => {
+    // Two would mean the blocked hand-off was still silently silenced (the
+    // close-out Blocking 1 bug); a fourth would mean training got a turn.
+    // The recorded inputs are the direct proof of what the model was asked:
+    // chat's tool call, session_planning's tool call, session_planning's
+    // REQUIRED second turn (the blocked hand-off falls through to it).
+    expect(doubleTransitionChatInputs).toBe(3);
   });
 });

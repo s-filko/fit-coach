@@ -18,6 +18,7 @@ import type { IConversationRunService, TranscriptPort } from '@domain/conversati
 import { evaluateTransition } from '@domain/conversation/transitions';
 
 import { splitEpisode, toTranscriptMessages } from '@infra/ai/graph/episode';
+import { isAcceptedHandoff } from '@infra/ai/graph/handoff';
 import { type ConversationStateType, ctxOf } from '@infra/ai/graph/state';
 import { promptVersionsForPhase } from '@infra/ai/prompts';
 import { outcomeKindOf } from '@infra/ai/tools/outcome';
@@ -113,8 +114,11 @@ export function buildCommitNode(deps: CommitNodeDeps) {
 
     // Task 2 (AC-TH-1/AC-TH-3): loop back to `route` — no second run row, no
     // second projection base, `prepare` is skipped entirely — only on the
-    // FIRST commit of the run, when the committed target is a hand-off target.
-    const shouldHop = isFirstCommitOfRun && !!verdict?.ok && handoffTargets.has(verdict.toPhase);
+    // FIRST commit of the run, when the committed target is a hand-off
+    // target. The shared isAcceptedHandoff predicate (close-out Blocking 1)
+    // is the SAME one tool-executor.ts uses to decide whether to silence the
+    // carrier and route to 'handoff' — the two can no longer disagree.
+    const shouldHop = isAcceptedHandoff(handoffTargets, phase, state.activeSessionId, request, !isFirstCommitOfRun);
     ctx.hopping = shouldHop;
     if (shouldHop && request) {
       // The final commit's OWN `request` is null by then (this commit already

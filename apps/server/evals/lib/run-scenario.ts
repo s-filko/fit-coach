@@ -243,11 +243,14 @@ export async function runScenario(scenario: Scenario, opts: RunScenarioOptions =
 /**
  * Every run wires its own PostgresSaver, which owns a pg pool. A journey file
  * that runs the scenario several times (the fact-lifecycle journeys run each
- * one with the course check on AND off) would otherwise leave a pool per run
- * open until the process exits and exhaust the test database's connections
- * ("too many clients already") for every file that follows.
+ * one with the course check on AND off), or a test that wires its own extra
+ * graph beyond what `runScenario` builds (close-out review Blocking 2), would
+ * otherwise leave a pool per run open until the process exits and exhaust the
+ * test database's connections ("too many clients already") for every file
+ * that follows. Exported so callers driving their own graph/container reuse
+ * this instead of copying it.
  */
-async function releaseCheckpointer(graph: CompiledConversationGraph): Promise<void> {
+export async function releaseCheckpointer(graph: CompiledConversationGraph): Promise<void> {
   const checkpointer = (graph as unknown as { checkpointer?: { end?: () => Promise<void> } }).checkpointer;
   await checkpointer?.end?.();
 }

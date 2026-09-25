@@ -5,6 +5,8 @@ import { z } from 'zod';
 import type { ConversationPhase } from '@domain/conversation/phases';
 import { ok } from '@domain/conversation/tool-outcome';
 
+import { HANDOFF_REGISTERED_TEXT } from '@infra/ai/graph/handoff';
+
 /** The three phases that get a request_transition tool — one builder, three variants. */
 export type RequestTransitionVariant = 'chat' | 'plan_creation' | 'session_planning';
 
@@ -39,9 +41,7 @@ export function buildRequestTransitionTool(
     return tool(
       async input => ({
         outcome: ok(
-          handoffTargets.has(input.toPhase)
-            ? 'Transition registered; the next phase answers the user.'
-            : `Transition to ${input.toPhase} requested.`,
+          handoffTargets.has(input.toPhase) ? HANDOFF_REGISTERED_TEXT : `Transition to ${input.toPhase} requested.`,
         ),
         update: {
           pendingTransition: {

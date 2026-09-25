@@ -12,22 +12,23 @@
  * repositories and PostgresSaver; only the ChatModel beneath the gateway is
  * replaced by the shared scripted model (scripted-model.ts).
  */
-import { and, desc, eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 
 import type { ConversationPhase } from '@domain/conversation/phases';
 import { CONVERSATION_RUN_PORT_TOKEN, type ConversationRunPort } from '@domain/conversation/ports';
 import type { CompiledConversationGraph } from '@infra/ai/graph/conversation.graph';
 import { db } from '@infra/db/drizzle';
-import { conversationRuns, sessionExercises, sessionSets, workoutSessions } from '@infra/db/schema';
+import { conversationRuns, workoutSessions } from '@infra/db/schema';
 import { Container } from '@infra/di/container';
 import { registerInfraServices } from '@main/register-infra-services';
 
-import { runScenario } from '../../../evals/lib/run-scenario';
+import { releaseCheckpointer, runScenario } from '../../../evals/lib/run-scenario';
 import { ScenarioSchema, type Scenario } from '../../../evals/schema/scenario.schema';
 import { BENCH_PRESS_ID, sharedPast, setupSteps } from '../../../evals/scenarios/b-full-workout.scenario';
 import { REAL_TIMER_APIS } from '../../helpers/real-timers';
 
 import { installScriptedModel, type ScriptedModelHandle } from './scripted-model';
+import { storedSets } from './session-seed';
 
 /** The scenario's weekday labels in the imported setup steps are pinned to this T0. */
 const T0 = new Date('2026-09-20T10:00:00.000Z');
@@ -65,22 +66,6 @@ async function latestRunRow(userId: string) {
     .orderBy(desc(conversationRuns.createdAt))
     .limit(1);
   return row ?? null;
-}
-
-/** Every stored session_sets row's setData for this user, across all their sessions. */
-async function storedSets(userId: string) {
-  return db
-    .select({ setData: sessionSets.setData })
-    .from(sessionSets)
-    .innerJoin(sessionExercises, eq(sessionSets.sessionExerciseId, sessionExercises.id))
-    .innerJoin(workoutSessions, eq(sessionExercises.sessionId, workoutSessions.id))
-    .where(eq(workoutSessions.userId, userId));
-}
-
-/** Every stub in this file uses ONE fresh Container/graph — never the one runScenario builds internally for setup. */
-async function releaseCheckpointer(graph: CompiledConversationGraph): Promise<void> {
-  const checkpointer = (graph as unknown as { checkpointer?: { end?: () => Promise<void> } }).checkpointer;
-  await checkpointer?.end?.();
 }
 
 describe('U5 transition-handoff — failure on the hop (AC-TH-5)', () => {

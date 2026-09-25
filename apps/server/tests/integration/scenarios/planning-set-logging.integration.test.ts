@@ -10,8 +10,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 
 import { db } from '@infra/db/drizzle';
-import { conversationRuns, conversationTurns } from '@infra/db/schema';
-import { sessionExercises, sessionSets, workoutSessions } from '@infra/db/schema';
+import { conversationRuns, conversationTurns, workoutSessions } from '@infra/db/schema';
 
 import { runScenario, type ScenarioRunResult } from '../../../evals/lib/run-scenario';
 import { ScenarioSchema, type Scenario } from '../../../evals/schema/scenario.schema';
@@ -19,6 +18,7 @@ import { BENCH_PRESS_ID, sharedPast, setupSteps } from '../../../evals/scenarios
 import { REAL_TIMER_APIS } from '../../helpers/real-timers';
 
 import { installScriptedModel, type ScriptedModelHandle } from './scripted-model';
+import { storedSets } from './session-seed';
 
 /** The scenario's weekday labels in the imported setup steps are pinned to this T0. */
 const T0 = new Date('2026-09-20T10:00:00.000Z');
@@ -104,12 +104,7 @@ describe('U5 transition-handoff — a set reported during session_planning', () 
     const setReportStep = result.steps[2];
     expect(setReportStep?.phase).toBe('training');
 
-    const sets = await db
-      .select({ setData: sessionSets.setData })
-      .from(sessionSets)
-      .innerJoin(sessionExercises, eq(sessionSets.sessionExerciseId, sessionExercises.id))
-      .innerJoin(workoutSessions, eq(sessionExercises.sessionId, workoutSessions.id))
-      .where(eq(workoutSessions.userId, result.userId));
+    const sets = await storedSets(result.userId);
 
     expect(sets.map(s => s.setData)).toContainEqual(expect.objectContaining({ reps: 12, weight: 110 }));
   });

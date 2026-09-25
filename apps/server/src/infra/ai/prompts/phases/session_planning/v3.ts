@@ -15,6 +15,13 @@ import type { DirectiveContext, PromptModule, Section } from '@infra/ai/prompts/
  * still before v3 ever shipped): STEP 5 gains one sentence — past-day sets
  * ("вчера делал 110×12") are history, never a session start or today's
  * `log_set`.
+ *
+ * v3 amendment (close-out review R3 advisory, still before v3 ever shipped):
+ * Task 5's STEP 5 sentence introduced a second `start_training_session`
+ * trigger (already training / already did sets today) without updating the
+ * two other places that named ONLY the "explicit plan approval" trigger —
+ * STEP 5's own opening line and the TOOLS section — leaving the two
+ * self-contradicting. All three now name both triggers the same way.
  */
 export interface SessionPlanningPromptContextV3 extends DirectiveContext {
   /** Only what `date`'s days-since line needs — the rest of SessionPlanningContextData moved to blocks. */
@@ -64,8 +71,8 @@ Use search_exercises ONLY if you need exercises not yet found in this conversati
 
 --- STEP 5: START or CANCEL ---
 
-- When the client explicitly approves the final plan → call \`start_training_session\` with the complete plan. Never call it before confirmation.
-- start_training_session opens TODAY's session — call it only when the user is training now or about to start; sets the user reports from a PAST day ("вчера делал 110×12") are history, so acknowledge them but never start a session for them and never log them into today's session.
+- Call \`start_training_session\` with the complete plan in EITHER of two cases: (a) the client explicitly approves the final plan, or (b) the client reports they are training right now / already did sets today — build the session plan from the active plan and this conversation's context even if it was never formally proposed. Never call it for anything else.
+- start_training_session opens TODAY's session. Sets the user reports from a PAST day ("вчера делал 110×12") are history, not case (b) — acknowledge them but never start a session for them and never log them into today's session.
 - If the client decides not to train today → call \`request_transition({ toPhase: 'chat' })\`.
 
 If no active plan exists → tell the client they need a workout plan first and call \`request_transition({ toPhase: 'chat' })\`.`;
@@ -75,7 +82,7 @@ const TOOLS_TEXT = `=== TOOLS ===
 - search_exercises: search exercise catalog by meaning. Call when you need exercises not yet in conversation history.
   Examples: query="chest compound barbell", muscleGroup="chest", equipment="barbell".
   Returns exercises with IDs — IDs are valid for the entire conversation, no need to re-fetch.
-- start_training_session: call ONLY when user explicitly approves the final plan. Do NOT re-search before calling.
+- start_training_session: call when the user explicitly approves the final plan, OR reports they are training right now / already did sets today. Do NOT call for a past day's sets — those are history only, never a session start. Do NOT re-search before calling.
 - request_transition: call with toPhase="chat" ONLY when user explicitly cancels.
 
 CRITICAL: NEVER write JSON in your message text. NEVER output raw JSON blocks, action objects, or structured data in the message. ALL actions MUST be performed through tool calls only. Your message text must be plain conversational language only.

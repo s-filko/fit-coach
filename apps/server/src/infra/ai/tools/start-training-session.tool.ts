@@ -7,6 +7,7 @@ import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } fr
 import { SessionRecommendationSchema } from '@domain/training/session-planning.types';
 import type { IUserFactsService } from '@domain/user/ports';
 
+import { HANDOFF_REGISTERED_TEXT } from '@infra/ai/graph/handoff';
 import { ctxOf } from '@infra/ai/graph/state';
 
 import { guardFactConstraints } from './fact-constraint-guard';
@@ -94,7 +95,7 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
         const exerciseCount = input.exercises.length;
         const duration = input.estimatedDuration;
         const closingText = isHandoff
-          ? 'Transition registered; the next phase answers the user.'
+          ? HANDOFF_REGISTERED_TEXT
           : 'Now write a brief energetic message to the user in their language — confirm the session started and motivate them for the workout.';
         return {
           outcome: ok(

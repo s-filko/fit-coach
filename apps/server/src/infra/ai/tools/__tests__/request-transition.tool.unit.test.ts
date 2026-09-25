@@ -4,6 +4,7 @@ import { isToolReturnWithUpdate, type ToolReturn } from '@domain/conversation/to
 import type { ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 
+import { HANDOFF_REGISTERED_TEXT } from '@infra/ai/graph/handoff';
 import { toToolMessage } from '@infra/ai/tools/outcome';
 
 import { buildRequestTransitionTool } from '../request-transition.tool';
@@ -148,7 +149,7 @@ describe('request-transition.tool — chat variant, D-5 hand-off wording', () =>
 
     const result = (await requestTransition.invoke({ toPhase: 'session_planning' }, makeConfig())) as ToolReturn;
 
-    expect(renderedContent(result)).toBe('Transition registered; the next phase answers the user.');
+    expect(renderedContent(result)).toBe(HANDOFF_REGISTERED_TEXT);
   });
 
   it('still requests the pendingTransition update when hand-off wording applies', async () => {
