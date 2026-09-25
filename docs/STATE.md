@@ -229,6 +229,15 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
+## Handoff (session-investigation-0925, 2026-09-25) — waiting on the owner
+
+The owner's live dev session of 2026-09-25 was investigated (plan `session-investigation-0925`, findings F1–F9,
+**BUG-034…038** in `BUGS.md`). Red tests exist for every code/spec finding (evidence table in the plan); default
+suites stay green; no production change. **Stopped at the owner gate:** no fix starts until the owner approves the
+findings and the red tests. Task worktrees `session-investigation-0925-t1..t4` are merged into the plan branch and
+clean, workers released — ready to clean up on the owner's word. F5 = BUG-030 (open), F6 = BUG-032 (fix on
+`plan/transition-handoff`).
+
 ## Handoff (orchestrator shift, 2026-09-25 — fifth relay)
 
 No live Orca runs, workers or plan worktrees (all released/removed 2026-09-25). Open owner decisions

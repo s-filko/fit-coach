@@ -118,6 +118,12 @@ the expected behaviour and what it catches), `apps/server/evals/scenarios/smoke.
 
 | AC | Command | Exit | Failing assertion | SHA |
 |---|---|---|---|---|
+| AC-SI-1a/b, AC-SI-3 | `npx jest --testMatch='**/tool-error-budget.repro.test.ts'` | 1 | 3/3 red: a batch after an earlier run's errors (1a) / with zero new errors (1b) ends with the catalog `AIMessage`; the fallback for an `en` user writing Russian is English (`/[а-яё]/i` fails) | `b0ea82c1` |
+| AC-SI-1c, AC-SI-2 | `db-test-lock.sh bash -c 'RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch="**/set-error-recovery.repro.test.ts"'` | 1 | 2/3 red: `rpe: 9.5` saves nothing (`toHaveLength(1)` got 0); run N+1 with a clean `log_set` delivers "Couldn't save the data…" instead of the scripted text. Control (the clean set persisted) green | `b0ea82c1` |
+| AC-SI-4 | `npx jest --testMatch='**/exercise-transition-order.repro.test.ts'` | 1 | 5/7 red: tool text has no confirm-first/brief-recap order and says "announce the next exercise"; prompt rule 4 puts the recap (idx 384) before the confirmation (idx 739) and announces the next exercise unconditionally | `d4c81b7a` |
+| AC-SI-5 | `npx jest --testMatch='**/compaction-churn.repro.test.ts'` | 1 | 5/5 red: 5 compactions in 5 near-cap runs (expected ≤ 1); summariser transcript has the UUID, not "Lat Pulldown"; same-day episodes read "training (today)" with no local time (3 entries collapse to 1 string) | `9f052c7c` |
+| AC-SI-6 | `npm run test:unit`; `db-test-lock.sh … smoke-seed.integration.test.ts` | 0 | 4 drafts LS-0005…0008 parse; smoke gains the RPE-range step, the mid-training "when last" step, `languageCode: 'en'` (not run) | `92ebcc6e` |
+| AC-SI-7 | `npm run test:unit`; `db-test-lock.sh npm run test:scenarios` on the merged plan branch | 0 | unit 129 suites / 1224 green; scenarios 11 suites / 355 green (+1 todo); production diff empty | `abf89eb4` |
 
 ## Judge rubrics for the 2026-09-25 drafts (Task 4)
 
