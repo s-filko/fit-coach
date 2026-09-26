@@ -433,6 +433,53 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
       );
     });
 
+    it('D2: the info line adds cacheReadTokens/reasoningTokens off usage_metadata details', async () => {
+      mockInvoke.mockResolvedValueOnce(
+        new AIMessage({
+          content: 'готово',
+          tool_calls: [],
+          usage_metadata: {
+            input_tokens: 5765,
+            output_tokens: 30,
+            total_tokens: 5795,
+            input_token_details: { cache_read: 5760 },
+            output_token_details: { reasoning: 30 },
+          },
+        }),
+      );
+      const node = buildAgentNode(makeSpec(), makeDeps());
+
+      await node(makeState(), CONFIG);
+
+      expect(logFns.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          promptTokens: 5765,
+          completionTokens: 30,
+          cacheReadTokens: 5760,
+          reasoningTokens: 30,
+        }),
+        expect.any(String),
+      );
+    });
+
+    it('D2: no cache/reasoning detail reported → those fields log as null, never 0', async () => {
+      mockInvoke.mockResolvedValueOnce(
+        new AIMessage({
+          content: 'готово',
+          tool_calls: [],
+          response_metadata: { finish_reason: 'stop', tokenUsage: { promptTokens: 100, completionTokens: 10 } },
+        }),
+      );
+      const node = buildAgentNode(makeSpec(), makeDeps());
+
+      await node(makeState(), CONFIG);
+
+      expect(logFns.info).toHaveBeenCalledWith(
+        expect.objectContaining({ cacheReadTokens: null, reasoningTokens: null }),
+        expect.any(String),
+      );
+    });
+
     it('truncated-but-non-empty → flow unchanged (the partial answer is returned), warn logged', async () => {
       mockInvoke.mockResolvedValueOnce(
         new AIMessage({ content: 'частичный ответ', tool_calls: [], response_metadata: { finish_reason: 'length' } }),

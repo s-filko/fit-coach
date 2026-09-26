@@ -19,6 +19,7 @@ import { langOf, t } from '@infra/ai/messages';
 import { getModel } from '@infra/ai/model.factory';
 import { POST_TOOL_NUDGE_V1, renderBlock, TIME_GAP_V1 } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
+import { extractUsageFromMessage } from '@infra/ai/usage';
 
 import { loadConfig } from '@config/index';
 
@@ -63,31 +64,34 @@ function finishReasonOf(response: AIMessage): string | undefined {
   return meta?.finish_reason;
 }
 
-/** Token counts: LangChain's usage_metadata, or response_metadata.tokenUsage (OpenAI shape). */
-function tokenUsageOf(response: AIMessage): { promptTokens?: number; completionTokens?: number } {
-  const um = response.usage_metadata;
-  if (um && typeof um.input_tokens === 'number') {
-    return { promptTokens: um.input_tokens, completionTokens: um.output_tokens };
-  }
-  const tu = (response.response_metadata as { tokenUsage?: { promptTokens?: number; completionTokens?: number } })
-    ?.tokenUsage;
-  return { promptTokens: tu?.promptTokens, completionTokens: tu?.completionTokens };
-}
-
 /**
  * BUG-019 / AC-RL-2: every model response is visible at info — one line per
  * call with the finish reason and token counts, never the message bodies.
  * A `length` response additionally warns: the answer was cut off by the
  * output-token cap, a call we already know is dead. Returns the finish reason
  * so the caller can skip the retry (see below).
+ *
+ * D2: token counts come from the shared extractor (usage.ts) — the same source of truth
+ * llm-log-handler.ts/run-metrics.ts use — so this line adds cacheReadTokens/reasoningTokens too.
  */
 function logModelResponse(response: AIMessage, userId: string, phase: string): string | undefined {
   const finishReason = finishReasonOf(response);
-  const { promptTokens, completionTokens } = tokenUsageOf(response);
-  log.info({ userId, phase, finishReason, promptTokens, completionTokens }, 'LLM response');
+  const { inputTokens, outputTokens, cacheReadTokens, reasoningTokens } = extractUsageFromMessage(response);
+  log.info(
+    {
+      userId,
+      phase,
+      finishReason,
+      promptTokens: inputTokens,
+      completionTokens: outputTokens,
+      cacheReadTokens,
+      reasoningTokens,
+    },
+    'LLM response',
+  );
   if (finishReason === 'length') {
     log.warn(
-      { userId, phase, finishReason, completionTokens, maxTokens: loadConfig().LLM_MAX_TOKENS },
+      { userId, phase, finishReason, completionTokens: outputTokens, maxTokens: loadConfig().LLM_MAX_TOKENS },
       'LLM answer truncated by the output-token cap (finish_reason=length)',
     );
   }
