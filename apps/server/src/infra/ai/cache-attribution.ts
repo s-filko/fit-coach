@@ -6,7 +6,23 @@
  * miss). No I/O here — `llm-call-recorder.ts` fetches `prev` (the previous row, plus its system
  * messages' `prompt_blobs` content) and calls this; D7's "never fails a call" is that caller's
  * job, not this one's.
+ *
+ * Close-out review fix (2026-09-26, blocking R3): the previous request comes back from `jsonb`,
+ * which does NOT preserve object key order (Postgres sorts by length then bytewise) — the current
+ * request is still in insertion order. Comparing `JSON.stringify` output directly therefore never
+ * matched even byte-identical tool schemas/tool_calls, making `warm` unreachable whenever a call
+ * had tools. Every comparison and every char-offset below runs on `canonicalStringify`'s output —
+ * object keys sorted recursively, arrays left in order (Postgres never reorders array elements) —
+ * so both sides compare on the same footing regardless of which one round-tripped through jsonb.
  */
+import {
+  COURSE_DIRECTIVE_HEADER,
+  EPISODE_SUMMARIES_HEADER,
+  TIME_GAP_PREFIX,
+  USER_FACTS_HEADER,
+} from '@infra/ai/prompts/blocks';
+
+import { commonPrefixLength } from '@shared/common-prefix';
 
 /** One message of a request, already resolved to comparable form — a system message carries its
  * actual text (never a bare hash: the recorder resolves `prev`'s hashes via `prompt_blobs` before
@@ -51,25 +67,40 @@ function gapMsOf(prevCreatedAt: Date, now: Date): number {
   return Math.max(0, now.getTime() - prevCreatedAt.getTime());
 }
 
-function commonPrefixLength(a: string, b: string): number {
-  const len = Math.min(a.length, b.length);
-  let i = 0;
-  while (i < len && a[i] === b[i]) {
-    i++;
+/**
+ * A `JSON.stringify` that recursively sorts object keys (arrays keep their order — Postgres never
+ * reorders array elements, only object keys) — so a value read back from `jsonb` compares equal to
+ * the same value still in its original insertion order. The one normal form every comparison and
+ * every char-offset in this module runs on (close-out review, blocking R3).
+ */
+function canonicalStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalStringify).join(',')}]`;
   }
-  return i;
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.keys(value as Record<string, unknown>)
+      .sort()
+      .map(key => `${JSON.stringify(key)}:${canonicalStringify((value as Record<string, unknown>)[key])}`);
+    return `{${entries.join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
 }
 
-/** D4: system messages compare (and diff) by their resolved text; everything else by serialized equality. */
+/** D4: system messages compare (and diff) by their resolved text; everything else by canonical serialized equality. */
 function comparableText(m: CacheAttributionMessage): string {
   if (m.role === 'system') {
-    return typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? null);
+    return typeof m.content === 'string' ? m.content : canonicalStringify(m.content ?? null);
   }
-  return JSON.stringify({
+  return canonicalStringify({
     content: m.content ?? null,
     toolCalls: m.toolCalls ?? null,
     toolCallId: m.toolCallId ?? null,
   });
+}
+
+/** D4: the tools + response_format unit, canonicalized the same way as messages. */
+function toolsCanonical(request: CacheAttributionRequest): string {
+  return canonicalStringify({ tools: request.tools ?? null, responseFormat: request.responseFormat ?? null });
 }
 
 /** True when every message before `index` is itself a system message — the ADR-0013 §3.4 "block 1..3" run. */
@@ -102,16 +133,16 @@ function labelForMessage(messages: CacheAttributionMessage[], index: number): st
     return 'system:prompt';
   }
   const text = typeof m.content === 'string' ? m.content : '';
-  if (text.startsWith('## User Facts')) {
+  if (text.startsWith(USER_FACTS_HEADER)) {
     return 'system:facts';
   }
-  if (text.startsWith('## Course Directive')) {
+  if (text.startsWith(COURSE_DIRECTIVE_HEADER)) {
     return 'system:directive';
   }
-  if (text.startsWith('## Previous episodes')) {
+  if (text.startsWith(EPISODE_SUMMARIES_HEADER)) {
     return 'system:summaries';
   }
-  if (text.startsWith('The user returns after')) {
+  if (text.startsWith(TIME_GAP_PREFIX)) {
     return 'system:gap-note';
   }
   if (isLeadingSystemRun(messages, index)) {
@@ -184,33 +215,32 @@ export function attributeCache(
   // it is cacheable either (an OpenAI-compatible wire request places the tool/response-format
   // framing ahead of the messages), so the shared estimate is 0 no matter how similar the
   // messages themselves are.
-  const prevToolsJson = JSON.stringify({
-    tools: prev.request.tools ?? null,
-    responseFormat: prev.request.responseFormat ?? null,
-  });
-  const curToolsJson = JSON.stringify({
-    tools: current.request.tools ?? null,
-    responseFormat: current.request.responseFormat ?? null,
-  });
+  const prevToolsText = toolsCanonical(prev.request);
+  const curToolsText = toolsCanonical(current.request);
+  const toolsEqual = prevToolsText === curToolsText;
 
   let label: string | null = null;
   let messageIndex: number | null = null;
   let charOffset: number | null = null;
-  let sharedChars = 0;
+  let messageSharedChars = 0;
 
-  if (prevToolsJson !== curToolsJson) {
+  if (!toolsEqual) {
     label = 'tools';
     messageIndex = -1;
-    charOffset = commonPrefixLength(prevToolsJson, curToolsJson);
+    charOffset = commonPrefixLength(prevToolsText, curToolsText);
   } else {
     const diff = diffMessages(prev.request.messages, current.request.messages);
-    ({ sharedChars } = diff);
+    ({ sharedChars: messageSharedChars } = diff);
     if (!diff.isPrefix) {
       ({ label, messageIndex, charOffset } = diff);
     }
   }
 
-  const curTotalChars = totalChars(current.request.messages);
+  // R3 advisory: the estimate must count the tools/response_format text too, not just messages —
+  // a multi-thousand-token tool schema shared between calls otherwise never shows up as "shared"
+  // at all, understating cacheSharedPrefixTokens whenever a call carries tools.
+  const curTotalChars = curToolsText.length + totalChars(current.request.messages);
+  const sharedChars = (toolsEqual ? curToolsText.length : 0) + messageSharedChars;
   const cacheSharedPrefixTokens =
     current.inputTokens !== null && curTotalChars > 0
       ? Math.round((current.inputTokens * sharedChars) / curTotalChars)
