@@ -62,6 +62,19 @@ export interface IWorkoutSessionRepository {
     exerciseIds: string[],
     excludeSessionId: string,
   ): Promise<ExerciseLastPerformance[]>;
+  /**
+   * Up to `limit` most recent real (completed, >= 1 set) performances of ONE exercise, newest
+   * first, excluding `excludeSessionId` (today's own session) — the `get_exercise_history` tool's
+   * on-demand lookup (training-history-lookup plan D2). A sibling of `findLastPerformancesByExercise`
+   * sharing its hydration path: that one anchors ONE entry per exercise id across many ids; this one
+   * returns up to N entries for a SINGLE exercise id.
+   */
+  findRecentPerformancesForExercise(
+    userId: string,
+    exerciseId: string,
+    excludeSessionId: string,
+    limit: number,
+  ): Promise<ExerciseLastPerformance[]>;
 }
 
 export interface ISessionExerciseRepository {

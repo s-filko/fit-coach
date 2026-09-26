@@ -9,6 +9,7 @@ import type { IUserFactsService } from '@domain/user/ports';
 
 import { ctxOf } from '@infra/ai/graph/state';
 
+import { checkExerciseNamesAgainstCatalog } from './exercise-name-check';
 import { guardFactConstraints } from './fact-constraint-guard';
 import { userIdOf } from './format-exercise-summary';
 
@@ -102,6 +103,7 @@ export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
       // Validate all exerciseIds exist in DB before saving, and resolve their
       // muscles in the same call for the constraint check below.
       let advisory: string | null = null;
+      let correctedTemplates = input.sessionTemplates;
       const allIds = input.sessionTemplates.flatMap(t => t.exercises.map(e => e.exerciseId));
       const uniqueIds = [...new Set(allIds)];
       if (uniqueIds.length > 0) {
@@ -114,6 +116,21 @@ export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
               'Use search_exercises to find valid exercise IDs.',
           );
         }
+
+        // Plan name/id check (training-history-lookup plan D5): reject before anything is
+        // persisted when an entry's name shares no word with its id's catalog name; otherwise the
+        // stored name is the catalog's, not whatever the plan called it.
+        const catalogNameById = new Map(found.map(e => [e.id, e.name]));
+        const flatExercises = input.sessionTemplates.flatMap(t => t.exercises);
+        const nameCheck = checkExerciseNamesAgainstCatalog(flatExercises, catalogNameById);
+        if (nameCheck.rejection) {
+          return nameCheck.rejection;
+        }
+        let i = 0;
+        correctedTemplates = input.sessionTemplates.map(t => ({
+          ...t,
+          exercises: t.exercises.map(() => nameCheck.corrected[i++]),
+        }));
 
         // Constraint guard (D-G, narrowed by AC-FL-6): a PERMANENT constraint's
         // muscle group among an exercise's PRIMARY muscles rejects the call —
@@ -132,7 +149,7 @@ export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
           trainingStyle: input.trainingStyle,
           targetMuscleGroups: input.targetMuscleGroups as MuscleGroup[],
           recoveryGuidelines: input.recoveryGuidelines,
-          sessionTemplates: input.sessionTemplates,
+          sessionTemplates: correctedTemplates,
           progressionRules: input.progressionRules,
         },
         status: 'active',

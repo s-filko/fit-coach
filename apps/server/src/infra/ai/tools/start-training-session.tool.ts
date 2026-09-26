@@ -10,6 +10,7 @@ import type { IUserFactsService } from '@domain/user/ports';
 import { HANDOFF_REGISTERED_TEXT } from '@infra/ai/graph/handoff';
 import { ctxOf } from '@infra/ai/graph/state';
 
+import { checkExerciseNamesAgainstCatalog } from './exercise-name-check';
 import { guardFactConstraints } from './fact-constraint-guard';
 import { userIdOf } from './format-exercise-summary';
 
@@ -49,6 +50,7 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
       // Validate all exerciseIds exist in DB before creating the session, and
       // resolve their muscles in the same call for the constraint check below.
       let advisory: string | null = null;
+      let correctedExercises = input.exercises;
       const allIds = input.exercises.map((e: { exerciseId: string }) => e.exerciseId);
       const uniqueIds = [...new Set(allIds)];
       if (uniqueIds.length > 0) {
@@ -61,6 +63,16 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
               'Use search_exercises to find valid exercise IDs, then retry.',
           );
         }
+
+        // Plan name/id check (training-history-lookup plan D5): reject before any state changes
+        // when a plan entry's name shares no word with its id's catalog name; otherwise the stored
+        // name is the catalog's, not whatever the plan called it.
+        const catalogNameById = new Map(found.map(e => [e.id, e.name]));
+        const nameCheck = checkExerciseNamesAgainstCatalog(input.exercises, catalogNameById);
+        if (nameCheck.rejection) {
+          return nameCheck.rejection;
+        }
+        correctedExercises = nameCheck.corrected;
 
         // Constraint guard (D-G, narrowed by AC-FL-6): a PERMANENT constraint's
         // muscle group among an exercise's PRIMARY muscles rejects the call —
@@ -84,7 +96,7 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
             sessionKey: input.sessionKey,
             sessionName: input.sessionName,
             reasoning: input.reasoning,
-            exercises: input.exercises,
+            exercises: correctedExercises,
             estimatedDuration: input.estimatedDuration,
             timeLimit: input.timeLimit,
             warnings: input.warnings,

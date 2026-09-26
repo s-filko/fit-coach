@@ -45,8 +45,12 @@ function resolveTz(ctx: ContextBlockCtx): string {
   return ctx.timezone ?? ctx.user?.timezone ?? 'UTC';
 }
 
-/** D5: "2026-09-16 · 5d ago (Wed)" — calendar date in the user's timezone, plus humanTimeAgo. */
-function formatDateAge(date: Date, ctx: ContextBlockCtx): string {
+/**
+ * D5: "2026-09-16 · 5d ago (Wed)" — calendar date in the user's timezone, plus humanTimeAgo.
+ * Exported for `get-exercise-history.tool.ts` (training-history-lookup plan D2) — the tool's dated
+ * lines reuse this formatter, not a copy.
+ */
+export function formatDateAge(date: Date, ctx: ContextBlockCtx): string {
   const tz = resolveTz(ctx);
   return `${formatInUserTz(date, tz).dateOnly} · ${humanTimeAgo(date, ctx.now, tz)}`;
 }

@@ -29,6 +29,7 @@ import {
   buildCompleteCurrentExerciseTool,
   buildDeleteLastSetsTool,
   buildFinishTrainingTool,
+  buildGetExerciseHistoryTool,
   buildLogSetTool,
   buildSearchExercisesTool,
   buildSharedTools,
@@ -94,10 +95,11 @@ export function buildTrainingToolPolicy(tools: StructuredToolInterface[]): ToolP
 }
 
 export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<TrainingData> {
-  const { userService, trainingService, exerciseRepository, embeddingService } = deps;
+  const { userService, trainingService, exerciseRepository, embeddingService, workoutSessionRepo } = deps;
   const entry = PHASE_PROMPTS.training;
   const tools = [
     buildSearchExercisesTool({ embeddingService, exerciseRepository }),
+    buildGetExerciseHistoryTool({ trainingService, exerciseRepository, workoutSessionRepo }),
     buildLogSetTool({ trainingService }),
     buildCompleteCurrentExerciseTool({ trainingService }),
     buildFinishTrainingTool({ trainingService }),

@@ -361,4 +361,63 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
       })
       .filter((p): p is ExerciseLastPerformance => p !== null);
   }
+
+  async findRecentPerformancesForExercise(
+    userId: string,
+    exerciseId: string,
+    excludeSessionId: string,
+    limit: number,
+  ): Promise<ExerciseLastPerformance[]> {
+    // Plain filter + order + limit — no DISTINCT ON needed, this is already scoped to one
+    // exercise id (unlike findLastPerformancesByExercise's per-id anchor over many ids).
+    const rows = await db
+      .select({
+        sessionExerciseId: sessionExercises.id,
+        completedAt: workoutSessions.completedAt,
+      })
+      .from(sessionExercises)
+      .innerJoin(workoutSessions, eq(sessionExercises.sessionId, workoutSessions.id))
+      .where(
+        and(
+          eq(workoutSessions.userId, userId),
+          eq(workoutSessions.status, 'completed'),
+          eq(sessionExercises.exerciseId, exerciseId),
+          ne(workoutSessions.id, excludeSessionId),
+          isNotNull(workoutSessions.completedAt),
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(sessionSets)
+              .where(eq(sessionSets.sessionExerciseId, sessionExercises.id)),
+          ),
+        ),
+      )
+      .orderBy(desc(workoutSessions.completedAt), desc(sessionExercises.orderIndex), desc(sessionExercises.id))
+      .limit(limit);
+
+    if (rows.length === 0) {
+      return [];
+    }
+
+    // Same batched hydration path as findByIdWithDetails/findLastPerformancesByExercise
+    // (close-out review R2) — no N+1 over the picked rows.
+    const sessionExerciseIds = rows.map(r => r.sessionExerciseId);
+    const joined = await db
+      .select()
+      .from(sessionExercises)
+      .leftJoin(exercises, eq(sessionExercises.exerciseId, exercises.id))
+      .where(inArray(sessionExercises.id, sessionExerciseIds));
+
+    const hydrated = await this.hydrateSessionExercises(joined);
+
+    return rows
+      .map(row => {
+        const sessionExercise = hydrated.get(row.sessionExerciseId);
+        if (!sessionExercise) {
+          return null;
+        }
+        return { exerciseId, completedAt: row.completedAt!, sessionExercise };
+      })
+      .filter((p): p is ExerciseLastPerformance => p !== null);
+  }
 }
