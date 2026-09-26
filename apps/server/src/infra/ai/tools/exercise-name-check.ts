@@ -6,11 +6,16 @@
  * D19: a session plan can name one exercise while carrying another's id (live 2026-09-25,
  * "Treadmill" naming Rowing Machine's id — BACKLOG.md § Findings).
  *
- * Match rule (close-out review, items 2/3): tokenise both names — lower-cased, Unicode-aware words
- * of >= 3 letters, equipment/modifier STOP_WORDS removed (D-stopwords below) — then pass if any
- * token is shared exactly, OR any pair of tokens shares a prefix of >= 4 chars (covers plural/
- * singular and compound-word drift: "Squats"/"Squat", "Lunges"/"Lunge", "Pullups"/"Pull-ups"). No
- * match rejects the WHOLE call (`llm_error`, nothing persisted) — the model is told to fix the id
+ * Match rule (close-out review items 2/3, then widened to containment by D16): tokenise both names
+ * — lower-cased, Unicode-aware words of >= 3 letters, equipment/modifier STOP_WORDS removed
+ * (D-stopwords below) — then CONTAIN, not merely overlap: every word of the SHORTER remaining word
+ * list must match some word of the other (exactly, or by a >= 4-char shared prefix whose extra tail
+ * is <= 3 chars — covers plural/compound drift: "Squats"/"Squat", "Lunges"/"Lunge",
+ * "Pullups"/"Pull-ups", but not "Dead Bug"/"Deadlift", whose shared "dead" prefix has a 4-char tail).
+ * Any-overlap alone was wrong: "Leg Curl" would have passed against "Leg Extension" on "leg" alone.
+ * If either side has NO words left after stop-word removal (e.g. "Smith Machine" — both words are
+ * equipment), the (trivially empty) shorter side's "every word matches" holds vacuously — accept.
+ * No match rejects the WHOLE call (`llm_error`, nothing persisted) — the model is told to fix the id
  * via `search_exercises` or use the English catalog name (the catalog is English-only, so a
  * non-English name — e.g. "Жим лёжа" — is always rejected, correctly). When the check passes, every
  * entry's `exerciseName` is replaced by the catalog name (D5 / D19: the catalog is the truth for an
@@ -33,6 +38,13 @@ export interface NameCheckResult<T extends NamedExerciseRef> {
 const WORD_RE = /[\p{L}\p{N}]+/gu;
 const MIN_WORD_LENGTH = 3;
 const MIN_SHARED_PREFIX = 4;
+/**
+ * The longer word's tail beyond the shared prefix must be short too (D16) — "pull"/"pullups" (tail
+ * "ups", 3) is plural/compound drift; "dead"/"deadlift" (tail "lift", 4) is two different exercises
+ * that merely start the same way. Without this cap the prefix rule alone would wrongly accept
+ * "Dead Bug" against "Deadlift".
+ */
+const MAX_PREFIX_TAIL = 3;
 
 /**
  * D-stopwords (close-out review item 3): equipment/modifier words that name almost every exercise
@@ -83,24 +95,33 @@ function commonPrefixLength(a: string, b: string): number {
   return i;
 }
 
+/** Exact match, or a shared prefix of >= 4 chars whose longer-word tail is <= 3 chars (D16). */
+function wordsMatch(a: string, b: string): boolean {
+  if (a === b) {
+    return true;
+  }
+  const prefixLen = commonPrefixLength(a, b);
+  if (prefixLen < MIN_SHARED_PREFIX) {
+    return false;
+  }
+  return Math.max(a.length, b.length) - prefixLen <= MAX_PREFIX_TAIL;
+}
+
+/**
+ * Containment (D16, close-out review advisory): every word of the SHORTER (non-stop-word) list must
+ * match some word of the other — not merely "some word in common", which let "Leg Curl" pass against
+ * "Leg Extension" on "leg" alone. `Array.prototype.every` on an empty list is vacuously true, so a
+ * name reduced to nothing by stop-word removal (e.g. "Smith Machine") accepts automatically — there
+ * is nothing left to contradict the other side.
+ */
+function isContainedIn(shorter: string[], longer: string[]): boolean {
+  return shorter.every(word => longer.some(other => wordsMatch(word, other)));
+}
+
 function sharesWord(a: string, b: string): boolean {
   const wordsA = wordsOf(a);
   const wordsB = wordsOf(b);
-  const setB = new Set(wordsB);
-  for (const word of wordsA) {
-    if (setB.has(word)) {
-      return true;
-    }
-  }
-  // A shared prefix of >= 4 chars between any pair of (non-stop-word) tokens.
-  for (const wordA of wordsA) {
-    for (const wordB of wordsB) {
-      if (commonPrefixLength(wordA, wordB) >= MIN_SHARED_PREFIX) {
-        return true;
-      }
-    }
-  }
-  return false;
+  return wordsA.length <= wordsB.length ? isContainedIn(wordsA, wordsB) : isContainedIn(wordsB, wordsA);
 }
 
 /**

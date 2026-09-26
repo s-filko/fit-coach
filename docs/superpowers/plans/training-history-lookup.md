@@ -118,6 +118,17 @@ autonomously; every decision is recorded here as **(D)** for the owner's later r
   `realPerformanceConditions(userId, excludeSessionId)` (the WHERE predicate: completed, has
   `completedAt`, >= 1 real set, optional exclusion) and `rehydratePerformances(picked, exerciseIdOf)`
   (the rejoin/hydrate/map tail) — instead of each carrying its own copy.
+- **D16 — containment, not any-overlap (reviewer advisory, accepted).** D12's "any shared word/prefix
+  passes" was too loose: "Leg Curl" shared "leg" with "Leg Extension" and would have wrongly passed.
+  Replaced with containment: after stop-word removal, every word of the SHORTER name's remaining
+  word list must match some word of the OTHER (exactly, or by the D12 >= 4-char shared prefix — now
+  additionally capped at a <= 3-char tail on the longer word, so "dead"/"deadlift" — tail "lift", 4
+  — no longer false-passes "Dead Bug" against "Deadlift" while "pull"/"pullups" — tail "ups", 3 —
+  still passes). `Array.prototype.every` on an empty list is vacuously true, so a name emptied
+  entirely by stop-word removal (e.g. "Smith Machine") accepts automatically — nothing is left to
+  contradict the catalog name. Side effect, intentional: the old "Up" (empty after the >= 3-letter
+  filter, unrelated to stop words) now also accepts for the same vacuous-truth reason — the existing
+  test for it was updated to expect acceptance rather than rejection.
 
 ## Acceptance criteria
 

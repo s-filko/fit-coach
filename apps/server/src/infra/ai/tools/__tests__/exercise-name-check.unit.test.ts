@@ -88,14 +88,17 @@ describe('checkExerciseNamesAgainstCatalog (AC-HL-5)', () => {
     expect(message).not.toContain('Bench Press" → id is'); // the matching entry is never listed
   });
 
-  it('never matches on words shorter than 3 letters alone', () => {
-    // "8" / "up" style short tokens must not create a false match between unrelated exercises.
+  it('D16: a name with NO real (>= 3 letter) words accepts — nothing left to contradict the catalog', () => {
+    // Pre-D16 this rejected "Up" as a short token with nothing in common; under containment an
+    // empty word list satisfies "every word matches" vacuously — same reasoning as "Smith Machine"
+    // being emptied by stop-word removal below.
     const result = checkExerciseNamesAgainstCatalog(
       [{ exerciseId: 'id-1', exerciseName: 'Up' }],
       new Map([['id-1', 'Pull-ups']]),
     );
 
-    expect(result.rejection).not.toBeNull();
+    expect(result.rejection).toBeNull();
+    expect(result.corrected).toEqual([{ exerciseId: 'id-1', exerciseName: 'Pull-ups' }]);
   });
 
   // Close-out review item 2: a shared prefix of >= 4 chars between any pair of tokens passes —
@@ -157,6 +160,49 @@ describe('checkExerciseNamesAgainstCatalog (AC-HL-5)', () => {
 
       expect(result.rejection).toBeNull();
       expect(result.corrected).toEqual([{ exerciseId: 'id-1', exerciseName: 'Leg Press' }]);
+    });
+  });
+
+  // D16 (reviewer advisory, accepted): containment, not any-overlap — every word of the shorter
+  // (non-stop-word) list must match some word of the other. Fixes the false accept any-overlap gave
+  // "Leg Curl" against "Leg Extension" (shared "leg") while keeping every earlier accepted case.
+  describe('containment rule (D16)', () => {
+    it.each([
+      ['Bench Press', 'Barbell Bench Press'],
+      ['Lat Pulldown', 'Lever Lat Pulldown (Plate-Loaded)'],
+      ['Plank', 'Plank'],
+      ['45° Leg Press', '45° Leg Press'],
+      ['Squats', 'Barbell Back Squat'],
+      ['Pullups', 'Pull-ups'],
+      ['Tricep Pushdown', 'Cable Tricep Pushdown, Rope'],
+      ['Smith Machine', 'Smith Machine Squat'],
+    ])('accepts "%s" naming %s\'s id', (planName, catalogName) => {
+      const result = checkExerciseNamesAgainstCatalog(
+        [{ exerciseId: 'id-1', exerciseName: planName }],
+        new Map([['id-1', catalogName]]),
+      );
+
+      expect(result.rejection).toBeNull();
+      expect(result.corrected).toEqual([{ exerciseId: 'id-1', exerciseName: catalogName }]);
+    });
+
+    it.each([
+      ['Leg Curl', 'Leg Extension'],
+      ['Barbell Row', 'Barbell Bench Press'],
+      ['Treadmill', 'Rowing Machine'],
+      ['Dead Bug', 'Deadlift'],
+      ['Bicep Curl', 'Leg Curl'],
+      ['Calf Raise', 'Lateral Raise'],
+      ['Жим лёжа', 'Barbell Bench Press'],
+    ])('rejects "%s" naming %s\'s id', (planName, catalogName) => {
+      const result = checkExerciseNamesAgainstCatalog(
+        [{ exerciseId: 'id-1', exerciseName: planName }],
+        new Map([['id-1', catalogName]]),
+      );
+
+      expect(result.rejection).not.toBeNull();
+      const { message } = result.rejection as { message: string };
+      expect(message).toContain(`"${planName}" → id is "${catalogName}"`);
     });
   });
 });
