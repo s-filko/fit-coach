@@ -82,8 +82,35 @@ recomputed.
   then cached again. Inactivity compaction happens after the cache TTL has expired anyway;
   budget compaction is rare by the low-water mark. Phase switches change block 1 — a full
   miss; out of scope here.
-- **First step:** record `cached_tokens` (provider usage) in `llm_calls`, to measure before
-  and after. Provider caching behaviour (Z.AI GLM, Gemini via OpenRouter: minimum size, TTL,
+- **First step — cost accounting with cache visibility** [owner 2026-09-26: cache usage must
+  be visible in the stats, as the basis for future optimisation]:
+  1. Record each call's full provider usage — input, output, **cached input**, reasoning
+     tokens (and the provider-reported cost, if the route returns one — probe first) — on
+     `llm_calls`, rolled up per run on `conversation_runs`. Today only
+     `promptTokens`/`completionTokens` are read (`run-metrics.ts`, `llm-log-handler.ts`,
+     `agent.node.ts`) and `llm_calls.response` keeps only the reply text, so the cache share
+     cannot be reconstructed after the fact.
+  2. Link a run to the workout session it happened in (`session_id` on `conversation_runs`)
+     — today a per-workout total is only a time-window join.
+  3. A "cost per workout" report over those fields (tokens, cache share; money from a price
+     table only if needed).
+  4. **Cache-miss attribution** [owner 2026-09-26: a miss caused by the cache TTL, while
+     everything else was right, must be distinguishable]. Each call gets an *expected* cache
+     state computed before the response, by comparing it with the same user's previous call
+     (`llm_calls` already keeps the call time and the ordered hashes of every system message,
+     `prompt_hashes`, plus the non-system messages in `request`):
+     `cold` (no previous call) · `ttl_expired` (same prefix, gap > the provider's TTL) ·
+     `prefix_changed:<where>` (first diverging part — phase prompt/version, tool set, facts,
+     summaries after compaction, history block, `NOW`) · `too_short` (shared prefix below the
+     provider's minimum) · `warm` (the cache should hit). After the response it is compared
+     with the actual cached tokens; **`warm` with no cache hit is an unexplained miss** — the
+     actionable signal (a wrong assumption about the provider's rules, or best-effort
+     caching). TTL and minimum size are per-provider settings taken from provider docs, never
+     guessed in code. Use case: how many misses the rest pauses between sets cause.
+  Baseline without it (2026-09-26, dev, owner's workout 2026-09-25, `glm-5.3-flash`): 69 runs,
+  90 calls, 1 302 759 input / 13 615 output tokens; ~18.9k input per run (system ~3.5k,
+  history ~8k, blocks ~0.9k, facts+summaries ~1.1k, tool schemas etc. ~5k). Input is ~99 % of
+  the volume, which is why the cache share is the lever. Provider caching behaviour (Z.AI GLM, Gemini via OpenRouter: minimum size, TTL,
   effect on subscription quota) must be read from provider docs and probed before relying on
   it.
 
