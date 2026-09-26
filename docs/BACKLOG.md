@@ -73,6 +73,19 @@ Rules:
 
 ## Findings
 
+- [ ] **Claude on the owner's subscription via `claude -p` — investigated and declined by the owner
+      (2026-09-26).** No money on OpenRouter (balance −$0.02) and no Anthropic API key, so the only route
+      to Claude is the subscription through the official binary. Verified: `claude -p --output-format json
+      --json-schema … --system-prompt … --tools ""` returns an emulated tool call (`log_set` with the exact
+      UUID, 2.4 s API time), and prompt caching works across separate `claude -p` processes (8 239 of 8 791
+      tokens read on the second call) — but only while the system prompt is byte-identical, which today's
+      training prompt (per-turn overview, "Nmin ago", current time) is not. Ready adapters are unusable:
+      binary wrappers (`wende/claude-max-api-proxy`) do not return client-defined `tool_calls`; the ones that
+      do (`m2cci-bouzentm/claude-ai-proxy`, `router-for-me/CLIProxyAPI`) call the API with the subscription's
+      OAuth token, bypassing the binary. The app's real wire subset (115 dev calls, 14 days): one endpoint,
+      non-streaming, `model/messages/tools/temperature/max_tokens/reasoning_effort/response_format` — an own
+      strict proxy would be small. Owner: «нет, не делать». Reopen only on the owner's word.
+
 - [ ] **Name → exercise resolution has no similarity threshold (found 2026-09-26,
       training-history-lookup D13).** `TrainingService.resolveExerciseIdByName` falls back to the
       top pgvector hit with no distance cut-off (`searchByEmbedding` does not even select the
