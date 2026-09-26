@@ -99,6 +99,14 @@ export const EnvSchema = z.object({
   // latency, error) is never pruned, only these two columns null out. Same
   // tunables-not-secrets class as COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS.
   LLM_CALLS_RETENTION_DAYS: z.coerce.number().positive().default(30),
+  // cache-accounting plan Task 1 (D6): provider prompt-cache limits are config, never guessed —
+  // Z.AI documents neither a TTL nor a minimum prefix size ("reasonable time limits"). Genuinely
+  // optional (unlike the tunables above, which all default): unset means "unknown", and
+  // `cache_expected` never reports `ttl_expired`/`too_short` — only `cache_gap_ms` is stored, so
+  // the real TTL can be read off the data later and configured. Same tunables-not-secrets
+  // exception as EPISODE_*/LLM_BUDGET_*.
+  LLM_CACHE_TTL_SECONDS: z.coerce.number().positive().int().optional(),
+  LLM_CACHE_MIN_PREFIX_TOKENS: z.coerce.number().positive().int().optional(),
   // Transition hand-off (transition-handoff plan Task 1, D-1, AC-TH-2): comma
   // list of ConversationPhase targets that get a silent same-run hand-off when
   // a transition tool commits to them. Empty/unset = off — byte-for-byte
