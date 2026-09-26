@@ -232,5 +232,32 @@ scores.
    (recommended — a human coach names the load unprompted), or only on request.
 2. Code candidate + analyst adapts (recommended) vs code gives facts only and the analyst
    decides.
-3. Where the strategy memory lives (per exercise, per pattern, per muscle group).
+3. Where the strategy memory lives (per exercise, per pattern, per muscle group). Lifecycle
+   and visibility answered by the owner 2026-09-26 — section 14; the scope is still open.
 4. Sources for the progression rules (section 2) — a research task before the spec is final.
+
+## 14. Strategy memory — lifecycle and visibility [owner 2026-09-26]
+
+Answers the lifecycle half of open question 13.3. Context: the owner discussion that produced
+`2026-09-26-training-history-context-design.md`.
+
+- **[owner]** Consistency across workouts: once the coach notices a plateau and changes
+  tactics (drop the weight, add a variable, deload, re-entry after a long break), that
+  decision and its reasons must not be lost between workouts; the next session continues it.
+- **[owner]** Every tactic has an explicit status: **active**; **superseded** (by whom —
+  user or model —, when, why, and by which tactic); **rejected** (by the user or the model —
+  never re-proposed silently).
+- **[owner]** No distractors: the active tactic is always shown as "what we are doing now";
+  past tactics appear only as history with the reason for each change.
+- **[owner]** The analytic view for a muscle shows the whole picture: the dynamics (growth,
+  plateau, decline, gap), the tactics tried and their outcome, and the comments tied to it —
+  the user's set/exercise feedback (already stored in `session_sets.user_feedback` and
+  `session_exercises.user_feedback`) and the model's decision rationale.
+- **[proposed]** A tactic's scope is an exercise or a muscle group (a plateau is measured
+  per exercise; volume or deload decisions are often per muscle); the muscle view aggregates
+  both. Writes go through a narrow tool with invariants (at most one active tactic per
+  scope; a new one supersedes the old with a required reason), in line with "reads broad,
+  writes narrow" from the history spec.
+- **[proposed]** Related, not the same: the recommendation log (section 11.8, R4.4) records
+  single "recommended → done" pairs; strategy memory records the multi-session course those
+  recommendations follow.
