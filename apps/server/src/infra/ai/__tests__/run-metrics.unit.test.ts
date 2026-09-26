@@ -111,4 +111,77 @@ describe('RunMetricsCollector (ADR-0013 §8, AC-1301; per-run instance since run
     expect(collector.snapshot().tokensIn).toBe(0);
     expect(collector.snapshot().llmCalls).toBe(0);
   });
+
+  describe('AC-CA-2: tokensCached/tokensReasoning — null when no call of the run reported them, never 0', () => {
+    it('null on a run whose calls never reported cache/reasoning tokens', () => {
+      const collector = new RunMetricsCollector('run-7');
+      collector.onStart('c1', 'm');
+      collector.onEnd('c1', 10, 5);
+
+      expect(collector.snapshot().tokensCached).toBeNull();
+      expect(collector.snapshot().tokensReasoning).toBeNull();
+    });
+
+    it('sums cache/reasoning tokens across several calls of the run', () => {
+      const collector = new RunMetricsCollector('run-8');
+      collector.onStart('c1', 'm');
+      collector.onEnd('c1', 10, 5, 100, 20);
+      collector.onStart('c2', 'm');
+      collector.onEnd('c2', 10, 5, 50, 10);
+
+      expect(collector.snapshot().tokensCached).toBe(150);
+      expect(collector.snapshot().tokensReasoning).toBe(30);
+    });
+
+    it('a call reporting 0 (reported, nothing cached) still starts the sum at 0, not null', () => {
+      const collector = new RunMetricsCollector('run-9');
+      collector.onStart('c1', 'm');
+      collector.onEnd('c1', 10, 5, 0, null);
+
+      expect(collector.snapshot().tokensCached).toBe(0);
+      expect(collector.snapshot().tokensReasoning).toBeNull();
+    });
+
+    it('the handler feeds cache/reasoning off generation.message.usage_metadata (D2), not just llmOutput.tokenUsage', () => {
+      const collector = new RunMetricsCollector('run-10');
+      const handler = collector.handler();
+      const start = handler.handleChatModelStart!.bind(handler) as (
+        llm: unknown,
+        messages: unknown,
+        runId: string,
+        parentRunId?: string,
+        extraParams?: Record<string, unknown>,
+        tags?: string[],
+        metadata?: Record<string, unknown>,
+      ) => void;
+      const end = handler.handleLLMEnd!.bind(handler) as (output: unknown, runId: string) => void;
+
+      start({}, [], 'call-1', undefined, { invocation_params: { model: 'm' } }, undefined, { runId: 'run-10' });
+      end(
+        {
+          generations: [
+            [
+              {
+                message: {
+                  usage_metadata: {
+                    input_tokens: 5765,
+                    output_tokens: 30,
+                    input_token_details: { cache_read: 5760 },
+                    output_token_details: { reasoning: 30 },
+                  },
+                },
+              },
+            ],
+          ],
+        },
+        'call-1',
+      );
+
+      const metrics = collector.snapshot();
+      expect(metrics.tokensIn).toBe(5765);
+      expect(metrics.tokensOut).toBe(30);
+      expect(metrics.tokensCached).toBe(5760);
+      expect(metrics.tokensReasoning).toBe(30);
+    });
+  });
 });
