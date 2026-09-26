@@ -128,3 +128,42 @@ non-null `cache_read_tokens` and a `cache_expected`; expect mostly `prefix_chang
 - `session_id` on `conversation_runs`, the cost-per-workout report, money/price tables (spec items 2, 3).
 - Reordering the context for caching (spec § 4 target order) — this plan only measures.
 - Backfilling old `llm_calls` rows.
+
+## Review
+
+2026-09-26, one combined reviewer (R1–R4, economical-work rule). Verdict: **blocked** (1 blocking).
+
+**Blocking**
+- R3 | `cache-attribution.ts:187-196` (with `:64-73`) | AC-CA-3 — the previous request is read back
+  from `jsonb`, which does not preserve object key order (sorts by length, then bytewise); the
+  current request is compared in insertion order. Verified by the reviewer:
+  `SELECT '{"type":"object","properties":{},"required":[],"additionalProperties":false,"$schema":"x"}'::jsonb::text`
+  → keys `type, $schema, required, properties, additionalProperties`. Every call with tools is
+  therefore `prefix_changed:tools` with shared 0, `warm` is unreachable in production, and history
+  messages with `tool_calls` diverge falsely. Tests pass because they use single-key tool objects
+  and in-memory fixtures. — *open*
+
+**Advisory**
+- R1 | `llm-call-recorder.ts:189-209` | ADR-0013 §8 item 2 — the synchronous recorder now also does
+  an indexed SELECT, reads the previous `request` jsonb and its blobs; ADR's "one indexed insert"
+  cost basis is no longer true.
+- R1 | `llm-call-recorder.ts:115-155` | one reason to change — the previous-call lookup lives in
+  the writer; belongs in a reader/attribution adapter.
+- R2 | `cache-attribution.ts:54` and `tools/exercise-name-check.ts:89` | DRY — `commonPrefixLength`
+  duplicated verbatim.
+- R2 | `llm-call-recorder.ts:138-143` and `observability/transcript-reader.ts:218-221` | DRY — hash
+  → `prompt_blobs` content resolution re-implemented.
+- R2 | `cache-attribution.ts:105-116` | DRY — block headers copied as literals, not imported from
+  `prompts/blocks/*`; a reworded header silently falls back to `system:domain`, no test ties them.
+- R3 | `llm-call-recorder.ts:201` | D5 — `cache_gap_ms` measured to record time (after the
+  response), so it includes the call's own latency (~11–13 s); should be measured from the call start.
+- R3 | `cache-attribution.ts:166,214` | D4 — shared-prefix estimate distributes the ~5k tool-schema
+  tokens over message characters only.
+- R3 | `llm-call-recorder.integration.test.ts:292` | "identical request is warm" never asserts `warm`.
+- R3 | plan AC-CA-3 | facts-block and NOW-offset cases proven by unit tests only, not through the
+  recorder against the DB.
+- R4 | `docs/adr/0013-llm-core-target-architecture.md:394,410-412,430` | stale column lists and cost
+  statement — durable spec, escalated to the owner, not edited.
+- R4 | `docs/ARCHITECTURE.md:84-90` | `infra/ai/` tree lacks `usage.ts`, `cache-attribution.ts`.
+
+**Meta** — filed in `docs/REVIEW_FINDINGS.md` § Blind spots (jsonb round trip).

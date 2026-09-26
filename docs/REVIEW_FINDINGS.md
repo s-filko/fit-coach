@@ -332,6 +332,13 @@ a wider reader (the final whole-branch review) or noticed after the fact.
 - [×1] R2's brief for an extracted infra helper named "existing backfill scripts" as search scope; the real overlap was a repository method (`ExerciseRepository.updateEmbedding`). Proposed: R2 prompts name `src/infra/db/repositories` and `src/domain/**/ports` as search scope for extracted infra helpers.
   Runs: transition-handoff (2026-09-25).
 
+- [×1] Nothing in the R3 zone mandates checking that data survives a round trip through the
+  storage layer: a comparison between a value read back from `jsonb` (Postgres reorders object
+  keys) and one built in memory looked equal in tests built from single-key fixtures and never
+  in production. Rule candidate: compare both in the same canonical form (sorted keys) and test
+  with multi-key objects.
+  Runs: cache-accounting (2026-09-26).
+
 ## Rule candidates
 
 A finding a zone wanted to raise as blocking but could not, because no rule in this repo
