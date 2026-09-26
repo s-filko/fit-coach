@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and
 > test-driven-development. Red tests first, then the fix.
 
-- Status: planned
+- Status: in progress
 - Branch: plan/cache-accounting
 
 **Goal:** make prompt-cache use visible, as the basis for the caching work in

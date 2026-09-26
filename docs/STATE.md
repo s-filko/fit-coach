@@ -12,10 +12,9 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-26 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-— none —
+- `cache-accounting.md` — Cache Accounting — Cached/Reasoning Tokens per Call and Cache-Miss Attribution Implementation Plan (branch: `plan/cache-accounting`, last commit 2026-09-26)
 
 **Planned**
-- `cache-accounting.md` — Cache Accounting — Cached/Reasoning Tokens per Call and Cache-Miss Attribution Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 
