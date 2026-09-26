@@ -48,6 +48,7 @@ async function seedNormalRun(userId: string): Promise<string> {
 
   await recordLlmCall({
     runId,
+    userId,
     model: 'z-ai/glm-5.3',
     request: {
       model: 'z-ai/glm-5.3',
