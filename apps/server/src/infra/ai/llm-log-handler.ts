@@ -291,6 +291,7 @@ export class LLMLogHandler extends BaseCallbackHandler {
               }
             : null,
         },
+        startedAt: pending.startedAt,
         latencyMs: Date.now() - pending.startedAt,
       });
     } catch (err) {
@@ -313,6 +314,7 @@ export class LLMLogHandler extends BaseCallbackHandler {
         model: pending.model,
         request: pending.request,
         response: null,
+        startedAt: pending.startedAt,
         latencyMs: Date.now() - pending.startedAt,
         errorClass,
         errorMessage,

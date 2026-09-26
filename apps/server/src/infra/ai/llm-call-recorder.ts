@@ -70,6 +70,12 @@ export interface RecordLlmCallInput {
   request: RecordLlmCallRequest;
   /** Null when the call failed before any response. */
   response: RecordLlmCallResponse | null;
+  /**
+   * D5/close-out review (advisory R3): epoch ms when THIS call was sent (`pending.startedAt` in
+   * llm-log-handler.ts) — `cache_gap_ms` is measured from here, never from record time (after the
+   * response), which would fold the call's own latency (seconds, sometimes 10+) into the gap.
+   */
+  startedAt: number;
   latencyMs: number;
   errorClass?: string | null;
   errorMessage?: string | null;
@@ -115,11 +121,11 @@ function toCacheAttributionMessage(message: RecordedRequestMessage): CacheAttrib
 async function lookupPreviousCall(
   db: (typeof import('@infra/db/drizzle'))['db'],
   llmCalls: (typeof import('@infra/db/schema'))['llmCalls'],
-  promptBlobs: (typeof import('@infra/db/schema'))['promptBlobs'],
   userId: string,
   model: string,
 ): Promise<PreviousCallLookup> {
-  const { eq, and, desc, inArray } = await import('drizzle-orm');
+  const { eq, and, desc } = await import('drizzle-orm');
+  const { resolveBlobContents } = await import('@infra/db/prompt-blobs');
   const [prevRow] = await db
     .select({ request: llmCalls.request, createdAt: llmCalls.createdAt })
     .from(llmCalls)
@@ -134,14 +140,7 @@ async function lookupPreviousCall(
   }
   const stored = prevRow.request as RecordLlmCallRequest;
   const hashes = stored.messages.map(m => m.contentHash).filter((h): h is string => Boolean(h));
-  const blobRows =
-    hashes.length > 0
-      ? await db
-          .select({ hash: promptBlobs.hash, content: promptBlobs.content })
-          .from(promptBlobs)
-          .where(inArray(promptBlobs.hash, hashes))
-      : [];
-  const blobContent = new Map(blobRows.map((b: { hash: string; content: string | null }) => [b.hash, b.content]));
+  const blobContent = await resolveBlobContents(hashes);
   if (hashes.some(h => blobContent.get(h) == null)) {
     // A referenced system blob already aged out (BR-LLM-011) — the comparison cannot be trusted.
     return { kind: 'pruned', createdAt: prevRow.createdAt };
@@ -190,7 +189,7 @@ export const recordLlmCall: RecordLlmCall = async input => {
     try {
       const { loadConfig } = await import('@config/index');
       const cfg = loadConfig();
-      const prev = await lookupPreviousCall(db, llmCalls, promptBlobs, input.userId, input.model);
+      const prev = await lookupPreviousCall(db, llmCalls, input.userId, input.model);
       const currentRequest: CacheAttributionRequest = {
         tools: input.request.tools,
         responseFormat: input.request.responseFormat,
@@ -198,7 +197,9 @@ export const recordLlmCall: RecordLlmCall = async input => {
       };
       const result = attributeCache(
         prev,
-        { request: currentRequest, inputTokens: usage?.promptTokens ?? null, now: new Date() },
+        // D5: gap measured from when THIS call was sent, not from now (after the response) —
+        // record time would fold the call's own latency into the gap (close-out review R3).
+        { request: currentRequest, inputTokens: usage?.promptTokens ?? null, now: new Date(input.startedAt) },
         { ttlSeconds: cfg.LLM_CACHE_TTL_SECONDS ?? null, minPrefixTokens: cfg.LLM_CACHE_MIN_PREFIX_TOKENS ?? null },
       );
       ({ cacheExpected, cacheDivergedAt, cacheSharedPrefixTokens, cacheGapMs } = result);

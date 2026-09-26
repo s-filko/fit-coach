@@ -64,6 +64,7 @@ async function seedNormalRun(userId: string): Promise<string> {
       finishReason: 'tool_calls',
       usage: { promptTokens: 100, completionTokens: 10 },
     },
+    startedAt: Date.now(),
     latencyMs: 400,
   });
 

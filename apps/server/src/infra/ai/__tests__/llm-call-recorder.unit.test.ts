@@ -32,6 +32,7 @@ describe('recordLlmCall — cache attribution failure never fails the call (AC-C
           finishReason: 'stop',
           usage: { promptTokens: 100, completionTokens: 10, cacheReadTokens: 0, reasoningTokens: 5 },
         },
+        startedAt: Date.now(),
         latencyMs: 250,
       }),
     ).resolves.toBeUndefined();
@@ -58,6 +59,7 @@ describe('recordLlmCall — cache attribution failure never fails the call (AC-C
       model: 'z-ai/glm-5.3',
       request: { model: 'z-ai/glm-5.3', messages: [{ role: 'user', content: 'привет' }], temperature: 0.7 },
       response: { text: 'ok', finishReason: 'stop', usage: { promptTokens: 10, completionTokens: 2 } },
+      startedAt: Date.now(),
       latencyMs: 100,
     });
 

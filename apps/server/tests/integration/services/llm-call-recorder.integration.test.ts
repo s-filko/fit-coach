@@ -13,11 +13,41 @@ import { randomUUID } from 'node:crypto';
 
 import { eq } from 'drizzle-orm';
 
+import type { UserFact } from '@domain/user/ports';
+
 import { recordLlmCall, type RecordLlmCallInput, type RecordLlmCallRequest } from '@infra/ai/llm-call-recorder';
+import { renderBlock, USER_FACTS_V2 } from '@infra/ai/prompts/blocks';
 import { db } from '@infra/db/drizzle';
 import { llmCalls, promptBlobs } from '@infra/db/schema';
 
 const SYSTEM_PROMPT = 'You are the training coach. '.repeat(50); // stand-in for the ~3.5k-token prompt
+
+// Same shape as budget.unit.test.ts's FACT fixture — the fields USER_FACTS_V2.render actually reads.
+const FACT = (fact: string, overrides: Partial<UserFact> = {}): UserFact => ({
+  id: 'f1',
+  userId: 'u1',
+  category: 'equipment',
+  fact,
+  factKey: 'likes-squats',
+  muscleGroup: null,
+  confirmations: 1,
+  sourceTurnId: null,
+  durability: 'permanent',
+  expiresAt: null,
+  reviewAfter: null,
+  phaseNote: null,
+  phaseAt: null,
+  onExpiry: null,
+  status: 'active',
+  archivedAt: null,
+  archivedReason: null,
+  closedByUserAt: null,
+  supersedesId: null,
+  context: null,
+  createdAt: new Date('2026-09-01T00:00:00Z'),
+  updatedAt: new Date('2026-09-01T00:00:00Z'),
+  ...overrides,
+});
 
 const baseCall = (runId: string, overrides: Partial<RecordLlmCallInput> = {}): RecordLlmCallInput => ({
   runId,
@@ -32,6 +62,7 @@ const baseCall = (runId: string, overrides: Partial<RecordLlmCallInput> = {}): R
     temperature: 0.7,
   },
   response: { text: 'Отлично!', finishReason: 'stop', usage: { promptTokens: 900, completionTokens: 12 } },
+  startedAt: Date.now(),
   latencyMs: 250,
   ...overrides,
 });
@@ -237,6 +268,88 @@ describe('recordLlmCall — cache attribution (AC-CA-3, D3-D6)', () => {
     expect(row.cacheDivergedAt).toMatch(/^system:prompt#0@\d+$/);
   });
 
+  it('a changed NOW line embedded mid-prompt (surrounding text unchanged) → prefix_changed:system:prompt, offset at the NOW line', async () => {
+    const userId = randomUUID();
+    const run1 = randomUUID();
+    const run2 = randomUUID();
+    const promptWith = (now: string) =>
+      `${SYSTEM_PROMPT}NOW: ${now}\nAlways answer in the user's language.`;
+    await recordLlmCall(
+      baseCall(run1, {
+        userId,
+        request: {
+          model: 'z-ai/glm-5.3',
+          messages: [
+            { role: 'system', content: promptWith('2026-09-26T11:59:00.000Z') },
+            { role: 'user', content: 'следующий подход' },
+          ],
+          temperature: 0.7,
+        },
+      }),
+    );
+    await recordLlmCall(
+      baseCall(run2, {
+        userId,
+        request: {
+          model: 'z-ai/glm-5.3',
+          messages: [
+            { role: 'system', content: promptWith('2026-09-26T12:00:00.000Z') },
+            { role: 'user', content: 'следующий подход' },
+          ],
+          temperature: 0.7,
+        },
+      }),
+    );
+
+    const row = await rowFor(run2);
+    expect(row.cacheExpected).toBe('prefix_changed:system:prompt');
+    expect(row.cacheDivergedAt).toMatch(/^system:prompt#0@\d+$/);
+    const offset = Number(row.cacheDivergedAt!.split('@')[1]);
+    // The offset must land inside the NOW timestamp, not at the very end of the prompt (the
+    // unchanged "Always answer..." sentence still follows it in both versions).
+    expect(offset).toBeGreaterThan(SYSTEM_PROMPT.length);
+    expect(offset).toBeLessThan(promptWith('2026-09-26T11:59:00.000Z').length - 'Always answer in the user\'s language.'.length);
+  });
+
+  it('a changed ## User Facts block → prefix_changed:system:facts', async () => {
+    const userId = randomUUID();
+    const run1 = randomUUID();
+    const run2 = randomUUID();
+    const factsBlock = (fact: string) => renderBlock(USER_FACTS_V2, { facts: [FACT(fact)] });
+    await recordLlmCall(
+      baseCall(run1, {
+        userId,
+        request: {
+          model: 'z-ai/glm-5.3',
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'system', content: factsBlock('likes squats') },
+            { role: 'user', content: 'следующий подход' },
+          ],
+          temperature: 0.7,
+        },
+      }),
+    );
+    await recordLlmCall(
+      baseCall(run2, {
+        userId,
+        request: {
+          model: 'z-ai/glm-5.3',
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'system', content: factsBlock('likes deadlifts') },
+            { role: 'user', content: 'следующий подход' },
+          ],
+          temperature: 0.7,
+        },
+      }),
+    );
+
+    const row = await rowFor(run2);
+    expect(row.cacheExpected).toBe('prefix_changed:system:facts');
+    expect(row.cacheDivergedAt).toMatch(/^system:facts#1@\d+$/);
+  });
+
   it('changed tools → prefix_changed:tools', async () => {
     const userId = randomUUID();
     const run1 = randomUUID();
@@ -297,8 +410,7 @@ describe('recordLlmCall — cache attribution (AC-CA-3, D3-D6)', () => {
     await recordLlmCall(baseCall(runNew, { userId }));
 
     const row = await rowFor(runNew);
-    expect(row.cacheExpected).not.toBe('ttl_expired');
-    expect(row.cacheExpected).not.toBe('too_short');
+    expect(row.cacheExpected).toBe('warm');
   });
 
   it('no userId on the call → no cache attribution attempted, columns stay null (never fails the call)', async () => {
