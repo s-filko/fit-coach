@@ -86,3 +86,40 @@ On the owner's next real messages: `llm_calls.cache_expected` for agent calls sh
 - Relative dates ("3 days ago") in summaries and domain blocks — a daily prefix break.
 - Reordering the other blocks (spec § 4 target order), the history block.
 - Course-check / compaction / summariser prompts.
+
+## Review
+
+2026-09-27, one combined reviewer (R1–R4). Verdict: **blocked**.
+
+**Blocking**
+- R1 | `prompts/index.ts:39-44` with `directives/index.ts:71` | ADR-0013 D-09 / BR-LLM-008 — the NOW
+  line is still sent on every call, but it left the phase's `directives`, so `promptVersionsOf` no
+  longer stamps `directive.current-time: v1`; `conversation_runs.prompt_versions` silently loses the
+  key (the gap note `TIME_GAP_V1` is likewise unstamped — precedent, not a justification). — *open*
+- R3 | plan Task 1 Verification | SUPERPOWERS_INTEGRATION rule 2 — no recorded integration/scenario
+  run for the branch. — *closed*: orchestrator re-ran at f09fab8e — `test:integration` 47 suites /
+  633 passed + 1 todo, `test:scenarios` 19 / 392 passed + 1 todo.
+- R4 | `docs/DB_SETUP.md:215-217` | rule 7 — the `prefix_changed:<label>` list lacks `system:now`. — *open*
+- R4 | `docs/adr/0013-llm-core-target-architecture.md:190-196` (§3.4 "Output order is fixed") | rules
+  1, 7 — the fixed order has no NOW message and still puts it in block 1's directives;
+  `docs/ARCHITECTURE.md:128` carries the same stale order (already lacking facts and the gap note).
+  Durable spec — escalated to the owner. — *open*
+
+**Advisory**
+- R1 | `directives/current-time.v1.ts:22` — no longer a directive; a standalone message like the gap
+  note (which lives in `blocks/`).
+- R2 | `agent.node.ts:154-160` vs `:162-169` — the render-context literal is built twice.
+- R2 | `current-time.v1.ts:20` vs `:28-29` — `CURRENT_TIME_PREFIX` is not used by the templates; only a
+  test keeps them in sync.
+- R3 | `agent.node.unit.test.ts:382-400` — AC-NL-2 test has no history/domain block, so "history
+  byte-identical" is not exercised.
+- R3 | `agent.node.unit.test.ts:372-380` — timezone test is vacuous (passes from block 1's timezone
+  directive; one variant only).
+- R4 | stale "appends CURRENT_TIME_V1" comments: `phases/registration/v2.ts:39`, `phases/chat/v3.ts:7`,
+  `phases/training/v4.ts:7`, `plan_creation/index.ts:16`, `session_planning/index.ts:17` (D5 promised).
+- R4 | `docs/BUGS.md:1693-1694` — BUG-032 fix text "Rendered as the LAST system section".
+- R4 | spec § 4 `2026-09-26-training-history-context-design.md:72` — the "(today)" finding is outdated for NOW.
+
+**Meta** — filed in `docs/REVIEW_FINDINGS.md`: rule candidate (every model-facing module reaching the
+request is stamped in `promptVersions`); blind spot (no zone diffs recorded run metadata before/after
+a prompt-structure move).

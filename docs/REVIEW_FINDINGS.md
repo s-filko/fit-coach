@@ -344,6 +344,11 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   with multi-key objects.
   Runs: cache-accounting (2026-09-26).
 
+- [×1] No zone asks the reviewer to diff a run's recorded metadata (`prompt_versions`) before and
+  after a prompt-structure move — moving a module out of `directives` silently dropped its stamp;
+  found only by reading `promptVersionsOf`.
+  Runs: now-line-last (2026-09-27).
+
 ## Rule candidates
 
 A finding a zone wanted to raise as blocking but could not, because no rule in this repo
@@ -777,3 +782,8 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   Runs: transition-handoff (2026-09-25).
 - [×1] When a fix commit reverts an approach (here embedding under Jest), nothing requires checking that what the abandoned approach changed (dropping the `embedBatch` call, a "because of Jest" comment) was reverted too. Proposed for `CONTRIBUTING_AI.md`: "A fix that abandons an approach reverts every change that approach made."
   Runs: transition-handoff (2026-09-25).
+- [×1] Every model-facing module whose text reaches a run's request is stamped in
+  `promptVersions` (a BR-LLM beside BR-LLM-008, ADR-0013 §5). The gap note already breaks it;
+  now-line-last broke it for NOW.
+  Runs: now-line-last (2026-09-27).
+
