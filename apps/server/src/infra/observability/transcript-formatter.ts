@@ -104,7 +104,17 @@ function formatCallDetail(c: LlmCallRecord, blobs: Map<string, string | null>, s
   }
   if (c.response !== null) {
     const res = c.response as ResponsePayload;
-    const usage = res.usage ? ` tokensIn=${res.usage.promptTokens} tokensOut=${res.usage.completionTokens}` : '';
+    let usage = '';
+    if (res.usage) {
+      const parts = [`tokensIn=${res.usage.promptTokens ?? '?'}`, `tokensOut=${res.usage.completionTokens ?? '?'}`];
+      if (res.usage.cacheReadTokens !== null && res.usage.cacheReadTokens !== undefined) {
+        parts.push(`cacheRead=${res.usage.cacheReadTokens}`);
+      }
+      if (res.usage.reasoningTokens !== null && res.usage.reasoningTokens !== undefined) {
+        parts.push(`reasoning=${res.usage.reasoningTokens}`);
+      }
+      usage = ` ${parts.join(' ')}`;
+    }
     lines.push(`    response: "${res.text ?? ''}" finishReason=${res.finishReason ?? 'null'}${usage}`);
   }
   return lines;
