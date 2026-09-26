@@ -74,6 +74,7 @@ const TOOL_NAMES: Record<ConversationPhase, string[]> = {
   ],
   training: [
     'search_exercises',
+    'get_exercise_history',
     'log_set',
     'complete_current_exercise',
     'finish_training',
@@ -136,6 +137,7 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
     const fresh = { exercises: [{ status: 'in_progress', sets: [] }] };
     expect(toolPolicy.availability?.({ data: { session: fresh } })).toEqual([
       'search_exercises',
+      'get_exercise_history',
       'log_set',
       'complete_current_exercise',
       'finish_training',

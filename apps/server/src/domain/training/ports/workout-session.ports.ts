@@ -62,6 +62,23 @@ export interface IWorkoutSessionRepository {
     exerciseIds: string[],
     excludeSessionId: string,
   ): Promise<ExerciseLastPerformance[]>;
+  /**
+   * Up to `limit` most recent real (completed, >= 1 set) performances of ONE exercise, newest
+   * first, excluding `excludeSessionId` (today's own session) — the `get_exercise_history` tool's
+   * on-demand lookup (training-history-lookup plan D2). A sibling of `findLastPerformancesByExercise`
+   * sharing its hydration path: that one anchors ONE entry per exercise id across many ids; this one
+   * returns up to N entries for a SINGLE exercise id.
+   *
+   * `excludeSessionId: null` (close-out review item 5) means there is no session to exclude — the
+   * caller must pass `null`, never `''`: a `uuid` column errors on an empty-string literal, it does
+   * not just fail to match.
+   */
+  findRecentPerformancesForExercise(
+    userId: string,
+    exerciseId: string,
+    excludeSessionId: string | null,
+    limit: number,
+  ): Promise<ExerciseLastPerformance[]>;
 }
 
 export interface ISessionExerciseRepository {

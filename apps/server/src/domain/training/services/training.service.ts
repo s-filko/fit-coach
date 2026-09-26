@@ -1,4 +1,4 @@
-import { ActiveSessionExistsError } from '@domain/training/errors';
+import { ActiveSessionExistsError, ExerciseNotFoundError } from '@domain/training/errors';
 import type {
   AutoCompletedExercise,
   CompletedSetDetail,
@@ -475,7 +475,7 @@ export class TrainingService implements ITrainingService {
    * semantic fallback (embedding search), then the ilike hit when no embedding service is wired.
    * A name that matches nothing fails with the existing "not found" rejection.
    */
-  private async resolveExerciseIdByName(exerciseName: string): Promise<string> {
+  async resolveExerciseIdByName(exerciseName: string): Promise<string> {
     const exactMatches = await this.exerciseRepo.search(exerciseName, 1);
     const exactMatch = exactMatches.find(ex => ex.name.toLowerCase() === exerciseName.toLowerCase());
     let resolvedExerciseId: string | undefined;
@@ -498,7 +498,7 @@ export class TrainingService implements ITrainingService {
     }
 
     if (!resolvedExerciseId) {
-      throw new Error(`Exercise "${exerciseName}" not found in DB. Cannot log set for unknown exercise.`);
+      throw new ExerciseNotFoundError(exerciseName);
     }
     return resolvedExerciseId;
   }

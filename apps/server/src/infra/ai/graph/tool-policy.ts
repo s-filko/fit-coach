@@ -61,6 +61,9 @@ export const SEARCH_DEDUP_POLICY: ToolPolicy = { perTurnDedup: ['search_exercise
 /** Execution priority for training tools. Lower number = runs first. (Moved from training.subgraph.ts.) */
 export const TRAINING_TOOL_PRIORITY: Record<string, number> = {
   search_exercises: 0,
+  // D3 (training-history-lookup plan): a read-only lookup runs before writes, alongside
+  // search_exercises — never blocks or reorders log_set/finish_training.
+  get_exercise_history: 0,
   log_set: 1,
   complete_current_exercise: 2,
   delete_last_sets: 3,

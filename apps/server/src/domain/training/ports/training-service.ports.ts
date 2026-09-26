@@ -107,6 +107,14 @@ export interface ITrainingService {
     },
   ): Promise<UpdateSetResult>;
 
+  /**
+   * Resolves an exercise name to its catalog id (exact ilike match, then semantic search) — the
+   * same resolver `logSetWithContext`/`ensureCurrentExercise` use for a name-only `log_set` call.
+   * `get_exercise_history` reuses it (training-history-lookup plan D2) rather than copying it.
+   * Throws when nothing resolves.
+   */
+  resolveExerciseIdByName(exerciseName: string): Promise<string>;
+
   // Log a set for the current exercise, auto-computing setNumber from existing sets in DB
   logSetWithContext(
     sessionId: string,

@@ -73,13 +73,27 @@ Rules:
 
 ## Findings
 
-- [ ] **A saved session plan can name one exercise and carry another's id (found 2026-09-26,
+- [ ] **Name → exercise resolution has no similarity threshold (found 2026-09-26,
+      training-history-lookup D13).** `TrainingService.resolveExerciseIdByName` falls back to the
+      top pgvector hit with no distance cut-off (`searchByEmbedding` does not even select the
+      distance), and the embedding model is English-only. So `log_set` / `get_exercise_history`
+      given a Russian or garbled name resolve to an arbitrary exercise instead of "not found".
+      Mitigated by prompt text ("English catalog name; prefer search_exercises → exerciseId"), not
+      by code. Fix: select the distance, reject above a threshold measured on the catalog.
+
+- [x] **A saved session plan can name one exercise and carry another's id (found 2026-09-26,
       training-exercise-history live check).** The owner's 2026-09-25 plan (`e9e76f10`) lists
       "Treadmill" with Rowing Machine's `exerciseId` (`bf6a2f9e…`). Nothing at plan save
       (`save_workout_plan` / `start_training_session`) checks `exerciseName` against the catalog row of
       `exerciseId`, so the coach may announce one exercise while logging and history resolve another.
       Training's history block now labels by catalog name (plan D19); the save-time check is open.
       Candidate for U7 `session-proposal` (R3.1 moves ID validation to the proposal).
+      Resolved by training-history-lookup (2026-09-26, D5/AC-HL-5): both tools now check each plan
+      entry's `exerciseName` against the catalog name of its `exerciseId`
+      (`checkExerciseNamesAgainstCatalog`, `tools/exercise-name-check.ts`) right after the existing
+      missing-id check — no shared word/prefix rejects the call (`llm_error`, nothing persisted),
+      otherwise the stored name is corrected to the catalog's.
+      Source: live check, training-exercise-history plan (2026-09-26).
 
 - [ ] **Direct Google AI Studio is not a drop-in replacement for the OpenRouter route (parked by the
       owner, 2026-09-22).** On 2026-09-21 dev was switched from OpenRouter BYOK to the Google AI
