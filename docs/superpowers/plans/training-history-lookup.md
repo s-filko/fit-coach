@@ -157,6 +157,16 @@ Verification (from `apps/server/`): `npm run check-all`; `npm run test:unit`;
 `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh npm run test:integration`;
 repo root `node scripts/state.mjs --check`.
 
+## Live check (dev, 2026-09-26, zero LLM calls)
+
+After the dev deploy, the tool and the name check were run inside `fitcoach-dev-server` over the
+owner's real dev data:
+- `get_exercise_history({ exerciseId: Leg Curl })` → 2026-09-21 3×12 @ 66 kg, 2026-09-16 3×12 @ 59 kg,
+  2026-09-12 3×12 @ 52 kg — the progression the coach denied on 2026-09-21, dated.
+- by name ("Leg Curl", "Standing Calf Raise Machine") → resolved; the calf raise shows 2026-09-21 and
+  `2026-04-24 · 155d ago`.
+- the name check over the real 2026-09-25 plan → `llm_error: "Treadmill" → id is "Rowing Machine"`.
+
 ## Not in scope
 
 - The same lookup in `chat` / `session_planning`.
