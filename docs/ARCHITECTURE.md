@@ -85,7 +85,9 @@ apps/server/src/
       model.factory.ts          # Single ChatOpenAI construction site (getModel(profile), AC-1313)
       llm.gateway.ts            # OpenAiLlmGateway — LlmGateway port implementation (ADR-0013 §7 D-10)
       llm-log-handler.ts        # LLM boundary callback: debug logging + the llm_calls record (run metrics live in the per-run collector)
-      llm-call-recorder.ts      # Writes one llm_calls row per invocation; dedupes system prompts into prompt_blobs by content hash
+      llm-call-recorder.ts      # Writes one llm_calls row per invocation; dedupes system prompts into prompt_blobs by content hash; also the cache-attribution previous-call lookup
+      usage.ts                  # extractUsage/extractUsageFromLLMResult/extractUsageFromMessage — shared token/cache/reasoning extraction (cache-accounting plan)
+      cache-attribution.ts      # attributeCache(prev, current, limits) — pure cache-hit/miss attribution against the previous same-user+model call (cache-accounting plan)
       run-metrics.ts            # RunMetricsCollector — per-run instance carried in run context (ADR-0013 §8; no module state, AC-1331)
       embedding.service.ts      # Local all-MiniLM-L6-v2 via @huggingface/transformers (ONNX)
       embedding-text.util.ts    # buildEmbeddingText() — composite text for exercise embeddings
