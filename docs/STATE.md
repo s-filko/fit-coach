@@ -15,6 +15,7 @@ _Generated 2026-09-26 from docs/superpowers/plans/ + git. Never hand-edit; regen
 — none —
 
 **Planned**
+- `now-line-last.md` — NOW Line Last — Move the Current-Time Line out of Block 1 for Prompt Caching Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 
