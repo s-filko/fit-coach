@@ -6,6 +6,12 @@ export interface TimeGapContext {
 }
 
 /**
+ * The block's stable opening phrase — the only part fixed across renders (the hour count varies).
+ * cache-attribution.ts's label derivation matches on this, not a copy.
+ */
+export const TIME_GAP_PREFIX = 'The user returns after';
+
+/**
  * One decimal only when non-integer — the journey scenarios assert the
  * markers "The user returns after 14 h" and "The user returns after 3.5 h"
  * verbatim (AC-CC-2).
@@ -32,7 +38,7 @@ export const TIME_GAP_V1: PromptModule<TimeGapContext> = {
       {
         id: 'time_gap',
         required: true,
-        text: `The user returns after ${formatHours(gapMs)} h. Reply to their new message first; the earlier conversation is context, not an agenda.`,
+        text: `${TIME_GAP_PREFIX} ${formatHours(gapMs)} h. Reply to their new message first; the earlier conversation is context, not an agenda.`,
       },
     ];
   },

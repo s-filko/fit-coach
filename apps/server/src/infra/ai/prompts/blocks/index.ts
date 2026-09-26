@@ -34,10 +34,15 @@ export {
 // The current version (v2, AC-SI-5c) — every production caller renders through it.
 export { episodeParagraph } from './episode-summaries.v2';
 export type { EpisodeSummariesContext } from './episode-summaries.v2';
-export { TIME_GAP_V1 } from './time-gap.v1';
+export { TIME_GAP_V1, TIME_GAP_PREFIX } from './time-gap.v1';
 export type { TimeGapContext } from './time-gap.v1';
 export type { CourseDirectiveContext } from './course-directive.v1';
 export type { UserFactsContext } from './user-facts.v2';
+// Stable block headers (cache-accounting plan Task 1 follow-up): cache-attribution.ts's label
+// derivation matches on these, not copied string literals.
+export { USER_FACTS_HEADER } from './user-facts.v2';
+export { COURSE_DIRECTIVE_HEADER } from './course-directive.v1';
+export { EPISODE_SUMMARIES_HEADER } from './episode-summaries.v2';
 
 export type { ContextBlock, ContextBlockCtx, RenderableBlock, RenderedBlock } from './types';
 

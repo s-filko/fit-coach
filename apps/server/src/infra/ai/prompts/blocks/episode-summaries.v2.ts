@@ -62,6 +62,9 @@ export function episodeParagraph(s: StoredEpisodeSummary, now: Date, timezone: s
  * reps, session state) never come from a summary, only from tools and the
  * current state (INV-LLM-003, owner rule).
  */
+/** The block's stable header — cache-attribution.ts's label derivation matches on this, not a copy. */
+export const EPISODE_SUMMARIES_HEADER = '## Previous episodes';
+
 export const EPISODE_SUMMARIES_V2: PromptModule<EpisodeSummariesContext> = {
   id: 'block.episode_summaries',
   version: 'v2',
@@ -75,7 +78,7 @@ export const EPISODE_SUMMARIES_V2: PromptModule<EpisodeSummariesContext> = {
         id: 'episode_summaries',
         required: true,
         text: [
-          '## Previous episodes',
+          EPISODE_SUMMARIES_HEADER,
           'Context only. Numbers below are not authoritative — use tools and the current state.',
           ...summaries.map(s => episodeParagraph(s, now, timezone)),
         ].join('\n'),
