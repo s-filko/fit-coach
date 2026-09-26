@@ -381,6 +381,25 @@ describe('canonical comparison across a jsonb round trip (close-out review, bloc
     expect(result.cacheExpected).toBe('prefix_changed:tools');
   });
 
+  it('an undefined-valued key in the current request does not diverge against its jsonb-stored previous (JSON drops such keys)', () => {
+    // JSON/jsonb serialization drops object keys whose value is undefined — so a request that
+    // round-tripped through the DB loses them, while the in-memory `current` keeps them. The
+    // canonical form must drop them the same way, or every such request reads as prefix_changed.
+    const prev = req([{ role: 'system', content: PROMPT }], { tools: [{ name: 'x' }] });
+    const current = req(
+      [
+        { role: 'system', content: PROMPT },
+        { role: 'human', content: 'привет' },
+      ],
+      { tools: [{ id: undefined, name: 'x' }] },
+    );
+
+    const result = attributeCache(available(prev, secondsAgo(1)), { request: current, inputTokens: 100, now: NOW }, {});
+
+    expect(result.cacheExpected).toBe('warm');
+    expect(result.cacheDivergedAt).toBeNull();
+  });
+
   it('the char offset for a genuine tools divergence is computed on the canonical form, not raw JSON', () => {
     // Both sides carry the SAME reordered shape up to a genuine value difference (the tool name) —
     // if the offset were computed on raw (non-canonical) JSON.stringify output, the two strings

@@ -244,6 +244,57 @@ describe('recordLlmCall — cache attribution (AC-CA-3, D3-D6)', () => {
     expect(row.cacheSharedPrefixTokens).toBeGreaterThan(0);
   });
 
+  it('a realistic tools + tool_calls turn stays warm after the previous call round-tripped through jsonb', async () => {
+    const userId = randomUUID();
+    const run1 = randomUUID();
+    const run2 = randomUUID();
+    // The shape bindTools would send: deep, multi-key objects (properties/required/$schema...)
+    // whose key order jsonb re-sorts on the way in — the second call compares against that
+    // reordered stored form while itself still being in insertion order.
+    const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'log_set',
+          description: 'Log a set',
+          parameters: {
+            type: 'object',
+            properties: { weight: { type: 'number' }, reps: { type: 'integer' } },
+            required: ['weight', 'reps'],
+            additionalProperties: false,
+            $schema: 'http://json-schema.org/draft-07/schema#',
+          },
+        },
+      },
+    ];
+    const messages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: 'запиши: 60 кг на 10 повторов' },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [{ name: 'log_set', args: { weight: 60, reps: 10 }, id: 'call_1', type: 'tool_call' }],
+      },
+      { role: 'tool', content: 'Записано.', tool_call_id: 'call_1' },
+    ];
+    const requestOf = (msgs: RecordLlmCallRequest['messages']): RecordLlmCallRequest => ({
+      model: 'z-ai/glm-5.3',
+      messages: msgs,
+      tools,
+      temperature: 0.7,
+    });
+
+    await recordLlmCall(baseCall(run1, { userId, request: requestOf(messages) }));
+    // The second call = the first one's messages plus one new human message.
+    await recordLlmCall(
+      baseCall(run2, { userId, request: requestOf([...messages, { role: 'user', content: 'спасибо' }]) }),
+    );
+
+    const row = await rowFor(run2);
+    expect(row.cacheExpected).toBe('warm');
+    expect(row.cacheDivergedAt).toBeNull();
+  });
+
   it('a changed system prompt (the resolved prompt_blobs content differs) → prefix_changed:system:prompt', async () => {
     const userId = randomUUID();
     const run1 = randomUUID();

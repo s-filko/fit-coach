@@ -78,9 +78,14 @@ function canonicalStringify(value: unknown): string {
     return `[${value.map(canonicalStringify).join(',')}]`;
   }
   if (value !== null && typeof value === 'object') {
-    const entries = Object.keys(value as Record<string, unknown>)
+    // Keys whose value is undefined or a function are dropped — JSON.stringify drops them on
+    // write, so the stored side of the comparison never has them; keeping them here (as `"k":null`)
+    // would diverge every request that merely carries one (follow-up to blocking R3).
+    const record = value as Record<string, unknown>;
+    const entries = Object.keys(record)
+      .filter(key => record[key] !== undefined && typeof record[key] !== 'function')
       .sort()
-      .map(key => `${JSON.stringify(key)}:${canonicalStringify((value as Record<string, unknown>)[key])}`);
+      .map(key => `${JSON.stringify(key)}:${canonicalStringify(record[key])}`);
     return `{${entries.join(',')}}`;
   }
   return JSON.stringify(value) ?? 'null';
