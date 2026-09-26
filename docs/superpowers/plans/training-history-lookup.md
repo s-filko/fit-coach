@@ -3,9 +3,12 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and
 > test-driven-development. Red tests first, then the fix.
 
-- Status: planned
+- Status: done
 - Branch: plan/training-history-lookup
 - After: training-exercise-history
+- Review: 2026-09-26 | clean | R1,R2,R3,R4
+
+**Review note:** one combined reviewer; first pass blocked on 1 (BACKLOG currency) with 6 advisories — all fixed in fb3560ac; re-run clean with one advisory (any-overlap name rule let "Leg Curl"/Leg Extension through) — fixed as D16 in 77a44542.
 
 **Goal:** close the two gaps left by `training-exercise-history` (BUG-030):
 1. The coach cannot see an exercise that is neither in today's session nor in the last 7 days

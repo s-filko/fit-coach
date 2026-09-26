@@ -73,6 +73,14 @@ Rules:
 
 ## Findings
 
+- [ ] **Name → exercise resolution has no similarity threshold (found 2026-09-26,
+      training-history-lookup D13).** `TrainingService.resolveExerciseIdByName` falls back to the
+      top pgvector hit with no distance cut-off (`searchByEmbedding` does not even select the
+      distance), and the embedding model is English-only. So `log_set` / `get_exercise_history`
+      given a Russian or garbled name resolve to an arbitrary exercise instead of "not found".
+      Mitigated by prompt text ("English catalog name; prefer search_exercises → exerciseId"), not
+      by code. Fix: select the distance, reject above a threshold measured on the catalog.
+
 - [x] **A saved session plan can name one exercise and carry another's id (found 2026-09-26,
       training-exercise-history live check).** The owner's 2026-09-25 plan (`e9e76f10`) lists
       "Treadmill" with Rowing Machine's `exerciseId` (`bf6a2f9e…`). Nothing at plan save

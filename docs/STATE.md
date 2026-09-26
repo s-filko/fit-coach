@@ -9,7 +9,7 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-09-25 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-09-26 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
 — none —
@@ -55,6 +55,7 @@ _Generated 2026-09-25 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `structured-output-fenced-json.md` — Structured Output — Fenced-JSON Recovery and the User-Facts Scenario Test Implementation Plan
 - `structured-output-json-object-mode.md` — Structured Output — Provider Mode `json_object` for the Z.AI Route Implementation Plan
 - `training-exercise-history.md` — Training Exercise History (BUG-030, Roadmap R1.3a) Implementation Plan
+- `training-history-lookup.md` — Training History Lookup and Plan Name Check Implementation Plan
 - `training-journey-scenarios.md` — Training Journey Scenarios — Deterministic over the Real Test DB + Live L3 Implementation Plan
 - `transition-handoff.md` — Transition Hand-off (Roadmap U5) Implementation Plan
 
@@ -230,6 +231,16 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
 4. **HB-02** (production Docker image) — its own plan, sequenced after HB-01;
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
+
+## Handoff (training-history-lookup, 2026-09-26) — lookup tool + plan name check, deployed to dev
+
+Continuation of the BUG-030 autonomy order ("продолжай сам до конца"). Plan `training-history-lookup`
+is `done`, reviewed clean, merged into `dev` and deployed: training gains the read-only
+`get_exercise_history` tool (last ≤ 5 real performances of any exercise, dated) with prompt
+`training` v7, and `start_training_session` / `save_workout_plan` reject a plan entry whose name does
+not match its id's catalog name (containment rule, D16) and store catalog names otherwise. **For the
+owner to review:** D1–D16 in the plan. New backlog finding: no similarity threshold in name →
+exercise resolution (D13).
 
 ## Handoff (training-exercise-history, 2026-09-26) — BUG-030 fixed, deployed to dev
 
