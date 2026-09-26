@@ -45,6 +45,36 @@ autonomously; every decision is recorded here as **(D)** for the owner's later r
   `llmError`** listing each mismatch (`"Treadmill" → id is "Rowing Machine"`) and telling the model to
   fix the id via `search_exercises` or use the catalog name; otherwise the stored `exerciseName` is
   replaced by the catalog name. Nothing is persisted on rejection.
+- **D6 — `resolveExerciseIdByName` made public, not copied.** `TrainingService.resolveExerciseIdByName`
+  was `private`; `get_exercise_history` needs the same resolver `log_set` uses (D2 says reuse, not
+  copy), so it was changed to a public method (unchanged body) and added to `ITrainingService`.
+- **D7 — repository sibling, not a parameterised `findLastPerformancesByExercise`.** Added
+  `findRecentPerformancesForExercise(userId, exerciseId, excludeSessionId, limit)` to
+  `IWorkoutSessionRepository`/`WorkoutSessionRepository` rather than overloading the existing
+  DISTINCT-ON method: that one anchors ONE performance per exercise across MANY ids (the
+  today's-exercises loader); this one returns UP TO N performances for a SINGLE id (the tool). Both
+  share `hydrateSessionExercises`; the query itself is a plain filter + order + limit, no DISTINCT ON
+  needed since it is already scoped to one exercise id.
+- **D8 — "no completed record" wording is exact and lower-cased**, per D2's literal quote:
+  `` `no completed record of ${exerciseName}` `` (an `ok` outcome). The unresolvable-name path is an
+  `llm_error` with a `search_exercises` hint, also per D2.
+- **D9 — name-check helper signature.** `checkExerciseNamesAgainstCatalog(entries, catalogNameById)`
+  (`src/infra/ai/tools/exercise-name-check.ts`) takes a `ReadonlyMap<exerciseId, catalogName>` (built
+  by each tool from its own `findByIdsWithMuscles` result) and returns `{ rejection, corrected }` —
+  `rejection` is a ready-made `llm_error` `ToolOutcome` naming every mismatch; `corrected` is the same
+  entries with `exerciseName` swapped to the catalog name where checked and matched (identity-preserved
+  when already equal, to keep existing tool tests' `toHaveBeenCalledWith(...)` assertions stable). Both
+  tools run it right after their missing-id check and before `guardFactConstraints`, so a name mismatch
+  never reaches the constraint check or persists anything.
+- **D10 — word-match rule implementation.** ">= 3 letters" words are tokenised with the Unicode-aware
+  regex `/[\p{L}\p{N}]+/gu`, lower-cased, so Cyrillic/other-script names match the same way (the app is
+  bilingual — RU/EN); a single shared token of length >= 3 in either direction is enough to pass.
+- **D11 — AC-HL-3 test exercise.** The test DB's seed catalog (`src/app/test/setup.ts`) has only four
+  exercises (Barbell Bench Press, Barbell Back Squat, Pull-ups, Running) — no treadmill/rowing pair.
+  The scripted scenario test uses `Running`, seeded 10 days back (outside the 7-day RECENT WORKOUTS
+  window, and not in journey B's `upper_a` plan) as the "exercise absent from the blocks"; the
+  DB-backed AC-HL-5 test uses `Running` as the "Treadmill" stand-in for the live "Rowing Machine" case,
+  since the real mismatch pair isn't in the test catalog.
 
 ## Acceptance criteria
 
