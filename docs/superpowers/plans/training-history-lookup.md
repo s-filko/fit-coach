@@ -76,6 +76,49 @@ autonomously; every decision is recorded here as **(D)** for the owner's later r
   DB-backed AC-HL-5 test uses `Running` as the "Treadmill" stand-in for the live "Rowing Machine" case,
   since the real mismatch pair isn't in the test catalog.
 
+### Close-out review fixes (2026-09-26)
+
+- **D12 — word-match rule widened: shared prefix (>= 4 chars) + equipment/modifier stop words.**
+  Item 2 (false rejections): exact-word match alone missed plural/compound drift ("Squats"/"Squat",
+  "Lunges"/"Lunge", "Pullups"/"Pull-ups") — added a second pass: any pair of (non-stop-word) tokens
+  sharing a >= 4-char prefix also passes. Item 3 (false acceptances): equipment/modifier words name
+  almost every exercise of a kind, so sharing one is not evidence of a correct id ("Barbell Row" vs
+  "Barbell Bench Press" must NOT pass on "barbell" alone) — both the exact-match and the new prefix
+  pass now run on tokens with a stop-word set removed first: `barbell, dumbbell, cable, machine,
+  lever, seated, standing, incline, decline, plate, loaded, smith, rope, grip, wide, narrow, close,
+  single, arm`. `leg` is deliberately NOT in the list — it is a body part, not equipment/a modifier,
+  so "45° Leg Press" still matches "Leg Press" on "leg" + "press". A non-English name (e.g. "Жим
+  лёжа") is still rejected against an English catalog name by construction (no shared token/prefix
+  across scripts) — the rejection message now says "use the English catalog name", and
+  `start_training_session`'s `exerciseName` schema description now says "English catalog name" too
+  (`save_workout_plan`'s already did).
+- **D13 — `get_exercise_history` error split; no similarity threshold added.** Item 4: added
+  `ExerciseNotFoundError` (`domain/training/errors.ts`) — `resolveExerciseIdByName` throws it instead
+  of a bare `Error` on a genuine miss (same message text, so the one existing test asserting on it by
+  regex is unaffected). The tool now returns `llm_error` (pointing at `search_exercises`) only for
+  that typed miss; any other failure (DB, embedding service) is `system_error`, mirroring `log_set`'s
+  DB/not-found split but keyed on the typed error rather than `isDatabaseFailure` (an embedding
+  failure is not a DB failure). Checked whether a similarity score could be exposed "cheaply" to add
+  a match threshold: `ExerciseRepository.searchByEmbedding` only ever `SELECT`s `id` and orders by
+  the pgvector distance expression — the distance itself is never fetched, so exposing it needs a
+  repository/port contract change, not a cheap read. Also: neither `search_exercises` nor `log_set`
+  apply any similarity threshold today (no results are ever filtered by score), so there is no
+  existing threshold to stay consistent with. Left as-is; a real threshold is a separate, larger
+  change (repository return shape + picking a cutoff) — candidate for the backlog, not this task.
+  Both tool/schema descriptions (`get_exercise_history` itself and its `exerciseName` field) now say
+  "English catalog name; prefer search_exercises → exerciseId when unsure".
+- **D14 — `excludeSessionId: string | null`, never `''`.** Item 5: passing `''` into
+  `ne(workoutSessions.id, excludeSessionId)` on a `uuid` column is a Postgres type error, not a
+  harmless no-match — `get_exercise_history` could 500 with no active session (should not happen
+  from the training phase, but defensive). `findRecentPerformancesForExercise`'s `excludeSessionId`
+  is now `string | null`; the tool passes `sessionIdOf(config)` directly (already nullable) instead
+  of defaulting to `''`; the repository skips the `ne()` condition entirely when null.
+- **D15 — shared predicate/hydrate-tail extraction.** Item 6: `findLastPerformancesByExercise` and
+  `findRecentPerformancesForExercise` now both call two new private helpers —
+  `realPerformanceConditions(userId, excludeSessionId)` (the WHERE predicate: completed, has
+  `completedAt`, >= 1 real set, optional exclusion) and `rehydratePerformances(picked, exerciseIdOf)`
+  (the rejoin/hydrate/map tail) — instead of each carrying its own copy.
+
 ## Acceptance criteria
 
 | AC | Criterion | Verification |

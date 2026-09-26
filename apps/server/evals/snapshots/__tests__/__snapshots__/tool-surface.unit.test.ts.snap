@@ -1127,6 +1127,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) ses
                 "type": "string",
               },
               "exerciseName": {
+                "description": "English catalog name of the exercise — must match the catalog row of exerciseId.",
                 "minLength": 1,
                 "type": "string",
               },

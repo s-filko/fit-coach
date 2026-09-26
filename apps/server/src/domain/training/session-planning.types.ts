@@ -5,7 +5,11 @@ import { z } from 'zod';
  */
 export const RecommendedExerciseSchema = z.object({
   exerciseId: z.string().uuid(),
-  exerciseName: z.string().min(1).optional(),
+  exerciseName: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('English catalog name of the exercise — must match the catalog row of exerciseId.'),
   targetSets: z.number().int().positive(),
   targetReps: z.string().min(1), // e.g., '8-10', '12-15'
   // LLM may send null, "BW", or a number — normalize to number | undefined

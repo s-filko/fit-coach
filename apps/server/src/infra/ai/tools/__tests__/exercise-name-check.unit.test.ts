@@ -97,4 +97,66 @@ describe('checkExerciseNamesAgainstCatalog (AC-HL-5)', () => {
 
     expect(result.rejection).not.toBeNull();
   });
+
+  // Close-out review item 2: a shared prefix of >= 4 chars between any pair of tokens passes —
+  // plural/singular and compound-word drift must not be treated as a mismatch.
+  describe('prefix match (>= 4 shared chars) — item 2', () => {
+    it.each([
+      ['Squats', 'Squat'],
+      ['Lunges', 'Lunge'],
+      ['Pullups', 'Pull-ups'],
+    ])('%s (plan) vs %s (catalog) passes', (planName, catalogName) => {
+      const result = checkExerciseNamesAgainstCatalog(
+        [{ exerciseId: 'id-1', exerciseName: planName }],
+        new Map([['id-1', catalogName]]),
+      );
+
+      expect(result.rejection).toBeNull();
+      expect(result.corrected).toEqual([{ exerciseId: 'id-1', exerciseName: catalogName }]);
+    });
+
+    it('a non-English name is still rejected — the catalog is English-only, message says so', () => {
+      const result = checkExerciseNamesAgainstCatalog(
+        [{ exerciseId: 'id-1', exerciseName: 'Жим лёжа' }],
+        new Map([['id-1', 'Barbell Bench Press']]),
+      );
+
+      expect(result.rejection).not.toBeNull();
+      const { message } = result.rejection as { message: string };
+      expect(message).toContain('"Жим лёжа" → id is "Barbell Bench Press"');
+      expect(message).toContain('English catalog name');
+    });
+  });
+
+  // Close-out review item 3: equipment/modifier words must not be enough to pass a mismatch
+  // between two genuinely different exercises that merely share the same equipment.
+  describe('equipment/modifier stop words never match alone — item 3', () => {
+    it('rejects "Barbell Row" naming Barbell Bench Press\'s id (shared word is only "barbell")', () => {
+      const result = checkExerciseNamesAgainstCatalog(
+        [{ exerciseId: 'id-1', exerciseName: 'Barbell Row' }],
+        new Map([['id-1', 'Barbell Bench Press']]),
+      );
+
+      expect(result.rejection).not.toBeNull();
+    });
+
+    it('rejects "Dumbbell Curl" naming Dumbbell Bench Press\'s id (shared word is only "dumbbell")', () => {
+      const result = checkExerciseNamesAgainstCatalog(
+        [{ exerciseId: 'id-1', exerciseName: 'Dumbbell Curl' }],
+        new Map([['id-1', 'Dumbbell Bench Press']]),
+      );
+
+      expect(result.rejection).not.toBeNull();
+    });
+
+    it('accepts "45° Leg Press" naming Leg Press\'s id — "leg" is a body part, not a stop word', () => {
+      const result = checkExerciseNamesAgainstCatalog(
+        [{ exerciseId: 'id-1', exerciseName: '45° Leg Press' }],
+        new Map([['id-1', 'Leg Press']]),
+      );
+
+      expect(result.rejection).toBeNull();
+      expect(result.corrected).toEqual([{ exerciseId: 'id-1', exerciseName: 'Leg Press' }]);
+    });
+  });
 });

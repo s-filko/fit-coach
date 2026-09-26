@@ -1,4 +1,4 @@
-import { ActiveSessionExistsError } from '@domain/training/errors';
+import { ActiveSessionExistsError, ExerciseNotFoundError } from '@domain/training/errors';
 import type {
   AutoCompletedExercise,
   CompletedSetDetail,
@@ -498,7 +498,7 @@ export class TrainingService implements ITrainingService {
     }
 
     if (!resolvedExerciseId) {
-      throw new Error(`Exercise "${exerciseName}" not found in DB. Cannot log set for unknown exercise.`);
+      throw new ExerciseNotFoundError(exerciseName);
     }
     return resolvedExerciseId;
   }

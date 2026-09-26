@@ -2,7 +2,8 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
-import { llmError, ok } from '@domain/conversation/tool-outcome';
+import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
+import { ExerciseNotFoundError } from '@domain/training/errors';
 import type { IExerciseRepository, ITrainingService, IWorkoutSessionRepository } from '@domain/training/ports';
 
 import { ctxOf } from '@infra/ai/graph/state';
@@ -29,8 +30,8 @@ const GET_EXERCISE_HISTORY_DESCRIPTION = [
   "Look up an exercise's real completed history — use this when the user asks about an exercise that is",
   'NOT shown in EXERCISE HISTORY or RECENT WORKOUTS (e.g. "how much did I bench last time?" for an exercise',
   "not in today's plan).",
-  'Identify the exercise with exerciseId when you have its exact UUID, or exerciseName otherwise (resolved',
-  'in the catalog, same as log_set). If the name cannot be resolved, call search_exercises first.',
+  'Identify the exercise with exerciseId when you have its exact UUID; prefer search_exercises to get an',
+  'exact exerciseId over passing exerciseName when you are not sure of the English catalog name.',
   'Returns up to `limit` (default 3, max 5) past performances, newest first, each dated and with its sets.',
   'A plain result saying there is no completed record is normal — never treat it as an error, and never',
   'tell the user they never did the exercise; say it is not in the records.',
@@ -42,7 +43,9 @@ export function buildGetExerciseHistoryTool(deps: GetExerciseHistoryToolDeps) {
   return tool(
     async (input, config) => {
       const userId = userIdOf(config) ?? '';
-      const sessionId = sessionIdOf(config) ?? '';
+      // No active session (should not happen from the training phase, defensive): skip the
+      // exclusion rather than pass '' into a uuid-typed ne() filter (close-out review item 5).
+      const sessionId = sessionIdOf(config);
       const limit = Math.min(input.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
 
       let { exerciseId } = input;
@@ -50,11 +53,18 @@ export function buildGetExerciseHistoryTool(deps: GetExerciseHistoryToolDeps) {
         try {
           exerciseId = await trainingService.resolveExerciseIdByName(input.exerciseName!);
         } catch (err) {
-          log.warn({ err, exerciseName: input.exerciseName }, 'get_exercise_history: name resolution failed');
-          return llmError(
-            `Exercise "${input.exerciseName}" not found in the catalog.`,
-            'Call search_exercises to find the correct exercise, then retry with its exerciseId.',
-          );
+          // A genuine miss (nothing resolved) is llm_error — the model can recover via
+          // search_exercises. Anything else (DB or embedding failure) is systemic — no retry by
+          // the model can fix it (close-out review item 4, mirrors log_set's DB/not-found split).
+          if (err instanceof ExerciseNotFoundError) {
+            log.warn({ exerciseName: input.exerciseName }, 'get_exercise_history: exercise name not found');
+            return llmError(
+              `Exercise "${input.exerciseName}" not found in the catalog.`,
+              'Call search_exercises to find the correct exercise, then retry with its exerciseId.',
+            );
+          }
+          log.error({ err, exerciseName: input.exerciseName }, 'get_exercise_history: name resolution failed');
+          return systemError('Could not resolve the exercise name — a database or embedding error occurred.');
         }
       }
 
@@ -101,7 +111,10 @@ export function buildGetExerciseHistoryTool(deps: GetExerciseHistoryToolDeps) {
           exerciseName: z
             .string()
             .optional()
-            .describe('Exercise name — use when its exact UUID is not known; resolved in the catalog.'),
+            .describe(
+              'English catalog name of the exercise — use when its exact UUID is not known; resolved in the ' +
+                'catalog. Prefer search_exercises → exerciseId when unsure of the exact catalog name.',
+            ),
           limit: z
             .number()
             .int()

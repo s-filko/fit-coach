@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, inArray, isNotNull, lt, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNotNull, lt, ne, type SQL, sql } from 'drizzle-orm';
 
 import { ActiveSessionExistsError } from '@domain/training/errors';
 import type { ExerciseLastPerformance, IWorkoutSessionRepository, RecentSessionsFilter } from '@domain/training/ports';
@@ -87,6 +87,67 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
       } as SessionExerciseWithDetails);
     }
     return result;
+  }
+
+  /**
+   * The WHERE predicate common to both "real performance" queries (close-out review item 6,
+   * training-history-lookup plan): completed, has a `completedAt`, and >= 1 real
+   * `session_sets` row. `excludeSessionId: null` (item 5) omits the exclusion entirely — a `uuid`
+   * column errors on `ne(col, '')`, it does not just fail to match, so an absent session must never
+   * reach this as `''`.
+   */
+  private realPerformanceConditions(userId: string, excludeSessionId: string | null): SQL[] {
+    const conditions = [
+      eq(workoutSessions.userId, userId),
+      eq(workoutSessions.status, 'completed'),
+      isNotNull(workoutSessions.completedAt),
+      exists(
+        db
+          .select({ one: sql`1` })
+          .from(sessionSets)
+          .where(eq(sessionSets.sessionExerciseId, sessionExercises.id)),
+      ),
+    ];
+    if (excludeSessionId) {
+      conditions.push(ne(workoutSessions.id, excludeSessionId));
+    }
+    return conditions;
+  }
+
+  /**
+   * The rejoin/hydrate/map tail shared by `findLastPerformancesByExercise` and
+   * `findRecentPerformancesForExercise` (close-out review item 6): given the picked
+   * `{ sessionExerciseId, completedAt }` rows (an anchor per exercise, or the top-N for one),
+   * rehydrates each through the batched `hydrateSessionExercises` path (never N+1) and maps back to
+   * `ExerciseLastPerformance[]`, dropping any row whose exercise was not found (should not happen
+   * under the FK, defensive — same as `findByIdWithDetails`).
+   */
+  private async rehydratePerformances<TPicked extends { sessionExerciseId: string; completedAt: Date | null }>(
+    picked: TPicked[],
+    exerciseIdOf: (row: TPicked) => string,
+  ): Promise<ExerciseLastPerformance[]> {
+    if (picked.length === 0) {
+      return [];
+    }
+
+    const sessionExerciseIds = picked.map(p => p.sessionExerciseId);
+    const rows = await db
+      .select()
+      .from(sessionExercises)
+      .leftJoin(exercises, eq(sessionExercises.exerciseId, exercises.id))
+      .where(inArray(sessionExercises.id, sessionExerciseIds));
+
+    const hydrated = await this.hydrateSessionExercises(rows);
+
+    return picked
+      .map(row => {
+        const sessionExercise = hydrated.get(row.sessionExerciseId);
+        if (!sessionExercise) {
+          return null;
+        }
+        return { exerciseId: exerciseIdOf(row), completedAt: row.completedAt!, sessionExercise };
+      })
+      .filter((p): p is ExerciseLastPerformance => p !== null);
   }
 
   async create(userId: string, session: CreateSessionDto): Promise<WorkoutSession> {
@@ -309,17 +370,8 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
       .innerJoin(workoutSessions, eq(sessionExercises.sessionId, workoutSessions.id))
       .where(
         and(
-          eq(workoutSessions.userId, userId),
-          eq(workoutSessions.status, 'completed'),
-          ne(workoutSessions.id, excludeSessionId),
+          ...this.realPerformanceConditions(userId, excludeSessionId),
           inArray(sessionExercises.exerciseId, exerciseIds),
-          isNotNull(workoutSessions.completedAt),
-          exists(
-            db
-              .select({ one: sql`1` })
-              .from(sessionSets)
-              .where(eq(sessionSets.sessionExerciseId, sessionExercises.id)),
-          ),
         ),
       )
       // DISTINCT ON keeps the first row per exerciseId under this order — completedAt DESC picks
@@ -332,40 +384,13 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
         desc(sessionExercises.id),
       );
 
-    if (anchors.length === 0) {
-      return [];
-    }
-
-    // Hydrate the winning session_exercises rows through the same batched path as
-    // findByIdWithDetails (close-out review R2) — no N+1 over the anchor ids.
-    const sessionExerciseIds = anchors.map(a => a.sessionExerciseId);
-    const rows = await db
-      .select()
-      .from(sessionExercises)
-      .leftJoin(exercises, eq(sessionExercises.exerciseId, exercises.id))
-      .where(inArray(sessionExercises.id, sessionExerciseIds));
-
-    const hydrated = await this.hydrateSessionExercises(rows);
-
-    return anchors
-      .map(anchor => {
-        const sessionExercise = hydrated.get(anchor.sessionExerciseId);
-        if (!sessionExercise) {
-          return null;
-        }
-        return {
-          exerciseId: anchor.exerciseId,
-          completedAt: anchor.completedAt!,
-          sessionExercise,
-        };
-      })
-      .filter((p): p is ExerciseLastPerformance => p !== null);
+    return this.rehydratePerformances(anchors, anchor => anchor.exerciseId);
   }
 
   async findRecentPerformancesForExercise(
     userId: string,
     exerciseId: string,
-    excludeSessionId: string,
+    excludeSessionId: string | null,
     limit: number,
   ): Promise<ExerciseLastPerformance[]> {
     // Plain filter + order + limit — no DISTINCT ON needed, this is already scoped to one
@@ -378,46 +403,11 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
       .from(sessionExercises)
       .innerJoin(workoutSessions, eq(sessionExercises.sessionId, workoutSessions.id))
       .where(
-        and(
-          eq(workoutSessions.userId, userId),
-          eq(workoutSessions.status, 'completed'),
-          eq(sessionExercises.exerciseId, exerciseId),
-          ne(workoutSessions.id, excludeSessionId),
-          isNotNull(workoutSessions.completedAt),
-          exists(
-            db
-              .select({ one: sql`1` })
-              .from(sessionSets)
-              .where(eq(sessionSets.sessionExerciseId, sessionExercises.id)),
-          ),
-        ),
+        and(...this.realPerformanceConditions(userId, excludeSessionId), eq(sessionExercises.exerciseId, exerciseId)),
       )
       .orderBy(desc(workoutSessions.completedAt), desc(sessionExercises.orderIndex), desc(sessionExercises.id))
       .limit(limit);
 
-    if (rows.length === 0) {
-      return [];
-    }
-
-    // Same batched hydration path as findByIdWithDetails/findLastPerformancesByExercise
-    // (close-out review R2) — no N+1 over the picked rows.
-    const sessionExerciseIds = rows.map(r => r.sessionExerciseId);
-    const joined = await db
-      .select()
-      .from(sessionExercises)
-      .leftJoin(exercises, eq(sessionExercises.exerciseId, exercises.id))
-      .where(inArray(sessionExercises.id, sessionExerciseIds));
-
-    const hydrated = await this.hydrateSessionExercises(joined);
-
-    return rows
-      .map(row => {
-        const sessionExercise = hydrated.get(row.sessionExerciseId);
-        if (!sessionExercise) {
-          return null;
-        }
-        return { exerciseId, completedAt: row.completedAt!, sessionExercise };
-      })
-      .filter((p): p is ExerciseLastPerformance => p !== null);
+    return this.rehydratePerformances(rows, () => exerciseId);
   }
 }
