@@ -3,8 +3,9 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and
 > test-driven-development. Red tests first, then the fix.
 
-- Status: in progress
+- Status: done
 - Branch: plan/cache-accounting
+- Review: 2026-09-26 | clean | R1,R2,R3,R4
 
 **Goal:** make prompt-cache use visible, as the basis for the caching work in
 `docs/superpowers/specs/2026-09-26-training-history-context-design.md` § 4 "First step",
@@ -131,7 +132,8 @@ non-null `cache_read_tokens` and a `cache_expected`; expect mostly `prefix_chang
 
 ## Review
 
-2026-09-26, one combined reviewer (R1–R4, economical-work rule). Verdict: **blocked** (1 blocking).
+2026-09-26, one combined reviewer (R1–R4, economical-work rule). First verdict: **blocked** (1 blocking);
+R3 re-run after the fixes: **clean** (see "R3 re-run" below).
 
 **Blocking**
 - R3 | `cache-attribution.ts:187-196` (with `:64-73`) | AC-CA-3 — the previous request is read back
@@ -169,5 +171,12 @@ non-null `cache_read_tokens` and a `cache_expected`; expect mostly `prefix_chang
 **Advisory disposition:** R1 lookup-placement → `BACKLOG.md` § cache-accounting advisories; R1
 ADR cost basis + R4 ADR columns → ADR-0013 §8 amendment 2026-09-26 (owner-approved); all R2, R3
 and the R4 `ARCHITECTURE.md` advisories fixed in ad9ca4e0…5399d2d7.
+
+**R3 re-run (2026-09-26)** — blocker confirmed closed; no new defect. Advisories: (a) the claimed
+multi-key-schema → `warm` DB test was missing (the worker's report overstated it) — added in 3acbda82;
+(b) `canonicalStringify` rendered `undefined`-valued keys as `null` while jsonb drops them — fixed in
+3acbda82 with a red-first unit test; (c) evidence for the fix commits — orchestrator re-ran at
+3acbda82: `test:integration` 47 suites / 632 passed + 1 todo, `test:scenarios` 19 / 392 passed + 1 todo,
+`state.mjs --check` OK (worker: `check-all` clean, `test:unit` 1456 passed).
 
 **Meta** — filed in `docs/REVIEW_FINDINGS.md` § Blind spots (jsonb round trip).

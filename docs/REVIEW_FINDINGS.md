@@ -161,6 +161,11 @@ or is inert for the kind of diff under review.
 - [×1] A plan stated "exactly N failing" for the repro glob from memory rather than from a command it had run; the baseline (2) and the close-out expectation (4) both missed the unit repro probes for BUG-023/BUG-025 (real: 4 before, 6 after). Proposed: a plan quoting a count of failing suites gets it from a run and names the command. Runs: coach-baseline 2026-09-25 (R3).
 - [×1] The zones do not say whether a missing AC id in a test name (SUPERPOWERS_INTEGRATION rule 4) is blocking or advisory; it meets the formal bar (file:line + named rule) yet costs two renames. A severity note in `r3-correctness.md` would make verdicts consistent. Runs: smoke-test 2026-09-25 (R3).
 
+- [×1] A re-review prompt listed as "claimed" a fix that neither the plan nor the commits claimed
+  (only the worker's worker_done prose did) — the reviewer had to check an assumed claim. A re-run
+  prompt should quote the fix commits' exact claims; worker reports are not evidence.
+  Runs: cache-accounting R3 re-run (2026-09-26).
+
 ## Blind spots
 
 What fell between the zones — a real problem no zone's mandate covered, usually surfaced by
