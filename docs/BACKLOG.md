@@ -806,3 +806,7 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 - [ ] One runtime source for the exercise category list and involvement values: `['compound','isolation','cardio','functional','mobility']` is typed by hand in `evals/schema/scenario.schema.ts:139`, `search-exercises.tool.ts:36` (`CATEGORIES`), `src/domain/training/types.ts:64` and `infra/db/seeds/exercises.seed.ts:15`; `InvolvementSchema`'s values are only type-checked against `Involvement`. Same class `db6c0a94` fixed for muscle groups and exercise types (whose two production copies in `save-workout-plan.tool.ts:22` / `search-exercises.tool.ts:13` also remain). Source: smoke-test close-out review R2 (2026-09-25).
 - [ ] Type `evals/lib/scenario-world.ts` `toSetData` against the domain `SetData` / `setDataTypes` (`src/domain/training/set-data.types.ts`) instead of `Record<string, unknown>` with literal type strings, so a domain setData change breaks the seeder at compile time. Source: smoke-test close-out review R2 (2026-09-25).
 
+
+## cache-accounting close-out review advisories (2026-09-26)
+
+- [ ] Move the previous-call lookup (`lookupPreviousCall` + `attributeCache` wiring) out of `llm-call-recorder.ts` into a reader/attribution adapter, so the recorder is a writer again; consider computing attribution off the synchronous path (ADR-0013 §8 amendment 2026-09-26 point 2 records the current cost). Source: cache-accounting close-out review R1 (2026-09-26).

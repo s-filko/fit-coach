@@ -166,4 +166,8 @@ non-null `cache_read_tokens` and a `cache_expected`; expect mostly `prefix_chang
   statement — durable spec, escalated to the owner, not edited.
 - R4 | `docs/ARCHITECTURE.md:84-90` | `infra/ai/` tree lacks `usage.ts`, `cache-attribution.ts`.
 
+**Advisory disposition:** R1 lookup-placement → `BACKLOG.md` § cache-accounting advisories; R1
+ADR cost basis + R4 ADR columns → ADR-0013 §8 amendment 2026-09-26 (owner-approved); all R2, R3
+and the R4 `ARCHITECTURE.md` advisories fixed in ad9ca4e0…5399d2d7.
+
 **Meta** — filed in `docs/REVIEW_FINDINGS.md` § Blind spots (jsonb round trip).
