@@ -454,4 +454,64 @@ describe('start-training-session.tool — start_training_session', () => {
     expect(isToolReturnWithUpdate(a) ? a.update.activeSessionId : undefined).toBe('session-A');
     expect(isToolReturnWithUpdate(b) ? b.update.activeSessionId : undefined).toBe('session-B');
   });
+
+  // training-history-lookup plan D5/AC-HL-5: the plan's exerciseName must agree with the catalog
+  // name of its exerciseId (BUG-030 D19 aftermath — live 2026-09-25, "Treadmill" naming Rowing
+  // Machine's id).
+  describe('plan name/id check (D5, AC-HL-5)', () => {
+    it("rejects a plan whose exerciseName shares no word with its id's catalog name — nothing persisted", async () => {
+      const trainingService = makeTrainingService();
+      const exerciseRepository = makeExerciseRepository();
+      exerciseRepository.findByIdsWithMuscles.mockResolvedValue([
+        makeExerciseWithMuscles([{ muscleGroup: 'chest', involvement: 'primary' }], undefined, 'Rowing Machine'),
+      ]);
+      const { startTrainingSession } = buildTools(
+        trainingService,
+        makeWorkoutPlanRepo(),
+        makeUserFactsService(),
+        exerciseRepository,
+      );
+
+      const plan = {
+        ...MINIMAL_SESSION_PLAN,
+        exercises: [{ ...MINIMAL_SESSION_PLAN.exercises[0], exerciseName: 'Treadmill' }],
+      };
+      const result = (await startTrainingSession.invoke(plan, makeConfig())) as ToolReturn;
+
+      const text = renderedContent(result);
+      expect(text).toContain('LLM_ERROR');
+      expect(text).toContain('"Treadmill" → id is "Rowing Machine"');
+      expect(trainingService.startSession).not.toHaveBeenCalled();
+      expect(isToolReturnWithUpdate(result)).toBe(false);
+    });
+
+    it('stores the catalog name when the plan only partially names the exercise', async () => {
+      const trainingService = makeTrainingService();
+      const exerciseRepository = makeExerciseRepository();
+      exerciseRepository.findByIdsWithMuscles.mockResolvedValue([
+        makeExerciseWithMuscles([{ muscleGroup: 'chest', involvement: 'primary' }], undefined, 'Barbell Bench Press'),
+      ]);
+      const { startTrainingSession } = buildTools(
+        trainingService,
+        makeWorkoutPlanRepo(),
+        makeUserFactsService(),
+        exerciseRepository,
+      );
+
+      const plan = {
+        ...MINIMAL_SESSION_PLAN,
+        exercises: [{ ...MINIMAL_SESSION_PLAN.exercises[0], exerciseName: 'Bench Press' }],
+      };
+      await startTrainingSession.invoke(plan, makeConfig());
+
+      expect(trainingService.startSession).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          sessionPlanJson: expect.objectContaining({
+            exercises: [expect.objectContaining({ exerciseName: 'Barbell Bench Press' })],
+          }),
+        }),
+      );
+    });
+  });
 });

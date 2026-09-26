@@ -426,4 +426,88 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
 
     expect(isToolReturnWithUpdate(result)).toBe(false);
   });
+
+  // training-history-lookup plan D5/AC-HL-5: the plan's exerciseName must agree with the catalog
+  // name of its exerciseId (BUG-030 D19 aftermath — live 2026-09-25, "Treadmill" naming Rowing
+  // Machine's id).
+  describe('plan name/id check (D5, AC-HL-5)', () => {
+    it("rejects a plan whose exerciseName shares no word with its id's catalog name — nothing persisted", async () => {
+      const workoutPlanRepo = makeWorkoutPlanRepo();
+      const exerciseRepository = makeExerciseRepository();
+      exerciseRepository.findByIdsWithMuscles.mockResolvedValue([
+        makeExerciseWithMuscles(
+          [{ muscleGroup: 'chest', involvement: 'primary' }],
+          'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
+          'Rowing Machine',
+        ),
+        makeExerciseWithMuscles(
+          [{ muscleGroup: 'quads', involvement: 'primary' }],
+          '3818f94a-0543-4241-83b4-6840d06a4e6a',
+          'Squat',
+        ),
+      ]);
+      const { saveWorkoutPlan } = buildTools(workoutPlanRepo, makeUserFactsService(), exerciseRepository);
+
+      const plan = {
+        ...MINIMAL_PLAN,
+        sessionTemplates: [
+          {
+            ...MINIMAL_PLAN.sessionTemplates[0],
+            exercises: [{ ...MINIMAL_PLAN.sessionTemplates[0].exercises[0], exerciseName: 'Treadmill' }],
+          },
+          MINIMAL_PLAN.sessionTemplates[1],
+        ],
+      };
+      const result = (await saveWorkoutPlan.invoke(plan, makeConfig())) as ToolReturn;
+
+      const text = renderedContent(result);
+      expect(text).toContain('LLM_ERROR');
+      expect(text).toContain('"Treadmill" → id is "Rowing Machine"');
+      expect(workoutPlanRepo.create).not.toHaveBeenCalled();
+      expect(isToolReturnWithUpdate(result)).toBe(false);
+    });
+
+    it('stores the catalog name when the plan only partially names the exercise', async () => {
+      const workoutPlanRepo = makeWorkoutPlanRepo();
+      const exerciseRepository = makeExerciseRepository();
+      exerciseRepository.findByIdsWithMuscles.mockResolvedValue([
+        makeExerciseWithMuscles(
+          [{ muscleGroup: 'chest', involvement: 'primary' }],
+          'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
+          'Barbell Bench Press',
+        ),
+        makeExerciseWithMuscles(
+          [{ muscleGroup: 'quads', involvement: 'primary' }],
+          '3818f94a-0543-4241-83b4-6840d06a4e6a',
+          'Squat',
+        ),
+      ]);
+      const { saveWorkoutPlan } = buildTools(workoutPlanRepo, makeUserFactsService(), exerciseRepository);
+
+      const plan = {
+        ...MINIMAL_PLAN,
+        sessionTemplates: [
+          {
+            ...MINIMAL_PLAN.sessionTemplates[0],
+            exercises: [{ ...MINIMAL_PLAN.sessionTemplates[0].exercises[0], exerciseName: 'Bench Press' }],
+          },
+          MINIMAL_PLAN.sessionTemplates[1],
+        ],
+      };
+      await saveWorkoutPlan.invoke(plan, makeConfig());
+
+      expect(workoutPlanRepo.create).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          planJson: expect.objectContaining({
+            sessionTemplates: expect.arrayContaining([
+              expect.objectContaining({
+                exercises: [expect.objectContaining({ exerciseName: 'Barbell Bench Press' })],
+              }),
+            ]),
+          }),
+        }),
+      );
+    });
+  });
 });

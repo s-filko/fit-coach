@@ -27,6 +27,7 @@ describe('SessionPlanningContextBuilder', () => {
     findTimedOut: jest.fn(),
     autoCloseTimedOut: jest.fn(),
     findLastPerformancesByExercise: jest.fn(),
+    findRecentPerformancesForExercise: jest.fn(),
   });
 
   const makeMockPlan = (): WorkoutPlan => ({
