@@ -262,9 +262,7 @@ Both plans are `done`, reviewed clean and merged into `dev` (`28db24ba`), deploy
 request 2026-09-25), bot restarted to drop its cached language. The first CI run failed: U5's static
 `@infra/db/drizzle` import in `evals/levels/l3.ts` ran `SELECT 1` inside L3 unit tests (no DB in CI) — fixed by a
 lazy import (`28db24ba`). **Next:** the owner's live Telegram training session; BUG-022/032/034..038 close on it.
-Cleanup owed on the owner's word: worktree `transition-handoff` (its session `transition-handoff-3e` is live) and
-this plan's worktree (the orchestrator runs in it); the uncommitted `COST_LEDGER.md` rows (smoke runs 6–7) sit in
-the main dev checkout, written by the U5 session.
+Cleanup done 2026-09-26 on the owner's word ("заканчивай все"): worktrees `session-investigation-0925` and `transition-handoff` removed, the U5 `COST_LEDGER.md` rows (smoke runs 6–7) committed.
 
 ## Handoff (orchestrator shift, 2026-09-25 — fifth relay)
 
