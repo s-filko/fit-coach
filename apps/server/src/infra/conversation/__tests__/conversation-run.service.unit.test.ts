@@ -18,6 +18,8 @@ const record: ConversationRunRecord = {
   promptVersions: { 'phase.chat': 'v0', directives: 'v0' },
   tokensIn: 120,
   tokensOut: 40,
+  tokensCached: 30,
+  tokensReasoning: 8,
   latencyMs: 1500,
   toolCalls: null,
   transition: null,
@@ -64,5 +66,13 @@ describe('DrizzleConversationRunService (AC-1301)', () => {
     await new DrizzleConversationRunService().recordRun({ ...record, budgetReport: null });
 
     expect(values).toHaveBeenCalledWith(expect.objectContaining({ budgetReport: null }));
+  });
+
+  it('AC-CA-2: passes tokensCached/tokensReasoning through, null when no call reported them', async () => {
+    await new DrizzleConversationRunService().recordRun(record);
+    expect(values).toHaveBeenCalledWith(expect.objectContaining({ tokensCached: 30, tokensReasoning: 8 }));
+
+    await new DrizzleConversationRunService().recordRun({ ...record, tokensCached: null, tokensReasoning: null });
+    expect(values).toHaveBeenCalledWith(expect.objectContaining({ tokensCached: null, tokensReasoning: null }));
   });
 });

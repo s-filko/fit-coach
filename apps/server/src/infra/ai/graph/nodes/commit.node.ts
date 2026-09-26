@@ -159,6 +159,8 @@ export function buildCommitNode(deps: CommitNodeDeps) {
           promptVersions,
           tokensIn: metrics.tokensIn,
           tokensOut: metrics.tokensOut,
+          tokensCached: metrics.tokensCached,
+          tokensReasoning: metrics.tokensReasoning,
           latencyMs: metrics.latencyMs,
           toolCalls: collectToolCalls(current),
           transition: effectiveTransition
