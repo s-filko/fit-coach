@@ -4,10 +4,11 @@
  * 1–3, llm_calls/prompt_blobs from Tasks 4–6). No writes; INV-LLM-001 is unaffected (this never
  * builds a prompt, it prints one that already happened).
  */
-import { and, asc, eq, gte, inArray, lte } from 'drizzle-orm';
+import { and, asc, eq, gte, lte } from 'drizzle-orm';
 
 import { db } from '@infra/db/drizzle';
-import { conversationRuns, conversationTurns, llmCalls, promptBlobs, workoutSessions } from '@infra/db/schema';
+import { resolveBlobContents } from '@infra/db/prompt-blobs';
+import { conversationRuns, conversationTurns, llmCalls, workoutSessions } from '@infra/db/schema';
 
 export interface RunSummary {
   runId: string;
@@ -212,12 +213,5 @@ export async function resolvePromptBlobs(calls: LlmCallRecord[]): Promise<Map<st
       }
     }
   }
-  if (hashes.size === 0) {
-    return new Map();
-  }
-  const rows = await db
-    .select({ hash: promptBlobs.hash, content: promptBlobs.content })
-    .from(promptBlobs)
-    .where(inArray(promptBlobs.hash, [...hashes]));
-  return new Map(rows.map(r => [r.hash, r.content]));
+  return resolveBlobContents([...hashes]);
 }
