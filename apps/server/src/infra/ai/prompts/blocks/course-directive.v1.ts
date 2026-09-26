@@ -6,6 +6,9 @@ export interface CourseDirectiveContext {
   directive: CourseCheckDirective;
 }
 
+/** The block's stable header — cache-attribution.ts's label derivation matches on this, not a copy. */
+export const COURSE_DIRECTIVE_HEADER = '## Course Directive';
+
 /**
  * `## Course Directive` v1 (course-check plan Task 1, AC-FL-5): the persisted
  * course-check directive, rendered as ONE prompt block — the current vector,
@@ -26,7 +29,7 @@ export const COURSE_DIRECTIVE_V1: PromptModule<CourseDirectiveContext> = {
   version: 'v1',
   directives: [],
   render({ directive }): Section[] {
-    const lines: string[] = ['## Course Directive', `- Current course: ${directive.vector}`];
+    const lines: string[] = [COURSE_DIRECTIVE_HEADER, `- Current course: ${directive.vector}`];
     if (directive.constraints.length > 0) {
       lines.push('Constraints in force:');
       lines.push(...directive.constraints.map(c => `- ${c}`));

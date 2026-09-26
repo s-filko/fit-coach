@@ -17,6 +17,8 @@ export class DrizzleConversationRunService implements IConversationRunService {
       promptVersions: record.promptVersions,
       tokensIn: record.tokensIn,
       tokensOut: record.tokensOut,
+      tokensCached: record.tokensCached,
+      tokensReasoning: record.tokensReasoning,
       latencyMs: record.latencyMs,
       toolCalls: record.toolCalls,
       transition: record.transition,

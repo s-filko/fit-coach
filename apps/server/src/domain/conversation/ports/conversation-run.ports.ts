@@ -64,6 +64,9 @@ export interface ConversationRunRecord {
   promptVersions: Record<string, string>;
   tokensIn: number | null;
   tokensOut: number | null;
+  /** AC-CA-2: sums of the run's own calls' cache_read/reasoning tokens — null when none reported them, never 0. */
+  tokensCached: number | null;
+  tokensReasoning: number | null;
   latencyMs: number;
   toolCalls: Array<{ name: string; argsHash: string; outcomeKind: string }> | null;
   /**

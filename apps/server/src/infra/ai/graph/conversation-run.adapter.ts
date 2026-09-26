@@ -172,6 +172,8 @@ export function buildConversationRunner(deps: ConversationRunnerDeps): Conversat
             promptVersions: {},
             tokensIn: null,
             tokensOut: null,
+            tokensCached: null,
+            tokensReasoning: null,
             latencyMs: metrics.snapshot().latencyMs,
             toolCalls: null,
             transition: null,

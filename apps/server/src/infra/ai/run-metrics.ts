@@ -13,10 +13,15 @@ import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 
 import type { BudgetReport } from '@domain/conversation/ports';
 
+import { extractUsageFromLLMResult, type UsageMetadataLike } from './usage';
+
 export interface RunMetrics {
   model: string | null;
   tokensIn: number;
   tokensOut: number;
+  /** AC-CA-2: sums of the run's own calls' cache_read/reasoning — null when none reported them, never 0. */
+  tokensCached: number | null;
+  tokensReasoning: number | null;
   latencyMs: number;
   llmCalls: number;
   budgetReport: BudgetReport | null;
@@ -27,6 +32,8 @@ export class RunMetricsCollector {
   private model: string | null = null;
   private tokensIn = 0;
   private tokensOut = 0;
+  private tokensCached: number | null = null;
+  private tokensReasoning: number | null = null;
   private llmCalls = 0;
   private budgetReport: BudgetReport | null = null;
   private assemblies = 0;
@@ -60,11 +67,23 @@ export class RunMetricsCollector {
   }
 
   /** Called by the handler; only counted for calls it started. */
-  onEnd(llmRunId: string, tokensIn: number, tokensOut: number): void {
+  onEnd(
+    llmRunId: string,
+    tokensIn: number,
+    tokensOut: number,
+    cacheReadTokens: number | null = null,
+    reasoningTokens: number | null = null,
+  ): void {
     if (this.startedCalls.has(llmRunId)) {
       this.startedCalls.delete(llmRunId);
       this.tokensIn += tokensIn;
       this.tokensOut += tokensOut;
+      if (cacheReadTokens !== null) {
+        this.tokensCached = (this.tokensCached ?? 0) + cacheReadTokens;
+      }
+      if (reasoningTokens !== null) {
+        this.tokensReasoning = (this.tokensReasoning ?? 0) + reasoningTokens;
+      }
     }
   }
 
@@ -73,6 +92,8 @@ export class RunMetricsCollector {
       model: this.model,
       tokensIn: this.tokensIn,
       tokensOut: this.tokensOut,
+      tokensCached: this.tokensCached,
+      tokensReasoning: this.tokensReasoning,
       latencyMs: Date.now() - this.startedAt,
       llmCalls: this.llmCalls,
       budgetReport: this.budgetReport,
@@ -114,10 +135,19 @@ class LlmMetricsHandler extends BaseCallbackHandler {
   }
 
   handleLLMEnd(
-    output: { llmOutput?: { tokenUsage?: { promptTokens?: number; completionTokens?: number } } },
+    output: {
+      generations: Array<Array<{ text: string; message?: { usage_metadata?: UsageMetadataLike } }>>;
+      llmOutput?: { tokenUsage?: { promptTokens?: number; completionTokens?: number } };
+    },
     llmRunId: string,
   ): void {
-    const usage = output.llmOutput?.tokenUsage;
-    this.collector.onEnd(llmRunId, usage?.promptTokens ?? 0, usage?.completionTokens ?? 0);
+    const usage = extractUsageFromLLMResult(output);
+    this.collector.onEnd(
+      llmRunId,
+      usage.inputTokens ?? 0,
+      usage.outputTokens ?? 0,
+      usage.cacheReadTokens,
+      usage.reasoningTokens,
+    );
   }
 }

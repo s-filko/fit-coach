@@ -23,6 +23,8 @@
  */
 import { llmError, type ToolOutcome } from '@domain/conversation/tool-outcome';
 
+import { commonPrefixLength } from '@shared/common-prefix';
+
 export interface NamedExerciseRef {
   exerciseId: string;
   exerciseName?: string;
@@ -84,15 +86,6 @@ function wordsOf(name: string): string[] {
     }
   }
   return words;
-}
-
-function commonPrefixLength(a: string, b: string): number {
-  const max = Math.min(a.length, b.length);
-  let i = 0;
-  while (i < max && a[i] === b[i]) {
-    i += 1;
-  }
-  return i;
 }
 
 /** Exact match, or a shared prefix of >= 4 chars whose longer-word tail is <= 3 chars (D16). */

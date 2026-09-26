@@ -35,6 +35,8 @@ describe('buildStubDeps', () => {
       promptVersions: {},
       tokensIn: 1,
       tokensOut: 1,
+      tokensCached: null,
+      tokensReasoning: null,
       latencyMs: 1,
       toolCalls: null,
       transition: null,

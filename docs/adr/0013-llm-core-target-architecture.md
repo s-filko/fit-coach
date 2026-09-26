@@ -437,6 +437,22 @@ is quoted below only where its correction is unreadable without it.
    sent is stored. INV-LLM-007 stands for runs recorded before this change; from it onward,
    reproduction reads `llm_calls.request`.
 
+**Amendment 2026-09-26 (`cache-accounting`, owner-approved at close-out).** Usage and prompt-cache
+visibility (spec `2026-09-26-training-history-context-design.md` § 4, items 1 and 4):
+
+1. **Columns.** `llm_calls` gains `user_id` (from callback metadata, no FK — same reason as `run_id`),
+   `input_tokens, output_tokens, cache_read_tokens, reasoning_tokens` (null = not reported by the
+   provider, never 0) and the cache attribution `cache_expected, cache_diverged_at,
+   cache_shared_prefix_tokens, cache_gap_ms`, indexed on `(user_id, created_at)`.
+   `conversation_runs` gains `tokens_cached, tokens_reasoning` — sums over the run's calls. Semantics
+   and the cache-efficiency query: `docs/DB_SETUP.md`.
+2. **The cost basis in amendment 2026-09-22 point 2 changes.** Besides the insert, the recorder now
+   reads the same user's previous call (an indexed lookup plus its `request` and `prompt_blobs`
+   content) and compares the two requests before the reply is released. The rule that point states
+   still holds — the write stays synchronous, and an attribution failure leaves the cache columns
+   null without failing the call — but "one indexed insert" is no longer the whole cost. Moving the
+   lookup out of the writer is a backlog item, not a relaxation of this rule.
+
 INV-LLM-008: Every model invocation **made on behalf of a conversation run** — i.e. one whose callback
 metadata carries a `runId` — is persisted to `llm_calls` with the request actually sent and the
 response received, independently of `LOG_LEVEL`, and the write completes before the run's reply is

@@ -15,12 +15,12 @@ _Generated 2026-09-26 from docs/superpowers/plans/ + git. Never hand-edit; regen
 — none —
 
 **Planned**
-- `cache-accounting.md` — Cache Accounting — Cached/Reasoning Tokens per Call and Cache-Miss Attribution Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
+- `cache-accounting.md` — Cache Accounting — Cached/Reasoning Tokens per Call and Cache-Miss Attribution Implementation Plan
 - `chat-continuity.md` — Chat Continuity — Compaction Keeps the Recent Conversation, the Reply Answers the Latest Message Implementation Plan
 - `coach-baseline.md` — Coach Baseline (Roadmap U1) Implementation Plan
 - `course-check-and-constraints.md` — Course Check and Constraint Handling Implementation Plan

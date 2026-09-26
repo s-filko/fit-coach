@@ -30,6 +30,7 @@ import {
   type RecordLlmCall,
   type RecordLlmCallRequest,
 } from './llm-call-recorder';
+import { extractUsageFromLLMResult } from './usage';
 
 const log = createLogger('llm');
 
@@ -155,6 +156,8 @@ export function buildReplayPayload(
 
 interface PendingCall {
   runId: string;
+  /** D1: from callback metadata — null when a call genuinely carries none (never expected in practice). */
+  userId: string | null;
   model: string;
   request: RecordLlmCallRequest;
   startedAt: number;
@@ -162,7 +165,7 @@ interface PendingCall {
 
 interface LlmGeneration {
   text: string;
-  message?: { tool_calls?: unknown };
+  message?: { tool_calls?: unknown; usage_metadata?: import('./usage').UsageMetadataLike };
   generationInfo?: Record<string, unknown>;
 }
 
@@ -234,7 +237,13 @@ export class LLMLogHandler extends BaseCallbackHandler {
     }
 
     if (runId) {
-      this.pending.set(llmRunId, { runId, model: replayPayload.model, request: replayPayload, startedAt: Date.now() });
+      this.pending.set(llmRunId, {
+        runId,
+        userId: userId ?? null,
+        model: replayPayload.model,
+        request: replayPayload,
+        startedAt: Date.now(),
+      });
     }
   }
 
@@ -255,20 +264,34 @@ export class LLMLogHandler extends BaseCallbackHandler {
     }
     this.pending.delete(llmRunId);
 
-    const usage = output.llmOutput?.tokenUsage;
+    // D2: generation.message.usage_metadata is authoritative (carries cache/reasoning detail);
+    // llmOutput.tokenUsage is the fallback, input/output only.
+    const extracted = extractUsageFromLLMResult(output);
+    const hasUsage =
+      extracted.inputTokens !== null ||
+      extracted.outputTokens !== null ||
+      extracted.cacheReadTokens !== null ||
+      extracted.reasoningTokens !== null;
     try {
       await this.recordCall({
         runId: pending.runId,
+        userId: pending.userId,
         model: pending.model,
         request: pending.request,
         response: {
           text: text ?? '',
           toolCalls: gen?.message?.tool_calls,
           finishReason: (gen?.generationInfo?.['finish_reason'] as string | undefined) ?? null,
-          usage: usage
-            ? { promptTokens: usage.promptTokens ?? 0, completionTokens: usage.completionTokens ?? 0 }
+          usage: hasUsage
+            ? {
+                promptTokens: extracted.inputTokens,
+                completionTokens: extracted.outputTokens,
+                cacheReadTokens: extracted.cacheReadTokens,
+                reasoningTokens: extracted.reasoningTokens,
+              }
             : null,
         },
+        startedAt: pending.startedAt,
         latencyMs: Date.now() - pending.startedAt,
       });
     } catch (err) {
@@ -287,9 +310,11 @@ export class LLMLogHandler extends BaseCallbackHandler {
     try {
       await this.recordCall({
         runId: pending.runId,
+        userId: pending.userId,
         model: pending.model,
         request: pending.request,
         response: null,
+        startedAt: pending.startedAt,
         latencyMs: Date.now() - pending.startedAt,
         errorClass,
         errorMessage,

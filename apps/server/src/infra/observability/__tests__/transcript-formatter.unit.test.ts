@@ -186,6 +186,40 @@ describe('formatRunTranscript (print-transcript)', () => {
       expect(out).toContain('response: "Отлично!" finishReason=stop tokensIn=50 tokensOut=5');
     });
 
+    it('cache-accounting: shows cacheRead/reasoning when the response usage carries them', () => {
+      const rt: RunTranscript = {
+        runId: 'run-1',
+        run: baseRun,
+        turns: [],
+        llmCalls: [
+          call({
+            response: {
+              text: 'Отлично!',
+              finishReason: 'stop',
+              usage: { promptTokens: 5765, completionTokens: 30, cacheReadTokens: 5760, reasoningTokens: 30 },
+            },
+          }),
+        ],
+      };
+      const out = formatRunTranscript(rt, new Map([['hash-1', 'RULES: only discuss fitness.']]), {
+        includePayloads: true,
+      });
+
+      expect(out).toContain(
+        'response: "Отлично!" finishReason=stop tokensIn=5765 tokensOut=30 cacheRead=5760 reasoning=30',
+      );
+    });
+
+    it('cache-accounting: a response without cache/reasoning details omits them, unchanged from before', () => {
+      const rt: RunTranscript = { runId: 'run-1', run: baseRun, turns: [], llmCalls: [call()] };
+      const out = formatRunTranscript(rt, new Map([['hash-1', 'RULES: only discuss fitness.']]), {
+        includePayloads: true,
+      });
+
+      expect(out).not.toContain('cacheRead=');
+      expect(out).not.toContain('reasoning=');
+    });
+
     it('BR-LLM-011: prints that a pruned blob aged out, with its hash, never an empty string or a crash', () => {
       const rt: RunTranscript = { runId: 'run-1', run: baseRun, turns: [], llmCalls: [call()] };
       const out = formatRunTranscript(rt, new Map([['hash-1', null]]), { includePayloads: true });

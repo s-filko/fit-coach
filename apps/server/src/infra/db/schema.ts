@@ -141,6 +141,11 @@ export const conversationRuns = pgTable(
     promptVersions: jsonb('prompt_versions'),
     tokensIn: integer('tokens_in'),
     tokensOut: integer('tokens_out'),
+    // cache-accounting plan Task 1 (AC-CA-2): sums of the run's own calls' cache_read_tokens /
+    // reasoning_tokens — null when no call of the run reported them, never 0 (0 means reported,
+    // none hit/reasoned).
+    tokensCached: integer('tokens_cached'),
+    tokensReasoning: integer('tokens_reasoning'),
     latencyMs: integer('latency_ms').notNull(),
     toolCalls: jsonb('tool_calls'),
     transition: jsonb('transition'),
@@ -204,6 +209,9 @@ export const llmCalls = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     runId: uuid('run_id').notNull(),
+    // cache-accounting plan Task 1 (D1): nullable, no FK — same reason as run_id (a call is
+    // recorded mid-run; the value comes from callback metadata, see conversation-run.adapter.ts).
+    userId: uuid('user_id'),
     callIndex: integer('call_index').notNull(),
     model: text('model').notNull(),
     // The request actually sent (messages, tools, temperature, reasoning effort) — every system
@@ -218,6 +226,21 @@ export const llmCalls = pgTable(
     // NEVER nulled by the prune (it is metadata: a few short hashes, not the bulky text they point at)
     // so a blob's liveness stays answerable by a join even after `request` itself is gone.
     promptHashes: text('prompt_hashes').array(),
+    // cache-accounting plan Task 1 (D1/D2): the provider's own usage report — nullable ints, null
+    // meaning "not reported" (never 0; 0 is itself meaningful, see usage.ts). Duplicates
+    // response.usage's JSON fields as top-level columns so AC-CA-5's aggregate queries need no
+    // JSON extraction.
+    inputTokens: integer('input_tokens'),
+    outputTokens: integer('output_tokens'),
+    cacheReadTokens: integer('cache_read_tokens'),
+    reasoningTokens: integer('reasoning_tokens'),
+    // D3-D6: this call's cache attribution against the same user+model's previous call —
+    // `cache-attribution.ts`'s attributeCache output, computed once at record time. Null when
+    // there is no userId to compare by, or D7's attribution failure (never fails the call).
+    cacheExpected: text('cache_expected'),
+    cacheDivergedAt: text('cache_diverged_at'),
+    cacheSharedPrefixTokens: integer('cache_shared_prefix_tokens'),
+    cacheGapMs: integer('cache_gap_ms'),
     latencyMs: integer('latency_ms').notNull(),
     errorClass: text('error_class'),
     errorMessage: text('error_message'),
@@ -237,6 +260,10 @@ export const llmCalls = pgTable(
       // containment; the predicate is rephrased to `@>` in blobsStatement so the
       // planner can actually pick it (see prune-llm-calls.ts's EXPLAIN-verified note).
       promptHashesGinIdx: index('idx_llm_calls_prompt_hashes_gin').using('gin', table.promptHashes),
+      // cache-accounting plan Task 1 (D1): the recorder's own previous-call lookup
+      // (same user + model, latest created_at) and AC-CA-5's per-user/day rollup both filter by
+      // user_id and order/window by created_at.
+      userCreatedIdx: index('idx_llm_calls_user_created').on(table.userId, table.createdAt),
     };
   },
 );

@@ -7,6 +7,9 @@ export interface UserFactsContext {
   facts: UserFact[];
 }
 
+/** The block's stable header — cache-attribution.ts's label derivation matches on this, not a copy. */
+export const USER_FACTS_HEADER = '## User Facts';
+
 /**
  * One fact as the coach needs to read it (AC-FL-1): the text, then the metadata
  * that tells yesterday from six months ago — the phase note for a long-term
@@ -55,7 +58,7 @@ export const USER_FACTS_V2: PromptModule<UserFactsContext> = {
       {
         id: 'user_facts',
         required: true,
-        text: ['## User Facts', ...lines].join('\n'),
+        text: [USER_FACTS_HEADER, ...lines].join('\n'),
       },
     ];
   },
