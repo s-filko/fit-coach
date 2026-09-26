@@ -172,9 +172,11 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
     });
 
     // v_next (transition-handoff plan Task 7, BUG-032): every `.current`
-    // phase module gains `directive.current-time` (DEFAULT_DIRECTIVES_V2 /
-    // DIRECTIVES_WITHOUT_IDENTITY_V2), rendered LAST — new snapshots; every
-    // block above stays pinned to its own frozen export, untouched.
+    // phase module gained `directive.current-time`, rendered LAST — new
+    // snapshots; every block above stays pinned to its own frozen export,
+    // untouched. now-line-last (2026-09-27): the directive left V2 for its
+    // own message right before `current`, so these block-1 snapshots lost
+    // the NOW line — updated deliberately, no frozen export touched.
     it(`phase.registration v2 / ${name}`, () => {
       const ctx = {
         now: FIXED_NOW,

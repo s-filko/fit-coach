@@ -9,12 +9,16 @@ import { formatInUserTz } from '@shared/date-utils';
  * for "this week" statements. One line, every phase, from `ctx.now` +
  * `ctx.timezone` — never `Date.now()` (BR-LLM-007, pure render).
  *
- * Placement (DEFAULT_DIRECTIVES_V2 / DIRECTIVES_WITHOUT_IDENTITY_V2, both in
- * `./index.ts`): LAST of the directives, which `renderDirectives` spreads
- * last in every phase's section list — this line changes every minute, so it
- * must be the last system section, after the stable prefix, or an early
- * change would break provider prompt caching for everything that follows it.
+ * Placement (now-line-last plan, D1/D2): NO LONGER a directive — it left
+ * `DEFAULT_DIRECTIVES_V2` because a line that changes every minute inside
+ * block 1 broke provider prompt caching for everything after it. agent.node.ts
+ * renders this same module into its own SystemMessage immediately before
+ * `current`'s HumanMessage (after the gap note), so the stable prefix ahead
+ * of it stays cacheable. `CURRENT_TIME_PREFIX` is what cache-attribution
+ * labels the message by (D4), like the blocks' headers.
  */
+export const CURRENT_TIME_PREFIX = 'NOW (';
+
 export const CURRENT_TIME_V1: DirectiveModule = {
   id: 'current-time',
   version: 'v1',

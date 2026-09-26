@@ -114,12 +114,15 @@ describe('journey A — greeting after a pause (BUG-018 repro)', () => {
 
     // Point 2 of BUG-018 beyond presence (fixed, Task 2): the note sits right
     // before the current user message ("привет"), not in the long-term blocks.
-    test(`a time-gap note sits right before "привет"`, () => {
+    // now-line-last D1: the NOW message is the one touching "привет" now —
+    // the note sits directly before it: [.., gap note, NOW, human].
+    test(`a time-gap note sits right before the NOW line ahead of "привет"`, () => {
       expect(seen).toContain(GAP_NOTE_MARKER);
       const firstCall = seenCalls[0] ?? [];
       const currentIdx = firstCall.findIndex(m => typeOf(m) === 'human' && textOf(m).includes(step.text));
       expect(currentIdx).toBeGreaterThan(0);
-      expect(textOf(firstCall[currentIdx - 1])).toContain(GAP_NOTE_MARKER);
+      expect(textOf(firstCall[currentIdx - 1])).toMatch(/^NOW \(/);
+      expect(textOf(firstCall[currentIdx - 2])).toContain(GAP_NOTE_MARKER);
     });
   });
 

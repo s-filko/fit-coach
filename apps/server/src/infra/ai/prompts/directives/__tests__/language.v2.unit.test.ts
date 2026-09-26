@@ -31,6 +31,8 @@ describe('LANGUAGE_V2 (BUG-036 + owner language rule, R3 — profile is the only
   it('DEFAULT_DIRECTIVES_V2 uses LANGUAGE_V2 in the language slot; V1 keeps LANGUAGE_V1 untouched (AC-1321 frozen snapshots)', () => {
     expect(DEFAULT_DIRECTIVES_V2[2]).toBe(LANGUAGE_V2);
     expect(DEFAULT_DIRECTIVES_V1[2]).toBe(LANGUAGE_V1);
-    expect(DEFAULT_DIRECTIVES_V2.map(d => d.id)).toEqual(DEFAULT_DIRECTIVES_V1.map(d => d.id).concat('current-time'));
+    // now-line-last D3: V2 is the language-swapped V1 list — current-time left
+    // for its own message before `current`.
+    expect(DEFAULT_DIRECTIVES_V2.map(d => d.id)).toEqual(DEFAULT_DIRECTIVES_V1.map(d => d.id));
   });
 });

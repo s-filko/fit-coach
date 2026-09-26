@@ -1,4 +1,10 @@
-import { CURRENT_TIME_V1, DEFAULT_DIRECTIVES_V1, DEFAULT_DIRECTIVES_V2, DIRECTIVES_WITHOUT_IDENTITY_V2 } from '..';
+import {
+  CURRENT_TIME_PREFIX,
+  CURRENT_TIME_V1,
+  DEFAULT_DIRECTIVES_V1,
+  DEFAULT_DIRECTIVES_V2,
+  DIRECTIVES_WITHOUT_IDENTITY_V2,
+} from '..';
 import type { DirectiveContext } from '../../types';
 
 const ctx = (over: Partial<DirectiveContext> = {}): DirectiveContext => ({
@@ -42,9 +48,10 @@ describe('CURRENT_TIME_V1 (transition-handoff plan Task 7, BUG-032 — the coach
   });
 });
 
-describe('DEFAULT_DIRECTIVES_V2 / DIRECTIVES_WITHOUT_IDENTITY_V2 (Task 7)', () => {
-  it('is V1 plus CURRENT_TIME_V1 appended LAST — never inserted, so it is the last rendered section', () => {
-    expect(DEFAULT_DIRECTIVES_V2.map(d => d.id)).toEqual([...DEFAULT_DIRECTIVES_V1.map(d => d.id), 'current-time']);
+describe('DEFAULT_DIRECTIVES_V2 / DIRECTIVES_WITHOUT_IDENTITY_V2 (now-line-last, D3)', () => {
+  it('no longer contains current-time — the NOW line left block 1 for its own message before `current`', () => {
+    expect(DEFAULT_DIRECTIVES_V2.map(d => d.id)).toEqual(DEFAULT_DIRECTIVES_V1.map(d => d.id));
+    expect(DEFAULT_DIRECTIVES_V2.map(d => d.id)).not.toContain('current-time');
   });
 
   it('DEFAULT_DIRECTIVES_V1 stays untouched — the frozen v1 snapshots must never gain this line', () => {
@@ -52,8 +59,15 @@ describe('DEFAULT_DIRECTIVES_V2 / DIRECTIVES_WITHOUT_IDENTITY_V2 (Task 7)', () =
     expect(DEFAULT_DIRECTIVES_V1).toHaveLength(9);
   });
 
-  it('the no-identity variant drops only identity, keeping current-time last', () => {
+  it('the no-identity variant still drops only identity (same slice rule, no current-time)', () => {
     expect(DIRECTIVES_WITHOUT_IDENTITY_V2.map(d => d.id)).toEqual(DEFAULT_DIRECTIVES_V2.map(d => d.id).slice(1));
-    expect(DIRECTIVES_WITHOUT_IDENTITY_V2[DIRECTIVES_WITHOUT_IDENTITY_V2.length - 1]?.id).toBe('current-time');
+    expect(DIRECTIVES_WITHOUT_IDENTITY_V2.map(d => d.id)).not.toContain('current-time');
+  });
+
+  it('CURRENT_TIME_PREFIX prefixes both timezone variants (D4 — the attribution label matches on it)', () => {
+    const known = CURRENT_TIME_V1.render(ctx({ now: new Date('2026-09-25T06:20:00.000Z'), timezone: 'Asia/Manila' }))!;
+    const unknown = CURRENT_TIME_V1.render(ctx({ now: new Date('2026-09-25T06:20:00.000Z'), timezone: null }))!;
+    expect(known.text.startsWith(CURRENT_TIME_PREFIX)).toBe(true);
+    expect(unknown.text.startsWith(CURRENT_TIME_PREFIX)).toBe(true);
   });
 });

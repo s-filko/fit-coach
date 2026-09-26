@@ -1,6 +1,6 @@
 import type { DirectiveModule } from '@infra/ai/prompts/types';
 
-import { CURRENT_TIME_V1 } from './current-time.v1';
+import { CURRENT_TIME_PREFIX, CURRENT_TIME_V1 } from './current-time.v1';
 import { FORMATTING_TELEGRAM_V1 } from './formatting.telegram.v1';
 import { GREETING_V1 } from './greeting.v1';
 import { IDENTITY_V1 } from './identity.v1';
@@ -13,6 +13,7 @@ import { TIMEZONE_V1 } from './timezone.v1';
 import { TOOL_REPLY_V1 } from './tool-reply.v1';
 
 export {
+  CURRENT_TIME_PREFIX,
   CURRENT_TIME_V1,
   FORMATTING_TELEGRAM_V1,
   GREETING_V1,
@@ -44,11 +45,9 @@ export const DIRECTIVES_WITHOUT_IDENTITY_V1: readonly DirectiveModule[] = DEFAUL
 
 /**
  * BUG-032 (transition-handoff plan Task 7): V1 plus `CURRENT_TIME_V1`,
- * appended — never inserted — so it renders LAST (`renderDirectives` walks
- * the array in order and every phase spreads it last in its section list).
- * `DEFAULT_DIRECTIVES_V1` stays untouched: it backs the frozen v1 prompt
- * snapshots (AC-1321), which must never gain a line they did not render at
- * the time they were pinned.
+ * appended — never inserted — so it rendered LAST. `DEFAULT_DIRECTIVES_V1`
+ * stays untouched: it backs the frozen v1 prompt snapshots (AC-1321), which
+ * must never gain a line they did not render at the time they were pinned.
  *
  * BUG-036 + owner language rule (R3): V2 also swaps `LANGUAGE_V1` for
  * `LANGUAGE_V2` in place (same position, same id `language`) — every live
@@ -56,15 +55,20 @@ export const DIRECTIVES_WITHOUT_IDENTITY_V1: readonly DirectiveModule[] = DEFAUL
  * training v4) reaches `LANGUAGE_V2` through this one substitution, with no
  * change to any phase file. V1's directive and the frozen v1 snapshots that
  * depend on it are untouched.
+ *
+ * now-line-last plan (D3, following the BUG-036 in-place precedent):
+ * `CURRENT_TIME_V1` is dropped from V2 in place — the NOW line left block 1
+ * (it changed every minute, so nothing after it was ever served from the
+ * provider's prompt cache) and is now rendered by agent.node.ts as its own
+ * SystemMessage immediately before `current`. No phase file changes;
+ * `llm_calls.request` stores the exact request, so reproducibility does not
+ * rest on the version label.
  */
 const DEFAULT_DIRECTIVES_V1_WITH_LANGUAGE_V2: readonly DirectiveModule[] = DEFAULT_DIRECTIVES_V1.map(d =>
   d.id === 'language' ? LANGUAGE_V2 : d,
 );
 
-export const DEFAULT_DIRECTIVES_V2: readonly DirectiveModule[] = [
-  ...DEFAULT_DIRECTIVES_V1_WITH_LANGUAGE_V2,
-  CURRENT_TIME_V1,
-];
+export const DEFAULT_DIRECTIVES_V2: readonly DirectiveModule[] = DEFAULT_DIRECTIVES_V1_WITH_LANGUAGE_V2;
 
 /** training's v4+ passed includeIdentity: false — same slice rule as V1. */
 export const DIRECTIVES_WITHOUT_IDENTITY_V2: readonly DirectiveModule[] = DEFAULT_DIRECTIVES_V2.slice(1);

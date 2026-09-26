@@ -10,8 +10,10 @@
  * the `## Previous episodes` block (block
  * 2b, when summaries exist), the rendered domain context blocks (block 3,
  * when any render non-null), the interleaved episode history from the
- * checkpointed `messages` channel (block 4), and this run's current
- * messages. Consecutive system messages are sent as separate SystemMessages.
+ * checkpointed `messages` channel (block 4), the time-gap note and the NOW
+ * line when present (now-line-last plan D1 — both ride with `current`), and
+ * this run's current messages. Consecutive system messages are sent as
+ * separate SystemMessages.
  *
  * Enforces INV-LLM-004 via `resolveBudget` (`./budget.ts`, order extended by
  * P6 Task 4): block 1 (`systemPrompt`) is never trimmed or dropped;
@@ -86,6 +88,16 @@ export interface AssembleInput<D = unknown> {
    * ~30-token note, counted only in `budgetReport.messages`.
    */
   gapNote?: string | null;
+  /**
+   * now-line-last plan (D1/D2): the rendered NOW line (`CURRENT_TIME_V1`,
+   * one renderer — agent.node.ts renders it, the gap-note wiring) as its own
+   * SystemMessage immediately after the gap note, immediately before
+   * `current`'s HumanMessage — the last message before the run, so everything
+   * ahead of it can be served from the provider's prompt cache. Rides with
+   * `current` (survives the D-D floor) and is not budgeted — a fixed ~20-token
+   * line, counted only in `budgetReport.messages`.
+   */
+  nowLine?: string | null;
   /** PhaseSpec.budget (Task 1's table / LLM_BUDGET_* overrides). Enforced via resolveBudget. */
   budget: TokenBudget;
   now: Date;
@@ -171,8 +183,10 @@ export async function assembleContext<D>(input: AssembleInput<D>): Promise<Assem
     ...(domainText ? [new SystemMessage(domainText)] : []),
     ...history,
     // AC-CC-2: the gap note belongs to `current`, not to history — placed
-    // immediately before its HumanMessage, never trimmed away.
+    // immediately before its HumanMessage, never trimmed away. The NOW line
+    // (now-line-last D1) follows it: … history → [gap note] → NOW → current.
     ...(input.gapNote ? [new SystemMessage(input.gapNote)] : []),
+    ...(input.nowLine ? [new SystemMessage(input.nowLine)] : []),
     ...input.current,
   ];
 

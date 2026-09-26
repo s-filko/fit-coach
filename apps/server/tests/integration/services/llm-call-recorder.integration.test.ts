@@ -362,6 +362,43 @@ describe('recordLlmCall — cache attribution (AC-CA-3, D3-D6)', () => {
     expect(offset).toBeLessThan(promptWith('2026-09-26T11:59:00.000Z').length - 'Always answer in the user\'s language.'.length);
   });
 
+  it('a changed NOW message after history (now-line-last, AC-NL-3) → prefix_changed:system:now', async () => {
+    const userId = randomUUID();
+    const run1 = randomUUID();
+    const run2 = randomUUID();
+    const messagesWith = (nowLine: string) => [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: 'привет' },
+      { role: 'assistant', content: 'Здравствуй!' },
+      { role: 'system', content: nowLine },
+      { role: 'user', content: 'следующий подход' },
+    ];
+    await recordLlmCall(
+      baseCall(run1, {
+        userId,
+        request: {
+          model: 'z-ai/glm-5.3',
+          messages: messagesWith("NOW (user's local time): Friday 2026-09-25 14:20 (Asia/Manila)"),
+          temperature: 0.7,
+        },
+      }),
+    );
+    await recordLlmCall(
+      baseCall(run2, {
+        userId,
+        request: {
+          model: 'z-ai/glm-5.3',
+          messages: messagesWith("NOW (user's local time): Friday 2026-09-25 14:21 (Asia/Manila)"),
+          temperature: 0.7,
+        },
+      }),
+    );
+
+    const row = await rowFor(run2);
+    expect(row.cacheExpected).toBe('prefix_changed:system:now');
+    expect(row.cacheDivergedAt).toMatch(/^system:now#3@\d+$/);
+  });
+
   it('a changed ## User Facts block → prefix_changed:system:facts', async () => {
     const userId = randomUUID();
     const run1 = randomUUID();

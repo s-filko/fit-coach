@@ -19,6 +19,7 @@ import { langOf, t } from '@infra/ai/messages';
 import { getModel } from '@infra/ai/model.factory';
 import { POST_TOOL_NUDGE_V1, renderBlock, TIME_GAP_V1 } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
+import { CURRENT_TIME_V1 } from '@infra/ai/prompts/directives';
 import { extractUsageFromMessage } from '@infra/ai/usage';
 
 import { loadConfig } from '@config/index';
@@ -143,6 +144,20 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     // after the run, and compaction never clears it.
     const gapMs = lastMessageTime !== null ? now.getTime() - lastMessageTime.getTime() : null;
     const gapNote = gapMs !== null && gapMs >= deps.episodeConfig.gapMs ? renderBlock(TIME_GAP_V1, { gapMs }) : null;
+    // now-line-last plan (D2): the NOW line left the directives (block 1 —
+    // it changes every minute, so nothing after it was ever prompt-cached)
+    // and is rendered here into its own SystemMessage immediately before
+    // `current`, following the gap-note wiring. One renderer — CURRENT_TIME_V1,
+    // the same module that used to render it inside block 1 — from the same
+    // `now`/`timezone` the phase prompt receives (BR-LLM-007: pure render).
+    const nowLine =
+      CURRENT_TIME_V1.render({
+        now,
+        timezone: user?.timezone ?? null,
+        client: 'telegram',
+        user: user ?? null,
+        lastMessageTime,
+      })?.text ?? null;
     const systemPrompt = compose(
       spec.prompt.current.render({
         now,
@@ -190,6 +205,7 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
       history,
       current,
       gapNote,
+      nowLine,
       budget: spec.budget,
       now,
       timezone: user?.timezone ?? null,

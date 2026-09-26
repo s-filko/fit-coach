@@ -478,9 +478,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.chat v3 / complete-profile 1`] = `
@@ -545,9 +543,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.chat v3 / empty-profile 1`] = `
@@ -612,9 +608,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.plan_creation / active-session 1`] = `
@@ -1300,9 +1294,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.plan_creation v3 / complete-profile 1`] = `
@@ -1394,9 +1386,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.plan_creation v3 / empty-profile 1`] = `
@@ -1488,9 +1478,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.registration / active-session 1`] = `
@@ -1780,9 +1768,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.registration v2 / complete-profile 1`] = `
@@ -1855,9 +1841,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.registration v2 / empty-profile 1`] = `
@@ -1928,9 +1912,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.session_planning / active-session 1`] = `
@@ -2809,9 +2791,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.session_planning v3 / complete-profile 1`] = `
@@ -2927,9 +2907,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.session_planning v3 / empty-profile 1`] = `
@@ -3045,9 +3023,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.training / active-session 1`] = `
@@ -4276,9 +4252,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.training v4 / complete-profile 1`] = `
@@ -4398,9 +4372,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.training v4 / empty-profile 1`] = `
@@ -4520,9 +4492,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.training v5 / active-session 1`] = `
@@ -4641,9 +4611,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.training v5 / complete-profile 1`] = `
@@ -4762,9 +4730,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.training v5 / empty-profile 1`] = `
@@ -4883,9 +4849,7 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing
-
-NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)"
+  text: ""  ← empty, user sees nothing"
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) summarizer / system 1`] = `
