@@ -75,6 +75,21 @@ export async function registerInfraServices(container: Container = getGlobalCont
   const { PostgresSaver } = await import('@langchain/langgraph-checkpoint-postgres');
   const { loadConfig } = await import('@config/index');
   const config = loadConfig();
+
+  // Speech-to-text (voice-transcription plan, D1/D2): registered even without a
+  // key — the adapter reports disabled and the server still boots.
+  const { GeminiTranscriber } = await import('@infra/ai/gemini-transcriber');
+  const { SPEECH_TRANSCRIBER_TOKEN } = await import('@domain/speech/ports');
+  container.register(
+    SPEECH_TRANSCRIBER_TOKEN,
+    new GeminiTranscriber({
+      apiKey: config.STT_API_KEY,
+      model: config.STT_MODEL,
+      apiUrl: config.STT_API_URL,
+      timeoutMs: config.STT_TIMEOUT_MS,
+    }),
+  );
+
   const connString = `postgresql://${config.DB_USER}:${config.DB_PASSWORD}@${config.DB_HOST}:${config.DB_PORT}/${config.DB_NAME}`;
   const checkpointer = PostgresSaver.fromConnString(connString);
   await checkpointer.setup();

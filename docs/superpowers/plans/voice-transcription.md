@@ -86,8 +86,8 @@ with DI tokens live), `src/infra/ai/gemini-transcriber.ts`, `src/config/index.ts
 a new `src/app/routes/voice.routes.ts` registered under `/api/bot` like `chat.routes.ts`,
 `.env.example`, tests next to the existing ones.
 
-- [ ] Red tests for AC-VT-1..3, then the code.
-- [ ] Verification (from `apps/server/`): `npm run lint && npm run type-check && npm run test:unit` — all green.
+- [x] Red tests for AC-VT-1..3, then the code.
+- [x] Verification (from `apps/server/`): `npm run lint && npm run type-check && npm run test:unit` — all green.
 
 ## Task 2 — Bot: voice handling and reply format (AC-VT-4..5)
 

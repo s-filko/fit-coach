@@ -1,4 +1,5 @@
 import { type ConversationRunPort } from '@domain/conversation/ports';
+import { type SpeechTranscriberPort } from '@domain/speech/ports';
 import { ITrainingService } from '@domain/training/ports';
 import { IUserService } from '@domain/user/ports';
 
@@ -8,6 +9,7 @@ declare module 'fastify' {
       userService: IUserService;
       trainingService: ITrainingService;
       conversationRun: ConversationRunPort;
+      speechTranscriber: SpeechTranscriberPort;
     };
   }
 

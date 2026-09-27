@@ -32,6 +32,7 @@ describe('POST /api/bot/chat – integration', () => {
       userService: container.get(USER_SERVICE_TOKEN) as any,
       trainingService: container.get(TRAINING_SERVICE_TOKEN) as any,
       conversationRun: container.get(CONVERSATION_RUN_PORT_TOKEN) as any,
+      speechTranscriber: { isEnabled: () => false, transcribe: async () => ({ text: '' }) } as never,
     });
 
     await app.ready();

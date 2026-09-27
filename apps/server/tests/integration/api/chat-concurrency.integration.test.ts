@@ -76,6 +76,7 @@ describe('POST /api/bot/chat concurrency — AC-1351', () => {
       userService: container.get(USER_SERVICE_TOKEN) as never,
       trainingService: container.get(TRAINING_SERVICE_TOKEN) as never,
       conversationRun: container.get(CONVERSATION_RUN_PORT_TOKEN) as never,
+      speechTranscriber: { isEnabled: () => false, transcribe: async () => ({ text: '' }) } as never,
     });
 
     await app.ready();

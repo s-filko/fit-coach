@@ -115,6 +115,14 @@ export const EnvSchema = z.object({
     .string()
     .optional()
     .transform(raw => parseTransitionHandoffTargets(raw)),
+  // Speech-to-text (voice-transcription plan, D2): the key is a genuinely
+  // optional secret — unset = voice disabled, the server still boots, so a
+  // missing key never breaks a deploy. The rest are tunables, same
+  // tunables-not-secrets exception as EPISODE_*.
+  STT_API_KEY: z.string().optional(),
+  STT_MODEL: z.string().min(1).default('gemini-3.8-flash'),
+  STT_API_URL: z.string().url().default('https://generativelanguage.googleapis.com/v1beta'),
+  STT_TIMEOUT_MS: z.coerce.number().positive().default(30000),
 });
 
 export type Env = z.infer<typeof EnvSchema> & {

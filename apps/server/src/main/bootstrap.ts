@@ -6,6 +6,7 @@ import { FastifyInstance } from 'fastify';
 import { buildServer } from '@app/server';
 
 import { type ConversationRunPort } from '@domain/conversation/ports';
+import { type SpeechTranscriberPort } from '@domain/speech/ports';
 import { ITrainingService } from '@domain/training/ports';
 import { IUserService } from '@domain/user/ports';
 
@@ -42,11 +43,13 @@ async function decorateAppWithServices(app: FastifyInstance, container: Containe
   const { USER_SERVICE_TOKEN } = await import('@domain/user/ports');
   const { TRAINING_SERVICE_TOKEN } = await import('@domain/training/ports');
   const { CONVERSATION_RUN_PORT_TOKEN } = await import('@domain/conversation/ports');
+  const { SPEECH_TRANSCRIBER_TOKEN } = await import('@domain/speech/ports');
 
   app.decorate('services', {
     userService: container.get<IUserService>(USER_SERVICE_TOKEN),
     trainingService: container.get<ITrainingService>(TRAINING_SERVICE_TOKEN),
     conversationRun: container.get<ConversationRunPort>(CONVERSATION_RUN_PORT_TOKEN),
+    speechTranscriber: container.get<SpeechTranscriberPort>(SPEECH_TRANSCRIBER_TOKEN),
   });
 }
 

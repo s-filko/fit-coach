@@ -14,6 +14,7 @@ import docsPlugin from '@app/plugins/docs.plugin';
 import { healthPlugin } from '@app/plugins/health.plugin';
 import { testPlugin } from '@app/plugins/test.plugin';
 import userRoutesPlugin from '@app/plugins/user-routes.plugin';
+import voiceRoutesPlugin from '@app/plugins/voice-routes.plugin';
 
 import { loadConfig } from '@config/index';
 
@@ -21,6 +22,7 @@ async function registerBotRoutes(instance: FastifyInstance): Promise<void> {
   await instance.register(botSecurityPlugin);
   await instance.register(userRoutesPlugin);
   await instance.register(chatRoutesPlugin);
+  await instance.register(voiceRoutesPlugin);
 }
 
 async function registerAppRoutes(instance: FastifyInstance): Promise<void> {
