@@ -1244,7 +1244,7 @@ Deterministic red: `planning-set-logging.repro.test.ts` (AC-CB-2). Fix owner: ro
 
 ## BUG-023 — Isometric holds are stored as repetitions: 45-second planks become "45 reps"
 
-**Status:** Open
+**Status:** Open — not fixed in code: the RED probe `log-set.tool.repro.test.ts` (AC-LSR-1) is still red. Live 2026-09-27 (`a8d3b20b`) the planks were stored as `cardio_duration` only because the model chose `durationSeconds`; the documented bodyweight path (`reps: 45`) still stores reps
 **Severity:** High — training history is factually wrong; hold-time progression cannot be tracked
 **Found during:** Live dev training session 2026-09-21 (owner review)
 **Component:** `apps/server/src/infra/ai/tools/log-set.tool.ts:38-58,135-142`, `apps/server/src/infra/ai/prompts/phases/training/v3.ts:70-73`
@@ -1287,7 +1287,7 @@ Scenario: plan a `2x45s` plank, report "две планки по 45" → the sto
 
 ## BUG-024 — The cardio warm-up never reaches the journal (second occurrence)
 
-**Status:** Open
+**Status:** Open — live 2026-09-27 (`e29d6ceb`) a warm-up reported in the training phase was logged as `cardio_distance`, but the failing path (work reported at or before session start, in `session_planning`) was not exercised, and no deterministic regression test exists (only eval LS-0002)
 **Severity:** High — reported work silently missing from history
 **Found during:** Live dev training session 2026-09-21 (owner review)
 **Component:** training prompt (no rule for pre-session work), `apps/server/src/domain/training/services/training.service.ts:192-206`
@@ -1546,7 +1546,7 @@ a truncating limit. Unit: `drizzle-transcript.service.unit.test.ts` pins `toTurn
 
 ## BUG-030 — "Last time you did…" quotes a seven-month-old session: the previous session is picked by exact `session_key`, and the block carries no date
 
-**Status:** fixed (training-exercise-history)
+**Status:** Closed (2026-09-27, after the owner's live dev session `769d4a24`: "last time" resolved the 2026-09-21 `lower_a` session with its date for every exercise). Fixed by plan `training-exercise-history`
 **Severity:** Critical — weight recommendations, the core of the product, are built on stale data, and the user is told work he did four days ago never happened
 **Found during:** Live dev training session 2026-09-21 (owner: "я уточнил про сгибание разгибание, а он говорит я не делал — я точно делал")
 **Component:** `apps/server/src/infra/ai/graph/phases/training.spec.ts` (`TrainingData` loader), `apps/server/src/infra/db/repositories/workout-session.repository.ts` (`findLastPerformancesByExercise`), `apps/server/src/infra/ai/prompts/blocks/training-exercise-history.v1.ts` (`training.exercise_history` / `training.recent_workouts`), `apps/server/src/infra/ai/prompts/phases/training/v6.ts`
@@ -1739,7 +1739,7 @@ Four sets were not logged. The coach stayed mostly honest («не сохрани
 
 ## BUG-034 — A successful tool call is answered with "Couldn't save the data": the per-run error budget counts errors from the whole chat history
 
-**Status:** Fixed in code (2026-09-26, plan `session-investigation-0925` task R1, `5fe61768`; regression: `tool-executor.unit.test.ts` (AC-1332 block, AC-SI-1a/1b) and `tests/integration/scenarios/set-error-recovery.integration.test.ts` (AC-SI-1c)) — closes after the dev deploy and the owner's live Telegram check
+**Status:** Closed (2026-09-27, after the owner's live dev session `769d4a24`: no catalog fallback in 27 runs). Fixed in code (2026-09-26, plan `session-investigation-0925` task R1, `5fe61768`; regression: `tool-executor.unit.test.ts` (AC-1332 block, AC-SI-1a/1b) and `tests/integration/scenarios/set-error-recovery.integration.test.ts` (AC-SI-1c))
 **Severity:** Critical — 17 of 69 runs in the owner's 2026-09-25 session replied "not saved" while 15 of them had saved the set; the coach's own reply after the tool was never generated
 **Found during:** owner's live dev training session 2026-09-25 07:58–09:33 UTC (`glm-5.3-flash`)
 **Component:** `apps/server/src/infra/ai/graph/tool-executor.ts:207` (`countLlmErrors(state.messages)`), `tool-policy.ts:43` (contract: "per run"), `phases/training.spec.ts:59` (`llmErrorBudget: 1`)
@@ -1790,7 +1790,7 @@ Every persona in the scenarios and the smoke uses `languageCode: 'ru'`, so this 
 
 ## BUG-037 — On an exercise switch the reply leads with the recap of the finished exercise instead of the set the user just reported
 
-**Status:** Fixed in code (2026-09-26, plan `session-investigation-0925` task R4, `a7a08812`; regression: `log-set.tool.unit.test.ts`, `format-exercise-summary.unit.test.ts`, `training.v5.unit.test.ts` (AC-SI-4)) — closes after the dev deploy and the owner's live Telegram check
+**Status:** Closed (2026-09-27, after the owner's live dev session `769d4a24`: 09:16 run `b04076ef`: the reported set confirmed first, the treadmill recap last). Fixed in code (2026-09-26, plan `session-investigation-0925` task R4, `a7a08812`; regression: `log-set.tool.unit.test.ts`, `format-exercise-summary.unit.test.ts`, `training.v5.unit.test.ts` (AC-SI-4))
 **Severity:** High — the owner's second complaint of the session
 **Found during:** owner's live dev session 2026-09-25, runs `7853c472`, `92351633`, `cca871bd`, `7a29f509`
 **Component:** `apps/server/src/infra/ai/tools/format-exercise-summary.ts:46`, `prompts/phases/training/v3.ts:34` (rule 4a/4b)
@@ -1805,7 +1805,7 @@ smoke read the replies as correct.
 
 ## BUG-038 — Budget compaction churns: near the cap every run summarises a 2–4 exchange fragment, and the fragments mislead
 
-**Status:** Fixed in code (2026-09-26, plan `session-investigation-0925` task R5 + R2, `b0f0aeb6`, `a1dc7949`; regression: `compact.unit.test.ts`, `compact.node.unit.test.ts` (AC-SI-5a), `episode-summaries.v2.unit.test.ts` (AC-SI-5c), renderTranscript over real `log_set` output (AC-SI-5b)) — closes after the dev deploy and the owner's live Telegram check
+**Status:** Closed (2026-09-27, after the owner's live dev session `769d4a24`: 3 summariser calls in 82 min vs 9 in 30 min on 09-25). Fixed in code (2026-09-26, plan `session-investigation-0925` task R5 + R2, `b0f0aeb6`, `a1dc7949`; regression: `compact.unit.test.ts`, `compact.node.unit.test.ts` (AC-SI-5a), `episode-summaries.v2.unit.test.ts` (AC-SI-5c), renderTranscript over real `log_set` output (AC-SI-5b))
 **Severity:** High — stale "open items" and wrong exercise names sit in `## Previous episodes`; 9 summariser calls in 30 minutes
 **Found during:** owner's live dev session 2026-09-25, summaries at 09:03:22 … 09:27:45
 **Component:** `apps/server/src/infra/ai/graph/nodes/compact.ts` (`planCompaction` budget branch, `renderTranscript`), `prompts/blocks/episode-summaries.v1.ts`
@@ -1979,10 +1979,9 @@ items `skipped`; show calf work by muscle, not only by the planned exercise id.
 
 ### Related findings from the same session (2026-09-27)
 
-Confirmed working live (evidence for closing, owner's call): BUG-034 (no catalog fallback in 27 runs), BUG-037
-(09:16: set confirmed first, treadmill recap last), BUG-038 (3 summariser calls in 82 min vs 9 in 30 min on
-09-25), BUG-030 (history resolved the 09-21 `lower_a` session for every exercise), BUG-023/024 (warm-up and
-planks stored as distance/duration). BUG-035/036 were not exercised.
+Closed on this session's evidence (owner, 2026-09-27): BUG-030, BUG-034, BUG-037, BUG-038. Kept open: BUG-023
+and BUG-024 — correct today, but by the model's choice / on an untested path (see their Status). BUG-035/036
+were not exercised.
 
 - **BUG-013** (open) reproduced: markdown tables and `**…**` in 4 replies — see that entry.
 - **BUG-023 legacy data:** the 09-21 planks are still stored as `functional_reps` («Plank: 45 reps» in the
