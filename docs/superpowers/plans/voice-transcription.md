@@ -3,8 +3,9 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and
 > test-driven-development. Red tests first, then the code.
 
-- Status: in progress
+- Status: done
 - Branch: plan/voice-transcription
+- Review: 2026-09-27 | clean | R1,R2,R3,R4
 
 **Goal:** a Telegram voice message is transcribed by a speech-to-text call and handled exactly
 like the same text typed by the user. The bot's reply starts with the recognised text as a quote,
@@ -152,6 +153,13 @@ runs away to 65k output tokens / 155 s without a cap, and stops at 11.5 s with `
 - [x] Verification: from `apps/server`: `npm run lint && npm run type-check && npm run test:unit`; from `apps/bot`:
   `npx tsc --noEmit && npm test` — all green.
 
+## Task 6 — Owner requests after review run 2 (D12, D13, D14; AC-1419, AC-1422, AC-1423)
+
+- [x] D12: the key is read from `AISTUDIO_API_KEY` (c3681898). Verification: server test:unit.
+- [x] D13: voice replies and notices threaded with `reply_to_message_id` (e7e2f9af). Verification: bot tests.
+- [x] D14: voice download retried up to 3 attempts on network errors only (7a4d5c16). Verification: bot tests.
+- [x] Verification: from `apps/server`: `npm run test:unit`; from `apps/bot`: `npx tsc --noEmit && npm test`.
+
 ## Verification evidence (2026-09-27)
 
 - Task 1 (worker, 435ca53b): server lint 0 errors, type-check clean, test:unit 150 suites / 1490 tests passed.
@@ -174,6 +182,11 @@ runs away to 65k output tokens / 155 s without a cap, and stops at 11.5 s with `
   | AC-1419 | AC-VT-1/2/3/5 | `stt-tunables.unit.test.ts`, `gemini-transcriber.unit.test.ts`, `voice.route.unit.test.ts`, `handlers.voice.unit.test.ts` |
   | AC-1420 | AC-VT-5 | `handlers.voice.unit.test.ts` |
   | AC-1421 | AC-VT-3 | `voice.route.unit.test.ts` |
+- Task 6 (orchestrator, and R3 run 3 at c41e5e45): server test:unit 151 suites / 1499 tests; bot `tsc --noEmit`
+  clean, `npm test` 8 suites / 71 tests (3 new D14 retry tests). D12 live-proven by the 22:20/22:22 voice notes
+  (transcribed with the key read as `AISTUDIO_API_KEY`); D13/D14 unit-tested only.
+  | AC-1422 | — | `handlers.voice.unit.test.ts` (reply options asserted on quote, answer and notices) |
+  | AC-1423 | — | `handlers.voice.unit.test.ts` (download retry tests) |
 - AC-VT-7 (owner + orchestrator, local server + `@MyFitAiCoachTestBot` from this worktree, local DB = clone of dev
   2026-09-27): voice notes at 22:20 and 22:22 → transcribed in 2.4 s / ~2 s, coach run recorded, reply = quote +
   coach answer; owner: "проверил ок". The 22:21 voice failed on the Mac↔Telegram file download
@@ -255,3 +268,11 @@ ADR-0013 §11 map lacks `domain/speech`; R3 notices sent outside try (unhandled 
 double failure in `beforeErrorText` mislabels the log, `route-error.ts` uses `in` (prototype chain); R4 FEAT-0010
 forward reference to "FEAT-0011" (fixed), stale digital-silence backlog line (dropped), docs/README indexes lack
 speech/FEAT-0011 (pre-existing staleness), CLAUDE.md does not mention `AISTUDIO_API_KEY` for `.env.dev` (A18).
+
+Run 3 — 2026-09-27, zone R3 (the zone blocked in run 2), whole diff at c41e5e45. R3-1, R3-2 confirmed closed.
+One blocking finding, closed on the branch: R3-3 | plan D12–D14 | SUPERPOWERS_INTEGRATION rule 2 — post-review commits
+had no task/AC/verification record → Task 6, AC-1422/AC-1423 in FEAT-0011, evidence and mapping above, ids in test names.
+Advisories → BACKLOG: `getFileStream` turns any download failure into ERR_STREAM_PREMATURE_CLOSE (so non-network
+download errors are retried too) and a non-2xx file answer is not an error; `isNetworkError` matches codes inside
+messages and every EFATAL; retry tests use real timers and do not assert the give-up text; the error text after the
+threaded quote is not threaded; `route-error.unit.test.ts` describe carries no id.

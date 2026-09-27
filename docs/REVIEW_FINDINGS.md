@@ -812,3 +812,8 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   `docs/DOCUMENTATION_GUIDE.md` § Feature Spec: "A feature spec has no Status/x-status line; delivery state
   lives only in the plan header and STATE.md" (legacy FEAT files → one-time cleanup).
   Runs: voice-transcription (2026-09-27, R4).
+- [×1] Owner-requested changes made after a review run and recorded only as Decisions (D-lines) have no task, AC or
+  verification slot, so they fall outside rule 2's "each task" wording. Proposed for `docs/CONTRIBUTING_AI.md`: "Every
+  code commit on a plan branch belongs to a plan task that cites its AC and verification command; a change added after
+  planning gets a new task entry, not only a D-line."
+  Runs: voice-transcription (2026-09-27, R3 run 3).

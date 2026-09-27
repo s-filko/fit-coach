@@ -32,6 +32,8 @@ before the coach's answer, so that I can talk to the coach hands-free during a w
   boots without `AISTUDIO_API_KEY` (S-0121).
 - **AC-1420:** a conversation error after a successful transcription sends the quote, then `errorTextFor` (S-0122).
 - **AC-1421:** error bodies of the transcribe route carry only `code` (INV-SPEECH-003).
+- **AC-1422:** the quote + answer and the voice notices are sent as a Telegram reply to the voice note.
+- **AC-1423:** the voice file download is retried up to 3 attempts on a network failure; other errors fail at once.
 
 Plan-level criteria and their tests: `docs/superpowers/plans/voice-transcription.md` (AC-VT-1..7); the durable ↔ plan ↔ test mapping is the table in its § Verification evidence.
 
