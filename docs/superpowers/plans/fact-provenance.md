@@ -129,6 +129,25 @@ touch `src/` outside `__tests__` in this task.
 counts). Also `npm run test:integration` through the same lock if the plan's files are covered by
 integration tests (`grep -rl 'factOperations\|SUMMARIZER' tests/integration`).
 
+## Task 3 — Review follow-ups (AC-FP-2, AC-FP-5)
+
+From the close-out review (advisories R3, R4), fixed on this branch because they are the same bug:
+
+- **D12 — `phaseNote` is number-checked too.** `phaseNote` is stored and rendered into
+  `## User Facts` for long_term facts, so a coach-only figure could still reach the prompt through it.
+  The D4 check covers `fact` **and** `phaseNote` of add/update. Red test first (an add whose
+  `fact` is clean but whose `phaseNote` carries a coach-only number is applied today), then the fix.
+- **D13 — v5 prompt quoting rules.** Tell the model the evidence is the user's words only — no
+  `User:` prefix, no `…`/ellipsis elisions, no merged fragments — and that line "Include numbers
+  (weights, reps, dates)" means only user-stated numbers (reconcile the two sentences). `v5.unit`
+  assertion for the new wording.
+- **D14 — comments.** `compact.node.ts` header and `episode.ts` `EpisodeSummaryV4Schema` doc comment
+  say the schema is shared by summariser v4 and v5.
+
+**Verification:** from `apps/server`: the new red test shown failing on the pre-fix tree (quote it),
+then `npm run type-check && npm run lint && npm run test:unit` green and
+`/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh npm run test:scenarios` green.
+
 ## D9 — the red commit
 
 - **D9 — repro files, no hook bypass.** Red tests live in `*.repro.test.ts` (existing convention),
