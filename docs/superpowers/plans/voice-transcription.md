@@ -72,18 +72,6 @@ Telegram, чтобы они были распознаны сервисом Speec
   OpenAI-compatible `input_audio` accepts only wav/mp3. Recorded as the ADR-0013 §7 amendment of 2026-09-27;
   domain spec `docs/domain/speech.spec.md`, feature spec FEAT-0011 (AC-1415..1421, S-0117..0122).
 
-- **D11 — local voice-activity gate before the model (2026-09-27, orchestrator, owner-delegated "будь строгим").**
-  A 10–30-call benchmark after Task 4 showed `gemini-3.8-flash` inventing text on non-speech far more often than
-  the first 3-call probes suggested: `<NO_SPEECH>` on room noise 1/10, white noise 5/10, quiet noise 7/10 (`low`);
-  `medium` 13/20 on noise, 0/5 on silence; `high` better on noise but truncates a 148 s monologue to 419 chars
-  (thinking eats the output cap). No prompt/level fixes it. `gemini-3.5-flash` rejects noise 20/20 but is slower
-  and is not the owner's choice. A local Silero VAD (MIT, ONNX, on the `onnxruntime-node` 1.21 the server already
-  ships for embeddings; Opus decoded by `ogg-opus-decoder` 1.7.5, MIT, wasm — no ffmpeg) prototyped on the same
-  clips: speech 4.7 s of 4.8 s (max p 1.00), 148 s monologue 132 s, whisper-level (−30 dB) and speech under noise
-  detected, a 0.6 s word 480 ms; silence, quiet/room/white/brown noise 0 ms (max p ≤ 0.05); 37 ms for 5 s,
-  0.5 s for 148 s. Rule: fewer than `STT_VAD_MIN_SPEECH_MS` (default 200) of frames with p > 0.5 → `NO_SPEECH`
-  without calling the model. The `<NO_SPEECH>` sentinel stays as the second line.
-
 ## Acceptance criteria
 
 | AC | Criterion | Verification |
@@ -157,27 +145,6 @@ runs away to 65k output tokens / 155 s without a cap, and stops at 11.5 s with `
 - [x] Verification: from `apps/server`: `npm run lint && npm run type-check && npm run test:unit`; from `apps/bot`:
   `npx tsc --noEmit && npm test` — all green.
 
-## Task 5 — Voice-activity gate (D11; AC-1417, AC-VT-1, AC-VT-2)
-
-- [ ] Domain port `VoiceActivityPort` (`domain/speech/ports`) — `speechMs({audioBase64, mimeType}): Promise<number>`;
-  a small domain function/service composes it with `SpeechTranscriberPort`: `speechMs < STT_VAD_MIN_SPEECH_MS` →
-  `NoSpeechError` without calling the transcriber; otherwise transcribe. The route calls that composition.
-- [ ] Infra adapter (e.g. `infra/ai/silero-vad.ts`): decode OGG/Opus with `ogg-opus-decoder@1.7.5` (exact pin),
-  downmix to mono, 48 kHz → 16 kHz by averaging each 3 samples, Silero v5 ONNX via the existing `onnxruntime-node`
-  (inputs `input` [1,576] = 64-sample context + 512-sample chunk, `state` [2,1,128], `sr` int64 16000; outputs
-  `output`, `stateN`), count 32 ms frames with p > 0.5. Session loaded lazily once per process (like
-  `EmbeddingService`). Decode/model failure or a non-OGG mime → log warn and **fail open** (return a value that
-  lets transcription proceed) — the VAD may block garbage, never a real voice.
-- [ ] Model file `silero_vad.onnx` vendored at `apps/server/assets/models/silero_vad.onnx` (from
-  `snakers4/silero-vad` `src/silero_vad/data/silero_vad.onnx`, MIT — note the source and licence next to it), and
-  `apps/server/Dockerfile` copies `apps/server/assets` so the path resolves both locally (`apps/server`) and in the
-  image (`/app`).
-- [ ] Config `STT_VAD_MIN_SPEECH_MS` (default 200, tunables class), `.env.example`.
-- [ ] Tests: the composition (below threshold → NoSpeechError and no transcriber call; above → transcriber called;
-  VAD failure → transcriber called); the adapter on real fixtures committed under the test dir — a short speech clip
-  (> 1000 ms speech) and a noise clip (0 ms) — generated with ffmpeg as in the plan's probes.
-- [ ] Verification: from `apps/server`: `npm run lint && npm run type-check && npm run test:unit`.
-
 ## Verification evidence (2026-09-27)
 
 - Task 1 (worker, 435ca53b): server lint 0 errors, type-check clean, test:unit 150 suites / 1490 tests passed.
@@ -204,9 +171,11 @@ runs away to 65k output tokens / 155 s without a cap, and stops at 11.5 s with `
 - `audio` files, `video_note`, forwarded voice from channels.
 - Recording the STT call in `llm_calls` / storing the audio.
 - Prod (frozen).
-- Pure digital silence (all-zero samples) may still be transcribed as invented words — no real Telegram
-  recording is digital zero (mic noise → `<NO_SPEECH>`), and the quote shows the user what was heard.
-  Energy-based pre-check (VAD) would need audio decoding (ffmpeg in the image) — not now.
+- Non-speech audio (silence, noise) is sometimes transcribed as invented words by `gemini-3.8-flash` even with the
+  `<NO_SPEECH>` instruction (measured 2026-09-27: noise → `<NO_SPEECH>` 1–7 of 10 per noise type at `low`;
+  `medium`/`high`/JSON `has_speech` do not fix it; `high` truncates long monologues). The quote shows the user what
+  was heard. Owner 2026-09-27: must be eliminated, now or later → `docs/BACKLOG.md` (Findings). A local VAD with
+  new dependencies was tried and rejected by the owner (no local installs; would not run on dev/prod).
 
 ## Review
 

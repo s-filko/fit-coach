@@ -73,6 +73,7 @@ Rules:
 
 ## Findings
 
+- [ ] **Voice notes without speech are transcribed as invented words — must be eliminated (owner 2026-09-27: "мне надо избавиться от этого, не сейчас так в будущем").** `gemini-3.8-flash` with the `<NO_SPEECH>` instruction returns the sentinel on noise only 1–7 of 10 per noise type (`low`); `medium`, `high` and a JSON `has_speech` field do not fix it, `high` truncates long monologues; the coach then answers the invented phrase. Measured options without local installs: `gemini-3.5-flash` rejects noise 20/20 but answers "0 0 0" on digital silence and is slower (3 s short / 14 s for 148 s); Google Cloud Speech-to-Text V2 (Chirp 3) is the dedicated service and returns empty on non-speech by design, but needs a GCP service account (API keys → 401, verified) and sync `recognize` is limited to ~60 s (longer: streaming via gRPC client = new dependency, or batch via Cloud Storage); a hybrid Chirp ≤60 s / Gemini >60 s needs no new package. A local VAD (Silero + Opus decoder) was prototyped and rejected — new dependencies/local installs. Any fix is a new adapter behind `SpeechTranscriberPort`. Source: voice-transcription live probes (2026-09-27).
 - [ ] **Claude on the owner's subscription via `claude -p` — investigated and declined by the owner
       (2026-09-26).** No money on OpenRouter (balance −$0.02) and no Anthropic API key, so the only route
       to Claude is the subscription through the official binary. Verified: `claude -p --output-format json

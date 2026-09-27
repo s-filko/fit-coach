@@ -47,6 +47,7 @@ Plan-level criteria and their tests: `docs/superpowers/plans/voice-transcription
 
 ## Known limits
 
-- Pure digital silence (all-zero samples) can be transcribed as invented words — model behaviour seen in live probes
-  2026-09-27; a real microphone recording with no speech answers `NO_SPEECH`. The quote makes any mis-hearing visible.
+- A voice note without speech (silence, background noise) can be transcribed as invented words — model behaviour
+  measured 2026-09-27 despite the `<NO_SPEECH>` instruction; the quote makes any mis-hearing visible. Removal is a
+  backlog item.
 - The STT call is logged (model, latency, tokens, finish reason), not written to `llm_calls`; the audio is not stored.
