@@ -3,8 +3,9 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and
 > test-driven-development. Red tests first, proven red on unchanged production, then the fix.
 
-- Status: in progress
+- Status: done
 - Branch: plan/fact-provenance
+- Review: 2026-09-27 | clean | R1,R2,R3,R4
 
 **Goal:** close the code/unguarded half of BUG-040. Today the episode summariser's `fact_operations`
 are applied verbatim (`apps/server/src/infra/ai/graph/nodes/compact.node.ts` `applyFactOperation`):
@@ -172,3 +173,36 @@ then `npm run type-check && npm run lint && npm run test:unit` green and
 - **D11 — docs.** ADR-0009 gains "Amendment 2026-09-27 — provenance" and ADR-0013 §3 a one-paragraph
   pointer (factual record of the shipped rule, flagged for the owner). BUG-040 → *Partially fixed*:
   warnings relevance, vocabulary and the model-side misses stay open (D7).
+- **Task 3 (`63b89e57`)** — red re-checked by the orchestrator on the pre-fix tree (`f4d04398` + the
+  new tests): 3 failed — `AC-FP-2: add whose fact is clean but whose phaseNote carries a coach-only
+  number is skipped` (`rememberFact` called) and two `AC-FP-5 (D13)` prompt assertions; after the fix
+  worker: `test:unit` 153 / 1534, `test:scenarios` 19 / 392 + 1 todo.
+- **D15 — stale docs reconciled** (review R4): `ARCHITECTURE.md` prompt tree lists summariser v4/v5
+  and the fact-writing paragraph describes operations + provenance; `CONTRIBUTING_AI.md` § User facts
+  likewise, and its "no per-turn fact tool" line now records the 2026-09-20 `manage_fact` restoration.
+
+## Review
+
+One combined reviewer over all four zones (economical-work), 2026-09-27, diff `9e8b1f5e...1ad3c093`.
+**Verdict: clean — no blocking findings.** The reviewer confirmed the human messages in `removed`
+are raw user text only (`conversation-run.adapter.ts:141` from `input.text`; voice arrives as the
+transcript text; NOW / gap notes are request-time SystemMessages, never checkpointed), so no
+injected content can serve as user evidence. It also ran DB-backed integration suites by mistake
+(not asked to) and saw 2 failures, one in `scenario-world-seed.integration.test.ts:191` — outside
+this diff; the orchestrator re-ran `test:integration` under the DB lock before merge (see below).
+
+Advisories and their disposition:
+- R1 — ADR-0009/0013 amendments change a rule's meaning (SUPERPOWERS_INTEGRATION rule 3): made under
+  the owner's autonomy order, dated, marked reversible, listed in the STATE handoff for the owner.
+- R1 — `compact.node.ts` (≈500 lines) now also owns provenance orchestration → `BACKLOG.md`.
+- R2 — `knownFactLine` copied verbatim v4 → v5 (versioned-prompt convention) → `BACKLOG.md`.
+- R3 — evidence proves quote existence, not support (non-numeric coach claims can pass) → BUG-040
+  status wording; stays open under BUG-040.
+- R3 — `phaseNote` not number-checked → **fixed** (Task 3, D12).
+- R3 — D4 over-filters digit tokens ("1RM", "5x5"), unit conversions, voice number words → `BACKLOG.md`.
+- R3 — v5 prompt did not forbid `User:` prefix / elisions → **fixed** (Task 3, D13).
+- R3 — `fact-provenance.unit.test.ts` names cite D-numbers, not AC ids → accepted (ACs named in
+  `compact.node.unit` / `v5.unit`).
+- R4 — `ARCHITECTURE.md` / `CONTRIBUTING_AI.md` stale → **fixed** (D15). Comments on the shared
+  v4/v5 schema → **fixed** (D14). Provenance rule has no BR/INV id → `BACKLOG.md`.
+- meta — rule 3 has no written carve-out for an owner autonomy order → `REVIEW_FINDINGS.md`.

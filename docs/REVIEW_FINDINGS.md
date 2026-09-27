@@ -817,3 +817,4 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   code commit on a plan branch belongs to a plan task that cites its AC and verification command; a change added after
   planning gets a new task entry, not only a D-line."
   Runs: voice-transcription (2026-09-27, R3 run 3).
+- [×1] `SUPERPOWERS_INTEGRATION.md` rule 3 (rule-meaning changes are owner-level "without exception") has no written carve-out for an explicit owner autonomy order; it lives only in memory. Proposed: "Under an explicit owner autonomy order for a named bug or plan, a durable-spec amendment recording the shipped rule is allowed if it is dated, marked 'decided without the owner, reversible', and listed in the STATE handoff." Without it R1 must either block every autonomous plan or ignore "always blocking". Runs: fact-provenance R1 (2026-09-27).
