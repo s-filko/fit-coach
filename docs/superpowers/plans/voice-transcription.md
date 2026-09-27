@@ -153,3 +153,45 @@ runs away to 65k output tokens / 155 s without a cap, and stops at 11.5 s with `
   Energy-based pre-check (VAD) would need audio decoding (ffmpeg in the image) — not now.
 
 ## Review
+
+Run 1 — 2026-09-27, zones R1–R4, verdict **blocked**. Findings relayed verbatim (condensed to their claim).
+
+Blocking:
+- B1 | R1 | `apps/server/src/infra/ai/gemini-transcriber.ts:164` | ADR-0007 Guardrail 3; ADR-0013 D-10 — `GeminiTranscriber` calls a model directly, bypassing `getModel(profile)` and the `LlmGateway` port. Owner decision: amend the ADR with a carve-out for non-conversational audio→text, or route through the profile mechanism. → open, asked the owner.
+- B2 | R2 | `apps/bot/handlers.ts:176-203` | CONTRIBUTING_AI "Principles & Boundaries" — DRY — the voice path's `/api/bot/chat` post + content check + 404-clear/log/errorTextFor tail is a third copy of the text path (`handlers.ts:386-418`) and `/start` (`:337-369`); the same tail repeats at `:206-212`. → Task 4 F1.
+- B3 | R2 | `apps/server/src/app/routes/voice.routes.ts:11-14` | DRY — `speechErrorCodeOf` copies `conversationErrorCodeOf` (`chat.routes.ts:8-11`) and needs an extra `CORE_ERROR ? 500` special case. → Task 4 F2.
+- B4 | R3 | plan AC-VT-7 | SUPERPOWERS_INTEGRATION rule 2 — the local-bot live check is pending. → owner's voice message, orchestrator records it.
+- B5 | R3 | `apps/server/src/config/__tests__/stt-tunables.unit.test.ts:6` | CONTRIBUTING_AI § ID Conventions — the AC-VT-2 test does not carry its ID. → Task 4 F3.
+- B6 | R4 | `docs/STATE.md:14` | Status layer rules 2–3 — `state.mjs --check` fails, STATE not regenerated. → orchestrator.
+- B7 | R4 | `docs/features/FEAT-0011-voice-messages.md:3` | Status layer rule 4 — status marker in a durable spec. → orchestrator.
+- B8 | R4 | `FEAT-0011:26` | rule of engagement 1; DOCUMENTATION_GUIDE unique IDs — ACs only a pointer to the plan; behaviour rules without IDs. → orchestrator.
+- B9 | R4 | `FEAT-0011:5` | DOCUMENTATION_GUIDE § Feature Spec — no Scenarios, API Mapping, Domain Rules Reference. → orchestrator.
+- B10 | R4 | `docs/domain/` | DOCUMENTATION_GUIDE § Domain Spec — no spec for the new `domain/speech` port. → orchestrator.
+- B11 | R4 | `docs/API_SPEC.md:156` | DOCUMENTATION_GUIDE § API Spec — § 3.2 omits the declared 400. → orchestrator.
+- B12 | R4 | `docs/ARCHITECTURE.md:35` | rule of engagement 7 — module layout lacks `domain/speech/` and `infra/ai/gemini-transcriber.ts`. → orchestrator.
+- B13 | R4 | this plan, D2/D3/D4/D6 | Division of roles (edit in place) — Decisions disagree with Task 3 (timeout 60000, `STT_MAX_OUTPUT_TOKENS`, `<NO_SPEECH>` sentinel, < 1 s rule). → orchestrator.
+
+Advisory (→ BACKLOG via the `backlog` skill unless a blocking fix removes them):
+- A1 | R1 | `gemini-transcriber.ts:20` — STT instruction is an inline constant, not a versioned prompt module (ADR-0013 D-09 applicability unclear).
+- A2 | R1 | `domain/speech/errors.ts:45` — HTTP status map in the domain (copies the conversation precedent).
+- A3 | R1 | `domain/speech/ports/index.ts:1` — ports index re-exports errors, unlike conversation.
+- A4 | R1+R2 | `speech-transcriber.ports.ts:22`, `voice.routes.ts:56-59` — disabled detected twice (`isEnabled()` and the throw).
+- A5 | R1 | `apps/bot/handlers.ts:133` — voice IO flow in `handlers.ts` (421 lines).
+- A6 | R2 | `domain/speech/errors.ts:42` — unused `SpeechError` union.
+- A7 | R2 | `voice.routes.ts:65,68` — latency/text length logged twice (route + adapter).
+- A8 | R2 | `apps/bot/voice.ts:68-86` — bilingual record + `ru` rule duplicated from `error-text.ts`.
+- A9 | R2 | `gemini-transcriber.ts:102-104` — second usage-reading convention beside `infra/ai/usage.ts`.
+- A10 | R3 | `apps/bot/handlers.ts:189` — a Telegram send failure after a successful chat is treated as a chat error (quote twice + misleading error).
+- A11 | R3 | `apps/bot/voice.ts:33` — escaping after the 3500 cut can still exceed 4096 for entity-dense text.
+- A12 | R3 | `handlers.voice.unit.test.ts:231` — test name claims the 3500 cut but asserts only expandable; unused `chatId`.
+- A13 | R3 | `handlers.voice.unit.test.ts:202` — split fixture reply alone exceeds 4096.
+- A14 | R3 | `voice.route.unit.test.ts:41`, `voice.unit.test.ts:23/96` — AC IDs only in header comments.
+- A15 | R3 | `voice.routes.ts:68` — `NoSpeechError` logged at error level.
+- A16 | R4 | `domain/speech/errors.ts:12`, `speech-transcriber.ports.ts:24` — JSDoc predates the sentinel.
+- A17 | R4 | `docs/ARCHITECTURE.md:333` — error-code table lacks NO_SPEECH/STT_UNAVAILABLE.
+- A18 | R4 | `CLAUDE.md` LLM section — `STT_API_KEY` in `.env.dev` not mentioned.
+
+Meta (→ `docs/REVIEW_FINDINGS.md`): R1 blind spot (ADR-0007 guardrails not listed as in force); R1 rule candidate
+(every model invocation through the model factory); R2 rule candidate (third copy of duplicated code is a violation);
+R3+R4 plan-local `AC-<SLUG>-n` IDs undefined; R3 blind spot (AC ID in header comment vs describe/it); R4 rule
+candidate (no Status line in feature specs).
