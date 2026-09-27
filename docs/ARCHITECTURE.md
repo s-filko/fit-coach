@@ -155,6 +155,8 @@ apps/server/src/
           user-facts.v1.ts           #   ## User Facts block (ADR-0013 §3.4 block 2, budgeted on `longTerm`) — durable facts extracted at compaction
           episode-summaries.v1.ts    #   ## Previous episodes block — context, not data (numbers come from tools)
           post-tool-nudge.v1.ts      #   post-tool nudge (agent node retry)
+          current-time.v1.ts / time-gap.v1.ts
+                                     #   NOW line / time-gap note — own SystemMessages right before current (ADR-0013 §3.4 amendment 2026-09-27)
           chat-context.v1.ts / client-profile.v1.ts / session-planning-*.v1.ts / training-workout-overview.v1.ts
                                      #   domain context blocks (ADR-0013 §3.4 block 3, D-B): one per moved v1 section, byte-equal at full depth; declared on PhaseSpec.contextBlocks
           training-exercise-history.v1.ts

@@ -202,7 +202,8 @@ One function, `assembleContext(phaseSpec, state, ctx): { messages: BaseMessage[]
 > it changes every minute, and as block 1's last section it kept everything after it (long-term and
 > domain blocks, history) out of the provider's prompt cache. Both survive the D-D floor and are not
 > budgeted. Their versions are stamped in `prompt_versions` (D-09): `block.current_time` on every run,
-> `block.time_gap` on runs that sent the note.
+> `block.time_gap` on runs that sent the note. Runs recorded before 2026-09-27 carry the NOW version
+> as `directive.current-time` instead.
 
 Budget (per phase, in `PhaseSpec.budget`, tokens estimated with a fixed estimator so results are reproducible offline):
 
@@ -317,7 +318,10 @@ apps/server/src/infra/ai/prompts/
   directives/            identity.v1.ts, formatting.telegram.v1.ts, formatting.plain.v1.ts,
                          language.v1.ts, timezone.v1.ts, name-usage.v1.ts, tool-reply.v1.ts,
                          time-reference.v1.ts, greeting.v1.ts, memory-usage.v1.ts,
-                         current-time.v1.ts (BUG-032, U5), language.v2.ts (BUG-036)
+                         language.v2.ts (BUG-036)
+  blocks/                injected fragments that are neither phase prompt nor directive — incl.
+                         current-time.v1.ts (BUG-032, U5; moved from directives/ by now-line-last,
+                         2026-09-27) and time-gap.v1.ts (AC-CC-2), the two messages riding with current
   phases/
     registration/ v1.ts ... vN.ts, index.ts (exports current)
     chat/ ...

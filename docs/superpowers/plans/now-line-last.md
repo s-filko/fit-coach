@@ -3,9 +3,10 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and
 > test-driven-development. Red tests first, then the fix.
 
-- Status: planned
+- Status: done
 - Branch: plan/now-line-last
 - After: cache-accounting
+- Review: 2026-09-27 | clean | R1,R2,R3,R4
 
 **Goal:** the `NOW` line (`CURRENT_TIME_V1`, BUG-032) is the last section of block 1 — the static
 phase prompt — and changes every minute, so nothing after it (facts, directive, summaries, domain
@@ -89,7 +90,8 @@ On the owner's next real messages: `llm_calls.cache_expected` for agent calls sh
 
 ## Review
 
-2026-09-27, one combined reviewer (R1–R4). Verdict: **blocked**.
+2026-09-27, one combined reviewer (R1–R4). First verdict: **blocked**; R1+R4 re-run: one more
+blocking item (below), fixed → **clean**.
 
 **Blocking**
 - R1 | `prompts/index.ts:39-44` with `directives/index.ts:71` | ADR-0013 D-09 / BR-LLM-008 — the NOW
@@ -126,6 +128,14 @@ On the owner's next real messages: `llm_calls.cache_expected` for agent calls sh
 **Advisory disposition:** all fixed in ee6052a9 (module moved to `blocks/`, one render context,
 `CURRENT_TIME_PREFIX` used by the templates, AC-NL-2 test with history + domain block, non-vacuous
 timezone test, comments, BUG-032 dated note); spec § 4 finding dated by the orchestrator.
+
+**R1+R4 re-run (2026-09-27)** — all claimed closures verified. Blocking: R4 ADR-0013 §5.1 Layout
+tree still listed `current-time.v1.ts` under `directives/` — *fixed* by the orchestrator (same owner
+approval as the §3.4 amendment). Advisories: `ARCHITECTURE.md` `blocks/` listing lacked
+`current-time`/`time-gap` — fixed; the §3.4 amendment now notes that runs before 2026-09-27 carry
+`directive.current-time` — fixed; `promptVersionExtras` placement → `BACKLOG.md`. Verification at
+dbc3c1f6 (orchestrator): `test:integration` 47 / 634 passed + 1 todo, `test:scenarios` 19 / 392
+passed + 1 todo, `state.mjs --check` OK.
 
 **Meta** — filed in `docs/REVIEW_FINDINGS.md`: rule candidate (every model-facing module reaching the
 request is stamped in `promptVersions`); blind spot (no zone diffs recorded run metadata before/after

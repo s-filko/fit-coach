@@ -349,6 +349,10 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   found only by reading `promptVersionsOf`.
   Runs: now-line-last (2026-09-27).
 
+- [×1] Moving a module between `prompts/` subdirectories has no checklist item for the ADR-0013 §5.1
+  Layout tree or the `ARCHITECTURE.md` tree — the first review and the fix commit both missed §5.1.
+  Runs: now-line-last R1+R4 re-run (2026-09-27).
+
 ## Rule candidates
 
 A finding a zone wanted to raise as blocking but could not, because no rule in this repo
