@@ -83,9 +83,11 @@ export const FactOperationSchema = z
 export type FactOperation = z.infer<typeof FactOperationSchema>;
 
 /**
- * Episode summariser v4's structured output: v3's five list fields, with
- * `factOperations` replacing `facts` (AC-FL-4). Empty is the expected common
- * answer — most episodes state nothing durable.
+ * The episode summariser's structured output, SHARED by prompts v4 and v5
+ * (fact-provenance D14: v5 adds only the provenance rules and the optional
+ * `evidence` on operations, so one schema serves both): v3's five list
+ * fields, with `factOperations` replacing `facts` (AC-FL-4). Empty is the
+ * expected common answer — most episodes state nothing durable.
  */
 export const EpisodeSummaryV4Schema = z
   .object({

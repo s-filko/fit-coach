@@ -3,8 +3,9 @@
  * guard between the summariser's answer and the episode's USER messages. A
  * mutating fact operation (add/update/retract) is applied only when the user
  * messages of the compacted episode support it — `evidence` quotes one of them
- * (D5) and every number in the fact text is user-stated (D4; for `update` a
- * number already in the old fact's text also counts). `confirm` is exempt
+ * (D5) and every number in the fact text and the phase note is user-stated
+ * (D4, D12; for `update` a number already in the old fact's text also counts).
+ * `confirm` is exempt
  * (D3) and never reaches this module. Pure (BR-LLM-007): texts arrive as
  * data; no clock, no I/O. The check never trusts the model's own claim of
  * provenance — it verifies the quote against the transcript.
@@ -30,6 +31,12 @@ export interface FactProvenanceInput {
    * (D4). Malformed operations pass none; the node skips those anyway.
    */
   factText?: string;
+  /**
+   * add/update (D12): the phase note stored beside the fact — its numbers are
+   * checked exactly like the fact text's (a phase note is rendered into
+   * `## User Facts`, so a coach-only figure must not hide there).
+   */
+  phaseNote?: string;
   /** The episode's user messages (the human messages of `removed`). */
   userTexts: string[];
   /** update only: the text of the known fact being superseded — its numbers also count (D4). */
@@ -67,7 +74,7 @@ function numbersIn(text: string): Set<string> {
 const MIN_EVIDENCE_CHARS = 3;
 
 export function checkFactProvenance(input: FactProvenanceInput): ProvenanceVerdict {
-  const { evidence, factText, userTexts, oldFactText } = input;
+  const { evidence, factText, phaseNote, userTexts, oldFactText } = input;
 
   if (evidence === undefined || evidence.trim() === '') {
     return { ok: false, reason: 'missing_evidence' };
@@ -84,7 +91,11 @@ export function checkFactProvenance(input: FactProvenanceInput): ProvenanceVerdi
   // D4: every number in the fact text must appear as a number the user wrote
   // (or, for update, that the old fact already carried). Losing a fact is
   // recoverable — it gets restated; storing a false one is not (BUG-040).
-  if (factText !== undefined && factText !== '') {
+  // D12: the phase note is checked by the same rule — it is stored with the
+  // fact and rendered into `## User Facts`, so a coach-only figure must not
+  // reach the prompt through it either.
+  const numberSources = [factText, phaseNote].filter((text): text is string => text !== undefined && text !== '');
+  if (numberSources.length > 0) {
     const established = new Set<string>();
     for (const line of userLines) {
       for (const n of numbersIn(line)) {
@@ -96,9 +107,11 @@ export function checkFactProvenance(input: FactProvenanceInput): ProvenanceVerdi
         established.add(n);
       }
     }
-    for (const n of numbersIn(factText)) {
-      if (!established.has(n)) {
-        return { ok: false, reason: 'number_not_user_stated' };
+    for (const source of numberSources) {
+      for (const n of numbersIn(source)) {
+        if (!established.has(n)) {
+          return { ok: false, reason: 'number_not_user_stated' };
+        }
       }
     }
   }

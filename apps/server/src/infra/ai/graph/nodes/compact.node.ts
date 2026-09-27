@@ -13,7 +13,8 @@
  *
  * Fact operations (fact-lifecycle plan Task 3, AC-FL-4 — reverses the P6
  * 2026-09-17 no-per-turn-tool stance, which Task 2's `manage_fact` already
- * ended): summariser v4 SEES the user's known active facts and returns
+ * ended): the episode summariser (v4/v5 — one shared EpisodeSummaryV4Schema,
+ * fact-provenance D14) SEES the user's known active facts and returns
  * operations (add / confirm / update / retract) instead of a blind upsert.
  * BUG-040 (fact-provenance plan): add/update/retract are further guarded by
  * `checkFactProvenance` — the operation is applied only when the episode's
@@ -317,6 +318,7 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
                 op: op.op,
                 evidence: op.evidence,
                 factText: op.fact,
+                phaseNote: op.phaseNote, // D12: rendered into ## User Facts too
                 userTexts,
                 oldFactText,
               });

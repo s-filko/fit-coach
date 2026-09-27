@@ -66,12 +66,12 @@ Return ONLY the structured output with these six fields:
 - openItems: unfinished topics or promised follow-ups (array of short English phrases)
 - fact_operations: operations on the user's durable facts (array of objects, see the rules below)
 
-Facts only, no style, no greetings, no filler. Include numbers (weights, reps, dates) only as facts in the five list fields above, never as instructions. Write in English regardless of the conversation language.
+Facts only, no style, no greetings, no filler. Include numbers (weights, reps, dates) only as facts in the five list fields above, never as instructions — except inside fact_operations, where a number is allowed only if the user themselves wrote it (see PROVENANCE below). Write in English regardless of the conversation language.
 
 PROVENANCE — a user fact is only what the USER said:
 - The assistant's own claims, estimates, explanations and figures are NEVER user facts. If only the Assistant stated something (an invented percentage, a mechanics explanation, a diagnosis), there is NO operation for it — the episode discussed it; the user did not state it.
-- "evidence" (required on add, update and retract) = a short VERBATIM quote from one User line of the transcript, in the original language, never translated, never from an Assistant line, never paraphrased. Copy the user's words exactly.
-- A number (weight, reps, percentage, days) may appear in a fact only if the user themselves wrote that number in this episode.
+- "evidence" (required on add, update and retract) = one continuous span of the USER’s own words, quoted VERBATIM from a single User line of the transcript: original language, never translated, never from an Assistant line, never paraphrased. No "User:" prefix, no ellipsis or … elisions, no fragments stitched together — the quote must appear word-for-word as a contiguous run inside one User line.
+- A number (weight, reps, percentage, days) may appear in a fact or a phaseNote only if the user themselves wrote that number in this episode.
 - This is verified in code, not on trust: an operation whose evidence is not found word-for-word in a User line, or whose fact carries a number the user did not state, is discarded. If you cannot support an operation with evidence, return no operation at all.
 - "confirm" needs no evidence: it only counts a restatement of a fact the user already owns.
 

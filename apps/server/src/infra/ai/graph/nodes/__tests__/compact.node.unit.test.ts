@@ -916,6 +916,33 @@ describe('buildCompactStep — fact provenance (BUG-040, AC-FP-1..4)', () => {
     expect(supersedeFact).not.toHaveBeenCalled();
   });
 
+  it('AC-FP-2: add whose fact is clean but whose phaseNote carries a coach-only number is skipped — rememberFact not called', async () => {
+    const { deps, rememberFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            {
+              op: 'add',
+              category: 'physical_constraint',
+              fact: 'Shoulder is recovering, still careful with overhead work',
+              durability: 'long_term',
+              phaseNote: 'the coach estimates the shoulder is ~70% recovered',
+              evidence: 'плечо ещё побаливает',
+            },
+          ],
+        }),
+    });
+    const compact = buildCompactStep(deps);
+
+    await compact(episodeState('Плечо ещё побаливает', 'Восстановление идёт хорошо — уже ~70% позади.'), ctxConfig());
+
+    // D12: the fact text carries no number and the evidence quotes the user
+    // line — but the phaseNote repeats the coach's "~70%" and phaseNote is
+    // rendered into ## User Facts for long_term facts.
+    expect(rememberFact).not.toHaveBeenCalled();
+  });
+
   it('AC-FP-3: retract whose evidence exists only in the AI message is skipped — retractFact not called', async () => {
     const { deps, retractFact, getForPrompt } = makeDeps({
       structured: () =>

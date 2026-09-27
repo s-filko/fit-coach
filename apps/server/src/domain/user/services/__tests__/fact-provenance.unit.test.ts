@@ -103,6 +103,28 @@ describe('checkFactProvenance — number provenance (D4)', () => {
   it('a fact text with no numbers passes on the evidence alone', () => {
     expect(check({ factText: 'Trains at home with dumbbells' })).toEqual({ ok: true });
   });
+
+  it('D12: a number the user did not state is refused even when only the phaseNote carries it', () => {
+    // The fact text is clean; the coach's "~70%" hides in the phase note —
+    // which is rendered into ## User Facts for long_term facts.
+    expect(
+      check({
+        factText: 'Shoulder is recovering',
+        phaseNote: 'the coach estimates ~70% recovered',
+      }),
+    ).toEqual(reject('number_not_user_stated'));
+  });
+
+  it('D12: a user-stated number in the phaseNote passes', () => {
+    expect(
+      check({
+        evidence: 'болело 3 недели',
+        factText: 'Shoulder is recovering',
+        phaseNote: 'ached for 3 weeks',
+        userTexts: ['болело 3 недели'],
+      }),
+    ).toEqual({ ok: true });
+  });
 });
 
 describe('checkFactProvenance — per-op shape (D3/D6)', () => {

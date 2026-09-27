@@ -85,6 +85,22 @@ describe('SUMMARIZER_V5 (AC-FP-5)', () => {
     expect(text).toMatch(/only if the user themselves wrote that number/);
   });
 
+  it('AC-FP-5 (D13): evidence is one continuous span of the user’s own words — no prefix, no elisions, no stitched fragments', () => {
+    const text = renderBlock(SUMMARIZER_V5, { phase: 'chat', transcript: 'User: hi', knownFacts: [] });
+    expect(text).toContain('one continuous span of the USER’s own words');
+    expect(text).toContain('No "User:" prefix');
+    expect(text).toContain('no ellipsis or … elisions');
+    expect(text).toContain('no fragments stitched together');
+  });
+
+  it('AC-FP-5 (D13): the numbers rule covers fact AND phaseNote and is reconciled with "Include numbers"', () => {
+    const text = renderBlock(SUMMARIZER_V5, { phase: 'chat', transcript: 'User: hi', knownFacts: [] });
+    expect(text).toContain('in a fact or a phaseNote only if the user themselves wrote that number');
+    // The general "Include numbers (weights, reps, dates)" sentence must point
+    // at the PROVENANCE restriction instead of contradicting it.
+    expect(text).toMatch(/Include numbers \(weights, reps, dates\)[^]*only if the user themselves wrote it/);
+  });
+
   it('keeps the transcript as the user section, after the instructions', () => {
     const sections = SUMMARIZER_V5.render({ phase: 'training', transcript: 'User: did squats', knownFacts: [] });
     expect(sections.map(s => s.id)).toEqual(['system', 'user']);
