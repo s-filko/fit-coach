@@ -25,6 +25,7 @@ _Generated 2026-09-27 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `coach-baseline.md` — Coach Baseline (Roadmap U1) Implementation Plan
 - `course-check-and-constraints.md` — Course Check and Constraint Handling Implementation Plan
 - `fact-lifecycle.md` — Fact Lifecycle — Storage, Conversational Tools, Summariser Operations Implementation Plan
+- `fact-provenance.md` — Fact Provenance — the Summariser Stores Only What the User Said (BUG-040) Implementation Plan
 - `llm-io-audit-trail-closeout.md` — LLM I/O Audit Trail — Close-out Remediation Implementation Plan
 - `llm-io-audit-trail.md` — LLM I/O Audit Trail — Nothing the User Wrote, the Model Answered, or the API Received Is Lost Implementation Plan
 - `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
@@ -234,6 +235,19 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
 4. **HB-02** (production Docker image) — its own plan, sequenced after HB-01;
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
+
+## Handoff (fact-provenance, 2026-09-27) — BUG-040 code half fixed, merged into dev
+
+Owner autonomy order 2026-09-27 ("бери 40 … без моего вмешательства … консервативно"). Plan
+`fact-provenance` is `done`, reviewed clean (one combined reviewer), merged into `dev`. Compaction
+fact operations `add`/`update`/`retract` are applied only with a verbatim user `evidence` quote and
+only user-stated numbers in the fact text and phase note (`domain/user/services/fact-provenance.ts`,
+summariser v5); `confirm` exempt. Red first: 5 + 3 tests failing on unchanged code, then green.
+**For the owner to review:** D1–D15 in the plan, incl. the ADR-0009 amendment 2026-09-27 and the
+ADR-0013 §3 pointer (rule-meaning change made under the autonomy order), D4's conservative number
+rule (a number the user wrote as a word is rejected). BUG-040 stays *Partially fixed*: a non-numeric
+coach claim with an unrelated user quote can still pass; warnings relevance and «табло» vocabulary
+are open. Five advisories in `BACKLOG.md` § fact-provenance.
 
 ## Handoff (training-history-lookup, 2026-09-26) — lookup tool + plan name check, deployed to dev
 
