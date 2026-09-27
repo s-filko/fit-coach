@@ -1,17 +1,20 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
-import { SPEECH_HTTP_STATUS_BY_CODE, type SpeechErrorCode } from '@domain/speech/ports';
+import { SPEECH_HTTP_STATUS_BY_CODE } from '@domain/speech/ports';
+
+import { errorCodeOf } from './route-error';
 
 /**
- * Any thrown value carrying a SpeechErrorCode (D3) — duck-typed, the same
- * trick as chat.routes.ts's conversationErrorCodeOf, so NoSpeechError and
- * SttUnavailableError match without an instanceof chain.
+ * F2 (Task 4, B3): the speech statuses plus CORE_ERROR → 500 — CORE_ERROR
+ * lives in the map, so the tail needs no special-case branch.
  */
-function speechErrorCodeOf(err: unknown): SpeechErrorCode | undefined {
-  const code = (err as { code?: unknown } | null)?.code;
-  return typeof code === 'string' && code in SPEECH_HTTP_STATUS_BY_CODE ? (code as SpeechErrorCode) : undefined;
-}
+const STATUS_BY_CODE = {
+  ...SPEECH_HTTP_STATUS_BY_CODE,
+  CORE_ERROR: 500,
+} as const;
+
+type VoiceErrorCode = keyof typeof STATUS_BY_CODE;
 
 /** Route-level body limit (D3): 15 MiB covers a 5-minute voice at ~1.6 MiB base64 with headroom
  * over Fastify's 1 MiB default — the route must never reject an audio the plan accepts. */
@@ -68,9 +71,8 @@ export async function registerVoiceRoutes(app: FastifyInstance): Promise<void> {
         req.log.error({ err: error, userId, ms: Date.now() - start }, 'Voice transcription failed');
         // INV-LLM-006: the body carries only `code`, never the exception's
         // message or a provider message — logs (above) may keep them.
-        const code = speechErrorCodeOf(error) ?? 'CORE_ERROR';
-        const status = code === 'CORE_ERROR' ? 500 : SPEECH_HTTP_STATUS_BY_CODE[code];
-        return reply.code(status).send({ error: { code } });
+        const code = errorCodeOf<VoiceErrorCode>(error, STATUS_BY_CODE) ?? 'CORE_ERROR';
+        return reply.code(STATUS_BY_CODE[code]).send({ error: { code } });
       }
     },
   );

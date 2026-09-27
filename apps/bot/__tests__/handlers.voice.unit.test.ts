@@ -186,6 +186,26 @@ describe('bot voice handling (AC-VT-4/5)', () => {
         );
     });
 
+    it('A10 (Task 4): a Telegram send failure after a successful chat is not a chat error', async () => {
+        mockPost
+            .mockResolvedValueOnce(flush({ data: { id: 'u5b' } }))
+            .mockResolvedValueOnce(flush({ data: { text: 'привет' } }))
+            .mockResolvedValueOnce(flush({ data: { content: 'ответ тренера' } }));
+        // The reply send itself fails — Telegram is unreachable, not the chat.
+        (bot.sendMessage as jest.Mock).mockRejectedValueOnce(new Error('ETELEGRAM 502'));
+
+        await emitAndSettle(voiceMessage());
+
+        // Only the failed reply send — no second quote, no chat-error text.
+        expect(bot.sendMessage).toHaveBeenCalledTimes(1);
+        const { log } = jest.requireMock('../logger') as { log: { error: jest.Mock } };
+        expect(log.error).toHaveBeenCalledWith(
+            expect.objectContaining({ err: expect.objectContaining({ message: 'ETELEGRAM 502' }) }),
+            expect.stringContaining('sending the voice reply failed'),
+        );
+        expect(log.error).not.toHaveBeenCalledWith(expect.anything(), 'voice chat processing failed');
+    });
+
     it('empty coach reply: only the quote is sent, chat was called with the transcript', async () => {
         mockPost
             .mockResolvedValueOnce(flush({ data: { id: 'u6' } }))

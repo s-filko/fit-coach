@@ -3,12 +3,7 @@ import { z } from 'zod';
 
 import { type ConversationErrorCode, HTTP_STATUS_BY_CODE } from '@domain/conversation/ports';
 
-/** Any thrown value carrying a ConversationErrorCode (D-B) — duck-typed so a thrown
- * LlmUnavailableError/ThreadBusyError/CoreError all match without an instanceof chain. */
-function conversationErrorCodeOf(err: unknown): ConversationErrorCode | undefined {
-  const code = (err as { code?: unknown } | null)?.code;
-  return typeof code === 'string' && code in HTTP_STATUS_BY_CODE ? (code as ConversationErrorCode) : undefined;
-}
+import { errorCodeOf } from './route-error';
 
 const chatMessageBody = z
   .object({
@@ -82,7 +77,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       } catch (error) {
         req.log.error({ err: error }, 'compact failed');
         // Same mapping as /chat (INV-LLM-006): the body carries only `code`.
-        const code = conversationErrorCodeOf(error) ?? 'CORE_ERROR';
+        const code = errorCodeOf<ConversationErrorCode>(error, HTTP_STATUS_BY_CODE) ?? 'CORE_ERROR';
         return reply.code(HTTP_STATUS_BY_CODE[code]).send({ error: { code } });
       }
     },
@@ -128,7 +123,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         req.log.error({ err: error }, 'Chat processing failed');
         // INV-LLM-006: the body carries only `code`, never the exception's
         // message or a stack — logs (above) may keep the message.
-        const code = conversationErrorCodeOf(error) ?? 'CORE_ERROR';
+        const code = errorCodeOf<ConversationErrorCode>(error, HTTP_STATUS_BY_CODE) ?? 'CORE_ERROR';
         return reply.code(HTTP_STATUS_BY_CODE[code]).send({ error: { code } });
       }
     },

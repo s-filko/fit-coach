@@ -3,7 +3,7 @@ import { BASE_ENV } from './base-env.fixture';
 
 const BASE = BASE_ENV;
 
-describe('STT config (D2 — optional key, tunables-not-secrets defaults)', () => {
+describe('STT config (AC-VT-2 — D2 optional key, tunables-not-secrets defaults)', () => {
   it('defaults STT_MODEL=gemini-3.8-flash, STT_API_URL, STT_TIMEOUT_MS=60000 (R3), STT_MAX_OUTPUT_TOKENS=4096 (R2), and parses without STT_API_KEY (server boots)', () => {
     const env = EnvSchema.parse(BASE);
     expect(env.STT_API_KEY).toBeUndefined();
