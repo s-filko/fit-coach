@@ -1923,7 +1923,8 @@ the coach mid-set.
 ### Fix plan
 
 Investigation + red test first (owner's procedure): a summariser case where only the coach asserts a figure
-must produce no fact carrying it. Data: fact `2075cb9f` must be corrected or retracted — owner decision.
+must produce no fact carrying it. Data: fact `2075cb9f` hand-corrected on dev 2026-09-27 (owner's order) — the
+"~70%" figure and the word "displayed" removed, the lever / leg-press distinction kept; `context` records the edit.
 
 ## BUG-041 — Non-strength sets are confirmed without their values, and free-text targets render as junk ("Target: ?×?", "2×2x45s")
 
