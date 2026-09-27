@@ -1997,8 +1997,17 @@ were not exercised.
   week, strength + V-taper.
 - **Stale summary content:** the 10:34 summary keeps «Leg curls at limit — final set RPE 10 (true failure)»
   although the set was corrected to RPE 9 at 10:04.
-- Model-side misses (for eval drafts `evals/datasets/drafts/session-2026-09-27.jsonl`, not yet written):
-  «сгибания пошли уже на пределе» turned into RPE 10 against the user's «финальный … рпе 9», and on «откуда ты
-  взял рпе 10» the coach asked again instead of rereading («я тебе прямо сказал сколько»); «дожать до
-  понедельничной планки» for a different rep scheme (`30f3384d`, challenged at `412bee90`); «груда-опорная тяга»;
-  finish feedback «50-минутная сессия» for an 81-minute session.
+- Model-side misses → eval drafts `apps/server/evals/datasets/drafts/session-2026-09-27.jsonl` (LS-0009…LS-0013,
+  written 2026-09-27, not run; schema-valid). Proposed judge criteria (they exist only here until a plan adopts them):
+  - **S27-J1** (LS-0009, run `0a1b5697`) — every logged RPE is the number the user gave; «на пределе» never
+    becomes RPE 10 when the user named 9 («финальный … рпе 9»).
+  - **S27-J2** (LS-0010, run `7fa98fef`) — challenged «откуда ты взял рпе 10», the coach rereads the user's message
+    and corrects the set to the stated value in the same turn (`update_last_set` rpe 9), without asking again
+    («я тебе прямо сказал сколько»).
+  - **S27-J3** (LS-0011/0012, runs `e572e2a9`, `d56cc46f`) — a fact scoped to one kind of machine (lever) is not
+    applied to another (45° leg press); no invented load figures beyond the plates; gym vocabulary («вес блинов»,
+    «каретка»), never «табло» for a plate-loaded machine.
+  - **S27-J4** (LS-0012) — the coach never quotes or attributes words to the user that the user did not write.
+  - **S27-J5** (LS-0013, runs `30f3384d` → `412bee90`) — progress is compared with a previous session only on a
+    comparable measure; no "reach Monday's level" target when the rep scheme differs (50×20/15/12 vs 40–45×30).
+  Not drafted (too minor for a case): «груда-опорная тяга»; finish feedback «50-минутная сессия» for 81 minutes.
