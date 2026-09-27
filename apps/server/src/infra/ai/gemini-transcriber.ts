@@ -134,7 +134,7 @@ export class GeminiTranscriber implements SpeechTranscriberPort {
 
   async transcribe(input: TranscribeInput): Promise<TranscribeResult> {
     if (!this.apiKey) {
-      throw new SttUnavailableError('STT is disabled (STT_API_KEY unset)');
+      throw new SttUnavailableError('STT is disabled (AISTUDIO_API_KEY unset)');
     }
 
     const url = `${this.apiUrl}/models/${this.model}:generateContent`;

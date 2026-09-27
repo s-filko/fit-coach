@@ -23,7 +23,7 @@ export class NoSpeechError extends Error {
 }
 
 /**
- * STT is unavailable: disabled (STT_API_KEY unset, D2), the provider errored,
+ * STT is unavailable: disabled (AISTUDIO_API_KEY unset, D2), the provider errored,
  * timed out, or answered with a body we cannot read. Mapped to HTTP 503.
  */
 export class SttUnavailableError extends Error {

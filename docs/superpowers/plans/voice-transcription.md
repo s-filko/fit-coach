@@ -35,7 +35,7 @@ Telegram, чтобы они были распознаны сервисом Speec
   `infra/ai/gemini-transcriber.ts` calling the REST API with `fetch` (no new dependency; `fetch`
   injectable for tests). The bot never holds a provider key. Swapping to another STT provider later
   is a new adapter, nothing else.
-- **D2 — config, optional.** `STT_API_KEY` (optional secret — unset = voice disabled, the server
+- **D2 — config, optional.** `AISTUDIO_API_KEY` (optional secret — unset = voice disabled, the server
   still boots, so the deploy never breaks on a missing key), `STT_MODEL` (default `gemini-3.8-flash`),
   `STT_API_URL` (default `https://generativelanguage.googleapis.com/v1beta`), `STT_TIMEOUT_MS`
   (default 60000, covers the body read — Task 3 R3), `STT_MAX_OUTPUT_TOKENS` (default 4096 — R2). Tunables-not-secrets exception, same class as `EPISODE_*`. `.env.example` documents them.
@@ -66,6 +66,8 @@ Telegram, чтобы они были распознаны сервисом Speec
   now, please type; too long: voice messages up to 5 minutes. Chat errors after a successful
   transcription keep today's `errorTextFor` path, preceded by the quote so the user sees what was heard.
 - **D9 — executor:** GLM worker, tasks in one terminal (server, bot, review fixes).
+- **D12 — key name (owner 2026-09-27: "чтобы не было дубля").** The provider key is read from the existing
+  `AISTUDIO_API_KEY` (renamed from `STT_API_KEY`), so one key has one name locally and on the VPS.
 - **D10 — STT outside `LlmGateway` (review B1, owner-delegated 2026-09-27: "будь строгим… доведи до рабочего").**
   Amend ADR-0013 §7 with a narrow carve-out rather than route audio through `getModel(profile)`: the factory is
   bound to one OpenAI-compatible route (Z.AI on dev, no audio), profiles cannot change provider, and
@@ -171,9 +173,9 @@ runs away to 65k output tokens / 155 s without a cap, and stops at 11.5 s with `
 
 ## Orchestrator checks before "ready to merge"
 
-- AC-VT-6: local server with `STT_API_KEY` set in local `apps/server/.env`, `curl` the route with the probe clip.
+- AC-VT-6: local server with `AISTUDIO_API_KEY` set in local `apps/server/.env`, `curl` the route with the probe clip.
 - AC-VT-7: local bot (third token) + local server; the owner sends a voice message.
-- Dev readiness: `STT_API_KEY` present in the VPS `.env.dev` before the merge, otherwise voice replies
+- Dev readiness: `AISTUDIO_API_KEY` present in the VPS `.env.dev` before the merge, otherwise voice replies
   `STT_UNAVAILABLE` after deploy (D2 keeps the deploy itself safe). Durable docs: `API_SPEC.md`
   (new route), feature spec `docs/features/FEAT-0011-voice-messages.md`.
 - `close-out-review`.
@@ -226,7 +228,7 @@ Advisory (→ BACKLOG via the `backlog` skill unless a blocking fix removes them
 - A15 | R3 | `voice.routes.ts:68` — `NoSpeechError` logged at error level.
 - A16 | R4 | `domain/speech/errors.ts:12`, `speech-transcriber.ports.ts:24` — JSDoc predates the sentinel.
 - A17 | R4 | `docs/ARCHITECTURE.md:333` — error-code table lacks NO_SPEECH/STT_UNAVAILABLE.
-- A18 | R4 | `CLAUDE.md` LLM section — `STT_API_KEY` in `.env.dev` not mentioned.
+- A18 | R4 | `CLAUDE.md` LLM section — `AISTUDIO_API_KEY` in `.env.dev` not mentioned.
 
 Meta (→ `docs/REVIEW_FINDINGS.md`): R1 blind spot (ADR-0007 guardrails not listed as in force); R1 rule candidate
 (every model invocation through the model factory); R2 rule candidate (third copy of duplicated code is a violation);
@@ -243,4 +245,4 @@ New advisories (→ BACKLOG or fixed): R2 duplicated `sendReply` empty-check clo
 ADR-0013 §11 map lacks `domain/speech`; R3 notices sent outside try (unhandled rejection on a Telegram failure),
 double failure in `beforeErrorText` mislabels the log, `route-error.ts` uses `in` (prototype chain); R4 FEAT-0010
 forward reference to "FEAT-0011" (fixed), stale digital-silence backlog line (dropped), docs/README indexes lack
-speech/FEAT-0011 (pre-existing staleness), CLAUDE.md does not mention `STT_API_KEY` for `.env.dev` (A18).
+speech/FEAT-0011 (pre-existing staleness), CLAUDE.md does not mention `AISTUDIO_API_KEY` for `.env.dev` (A18).

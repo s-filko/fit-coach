@@ -83,7 +83,7 @@ export async function registerInfraServices(container: Container = getGlobalCont
   container.register(
     SPEECH_TRANSCRIBER_TOKEN,
     new GeminiTranscriber({
-      apiKey: config.STT_API_KEY,
+      apiKey: config.AISTUDIO_API_KEY,
       model: config.STT_MODEL,
       apiUrl: config.STT_API_URL,
       timeoutMs: config.STT_TIMEOUT_MS,

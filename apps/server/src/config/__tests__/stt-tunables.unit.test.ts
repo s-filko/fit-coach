@@ -4,9 +4,9 @@ import { BASE_ENV } from './base-env.fixture';
 const BASE = BASE_ENV;
 
 describe('STT config (AC-VT-2, AC-1419 — D2 optional key, tunables-not-secrets defaults)', () => {
-  it('defaults STT_MODEL=gemini-3.8-flash, STT_API_URL, STT_TIMEOUT_MS=60000 (R3), STT_MAX_OUTPUT_TOKENS=4096 (R2), and parses without STT_API_KEY (server boots)', () => {
+  it('defaults STT_MODEL=gemini-3.8-flash, STT_API_URL, STT_TIMEOUT_MS=60000 (R3), STT_MAX_OUTPUT_TOKENS=4096 (R2), and parses without AISTUDIO_API_KEY (server boots)', () => {
     const env = EnvSchema.parse(BASE);
-    expect(env.STT_API_KEY).toBeUndefined();
+    expect(env.AISTUDIO_API_KEY).toBeUndefined();
     expect(env.STT_MODEL).toBe('gemini-3.8-flash');
     expect(env.STT_API_URL).toBe('https://generativelanguage.googleapis.com/v1beta');
     expect(env.STT_TIMEOUT_MS).toBe(60000);
@@ -16,13 +16,13 @@ describe('STT config (AC-VT-2, AC-1419 — D2 optional key, tunables-not-secrets
   it('accepts overrides and coerces the numbers', () => {
     const env = EnvSchema.parse({
       ...BASE,
-      STT_API_KEY: 'k',
+      AISTUDIO_API_KEY: 'k',
       STT_MODEL: 'other-model',
       STT_API_URL: 'https://stt.example.com',
       STT_TIMEOUT_MS: '5000',
       STT_MAX_OUTPUT_TOKENS: '8192',
     });
-    expect(env.STT_API_KEY).toBe('k');
+    expect(env.AISTUDIO_API_KEY).toBe('k');
     expect(env.STT_MODEL).toBe('other-model');
     expect(env.STT_API_URL).toBe('https://stt.example.com');
     expect(env.STT_TIMEOUT_MS).toBe(5000);

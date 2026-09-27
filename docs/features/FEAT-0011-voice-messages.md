@@ -29,7 +29,7 @@ before the coach's answer, so that I can talk to the coach hands-free during a w
 - **AC-1417:** `<NO_SPEECH>` or an empty transcript → 422 `NO_SPEECH`, the no-speech notice, no chat call (S-0119).
 - **AC-1418:** < 1 s and > 300 s voice notes are answered without download or STT call (S-0120).
 - **AC-1419:** STT disabled / provider error / timeout → 503 `STT_UNAVAILABLE`, the unavailable notice; the server
-  boots without `STT_API_KEY` (S-0121).
+  boots without `AISTUDIO_API_KEY` (S-0121).
 - **AC-1420:** a conversation error after a successful transcription sends the quote, then `errorTextFor` (S-0122).
 - **AC-1421:** error bodies of the transcribe route carry only `code` (INV-SPEECH-003).
 

@@ -160,7 +160,7 @@ components:
   - 413 — body over 15 MiB (Fastify)
   - 422 `{ error: { code: "NO_SPEECH" } }` — the provider found no clearly spoken words
   - 500 `{ error: { code: "CORE_ERROR" } }`
-  - 503 `{ error: { code: "STT_UNAVAILABLE" } }` — STT disabled (`STT_API_KEY` unset), provider error or timeout
+  - 503 `{ error: { code: "STT_UNAVAILABLE" } }` — STT disabled (`AISTUDIO_API_KEY` unset), provider error or timeout
 
   The route only transcribes: it writes nothing and does not touch the conversation. The bot sends
   the transcript to `/api/bot/chat` (§ 3.1) as the user's message. Error bodies carry the `code`

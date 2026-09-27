@@ -18,7 +18,7 @@ export interface TranscribeResult {
 }
 
 export interface SpeechTranscriberPort {
-  /** False when STT is disabled (D2: STT_API_KEY unset) — the caller answers 503 without calling. */
+  /** False when STT is disabled (D2: AISTUDIO_API_KEY unset) — the caller answers 503 without calling. */
   isEnabled(): boolean;
   /**
    * Transcribes the audio. Throws `NoSpeechError` for an empty transcript and
