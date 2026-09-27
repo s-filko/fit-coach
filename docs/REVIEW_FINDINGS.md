@@ -69,6 +69,7 @@ or is inert for the kind of diff under review.
   deleted prompt builder), and nothing directs the reviewer to check the survivor for exports
   the deletion just killed.
   Runs: refactor-p0-dead-code (2026-09-12), refactor-p0-dead-code (2026-09-12, third run).
+- [×2] The zones do not say whether a missing AC id in a test name (SUPERPOWERS_INTEGRATION rule 4) is blocking or advisory; it meets the formal bar (file:line + named rule) yet costs two renames. A severity note in `r3-correctness.md` would make verdicts consistent. Also unstated: whether an id in the file header comment satisfies the convention (R3 graded header-only advisory, fully absent blocking). Runs: smoke-test 2026-09-25 (R3), voice-transcription 2026-09-27 (R3).
 - [×1] R1's "always blocking" clause — any durable spec under `docs/` outside `docs/superpowers/`
   edited in this diff — collides with the plan, which explicitly assigned `docs/LOGGING_GUIDE.md`
   to Tasks 5 and 6, and with the plan's own Global Constraints, which reserve a narrower list
@@ -159,7 +160,6 @@ or is inert for the kind of diff under review.
   prioritisation in the brief or an explicit budget.
   Runs: llm-io-audit-trail (2026-09-22).
 - [×1] A plan stated "exactly N failing" for the repro glob from memory rather than from a command it had run; the baseline (2) and the close-out expectation (4) both missed the unit repro probes for BUG-023/BUG-025 (real: 4 before, 6 after). Proposed: a plan quoting a count of failing suites gets it from a run and names the command. Runs: coach-baseline 2026-09-25 (R3).
-- [×1] The zones do not say whether a missing AC id in a test name (SUPERPOWERS_INTEGRATION rule 4) is blocking or advisory; it meets the formal bar (file:line + named rule) yet costs two renames. A severity note in `r3-correctness.md` would make verdicts consistent. Runs: smoke-test 2026-09-25 (R3).
 
 - [×1] A re-review prompt listed as "claimed" a fix that neither the plan nor the commits claimed
   (only the worker's worker_done prose did) — the reviewer had to check an assumed claim. A re-run
@@ -352,6 +352,11 @@ a wider reader (the final whole-branch review) or noticed after the fact.
 - [×1] Moving a module between `prompts/` subdirectories has no checklist item for the ADR-0013 §5.1
   Layout tree or the `ARCHITECTURE.md` tree — the first review and the fix commit both missed §5.1.
   Runs: now-line-last R1+R4 re-run (2026-09-27).
+- [×1] R1 was pointed at ADR-0013 boundaries, but the rule that applied (no direct model call bypassing
+  `getModel()`) is ADR-0007 Guardrail 3, which lives in an ADR that reads as historical and is only
+  cited as in force from ADR-0013. Proposed: list the ADR-0007 guardrails still in force in
+  `docs/CONTRIBUTING_AI.md`, or restate Guardrail 3 as an INV-LLM-* in ADR-0013 §11.
+  Runs: voice-transcription (2026-09-27, R1).
 
 ## Rule candidates
 
@@ -371,20 +376,7 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   double reimplemented in two files."
   Fourth run: R2 applied DRY equally to test/fixture code in `tests/integration/scenarios` and noted the zone file does not say whether it should; that choice produced 2 of its 3 blocking findings.
   Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19), training-journey-scenarios (2026-09-20), transition-handoff (2026-09-25).
-- [×3] A docs-reconcile task's checklist written from the author's memory left five durable
-  docs drifted (API_SPEC.md, three FEAT-* specs, BUGS.md/MANUAL_TEST_PLAN pointers) while
-  every enumerated step was ticked done. Proposed sentence for the factual-bucket definition
-  in `SUPERPOWERS_INTEGRATION.md` rule 3: a docs-reconcile step's file list must be derived
-  mechanically — for every file/symbol the branch deletes or moves, paste
-  `git grep -l -e <deleted-path-stem> -e <renamed-symbol> -- docs` into the plan and tick
-  items only against that list. Second occurrence adds a sharper variant: the drift hit
-  docs that the same branch's own edits cited — CONTRIBUTING_AI's rewritten section still
-  pointed readers at `conversation.spec.md` for verification two lines after declaring the
-  mechanism deleted — so the checklist author did not notice even while editing an adjacent
-  paragraph about it.
-  Third run: R4 found the close-out doc task (written before the code) missed CONTRIBUTING_AI.md run-row semantics, ARCHITECTURE.md reply semantics and prompt tree, ADR-0013 §5.1 and BUG-032. Proposed principle for CONTRIBUTING_AI.md: "A plan's close-out doc task is written from the diff, not from the plan: before `Status: done`, grep the durable layer for every symbol the diff changes and list each hit in the close-out task."
-  Runs: refactor-p3-run-context-commit (2026-09-17), refactor-p4-episode-memory (2026-09-18), transition-handoff (2026-09-25).
-- [×3] R3's "describe/it names carry BR/AC references per `docs/CONTRIBUTING_AI.md`" has no slot for
+- [×4] R3's "describe/it names carry BR/AC references per `docs/CONTRIBUTING_AI.md`" has no slot for
   `BUG-0NN`, which was this plan's owner-designated source of truth, nor for plan-local `AC-LSR-N`
   acceptance ids that are not durable `AC-####` specs. The six repro files do carry `BUG-0NN` in
   their `describe()` names and both ids in their header docblocks — satisfying CONTRIBUTING_AI.md's
@@ -399,7 +391,20 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   (`AC-[0-9]{4}`) silently misses all of them. Proposed: the guide's ID Conventions line reads
   `AC-####` for durable/cross-cutting criteria and `AC-<SLUG>-N` for plan-scoped ones, and the zone grep
   matches both shapes.
-  Runs: session-2026-09-21-repro (2026-09-22), llm-io-audit-trail (2026-09-22), session-investigation-0925 (2026-09-26).
+  Runs: session-2026-09-21-repro (2026-09-22), llm-io-audit-trail (2026-09-22), session-investigation-0925 (2026-09-26), voice-transcription (2026-09-27, R3+R4: `AC-VT-*` vs `AC-####`; the guide still defines only the numeric form).
+- [×3] A docs-reconcile task's checklist written from the author's memory left five durable
+  docs drifted (API_SPEC.md, three FEAT-* specs, BUGS.md/MANUAL_TEST_PLAN pointers) while
+  every enumerated step was ticked done. Proposed sentence for the factual-bucket definition
+  in `SUPERPOWERS_INTEGRATION.md` rule 3: a docs-reconcile step's file list must be derived
+  mechanically — for every file/symbol the branch deletes or moves, paste
+  `git grep -l -e <deleted-path-stem> -e <renamed-symbol> -- docs` into the plan and tick
+  items only against that list. Second occurrence adds a sharper variant: the drift hit
+  docs that the same branch's own edits cited — CONTRIBUTING_AI's rewritten section still
+  pointed readers at `conversation.spec.md` for verification two lines after declaring the
+  mechanism deleted — so the checklist author did not notice even while editing an adjacent
+  paragraph about it.
+  Third run: R4 found the close-out doc task (written before the code) missed CONTRIBUTING_AI.md run-row semantics, ARCHITECTURE.md reply semantics and prompt tree, ADR-0013 §5.1 and BUG-032. Proposed principle for CONTRIBUTING_AI.md: "A plan's close-out doc task is written from the diff, not from the plan: before `Status: done`, grep the durable layer for every symbol the diff changes and list each hit in the close-out task."
+  Runs: refactor-p3-run-context-commit (2026-09-17), refactor-p4-episode-memory (2026-09-18), transition-handoff (2026-09-25).
 - [×2] A helper extracted into a shared module leaves its pre-existing call sites untouched,
   and no rule says that is unfinished. On this branch Task 2 moved the domain renderers into
   `prompts/blocks/` and only `training/v1.ts` was repointed; `chat/v1.ts`, `plan_creation/v1.ts`
@@ -791,3 +796,19 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   now-line-last broke it for NOW.
   Runs: now-line-last (2026-09-27).
 
+- [×1] Neither ADR said whether a model call that is not conversational and has no run (speech-to-text,
+  an eval judge) must go through `getModel()`/`LlmGateway`. Proposed INV-LLM-0xx in ADR-0013 §11: "Every
+  model invocation obtains its client through `infra/ai/model.factory` by profile; exceptions require an
+  ADR amendment." (This run resolved it for STT by the ADR-0013 §7 amendment of 2026-09-27.)
+  Runs: voice-transcription (2026-09-27, R1).
+- [×1] The DRY mandate does not say whether adding another copy of an already-duplicated sequence is a
+  violation or inherited debt. Proposed for `CONTRIBUTING_AI.md` "Principles & Boundaries": "DRY applies to
+  the new copy: code that adds another instance of an existing duplicated sequence is a violation even when
+  the earlier copies predate the branch; the fix extracts the shared helper and uses it at all sites the
+  branch touches."
+  Runs: voice-transcription (2026-09-27, R2).
+- [×1] Existing feature specs carry `**Status**:` / `x-status` lines (FEAT-0003, 0006, 0010) although the
+  Status layer forbids progress markers in durable specs, and a new spec copied the pattern. Proposed for
+  `docs/DOCUMENTATION_GUIDE.md` § Feature Spec: "A feature spec has no Status/x-status line; delivery state
+  lives only in the plan header and STATE.md" (legacy FEAT files → one-time cleanup).
+  Runs: voice-transcription (2026-09-27, R4).
