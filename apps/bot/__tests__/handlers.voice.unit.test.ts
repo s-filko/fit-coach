@@ -36,6 +36,15 @@ function fakeStream(data: Buffer): Readable {
     } as unknown as Readable;
 }
 
+function failingStream(code: string): Readable {
+    return {
+        // eslint-disable-next-line require-yield
+        async *[Symbol.asyncIterator]() {
+            throw Object.assign(new Error(code === 'ERR_STREAM_PREMATURE_CLOSE' ? 'Premature close' : code), { code });
+        },
+    } as unknown as Readable;
+}
+
 const AUDIO = Buffer.from('fake-ogg-bytes');
 const AUDIO_BASE64 = AUDIO.toString('base64');
 
@@ -76,6 +85,16 @@ describe('bot voice handling (AC-VT-4/5; AC-1415, AC-1416, AC-1417, AC-1418, AC-
 
     const emitAndSettle = async (msg: TelegramBot.Message) => {
         bot.emit('message', msg);
+        await new Promise(resolve => setTimeout(resolve, 50));
+    };
+
+    // Retries back off 500 ms then 1000 ms, so the retry tests wait for the handler's last visible effect.
+    const emitAndWaitFor = async (msg: TelegramBot.Message, done: () => boolean, timeoutMs = 4000) => {
+        bot.emit('message', msg);
+        const start = Date.now();
+        while (!done() && Date.now() - start < timeoutMs) {
+            await new Promise(resolve => setTimeout(resolve, 20));
+        }
         await new Promise(resolve => setTimeout(resolve, 50));
     };
 
@@ -301,5 +320,40 @@ describe('bot voice handling (AC-VT-4/5; AC-1415, AC-1416, AC-1417, AC-1418, AC-
             }),
             'voice message processing failed',
         );
+    });
+
+    it('download retry (owner 2026-09-27): two network drops, third attempt succeeds → transcribed and answered', async () => {
+        bot.getFileStream = jest.fn()
+            .mockReturnValueOnce(failingStream('ERR_STREAM_PREMATURE_CLOSE'))
+            .mockReturnValueOnce(failingStream('ETIMEDOUT'))
+            .mockReturnValueOnce(fakeStream(AUDIO));
+        mockPost
+            .mockResolvedValueOnce(flush({ data: { id: 'u1' } }))
+            .mockResolvedValueOnce(flush({ data: { text: 'привет' } }))
+            .mockResolvedValueOnce(flush({ data: { content: 'Привет!' } }));
+
+        await emitAndWaitFor(voiceMessage(), () => (bot.sendMessage as jest.Mock).mock.calls.length > 0);
+
+        expect(bot.getFileStream).toHaveBeenCalledTimes(3);
+        expect(mockPost).toHaveBeenCalledWith('/api/bot/voice/transcribe', expect.objectContaining({ audioBase64: AUDIO_BASE64 }));
+    });
+
+    it('download retry: three network drops → gives up after 3 attempts, no transcribe call', async () => {
+        bot.getFileStream = jest.fn().mockImplementation(() => failingStream('ECONNRESET'));
+        mockPost.mockResolvedValueOnce(flush({ data: { id: 'u1' } }));
+
+        await emitAndWaitFor(voiceMessage(), () => (bot.sendMessage as jest.Mock).mock.calls.length > 0);
+
+        expect(bot.getFileStream).toHaveBeenCalledTimes(3);
+        expect(mockPost).not.toHaveBeenCalledWith('/api/bot/voice/transcribe', expect.anything());
+    });
+
+    it('download retry: a non-network error is not retried', async () => {
+        bot.getFileStream = jest.fn().mockImplementation(() => failingStream('EACCES'));
+        mockPost.mockResolvedValueOnce(flush({ data: { id: 'u1' } }));
+
+        await emitAndSettle(voiceMessage());
+
+        expect(bot.getFileStream).toHaveBeenCalledTimes(1);
     });
 });

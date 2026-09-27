@@ -119,13 +119,44 @@ function sttNoticeKindOf(error: unknown): 'NO_SPEECH' | 'STT_UNAVAILABLE' {
 }
 
 /** D6: the bot never holds a provider key — audio goes to the server as base64. */
-async function downloadVoiceAsBase64(bot: TelegramBot, fileId: string): Promise<string> {
+async function downloadOnce(bot: TelegramBot, fileId: string): Promise<string> {
     const stream = bot.getFileStream(fileId);
     const chunks: Buffer[] = [];
     for await (const chunk of stream) {
         chunks.push(Buffer.from(chunk as Buffer));
     }
     return Buffer.concat(chunks).toString('base64');
+}
+
+// Owner 2026-09-27: the file download from Telegram is retried up to 3 attempts, only on a network failure
+// (a dropped/timed-out connection — seen live as ERR_STREAM_PREMATURE_CLOSE and ETIMEDOUT).
+const VOICE_DOWNLOAD_ATTEMPTS = 3;
+const VOICE_DOWNLOAD_BACKOFF_MS = 500;
+const NETWORK_ERROR_CODES = new Set([
+    'ERR_STREAM_PREMATURE_CLOSE', 'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EPIPE', 'ENOTFOUND', 'EAI_AGAIN', 'ESOCKETTIMEDOUT', 'EFATAL',
+]);
+
+export function isNetworkError(error: unknown): boolean {
+    const code = (error as { code?: unknown } | null)?.code;
+    if (typeof code === 'string' && NETWORK_ERROR_CODES.has(code)) {
+        return true;
+    }
+    const message = error instanceof Error ? error.message : '';
+    return [...NETWORK_ERROR_CODES].some(c => message.includes(c)) || message.includes('Premature close');
+}
+
+async function downloadVoiceAsBase64(bot: TelegramBot, fileId: string): Promise<string> {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            return await downloadOnce(bot, fileId);
+        } catch (error) {
+            if (attempt >= VOICE_DOWNLOAD_ATTEMPTS || !isNetworkError(error)) {
+                throw error;
+            }
+            log.warn({ err: error, attempt }, 'voice download failed on the network — retrying');
+            await new Promise(resolve => setTimeout(resolve, VOICE_DOWNLOAD_BACKOFF_MS * attempt));
+        }
+    }
 }
 
 /**
