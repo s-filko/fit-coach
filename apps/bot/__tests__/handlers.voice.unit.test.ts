@@ -282,4 +282,22 @@ describe('bot voice handling (AC-VT-4/5)', () => {
         expect(mockPost).toHaveBeenCalledWith('/api/bot/user', expect.any(Object));
         expect(mockPost).toHaveBeenCalledWith('/api/bot/voice/transcribe', expect.objectContaining({ userId: 'u10-new' }));
     });
+
+    it('F4: the voice outer catch logs the axios status/responseData of the failure', async () => {
+        mockPost
+            .mockResolvedValueOnce(flush({ data: { id: 'u11' } }))
+            .mockRejectedValueOnce(axiosError(404, { error: { code: 'USER_NOT_FOUND' } }));
+
+        await emitAndSettle(voiceMessage());
+
+        const { log } = jest.requireMock('../logger') as { log: { error: jest.Mock } };
+        expect(log.error).toHaveBeenCalledWith(
+            expect.objectContaining({
+                err: expect.anything(),
+                status: 404,
+                responseData: { error: { code: 'USER_NOT_FOUND' } },
+            }),
+            'voice message processing failed',
+        );
+    });
 });

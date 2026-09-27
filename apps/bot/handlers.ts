@@ -199,11 +199,7 @@ async function handleVoiceMessage(bot: TelegramBot, msg: TelegramBot.Message, vo
         });
     } catch (error) {
         // registerOrGetUser / download / a 404 re-thrown from above.
-        if (isNotFound(error) && msg.from) {
-            userIdBySenderId.delete(msg.from.id);
-        }
-        log.error({ err: error, chatId }, 'voice message processing failed');
-        await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), knownLanguageCode(msg)));
+        await reportFailure(bot, msg, chatId, error, 'voice message processing failed');
     }
 }
 
@@ -219,6 +215,39 @@ function conversationErrorCodeOf(error: unknown): string | undefined {
     }
     const code = error.response?.data?.error?.code;
     return typeof code === 'string' ? code : undefined;
+}
+
+/**
+ * F4 (Task 4, B2): the one failure tail shared by chatAndReply's catch and
+ * the outer catches of /start, the text path and the voice path — 404 clears
+ * the cached id, the error is logged (with the axios status/responseData when
+ * present) under the caller's label, and the user gets the localized
+ * errorTextFor message — optionally preceded by `beforeErrorText` (the voice
+ * quote, D8).
+ */
+async function reportFailure(
+    bot: TelegramBot,
+    msg: TelegramBot.Message,
+    chatId: number,
+    error: unknown,
+    logLabel: string,
+    beforeErrorText?: () => Promise<void>,
+): Promise<void> {
+    if (isNotFound(error) && msg.from) {
+        userIdBySenderId.delete(msg.from.id);
+    }
+    log.error({
+        err: error,
+        username: msg.from?.username,
+        ...(axios.isAxiosError(error) && {
+            status: error.response?.status,
+            responseData: error.response?.data,
+        }),
+    }, logLabel);
+    if (beforeErrorText) {
+        await beforeErrorText();
+    }
+    await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), knownLanguageCode(msg)));
 }
 
 /**
@@ -252,21 +281,7 @@ async function chatAndReply(
         }
         content = aiResponse;
     } catch (error) {
-        if (isNotFound(error) && msg.from) {
-            userIdBySenderId.delete(msg.from.id);
-        }
-        log.error({
-            err: error,
-            username: msg.from?.username,
-            ...(axios.isAxiosError(error) && {
-                status: error.response?.status,
-                responseData: error.response?.data,
-            }),
-        }, logLabel);
-        if (options.beforeErrorText) {
-            await options.beforeErrorText();
-        }
-        await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), knownLanguageCode(msg)));
+        await reportFailure(bot, msg, chatId, error, logLabel, options.beforeErrorText);
         return;
     }
     await sendReply(content);
@@ -389,18 +404,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                         }, '/start command failed');
                     });
                 } catch (error) {
-                    if (isNotFound(error)) {
-                        userIdBySenderId.delete(msg.from.id);
-                    }
-                    log.error({
-                        err: error,
-                        username: msg.from?.username,
-                        ...(axios.isAxiosError(error) && {
-                            status: error.response?.status,
-                            responseData: error.response?.data,
-                        }),
-                    }, '/start command failed');
-                    await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), knownLanguageCode(msg)));
+                    await reportFailure(bot, msg, chatId, error, '/start command failed');
                 }
                 return;
             }
@@ -427,18 +431,7 @@ export function registerBotHandlers(bot: TelegramBot) {
                     }, 'message processing failed');
                 });
             } catch (error) {
-                if (isNotFound(error)) {
-                    userIdBySenderId.delete(msg.from.id);
-                }
-                log.error({
-                    err: error,
-                    username: msg.from?.username,
-                    ...(axios.isAxiosError(error) && {
-                        status: error.response?.status,
-                        responseData: error.response?.data,
-                    }),
-                }, 'message processing failed');
-                await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), knownLanguageCode(msg)));
+                await reportFailure(bot, msg, chatId, error, 'message processing failed');
             }
         });
     });
