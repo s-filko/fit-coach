@@ -32,6 +32,8 @@ const SUMMARY = {
       category: 'physical_constraint',
       fact: 'left knee hurts on deep squats',
       durability: 'long_term',
+      // BUG-040 (fact-provenance): verbatim from the folded freshest user turn.
+      evidence: 'Левое колено болит',
     },
   ],
 };

@@ -13,8 +13,14 @@
  *
  * Fact operations (fact-lifecycle plan Task 3, AC-FL-4 — reverses the P6
  * 2026-09-17 no-per-turn-tool stance, which Task 2's `manage_fact` already
- * ended): summariser v4 SEES the user's known active facts and returns
+ * ended): the episode summariser (v4/v5 — one shared EpisodeSummaryV4Schema,
+ * fact-provenance D14) SEES the user's known active facts and returns
  * operations (add / confirm / update / retract) instead of a blind upsert.
+ * BUG-040 (fact-provenance plan): add/update/retract are further guarded by
+ * `checkFactProvenance` — the operation is applied only when the episode's
+ * USER messages support it (a verbatim `evidence` quote, and only
+ * user-stated numbers); `confirm` is exempt. A rejected operation logs and
+ * the batch continues.
  * After a successful `summaries.insert`, this node applies each operation via
  * the facts port. TWO CLOCKS (AC-FL-3): every written date uses the run clock
  * ctx.now, while the EVIDENCE time is the compacted episode's newest user
@@ -39,10 +45,12 @@ import type { ConversationPhase } from '@domain/conversation/phases';
 import type { LegacySummary, SummaryPort } from '@domain/conversation/ports';
 import type { IUserFactsService } from '@domain/user/ports';
 import { PermanentFactRefusal } from '@domain/user/services/fact-lifecycle';
+import { checkFactProvenance } from '@domain/user/services/fact-provenance';
 
 import { estimateMessages } from '@infra/ai/context/token-estimator';
 import { splitEpisode } from '@infra/ai/graph/episode';
 import { type ConversationStateType, ctxOf } from '@infra/ai/graph/state';
+import { textOf } from '@infra/ai/llm.gateway';
 import { episodeParagraph } from '@infra/ai/prompts/blocks';
 import { SUMMARIZER_PROMPT } from '@infra/ai/prompts/summarizer';
 
@@ -294,8 +302,34 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
         // episode can be no newer than this; ctx.now would let a restatement
         // leapfrog a closure that happened in between.
         const evidenceAt = state.lastUserMessageAt ? new Date(state.lastUserMessageAt) : ctx.now;
+        // BUG-040 (fact-provenance D6): a mutating operation must be supported
+        // by the episode's USER messages — the summarised `removed` part is the
+        // only place the evidence can come from, human messages only.
+        const userTexts = removed.filter(m => m._getType() === 'human').map(m => textOf(m.content));
         for (const op of operations) {
           try {
+            // D3: confirm is exempt — it bumps a counter on a fact the user
+            // already owns and never changes text. D6: the check is in code,
+            // not asked of the model; a rejected operation is skipped and the
+            // batch continues (D-E). Never log the fact text.
+            if (op.op !== 'confirm') {
+              const oldFactText = op.op === 'update' ? knownFacts.find(f => f.id === op.factId)?.fact : undefined;
+              const verdict = checkFactProvenance({
+                op: op.op,
+                evidence: op.evidence,
+                factText: op.fact,
+                phaseNote: op.phaseNote, // D12: rendered into ## User Facts too
+                userTexts,
+                oldFactText,
+              });
+              if (!verdict.ok) {
+                log.info(
+                  { userId, runId, op: op.op, reason: verdict.reason, factId: op.factId ?? null },
+                  'Fact operation skipped — the episode’s user messages do not support it (BUG-040)',
+                );
+                continue;
+              }
+            }
             await applyFactOperation(userFacts, userId, op, evidenceAt, ctx.now, summaryTurnId);
           } catch (err) {
             if (err instanceof PermanentFactRefusal) {

@@ -69,15 +69,25 @@ export const FactOperationSchema = z
     reviewInDays: z.number().int().optional(),
     phaseNote: z.string().optional(),
     onExpiry: z.enum(FACT_ON_EXPIRY).optional(),
+    /**
+     * add/update/retract (BUG-040, fact-provenance D2): a verbatim quote from
+     * one of the episode's USER lines that states the fact — original language,
+     * never translated. Optional on purpose: a missing field SKIPS that
+     * operation in the compaction node (the summary and the other operations
+     * still apply, the fact-lifecycle D-E rule); it never fails the summary.
+     */
+    evidence: z.string().optional(),
   })
   .strict();
 
 export type FactOperation = z.infer<typeof FactOperationSchema>;
 
 /**
- * Episode summariser v4's structured output: v3's five list fields, with
- * `factOperations` replacing `facts` (AC-FL-4). Empty is the expected common
- * answer — most episodes state nothing durable.
+ * The episode summariser's structured output, SHARED by prompts v4 and v5
+ * (fact-provenance D14: v5 adds only the provenance rules and the optional
+ * `evidence` on operations, so one schema serves both): v3's five list
+ * fields, with `factOperations` replacing `facts` (AC-FL-4). Empty is the
+ * expected common answer — most episodes state nothing durable.
  */
 export const EpisodeSummaryV4Schema = z
   .object({

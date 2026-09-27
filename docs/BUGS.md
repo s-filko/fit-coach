@@ -1878,7 +1878,7 @@ produce no "completed" summary for an exercise the batch keeps logging.
 
 ## BUG-040 — The summariser stores the coach's own invented claims as user facts; a fact scoped to lever machines was applied to the leg press
 
-**Status:** Open
+**Status:** Partially fixed (2026-09-27, plan `fact-provenance`) — the code/unguarded half is closed: compaction fact operations (`add`/`update`/`retract`) are applied only with a verbatim user quote and user-stated numbers (ADR-0009 amendment 2026-09-27; tests AC-FP-1..4 in `compact.node.unit.test.ts` / `user-facts.scenario.unit.test.ts`, red first on unchanged code). The number half (the `2075cb9f` "~70%" case, fact text and phase note) is closed deterministically; the quote check proves the evidence is the user's words, not that it supports the fact, so a **non-numeric** coach claim with an unrelated user quote can still pass. Still open: `start_training_session.warnings` relevance to the planned exercises, gym vocabulary («табло»), and the model-side fabricated quote / scope misapplication (eval drafts LS-0011/0012)
 **Severity:** High — wrong "knowledge" becomes durable memory with the user as its source, and will be quoted back in every later session
 **Found during:** owner's live dev session 2026-09-27, runs `e572e2a9` (09:21) → `40f627e4` (09:38); fact written 10:34:37 by the compaction in run `622a877a`
 **Component:** fact extraction in the episode summariser (`apps/server/src/infra/ai/graph/nodes/compact.ts` + its prompt), `session_planning` → `start_training_session.warnings`, `user_facts`
