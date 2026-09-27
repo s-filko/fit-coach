@@ -59,7 +59,7 @@ function voiceMessage(overrides: Partial<TelegramBot.Message> = {}): TelegramBot
 
 const htmlOptions = { parse_mode: 'HTML' } as const;
 
-describe('bot voice handling (AC-VT-4/5)', () => {
+describe('bot voice handling (AC-VT-4/5; AC-1415, AC-1416, AC-1417, AC-1418, AC-1419, AC-1420)', () => {
     let bot: TelegramBot & EventEmitter;
 
     beforeEach(() => {

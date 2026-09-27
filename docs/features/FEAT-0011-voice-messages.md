@@ -33,7 +33,7 @@ before the coach's answer, so that I can talk to the coach hands-free during a w
 - **AC-1420:** a conversation error after a successful transcription sends the quote, then `errorTextFor` (S-0122).
 - **AC-1421:** error bodies of the transcribe route carry only `code` (INV-SPEECH-003).
 
-Plan-level criteria and their tests: `docs/superpowers/plans/voice-transcription.md` (AC-VT-1..7 map onto these).
+Plan-level criteria and their tests: `docs/superpowers/plans/voice-transcription.md` (AC-VT-1..7); the durable ↔ plan ↔ test mapping is the table in its § Verification evidence.
 
 ## API Mapping
 

@@ -38,7 +38,7 @@ async function buildApp(): Promise<FastifyInstance> {
 
 const VALID_BODY = { userId: 'u1', audioBase64: 'AQID', mimeType: 'audio/ogg' };
 
-describe('POST /api/bot/voice/transcribe', () => {
+describe('POST /api/bot/voice/transcribe (AC-VT-3; AC-1417, AC-1419, AC-1421)', () => {
   let app: FastifyInstance;
   const headers = () => ({ 'x-api-key': loadConfig().BOT_API_KEY as string });
 

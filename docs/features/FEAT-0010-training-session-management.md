@@ -218,7 +218,7 @@ Key tables:
 
 ## Out of Scope (Future Features)
 
-- Automatic workout plan generation (FEAT-0011)
+- Automatic workout plan generation
 - Real-time form feedback via video analysis
 - Progress charts and analytics dashboard
 - Social features (sharing workouts, challenges)

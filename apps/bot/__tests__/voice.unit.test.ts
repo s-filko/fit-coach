@@ -20,7 +20,7 @@ describe('escapeHtml', () => {
     });
 });
 
-describe('voiceReplyMessages (D7)', () => {
+describe('voiceReplyMessages (D7, AC-1416, BR-SPEECH-004/005)', () => {
     it('composes one message: quote + coach reply', () => {
         const messages = voiceReplyMessages('привет', 'Привет! Чем помочь?');
         expect(messages).toEqual(['<blockquote>🎤 привет</blockquote>\n\nПривет! Чем помочь?']);
@@ -93,7 +93,7 @@ describe('voiceReplyMessages (D7)', () => {
     });
 });
 
-describe('voiceNoticeFor (D8)', () => {
+describe('voiceNoticeFor (D8, AC-1417, AC-1418, AC-1419, BR-SPEECH-007)', () => {
     it.each(['NO_SPEECH', 'STT_UNAVAILABLE', 'TOO_LONG'] as const)('%s: ru for ru, en fallback otherwise', kind => {
         const ru = voiceNoticeFor(kind, 'ru');
         const en = voiceNoticeFor(kind, 'en');

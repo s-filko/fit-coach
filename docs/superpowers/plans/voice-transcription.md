@@ -155,6 +155,18 @@ runs away to 65k output tokens / 155 s without a cap, and stops at 11.5 s with `
   `probe.ogg` 6 s → 200 `"Сегодня сделал три подхода приседа по 8 повторов с весом 60 кг."` 2.2 s;
   low-level noise → 422 `NO_SPEECH` 1.3 s; 147 s monologue → 200 full transcript; looped 300 s clip → 200
   capped (`MAX_TOKENS`) instead of the pre-fix 503 at 30 s; no `X-Api-Key` → 401.
+- Task 4 (worker 249d676a + 420b1bb6, re-run by the orchestrator and R3 at 78f83304 / after the ID renames):
+  server test:unit 151 suites / 1499 tests; bot `npx tsc --noEmit` clean, `npm test` 8 suites / 68 tests.
+- Durable AC ↔ plan AC ↔ tests (test `describe` names carry both):
+  | Durable | Plan | Tests |
+  |---|---|---|
+  | AC-1415 | AC-VT-4 | `handlers.voice.unit.test.ts` |
+  | AC-1416 | AC-VT-4 | `voice.unit.test.ts` (voiceReplyMessages), `handlers.voice.unit.test.ts` |
+  | AC-1417 | AC-VT-1/3/5 | `gemini-transcriber.unit.test.ts`, `voice.route.unit.test.ts`, `voice.unit.test.ts`, `handlers.voice.unit.test.ts` |
+  | AC-1418 | AC-VT-5 | `handlers.voice.unit.test.ts`, `voice.unit.test.ts` |
+  | AC-1419 | AC-VT-1/2/3/5 | `stt-tunables.unit.test.ts`, `gemini-transcriber.unit.test.ts`, `voice.route.unit.test.ts`, `handlers.voice.unit.test.ts` |
+  | AC-1420 | AC-VT-5 | `handlers.voice.unit.test.ts` |
+  | AC-1421 | AC-VT-3 | `voice.route.unit.test.ts` |
 - AC-VT-7: pending — local bot `@MyFitAiCoachTestBot` running from this worktree, awaiting the owner's voice message.
 
 ## Orchestrator checks before "ready to merge"
@@ -182,7 +194,7 @@ runs away to 65k output tokens / 155 s without a cap, and stops at 11.5 s with `
 Run 1 — 2026-09-27, zones R1–R4, verdict **blocked**. Findings relayed verbatim (condensed to their claim).
 
 Blocking:
-- B1 | R1 | `apps/server/src/infra/ai/gemini-transcriber.ts:164` | ADR-0007 Guardrail 3; ADR-0013 D-10 — `GeminiTranscriber` calls a model directly, bypassing `getModel(profile)` and the `LlmGateway` port. Owner decision: amend the ADR with a carve-out for non-conversational audio→text, or route through the profile mechanism. → open, asked the owner.
+- B1 | R1 | `apps/server/src/infra/ai/gemini-transcriber.ts:164` | ADR-0007 Guardrail 3; ADR-0013 D-10 — `GeminiTranscriber` calls a model directly, bypassing `getModel(profile)` and the `LlmGateway` port. Owner decision: amend the ADR with a carve-out for non-conversational audio→text, or route through the profile mechanism. → closed: ADR-0013 §7 amendment 2026-09-27 (plan D10).
 - B2 | R2 | `apps/bot/handlers.ts:176-203` | CONTRIBUTING_AI "Principles & Boundaries" — DRY — the voice path's `/api/bot/chat` post + content check + 404-clear/log/errorTextFor tail is a third copy of the text path (`handlers.ts:386-418`) and `/start` (`:337-369`); the same tail repeats at `:206-212`. → Task 4 F1.
 - B3 | R2 | `apps/server/src/app/routes/voice.routes.ts:11-14` | DRY — `speechErrorCodeOf` copies `conversationErrorCodeOf` (`chat.routes.ts:8-11`) and needs an extra `CORE_ERROR ? 500` special case. → Task 4 F2.
 - B4 | R3 | plan AC-VT-7 | SUPERPOWERS_INTEGRATION rule 2 — the local-bot live check is pending. → owner's voice message, orchestrator records it.
@@ -220,3 +232,15 @@ Meta (→ `docs/REVIEW_FINDINGS.md`): R1 blind spot (ADR-0007 guardrails not lis
 (every model invocation through the model factory); R2 rule candidate (third copy of duplicated code is a violation);
 R3+R4 plan-local `AC-<SLUG>-n` IDs undefined; R3 blind spot (AC ID in header comment vs describe/it); R4 rule
 candidate (no Status line in feature specs).
+
+Run 2 — 2026-09-27, zones R1–R4. R1, R2, R4 clean (run-1 B1–B3, B5, B7–B13 confirmed closed; A10, A17 fixed).
+R3 blocked on two findings, both closed on the branch:
+- R3-1 | plan § Verification evidence | SUPERPOWERS_INTEGRATION rule 2 — no bot-side evidence for Task 4. → recorded above.
+- R3-2 | voice test files | CONTRIBUTING_AI § ID Conventions — durable AC-1415..1421 not in test names, no mapping. →
+  ids added to the top-level `describe` names, mapping table above.
+New advisories (→ BACKLOG or fixed): R2 duplicated `sendReply` empty-check closures in `/start`/text path, one-call-site
+`beforeErrorText`, exported-unused `FetchLike`; R1 ADR-0007 Guardrail 3 without a pointer to the ADR-0013 §7 carve-out,
+ADR-0013 §11 map lacks `domain/speech`; R3 notices sent outside try (unhandled rejection on a Telegram failure),
+double failure in `beforeErrorText` mislabels the log, `route-error.ts` uses `in` (prototype chain); R4 FEAT-0010
+forward reference to "FEAT-0011" (fixed), stale digital-silence backlog line (dropped), docs/README indexes lack
+speech/FEAT-0011 (pre-existing staleness), CLAUDE.md does not mention `STT_API_KEY` for `.env.dev` (A18).

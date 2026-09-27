@@ -45,7 +45,7 @@ function build(overrides: Partial<typeof OPTS> = {}): GeminiTranscriber {
   return new GeminiTranscriber({ ...OPTS, ...overrides });
 }
 
-describe('GeminiTranscriber (AC-VT-1)', () => {
+describe('GeminiTranscriber (AC-VT-1; AC-1417, AC-1419)', () => {
   beforeEach(() => {
     fetchImpl.mockReset();
     logFns.info.mockClear();
