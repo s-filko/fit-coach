@@ -122,6 +122,20 @@ runs away to 65k output tokens / 155 s without a cap, and stops at 11.5 s with `
 - [x] Verification: from `apps/server`: `npm run lint && npm run type-check && npm run test:unit`; from
   `apps/bot`: `npx tsc --noEmit && npm test` — all green.
 
+## Task 4 — Review run 1 code fixes (B2, B3, B5)
+
+- [ ] **F1 (B2, covers A10).** In `apps/bot/handlers.ts` extract one helper for the shared chat sequence
+  (post `/api/bot/chat`, validate `data.content`, and the failure tail: 404 → clear cached id, `log.error` with
+  axios status/responseData, `errorTextFor`), used by the text path, `/start` and the voice path. The voice path
+  keeps only its differences (quote-first reply; the quote before the error text). A Telegram send failure after
+  a successful chat must not be reported as a chat error. Behaviour of the text and `/start` paths unchanged —
+  their existing tests stay green untouched.
+- [ ] **F2 (B3).** One shared "code of a thrown error against a status map" helper for `chat.routes.ts` and
+  `voice.routes.ts` (no special-case `CORE_ERROR` branch; `CORE_ERROR` → 500 lives in the map the voice route uses).
+- [ ] **F3 (B5).** AC-VT-2 in the describe name of `stt-tunables.unit.test.ts`.
+- [ ] Verification: from `apps/server`: `npm run lint && npm run type-check && npm run test:unit`; from `apps/bot`:
+  `npx tsc --noEmit && npm test` — all green.
+
 ## Verification evidence (2026-09-27)
 
 - Task 1 (worker, 435ca53b): server lint 0 errors, type-check clean, test:unit 150 suites / 1490 tests passed.
