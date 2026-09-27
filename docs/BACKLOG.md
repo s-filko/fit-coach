@@ -814,3 +814,12 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 ## now-line-last close-out review advisories (2026-09-27)
 
 - [ ] Move `promptVersionExtras` (run context, `graph/state.ts:104`) into a per-run "rendered modules" collector (e.g. on `RunMetricsCollector`): the run context now carries prompt-version facts from agent to commit, which scales poorly as more conditionally sent modules appear. Source: now-line-last close-out review R1 re-run (2026-09-27).
+
+## voice-transcription close-out review advisories (2026-09-27)
+
+- [ ] STT instruction is an inline constant in `infra/ai/gemini-transcriber.ts`, not a versioned prompt module under `infra/ai/prompts/` — a wording change is not traceable like other prompts (ADR-0013 D-09 applicability unclear for run-less calls). Source: voice-transcription review A1 (2026-09-27).
+- [ ] Voice with pure digital silence can be transcribed as invented words (model behaviour; real mic noise → `NO_SPEECH`); an energy/VAD pre-check would need audio decoding (ffmpeg in the image). Source: voice-transcription live probes (2026-09-27).
+- [ ] `domain/speech` shape nits: HTTP status map in the domain (`errors.ts:45`, copies the conversation precedent), unused `SpeechError` union (`errors.ts:42`), "disabled" detected twice (`isEnabled()` in the route + the adapter's throw), JSDoc of `NoSpeechError`/port still says "empty transcript" only (sentinel since R1). Source: voice-transcription review A2/A4/A6/A16 (2026-09-27).
+- [ ] STT logging: latency/text length logged by both the route and the adapter; `NoSpeechError` (an expected outcome) logged at error level; Gemini usage parsed by hand beside `infra/ai/usage.ts`. Source: voice-transcription review A7/A9/A15 (2026-09-27).
+- [ ] Bot voice nits: voice IO flow lives in `handlers.ts` (could be its own module); bilingual record + `ru` rule duplicated between `voice.ts` and `error-text.ts`; an entity-dense transcript can still exceed 4096 after escaping the 3500-char cut. Source: voice-transcription review A5/A8/A11 (2026-09-27).
+- [ ] Voice test hygiene: `handlers.voice.unit.test.ts:231` name claims the 3500 cut but asserts only expandable (unused `chatId`); the split fixture's reply alone exceeds 4096; AC ids only in header comments of `voice.route.unit.test.ts`/`voice.unit.test.ts`. Source: voice-transcription review A12/A13/A14 (2026-09-27).
