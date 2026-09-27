@@ -6,9 +6,14 @@ import { createChatQueue } from './queue';
 import { withTypingIndicator } from './typing-keepalive';
 import { quoteLine, voiceNoticeFor, voiceReplyMessages } from './voice';
 
-async function sendHtml(bot: TelegramBot, chatId: number, text: string): Promise<void> {
+/** `replyTo` threads the message as a Telegram reply to that message id (voice replies, owner 2026-09-27). */
+function replyOptions(replyTo?: number): TelegramBot.SendMessageOptions {
+    return replyTo === undefined ? {} : { reply_to_message_id: replyTo, allow_sending_without_reply: true };
+}
+
+async function sendHtml(bot: TelegramBot, chatId: number, text: string, replyTo?: number): Promise<void> {
     try {
-        await bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
+        await bot.sendMessage(chatId, text, { parse_mode: 'HTML', ...replyOptions(replyTo) });
     } catch (htmlError) {
         const isHtmlParseError = htmlError instanceof Error && htmlError.message.includes("can't parse entities");
         if (!isHtmlParseError) {
@@ -16,7 +21,7 @@ async function sendHtml(bot: TelegramBot, chatId: number, text: string): Promise
         }
         log.warn({ chatId, textSnippet: text.slice(0, 100) }, 'HTML parse failed, retrying as plain text');
         try {
-            await bot.sendMessage(chatId, text);
+            await bot.sendMessage(chatId, text, replyOptions(replyTo));
         } catch (fallbackError) {
             log.error(
                 { chatId, htmlError, fallbackError },
@@ -134,14 +139,14 @@ async function handleVoiceMessage(bot: TelegramBot, msg: TelegramBot.Message, vo
     const chatId = msg.chat.id;
 
     if (voice.duration > MAX_VOICE_DURATION_S) {
-        await bot.sendMessage(chatId, voiceNoticeFor('TOO_LONG', knownLanguageCode(msg)));
+        await bot.sendMessage(chatId, voiceNoticeFor('TOO_LONG', knownLanguageCode(msg)), replyOptions(msg.message_id));
         return;
     }
 
     // R6 (Task 3): a sub-second voice is an accidental tap — no speech in it.
     // Same notice as NO_SPEECH, without a pointless download and STT call.
     if (voice.duration < 1) {
-        await bot.sendMessage(chatId, voiceNoticeFor('NO_SPEECH', knownLanguageCode(msg)));
+        await bot.sendMessage(chatId, voiceNoticeFor('NO_SPEECH', knownLanguageCode(msg)), replyOptions(msg.message_id));
         return;
     }
 
@@ -169,7 +174,7 @@ async function handleVoiceMessage(bot: TelegramBot, msg: TelegramBot.Message, vo
                     throw sttError;
                 }
                 log.warn({ err: sttError, chatId }, 'voice transcription failed');
-                await bot.sendMessage(chatId, voiceNoticeFor(sttNoticeKindOf(sttError), knownLanguageCode(msg)));
+                await bot.sendMessage(chatId, voiceNoticeFor(sttNoticeKindOf(sttError), knownLanguageCode(msg)), replyOptions(msg.message_id));
                 return;
             }
 
@@ -183,12 +188,13 @@ async function handleVoiceMessage(bot: TelegramBot, msg: TelegramBot.Message, vo
                     // D7: quote + reply (split over 4096, or quote only when the reply is empty).
                     async content => {
                         for (const part of voiceReplyMessages(transcript, content)) {
-                            await sendHtml(bot, chatId, part);
+                            // Every part replies to the voice note, so the answer is threaded to it.
+                            await sendHtml(bot, chatId, part, msg.message_id);
                         }
                     },
                     'voice chat processing failed',
                     // D8: the quote first so the user sees what was heard, then the usual error text.
-                    { beforeErrorText: async () => sendHtml(bot, chatId, quoteLine(transcript)) },
+                    { beforeErrorText: async () => sendHtml(bot, chatId, quoteLine(transcript), msg.message_id) },
                 );
             } catch (sendError) {
                 // A10 (Task 4): a Telegram send failure after a successful

@@ -57,7 +57,9 @@ function voiceMessage(overrides: Partial<TelegramBot.Message> = {}): TelegramBot
     } as TelegramBot.Message;
 }
 
-const htmlOptions = { parse_mode: 'HTML' } as const;
+// Voice replies are threaded to the voice note (reply_to_message_id = the fixture's message_id).
+const replyOpts = { reply_to_message_id: 1, allow_sending_without_reply: true } as const;
+const htmlOptions = { parse_mode: 'HTML', ...replyOpts } as const;
 
 describe('bot voice handling (AC-VT-4/5; AC-1415, AC-1416, AC-1417, AC-1418, AC-1419, AC-1420)', () => {
     let bot: TelegramBot & EventEmitter;
@@ -113,8 +115,8 @@ describe('bot voice handling (AC-VT-4/5; AC-1415, AC-1416, AC-1417, AC-1418, AC-
 
         expect(bot.getFileStream).not.toHaveBeenCalled();
         expect(mockPost).not.toHaveBeenCalled();
-        expect(bot.sendMessage).toHaveBeenCalledWith(nextSenderId, expect.stringContaining('5 минут'));
-        expect(bot.sendMessage).toHaveBeenCalledWith(nextSenderId, expect.not.stringContaining('5 minutes'));
+        expect(bot.sendMessage).toHaveBeenCalledWith(nextSenderId, expect.stringContaining('5 минут'), replyOpts);
+        expect(bot.sendMessage).toHaveBeenCalledWith(nextSenderId, expect.not.stringContaining('5 minutes'), replyOpts);
     });
 
     it('too-long text is English when the profile language is not ru', async () => {
@@ -123,7 +125,7 @@ describe('bot voice handling (AC-VT-4/5; AC-1415, AC-1416, AC-1417, AC-1418, AC-
             voice: { duration: 500, file_id: 'F', file_unique_id: 'U', file_size: 1 } as TelegramBot.Voice,
         }));
 
-        expect(bot.sendMessage).toHaveBeenCalledWith(nextSenderId, expect.stringContaining('5 minutes'));
+        expect(bot.sendMessage).toHaveBeenCalledWith(nextSenderId, expect.stringContaining('5 minutes'), replyOpts);
     });
 
     it('R6: duration < 1 s (accidental tap) → NO_SPEECH notice, no download, no API call', async () => {
@@ -132,7 +134,7 @@ describe('bot voice handling (AC-VT-4/5; AC-1415, AC-1416, AC-1417, AC-1418, AC-
         expect(bot.getFileStream).not.toHaveBeenCalled();
         expect(mockPost).not.toHaveBeenCalled();
         expect(bot.sendMessage).toHaveBeenCalledTimes(1);
-        expect(bot.sendMessage).toHaveBeenCalledWith(nextSenderId, expect.stringContaining('голосовое'));
+        expect(bot.sendMessage).toHaveBeenCalledWith(nextSenderId, expect.stringContaining('голосовое'), replyOpts);
     });
 
     it('422 NO_SPEECH: sends the notice, chat is NOT called', async () => {
@@ -143,7 +145,7 @@ describe('bot voice handling (AC-VT-4/5; AC-1415, AC-1416, AC-1417, AC-1418, AC-
         await emitAndSettle(voiceMessage());
 
         expect(mockPost).toHaveBeenCalledTimes(2);
-        expect(bot.sendMessage).toHaveBeenCalledWith(nextSenderId, expect.stringContaining('голосовое'));
+        expect(bot.sendMessage).toHaveBeenCalledWith(nextSenderId, expect.stringContaining('голосовое'), replyOpts);
         expect(bot.sendMessage).not.toHaveBeenCalledWith(nextSenderId, expect.anything(), htmlOptions);
     });
 
@@ -155,7 +157,7 @@ describe('bot voice handling (AC-VT-4/5; AC-1415, AC-1416, AC-1417, AC-1418, AC-
         await emitAndSettle(voiceMessage());
 
         expect(mockPost).toHaveBeenCalledTimes(2);
-        expect(bot.sendMessage).toHaveBeenCalledWith(nextSenderId, expect.stringContaining('напиши'));
+        expect(bot.sendMessage).toHaveBeenCalledWith(nextSenderId, expect.stringContaining('напиши'), replyOpts);
     });
 
     it('network failure on the transcribe call counts as STT_UNAVAILABLE, chat is NOT called', async () => {
@@ -166,7 +168,7 @@ describe('bot voice handling (AC-VT-4/5; AC-1415, AC-1416, AC-1417, AC-1418, AC-
         await emitAndSettle(voiceMessage());
 
         expect(mockPost).toHaveBeenCalledTimes(2);
-        expect(bot.sendMessage).toHaveBeenCalledWith(nextSenderId, expect.stringContaining('недоступно'));
+        expect(bot.sendMessage).toHaveBeenCalledWith(nextSenderId, expect.stringContaining('недоступно'), replyOpts);
     });
 
     it('chat error after a successful transcription: quote first, then the standard error text (D8)', async () => {

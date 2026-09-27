@@ -68,6 +68,8 @@ Telegram, чтобы они были распознаны сервисом Speec
 - **D9 — executor:** GLM worker, tasks in one terminal (server, bot, review fixes).
 - **D12 — key name (owner 2026-09-27: "чтобы не было дубля").** The provider key is read from the existing
   `AISTUDIO_API_KEY` (renamed from `STT_API_KEY`), so one key has one name locally and on the VPS.
+- **D13 — replies are threaded (owner 2026-09-27: "а он может отвечать на сообщение").** The quote + answer and
+  the voice notices are sent with `reply_to_message_id` = the voice note (`allow_sending_without_reply`).
 - **D10 — STT outside `LlmGateway` (review B1, owner-delegated 2026-09-27: "будь строгим… доведи до рабочего").**
   Amend ADR-0013 §7 with a narrow carve-out rather than route audio through `getModel(profile)`: the factory is
   bound to one OpenAI-compatible route (Z.AI on dev, no audio), profiles cannot change provider, and

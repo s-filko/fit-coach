@@ -13,7 +13,7 @@ Business Rules
 	• BR-SPEECH-001: A voice message shorter than 1 s is an accidental tap → the NO_SPEECH notice; longer than 300 s → the too-long notice; neither is downloaded or transcribed
 	• BR-SPEECH-002: No clearly spoken words (the provider answers the `<NO_SPEECH>` sentinel, or an empty text) → NO_SPEECH; the conversation is not called
 	• BR-SPEECH-003: A transcript is sent to the conversation unchanged, exactly as if the user had typed it
-	• BR-SPEECH-004: The reply starts with the transcript as a quote (`🎤`), then the coach's answer, in one message when it fits Telegram's 4096 chars, otherwise the quote first; an empty coach answer sends the quote alone
+	• BR-SPEECH-004: The reply starts with the transcript as a quote (`🎤`), then the coach's answer, in one message when it fits Telegram's 4096 chars, otherwise the quote first; an empty coach answer sends the quote alone; every voice reply and voice notice is sent as a Telegram reply to the voice note
 	• BR-SPEECH-005: The displayed quote is cut at 3500 raw chars (then escaped); over 500 chars it is expandable; the coach always receives the full transcript
 	• BR-SPEECH-006: STT disabled (no key), a provider error or timeout → STT_UNAVAILABLE notice; a conversation error after a successful transcription → the quote, then the usual conversation error text
 	• BR-SPEECH-007: Notices use the user's profile language (ru → Russian, anything else → English), the same rule as conversation error texts
