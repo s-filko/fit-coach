@@ -174,7 +174,11 @@ runs away to 65k output tokens / 155 s without a cap, and stops at 11.5 s with `
   | AC-1419 | AC-VT-1/2/3/5 | `stt-tunables.unit.test.ts`, `gemini-transcriber.unit.test.ts`, `voice.route.unit.test.ts`, `handlers.voice.unit.test.ts` |
   | AC-1420 | AC-VT-5 | `handlers.voice.unit.test.ts` |
   | AC-1421 | AC-VT-3 | `voice.route.unit.test.ts` |
-- AC-VT-7: pending — local bot `@MyFitAiCoachTestBot` running from this worktree, awaiting the owner's voice message.
+- AC-VT-7 (owner + orchestrator, local server + `@MyFitAiCoachTestBot` from this worktree, local DB = clone of dev
+  2026-09-27): voice notes at 22:20 and 22:22 → transcribed in 2.4 s / ~2 s, coach run recorded, reply = quote +
+  coach answer; owner: "проверил ок". The 22:21 voice failed on the Mac↔Telegram file download
+  (`ERR_STREAM_PREMATURE_CLOSE`) before reaching the server → D14 retry. Local DB had to be migrated (5 of 19
+  applied) and was then replaced by a dev clone — unrelated to this branch.
 
 ## Orchestrator checks before "ready to merge"
 
