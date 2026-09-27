@@ -14,7 +14,8 @@ export { SESSION_PLANNING_V1, SESSION_PLANNING_V2, SESSION_PLANNING_V3 };
  * blocks in v2 (P4 context-budget plan, Task 2, D-B) — none is a prompt
  * section any more. `date` keeps its id in v3 (transition-handoff plan
  * Task 7, BUG-032) but drops the `Current Date` line — superseded by
- * `directive.current-time`.
+ * the NOW line (`blocks/current-time.v1.ts`, its own message before
+ * `current` since now-line-last).
  */
 export const SESSION_PLANNING_PROMPT: PhasePromptEntry<SessionPlanningPromptContextV3> = {
   current: SESSION_PLANNING_V3,

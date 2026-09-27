@@ -36,8 +36,10 @@ function collectProfileRows(user: User | null): ProfileRows {
 
 /**
  * v2 (transition-handoff plan Task 7, BUG-032): identical to v1 except the
- * directive list — `DEFAULT_DIRECTIVES_V2` appends `CURRENT_TIME_V1`, giving
+ * directive list — `DEFAULT_DIRECTIVES_V2` appended `CURRENT_TIME_V1`, giving
  * this phase a "now" line for the first time. No section wording changes.
+ * (now-line-last, 2026-09-27: the NOW line left the directive list for its
+ * own message before `current` — `blocks/current-time.v1.ts`.)
  */
 export const REGISTRATION_V2: PromptModule<RegistrationPromptContextV2> = {
   id: 'phase.registration',

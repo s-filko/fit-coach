@@ -13,7 +13,8 @@ export { PLAN_CREATION_V1, PLAN_CREATION_V2, PLAN_CREATION_V3 };
  * `plan_creation.client_profile` domain block in v2 (P4 context-budget plan,
  * Task 2, D-B) — it is no longer a prompt section. `date` dropped in v3
  * (transition-handoff plan Task 7, BUG-032) — superseded by
- * `directive.current-time`.
+ * the NOW line (`blocks/current-time.v1.ts`, its own message before `current` since
+ * now-line-last).
  */
 export const PLAN_CREATION_PROMPT: PhasePromptEntry<PlanCreationPromptContextV3> = {
   current: PLAN_CREATION_V3,

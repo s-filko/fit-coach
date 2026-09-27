@@ -38,7 +38,7 @@ const attachSpy = jest.spyOn(metricsCollector, 'attachBudgetReport');
 
 const NUDGE_TEXT = renderBlock(POST_TOOL_NUDGE_V1, {});
 
-const FRESH_USER = { id: 'fresh-user', languageCode: 'ru', timezone: 'Europe/Berlin' };
+const FRESH_USER = { id: 'fresh-user', languageCode: 'ru', timezone: 'Europe/Berlin' as string | null };
 
 const renderSpy = jest.fn((ctx: { user?: { id?: string } | null }) => [
   { id: 'task', text: `rendered-for:${ctx.user?.id ?? 'none'}`, required: true },
@@ -338,14 +338,14 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
   // the gap-note wiring — into its own SystemMessage immediately before
   // `current`'s HumanMessage, so everything ahead of it is prompt-cacheable.
   describe('NOW line (now-line-last, AC-NL-1/AC-NL-2)', () => {
-    const configWithNow = (now: Date): RunnableConfig =>
+    const configWithNow = (now: Date, user = FRESH_USER): RunnableConfig =>
       ({
         configurable: { userId: 'u1' },
         metadata: { runId: 'run-1', userId: 'u1' },
         context: {
           runId: 'run-1',
           userId: 'u1',
-          user: FRESH_USER as never,
+          user: user as never,
           now,
           client: 'telegram' as const,
           trigger: 'user_message' as const,
@@ -369,20 +369,41 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
       expect(String(sent[humanIdx - 1].content).startsWith('NOW (')).toBe(true);
     });
 
+    // Review R3: non-vacuous — the assertion targets the NOW message itself
+    // (found by its prefix), both timezone variants, not "somewhere in sent".
     it('renders the user’s timezone (FRESH_USER → Europe/Berlin), both variants one renderer', async () => {
-      mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
+      mockInvoke.mockResolvedValue(new AIMessage({ content: 'ok', tool_calls: [] }));
       const node = buildAgentNode(makeSpec(), makeDeps());
 
-      await node({ ...makeState(), messages: [new HumanMessage('привет')] }, CONFIG);
+      await node({ ...makeState(), messages: [new HumanMessage('привет')] }, configWithNow(new Date(0)));
+      await node(
+        { ...makeState(), messages: [new HumanMessage('привет')] },
+        configWithNow(new Date(0), { ...FRESH_USER, timezone: null }),
+      );
 
-      const sent = mockInvoke.mock.calls[0][0] as BaseMessage[];
-      expect(sent.some(m => String(m.content).includes('Europe/Berlin'))).toBe(true);
+      const nowOf = (messages: BaseMessage[]) =>
+        messages.find(m => String(m.content).startsWith('NOW (')) as BaseMessage;
+      const known = nowOf(mockInvoke.mock.calls[0][0] as BaseMessage[]);
+      const unknown = nowOf(mockInvoke.mock.calls[1][0] as BaseMessage[]);
+      expect(String(known.content)).toContain('(Europe/Berlin)');
+      expect(String(unknown.content)).toContain("user's timezone is unknown");
+      expect(String(unknown.content)).not.toContain('Europe/Berlin');
     });
 
     it('AC-NL-2: two runs one minute apart → everything before the NOW message is byte-identical, only NOW differs', async () => {
       mockInvoke.mockResolvedValue(new AIMessage({ content: 'ok', tool_calls: [] }));
-      const node = buildAgentNode(makeSpec(), makeDeps());
-      const state = { ...makeState(), messages: [new HumanMessage('привет')] };
+      // Review R3: non-empty history and a domain block, so "byte-identical"
+      // actually covers block 1 + domain + history, not just block 1.
+      const node = buildAgentNode(
+        makeSpec({
+          contextBlocks: [{ id: 'test.domain', render: () => 'DOMAIN BLOCK (stable across runs)' }],
+        } as never),
+        makeDeps(),
+      );
+      const state = {
+        ...makeState(),
+        messages: [new HumanMessage('первое'), new AIMessage('ответ'), new HumanMessage('привет')],
+      };
 
       await node(state, configWithNow(new Date(0)));
       await node(state, configWithNow(new Date(60_000)));
@@ -392,7 +413,11 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
       expect(first).toHaveLength(second.length);
 
       const nowIdx = first.findIndex(m => String(m.content).startsWith('NOW ('));
-      expect(nowIdx).toBeGreaterThan(0);
+      // [block 1, domain, history human, history ai, NOW, current human]
+      expect(first.slice(0, nowIdx).map(m => m._getType())).toEqual(['system', 'system', 'human', 'ai']);
+      expect(String(first[nowIdx - 3].content)).toContain('DOMAIN BLOCK');
+      expect(String(first[nowIdx - 2].content)).toContain('первое');
+      expect(String(first[nowIdx - 1].content)).toContain('ответ');
       // block 1 .. history, byte-identical — this is the prompt-cacheable prefix.
       expect(first.slice(0, nowIdx).map(m => JSON.stringify([m._getType(), m.content]))).toEqual(
         second.slice(0, nowIdx).map(m => JSON.stringify([m._getType(), m.content])),

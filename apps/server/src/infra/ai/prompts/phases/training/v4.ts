@@ -4,9 +4,11 @@ import type { DirectiveContext, PromptModule, Section } from '@infra/ai/prompts/
 
 /**
  * v4 (transition-handoff plan Task 7, BUG-032): identical to v3 except the
- * directive list — `DIRECTIVES_WITHOUT_IDENTITY_V2` appends `CURRENT_TIME_V1`.
+ * directive list — `DIRECTIVES_WITHOUT_IDENTITY_V2` appended `CURRENT_TIME_V1`.
  * training rendered no current date or time at all before this; every other
- * section renders the exact wording v3 rendered for it.
+ * section renders the exact wording v3 rendered for it. (now-line-last,
+ * 2026-09-27: the NOW line left the directive list for its own message before
+ * `current` — `blocks/current-time.v1.ts`.)
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- v4 adds no fields
 export interface TrainingPromptContextV4 extends DirectiveContext {}

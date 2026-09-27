@@ -133,9 +133,14 @@ export function buildCommitNode(deps: CommitNodeDeps) {
       const metrics = ctx.metrics.snapshot();
       const fromPhase = ctx.phasePath[0] ?? phase;
       const hopped = ctx.phasePath.length > 1;
-      const promptVersions = hopped
-        ? { ...promptVersionsForPhase(fromPhase), ...promptVersionsForPhase(phase) }
-        : promptVersionsForPhase(phase);
+      const promptVersions = {
+        ...(hopped
+          ? { ...promptVersionsForPhase(fromPhase), ...promptVersionsForPhase(phase) }
+          : promptVersionsForPhase(phase)),
+        // Review R1 (BR-LLM-008): the conditionally sent modules this run
+        // actually rendered (the time-gap note) — set by the agent node.
+        ...(ctx.promptVersionExtras ?? {}),
+      };
       const budgetReport = metrics.budgetReport ? { ...metrics.budgetReport, assemblies: metrics.assemblies } : null;
       let phaseOut: ConversationPhase | null = null;
       if (verdict?.ok) {

@@ -17,9 +17,8 @@ import type { ConversationGraphDeps, PhaseSpec, PromptContextFor } from '@infra/
 import { ctxOf } from '@infra/ai/graph/state';
 import { langOf, t } from '@infra/ai/messages';
 import { getModel } from '@infra/ai/model.factory';
-import { POST_TOOL_NUDGE_V1, renderBlock, TIME_GAP_V1 } from '@infra/ai/prompts/blocks';
+import { CURRENT_TIME_V1, POST_TOOL_NUDGE_V1, renderBlock, TIME_GAP_V1 } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
-import { CURRENT_TIME_V1 } from '@infra/ai/prompts/directives';
 import { extractUsageFromMessage } from '@infra/ai/usage';
 
 import { loadConfig } from '@config/index';
@@ -144,27 +143,31 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     // after the run, and compaction never clears it.
     const gapMs = lastMessageTime !== null ? now.getTime() - lastMessageTime.getTime() : null;
     const gapNote = gapMs !== null && gapMs >= deps.episodeConfig.gapMs ? renderBlock(TIME_GAP_V1, { gapMs }) : null;
+    if (gapNote !== null) {
+      // Review R1 (BR-LLM-008): the note reached the request, so the run row
+      // must stamp it — `commit` merges these into the row's promptVersions.
+      ctx.promptVersionExtras = { [TIME_GAP_V1.id]: TIME_GAP_V1.version };
+    }
+    // The shared render context (review R2: built once) — the NOW line and the
+    // phase prompt render from the same `now`/`timezone`/`user` (BR-LLM-007:
+    // pure render, no second read of anything).
+    const renderCtx = {
+      now,
+      timezone: user?.timezone ?? null,
+      client: 'telegram' as const,
+      user,
+      lastMessageTime,
+    };
     // now-line-last plan (D2): the NOW line left the directives (block 1 —
     // it changes every minute, so nothing after it was ever prompt-cached)
     // and is rendered here into its own SystemMessage immediately before
-    // `current`, following the gap-note wiring. One renderer — CURRENT_TIME_V1,
-    // the same module that used to render it inside block 1 — from the same
-    // `now`/`timezone` the phase prompt receives (BR-LLM-007: pure render).
-    const nowLine =
-      CURRENT_TIME_V1.render({
-        now,
-        timezone: user?.timezone ?? null,
-        client: 'telegram',
-        user: user ?? null,
-        lastMessageTime,
-      })?.text ?? null;
+    // `current`, following the gap-note wiring. One renderer — CURRENT_TIME_V1
+    // (blocks/, a standalone message module like the gap note since review R1)
+    // — the same module that used to render it inside block 1.
+    const nowLine = renderBlock(CURRENT_TIME_V1, renderCtx);
     const systemPrompt = compose(
       spec.prompt.current.render({
-        now,
-        timezone: user?.timezone ?? null,
-        client: 'telegram',
-        user,
-        lastMessageTime,
+        ...renderCtx,
         ...loaded.data,
       } as PromptContextFor<D>),
     );

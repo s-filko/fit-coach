@@ -1,6 +1,5 @@
 import type { DirectiveModule } from '@infra/ai/prompts/types';
 
-import { CURRENT_TIME_PREFIX, CURRENT_TIME_V1 } from './current-time.v1';
 import { FORMATTING_TELEGRAM_V1 } from './formatting.telegram.v1';
 import { GREETING_V1 } from './greeting.v1';
 import { IDENTITY_V1 } from './identity.v1';
@@ -13,8 +12,6 @@ import { TIMEZONE_V1 } from './timezone.v1';
 import { TOOL_REPLY_V1 } from './tool-reply.v1';
 
 export {
-  CURRENT_TIME_PREFIX,
-  CURRENT_TIME_V1,
   FORMATTING_TELEGRAM_V1,
   GREETING_V1,
   IDENTITY_V1,
@@ -60,9 +57,10 @@ export const DIRECTIVES_WITHOUT_IDENTITY_V1: readonly DirectiveModule[] = DEFAUL
  * `CURRENT_TIME_V1` is dropped from V2 in place — the NOW line left block 1
  * (it changed every minute, so nothing after it was ever served from the
  * provider's prompt cache) and is now rendered by agent.node.ts as its own
- * SystemMessage immediately before `current`. No phase file changes;
- * `llm_calls.request` stores the exact request, so reproducibility does not
- * rest on the version label.
+ * SystemMessage immediately before `current` (review R1 moved the module to
+ * `blocks/current-time.v1.ts` — a standalone message like the gap note).
+ * No phase file changes; `llm_calls.request` stores the exact request, so
+ * reproducibility does not rest on the version label.
  */
 const DEFAULT_DIRECTIVES_V1_WITH_LANGUAGE_V2: readonly DirectiveModule[] = DEFAULT_DIRECTIVES_V1.map(d =>
   d.id === 'language' ? LANGUAGE_V2 : d,

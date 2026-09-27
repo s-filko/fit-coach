@@ -214,7 +214,7 @@ computed once at record time and never recomputed:
   configured — Z.AI documents neither, so both are unset by default and these two values never appear),
   `warm` (the previous request is a full prefix of this one), or `prefix_changed:<label>` (the first
   point the two requests differ — `tools`, `system:prompt`/`facts`/`directive`/`summaries`/`domain`/
-  `gap-note`, or `history[i]:<role>`).
+  `gap-note`/`now`, or `history[i]:<role>`).
 - `cache_diverged_at` — `<label>#<messageIndex>@<charOffset>` for the divergence above; null when
   `cold`/`unknown`/`warm`.
 - `cache_shared_prefix_tokens` — an ESTIMATE (tokenizer-free: `round(input_tokens × sharedChars /

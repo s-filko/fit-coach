@@ -34,7 +34,7 @@ describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVer
   it('promptVersionsForPhase stamps the SAME blocks for every phase (one chat — P4 Task 5)', () => {
     for (const phase of Object.keys(PHASE_PROMPTS) as ConversationPhase[]) {
       const keys = Object.keys(promptVersionsForPhase(phase)).filter(k => k.startsWith('block.'));
-      expect(keys.sort()).toEqual(['block.episode_summaries', 'block.post_tool_nudge']);
+      expect(keys.sort()).toEqual(['block.current_time', 'block.episode_summaries', 'block.post_tool_nudge']);
     }
   });
 
@@ -44,6 +44,9 @@ describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVer
       expect(versions[PHASE_PROMPTS[phase].current.id]).toBeDefined();
       expect(versions['block.episode_summaries']).toBe('v2');
       expect(versions['block.post_tool_nudge']).toBe('v1');
+      // Review R1 (BR-LLM-008): the NOW line left the phase's directives but
+      // is still sent on every call — its module stays stamped.
+      expect(versions['block.current_time']).toBe('v1');
     }
   });
 

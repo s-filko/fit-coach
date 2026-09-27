@@ -36,6 +36,10 @@ export { episodeParagraph } from './episode-summaries.v2';
 export type { EpisodeSummariesContext } from './episode-summaries.v2';
 export { TIME_GAP_V1, TIME_GAP_PREFIX } from './time-gap.v1';
 export type { TimeGapContext } from './time-gap.v1';
+// now-line-last review R1: the NOW line is a standalone message module like
+// the gap note (moved from directives/) — exported with its label prefix (D4).
+export { CURRENT_TIME_PREFIX, CURRENT_TIME_V1 } from './current-time.v1';
+export type { CurrentTimeContext } from './current-time.v1';
 export type { CourseDirectiveContext } from './course-directive.v1';
 export type { UserFactsContext } from './user-facts.v2';
 // Stable block headers (cache-accounting plan Task 1 follow-up): cache-attribution.ts's label

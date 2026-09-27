@@ -17,11 +17,11 @@
  */
 import {
   COURSE_DIRECTIVE_HEADER,
+  CURRENT_TIME_PREFIX,
   EPISODE_SUMMARIES_HEADER,
   TIME_GAP_PREFIX,
   USER_FACTS_HEADER,
 } from '@infra/ai/prompts/blocks';
-import { CURRENT_TIME_PREFIX } from '@infra/ai/prompts/directives';
 
 import { commonPrefixLength } from '@shared/common-prefix';
 

@@ -1694,6 +1694,11 @@ One "now" line in every phase: local weekday, date and time with the zone name, 
 unknown. Rendered as the LAST system section (it changes every minute — keep it after the stable prefix
 so provider prompt caching is not broken). Prompt versions bumped, L0 snapshots updated.
 
+2026-09-27 (plan `now-line-last`): the line no longer renders as the last section of block 1 — it is
+its own SystemMessage immediately before the current user message (after the gap note), with the text
+unchanged; the module lives in `prompts/blocks/current-time.v1.ts` and is stamped in the run's
+`prompt_versions` as `block.current_time: v1`.
+
 ## BUG-033 — The smoke's test catalog has no embeddings, so `search_exercises` finds nothing there; `log_set` name resolution is exact-match
 
 **Status:** Fixed for the smoke (commit 367ceda1); the exact-name half is Open

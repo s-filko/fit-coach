@@ -1,6 +1,6 @@
 import type { ConversationPhase } from '@domain/conversation/ports';
 
-import { EPISODE_SUMMARIES_V2, POST_TOOL_NUDGE_V1 } from './blocks';
+import { CURRENT_TIME_V1, EPISODE_SUMMARIES_V2, POST_TOOL_NUDGE_V1 } from './blocks';
 import { promptVersionsOf } from './compose';
 import { CHAT_PROMPT } from './phases/chat';
 import { PLAN_CREATION_PROMPT } from './phases/plan_creation';
@@ -33,11 +33,16 @@ export const STANDALONE_PROMPTS: readonly PromptModule<unknown>[] = [
 
 /**
  * Every block a phase's run stamps, for every phase alike: the phase module,
- * the episode-summaries block (rendered only when summaries exist), and the
- * post-tool nudge (ADR-0013 §6 applies it to all phases).
+ * the NOW line (its own message before `current` since now-line-last — sent
+ * on every call, so stamped on every run; review R1), the episode-summaries
+ * block (rendered only when summaries exist), and the post-tool nudge
+ * (ADR-0013 §6 applies it to all phases). The conditionally sent time-gap
+ * note is NOT here — the agent node records it on the run context when it
+ * actually renders one, and `commit` merges it in.
  */
 export function promptVersionsForPhase(phase: ConversationPhase): Record<string, string> {
   const versions = promptVersionsOf(PHASE_PROMPTS[phase].current);
+  versions[CURRENT_TIME_V1.id] = CURRENT_TIME_V1.version;
   versions[EPISODE_SUMMARIES_V2.id] = EPISODE_SUMMARIES_V2.version;
   versions[POST_TOOL_NUDGE_V1.id] = POST_TOOL_NUDGE_V1.version;
   return versions;
