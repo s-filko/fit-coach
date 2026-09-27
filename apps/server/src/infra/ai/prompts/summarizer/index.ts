@@ -4,5 +4,7 @@ export { SUMMARIZER_V2 } from './v2';
 export type { SummarizerV2Context } from './v2';
 export { SUMMARIZER_V3 } from './v3';
 export type { SummarizerV3Context } from './v3';
-export { SUMMARIZER_V4, SUMMARIZER_V4 as SUMMARIZER_PROMPT } from './v4';
+export { SUMMARIZER_V4 } from './v4';
 export type { SummarizerV4Context } from './v4';
+export { SUMMARIZER_V5, SUMMARIZER_V5 as SUMMARIZER_PROMPT } from './v5';
+export type { SummarizerV5Context } from './v5';

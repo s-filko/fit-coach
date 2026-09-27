@@ -37,10 +37,10 @@ import { REAL_TIMER_APIS } from '../../helpers/real-timers';
 import { resolveFactPlaceholders } from './fact-placeholders';
 import { installScriptedModel, type ScriptedModelHandle, type StructuredInput } from './scripted-model';
 
-const DELETED = 'RRP6-DELETED Left knee meniscus repair, no deep squats';
-const CLOSED = 'RRP6-CLOSED Right shoulder pain when pressing overhead';
-const KEPT = 'RRP6-KEPT Trains at home with a barbell and a squat rack';
-const FRESH = 'RRP6-FRESH Prefers short, direct replies';
+const DELETED = 'RRPX-DELETED Left knee meniscus repair, no deep squats';
+const CLOSED = 'RRPX-CLOSED Right shoulder pain when pressing overhead';
+const KEPT = 'RRPX-KEPT Trains at home with a barbell and a squat rack';
+const FRESH = 'RRPX-FRESH Prefers short, direct replies';
 
 const T0 = new Date('2026-09-21T10:00:00.000Z');
 
@@ -51,6 +51,10 @@ const STALE_STATEMENT = {
   durability: 'long_term',
   reviewInDays: 30,
   phaseNote: 'after surgery',
+  // BUG-040 (fact-provenance): a verbatim quote from the compacted episode's
+  // user line, so the operations reach the port and are refused by the
+  // STALE-EVIDENCE guard (what this journey pins) — not by the provenance one.
+  evidence: 'Про колено забудь совсем',
 };
 
 const scenario: Scenario = {
@@ -84,8 +88,8 @@ const scenario: Scenario = {
       action: 'user',
       text: 'Про колено забудь совсем — удали. А плечо уже в порядке.',
       script: [
-        { toolCall: { name: 'manage_fact', args: { operation: 'delete', factId: '{{factId:RRP6-DELETED}}' } } },
-        { toolCall: { name: 'manage_fact', args: { operation: 'retract', factId: '{{factId:RRP6-CLOSED}}' } } },
+        { toolCall: { name: 'manage_fact', args: { operation: 'delete', factId: '{{factId:RRPX-DELETED}}' } } },
+        { toolCall: { name: 'manage_fact', args: { operation: 'retract', factId: '{{factId:RRPX-CLOSED}}' } } },
         { text: 'Готово: колено удалено, плечо закрыто.' },
       ],
     },
@@ -99,8 +103,8 @@ const scenario: Scenario = {
           topics: ['Knee and shoulder'],
           factOperations: [
             { op: 'add', ...STALE_STATEMENT },
-            { op: 'update', factId: '{{factId:RRP6-DELETED}}', ...STALE_STATEMENT },
-            { op: 'confirm', factId: '{{factId:RRP6-DELETED}}' },
+            { op: 'update', factId: '{{factId:RRPX-DELETED}}', ...STALE_STATEMENT },
+            { op: 'confirm', factId: '{{factId:RRPX-DELETED}}' },
             // Control: a genuinely new fact in the same batch must be applied.
             {
               op: 'add',
@@ -108,6 +112,7 @@ const scenario: Scenario = {
               fact: FRESH,
               durability: 'permanent',
               explicitPermanent: true,
+              evidence: 'А плечо уже в порядке',
             },
           ],
         }),
@@ -284,12 +289,12 @@ describe('what deleting a fact guarantees (AC-RRP-6)', () => {
 
     it('control: the delete archived the row as user_deleted and the retract as user_closed (both stamped by the user)', () => {
       const afterDelete = run.steps[0]!.facts;
-      const deleted = afterDelete.find(f => f.fact.includes('RRP6-DELETED'))!;
-      const closed = afterDelete.find(f => f.fact.includes('RRP6-CLOSED'))!;
+      const deleted = afterDelete.find(f => f.fact.includes('RRPX-DELETED'))!;
+      const closed = afterDelete.find(f => f.fact.includes('RRPX-CLOSED'))!;
       expect(deleted).toMatchObject({ status: 'archived', archivedReason: 'user_deleted' });
       expect(deleted.closedByUserAt).not.toBeNull();
       expect(closed).toMatchObject({ status: 'archived', archivedReason: 'user_closed' });
-      expect(afterDelete.find(f => f.fact.includes('RRP6-KEPT'))).toMatchObject({ status: 'active' });
+      expect(afterDelete.find(f => f.fact.includes('RRPX-KEPT'))).toMatchObject({ status: 'active' });
     });
 
     it('control: before the delete the model DID see the fact in its system prompt (the block carries facts at all)', () => {
@@ -303,15 +308,15 @@ describe('what deleting a fact guarantees (AC-RRP-6)', () => {
 
       expect(texts).toContain(KEPT);
       expect(texts).toContain(FRESH);
-      expect(texts.some(t => t.includes('RRP6-DELETED'))).toBe(false);
-      expect(texts.some(t => t.includes('RRP6-CLOSED'))).toBe(false);
+      expect(texts.some(t => t.includes('RRPX-DELETED'))).toBe(false);
+      expect(texts.some(t => t.includes('RRPX-CLOSED'))).toBe(false);
     });
 
     it('getConstraints: a deleted (or closed) physical constraint can no longer block an exercise', async () => {
       const texts = (await repo.getConstraints(run.userId, now)).map(f => f.fact);
 
-      expect(texts.some(t => t.includes('RRP6-DELETED'))).toBe(false);
-      expect(texts.some(t => t.includes('RRP6-CLOSED'))).toBe(false);
+      expect(texts.some(t => t.includes('RRPX-DELETED'))).toBe(false);
+      expect(texts.some(t => t.includes('RRPX-CLOSED'))).toBe(false);
     });
 
     it.each([2, 3, 4])(
@@ -322,8 +327,8 @@ describe('what deleting a fact guarantees (AC-RRP-6)', () => {
         expect(blocks.length).toBeGreaterThan(0);
         for (const block of blocks) {
           expect(block).toContain(KEPT);
-          expect(block).not.toContain('RRP6-DELETED');
-          expect(block).not.toContain('RRP6-CLOSED');
+          expect(block).not.toContain('RRPX-DELETED');
+          expect(block).not.toContain('RRPX-CLOSED');
         }
       },
     );
@@ -336,7 +341,7 @@ describe('what deleting a fact guarantees (AC-RRP-6)', () => {
         ),
       ];
 
-      expect(seen.some(t => t.includes('RRP6-DELETED'))).toBe(false);
+      expect(seen.some(t => t.includes('RRPX-DELETED'))).toBe(false);
     });
   });
 
@@ -347,7 +352,7 @@ describe('what deleting a fact guarantees (AC-RRP-6)', () => {
       expect(listing).toContain(CLOSED);
       expect(listing).toContain('(reason: user_closed)');
       expect(listing).toContain(KEPT);
-      expect(listing).not.toContain('RRP6-DELETED');
+      expect(listing).not.toContain('RRPX-DELETED');
       expect(listing).not.toContain('user_deleted');
     });
 
@@ -355,8 +360,8 @@ describe('what deleting a fact guarantees (AC-RRP-6)', () => {
       const listing = lastListing(steps[4]!);
 
       expect(listing).toContain(KEPT);
-      expect(listing).not.toContain('RRP6-DELETED');
-      expect(listing).not.toContain('RRP6-CLOSED');
+      expect(listing).not.toContain('RRPX-DELETED');
+      expect(listing).not.toContain('RRPX-CLOSED');
     });
 
     it('the service agrees: listFacts(includeArchived) has the closed row and never the deleted one', async () => {
@@ -364,26 +369,26 @@ describe('what deleting a fact guarantees (AC-RRP-6)', () => {
       const without = await repo.listFacts(run.userId, false, now);
 
       expect(withArchived.archived.map(f => f.fact)).toContain(CLOSED);
-      expect([...withArchived.active, ...withArchived.archived].some(f => f.fact.includes('RRP6-DELETED'))).toBe(false);
+      expect([...withArchived.active, ...withArchived.archived].some(f => f.fact.includes('RRPX-DELETED'))).toBe(false);
       expect(without.archived).toEqual([]);
-      expect(without.active.some(f => f.fact.includes('RRP6-DELETED'))).toBe(false);
+      expect(without.active.some(f => f.fact.includes('RRPX-DELETED'))).toBe(false);
     });
   });
 
   describe('3 — old evidence cannot bring a deleted fact back', () => {
     it('control: the summariser was really consulted and applied the batch — the fresh fact was added', () => {
       expect(steps[2]!.structured.filter(s => s.kind === 'summary').length).toBeGreaterThan(0);
-      expect(rowsWith('RRP6-FRESH')).toHaveLength(1);
-      expect(rowsWith('RRP6-FRESH')[0]).toMatchObject({ status: 'active' });
+      expect(rowsWith('RRPX-FRESH')).toHaveLength(1);
+      expect(rowsWith('RRPX-FRESH')[0]).toMatchObject({ status: 'active' });
     });
 
     it('a scripted add, update and confirm for the deleted fact change nothing: one row, still user_deleted, no active twin', () => {
-      const before = run.steps[0]!.facts.find(f => f.fact.includes('RRP6-DELETED'))!;
-      const after = rowsWith('RRP6-DELETED');
+      const before = run.steps[0]!.facts.find(f => f.fact.includes('RRPX-DELETED'))!;
+      const after = rowsWith('RRPX-DELETED');
 
       expect(after).toHaveLength(1);
       expect(after[0]).toEqual(before); // id, status, reason, closure stamp, confirmations, links — all untouched
-      expect(finalFacts().some(f => f.fact.includes('RRP6-DELETED') && f.status === 'active')).toBe(false);
+      expect(finalFacts().some(f => f.fact.includes('RRPX-DELETED') && f.status === 'active')).toBe(false);
     });
   });
 

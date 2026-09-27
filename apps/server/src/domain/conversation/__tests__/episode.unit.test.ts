@@ -124,6 +124,7 @@ describe('EpisodeSummaryV4Schema (fact-lifecycle Task 3, AC-FL-4 — operations,
           durability: 'long_term',
           reviewInDays: 60,
           phaseNote: 'in a cast',
+          evidence: 'сломал запястье',
         },
         { op: 'confirm', factId: '5b0f8a3e-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
         {
@@ -162,5 +163,19 @@ describe('EpisodeSummaryV4Schema (fact-lifecycle Task 3, AC-FL-4 — operations,
 
   it('an empty operations array is the expected common answer', () => {
     expect(EpisodeSummaryV4Schema.parse({ ...base, factOperations: [] }).factOperations).toEqual([]);
+  });
+
+  // BUG-040 (fact-provenance D2): `evidence` is optional on purpose — a missing
+  // field SKIPS the operation in the compaction node, it never fails the summary.
+  it('evidence is optional on every operation (a missing one skips, never fails)', () => {
+    expect(() =>
+      EpisodeSummaryV4Schema.parse({
+        ...base,
+        factOperations: [
+          { op: 'add', category: 'equipment', fact: 'Has a barbell', durability: 'short' },
+          { op: 'retract', factId: '5b0f8a3e-eeee-4eee-8eee-eeeeeeeeeeee' },
+        ],
+      }),
+    ).not.toThrow();
   });
 });

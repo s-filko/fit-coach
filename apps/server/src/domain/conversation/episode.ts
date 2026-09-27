@@ -69,6 +69,14 @@ export const FactOperationSchema = z
     reviewInDays: z.number().int().optional(),
     phaseNote: z.string().optional(),
     onExpiry: z.enum(FACT_ON_EXPIRY).optional(),
+    /**
+     * add/update/retract (BUG-040, fact-provenance D2): a verbatim quote from
+     * one of the episode's USER lines that states the fact — original language,
+     * never translated. Optional on purpose: a missing field SKIPS that
+     * operation in the compaction node (the summary and the other operations
+     * still apply, the fact-lifecycle D-E rule); it never fails the summary.
+     */
+    evidence: z.string().optional(),
   })
   .strict();
 

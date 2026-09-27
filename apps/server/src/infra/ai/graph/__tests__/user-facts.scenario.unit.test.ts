@@ -390,6 +390,9 @@ const ADD_INJURY = [
     fact: 'User has a lower back injury — no direct loading of the lower back',
     muscleGroup: 'lower_back',
     durability: 'permanent',
+    // BUG-040 (fact-provenance): a verbatim quote from the episode's User line —
+    // the deterministic guard requires it before the operation is applied.
+    evidence: 'травма поясницы',
   },
 ];
 /** The second compaction restates the SAME fact — v4 says confirm by id, not re-add. */
@@ -716,6 +719,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
           fact: 'User has a lower back injury — no direct loading of the lower back',
           muscleGroup: 'lower_back',
           durability: 'permanent',
+          evidence: 'травма поясницы',
         },
       ]),
     );
@@ -760,5 +764,79 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
     expect(active).toEqual([]); // skipped_stale_evidence — T0 evidence vs T1 closure
     expect(facts.rows[0]!.status).toBe('archived'); // the closure is intact
     expect(facts.rows).toHaveLength(1); // no resurrection row was created
+  });
+
+  it('BUG-040 / AC-FP-1..4: a coach-only figure (~70%) from the episode is not stored and never reaches ## User Facts', async () => {
+    const T0 = new Date('2026-09-27T10:00:00Z');
+    const T1 = new Date(T0.getTime() + 5 * 60_000); // run 2: T1 - T0 ≥ gap → compaction
+    const T2 = new Date(T1.getTime() + 10_000); // run 3: T2 - T1 < gap → no compaction
+    const facts = new InMemoryUserFactsService();
+    const deps = makeDeps(facts);
+    const { insert: summariesInsert } = deps.summaries as unknown as { insert: jest.Mock };
+    const graph = buildConversationGraph(deps);
+
+    const { __recorded: recorded, __script: script, __structuredAnswers: structuredAnswers } = modelFactory;
+    const callsBefore = modelFactory.__structuredCalls();
+    recorded.length = 0;
+    script.length = 0;
+    structuredAnswers.length = 0;
+    script.push(
+      // Run 1 (chat): the COACH's own claim — the only place "~70%" appears.
+      () =>
+        new AIMessage({
+          content: '«130 кг» = блины полностью + ~70% веса платформы, реальная нагрузка выше.',
+          tool_calls: [],
+        }),
+      // Run 2 (chat, the compaction run): plain-text reply.
+      () => new AIMessage({ content: 'Всегда пожалуйста.', tool_calls: [] }),
+      // Run 3 (chat): plain-text reply.
+      () => new AIMessage({ content: 'Продолжаем.', tool_calls: [] }),
+    );
+    // The summariser's add even QUOTES the user line (a well-formed evidence) —
+    // but the "~70%" figure appears in no user message: the number provenance
+    // check (D4) is what refuses it. The BUG-040 2075cb9f write.
+    structuredAnswers.push(
+      fencedOperations([
+        {
+          op: 'add',
+          category: 'equipment',
+          fact: 'On the 45° leg press the platform weight (~70% of its mass) adds to the plates',
+          durability: 'long_term',
+          evidence: 'Почему ты жим ногами называешь рычажным тренажёром?',
+        },
+      ]),
+    );
+
+    // --- Run 1: the user only ASKS; the figure comes from the coach's reply.
+    await graph.invoke(
+      { phase: 'chat', messages: [new HumanMessage('Почему ты жим ногами называешь рычажным тренажёром?')] },
+      ctxConfig({ runId: 'run-1', now: T0 }),
+    );
+    expect(facts.rows).toHaveLength(0); // nothing written yet — extraction is compaction's job
+
+    // --- Run 2: compaction — the summariser promotes the coach's figure to a fact.
+    await graph.invoke(
+      { phase: 'chat', messages: [new HumanMessage('Понятно, спасибо.')] },
+      ctxConfig({ runId: 'run-2', now: T1 }),
+    );
+
+    expect(summariesInsert).toHaveBeenCalledTimes(1); // the summary itself still applies (D-E)
+    expect(facts.rows).toHaveLength(0); // the add was skipped — no user-stated "~70%"
+    expect(modelFactory.__structuredCalls()).toBe(callsBefore + 1); // the summariser DID answer
+
+    // --- Run 3: the next run's model input must not carry the figure as a user fact.
+    await graph.invoke(
+      { phase: 'chat', messages: [new HumanMessage('Что ты помнишь обо мне?')] },
+      ctxConfig({ runId: 'run-3', now: T2 }),
+    );
+
+    const run3Input = recorded[2]!;
+    const factsBlock = run3Input.find(m => m._getType() === 'system' && String(m.content).includes('## User Facts'));
+    // With no stored fact there is no block at all; if anything is stored, none
+    // of it may carry the coach's figure.
+    if (factsBlock !== undefined) {
+      expect(String(factsBlock!.content)).not.toContain('70%');
+    }
+    expect(facts.rows.filter(r => r.fact.includes('70%'))).toEqual([]); // belt: nothing stored anywhere
   });
 });

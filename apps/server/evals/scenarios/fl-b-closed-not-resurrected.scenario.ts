@@ -32,6 +32,10 @@ const SHOULDER_NEW_STATEMENT = {
   durability: 'long_term',
   reviewInDays: 30,
   phaseNote: 'after a fall',
+  // BUG-040 (fact-provenance): a verbatim quote from the compacted episode's
+  // user line, so the add/update reach the port and are refused by the
+  // EVIDENCE CLOCK (what this journey pins) — not by the provenance check.
+  evidence: 'Плечо уже не болит',
 };
 
 export const scenario: Scenario = {
