@@ -97,6 +97,31 @@ calls), `apps/bot/__tests__/`.
 - [x] Red tests for AC-VT-4..5, then the code.
 - [x] Verification (from `apps/bot/`): `npx tsc --noEmit && npm test` — all green.
 
+## Task 3 — Fixes from the orchestrator's review and live probes (AC-VT-1, AC-VT-4..6)
+
+Live checks on the local server (2026-09-27): speech → 200 in 1.8 s ✓; 3 s of digital silence → `"700"`
+(hallucination); a 300 s clip → 503 after 30 s (timeout). Direct probes: with the R1 instruction, low-level
+noise (real-mic-like) → `<NO_SPEECH>` 3/3 and white noise 2/2, but pure digital silence still hallucinates
+in 3–4 of 4 with every variant tried (`medium` thinking, JSON `has_speech` schema) — accepted, see Not in
+scope. A 147 s natural monologue → full transcript (1915 chars, 609 tokens) in 4.8 s; a looped 300 s clip
+runs away to 65k output tokens / 155 s without a cap, and stops at 11.5 s with `maxOutputTokens: 4096`
+(`finishReason: MAX_TOKENS`).
+
+- [ ] **R1 — no-speech sentinel.** Instruction becomes exactly: `Transcribe the audio verbatim in its original
+  language. Output only the transcript text, nothing else. Write numbers as digits. If the audio contains no
+  clearly spoken words (silence, noise, music, breathing), output exactly: <NO_SPEECH>. Never guess or invent
+  words that are not clearly spoken.` A trimmed transcript equal to `<NO_SPEECH>` (or empty) → `NoSpeechError`.
+- [ ] **R2 — output cap.** `STT_MAX_OUTPUT_TOKENS` (default 4096) → `generationConfig.maxOutputTokens`.
+  `finishReason: MAX_TOKENS` → log warn, return the text as is.
+- [ ] **R3 — timeout.** `STT_TIMEOUT_MS` default 60000, and the timer also covers reading the body.
+- [ ] **R4 — log usage (D5).** One info log per successful call: model, latency, `promptTokenCount`,
+  `candidatesTokenCount`, `thoughtsTokenCount`, `finishReason`, text length.
+- [ ] **R5 — bot quote cut.** Cut the raw transcript at 3500 chars, then escape — cutting after escaping
+  can split an entity (`&am…`), Telegram rejects the HTML and `sendHtml` falls back to raw tags.
+- [ ] **R6 — bot accidental taps.** Voice with `duration < 1` → the `NO_SPEECH` notice, no download, no STT call.
+- [ ] Verification: from `apps/server`: `npm run lint && npm run type-check && npm run test:unit`; from
+  `apps/bot`: `npx tsc --noEmit && npm test` — all green.
+
 ## Orchestrator checks before "ready to merge"
 
 - AC-VT-6: local server with `STT_API_KEY` set in local `apps/server/.env`, `curl` the route with the probe clip.
@@ -111,5 +136,8 @@ calls), `apps/bot/__tests__/`.
 - `audio` files, `video_note`, forwarded voice from channels.
 - Recording the STT call in `llm_calls` / storing the audio.
 - Prod (frozen).
+- Pure digital silence (all-zero samples) may still be transcribed as invented words — no real Telegram
+  recording is digital zero (mic noise → `<NO_SPEECH>`), and the quote shows the user what was heard.
+  Energy-based pre-check (VAD) would need audio decoding (ffmpeg in the image) — not now.
 
 ## Review
