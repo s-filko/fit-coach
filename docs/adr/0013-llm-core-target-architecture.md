@@ -195,6 +195,15 @@ One function, `assembleContext(phaseSpec, state, ctx): { messages: BaseMessage[]
 4. `messages` — the episode history after `trimMessages` to the history budget (strategy `last`, `startOn: human`, `includeSystem: false`, keep tool pairs intact).
 5. In-flight messages are already inside `messages` (they are the same channel) — no separate splice.
 
+> **Amendment 2026-09-27 (`now-line-last`, owner-approved at close-out).** Two messages ride with the
+> current turn, between the history (4) and the current `HumanMessage`, in this order: the time-gap
+> note (AC-CC-2, only after an `EPISODE_GAP_HOURS` pause) and the **`NOW` line** (`CURRENT_TIME_V1`,
+> BUG-032, every call) — `… history → [gap note] → NOW → current`. `NOW` is no longer part of block 1:
+> it changes every minute, and as block 1's last section it kept everything after it (long-term and
+> domain blocks, history) out of the provider's prompt cache. Both survive the D-D floor and are not
+> budgeted. Their versions are stamped in `prompt_versions` (D-09): `block.current_time` on every run,
+> `block.time_gap` on runs that sent the note.
+
 Budget (per phase, in `PhaseSpec.budget`, tokens estimated with a fixed estimator so results are reproducible offline):
 
 | Phase            | system | long-term | domain | history | output reserve |

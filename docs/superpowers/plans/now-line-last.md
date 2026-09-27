@@ -95,15 +95,18 @@ On the owner's next real messages: `llm_calls.cache_expected` for agent calls sh
 - R1 | `prompts/index.ts:39-44` with `directives/index.ts:71` | ADR-0013 D-09 / BR-LLM-008 — the NOW
   line is still sent on every call, but it left the phase's `directives`, so `promptVersionsOf` no
   longer stamps `directive.current-time: v1`; `conversation_runs.prompt_versions` silently loses the
-  key (the gap note `TIME_GAP_V1` is likewise unstamped — precedent, not a justification). — *open*
+  key (the gap note `TIME_GAP_V1` is likewise unstamped — precedent, not a justification). — *fixed in
+  ee6052a9*: `block.current_time` stamped on every run (key renamed from `directive.current-time` — the
+  module moved to `blocks/`), `block.time_gap` on runs that sent the note.
 - R3 | plan Task 1 Verification | SUPERPOWERS_INTEGRATION rule 2 — no recorded integration/scenario
   run for the branch. — *closed*: orchestrator re-ran at f09fab8e — `test:integration` 47 suites /
   633 passed + 1 todo, `test:scenarios` 19 / 392 passed + 1 todo.
-- R4 | `docs/DB_SETUP.md:215-217` | rule 7 — the `prefix_changed:<label>` list lacks `system:now`. — *open*
+- R4 | `docs/DB_SETUP.md:215-217` | rule 7 — the `prefix_changed:<label>` list lacks `system:now`. — *fixed in ee6052a9*.
 - R4 | `docs/adr/0013-llm-core-target-architecture.md:190-196` (§3.4 "Output order is fixed") | rules
   1, 7 — the fixed order has no NOW message and still puts it in block 1's directives;
   `docs/ARCHITECTURE.md:128` carries the same stale order (already lacking facts and the gap note).
-  Durable spec — escalated to the owner. — *open*
+  Durable spec — escalated to the owner; owner approved (2026-09-27) — *fixed*: ADR-0013 §3.4
+  amendment 2026-09-27, `ARCHITECTURE.md` order line, spec § 4 finding dated.
 
 **Advisory**
 - R1 | `directives/current-time.v1.ts:22` — no longer a directive; a standalone message like the gap
@@ -119,6 +122,10 @@ On the owner's next real messages: `llm_calls.cache_expected` for agent calls sh
   `phases/training/v4.ts:7`, `plan_creation/index.ts:16`, `session_planning/index.ts:17` (D5 promised).
 - R4 | `docs/BUGS.md:1693-1694` — BUG-032 fix text "Rendered as the LAST system section".
 - R4 | spec § 4 `2026-09-26-training-history-context-design.md:72` — the "(today)" finding is outdated for NOW.
+
+**Advisory disposition:** all fixed in ee6052a9 (module moved to `blocks/`, one render context,
+`CURRENT_TIME_PREFIX` used by the templates, AC-NL-2 test with history + domain block, non-vacuous
+timezone test, comments, BUG-032 dated note); spec § 4 finding dated by the orchestrator.
 
 **Meta** — filed in `docs/REVIEW_FINDINGS.md`: rule candidate (every model-facing module reaching the
 request is stamped in `promptVersions`); blind spot (no zone diffs recorded run metadata before/after

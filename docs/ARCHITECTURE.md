@@ -125,7 +125,7 @@ apps/server/src/
       messages/                      # User-facing message catalog (ADR-0013 §11) — en/ru, language_code driven
         catalog.ts / en.ts / ru.ts / index.ts
       context/                      # Context assembler — message order + token accounting (ADR-0013 §3.4)
-        assemble-context.ts         # assembleContext() → { messages, budgetReport }: block 1 system → block 2 episode summaries → block 3 domain blocks → history → current (one shape for every phase); calls resolveBudget
+        assemble-context.ts         # assembleContext() → { messages, budgetReport }: block 1 system → user facts → course directive → episode summaries → block 3 domain blocks → history → [time-gap note] → NOW line → current (one shape for every phase); calls resolveBudget
         budget.ts                   # resolveBudget/trimHistory — INV-LLM-004 order: trim history → step block depths → drop oldest summary → D-D floor (block 1 never cut; `system` over budget only reported)
         token-estimator.ts          # estimateTokens + estimateMessages + TOKEN_ESTIMATOR_ID — the single estimator (app + eval stack)
       prompts/                       # Versioned prompt modules — every model-facing string (ADR-0013 §5)

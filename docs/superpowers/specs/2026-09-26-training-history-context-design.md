@@ -69,7 +69,7 @@ Older workouts are not shown in detail — use get_training_history.
 Provider prompt caching is prefix-based: everything after the first changed token is
 recomputed.
 
-- **Finding (today):** the `NOW` line is the last section of block 1 (`current-time.v1.ts`),
+- **Finding (2026-09-26; `NOW` moved out of block 1 by plan `now-line-last`, 2026-09-27):** the `NOW` line is the last section of block 1 (`current-time.v1.ts`),
   but facts, summaries, domain blocks and the whole episode history come after it — so
   nothing past the static phase prompt is ever cached. Relative dates ("3 days ago", "5d
   ago") in summaries and blocks add a daily break. `cached_tokens` is not recorded anywhere,
