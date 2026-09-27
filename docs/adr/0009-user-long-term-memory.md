@@ -143,6 +143,30 @@ The hard rejection of an exercise whose primary muscles hit a `physical_constrai
 still applies to **every** active constraint fact. Narrowing that block to `permanent` and turning
 the rest into advisory guidance is wave B (`course-check-and-constraints`), measured separately.
 
+### Amendment 2026-09-27 — provenance: a compaction fact must come from the user (BUG-040)
+
+> Decided without the owner (2026-09-27, autonomy order "бери 40 … без моего вмешательства");
+> reversible — plan `fact-provenance`, decisions D1–D9, flagged for the owner's review.
+
+On 2026-09-27 the summariser promoted the coach's own improvised figure ("~70% of the platform
+mass") into an active user fact. Compaction-sourced fact operations are now checked in code before
+they are applied (`domain/user/services/fact-provenance.ts`, called from `compact.node.ts`):
+
+- `add`, `update` and `retract` carry `evidence` — a verbatim quote from one of the compacted
+  episode's **user** messages. No quote, or a quote found in no user message after one fixed
+  normalisation (case, `ё→е`, quotes, whitespace, edge punctuation), skips the operation.
+- Every number in an `add`/`update` fact text must appear in the episode's user messages (for
+  `update`, also accepted from the old fact's text). Otherwise the operation is skipped whole and
+  an updated fact keeps its old text. A number the user wrote as a word is rejected — losing a fact
+  is recoverable, storing a false one is not.
+- `confirm` is exempt: it never changes text.
+- A skipped operation is logged (op, reason, fact id — never the text); the summary and the rest of
+  the batch still apply. The summariser prompt (`summarizer` v5) states the rule and asks for the
+  quote, but the check does not rely on it.
+
+The conversational path (`manage_fact` in a live turn) is unchanged: there the user's statement is
+the current message itself.
+
 ---
 
 ## Fact Categories

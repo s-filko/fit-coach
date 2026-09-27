@@ -135,3 +135,21 @@ integration tests (`grep -rl 'factOperations\|SUMMARIZER' tests/integration`).
   so the red commit passes the pre-commit hook. The orchestrator re-runs Task 1's command on the
   red commit before Task 2 starts; Task 2 promotes the cases into
   `compact.node.unit.test.ts` / `user-facts.scenario.unit.test.ts` and deletes the repro files.
+
+## Evidence
+
+- **Red (Task 1, `568efaf7`)** — re-run by the orchestrator on the red commit:
+  `npx jest --testMatch='**/__tests__/**/*provenance*.repro.test.ts'` → 5 failed, 2 passed.
+  Failing because the operation *was applied*: AC-FP-1 ×2 (`rememberFact` called), AC-FP-2
+  (`supersedeFact` called with the "~70%" text), AC-FP-3 (`retractFact` called), scenario (the
+  coach-only fact row stored). AC-FP-4 ×2 green (no over-filtering).
+- **Green (Task 2, `6d512d2d`)** — worker: `test:unit` 153 suites / 1529 tests, `test:scenarios`
+  19 / 392 + 1 todo, `test:integration` 47 / 634 + 1 todo; orchestrator re-run of
+  `test:scenarios` under the DB lock: 19 suites, 392 passed + 1 todo. Repro files promoted and
+  deleted.
+- **D10 (found in Task 2)** — the `review-memory-delete` integration scenario's markers `RRP6-…`
+  carried the digit 6, which D4 correctly refused; renamed to digit-free `RRPX-…` so that journey
+  keeps testing the stale-evidence guard, not the new one.
+- **D11 — docs.** ADR-0009 gains "Amendment 2026-09-27 — provenance" and ADR-0013 §3 a one-paragraph
+  pointer (factual record of the shipped rule, flagged for the owner). BUG-040 → *Partially fixed*:
+  warnings relevance, vocabulary and the model-side misses stay open (D7).
