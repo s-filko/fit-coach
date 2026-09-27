@@ -122,6 +122,18 @@ runs away to 65k output tokens / 155 s without a cap, and stops at 11.5 s with `
 - [x] Verification: from `apps/server`: `npm run lint && npm run type-check && npm run test:unit`; from
   `apps/bot`: `npx tsc --noEmit && npm test` — all green.
 
+## Verification evidence (2026-09-27)
+
+- Task 1 (worker, 435ca53b): server lint 0 errors, type-check clean, test:unit 150 suites / 1490 tests passed.
+- Task 2 (worker, c7df9875): bot `tsc --noEmit` clean, `npm test` 8 suites / 64 tests; server lint 0 errors.
+- Task 3 (worker, e4cf9f6f): server test:unit 150 suites / 1496 tests; bot 8 suites / 66 tests; lint/type-check clean.
+  Every commit passed `.husky/pre-commit` (lint → format:check → type-check → test:unit).
+- AC-VT-6 (orchestrator, local server from this worktree, real key, after Task 3):
+  `probe.ogg` 6 s → 200 `"Сегодня сделал три подхода приседа по 8 повторов с весом 60 кг."` 2.2 s;
+  low-level noise → 422 `NO_SPEECH` 1.3 s; 147 s monologue → 200 full transcript; looped 300 s clip → 200
+  capped (`MAX_TOKENS`) instead of the pre-fix 503 at 30 s; no `X-Api-Key` → 401.
+- AC-VT-7: pending — local bot `@MyFitAiCoachTestBot` running from this worktree, awaiting the owner's voice message.
+
 ## Orchestrator checks before "ready to merge"
 
 - AC-VT-6: local server with `STT_API_KEY` set in local `apps/server/.env`, `curl` the route with the probe clip.
