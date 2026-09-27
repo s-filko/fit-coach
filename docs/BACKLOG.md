@@ -49,6 +49,35 @@ Rules:
       model or the code" with numbers rather than opinion. Cheaper and more reliable once
       `llm-io-audit-trail` Task 4 stores real requests. Source: owner review of the 2026-09-21 dev
       training session.
+- [ ] **Training places and the user's own machines — a load number means something only on a known
+      machine in a known place (owner, 2026-09-27).** Catalog names are generic ("lever row", "calf raise
+      machine"), but real machines vary between gyms and even within one gym, and for cable and lever
+      machines the same number on the plates/stack gives a different effort; many machines also have their
+      own moving weight (carriage, lever arm), so "added 5 kg" sits on top of an unknown base. Free weights
+      are simpler, though bars differ too. Parts:
+      (1) **Places** — a user has one or more training places: a named gym, or home (not a gym: what matters
+      is the equipment actually there); each place has its inventory of equipment.
+      (2) **Machine instances** — once identified, a machine becomes the user's own record: catalog exercise
+      + place + a permanent description in the user's words (how it is built, how the load is applied, own
+      weight if known), reused in every later session at that place.
+      (3) **Coach clarifies** — when a machine is first mentioned or the name is ambiguous, the coach asks
+      which one exactly ("уточни, какой именно — если есть сомнения"); the user may also describe it
+      unprompted at any time; the answer is stored on the instance, not as a loose fact.
+      (4) **Comparability** — history, "last time" and load advice compare weights only within the same
+      machine instance (or the same free-weight kind); across places or variants they are shown as
+      separate lines, never as progress.
+      (5) **Session place** — each workout knows where it happens (asked or inferred), so the plan uses the
+      equipment that place has.
+      Already exists, partly: fact category `equipment` (free text, no link to a place or a machine —
+      e.g. the lever-machine fact that BUG-040 misapplied to the leg press); `docs/domain/user.spec.md`
+      BR-USER-018…020 specify `trainingLocation` (home|gym|outdoors, one value) and `equipmentPresent[]`, but
+      the `users` table has neither column; `exercises.equipment` is a generic type (machine/cable/…);
+      `2026-09-24-load-advisor-design.md` § 11 lists "machines differ between gyms" (#3) and "equipment weight
+      step as a user/gym fact" (#7) as data prerequisites of the load advisor — named, not designed. Not
+      covered anywhere: several places per user, per-place inventory, machine instances, a machine's own
+      weight, the clarifying question. A new domain entity — needs a spec and an ADR before planning; a
+      prerequisite of roadmap R4 (load advisor). Source: owner, during the 2026-09-27 dev training session
+      (examples: lateral raise machine, chest-supported row facing the floor, 45° leg press).
 
 - [ ] Connector layer on top of P1's `LlmGateway`: profiles become full connectors —
       each carries its own `API_URL` + `API_KEY` (provider/token pair), so the app talks to

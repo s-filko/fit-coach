@@ -891,6 +891,12 @@ User asks for an exercise technique explanation
 
 L1 eval run 2026-09-13, case TR-0009, sample observation: reply text contains `**Техника жима лёжа со штангой:**` → `text.format: telegram_html` check FAIL. Recorded in `docs/superpowers/plans/refactor-p0-eval-l1-chat-training.md` (Task 6 measurement).
 
+**Reproduced live 2026-09-27** (dev, `glm-5.3-flash`, session `769d4a24`): 4 of 27 replies carry markdown —
+pipe tables (`| Подход | Вес × Повторы | RPE |`, runs `1d2302bb` 09:37, `a8d3b20b` 10:34) and `**Leg Extension**`
+/ `**Leg Curl**` headers (`0a1b5697` 09:55, `4bc9f734` 10:04). Tables appear on every recap-type reply (exercise
+or session totals), so the trigger is no longer "technique explanations" only. Nothing between the model and
+Telegram converts or strips markdown — the gap is unguarded, not only a model habit.
+
 ### Impact
 
 - Degraded readability of technique/guidance answers in Telegram (literal `**` in user-facing text)
@@ -1824,3 +1830,175 @@ sequence.
 - **BUG-022/024** — the 2.33 km warm-up was never logged.
 - Model-side misses (misread "как ты определил?" ×3, target reps drifting 8-10/12/13 under pressure) — eval drafts
   `evals/datasets/drafts/session-2026-09-25.jsonl`.
+
+## BUG-039 — A superset flips its two exercises between `completed` and `in_progress`: every alternating set auto-completes the other exercise
+
+**Status:** Open
+**Severity:** Medium — the data ends up right, but one batch fed the model five contradictory "Exercise … completed" summaries with partial counts; supersets are the owner's normal practice when short on time (active fact)
+**Found during:** owner's live dev session 2026-09-27, run `0a1b5697` (09:55 UTC), session `769d4a24` (`lower_a_20260927`)
+**Component:** `apps/server/src/domain/training/services/training.service.ts` (`ensureCurrentExercise`, auto-complete on switch), `apps/server/src/infra/ai/tools/format-exercise-summary.ts`, `log-set.tool.ts`
+
+### Description
+
+The user reported a leg extension / leg curl superset (3 rounds, 66 kg). The model sent six `log_set` calls,
+alternating the two exercise ids. Each call switched the "current" exercise, so `ensureCurrentExercise`
+auto-completed the other one and re-opened the target (`completed → in_progress`). The tool results carried:
+`Exercise '45° Leg Press' completed` (correct), then `Leg Extension completed 1/3`, `Leg Curl completed 1/3`,
+`Leg Extension completed 2/3`, `Leg Curl completed 2/3`, `Leg Extension completed 3/3` — each with the
+instruction "add a brief recap of this completed exercise". The model coped this time (the reply lists both as
+3/3), but the signals are wrong: an exercise with 1 of 3 sets is announced as finished, and statuses churn.
+The model also numbered `order` 1…6 across both exercises; the stored `set_number` is per exercise (correct),
+so `order` is silently ignored — its meaning is undefined for interleaved sets.
+
+### Root cause
+
+The session model has exactly one `in_progress` exercise, and any `log_set` for a different exercise is read
+as "the user moved on" (ADR-0011 Fix 1.3). There is no notion of two exercises open at once, and a re-opened
+`completed` exercise is not distinguished from a new one.
+
+### DB evidence
+
+`session_sets` for Leg Extension / Leg Curl: all six rows at 09:55:02.41 … 09:55:02.61, `set_number` 1–3 per
+exercise, both `session_exercises` rows end `completed`.
+
+### Impact
+
+- Five spurious "completed" summaries in one batch (BUG-025 family: completion reports that do not match the data)
+- Churn of `session_exercises.status`; any logic keyed on `completed` (course check, overview) sees exercises finish and reopen within a second
+
+### Why the tests did not catch it
+
+No scenario, journey or eval case logs interleaved sets of two exercises.
+
+### Fix plan
+
+Not decided — needs an owner call: (a) auto-complete only when the new exercise was never started in this
+session, or (b) an explicit superset/pair concept. Red test first: a batch of alternating `log_set` calls must
+produce no "completed" summary for an exercise the batch keeps logging.
+
+## BUG-040 — The summariser stores the coach's own invented claims as user facts; a fact scoped to lever machines was applied to the leg press
+
+**Status:** Open
+**Severity:** High — wrong "knowledge" becomes durable memory with the user as its source, and will be quoted back in every later session
+**Found during:** owner's live dev session 2026-09-27, runs `e572e2a9` (09:21) → `40f627e4` (09:38); fact written 10:34:37 by the compaction in run `622a877a`
+**Component:** fact extraction in the episode summariser (`apps/server/src/infra/ai/graph/nodes/compact.ts` + its prompt), `session_planning` → `start_training_session.warnings`, `user_facts`
+
+### Description
+
+1. The active fact `6e14cfe2` (category `equipment`, source "user flagged during chest-supported row") reads
+   "For plate-loaded **lever** machines, displayed plate weight excludes the handle/machine's own weight".
+   Session planning copied it into the session `warnings` as «Реальный вес рычажных тренажеров выше
+   отображаемого на блинах» for a session with no lever machine, and the coach applied it to the 45° leg press:
+   «помни про рычажный тренажёр: реальная нагрузка выше».
+2. Asked to explain, the coach invented mechanics over three replies and contradicted itself: «130 на табло ≈
+   фактически ~160+ кг», «вес платформы × sin(45°) ≈ ~0.7 от её массы», then «под 45° нагрузка от платформы
+   меньше», then «“130 кг” = блины полностью + ~70% веса платформы». The user caught it twice («где тут
+   рычаг?», «почему ты его называешь рычажным»).
+3. At 10:34 the summariser **superseded** `6e14cfe2` with the active fact `2075cb9f`: «…this does NOT apply to
+   the 45° leg press — there the platform weight (~70% of its mass due to the 45° angle) simply adds to the
+   plates». The "~70%" figure is the coach's own improvisation — the user never said it — yet it is now a
+   long-term user fact (`source: "corrected in a compacted episode"`).
+4. **Unprofessional vocabulary and a fabricated quote.** A plate-loaded leg press has no display, yet the coach
+   talks about «табло» six times («130 на табло», «вес на табло был условным») — its rendering of the fact's
+   English "displayed plate weight". The user never used the word (0 of his messages). At 09:22 (`d56cc46f`)
+   the coach presented it as the user's own words: «Ты сам мне это рассказывал раньше 👇 > «…Реальная нагрузка
+   выше, чем на табло»» — a quotation the user never said. Owner (2026-09-27): «платформа и табло, это дичь,
+   откуда у него вообще табло, звучит не профессионально». Classes: **unguarded** (the fact text is English
+   and ambiguous — "displayed" — and nothing tells the coach to use gym terminology: «вес блинов», «вес
+   каретки»); **model** (a fabricated quote attributed to the user — eval draft).
+
+### Root cause (to confirm in the investigation)
+
+- **Code / unguarded:** fact extraction has no provenance rule — it does not distinguish what the user stated
+  from what the coach said, so coach claims are promoted to user facts.
+- **Unguarded:** `warnings` in `start_training_session` accept any fact text with no relevance to the planned
+  exercises.
+- **Model:** fabricated physics and scope misapplication (eval draft).
+
+### Impact
+
+A false statement is now permanent memory attributed to the user; the owner spent three exchanges correcting
+the coach mid-set.
+
+### Fix plan
+
+Investigation + red test first (owner's procedure): a summariser case where only the coach asserts a figure
+must produce no fact carrying it. Data: fact `2075cb9f` must be corrected or retracted — owner decision.
+
+## BUG-041 — Non-strength sets are confirmed without their values, and free-text targets render as junk ("Target: ?×?", "2×2x45s")
+
+**Status:** Open
+**Severity:** Medium — the model cannot check from the tool result what was saved (BUG-009 class); the overview shown to it every turn carries nonsense targets
+**Found during:** owner's live dev session 2026-09-27, runs `e29d6ceb` (09:14), `b04076ef` (09:16), `a8d3b20b` (10:34)
+**Component:** `apps/server/src/infra/ai/tools/log-set.tool.ts` (confirmation text), `format-exercise-summary.ts`, the training overview domain block, `start_training_session` target schema
+
+### Description
+
+- `log_set` confirmations for non-strength types print the type instead of the values:
+  `Set 1 logged — Treadmill: cardio_distance.`, `Set 1 logged — Plank: cardio_duration.` (strength sets print
+  `12 reps @ 110 kg | RPE 8`). The DB rows are correct (`{"distance": 2.33, "duration": 1006}`,
+  `{"duration": 45}`).
+- The auto-complete summary for the treadmill: `Target: ?x?`, `Set 1:` (empty), `Total: 1/? sets.`; for an
+  off-plan exercise (`Standing Calf Raise Machine`): `Target: ?x?`, `Total: 4/? sets.`.
+- Planning sent `targetReps: "2x45s"` / `"2x25-30s per side"` together with `targetSets: 2`; the overview renders
+  `Plank: 2×2x45s`, the summary `Target: 2x2x45s`. `targetReps` is free text, so sets can be encoded twice.
+- "Per side" is not representable: the side plank was logged as 2 × 30 s with no sides.
+
+### Why the tests did not catch it
+
+BUG-023/024 tests assert the stored `set_data`, not the text the model receives; no test renders the summary or
+overview for a cardio, duration or off-plan exercise.
+
+### Fix plan
+
+Format every `set_data` type through one formatter in the confirmation, summary and overview; omit the target
+line when there is none; reject or normalise a `targetReps` that repeats the set count.
+
+## BUG-042 — A planned exercise replaced by another leaves no trace: no `skipped` row, the plan line stays pending, and the next session reads "never done"
+
+**Status:** Open
+**Severity:** Medium — history and plan adherence under-report the work; the coach tells the user sets "were not logged"
+**Found during:** owner's live dev session 2026-09-27 (runs `0a1b5697` 09:55, `78be6b58` 10:07, `622a877a` finish)
+**Component:** `apps/server/src/domain/training/services/training.service.ts` (`finishSession` completes only `in_progress` rows; `session_exercises` are created lazily), training history / recent-workouts blocks
+
+### Description
+
+The plan had `Seated Calf Raise Machine 4×15`; the user did standing calf raises in the Smith machine, logged as
+the off-plan `Standing Calf Raise Machine`. Because rows are created on the first set, the seated calf raise has
+**no** `session_exercises` row today; the overview kept `[—] Seated Calf Raise Machine: 4×15` pending until the
+finish, and `finish_training` did not reconcile it. On 2026-09-21 the same substitution left a `skipped` row
+instead — the outcome depends on the path taken. The next plan's history block showed «Seated Calf Raise
+Machine — no completed record», and the coach said at 09:55 «В понедельник подходы не залогировались, так что
+стартуй консервативно» — the user had done 3 calf sets at 50 kg that Monday (found by the coach itself at 10:07).
+The catalog also has no Smith-machine calf raise, so the substitute is logged under a different machine.
+
+### Fix plan
+
+Needs design (overlaps `refactor-p6-progress-and-drafts`, muscle-centric history): at finish, mark untouched plan
+items `skipped`; show calf work by muscle, not only by the planned exercise id.
+
+### Related findings from the same session (2026-09-27)
+
+Confirmed working live (evidence for closing, owner's call): BUG-034 (no catalog fallback in 27 runs), BUG-037
+(09:16: set confirmed first, treadmill recap last), BUG-038 (3 summariser calls in 82 min vs 9 in 30 min on
+09-25), BUG-030 (history resolved the 09-21 `lower_a` session for every exercise), BUG-023/024 (warm-up and
+planks stored as distance/duration). BUG-035/036 were not exercised.
+
+- **BUG-013** (open) reproduced: markdown tables and `**…**` in 4 replies — see that entry.
+- **BUG-023 legacy data:** the 09-21 planks are still stored as `functional_reps` («Plank: 45 reps» in the
+  history block); the fix was prospective, no backfill.
+- **Prompt cache ≈10 %** (64 k of 640 k input tokens across 49 calls, after `now-line-last`): 35 calls diverge at
+  `system:domain#4@~963` — the domain block puts the volatile WORKOUT OVERVIEW (set counts, "(Nmin ago)") before
+  ~5 k tokens of stable EXERCISE HISTORY / RECENT WORKOUTS; 9 diverge at `tools`. Covered by the target order in
+  `docs/superpowers/specs/2026-09-26-training-history-context-design.md` § 4 — not a new item.
+- **Inline compaction on the reply path:** runs `7fa98fef` (57 s, summariser 35 s) and `622a877a` (53 s,
+  summariser 13 s) waited for the summariser before answering.
+- **Stale profile:** the CLIENT block says «Goal: сила, 3 раза в неделю» while the active facts say ~5 sessions a
+  week, strength + V-taper.
+- **Stale summary content:** the 10:34 summary keeps «Leg curls at limit — final set RPE 10 (true failure)»
+  although the set was corrected to RPE 9 at 10:04.
+- Model-side misses (for eval drafts `evals/datasets/drafts/session-2026-09-27.jsonl`, not yet written):
+  «сгибания пошли уже на пределе» turned into RPE 10 against the user's «финальный … рпе 9», and on «откуда ты
+  взял рпе 10» the coach asked again instead of rereading («я тебе прямо сказал сколько»); «дожать до
+  понедельничной планки» for a different rep scheme (`30f3384d`, challenged at `412bee90`); «груда-опорная тяга»;
+  finish feedback «50-минутная сессия» for an 81-minute session.
