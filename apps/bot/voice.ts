@@ -23,10 +23,15 @@ export function escapeHtml(text: string): string {
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-/** The quote body: escaped transcript, cut at 3500 chars with `…`. */
+/**
+ * The quote body: the RAW transcript cut at 3500 chars with `…`, THEN escaped.
+ * R5 (Task 3): cutting after escaping could split an HTML entity in half
+ * (`&am…`) — Telegram rejects the HTML and `sendHtml` falls back to showing
+ * raw tags. Cutting first keeps every entity whole.
+ */
 function quoteBody(transcript: string): string {
-    const escaped = escapeHtml(transcript);
-    return escaped.length > DISPLAY_CUT ? escaped.slice(0, DISPLAY_CUT) + '…' : escaped;
+    const raw = transcript.length > DISPLAY_CUT ? transcript.slice(0, DISPLAY_CUT) + '…' : transcript;
+    return escapeHtml(raw);
 }
 
 /** The full quote line exactly as it goes into a Telegram message. */

@@ -87,6 +87,7 @@ export async function registerInfraServices(container: Container = getGlobalCont
       model: config.STT_MODEL,
       apiUrl: config.STT_API_URL,
       timeoutMs: config.STT_TIMEOUT_MS,
+      maxOutputTokens: config.STT_MAX_OUTPUT_TOKENS,
     }),
   );
 

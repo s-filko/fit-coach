@@ -138,6 +138,13 @@ async function handleVoiceMessage(bot: TelegramBot, msg: TelegramBot.Message, vo
         return;
     }
 
+    // R6 (Task 3): a sub-second voice is an accidental tap — no speech in it.
+    // Same notice as NO_SPEECH, without a pointless download and STT call.
+    if (voice.duration < 1) {
+        await bot.sendMessage(chatId, voiceNoticeFor('NO_SPEECH', knownLanguageCode(msg)));
+        return;
+    }
+
     try {
         await withTypingIndicator(bot, chatId, async () => {
             const user = await registerOrGetUser(msg);

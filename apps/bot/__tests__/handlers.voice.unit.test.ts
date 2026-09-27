@@ -126,6 +126,15 @@ describe('bot voice handling (AC-VT-4/5)', () => {
         expect(bot.sendMessage).toHaveBeenCalledWith(nextSenderId, expect.stringContaining('5 minutes'));
     });
 
+    it('R6: duration < 1 s (accidental tap) → NO_SPEECH notice, no download, no API call', async () => {
+        await emitAndSettle(voiceMessage({ voice: { duration: 0, file_id: 'F', file_unique_id: 'U', file_size: 1 } as TelegramBot.Voice }));
+
+        expect(bot.getFileStream).not.toHaveBeenCalled();
+        expect(mockPost).not.toHaveBeenCalled();
+        expect(bot.sendMessage).toHaveBeenCalledTimes(1);
+        expect(bot.sendMessage).toHaveBeenCalledWith(nextSenderId, expect.stringContaining('голосовое'));
+    });
+
     it('422 NO_SPEECH: sends the notice, chat is NOT called', async () => {
         mockPost
             .mockResolvedValueOnce(flush({ data: { id: 'u2' } }))

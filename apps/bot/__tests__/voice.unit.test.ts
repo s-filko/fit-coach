@@ -53,6 +53,19 @@ describe('voiceReplyMessages (D7)', () => {
         expect(quote.length).toBeLessThanOrEqual('<blockquote expandable>🎤 '.length + 3500 + '…'.length);
     });
 
+    it('R5: cuts the RAW transcript at 3500 chars, THEN escapes — an HTML entity is never split', () => {
+        // '&' escapes to '&amp;' (5 chars). Cutting the escaped text at 3500
+        // would split an entity in half ('&am…'), Telegram rejects the HTML and
+        // sendHtml falls back to showing raw tags. The raw cut keeps every
+        // entity whole.
+        const long = '&&'.repeat(2000); // 4000 raw chars
+        const [composed] = voiceReplyMessages(long, 'ok');
+        const quote = composed.slice(0, composed.indexOf('</blockquote>'));
+
+        expect(quote).toBe('<blockquote expandable>🎤 ' + '&amp;'.repeat(3500) + '…');
+        expect(quote).not.toMatch(/&(a(?!mp)|l(?!t;)|g(?!t;))/); // no partial entity
+    });
+
     it('returns only the quote when the coach reply is empty (the user still sees what was heard)', () => {
         expect(voiceReplyMessages('привет', '')).toEqual(['<blockquote>🎤 привет</blockquote>']);
         expect(voiceReplyMessages('привет', '   \n')).toEqual(['<blockquote>🎤 привет</blockquote>']);

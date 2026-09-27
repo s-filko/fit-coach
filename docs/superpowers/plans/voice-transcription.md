@@ -107,19 +107,19 @@ scope. A 147 s natural monologue → full transcript (1915 chars, 609 tokens) in
 runs away to 65k output tokens / 155 s without a cap, and stops at 11.5 s with `maxOutputTokens: 4096`
 (`finishReason: MAX_TOKENS`).
 
-- [ ] **R1 — no-speech sentinel.** Instruction becomes exactly: `Transcribe the audio verbatim in its original
+- [x] **R1 — no-speech sentinel.** Instruction becomes exactly: `Transcribe the audio verbatim in its original
   language. Output only the transcript text, nothing else. Write numbers as digits. If the audio contains no
   clearly spoken words (silence, noise, music, breathing), output exactly: <NO_SPEECH>. Never guess or invent
   words that are not clearly spoken.` A trimmed transcript equal to `<NO_SPEECH>` (or empty) → `NoSpeechError`.
-- [ ] **R2 — output cap.** `STT_MAX_OUTPUT_TOKENS` (default 4096) → `generationConfig.maxOutputTokens`.
+- [x] **R2 — output cap.** `STT_MAX_OUTPUT_TOKENS` (default 4096) → `generationConfig.maxOutputTokens`.
   `finishReason: MAX_TOKENS` → log warn, return the text as is.
-- [ ] **R3 — timeout.** `STT_TIMEOUT_MS` default 60000, and the timer also covers reading the body.
-- [ ] **R4 — log usage (D5).** One info log per successful call: model, latency, `promptTokenCount`,
+- [x] **R3 — timeout.** `STT_TIMEOUT_MS` default 60000, and the timer also covers reading the body.
+- [x] **R4 — log usage (D5).** One info log per successful call: model, latency, `promptTokenCount`,
   `candidatesTokenCount`, `thoughtsTokenCount`, `finishReason`, text length.
-- [ ] **R5 — bot quote cut.** Cut the raw transcript at 3500 chars, then escape — cutting after escaping
+- [x] **R5 — bot quote cut.** Cut the raw transcript at 3500 chars, then escape — cutting after escaping
   can split an entity (`&am…`), Telegram rejects the HTML and `sendHtml` falls back to raw tags.
-- [ ] **R6 — bot accidental taps.** Voice with `duration < 1` → the `NO_SPEECH` notice, no download, no STT call.
-- [ ] Verification: from `apps/server`: `npm run lint && npm run type-check && npm run test:unit`; from
+- [x] **R6 — bot accidental taps.** Voice with `duration < 1` → the `NO_SPEECH` notice, no download, no STT call.
+- [x] Verification: from `apps/server`: `npm run lint && npm run type-check && npm run test:unit`; from
   `apps/bot`: `npx tsc --noEmit && npm test` — all green.
 
 ## Orchestrator checks before "ready to merge"

@@ -11,15 +11,21 @@ import { createLogger } from '@shared/logger';
 const log = createLogger('stt');
 
 /**
- * D4: one constant instruction — verbatim in the original language, only the
- * transcript, numbers as digits, empty output when there is no intelligible
- * speech. English works for every language the model covers.
+ * D4 + R1: one constant instruction — verbatim in the original language, only
+ * the transcript, numbers as digits, and the `<NO_SPEECH>` sentinel when
+ * nothing is clearly spoken (live probes 2026-09-27: without the sentinel,
+ * silence hallucinated invented words; with it, mic-like noise answers
+ * `<NO_SPEECH>` reliably). Exact text fixed by the plan's Task 3.
  */
 const TRANSCRIBE_INSTRUCTION =
   'Transcribe the audio verbatim in its original language. ' +
   'Output only the transcript text, nothing else. ' +
   'Write numbers as digits. ' +
-  'If there is no intelligible speech, output nothing.';
+  'If the audio contains no clearly spoken words (silence, noise, music, breathing), output exactly: <NO_SPEECH>. ' +
+  'Never guess or invent words that are not clearly spoken.';
+
+/** R1: the model answers with this sentinel when there is no speech. */
+const NO_SPEECH_SENTINEL = '<NO_SPEECH>';
 
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -29,6 +35,8 @@ export interface GeminiTranscriberOptions {
   model: string;
   apiUrl: string;
   timeoutMs: number;
+  /** R2: generationConfig.maxOutputTokens — without a cap, a runaway clip burned 65k output tokens. */
+  maxOutputTokens: number;
   /** Injected in tests; the global fetch in production. */
   fetchImpl?: FetchLike;
 }
@@ -38,19 +46,38 @@ interface GeminiPart {
   thought?: boolean;
 }
 
+interface GeminiCandidate {
+  content?: { parts?: unknown };
+  finishReason?: unknown;
+}
+
+interface GeminiUsageMetadata {
+  promptTokenCount?: unknown;
+  candidatesTokenCount?: unknown;
+  thoughtsTokenCount?: unknown;
+}
+
+interface ParsedResponse {
+  /** Joined text of the non-thought parts, trimmed; null when the body is unusable. */
+  text: string | null;
+  finishReason: string | undefined;
+  usage: GeminiUsageMetadata | undefined;
+}
+
 /**
- * Joins the text of the non-thought parts and trims. Returns `null` for a
- * malformed body (no candidates / no parts / no text part at all), which the
- * caller reports as STT_UNAVAILABLE.
+ * Joins the text of the non-thought parts and trims, and picks up
+ * finishReason/usageMetadata for logging. `text === null` means malformed (no
+ * candidates / no parts / no text part at all) → STT_UNAVAILABLE.
  */
-function extractTranscript(json: unknown): string | null {
+function parseResponse(json: unknown): ParsedResponse {
   const candidates = (json as { candidates?: unknown } | null)?.candidates;
   if (!Array.isArray(candidates) || candidates.length === 0) {
-    return null;
+    return { text: null, finishReason: undefined, usage: undefined };
   }
-  const parts = (candidates[0] as { content?: { parts?: unknown } } | undefined)?.content?.parts;
+  const candidate = candidates[0] as GeminiCandidate;
+  const parts = candidate.content?.parts;
   if (!Array.isArray(parts)) {
-    return null;
+    return { text: null, finishReason: undefined, usage: undefined };
   }
   let sawTextPart = false;
   const joined = parts
@@ -62,10 +89,18 @@ function extractTranscript(json: unknown): string | null {
       return part.text;
     })
     .join('');
-  if (!sawTextPart) {
-    return null;
-  }
-  return joined.trim();
+  const finishReason = typeof candidate.finishReason === 'string' ? candidate.finishReason : undefined;
+  const rawUsage = (json as { usageMetadata?: unknown } | null)?.usageMetadata;
+  const usage = typeof rawUsage === 'object' && rawUsage !== null ? (rawUsage as GeminiUsageMetadata) : undefined;
+  return {
+    text: sawTextPart ? joined.trim() : null,
+    finishReason,
+    usage,
+  };
+}
+
+function tokenCountOf(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 /**
@@ -81,6 +116,7 @@ export class GeminiTranscriber implements SpeechTranscriberPort {
   private readonly model: string;
   private readonly apiUrl: string;
   private readonly timeoutMs: number;
+  private readonly maxOutputTokens: number;
   private readonly fetchImpl: FetchLike;
 
   constructor(opts: GeminiTranscriberOptions) {
@@ -88,6 +124,7 @@ export class GeminiTranscriber implements SpeechTranscriberPort {
     this.model = opts.model;
     this.apiUrl = opts.apiUrl;
     this.timeoutMs = opts.timeoutMs;
+    this.maxOutputTokens = opts.maxOutputTokens;
     this.fetchImpl = opts.fetchImpl ?? ((url, init) => fetch(url, init));
   }
 
@@ -110,14 +147,21 @@ export class GeminiTranscriber implements SpeechTranscriberPort {
           ],
         },
       ],
-      generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: 'low' } },
+      generationConfig: {
+        temperature: 0,
+        thinkingConfig: { thinkingLevel: 'low' },
+        maxOutputTokens: this.maxOutputTokens,
+      },
     });
 
+    const start = Date.now();
+    // R3: one timer for the whole call — fetch AND reading the body. Clearing
+    // it when the headers arrive (fetch resolves) left an unbounded body read.
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    let response: Response;
+    let json: unknown;
     try {
-      response = await this.fetchImpl(url, {
+      const response = await this.fetchImpl(url, {
         method: 'POST',
         headers: {
           'x-goog-api-key': this.apiKey,
@@ -126,35 +170,57 @@ export class GeminiTranscriber implements SpeechTranscriberPort {
         body,
         signal: controller.signal,
       });
+
+      if (!response.ok) {
+        const providerBody = await response.text().catch(() => '');
+        // INV-LLM-006: the provider's message goes to the log, never to a response body.
+        log.warn(
+          { status: response.status, model: this.model, providerBody: providerBody.slice(0, 500) },
+          'STT provider error',
+        );
+        throw new SttUnavailableError(`STT provider returned ${response.status}`);
+      }
+
+      json = await response.json();
     } catch (err) {
-      throw new SttUnavailableError('STT request failed', err);
+      if (err instanceof SttUnavailableError) {
+        throw err;
+      }
+      throw new SttUnavailableError('STT request failed or timed out', err);
     } finally {
       clearTimeout(timer);
     }
 
-    if (!response.ok) {
-      const providerBody = await response.text().catch(() => '');
-      // INV-LLM-006: the provider's message goes to the log, never to a response body.
-      log.warn(
-        { status: response.status, model: this.model, providerBody: providerBody.slice(0, 500) },
-        'STT provider error',
-      );
-      throw new SttUnavailableError(`STT provider returned ${response.status}`);
-    }
-
-    let json: unknown;
-    try {
-      json = await response.json();
-    } catch (err) {
-      throw new SttUnavailableError('Malformed STT response body', err);
-    }
-
-    const text = extractTranscript(json);
+    const { text, finishReason, usage } = parseResponse(json);
     if (text === null) {
       log.warn({ model: this.model }, 'STT response without usable candidates/parts');
       throw new SttUnavailableError('Malformed STT response body');
     }
-    if (text === '') {
+
+    if (finishReason === 'MAX_TOKENS') {
+      // R2: the cap stopped a runaway clip — return what was transcribed, loudly.
+      log.warn(
+        { model: this.model, finishReason, maxOutputTokens: this.maxOutputTokens },
+        'STT transcript hit maxOutputTokens',
+      );
+    }
+
+    // R4/D5: the STT call is logged (never written to llm_calls — run-scoped table).
+    log.info(
+      {
+        model: this.model,
+        latencyMs: Date.now() - start,
+        promptTokenCount: tokenCountOf(usage?.promptTokenCount),
+        candidatesTokenCount: tokenCountOf(usage?.candidatesTokenCount),
+        thoughtsTokenCount: tokenCountOf(usage?.thoughtsTokenCount),
+        finishReason,
+        textLength: text.length,
+      },
+      'STT call completed',
+    );
+
+    // R1: the sentinel (or emptiness) after trim means nothing was spoken.
+    if (text === NO_SPEECH_SENTINEL || text === '') {
       throw new NoSpeechError();
     }
     return { text };
