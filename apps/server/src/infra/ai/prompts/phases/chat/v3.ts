@@ -4,9 +4,11 @@ import type { DirectiveContext, PromptModule, Section } from '@infra/ai/prompts/
 
 /**
  * v3 (transition-handoff plan Task 7, BUG-032): identical to v2 except the
- * directive list — `DEFAULT_DIRECTIVES_V2` appends `CURRENT_TIME_V1`. chat
+ * directive list — `DEFAULT_DIRECTIVES_V2` appended `CURRENT_TIME_V1`. chat
  * rendered no current date or time at all before this; every other section
- * renders the exact wording v2 rendered for it.
+ * renders the exact wording v2 rendered for it. (now-line-last, 2026-09-27:
+ * the NOW line left the directive list for its own message before `current`
+ * — `blocks/current-time.v1.ts`.)
  */
 export interface ChatPromptContextV3 extends DirectiveContext {
   hasActivePlan: boolean;

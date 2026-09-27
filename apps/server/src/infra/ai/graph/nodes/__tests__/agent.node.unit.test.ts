@@ -38,7 +38,7 @@ const attachSpy = jest.spyOn(metricsCollector, 'attachBudgetReport');
 
 const NUDGE_TEXT = renderBlock(POST_TOOL_NUDGE_V1, {});
 
-const FRESH_USER = { id: 'fresh-user', languageCode: 'ru', timezone: 'Europe/Berlin' };
+const FRESH_USER = { id: 'fresh-user', languageCode: 'ru', timezone: 'Europe/Berlin' as string | null };
 
 const renderSpy = jest.fn((ctx: { user?: { id?: string } | null }) => [
   { id: 'task', text: `rendered-for:${ctx.user?.id ?? 'none'}`, required: true },
@@ -165,12 +165,13 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     await node(state, CONFIG);
 
     const first = mockInvoke.mock.calls[0][0] as BaseMessage[];
-    // [system, human, ai(tool_calls), nudge, tool] — the nudge sits
-    // immediately before the last ToolMessage (one shape, no frames).
-    expect(first).toHaveLength(5);
-    expect(first[3]._getType()).toBe('system');
-    expect(first[3].content).toBe(NUDGE_TEXT);
-    expect(first[4]._getType()).toBe('tool');
+    // [system, NOW, human, ai(tool_calls), nudge, tool] — the nudge sits
+    // immediately before the last ToolMessage (one shape, no frames); the
+    // NOW line (now-line-last) is its own message ahead of `current`.
+    expect(first).toHaveLength(6);
+    expect(first[4]._getType()).toBe('system');
+    expect(first[4].content).toBe(NUDGE_TEXT);
+    expect(first[5]._getType()).toBe('tool');
   });
 
   it('system-block-final turn (training tool-results frame): no nudge on the first call', async () => {
@@ -188,12 +189,12 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     await node(state, CONFIG);
 
     const first = mockInvoke.mock.calls[0][0] as BaseMessage[];
-    // [system, human, ai(tool_calls), tool, system-frame] — a system-final
+    // [system, NOW, human, ai(tool_calls), tool, system-frame] — a system-final
     // turn gets no nudge on the first call.
-    expect(first).toHaveLength(5);
+    expect(first).toHaveLength(6);
     expect(first.every(m => m.content !== NUDGE_TEXT)).toBe(true);
-    expect(first[4]._getType()).toBe('system');
-    expect(String(first[4].content).startsWith('=== TOOL EXECUTION RESULTS ===')).toBe(true);
+    expect(first[5]._getType()).toBe('system');
+    expect(String(first[5].content).startsWith('=== TOOL EXECUTION RESULTS ===')).toBe(true);
   });
 
   it('empty reply → one retry with the nudge → still empty → the empty_reply catalog message (D-D)', async () => {
@@ -283,7 +284,7 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
       return humanIdx > 0 ? sent[humanIdx - 1] : undefined;
     };
 
-    it('gap ≥ EPISODE_GAP_HOURS → a system note with the duration right before the new message', async () => {
+    it('gap ≥ EPISODE_GAP_HOURS → a system note with the duration directly before the NOW line', async () => {
       mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
       const node = buildAgentNode(makeSpec(), makeDeps());
 
@@ -298,9 +299,14 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
       );
 
       const sent = mockInvoke.mock.calls[0][0] as BaseMessage[];
-      const before = messageBeforeHuman(sent);
-      expect(before?._getType()).toBe('system');
-      expect(String(before?.content)).toContain('The user returns after 4 h.');
+      // now-line-last D1: [system, note, NOW, human] — the note no longer
+      // touches the human message; the NOW line does.
+      const noteIdx = sent.findIndex(m => String(m.content).includes('The user returns after 4 h.'));
+      expect(noteIdx).toBeGreaterThan(0);
+      expect(sent[noteIdx]._getType()).toBe('system');
+      expect(sent[noteIdx + 1]._getType()).toBe('system');
+      expect(String(sent[noteIdx + 1].content).startsWith('NOW (')).toBe(true);
+      expect(messageBeforeHuman(sent)).toBe(sent[noteIdx + 1]);
     });
 
     it('gap below EPISODE_GAP_HOURS → no note anywhere', async () => {
@@ -324,6 +330,111 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
 
       const sent = mockInvoke.mock.calls[0][0] as BaseMessage[];
       expect(sent.some(m => String(m.content).includes('The user returns after'))).toBe(false);
+    });
+  });
+
+  // now-line-last plan (BUG-032 amendment, D1/D2): the NOW line left the
+  // directives (block 1) and is rendered here — same CURRENT_TIME_V1 renderer,
+  // the gap-note wiring — into its own SystemMessage immediately before
+  // `current`'s HumanMessage, so everything ahead of it is prompt-cacheable.
+  describe('NOW line (now-line-last, AC-NL-1/AC-NL-2)', () => {
+    const configWithNow = (now: Date, user = FRESH_USER): RunnableConfig =>
+      ({
+        configurable: { userId: 'u1' },
+        metadata: { runId: 'run-1', userId: 'u1' },
+        context: {
+          runId: 'run-1',
+          userId: 'u1',
+          user: user as never,
+          now,
+          client: 'telegram' as const,
+          trigger: 'user_message' as const,
+          metrics: metricsCollector,
+        },
+      }) as never as RunnableConfig;
+
+    it('exactly one SystemMessage starting with NOW ( directly before the current HumanMessage; block 1 carries no NOW', async () => {
+      mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
+      const node = buildAgentNode(makeSpec(), makeDeps());
+
+      await node({ ...makeState(), messages: [new HumanMessage('привет')] }, CONFIG);
+
+      const sent = mockInvoke.mock.calls[0][0] as BaseMessage[];
+      const nowMessages = sent.filter(m => String(m.content).startsWith('NOW ('));
+      expect(nowMessages).toHaveLength(1);
+      expect(sent[0]._getType()).toBe('system');
+      expect(String(sent[0].content)).not.toContain('NOW (');
+      const humanIdx = sent.findIndex(m => m._getType() === 'human');
+      expect(humanIdx).toBe(2); // [block 1, NOW, human]
+      expect(String(sent[humanIdx - 1].content).startsWith('NOW (')).toBe(true);
+    });
+
+    // Review R3: non-vacuous — the assertion targets the NOW message itself
+    // (found by its prefix), both timezone variants, not "somewhere in sent".
+    it('renders the user’s timezone (FRESH_USER → Europe/Berlin), both variants one renderer', async () => {
+      mockInvoke.mockResolvedValue(new AIMessage({ content: 'ok', tool_calls: [] }));
+      const node = buildAgentNode(makeSpec(), makeDeps());
+
+      await node({ ...makeState(), messages: [new HumanMessage('привет')] }, configWithNow(new Date(0)));
+      await node(
+        { ...makeState(), messages: [new HumanMessage('привет')] },
+        configWithNow(new Date(0), { ...FRESH_USER, timezone: null }),
+      );
+
+      const nowOf = (messages: BaseMessage[]) =>
+        messages.find(m => String(m.content).startsWith('NOW (')) as BaseMessage;
+      const known = nowOf(mockInvoke.mock.calls[0][0] as BaseMessage[]);
+      const unknown = nowOf(mockInvoke.mock.calls[1][0] as BaseMessage[]);
+      expect(String(known.content)).toContain('(Europe/Berlin)');
+      expect(String(unknown.content)).toContain("user's timezone is unknown");
+      expect(String(unknown.content)).not.toContain('Europe/Berlin');
+    });
+
+    it('AC-NL-2: two runs one minute apart → everything before the NOW message is byte-identical, only NOW differs', async () => {
+      mockInvoke.mockResolvedValue(new AIMessage({ content: 'ok', tool_calls: [] }));
+      // Review R3: non-empty history and a domain block, so "byte-identical"
+      // actually covers block 1 + domain + history, not just block 1.
+      const node = buildAgentNode(
+        makeSpec({
+          contextBlocks: [{ id: 'test.domain', render: () => 'DOMAIN BLOCK (stable across runs)' }],
+        } as never),
+        makeDeps(),
+      );
+      const state = {
+        ...makeState(),
+        messages: [new HumanMessage('первое'), new AIMessage('ответ'), new HumanMessage('привет')],
+      };
+
+      await node(state, configWithNow(new Date(0)));
+      await node(state, configWithNow(new Date(60_000)));
+
+      const first = mockInvoke.mock.calls[0][0] as BaseMessage[];
+      const second = mockInvoke.mock.calls[1][0] as BaseMessage[];
+      expect(first).toHaveLength(second.length);
+
+      const nowIdx = first.findIndex(m => String(m.content).startsWith('NOW ('));
+      // [block 1, domain, history human, history ai, NOW, current human]
+      expect(first.slice(0, nowIdx).map(m => m._getType())).toEqual(['system', 'system', 'human', 'ai']);
+      expect(String(first[nowIdx - 3].content)).toContain('DOMAIN BLOCK');
+      expect(String(first[nowIdx - 2].content)).toContain('первое');
+      expect(String(first[nowIdx - 1].content)).toContain('ответ');
+      // block 1 .. history, byte-identical — this is the prompt-cacheable prefix.
+      expect(first.slice(0, nowIdx).map(m => JSON.stringify([m._getType(), m.content]))).toEqual(
+        second.slice(0, nowIdx).map(m => JSON.stringify([m._getType(), m.content])),
+      );
+      // Only the NOW message moved: minute later, still the same shape.
+      expect(String(first[nowIdx].content)).not.toBe(String(second[nowIdx].content));
+      expect(
+        first
+          .slice(nowIdx)
+          .map(m => JSON.stringify([m._getType(), m.content]))
+          .slice(1),
+      ).toEqual(
+        second
+          .slice(nowIdx)
+          .map(m => JSON.stringify([m._getType(), m.content]))
+          .slice(1),
+      );
     });
   });
 

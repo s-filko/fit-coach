@@ -92,6 +92,16 @@ export const RunContext = Annotation.Root({
   hopping: Annotation<boolean | undefined>(),
   hopBoundaryIndex: Annotation<number | undefined>(),
   hopTransition: Annotation<TransitionRequest | undefined>(),
+  /**
+   * now-line-last review R1 (BR-LLM-008): prompt-version keys for the
+   * modules this run sent CONDITIONALLY — the agent node sets them when it
+   * actually renders the module (the time-gap note), and `commit` merges
+   * them into the run row's promptVersions. Unconditionally sent modules
+   * (the NOW line) are stamped by `promptVersionsForPhase` instead. Mutated
+   * in place on the same ctx object across the run's nodes, exactly like the
+   * hop facts — never checkpointed. Absent when nothing conditional was sent.
+   */
+  promptVersionExtras: Annotation<Record<string, string> | undefined>(),
 });
 
 export type RunContextType = typeof RunContext.State;

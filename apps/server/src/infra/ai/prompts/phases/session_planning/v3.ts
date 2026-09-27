@@ -7,8 +7,9 @@ import type { DirectiveContext, PromptModule, Section } from '@infra/ai/prompts/
 /**
  * v3 (transition-handoff plan Task 7, BUG-032): `date` keeps its
  * days-since-last-workout line but drops `Current Date: YYYY-MM-DD` —
- * duplicated by the new `directive.current-time` (DEFAULT_DIRECTIVES_V2,
- * last directive), which also gives a time and weekday. Everything else
+ * duplicated by the NOW line (then `directive.current-time`, last of
+ * DEFAULT_DIRECTIVES_V2; since the now-line-last plan its own message right
+ * before `current`), which also gives a time and weekday. Everything else
  * renders the exact wording v2 rendered for it.
  *
  * v3 amendment (transition-handoff plan Task 5, AC-TH-7 negative half,

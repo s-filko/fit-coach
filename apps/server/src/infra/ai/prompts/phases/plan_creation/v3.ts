@@ -4,9 +4,11 @@ import type { DirectiveContext, PromptModule, Section } from '@infra/ai/prompts/
 
 /**
  * v3 (transition-handoff plan Task 7, BUG-032): drops the `date` section —
- * `Current Date: YYYY-MM-DD` duplicated what the new `directive.current-time`
- * (DEFAULT_DIRECTIVES_V2, last directive) now says with a time and weekday
- * too. Everything else renders the exact wording v2 rendered for it.
+ * `Current Date: YYYY-MM-DD` duplicated what the NOW line (then
+ * `directive.current-time`, last of DEFAULT_DIRECTIVES_V2; since the
+ * now-line-last plan its own message right before `current`) says with a
+ * time and weekday too. Everything else renders the exact wording v2
+ * rendered for it.
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- v3 adds no fields
 export interface PlanCreationPromptContextV3 extends DirectiveContext {}

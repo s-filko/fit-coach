@@ -810,3 +810,7 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 ## cache-accounting close-out review advisories (2026-09-26)
 
 - [ ] Move the previous-call lookup (`lookupPreviousCall` + `attributeCache` wiring) out of `llm-call-recorder.ts` into a reader/attribution adapter, so the recorder is a writer again; consider computing attribution off the synchronous path (ADR-0013 §8 amendment 2026-09-26 point 2 records the current cost). Source: cache-accounting close-out review R1 (2026-09-26).
+
+## now-line-last close-out review advisories (2026-09-27)
+
+- [ ] Move `promptVersionExtras` (run context, `graph/state.ts:104`) into a per-run "rendered modules" collector (e.g. on `RunMetricsCollector`): the run context now carries prompt-version facts from agent to commit, which scales poorly as more conditionally sent modules appear. Source: now-line-last close-out review R1 re-run (2026-09-27).

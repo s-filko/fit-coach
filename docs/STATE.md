@@ -9,13 +9,12 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-09-26 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-09-27 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
 — none —
 
 **Planned**
-- `now-line-last.md` — NOW Line Last — Move the Current-Time Line out of Block 1 for Prompt Caching Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 
@@ -30,6 +29,7 @@ _Generated 2026-09-26 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `llm-io-audit-trail.md` — LLM I/O Audit Trail — Nothing the User Wrote, the Model Answered, or the API Received Is Lost Implementation Plan
 - `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
+- `now-line-last.md` — NOW Line Last — Move the Current-Time Line out of Block 1 for Prompt Caching Implementation Plan
 - `ports-layout-consistency.md` — Ports Layout Consistency Implementation Plan
 - `refactor-p0-dead-code.md` — Refactor P0 — Dead Code Removal Implementation Plan
 - `refactor-p0-eval-baseline.md` — Refactor P0 — Remaining Datasets and v0 Baseline Implementation Plan

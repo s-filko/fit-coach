@@ -246,7 +246,7 @@ describe('BUG-018 reproduction — "привет" after a 6-hour pause (AC-CC-4)
     expect(hellos).toHaveLength(2);
   });
 
-  test('(b) AC-CC-2 — a time-gap system note sits immediately before the new "привет"', () => {
+  test('(b) AC-CC-2 — a time-gap system note sits directly before the NOW line ahead of the new "привет"', () => {
     let lastHuman = -1;
     for (let i = run3FirstInput.length - 1; i >= 0; i -= 1) {
       if (run3FirstInput[i]?._getType() === 'human') {
@@ -255,7 +255,12 @@ describe('BUG-018 reproduction — "привет" after a 6-hour pause (AC-CC-4)
       }
     }
     expect(lastHuman).toBeGreaterThan(0);
-    const note = run3FirstInput[lastHuman - 1];
+    // now-line-last D1: [.., gap note, NOW, human] — the NOW message, not the
+    // note, touches the human message now.
+    const nowMsg = run3FirstInput[lastHuman - 1];
+    expect(nowMsg?._getType()).toBe('system');
+    expect(String(nowMsg?.content)).toMatch(/^NOW \(/);
+    const note = run3FirstInput[lastHuman - 2];
     expect(note?._getType()).toBe('system');
     // The time-gap block's wording (Task 2): the measured gap is ~6.1 h.
     expect(String(note?.content)).toMatch(/The user returns after/i);

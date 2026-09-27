@@ -222,6 +222,51 @@ describe('attributeCache (D3-D6)', () => {
     expect(result.cacheExpected).toBe('prefix_changed:system:gap-note');
   });
 
+  it('AC-NL-3: a changed NOW message after history → prefix_changed:system:now, wherever it sits', () => {
+    const prev = req([
+      { role: 'system', content: PROMPT },
+      { role: 'human', content: 'привет' },
+      { role: 'ai', content: 'Здравствуй!' },
+      { role: 'system', content: "NOW (user's local time): Friday 2026-09-25 14:20 (Asia/Manila)" },
+      { role: 'human', content: 'следующий подход' },
+    ]);
+    const current = req([
+      { role: 'system', content: PROMPT },
+      { role: 'human', content: 'привет' },
+      { role: 'ai', content: 'Здравствуй!' },
+      { role: 'system', content: "NOW (user's local time): Friday 2026-09-25 14:21 (Asia/Manila)" },
+      { role: 'human', content: 'следующий подход' },
+    ]);
+    const result = attributeCache(
+      available(prev, secondsAgo(61)),
+      { request: current, inputTokens: 100, now: NOW },
+      {},
+    );
+    expect(result.cacheExpected).toBe('prefix_changed:system:now');
+    expect(result.cacheDivergedAt).toMatch(/^system:now#3@\d+$/);
+  });
+
+  it('AC-NL-3: a tool-loop second call (inFlight appended after the human, NOW unchanged) → warm', () => {
+    const prefix = [
+      { role: 'system', content: PROMPT },
+      { role: 'system', content: "NOW (user's local time): Friday 2026-09-25 14:20 (Asia/Manila)" },
+      { role: 'human', content: 'ещё подход' },
+    ];
+    const prev = req(prefix);
+    const current = req([
+      ...prefix,
+      { role: 'ai', content: '', toolCalls: [{ id: 'c1', name: 'log_set', args: {} }] },
+      { role: 'tool', content: 'ok', toolCallId: 'c1' },
+    ]);
+    const result = attributeCache(
+      available(prev, secondsAgo(5)),
+      { request: current, inputTokens: 1000, now: NOW },
+      {},
+    );
+    expect(result.cacheExpected).toBe('warm');
+    expect(result.cacheSharedPrefixTokens).toBeGreaterThan(0);
+  });
+
   it('a leading system block with no recognized header falls back to system:domain', () => {
     const prev = req([
       { role: 'system', content: PROMPT },

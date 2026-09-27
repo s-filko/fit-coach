@@ -17,6 +17,7 @@
  */
 import {
   COURSE_DIRECTIVE_HEADER,
+  CURRENT_TIME_PREFIX,
   EPISODE_SUMMARIES_HEADER,
   TIME_GAP_PREFIX,
   USER_FACTS_HEADER,
@@ -149,6 +150,11 @@ function labelForMessage(messages: CacheAttributionMessage[], index: number): st
   }
   if (text.startsWith(TIME_GAP_PREFIX)) {
     return 'system:gap-note';
+  }
+  // now-line-last D4: the NOW message sits after history, wherever the
+  // assembler put it — matched by its exported prefix, like the headers above.
+  if (text.startsWith(CURRENT_TIME_PREFIX)) {
+    return 'system:now';
   }
   if (isLeadingSystemRun(messages, index)) {
     return 'system:domain';

@@ -399,6 +399,62 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
     });
   });
 
+  // now-line-last plan, D1/D2: the NOW line is its own SystemMessage after
+  // the gap note, immediately before `current` — the last thing before the
+  // run's human message, so everything ahead of it can hit the provider's
+  // prompt cache. Rendered by agent.node.ts (the gap-note wiring) from the
+  // same CURRENT_TIME_V1 renderer block 1 used to carry.
+  describe('nowLine (now-line-last plan, AC-NL-1)', () => {
+    const NOW_LINE = "NOW (user's local time): Friday 2026-09-25 14:20 (Asia/Manila)";
+
+    it('sits immediately before current’s HumanMessage, after history', async () => {
+      const { messages } = await assembleContext(input({ history: historyFixture(), nowLine: NOW_LINE }));
+
+      // [system, ...history(2), NOW, human]
+      expect(messages).toHaveLength(5);
+      expect(isType(messages[3], 'system')).toBe(true);
+      expect(String(messages[3].content)).toBe(NOW_LINE);
+      expect(isType(messages[4], 'human')).toBe(true);
+    });
+
+    it('after the gap note when there is one: history → gap note → NOW → current', async () => {
+      const { messages } = await assembleContext(
+        input({ history: historyFixture(), gapNote: 'The user returns after 14 h.', nowLine: NOW_LINE }),
+      );
+
+      // [system, ...history(2), note, NOW, human]
+      expect(messages).toHaveLength(6);
+      expect(String(messages[3].content)).toContain('The user returns after');
+      expect(String(messages[4].content)).toBe(NOW_LINE);
+      expect(isType(messages[5], 'human')).toBe(true);
+    });
+
+    it('no nowLine → no extra system message (the default shape is unchanged)', async () => {
+      const { messages } = await assembleContext(input());
+      expect(messages).toEqual([new SystemMessage(SYSTEM), new HumanMessage(USER_MESSAGE)]);
+    });
+
+    it('rides with current at the D-D floor — never dropped, never budgeted', async () => {
+      const { messages, budgetReport } = await assembleContext(
+        input({
+          history: historyFixture(),
+          episodeSummaries: [EPISODE_SUMMARY],
+          nowLine: NOW_LINE,
+          current: [new HumanMessage('u'.repeat(20000))],
+          budget: { system: 50, longTerm: 10, domain: 10, history: 10, outputReserve: 1 },
+        }),
+      );
+
+      expect(budgetReport.cuts).toContain('floor');
+      // Block 1, the NOW line, current — it belongs to `current`, like the gap note.
+      expect(messages).toHaveLength(3);
+      expect(String(messages[1].content)).toBe(NOW_LINE);
+      expect(isType(messages[2], 'human')).toBe(true);
+      // Not budgeted: no dedicated report slot; only counted in `messages`.
+      expect(budgetReport.messages).toBe(3);
+    });
+  });
+
   // course-check plan Task 1 (AC-FL-5): the persisted directive renders as ONE
   // prompt block — its own SystemMessage directly after `## User Facts`, ahead
   // of episode memory — and is measured by resolveBudget through the SAME
