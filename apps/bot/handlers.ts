@@ -4,10 +4,16 @@ import { errorTextFor } from './error-text';
 import { log } from './logger';
 import { createChatQueue } from './queue';
 import { withTypingIndicator } from './typing-keepalive';
+import { quoteLine, voiceNoticeFor, voiceReplyMessages } from './voice';
 
-async function sendHtml(bot: TelegramBot, chatId: number, text: string): Promise<void> {
+/** `replyTo` threads the message as a Telegram reply to that message id (voice replies, owner 2026-09-27). */
+function replyOptions(replyTo?: number): TelegramBot.SendMessageOptions {
+    return replyTo === undefined ? {} : { reply_to_message_id: replyTo, allow_sending_without_reply: true };
+}
+
+async function sendHtml(bot: TelegramBot, chatId: number, text: string, replyTo?: number): Promise<void> {
     try {
-        await bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
+        await bot.sendMessage(chatId, text, { parse_mode: 'HTML', ...replyOptions(replyTo) });
     } catch (htmlError) {
         const isHtmlParseError = htmlError instanceof Error && htmlError.message.includes("can't parse entities");
         if (!isHtmlParseError) {
@@ -15,7 +21,7 @@ async function sendHtml(bot: TelegramBot, chatId: number, text: string): Promise
         }
         log.warn({ chatId, textSnippet: text.slice(0, 100) }, 'HTML parse failed, retrying as plain text');
         try {
-            await bot.sendMessage(chatId, text);
+            await bot.sendMessage(chatId, text, replyOptions(replyTo));
         } catch (fallbackError) {
             log.error(
                 { chatId, htmlError, fallbackError },
@@ -101,6 +107,139 @@ async function refuseNonPrivateChat(bot: TelegramBot, msg: TelegramBot.Message):
 
 const chatQueue = createChatQueue();
 
+// D6: voice only — audio files, video notes and documents are out of scope.
+const MAX_VOICE_DURATION_S = 300;
+// Telegram voice is always OGG/Opus; the server passes it to the STT provider as-is.
+const VOICE_MIME_TYPE = 'audio/ogg';
+
+/** The transcribe call's failure mode: 422 NO_SPEECH, anything else STT_UNAVAILABLE (D3/D8). */
+function sttNoticeKindOf(error: unknown): 'NO_SPEECH' | 'STT_UNAVAILABLE' {
+    const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+    return status === 422 ? 'NO_SPEECH' : 'STT_UNAVAILABLE';
+}
+
+/** D6: the bot never holds a provider key — audio goes to the server as base64. */
+async function downloadOnce(bot: TelegramBot, fileId: string): Promise<string> {
+    const stream = bot.getFileStream(fileId);
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+        chunks.push(Buffer.from(chunk as Buffer));
+    }
+    return Buffer.concat(chunks).toString('base64');
+}
+
+// Owner 2026-09-27: the file download from Telegram is retried up to 3 attempts, only on a network failure
+// (a dropped/timed-out connection — seen live as ERR_STREAM_PREMATURE_CLOSE and ETIMEDOUT).
+const VOICE_DOWNLOAD_ATTEMPTS = 3;
+const VOICE_DOWNLOAD_BACKOFF_MS = 500;
+const NETWORK_ERROR_CODES = new Set([
+    'ERR_STREAM_PREMATURE_CLOSE', 'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EPIPE', 'ENOTFOUND', 'EAI_AGAIN', 'ESOCKETTIMEDOUT', 'EFATAL',
+]);
+
+export function isNetworkError(error: unknown): boolean {
+    const code = (error as { code?: unknown } | null)?.code;
+    if (typeof code === 'string' && NETWORK_ERROR_CODES.has(code)) {
+        return true;
+    }
+    const message = error instanceof Error ? error.message : '';
+    return [...NETWORK_ERROR_CODES].some(c => message.includes(c)) || message.includes('Premature close');
+}
+
+async function downloadVoiceAsBase64(bot: TelegramBot, fileId: string): Promise<string> {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            return await downloadOnce(bot, fileId);
+        } catch (error) {
+            if (attempt >= VOICE_DOWNLOAD_ATTEMPTS || !isNetworkError(error)) {
+                throw error;
+            }
+            log.warn({ err: error, attempt }, 'voice download failed on the network — retrying');
+            await new Promise(resolve => setTimeout(resolve, VOICE_DOWNLOAD_BACKOFF_MS * attempt));
+        }
+    }
+}
+
+/**
+ * D6: one voice message → transcribe via the server → the transcript is the
+ * user's message (D5), sent to /api/bot/chat unchanged → the reply is quote +
+ * coach answer (D7). Runs inside the caller's chatQueue + withTypingIndicator.
+ * STT failures send the D8 notice and never reach /chat; chat errors after a
+ * successful transcription keep the errorTextFor path, preceded by the quote.
+ */
+async function handleVoiceMessage(bot: TelegramBot, msg: TelegramBot.Message, voice: TelegramBot.Voice): Promise<void> {
+    const chatId = msg.chat.id;
+
+    if (voice.duration > MAX_VOICE_DURATION_S) {
+        await bot.sendMessage(chatId, voiceNoticeFor('TOO_LONG', knownLanguageCode(msg)), replyOptions(msg.message_id));
+        return;
+    }
+
+    // R6 (Task 3): a sub-second voice is an accidental tap — no speech in it.
+    // Same notice as NO_SPEECH, without a pointless download and STT call.
+    if (voice.duration < 1) {
+        await bot.sendMessage(chatId, voiceNoticeFor('NO_SPEECH', knownLanguageCode(msg)), replyOptions(msg.message_id));
+        return;
+    }
+
+    try {
+        await withTypingIndicator(bot, chatId, async () => {
+            const user = await registerOrGetUser(msg);
+            const audioBase64 = await downloadVoiceAsBase64(bot, voice.file_id);
+
+            let transcript: string;
+            try {
+                const sttResponse = await api.post('/api/bot/voice/transcribe', {
+                    userId: user.id,
+                    audioBase64,
+                    mimeType: VOICE_MIME_TYPE,
+                });
+                const text = sttResponse.data?.data?.text;
+                if (typeof text !== 'string') {
+                    throw new Error('Invalid transcription response');
+                }
+                transcript = text;
+            } catch (sttError) {
+                // A stale cached userId is not an STT problem — let the outer
+                // handler do the self-healing (clear cache, errorTextFor).
+                if (isNotFound(sttError)) {
+                    throw sttError;
+                }
+                log.warn({ err: sttError, chatId }, 'voice transcription failed');
+                await bot.sendMessage(chatId, voiceNoticeFor(sttNoticeKindOf(sttError), knownLanguageCode(msg)), replyOptions(msg.message_id));
+                return;
+            }
+
+            try {
+                await chatAndReply(
+                    bot,
+                    msg,
+                    chatId,
+                    user.id,
+                    transcript,
+                    // D7: quote + reply (split over 4096, or quote only when the reply is empty).
+                    async content => {
+                        for (const part of voiceReplyMessages(transcript, content)) {
+                            // Every part replies to the voice note, so the answer is threaded to it.
+                            await sendHtml(bot, chatId, part, msg.message_id);
+                        }
+                    },
+                    'voice chat processing failed',
+                    // D8: the quote first so the user sees what was heard, then the usual error text.
+                    { beforeErrorText: async () => sendHtml(bot, chatId, quoteLine(transcript), msg.message_id) },
+                );
+            } catch (sendError) {
+                // A10 (Task 4): a Telegram send failure after a successful
+                // chat is not a chat error — the coach's answer was produced;
+                // log and stop, no second quote, no chat-error text.
+                log.error({ err: sendError, chatId }, 'sending the voice reply failed');
+            }
+        });
+    } catch (error) {
+        // registerOrGetUser / download / a 404 re-thrown from above.
+        await reportFailure(bot, msg, chatId, error, 'voice message processing failed');
+    }
+}
+
 /** True for an axios error whose response status is 404 (a stale cached userId). */
 function isNotFound(error: unknown): boolean {
     return axios.isAxiosError(error) && error.response?.status === 404;
@@ -113,6 +252,76 @@ function conversationErrorCodeOf(error: unknown): string | undefined {
     }
     const code = error.response?.data?.error?.code;
     return typeof code === 'string' ? code : undefined;
+}
+
+/**
+ * F4 (Task 4, B2): the one failure tail shared by chatAndReply's catch and
+ * the outer catches of /start, the text path and the voice path — 404 clears
+ * the cached id, the error is logged (with the axios status/responseData when
+ * present) under the caller's label, and the user gets the localized
+ * errorTextFor message — optionally preceded by `beforeErrorText` (the voice
+ * quote, D8).
+ */
+async function reportFailure(
+    bot: TelegramBot,
+    msg: TelegramBot.Message,
+    chatId: number,
+    error: unknown,
+    logLabel: string,
+    beforeErrorText?: () => Promise<void>,
+): Promise<void> {
+    if (isNotFound(error) && msg.from) {
+        userIdBySenderId.delete(msg.from.id);
+    }
+    log.error({
+        err: error,
+        username: msg.from?.username,
+        ...(axios.isAxiosError(error) && {
+            status: error.response?.status,
+            responseData: error.response?.data,
+        }),
+    }, logLabel);
+    if (beforeErrorText) {
+        await beforeErrorText();
+    }
+    await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), knownLanguageCode(msg)));
+}
+
+/**
+ * F1 (Task 4, B2): the one shared chat sequence — post /api/bot/chat,
+ * validate data.content, and the failure tail (404 → clear the cached id,
+ * log.error with axios status/responseData, errorTextFor). Used by the text
+ * path, /start and the voice path; each passes its reply rendering in
+ * `sendReply` and its log label. A Telegram failure inside `sendReply` or
+ * `beforeErrorText` happens AFTER the catch, so it is never treated as a
+ * chat error (A10) — it propagates to the caller.
+ */
+async function chatAndReply(
+    bot: TelegramBot,
+    msg: TelegramBot.Message,
+    chatId: number,
+    userId: string,
+    message: string,
+    sendReply: (content: string) => Promise<void>,
+    logLabel: string,
+    options: { beforeErrorText?: () => Promise<void> } = {},
+): Promise<void> {
+    let content: string;
+    try {
+        const chatResponse = await api.post('/api/bot/chat', {
+            userId,
+            message,
+        });
+        const aiResponse = chatResponse.data?.data?.content;
+        if (typeof aiResponse !== 'string') {
+            throw new Error('Invalid response from AI service');
+        }
+        content = aiResponse;
+    } catch (error) {
+        await reportFailure(bot, msg, chatId, error, logLabel, options.beforeErrorText);
+        return;
+    }
+    await sendReply(content);
 }
 
 async function registerOrGetUser(msg: TelegramBot.Message) {
@@ -220,42 +429,26 @@ export function registerBotHandlers(bot: TelegramBot) {
             if (userText === '/start') {
                 try {
                     await withTypingIndicator(bot, chatId, async () => {
-                        // Register user and get LLM greeting
+                        // Register user and get the personalized LLM greeting.
                         const user = await registerOrGetUser(msg);
 
-                        // Send initial message to get personalized greeting from LLM
-                        const chatResponse = await api.post('/api/bot/chat', {
-                            userId: user.id,
-                            message: 'hi',
-                        });
-
-                        const aiResponse = chatResponse.data?.data?.content;
-                        if (typeof aiResponse !== 'string') {
-                            log.error({ responseData: chatResponse.data }, 'invalid AI response on /start');
-                            throw new Error('Invalid response from AI service');
-                        }
-
-                        if (!aiResponse.trim()) {
-                            log.warn({ chatId, username: msg.from?.username }, 'LLM returned empty response on /start, suppressing');
-                            return;
-                        }
-
-                        await sendHtml(bot, chatId, aiResponse);
+                        await chatAndReply(bot, msg, chatId, user.id, 'hi', async content => {
+                            if (!content.trim()) {
+                                log.warn({ chatId, username: msg.from?.username }, 'LLM returned empty response on /start, suppressing');
+                                return;
+                            }
+                            await sendHtml(bot, chatId, content);
+                        }, '/start command failed');
                     });
                 } catch (error) {
-                    if (isNotFound(error)) {
-                        userIdBySenderId.delete(msg.from.id);
-                    }
-                    log.error({
-                        err: error,
-                        username: msg.from?.username,
-                        ...(axios.isAxiosError(error) && {
-                            status: error.response?.status,
-                            responseData: error.response?.data,
-                        }),
-                    }, '/start command failed');
-                    await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), knownLanguageCode(msg)));
+                    await reportFailure(bot, msg, chatId, error, '/start command failed');
                 }
+                return;
+            }
+
+            // Voice messages have no msg.text — handle them before the text gate drops them.
+            if (msg.voice) {
+                await handleVoiceMessage(bot, msg, msg.voice);
                 return;
             }
 
@@ -266,38 +459,16 @@ export function registerBotHandlers(bot: TelegramBot) {
                     // Ensure user exists to get userId
                     const user = await registerOrGetUser(msg);
 
-                    // Send message to LLM chat API
-                    const chatResponse = await api.post('/api/bot/chat', {
-                        userId: user.id,
-                        message: userText,
-                    });
-
-                    const aiResponse = chatResponse.data?.data?.content;
-                    if (typeof aiResponse !== 'string') {
-                        log.error({ responseData: chatResponse.data }, 'invalid AI response');
-                        throw new Error('Invalid response from AI service');
-                    }
-
-                    if (!aiResponse.trim()) {
-                        log.warn({ chatId, username: msg.from?.username, userText }, 'LLM returned empty response, suppressing');
-                        return;
-                    }
-
-                    await sendHtml(bot, chatId, aiResponse);
+                    await chatAndReply(bot, msg, chatId, user.id, userText, async content => {
+                        if (!content.trim()) {
+                            log.warn({ chatId, username: msg.from?.username, userText }, 'LLM returned empty response, suppressing');
+                            return;
+                        }
+                        await sendHtml(bot, chatId, content);
+                    }, 'message processing failed');
                 });
             } catch (error) {
-                if (isNotFound(error)) {
-                    userIdBySenderId.delete(msg.from.id);
-                }
-                log.error({
-                    err: error,
-                    username: msg.from?.username,
-                    ...(axios.isAxiosError(error) && {
-                        status: error.response?.status,
-                        responseData: error.response?.data,
-                    }),
-                }, 'message processing failed');
-                await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), knownLanguageCode(msg)));
+                await reportFailure(bot, msg, chatId, error, 'message processing failed');
             }
         });
     });

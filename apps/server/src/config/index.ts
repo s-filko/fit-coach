@@ -115,6 +115,19 @@ export const EnvSchema = z.object({
     .string()
     .optional()
     .transform(raw => parseTransitionHandoffTargets(raw)),
+  // Speech-to-text (voice-transcription plan, D2): the key is a genuinely
+  // optional secret — unset = voice disabled, the server still boots, so a
+  // missing key never breaks a deploy. The rest are tunables, same
+  // tunables-not-secrets exception as EPISODE_*.
+  AISTUDIO_API_KEY: z.string().optional(),
+  STT_MODEL: z.string().min(1).default('gemini-3.8-flash'),
+  STT_API_URL: z.string().url().default('https://generativelanguage.googleapis.com/v1beta'),
+  // R3 (Task 3): 60 s — a 5-minute clip transcribes in ~5 s, but the first
+  // cold call can be slower; the old 30 s cut off a 300 s clip mid-flight.
+  STT_TIMEOUT_MS: z.coerce.number().positive().default(60000),
+  // R2 (Task 3): generationConfig.maxOutputTokens — without a cap, a runaway
+  // clip burned 65k output tokens / 155 s (live probe 2026-09-27).
+  STT_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(4096),
 });
 
 export type Env = z.infer<typeof EnvSchema> & {

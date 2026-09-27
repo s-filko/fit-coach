@@ -20,6 +20,7 @@ describeIfDb('Retired mini-app LLM endpoints (AC-1312, ADR-0013 OQ-1)', () => {
       userService: container.get(USER_SERVICE_TOKEN) as never,
       trainingService: container.get(TRAINING_SERVICE_TOKEN) as never,
       conversationRun: { invoke: jest.fn() } as never,
+      speechTranscriber: { isEnabled: () => false, transcribe: async () => ({ text: '' }) } as never,
     });
     await app.ready();
     initData = buildSignedInitData(process.env.TELEGRAM_TOKEN!);

@@ -46,6 +46,7 @@ describe('missing user through the real runner and chat routes (AC-RRP-5)', () =
       userService: container.get(USER_SERVICE_TOKEN) as never,
       trainingService: container.get(TRAINING_SERVICE_TOKEN) as never,
       conversationRun: conversationRun as never,
+      speechTranscriber: { isEnabled: () => false, transcribe: async () => ({ text: '' }) } as never,
     });
     await app.ready();
   });

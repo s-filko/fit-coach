@@ -60,6 +60,7 @@ _Generated 2026-09-27 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `training-history-lookup.md` — Training History Lookup and Plan Name Check Implementation Plan
 - `training-journey-scenarios.md` — Training Journey Scenarios — Deterministic over the Real Test DB + Live L3 Implementation Plan
 - `transition-handoff.md` — Transition Hand-off (Roadmap U5) Implementation Plan
+- `voice-transcription.md` — Voice Transcription — Telegram Voice Messages Answered as Text Implementation Plan
 
 **Close-out debt (merged but plan not done)**
 — none —

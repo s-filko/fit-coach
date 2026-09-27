@@ -27,6 +27,7 @@ apps/server/src/
   app/                          # HTTP transport (Fastify adapters)
     routes/                     # Route handlers (thin controllers)
       chat.routes.ts            # Thin proxy to ConversationRunPort (DI token CONVERSATION_RUN_PORT_TOKEN)
+      voice.routes.ts           # POST /voice/transcribe — thin proxy to SpeechTranscriberPort (FEAT-0011)
     plugins/                    # Fastify plugins (routes, security, docs)
     middlewares/                # Error, logging, validation hooks
     server.ts                   # Builds Fastify instance (plugins, hooks, routes)
@@ -58,6 +59,11 @@ apps/server/src/
         summary.ports.ts      # SummaryPort (insert, latestLegacySummary) — conversation_summaries (§8)
         conversation-run.ports.ts      # IConversationRunService (run rows, §8) + ConversationRunPort (§11 — run the graph, clearContext; token CONVERSATION_RUN_PORT_TOKEN)
         index.ts               # Re-exports (incl. ConversationPhase, and errors.ts's exports)
+    speech/
+      errors.ts                # NoSpeechError/SttUnavailableError + SPEECH_HTTP_STATUS_BY_CODE (422/503) — mapped by voice.routes.ts
+      ports/
+        speech-transcriber.ports.ts # SpeechTranscriberPort (isEnabled, transcribe; token SPEECH_TRANSCRIBER_TOKEN) — docs/domain/speech.spec.md
+        index.ts               # Re-exports (incl. errors.ts's exports)
     training/
       ports/                   # Named by contract (rule 2)
         index.ts               # Re-exports
@@ -90,6 +96,7 @@ apps/server/src/
       cache-attribution.ts      # attributeCache(prev, current, limits) — pure cache-hit/miss attribution against the previous same-user+model call (cache-accounting plan)
       run-metrics.ts            # RunMetricsCollector — per-run instance carried in run context (ADR-0013 §8; no module state, AC-1331)
       embedding.service.ts      # Local all-MiniLM-L6-v2 via @huggingface/transformers (ONNX)
+      gemini-transcriber.ts     # SpeechTranscriberPort over Google AI Studio generateContent (STT_*; ADR-0013 §7 amendment 2026-09-27)
       embedding-text.util.ts    # buildEmbeddingText() — composite text for exercise embeddings
       graph/
         conversation.graph.ts   # Main StateGraph: prepare→route→<phase>→commit (ADR-0013 §4.1)
@@ -343,6 +350,9 @@ Standing exceptions (each names the task that closes it):
 
   `req.log.error({ err })` still carries the original message for logs — only the response
   body is restricted.
+- **`POST /api/bot/voice/transcribe` error codes** (FEAT-0011, INV-SPEECH-003): same `{ error: { code } }` shape —
+  422 `NO_SPEECH` (no clearly spoken words), 503 `STT_UNAVAILABLE` (disabled, provider error or timeout),
+  500 `CORE_ERROR` (anything else).
 
 ## Testing Strategy
 - Unit: domain services with repository stubs.
