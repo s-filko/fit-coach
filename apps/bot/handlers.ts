@@ -4,6 +4,7 @@ import { errorTextFor } from './error-text';
 import { log } from './logger';
 import { createChatQueue } from './queue';
 import { withTypingIndicator } from './typing-keepalive';
+import { quoteLine, voiceNoticeFor, voiceReplyMessages } from './voice';
 
 async function sendHtml(bot: TelegramBot, chatId: number, text: string): Promise<void> {
     try {
@@ -100,6 +101,110 @@ async function refuseNonPrivateChat(bot: TelegramBot, msg: TelegramBot.Message):
 }
 
 const chatQueue = createChatQueue();
+
+// D6: voice only — audio files, video notes and documents are out of scope.
+const MAX_VOICE_DURATION_S = 300;
+// Telegram voice is always OGG/Opus; the server passes it to the STT provider as-is.
+const VOICE_MIME_TYPE = 'audio/ogg';
+
+/** The transcribe call's failure mode: 422 NO_SPEECH, anything else STT_UNAVAILABLE (D3/D8). */
+function sttNoticeKindOf(error: unknown): 'NO_SPEECH' | 'STT_UNAVAILABLE' {
+    const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+    return status === 422 ? 'NO_SPEECH' : 'STT_UNAVAILABLE';
+}
+
+/** D6: the bot never holds a provider key — audio goes to the server as base64. */
+async function downloadVoiceAsBase64(bot: TelegramBot, fileId: string): Promise<string> {
+    const stream = bot.getFileStream(fileId);
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+        chunks.push(Buffer.from(chunk as Buffer));
+    }
+    return Buffer.concat(chunks).toString('base64');
+}
+
+/**
+ * D6: one voice message → transcribe via the server → the transcript is the
+ * user's message (D5), sent to /api/bot/chat unchanged → the reply is quote +
+ * coach answer (D7). Runs inside the caller's chatQueue + withTypingIndicator.
+ * STT failures send the D8 notice and never reach /chat; chat errors after a
+ * successful transcription keep the errorTextFor path, preceded by the quote.
+ */
+async function handleVoiceMessage(bot: TelegramBot, msg: TelegramBot.Message, voice: TelegramBot.Voice): Promise<void> {
+    const chatId = msg.chat.id;
+
+    if (voice.duration > MAX_VOICE_DURATION_S) {
+        await bot.sendMessage(chatId, voiceNoticeFor('TOO_LONG', knownLanguageCode(msg)));
+        return;
+    }
+
+    try {
+        await withTypingIndicator(bot, chatId, async () => {
+            const user = await registerOrGetUser(msg);
+            const audioBase64 = await downloadVoiceAsBase64(bot, voice.file_id);
+
+            let transcript: string;
+            try {
+                const sttResponse = await api.post('/api/bot/voice/transcribe', {
+                    userId: user.id,
+                    audioBase64,
+                    mimeType: VOICE_MIME_TYPE,
+                });
+                const text = sttResponse.data?.data?.text;
+                if (typeof text !== 'string') {
+                    throw new Error('Invalid transcription response');
+                }
+                transcript = text;
+            } catch (sttError) {
+                // A stale cached userId is not an STT problem — let the outer
+                // handler do the self-healing (clear cache, errorTextFor).
+                if (isNotFound(sttError)) {
+                    throw sttError;
+                }
+                log.warn({ err: sttError, chatId }, 'voice transcription failed');
+                await bot.sendMessage(chatId, voiceNoticeFor(sttNoticeKindOf(sttError), knownLanguageCode(msg)));
+                return;
+            }
+
+            try {
+                const chatResponse = await api.post('/api/bot/chat', {
+                    userId: user.id,
+                    message: transcript,
+                });
+                const aiResponse = chatResponse.data?.data?.content;
+                if (typeof aiResponse !== 'string') {
+                    throw new Error('Invalid response from AI service');
+                }
+                // D7: quote + reply (split over 4096, or quote only when the reply is empty).
+                for (const part of voiceReplyMessages(transcript, aiResponse)) {
+                    await sendHtml(bot, chatId, part);
+                }
+            } catch (chatError) {
+                if (isNotFound(chatError)) {
+                    userIdBySenderId.delete(msg.from!.id);
+                }
+                log.error({
+                    err: chatError,
+                    username: msg.from?.username,
+                    ...(axios.isAxiosError(chatError) && {
+                        status: chatError.response?.status,
+                        responseData: chatError.response?.data,
+                    }),
+                }, 'voice chat processing failed');
+                // D8: the quote first so the user sees what was heard, then the usual error text.
+                await sendHtml(bot, chatId, quoteLine(transcript));
+                await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(chatError), knownLanguageCode(msg)));
+            }
+        });
+    } catch (error) {
+        // registerOrGetUser / download / a 404 re-thrown from above.
+        if (isNotFound(error) && msg.from) {
+            userIdBySenderId.delete(msg.from.id);
+        }
+        log.error({ err: error, chatId }, 'voice message processing failed');
+        await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), knownLanguageCode(msg)));
+    }
+}
 
 /** True for an axios error whose response status is 404 (a stale cached userId). */
 function isNotFound(error: unknown): boolean {
@@ -256,6 +361,12 @@ export function registerBotHandlers(bot: TelegramBot) {
                     }, '/start command failed');
                     await bot.sendMessage(chatId, errorTextFor(conversationErrorCodeOf(error), knownLanguageCode(msg)));
                 }
+                return;
+            }
+
+            // Voice messages have no msg.text — handle them before the text gate drops them.
+            if (msg.voice) {
+                await handleVoiceMessage(bot, msg, msg.voice);
                 return;
             }
 

@@ -94,8 +94,8 @@ a new `src/app/routes/voice.routes.ts` registered under `/api/bot` like `chat.ro
 Files: `apps/bot/handlers.ts`, a new `apps/bot/voice.ts` (format helpers + D8 texts, no Telegram
 calls), `apps/bot/__tests__/`.
 
-- [ ] Red tests for AC-VT-4..5, then the code.
-- [ ] Verification (from `apps/bot/`): `npx tsc --noEmit && npm test` — all green.
+- [x] Red tests for AC-VT-4..5, then the code.
+- [x] Verification (from `apps/bot/`): `npx tsc --noEmit && npm test` — all green.
 
 ## Orchestrator checks before "ready to merge"
 
