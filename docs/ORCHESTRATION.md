@@ -214,6 +214,11 @@ orca orchestration worker-read --dispatch <dispatch_id> --source auto --json
   evidence; a final agent turn with no `worker_done` is the positive proof that
   authorizes `worker-abandon` / `worker-stop` and a retry.
 - `unverifiable` liveness or a timeout is absence, not failure — it authorizes nothing.
+- **A Claude Code notice can block a worker mid-turn** **[verified 2026-09-27]**: a GLM worker
+  (z.ai route) stopped ~33 min on a full-screen "auto mode classifier billing" notice waiting for
+  Enter — liveness `unverifiable`/`stale_status`, no heartbeat, work finished but uncommitted. Check
+  the screen with `orca terminal read --terminal <handle> --screen`; dismiss with
+  `orca terminal send --terminal <handle> --enter`. Specs now tell workers to dismiss such dialogs.
 
 ## Task spec
 
