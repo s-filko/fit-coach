@@ -139,6 +139,32 @@ components:
     4. User: "Finished" → LLM calls `finish_training` tool → session completed → phase → chat
     With `TRANSITION_HANDOFF_TARGETS=training,session_planning` (dev, U5) steps 1→2 and 2→3 can happen in **one** POST: the phase a transition leads to answers the same message (e.g. a set reported while planning opens training and is logged in the same reply).
 
+### 3.2 Transcribe Voice Message
+
+- x-feature: FEAT-0011
+- POST `/api/bot/voice/transcribe` (route-level body limit 15 MiB)
+- Request body (Zod):
+
+```ts
+{
+  userId: string(min:1),        // for logs only
+  audioBase64: string(min:1),   // the Telegram voice file, base64
+  mimeType: string(min:1),      // "audio/ogg" for Telegram voice (OGG/Opus)
+}
+```
+
+- Responses:
+  - 200 `{ data: { text: string } }` — the verbatim transcript, trimmed
+  - 401 / 403 as for every bot route
+  - 422 `{ error: { code: "NO_SPEECH" } }` — the provider found no clearly spoken words
+  - 500 `{ error: { code: "CORE_ERROR" } }`
+  - 503 `{ error: { code: "STT_UNAVAILABLE" } }` — STT disabled (`STT_API_KEY` unset), provider error or timeout
+
+  The route only transcribes: it writes nothing and does not touch the conversation. The bot sends
+  the transcript to `/api/bot/chat` (§ 3.1) as the user's message. Error bodies carry the `code`
+  only (INV-LLM-006). Provider: Google AI Studio `generateContent` (`STT_MODEL`, default
+  `gemini-3.8-flash`) behind `SpeechTranscriberPort`; configuration `STT_*` in `.env.example`.
+
 ### Notes
 
 - x-feature: FEAT-0009 ✅ IMPLEMENTED (simplified to 2-method interface)

@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and
 > test-driven-development. Red tests first, then the code.
 
-- Status: planned
+- Status: in progress
 - Branch: plan/voice-transcription
 
 **Goal:** a Telegram voice message is transcribed by a speech-to-text call and handled exactly
