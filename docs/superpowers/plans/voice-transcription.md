@@ -139,6 +139,9 @@ runs away to 65k output tokens / 155 s without a cap, and stops at 11.5 s with `
 - [x] **F2 (B3).** One shared "code of a thrown error against a status map" helper for `chat.routes.ts` and
   `voice.routes.ts` (no special-case `CORE_ERROR` branch; `CORE_ERROR` → 500 lives in the map the voice route uses).
 - [x] **F3 (B5).** AC-VT-2 in the describe name of `stt-tunables.unit.test.ts`.
+- [ ] **F4 (B2, orchestrator review of F1).** The failure tail (404 → clear cached id, `log.error` with axios
+  status/responseData, `errorTextFor`) is still written out in `chatAndReply`'s catch and in the outer catches of
+  `/start`, the text path and the voice path. One helper for that tail, used by all four; behaviour unchanged.
 - [x] Verification: from `apps/server`: `npm run lint && npm run type-check && npm run test:unit`; from `apps/bot`:
   `npx tsc --noEmit && npm test` — all green.
 
