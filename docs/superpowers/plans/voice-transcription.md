@@ -38,33 +38,39 @@ Telegram, чтобы они были распознаны сервисом Speec
 - **D2 — config, optional.** `STT_API_KEY` (optional secret — unset = voice disabled, the server
   still boots, so the deploy never breaks on a missing key), `STT_MODEL` (default `gemini-3.8-flash`),
   `STT_API_URL` (default `https://generativelanguage.googleapis.com/v1beta`), `STT_TIMEOUT_MS`
-  (default 30000). Tunables-not-secrets exception, same class as `EPISODE_*`. `.env.example` documents them.
+  (default 60000, covers the body read — Task 3 R3), `STT_MAX_OUTPUT_TOKENS` (default 4096 — R2). Tunables-not-secrets exception, same class as `EPISODE_*`. `.env.example` documents them.
 - **D3 — route.** `POST /api/bot/voice/transcribe`, `X-Api-Key` auth like every `/api/bot` route,
   body `{userId, audioBase64, mimeType}`, route-level `bodyLimit` 15 MiB.
-  `200 {data:{text}}`; `422 {error:{code:'NO_SPEECH'}}` when the transcript is empty after trim;
+  `200 {data:{text}}`; `422 {error:{code:'NO_SPEECH'}}` when the model answers the `<NO_SPEECH>` sentinel or an empty text (R1);
   `503 {error:{code:'STT_UNAVAILABLE'}}` when STT is disabled, the provider errors or times out.
   The body never carries the provider's message (INV-LLM-006 style); logs do.
 - **D4 — instruction.** One constant: transcribe verbatim in the original language, output only
-  the transcript, write numbers as digits, empty output if there is no intelligible speech.
-  `temperature: 0`, `thinkingLevel: "low"`.
+  the transcript, write numbers as digits, and exactly `<NO_SPEECH>` when nothing is clearly spoken (exact
+  text in Task 3 R1). `temperature: 0`, `thinkingLevel: "low"`, `maxOutputTokens` from `STT_MAX_OUTPUT_TOKENS`.
 - **D5 — the transcript is the user's message.** The bot sends the transcript to the existing
   `/api/bot/chat` unchanged — the conversation, audit trail (`llm_calls`, transcript) and prompts do
   not change. The STT call itself is logged (userId, model, latency, audio/output tokens, text length),
   not written to `llm_calls` (run-scoped table; a pre-run call has no run).
 - **D6 — bot flow for `msg.voice`.** Inside the same `chatQueue` + `withTypingIndicator`:
-  duration > 300 s → localized "too long" text, no download; else download via
+  duration < 1 s → the `NO_SPEECH` notice (accidental tap, Task 3 R6); duration > 300 s → localized
+  "too long" text; neither is downloaded; else download via
   `bot.getFileStream(file_id)` (or `getFileLink` + axios) → base64 → transcribe → on success
   `/api/bot/chat` with the transcript → reply. Voice only: `audio`, `video_note`, documents are out of scope.
 - **D7 — reply format.** One message: `<blockquote>🎤 {escapeHtml(transcript)}</blockquote>\n\n{coachReply}`
   through the existing `sendHtml`. Transcript > 500 chars → `<blockquote expandable>`; the displayed
-  quote is cut at 3500 chars with `…` (the coach always gets the full text). If the composed message
+  quote is cut at 3500 raw chars with `…`, then escaped (Task 3 R5), (the coach always gets the full text). If the composed message
   exceeds Telegram's 4096 chars, the quote goes as its own message first, then the reply.
   Empty coach reply → only the quote is sent (the user still sees what was heard).
 - **D8 — failure texts (en/ru, profile language like `errorTextFor`).** `NO_SPEECH`: couldn't make out
   the voice message, try again or type it; `STT_UNAVAILABLE`: voice recognition is unavailable right
   now, please type; too long: voice messages up to 5 minutes. Chat errors after a successful
   transcription keep today's `errorTextFor` path, preceded by the quote so the user sees what was heard.
-- **D9 — executor:** GLM worker, two tasks in one terminal (server, then bot).
+- **D9 — executor:** GLM worker, tasks in one terminal (server, bot, review fixes).
+- **D10 — STT outside `LlmGateway` (review B1, owner-delegated 2026-09-27: "будь строгим… доведи до рабочего").**
+  Amend ADR-0013 §7 with a narrow carve-out rather than route audio through `getModel(profile)`: the factory is
+  bound to one OpenAI-compatible route (Z.AI on dev, no audio), profiles cannot change provider, and
+  OpenAI-compatible `input_audio` accepts only wav/mp3. Recorded as the ADR-0013 §7 amendment of 2026-09-27;
+  domain spec `docs/domain/speech.spec.md`, feature spec FEAT-0011 (AC-1415..1421, S-0117..0122).
 
 ## Acceptance criteria
 

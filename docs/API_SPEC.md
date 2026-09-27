@@ -155,7 +155,9 @@ components:
 
 - Responses:
   - 200 `{ data: { text: string } }` — the verbatim transcript, trimmed
-  - 401 / 403 as for every bot route
+  - 400 `{ error: { message: string } }` — request body fails the schema
+  - 401 `{ error: { message: string } }` / 403 `{ error: { message: string } }` — as for every bot route
+  - 413 — body over 15 MiB (Fastify)
   - 422 `{ error: { code: "NO_SPEECH" } }` — the provider found no clearly spoken words
   - 500 `{ error: { code: "CORE_ERROR" } }`
   - 503 `{ error: { code: "STT_UNAVAILABLE" } }` — STT disabled (`STT_API_KEY` unset), provider error or timeout
@@ -163,7 +165,7 @@ components:
   The route only transcribes: it writes nothing and does not touch the conversation. The bot sends
   the transcript to `/api/bot/chat` (§ 3.1) as the user's message. Error bodies carry the `code`
   only (INV-LLM-006). Provider: Google AI Studio `generateContent` (`STT_MODEL`, default
-  `gemini-3.8-flash`) behind `SpeechTranscriberPort`; configuration `STT_*` in `.env.example`.
+  `gemini-3.8-flash`) behind `SpeechTranscriberPort` (`docs/domain/speech.spec.md`); configuration `STT_*` in `.env.example`.
 
 ### Notes
 
