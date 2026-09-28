@@ -15,6 +15,16 @@ import type { ContextBlock, ContextBlockCtx } from './types';
 const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 /**
+ * set-kind plan Task 1 (D4): only working sets count against a plan target. A NULL/absent
+ * `setKind` (legacy row, or a fixture that never set it) counts as working — today's behaviour,
+ * unchanged (AC-SK-3). Generic so `format-exercise-summary.ts`'s `CompletedSetDetail[]` reuses it
+ * too — one helper, no second copy.
+ */
+export function workingSets<T extends { setKind?: 'warmup' | 'working' | null }>(sets: T[]): T[] {
+  return sets.filter(s => s.setKind !== 'warmup');
+}
+
+/**
  * Single source of truth for the LLM about what has been done and what is planned.
  *
  * Structure:
@@ -45,7 +55,7 @@ export function buildWorkoutOverview(session: WorkoutSessionWithDetails, now: Da
         marker = 'IN PROGRESS';
       }
       const weight = p.targetWeight ? ` @ ${p.targetWeight} kg` : '';
-      const setsInfo = started ? ` (${started.sets.length}/${p.targetSets} sets)` : '';
+      const setsInfo = started ? ` (${workingSets(started.sets).length}/${p.targetSets} sets)` : '';
       guideLines.push(
         `  [${marker.padEnd(11)}] [ID:${p.exerciseId}] ${p.exerciseName}: ${p.targetSets}×${p.targetReps}${weight}${setsInfo}`,
       );
@@ -91,7 +101,8 @@ export function buildWorkoutOverview(session: WorkoutSessionWithDetails, now: Da
           const timeLabel = minutesAgo === 0 ? 'just now' : `${minutesAgo}min ago`;
           const rpe = s.rpe ? ` | RPE ${s.rpe}` : '';
           const fb = s.userFeedback ? ` | "${s.userFeedback}"` : '';
-          detailLines.push(`    Set ${s.setNumber} (${timeLabel}): ${formatSetData(s.setData)}${rpe}${fb}`);
+          const kindNote = s.setKind === 'warmup' ? ' (w/u)' : '';
+          detailLines.push(`    Set ${s.setNumber} (${timeLabel}): ${formatSetData(s.setData)}${kindNote}${rpe}${fb}`);
         }
       }
       if (ex.userFeedback) {
@@ -104,8 +115,9 @@ export function buildWorkoutOverview(session: WorkoutSessionWithDetails, now: Da
   const current = session.exercises.find(ex => ex.status === 'in_progress');
   let activeStatus: string;
   if (current) {
-    const setsLeft = current.targetSets !== null ? Math.max(0, current.targetSets - current.sets.length) : '?';
-    activeStatus = `ACTIVE: ${current.exercise.name} [ID:${current.exerciseId}] — ${current.sets.length} set(s) done, ${setsLeft} remaining per plan.`;
+    const doneCount = workingSets(current.sets).length;
+    const setsLeft = current.targetSets !== null ? Math.max(0, current.targetSets - doneCount) : '?';
+    activeStatus = `ACTIVE: ${current.exercise.name} [ID:${current.exerciseId}] — ${doneCount} set(s) done, ${setsLeft} remaining per plan.`;
   } else {
     activeStatus = 'ACTIVE: none — log any set to start an exercise (from guide or off-plan).';
   }
@@ -134,9 +146,10 @@ export function formatExerciseSets(
 
   const setsText = sets.map(s => {
     const base = formatSetData(s.setData);
+    const kindNote = s.setKind === 'warmup' ? ' (w/u)' : '';
     const rpe = s.rpe ? ` | RPE ${s.rpe}` : '';
     const fb = s.userFeedback ? ` | "${s.userFeedback}"` : '';
-    return `  Set ${s.setNumber}: ${base}${rpe}${fb}`;
+    return `  Set ${s.setNumber}: ${base}${kindNote}${rpe}${fb}`;
   });
 
   const feedbackLine = userFeedback ? `\n  Overall feedback: "${userFeedback}"` : '';
@@ -164,8 +177,10 @@ export function formatSetData(
   setData: WorkoutSessionWithDetails['exercises'][number]['sets'][number]['setData'],
 ): string {
   switch (setData.type) {
-    case 'strength':
-      return `${setData.reps} reps${setData.weight != null ? ` @ ${setData.weight} ${setData.weightUnit ?? 'kg'}` : ''}`;
+    case 'strength': {
+      const perHandNote = setData.perHand ? ' per hand' : '';
+      return `${setData.reps} reps${setData.weight != null ? ` @ ${setData.weight} ${setData.weightUnit ?? 'kg'}${perHandNote}` : ''}`;
+    }
     case 'cardio_distance': {
       const durStr = setData.duration > 0 ? `${Math.round(setData.duration / 60)}min` : '?min';
       const parts: string[] = [`${setData.distance}${setData.distanceUnit}`, durStr];

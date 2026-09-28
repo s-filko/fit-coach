@@ -13,9 +13,9 @@ describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVer
     ]);
   });
 
-  it('promptVersionsForPhase(training) lists the phase (v7 — training-history-lookup D4, get_exercise_history; v6 was BUG-030 exercise-history rewrite; v5 was BUG-037 transition reply order; v4 was BUG-032 current-time directive; v3 was exerciseId / search_exercises tool rules; v2 was P4 Task 2, D-B), its directives and the shared blocks', () => {
+  it('promptVersionsForPhase(training) lists the phase (v8 — set-kind plan Task 1, D9: setKind/per-hand rules, set_session_place TOOLS entry; v7 was training-history-lookup D4, get_exercise_history; v6 was BUG-030 exercise-history rewrite; v5 was BUG-037 transition reply order; v4 was BUG-032 current-time directive; v3 was exerciseId / search_exercises tool rules; v2 was P4 Task 2, D-B), its directives and the shared blocks', () => {
     const versions = promptVersionsForPhase('training');
-    expect(versions['phase.training']).toBe('v7');
+    expect(versions['phase.training']).toBe('v8');
     expect(versions['directive.identity']).toBeUndefined(); // training has no identity directive
     expect(versions['directive.tool-reply']).toBe('v1');
     expect(versions['block.episode_summaries']).toBe('v2');

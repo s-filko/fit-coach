@@ -21,6 +21,7 @@ import type {
   SessionRecommendation,
   SessionSet,
   SetData,
+  SetKind,
   WorkoutPlan,
   WorkoutSession,
   WorkoutSessionWithDetails,
@@ -30,7 +31,7 @@ import type { UserRepository } from '@domain/user/ports';
 const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 function extractSetDetail(s: SessionSet): CompletedSetDetail {
-  const detail: CompletedSetDetail = { setNumber: s.setNumber, rpe: s.rpe };
+  const detail: CompletedSetDetail = { setNumber: s.setNumber, rpe: s.rpe, setKind: s.setKind };
   const d = s.setData;
   if (d.type === 'strength') {
     detail.reps = d.reps;
@@ -319,6 +320,8 @@ export class TrainingService implements ITrainingService {
       feedback?: string;
       createdAt?: Date;
       skipActivityUpdate?: boolean;
+      setKind?: SetKind;
+      weightBasis?: 'total';
     },
   ): Promise<{ set: SessionSet; setNumber: number; autoCompleted?: AutoCompletedExercise }> {
     const { exercise: sessionExercise, autoCompleted } = await this.ensureCurrentExercise(sessionId, {
@@ -327,21 +330,45 @@ export class TrainingService implements ITrainingService {
       skipActivityUpdate: opts.skipActivityUpdate,
     });
 
+    // set-kind plan Task 1 (D2, D3): the app layer, not the DB, defaults to 'working' — the DB
+    // default stays absent so legacy (pre-plan) rows keep reading NULL.
+    const setKind: SetKind = opts.setKind ?? 'working';
+    const setData = await this.applyPerHand(sessionExercise.exerciseId, opts.setData, opts.weightBasis);
+
     const set = opts.skipActivityUpdate
       ? await this.sessionSetRepo.create(sessionExercise.id, {
-          setData: opts.setData,
+          setData,
           rpe: opts.rpe,
           userFeedback: opts.feedback,
           createdAt: opts.createdAt,
+          setKind,
         })
       : await this.logSet(sessionExercise.id, {
-          setData: opts.setData,
+          setData,
           rpe: opts.rpe,
           userFeedback: opts.feedback,
           createdAt: opts.createdAt,
+          setKind,
         });
 
     return { set, setNumber: set.setNumber, autoCompleted };
+  }
+
+  /**
+   * set-kind plan Task 1 (D5): resolves the exercise's catalog equipment once and, for a
+   * dumbbell exercise's strength set, sets `perHand` — true by default, false when the caller
+   * said the weight is a total. Every other equipment leaves `setData` untouched (no `perHand`
+   * key at all).
+   */
+  private async applyPerHand(exerciseId: string, setData: SetData, weightBasis?: 'total'): Promise<SetData> {
+    if (setData.type !== 'strength') {
+      return setData;
+    }
+    const exercise = await this.exerciseRepo.findById(exerciseId);
+    if (exercise?.equipment !== 'dumbbell') {
+      return setData;
+    }
+    return { ...setData, perHand: weightBasis !== 'total' };
   }
 
   /**
@@ -402,6 +429,7 @@ export class TrainingService implements ITrainingService {
       durationSeconds?: number;
       distanceKm?: number;
       inclinePct?: number;
+      setKind?: SetKind;
     },
   ): Promise<UpdateSetResult> {
     const session = await this.sessionRepo.findByIdWithDetails(sessionId);
@@ -427,6 +455,7 @@ export class TrainingService implements ITrainingService {
       setData: lastSet.setData,
       rpe: lastSet.rpe,
       userFeedback: lastSet.userFeedback,
+      setKind: lastSet.setKind,
     };
 
     const updatedSetData: SessionSet['setData'] = {
@@ -442,6 +471,7 @@ export class TrainingService implements ITrainingService {
       setData: updatedSetData,
       ...(updates.rpe != null ? { rpe: updates.rpe } : {}),
       ...(updates.feedback != null ? { userFeedback: updates.feedback } : {}),
+      ...(updates.setKind != null ? { setKind: updates.setKind } : {}),
     });
 
     return {
@@ -452,6 +482,7 @@ export class TrainingService implements ITrainingService {
         setData: updatedSet.setData,
         rpe: updatedSet.rpe,
         userFeedback: updatedSet.userFeedback,
+        setKind: updatedSet.setKind,
       },
     };
   }

@@ -23,6 +23,10 @@ const StrengthSetDataSchema = z.object({
   weight: z.number().min(0).optional(),
   weightUnit: z.enum(['kg', 'lbs']).optional(),
   restSeconds: z.number().int().min(0).optional(),
+  // set-kind plan Task 1 (D5): the dumbbell/kettlebell load basis — true when `weight` is per
+  // hand. Set by the service from the exercise's catalog equipment, never by the model; absent
+  // for every other equipment.
+  perHand: z.boolean().optional(),
 });
 
 const CardioDistanceSetDataSchema = z.object({
