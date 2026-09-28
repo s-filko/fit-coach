@@ -9,7 +9,7 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-09-27 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-09-28 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
 — none —
@@ -26,6 +26,7 @@ _Generated 2026-09-27 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `course-check-and-constraints.md` — Course Check and Constraint Handling Implementation Plan
 - `fact-lifecycle.md` — Fact Lifecycle — Storage, Conversational Tools, Summariser Operations Implementation Plan
 - `fact-provenance.md` — Fact Provenance — the Summariser Stores Only What the User Said (BUG-040) Implementation Plan
+- `fact-verification.md` — Fact Verification — a Model Checks Each Compaction Fact Against the User's Words (BUG-040 follow-up) Implementation Plan
 - `llm-io-audit-trail-closeout.md` — LLM I/O Audit Trail — Close-out Remediation Implementation Plan
 - `llm-io-audit-trail.md` — LLM I/O Audit Trail — Nothing the User Wrote, the Model Answered, or the API Received Is Lost Implementation Plan
 - `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
@@ -236,7 +237,20 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
-## Handoff (fact-provenance, 2026-09-27) — BUG-040 code half fixed, merged into dev
+## Handoff (fact-verification, 2026-09-28) — model verifier replaces the string check; quote stored
+
+Owner decision 2026-09-28: string checks on model output are unreliable — verify with a model, as
+the industry does, only when a fact is found. Plan `fact-verification` is `done`, reviewed clean,
+merged into `dev`. When the summariser returns `add`/`update`/`retract`, one more structured call
+(`fact-verifier` v1, profile `summarizer`) says per operation whether the **user** stated or
+confirmed it (numbers by meaning: «пять дней» = "5 days"); unsupported → skipped, verifier failure →
+all skipped (fail closed). The string check of `fact-provenance` is removed. The user's supporting
+words are stored in `user_facts.evidence` (migration `0019`) and shown by `list_facts` as
+`said: «…»`. Live probe on the dev route 4/4. **For the owner to review:** D1–D21 in the plan; the
+extra ≈2.5 s model call on the reply path when a fact operation exists (ADR-0009 amendment
+2026-09-27/28); `manage_fact` stores no quote yet (D20, backlog).
+
+## Handoff (fact-provenance, 2026-09-27) — BUG-040 code half fixed, merged into dev (string check superseded 2026-09-28 by `fact-verification`)
 
 Owner autonomy order 2026-09-27 ("бери 40 … без моего вмешательства … консервативно"). Plan
 `fact-provenance` is `done`, reviewed clean (one combined reviewer), merged into `dev`. Compaction
