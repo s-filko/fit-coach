@@ -857,8 +857,8 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 
 ## fact-provenance close-out review advisories (2026-09-27)
 
-- [ ] `compact.node.ts` (~500 lines) now owns compaction, summary insert, the two clocks **and** fact-operation provenance/application — candidate: move fact-operation application into its own module. Source: fact-provenance review R1 (2026-09-27).
+- [ ] `compact.node.ts` (~500 lines) owns compaction, summary insert, the two clocks **and** fact-operation application — candidate: move fact-operation application into its own module (verification already moved out to `verify-fact-operations.ts`, 2026-09-28). Source: fact-provenance review R1 (2026-09-27).
 - [ ] `knownFactLine` is copied verbatim in `prompts/summarizer/v4.ts` and `v5.ts` — render helper is code, not wording; v5 could import it. Source: fact-provenance review R2 (2026-09-27).
-- [ ] Provenance D4 over-filters legit facts: digit tokens that are not quantities ("1RM", "5x5", "Type 2" said as «второго типа»), unit conversions («полтора месяца» → "6 weeks"), voice transcripts with numbers as words, `5'10"` → "510" after quote stripping. Measure on real summariser output before loosening. Source: fact-provenance review R3 (2026-09-27).
-- [ ] The compaction provenance rule (ADR-0009 amendment 2026-09-27) has no BR-*/INV-* id; candidate home `docs/domain/user.spec.md`. Source: fact-provenance review R4 (2026-09-27).
+- [x] ~~Provenance D4 over-filters legit facts (number words, digit tokens, unit conversions)~~ — resolved 2026-09-28: the string check was replaced by the model verifier (plan `fact-verification`).
+- [ ] The compaction provenance rule (ADR-0009 amendment 2026-09-27/28, now a model verifier) has no BR-*/INV-* id; candidate home `docs/domain/user.spec.md`. Source: fact-provenance review R4 (2026-09-27).
 - [ ] `ARCHITECTURE.md` § User facts / `CONTRIBUTING_AI.md` § User facts still describe `user_facts.v1` rendering and the pre-wave-B hard block for every constraint (ADR-0009 wave B narrowed it to `permanent`). Source: fact-provenance close-out, orchestrator while fixing R4 (2026-09-27).
