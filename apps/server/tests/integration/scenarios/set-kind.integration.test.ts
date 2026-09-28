@@ -5,10 +5,10 @@
  * confirmation must name the warm-up sets, and the next turn's WORKOUT OVERVIEW must count only
  * the working set against the target.
  *
- * RED today: the `log_set` schema silently drops the unknown `setKind` field (zod strips it),
- * `session_sets` has no `set_kind` column to persist it in the first place, the confirmation never
- * says "(warm-up)", and the guide/ACTIVE STATUS count all three sets — "(3/3 sets)", not "(1/3
- * sets)".
+ * Promoted from `set-kind.repro.test.ts` once Task 1's schema/domain/tool/block changes landed
+ * (was RED: the `log_set` schema silently dropped the unknown `setKind` field, `session_sets` had
+ * no `set_kind` column, the confirmation never said "(warm-up)", and the guide/ACTIVE STATUS
+ * counted every set — "(3/3 sets)", not "(1/3 sets)").
  *
  * Reuses journey B's setup (`setupSteps`/`sharedPast` — greeting → session_planning → proposal →
  * start_training_session), same production wiring as `exercise-history-lookup-scripted.integration.test.ts`.

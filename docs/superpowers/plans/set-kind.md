@@ -71,6 +71,13 @@ entity, machine instances and the clarifying question are **not** this plan).
   is absent. Confirmation and `formatSetData` render `@ 12 kg per hand`. The prompt rule: for
   dumbbells the coach assumes per hand and says so in the confirmation; it asks only if the user's
   words make it ambiguous. Kettlebell single-arm work is per hand by the same rule.
+  - **Worker note (Task 1):** the seeded catalog (`src/infra/db/seeds/exercises.seed.ts`,
+    `Exercise['equipment']` in `types.ts`) has exactly six distinct `equipment` values —
+    `'barbell' | 'dumbbell' | 'bodyweight' | 'machine' | 'cable' | 'none'`. There is **no**
+    separate `'kettlebell'` value anywhere in the catalog or the type — kettlebell exercises, if
+    any are added later, would need their own catalog `equipment` string first. `applyPerHand`
+    (`training.service.ts`) therefore triggers on `equipment === 'dumbbell'` only; the D5 rule's
+    "kettlebell" mentions describe intent for when that equipment value exists, not code today.
 - **D6 — session place** is `workout_sessions.place text` (nullable), free text in the user's
   words ("Fitness House на Ленина", "дома"). Written by an optional `place` argument on
   `start_training_session` and by a new narrow tool `set_session_place(place)` available in
