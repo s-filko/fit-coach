@@ -1961,7 +1961,7 @@ line when there is none; reject or normalise a `targetReps` that repeats the set
 
 ## BUG-042 — A planned exercise replaced by another leaves no trace: no `skipped` row, the plan line stays pending, and the next session reads "never done"
 
-**Status:** fixed (set-kind, 2026-09-28)
+**Status:** Fixed (set-kind, 2026-09-28)
 **Severity:** Medium — history and plan adherence under-report the work; the coach tells the user sets "were not logged"
 **Found during:** owner's live dev session 2026-09-27 (runs `0a1b5697` 09:55, `78be6b58` 10:07, `622a877a` finish)
 **Component:** `apps/server/src/domain/training/services/training.service.ts` (`finishSession` completes only `in_progress` rows; `session_exercises` are created lazily), training history / recent-workouts blocks

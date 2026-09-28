@@ -66,7 +66,7 @@ Rules:
       (4) **Comparability** — history, "last time" and load advice compare weights only within the same
       machine instance (or the same free-weight kind); across places or variants they are shown as
       separate lines, never as progress.
-      Points 1–4 above remain open — point 5 (session place) delivered by plan `set-kind`.
+      Points 1–4 above remain open; the session place (recorded per workout) is delivered by plan `set-kind`.
       Already exists, partly: fact category `equipment` (free text, no link to a place or a machine —
       e.g. the lever-machine fact that BUG-040 misapplied to the leg press); `docs/domain/user.spec.md`
       BR-USER-018…020 specify `trainingLocation` (home|gym|outdoors, one value) and `equipmentPresent[]`, but
@@ -863,3 +863,13 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 - [ ] Scenario/integration journeys never exercise a rejected verdict: `scripted-model.ts` falls back to all-supported verdicts and `enqueueFactVerdicts` has no caller — a regression that bypasses the verifier stays green there (unit tests still catch it). Source: fact-verification review R2 + meta (2026-09-28).
 - [ ] `verify-fact-operations.ts` lives in `graph/nodes/` but is not a node (a schema + one gateway call, like course-check) — candidate move to `infra/ai/`. Section-to-ChatMsg role mapping now exists in three places (verifier, compact, course-check). Source: fact-verification review R1/R2 (2026-09-28).
 - [ ] The ADR-0009 2026-09-27 amendment was rewritten in place when the string check was replaced (only a one-sentence record of the old rule remains). Source: fact-verification review R1 (2026-09-28).
+
+## set-kind close-out review advisories (2026-09-29)
+
+- [ ] Session place is deduped by exact string and accepts whitespace-only input (`z.string().min(1)`): "дома"/"Дома" count as two places and alone trigger the ask line. Normalise (trim, case-fold) on write or in `distinctRecentPlaces`. Source: set-kind review R3 run 2.
+- [ ] `distinctRecentPlaces` "dedupes AFTER the window" test (A, B, A) also passes a DISTINCT-before-LIMIT implementation; use B(oldest), A, A, A with limit 3. The v8 unit test asserts the TOOLS entry but not the `set_session_place` tool description; the new describe/it names lack AC-SK-5. Source: set-kind review R3 run 2.
+- [ ] `log_set` confirmation for non-strength sets changed with the `formatSetData` reuse (bare type → formatted data) — an improvement, untested. AC-SK-3/-4 DB halves (legacy NULL rows over the migration; a dumbbell `perHand` step) are covered only by unit tests. Source: set-kind review R3 runs 1–2.
+- [ ] Set-kind values `['warmup','working']` are written by hand in four places (two tool `z.enum`s, `SetKind` union, `pgEnum`) — declare one domain `SetKindSchema` and derive. `findLastSkipsByExercise` re-builds the `findLastPerformancesByExercise` anchor query — share a condition base. The plan-row builder and the zero-sets → skipped rule are duplicated between `reconcilePlanItems` and `ensureCurrentExercise`. Warm-up/per-hand model wording lives in three places (tool description, zod `.describe()`, v8). Source: set-kind review R2 runs 1–2.
+- [ ] Interface fit: `findTimedOut(cutoff)` has no `userId` (auto-close loads every user's timed-out sessions and re-applies the check in `autoCloseTimedOut`); `CreateSessionExerciseDto` cannot carry a status (create-then-update); `SessionSet.setKind` is both optional and nullable for fixtures; `format-exercise-summary.ts` mixes run-config accessors, a timeout constant and the summary formatter. Source: set-kind review R1 run 1.
+- [ ] Tool-result strings changed (`(warm-up)`, `per hand`, update before/after kind, working-set `Total:`) without a `TOOL_OUTCOME_FORMAT_ID` bump — rule never applied in history (see REVIEW_FINDINGS rule candidate). Context blocks `training.workout_overview` / `training.exercise_history` v1 changed output in place. Source: set-kind review R1 run 1.
+- [ ] Docs drift: `API_SPEC.md` shared types lack `WorkoutSession.place`, `SessionSet.setKind`, strength `setData.perHand` (live via `/api/app/session/*`); ADR-0011 tool-priority table stale (no `get_exercise_history`, `set_session_place`) — point it at `tool-policy.ts`. Source: set-kind review R4 run 1.
