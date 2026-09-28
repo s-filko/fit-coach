@@ -97,7 +97,7 @@ Existing assets to reuse, not rebuild:
 | R1.2 | One set formatter for every history block (today two: `session-planning-recent-history.v1.ts` drops non-strength data, `training-workout-overview.v1.ts` `formatSetData` does not); absolute date + "N days ago"; no template labels (`sessionKey`) in blocks | cardio/isometric visible in planning; dates unambiguous | block unit tests + prompt snapshots updated deliberately | "что я делал на прошлой неделе по кардио?" → correct distance/time | new block versions |
 | R1.3a | **Delivered by plan `training-exercise-history`** (BUG-030 fix, owner autonomy order 2026-09-26) — `training.exercise_history` (per-exercise anchor, unbounded in time) + `training.recent_workouts` (7-day fatigue window, muscle-overlap labels) replace `findLastCompletedByUserAndKey`. AC-LSR-4 and R0.2 green. | yesterday's overlapping load never hidden; BUG-030 gone | AC-LSR-4 and R0.2 green | yesterday heavy shoulders/triceps, today bench → last bench numbers with date **and** yesterday named | block version |
 | R1.3b | **Level 1 — overview, what to train today.** In `session_planning`: the last 2–3 whole sessions in order + per-muscle status over a recent window (last trained, sets, primary/secondary) | today's focus is chosen from the whole picture | block tests | "что сегодня?" → reasoning cites the right sessions and neglected muscles | block version |
-| R1.4 | **Delivered by plan `set-kind` (2026-09-28)** — set kind (warm-up / working) in `log_set` + migration; **widened 2026-09-28** (design §9): dumbbell per-hand basis, session place, untouched plan items `skipped` at finish (BUG-042). | warm-ups stop polluting working-set data; dumbbell trends stop jumping; loads comparable within a place | unit + integration + scenario | log a warm-up then a working set → stored with different kinds, 1/N counted | column is additive; prompt version |
+| R1.4 | **Code done (plan `set-kind`), live check on dev pending** — set kind (warm-up / working) in `log_set` + migration; **widened 2026-09-28** (design §9): dumbbell per-hand basis, session place, untouched plan items `skipped` at finish (BUG-042). | warm-ups stop polluting working-set data; dumbbell trends stop jumping; loads comparable within a place | unit + integration + scenario | log a warm-up then a working set → stored with different kinds, 1/N counted | column is additive; prompt version |
 
 R1.3a/b realise the two levels already sketched in `docs/PLAN-muscle-centric-history.md`
 (2026-03, never implemented, paths stale). Fix its three flaws: level-2 lookup by **primary**
@@ -194,7 +194,7 @@ session-start call needs the two-message delivery. Previous order (2026-09-24): 
 |---|---|
 | U1 | done (2026-09-25 — live check by `npm run smoke` run 2, see plan `coach-baseline` § Review) |
 | U5 | code done, live check on `dev` pending (see plan `transition-handoff` § Review) |
-| U4 | plan `set-kind` written 2026-09-28, not started |
+| U4 | code done (plan `set-kind`), live check on dev pending |
 | U2, U3, U6–U14 | not started |
 
 Update this table when a unit's live check passes; mirror the change in `docs/STATE.md`.
