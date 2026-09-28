@@ -57,7 +57,7 @@ export interface VerifyFactOperationsParams {
   transcript: string;
   /** The MUTATING operations only (add/update/retract), in application order; confirm never reaches this. */
   operations: FactOperation[];
-  /** The known active facts — for `update`, the old fact text the verifier must also see (D3). */
+  /** The known active facts — for `update`/`retract`, the known fact's text the verifier must also see (D3, D13). */
   knownFacts: UserFact[];
   runId: string;
   userId: string;
@@ -78,6 +78,7 @@ export async function verifyFactOperations(params: VerifyFactOperationsParams): 
     fact: op.fact,
     phaseNote: op.phaseNote, // D12 legacy: its numbers are checked like the fact text's
     oldFactText: op.op === 'update' ? knownFacts.find(f => f.id === op.factId)?.fact : undefined,
+    retractedFactText: op.op === 'retract' ? knownFacts.find(f => f.id === op.factId)?.fact : undefined,
     reason: op.op === 'retract' ? op.reason : undefined,
     evidence: op.evidence,
   }));

@@ -135,7 +135,7 @@ export interface ScriptedModelHandle {
   /** Empties every queue and recording — the state a journey run starts from. */
   reset(): void;
   /** Drops every unconsumed structured answer of all kinds — run between steps so a script never leaks into the next one. */
-  clearStructuredScripts(): { summary: number; courseCheck: number };
+  clearStructuredScripts(): { summary: number; courseCheck: number; factVerifier: number };
   /** Resolves `{{factId:...}}` (or any) placeholders in tool-call args and structured answers at answer time. */
   setPlaceholderResolver(resolver: ((text: string) => Promise<string>) | null): void;
   /** Structured requests recorded since the last drain — what the course check / summariser were handed. */

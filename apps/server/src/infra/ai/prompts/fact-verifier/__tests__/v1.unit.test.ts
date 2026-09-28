@@ -61,11 +61,18 @@ describe('FACT_VERIFIER_V1 (AC-FV-5, D3)', () => {
           phaseNote: 'the coach estimates ~70%',
           evidence: 'почему рычажный',
         },
-        { index: 1, op: 'retract', reason: 'the user said the shoulder is fine now', evidence: 'плечо здорово' },
+        {
+          index: 1,
+          op: 'retract',
+          retractedFactText: fact().fact,
+          reason: 'the user said the shoulder is fine now',
+          evidence: 'плечо здорово',
+        },
       ],
     });
     expect(text).toContain('replaces the known fact: "For plate-loaded lever machines');
     expect(text).toContain('phase note: "the coach estimates ~70%"');
+    expect(text).toContain('fact being retracted: "For plate-loaded lever machines');
     expect(text).toContain('reason: "the user said the shoulder is fine now"');
     expect(text).toContain('[1] retract');
   });

@@ -20,7 +20,8 @@
  * model call — `verifyFactOperations` (D2/D6) re-checks each mutating
  * operation against the same transcript the summariser saw and only supported
  * ones are applied; `confirm` is exempt. A rejected operation logs (op,
- * factId, the verifier's reason — never the fact text, D8) and the batch
+ * factId, a verdict status — never the fact text nor the verifier's free-text
+ * reason, D8/D14) and the batch
  * continues; a failed verifier call fails CLOSED (D5) — every mutating
  * operation of that compaction is skipped, the summary and the `confirm`s
  * still apply.
@@ -334,14 +335,24 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
             if (isMutating) {
               const verdict = verdicts?.get(mutatingIndex);
               if (!verdict?.supported) {
-                // D8: op, factId, the verifier's reason — never the fact text.
+                // D14 (D8): op, factId and a verdict status only — the
+                // verifier's free-text reason can quote the user's words, so
+                // it never enters the log; nor does the fact text.
+                let verdictStatus: 'unsupported' | 'verdict-missing' | 'verifier-failed';
+                if (verdict) {
+                  verdictStatus = 'unsupported';
+                } else if (verdicts === null) {
+                  verdictStatus = 'verifier-failed';
+                } else {
+                  verdictStatus = 'verdict-missing';
+                }
                 log.info(
                   {
                     userId,
                     runId,
                     op: op.op,
-                    reason: verdict?.reason ?? (verdicts === null ? 'fact_verifier_failed' : 'no_verdict'),
                     factId: op.factId ?? null,
+                    verdict: verdictStatus,
                   },
                   'Fact operation skipped — the verifier did not support it (BUG-040 follow-up)',
                 );

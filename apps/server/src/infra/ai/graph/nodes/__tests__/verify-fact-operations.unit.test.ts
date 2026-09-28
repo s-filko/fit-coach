@@ -130,6 +130,19 @@ describe('verifyFactOperations (fact-verification Task 2, D2-D6)', () => {
     expect(prompt).toContain('reason: "the user said the shoulder is fine now"');
   });
 
+  it('AC-FV-2 (D13): a retract reaches the verifier with the TEXT of the fact it retracts, not the reason alone', async () => {
+    const { gateway, structured } = makeGateway({
+      verdicts: [{ index: 2, supported: true, reason: 'stub' }],
+    });
+
+    await verifyFactOperations({ llmGateway: gateway, ...PARAMS });
+
+    const prompt = (structured.mock.calls[0] as unknown as [unknown, Array<{ role: string; content: string }>])[1]
+      .map(m => m.content)
+      .join('\n');
+    expect(prompt).toContain('fact being retracted: "For plate-loaded lever machines');
+  });
+
   it('D4: verdicts map by index — supported and unsupported alike', async () => {
     const { gateway } = makeGateway({
       verdicts: [

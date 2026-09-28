@@ -11,6 +11,8 @@ export interface FactVerifierOperation {
   phaseNote?: string;
   /** update only: the text of the known fact being superseded. */
   oldFactText?: string;
+  /** retract only: the text of the known fact being retracted (D13 — the reason alone misleads on a wrong factId). */
+  retractedFactText?: string;
   /** retract only: why the summariser says the fact stopped being true. */
   reason?: string;
   /** The summariser’s own `evidence` quote — a HINT, verified against the transcript, never trusted. */
@@ -48,6 +50,9 @@ export const FACT_VERIFIER_V1: PromptModule<FactVerifierV1Context> = {
         }
         if (op.oldFactText !== undefined) {
           bits.push(`replaces the known fact: "${op.oldFactText}"`);
+        }
+        if (op.retractedFactText !== undefined) {
+          bits.push(`fact being retracted: "${op.retractedFactText}"`);
         }
         if (op.reason !== undefined) {
           bits.push(`reason: "${op.reason}"`);

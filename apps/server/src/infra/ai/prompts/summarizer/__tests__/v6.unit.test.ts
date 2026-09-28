@@ -82,7 +82,8 @@ describe('SUMMARIZER_V6 (AC-FV-5, D7)', () => {
     const text = renderBlock(SUMMARIZER_V6, { phase: 'chat', transcript: 'User: hi', knownFacts: [] });
     expect(text).not.toMatch(/verified in code/);
     expect(text).not.toMatch(/word-for-word in a User line[^]*is discarded/);
-    expect(text).toMatch(/re-checked by a separate verification model against this transcript/);
+    expect(text).not.toMatch(/Every fact operation is re-checked/); // D15: only add/update/retract are
+    expect(text).toMatch(/Every add, update and retract operation is re-checked by a separate verification model/);
     expect(text).toMatch(/cannot ground in the user's own words or explicit confirmation is discarded/);
   });
 
