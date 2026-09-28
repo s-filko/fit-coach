@@ -26,8 +26,9 @@ explicit. Roadmap step R1.4 widened per design §9.
 всё от начала до конца». The orchestrator runs this plan to the dev deploy without questions to the
 owner: it decides executor, review fixes, merge and deploy, records every decision as a **(D)**
 bullet below, and lists them in the STATE handoff for the owner to review. D11's durable-spec ids
-(BR-TRAINING-014..016) are **proposed** in the PR description and flagged for the owner; the
-`training.spec.md` edit itself waits for the owner unless it is purely factual.
+(BR-TRAINING-027..029) are **proposed** in the plan section "Proposed durable-spec text" and
+flagged for the owner; the `training.spec.md` edit itself waits for the owner unless it is purely
+factual.
 
 **Spec:** roadmap `docs/superpowers/specs/2026-09-24-coach-roadmap.md` R1.4 / U4; design
 `2026-09-28-load-recommendation-architecture-design.md` §3.2 (legacy sets), §9 (U4 row), §10
@@ -111,11 +112,12 @@ entity, machine instances and the clarifying question are **not** this plan).
   (economical-work rule). Per-task worktrees `set-kind-t1`, `set-kind-t2`; DB tests serialized via
   `db-test-lock.sh`.
 - **D11 — docs touched by this plan (worker lists exact edits in the task commit):**
-  `docs/domain/training.spec.md` — INV-TRAINING-003 unchanged; add BR-TRAINING-014 (set kind:
-  only working sets count toward targets; NULL = unknown legacy), BR-TRAINING-015 (dumbbell
-  weight is per hand unless stated total), BR-TRAINING-016 (finish reconciles untouched plan items
-  to `skipped`; zero-set exercises are `skipped`), and `workout_sessions.place` in the entity
-  list — **escalate to the owner in the PR description; durable spec ids are minted by the
+  `docs/domain/training.spec.md` — INV-TRAINING-003 unchanged; add BR-TRAINING-027 (set kind:
+  only working sets count toward targets; NULL counted as working for plan targets, unknown for
+  load metrics), BR-TRAINING-028 (dumbbell weight is per hand unless stated total),
+  BR-TRAINING-029 (finish reconciles untouched plan items to `skipped`; zero-set exercises are
+  `skipped`), and `workout_sessions.place` in the entity list — **escalate to the owner in the
+  plan section "Proposed durable-spec text"; durable spec ids are minted by the
   owner** (`docs/DOCUMENTATION_GUIDE.md`), so the worker proposes the text and numbers, the
   orchestrator confirms with the owner before merge. `docs/BUGS.md` BUG-042 → fixed, BUG-025 note.
   `docs/BACKLOG.md` — the warm-up entry closed; the places entry keeps points 1–4 open and
@@ -146,7 +148,7 @@ entity, machine instances and the clarifying question are **not** this plan).
 | AC-SK-3 | Rows inserted before the migration read `set_kind = NULL`; the overview counts a NULL-kind set as working (today's behaviour, unchanged) and marks nothing | migration applied over seeded legacy rows in the integration test; block unit test |
 | AC-SK-4 | A set on a dumbbell exercise stores `setData.perHand = true` and renders `@ 12 kg per hand`; the same call with `weightBasis: 'total'` stores `perHand = false`; a barbell set stores no `perHand` | `log-set.tool.unit.test.ts`, `set-data.types` unit test, scenario |
 | AC-SK-5 | `start_training_session({ place })` and `set_session_place` write `workout_sessions.place`; the overview prints `Place: …`; with ≥ 2 distinct places in the last 10 real workouts and no place today the overview prints the ask line, otherwise not | tool unit tests, loader/block unit test, scenario |
-| AC-SK-6 | Finishing a session whose plan lists an exercise with no row creates a `skipped` row with the plan's targets; an `in_progress` exercise with zero sets ends `skipped`; the next session's `training.exercise_history` shows `skipped <date>` for it, not "no completed record" | `tests/integration/scenarios/bug-042-skipped-plan-items.repro.test.ts` → promoted; `training.service.unit.test.ts`; block unit test |
+| AC-SK-6 | Finishing a session whose plan lists an exercise with no row creates a `skipped` row with the plan's targets; an `in_progress` exercise with zero sets ends `skipped`; the next session's `training.exercise_history` shows `skipped <date>` for it, not "no completed record" | `tests/integration/scenarios/bug-042-skipped-plan-items.integration.test.ts`; `training-service-finish-reconcile.unit.test.ts`; block unit test |
 | AC-SK-7 | Prompt `training` v8 carries the three rules and the tool entry; every existing training snapshot changes only in the expected lines (diff reviewed in the task commit) | prompt unit test + snapshot update via the documented command |
 | AC-SK-8 | `update_last_set({ setKind })` changes the kind of the last set and reports before/after | tool unit test |
 
@@ -216,11 +218,11 @@ the fix and gone — promoted — after), `node scripts/state.mjs --check` from 
   ordering table lists tools), `apps/server/src/domain/training/services/training.service.ts`
   (`completeSession` reconciliation, `autoCloseTimedOut` path, `setSessionPlace`),
   `infra/db/repositories/workout-session.repository.ts` (`place`, `distinctRecentPlaces`)
-- `apps/server/src/infra/ai/graph/phases/training.spec.ts` (loader: `placeAmbiguous`),
+- `apps/server/src/infra/ai/graph/phases/training.spec.ts` (loader: `recentPlacesCount`),
   `apps/server/src/infra/ai/prompts/blocks/training-workout-overview.v1.ts` (`Place:` line),
   `training-exercise-history.v1.ts` (`skipped <date>` line; loader query for the newest skip)
-- tests: `tests/integration/scenarios/bug-042-skipped-plan-items.repro.test.ts` → promoted;
-  `training.service.unit.test.ts`; tool unit tests; block unit tests.
+- tests: `tests/integration/scenarios/bug-042-skipped-plan-items.integration.test.ts`;
+  `training-service-finish-reconcile.unit.test.ts`; tool unit tests; block unit tests.
 
 **Steps:**
 
@@ -236,8 +238,8 @@ the fix and gone — promoted — after), `node scripts/state.mjs --check` from 
    private method `reconcilePlanItems(session)`; reuse the plan-id UUID guard from
    `training.spec.ts` (move it to a shared domain helper if it is not already importable — no
    copy).
-3. **Place** (D6): repository `update({ place })`, `distinctPlacesInLastRealWorkouts(userId, 10)`;
-   service `setSessionPlace(sessionId, place)`; tools; loader `placeAmbiguous`; overview line.
+3. **Place** (D6): repository `update({ place })`, `distinctRecentPlaces(userId, 10)`;
+   service `setSessionPlace(sessionId, place)`; tools; loader `recentPlacesCount`; overview line.
 4. **History line** for skips (D7 last sentence): the exercise-history loader also fetches the
    newest `skipped` row per today's exercise; the block prints `· skipped YYYY-MM-DD` after the
    anchor when the skip is newer, or `— skipped YYYY-MM-DD, no completed record` when there is
@@ -245,7 +247,8 @@ the fix and gone — promoted — after), `node scripts/state.mjs --check` from 
 5. Promote the repro; `docs/BUGS.md` BUG-042 → `Status: fixed (set-kind)` with the test paths,
    BUG-025 gains a note that zero-set exercises now end `skipped` at finish too; `docs/BACKLOG.md`
    places entry: point 5 delivered, 1–4 open; roadmap R1.4 row → delivered by this plan;
-   `docs/domain/training.spec.md` proposals per D11 in the PR description.
+   `docs/domain/training.spec.md` proposals per D11 in the plan section "Proposed durable-spec
+   text".
 
 **Verification:** the command list above, results quoted in the task report.
 
@@ -316,8 +319,14 @@ grep across docs/), R4 rule candidate (BACKLOG `[x]` entries).
 ## Proposed durable-spec text (for the owner)
 
 D11: durable-spec ids are minted by the owner, so this text is a PROPOSAL — the `docs/domain/
-training.spec.md` edit itself waits for the owner's confirmation before merge. BR-TRAINING-014..016
-follow the file's existing numbering (last used: BR-TRAINING-013).
+training.spec.md` edit itself waits for the owner's confirmation before merge.
+
+**Collision note (B5, close-out review run 1):** `docs/domain/training.spec.md`'s own numbering
+stops at BR-TRAINING-013, but `docs/features/FEAT-0010-training-session-management.md` already
+uses BR-TRAINING-014..026 (its own, unrelated business rules — `grep -rhoE "BR-TRAINING-[0-9]+"
+docs | sort -uV` confirms the highest used anywhere in `docs/` is BR-TRAINING-026). The ids below
+are renumbered to the next free ones, BR-TRAINING-027..029, so the owner does not have to resolve
+a collision before minting them.
 
 In `docs/domain/training.spec.md`:
 
@@ -325,9 +334,9 @@ In `docs/domain/training.spec.md`:
   `• WorkoutSession: actual workout session with status tracking (planning|in_progress|completed|skipped) and place (free text, NULL = not stated)`
 
 - Business Rules, append:
-  `• BR-TRAINING-014: Every set carries its kind — 'warmup' or 'working'; only working sets count toward plan targets; NULL set_kind (pre-2026-09-28 legacy rows) means unknown, never certain working`
-  `• BR-TRAINING-015: A dumbbell exercise's weight is per hand unless the user states a total; the confirmation says "per hand"`
-  `• BR-TRAINING-016: Finishing a session (explicit or auto-close) reconciles the plan — every untouched plan exercise gets a session_exercises row with status='skipped' and the plan's targets, and a zero-set exercise ends 'skipped', not 'completed'`
+  `• BR-TRAINING-027: Every set carries its kind — 'warmup' or 'working'; only working sets count toward plan targets; a NULL set_kind (pre-2026-09-28 legacy rows) is counted as working for plan targets and treated as unknown by load metrics (design §3.2)`
+  `• BR-TRAINING-028: A dumbbell exercise's weight is per hand unless the user states a total; the confirmation says "per hand"`
+  `• BR-TRAINING-029: Finishing a session (explicit or auto-close) reconciles the plan — every untouched plan exercise gets a session_exercises row with status='skipped' and the plan's targets, and a zero-set exercise ends 'skipped', not 'completed'`
 
 Entity line for the entity list: `workout_sessions.place` — `text`, nullable, free text in the user's
 words, written only when the user names it (`start_training_session({ place })` / `set_session_place`).
