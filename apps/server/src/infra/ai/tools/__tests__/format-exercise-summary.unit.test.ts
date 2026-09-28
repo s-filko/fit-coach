@@ -50,3 +50,37 @@ describe('formatExerciseSummary — instruction text per transition kind (BUG-03
     expect(factsOf(setTriggered)).toBe(factsOf(explicit));
   });
 });
+
+// -------------------------------------------------------------------------
+// set-kind plan Task 1 (D4, AC-SK-2): the completion summary's volume line excludes warm-ups.
+// RED today: `Total:` counts every set in `ex.sets`, warm-up or not.
+// -------------------------------------------------------------------------
+
+describe('formatExerciseSummary — volume excludes warm-ups (set-kind plan D4, AC-SK-2)', () => {
+  it('"Total:" counts only working sets against the target', () => {
+    const exercise: AutoCompletedExercise = {
+      exerciseId: '00000000-0000-4000-8000-00000000000b',
+      exerciseName: 'Bench Press',
+      setsLogged: 3,
+      sets: [
+        { setNumber: 1, reps: 10, weight: 40, weightUnit: 'kg', rpe: null, setKind: 'warmup' },
+        { setNumber: 2, reps: 10, weight: 40, weightUnit: 'kg', rpe: null, setKind: 'warmup' },
+        { setNumber: 3, reps: 10, weight: 60, weightUnit: 'kg', rpe: null, setKind: 'working' },
+      ],
+      targetSets: 3,
+      targetReps: '8-10',
+      targetWeight: null,
+    };
+
+    expect(formatExerciseSummary(exercise)).toContain('Total: 1/3 sets.');
+  });
+
+  it('a legacy set with no setKind still counts as working (AC-SK-3)', () => {
+    const exercise: AutoCompletedExercise = {
+      ...finishedExercise,
+      sets: finishedExercise.sets.map(s => ({ ...s, setKind: undefined })),
+    };
+
+    expect(formatExerciseSummary(exercise)).toContain('Total: 2/3 sets.');
+  });
+});

@@ -402,3 +402,163 @@ describe('log-set.tool — summariser input names the exercise (BUG-038 part 3)'
     expect(transcript).toContain('Lever Lat Pulldown (Plate-Loaded)');
   });
 });
+
+// -------------------------------------------------------------------------
+// set-kind plan Task 1 (D3, D5, AC-SK-1, AC-SK-4): setKind / weightBasis passthrough and the
+// (warm-up) / per-hand confirmation markers. RED today: the schema rejects the unknown fields
+// (or the zod default strips them silently) and the confirmation never renders the markers.
+// -------------------------------------------------------------------------
+
+describe('log-set.tool — setKind passthrough and confirmation marker (set-kind plan D3, AC-SK-1)', () => {
+  it('passes setKind through to logSetWithContext when the user called it a warm-up', async () => {
+    const trainingService = makeTrainingService();
+    const mockSet: SessionSet = {
+      id: 'set-1',
+      sessionExerciseId: 'ex-1',
+      setNumber: 1,
+      rpe: null,
+      userFeedback: null,
+      createdAt: new Date(),
+      completedAt: null,
+      setData: { type: 'strength', reps: 10, weight: 40, weightUnit: 'kg' },
+      setKind: 'warmup',
+    };
+    trainingService.logSetWithContext.mockResolvedValue({ set: mockSet, setNumber: 1 });
+
+    const { byName, config } = makeDeps(trainingService);
+    await byName('log_set').invoke(
+      { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', reps: 10, weight: 40, setKind: 'warmup' },
+      config,
+    );
+
+    expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({ setKind: 'warmup' }),
+    );
+  });
+
+  it('the confirmation names a warm-up set "(warm-up)" when the saved set came back with setKind warmup', async () => {
+    const trainingService = makeTrainingService();
+    const mockSet: SessionSet = {
+      id: 'set-1',
+      sessionExerciseId: 'ex-1',
+      setNumber: 1,
+      rpe: null,
+      userFeedback: null,
+      createdAt: new Date(),
+      completedAt: null,
+      setData: { type: 'strength', reps: 10, weight: 40, weightUnit: 'kg' },
+      setKind: 'warmup',
+    };
+    trainingService.logSetWithContext.mockResolvedValue({ set: mockSet, setNumber: 1 });
+
+    const { byName, config } = makeDeps(trainingService);
+    const result = (await byName('log_set').invoke(
+      { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', reps: 10, weight: 40, setKind: 'warmup' },
+      config,
+    )) as ToolReturn;
+
+    expect(renderedContent(result)).toBe('Set 1 logged: 10 reps @ 40 kg (warm-up).');
+  });
+
+  it('a working set (no setKind passed) never shows the warm-up marker', async () => {
+    const trainingService = makeTrainingService();
+    const mockSet: SessionSet = {
+      id: 'set-1',
+      sessionExerciseId: 'ex-1',
+      setNumber: 3,
+      rpe: null,
+      userFeedback: null,
+      createdAt: new Date(),
+      completedAt: null,
+      setData: { type: 'strength', reps: 10, weight: 60, weightUnit: 'kg' },
+      setKind: 'working',
+    };
+    trainingService.logSetWithContext.mockResolvedValue({ set: mockSet, setNumber: 3 });
+
+    const { byName, config } = makeDeps(trainingService);
+    const result = (await byName('log_set').invoke(
+      { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', reps: 10, weight: 60 },
+      config,
+    )) as ToolReturn;
+
+    expect(renderedContent(result)).not.toContain('warm-up');
+  });
+});
+
+describe('log-set.tool — weightBasis passthrough and per-hand confirmation marker (set-kind plan D5, AC-SK-4)', () => {
+  it('passes weightBasis through to logSetWithContext when the user said the weight is a total', async () => {
+    const trainingService = makeTrainingService();
+    const mockSet: SessionSet = {
+      id: 'set-1',
+      sessionExerciseId: 'ex-1',
+      setNumber: 1,
+      rpe: null,
+      userFeedback: null,
+      createdAt: new Date(),
+      completedAt: null,
+      setData: { type: 'strength', reps: 10, weight: 24, weightUnit: 'kg', perHand: false },
+      setKind: 'working',
+    };
+    trainingService.logSetWithContext.mockResolvedValue({ set: mockSet, setNumber: 1 });
+
+    const { byName, config } = makeDeps(trainingService);
+    await byName('log_set').invoke(
+      { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', reps: 10, weight: 24, weightBasis: 'total' },
+      config,
+    );
+
+    expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({ weightBasis: 'total' }),
+    );
+  });
+
+  it('the confirmation says "per hand" when the saved set came back with setData.perHand true', async () => {
+    const trainingService = makeTrainingService();
+    const mockSet: SessionSet = {
+      id: 'set-1',
+      sessionExerciseId: 'ex-1',
+      setNumber: 1,
+      rpe: null,
+      userFeedback: null,
+      createdAt: new Date(),
+      completedAt: null,
+      setData: { type: 'strength', reps: 10, weight: 12, weightUnit: 'kg', perHand: true },
+      setKind: 'working',
+    };
+    trainingService.logSetWithContext.mockResolvedValue({ set: mockSet, setNumber: 1 });
+
+    const { byName, config } = makeDeps(trainingService);
+    const result = (await byName('log_set').invoke(
+      { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', reps: 10, weight: 12 },
+      config,
+    )) as ToolReturn;
+
+    expect(renderedContent(result)).toBe('Set 1 logged: 10 reps @ 12 kg per hand.');
+  });
+
+  it('a barbell set (no perHand on the returned setData) never shows "per hand"', async () => {
+    const trainingService = makeTrainingService();
+    const mockSet: SessionSet = {
+      id: 'set-1',
+      sessionExerciseId: 'ex-1',
+      setNumber: 1,
+      rpe: null,
+      userFeedback: null,
+      createdAt: new Date(),
+      completedAt: null,
+      setData: { type: 'strength', reps: 8, weight: 80, weightUnit: 'kg' },
+      setKind: 'working',
+    };
+    trainingService.logSetWithContext.mockResolvedValue({ set: mockSet, setNumber: 1 });
+
+    const { byName, config } = makeDeps(trainingService);
+    const result = (await byName('log_set').invoke(
+      { exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', reps: 8, weight: 80 },
+      config,
+    )) as ToolReturn;
+
+    expect(renderedContent(result)).not.toContain('per hand');
+  });
+});

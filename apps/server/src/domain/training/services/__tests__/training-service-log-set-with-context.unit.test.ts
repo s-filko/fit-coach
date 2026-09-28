@@ -40,6 +40,7 @@ describe('TrainingService.logSetWithContext', () => {
       setData: { type: 'strength', reps: 10, weight: 80 },
       rpe: 8,
       userFeedback: 'felt strong',
+      setKind: 'working',
     });
   });
 
