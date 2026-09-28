@@ -96,12 +96,15 @@ export async function verifyFactOperations(params: VerifyFactOperationsParams): 
       userId,
     });
     const verdicts: FactVerdictMap = new Map();
+    // A duplicated index is voided FOREVER (D4) — a later third verdict cannot resurrect it.
+    const voided = new Set<number>();
     for (const v of answer.verdicts) {
       if (v.index < 0 || v.index >= operations.length) {
         continue; // out of range — cannot map to any operation (D4)
       }
-      if (verdicts.has(v.index)) {
+      if (verdicts.has(v.index) || voided.has(v.index)) {
         verdicts.delete(v.index); // duplicate — the operation counts as unsupported (D4)
+        voided.add(v.index);
         continue;
       }
       verdicts.set(v.index, { supported: v.supported, reason: v.reason });

@@ -158,6 +158,20 @@ describe('verifyFactOperations (fact-verification Task 2, D2-D6)', () => {
     expect(verdicts?.has(0)).toBe(false);
   });
 
+  it('AC-FV-4: a THIRD verdict with the same index does not resurrect it — a duplicated index stays unsupported', async () => {
+    const { gateway } = makeGateway({
+      verdicts: [
+        { index: 0, supported: true, reason: 'first' },
+        { index: 0, supported: true, reason: 'second' },
+        { index: 0, supported: true, reason: 'third' },
+      ],
+    });
+
+    const verdicts = await verifyFactOperations({ llmGateway: gateway, ...PARAMS });
+
+    expect(verdicts?.has(0)).toBe(false);
+  });
+
   it('D4: an out-of-range index is dropped, not thrown', async () => {
     const { gateway } = makeGateway({
       verdicts: [
