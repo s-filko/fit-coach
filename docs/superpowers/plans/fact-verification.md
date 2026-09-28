@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and
 > test-driven-development. Red tests first, proven red on unchanged production, then the fix.
 
-- Status: planned
+- Status: in progress
 - Branch: plan/fact-verification
 - After: fact-provenance
 
