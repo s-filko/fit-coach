@@ -228,10 +228,11 @@ scores.
 
 ## 13. Open questions
 
-1. When the analyst runs: at the start of every exercise, cached for the exercise
-   (recommended — a human coach names the load unprompted), or only on request.
-2. Code candidate + analyst adapts (recommended) vs code gives facts only and the analyst
-   decides.
+1. ~~When the analyst runs~~ — **answered by the owner 2026-09-28 (section 15):** at every
+   exercise transition, unprompted.
+2. ~~Code candidate + analyst adapts vs facts only~~ — **answered by the owner 2026-09-28
+   (section 15):** the recommendation is work done against every relevant fact, never a
+   free generation; code computes the facts and a candidate, the analyst reasons over them.
 3. Where the strategy memory lives (per exercise, per pattern, per muscle group). Lifecycle
    and visibility answered by the owner 2026-09-26 — section 14; the scope is still open.
 4. Sources for the progression rules (section 2) — a research task before the spec is final.
@@ -261,3 +262,41 @@ Answers the lifecycle half of open question 13.3. Context: the owner discussion 
 - **[proposed]** Related, not the same: the recommendation log (section 11.8, R4.4) records
   single "recommended → done" pairs; strategy memory records the multi-session course those
   recommendations follow.
+
+## 15. Owner statement 2026-09-28 — what the recommendation must be [owner]
+
+Verbatim intent (owner, 2026-09-28): «при переходе с упражнения к упражнению тренер
+рекомендовал вес и ссылался на прошлые тренировки, а также всегда аргументировал коротко
+предложенный вес, при этом был реалистичен, не выдумывал ничего если фактов не хватает,
+предлагал консервативные варианты тоже с аргументацией. причем все должно быть согласно
+общепринятых рекомендаций в спорте и учитывать все индивидуальные факты и замечания. т.е.
+сама рекомендация это не тривиальная генерация от балды, а проделанная работа против всех
+имеющихся необходимых фактов».
+
+Requirements derived from it (each becomes an AC in the unit that implements it):
+
+1. **Trigger:** at every exercise transition (the coach announces the next exercise, or the
+   user starts one), unprompted — closes open question 13.1.
+2. **Grounded in the log:** the recommendation names the past performances it relies on,
+   with their dates (the `training-exercise-history` rule "age of quoted numbers" stays).
+3. **Always argued, briefly:** one or two sentences — which facts, which rule, why this
+   number.
+4. **Realistic, never invented:** when the facts are insufficient the reply says so and
+   applies the cold-start protocol (section 9); no number is derived from a different
+   exercise's kilograms (section 10 transfer seeds only a probe).
+5. **A conservative alternative, also argued:** alongside the main recommendation the coach
+   offers the conservative option (hold / smaller step) with its own reason, so the user
+   chooses knowingly (section 6 presentation).
+6. **Established practice, cited:** every progression rule applied traces to a sourced rule
+   in section 2 (R4.0 research is a hard prerequisite, not a nice-to-have).
+7. **All individual facts and remarks:** user facts (constraints, equipment, remarks), set
+   and exercise feedback, today's earlier load on the same muscles, recovery — all enter the
+   analysis (framework steps 3–4).
+8. **Work, not generation:** the facts and the candidate are computed in code (sections 3–4,
+   7–8); the model reasons over them and may deviate only with a stated reason — closes open
+   question 13.2.
+
+Consequence for staging: the owner wants the outcome now; the roadmap order in
+`2026-09-24-coach-roadmap.md` § 4 (U9 after U3, U4) is to be re-confirmed against this
+statement — see that file's status table for the decision.
+

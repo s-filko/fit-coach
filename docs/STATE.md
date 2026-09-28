@@ -17,6 +17,7 @@ _Generated 2026-09-28 from docs/superpowers/plans/ + git. Never hand-edit; regen
 **Planned**
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
+- `set-kind.md` — Set Kind — Warm-up vs Working Sets, Dumbbell Load Basis, Session Place, Skipped Plan Items (Roadmap U4) Implementation Plan
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
@@ -249,6 +250,22 @@ words are stored in `user_facts.evidence` (migration `0019`) and shown by `list_
 `said: «…»`. Live probe on the dev route 4/4. **For the owner to review:** D1–D21 in the plan; the
 extra ≈2.5 s model call on the reply path when a fact operation exists (ADR-0009 amendment
 2026-09-27/28); `manage_fact` stores no quote yet (D20, backlog).
+
+## Handoff (load advisor design, 2026-09-28) — Stage 4 pulled ahead, plan `set-kind` written, nothing dispatched
+
+Owner brainstorm 2026-09-28 on the load recommendation ("при переходе к упражнению тренер рекомендует
+вес … не от балды"). Outcome: `docs/superpowers/specs/2026-09-28-load-recommendation-architecture-design.md`
+(v2.1) — layer 1 in code at request time (facts, decision order, `LOAD PLAN` block + `get_load_plan`
+tool), progression schemes as a code registry with the user's choice as a fact, breaks as an event
+with a reason and a return ladder, layer 2 as a session-start reasoning call announced to the user.
+Reviewed by an independent Opus reviewer the same day; dispositions and full text in
+`…-architecture-review.md`. The owner answered the four open questions one at a time (design §11).
+Roadmap re-ordered: **U4 → U9a → U9b → U11 → U13 → U6 → U12**, then U3 → U2 → U7 → U8 → U14
+(roadmap §4 priority line, §5 gates, §6 status). Plan `docs/superpowers/plans/set-kind.md` (U4,
+`Status: planned`): set kind, dumbbell per-hand basis, session place, BUG-042 skipped rows; two
+serial tasks, red first. **Next:** owner reads the plan (D1–D11; D11 proposes three BR-TRAINING ids
+the owner mints), then dispatch via `delegate-implementation`. Uncommitted at hand-off: the two
+2026-09-28 specs, the plan, roadmap and load-advisor spec edits (§15), this STATE block.
 
 ## Handoff (fact-provenance, 2026-09-27) — BUG-040 code half fixed, merged into dev (string check superseded 2026-09-28 by `fact-verification`)
 

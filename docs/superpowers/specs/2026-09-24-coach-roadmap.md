@@ -1,8 +1,12 @@
 # Roadmap — Session planning redesign and load advisor
 
-> **Status: accepted by the owner 2026-09-24; no plan written yet.** Acceptance covers the
-> step order, the units and the rules in section 2; decisions tagged **[proposed]** in the two
-> design specs still need the owner's confirmation per the gates in section 5. This document
+> **Status: accepted by the owner 2026-09-24; re-ordered by the owner 2026-09-28.** Acceptance
+> covers the step order, the units and the rules in section 2; decisions tagged **[proposed]** in
+> the design specs still need the owner's confirmation per the gates in section 5.
+> **2026-09-28:** Stage 4 (load advisor) is pulled ahead of U2/U3/U7; its design is
+> `2026-09-28-load-recommendation-architecture-design.md` (v2.1, the owner's four decisions in its
+> §11), which amends `2026-09-24-load-advisor-design.md`. First unit under the new order: U4
+> `set-kind` (plan written 2026-09-28). This document
 > is self-contained: a fresh session starts here and needs nothing from the brainstorm that
 > produced it. It orders two design specs into small, independently verifiable steps and
 > groups them into plan-sized units.
@@ -12,7 +16,9 @@
 1. Read `docs/STATE.md` (orientation, repo rules), then this file top to bottom.
 2. Read the two design specs only for the unit you are about to plan:
    - `docs/superpowers/specs/2026-09-24-session-planning-redesign-design.md` (units U1–U8)
-   - `docs/superpowers/specs/2026-09-24-load-advisor-design.md` (units U9–U14)
+   - `docs/superpowers/specs/2026-09-24-load-advisor-design.md` (units U9–U14), as amended by
+     `docs/superpowers/specs/2026-09-28-load-recommendation-architecture-design.md` (read the
+     2026-09-28 file first for U4, U9a, U9b, U11–U13)
    Decisions there are tagged **[owner]** (settled) or **[proposed]** (confirm with the owner
    before relying on it — one question at a time, recommendation first).
 3. Pick the first unit whose status (section 6) is `next` and whose gate (section 5) is open.
@@ -91,7 +97,7 @@ Existing assets to reuse, not rebuild:
 | R1.2 | One set formatter for every history block (today two: `session-planning-recent-history.v1.ts` drops non-strength data, `training-workout-overview.v1.ts` `formatSetData` does not); absolute date + "N days ago"; no template labels (`sessionKey`) in blocks | cardio/isometric visible in planning; dates unambiguous | block unit tests + prompt snapshots updated deliberately | "что я делал на прошлой неделе по кардио?" → correct distance/time | new block versions |
 | R1.3a | **Delivered by plan `training-exercise-history`** (BUG-030 fix, owner autonomy order 2026-09-26) — `training.exercise_history` (per-exercise anchor, unbounded in time) + `training.recent_workouts` (7-day fatigue window, muscle-overlap labels) replace `findLastCompletedByUserAndKey`. AC-LSR-4 and R0.2 green. | yesterday's overlapping load never hidden; BUG-030 gone | AC-LSR-4 and R0.2 green | yesterday heavy shoulders/triceps, today bench → last bench numbers with date **and** yesterday named | block version |
 | R1.3b | **Level 1 — overview, what to train today.** In `session_planning`: the last 2–3 whole sessions in order + per-muscle status over a recent window (last trained, sets, primary/secondary) | today's focus is chosen from the whole picture | block tests | "что сегодня?" → reasoning cites the right sessions and neglected muscles | block version |
-| R1.4 | Set kind (warm-up / working) in `log_set` + migration | warm-ups stop polluting working-set data | unit + integration | log a warm-up then a working set → stored with different kinds | column is additive; prompt version |
+| R1.4 | Set kind (warm-up / working) in `log_set` + migration; **widened 2026-09-28** (design §9): dumbbell per-hand basis, session place, untouched plan items `skipped` at finish (BUG-042). **Plan: `set-kind` (written 2026-09-28)** | warm-ups stop polluting working-set data; dumbbell trends stop jumping; loads comparable within a place | unit + integration + scenario | log a warm-up then a working set → stored with different kinds, 1/N counted | column is additive; prompt version |
 
 R1.3a/b realise the two levels already sketched in `docs/PLAN-muscle-centric-history.md`
 (2026-03, never implemented, paths stale). Fix its three flaws: level-2 lookup by **primary**
@@ -125,6 +131,12 @@ built. Do that first, in plain language, with the R0.1 scenario as the example.
 
 ### Stage 4 — Load advisor (cheapest value first)
 
+**Superseding design (2026-09-28):** `2026-09-28-load-recommendation-architecture-design.md`.
+Where a row below and that design differ, the design wins: the analyst (R4.6) runs at **session
+start**, announced, not in the moment and not offline; R4.1's progression-model tag is derived
+from `exercise_type` + `equipment` (no catalog tagging blocks U9); the movement-pattern tag moves
+to U11; breaks with a reason and a return ladder (design §5) are part of U9b.
+
 | ID | Step | Hyp | Automated | Live | Rollback |
 |---|---|---|---|---|---|
 | R4.0 | Research: cited sources for every progression rule (load spec §2) | rules are sourced, not invented | — | owner reads | — |
@@ -144,21 +156,24 @@ built. Do that first, in plain language, with the R0.1 scenario as the example.
 | U1 | `coach-baseline` | R0.1–R0.4, R1.1 | — |
 | U2 | `history-formatting` | R1.2 | U1 |
 | U3 | `muscle-centric-history` | R1.3b only — R1.3a delivered by plan `training-exercise-history` (+ retire `PLAN-muscle-centric-history.md`) | U2 |
-| U4 | `set-kind` | R1.4 | U1 |
+| U4 | `set-kind` | R1.4 (widened: set kind, dumbbell basis, session place, BUG-042) | U1 |
 | U5 | `transition-handoff` | R2.0–R2.2 | U1 |
 | U6 | `interim-delivery` | R2.3–R2.4 | U5 |
 | U7 | `session-proposal` | R3.1–R3.5 (may split at R3.3/R3.4 if the plan is too large) | U5 |
 | U8 | `planning-in-training` | R3.6 | U3, U7 |
-| U9 | `load-facts` | R4.0–R4.3 | U3, U4 |
-| U10 | `recommendation-log` | R4.4 | U9 |
-| U11 | `cold-start` | R4.5 | U9 |
-| U12 | `load-analyst` | R4.6 | U9, U10 |
-| U13 | `overreach-signal` | R4.7 | U9 |
+| U9a | `load-facts` | R4.0, R4.2, R4.3 as facts only (metrics incl. fatigue context and gap tier, `LOAD PLAN` producer, `get_load_plan`; folds U2's R1.2 for training) | U4 |
+| U9b | `load-plan` | decision order, scheme registry (double, linear) + contract tests, scheme choice as a fact, recommendation log (R4.4), breaks + return ladder, planner stops writing `targetWeight`, prompt versions | U9a |
+| U10 | ~~`recommendation-log`~~ | R4.4 — **folded into U9b** (2026-09-28) | — |
+| U11 | `cold-start` | R4.5 + movement-pattern tag (R4.1 half) | U9b |
+| U12 | `strategy-records` | R4.6 at session start (design §6); own LLM profile; kept only if the target-rep hit rate improves over U9b | U9b, U6, ≥ 3–4 weeks of U9b log data |
+| U13 | `overreach-signal` | R4.7 | U9b |
 | U14 | `athlete-profile` | R4.8 | U10 + weeks of data |
 
-Priority: U1 → U5 (BUG-022, Critical) and U3 → U4 → U2 → U7 → U6 → U9 → U10 → U11 → U8 →
-U13 → U12 → U14. U4 and U10 are cheap and make stored data trustworthy — never let them slip
-far, their value compounds with time.
+Priority (owner 2026-09-28): **U4 → U9a → U9b → U11 → U13 → U6 → U12**, then U3 → U2 → U7 → U8 →
+U14. Rationale: the owner wants the load recommendation now (design §1); U4 makes stored data
+trustworthy and its value compounds with time; U6 moves before U12 because the announced
+session-start call needs the two-message delivery. Previous order (2026-09-24): U3 → U4 → U2 → U7
+→ U6 → U9 → U10 → U11 → U8 → U13 → U12 → U14.
 
 ## 5. Gates (owner decisions a unit needs before its plan is written)
 
@@ -168,8 +183,9 @@ far, their value compounds with time.
 | U5 | the owner walkthrough of the loop (planning spec §8); R2.0 result |
 | U6 | interim timing: parallel with the second hop, sent only if ready first (recommended) vs sequential |
 | U7 | proposal lifetime (e.g. end of the user's local day); off-topic guard: drop (recommended) or soften; does a next-day "погнали" re-check recovery |
-| U9 | load spec open questions 1–2 (when the analyst runs; code candidate + analyst adapts) |
-| U12 | load spec open question 3 (where strategy memory lives) |
+| U9a | none open — R4.0's threshold table (breaks, growth, steps) is shown to the owner once before it becomes code parameters (design §11.4) |
+| U9b | none open — load spec open questions 1–2 answered 2026-09-28 (design §11.1, §2 principle 8); scheme choice as a fact (design §11.2) |
+| U12 | model/route for the analyst profile (design §11.3 — decided at the U12 plan after a probe); strategy memory lives per exercise, session-scoped records (design §6) |
 | any | recording the governing principle in `docs/PRODUCT_VISION.md` (durable spec — owner approval) |
 
 ## 6. Status
@@ -178,6 +194,7 @@ far, their value compounds with time.
 |---|---|
 | U1 | done (2026-09-25 — live check by `npm run smoke` run 2, see plan `coach-baseline` § Review) |
 | U5 | code done, live check on `dev` pending (see plan `transition-handoff` § Review) |
-| U2–U4, U6–U14 | not started |
+| U4 | plan `set-kind` written 2026-09-28, not started |
+| U2, U3, U6–U14 | not started |
 
 Update this table when a unit's live check passes; mirror the change in `docs/STATE.md`.
