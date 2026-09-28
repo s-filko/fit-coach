@@ -130,3 +130,25 @@ green; `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh npm run test:scen
 runs it — model calls are the orchestrator's): the four D9 cases through the real `verifyFactOperations`
 with the local `.env` route (Z.AI, same as dev). Output: per case verdict + reason. Recorded in the
 plan and `apps/server/evals/COST_LEDGER.md`.
+
+## Evidence
+
+- **Red (Task 1, `dd5aad8d`)** — orchestrator re-run: 3 failed / 2 passed. AC-FV-1 (`rememberFact`
+  0 calls: the digit check dropped "5 days"), AC-FV-2 (2 calls: the lever-machine claim stored),
+  AC-FV-3 (1 call: valid-quote op applied with no verifier). AC-FV-4 ×2 green (guards).
+- **Green (Task 2, `eb9ac4c9`)** — worker: `test:unit` 155 / 1542, `test:scenarios` 19 / 392 + 1
+  todo, `test:integration` 47 / 634 + 1 todo. `fact-provenance.ts` and the repro file deleted.
+  Scripted gateways answer the verifier (`scripted-model.ts` gained a `fact_verifier` kind whose
+  fallback is all-supported — test scaffolding only).
+- **D11 (found at acceptance)** — a third verdict for a duplicated index resurrected it (delete-then-
+  set). Red test `AC-FV-4: a THIRD verdict with the same index …` failed (`Received: true`), fixed
+  with a voided-index set (`693dbafa`); `test:unit` 155 / 1543.
+- **D12 — probe script not type-checked by `npm run type-check`** (tsconfig excludes `scripts/`, as
+  for `print-transcript.ts`); the orchestrator kept tsconfig unchanged, the worker type-checked it
+  one-off (exit 0).
+- **AC-FV-6 live probe** — dev route, `glm-5.3-flash`: **4/4** as expected — the BUG-040 "~70%"
+  update unsupported; «колено болит уже пять дней» → "5 days" supported; «колено болит неделю» →
+  "about a week" supported; the coach's non-numeric «это рычажный тренажёр» unsupported. 12 calls in
+  total (the script was run 3× because its first outputs were buried in recorder error logs: the
+  probe's `runId` is not a UUID, so `llm_calls` rejects the row — harmless, local DB only).
+  `COST_LEDGER.md` row added.
