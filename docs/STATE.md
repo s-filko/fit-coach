@@ -238,6 +238,41 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
+## Handoff (set-kind, 2026-09-29) — U4 merged and deployed to dev; owner's live check pending
+
+Plan `set-kind` (roadmap U4) is `done`, review clean on run 2 (run 1 blocked on 6, all fixed on the
+branch), merged into `dev` (`e4618d99`), deployed to dev by the Deploy Dev Action (`1048e73e`):
+migration `0020` applied (21 journal rows), health 200, containers up. Zero-LLM check over the dev DB:
+`set_kind` enum `{warmup,working}`, all 446 legacy sets `NULL`, all 31 sessions `place` NULL — no
+backfill, as D2/D6 say. What ships: every set carries a kind and only working sets count toward
+targets (`(w/u)` in listings); dumbbell sets are per hand unless the user says total; a workout
+records its place (`start_training_session.place`, `set_session_place`, ask line when recent
+workouts had ≥ 2 places); finishing reconciles untouched plan items to `skipped` and zero-set
+exercises end `skipped` (BUG-042), shown as `skipped <date>` in exercise history. Prompt training v8.
+
+**For the owner to review:**
+- Decisions D12–D16 in the plan (orchestrator): D12 merged without your confirmation of the BR
+  text; D13 per-hand only for `dumbbell` (catalog has no kettlebell); D14 `pending` zero-set rows
+  also end `skipped`; D15 worker incidents; D16 review fixes on the branch.
+- **Durable-spec ids to mint:** proposed **BR-TRAINING-027..029** (the plan's 014..016 collide with
+  `FEAT-0010`, which uses up to -026) — text in the plan § "Proposed durable-spec text";
+  `training.spec.md` untouched.
+- **Live check on dev** (≤ 5 messages, expected replies in the plan § Live check).
+- Advisories filed: `BACKLOG.md` § "set-kind close-out review advisories (2026-09-29)" (place
+  normalisation "дома"/"Дома" is the one with user-visible effect); meta in `REVIEW_FINDINGS.md`.
+
+**Outside the plan — prod (owner order 2026-09-28):** "deploy current dev to prod with the dev DB".
+A subagent backed up prod (`/srv/docker/fitcoach/backups/prod_predeploy_20260928_150809.dump`),
+merged dev into `main` as `7dfd8269` (main was not an ancestor of dev) and pushed; Deploy Prod run
+`36441650964` started; the auto-mode classifier then blocked further prod steps. Remaining: the
+owner runs the prepared script (second `deploy.sh prod` + dev DB dump restored into prod + checks) —
+its path is in the orchestrator's final report. Prod is therefore no longer "frozen/behind" once
+that runs; the `prod-is-frozen` memory needs updating.
+
+**Cleanup pending (deferred to the end of the run, owner 2026-09-29):** worktree `set-kind-t1` +
+branch `plan/set-kind` (local and remote); worker tabs of Task 1 (Sonnet) and Task 2 (GLM) were
+`retained / user_takeover` on release — close them. `set-kind-t2` was already removed.
+
 ## Handoff (fact-verification, 2026-09-28) — model verifier replaces the string check; quote stored
 
 Owner decision 2026-09-28: string checks on model output are unreliable — verify with a model, as
