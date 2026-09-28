@@ -152,3 +152,40 @@ plan and `apps/server/evals/COST_LEDGER.md`.
   total (the script was run 3× because its first outputs were buried in recorder error logs: the
   probe's `runId` is not a UUID, so `llm_calls` rejects the row — harmless, local DB only).
   `COST_LEDGER.md` row added.
+
+## Task 5 — Store the user's quote with the fact (owner 2026-09-28: «да добавляй»)
+
+Owner asked whether to keep a quote from the conversation with each fact; answered yes. Purpose:
+the coach can show the user's real words when asked "откуда ты это взял" instead of inventing a
+quote (BUG-040 item 4), the user sees why a fact exists (`list_facts`), and facts can be re-checked
+later after the episode is compacted away.
+
+- **D17 — column.** `user_facts.evidence text NULL`, added in `schema.ts` and a generated migration
+  (`npm run drizzle:generate`; HB-01 — never `push`). Existing rows stay NULL. Domain `UserFact`
+  gains `evidence: string | null`; `rememberFact` / `supersedeFact` inputs accept an optional
+  `evidence`.
+- **D18 — which quote.** The verifier returns, per verdict, `userQuote`: the user's own words from
+  the transcript that support the operation (original language; empty when unsupported). The
+  compaction stores `userQuote` if non-empty, else the summariser's `evidence`. No string matching
+  (owner's rule) — both are model output; the verifier's is preferred because it decided the verdict.
+  `fact_verdicts_v1` / `fact-verifier` v1 are unreleased — edit in place.
+- **D19 — per operation.** `add` → stored on the new row; `update` → on the superseding row (the old
+  row keeps its own quote as history); `retract` / `confirm` → no quote written.
+- **D20 — live path.** `manage_fact` "save" stores the current user message text as `evidence`
+  when the run context exposes it; if it does not, leave NULL and report (do not thread new plumbing
+  without asking).
+- **D21 — where it shows.** Not in the `## User Facts` block (tokens every turn). `list_facts` prints
+  it per fact as `said: «…»` (cut at 200 chars), and its description tells the coach: when asked
+  where a fact came from, quote `said` exactly; if there is none, say the source is not recorded —
+  never reconstruct a quote.
+
+**Red tests first** (proven red on the current branch, repro convention or plain failing tests
+committed together with the fix only after the red run is quoted): compaction `add` passes
+`evidence` = the verifier's `userQuote` to `rememberFact`; `update` passes it to `supersedeFact`;
+`list_facts` renders `said: «…»`; `manage_fact` save stores the current message (if D20 applies);
+a DB-backed integration test round-trips the column.
+
+**Verification:** `npm run type-check && npm run lint && npm run test:unit`;
+`db-test-lock.sh npm run db:local:migrate` is NOT to be run by the worker against the dev DB —
+the test DB gets migrations via the test setup; `db-test-lock.sh npm run test:scenarios` and
+`db-test-lock.sh npm run test:integration` green.
