@@ -71,6 +71,7 @@ function fact(id: string, text: string): UserFact {
     closedByUserAt: null,
     supersedesId: null,
     context: null,
+    evidence: null,
   };
 }
 

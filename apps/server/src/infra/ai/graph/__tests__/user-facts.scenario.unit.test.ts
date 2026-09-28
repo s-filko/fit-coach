@@ -99,6 +99,7 @@ class InMemoryUserFactsService implements IUserFactsService {
         closedByUserAt: null,
         supersedesId: input.supersedesFactId ?? existing.id,
         context: input.context ?? null,
+        evidence: input.evidence ?? null,
       };
       this.rows.push(row);
       return { outcome: 'created', fact: row };
@@ -136,6 +137,7 @@ class InMemoryUserFactsService implements IUserFactsService {
       closedByUserAt: null,
       supersedesId: input.supersedesFactId ?? null,
       context: input.context ?? null,
+      evidence: input.evidence ?? null,
     };
     this.rows.push(row);
     return { outcome: 'created', fact: row };
@@ -194,6 +196,7 @@ class InMemoryUserFactsService implements IUserFactsService {
       closedByUserAt: null,
       supersedesId: old.id,
       context: input.context ?? null,
+      evidence: input.evidence ?? null,
     };
     this.rows.push(row);
     return { outcome: 'created', fact: row };
@@ -639,6 +642,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
         closedByUserAt: null,
         supersedesId: null,
         context: null,
+        evidence: null,
       },
       {
         id: 'expired-1',
@@ -663,6 +667,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
         closedByUserAt: null,
         supersedesId: null,
         context: null,
+        evidence: null,
       },
       {
         id: 'archived-1',
@@ -687,6 +692,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
         closedByUserAt: new Date('2026-09-01T00:00:00Z'),
         supersedesId: null,
         context: null,
+        evidence: null,
       },
     );
 

@@ -43,6 +43,7 @@ function fact(overrides: Partial<UserFact> = {}): UserFact {
     closedByUserAt: null,
     supersedesId: null,
     context: null,
+    evidence: null,
     ...overrides,
   };
 }
@@ -178,5 +179,57 @@ describe('list_facts (AC-FL-8)', () => {
     const ret = (await tool.invoke({}, { configurable: {} })) as ToolReturn;
 
     expect(ret).toMatchObject({ ok: false, kind: 'user_error' });
+  });
+
+  // fact-verification plan Task 5 (D21): each active fact prints its stored
+  // user quote as `said: «…»` — the coach quotes it EXACTLY when asked where
+  // a fact came from; no quote, no invention ("the source is not recorded").
+  it('Task 5 (D21): renders the stored quote per fact as said: «…»', async () => {
+    const svc = makeFactsService({
+      active: [
+        fact({
+          id: '5b0f8a3e-3333-4333-8333-333333333333',
+          evidence: 'колено болит уже пять дней',
+        } as Partial<UserFact>),
+      ],
+      archived: [],
+    });
+    const tool = buildTool(svc);
+
+    const text = summaryOf(await tool.invoke({}, makeConfig()));
+
+    expect(text).toContain('said: «колено болит уже пять дней»');
+  });
+
+  it('Task 5 (D21): the quote is cut at 200 characters', async () => {
+    const long = 'а'.repeat(250);
+    const svc = makeFactsService({
+      active: [fact({ id: '5b0f8a3e-4444-4444-8444-444444444444', evidence: long })],
+      archived: [],
+    });
+    const tool = buildTool(svc);
+
+    const text = summaryOf(await tool.invoke({}, makeConfig()));
+
+    expect(text).toContain(`said: «${'а'.repeat(200)}»`);
+    expect(text).not.toContain(`said: «${long}»`);
+  });
+
+  it('Task 5 (D21): a fact with no quote renders no said: part', async () => {
+    const svc = makeFactsService({ active: [fact({ id: '5b0f8a3e-5555-4555-8555-555555555555' })], archived: [] });
+    const tool = buildTool(svc);
+
+    const text = summaryOf(await tool.invoke({}, makeConfig()));
+
+    expect(text).not.toContain('said:');
+  });
+
+  it('Task 5 (D21): the description tells the coach to quote said exactly and never reconstruct', async () => {
+    const svc = makeFactsService({ active: [], archived: [] });
+    const tool = buildListFactsTool({ userFactsService: svc }) as unknown as { description: string };
+
+    expect(tool.description).toContain('said');
+    expect(tool.description).toMatch(/quote .*said.* exactly/i);
+    expect(tool.description).toMatch(/never reconstruct/i);
   });
 });

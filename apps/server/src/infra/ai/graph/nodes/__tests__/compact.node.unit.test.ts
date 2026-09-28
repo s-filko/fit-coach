@@ -473,6 +473,7 @@ describe('buildCompactStep — fact operations (fact-lifecycle Task 3, AC-FL-4)'
       closedByUserAt: null,
       supersedesId: null,
       context: null,
+      evidence: null,
     };
   }
 
@@ -854,6 +855,7 @@ describe('buildCompactStep — fact provenance via the verifier (BUG-040, AC-FP-
       closedByUserAt: null,
       supersedesId: null,
       context: null,
+      evidence: null,
     };
   }
 
@@ -1211,6 +1213,134 @@ describe('buildCompactStep — fact verification (BUG-040 follow-up, AC-FV-1..4)
 
     expect(rememberFact).toHaveBeenCalledTimes(1);
     expect(rememberFact.mock.calls[0][1]).toMatchObject({ fact: 'Trains with dumbbells' });
+  });
+
+  // fact-verification plan Task 5 (D18/D19): the verifier's per-verdict
+  // `userQuote` — the user's own supporting words — is stored with the fact;
+  // an empty quote falls back to the summariser's `evidence` hint. Both are
+  // model output, no string matching (the owner's rule); the verifier's wins
+  // because it decided the verdict.
+  it('Task 5 (D18/D19): add stores the verifier’s userQuote as the fact’s evidence', async () => {
+    const { deps, rememberFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            {
+              op: 'add',
+              category: 'physical_constraint',
+              fact: 'Knee pain for 5 days',
+              durability: 'long_term',
+              evidence: 'колено болит', // the hint LOSES to the verifier’s quote
+            },
+          ],
+        }),
+      verdicts: {
+        verdicts: [
+          { index: 0, supported: true, reason: 'the user said five days', userQuote: 'колено болит уже пять дней' },
+        ],
+      },
+    });
+    const compact = buildCompactStep(deps);
+
+    await compact(episodeState('Колено болит уже пять дней', 'Понял, скорректирую нагрузку.'), ctxConfig());
+
+    expect(rememberFact).toHaveBeenCalledTimes(1);
+    expect(rememberFact.mock.calls[0][1]).toMatchObject({
+      fact: 'Knee pain for 5 days',
+      evidence: 'колено болит уже пять дней',
+    });
+  });
+
+  it('Task 5 (D18): an empty userQuote falls back to the summariser’s evidence hint', async () => {
+    const { deps, rememberFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            {
+              op: 'add',
+              category: 'physical_constraint',
+              fact: 'Knee pain for 5 days',
+              durability: 'long_term',
+              evidence: 'колено болит уже пять дней',
+            },
+          ],
+        }),
+      verdicts: {
+        verdicts: [{ index: 0, supported: true, reason: 'the user said five days', userQuote: '' }],
+      },
+    });
+    const compact = buildCompactStep(deps);
+
+    await compact(episodeState('Колено болит уже пять дней', 'Понял, скорректирую нагрузку.'), ctxConfig());
+
+    expect(rememberFact).toHaveBeenCalledTimes(1);
+    expect(rememberFact.mock.calls[0][1]).toMatchObject({ evidence: 'колено болит уже пять дней' });
+  });
+
+  it('Task 5 (D19): update stores the quote on the superseding row (the old row keeps its own)', async () => {
+    const { deps, supersedeFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            {
+              op: 'update',
+              factId: '6e14cfe2-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+              category: 'equipment',
+              fact: 'Dumbbells up to 20kg',
+              durability: 'long_term',
+              evidence: 'купил новые гантели',
+            },
+          ],
+        }),
+      verdicts: {
+        verdicts: [
+          {
+            index: 0,
+            supported: true,
+            reason: 'the user said it',
+            userQuote: 'теперь у меня гантели до двадцати килограмм',
+          },
+        ],
+      },
+    });
+    const compact = buildCompactStep(deps);
+
+    await compact(episodeState('Теперь у меня гантели до двадцати килограмм', 'Обновляю.'), ctxConfig());
+
+    expect(supersedeFact).toHaveBeenCalledTimes(1);
+    expect(supersedeFact.mock.calls[0][1]).toMatchObject({
+      fact: 'Dumbbells up to 20kg',
+      evidence: 'теперь у меня гантели до двадцати килограмм',
+    });
+  });
+
+  it('Task 5 (D19): retract writes no quote — retractFact is called with no evidence', async () => {
+    const { deps, retractFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            {
+              op: 'retract',
+              factId: '6e14cfe2-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+              reason: 'the user said the shoulder is fine now',
+              evidence: 'плечо здорово',
+            },
+          ],
+        }),
+      verdicts: {
+        verdicts: [{ index: 0, supported: true, reason: 'the user said it', userQuote: 'плечо уже не болит' }],
+      },
+    });
+    const compact = buildCompactStep(deps);
+
+    await compact(episodeState('Плечо уже не болит', 'Хорошо.'), ctxConfig());
+
+    expect(retractFact).toHaveBeenCalledTimes(1);
+    expect(retractFact.mock.calls[0][1]).not.toHaveProperty('evidence');
   });
 });
 

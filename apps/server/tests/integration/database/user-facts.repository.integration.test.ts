@@ -1033,4 +1033,86 @@ describe('UserFactsRepository – integration', () => {
       expect(stale.outcome).toBe('skipped_stale_evidence');
     });
   });
+
+  // fact-verification plan Task 5 (D17-D19): the user's quote round-trips the
+  // `user_facts.evidence` column — written on the new row by rememberFact and
+  // on the SUPERSEDING row by supersedeFact (the old row keeps its own quote
+  // as history); a write without a quote stores NULL.
+  describe('evidence column round-trip (fact-verification Task 5, D17-D19)', () => {
+    async function freshUser(name: string): Promise<string> {
+      const user = await userRepo.create(
+        createTestUserData({ username: name, firstName: 'Quote', lastName: 'Tester' }),
+      );
+      return user.id;
+    }
+
+    it('rememberFact stores the quote on the new row and reads it back; no quote → NULL', async () => {
+      const userId = await freshUser('evidence_roundtrip_user');
+      const NOW = new Date('2026-09-28T12:00:00Z');
+
+      await repository.rememberFact(
+        userId,
+        {
+          category: 'physical_constraint',
+          fact: 'Knee pain for 5 days',
+          durability: 'long_term',
+          explicitPermanent: false,
+          evidence: 'колено болит уже пять дней',
+        },
+        NOW,
+      );
+      await repository.rememberFact(
+        userId,
+        { category: 'equipment', fact: 'Has a barbell', durability: 'permanent', explicitPermanent: true },
+        NOW,
+      );
+
+      const facts = await repository.getForPrompt(userId, NOW);
+      const knee = facts.find(f => f.fact === 'Knee pain for 5 days');
+      const barbell = facts.find(f => f.fact === 'Has a barbell');
+
+      expect(knee?.evidence).toBe('колено болит уже пять дней');
+      expect(barbell?.evidence).toBeNull();
+    });
+
+    it('supersedeFact puts the quote on the NEW row; the superseded row keeps its own quote (D19)', async () => {
+      const userId = await freshUser('evidence_supersede_user');
+      const T0 = new Date('2026-09-28T12:00:00Z');
+
+      const created = await repository.rememberFact(
+        userId,
+        {
+          category: 'equipment',
+          fact: 'Dumbbells up to 12kg',
+          durability: 'permanent',
+          explicitPermanent: true,
+          evidence: 'гантели до двенадцати',
+        },
+        T0,
+      );
+      const oldId = created.outcome === 'created' ? created.fact.id : null;
+      if (oldId === null) throw new Error('expected created');
+
+      const result = await repository.supersedeFact(
+        userId,
+        {
+          factId: oldId,
+          category: 'equipment',
+          fact: 'Dumbbells up to 20kg',
+          durability: 'short',
+          ttlDays: 14,
+          evidence: 'теперь гантели до двадцати',
+        },
+        T0,
+        T0,
+      );
+
+      expect(result?.outcome).toBe('created');
+      expect(result?.fact.evidence).toBe('теперь гантели до двадцати');
+
+      const listing = await repository.listFacts(userId, true, T0);
+      const old = listing.archived.find(f => f.id === oldId);
+      expect(old?.evidence).toBe('гантели до двенадцати'); // history keeps its own
+    });
+  });
 });

@@ -79,7 +79,7 @@ The rule:
 - The user speaks any language; the fact text is in English. Judge by meaning, never by string matching.
 - The summariser’s evidence hint is a suggestion, not proof: it may be wrong, paraphrased, or quote the Assistant. Verify against the transcript’s User lines yourself.
 
-Return ONLY the structured output: verdicts, exactly one per operation, each { index, supported, reason }. index = the operation’s [n] number, verbatim. reason = one short English sentence naming what in the transcript (or its absence) decided it.`,
+Return ONLY the structured output: verdicts, exactly one per operation, each { index, supported, reason, userQuote }. index = the operation’s [n] number, verbatim. reason = one short English sentence naming what in the transcript (or its absence) decided it. userQuote = the user’s own words from the transcript that support the operation — a short exact quote from one User line, in the original language, never translated, never the assistant’s words; empty when unsupported.`,
       },
       {
         id: 'user',

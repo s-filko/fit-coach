@@ -25,6 +25,7 @@ const makeFact = (overrides: Partial<UserFact> = {}): UserFact => ({
   closedByUserAt: null,
   supersedesId: null,
   context: null,
+  evidence: null,
   createdAt: new Date('2026-09-01T00:00:00Z'),
   updatedAt: new Date('2026-09-01T00:00:00Z'),
   ...overrides,

@@ -87,6 +87,12 @@ export interface UserFact {
   supersedesId: string | null;
   /** A short "how we learned this". */
   context: string | null;
+  /**
+   * The user's own words that support the fact (fact-verification Task 5, D17):
+   * the verifier's `userQuote`, else the summariser's `evidence` hint. NULL when
+   * none was captured — existing rows, retract/confirm, manage_fact today.
+   */
+  evidence: string | null;
 }
 
 /**
@@ -108,6 +114,8 @@ export interface SupersedeFactInput {
   phaseNote?: string | null;
   onExpiry?: FactOnExpiry;
   context?: string | null;
+  /** The user's supporting quote, stored with the new row (fact-verification Task 5, D19). */
+  evidence?: string | null;
 }
 
 /**
@@ -139,6 +147,8 @@ export interface RememberFactInput {
   explicitPermanent?: boolean;
   /** A genuinely new statement replacing a CLOSED fact — linked via supersedes_id. */
   supersedesFactId?: string;
+  /** The user's supporting quote, stored with the row (fact-verification Task 5, D17/D19). */
+  evidence?: string | null;
   /**
    * When this evidence was actually stated — the AC-FL-3 clock. Defaults to `now`
    * (a live conversation is its own evidence); the compaction path (Task 3) passes

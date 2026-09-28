@@ -127,6 +127,10 @@ export function buildManageFactTool(deps: ManageFactToolDeps) {
               phaseNote: input.phaseNote ?? null,
               onExpiry: input.onExpiry,
               context: input.context ?? null,
+              // fact-verification Task 5 (D20): the run context does not expose
+              // the current user message, so the live path stores no quote —
+              // NULL, never undefined (the port's unset-optionals rule).
+              evidence: null,
               explicitPermanent: input.explicitPermanent,
               supersedesFactId: input.supersedesFactId,
             },

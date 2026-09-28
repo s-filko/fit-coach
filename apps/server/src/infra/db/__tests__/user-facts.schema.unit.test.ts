@@ -88,6 +88,13 @@ describe('user_facts schema (ADR-0009 table shape, D-B, D-C)', () => {
     }
   });
 
+  // fact-verification plan Task 5 (D17): the user's quote stored with the
+  // fact — existing rows stay NULL, retract/confirm never write one.
+  it('exposes the evidence column (D17) and keeps it nullable — existing rows stay NULL', () => {
+    expect(userFacts.evidence).toBeDefined();
+    expect(userFacts.evidence.notNull).toBe(false);
+  });
+
   it('archived_reason knows why a fact was archived — including user_deleted, the "do not store it" road (owner decision 2026-09-21)', () => {
     expect(userFacts.archivedReason.enumValues).toEqual(
       expect.arrayContaining(['user_closed', 'user_deleted', 'expired', 'superseded']),

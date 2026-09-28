@@ -100,8 +100,9 @@ async function captureInvocation(
   // appear.
   const { deps } = buildStubDeps(phase.fixture);
   if (userFacts) {
-    (deps.userFacts as unknown as { getForPrompt: (userId: string, now: Date, cap?: number) => Promise<UserFact[]> }).getForPrompt =
-      async () => userFacts;
+    (
+      deps.userFacts as unknown as { getForPrompt: (userId: string, now: Date, cap?: number) => Promise<UserFact[]> }
+    ).getForPrompt = async () => userFacts;
   }
 
   const subgraph = buildSubgraph(phase.phase, deps);
@@ -180,18 +181,19 @@ describe('message assembly (pre-wiring truth, refactor-p2-context-assembler Task
       muscleGroup: null,
       confirmations: 1,
       sourceTurnId: null,
-    durability: 'permanent',
-    expiresAt: null,
-    reviewAfter: null,
-    phaseNote: null,
-    phaseAt: null,
-    onExpiry: null,
-    status: 'active',
-    archivedAt: null,
-    archivedReason: null,
-    closedByUserAt: null,
-    supersedesId: null,
-    context: null,
+      durability: 'permanent',
+      expiresAt: null,
+      reviewAfter: null,
+      phaseNote: null,
+      phaseAt: null,
+      onExpiry: null,
+      status: 'active',
+      archivedAt: null,
+      archivedReason: null,
+      closedByUserAt: null,
+      supersedesId: null,
+      context: null,
+      evidence: null,
       createdAt: new Date('2026-09-01T00:00:00Z'),
       updatedAt: new Date('2026-09-01T00:00:00Z'),
     };

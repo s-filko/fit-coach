@@ -40,6 +40,13 @@ export const FactVerdictsSchema = z
           index: z.number().int(),
           supported: z.boolean(),
           reason: z.string(),
+          /**
+           * Task 5 (D18): the user's own words from the transcript that support
+           * the operation — original language, empty when unsupported. Optional
+           * with an empty default: `fact_verdicts_v1` is unreleased, but the
+           * scripted gateways of existing fixtures answer without it.
+           */
+          userQuote: z.string().default(''),
         })
         .strict(),
     ),
@@ -49,7 +56,7 @@ export const FactVerdictsSchema = z
 export type FactVerdicts = z.infer<typeof FactVerdictsSchema>;
 
 /** Per mutating operation (by its index in the batch): the verdict that applies, when one does. */
-export type FactVerdictMap = Map<number, { supported: boolean; reason: string }>;
+export type FactVerdictMap = Map<number, { supported: boolean; reason: string; userQuote: string }>;
 
 export interface VerifyFactOperationsParams {
   llmGateway: LlmGateway;
@@ -108,7 +115,7 @@ export async function verifyFactOperations(params: VerifyFactOperationsParams): 
         voided.add(v.index);
         continue;
       }
-      verdicts.set(v.index, { supported: v.supported, reason: v.reason });
+      verdicts.set(v.index, { supported: v.supported, reason: v.reason, userQuote: v.userQuote });
     }
     return verdicts;
   } catch (err) {

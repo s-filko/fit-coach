@@ -319,6 +319,10 @@ export const userFacts = pgTable(
       onDelete: 'set null',
     }),
     context: text('context'),
+    // fact-verification plan Task 5 (D17): the user's own words that support the
+    // fact — the verifier's userQuote, else the summariser's evidence hint. NULL
+    // on existing rows and whenever none was captured (manage_fact today).
+    evidence: text('evidence'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

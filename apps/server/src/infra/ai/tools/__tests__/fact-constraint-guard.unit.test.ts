@@ -28,6 +28,7 @@ const makeFact = (overrides: Partial<UserFact> = {}): UserFact => ({
   closedByUserAt: null,
   supersedesId: null,
   context: null,
+  evidence: null,
   ...overrides,
 });
 

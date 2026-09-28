@@ -33,6 +33,7 @@ function fact(overrides: Partial<UserFact> = {}): UserFact {
     closedByUserAt: null,
     supersedesId: null,
     context: null,
+    evidence: null,
     ...overrides,
   };
 }
@@ -110,5 +111,15 @@ describe('FACT_VERIFIER_V1 (AC-FV-5, D3)', () => {
       operations: [{ index: 0, op: 'add' as const, fact: 'F', evidence: 'hi' }],
     };
     expect(renderBlock(FACT_VERIFIER_V1, ctx)).toBe(renderBlock(FACT_VERIFIER_V1, ctx));
+  });
+
+  // fact-verification plan Task 5 (D18): the verdict also returns the user's
+  // own supporting words as `userQuote` — stored with the fact so the coach
+  // can quote the user's real words instead of inventing a quote (BUG-040 item 4).
+  it('Task 5 (D18): asks for userQuote — the user’s own words, exact, empty when unsupported', () => {
+    const text = renderBlock(FACT_VERIFIER_V1, { transcript: 'User: hi', operations: [] });
+    expect(text).toContain('userQuote');
+    expect(text).toMatch(/the user’s own words/);
+    expect(text).toMatch(/empty when unsupported/);
   });
 });

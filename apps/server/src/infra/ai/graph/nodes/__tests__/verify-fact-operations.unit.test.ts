@@ -8,7 +8,7 @@
  */
 import type { LlmGateway } from '@domain/ai/ports';
 
-import { FACT_VERDICTS_SCHEMA_NAME, verifyFactOperations } from '../verify-fact-operations';
+import { FactVerdictsSchema, FACT_VERDICTS_SCHEMA_NAME, verifyFactOperations } from '../verify-fact-operations';
 
 import type { UserFact } from '@domain/user/ports';
 
@@ -38,6 +38,7 @@ function knownFact(): UserFact {
     closedByUserAt: null,
     supersedesId: null,
     context: null,
+    evidence: null,
   };
 }
 
@@ -212,5 +213,40 @@ describe('verifyFactOperations (fact-verification Task 2, D2-D6)', () => {
 
     expect(verdicts?.has(1)).toBe(false);
     expect(verdicts?.has(2)).toBe(false);
+  });
+
+  // fact-verification plan Task 5 (D18): each verdict carries `userQuote` —
+  // the user's own supporting words from the transcript, original language,
+  // empty when unsupported — which the compaction stores with the fact.
+  it('D18: each verdict carries the user’s supporting quote, empty when unsupported', async () => {
+    const { gateway } = makeGateway({
+      verdicts: [
+        { index: 0, supported: true, reason: 'the user said five days', userQuote: 'колено болит уже пять дней' },
+        { index: 1, supported: false, reason: 'the ~70% is the assistant’s figure', userQuote: '' },
+      ],
+    });
+
+    const verdicts = await verifyFactOperations({ llmGateway: gateway, ...PARAMS });
+
+    expect(verdicts?.get(0)).toEqual({
+      supported: true,
+      reason: 'the user said five days',
+      userQuote: 'колено болит уже пять дней',
+    });
+    expect(verdicts?.get(1)).toEqual({
+      supported: false,
+      reason: 'the ~70% is the assistant’s figure',
+      userQuote: '',
+    });
+  });
+
+  // The schema default is what makes an answer WITHOUT userQuote (the scripted
+  // gateways of existing fixtures) parse to an empty quote — the gateway parses
+  // through FactVerdictsSchema before this module ever sees the verdicts.
+  it('D18: a verdict without userQuote parses to an empty quote (optional with empty default)', () => {
+    const parsed = FactVerdictsSchema.parse({
+      verdicts: [{ index: 0, supported: true, reason: 'the user said it' }],
+    });
+    expect(parsed.verdicts[0]?.userQuote).toBe('');
   });
 });

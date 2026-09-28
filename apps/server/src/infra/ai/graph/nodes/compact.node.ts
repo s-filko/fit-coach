@@ -331,35 +331,40 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
           if (isMutating) {
             mutatingIndex += 1;
           }
+          const verdict = isMutating ? verdicts?.get(mutatingIndex) : undefined;
           try {
-            if (isMutating) {
-              const verdict = verdicts?.get(mutatingIndex);
-              if (!verdict?.supported) {
-                // D14 (D8): op, factId and a verdict status only — the
-                // verifier's free-text reason can quote the user's words, so
-                // it never enters the log; nor does the fact text.
-                let verdictStatus: 'unsupported' | 'verdict-missing' | 'verifier-failed';
-                if (verdict) {
-                  verdictStatus = 'unsupported';
-                } else if (verdicts === null) {
-                  verdictStatus = 'verifier-failed';
-                } else {
-                  verdictStatus = 'verdict-missing';
-                }
-                log.info(
-                  {
-                    userId,
-                    runId,
-                    op: op.op,
-                    factId: op.factId ?? null,
-                    verdict: verdictStatus,
-                  },
-                  'Fact operation skipped — the verifier did not support it (BUG-040 follow-up)',
-                );
-                continue;
+            if (isMutating && !verdict?.supported) {
+              // D14 (D8): op, factId and a verdict status only — the
+              // verifier's free-text reason can quote the user's words, so
+              // it never enters the log; nor does the fact text.
+              let verdictStatus: 'unsupported' | 'verdict-missing' | 'verifier-failed';
+              if (verdict) {
+                verdictStatus = 'unsupported';
+              } else if (verdicts === null) {
+                verdictStatus = 'verifier-failed';
+              } else {
+                verdictStatus = 'verdict-missing';
               }
+              log.info(
+                {
+                  userId,
+                  runId,
+                  op: op.op,
+                  factId: op.factId ?? null,
+                  verdict: verdictStatus,
+                },
+                'Fact operation skipped — the verifier did not support it (BUG-040 follow-up)',
+              );
+              continue;
             }
-            await applyFactOperation(userFacts, userId, op, evidenceAt, ctx.now, summaryTurnId);
+            // Task 5 (D18): the quote stored with the fact — the verifier's
+            // userQuote when it gave one, else the summariser's evidence hint.
+            // Both are model output, no string matching (the owner's rule); the
+            // verifier's is preferred because it decided the verdict. Only
+            // add/update consume it (D19) — retract/confirm write no quote.
+            const userQuote = verdict?.userQuote ?? '';
+            const quote = userQuote !== '' ? userQuote : (op.evidence ?? null);
+            await applyFactOperation(userFacts, userId, op, quote, evidenceAt, ctx.now, summaryTurnId);
           } catch (err) {
             if (err instanceof PermanentFactRefusal) {
               log.info({ userId, runId, op: op.op }, 'Fact operation skipped — permanent refused without the gate');
@@ -387,6 +392,8 @@ async function applyFactOperation(
   userFacts: IUserFactsService,
   userId: string,
   op: FactOperation,
+  /** D18: the user's supporting quote — written by add/update only (D19). */
+  quote: string | null,
   evidenceAt: Date,
   now: Date,
   sourceTurnId: string | undefined,
@@ -409,6 +416,7 @@ async function applyFactOperation(
           phaseNote: op.phaseNote ?? null,
           onExpiry: op.onExpiry,
           context: 'stated in a compacted episode',
+          evidence: quote,
           explicitPermanent: op.explicitPermanent,
           evidenceAt,
         },
@@ -448,6 +456,7 @@ async function applyFactOperation(
           phaseNote: op.phaseNote ?? null,
           onExpiry: op.onExpiry,
           context: 'corrected in a compacted episode',
+          evidence: quote,
           explicitPermanent: op.explicitPermanent,
         },
         evidenceAt,
