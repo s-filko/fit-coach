@@ -585,6 +585,16 @@ export class TrainingService implements ITrainingService {
       if (!isValidExerciseId(planEx.exerciseId) || existingIds.has(planEx.exerciseId)) {
         continue;
       }
+      // A well-formed UUID that is not a real catalog exercise (stale/bad plan row) would violate
+      // the exercise FK — check existence first, never rely on the DB to reject (close-out review
+      // advisory R3).
+      const exercise = await this.exerciseRepo.findById(planEx.exerciseId);
+      if (!exercise) {
+        continue;
+      }
+      // Marked BEFORE the write so a plan id repeated in session_plan_json (bad data) creates one
+      // skipped row, not one per occurrence (close-out review advisory R3).
+      existingIds.add(planEx.exerciseId);
       const created = await this.sessionExerciseRepo.create(session.id, {
         exerciseId: planEx.exerciseId,
         orderIndex: orderIndex++,

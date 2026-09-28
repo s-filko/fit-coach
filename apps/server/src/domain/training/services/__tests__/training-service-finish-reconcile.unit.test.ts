@@ -73,7 +73,7 @@ describe('TrainingService.completeSession — finish reconciliation (set-kind pl
   });
 
   it('creates a skipped row with the plan targets for every plan exercise with no row', async () => {
-    const { trainingService, mockSessionRepo, mockSessionExerciseRepo } = createMocks();
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo, mockExerciseRepo } = createMocks();
     const bench = makeExerciseWithDetails({
       id: 'se-1',
       exerciseId: BENCH_ID,
@@ -84,6 +84,7 @@ describe('TrainingService.completeSession — finish reconciliation (set-kind pl
     mockSessionRepo.complete.mockResolvedValue({ ...makeSessionWithPlan([]), status: 'completed' });
     mockSessionExerciseRepo.update.mockResolvedValue(bench);
     mockSessionExerciseRepo.create.mockResolvedValue(makeExerciseWithDetails({ exerciseId: PULL_UPS_ID }));
+    mockExerciseRepo.findById.mockResolvedValue({ id: PULL_UPS_ID } as never);
 
     await trainingService.completeSession('session-1');
 
@@ -107,6 +108,70 @@ describe('TrainingService.completeSession — finish reconciliation (set-kind pl
     await trainingService.completeSession('session-1');
 
     expect(mockSessionExerciseRepo.create).not.toHaveBeenCalled();
+  });
+
+  it('skips a well-formed plan id that is not a real catalog exercise, without a create call (close-out review advisory R3)', async () => {
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo, mockExerciseRepo } = createMocks();
+    const session = makeSessionWithPlan([]);
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(session);
+    mockSessionRepo.complete.mockResolvedValue({ ...session, status: 'completed' });
+    mockExerciseRepo.findById.mockResolvedValue(null);
+
+    await trainingService.completeSession('session-1');
+
+    expect(mockExerciseRepo.findById).toHaveBeenCalledWith(BENCH_ID);
+    expect(mockExerciseRepo.findById).toHaveBeenCalledWith(PULL_UPS_ID);
+    expect(mockSessionExerciseRepo.create).not.toHaveBeenCalled();
+  });
+
+  it('creates only one skipped row for a plan id repeated in session_plan_json (close-out review advisory R3)', async () => {
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo, mockExerciseRepo } = createMocks();
+    const session = makeSessionWithPlan([]);
+    session.sessionPlanJson!.exercises = [
+      {
+        exerciseId: BENCH_ID,
+        exerciseName: 'Barbell Bench Press',
+        targetSets: 3,
+        targetReps: '8-10',
+        restSeconds: 120,
+      },
+      {
+        exerciseId: BENCH_ID,
+        exerciseName: 'Barbell Bench Press',
+        targetSets: 3,
+        targetReps: '8-10',
+        restSeconds: 120,
+      },
+    ];
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(session);
+    mockSessionRepo.complete.mockResolvedValue({ ...session, status: 'completed' });
+    mockExerciseRepo.findById.mockResolvedValue({ id: BENCH_ID } as never);
+    mockSessionExerciseRepo.create.mockResolvedValue(makeExerciseWithDetails({ exerciseId: BENCH_ID }));
+
+    await trainingService.completeSession('session-1');
+
+    expect(mockSessionExerciseRepo.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('TrainingService — auto-close reconciles before marking the session completed (close-out review advisory R3)', () => {
+  it('reconciles a timed-out session (via findTimedOut) before autoCloseTimedOut runs', async () => {
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo } = createMocks();
+    const zeroSet = makeExerciseWithDetails({ id: 'se-1', exerciseId: BENCH_ID, status: 'in_progress', sets: [] });
+    const timedOutSession = makeSession([zeroSet]);
+
+    mockSessionRepo.findTimedOut.mockResolvedValue([{ id: 'session-1', userId: 'user-1' } as never]);
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(timedOutSession);
+    mockSessionRepo.findActiveByUserId.mockResolvedValue(null);
+    mockSessionRepo.findRecentByUserIdWithDetails.mockResolvedValue([]);
+    mockSessionExerciseRepo.update.mockResolvedValue({ ...zeroSet, status: 'skipped' });
+
+    await trainingService.getActiveSession('user-1');
+
+    expect(mockSessionExerciseRepo.update).toHaveBeenCalledWith('se-1', { status: 'skipped' });
+    const [reconcileOrder] = mockSessionExerciseRepo.update.mock.invocationCallOrder;
+    const [autoCloseOrder] = mockSessionRepo.autoCloseTimedOut.mock.invocationCallOrder;
+    expect(reconcileOrder).toBeLessThan(autoCloseOrder);
   });
 });
 
