@@ -515,4 +515,28 @@ describe('start-training-session.tool — start_training_session', () => {
       );
     });
   });
+
+  describe('place argument (set-kind plan D6, AC-SK-5)', () => {
+    it('passes place through to startSession when the user named the place', async () => {
+      const trainingService = makeTrainingService();
+      const { startTrainingSession } = buildTools(trainingService, makeWorkoutPlanRepo());
+
+      await startTrainingSession.invoke({ ...MINIMAL_SESSION_PLAN, place: 'дома' }, makeConfig());
+
+      expect(trainingService.startSession).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ place: 'дома' }),
+      );
+    });
+
+    it('omits place when the user did not name one', async () => {
+      const trainingService = makeTrainingService();
+      const { startTrainingSession } = buildTools(trainingService, makeWorkoutPlanRepo());
+
+      await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig());
+
+      const dto = trainingService.startSession.mock.calls[0]?.[1] as Record<string, unknown> | undefined;
+      expect(dto).not.toHaveProperty('place');
+    });
+  });
 });

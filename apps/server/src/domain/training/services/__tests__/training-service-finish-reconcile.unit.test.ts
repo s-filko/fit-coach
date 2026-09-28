@@ -1,0 +1,111 @@
+/**
+ * set-kind plan Task 2 (D7, AC-SK-6): `completeSession` reconciles the plan at finish — an
+ * in_progress exercise with zero sets ends `skipped` (RED today: `completed`), and every plan
+ * exercise with no `session_exercises` row gets one with the plan's targets and status `skipped`
+ * (RED today: no row is ever created). A plan id that is not a valid UUID (legacy placeholder)
+ * must be skipped over, not sent to the DB.
+ */
+import type { WorkoutSessionWithDetails } from '@domain/training/types';
+
+import { createMocks, makeExerciseWithDetails, makeSession, makeSessionSet } from './training-service-test-support';
+
+const BENCH_ID = 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95';
+const PULL_UPS_ID = '8c88ebce-f5df-4d33-afdb-0b096a0dd7a8';
+
+function makeSessionWithPlan(exercises: ReturnType<typeof makeExerciseWithDetails>[]): WorkoutSessionWithDetails {
+  return {
+    ...makeSession(exercises),
+    sessionPlanJson: {
+      sessionKey: 'upper_a',
+      sessionName: 'Upper A',
+      reasoning: 'Upper day per the active split.',
+      exercises: [
+        {
+          exerciseId: BENCH_ID,
+          exerciseName: 'Barbell Bench Press',
+          targetSets: 3,
+          targetReps: '8-10',
+          restSeconds: 120,
+        },
+        {
+          exerciseId: PULL_UPS_ID,
+          exerciseName: 'Pull-ups',
+          targetSets: 3,
+          targetReps: '6-8',
+          restSeconds: 120,
+        },
+      ],
+      estimatedDuration: 60,
+    },
+  };
+}
+
+describe('TrainingService.completeSession — finish reconciliation (set-kind plan D7, AC-SK-6)', () => {
+  it('marks an in_progress exercise with zero sets skipped, not completed', async () => {
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo } = createMocks();
+    const zeroSet = makeExerciseWithDetails({ id: 'se-1', exerciseId: BENCH_ID, status: 'in_progress', sets: [] });
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(makeSessionWithPlan([zeroSet]));
+    mockSessionRepo.complete.mockResolvedValue({ ...makeSessionWithPlan([]), status: 'completed' });
+    mockSessionExerciseRepo.update.mockResolvedValue({ ...zeroSet, status: 'skipped' });
+    mockSessionExerciseRepo.create.mockResolvedValue(zeroSet);
+
+    await trainingService.completeSession('session-1');
+
+    expect(mockSessionExerciseRepo.update).toHaveBeenCalledWith('se-1', { status: 'skipped' });
+  });
+
+  it('still completes an in_progress exercise that has sets', async () => {
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo } = createMocks();
+    const withSets = makeExerciseWithDetails({
+      id: 'se-1',
+      exerciseId: BENCH_ID,
+      status: 'in_progress',
+      sets: [makeSessionSet({ setNumber: 1 }), makeSessionSet({ setNumber: 2 })],
+    });
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(makeSessionWithPlan([withSets]));
+    mockSessionRepo.complete.mockResolvedValue({ ...makeSessionWithPlan([]), status: 'completed' });
+    mockSessionExerciseRepo.update.mockResolvedValue({ ...withSets, status: 'completed' });
+    mockSessionExerciseRepo.create.mockResolvedValue(withSets);
+
+    await trainingService.completeSession('session-1');
+
+    expect(mockSessionExerciseRepo.update).toHaveBeenCalledWith('se-1', { status: 'completed' });
+  });
+
+  it('creates a skipped row with the plan targets for every plan exercise with no row', async () => {
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo } = createMocks();
+    const bench = makeExerciseWithDetails({
+      id: 'se-1',
+      exerciseId: BENCH_ID,
+      status: 'completed',
+      sets: [makeSessionSet()],
+    });
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(makeSessionWithPlan([bench]));
+    mockSessionRepo.complete.mockResolvedValue({ ...makeSessionWithPlan([]), status: 'completed' });
+    mockSessionExerciseRepo.update.mockResolvedValue(bench);
+    mockSessionExerciseRepo.create.mockResolvedValue(makeExerciseWithDetails({ exerciseId: PULL_UPS_ID }));
+
+    await trainingService.completeSession('session-1');
+
+    expect(mockSessionExerciseRepo.create).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({ exerciseId: PULL_UPS_ID, targetSets: 3, targetReps: '6-8' }),
+    );
+  });
+
+  it('never sends a non-UUID legacy plan id to the DB', async () => {
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo } = createMocks();
+    const session = makeSessionWithPlan([]);
+    // A legacy placeholder that was never a catalog id (training.spec.ts's guard case).
+    session.sessionPlanJson!.exercises = [
+      { exerciseId: 'calf-raise-placeholder', targetSets: 4, targetReps: '15', restSeconds: 60 },
+    ];
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(session);
+    mockSessionRepo.complete.mockResolvedValue({ ...session, status: 'completed' });
+    mockSessionExerciseRepo.create.mockResolvedValue(makeExerciseWithDetails());
+
+    await trainingService.completeSession('session-1');
+
+    expect(mockSessionExerciseRepo.create).not.toHaveBeenCalled();
+  });
+});
