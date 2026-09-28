@@ -68,6 +68,7 @@ function makeSession(exercise: SessionExerciseWithDetails): WorkoutSessionWithDe
     planId: 'plan-1',
     sessionKey: 'upper_a',
     status: 'in_progress',
+    place: null,
     startedAt: NOW,
     completedAt: null,
     durationMinutes: null,
@@ -158,5 +159,30 @@ describe('formatSetData — per-hand marker (set-kind plan D5, AC-SK-4)', () => 
     expect(formatSetData({ type: 'strength', reps: 10, weight: 24, weightUnit: 'kg', perHand: false })).toBe(
       '10 reps @ 24 kg',
     );
+  });
+});
+
+describe('buildWorkoutOverview — the place line (set-kind plan D6, AC-SK-5)', () => {
+  it('renders the stated place as one line', () => {
+    const session = { ...makeSession(makeExercise({})), place: 'Fitness House на Ленина' };
+    const text = buildWorkoutOverview(session, NOW, { placeAmbiguous: false });
+    expect(text).toContain('Place: Fitness House на Ленина');
+  });
+
+  it('renders the ask line when the place is not stated and recent workouts were at 2 places', () => {
+    const text = buildWorkoutOverview(makeSession(makeExercise({})), NOW, { placeAmbiguous: true });
+    expect(text).toContain('Place: not stated (ask');
+  });
+
+  it('renders no place line when the place is not stated and there is nothing to ask', () => {
+    const text = buildWorkoutOverview(makeSession(makeExercise({})), NOW, { placeAmbiguous: false });
+    expect(text).not.toContain('Place:');
+  });
+
+  it('the stated place wins over the ask line', () => {
+    const session = { ...makeSession(makeExercise({})), place: 'дома' };
+    const text = buildWorkoutOverview(session, NOW, { placeAmbiguous: true });
+    expect(text).toContain('Place: дома');
+    expect(text).not.toContain('not stated');
   });
 });

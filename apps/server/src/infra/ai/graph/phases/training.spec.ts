@@ -7,6 +7,10 @@
 import type { StructuredToolInterface } from '@langchain/core/tools';
 
 import type { ExerciseWithMuscles, MuscleGroup, WorkoutSessionWithDetails } from '@domain/training/types';
+// set-kind plan Task 2 (D7): the plan-id guard moved into the domain (plan-exercise-id.ts) so
+// TrainingService's finish reconciliation reuses this one copy — a bad legacy `session_plan_json`
+// row never reaches a DB query (close-out review advisory 6).
+import { isValidExerciseId } from '@domain/training/plan-exercise-id';
 
 import type {
   ConversationGraphDeps,
@@ -32,6 +36,7 @@ import {
   buildGetExerciseHistoryTool,
   buildLogSetTool,
   buildSearchExercisesTool,
+  buildSetSessionPlaceTool,
   buildSharedTools,
   buildUpdateLastSetTool,
 } from '@infra/ai/tools';
@@ -49,23 +54,16 @@ export interface TrainingData {
   exerciseHistory: ExerciseHistoryEntry[];
   recentWorkouts: WorkoutSessionWithDetails[];
   todayMuscles: MuscleGroup[];
+  /**
+   * set-kind plan Task 2 (D6): the user's last 10 real workouts carry >= 2 distinct places and
+   * today's session has none — the overview renders its one-line ask. False otherwise.
+   */
+  placeAmbiguous: boolean;
 }
 
 /** Mid-workout session shape the availability filter reads (BUG-008 Plan A). */
 interface SessionLike {
   exercises?: Array<{ status?: string; sets?: unknown[] }>;
-}
-
-/** Generic UUID shape (any version/variant) — matches every real exerciseId the catalog issues. */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/**
- * A bad legacy `session_plan_json` row (empty string, missing, or a placeholder that was never a
- * real catalog id) must not fail the turn — dropped before it ever reaches a DB query
- * (close-out review advisory 6).
- */
-function isValidExerciseId(id: unknown): id is string {
-  return typeof id === 'string' && UUID_RE.test(id);
 }
 
 /**
@@ -103,6 +101,8 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
     buildLogSetTool({ trainingService }),
     buildCompleteCurrentExerciseTool({ trainingService }),
     buildFinishTrainingTool({ trainingService }),
+    // set-kind plan Task 2 (D6): "я сегодня в другом зале" — after the start.
+    buildSetSessionPlaceTool({ trainingService }),
     buildDeleteLastSetsTool({ trainingService }),
     buildUpdateLastSetTool({ trainingService }),
     ...buildSharedTools({ userService, userFacts: deps.userFacts }),
@@ -176,6 +176,13 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
           ? await deps.workoutSessionRepo.findLastPerformancesByExercise(input.userId, todayExerciseIds, session.id)
           : [];
       const performanceById = new Map(performances.map(p => [p.exerciseId, p]));
+      // set-kind plan Task 2 (D7): the newest skip per today's exercise — the history block's
+      // `skipped <date>` line. Not a performance (no sets), so it never feeds the anchor above.
+      const skips =
+        todayExerciseIds.length > 0
+          ? await deps.workoutSessionRepo.findLastSkipsByExercise(input.userId, todayExerciseIds, session.id)
+          : [];
+      const skipById = new Map(skips.map(sk => [sk.exerciseId, sk.skippedAt]));
       const exerciseHistory: ExerciseHistoryEntry[] = todayExerciseIds.map(exerciseId => {
         const performance = performanceById.get(exerciseId);
         return {
@@ -183,8 +190,14 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
           exerciseName: nameById.get(exerciseId) ?? 'Exercise',
           performance: performance?.sessionExercise ?? null,
           completedAt: performance?.completedAt ?? null,
+          lastSkippedAt: skipById.get(exerciseId) ?? null,
         };
       });
+
+      // set-kind plan Task 2 (D6): ask once per session only when the user's last 10 real
+      // workouts carry >= 2 distinct places and today's session states none.
+      const placeAmbiguous =
+        !session.place && (await deps.workoutSessionRepo.distinctRecentPlaces(input.userId, 10)).length >= 2;
 
       // Fatigue window (D3): up to 7 recent real workouts; the block applies the 7-day cut
       // against ctx.now (the loader never reads the clock). Today's own session is excluded.
@@ -195,7 +208,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
 
       return {
         ok: true,
-        data: { session, exerciseHistory, recentWorkouts, todayMuscles: [...todayMuscleSet] },
+        data: { session, exerciseHistory, recentWorkouts, todayMuscles: [...todayMuscleSet], placeAmbiguous },
       };
     },
     // D-B/D4: v1's `client`, `workout_overview`, `stale_session` sections, plus `exercise_history`

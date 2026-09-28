@@ -79,6 +79,7 @@ export const makeSession = (exercises: SessionExerciseWithDetails[] = []): Worko
   planId: null,
   sessionKey: null,
   status: 'in_progress',
+  place: null,
   startedAt: new Date(),
   completedAt: null,
   durationMinutes: null,
@@ -123,6 +124,8 @@ export function createMocks() {
     findTimedOut: jest.fn(),
     autoCloseTimedOut: jest.fn().mockResolvedValue(0),
     findLastPerformancesByExercise: jest.fn(),
+    distinctRecentPlaces: jest.fn().mockResolvedValue([]),
+    findLastSkipsByExercise: jest.fn().mockResolvedValue([]),
   } as unknown as jest.Mocked<IWorkoutSessionRepository>;
 
   const mockWorkoutPlanRepo = {} as jest.Mocked<IWorkoutPlanRepository>;

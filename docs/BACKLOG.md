@@ -67,7 +67,10 @@ Rules:
       machine instance (or the same free-weight kind); across places or variants they are shown as
       separate lines, never as progress.
       (5) **Session place** — each workout knows where it happens (asked or inferred), so the plan uses the
-      equipment that place has.
+      equipment that place has. **Delivered (set-kind plan, 2026-09-28):** `workout_sessions.place` +
+      `start_training_session({ place })` + the `set_session_place` tool; recorded only when the user
+      names it (one ask per session only when the last 10 real workouts carry ≥ 2 distinct places).
+      Points 1–4 above remain open.
       Already exists, partly: fact category `equipment` (free text, no link to a place or a machine —
       e.g. the lever-machine fact that BUG-040 misapplied to the leg press); `docs/domain/user.spec.md`
       BR-USER-018…020 specify `trainingLocation` (home|gym|outdoors, one value) and `equipmentPresent[]`, but

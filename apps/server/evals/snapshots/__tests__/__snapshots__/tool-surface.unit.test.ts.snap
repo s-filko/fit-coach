@@ -1106,7 +1106,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) ses
     },
   },
   {
-    "description": "Create a training session with the approved workout plan and transition to the training phase. Call this ONLY when the user has explicitly approved the session plan and is ready to start. Do NOT call this during discussion, proposal, or plan refinement. Include the complete session plan as arguments — it will be stored with the session.",
+    "description": "Create a training session with the approved workout plan and transition to the training phase. Call this ONLY when the user has explicitly approved the session plan and is ready to start. Do NOT call this during discussion, proposal, or plan refinement. Include the complete session plan as arguments — it will be stored with the session. Optional \`place\`: where the workout happens, free text in the user's own words ("дома", "Fitness House на Ленина"). Pass it ONLY if the user named the place themselves — never ask and never guess.",
     "name": "start_training_session",
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1186,6 +1186,10 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) ses
             "type": "string",
           },
           "type": "array",
+        },
+        "place": {
+          "minLength": 1,
+          "type": "string",
         },
         "reasoning": {
           "minLength": 1,

@@ -1,7 +1,12 @@
 import { and, desc, eq, exists, inArray, isNotNull, lt, ne, type SQL, sql } from 'drizzle-orm';
 
 import { ActiveSessionExistsError } from '@domain/training/errors';
-import type { ExerciseLastPerformance, IWorkoutSessionRepository, RecentSessionsFilter } from '@domain/training/ports';
+import type {
+  ExerciseLastPerformance,
+  ExerciseLastSkip,
+  IWorkoutSessionRepository,
+  RecentSessionsFilter,
+} from '@domain/training/ports';
 import type {
   CreateSessionDto,
   Involvement,
@@ -160,6 +165,8 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
         userContextJson: session.userContext ?? null,
         sessionPlanJson: session.sessionPlanJson ?? null,
         status: session.status ?? 'planning',
+        // set-kind plan Task 2 (D6): where the workout happens, in the user's own words.
+        place: session.place ?? null,
       })
       .returning();
 
@@ -209,21 +216,29 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     } as WorkoutSessionWithDetails;
   }
 
+  /**
+   * The WHERE predicate of a "real workout" (completed + >= 1 set) — shared by
+   * `findRecentByUserId(realWorkoutsOnly)` and `distinctRecentPlaces` (set-kind plan Task 2 D6).
+   */
+  private realWorkoutConditions(userId: string): SQL[] {
+    return [
+      eq(workoutSessions.userId, userId),
+      eq(workoutSessions.status, 'completed'),
+      exists(
+        db
+          .select({ one: sql`1` })
+          .from(sessionExercises)
+          .innerJoin(sessionSets, eq(sessionSets.sessionExerciseId, sessionExercises.id))
+          .where(eq(sessionExercises.sessionId, workoutSessions.id)),
+      ),
+    ];
+  }
+
   async findRecentByUserId(userId: string, limit: number, filter?: RecentSessionsFilter): Promise<WorkoutSession[]> {
     // One query: the EXISTS predicate sits in the WHERE, so `limit` counts real workouts only.
-    const conditions = [eq(workoutSessions.userId, userId)];
-    if (filter?.realWorkoutsOnly) {
-      conditions.push(
-        eq(workoutSessions.status, 'completed'),
-        exists(
-          db
-            .select({ one: sql`1` })
-            .from(sessionExercises)
-            .innerJoin(sessionSets, eq(sessionSets.sessionExerciseId, sessionExercises.id))
-            .where(eq(sessionExercises.sessionId, workoutSessions.id)),
-        ),
-      );
-    }
+    const conditions = filter?.realWorkoutsOnly
+      ? this.realWorkoutConditions(userId)
+      : [eq(workoutSessions.userId, userId)];
     // realWorkoutsOnly: every row is completed (non-null completedAt), and an imported session's
     // createdAt does not track when it actually happened — order by completedAt (review advisory
     // 4), not createdAt. Without the filter, keep createdAt DESC exactly (getActiveSession depends
@@ -409,5 +424,57 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
       .limit(limit);
 
     return this.rehydratePerformances(rows, () => exerciseId);
+  }
+
+  async distinctRecentPlaces(userId: string, limit: number): Promise<string[]> {
+    // set-kind plan Task 2 (D6): the last `limit` real workouts' places, deduped in JS — a
+    // DISTINCT over places would dedupe BEFORE the window, not inside it. NULL = not stated
+    // and never counts as a place.
+    const rows = await db
+      .select({ place: workoutSessions.place })
+      .from(workoutSessions)
+      .where(and(...this.realWorkoutConditions(userId)))
+      .orderBy(desc(workoutSessions.completedAt))
+      .limit(limit);
+    return [...new Set(rows.map(r => r.place).filter((p): p is string => p !== null))];
+  }
+
+  async findLastSkipsByExercise(
+    userId: string,
+    exerciseIds: string[],
+    excludeSessionId: string,
+  ): Promise<ExerciseLastSkip[]> {
+    if (exerciseIds.length === 0) {
+      return [];
+    }
+
+    // One query for the pick: DISTINCT ON (exercise_id), newest completed session first — the
+    // same anchor shape as `findLastPerformancesByExercise`, minus the >= 1 set requirement
+    // (a skipped row has none by construction).
+    const rows = await db
+      .selectDistinctOn([sessionExercises.exerciseId], {
+        exerciseId: sessionExercises.exerciseId,
+        skippedAt: workoutSessions.completedAt,
+      })
+      .from(sessionExercises)
+      .innerJoin(workoutSessions, eq(sessionExercises.sessionId, workoutSessions.id))
+      .where(
+        and(
+          eq(workoutSessions.userId, userId),
+          eq(workoutSessions.status, 'completed'),
+          isNotNull(workoutSessions.completedAt),
+          eq(sessionExercises.status, 'skipped'),
+          ne(workoutSessions.id, excludeSessionId),
+          inArray(sessionExercises.exerciseId, exerciseIds),
+        ),
+      )
+      .orderBy(
+        sessionExercises.exerciseId,
+        desc(workoutSessions.completedAt),
+        desc(sessionExercises.orderIndex),
+        desc(sessionExercises.id),
+      );
+
+    return rows.map(r => ({ exerciseId: r.exerciseId, skippedAt: r.skippedAt! }));
   }
 }

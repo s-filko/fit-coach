@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { tool } from '@langchain/core/tools';
+import { z } from 'zod';
 
 import type { ConversationPhase } from '@domain/conversation/phases';
 import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
@@ -34,7 +35,19 @@ const START_TRAINING_SESSION_DESCRIPTION = [
   'Call this ONLY when the user has explicitly approved the session plan and is ready to start.',
   'Do NOT call this during discussion, proposal, or plan refinement.',
   'Include the complete session plan as arguments — it will be stored with the session.',
+  // set-kind plan Task 2 (D6): the place argument — recorded only when the user names it.
+  'Optional `place`: where the workout happens, free text in the user\'s own words ("дома", "Fitness House на Ленина").',
+  'Pass it ONLY if the user named the place themselves — never ask and never guess.',
 ].join(' ');
+
+/**
+ * set-kind plan Task 2 (D6): the tool's schema = the domain plan schema + the optional
+ * `place` argument. Kept local so `SessionRecommendationSchema` (the stored plan's shape)
+ * stays place-free.
+ */
+const StartTrainingSessionSchema = SessionRecommendationSchema.extend({
+  place: z.string().min(1).optional(),
+});
 
 export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps) {
   const { trainingService, workoutPlanRepository, exerciseRepository, userFactsService } = deps;
@@ -92,6 +105,8 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
           planId: activePlan?.id,
           sessionKey: input.sessionKey,
           status: 'planning',
+          // set-kind plan Task 2 (D6): present only when the user named the place.
+          ...(input.place ? { place: input.place } : {}),
           sessionPlanJson: {
             sessionKey: input.sessionKey,
             sessionName: input.sessionName,
@@ -134,7 +149,7 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
     {
       name: 'start_training_session',
       description: START_TRAINING_SESSION_DESCRIPTION,
-      schema: SessionRecommendationSchema,
+      schema: StartTrainingSessionSchema,
     },
   );
 }

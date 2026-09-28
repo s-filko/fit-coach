@@ -155,6 +155,9 @@ export interface WorkoutSession {
   planId: string | null;
   sessionKey: string | null; // e.g., 'upper_a'
   status: SessionStatus;
+  // set-kind plan Task 2 (D6): where the workout happened, in the user's own words.
+  // NULL = not stated — never inferred.
+  place: string | null;
   startedAt: Date | null;
   completedAt: Date | null;
   durationMinutes: number | null;
@@ -252,6 +255,8 @@ export interface CreateSessionDto {
   userContext?: UserContext;
   status?: SessionStatus;
   sessionPlanJson?: SessionRecommendation;
+  // set-kind plan Task 2 (D6): written by start_training_session's optional `place` argument.
+  place?: string;
 }
 
 export interface CreateSessionExerciseDto {

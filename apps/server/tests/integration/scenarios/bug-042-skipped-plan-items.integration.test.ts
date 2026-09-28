@@ -14,6 +14,11 @@
  *
  * Reuses journey B's setup (`setupSteps`/`sharedPast` — greeting → session_planning → proposal →
  * start_training_session), same production wiring as `set-kind.integration.test.ts`.
+ *
+ * Promoted from `bug-042-skipped-plan-items.repro.test.ts` once Task 2's finish reconciliation,
+ * place tool and history skip line landed (was RED: no row for Pull-ups at finish, place null,
+ * `set_session_place` rejected as an unknown tool, and the day-2 line read bare
+ * `no completed record`).
  */
 import { runScenario, type ScenarioRunResult } from '../../../evals/lib/run-scenario';
 import type { Scenario } from '../../../evals/schema/scenario.schema';

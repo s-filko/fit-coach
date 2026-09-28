@@ -36,6 +36,16 @@ export interface ExerciseLastPerformance {
   sessionExercise: SessionExerciseWithDetails;
 }
 
+/**
+ * set-kind plan Task 2 (D7): one exercise's newest `skipped` row (completed sessions only) —
+ * the anchor-less companion of `ExerciseLastPerformance` behind the history block's
+ * `skipped <date>` line.
+ */
+export interface ExerciseLastSkip {
+  exerciseId: string;
+  skippedAt: Date;
+}
+
 export interface IWorkoutSessionRepository {
   create(userId: string, session: CreateSessionDto): Promise<WorkoutSession>;
   findById(sessionId: string): Promise<WorkoutSession | null>;
@@ -79,6 +89,18 @@ export interface IWorkoutSessionRepository {
     excludeSessionId: string | null,
     limit: number,
   ): Promise<ExerciseLastPerformance[]>;
+  /**
+   * set-kind plan Task 2 (D6): the distinct non-null places among the last `limit` real
+   * (completed, >= 1 set) workouts — the input of the loader's `placeAmbiguous` flag.
+   * A workout with no place stated does not count as a place.
+   */
+  distinctRecentPlaces(userId: string, limit: number): Promise<string[]>;
+  /**
+   * set-kind plan Task 2 (D7): the newest `skipped` `session_exercises` row per exercise id
+   * (completed sessions only), excluding `excludeSessionId` — the input of the exercise-history
+   * block's `skipped <date>` line. At most one entry per exercise id.
+   */
+  findLastSkipsByExercise(userId: string, exerciseIds: string[], excludeSessionId: string): Promise<ExerciseLastSkip[]>;
 }
 
 export interface ISessionExerciseRepository {

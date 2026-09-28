@@ -32,9 +32,28 @@ export function workingSets<T extends { setKind?: 'warmup' | 'working' | null }>
  *   EXERCISE DETAIL — sets for in_progress and completed exercises only
  *   ACTIVE STATUS   — explicit "what can be done right now" line
  */
-export function buildWorkoutOverview(session: WorkoutSessionWithDetails, now: Date): string {
+/**
+ * set-kind plan Task 2 (D6): the one place line — the stated place, or (only when the user's
+ * recent real workouts were at >= 2 distinct places and today's states none) the single ask.
+ * Null when the place is not stated and there is nothing to ask.
+ */
+export function placeLineOf(place: string | null, placeAmbiguous: boolean): string | null {
+  if (place) {
+    return `Place: ${place}`;
+  }
+  return placeAmbiguous ? 'Place: not stated (ask — recent workouts were at 2 places)' : null;
+}
+
+export function buildWorkoutOverview(
+  session: WorkoutSessionWithDetails,
+  now: Date,
+  opts?: { placeAmbiguous?: boolean },
+): string {
   const plan = session.sessionPlanJson;
   const startedById = new Map(session.exercises.map(ex => [ex.exerciseId, ex]));
+
+  // --- PLACE (set-kind plan Task 2, D6) ---
+  const placeLine = placeLineOf(session.place ?? null, opts?.placeAmbiguous ?? false);
 
   // --- SESSION GUIDE ---
   const guideLines: string[] = [
@@ -123,6 +142,9 @@ export function buildWorkoutOverview(session: WorkoutSessionWithDetails, now: Da
   }
 
   const parts = [guideLines.join('\n')];
+  if (placeLine) {
+    parts.push(placeLine);
+  }
   if (detailLines.length > 0) {
     parts.push(detailLines.join('\n'));
   }
@@ -251,13 +273,17 @@ export const TRAINING_CLIENT_V1: ContextBlock<TrainingClientData> = {
 
 export interface TrainingWorkoutOverviewData {
   session: WorkoutSessionWithDetails;
+  /** set-kind plan Task 2 (D6): >= 2 distinct places in the last 10 real workouts, none today. */
+  placeAmbiguous?: boolean;
 }
 
 export const TRAINING_WORKOUT_OVERVIEW_V1: ContextBlock<TrainingWorkoutOverviewData> = {
   id: 'training.workout_overview',
   version: 'v1',
   render(data, ctx: ContextBlockCtx) {
-    return `=== WORKOUT OVERVIEW ===\n\n${buildWorkoutOverview(data.session, ctx.now)}`;
+    return `=== WORKOUT OVERVIEW ===\n\n${buildWorkoutOverview(data.session, ctx.now, {
+      placeAmbiguous: data.placeAmbiguous,
+    })}`;
   },
 };
 

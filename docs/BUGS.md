@@ -1319,6 +1319,10 @@ Scenario: "разминка 2 км за 13:45" at session start → a `cardio_di
 ## BUG-025 — Auto-complete reports "completed" for an exercise it actually marked `skipped` (0 sets)
 
 **Status:** Open
+**Note (set-kind plan, 2026-09-28):** the finish path no longer produces the mismatched state —
+`completeSession`/auto-close mark a zero-set exercise `skipped`, not `completed` (BUG-042 fix, D7).
+The open part is the switch-time summary text (`ensureCurrentExercise` → `formatExerciseSummary`
+still says "completed" on the auto-complete of an empty exercise).
 **Severity:** Medium — the model is told a false state and repeats it to the user
 **Found during:** Live dev training session 2026-09-21 (owner review)
 **Component:** `apps/server/src/infra/ai/tools/format-exercise-summary.ts:41-47`, `apps/server/src/domain/training/services/training.service.ts:210-216`
@@ -1957,7 +1961,7 @@ line when there is none; reject or normalise a `targetReps` that repeats the set
 
 ## BUG-042 — A planned exercise replaced by another leaves no trace: no `skipped` row, the plan line stays pending, and the next session reads "never done"
 
-**Status:** Open
+**Status:** fixed (set-kind, 2026-09-28)
 **Severity:** Medium — history and plan adherence under-report the work; the coach tells the user sets "were not logged"
 **Found during:** owner's live dev session 2026-09-27 (runs `0a1b5697` 09:55, `78be6b58` 10:07, `622a877a` finish)
 **Component:** `apps/server/src/domain/training/services/training.service.ts` (`finishSession` completes only `in_progress` rows; `session_exercises` are created lazily), training history / recent-workouts blocks
@@ -1977,6 +1981,16 @@ The catalog also has no Smith-machine calf raise, so the substitute is logged un
 
 Needs design (overlaps `refactor-p6-progress-and-drafts`, muscle-centric history): at finish, mark untouched plan
 items `skipped`; show calf work by muscle, not only by the planned exercise id.
+
+**Fixed by plan `set-kind` (Task 2, D7):** `completeSession` and the auto-close path share one
+`reconcilePlanItems` — every valid-id plan exercise with no row gets a `skipped` row with the plan's
+targets, and a zero-set `in_progress`/`pending` row ends `skipped`; `training.exercise_history` renders
+`skipped <date>` for the newest skip. Tests:
+`apps/server/tests/integration/scenarios/bug-042-skipped-plan-items.integration.test.ts` (scripted scenario,
+promoted from the repro),
+`apps/server/src/domain/training/services/__tests__/training-service-finish-reconcile.unit.test.ts`,
+`apps/server/src/infra/ai/prompts/blocks/__tests__/training-exercise-history.v1.unit.test.ts`.
+The muscle-centric view of substitute work (standing vs seated calf) stays with U3 — not this fix.
 
 ### Related findings from the same session (2026-09-27)
 

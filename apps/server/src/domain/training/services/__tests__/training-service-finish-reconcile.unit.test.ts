@@ -109,3 +109,25 @@ describe('TrainingService.completeSession — finish reconciliation (set-kind pl
     expect(mockSessionExerciseRepo.create).not.toHaveBeenCalled();
   });
 });
+
+describe('TrainingService.setSessionPlace — session place (set-kind plan D6, AC-SK-5)', () => {
+  it('updates the session row with the place and returns it', async () => {
+    const { trainingService, mockSessionRepo } = createMocks();
+    const session = makeSessionWithPlan([]);
+    mockSessionRepo.findById.mockResolvedValue(session);
+    mockSessionRepo.update.mockResolvedValue({ ...session, place: 'Fitness House на Ленина' });
+
+    const updated = await trainingService.setSessionPlace('session-1', 'Fitness House на Ленина');
+
+    expect(mockSessionRepo.update).toHaveBeenCalledWith('session-1', { place: 'Fitness House на Ленина' });
+    expect(updated.place).toBe('Fitness House на Ленина');
+  });
+
+  it('throws on an unknown session, writing nothing', async () => {
+    const { trainingService, mockSessionRepo } = createMocks();
+    mockSessionRepo.findById.mockResolvedValue(null);
+
+    await expect(trainingService.setSessionPlace('nope', 'дома')).rejects.toThrow('Session not found');
+    expect(mockSessionRepo.update).not.toHaveBeenCalled();
+  });
+});

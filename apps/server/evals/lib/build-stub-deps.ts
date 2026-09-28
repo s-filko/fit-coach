@@ -370,6 +370,10 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
       // training.spec.ts's loader (BUG-030 fix): no eval fixture asserts on exercise-history
       // content today, so "nothing on record" is the safe default here.
       findLastPerformancesByExercise: async () => [],
+      // set-kind plan Task 2 (D6/D7): no fixture asserts on places or skips today —
+      // "nothing on record" keeps both flags off.
+      distinctRecentPlaces: async () => [],
+      findLastSkipsByExercise: async () => [],
     },
     exerciseRepository: {
       searchByEmbedding: async () => [],

@@ -1,4 +1,5 @@
 import { ActiveSessionExistsError, ExerciseNotFoundError } from '@domain/training/errors';
+import { isValidExerciseId } from '@domain/training/plan-exercise-id';
 import type {
   AutoCompletedExercise,
   CompletedSetDetail,
@@ -242,17 +243,13 @@ export class TrainingService implements ITrainingService {
   }
 
   async completeSession(sessionId: string, durationMinutes?: number, completedAt?: Date): Promise<WorkoutSession> {
-    const session = await this.sessionRepo.findById(sessionId);
+    // set-kind plan Task 2 (D7): with details — reconciliation needs each row's sets.
+    const session = await this.sessionRepo.findByIdWithDetails(sessionId);
     if (!session) {
       throw new Error('Session not found');
     }
 
-    const exercises = await this.sessionExerciseRepo.findBySessionId(sessionId);
-    for (const ex of exercises) {
-      if (ex.status === 'in_progress') {
-        await this.sessionExerciseRepo.update(ex.id, { status: 'completed' });
-      }
-    }
+    await this.reconcilePlanItems(session);
 
     const resolvedCompletedAt = completedAt ?? new Date();
     const duration =
@@ -269,6 +266,20 @@ export class TrainingService implements ITrainingService {
     }
 
     return this.sessionRepo.update(sessionId, { status: 'skipped' });
+  }
+
+  /**
+   * set-kind plan Task 2 (D6): record where today's session is happening — free text in the
+   * user's own words, written by `set_session_place` (and by `start_training_session`'s
+   * optional `place` argument at creation).
+   */
+  async setSessionPlace(sessionId: string, place: string): Promise<WorkoutSession> {
+    const session = await this.sessionRepo.findById(sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    return this.sessionRepo.update(sessionId, { place });
   }
 
   async getActiveSession(userId: string): Promise<WorkoutSessionWithDetails | null> {
@@ -536,6 +547,52 @@ export class TrainingService implements ITrainingService {
 
   private async autoCloseTimedOutSessions(userId: string): Promise<void> {
     const cutoffTime = new Date(Date.now() - SESSION_TIMEOUT_MS);
+    // set-kind plan Task 2 (D7): a timed-out session reconciles through the SAME path as an
+    // explicit finish — reconcile before the repo marks the sessions completed.
+    const timedOut = await this.sessionRepo.findTimedOut(cutoffTime);
+    for (const session of timedOut) {
+      if (session.userId !== userId) {
+        continue;
+      }
+      const details = await this.sessionRepo.findByIdWithDetails(session.id);
+      if (details) {
+        await this.reconcilePlanItems(details);
+      }
+    }
     await this.sessionRepo.autoCloseTimedOut(userId, cutoffTime);
+  }
+
+  /**
+   * set-kind plan Task 2 (D7, BUG-042): finish reconciliation, the one path shared by
+   * `completeSession` and the auto-close of timed-out sessions.
+   * (a) every `session_plan_json` exercise with a valid id and no `session_exercises` row
+   *     gets one with `status = 'skipped'` and the plan's targets — a planned exercise the
+   *     user never touched stops vanishing;
+   * (b) an `in_progress` (or still-`pending`) row with zero sets ends `skipped`, not
+   *     `completed` — the same rule `ensureCurrentExercise` applies on a switch.
+   */
+  private async reconcilePlanItems(session: WorkoutSessionWithDetails): Promise<void> {
+    for (const ex of session.exercises) {
+      if (ex.status === 'in_progress' || ex.status === 'pending') {
+        const newStatus = ex.sets.length > 0 ? 'completed' : 'skipped';
+        await this.sessionExerciseRepo.update(ex.id, { status: newStatus });
+      }
+    }
+
+    const existingIds = new Set(session.exercises.map(ex => ex.exerciseId));
+    let orderIndex = session.exercises.length;
+    for (const planEx of session.sessionPlanJson?.exercises ?? []) {
+      if (!isValidExerciseId(planEx.exerciseId) || existingIds.has(planEx.exerciseId)) {
+        continue;
+      }
+      const created = await this.sessionExerciseRepo.create(session.id, {
+        exerciseId: planEx.exerciseId,
+        orderIndex: orderIndex++,
+        targetSets: planEx.targetSets,
+        targetReps: planEx.targetReps,
+        targetWeight: planEx.targetWeight ?? undefined,
+      });
+      await this.sessionExerciseRepo.update(created.id, { status: 'skipped' });
+    }
   }
 }

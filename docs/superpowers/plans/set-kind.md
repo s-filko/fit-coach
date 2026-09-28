@@ -246,3 +246,22 @@ the fix and gone — promoted — after), `node scripts/state.mjs --check` from 
 ## Review
 
 (filled at close-out: `- Review: <date> | clean | R1,R2,R3,R4` plus notes)
+
+## Proposed durable-spec text (for the owner)
+
+D11: durable-spec ids are minted by the owner, so this text is a PROPOSAL — the `docs/domain/
+training.spec.md` edit itself waits for the owner's confirmation before merge. BR-TRAINING-014..016
+follow the file's existing numbering (last used: BR-TRAINING-013).
+
+In `docs/domain/training.spec.md`:
+
+- Terms, amend the WorkoutSession line:
+  `• WorkoutSession: actual workout session with status tracking (planning|in_progress|completed|skipped) and place (free text, NULL = not stated)`
+
+- Business Rules, append:
+  `• BR-TRAINING-014: Every set carries its kind — 'warmup' or 'working'; only working sets count toward plan targets; NULL set_kind (pre-2026-09-28 legacy rows) means unknown, never certain working`
+  `• BR-TRAINING-015: A dumbbell exercise's weight is per hand unless the user states a total; the confirmation says "per hand"`
+  `• BR-TRAINING-016: Finishing a session (explicit or auto-close) reconciles the plan — every untouched plan exercise gets a session_exercises row with status='skipped' and the plan's targets, and a zero-set exercise ends 'skipped', not 'completed'`
+
+Entity line for the entity list: `workout_sessions.place` — `text`, nullable, free text in the user's
+words, written only when the user names it (`start_training_session({ place })` / `set_session_place`).

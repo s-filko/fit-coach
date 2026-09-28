@@ -81,6 +81,8 @@ export interface ITrainingService {
   logSet(exerciseId: string, dto: CreateSessionSetDto): Promise<SessionSet>;
   completeSession(sessionId: string, durationMinutes?: number, completedAt?: Date): Promise<WorkoutSession>;
   skipSession(sessionId: string): Promise<WorkoutSession>;
+  // set-kind plan Task 2 (D6): set where today's session is happening, in the user's own words.
+  setSessionPlace(sessionId: string, place: string): Promise<WorkoutSession>;
   getActiveSession(userId: string): Promise<WorkoutSessionWithDetails | null>;
   getTrainingHistory(userId: string, limit?: number): Promise<WorkoutSessionWithDetails[]>;
   getSessionDetails(sessionId: string): Promise<WorkoutSessionWithDetails | null>;

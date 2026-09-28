@@ -60,6 +60,7 @@ export function buildFixtureSession(fixture: EvalFixture, now: Date): WorkoutSes
     planId: 'eval-plan-1',
     sessionKey: active?.sessionKey ?? 'Upper A',
     status: 'in_progress',
+    place: null,
     startedAt: now,
     completedAt: null,
     durationMinutes: null,
