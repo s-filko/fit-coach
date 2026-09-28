@@ -4,7 +4,7 @@
 > test-driven-development. Red tests first, then the fix. Every task's step 1 is a test that
 > must fail on unchanged code for the stated reason; commit it red before any production change.
 
-- Status: planned
+- Status: in progress
 - Branch: plan/set-kind
 - After: —
 
@@ -120,6 +120,22 @@ entity, machine instances and the clarifying question are **not** this plan).
   orchestrator confirms with the owner before merge. `docs/BUGS.md` BUG-042 → fixed, BUG-025 note.
   `docs/BACKLOG.md` — the warm-up entry closed; the places entry keeps points 1–4 open and
   records point 5 as delivered. Roadmap R1.4 row → delivered by this plan.
+- **D12 (orchestrator, 2026-09-28) — merge without the owner's confirmation of D11.** The owner's
+  autonomy order supersedes "confirms with the owner before merge": code merges into `dev` with the
+  BR text only **proposed** (section at the end of this plan), `training.spec.md` untouched; the
+  owner mints or renumbers the ids later. The R1 meta note (docs-first gate) is recorded, not acted on.
+- **D13 (orchestrator) — per hand only for `equipment = 'dumbbell'`.** The catalog has no kettlebell
+  value (Task 1 worker note under D5); kettlebell per-hand waits for a catalog value.
+- **D14 (orchestrator) — reconciliation also closes `pending` zero-set rows as `skipped`** (plan text
+  said `in_progress`); consistent with D7's intent, accepted at Task 2 review.
+- **D15 (orchestrator) — worker incidents.** The GLM Task 2 worker's turn died on a network error
+  (`ENOTFOUND`) with work done but uncommitted; the orchestrator nudged it via `orca terminal send`
+  and it finished. Both workers' `worker-release` answered `retained / user_takeover`; their tabs
+  are closed at final cleanup. Worktree deletions are deferred to the very end of the run (owner
+  2026-09-29: an approval prompt stalls an autonomous run).
+- **D16 (orchestrator) — review fixes stay on this branch** (economical-work rule): all six blocking
+  findings plus the cheap advisories listed in § Review are fixed by one Sonnet fix worker in
+  `set-kind-t1`; the rest go to one grouped `docs/BACKLOG.md` entry.
 
 ## Acceptance criteria
 
@@ -245,7 +261,57 @@ the fix and gone — promoted — after), `node scripts/state.mjs --check` from 
 
 ## Review
 
-(filled at close-out: `- Review: <date> | clean | R1,R2,R3,R4` plus notes)
+Run 1 — 2026-09-29, zones R1, R2, R3, R4 — **blocked** (6 blocking). Fixes dispatched per D16.
+
+**Verification evidence (orchestrator, from the workers' `worker_done` and its own re-runs):**
+Task 1 (Sonnet) — check-all green; test:unit 1583/1583; test:integration 643/643; test:scenarios
+399/399 (+1 todo); repro glob: only the pre-existing BUG-023/025/027 reds. Orchestrator re-run of
+test:scenarios on `6cf32a69`: 20 suites, 399 passed, 1 todo. Task 2 (GLM) — check-all exit 0;
+test:unit 160 suites / 1601; test:integration 49 suites / 648 (+1 todo); test:scenarios 21 suites /
+404 (+1 todo); repro glob: the same 3 pre-existing reds; `state.mjs --check` OK. Orchestrator re-run
+of test:scenarios on `35a99846`: 21 suites, 404 passed, 1 todo.
+
+**Blocking (run 1):**
+- B1 (R2) `log-set.tool.ts:111-112` — strength confirmation copies `formatSetData`, now with a second
+  copy of the per-hand note. → fix: call `formatSetData`.
+- B2 (R3) `phases/training/v8.ts:53` — AC-SK-7: v8 lacks the place rule (D6); the `set_session_place`
+  TOOLS entry and tool description say "Do NOT ask", contradicting the overview's ask line.
+  → fix: add the place rule; align the tool text.
+- B3 (R3) `training.spec.ts:199` — AC-SK-5: `placeAmbiguous === true`, the `!session.place`
+  short-circuit and `distinctRecentPlaces` (window 10, NULL excluded, dedupe after limit) untested.
+  → fix: loader unit tests + a real-DB repository test.
+- B4 (R3) plan — verification results not quoted anywhere on the branch. → closed by the evidence
+  block above (orchestrator).
+- B5 (R4) plan § Proposed durable-spec text — BR-TRAINING-014..016 already exist in
+  `docs/features/FEAT-0010-training-session-management.md` (up to -026). → fix: propose free ids and
+  flag the collision for the owner.
+- B6 (R4) `docs/BACKLOG.md:360` — the delivered warm-up entry must be removed, not ticked.
+  → fix: remove it.
+
+**Advisory (run 1) — fixed on the branch (D16):** R1 `workingSets` domain rule lives in a prompt
+block → move to `domain/training`; R1 `placeAmbiguous` literals 10/2 → named constants; R2 `SetKind`
+union hand-written → import the domain type; R2 `placeLineOf` exported with one use → unexport;
+R3 skipped-row insert for a UUID-shaped id not in the catalog would throw on the FK, and a duplicated
+plan id gives two skipped rows → skip non-catalog ids, update `existingIds`; R3 no test for the
+auto-close reconciliation path → unit test; R3 ask line hardcodes "2 places" → render the count;
+R3 debug `console.log` in `bug-042-…integration.test.ts` afterAll → remove; R4 roadmap §6 U4 and
+R1.4 "Delivered" premature → "code done, live check on dev pending"; R4 BR-014 proposal wording on
+NULL → state both (counted as working for targets, unknown for load metrics); R4 stale test/method
+names and "PR description" wording in this plan → corrected.
+
+**Advisory (run 1) — to `docs/BACKLOG.md` (one grouped entry, filled after the fix):** R1
+`findTimedOut` has no `userId` (two reads of "timed out"); R1 `CreateSessionExerciseDto` has no
+status (create-then-update); R1 `SessionSet.setKind` optional + nullable for fixtures; R1
+`format-exercise-summary.ts` mixes concerns; R1 `TOOL_OUTCOME_FORMAT_ID` not bumped; R2 plan-row
+builder duplicated between `reconcilePlanItems` and `ensureCurrentExercise`; R2 warm-up/per-hand
+wording in three places; R3 AC-SK-3/-4 DB halves only unit-tested; R4 places entry carries a
+delivery note; R4 `API_SPEC.md` shared types lack `place`/`setKind`/`perHand`; R4 ADR-0011
+tool-priority table stale.
+
+**Meta (to `docs/REVIEW_FINDINGS.md`):** R1 ×2 rule candidates (TOOL_OUTCOME_FORMAT_ID, block
+versioning), R1 blind spot (docs-first gate), R2 blind spot (versioned prompts vs DRY), R3 blind spot
+(where verification evidence lives), R3 rule candidate (every D names an AC), R4 blind spot (BR id
+grep across docs/), R4 rule candidate (BACKLOG `[x]` entries).
 
 ## Proposed durable-spec text (for the owner)
 
