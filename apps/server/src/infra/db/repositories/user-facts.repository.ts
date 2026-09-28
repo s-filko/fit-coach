@@ -37,6 +37,7 @@ function toUserFact(row: typeof userFacts.$inferSelect): UserFact {
     closedByUserAt: row.closedByUserAt,
     supersedesId: row.supersedesId,
     context: row.context,
+    evidence: row.evidence,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -184,6 +185,7 @@ export class UserFactsRepository implements IUserFactsService {
           muscleGroup: input.muscleGroup ?? null,
           confirmations: row.confirmations + 1,
           context: input.context ?? row.context,
+          evidence: input.evidence ?? row.evidence,
           ...lifecycleValues,
           updatedAt: now,
         })
@@ -220,6 +222,7 @@ export class UserFactsRepository implements IUserFactsService {
         // A genuinely new statement replacing a KNOWN closed fact keeps the link (AC-FL-3).
         supersedesId: input.supersedesFactId ?? null,
         context: input.context ?? null,
+        evidence: input.evidence ?? null,
         sourceTurnId: sourceTurnId ?? null,
         ...lifecycleValues,
         createdAt: now,
@@ -249,6 +252,7 @@ export class UserFactsRepository implements IUserFactsService {
         confirmations: 1,
         supersedesId: input.supersedesFactId ?? existing.id,
         context: input.context ?? null,
+        evidence: input.evidence ?? null,
         sourceTurnId: sourceTurnId ?? null,
         ...lifecycleValues,
         createdAt: now,
@@ -370,6 +374,7 @@ export class UserFactsRepository implements IUserFactsService {
         confirmations: 1,
         supersedesId: existing.id,
         context: input.context ?? null,
+        evidence: input.evidence ?? null,
         sourceTurnId: sourceTurnId ?? null,
         durability: lifecycle.durability,
         expiresAt: lifecycle.expiresAt,

@@ -200,6 +200,7 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
     closedByUserAt: null,
     supersedesId: null,
     context: null,
+    evidence: null,
     createdAt: new Date(0),
     updatedAt: new Date(0),
   }));

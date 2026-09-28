@@ -13,14 +13,18 @@
  *
  * Fact operations (fact-lifecycle plan Task 3, AC-FL-4 — reverses the P6
  * 2026-09-17 no-per-turn-tool stance, which Task 2's `manage_fact` already
- * ended): the episode summariser (v4/v5 — one shared EpisodeSummaryV4Schema,
- * fact-provenance D14) SEES the user's known active facts and returns
- * operations (add / confirm / update / retract) instead of a blind upsert.
- * BUG-040 (fact-provenance plan): add/update/retract are further guarded by
- * `checkFactProvenance` — the operation is applied only when the episode's
- * USER messages support it (a verbatim `evidence` quote, and only
- * user-stated numbers); `confirm` is exempt. A rejected operation logs and
- * the batch continues.
+ * ended): the episode summariser (v4/v5/v6 — one shared EpisodeSummaryV4Schema)
+ * SEES the user's known active facts and returns operations (add / confirm /
+ * update / retract) instead of a blind upsert. BUG-040 follow-up
+ * (fact-verification plan): add/update/retract are further guarded by ONE
+ * model call — `verifyFactOperations` (D2/D6) re-checks each mutating
+ * operation against the same transcript the summariser saw and only supported
+ * ones are applied; `confirm` is exempt. A rejected operation logs (op,
+ * factId, a verdict status — never the fact text nor the verifier's free-text
+ * reason, D8/D14) and the batch
+ * continues; a failed verifier call fails CLOSED (D5) — every mutating
+ * operation of that compaction is skipped, the summary and the `confirm`s
+ * still apply.
  * After a successful `summaries.insert`, this node applies each operation via
  * the facts port. TWO CLOCKS (AC-FL-3): every written date uses the run clock
  * ctx.now, while the EVIDENCE time is the compacted episode's newest user
@@ -45,18 +49,17 @@ import type { ConversationPhase } from '@domain/conversation/phases';
 import type { LegacySummary, SummaryPort } from '@domain/conversation/ports';
 import type { IUserFactsService } from '@domain/user/ports';
 import { PermanentFactRefusal } from '@domain/user/services/fact-lifecycle';
-import { checkFactProvenance } from '@domain/user/services/fact-provenance';
 
 import { estimateMessages } from '@infra/ai/context/token-estimator';
 import { splitEpisode } from '@infra/ai/graph/episode';
 import { type ConversationStateType, ctxOf } from '@infra/ai/graph/state';
-import { textOf } from '@infra/ai/llm.gateway';
 import { episodeParagraph } from '@infra/ai/prompts/blocks';
 import { SUMMARIZER_PROMPT } from '@infra/ai/prompts/summarizer';
 
 import { createLogger } from '@shared/logger';
 
 import { decideCompactReason, planCompaction, renderTranscript } from './compact';
+import { type FactVerdictMap, verifyFactOperations } from './verify-fact-operations';
 
 const log = createLogger('compact-node');
 
@@ -232,10 +235,12 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
     }
 
     let summary: EpisodeSummaryV4 | null = null;
+    // D3: the verifier must see the SAME transcript the summariser saw.
+    const transcript = renderTranscript(removed);
     try {
       const sections = SUMMARIZER_PROMPT.render({
         phase: state.phase,
-        transcript: renderTranscript(removed),
+        transcript,
         knownFacts,
       });
       const messages: ChatMsg[] = sections.map(s => ({
@@ -302,35 +307,64 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
         // episode can be no newer than this; ctx.now would let a restatement
         // leapfrog a closure that happened in between.
         const evidenceAt = state.lastUserMessageAt ? new Date(state.lastUserMessageAt) : ctx.now;
-        // BUG-040 (fact-provenance D6): a mutating operation must be supported
-        // by the episode's USER messages — the summarised `removed` part is the
-        // only place the evidence can come from, human messages only.
-        const userTexts = removed.filter(m => m._getType() === 'human').map(m => textOf(m.content));
+        // BUG-040 follow-up (fact-verification D2/D6): ONE verifier call per
+        // compaction, only when at least one MUTATING operation came back —
+        // `confirm` never changes text and is exempt (fact-provenance D3
+        // kept). null = the call threw or was unparsable: fail CLOSED (D5),
+        // every mutating operation below reads as unsupported, while the
+        // summary and the confirms still apply.
+        const mutating = operations.filter(op => op.op !== 'confirm');
+        let verdicts: FactVerdictMap | null = null;
+        if (mutating.length > 0) {
+          verdicts = await verifyFactOperations({
+            llmGateway,
+            transcript,
+            operations: mutating,
+            knownFacts,
+            runId,
+            userId,
+          });
+        }
+        let mutatingIndex = -1; // the verifier numbers the mutating ops 0..n-1, in this order
         for (const op of operations) {
+          const isMutating = op.op !== 'confirm';
+          if (isMutating) {
+            mutatingIndex += 1;
+          }
+          const verdict = isMutating ? verdicts?.get(mutatingIndex) : undefined;
           try {
-            // D3: confirm is exempt — it bumps a counter on a fact the user
-            // already owns and never changes text. D6: the check is in code,
-            // not asked of the model; a rejected operation is skipped and the
-            // batch continues (D-E). Never log the fact text.
-            if (op.op !== 'confirm') {
-              const oldFactText = op.op === 'update' ? knownFacts.find(f => f.id === op.factId)?.fact : undefined;
-              const verdict = checkFactProvenance({
-                op: op.op,
-                evidence: op.evidence,
-                factText: op.fact,
-                phaseNote: op.phaseNote, // D12: rendered into ## User Facts too
-                userTexts,
-                oldFactText,
-              });
-              if (!verdict.ok) {
-                log.info(
-                  { userId, runId, op: op.op, reason: verdict.reason, factId: op.factId ?? null },
-                  'Fact operation skipped — the episode’s user messages do not support it (BUG-040)',
-                );
-                continue;
+            if (isMutating && !verdict?.supported) {
+              // D14 (D8): op, factId and a verdict status only — the
+              // verifier's free-text reason can quote the user's words, so
+              // it never enters the log; nor does the fact text.
+              let verdictStatus: 'unsupported' | 'verdict-missing' | 'verifier-failed';
+              if (verdict) {
+                verdictStatus = 'unsupported';
+              } else if (verdicts === null) {
+                verdictStatus = 'verifier-failed';
+              } else {
+                verdictStatus = 'verdict-missing';
               }
+              log.info(
+                {
+                  userId,
+                  runId,
+                  op: op.op,
+                  factId: op.factId ?? null,
+                  verdict: verdictStatus,
+                },
+                'Fact operation skipped — the verifier did not support it (BUG-040 follow-up)',
+              );
+              continue;
             }
-            await applyFactOperation(userFacts, userId, op, evidenceAt, ctx.now, summaryTurnId);
+            // Task 5 (D18): the quote stored with the fact — the verifier's
+            // userQuote when it gave one, else the summariser's evidence hint.
+            // Both are model output, no string matching (the owner's rule); the
+            // verifier's is preferred because it decided the verdict. Only
+            // add/update consume it (D19) — retract/confirm write no quote.
+            const userQuote = verdict?.userQuote ?? '';
+            const quote = userQuote !== '' ? userQuote : (op.evidence ?? null);
+            await applyFactOperation(userFacts, userId, op, quote, evidenceAt, ctx.now, summaryTurnId);
           } catch (err) {
             if (err instanceof PermanentFactRefusal) {
               log.info({ userId, runId, op: op.op }, 'Fact operation skipped — permanent refused without the gate');
@@ -358,6 +392,8 @@ async function applyFactOperation(
   userFacts: IUserFactsService,
   userId: string,
   op: FactOperation,
+  /** D18: the user's supporting quote — written by add/update only (D19). */
+  quote: string | null,
   evidenceAt: Date,
   now: Date,
   sourceTurnId: string | undefined,
@@ -380,6 +416,7 @@ async function applyFactOperation(
           phaseNote: op.phaseNote ?? null,
           onExpiry: op.onExpiry,
           context: 'stated in a compacted episode',
+          evidence: quote,
           explicitPermanent: op.explicitPermanent,
           evidenceAt,
         },
@@ -419,6 +456,7 @@ async function applyFactOperation(
           phaseNote: op.phaseNote ?? null,
           onExpiry: op.onExpiry,
           context: 'corrected in a compacted episode',
+          evidence: quote,
           explicitPermanent: op.explicitPermanent,
         },
         evidenceAt,

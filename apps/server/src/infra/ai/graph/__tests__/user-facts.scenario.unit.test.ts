@@ -99,6 +99,7 @@ class InMemoryUserFactsService implements IUserFactsService {
         closedByUserAt: null,
         supersedesId: input.supersedesFactId ?? existing.id,
         context: input.context ?? null,
+        evidence: input.evidence ?? null,
       };
       this.rows.push(row);
       return { outcome: 'created', fact: row };
@@ -136,6 +137,7 @@ class InMemoryUserFactsService implements IUserFactsService {
       closedByUserAt: null,
       supersedesId: input.supersedesFactId ?? null,
       context: input.context ?? null,
+      evidence: input.evidence ?? null,
     };
     this.rows.push(row);
     return { outcome: 'created', fact: row };
@@ -194,6 +196,7 @@ class InMemoryUserFactsService implements IUserFactsService {
       closedByUserAt: null,
       supersedesId: old.id,
       context: input.context ?? null,
+      evidence: input.evidence ?? null,
     };
     this.rows.push(row);
     return { outcome: 'created', fact: row };
@@ -383,6 +386,15 @@ function fencedOperations(factOperations: unknown[]): string {
   return `\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``;
 }
 
+/**
+ * The fact verifier's answer (fact-verification plan Task 2), same fence —
+ * the structured FIFO is shared, and the verifier call always follows the
+ * summariser's inside one compaction.
+ */
+function fencedVerdicts(verdicts: Array<{ index: number; supported: boolean; reason: string }>): string {
+  return `\`\`\`json\n${JSON.stringify({ verdicts }, null, 2)}\n\`\`\``;
+}
+
 const ADD_INJURY = [
   {
     op: 'add',
@@ -493,7 +505,14 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
       // Run 4 (chat): plain-text reply.
       () => new AIMessage({ content: 'Продолжаем.', tool_calls: [] }),
     );
-    structuredAnswers.push(fencedOperations(ADD_INJURY), fencedOperations(CONFIRM_INJURY));
+    structuredAnswers.push(
+      fencedOperations(ADD_INJURY),
+      // The verifier call right after the summariser's: the injury is the
+      // user's own statement → supported (fact-verification Task 2).
+      fencedVerdicts([{ index: 0, supported: true, reason: 'the user stated the injury' }]),
+      // The second compaction is confirm-only — no verifier call for it (D2).
+      fencedOperations(CONFIRM_INJURY),
+    );
 
     // --- Step 1: the user states a lower-back injury in an episode.
     await graph.invoke(
@@ -526,9 +545,9 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
       confirmations: 1,
     });
     await expect(facts.getConstraints('u1', T1)).resolves.toHaveLength(1);
-    // The fenced answer cost exactly ONE provider call — BUG-017's recovery,
-    // not the old blind retry.
-    expect(modelFactory.__structuredCalls()).toBe(1);
+    // The fenced answers cost exactly TWO provider calls — the summariser's
+    // plus the verifier's (BUG-017's recovery, not the old blind retry).
+    expect(modelFactory.__structuredCalls()).toBe(2);
 
     // --- Step 3: the next run's assembled model input carries `## User Facts`
     // with the fact, placed BEFORE `## Previous episodes` (D-F ordering).
@@ -581,7 +600,8 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
     expect(facts.rows).toHaveLength(1); // confirm did not duplicate the row
     expect(facts.rows[0]!.confirmations).toBe(2); // the counter bumped...
     expect(facts.rows[0]!.fact).toBe(FACT_V1); // ...but the stored text is never rewritten (D-C)
-    expect(modelFactory.__structuredCalls()).toBe(2);
+    // Two compactions: summariser+verifier, then a confirm-only summariser.
+    expect(modelFactory.__structuredCalls()).toBe(3);
   });
 
   it('AC-FL-1: expired and archived facts never reach the prompt; the facts clock is the run clock', async () => {
@@ -622,6 +642,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
         closedByUserAt: null,
         supersedesId: null,
         context: null,
+        evidence: null,
       },
       {
         id: 'expired-1',
@@ -646,6 +667,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
         closedByUserAt: null,
         supersedesId: null,
         context: null,
+        evidence: null,
       },
       {
         id: 'archived-1',
@@ -670,6 +692,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
         closedByUserAt: new Date('2026-09-01T00:00:00Z'),
         supersedesId: null,
         context: null,
+        evidence: null,
       },
     );
 
@@ -710,7 +733,8 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
       () => new AIMessage({ content: 'Хорошо.', tool_calls: [] }),
     );
     // The compaction's summariser returns the injury as an ADD — exactly the
-    // "blind upsert" v3 would have done. v4 + evidenceAt must refuse it.
+    // "blind upsert" v3 would have done. The verifier supports it (the user
+    // did state it), so v4 + evidenceAt is what must refuse it.
     structuredAnswers.push(
       fencedOperations([
         {
@@ -722,6 +746,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
           evidence: 'травма поясницы',
         },
       ]),
+      fencedVerdicts([{ index: 0, supported: true, reason: 'the user stated the injury' }]),
     );
 
     // --- Run 1 creates the episode that mentions the injury.
@@ -757,9 +782,10 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
       ctxConfig({ runId: 'run-2', now: T2 }),
     );
 
-    // The summariser ran and returned the add — but the closed fact did NOT come back
-    // (the call counter is cumulative across this file's tests — assert the delta).
-    expect(modelFactory.__structuredCalls()).toBe(callsBefore + 1);
+    // The summariser and the verifier both ran and returned their answers —
+    // but the closed fact did NOT come back (the call counter is cumulative
+    // across this file's tests — assert the delta).
+    expect(modelFactory.__structuredCalls()).toBe(callsBefore + 2);
     const active = facts.rows.filter(r => r.status === 'active');
     expect(active).toEqual([]); // skipped_stale_evidence — T0 evidence vs T1 closure
     expect(facts.rows[0]!.status).toBe('archived'); // the closure is intact
@@ -793,8 +819,9 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
       () => new AIMessage({ content: 'Продолжаем.', tool_calls: [] }),
     );
     // The summariser's add even QUOTES the user line (a well-formed evidence) —
-    // but the "~70%" figure appears in no user message: the number provenance
-    // check (D4) is what refuses it. The BUG-040 2075cb9f write.
+    // but the "~70%" figure appears in no user message: the VERIFIER's
+    // unsupported verdict (fact-verification plan, D1 replaced the string
+    // check) is what refuses it. The BUG-040 2075cb9f write.
     structuredAnswers.push(
       fencedOperations([
         {
@@ -805,6 +832,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
           evidence: 'Почему ты жим ногами называешь рычажным тренажёром?',
         },
       ]),
+      fencedVerdicts([{ index: 0, supported: false, reason: 'the ~70% figure is the assistant’s own' }]),
     );
 
     // --- Run 1: the user only ASKS; the figure comes from the coach's reply.
@@ -821,8 +849,8 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
     );
 
     expect(summariesInsert).toHaveBeenCalledTimes(1); // the summary itself still applies (D-E)
-    expect(facts.rows).toHaveLength(0); // the add was skipped — no user-stated "~70%"
-    expect(modelFactory.__structuredCalls()).toBe(callsBefore + 1); // the summariser DID answer
+    expect(facts.rows).toHaveLength(0); // the add was skipped — the verifier said unsupported
+    expect(modelFactory.__structuredCalls()).toBe(callsBefore + 2); // summariser + verifier both answered
 
     // --- Run 3: the next run's model input must not carry the figure as a user fact.
     await graph.invoke(

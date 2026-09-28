@@ -47,6 +47,7 @@ function makeFact(overrides: Partial<UserFact> = {}): UserFact {
     closedByUserAt: null,
     supersedesId: null,
     context: null,
+    evidence: null,
     ...overrides,
   };
 }
@@ -110,6 +111,7 @@ describe('manage_fact — operation save', () => {
         // unset optionals normalise to null — never leak into the domain as undefined
         muscleGroup: null,
         context: null,
+        evidence: null,
       }),
       NOW,
     );

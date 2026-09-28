@@ -128,6 +128,21 @@ export function contextsForModule(moduleId: string, fixture: EvalFixture): unkno
       // v4 sees the known active facts (fact-lifecycle Task 3, AC-FL-4) — empty
       // renders the "none yet" line; the L0 forbidden-string scan stays clean.
       return { phase: 'training', transcript: FIXTURE_TRANSCRIPT, knownFacts: [] };
+    case 'fact-verifier':
+      // fact-verification plan Task 2 (D6): the verifier sees the SAME fixture
+      // transcript the summariser does, plus one candidate operation drawn
+      // from it (the user's own shoulder line — an L0-clean add).
+      return {
+        transcript: FIXTURE_TRANSCRIPT,
+        operations: [
+          {
+            index: 0,
+            op: 'add',
+            fact: 'Mild shoulder discomfort after training',
+            evidence: 'Плечо побаливает после последней тренировки',
+          },
+        ],
+      };
     case 'block.episode_summaries':
       return { summaries: [FIXTURE_EPISODE_SUMMARY], now: FIXED_NOW, timezone: 'Europe/Berlin' };
     case 'block.post_tool_nudge':

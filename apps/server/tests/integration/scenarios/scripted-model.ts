@@ -18,13 +18,17 @@
  *   ordering since it always fires on the very next call regardless of what
  *   is already queued.
  * - `structured` (the gateway's `getModel(profile).withConfig(...).invoke`):
- *   two KINDS share this path and are routed by their prompt — the
+ *   three KINDS share this path and are routed by their prompt — the
  *   course-check call (its system prompt opens "You are the course-check
- *   layer") and the episode summariser (everything else). Each kind has its own
- *   FIFO of scripted raw contents, so a journey run with the course check ON
- *   and OFF consumes the same summariser answers (AC-FL-7); fallbacks are the
- *   minimal valid payload of each kind (an empty episode / a neutral
- *   directive).
+ *   layer"), the fact verifier (its system prompt opens "You are the
+ *   fact-verification layer", fact-verification plan Task 2) and the episode
+ *   summariser (everything else). Each kind has its own FIFO of scripted raw
+ *   contents, so a journey run with the course check ON and OFF consumes the
+ *   same summariser answers (AC-FL-7); fallbacks are the minimal valid
+ *   payload of each kind (an empty episode / a neutral directive / a verdict
+ *   list marking every listed operation supported — parsed from the
+ *   operation list the verifier prompt renders, so an under-scripted journey
+ *   still applies the operations its summary scripted).
  * - every input on both paths is recorded; `drainChatInputs()` is the
  *   deterministic layer's `seen` observation, `drainStructuredInputs()` its
  *   twin for what the course check and the summariser were handed.
@@ -57,6 +61,20 @@ export const MINIMAL_STRUCTURED_ANSWER = JSON.stringify({
   facts: [],
 });
 
+/**
+ * The fact verifier's fallback (fact-verification plan Task 2): every
+ * operation the verifier prompt listed reads as supported — an under-scripted
+ * journey still applies the mutating operations its summary scripted. The
+ * indices are parsed from the prompt's own `[n] op` rendering.
+ */
+function allSupportedVerdicts(messages: BaseMessage[]): string {
+  const text = messages.map(m => (typeof m.content === 'string' ? m.content : '')).join('\n');
+  const indices = [...text.matchAll(/\[(\d+)\] (?:add|update|retract)/g)].map(m => Number(m[1]));
+  return JSON.stringify({
+    verdicts: indices.map(index => ({ index, supported: true, reason: 'scripted fallback: supported' })),
+  });
+}
+
 /** A neutral, schema-valid course-check directive — the fallback when a journey scripts none. */
 export const NEUTRAL_DIRECTIVE_ANSWER = JSON.stringify({
   vector: 'General fitness, no fixed plan yet',
@@ -67,7 +85,7 @@ export const NEUTRAL_DIRECTIVE_ANSWER = JSON.stringify({
 });
 
 /** Which structured call a request is: decided by the prompt it carries (see the file header). */
-export type StructuredKind = 'course_check' | 'summary';
+export type StructuredKind = 'course_check' | 'summary' | 'fact_verifier';
 
 /** One recorded structured request. */
 export interface StructuredInput {
@@ -86,6 +104,7 @@ const mockState = {
   chatFailure: null as Error | null,
   summaryScript: [] as string[],
   courseScript: [] as string[],
+  verifierScript: [] as string[],
   chatInputs: [] as BaseMessage[][],
   structuredInputs: [] as StructuredInput[],
   resolvePlaceholders: null as null | ((text: string) => Promise<string>),
@@ -111,10 +130,12 @@ export interface ScriptedModelHandle {
   enqueueStructuredAnswers(rawContents: string[]): void;
   /** Queues scripted raw course-check answers (the directive path). */
   enqueueCourseDirectives(rawContents: string[]): void;
+  /** Queues scripted raw fact-verifier answers (the verdicts path). */
+  enqueueFactVerdicts(rawContents: string[]): void;
   /** Empties every queue and recording — the state a journey run starts from. */
   reset(): void;
-  /** Drops every unconsumed structured answer of both kinds — run between steps so a script never leaks into the next one. */
-  clearStructuredScripts(): { summary: number; courseCheck: number };
+  /** Drops every unconsumed structured answer of all kinds — run between steps so a script never leaks into the next one. */
+  clearStructuredScripts(): { summary: number; courseCheck: number; factVerifier: number };
   /** Resolves `{{factId:...}}` (or any) placeholders in tool-call args and structured answers at answer time. */
   setPlaceholderResolver(resolver: ((text: string) => Promise<string>) | null): void;
   /** Structured requests recorded since the last drain — what the course check / summariser were handed. */
@@ -159,11 +180,19 @@ export function installScriptedModel(): ScriptedModelHandle {
           const isCourseCheck = messages.some(
             m => typeof m.content === 'string' && m.content.includes('You are the course-check layer'),
           );
-          const kind: StructuredKind = isCourseCheck ? 'course_check' : 'summary';
+          const isFactVerifier = messages.some(
+            m => typeof m.content === 'string' && m.content.includes('You are the fact-verification layer'),
+          );
+          const kind: StructuredKind = isCourseCheck ? 'course_check' : isFactVerifier ? 'fact_verifier' : 'summary';
           mockState.structuredInputs.push({ kind, messages });
-          const raw = isCourseCheck
-            ? (mockState.courseScript.shift() ?? NEUTRAL_DIRECTIVE_ANSWER)
-            : (mockState.summaryScript.shift() ?? MINIMAL_STRUCTURED_ANSWER);
+          let raw: string;
+          if (isCourseCheck) {
+            raw = mockState.courseScript.shift() ?? NEUTRAL_DIRECTIVE_ANSWER;
+          } else if (isFactVerifier) {
+            raw = mockState.verifierScript.shift() ?? allSupportedVerdicts(messages);
+          } else {
+            raw = mockState.summaryScript.shift() ?? MINIMAL_STRUCTURED_ANSWER;
+          }
           const content = mockState.resolvePlaceholders === null ? raw : await mockState.resolvePlaceholders(raw);
           return { content };
         },
@@ -188,19 +217,28 @@ export function installScriptedModel(): ScriptedModelHandle {
     enqueueCourseDirectives(rawContents) {
       mockState.courseScript.push(...rawContents);
     },
+    enqueueFactVerdicts(rawContents) {
+      mockState.verifierScript.push(...rawContents);
+    },
     reset() {
       mockState.chatScript = [];
       mockState.chatFailure = null;
       mockState.summaryScript = [];
       mockState.courseScript = [];
+      mockState.verifierScript = [];
       mockState.chatInputs = [];
       mockState.structuredInputs = [];
       mockState.resolvePlaceholders = null;
     },
     clearStructuredScripts() {
-      const dropped = { summary: mockState.summaryScript.length, courseCheck: mockState.courseScript.length };
+      const dropped = {
+        summary: mockState.summaryScript.length,
+        courseCheck: mockState.courseScript.length,
+        factVerifier: mockState.verifierScript.length,
+      };
       mockState.summaryScript = [];
       mockState.courseScript = [];
+      mockState.verifierScript = [];
       return dropped;
     },
     setPlaceholderResolver(resolver) {

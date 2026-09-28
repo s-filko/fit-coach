@@ -26,10 +26,16 @@ function day(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+/** D21: the stored user quote, cut at 200 chars — long transcripts stay readable. */
+function said(fact: UserFact): string {
+  return fact.evidence === null ? '' : ` — said: «${fact.evidence.slice(0, 200)}»`;
+}
+
 function activeLine(fact: UserFact): string {
   // BUG-020: the id LEADS the line in summariser v4's exact shape — the model
   // must be able to copy it from this listing into manage_fact's factId.
-  return `- id ${fact.id}: ${fact.fact} — ${fact.durability}, ${fact.confirmations}× confirmed, updated ${day(fact.updatedAt)}`;
+  // Task 5 (D21): the stored quote follows as `said: «…»` (none when NULL).
+  return `- id ${fact.id}: ${fact.fact} — ${fact.durability}, ${fact.confirmations}× confirmed, updated ${day(fact.updatedAt)}${said(fact)}`;
 }
 
 function archivedLine(fact: UserFact): string {
@@ -84,6 +90,7 @@ export function buildListFactsTool(deps: ListFactsToolDeps) {
         'List the durable facts remembered about the user — use it to answer "what do you remember about me", and to get a fact\'s id before correcting or retracting it.',
         'Every line starts with the fact\'s id ("- id <uuid>: ..."): copy that id VERBATIM into manage_fact\'s factId — never invent or abbreviate it.',
         'Each fact is listed grouped by category, with its durability class, confirmation count and last-updated date.',
+        'When the user asks where a fact came from ("откуда ты это взял"), quote the fact\'s `said: «…»` part EXACTLY, in the user\'s original words; if a fact shows no `said`, say the source is not recorded — never reconstruct or invent a quote.',
         'Set includeArchived=true only when the user asks what used to be remembered: archived facts come with their closure reason.',
       ].join(' '),
       schema: z.object({

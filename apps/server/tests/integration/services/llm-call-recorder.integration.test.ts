@@ -44,6 +44,7 @@ const FACT = (fact: string, overrides: Partial<UserFact> = {}): UserFact => ({
   closedByUserAt: null,
   supersedesId: null,
   context: null,
+  evidence: null,
   createdAt: new Date('2026-09-01T00:00:00Z'),
   updatedAt: new Date('2026-09-01T00:00:00Z'),
   ...overrides,
@@ -177,7 +178,11 @@ describe('recordLlmCall — usage columns (AC-CA-1)', () => {
 
   it('a response without cache/reasoning details stores null, not 0', async () => {
     const runId = randomUUID();
-    await recordLlmCall(baseCall(runId, { response: { text: 'ok', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 10 } } }));
+    await recordLlmCall(
+      baseCall(runId, {
+        response: { text: 'ok', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 10 } },
+      }),
+    );
 
     const [row] = await callsOfRun(runId);
     expect(row!.inputTokens).toBe(100);
@@ -323,8 +328,7 @@ describe('recordLlmCall — cache attribution (AC-CA-3, D3-D6)', () => {
     const userId = randomUUID();
     const run1 = randomUUID();
     const run2 = randomUUID();
-    const promptWith = (now: string) =>
-      `${SYSTEM_PROMPT}NOW: ${now}\nAlways answer in the user's language.`;
+    const promptWith = (now: string) => `${SYSTEM_PROMPT}NOW: ${now}\nAlways answer in the user's language.`;
     await recordLlmCall(
       baseCall(run1, {
         userId,
@@ -359,7 +363,9 @@ describe('recordLlmCall — cache attribution (AC-CA-3, D3-D6)', () => {
     // The offset must land inside the NOW timestamp, not at the very end of the prompt (the
     // unchanged "Always answer..." sentence still follows it in both versions).
     expect(offset).toBeGreaterThan(SYSTEM_PROMPT.length);
-    expect(offset).toBeLessThan(promptWith('2026-09-26T11:59:00.000Z').length - 'Always answer in the user\'s language.'.length);
+    expect(offset).toBeLessThan(
+      promptWith('2026-09-26T11:59:00.000Z').length - "Always answer in the user's language.".length,
+    );
   });
 
   it('a changed NOW message after history (now-line-last, AC-NL-3) → prefix_changed:system:now', async () => {
@@ -442,7 +448,9 @@ describe('recordLlmCall — cache attribution (AC-CA-3, D3-D6)', () => {
     const userId = randomUUID();
     const run1 = randomUUID();
     const run2 = randomUUID();
-    await recordLlmCall(baseCall(run1, { userId, request: { ...baseCall(run1).request, tools: [{ name: 'log_set' }] } }));
+    await recordLlmCall(
+      baseCall(run1, { userId, request: { ...baseCall(run1).request, tools: [{ name: 'log_set' }] } }),
+    );
     await recordLlmCall(
       baseCall(run2, { userId, request: { ...baseCall(run2).request, tools: [{ name: 'update_last_set' }] } }),
     );

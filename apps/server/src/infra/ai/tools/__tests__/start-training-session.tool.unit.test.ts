@@ -127,6 +127,7 @@ const makeConstraintFact = (muscleGroup: UserFact['muscleGroup'], overrides: Par
   closedByUserAt: null,
   supersedesId: null,
   context: null,
+  evidence: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   ...overrides,

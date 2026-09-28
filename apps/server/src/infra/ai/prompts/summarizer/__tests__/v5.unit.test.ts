@@ -3,7 +3,9 @@
  * operations plus PROVENANCE — the prompt asks for `evidence` on
  * add/update/retract and states that the assistant's own statements are never
  * user facts. Pure: transcript and known facts arrive as data; no clock, no
- * I/O. The deterministic half (checkFactProvenance) is fact-provenance.ts's.
+ * I/O. The deterministic half (checkFactProvenance, fact-provenance.ts) was
+ * replaced by the model verifier (prompts/fact-verifier/v1.ts) in the
+ * fact-verification plan — nothing enforces v5's evidence in code anymore.
  */
 import type { UserFact } from '@domain/user/ports';
 
@@ -34,6 +36,7 @@ function fact(overrides: Partial<UserFact> = {}): UserFact {
     closedByUserAt: null,
     supersedesId: null,
     context: null,
+    evidence: null,
     ...overrides,
   };
 }

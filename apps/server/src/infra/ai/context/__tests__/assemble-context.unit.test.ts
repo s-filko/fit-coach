@@ -290,6 +290,7 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
       closedByUserAt: null,
       supersedesId: null,
       context: null,
+      evidence: null,
       createdAt: new Date('2026-09-01T00:00:00Z'),
       updatedAt: new Date('2026-09-01T00:00:00Z'),
     };
@@ -481,6 +482,7 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
       closedByUserAt: null,
       supersedesId: null,
       context: null,
+      evidence: null,
       createdAt: new Date('2026-09-01T00:00:00Z'),
       updatedAt: new Date('2026-09-01T00:00:00Z'),
     };

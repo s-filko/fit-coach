@@ -143,26 +143,48 @@ The hard rejection of an exercise whose primary muscles hit a `physical_constrai
 still applies to **every** active constraint fact. Narrowing that block to `permanent` and turning
 the rest into advisory guidance is wave B (`course-check-and-constraints`), measured separately.
 
-### Amendment 2026-09-27 — provenance: a compaction fact must come from the user (BUG-040)
+### Amendment 2026-09-27/28 — provenance: a compaction fact must come from the user (BUG-040)
 
-> Decided without the owner (2026-09-27, autonomy order "бери 40 … без моего вмешательства");
-> reversible — plan `fact-provenance`, decisions D1–D9, flagged for the owner's review.
+> 2026-09-27: decided without the owner under the autonomy order (plan `fact-provenance`, a string
+> check). **2026-09-28: replaced by the owner's decision** (plan `fact-verification`): «код с
+> недетерминированными строками максимально не надежная вещь … надо проверять через модель как это
+> делает индустрия, если факт найден».
 
 On 2026-09-27 the summariser promoted the coach's own improvised figure ("~70% of the platform
-mass") into an active user fact. Compaction-sourced fact operations are now checked in code before
-they are applied (`domain/user/services/fact-provenance.ts`, called from `compact.node.ts`):
+mass") into an active user fact. Compaction-sourced fact operations are now **verified by a model**
+before they are applied (`infra/ai/graph/nodes/verify-fact-operations.ts`, prompt
+`fact-verifier` v1, called from `compact.node.ts`):
 
-- `add`, `update` and `retract` carry `evidence` — a verbatim quote from one of the compacted
-  episode's **user** messages. No quote, or a quote found in no user message after one fixed
-  normalisation (case, `ё→е`, quotes, whitespace, edge punctuation), skips the operation.
-- Every number in an `add`/`update` fact text must appear in the episode's user messages (for
-  `update`, also accepted from the old fact's text). Otherwise the operation is skipped whole and
-  an updated fact keeps its old text. A number the user wrote as a word is rejected — losing a fact
-  is recoverable, storing a false one is not.
-- `confirm` is exempt: it never changes text.
-- A skipped operation is logged (op, reason, fact id — never the text); the summary and the rest of
-  the batch still apply. The summariser prompt (`summarizer` v5) states the rule and asks for the
-  quote, but the check does not rely on it.
+- When the summariser returns at least one `add` / `update` / `retract`, one extra structured call
+  (profile `summarizer`) gets the episode transcript with speaker labels and the numbered
+  operations, and returns per operation whether the **user** stated it or explicitly confirmed it.
+  Anything only the assistant said is unsupported; numbers must match what the user said by
+  meaning — digits or words, any language («пять дней» = "5 days").
+- Only supported operations are applied. A missing, duplicated or out-of-range verdict counts as
+  unsupported. The verifier failing (error, unparsable answer) skips every mutating operation of
+  that compaction (fail closed); the summary and `confirm`s still apply.
+- `confirm` is never verified: it does not change text. No mutating operation → no extra call.
+- A skipped operation is logged with op, fact id and the verifier's reason — never the fact text.
+- The summariser (`summarizer` v6) still returns an `evidence` quote per operation, as a hint for
+  the verifier only; no code compares strings.
+
+- **Scope: this episode only.** The verifier sees the same compacted part the summariser saw — not
+  the kept verbatim tail and not earlier episodes (an `update` also shows the old fact's text, a
+  `retract` the text of the fact it closes). A figure the user gave in an earlier episode, or a «да»
+  that lands after the cut, is judged unsupported; the fact is restated later.
+- **Cost on the reply path.** Compaction runs inline, inside the reply the user is waiting for; when
+  a mutating operation exists, the verifier is a second sequential model call there (≈2.5 s on the
+  dev route, 2026-09-28 probe). No mutating operation → no call. Accepted by the owner («это не
+  происходит постоянно»).
+- **The user's quote is stored with the fact.** `user_facts.evidence` (migration `0019`, nullable):
+  for a verified `add`/`update` the verifier's `userQuote` — the user's own words that support it —
+  or, if empty, the summariser's hint. Not rendered into the prompt every turn; `list_facts` shows
+  it as `said: «…»` so the coach quotes real words when asked where a fact came from and never
+  reconstructs one. The live `manage_fact` path writes NULL for now (its run context does not carry
+  the current message).
+
+The string check of 2026-09-27 (verbatim quote + digits-only number match) was removed: it dropped
+real facts dictated with number words and could not catch a non-numeric coach claim.
 
 The conversational path (`manage_fact` in a live turn) is unchanged: there the user's statement is
 the current message itself.
