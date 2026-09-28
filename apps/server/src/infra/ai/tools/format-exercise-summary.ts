@@ -1,6 +1,5 @@
 import type { AutoCompletedExercise } from '@domain/training/ports';
-
-import { workingSets } from '@infra/ai/prompts/blocks/training-workout-overview.v1';
+import { workingSets } from '@domain/training/sets';
 
 /** A training session idle longer than this is considered stale/retro-logging territory. */
 export const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;

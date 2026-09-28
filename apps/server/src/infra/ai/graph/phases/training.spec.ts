@@ -6,11 +6,14 @@
  */
 import type { StructuredToolInterface } from '@langchain/core/tools';
 
-import type { ExerciseWithMuscles, MuscleGroup, WorkoutSessionWithDetails } from '@domain/training/types';
+// set-kind plan Task 2 (D6): the ask-once window, named (close-out review advisory R1) — the
+// threshold itself is applied by the block that renders the ask line, not the loader.
+import { RECENT_PLACES_WINDOW } from '@domain/training/place';
 // set-kind plan Task 2 (D7): the plan-id guard moved into the domain (plan-exercise-id.ts) so
 // TrainingService's finish reconciliation reuses this one copy — a bad legacy `session_plan_json`
 // row never reaches a DB query (close-out review advisory 6).
 import { isValidExerciseId } from '@domain/training/plan-exercise-id';
+import type { ExerciseWithMuscles, MuscleGroup, WorkoutSessionWithDetails } from '@domain/training/types';
 
 import type {
   ConversationGraphDeps,
@@ -55,10 +58,11 @@ export interface TrainingData {
   recentWorkouts: WorkoutSessionWithDetails[];
   todayMuscles: MuscleGroup[];
   /**
-   * set-kind plan Task 2 (D6): the user's last 10 real workouts carry >= 2 distinct places and
-   * today's session has none — the overview renders its one-line ask. False otherwise.
+   * set-kind plan Task 2 (D6): distinct places among the last RECENT_PLACES_WINDOW real
+   * workouts; 0 when today's session already states a place (short-circuits, never queries the
+   * repository). The overview block renders its one-line ask once this crosses its threshold.
    */
-  placeAmbiguous: boolean;
+  recentPlacesCount: number;
 }
 
 /** Mid-workout session shape the availability filter reads (BUG-008 Plan A). */
@@ -194,10 +198,13 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
         };
       });
 
-      // set-kind plan Task 2 (D6): ask once per session only when the user's last 10 real
-      // workouts carry >= 2 distinct places and today's session states none.
-      const placeAmbiguous =
-        !session.place && (await deps.workoutSessionRepo.distinctRecentPlaces(input.userId, 10)).length >= 2;
+      // set-kind plan Task 2 (D6): the distinct places among the user's last RECENT_PLACES_WINDOW
+      // real workouts, so the overview block can decide whether to ask (D6, once per session).
+      // `session.place` short-circuits the ternary — a stated place never reaches the repository
+      // (B3, close-out review).
+      const recentPlacesCount = session.place
+        ? 0
+        : (await deps.workoutSessionRepo.distinctRecentPlaces(input.userId, RECENT_PLACES_WINDOW)).length;
 
       // Fatigue window (D3): up to 7 recent real workouts; the block applies the 7-day cut
       // against ctx.now (the loader never reads the clock). Today's own session is excluded.
@@ -208,7 +215,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
 
       return {
         ok: true,
-        data: { session, exerciseHistory, recentWorkouts, todayMuscles: [...todayMuscleSet], placeAmbiguous },
+        data: { session, exerciseHistory, recentWorkouts, todayMuscles: [...todayMuscleSet], recentPlacesCount },
       };
     },
     // D-B/D4: v1's `client`, `workout_overview`, `stale_session` sections, plus `exercise_history`

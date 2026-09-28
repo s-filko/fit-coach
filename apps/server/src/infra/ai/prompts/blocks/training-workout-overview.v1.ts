@@ -6,6 +6,8 @@
  * `buildStaleSessionSection`'s trailing "\n\n" stays trimmed by the caller —
  * the section separator comes from compose()/assembler instead.
  */
+import { PLACE_AMBIGUOUS_THRESHOLD } from '@domain/training/place';
+import { workingSets } from '@domain/training/sets';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
 import { humanTimeAgo } from '@shared/date-utils';
@@ -13,16 +15,6 @@ import { humanTimeAgo } from '@shared/date-utils';
 import type { ContextBlock, ContextBlockCtx } from './types';
 
 const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
-
-/**
- * set-kind plan Task 1 (D4): only working sets count against a plan target. A NULL/absent
- * `setKind` (legacy row, or a fixture that never set it) counts as working — today's behaviour,
- * unchanged (AC-SK-3). Generic so `format-exercise-summary.ts`'s `CompletedSetDetail[]` reuses it
- * too — one helper, no second copy.
- */
-export function workingSets<T extends { setKind?: 'warmup' | 'working' | null }>(sets: T[]): T[] {
-  return sets.filter(s => s.setKind !== 'warmup');
-}
 
 /**
  * Single source of truth for the LLM about what has been done and what is planned.
@@ -34,26 +26,29 @@ export function workingSets<T extends { setKind?: 'warmup' | 'working' | null }>
  */
 /**
  * set-kind plan Task 2 (D6): the one place line — the stated place, or (only when the user's
- * recent real workouts were at >= 2 distinct places and today's states none) the single ask.
- * Null when the place is not stated and there is nothing to ask.
+ * recent real workouts were at >= PLACE_AMBIGUOUS_THRESHOLD distinct places and today's states
+ * none) the single ask, naming the actual count seen. Null when the place is not stated and
+ * there is nothing to ask. Not exported — one caller (close-out review advisory R2).
  */
-export function placeLineOf(place: string | null, placeAmbiguous: boolean): string | null {
+function placeLineOf(place: string | null, recentPlacesCount: number): string | null {
   if (place) {
     return `Place: ${place}`;
   }
-  return placeAmbiguous ? 'Place: not stated (ask — recent workouts were at 2 places)' : null;
+  return recentPlacesCount >= PLACE_AMBIGUOUS_THRESHOLD
+    ? `Place: not stated (ask — recent workouts were at ${recentPlacesCount} places)`
+    : null;
 }
 
 export function buildWorkoutOverview(
   session: WorkoutSessionWithDetails,
   now: Date,
-  opts?: { placeAmbiguous?: boolean },
+  opts?: { recentPlacesCount?: number },
 ): string {
   const plan = session.sessionPlanJson;
   const startedById = new Map(session.exercises.map(ex => [ex.exerciseId, ex]));
 
   // --- PLACE (set-kind plan Task 2, D6) ---
-  const placeLine = placeLineOf(session.place ?? null, opts?.placeAmbiguous ?? false);
+  const placeLine = placeLineOf(session.place ?? null, opts?.recentPlacesCount ?? 0);
 
   // --- SESSION GUIDE ---
   const guideLines: string[] = [
@@ -273,8 +268,11 @@ export const TRAINING_CLIENT_V1: ContextBlock<TrainingClientData> = {
 
 export interface TrainingWorkoutOverviewData {
   session: WorkoutSessionWithDetails;
-  /** set-kind plan Task 2 (D6): >= 2 distinct places in the last 10 real workouts, none today. */
-  placeAmbiguous?: boolean;
+  /**
+   * set-kind plan Task 2 (D6): distinct places among the last RECENT_PLACES_WINDOW real workouts;
+   * 0 when today's session already states a place (the loader short-circuits, never queries).
+   */
+  recentPlacesCount?: number;
 }
 
 export const TRAINING_WORKOUT_OVERVIEW_V1: ContextBlock<TrainingWorkoutOverviewData> = {
@@ -282,7 +280,7 @@ export const TRAINING_WORKOUT_OVERVIEW_V1: ContextBlock<TrainingWorkoutOverviewD
   version: 'v1',
   render(data, ctx: ContextBlockCtx) {
     return `=== WORKOUT OVERVIEW ===\n\n${buildWorkoutOverview(data.session, ctx.now, {
-      placeAmbiguous: data.placeAmbiguous,
+      recentPlacesCount: data.recentPlacesCount,
     })}`;
   },
 };

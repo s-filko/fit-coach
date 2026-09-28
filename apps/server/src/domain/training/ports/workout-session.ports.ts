@@ -91,7 +91,7 @@ export interface IWorkoutSessionRepository {
   ): Promise<ExerciseLastPerformance[]>;
   /**
    * set-kind plan Task 2 (D6): the distinct non-null places among the last `limit` real
-   * (completed, >= 1 set) workouts — the input of the loader's `placeAmbiguous` flag.
+   * (completed, >= 1 set) workouts — the input of the loader's `recentPlacesCount`.
    * A workout with no place stated does not count as a place.
    */
   distinctRecentPlaces(userId: string, limit: number): Promise<string[]>;

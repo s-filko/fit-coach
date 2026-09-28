@@ -6,9 +6,10 @@
  * counts every set regardless of kind, `workingSets` does not exist, and `formatSetData` never
  * renders "per hand".
  */
+import { workingSets } from '@domain/training/sets';
 import type { SessionExerciseWithDetails, SessionSet, WorkoutSessionWithDetails } from '@domain/training/types';
 
-import { buildWorkoutOverview, formatSetData, workingSets } from '../training-workout-overview.v1';
+import { buildWorkoutOverview, formatSetData } from '../training-workout-overview.v1';
 
 const NOW = new Date('2026-09-28T10:00:00.000Z');
 
@@ -165,23 +166,28 @@ describe('formatSetData — per-hand marker (set-kind plan D5, AC-SK-4)', () => 
 describe('buildWorkoutOverview — the place line (set-kind plan D6, AC-SK-5)', () => {
   it('renders the stated place as one line', () => {
     const session = { ...makeSession(makeExercise({})), place: 'Fitness House на Ленина' };
-    const text = buildWorkoutOverview(session, NOW, { placeAmbiguous: false });
+    const text = buildWorkoutOverview(session, NOW, { recentPlacesCount: 0 });
     expect(text).toContain('Place: Fitness House на Ленина');
   });
 
-  it('renders the ask line when the place is not stated and recent workouts were at 2 places', () => {
-    const text = buildWorkoutOverview(makeSession(makeExercise({})), NOW, { placeAmbiguous: true });
-    expect(text).toContain('Place: not stated (ask');
+  it('renders the ask line, naming the actual count, when the place is not stated and recent workouts were at >= 2 places', () => {
+    const text = buildWorkoutOverview(makeSession(makeExercise({})), NOW, { recentPlacesCount: 3 });
+    expect(text).toContain('Place: not stated (ask — recent workouts were at 3 places)');
   });
 
   it('renders no place line when the place is not stated and there is nothing to ask', () => {
-    const text = buildWorkoutOverview(makeSession(makeExercise({})), NOW, { placeAmbiguous: false });
+    const text = buildWorkoutOverview(makeSession(makeExercise({})), NOW, { recentPlacesCount: 0 });
+    expect(text).not.toContain('Place:');
+  });
+
+  it('renders no place line below the ambiguity threshold', () => {
+    const text = buildWorkoutOverview(makeSession(makeExercise({})), NOW, { recentPlacesCount: 1 });
     expect(text).not.toContain('Place:');
   });
 
   it('the stated place wins over the ask line', () => {
     const session = { ...makeSession(makeExercise({})), place: 'дома' };
-    const text = buildWorkoutOverview(session, NOW, { placeAmbiguous: true });
+    const text = buildWorkoutOverview(session, NOW, { recentPlacesCount: 2 });
     expect(text).toContain('Place: дома');
     expect(text).not.toContain('not stated');
   });
