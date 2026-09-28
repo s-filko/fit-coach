@@ -12,6 +12,7 @@ import type {
   PromptContextFor,
 } from '@infra/ai/graph/phase-spec';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
+import { CHAT_CONTEXT_V1 } from '@infra/ai/prompts/blocks';
 import { buildRequestTransitionTool, buildSharedTools, buildUpdateProfileTool } from '@infra/ai/tools';
 
 import { NO_POLICY, type ToolPolicy } from '../tool-policy';
@@ -33,8 +34,8 @@ export function buildChatSpec(deps: ConversationGraphDeps): PhaseSpec<ChatData> 
     prompt: entry as PhasePromptEntry<PromptContextFor<ChatData>>,
     tools: [
       buildUpdateProfileTool({ userService }),
-      buildRequestTransitionTool('chat'),
-      ...buildSharedTools({ userService }),
+      buildRequestTransitionTool('chat', deps.transitionHandoffTargets),
+      ...buildSharedTools({ userService, userFacts: deps.userFacts }),
     ],
     toolPolicy: CHAT_TOOL_POLICY,
     // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).
@@ -42,13 +43,16 @@ export function buildChatSpec(deps: ConversationGraphDeps): PhaseSpec<ChatData> 
     loadContext: async (input: LoadInput, deps: ConversationGraphDeps) => {
       const [activePlan, recentSessions] = await Promise.all([
         deps.workoutPlanRepo.findActiveByUserId(input.userId),
-        deps.workoutSessionRepo.findRecentByUserIdWithDetails(input.userId, 5),
+        // Real workouts only (BUG-031): skipped/unfinished/empty sessions are not "recent training".
+        deps.workoutSessionRepo.findRecentByUserIdWithDetails(input.userId, 5, { realWorkoutsOnly: true }),
       ]);
       return {
         ok: true as const,
         data: { hasActivePlan: !!activePlan, recentSessions },
       };
     },
+    // D-B: the v1 `context` section becomes this domain block (block 3).
+    contextBlocks: [CHAT_CONTEXT_V1],
     modelProfile: 'default',
   };
 }

@@ -2,7 +2,10 @@
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
+import type { ConversationPhase } from '@domain/conversation/phases';
 import { ok } from '@domain/conversation/tool-outcome';
+
+import { HANDOFF_REGISTERED_TEXT } from '@infra/ai/graph/handoff';
 
 /** The three phases that get a request_transition tool — one builder, three variants. */
 export type RequestTransitionVariant = 'chat' | 'plan_creation' | 'session_planning';
@@ -24,11 +27,22 @@ const DESCRIPTIONS: Record<RequestTransitionVariant, string> = {
   ].join(' '),
 };
 
-export function buildRequestTransitionTool(variant: RequestTransitionVariant) {
+export function buildRequestTransitionTool(
+  variant: RequestTransitionVariant,
+  /**
+   * transition-handoff plan Task 1 (D-5): only the chat variant's targets
+   * (plan_creation, session_planning) can be hand-off targets in this plan —
+   * the plan_creation/session_planning variants target only 'chat', which is
+   * never one. Absent/empty = today's wording.
+   */
+  handoffTargets: ReadonlySet<ConversationPhase> = new Set(),
+) {
   if (variant === 'chat') {
     return tool(
       async input => ({
-        outcome: ok(`Transition to ${input.toPhase} requested.`),
+        outcome: ok(
+          handoffTargets.has(input.toPhase) ? HANDOFF_REGISTERED_TEXT : `Transition to ${input.toPhase} requested.`,
+        ),
         update: {
           pendingTransition: {
             toPhase: input.toPhase,

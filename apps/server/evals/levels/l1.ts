@@ -5,7 +5,7 @@ import { buildSearchKey } from '@infra/ai/graph/tool-policy';
 
 import { CostRecorder, type CostRecord } from '../lib/cost-ledger';
 import type { CheckResult } from '../lib/reporter';
-import { type CaseObservation, runCase } from '../lib/run-case';
+import { type CaseObservation, type ModelInputMessage, runCase } from '../lib/run-case';
 import { selectDatasetFiles } from '../lib/run-guard';
 import { seededSearchKeys } from '../lib/seeded-search-keys';
 import { type EvalCase, parseCases } from '../schema/case.schema';
@@ -56,6 +56,41 @@ export function assertCase(testCase: EvalCase, observation: CaseObservation): Ch
     observation.budgetReport ? `total ${observation.budgetReport.total}` : 'no budget report attached',
   );
 
+  // D-C / INV-LLM-004 (P4 context-budget plan Task 3/4): history never exceeds
+  // its budget, and total never exceeds sum - outputReserve. Only emitted
+  // when the report carries a `budget` (Task 3 shape) — earlier baselines
+  // recorded reports without one.
+  const { budgetReport } = observation;
+  const { budget } = budgetReport ?? {};
+  if (budget) {
+    const sumMinusReserve = budget.system + budget.longTerm + budget.domain + budget.history - budget.outputReserve;
+    const withinHistory = budgetReport!.history <= budget.history;
+    const withinTotal = budgetReport!.total <= sumMinusReserve;
+    let detail: string | undefined;
+    if (!withinHistory) {
+      detail = `history ${budgetReport!.history} > budget.history ${budget.history}`;
+    } else if (!withinTotal) {
+      detail = `total ${budgetReport!.total} > sum-outputReserve ${sumMinusReserve}`;
+    }
+    add('budget-within-limits', withinHistory && withinTotal, detail);
+  }
+
+  // D-C (P4 context-budget plan Task 4): every ToolMessage the model actually
+  // received must answer a tool_call_id some AIMessage in the SAME input
+  // carries — an orphan would reach the provider and could error or silently
+  // confuse the model. Only emitted when a model call was observed.
+  if (observation.lastModelInput.length > 0) {
+    const carriedToolCallIds = new Set(observation.lastModelInput.flatMap(m => m.toolCallIds));
+    const isOrphan = (m: ModelInputMessage): boolean =>
+      m.toolCallId !== undefined && !carriedToolCallIds.has(m.toolCallId);
+    const orphan = observation.lastModelInput.find(isOrphan);
+    add(
+      'no-orphan-tool-message',
+      orphan === undefined,
+      orphan ? `orphan tool_call_id ${orphan.toolCallId}` : undefined,
+    );
+  }
+
   const called = observation.toolCalls.map(tc => tc.name);
 
   for (const tool of testCase.expect.tools?.must ?? []) {
@@ -92,6 +127,25 @@ export function assertCase(testCase: EvalCase, observation: CaseObservation): Ch
     add('no_redundant_search', redundant === null, redundant ? `repeated search key ${redundant}` : undefined);
   }
 
+  // AC-1361 deterministic half (P6 Task 6): a case that carries fixture facts
+  // expects them rendered — the assembled input must contain the `## User Facts`
+  // heading AND every fixture fact's text. Emitted only when the fixture has
+  // facts, so baselines v0–v2 (facts-free fixtures) record nothing new.
+  const expectedFacts = testCase.fixture.facts ?? [];
+  if (expectedFacts.length > 0) {
+    const hasHeading = observation.assembledInput.includes('## User Facts');
+    const missingFact = expectedFacts.find(fact => !observation.assembledInput.includes(fact.fact));
+    add(
+      'user-facts-block-present',
+      hasHeading && missingFact === undefined,
+      !hasHeading
+        ? 'no ## User Facts heading in the assembled input'
+        : missingFact
+          ? `fact not in the assembled input: ${missingFact.fact}`
+          : undefined,
+    );
+  }
+
   if (testCase.expect.transition !== undefined) {
     add(
       'transition',
@@ -126,7 +180,13 @@ export function assertCase(testCase: EvalCase, observation: CaseObservation): Ch
   return results;
 }
 
-/** Loads a phase's cases; `dataset` (a file stem) narrows to `<dataset>.jsonl` (D-P). */
+/**
+ * Loads a phase's cases; `dataset` (a file stem) narrows to `<dataset>.jsonl` (D-P).
+ * `phase` is a dataset-directory key, not necessarily an `EvalPhase`: cross-phase
+ * datasets live in their own directories — the first is `memory/` (P6 Task 6,
+ * AC-1361), loaded as `loadCases('memory', 'facts')` / `--phase memory --dataset facts`.
+ * A case's routing still comes from its own `phase` field, never from the directory.
+ */
 export function loadCases(phase: string, dataset?: string): EvalCase[] {
   const phases = phase === 'all' ? readdirSync(DATASETS_DIR) : [phase];
   const cases: EvalCase[] = [];

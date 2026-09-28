@@ -2,6 +2,8 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 
 import { isToolReturnWithUpdate, type ToolReturn } from '@domain/conversation/tool-outcome';
 import type { IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
+import type { IUserFactsService, UserFact } from '@domain/user/ports/user-facts.ports';
+import type { ExerciseWithMuscles } from '@domain/training/types';
 
 import { toToolMessage } from '@infra/ai/tools/outcome';
 
@@ -80,33 +82,102 @@ const makeWorkoutPlanRepo = (): jest.Mocked<IWorkoutPlanRepository> =>
     archive: jest.fn(),
   }) as unknown as jest.Mocked<IWorkoutPlanRepository>;
 
-const makeConfig = (userId = 'u1'): RunnableConfig => ({
-  configurable: { userId, thread_id: userId },
-});
+const makeConfig = (userId = 'u1'): RunnableConfig =>
+  // `context` is the LangGraph run context the graph threads to tools (not a
+  // stock RunnableConfig field — hence the cast); ctxOf reads `now` from it for
+  // the facts constraint check (fact-lifecycle Task 1).
+  ({
+    configurable: { userId, thread_id: userId },
+    context: { runId: 'run-test', userId, now: new Date('2026-09-20T12:00:00Z') },
+  }) as unknown as RunnableConfig;
 
 const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> =>
   ({
-    findByIds: jest
-      .fn()
-      .mockResolvedValue([
-        { id: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95' },
-        { id: '3818f94a-0543-4241-83b4-6840d06a4e6a' },
-      ]),
+    findByIds: jest.fn().mockResolvedValue([]),
     searchByEmbedding: jest.fn().mockResolvedValue([]),
     updateEmbedding: jest.fn(),
     findAll: jest.fn(),
     findAllWithMuscles: jest.fn(),
     findById: jest.fn(),
     findByIdWithMuscles: jest.fn(),
-    findByIdsWithMuscles: jest.fn(),
+    findByIdsWithMuscles: jest
+      .fn()
+      .mockResolvedValue([
+        makeExerciseWithMuscles([{ muscleGroup: 'chest', involvement: 'primary' }]),
+        makeExerciseWithMuscles(
+          [{ muscleGroup: 'quads', involvement: 'primary' }],
+          '3818f94a-0543-4241-83b4-6840d06a4e6a',
+          'Squat',
+        ),
+      ]),
     findByMuscleGroup: jest.fn(),
     search: jest.fn(),
   }) as unknown as jest.Mocked<IExerciseRepository>;
 
-const buildTools = (workoutPlanRepository: jest.Mocked<IWorkoutPlanRepository>) => {
+const makeExerciseWithMuscles = (
+  muscleGroups: ExerciseWithMuscles['muscleGroups'],
+  id = 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
+  name = 'Bench Press',
+): ExerciseWithMuscles => ({
+  id,
+  name,
+  category: 'compound',
+  equipment: 'barbell',
+  exerciseType: 'strength',
+  description: null,
+  energyCost: 'high',
+  complexity: 'intermediate',
+  typicalDurationMinutes: 12,
+  requiresSpotter: false,
+  imageUrl: null,
+  videoUrl: null,
+  createdAt: new Date(),
+  muscleGroups,
+});
+
+const makeConstraintFact = (muscleGroup: UserFact['muscleGroup'], overrides: Partial<UserFact> = {}): UserFact => ({
+  id: 'fact-1',
+  userId: 'u1',
+  category: 'physical_constraint',
+  fact: 'User has a quad injury — avoid quad-dominant exercises.',
+  factKey: 'quad-injury',
+  muscleGroup,
+  confirmations: 1,
+  sourceTurnId: null,
+  durability: 'permanent',
+  expiresAt: null,
+  reviewAfter: null,
+  phaseNote: null,
+  phaseAt: null,
+  onExpiry: null,
+  status: 'active',
+  archivedAt: null,
+  archivedReason: null,
+  closedByUserAt: null,
+  supersedesId: null,
+  context: null,
+  evidence: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  ...overrides,
+});
+
+const makeUserFactsService = (constraints: UserFact[] = []): jest.Mocked<IUserFactsService> =>
+  ({
+    upsertMany: jest.fn(),
+    getForPrompt: jest.fn(),
+    getConstraints: jest.fn().mockResolvedValue(constraints),
+  }) as unknown as jest.Mocked<IUserFactsService>;
+
+const buildTools = (
+  workoutPlanRepository: jest.Mocked<IWorkoutPlanRepository>,
+  userFactsService: jest.Mocked<IUserFactsService> = makeUserFactsService(),
+  exerciseRepository: jest.Mocked<IExerciseRepository> = makeExerciseRepository(),
+) => {
   const saveWorkoutPlan = buildSaveWorkoutPlanTool({
     workoutPlanRepository,
-    exerciseRepository: makeExerciseRepository(),
+    exerciseRepository,
+    userFactsService,
   }) as unknown as InvokableTool;
   return { saveWorkoutPlan };
 };
@@ -159,6 +230,179 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
     expect(renderedContent(result)).toContain('Plan saved');
   });
 
+  it('rejects a plan whose exercise PRIMARILY trains a constrained muscle group, quoting the fact', async () => {
+    const repo = makeWorkoutPlanRepo();
+    const fact = makeConstraintFact('quads'); // Squat's primary muscle in the mock
+    const { saveWorkoutPlan } = buildTools(repo, makeUserFactsService([fact]));
+
+    const result = (await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig('u1'))) as ToolReturn;
+
+    expect(result).toEqual({
+      ok: false,
+      kind: 'user_error',
+      message: expect.stringContaining('User has a quad injury — avoid quad-dominant exercises.'),
+    });
+    // persists nothing
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('does NOT reject when the constrained muscle is only a secondary muscle', async () => {
+    const repo = makeWorkoutPlanRepo();
+    const exerciseRepository = makeExerciseRepository();
+    exerciseRepository.findByIdsWithMuscles.mockResolvedValue([
+      makeExerciseWithMuscles([{ muscleGroup: 'chest', involvement: 'primary' }]),
+      makeExerciseWithMuscles(
+        [
+          { muscleGroup: 'quads', involvement: 'primary' },
+          { muscleGroup: 'lower_back', involvement: 'secondary' },
+        ],
+        '3818f94a-0543-4241-83b4-6840d06a4e6a',
+        'Squat',
+      ),
+    ]);
+    const { saveWorkoutPlan } = buildTools(
+      repo,
+      makeUserFactsService([makeConstraintFact('lower_back')]),
+      exerciseRepository,
+    );
+
+    const result = (await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig('u1'))) as ToolReturn;
+
+    expect(isToolReturnWithUpdate(result)).toBe(true);
+    expect(repo.create).toHaveBeenCalledTimes(1);
+  });
+
+  // AC-FL-6: only a `permanent` constraint blocks; everything else advises.
+  describe('non-permanent constraints advise instead of blocking (AC-FL-6)', () => {
+    const DEADLIFT = { id: '11111111-1111-4111-8111-111111111111', name: 'Conventional Deadlift' };
+    const ROW = { id: '22222222-2222-4222-8222-222222222222', name: 'Barbell Row' };
+    const HYPER = { id: '33333333-3333-4333-8333-333333333333', name: 'Hyperextension' };
+    const lowerBackPrimary = [{ muscleGroup: 'lower_back' as const, involvement: 'primary' as const }];
+
+    /** MINIMAL_PLAN with three extra lower-back-primary exercises. */
+    const planWithThreeProblemExercises = () => ({
+      ...MINIMAL_PLAN,
+      sessionTemplates: [
+        MINIMAL_PLAN.sessionTemplates[0],
+        {
+          ...MINIMAL_PLAN.sessionTemplates[1],
+          exercises: [DEADLIFT, ROW, HYPER].map(e => ({
+            exerciseId: e.id,
+            exerciseName: e.name,
+            energyCost: 'high',
+            targetSets: 3,
+            targetReps: '8',
+            restSeconds: 90,
+            estimatedDuration: 10,
+          })),
+        },
+      ],
+    });
+    const catalogWithThreeProblemExercises = () => {
+      const exerciseRepository = makeExerciseRepository();
+      exerciseRepository.findByIdsWithMuscles.mockResolvedValue([
+        makeExerciseWithMuscles([{ muscleGroup: 'chest', involvement: 'primary' }]),
+        ...[DEADLIFT, ROW, HYPER].map(e => makeExerciseWithMuscles(lowerBackPrimary, e.id, e.name)),
+      ]);
+      return exerciseRepository;
+    };
+
+    it.each(['long_term', 'short'] as const)(
+      'a %s constraint no longer rejects: the plan is saved and the result names the fact and EVERY conflicting exercise',
+      async durability => {
+        const repo = makeWorkoutPlanRepo();
+        const fact = makeConstraintFact('lower_back', {
+          durability,
+          fact: 'Lower back is sore after a fall',
+          phaseNote: durability === 'long_term' ? 'three weeks into recovery' : null,
+        });
+        const { saveWorkoutPlan } = buildTools(repo, makeUserFactsService([fact]), catalogWithThreeProblemExercises());
+
+        const result = (await saveWorkoutPlan.invoke(planWithThreeProblemExercises(), makeConfig('u1'))) as ToolReturn;
+
+        expect(repo.create).toHaveBeenCalledTimes(1); // persisted
+        expect(isToolReturnWithUpdate(result)).toBe(true); // the transition is still requested
+        const text = renderedContent(result);
+        expect(text).toContain('Plan saved');
+        expect(text).toContain('ADVISORY');
+        expect(text).toContain('Lower back is sore after a fall');
+        expect(text).toContain(durability);
+        for (const name of [DEADLIFT.name, ROW.name, HYPER.name]) {
+          expect(text).toContain(name); // not just the first
+        }
+        expect(text).not.toContain('Bench Press'); // an exercise without a conflict is not reported
+        expect(text).toMatch(/must address/i);
+        if (durability === 'long_term') {
+          expect(text).toContain('three weeks into recovery');
+        }
+      },
+    );
+
+    it('a permanent constraint still rejects, listing every conflicting exercise; nothing is persisted', async () => {
+      const repo = makeWorkoutPlanRepo();
+      const { saveWorkoutPlan } = buildTools(
+        repo,
+        makeUserFactsService([makeConstraintFact('lower_back', { durability: 'permanent' })]),
+        catalogWithThreeProblemExercises(),
+      );
+
+      const result = (await saveWorkoutPlan.invoke(planWithThreeProblemExercises(), makeConfig('u1'))) as ToolReturn;
+
+      expect(result).toMatchObject({ ok: false, kind: 'user_error' });
+      const { message } = result as { message: string };
+      for (const name of [DEADLIFT.name, ROW.name, HYPER.name]) {
+        expect(message).toContain(name);
+      }
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('a permanent constraint wins over a non-permanent one: rejected, and only the permanent fact is quoted', async () => {
+      const repo = makeWorkoutPlanRepo();
+      const { saveWorkoutPlan } = buildTools(
+        repo,
+        makeUserFactsService([
+          makeConstraintFact('lower_back', { id: 'f-short', durability: 'short', fact: 'Sore back today' }),
+          makeConstraintFact('lower_back', { id: 'f-perm', durability: 'permanent', fact: 'Fused spine' }),
+        ]),
+        catalogWithThreeProblemExercises(),
+      );
+
+      const result = (await saveWorkoutPlan.invoke(planWithThreeProblemExercises(), makeConfig('u1'))) as ToolReturn;
+
+      expect(result).toMatchObject({ ok: false, kind: 'user_error' });
+      expect((result as { message: string }).message).toContain('Fused spine');
+      expect((result as { message: string }).message).not.toContain('Sore back today');
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('a non-permanent constraint with no intersecting exercise leaves the summary byte-identical (no advisory)', async () => {
+      const { saveWorkoutPlan } = buildTools(
+        makeWorkoutPlanRepo(),
+        makeUserFactsService([makeConstraintFact('abs', { durability: 'long_term' })]),
+      );
+
+      const result = (await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig('u1'))) as ToolReturn;
+
+      expect(isToolReturnWithUpdate(result) ? result.outcome : result).toEqual({
+        ok: true,
+        summary:
+          'Plan saved. Now write a brief confirmation to the user in their language — congratulate them and say you are ready to start training.',
+      });
+    });
+  });
+
+  it('clean path keeps the byte-identical success summary', async () => {
+    const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo(), makeUserFactsService([makeConstraintFact('abs')]));
+
+    const result = (await saveWorkoutPlan.invoke(MINIMAL_PLAN, makeConfig('u1'))) as ToolReturn;
+
+    expect(isToolReturnWithUpdate(result) ? result.outcome : result).toEqual({
+      ok: true,
+      summary:
+        'Plan saved. Now write a brief confirmation to the user in their language — congratulate them and say you are ready to start training.',
+    });
+  });
+
   it('returns error string when userId is missing from configurable', async () => {
     const { saveWorkoutPlan } = buildTools(makeWorkoutPlanRepo());
 
@@ -182,5 +426,89 @@ describe('save-workout-plan.tool — save_workout_plan', () => {
     const result = (await saveWorkoutPlan.invoke(MINIMAL_PLAN, { configurable: {} })) as ToolReturn;
 
     expect(isToolReturnWithUpdate(result)).toBe(false);
+  });
+
+  // training-history-lookup plan D5/AC-HL-5: the plan's exerciseName must agree with the catalog
+  // name of its exerciseId (BUG-030 D19 aftermath — live 2026-09-25, "Treadmill" naming Rowing
+  // Machine's id).
+  describe('plan name/id check (D5, AC-HL-5)', () => {
+    it("rejects a plan whose exerciseName shares no word with its id's catalog name — nothing persisted", async () => {
+      const workoutPlanRepo = makeWorkoutPlanRepo();
+      const exerciseRepository = makeExerciseRepository();
+      exerciseRepository.findByIdsWithMuscles.mockResolvedValue([
+        makeExerciseWithMuscles(
+          [{ muscleGroup: 'chest', involvement: 'primary' }],
+          'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
+          'Rowing Machine',
+        ),
+        makeExerciseWithMuscles(
+          [{ muscleGroup: 'quads', involvement: 'primary' }],
+          '3818f94a-0543-4241-83b4-6840d06a4e6a',
+          'Squat',
+        ),
+      ]);
+      const { saveWorkoutPlan } = buildTools(workoutPlanRepo, makeUserFactsService(), exerciseRepository);
+
+      const plan = {
+        ...MINIMAL_PLAN,
+        sessionTemplates: [
+          {
+            ...MINIMAL_PLAN.sessionTemplates[0],
+            exercises: [{ ...MINIMAL_PLAN.sessionTemplates[0].exercises[0], exerciseName: 'Treadmill' }],
+          },
+          MINIMAL_PLAN.sessionTemplates[1],
+        ],
+      };
+      const result = (await saveWorkoutPlan.invoke(plan, makeConfig())) as ToolReturn;
+
+      const text = renderedContent(result);
+      expect(text).toContain('LLM_ERROR');
+      expect(text).toContain('"Treadmill" → id is "Rowing Machine"');
+      expect(workoutPlanRepo.create).not.toHaveBeenCalled();
+      expect(isToolReturnWithUpdate(result)).toBe(false);
+    });
+
+    it('stores the catalog name when the plan only partially names the exercise', async () => {
+      const workoutPlanRepo = makeWorkoutPlanRepo();
+      const exerciseRepository = makeExerciseRepository();
+      exerciseRepository.findByIdsWithMuscles.mockResolvedValue([
+        makeExerciseWithMuscles(
+          [{ muscleGroup: 'chest', involvement: 'primary' }],
+          'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
+          'Barbell Bench Press',
+        ),
+        makeExerciseWithMuscles(
+          [{ muscleGroup: 'quads', involvement: 'primary' }],
+          '3818f94a-0543-4241-83b4-6840d06a4e6a',
+          'Squat',
+        ),
+      ]);
+      const { saveWorkoutPlan } = buildTools(workoutPlanRepo, makeUserFactsService(), exerciseRepository);
+
+      const plan = {
+        ...MINIMAL_PLAN,
+        sessionTemplates: [
+          {
+            ...MINIMAL_PLAN.sessionTemplates[0],
+            exercises: [{ ...MINIMAL_PLAN.sessionTemplates[0].exercises[0], exerciseName: 'Bench Press' }],
+          },
+          MINIMAL_PLAN.sessionTemplates[1],
+        ],
+      };
+      await saveWorkoutPlan.invoke(plan, makeConfig());
+
+      expect(workoutPlanRepo.create).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          planJson: expect.objectContaining({
+            sessionTemplates: expect.arrayContaining([
+              expect.objectContaining({
+                exercises: [expect.objectContaining({ exerciseName: 'Barbell Bench Press' })],
+              }),
+            ]),
+          }),
+        }),
+      );
+    });
   });
 });

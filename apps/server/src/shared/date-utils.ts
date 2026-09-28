@@ -28,10 +28,13 @@ function dateInTz(date: Date, tz: string): number {
 }
 
 /**
- * Format a Date into date-only and time strings in the user's timezone.
- * Falls back to UTC when `tz` is absent or invalid.
+ * Format a Date into date-only, time and weekday strings in the user's
+ * timezone. Falls back to UTC when `tz` is absent or invalid.
  */
-export function formatInUserTz(date: Date, tz?: string | null): { dateOnly: string; time: string; label: string } {
+export function formatInUserTz(
+  date: Date,
+  tz?: string | null,
+): { dateOnly: string; time: string; weekday: string; label: string } {
   const timeZone = tz && isValidTimezone(tz) ? tz : 'UTC';
   const dateFmt = new Intl.DateTimeFormat('en-CA', {
     timeZone,
@@ -45,9 +48,11 @@ export function formatInUserTz(date: Date, tz?: string | null): { dateOnly: stri
     minute: '2-digit',
     hour12: false,
   });
+  const weekdayFmt = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'long' });
   return {
     dateOnly: dateFmt.format(date),
     time: timeFmt.format(date),
+    weekday: weekdayFmt.format(date),
     label: timeZone,
   };
 }

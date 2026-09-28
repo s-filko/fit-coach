@@ -17,11 +17,16 @@ export class DrizzleConversationRunService implements IConversationRunService {
       promptVersions: record.promptVersions,
       tokensIn: record.tokensIn,
       tokensOut: record.tokensOut,
+      tokensCached: record.tokensCached,
+      tokensReasoning: record.tokensReasoning,
       latencyMs: record.latencyMs,
       toolCalls: record.toolCalls,
       transition: record.transition,
       outcome: record.outcome,
       budgetReport: record.budgetReport,
+      // INV-LLM-009: null for an 'ok' run — the commit node never sets these (optional on the type).
+      errorClass: record.errorClass ?? null,
+      errorMessage: record.errorMessage ?? null,
     });
   }
 }

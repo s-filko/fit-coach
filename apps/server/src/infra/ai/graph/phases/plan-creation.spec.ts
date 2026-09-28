@@ -10,6 +10,7 @@ import type {
   PromptContextFor,
 } from '@infra/ai/graph/phase-spec';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
+import { PLAN_CREATION_CLIENT_PROFILE_V1 } from '@infra/ai/prompts/blocks';
 import {
   buildRequestTransitionTool,
   buildSaveWorkoutPlanTool,
@@ -34,9 +35,13 @@ export function buildPlanCreationSpec(deps: ConversationGraphDeps): PhaseSpec<Pl
     prompt: entry as PhasePromptEntry<PromptContextFor<PlanCreationData>>,
     tools: [
       buildSearchExercisesTool({ embeddingService, exerciseRepository }),
-      buildSaveWorkoutPlanTool({ workoutPlanRepository: deps.workoutPlanRepo, exerciseRepository }),
+      buildSaveWorkoutPlanTool({
+        workoutPlanRepository: deps.workoutPlanRepo,
+        exerciseRepository,
+        userFactsService: deps.userFacts,
+      }),
       buildRequestTransitionTool('plan_creation'),
-      ...buildSharedTools({ userService }),
+      ...buildSharedTools({ userService, userFacts: deps.userFacts }),
     ],
     toolPolicy: PLAN_CREATION_TOOL_POLICY,
     // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).
@@ -45,6 +50,8 @@ export function buildPlanCreationSpec(deps: ConversationGraphDeps): PhaseSpec<Pl
       ok: true as const,
       data: {},
     }),
+    // D-B: the v1 `client_profile` section becomes this domain block (block 3).
+    contextBlocks: [PLAN_CREATION_CLIENT_PROFILE_V1],
     modelProfile: 'default',
   };
 }

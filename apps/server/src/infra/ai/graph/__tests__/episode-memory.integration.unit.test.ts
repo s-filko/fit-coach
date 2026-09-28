@@ -10,17 +10,8 @@ import { MemorySaver } from '@langchain/langgraph';
 
 import type { ConversationRunRecord } from '@domain/conversation/ports';
 
-import { RunMetricsCollector } from '@infra/ai/run-metrics';
-
 import { buildConversationGraph, type ConversationGraphDeps } from '../conversation.graph';
-
-const USER = {
-  id: 'u1',
-  firstName: 'Test',
-  languageCode: 'ru',
-  profileStatus: 'complete',
-  registrationCompleted: true,
-};
+import { USER, ctxConfig } from './graph-test-support';
 
 /** Run 1 calls save_timezone; run 2 replies with plain text. */
 jest.mock('@infra/ai/model.factory', () => {
@@ -70,31 +61,19 @@ function makeDeps(): ConversationGraphDeps {
     } as never,
     transcript: { appendRunMessages: jest.fn(), appendSystemNote: jest.fn() },
     summaries: { insert: jest.fn(), latestLegacySummary: jest.fn().mockResolvedValue(null) },
+    userFacts: {
+      upsertMany: jest.fn().mockResolvedValue(0),
+      getForPrompt: jest.fn().mockResolvedValue([]),
+      getConstraints: jest.fn(),
+    },
     llmGateway: {
       chat: jest.fn(),
       structured: jest.fn(),
     } as never,
     runService: { recordRun: jest.fn() } as never,
-    episodeConfig: { gapMs: 24 * 3600 * 1000, minTurns: 2, minTokens: 300 },
+    episodeConfig: { gapMs: 24 * 3600 * 1000, minTurns: 2, minTokens: 300, keepTurns: 6 },
     checkpointer: new MemorySaver(),
   } as unknown as ConversationGraphDeps;
-}
-
-function ctxConfig(runId: string, userId = 'u1') {
-  return {
-    configurable: { thread_id: userId },
-    metadata: { runId, userId },
-    context: {
-      runId,
-      userId,
-      user: USER as never,
-      now: new Date(),
-      client: 'telegram' as const,
-      trigger: 'user_message' as const,
-      metrics: new RunMetricsCollector(runId),
-    },
-    recursionLimit: 25,
-  } as never;
 }
 
 describe('episode memory across runs (AC-1341, INV-LLM-001/002)', () => {
@@ -105,7 +84,7 @@ describe('episode memory across runs (AC-1341, INV-LLM-001/002)', () => {
 
     const first = (await graph.invoke(
       { phase: 'chat', messages: [new HumanMessage('Моё время Берлин')] },
-      ctxConfig('run-1'),
+      ctxConfig({ runId: 'run-1' }),
     )) as { messages: BaseMessage[] };
     const run1Input = __recorded[0]! as BaseMessage[];
     const run1Output = first.messages;
@@ -113,7 +92,7 @@ describe('episode memory across runs (AC-1341, INV-LLM-001/002)', () => {
 
     const second = (await graph.invoke(
       { phase: 'chat', messages: [new HumanMessage('Спасибо!')] },
-      ctxConfig('run-2'),
+      ctxConfig({ runId: 'run-2' }),
     )) as { messages: BaseMessage[] };
 
     // Run 2's model input contains run 1's AIMessage(tool_calls) and its ToolMessage.
@@ -138,11 +117,11 @@ describe('episode memory across runs (AC-1341, INV-LLM-001/002)', () => {
   it('AC-1342: EPISODE_GAP → 0 — run 2 sees exactly one episode-summary block and none of run 1’s messages; one summaries row', async () => {
     // Injected through the compact deps, never process.env.
     const deps = makeDeps();
-    (deps as unknown as { episodeConfig: { gapMs: number; minTurns: number; minTokens: number } }).episodeConfig = {
-      gapMs: 0,
-      minTurns: 0,
-      minTokens: 0,
-    };
+    // keepTurns 0 disables the verbatim tail — AC-1342 folds the WHOLE
+    // episode into its summary, which is what this test pins.
+    (
+      deps as unknown as { episodeConfig: { gapMs: number; minTurns: number; minTokens: number; keepTurns: number } }
+    ).episodeConfig = { gapMs: 0, minTurns: 0, minTokens: 0, keepTurns: 0 };
     const summariesMock = deps.summaries as unknown as { insert: jest.Mock };
     const gatewayMock = deps.llmGateway as unknown as { structured: jest.Mock };
     summariesMock.insert = jest.fn().mockResolvedValue(undefined);
@@ -152,12 +131,16 @@ describe('episode memory across runs (AC-1341, INV-LLM-001/002)', () => {
       userState: [],
       trainingFeedback: [],
       openItems: [],
+      factOperations: [],
     });
     const graph = buildConversationGraph(deps);
     __recorded.length = 0;
 
-    await graph.invoke({ phase: 'chat', messages: [new HumanMessage('Моё время Берлин')] }, ctxConfig('run-1'));
-    await graph.invoke({ phase: 'chat', messages: [new HumanMessage('Спасибо!')] }, ctxConfig('run-2'));
+    await graph.invoke(
+      { phase: 'chat', messages: [new HumanMessage('Моё время Берлин')] },
+      ctxConfig({ runId: 'run-1' }),
+    );
+    await graph.invoke({ phase: 'chat', messages: [new HumanMessage('Спасибо!')] }, ctxConfig({ runId: 'run-2' }));
 
     // Run 2's first model call (run 1 took two: the tool call and the final
     // reply): one `## Previous episodes` system block, and run 1's traffic

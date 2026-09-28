@@ -16,7 +16,8 @@ export async function registerInfraServices(container: Container = getGlobalCont
   // Lazy load all dependencies to avoid circular imports and config loading issues
   const { DrizzleUserRepository } = await import('@infra/db/repositories/user.repository');
   const { UserService } = await import('@domain/user/services/user.service');
-  const { USER_REPOSITORY_TOKEN, USER_SERVICE_TOKEN } = await import('@domain/user/ports');
+  const { USER_REPOSITORY_TOKEN, USER_SERVICE_TOKEN, USER_FACTS_SERVICE_TOKEN } = await import('@domain/user/ports');
+  const { UserFactsRepository } = await import('@infra/db/repositories/user-facts.repository');
 
   // Training domain
   const { TrainingService } = await import('@domain/training/services/training.service');
@@ -43,6 +44,7 @@ export async function registerInfraServices(container: Container = getGlobalCont
   // Register infrastructure implementations
   container.register(USER_REPOSITORY_TOKEN, new DrizzleUserRepository());
   container.registerFactory(USER_SERVICE_TOKEN, c => new UserService(c.get(USER_REPOSITORY_TOKEN)));
+  container.register(USER_FACTS_SERVICE_TOKEN, new UserFactsRepository());
 
   const { OpenAiLlmGateway } = await import('@infra/ai/llm.gateway');
   const { LLM_GATEWAY_TOKEN } = await import('@domain/ai/ports');
@@ -73,11 +75,27 @@ export async function registerInfraServices(container: Container = getGlobalCont
   const { PostgresSaver } = await import('@langchain/langgraph-checkpoint-postgres');
   const { loadConfig } = await import('@config/index');
   const config = loadConfig();
+
+  // Speech-to-text (voice-transcription plan, D1/D2): registered even without a
+  // key — the adapter reports disabled and the server still boots.
+  const { GeminiTranscriber } = await import('@infra/ai/gemini-transcriber');
+  const { SPEECH_TRANSCRIBER_TOKEN } = await import('@domain/speech/ports');
+  container.register(
+    SPEECH_TRANSCRIBER_TOKEN,
+    new GeminiTranscriber({
+      apiKey: config.AISTUDIO_API_KEY,
+      model: config.STT_MODEL,
+      apiUrl: config.STT_API_URL,
+      timeoutMs: config.STT_TIMEOUT_MS,
+      maxOutputTokens: config.STT_MAX_OUTPUT_TOKENS,
+    }),
+  );
+
   const connString = `postgresql://${config.DB_USER}:${config.DB_PASSWORD}@${config.DB_HOST}:${config.DB_PORT}/${config.DB_NAME}`;
   const checkpointer = PostgresSaver.fromConnString(connString);
   await checkpointer.setup();
 
-  const { buildConversationGraph } = await import('@infra/ai/graph/conversation.graph');
+  const { buildConversationGraph, CONVERSATION_GRAPH_TOKEN } = await import('@infra/ai/graph/conversation.graph');
   const { buildConversationRunner } = await import('@infra/ai/graph/conversation-run.adapter');
   const { CONVERSATION_RUN_SERVICE_TOKEN, CONVERSATION_RUN_PORT_TOKEN } = await import('@domain/conversation/ports');
   const { DrizzleConversationRunService } = await import('@infra/conversation/drizzle-conversation-run.service');
@@ -98,25 +116,43 @@ export async function registerInfraServices(container: Container = getGlobalCont
     runService: container.get(CONVERSATION_RUN_SERVICE_TOKEN),
     transcript: container.get(TRANSCRIPT_PORT_TOKEN),
     summaries: container.get(SUMMARY_PORT_TOKEN),
+    userFacts: container.get(USER_FACTS_SERVICE_TOKEN),
     llmGateway: container.get(LLM_GATEWAY_TOKEN),
     // D-L: episode tunables resolved once here — the nodes never read env mid-run.
     episodeConfig: {
       gapMs: config.EPISODE_GAP_HOURS * 3_600_000,
       minTurns: config.EPISODE_MIN_TURNS,
       minTokens: config.EPISODE_MIN_TOKENS,
+      keepTurns: config.EPISODE_KEEP_TURNS,
+      budgetLowWater: config.EPISODE_BUDGET_LOW_WATER,
     },
+    // LLM_BUDGET_* overrides (P4 context-budget plan Task 3), resolved once here.
+    budgetOverrides: config.LLM_BUDGETS,
+    // AC-FL-5 (course-check plan Task 1): the layer's on/off switch, resolved once here.
+    courseCheckEnabled: config.COURSE_CHECK_ENABLED,
+    courseCheckRetryCooldownMs: config.COURSE_CHECK_RETRY_COOLDOWN_MINUTES * 60_000,
+    courseCheckExpiryAskWindowMs: config.COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS * 86_400_000,
+    // transition-handoff plan Task 1 (D-1): empty set = off, resolved once here.
+    transitionHandoffTargets: new Set(config.TRANSITION_HANDOFF_TARGETS),
     checkpointer,
+  });
+  // The compiled graph under its token: infra-internal, but the scenario
+  // runner (evals/lib/run-scenario.ts) needs it for checkpoint seeding
+  // (`updateState`) and phase observation (`getState`).
+  container.register(CONVERSATION_GRAPH_TOKEN, graph);
+  const { withRunMutex } = await import('@infra/conversation/with-run-mutex');
+  const runner = buildConversationRunner({
+    graph,
+    userService: container.get(USER_SERVICE_TOKEN),
+    runService: container.get(CONVERSATION_RUN_SERVICE_TOKEN),
+    // D-F: clearContext goes through the same checkpointer and transcript.
+    checkpointer,
+    transcript: container.get(TRANSCRIPT_PORT_TOKEN),
   });
   container.register(
     CONVERSATION_RUN_PORT_TOKEN,
-    buildConversationRunner({
-      graph,
-      userService: container.get(USER_SERVICE_TOKEN),
-      runService: container.get(CONVERSATION_RUN_SERVICE_TOKEN),
-      // D-F: clearContext goes through the same checkpointer and transcript.
-      checkpointer,
-      transcript: container.get(TRANSCRIPT_PORT_TOKEN),
-    }),
+    // D-A, D-12: one conversation run per userId at a time.
+    withRunMutex(runner, { waitMs: config.LLM_RUN_MUTEX_WAIT_MS }),
   );
 
   // Kick off model warm-up in background — do not await so server starts immediately

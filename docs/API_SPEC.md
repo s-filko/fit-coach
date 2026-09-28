@@ -64,8 +64,12 @@ components:
 }
 ```
 
+- `languageCode` seeds the profile language only when the user is created; an existing
+  user's profile language is never overwritten by it (it changes only through the
+  `set_language` tool, on the user's explicit request — owner rule 2026-09-25).
 - Responses:
-  - 200 `{ data: { id: string } }`
+  - 200 `{ data: { id: string, languageCode: string | null } }` — `languageCode` is the
+    profile language (the bot uses it for its own fixed texts)
   - 400 `{ error: { message: string } }`
   - 401 `{ error: { message: string } }`
   - 403 `{ error: { message: string } }`
@@ -100,12 +104,21 @@ components:
   - 200 `{ data: { content: string, timestamp: string, registrationComplete?: boolean } }`
   - 401 `{ error: { message: string } }`
   - 403 `{ error: { message: string } }`
-  - 404 `{ error: { message: "User not found" } }`
-  - 500 `{ error: { message: "Processing failed" } }`
+  - 404 `{ error: { code: "USER_NOT_FOUND" } }`
+  - 409 `{ error: { code: "THREAD_BUSY" } }`
+  - 500 `{ error: { code: "CORE_ERROR" } }`
+  - 503 `{ error: { code: "LLM_UNAVAILABLE" } }`
 
   Response fields:
-  - `content` (string): AI-generated response message
+  - `content` (string): AI-generated response message. When the message crosses a phase hand-off
+    (`TRANSITION_HANDOFF_TARGETS`, ADR-0013 §3.2/§4.1 amendments 2026-09-26), `content` holds only the
+    text of the phase the run ended in — one POST, one reply, at most one hop.
   - `timestamp` (string): ISO 8601 timestamp of the response
+
+  Error bodies carry the `code` only — never exception text or a stack (INV-LLM-006). The full
+  table of codes and their meanings lives in `ARCHITECTURE.md`; `USER_NOT_FOUND` was added
+  2026-09-21 (AC-RRP-5) so the bot's existing recovery — clear the cached id, re-upsert on the
+  next message — is actually reachable, which a 500 never made it.
 
   Notes:
   - **All conversational phases (registration, chat, plan_creation, session_planning, training) interact exclusively through this `/api/bot/chat` endpoint.**
@@ -124,6 +137,35 @@ components:
     2. Session planning → LLM calls `start_training_session` tool → session created in DB → phase → training
     3. User: "Did 10 reps with 50kg" → LLM calls `log_set` tool → set saved to DB
     4. User: "Finished" → LLM calls `finish_training` tool → session completed → phase → chat
+    With `TRANSITION_HANDOFF_TARGETS=training,session_planning` (dev, U5) steps 1→2 and 2→3 can happen in **one** POST: the phase a transition leads to answers the same message (e.g. a set reported while planning opens training and is logged in the same reply).
+
+### 3.2 Transcribe Voice Message
+
+- x-feature: FEAT-0011
+- POST `/api/bot/voice/transcribe` (route-level body limit 15 MiB)
+- Request body (Zod):
+
+```ts
+{
+  userId: string(min:1),        // for logs only
+  audioBase64: string(min:1),   // the Telegram voice file, base64
+  mimeType: string(min:1),      // "audio/ogg" for Telegram voice (OGG/Opus)
+}
+```
+
+- Responses:
+  - 200 `{ data: { text: string } }` — the verbatim transcript, trimmed
+  - 400 `{ error: { message: string } }` — request body fails the schema
+  - 401 `{ error: { message: string } }` / 403 `{ error: { message: string } }` — as for every bot route
+  - 413 — body over 15 MiB (Fastify)
+  - 422 `{ error: { code: "NO_SPEECH" } }` — the provider found no clearly spoken words
+  - 500 `{ error: { code: "CORE_ERROR" } }`
+  - 503 `{ error: { code: "STT_UNAVAILABLE" } }` — STT disabled (`AISTUDIO_API_KEY` unset), provider error or timeout
+
+  The route only transcribes: it writes nothing and does not touch the conversation. The bot sends
+  the transcript to `/api/bot/chat` (§ 3.1) as the user's message. Error bodies carry the `code`
+  only (INV-LLM-006). Provider: Google AI Studio `generateContent` (`STT_MODEL`, default
+  `gemini-3.8-flash`) behind `SpeechTranscriberPort` (`docs/domain/speech.spec.md`); configuration `STT_*` in `.env.example`.
 
 ### Notes
 

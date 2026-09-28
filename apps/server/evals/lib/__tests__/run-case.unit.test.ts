@@ -1,9 +1,9 @@
-import { AIMessage } from '@langchain/core/messages';
+import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 
 import * as modelFactory from '@infra/ai/model.factory';
 
 import type { EvalCase } from '../../schema/case.schema';
-import { runCase } from '../run-case';
+import { ModelInputRecorder, runCase } from '../run-case';
 
 jest.mock('@infra/ai/model.factory', () => {
   const { AIMessage: MockAIMessage } = jest.requireActual('@langchain/core/messages');
@@ -135,5 +135,21 @@ describe('ToolRecorder — the tool name comes from runName, not from serialized
     await t.invoke({ toPhase: 'session_planning' }, { callbacks: [recorder] });
 
     expect(recorder.calls).toEqual([{ name: 'request_transition', args: { toPhase: 'session_planning' } }]);
+  });
+
+  it('ModelInputRecorder captures the call input as joined text (assembledInput, P6 Task 6)', () => {
+    // The factory mock bypasses real chat-model invocation, so the recorder is
+    // driven directly — the assembled text is what user-facts-block-present
+    // scans for the ## User Facts heading and fact substrings.
+    const recorder = new ModelInputRecorder();
+    recorder.handleChatModelStart(null, [
+      [
+        new SystemMessage('## User Facts\nphysical_constraint:\n- Травмировано правое плечо'),
+        new HumanMessage('привет'),
+      ],
+    ]);
+    expect(recorder.lastText).toContain('## User Facts');
+    expect(recorder.lastText).toContain('привет');
+    expect(recorder.lastText.endsWith('привет')).toBe(true);
   });
 });

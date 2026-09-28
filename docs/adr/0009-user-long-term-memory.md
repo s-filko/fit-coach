@@ -40,6 +40,157 @@ Implement a **passive always-on memory extraction layer** that listens to every 
 
 ---
 
+## Amendment 2026-09-21 — fact lifecycle (supersedes parts of the Decision above)
+
+> **Decided without the owner (2026-09-21).** The owner was away and authorised deciding on his
+> behalf and marking what was decided. This amendment records what the `fact-lifecycle` plan
+> (wave A) shipped; it is reversible — the plan's decision table lists it.
+
+The **passive per-turn extraction layer** and the `remember_fact`-in-every-subgraph mechanism
+described above were superseded twice, both times by the owner:
+
+- **2026-09-17** — extraction moved to summarisation only: facts come from the summariser's
+  structured output at compaction, `remember_fact` was dropped, `user_facts` stayed.
+- **2026-09-20** — the conversational half was deliberately restored: the case the 09-17 decision
+  did not cover is "the user says something important now and it must stick now". Facts are now
+  written **both** at compaction and in conversation, through one tool.
+
+### Durability: the model judges, the code bounds
+
+Every fact carries a durability class, and the class decides whether it ages:
+
+| Class | Dates | Meaning |
+|---|---|---|
+| `permanent` | none | Irreversible condition (missing limb, irreversible diagnosis). Never re-asked. |
+| `long_term` | `review_after` + `phase_note` / `phase_at` | Fracture, surgery, a months-long recovery. The coach re-asks when the date arrives, with a specific question. |
+| `short` | `expires_at` + `on_expiry` | A state that resolves in days (soreness, bad sleep, a tweak). On expiry it is either forgotten silently (`forget`) or asked about once (`ask_once`). |
+
+The **model** picks the class, the TTL / review distance and `on_expiry`; the **code** clamps them
+(short 1–14 days, long-term 14–182 days) and refuses `permanent` unless the user stated the
+irreversibility explicitly or the fact already carries ≥ 3 confirmations. Those numbers live in
+exactly one module, `domain/user/services/fact-lifecycle.ts`, and nothing else restates them.
+
+### Closure: the user's word wins, and the archive is kept
+
+- `status` is `active | archived`; `archived_reason` is `user_closed | expired | superseded`.
+- **Retract and delete are two operations and are never silently swapped.** Retract archives (the
+  row, its history and its confirmation counter survive); delete removes the row entirely. The
+  coach asks which is meant when the request is ambiguous.
+  > **Superseded 2026-09-21 by the owner** (recorded by the orchestrator on his instruction, the same
+  > authorisation as the amendments around it). Nothing is ever removed. `delete` archives too, with
+  > its own reason `user_deleted`, and the user is TOLD the fact was deleted — from where he stands it
+  > is: never used, never asked about, and not listed even when he asks what used to be remembered
+  > (`user_closed` rows still appear in that listing). Because both roads now end in the same place for
+  > the user, the confirmation gate and the ask-which-you-mean rule are gone: making him choose between
+  > outcomes he cannot tell apart is friction, not consent. The internal distinction survives for the
+  > archive's own sake — a future recurrence count reads it. In the owner's words: «Я не хочу, чтобы
+  > что-то удалялось, но для пользователя это должно звучать, как удалил, и оно не всплывает больше.»
+  > A real erasure (a legal demand, someone else's data) is a separate, unbuilt capability.
+- A closed fact is **never re-opened in place**. Newer evidence creates a **new** row linked to the
+  closed one through `supersedes_id`, and the closed row keeps its archive — that record is what a
+  later recurrence promotion (a short state that keeps coming back becomes a
+  `physiological_pattern`) will count.
+- A closed fact key is re-created **only from evidence newer than the closure**. The comparison
+  uses the evidence clock, not the run clock — see ADR-0013 §3.3's 2026-09-21 amendment.
+
+### User-controlled memory
+
+`list_facts` answers "what do you remember about me": active facts grouped by category, each with
+its date, confirmation count and durability class, and the archived ones with their closure reason
+when asked. The `## User Facts` prompt block cannot serve this — it is capped and ordered for
+steering, not for review. `manage_fact` (`save | retract | delete`) is how a correction, a closure
+or an erasure is carried out during a conversation.
+
+### Storage
+
+One table, extended — no new table and no rewrite. `user_facts` gained `durability`, `expires_at`,
+`review_after`, `phase_note`, `phase_at`, `on_expiry`, `status`, `archived_at`, `archived_reason`,
+`closed_by_user_at`, `supersedes_id` and `context` (migration `0006`, additive: existing rows
+became `permanent` / `active` with no dates, which changes nothing behaviourally). Uniqueness of
+`(user_id, category, fact_key)` now holds **among active rows only** — a partial unique index
+(migration `0007`), because a Postgres UNIQUE constraint cannot be partial and closed history must
+be able to keep its key.
+
+Reads (`getForPrompt`, `getConstraints`) take the run clock as data and exclude archived and
+expired rows; the prompt block (`USER_FACTS_V2`) renders each fact with its date and confirmation
+count, so the model can tell yesterday from six months ago.
+
+### Amendment 2026-09-21 (wave B) — the hard block is only for `permanent`
+
+> Decided without the owner (2026-09-21), same authorisation as the amendment above; reversible.
+
+Wave A's note below said the hard rejection still applied to every active constraint fact. Wave B
+narrowed it, for the reason the plan measured against the real catalog: a muscle label expresses
+neither movement nor load, so a `lower_back` constraint **blocked** Conventional Deadlift and
+Hyperextension (the rehab exercise) while **allowing** Romanian Deadlift, Barbell Back Squat and
+Barbell Row, where `lower_back` is only secondary. A hard gate on a soft, model-assigned label is
+honest for exactly one class.
+
+- A `permanent` constraint still rejects `save_workout_plan` / `start_training_session`, and nothing
+  is persisted on rejection. In a mixed set only the permanent facts are quoted.
+- A `long_term` or `short` constraint no longer rejects: the write succeeds and the tool result
+  carries an **advisory** naming each fact (with its durability and phase note) and **every**
+  conflicting exercise, which the coach must address in its reply.
+- The user's word still decides, as always.
+
+The code keeps the two halves apart: `findFactConflicts` reports every conflict, `blockingConflicts`
+keeps only the permanent ones (`domain/user/services/fact-conflicts.ts`, where the catalog evidence
+above is recorded so the narrowing is not "fixed" back by someone reading only the code).
+
+### What this amendment does NOT change
+
+The hard rejection of an exercise whose primary muscles hit a `physical_constraint` fact (P6, D-G)
+still applies to **every** active constraint fact. Narrowing that block to `permanent` and turning
+the rest into advisory guidance is wave B (`course-check-and-constraints`), measured separately.
+
+### Amendment 2026-09-27/28 — provenance: a compaction fact must come from the user (BUG-040)
+
+> 2026-09-27: decided without the owner under the autonomy order (plan `fact-provenance`, a string
+> check). **2026-09-28: replaced by the owner's decision** (plan `fact-verification`): «код с
+> недетерминированными строками максимально не надежная вещь … надо проверять через модель как это
+> делает индустрия, если факт найден».
+
+On 2026-09-27 the summariser promoted the coach's own improvised figure ("~70% of the platform
+mass") into an active user fact. Compaction-sourced fact operations are now **verified by a model**
+before they are applied (`infra/ai/graph/nodes/verify-fact-operations.ts`, prompt
+`fact-verifier` v1, called from `compact.node.ts`):
+
+- When the summariser returns at least one `add` / `update` / `retract`, one extra structured call
+  (profile `summarizer`) gets the episode transcript with speaker labels and the numbered
+  operations, and returns per operation whether the **user** stated it or explicitly confirmed it.
+  Anything only the assistant said is unsupported; numbers must match what the user said by
+  meaning — digits or words, any language («пять дней» = "5 days").
+- Only supported operations are applied. A missing, duplicated or out-of-range verdict counts as
+  unsupported. The verifier failing (error, unparsable answer) skips every mutating operation of
+  that compaction (fail closed); the summary and `confirm`s still apply.
+- `confirm` is never verified: it does not change text. No mutating operation → no extra call.
+- A skipped operation is logged with op, fact id and the verifier's reason — never the fact text.
+- The summariser (`summarizer` v6) still returns an `evidence` quote per operation, as a hint for
+  the verifier only; no code compares strings.
+
+- **Scope: this episode only.** The verifier sees the same compacted part the summariser saw — not
+  the kept verbatim tail and not earlier episodes (an `update` also shows the old fact's text, a
+  `retract` the text of the fact it closes). A figure the user gave in an earlier episode, or a «да»
+  that lands after the cut, is judged unsupported; the fact is restated later.
+- **Cost on the reply path.** Compaction runs inline, inside the reply the user is waiting for; when
+  a mutating operation exists, the verifier is a second sequential model call there (≈2.5 s on the
+  dev route, 2026-09-28 probe). No mutating operation → no call. Accepted by the owner («это не
+  происходит постоянно»).
+- **The user's quote is stored with the fact.** `user_facts.evidence` (migration `0019`, nullable):
+  for a verified `add`/`update` the verifier's `userQuote` — the user's own words that support it —
+  or, if empty, the summariser's hint. Not rendered into the prompt every turn; `list_facts` shows
+  it as `said: «…»` so the coach quotes real words when asked where a fact came from and never
+  reconstructs one. The live `manage_fact` path writes NULL for now (its run context does not carry
+  the current message).
+
+The string check of 2026-09-27 (verbatim quote + digits-only number match) was removed: it dropped
+real facts dictated with number words and could not catch a non-numeric coach claim.
+
+The conversational path (`manage_fact` in a live turn) is unchanged: there the user's statement is
+the current message itself.
+
+---
+
 ## Fact Categories
 
 | Category | Description | Example (stored form) |

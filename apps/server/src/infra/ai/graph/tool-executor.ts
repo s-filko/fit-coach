@@ -5,11 +5,12 @@
  * outcome with `toToolMessage` v1, collects `ToolStateUpdate`s and enforces
  * the phase's `ToolPolicy` (ordering, dedup, error budget, system-error stop).
  */
-import { AIMessage, type BaseMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { StructuredToolInterface } from '@langchain/core/tools';
-import { END } from '@langchain/langgraph';
+import { END, type LangGraphRunnableConfig } from '@langchain/langgraph';
 
+import type { ConversationPhase } from '@domain/conversation/phases';
 import {
   isToolReturnWithUpdate,
   llmError,
@@ -19,6 +20,7 @@ import {
 } from '@domain/conversation/tool-outcome';
 import type { TransitionRequest } from '@domain/conversation/transitions';
 
+import { isAcceptedHandoff } from '@infra/ai/graph/handoff';
 import { ctxOf } from '@infra/ai/graph/state';
 import { langOf, t } from '@infra/ai/messages';
 import { outcomeKindOf, toToolMessage } from '@infra/ai/tools/outcome';
@@ -44,6 +46,12 @@ type InvokableTool = {
 export interface ToolExecutorState {
   messages: BaseMessage[];
   activeSessionId?: string | null;
+  /**
+   * Task 2 (owner review of Task 1): the FROM phase evaluateTransition needs.
+   * Optional like `activeSessionId` — production ConversationState always has
+   * it; a test fixture that never touches a hand-off target may omit it.
+   */
+  phase?: ConversationPhase;
 }
 
 export type ToolExecutorUpdate = {
@@ -63,6 +71,8 @@ function normalizeReturn(ret: unknown): ToolReturn {
 export function buildToolExecutor(
   tools: StructuredToolInterface[],
   policy: ToolPolicy,
+  /** transition-handoff plan Task 1 (D-5): targets that get the carrier AIMessage's text emptied. */
+  handoffTargets: ReadonlySet<ConversationPhase> = new Set(),
 ): (state: ToolExecutorState, config: RunnableConfig) => Promise<ToolExecutorUpdate> {
   const toolMap = Object.fromEntries(tools.map(t => [t.name, t])) as Record<string, InvokableTool>;
 
@@ -103,6 +113,18 @@ export function buildToolExecutor(
         }
       }
       return count;
+    };
+
+    // BUG-034 (F1, AC-SI-1a/b): a run's own messages are everything AFTER its
+    // last HumanMessage — an earlier run's llm_errors never carry into this
+    // run's budget (tool-policy.ts's "per run" contract).
+    const messagesThisRun = (msgs: BaseMessage[]): BaseMessage[] => {
+      for (let i = msgs.length - 1; i >= 0; i -= 1) {
+        if (msgs[i] instanceof HumanMessage) {
+          return msgs.slice(i + 1);
+        }
+      }
+      return msgs;
     };
 
     for (const call of sorted) {
@@ -159,11 +181,20 @@ export function buildToolExecutor(
         ret = await targetTool.invoke(call.args, toolConfig);
       } catch (err) {
         let message = err instanceof Error ? err.message : String(err);
-        // A schema rejection carries no recovery cue unless we add one: ids are
-        // UUIDs the model must copy verbatim from search_exercises results
-        // (dev-smoke 2026-09-17: the model invented exerciseIds and gave up).
+        // A schema rejection carries no recovery cue unless we add one. The Zod
+        // text above the cue already names the offending field, so the cue only
+        // says how to fix and re-call — it must never invent a cause. The ONE
+        // tool-specific cue that is real: an exercise-id rejection (dev-smoke
+        // 2026-09-17: the model invented exerciseIds and gave up) keeps the
+        // search_exercises sentence. Anything else gets the generic cue — the
+        // 2026-09-21 live smoke showed a hardcoded hint pointing a manage_fact
+        // enum error at search_exercises ids is worse than no hint: the model
+        // abandoned the call and reported success it did not have.
         if (message.includes('did not match expected schema')) {
-          message += `\nFix the arguments and call ${call.name} again: every id must be a UUID copied verbatim from the search_exercises results (the "ID:..." line), never invented or abbreviated.`;
+          const exerciseIdRejected = /exerciseId/i.test(message);
+          message += exerciseIdRejected
+            ? `\nFix the arguments and call ${call.name} again: every id must be a UUID copied verbatim from the search_exercises results (the "ID:..." line), never invented or abbreviated.`
+            : `\nFix the arguments and call ${call.name} again: correct the field named in the error above, using its exact name and allowed values from the tool's schema.`;
         }
         log.warn({ userId: ctx.userId, tool: call.name, err: message, args: call.args }, 'Tool invocation failed');
         newMessages.push(toToolMessage(llmError(message), call.id ?? ''));
@@ -194,12 +225,43 @@ export function buildToolExecutor(
       return finish(newMessages, updates);
     }
 
-    // Error budget: previous batches plus this one; Infinity never exhausts.
-    const toolErrorCount = countLlmErrors(state.messages) + countLlmErrors(newMessages);
-    if (toolErrorCount > policy.llmErrorBudget) {
+    // Error budget: THIS run's earlier batches plus this one; Infinity never
+    // exhausts. A batch that adds zero new errors of its own never ends the
+    // run — an old, already-over-budget total from earlier in the run is not
+    // grounds to stop once the model started succeeding again.
+    const newBatchErrorCount = countLlmErrors(newMessages);
+    const toolErrorCount = countLlmErrors(messagesThisRun(state.messages)) + newBatchErrorCount;
+    if (newBatchErrorCount > 0 && toolErrorCount > policy.llmErrorBudget) {
       log.warn({ userId: ctx.userId, toolErrorCount }, 'Tool error retry budget exhausted');
       newMessages.push(new AIMessage(t('tool_error_budget_exhausted', lang)));
       return finish(newMessages, updates);
+    }
+
+    // Hand-off (D-5): an ACCEPTED committed transition (the shared
+    // isAcceptedHandoff predicate — close-out Blocking 1) to a hand-off
+    // target empties the carrier AIMessage's text — same id, so the reducer
+    // replaces it in place — so nothing this phase wrote reaches the next
+    // phase or the user. Uses the JUST-UPDATED activeSessionId (e.g.
+    // start_training_session sets it in this same batch), not the pre-tool
+    // one, and `ctx.phasePath` read BEFORE this run's commit pushes its own
+    // phase — non-empty means a hop already happened this run (max 1 hop, no
+    // revisit): a SECOND hand-off-shaped transition in the same run must NOT
+    // be silenced, or the run delivers '' (close-out Blocking 1's defect).
+    // `id` is only absent in hand-built test state that bypasses the graph;
+    // production messages always carry one by the time they reach this node
+    // (ADR-0013 §4.1).
+    const alreadyHopped = (ctx.phasePath?.length ?? 0) > 0;
+    if (
+      isAcceptedHandoff(
+        handoffTargets,
+        state.phase,
+        updates.activeSessionId ?? state.activeSessionId,
+        updates.pendingTransition,
+        alreadyHopped,
+      ) &&
+      lastMessage?.id
+    ) {
+      newMessages.push(new AIMessage({ id: lastMessage.id, content: '', tool_calls: lastMessage.tool_calls ?? [] }));
     }
 
     return finish(newMessages, updates);
@@ -215,8 +277,44 @@ function finish(newMessages: BaseMessage[], updates: ToolStateUpdate): ToolExecu
   };
 }
 
-/** Conditional edge after the executor: 'agent' normally, END when the executor appended a terminal AIMessage. */
-export function afterTools(state: { messages: BaseMessage[] }): 'agent' | typeof END {
-  const last = state.messages[state.messages.length - 1] as Partial<BaseMessage> | undefined;
-  return last?._getType?.() === 'ai' ? END : 'agent';
+/**
+ * Conditional edge after the executor (transition-handoff plan Task 1, gated
+ * by the shared isAcceptedHandoff predicate — close-out Blocking 1): `agent`
+ * normally, `finalize` (mapped from END) when the executor appended a
+ * terminal AIMessage with real text, or `handoff` when the batch committed
+ * an ACCEPTED transition to a hand-off target — the phase that hands off
+ * never gets a second model call, so it has no final text for `finalize` to
+ * validate; the caller must route `handoff` straight to the subgraph's real
+ * END, bypassing `finalize` (phase-subgraph.factory.ts). A target commit
+ * would BLOCK (e.g. no active session, or the run already hopped once) falls
+ * through to today's path — the phase's own agent gets another turn and
+ * writes its own reply, never a silent, replyless run.
+ *
+ * Reads `config.context` directly (like `conversation.graph.ts`'s
+ * `afterCommit`, not `ctxOf`, which throws): a config without a run context
+ * (e.g. LangGraph's own `updateState`, used for checkpoint seeding in tests)
+ * just means "not mid-run" — `alreadyHopped` defaults to false, matching
+ * today's behaviour.
+ */
+export function buildAfterTools(handoffTargets: ReadonlySet<ConversationPhase> = new Set()): (
+  state: {
+    messages: BaseMessage[];
+    phase?: ConversationPhase;
+    activeSessionId?: string | null;
+    pendingTransition?: TransitionRequest | null;
+  },
+  config?: LangGraphRunnableConfig,
+) => 'agent' | 'handoff' | typeof END {
+  return (state, config) => {
+    const ctx = config?.context as { phasePath?: ConversationPhase[] } | undefined;
+    const alreadyHopped = (ctx?.phasePath?.length ?? 0) > 0;
+    if (isAcceptedHandoff(handoffTargets, state.phase, state.activeSessionId, state.pendingTransition, alreadyHopped)) {
+      return 'handoff';
+    }
+    const last = state.messages[state.messages.length - 1] as Partial<BaseMessage> | undefined;
+    return last?._getType?.() === 'ai' ? END : 'agent';
+  };
 }
+
+/** Flag-off default (no hand-off targets) — today's behaviour, byte-for-byte. */
+export const afterTools = buildAfterTools();

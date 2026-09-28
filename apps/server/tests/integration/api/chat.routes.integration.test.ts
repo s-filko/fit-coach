@@ -32,6 +32,7 @@ describe('POST /api/bot/chat – integration', () => {
       userService: container.get(USER_SERVICE_TOKEN) as any,
       trainingService: container.get(TRAINING_SERVICE_TOKEN) as any,
       conversationRun: container.get(CONVERSATION_RUN_PORT_TOKEN) as any,
+      speechTranscriber: { isEnabled: () => false, transcribe: async () => ({ text: '' }) } as never,
     });
 
     await app.ready();
@@ -107,8 +108,9 @@ describe('POST /api/bot/chat – integration', () => {
       expect(res.json()).toHaveProperty('error');
     });
 
-    it('should return 500 (no details) when the run throws', async () => {
-      stubRun.run.mockRejectedValueOnce(new Error('Graph failure'));
+    it('INV-LLM-006: returns 500 { error: { code: CORE_ERROR } } when the run throws — no exception message in the body', async () => {
+      const sentinel = 'SENTINEL_GRAPH_FAILURE_9f3c1a';
+      stubRun.run.mockRejectedValueOnce(new Error(sentinel));
 
       const res = await app.inject({
         method: 'POST',
@@ -118,7 +120,10 @@ describe('POST /api/bot/chat – integration', () => {
       });
 
       expect(res.statusCode).toBe(500);
-      expect(res.json().error.message).toBe('Processing failed');
+      expect(res.json()).toEqual({ error: { code: 'CORE_ERROR' } });
+      const rawBody = res.body;
+      expect(rawBody).not.toContain(sentinel);
+      expect(rawBody).not.toContain('at ');
     });
   });
 

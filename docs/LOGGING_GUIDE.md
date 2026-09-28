@@ -318,6 +318,178 @@ LLM request/response content itself stays at `debug` (BUG-003 replay behaviour).
 
 ---
 
+## The Durable Record vs. the Log (INV-LLM-008, BR-LLM-011)
+
+**Pino logs (this whole document, so far) are ephemeral.** They go to stdout, Docker's
+`json-file` driver captures up to 10 MB × 3 files per container, and that is it — the
+log lines above are for debugging a live process, not for answering "what did we send
+the model on 2026-09-21?" days later. **The authoritative record of every model
+invocation a conversation run makes lives in Postgres, in `llm_calls` (+ `prompt_blobs`), not in
+the log**, since INV-LLM-008 (ADR-0013 §8): logs are a hint, the tables are the record. (A
+background job's call carries no `runId` and is logged only — the same invariant says so.) If you need to know what a run said,
+sent, or received, query the database; treat a log line as a hint, never as the source.
+
+### Why a `volumes:` mount cannot fix a lost container log
+
+Mounting a volume does not make a container's log durable, and it is worth stating why,
+because it is the first fix everyone reaches for. Docker's `json-file` driver (configured in `deploy/docker-compose.yml`'s
+`logging:` block, 10m × 3 files, on every service) writes to
+`/var/lib/docker/containers/<container-id>/<container-id>-json.log` — a path under
+**dockerd's own data root, keyed by container id**. No `volumes:` entry in a compose
+service can relocate it; a bind mount only reaches paths you name inside *that*
+container's filesystem, and this file lives outside every container, managed by the
+daemon. What actually erases the evidence is the deploy itself: `docker compose up -d`
+recreates `server` and `bot` with **new** container ids, the **old** containers are
+removed, and dockerd deletes the old id's log directory with them — evidence gone,
+silently, the moment the recreate completes.
+
+### The fix: capture before recreate, in `deploy.sh`
+
+`deploy/deploy.sh` now captures each running service's current logs to a host file
+**before** rebuilding and restarting containers — the same shape, and same place in the
+script, as the existing database backup:
+
+- **What**: `docker compose logs <service>` output — whatever `json-file` still has
+  retained (up to the 30 MB rolling window) — for `server` and `bot`.
+- **When**: right after the database backup, before `docker compose build`/`up -d`.
+- **Where**: `${REPO_DIR}/logs/<env>/<service>_<timestamp>.log` on the VPS host (e.g.
+  `/srv/docker/fitcoach/logs/dev/server_20260922_093000.log`) — a plain file, not a
+  container volume; nothing container-side needs to change for this to work.
+- **Failure mode**: a capture failure or a service that isn't running yet (first
+  deploy) is logged and skipped — it never aborts the deploy, matching the DB backup's
+  own guard.
+- **Retention of the capture files themselves**: not automated by this plan: they are
+  the "before we blew away the old container" snapshot, not a permanent log archive.
+  Prune `${REPO_DIR}/logs/<env>/` by hand (or a future cron) if disk pressure calls for
+  it.
+
+### `llm_calls` retention (the durable record's own aging policy)
+
+Unlike the ephemeral log capture above, `llm_calls` rows are never deleted — only the
+heavy `request`/`response` JSON columns age out. Every other column — `run_id`,
+`call_index`, `model`, `latency_ms`, `error_class`, `error_message`, `created_at`,
+`prompt_hashes` — is kept forever, so "this run made this call, on this model, at this
+time, taking this long, and it did or didn't fail" survives even after the payload is
+gone.
+
+- **What ages out**: `llm_calls.request` and `llm_calls.response` — nulled, not the row.
+- **Window**: `LLM_CALLS_RETENTION_DAYS`, default **30** — a plain integer, days.
+  Configured in `apps/server/src/config/index.ts` (`EnvSchema`), documented in
+  `apps/server/.env.example`. To change it, set `LLM_CALLS_RETENTION_DAYS=<n>` in the
+  environment's real `.env.<env>` file (never `.env.example` itself) and redeploy.
+- **`prompt_blobs` ages out too, on the same "keep the row, drop the payload" rule.**
+  It is tempting to treat a blob as one row per distinct prompt version and leave the
+  table alone; that holds only for the one static rules block.
+  `assemble-context.ts` pushes up to six `SystemMessage`s
+  per call — per-profile, per-episode and per-workout blocks that change on nearly every
+  call — and the recorder hashes every one of them into its own blob, so most blobs are
+  NOT reusable across calls the way the static one is. Leaving them all forever would
+  have moved the bulky, ever-changing context OUT of the column being pruned and INTO a
+  table kept permanently — the opposite of retention. The fix: `llm_calls.prompt_hashes`
+  (every hash a call's request referenced) is written once at record time and is NEVER
+  nulled by the prune, so a blob's liveness stays a join away even after `request`
+  itself is gone. Once no row whose `request` is still present references a hash any
+  more, that blob's `content` is nulled — never the row (`hash`/`created_at` survive,
+  so which prompt versions ever existed stays answerable). A blob referenced by both a
+  pruned row and a still-live one keeps its content; sharing a hash never costs the live
+  row its context. Content that comes back later (identical text hashes to the same key)
+  is restored by the recorder's upsert, not left stuck null. See
+  `apps/server/src/infra/db/scripts/prune-llm-calls.ts`'s header for the full reasoning.
+- **How to run it**: `npm run db:prune-llm-calls` from `apps/server` — dry-run by
+  default (counts what each of the two statements would drop, changes nothing); pass
+  `-- --apply` to actually null the payloads, and `-- --days N` to override the
+  configured window for one run. Both statements share that same window — the
+  `prompt_blobs` pass judges a row "live" by `request IS NOT NULL AND` still inside it,
+  the identical predicate in dry run and apply, so a dry run's blob count matches what
+  `--apply` actually nulls instead of under-reporting it. No in-app scheduler: install
+  it as a nightly cron job on the host, the same operating model as `db:prune-checkpoints`.
+
+---
+
+## Reading a Run or a Session Back
+
+`npm run print-transcript` (from `apps/server`) is the one command that reconstructs what actually
+happened, from the durable record above — not from logs. It is written for a PERSON reconstructing
+an incident, not for a machine: full sentences, no JSON dump, and every gap this plan closed (a
+missing answer, a pruned payload, a pre-`seq` row) is printed as a stated fact, never a silent
+absence.
+
+```bash
+npm run print-transcript -- --run <runId>
+npm run print-transcript -- --session <workoutSessionId>
+npm run print-transcript -- --user <userId> --since <ISO> --until <ISO>
+npm run print-transcript -- --run <runId> --payloads   # + the exact request/response sent
+```
+
+- **`--run`** prints one run: its `conversation_runs` summary (phase, model, tokens, outcome), then
+  every `conversation_turns` row and `llm_calls` invocation, interleaved by when each actually
+  happened (`created_at`, `seq` as the tiebreak — the order BUG-029 made recoverable) — not turns first and calls appended,
+  since an API call is recorded before the turns it produced are committed (Task 4/BUG-022's own
+  lesson: seeing the calls precede the transcript write is the truthful order).
+- **`--session <id>`** resolves a `workout_sessions` row to its user and `[startedAt, completedAt]`
+  (falling back to `createdAt`/`lastActivityAt`/`updatedAt` for an in-progress or abandoned session),
+  then prints every run in that window, oldest first.
+- **`--user --since --until`** is the same window query directly, for anything not tied to a
+  training session.
+- **A failed run prints as failed** — its `outcome`, `error_class` and `error_message`,
+  right in the run header, not buried.
+- **A user message with no model answer prints `NO ANSWER RECORDED (BUG-022)`** — the exact defect
+  this plan started from — instead of just... not showing a reply and leaving the reader to notice.
+- **A row written before `seq` existed is flagged**, not silently reordered or dropped: `seq —`
+  in place of a number, plus one warning line per run that has any.
+- **`--payloads` resolves `prompt_hashes` back through `prompt_blobs`.** A pruned call
+  (`request`/`response` nulled per BR-LLM-011) prints `request: [aged out — retention pruned this
+  payload]`; a pruned blob prints `[payload aged out — retention pruned this prompt, hash <hash>]`
+  — never an empty string, never a crash. The static rules block (and any other prompt block reused
+  across calls) is printed in full only the FIRST time it appears in the whole invocation; every
+  later reference — same call, another call, another run in a session listing — points back to it
+  instead of repeating a multi-kilobyte block verbatim.
+- **Off by default** because a run's request can carry the whole conversation history (BR-LLM-011's own
+  measured volume: ~150 KB per run across 2–3 model calls) — without the flag, an `llm_calls` line shows only its model,
+  latency and error, if any.
+
+### Which database it reads
+
+`package.json`'s script (`tsx --env-file-if-exists=.env ...`) always loads `.env` — setting
+`NODE_ENV=test` in the shell has NO effect on that; `tsx`'s own `--env-file` flag is fixed before
+this file's code ever runs. The command now prints which database it actually opened as its FIRST
+line, always:
+
+```
+Reading from postgres://localhost:5432/fitcoach_dev
+```
+
+so a mismatch is visible immediately instead of surfacing later as a raw driver error. If a query
+fails because a column or table this code expects is missing, the command says so in one sentence
+naming the database, instead of printing a bare Postgres exception — the schema there is behind
+migrations, or it is simply the wrong database.
+
+**To read a different environment, pass `--env-file <path>`** — it overrides whatever `.env` already
+loaded, for this run only:
+
+```bash
+npm run print-transcript -- --run <runId> --env-file .env.test
+```
+
+### Running it against dev, during an incident
+
+The owner's incidents live on the VPS, in the `fitcoach-dev-db` container — not on a laptop. Run the
+command INSIDE the running `fitcoach-dev-server` container, over SSH, so it inherits that
+container's own database connection (`DB_HOST=db` etc., the same environment docker-compose already
+gives it — no `--env-file` needed there, and none of `.env.dev`'s secrets ever have to leave the
+VPS):
+
+```bash
+ssh filko.dev
+docker exec -it fitcoach-dev-server npm run print-transcript -- --run <runId> [--payloads]
+```
+
+The printed `Reading from postgres://...` line there should name the `db` service's own host/port
+inside that container's network, not `localhost` — if it does not, something about the container's
+environment changed and is worth a second look before trusting the rest of the output.
+
+---
+
 ## What to NEVER log
 
 ### Automatic redaction (Pino `redact`)

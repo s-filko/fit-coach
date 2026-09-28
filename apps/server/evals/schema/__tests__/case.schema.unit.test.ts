@@ -150,4 +150,29 @@ describe('seed message schema and binding rule (P4 Task 1 — tool seeds, AC-134
       { role: 'ai', text: 'a' },
     ]);
   });
+
+  it('types fixture.facts — category from ADR-0009, optional nullable muscleGroup (P6 Task 6)', () => {
+    const withFacts = {
+      ...minimalCase,
+      fixture: {
+        ...minimalCase.fixture,
+        facts: [
+          { category: 'physical_constraint', fact: 'Травмировано правое плечо', muscleGroup: 'shoulders_front' },
+          { category: 'exercise_preference', fact: 'Предпочитает гантели штангам', muscleGroup: null },
+        ],
+      },
+    };
+    expect(() => EvalCaseSchema.parse(withFacts)).not.toThrow();
+  });
+
+  it('rejects an unknown fact category in fixture.facts', () => {
+    const badCategory = {
+      ...minimalCase,
+      fixture: {
+        ...minimalCase.fixture,
+        facts: [{ category: 'made_up', fact: 'x', muscleGroup: null }],
+      },
+    };
+    expect(() => EvalCaseSchema.parse(badCategory)).toThrow();
+  });
 });

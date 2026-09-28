@@ -8,6 +8,8 @@ import type { ITrainingService } from '@domain/training/ports';
 import { sessionIdOf, userIdOf } from '@infra/ai/tools/format-exercise-summary';
 
 import { createLogger } from '@shared/logger';
+import { isDatabaseFailure } from '@shared/pg-error-cause';
+import { roundRpeToHalf } from '@shared/rpe';
 
 const log = createLogger('training-tools');
 
@@ -26,11 +28,13 @@ export function buildUpdateLastSetTool(deps: UpdateLastSetToolDeps) {
         return systemError('No active training session found. Start a session first.');
       }
 
+      const rpe = input.rpe != null ? roundRpeToHalf(input.rpe) : undefined;
+
       try {
         const result = await trainingService.updateLastSet(sessionId, input.exercise_id, {
           weight: input.weight,
           reps: input.reps,
-          rpe: input.rpe,
+          rpe,
           feedback: input.feedback,
           durationSeconds: input.durationSeconds,
           distanceKm: input.distanceKm,
@@ -56,6 +60,10 @@ export function buildUpdateLastSetTool(deps: UpdateLastSetToolDeps) {
             `After: ${afterStr}${result.after.rpe != null ? ` RPE ${result.after.rpe}` : ''}.`,
         );
       } catch (err) {
+        if (isDatabaseFailure(err)) {
+          log.error({ err, sessionId }, 'update_last_set failed: repository/DB error');
+          return systemError('Could not save the update — a database error occurred. Try again.');
+        }
         const message = err instanceof Error ? err.message : String(err);
         return llmError(message);
       }

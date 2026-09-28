@@ -10,143 +10,9 @@
  *   2.2 — updateLastSet method does not exist → toHaveProperty fails
  */
 
-import type {
-  IExerciseRepository,
-  ISessionExerciseRepository,
-  ISessionSetRepository,
-  IWorkoutPlanRepository,
-  IWorkoutSessionRepository,
-} from '@domain/training/ports';
-import { TrainingService } from '@domain/training/services/training.service';
-import type {
-  SessionExercise,
-  SessionExerciseWithDetails,
-  SessionSet,
-  WorkoutSessionWithDetails,
-} from '@domain/training/types';
+import type { SessionExercise, WorkoutSessionWithDetails } from '@domain/training/types';
 
-// ---------------------------------------------------------------------------
-// Factories
-// ---------------------------------------------------------------------------
-
-const makeSessionSet = (overrides: Partial<SessionSet> = {}): SessionSet => ({
-  id: `set-${Date.now()}-${Math.random()}`,
-  sessionExerciseId: 'se-1',
-  setNumber: 1,
-  rpe: null,
-  userFeedback: null,
-  createdAt: new Date(),
-  completedAt: null,
-  setData: { type: 'strength', reps: 10, weight: 80, weightUnit: 'kg' },
-  ...overrides,
-});
-
-const makeExerciseWithDetails = (overrides: Partial<SessionExerciseWithDetails> = {}): SessionExerciseWithDetails => ({
-  id: 'se-default',
-  sessionId: 'session-1',
-  exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
-  orderIndex: 0,
-  status: 'pending',
-  targetSets: 4,
-  targetReps: '8-10',
-  targetWeight: null,
-  actualRepsRange: null,
-  userFeedback: null,
-  createdAt: new Date(),
-  exercise: {
-    id: 'd8794819-ffc6-4d08-8336-d9bedc4e554a',
-    name: 'Bench Press',
-    category: 'compound',
-    equipment: 'barbell',
-    exerciseType: 'strength',
-    description: null,
-    energyCost: 'high',
-    complexity: 'intermediate',
-    typicalDurationMinutes: 15,
-    requiresSpotter: true,
-    imageUrl: null,
-    videoUrl: null,
-    createdAt: new Date(),
-    muscleGroups: [],
-  },
-  sets: [],
-  ...overrides,
-});
-
-const makeSession = (exercises: SessionExerciseWithDetails[] = []): WorkoutSessionWithDetails => ({
-  id: 'session-1',
-  userId: 'user-1',
-  planId: null,
-  sessionKey: null,
-  status: 'in_progress',
-  startedAt: new Date(),
-  completedAt: null,
-  durationMinutes: null,
-  userContextJson: null,
-  sessionPlanJson: null,
-  lastActivityAt: new Date(),
-  autoCloseReason: null,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  exercises,
-});
-
-// ---------------------------------------------------------------------------
-// Common mock setup
-// ---------------------------------------------------------------------------
-
-function createMocks() {
-  const mockSessionSetRepo = {
-    create: jest.fn(),
-    findById: jest.fn(),
-    findByExerciseId: jest.fn(),
-    update: jest.fn(),
-  } as unknown as jest.Mocked<ISessionSetRepository>;
-
-  const mockSessionExerciseRepo = {
-    create: jest.fn(),
-    findById: jest.fn(),
-    findBySessionId: jest.fn(),
-    update: jest.fn(),
-  } as unknown as jest.Mocked<ISessionExerciseRepository>;
-
-  const mockSessionRepo = {
-    findById: jest.fn(),
-    findByIdWithDetails: jest.fn(),
-    updateActivity: jest.fn().mockResolvedValue(undefined),
-    create: jest.fn(),
-    findRecentByUserId: jest.fn(),
-    findRecentByUserIdWithDetails: jest.fn(),
-    findActiveByUserId: jest.fn(),
-    update: jest.fn(),
-    complete: jest.fn(),
-    findTimedOut: jest.fn(),
-    autoCloseTimedOut: jest.fn().mockResolvedValue(0),
-    findLastCompletedByUserAndKey: jest.fn(),
-  } as unknown as jest.Mocked<IWorkoutSessionRepository>;
-
-  const mockWorkoutPlanRepo = {} as jest.Mocked<IWorkoutPlanRepository>;
-  const mockExerciseRepo = {} as jest.Mocked<IExerciseRepository>;
-  const mockUserRepo = { getById: jest.fn() } as never;
-  const mockLlmService = {} as never;
-
-  const trainingService = new TrainingService(
-    mockWorkoutPlanRepo,
-    mockSessionRepo,
-    mockExerciseRepo,
-    mockSessionExerciseRepo,
-    mockSessionSetRepo,
-    mockUserRepo,
-    mockLlmService,
-  );
-
-  return {
-    trainingService,
-    mockSessionRepo,
-    mockSessionExerciseRepo,
-    mockSessionSetRepo,
-  };
-}
+import { createMocks, makeExerciseWithDetails, makeSession, makeSessionSet } from './training-service-test-support';
 
 // ---------------------------------------------------------------------------
 // Phase 1.3: ensureCurrentExercise auto-complete on switch
@@ -404,5 +270,87 @@ describe('TrainingService.updateLastSet (ADR-0011 Fix 2.2)', () => {
     const { trainingService } = createMocks();
 
     expect(typeof (trainingService as unknown as Record<string, unknown>)['updateLastSet']).toBe('function');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Unknown exerciseId guard (2026-09-20: model invented a UUID for an off-plan treadmill warm-up)
+// ---------------------------------------------------------------------------
+
+describe('TrainingService.ensureCurrentExercise — exerciseId must exist in the catalog', () => {
+  const CATALOG_ID = 'a8658a5d-d2eb-4aeb-a179-92ed8cc2c27e';
+  const INVENTED_ID = '780d096a-e1e2-42f2-8d78-2d54ea3d3d0e';
+
+  const createdRow = (exerciseId: string): SessionExercise => ({
+    id: 'se-new',
+    sessionId: 'session-1',
+    exerciseId,
+    orderIndex: 0,
+    status: 'pending',
+    targetSets: null,
+    targetReps: null,
+    targetWeight: null,
+    actualRepsRange: null,
+    userFeedback: null,
+    createdAt: new Date(),
+  });
+
+  it('rejects an id that is not in the session, the plan or the catalog — and changes nothing', async () => {
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo, mockExerciseRepo } = createMocks();
+    const current = makeExerciseWithDetails({ id: 'se-A', status: 'in_progress', sets: [makeSessionSet()] });
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(makeSession([current]));
+    mockExerciseRepo.findById.mockResolvedValue(null);
+
+    await expect(trainingService.ensureCurrentExercise('session-1', { exerciseId: INVENTED_ID })).rejects.toThrow(
+      /Unknown exerciseId 780d096a.*not in the exercise catalog.*search_exercises.*exerciseName/s,
+    );
+
+    expect(mockExerciseRepo.findById).toHaveBeenCalledWith(INVENTED_ID);
+    // The in-progress exercise must NOT be auto-completed by a call that then fails
+    expect(mockSessionExerciseRepo.update).not.toHaveBeenCalled();
+    expect(mockSessionExerciseRepo.create).not.toHaveBeenCalled();
+  });
+
+  it('creates an ad-hoc session exercise when the id exists in the catalog', async () => {
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo, mockExerciseRepo } = createMocks();
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(makeSession([]));
+    mockExerciseRepo.findById.mockResolvedValue({ id: CATALOG_ID } as never);
+    mockSessionExerciseRepo.create.mockResolvedValue(createdRow(CATALOG_ID));
+    mockSessionExerciseRepo.update.mockResolvedValue(createdRow(CATALOG_ID));
+
+    const result = await trainingService.ensureCurrentExercise('session-1', { exerciseId: CATALOG_ID });
+
+    expect(mockSessionExerciseRepo.create).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({ exerciseId: CATALOG_ID }),
+    );
+    expect(result.exercise.status).toBe('in_progress');
+  });
+
+  it('does not query the catalog for an id that comes from the session plan', async () => {
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo, mockExerciseRepo } = createMocks();
+    const withPlan = {
+      ...makeSession([]),
+      sessionPlanJson: { exercises: [{ exerciseId: CATALOG_ID, targetSets: 3, targetReps: '8' }] },
+    } as unknown as WorkoutSessionWithDetails;
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(withPlan);
+    mockSessionExerciseRepo.create.mockResolvedValue(createdRow(CATALOG_ID));
+    mockSessionExerciseRepo.update.mockResolvedValue(createdRow(CATALOG_ID));
+
+    await trainingService.ensureCurrentExercise('session-1', { exerciseId: CATALOG_ID });
+
+    expect(mockExerciseRepo.findById).not.toHaveBeenCalled();
+    expect(mockSessionExerciseRepo.create).toHaveBeenCalled();
+  });
+
+  it('does not query the catalog for an exercise already in the session', async () => {
+    const { trainingService, mockSessionRepo, mockSessionExerciseRepo, mockExerciseRepo } = createMocks();
+    const existing = makeExerciseWithDetails({ id: 'se-A', exerciseId: CATALOG_ID, status: 'pending' });
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(makeSession([existing]));
+    mockSessionExerciseRepo.update.mockResolvedValue({ ...existing } as unknown as SessionExercise);
+
+    await trainingService.ensureCurrentExercise('session-1', { exerciseId: CATALOG_ID });
+
+    expect(mockExerciseRepo.findById).not.toHaveBeenCalled();
   });
 });

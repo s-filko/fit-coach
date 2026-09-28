@@ -1,6 +1,6 @@
 import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 
-import { lastAiText, splitEpisode, toTranscriptMessages } from '../episode';
+import { runAiText, splitEpisode, toTranscriptMessages } from '../episode';
 
 describe('splitEpisode (D-I — this run = from the last HumanMessage on; INV-LLM-002)', () => {
   it('splits on the single human message', () => {
@@ -32,13 +32,67 @@ describe('splitEpisode (D-I — this run = from the last HumanMessage on; INV-LL
   });
 });
 
-describe('lastAiText', () => {
-  it('returns the text of the last AI message', () => {
-    expect(lastAiText([new HumanMessage('q'), new AIMessage('first'), new AIMessage('last')])).toBe('last');
+describe("runAiText (AC-CC-3 — the run's reply: every non-empty AI text of THIS run)", () => {
+  const call = new AIMessage({
+    content: '',
+    tool_calls: [{ id: 'c1', name: 'log_set', args: {}, type: 'tool_call' }],
+  });
+  const result = new ToolMessage({ tool_call_id: 'c1', content: 'ok' });
+
+  it('a run with text + tool calls + final text delivers BOTH texts, in order, blank line between', () => {
+    const run = [
+      new HumanMessage('сделал жим 80 на 8'),
+      new AIMessage('Записал!'),
+      call,
+      result,
+      new AIMessage('Отлично, есть первый подход!'),
+    ];
+    expect(runAiText(run)).toBe('Записал!\n\nОтлично, есть первый подход!');
   });
 
-  it('returns null with no AI message', () => {
-    expect(lastAiText([new HumanMessage('q')])).toBeNull();
+  it('AI messages with only tool calls / empty text contribute nothing', () => {
+    const run = [new HumanMessage('q'), new AIMessage(''), call, result, new AIMessage('Ответ')];
+    expect(runAiText(run)).toBe('Ответ');
+  });
+
+  it('texts from earlier runs (before the last HumanMessage) are never re-sent', () => {
+    const earlier = [new HumanMessage('q1'), new AIMessage('старый ответ')];
+    const run = [new HumanMessage('q2'), new AIMessage('новый ответ')];
+    expect(runAiText([...earlier, ...run])).toBe('новый ответ');
+  });
+
+  it("a single-AI-message run delivers exactly that message's text, unchanged", () => {
+    const run = [new HumanMessage('q'), new AIMessage('  Ответ  ')];
+    expect(runAiText(run)).toBe('  Ответ  ');
+  });
+
+  it('no AI message at all → empty string', () => {
+    expect(runAiText([new HumanMessage('q')])).toBe('');
+    expect(runAiText([])).toBe('');
+  });
+
+  describe('fromIndex (transition-handoff plan Task 2): the hand-off delivery cutoff', () => {
+    it('default (no fromIndex) is the whole run — unchanged when no hop happened', () => {
+      const run = [new HumanMessage('q'), new AIMessage('phase one text'), new AIMessage('phase two text')];
+      expect(runAiText(run)).toBe('phase one text\n\nphase two text');
+    });
+
+    it('fromIndex cuts current at that index — only the phase AFTER the boundary is delivered', () => {
+      const run = [
+        new HumanMessage('сделал 2 подхода 110х12'),
+        new AIMessage('this text must never reach the user'),
+        call,
+        result,
+        new AIMessage('Записал: 110 x 12.'),
+      ];
+      // Boundary = 3 (human, ai, tool — the first phase's whole `current` slice).
+      expect(runAiText(run, 3)).toBe('Записал: 110 x 12.');
+    });
+
+    it('fromIndex 0 is identical to the default', () => {
+      const run = [new HumanMessage('q'), new AIMessage('Ответ')];
+      expect(runAiText(run, 0)).toBe(runAiText(run));
+    });
   });
 });
 

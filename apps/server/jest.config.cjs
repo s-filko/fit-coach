@@ -67,8 +67,11 @@ module.exports = {
   // Test timeouts
   testTimeout: 30000, // 30 seconds for all tests
 
-  // Force Jest to exit after tests complete
-  forceExit: true,
+  // Do NOT force-exit: the embedding service's native ONNX session needs its background thread
+  // pool to unwind on its own after EmbeddingService.dispose() releases it (see
+  // src/app/test/setup.ts's afterAll) — forceExit kills the process before that finishes and
+  // aborts with `libc++abi: mutex lock failed` (exit 134) instead of exiting 0/1.
+  forceExit: false,
   detectOpenHandles: true,
 
   // Error handling

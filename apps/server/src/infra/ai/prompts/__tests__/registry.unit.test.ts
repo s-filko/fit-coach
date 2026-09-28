@@ -13,19 +13,28 @@ describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVer
     ]);
   });
 
-  it('promptVersionsForPhase(training) lists the phase, its directives and the shared blocks, all v1', () => {
+  it('promptVersionsForPhase(training) lists the phase (v7 — training-history-lookup D4, get_exercise_history; v6 was BUG-030 exercise-history rewrite; v5 was BUG-037 transition reply order; v4 was BUG-032 current-time directive; v3 was exerciseId / search_exercises tool rules; v2 was P4 Task 2, D-B), its directives and the shared blocks', () => {
     const versions = promptVersionsForPhase('training');
-    expect(versions['phase.training']).toBe('v1');
+    expect(versions['phase.training']).toBe('v7');
     expect(versions['directive.identity']).toBeUndefined(); // training has no identity directive
     expect(versions['directive.tool-reply']).toBe('v1');
-    expect(versions['block.episode_summaries']).toBe('v1');
-    expect(Object.values(versions).every(v => v === 'v1')).toBe(true);
+    expect(versions['block.episode_summaries']).toBe('v2');
+    // BUG-036 + owner language rule (R3): training reaches DIRECTIVES_WITHOUT_IDENTITY_V2,
+    // which carries LANGUAGE_V2 (no "from Telegram" wording) — the only v2 directive.
+    expect(versions['directive.language']).toBe('v2');
+    const {
+      'phase.training': _phaseVersion,
+      'block.episode_summaries': _episodeSummariesVersion,
+      'directive.language': _languageVersion,
+      ...rest
+    } = versions;
+    expect(Object.values(rest).every(v => v === 'v1')).toBe(true);
   });
 
   it('promptVersionsForPhase stamps the SAME blocks for every phase (one chat — P4 Task 5)', () => {
     for (const phase of Object.keys(PHASE_PROMPTS) as ConversationPhase[]) {
       const keys = Object.keys(promptVersionsForPhase(phase)).filter(k => k.startsWith('block.'));
-      expect(keys.sort()).toEqual(['block.episode_summaries', 'block.post_tool_nudge']);
+      expect(keys.sort()).toEqual(['block.current_time', 'block.episode_summaries', 'block.post_tool_nudge']);
     }
   });
 
@@ -33,8 +42,11 @@ describe('prompt registry (ADR-0013 §5, BR-LLM-008 — one list, real promptVer
     for (const phase of Object.keys(PHASE_PROMPTS) as ConversationPhase[]) {
       const versions = promptVersionsForPhase(phase);
       expect(versions[PHASE_PROMPTS[phase].current.id]).toBeDefined();
-      expect(versions['block.episode_summaries']).toBe('v1');
+      expect(versions['block.episode_summaries']).toBe('v2');
       expect(versions['block.post_tool_nudge']).toBe('v1');
+      // Review R1 (BR-LLM-008): the NOW line left the phase's directives but
+      // is still sent on every call — its module stays stamped.
+      expect(versions['block.current_time']).toBe('v1');
     }
   });
 

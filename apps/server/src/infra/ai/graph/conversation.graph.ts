@@ -1,4 +1,4 @@
-import { type BaseCheckpointSaver, END, START, StateGraph } from '@langchain/langgraph';
+import { type BaseCheckpointSaver, END, type LangGraphRunnableConfig, START, StateGraph } from '@langchain/langgraph';
 
 import { LlmGateway } from '@domain/ai/ports';
 import type { ConversationPhase } from '@domain/conversation/phases';
@@ -10,7 +10,15 @@ import type {
   IWorkoutPlanRepository,
   IWorkoutSessionRepository,
 } from '@domain/training/ports';
-import type { IUserService } from '@domain/user/ports';
+import type { IUserFactsService, IUserService } from '@domain/user/ports';
+
+import {
+  buildCourseCheckStep,
+  DEFAULT_EXPIRY_ASK_WINDOW_MS,
+  DEFAULT_RETRY_COOLDOWN_MS,
+} from '@infra/ai/course-check/course-check.step';
+
+import type { TokenBudgetOverride } from '@config/llm-budget-overrides';
 
 import { buildCompactionFlagHandler } from './handlers/compaction-flag.handler';
 import { buildSessionLifecycleHandler } from './handlers/session-lifecycle.handler';
@@ -20,7 +28,7 @@ import { buildPrepareNode } from './nodes/prepare.node';
 import { buildRouteNode } from './nodes/route.node';
 import { buildPhaseSubgraph } from './phase-subgraph.factory';
 import { buildPhaseSpecs } from './phases';
-import { ConversationState, RunContext } from './state';
+import { ConversationState, type ConversationStateType, RunContext } from './state';
 
 export const CONVERSATION_GRAPH_TOKEN = Symbol('ConversationGraph');
 
@@ -34,30 +42,106 @@ export interface ConversationGraphDeps {
   runService: IConversationRunService;
   transcript: TranscriptPort;
   summaries: SummaryPort;
+  /**
+   * Facts: compaction applies the summariser's operations; conversation writes
+   * go through manage_fact (fact-lifecycle Tasks 2-3).
+   */
+  userFacts: IUserFactsService;
   llmGateway: LlmGateway;
   /** The D-L episode tunables, resolved from env at the composition root. */
   episodeConfig: EpisodeTunables;
+  /**
+   * AC-FL-5 (course-check plan Task 1): COURSE_CHECK_ENABLED, resolved once at
+   * the composition root. Optional so existing test fixtures keep compiling;
+   * absent means enabled (the layer is the shipped behaviour).
+   */
+  courseCheckEnabled?: boolean;
+  /**
+   * COURSE_CHECK_RETRY_COOLDOWN_MINUTES in ms — how long a failed check is not
+   * retried on the same fingerprint. Optional like the switch; absent = 15 min.
+   */
+  courseCheckRetryCooldownMs?: number;
+  /**
+   * COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS in ms — an ask_once fact expired longer
+   * ago than this is archived silently, never asked about. Absent = 7 days.
+   */
+  courseCheckExpiryAskWindowMs?: number;
+  /** LLM_BUDGET_<PHASE>_<PART> overrides (P4 context-budget plan Task 3), resolved once here. */
+  budgetOverrides?: Record<string, TokenBudgetOverride>;
+  /**
+   * TRANSITION_HANDOFF_TARGETS (transition-handoff plan Task 1, D-1, AC-TH-2):
+   * phases that get a silent same-run hand-off when a tool batch commits a
+   * transition to them — no second model call in the phase that hands off.
+   * Optional like courseCheckEnabled; absent/empty = off (today's graph).
+   */
+  transitionHandoffTargets?: ReadonlySet<ConversationPhase>;
   checkpointer: BaseCheckpointSaver;
+}
+
+/**
+ * Conditional edge after `commit` (transition-handoff plan Task 2, AC-TH-1):
+ * `route` when `commit` just set `ctx.hopping` (a committed transition to a
+ * hand-off target, on the FIRST commit of the run only — commit.node.ts
+ * enforces max 1 hop), END otherwise — today's behaviour, byte-for-byte, when
+ * the flag is off. `prepare` is skipped entirely on the hop.
+ *
+ * Reads `config.context` directly (not `ctxOf`, which throws): LangGraph's
+ * own `updateState` (checkpoint seeding in tests and the eval scenario
+ * runner) re-evaluates outgoing branches with no run context at all — a
+ * missing context here just means "not mid-run", so END is the safe default.
+ */
+function afterCommit(_state: ConversationStateType, config: LangGraphRunnableConfig): 'route' | typeof END {
+  const ctx = config.context as { hopping?: boolean } | undefined;
+  return ctx?.hopping ? 'route' : END;
+}
+
+/** Applies a phase's LLM_BUDGET_* override (partial) over its PhaseSpec.budget default. */
+export function withBudgetOverrides(
+  specs: ReturnType<typeof buildPhaseSpecs>,
+  overrides: Record<string, TokenBudgetOverride>,
+) {
+  return specs.map(spec => {
+    const override = overrides[spec.name];
+    return override ? { ...spec, budget: { ...spec.budget, ...override } } : spec;
+  });
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function buildGraph(deps: ConversationGraphDeps) {
   const { userService, trainingService, runService, workoutSessionRepo, checkpointer, transcript } = deps;
-  const { llmGateway, summaries, episodeConfig } = deps;
+  const { llmGateway, summaries, userFacts, episodeConfig } = deps;
 
-  const specs = buildPhaseSpecs(deps);
+  const specs = withBudgetOverrides(buildPhaseSpecs(deps), deps.budgetOverrides ?? {});
 
   // D-D: the BR-LLM-003 trigger reads PhaseSpec.budget.history; an unknown
   // phase never overflows (the trigger is a comparison, enforcement is the
   // context-budget plan).
   const budgetFor = (phase: ConversationPhase): number =>
     specs.find(s => s.name === phase)?.budget.history ?? Number.POSITIVE_INFINITY;
-  const compactStep = buildCompactStep({ llmGateway, summaries, config: episodeConfig, budgetFor });
+  const compactStep = buildCompactStep({ llmGateway, summaries, userFacts, config: episodeConfig, budgetFor });
+  // AC-FL-5: the course-check step — same gap threshold as compaction and the
+  // time-gap note (threaded from episodeConfig, never re-read from env).
+  const courseCheckStep = buildCourseCheckStep({
+    llmGateway,
+    userFacts,
+    trainingService,
+    config: {
+      enabled: deps.courseCheckEnabled ?? true,
+      gapMs: episodeConfig.gapMs,
+      retryCooldownMs: deps.courseCheckRetryCooldownMs ?? DEFAULT_RETRY_COOLDOWN_MS,
+      expiryAskWindowMs: deps.courseCheckExpiryAskWindowMs ?? DEFAULT_EXPIRY_ASK_WINDOW_MS,
+    },
+  });
 
   // prepare routes to 'route' normally and short-circuits dead training
   // states to 'commit' (D-E); route fans out to the phase nodes; every phase
   // falls into commit. Adding a phase = adding a spec (INV-LLM-005).
-  const prepareNode = buildPrepareNode({ userService, trainingService, compact: compactStep });
+  const prepareNode = buildPrepareNode({
+    userService,
+    trainingService,
+    compact: compactStep,
+    courseCheck: courseCheckStep,
+  });
   const routeNode = buildRouteNode();
   const commitNode = buildCommitNode({
     transcript,
@@ -66,14 +150,19 @@ function buildGraph(deps: ConversationGraphDeps) {
     // handler fails. The legacy phase-summary handler is gone (P4 Task 4);
     // its file dies in Task 7.
     onTransition: [buildCompactionFlagHandler(), buildSessionLifecycleHandler({ trainingService, workoutSessionRepo })],
+    // transition-handoff plan Task 2 (D-1): same targets tool-executor uses.
+    transitionHandoffTargets: deps.transitionHandoffTargets,
   });
 
   const graph = new StateGraph(ConversationState, RunContext)
-    .addNode('prepare', prepareNode, { ends: ['route', 'commit'] })
+    .addNode('prepare', prepareNode, { ends: ['route', 'commit', END] })
     .addNode('route', routeNode, { ends: specs.map(s => s.name) })
     .addNode('commit', commitNode)
     .addEdge(START, 'prepare')
-    .addEdge('commit', END);
+    // transition-handoff plan Task 2 (AC-TH-1): `commit` sets ctx.hopping when
+    // it just committed a transition to a hand-off target — the ONLY way back
+    // to `route` this run; `prepare` is never re-entered on a hop.
+    .addConditionalEdges('commit', afterCommit, { route: 'route', [END]: END });
 
   for (const spec of specs) {
     graph.addNode(spec.name, buildPhaseSubgraph(spec, deps)).addEdge(spec.name, 'commit');

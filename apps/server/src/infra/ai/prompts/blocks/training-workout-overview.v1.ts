@@ -1,10 +1,18 @@
+/**
+ * `training.client`, `training.workout_overview`, `training.stale_session`,
+ * `training.previous_session` blocks (D-B) — moved verbatim from
+ * `prompts/phases/training/v1.helpers.ts` and the matching sections of
+ * `prompts/phases/training/v1.ts` (P4 context-budget plan, Task 2).
+ * `buildStaleSessionSection`'s trailing "\n\n" stays trimmed by the caller —
+ * the section separator comes from compose()/assembler instead.
+ */
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
-/**
- * Moved verbatim from graph/nodes/training.node.ts private helpers (P2, AC-1321).
- * buildStaleSessionSection's trailing "\n\n" is trimmed by the caller — the section
- * separator comes from compose() instead.
- */
+import { humanTimeAgo } from '@shared/date-utils';
+
+import type { ContextBlock, ContextBlockCtx } from './types';
+
+const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 /**
  * Single source of truth for the LLM about what has been done and what is planned.
@@ -110,6 +118,31 @@ export function buildWorkoutOverview(session: WorkoutSessionWithDetails, now: Da
   return parts.join('\n\n');
 }
 
+/**
+ * One exercise's set lines (`  Set N: ...`) plus an optional `  Overall feedback: "..."` line, or
+ * `  No sets logged.` — everything after the caller's own `Name [ID:...]` header line. Shared by
+ * `buildPreviousSessionSection` (legacy, byte-identical) and `training-exercise-history.v1.ts`'s
+ * EXERCISE HISTORY block (close-out review R2 — was duplicated between the two).
+ */
+export function formatExerciseSets(
+  sets: WorkoutSessionWithDetails['exercises'][number]['sets'],
+  userFeedback: string | null,
+): string {
+  if (sets.length === 0) {
+    return '  No sets logged.';
+  }
+
+  const setsText = sets.map(s => {
+    const base = formatSetData(s.setData);
+    const rpe = s.rpe ? ` | RPE ${s.rpe}` : '';
+    const fb = s.userFeedback ? ` | "${s.userFeedback}"` : '';
+    return `  Set ${s.setNumber}: ${base}${rpe}${fb}`;
+  });
+
+  const feedbackLine = userFeedback ? `\n  Overall feedback: "${userFeedback}"` : '';
+  return `${setsText.join('\n')}${feedbackLine}`;
+}
+
 export function buildPreviousSessionSection(session: WorkoutSessionWithDetails): string {
   if (session.exercises.length === 0) {
     return 'No exercise data from previous session.';
@@ -118,24 +151,18 @@ export function buildPreviousSessionSection(session: WorkoutSessionWithDetails):
   return session.exercises
     .map(ex => {
       const header = `${ex.exercise.name} [ID:${ex.exerciseId}]`;
-      if (ex.sets.length === 0) {
-        return `${header}\n  No sets logged.`;
-      }
-
-      const setsText = ex.sets.map(s => {
-        const base = formatSetData(s.setData);
-        const rpe = s.rpe ? ` | RPE ${s.rpe}` : '';
-        const fb = s.userFeedback ? ` | "${s.userFeedback}"` : '';
-        return `  Set ${s.setNumber}: ${base}${rpe}${fb}`;
-      });
-
-      const exerciseFb = ex.userFeedback ? `\n  Overall feedback: "${ex.userFeedback}"` : '';
-      return `${header}\n${setsText.join('\n')}${exerciseFb}`;
+      return `${header}\n${formatExerciseSets(ex.sets, ex.userFeedback)}`;
     })
     .join('\n\n');
 }
 
-function formatSetData(setData: WorkoutSessionWithDetails['exercises'][number]['sets'][number]['setData']): string {
+/**
+ * Exported for `training-exercise-history.v1.ts` (EXERCISE HISTORY / RECENT WORKOUTS) — one set
+ * formatter, not copied.
+ */
+export function formatSetData(
+  setData: WorkoutSessionWithDetails['exercises'][number]['sets'][number]['setData'],
+): string {
   switch (setData.type) {
     case 'strength':
       return `${setData.reps} reps${setData.weight != null ? ` @ ${setData.weight} ${setData.weightUnit ?? 'kg'}` : ''}`;
@@ -186,3 +213,74 @@ RULES:
 3. If ambiguous, ASK: "Are you adding to the previous session or starting fresh?"
 `;
 }
+
+/**
+ * `render` never reads `data` (session-independent — ctx.user only), so this carries no fields.
+ * training-exercise-history plan: was `{ previousSession }` only because `TrainingData` happened to
+ * have that field; kept structurally open (`Record<string, never>` would reject any caller's
+ * extra properties) since every caller passes it the full `TrainingData` object regardless.
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- see comment above
+export interface TrainingClientData {}
+
+/** `=== CLIENT ===` — name and goal. Session-independent, so it uses ctx.user only. */
+export const TRAINING_CLIENT_V1: ContextBlock<TrainingClientData> = {
+  id: 'training.client',
+  version: 'v1',
+  render(_data, ctx: ContextBlockCtx) {
+    const clientName = ctx.user?.firstName ?? 'Client';
+    const fitnessGoal = ctx.user?.fitnessGoal ?? null;
+    return `=== CLIENT ===\n\nName: ${clientName}${fitnessGoal ? `\nGoal: ${fitnessGoal}` : ''}`;
+  },
+};
+
+export interface TrainingWorkoutOverviewData {
+  session: WorkoutSessionWithDetails;
+}
+
+export const TRAINING_WORKOUT_OVERVIEW_V1: ContextBlock<TrainingWorkoutOverviewData> = {
+  id: 'training.workout_overview',
+  version: 'v1',
+  render(data, ctx: ContextBlockCtx) {
+    return `=== WORKOUT OVERVIEW ===\n\n${buildWorkoutOverview(data.session, ctx.now)}`;
+  },
+};
+
+export interface TrainingStaleSessionData {
+  session: WorkoutSessionWithDetails;
+}
+
+/** Absent (null) unless the session has been inactive past SESSION_TIMEOUT_MS — v1's `isStale` gate. */
+export const TRAINING_STALE_SESSION_V1: ContextBlock<TrainingStaleSessionData> = {
+  id: 'training.stale_session',
+  version: 'v1',
+  render(data, ctx: ContextBlockCtx) {
+    const lastActivity = data.session.lastActivityAt ?? data.session.updatedAt ?? data.session.createdAt;
+    const sessionAgeMs = ctx.now.getTime() - new Date(lastActivity).getTime();
+    if (sessionAgeMs <= SESSION_TIMEOUT_MS) {
+      return null;
+    }
+    return buildStaleSessionSection(sessionAgeMs).trimEnd();
+  },
+};
+
+export interface TrainingPreviousSessionData {
+  previousSession: WorkoutSessionWithDetails | null;
+}
+
+/** Absent (null) when there is no previous session for this template — v1's `if (previousSession)` gate. */
+export const TRAINING_PREVIOUS_SESSION_V1: ContextBlock<TrainingPreviousSessionData> = {
+  id: 'training.previous_session',
+  version: 'v1',
+  render(data, ctx: ContextBlockCtx) {
+    if (!data.previousSession) {
+      return null;
+    }
+    const when = humanTimeAgo(
+      new Date(data.previousSession.completedAt ?? data.previousSession.createdAt),
+      ctx.now,
+      ctx.user?.timezone,
+    );
+    return `=== PREVIOUS SESSION (same template — ${when}) ===\n\n${buildPreviousSessionSection(data.previousSession)}`;
+  },
+};

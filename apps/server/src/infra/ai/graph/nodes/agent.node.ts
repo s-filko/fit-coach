@@ -11,13 +11,17 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 import type { StoredEpisodeSummary } from '@domain/conversation/episode';
 
 import { assembleContext } from '@infra/ai/context/assemble-context';
+import type { CourseCheckDirective, StoredCourseDirective } from '@infra/ai/course-check/directive';
 import { splitEpisode } from '@infra/ai/graph/episode';
 import type { ConversationGraphDeps, PhaseSpec, PromptContextFor } from '@infra/ai/graph/phase-spec';
 import { ctxOf } from '@infra/ai/graph/state';
 import { langOf, t } from '@infra/ai/messages';
 import { getModel } from '@infra/ai/model.factory';
-import { POST_TOOL_NUDGE_V1, renderBlock } from '@infra/ai/prompts/blocks';
+import { CURRENT_TIME_V1, POST_TOOL_NUDGE_V1, renderBlock, TIME_GAP_V1 } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
+import { extractUsageFromMessage } from '@infra/ai/usage';
+
+import { loadConfig } from '@config/index';
 
 import { createLogger } from '@shared/logger';
 
@@ -31,6 +35,10 @@ export interface AgentNodeState {
   lastUserMessageAt?: string | null;
   /** Read by the episode-summaries block from Task 5 on (declared now, D-H's state contract). */
   episodeSummaries?: StoredEpisodeSummary[];
+  /** AC-FL-5: the persisted course-check directive — prepare's step wrote it; its payload renders as block 2a′. */
+  courseDirective?: StoredCourseDirective | null;
+  /** This run's one-shot expiry questions — rendered with the directive, cleared by commit, never persisted with it. */
+  courseExpiryQuestions?: string[];
 }
 
 function isEmptyAIResponse(response: AIMessage): boolean {
@@ -48,6 +56,46 @@ function typeOf(m: BaseMessage | undefined): string {
 
 function endsWithToolMessage(messages: BaseMessage[]): boolean {
   return typeOf(messages[messages.length - 1]) === 'tool';
+}
+
+/** Z.AI/LangChain put the OpenAI finish_reason here (stop | tool_calls | length | …). */
+function finishReasonOf(response: AIMessage): string | undefined {
+  const meta = response.response_metadata as { finish_reason?: string } | undefined;
+  return meta?.finish_reason;
+}
+
+/**
+ * BUG-019 / AC-RL-2: every model response is visible at info — one line per
+ * call with the finish reason and token counts, never the message bodies.
+ * A `length` response additionally warns: the answer was cut off by the
+ * output-token cap, a call we already know is dead. Returns the finish reason
+ * so the caller can skip the retry (see below).
+ *
+ * D2: token counts come from the shared extractor (usage.ts) — the same source of truth
+ * llm-log-handler.ts/run-metrics.ts use — so this line adds cacheReadTokens/reasoningTokens too.
+ */
+function logModelResponse(response: AIMessage, userId: string, phase: string): string | undefined {
+  const finishReason = finishReasonOf(response);
+  const { inputTokens, outputTokens, cacheReadTokens, reasoningTokens } = extractUsageFromMessage(response);
+  log.info(
+    {
+      userId,
+      phase,
+      finishReason,
+      promptTokens: inputTokens,
+      completionTokens: outputTokens,
+      cacheReadTokens,
+      reasoningTokens,
+    },
+    'LLM response',
+  );
+  if (finishReason === 'length') {
+    log.warn(
+      { userId, phase, finishReason, completionTokens: outputTokens, maxTokens: loadConfig().LLM_MAX_TOKENS },
+      'LLM answer truncated by the output-token cap (finish_reason=length)',
+    );
+  }
+  return finishReason;
 }
 
 /**
@@ -87,13 +135,39 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     }
 
     const lastMessageTime = state.lastUserMessageAt ? new Date(state.lastUserMessageAt) : null;
+    // AC-CC-2 (chat-continuity Task 2): when the new message arrives after an
+    // EPISODE_GAP_HOURS pause, one time-gap note sits immediately before it —
+    // the SAME threshold compaction's inactivity trigger uses, threaded from
+    // the episode config (never re-read from env). `lastUserMessageAt` still
+    // holds the previous run's time here; commit.node stamps the new one
+    // after the run, and compaction never clears it.
+    const gapMs = lastMessageTime !== null ? now.getTime() - lastMessageTime.getTime() : null;
+    const gapNote = gapMs !== null && gapMs >= deps.episodeConfig.gapMs ? renderBlock(TIME_GAP_V1, { gapMs }) : null;
+    if (gapNote !== null) {
+      // Review R1 (BR-LLM-008): the note reached the request, so the run row
+      // must stamp it — `commit` merges these into the row's promptVersions.
+      ctx.promptVersionExtras = { [TIME_GAP_V1.id]: TIME_GAP_V1.version };
+    }
+    // The shared render context (review R2: built once) — the NOW line and the
+    // phase prompt render from the same `now`/`timezone`/`user` (BR-LLM-007:
+    // pure render, no second read of anything).
+    const renderCtx = {
+      now,
+      timezone: user?.timezone ?? null,
+      client: 'telegram' as const,
+      user,
+      lastMessageTime,
+    };
+    // now-line-last plan (D2): the NOW line left the directives (block 1 —
+    // it changes every minute, so nothing after it was ever prompt-cached)
+    // and is rendered here into its own SystemMessage immediately before
+    // `current`, following the gap-note wiring. One renderer — CURRENT_TIME_V1
+    // (blocks/, a standalone message module like the gap note since review R1)
+    // — the same module that used to render it inside block 1.
+    const nowLine = renderBlock(CURRENT_TIME_V1, renderCtx);
     const systemPrompt = compose(
       spec.prompt.current.render({
-        now,
-        timezone: user?.timezone ?? null,
-        client: 'telegram',
-        user,
-        lastMessageTime,
+        ...renderCtx,
         ...loaded.data,
       } as PromptContextFor<D>),
     );
@@ -112,27 +186,68 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     // inherited from the route's invoke config; configurable never reaches handlers.
     const model = getModel(spec.modelProfile).bindTools(tools);
 
-    const { messages: llmMessages, budgetReport } = assembleContext({
+    // P6 Task 4 (D-F): facts are loaded once per run here, not per block
+    // render — the block itself is pure and takes already-loaded data. AC-FL-1:
+    // the run clock (ctx.now) decides what is expired — never the DB clock.
+    const userFacts = await deps.userFacts.getForPrompt(userId, now);
+
+    // ADR-0013 §3.4 block 2a (D-F) + block 3 (D-A/D-B) + INV-LLM-004 (Task 3,
+    // order extended by Task 4): assembleContext renders spec.contextBlocks at
+    // full depth and enforces the budget via resolveBudget — truncate facts,
+    // trim history, step blocks down their depths, drop the oldest summary,
+    // D-D floor, in that order. Block 1 (systemPrompt) is never touched here.
+    const { messages: llmMessages, budgetReport } = await assembleContext({
       systemPrompt,
+      userFacts,
+      // AC-FL-5: the directive the course-check step stored (or kept) in
+      // prepare this run — its payload, rendered as one block after the facts.
+      courseDirective: directiveForRun(state),
       episodeSummaries: state.episodeSummaries ?? [],
+      contextBlocks: spec.contextBlocks,
+      blockData: loaded.data,
       history,
       current,
+      gapNote,
+      nowLine,
+      budget: spec.budget,
       now,
       timezone: user?.timezone ?? null,
+      user,
     });
     ctx.metrics.attachBudgetReport(budgetReport);
+
+    if (budgetReport.system > spec.budget.system) {
+      log.warn(
+        { userId, phase: spec.name, system: budgetReport.system, budget: spec.budget.system },
+        'Phase system prompt exceeds its token budget (reported, never cut — INV-LLM-004)',
+      );
+    }
+    if (budgetReport.cuts?.includes('floor')) {
+      log.error(
+        { userId, phase: spec.name, cuts: budgetReport.cuts },
+        'Context budget hit the floor (D-D) — history and summaries dropped for this run',
+      );
+    }
 
     // Post-tool nudge + empty-reply retry, moved verbatim from invokeWithRetry
     // (ADR-0013 §6: every phase, one retry, then the catalog fallback — D-D).
     const postTool = endsWithToolMessage(llmMessages);
     const firstMessages = postTool ? withPostToolNudge(llmMessages) : llmMessages;
     const response = await model.invoke(firstMessages, config);
+    const finishReason = logModelResponse(response, userId, spec.name);
 
     if (isEmptyAIResponse(response)) {
+      // BUG-019 / AC-RL-2: an empty answer truncated by the output cap is a
+      // call we already know was cut off — never pay a second multi-minute
+      // invoke for it; the user gets the catalog text right away.
+      if (finishReason === 'length') {
+        return { messages: [new AIMessage(t('empty_reply', lang))] };
+      }
       log.warn({ userId, phase: spec.name }, 'LLM returned empty response — retrying once');
       // On retry always include the nudge regardless of message structure
       const retryMessages = postTool ? firstMessages : withPostToolNudge(llmMessages);
       const retried = await model.invoke(retryMessages, config);
+      logModelResponse(retried, userId, spec.name);
       if (isEmptyAIResponse(retried)) {
         return { messages: [new AIMessage(t('empty_reply', lang))] };
       }
@@ -141,4 +256,18 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
 
     return { messages: [response] };
   };
+}
+
+/**
+ * The directive as THIS run renders it: the stored one, plus the expiry
+ * questions asked this run (course-check expiry) appended to its questions. The
+ * stored directive never carries them — they are one-shot.
+ */
+function directiveForRun(state: AgentNodeState): CourseCheckDirective | null {
+  const stored = state.courseDirective?.directive;
+  if (stored === undefined) {
+    return null;
+  }
+  const oneShot = state.courseExpiryQuestions ?? [];
+  return oneShot.length === 0 ? stored : { ...stored, questions: [...stored.questions, ...oneShot] };
 }

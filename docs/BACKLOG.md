@@ -19,6 +19,66 @@ Rules:
 
 ## Ideas
 
+- [ ] **User-fact lifecycle: dates, context, expiry, retraction (owner, 2026-09-19).** Today a
+      `user_facts` row lives forever: the `## User Facts` block shows only the text (+ muscle), no
+      "when stated / last confirmed / how many times"; nothing ages a fact out; nothing removes one
+      the user contradicts ("the hernia healed" adds a new row, the old `physical_constraint`
+      stays — and the hard validation keeps rejecting exercises for it); the summariser never sees
+      the known facts, so it cannot say one is no longer true; `source_turn_id` exists but is not
+      filled at extraction. Scope to design: render dates/confirmations as context, a staleness
+      rule per category (an injury ages differently from equipment), explicit retraction
+      (summariser output and/or user command), deletion vs. soft-archive, and how hard
+      validation treats an old constraint. **Direction chosen by the owner 2026-09-20 — standard
+      agent memory:** at compaction the summariser sees the known facts and returns operations
+      (add / confirm / update / retract); the prompt shows each fact with its date and confirmation
+      count; a retracted fact is archived, not deleted; a long-unconfirmed constraint is shown as
+      "may be outdated — ask" instead of silently blocking. Details to be checked against the
+      standard before planning; needs an ADR-0009 / ADR-0013 amendment. Related: the near-duplicate-facts entry in
+      § P6 facts (Group 1) close-out review advisories. Source: owner review of the P6 dev smoke
+      (2026-09-19).
+- [ ] **Eval cases from real sessions — the safety net for correcting prompts in small strokes (owner,
+      2026-09-21).** The owner's way of working on prompts is one small change at a time, "они не станут
+      рабочими с одного редактирования, но и не сломать чтобы" — which needs a fixed set to run before
+      and after each stroke, otherwise an improvement and a coincidence look alike. First candidate set
+      is the 2026-09-21 training session: report sets in `session_planning` → the reply must not claim
+      they were logged (BUG-022); "напомни прошлый вес" → the most recent real session, with its date
+      (BUG-030); "две планки по 45" → stored as a duration (BUG-023); a correction → delete and re-log
+      in one turn (BUG-027); the reply in the user's language with no internal rule numbers (BUG-028).
+      Mechanics exist: `npm run evals:export -- --since <date>` produces expectation-less drafts
+      (BR-EVAL-003), a human adds the expectations. The same set on two models also answers "is it the
+      model or the code" with numbers rather than opinion. Cheaper and more reliable once
+      `llm-io-audit-trail` Task 4 stores real requests. Source: owner review of the 2026-09-21 dev
+      training session.
+- [ ] **Training places and the user's own machines — a load number means something only on a known
+      machine in a known place (owner, 2026-09-27).** Catalog names are generic ("lever row", "calf raise
+      machine"), but real machines vary between gyms and even within one gym, and for cable and lever
+      machines the same number on the plates/stack gives a different effort; many machines also have their
+      own moving weight (carriage, lever arm), so "added 5 kg" sits on top of an unknown base. Free weights
+      are simpler, though bars differ too. Parts:
+      (1) **Places** — a user has one or more training places: a named gym, or home (not a gym: what matters
+      is the equipment actually there); each place has its inventory of equipment.
+      (2) **Machine instances** — once identified, a machine becomes the user's own record: catalog exercise
+      + place + a permanent description in the user's words (how it is built, how the load is applied, own
+      weight if known), reused in every later session at that place.
+      (3) **Coach clarifies** — when a machine is first mentioned or the name is ambiguous, the coach asks
+      which one exactly ("уточни, какой именно — если есть сомнения"); the user may also describe it
+      unprompted at any time; the answer is stored on the instance, not as a loose fact.
+      (4) **Comparability** — history, "last time" and load advice compare weights only within the same
+      machine instance (or the same free-weight kind); across places or variants they are shown as
+      separate lines, never as progress.
+      (5) **Session place** — each workout knows where it happens (asked or inferred), so the plan uses the
+      equipment that place has.
+      Already exists, partly: fact category `equipment` (free text, no link to a place or a machine —
+      e.g. the lever-machine fact that BUG-040 misapplied to the leg press); `docs/domain/user.spec.md`
+      BR-USER-018…020 specify `trainingLocation` (home|gym|outdoors, one value) and `equipmentPresent[]`, but
+      the `users` table has neither column; `exercises.equipment` is a generic type (machine/cable/…);
+      `2026-09-24-load-advisor-design.md` § 11 lists "machines differ between gyms" (#3) and "equipment weight
+      step as a user/gym fact" (#7) as data prerequisites of the load advisor — named, not designed. Not
+      covered anywhere: several places per user, per-place inventory, machine instances, a machine's own
+      weight, the clarifying question. A new domain entity — needs a spec and an ADR before planning; a
+      prerequisite of roadmap R4 (load advisor). Source: owner, during the 2026-09-27 dev training session
+      (examples: lateral raise machine, chest-supported row facing the floor, 45° leg press).
+
 - [ ] Connector layer on top of P1's `LlmGateway`: profiles become full connectors —
       each carries its own `API_URL` + `API_KEY` (provider/token pair), so the app talks to
       any provider through one interface with per-task routing (strong model for content,
@@ -41,6 +101,102 @@ Rules:
       Source: TODO coach-tone review (2026-09-11).
 
 ## Findings
+
+- [ ] **Voice notes without speech are transcribed as invented words — must be eliminated (owner 2026-09-27: "мне надо избавиться от этого, не сейчас так в будущем").** `gemini-3.8-flash` with the `<NO_SPEECH>` instruction returns the sentinel on noise only 1–7 of 10 per noise type (`low`); `medium`, `high` and a JSON `has_speech` field do not fix it, `high` truncates long monologues; the coach then answers the invented phrase. Measured options without local installs: `gemini-3.5-flash` rejects noise 20/20 but answers "0 0 0" on digital silence and is slower (3 s short / 14 s for 148 s); Google Cloud Speech-to-Text V2 (Chirp 3) is the dedicated service and returns empty on non-speech by design, but needs a GCP service account (API keys → 401, verified) and sync `recognize` is limited to ~60 s (longer: streaming via gRPC client = new dependency, or batch via Cloud Storage); a hybrid Chirp ≤60 s / Gemini >60 s needs no new package. A local VAD (Silero + Opus decoder) was prototyped and rejected — new dependencies/local installs. Any fix is a new adapter behind `SpeechTranscriberPort`. Source: voice-transcription live probes (2026-09-27).
+- [ ] **Claude on the owner's subscription via `claude -p` — investigated and declined by the owner
+      (2026-09-26).** No money on OpenRouter (balance −$0.02) and no Anthropic API key, so the only route
+      to Claude is the subscription through the official binary. Verified: `claude -p --output-format json
+      --json-schema … --system-prompt … --tools ""` returns an emulated tool call (`log_set` with the exact
+      UUID, 2.4 s API time), and prompt caching works across separate `claude -p` processes (8 239 of 8 791
+      tokens read on the second call) — but only while the system prompt is byte-identical, which today's
+      training prompt (per-turn overview, "Nmin ago", current time) is not. Ready adapters are unusable:
+      binary wrappers (`wende/claude-max-api-proxy`) do not return client-defined `tool_calls`; the ones that
+      do (`m2cci-bouzentm/claude-ai-proxy`, `router-for-me/CLIProxyAPI`) call the API with the subscription's
+      OAuth token, bypassing the binary. The app's real wire subset (115 dev calls, 14 days): one endpoint,
+      non-streaming, `model/messages/tools/temperature/max_tokens/reasoning_effort/response_format` — an own
+      strict proxy would be small. Owner: «нет, не делать». Reopen only on the owner's word.
+
+- [ ] **Name → exercise resolution has no similarity threshold (found 2026-09-26,
+      training-history-lookup D13).** `TrainingService.resolveExerciseIdByName` falls back to the
+      top pgvector hit with no distance cut-off (`searchByEmbedding` does not even select the
+      distance), and the embedding model is English-only. So `log_set` / `get_exercise_history`
+      given a Russian or garbled name resolve to an arbitrary exercise instead of "not found".
+      Mitigated by prompt text ("English catalog name; prefer search_exercises → exerciseId"), not
+      by code. Fix: select the distance, reject above a threshold measured on the catalog.
+
+- [x] **A saved session plan can name one exercise and carry another's id (found 2026-09-26,
+      training-exercise-history live check).** The owner's 2026-09-25 plan (`e9e76f10`) lists
+      "Treadmill" with Rowing Machine's `exerciseId` (`bf6a2f9e…`). Nothing at plan save
+      (`save_workout_plan` / `start_training_session`) checks `exerciseName` against the catalog row of
+      `exerciseId`, so the coach may announce one exercise while logging and history resolve another.
+      Training's history block now labels by catalog name (plan D19); the save-time check is open.
+      Candidate for U7 `session-proposal` (R3.1 moves ID validation to the proposal).
+      Resolved by training-history-lookup (2026-09-26, D5/AC-HL-5): both tools now check each plan
+      entry's `exerciseName` against the catalog name of its `exerciseId`
+      (`checkExerciseNamesAgainstCatalog`, `tools/exercise-name-check.ts`) right after the existing
+      missing-id check — no shared word/prefix rejects the call (`llm_error`, nothing persisted),
+      otherwise the stored name is corrected to the catalog's.
+      Source: live check, training-exercise-history plan (2026-09-26).
+
+- [ ] **Direct Google AI Studio is not a drop-in replacement for the OpenRouter route (parked by the
+      owner, 2026-09-22).** On 2026-09-21 dev was switched from OpenRouter BYOK to the Google AI
+      Studio endpoint directly and rolled back the same evening: the application's own requests came
+      back `400`, while the identical route through OpenRouter works. Verified during that attempt,
+      so nobody repeats it: the key is valid (the endpoint listed 58 models), the model name is
+      accepted both as `gemini-3.8-flash` and as `models/gemini-3.8-flash`, and a direct `curl`
+      carrying tools, a strict response schema and a 16 384-token ceiling each returned `200`. So the
+      key, the model name and those three request features are all ruled out. **Not established:**
+      which field the SDK adds to the request that direct Google rejects and OpenRouter tolerates —
+      that is the one open question, and it is answered by probing fields one at a time against the
+      live endpoint, never by switching the server. Functionally there is nothing to gain: OpenRouter
+      BYOK already calls the owner's own Google key (`usage.is_byok: true`), so the only difference
+      is the intermediary's markup. State as verified on 2026-09-22: dev is on
+      `LLM_API_URL=https://openrouter.ai/api/v1/`, `google/gemini-3.8-flash`,
+      `LLM_REASONING_EFFORT=low`, `LLM_STRUCTURED_OUTPUT_MODE=json_schema`; no `.env.dev` backup on
+      the VPS contains a direct-Google URL, i.e. the rollback was complete. Backup names mislead —
+      `.env.dev.bak-20260921-aistudio` and `-aistudio2` differ from the live file **only** in
+      `LLM_REASONING_EFFORT` and are OpenRouter configs; `-llm` is the Z.AI route (the documented
+      fallback) and `-model` predates the model change. Related: the connector-layer idea in
+      § Ideas, whose failover chains would make such a switch reversible in one setting.
+      Source: orchestrator session 2026-09-21, recovered from its terminal before it was closed.
+
+- [ ] **BOT UX — `plan_creation` makes the user wait minutes in silence (owner priority, 2026-09-19).**
+      The owner's position: a bot must answer in seconds, or tell the user it is working. Today it
+      does neither — it holds the HTTP connection open and stays silent. Measured on dev
+      (`conversation_runs`, n = 25 for this phase): **avg 72 s, p95 317 s, max 393 s**; `chat` by
+      comparison averages 19 s. `requestTimeout` was raised 30 s → 420 s (commit `42d4fe8f`) so the
+      answer is not truncated — that is a band-aid on the symptom, not the fix, and it should be
+      lowered again once the real causes are addressed.
+      **Three distinct causes, from the data — they need different fixes:**
+      1. **Generation itself dominates, not tools.** The two slowest runs (393 s, 324 s) made
+         **zero** tool calls, and `plan_creation` runs with no tools still average **67 s**. The
+         model is writing a whole multi-session plan as one long structured answer. Fixes to weigh:
+         stream the response, split plan creation into steps the user sees arriving, or shrink what
+         one turn must produce.
+      2. **No progress signal.** Nothing is sent between "message received" and the final answer —
+         no typing action, no "собираю план…" interim message. Telegram's `sendChatAction` is the
+         cheap half of this; an interim message is the honest half.
+      3. **Tool-call fan-out and schema retries.** One run issued **12 sequential `search_exercises`
+         calls** (one per exercise, no batching) and then **two `save_workout_plan` calls that both
+         came back `llm_error`** — the model failed the schema twice and retried. Batch the search,
+         and treat repeated `llm_error` on the same tool as a prompt/schema defect worth its own
+         look.
+      **Not scoped as a plan yet** — it spans prompt design, bot UX and tool ergonomics, so it wants
+      the owner's call on direction before it becomes one. Source: P5 Task 6 latency calibration +
+      owner instruction (2026-09-19).
+
+- [ ] **Off-catalog exercises: how should they be created at all? (owner, 2026-09-21).** The catalog has
+      no dumbbell calf raise, so three sets done standing with two 25 kg dumbbells were logged against
+      **`Standing Calf Raise Machine` at 50 kg** — a machine load is not comparable to dumbbells, and the
+      next session will read that 50 kg as a working weight on the machine. The planned
+      `Seated Calf Raise Machine` stayed in the session as `skipped`. Today the only paths are
+      `exerciseId` (catalog) or `exerciseName` (resolved against the catalog, `ensureCurrentExercise`),
+      so anything absent silently lands on the nearest catalog row. To think through: when a user does
+      an exercise the catalog lacks, do we create a real catalog entry, a per-user/ad-hoc one, or a
+      variant of an existing exercise (same movement, different equipment)? Who approves it, what does it
+      carry (equipment, muscles, how the load is expressed), and how do the progression blocks compare
+      loads across equipment. May grow into an ADR. Source: owner review of the 2026-09-21 dev training
+      session (session `fa293e20`, runs `48d59d0e` / `a5a49e13` / `ef6030d6`).
 
 - [ ] **Decompose `ITrainingService` (16 methods) by role**: rule-3 review (ARCHITECTURE.md,
       recorded as a standing exception) found one contract serving two different consumers —
@@ -106,14 +262,6 @@ Rules:
 - [ ] **Inline `setNumericField`** in llm-profiles.ts (one call site; the field parameter
       splits the body in two — the plan's own snippet had the branches inline). Source:
       refactor-P1 close-out review R2 (2026-09-16).
-- [ ] **Integration runner exits 134 after an all-green run**: `RUN_DB_TESTS=1
-npm run test:integration` (apps/server) crashes in jest global teardown
-      (`src/app/test/teardown.ts`, DB-pool close) with libc++ `mutex lock failed` AFTER
-      printing 122/122 passed — the non-zero exit can fail CI/cleanup even when tests pass.
-      The plain unit run (`npx jest --ci`) crashes identically after an all-green summary —
-      proven pre-existing at the base commit by the P2 review (temp worktree, same crash).
-      Reproduced on clean `dev`, pre-existing, not a P2 regression. Source: refactor-P2
-      Task 8 verification + close-out review R3 (2026-09-16).
 - [ ] L0 eval checks named by `PROMPT_EVAL_FRAMEWORK.md` §4.1 but not implemented in the
       P0 harness: version discipline, message-catalog completeness (section presence shipped
       in refactor-p2-prompt-modules). Both need artefacts the harness does not build yet —
@@ -337,9 +485,10 @@ P2 close-out review batch (refactor-p2-prompt-modules, 2026-09-16):
 - [ ] **`Section.required` is written but never read**: every module sets it; L0 reads
       `PhasePromptEntry.requiredSections` instead. Drop the field or wire the check to it in P4.
       Source: P2 review R2.
-- [ ] **Small P2 duplications**: 11-line profile block + `=== CLIENT PROFILE ===` wrapper in
-      plan_creation/v1.ts:68 = session_planning/v1.ts:212 (moved verbatim; pairs with
-      context-assembler); magic timestamp 2026-09-12T08:00Z duplicated between
+- [ ] **Small P2 duplications**: ~~11-line profile block + `=== CLIENT PROFILE ===` wrapper in
+      plan_creation/v1.ts:68 = session_planning/v1.ts:212~~ — one shared renderer
+      `prompts/blocks/client-profile.v1.ts` since refactor-p4-context-budget (2026-09-19);
+      the remaining two items stand: magic timestamp 2026-09-12T08:00Z duplicated between
       prompt-snapshots.unit.test.ts:32 and prompt-contexts.ts:62 (must stay in sync for
       AC-1321/L0 agreement — export one constant); chat v1 test `makeUser` is the sixth copy of
       the test user factory. Source: P2 review R2.
@@ -363,6 +512,14 @@ P2 close-out review batch (refactor-p2-prompt-modules, 2026-09-16):
 
 ## Wishes
 
+- [ ] Strip the `Co-Authored-By: Claude …` trailer from every commit in history — 215 of 852
+      commits carry it (counted 2026-09-25); attribution is now off in both Claude profiles
+      (`~/.claude-personal`, `~/.claude` settings `attribution: {commit: "", pr: ""}`). It is a
+      full history rewrite (`git filter-repo --message-callback`): every SHA changes, so
+      `main`/`dev`/all branches need a force-push, every worktree and Orca session must be
+      re-synced, and SHAs cited in plans, `BUGS.md`, `STATE.md`, `COST_LEDGER.md` go stale
+      (map old→new via filter-repo's `commit-map`). Run only when no plan is in flight. Source:
+      owner request (2026-09-25).
 - [ ] Replace the `§` section sign across `docs/` — owner dislikes the notation; use
       "section N" or named references instead. Touches 10 files, including durable specs
       (`DOCUMENTATION_GUIDE.md`, `adr/0013-llm-core-target-architecture.md`,
@@ -426,10 +583,11 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       `ConversationRunnerDeps.graph` declares only `{ invoke }` — the deps interface must
       declare every method the implementation calls (see also the rule candidate in
       `docs/REVIEW_FINDINGS.md` this run). Source: close-out-review, R1 (2026-09-18).
-- [ ] `new RemoveMessage({ id: m.id ?? '' })` in `compact.node.ts` silently no-ops when a
+- [x] `new RemoveMessage({ id: m.id ?? '' })` in `compact.node.ts` silently no-ops when a
       history message has no id: removal never lands, the budget trigger refires every run,
       a summary can repeat per episode. Fail loud (drop the fallback or `log.error`).
-      Source: close-out-review, R3 (2026-09-18).
+      Source: close-out-review, R3 (2026-09-18). Fixed: `refactor-p4-context-budget` Task 4
+      Step 0 — `log.error` + the whole removal set is skipped (never remove with `''`).
 - [ ] `POST /api/bot/chat/clear-context` (chat.routes.ts) is missing from `docs/API_SPEC.md`
       although the branch changed its mechanics and MANUAL_TEST_PLAN S8.4 exercises it.
       Source: close-out-review, R4 (2026-09-18).
@@ -444,10 +602,11 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
       the binding contract in `case.schema.ts:72-74` — a `ToolMessage` with an undefined
       `tool_call_id` would reach the provider. Latent (no current dataset has one).
       Source: close-out-review, R3 (2026-09-18).
-- [ ] The D-E legacy-import branch in `compact.node.ts` returns without consuming a pending
+- [x] The D-E legacy-import branch in `compact.node.ts` returns without consuming a pending
       `state.compactReason` — the flag can survive into the next run after a transition-plus-
       first-message combination. Add to `refactor-p4-context-budget`'s test list.
-      Source: close-out-review, R3 (2026-09-18).
+      Source: close-out-review, R3 (2026-09-18). Fixed: `refactor-p4-context-budget` Task 4
+      Step 0 — both the "legacy found" and "no legacy found" returns now set `compactReason: null`.
 - [ ] Evals tooling duplication trio: `estimateWeeklyPct` re-parses ledger rows
       `parseLedgerTable` owns; `argValue`/ledger-path are defined twice across `run.ts` /
       `ledger.ts`; `CostRecorder.handleLLMEnd` mirrors `RunMetricsCollector` token extraction
@@ -459,7 +618,254 @@ PromptContextFor<D>`). Carry the data type through or document the one cast as t
 - [ ] `evals/lib/quota.ts` reads the operator's `~/.claude/settings.json` (with env fallbacks)
       to reach the Z.AI monitor API — repo tooling depends on one machine's home layout;
       consolidate behind the documented env var. Source: close-out-review, R1 (2026-09-18).
-- [ ] `compact.node.ts` re-declares `LegacySummary` as an inline annotation — import the named
+- [x] `compact.node.ts` re-declares `LegacySummary` as an inline annotation — import the named
       type from `summary.ports.ts`. Fold into `refactor-p4-context-budget`'s branch (touches
-      the same file). Source: close-out-review, R2 (2026-09-18).
+      the same file). Source: close-out-review, R2 (2026-09-18). Fixed: `refactor-p4-context-budget`
+      Task 4 Step 0 — imports `LegacySummary` from `@domain/conversation/ports`.
 
+
+## P4 context-budget close-out review advisories (2026-09-19)
+
+- [ ] `prompts/blocks/training-workout-overview.v1.ts` holds four training blocks
+      (`client`, `workout_overview`, `stale_session`, `previous_session`) while every other
+      block has its own file — split it, or write the grouping rule down so the exception is
+      deliberate (see the matching rule candidate in `docs/REVIEW_FINDINGS.md`).
+      Source: close-out-review, R1/R2 (2026-09-19).
+- [ ] Domain blocks are rendered twice per run — once by `resolveBudget` to measure tokens,
+      once by `assembleContext` to build the text. Pure renderers make this correct but not
+      free; a render cache keyed by `(block id, depth)` would halve it. Measure before fixing:
+      the cost is unquantified. Source: close-out-review, R2 (2026-09-19).
+- [ ] `ModelInputRecorder` only attaches to a real `BaseChatModel`, so on L1 datasets whose
+      model is a stub the `no-orphan-tool-message` check silently does not run — a check that
+      passes because it never executed. Make the skip loud (log or fail the case).
+      Source: close-out-review, R3 (2026-09-19).
+- [ ] `src/infra/db/scripts/__tests__/prune-checkpoints.unit.test.ts:6-7` — the module docstring
+      and test 5's title still describe the pre-fix blob semantics ("referenced by the SURVIVING
+      latest checkpoint"); the code now keeps blobs referenced by any retained checkpoint. The
+      test still passes because it only asserts the SQL mentions `channel_versions`.
+      Source: close-out-review, R3 (2026-09-19).
+- [ ] `renderBlocks`'s injectable `depthOf` and the structural `RenderableBlock<D>` widening were
+      built for two callers; Task 3 collapsed them into one real caller (`assembleContext`).
+      Either simplify to that caller's needs or leave it as the extension point P6's blocks will
+      use — decide when P6 lands, not before. Source: close-out-review, R2 (2026-09-19).
+- [ ] `context/budget.ts`'s `renderBlockAt` reimplements `renderBlocks`'s render-and-measure step
+      with a different return shape (token count instead of a `RenderedBlock`). Not a clean
+      duplicate, but the same operation expressed twice. Source: close-out-review, R2 (2026-09-19).
+
+## P5 close-out review advisories (2026-09-19)
+
+- [ ] `infra/conversation/keyed-mutex.ts:43-52` — a waiter that later times out still holds its
+      chain slot until its own settle, so a third caller queues behind a timed-out second caller
+      rather than being freed when that waiter's window expires. Behaviourally harmless (each
+      waiter races its own timeout), but the chain length is bounded by concurrent callers, not
+      by successful completions — worth a comment saying so. Source: close-out-review, R3 (2026-09-19).
+- [ ] No test exercises `chatQueue.enqueue` wired through `registerBotHandlers` — two rapid
+      messages to one chatId producing two sequential HTTP calls. Consistent with D-E's stated
+      pure-unit test boundary for the bot, so not an AC gap, but nothing proves that seam
+      end-to-end. Source: close-out-review, R3 (2026-09-19).
+- [ ] `app/routes/chat.routes.ts` duck-types the thrown error's `code` field instead of using
+      `instanceof` against the exported error classes. This is D-B's explicit intent (one shared
+      status table, no instanceof chain) and is correct — recorded only so the divergence from
+      the usual discriminated-class style is a deliberate choice on record.
+      Source: close-out-review, R1 (2026-09-19).
+- [ ] `conversation_runs.created_at` is stored **without a timezone, in local time**, while
+      Postgres `now()` returns UTC — so `WHERE created_at > now() - interval 'N minutes'`
+      silently returns zero rows even when the runs exist (cost a confused query during the P5
+      dev smoke, 2026-09-19; the P4 smoke's own SQL in the plan has the same latent flaw).
+      Either store it as `timestamptz` (migration) or fix every query and the plans that carry
+      them. Source: P5 dev smoke (2026-09-19).
+
+## P6 facts (Group 1) close-out review advisories (2026-09-19)
+
+- [ ] Near-duplicate facts create separate `user_facts` rows — D-C's idempotency key is a
+      code-normalised text (`fact_key`), so the same fact in different words is two rows (the
+      block caps at 50 and truncates lowest-`confirmations` first). A similarity-based merge
+      needs the consolidated eval pass to judge it. Source: plan
+      refactor-p6-facts-and-progress-blocks D-C (2026-09-19).
+- [ ] Dependency types wider than use: `CompactStepDeps.userFacts`
+      (`graph/nodes/compact.node.ts:53`) is the full `IUserFactsService` but only `upsertMany`
+      is called; the two tools' deps (`save-workout-plan.tool.ts`,
+      `start-training-session.tool.ts`) still declare the full service although the shared
+      `rejectOnFactConflict` guard already takes `Pick<IUserFactsService, 'getConstraints'>`.
+      Narrowing makes read vs. write visible at the type level. Source: close-out-review, R1 (2026-09-19).
+- [ ] `domain/user/services/fact-conflicts.ts` works entirely over exercise muscle involvement
+      (the fact only supplies the constrained muscle) — its substantive domain is "which
+      exercises are safe", arguably `domain/training/services/`. Not a boundary violation
+      (lint-clean, domain→domain imports are existing practice). Source: close-out-review, R1 (2026-09-19).
+- [ ] `evals/schema/case.schema.ts` `FixtureFactSchema.muscleGroup` is `z.string()`, not the
+      `MuscleGroup` enum — a typo in a dataset (`shoulder_front`) would silently make a
+      `physical_constraint` fixture bind nothing. Validate against the enum. Source:
+      orchestrator review of P6 Task 6 (2026-09-19).
+
+## structured-output-fenced-json close-out review advisories (2026-09-19)
+
+- [ ] `extractJsonPayload` (`infra/ai/structured-json.ts`) looks at the first Markdown fence
+      only, and its brace-span fallback spans the whole text — an answer with two fenced blocks
+      (a discarded draft plus the real payload) is not recovered and not tested. Iterate every
+      fence before falling back. Source: close-out-review, R3 (2026-09-19).
+- [ ] `infra/ai/structured-json.ts` holds two independent reasons to change: the JSON-recovery
+      heuristics (BUG-017's fix) and the `response_format` builder whose `String`-object `type`
+      exists only to dodge a `@langchain/openai` internal routing check. Split if either grows;
+      the routing workaround is the one a library upgrade will touch. Source: close-out-review, R1 (2026-09-19).
+- [ ] The scripted-model `jest.mock('@infra/ai/model.factory', …)` double is now near-copied in
+      three graph test files (`episode-memory.integration`, `conversation.graph`,
+      `user-facts.scenario`); `graph/__tests__/graph-test-support.ts` (added at this close-out
+      for `USER` / `ctxConfig`) is the natural home for one builder — and for
+      `conversation.graph.unit.test.ts`'s own local `USER` / positional `ctxConfig`, which predate
+      this branch and were left alone. Source: close-out-review, R2 (2026-09-19). Fourth copy
+      added 2026-09-20: `tests/integration/scenarios/scripted-model.ts` `installScriptedModel()`
+      re-implements the same shape as `user-facts.scenario.unit.test.ts:118-148` — extract one
+      shared builder (e.g. `tests/support/scripted-chat-model.ts`). Source: training-journey-scenarios close-out, R2.
+- [ ] No test proves that a `RunMetricsCollector` attached through the invoke config still
+      receives the LLM callbacks for `structured()` calls — the switch from
+      `withStructuredOutput(...)` to `withConfig({ response_format })` is believed equivalent
+      (both bind the same `ChatOpenAI`) but that is inference; a dev smoke run row's token
+      counts for a compaction would settle it cheaply. Source: close-out-review, R3 (2026-09-19).
+- [ ] `docs/ARCHITECTURE.md`'s module-layout tree omits `domain/user/services/fact-conflicts.ts`,
+      `domain/user/services/fact-key.ts` and `infra/ai/structured-json.ts` (the tree is
+      illustrative and was already non-exhaustive). Source: close-out-review, R4 (2026-09-19).
+- [ ] No test drives a raw `SyntaxError` from the provider/transport layer through
+      `structured()` to pin that it now propagates without a retry (the blanket `SyntaxError`
+      retry was removed as dead for format errors; a transport-level one is a non-format error
+      by the plan's AC and propagates — correct, but unpinned). Source: close-out-review, R3 (2026-09-19).
+
+## training-journey-scenarios close-out review advisories (2026-09-20)
+
+- [ ] Session timestamps come from two clocks: `workout_sessions` rows created mid-journey get
+      the DB's `defaultNow()` while the app runs on its own `now` (fake clock in scenarios), so
+      the scenario runner re-stamps new sessions (`evals/lib/run-scenario.ts:136-160`,
+      `stampNewSessions`). Production has the same split (DB time vs app time) — pass `now`
+      explicitly on insert and drop the harness patch. Source: Task 4 worker + close-out review, R1 (2026-09-20).
+
+## chat-continuity close-out review advisories (2026-09-20)
+
+- [ ] The inactivity test "gap since the previous message ≥ `EPISODE_GAP_HOURS`" is written out twice
+      against the same `gapMs` — `agent.node.ts:96-97` (time-gap note) and `compact.ts:52` (compaction
+      trigger). One shared `isPastGap(now, last, gapMs)` would keep the two from drifting.
+      Source: close-out-review, R2 (2026-09-20).
+- [ ] Long pauses read as hours in the time-gap note (`time-gap.v1.ts`: two weeks → "336 h"); days
+      would be friendlier to the model once the note is tuned in the consolidated eval pass.
+      Source: orchestrator at Task 2 acceptance (2026-09-20).
+
+## reply-latency close-out review advisories (2026-09-20)
+
+- [ ] The per-phase `outputReserve` values (`infra/ai/context/budget.ts`, ADR-0013 §3.4 table, 1.5k–4k)
+      were sized against the retired 4096-token output cap; the cap is now `LLM_MAX_TOKENS` (16384) and
+      reasoning spends the same budget. Re-tune them with the consolidated eval pass.
+      Source: close-out-review, R3 (2026-09-20).
+- [ ] No test pins `finish_reason: 'length'` arriving together with tool calls — the skip-retry branch
+      cannot fire there (`isEmptyAIResponse` requires no tool calls), but that is verified by reading,
+      not by a test. Source: close-out-review, R3 (2026-09-20).
+
+## fact-lifecycle (wave A) close-out review advisories (2026-09-21)
+
+- [ ] The AC-FL-3 end-to-end scenario test uses an in-memory fake of `IUserFactsService` that
+      re-implements the stale-evidence rule itself, so the test would still pass if the real repository
+      diverged. The real path is covered by the DB integration suite, but the two rules are written
+      twice. Source: orchestrator, Task 3 acceptance (2026-09-21).
+- [ ] `USER_FACTS_V1` is now unused in production code (v2 renders every block) and is kept only by the
+      repo's prompt-version convention plus its own unit test — unlike the phase `v1.ts` files, no
+      snapshot test pins it. Decide whether the convention should require a snapshot or allow removal.
+      Source: orchestrator, Task 1 acceptance (2026-09-21).
+- [ ] The SQL visibility filter and `isActiveForPrompt` are now twins by construction (both check
+      status, durability and expiry) but still live in two languages. If a third read path appears,
+      give them one shared description instead of a third copy.
+      Source: close-out-review, R2 (2026-09-21), partially addressed in `38f84746`.
+- [ ] **Model behaviour, not code (evidence for wave B):** in the 2026-09-21 dev smoke the coach
+      answered a failed tool call with a confident claim that the action had been performed — twice,
+      including "факт помечен как неприменимый" while the row was still `active`. The tool could not be
+      called at all then (BUG-020), but nothing in the run forced the model to either retry or admit the
+      failure. This is the exact case the wave-B course-check layer exists for; it is also the
+      BUG-014/BUG-015 family. Worth one deterministic check in the consolidated eval pass: a tool that
+      returns an error must never be followed by a success claim.
+      Source: orchestrator dev smoke (2026-09-21).
+
+## Recurrence → `physiological_pattern` promotion is unimplemented (2026-09-21)
+
+- [ ] The owner's durability model (2026-09-20) says a short state that keeps recurring is promoted to
+      a `physiological_pattern` fact — "that is how the archive turns into knowledge instead of
+      garbage". **Nothing performs that promotion.** Verified 2026-09-21 by the wave-B Task 3 worker and
+      confirmed by the orchestrator: `recur|promot` matches only two *comments*
+      (`user-facts.repository.ts`, `user-facts.ports.ts`, both saying "wave B's recurrence promotion
+      counts exactly that archive"); there is no detector, no writer, the course-check prompt sees only
+      ACTIVE facts and never the archive, and summariser v4's operations (`add|confirm|update|retract`)
+      have no `pattern` op.
+      What DOES exist and makes it possible: a closed key re-stated later creates a new row linked by
+      `supersedes_id` while the old row keeps its archive, so N occurrences leave an N-row chain that a
+      promotion could count. Journey (d) of `course-check-and-constraints` Task 3 asserts that chain and
+      stops there, with an `it.todo` marking the missing ending.
+      **Three owner decisions before this can be planned:** (1) who promotes — code at the Nth
+      occurrence, or a course-check directive telling the coach to save it through `manage_fact`;
+      (2) identity — `fact_key` is normalised text, so three differently-worded statements of the same
+      ache do not share a key (category + `muscle_group` grouping is cheap but coarse; model-judged
+      identity is accurate but costs a call); (3) the threshold and the window (3 within N days?).
+      Source: wave-B Task 3 `ask` + orchestrator decision to keep it out of that plan (2026-09-21).
+
+## course-check (wave B) close-out review advisories (2026-09-21)
+
+- [ ] `user-facts.repository.ts` `expiredAt(now)` re-expresses `isExpired`'s clause (active + short +
+      `expires_at <= now`) as raw SQL — a second statement of the rule that owns its numbers in
+      `domain/user/services/fact-lifecycle.ts`, next to the existing `visibleAt` / `isActiveForPrompt`
+      twin. SQL cannot call the TS predicate, so this is structural, but a change to the `<=` edge will
+      not fail to compile if the SQL drifts — only fail behaviourally.
+      Source: close-out-review, R2 (2026-09-21).
+- [ ] `tests/integration/scenarios/scripted-model.ts` routes a structured call to the course-check
+      answer queue by matching the literal opening sentence of `prompts/course-check/v1.ts`. Reword that
+      sentence and every FL journey misroutes its course-check call into the summariser's queue (a loud
+      schema failure, not a silent one, but nothing ties the two strings together). Route by schema name
+      instead. Source: close-out-review, R2+R3 (2026-09-21).
+- [ ] The course-check prompt forbids putting an expiry check-in into the general `questions` list
+      instead of the dedicated field, but code cannot tell the two apart — a model that ignores the
+      instruction would have its expiry question persisted like an ordinary one, so it would be asked
+      more than once. Worth one deterministic check in the consolidated eval pass.
+      Source: wave-B Task 3b worker note, accepted by the orchestrator (2026-09-21).
+- [ ] The new optional field in the course-check structured schema follows the summariser's precedent
+      for optional fields under strict `json_schema`, but only a live provider run proves the provider
+      accepts it. Worth confirming on the first live course-check run.
+      Source: wave-B Task 3b worker note (2026-09-21).
+
+## coach-baseline close-out review advisories (2026-09-25)
+
+- [ ] Move embedding-session teardown into the DI container: `embedding.service.ts` keeps a module-level `liveInstances` registry and `disposeAllEmbeddingServices()` whose only caller is `src/app/test/setup.ts`, so DI-created instances are tracked outside the container; a container shutdown/dispose hook would own the lifecycle and also serve graceful shutdown. Source: coach-baseline close-out review R1 (2026-09-25).
+- [ ] Document the `forceExit: false` failure mode: a future leaked handle now makes jest hang (reported by `detectOpenHandles`, ended only by a CI timeout) instead of exiting — the intended trade-off for AC-CB-1, but nowhere written down for whoever meets the hang. Source: coach-baseline close-out review R3 (2026-09-25).
+- [ ] Harden `overlapping-load.repro.test.ts` Red 1 before U3 turns it green: `toContain('Overhead Press')` could pass without the level-2 block (e.g. a substitutes list); tie the exercise name to yesterday's date. Source: coach-baseline close-out review R3 (2026-09-25).
+- [ ] Two `SeedSession` types of different shapes: `recent-history-status.integration.test.ts:31` and `tests/integration/scenarios/session-seed.ts:12`; the separate seeding loop is justified (the shared seeder cannot express `skipped`/`planning` or custom timestamps), the duplicate type name is a trap — rename one or widen the shared seeder. Source: coach-baseline close-out review R2 (2026-09-25).
+
+## smoke-test close-out review advisories (2026-09-25)
+
+- [ ] One runtime source for the exercise category list and involvement values: `['compound','isolation','cardio','functional','mobility']` is typed by hand in `evals/schema/scenario.schema.ts:139`, `search-exercises.tool.ts:36` (`CATEGORIES`), `src/domain/training/types.ts:64` and `infra/db/seeds/exercises.seed.ts:15`; `InvolvementSchema`'s values are only type-checked against `Involvement`. Same class `db6c0a94` fixed for muscle groups and exercise types (whose two production copies in `save-workout-plan.tool.ts:22` / `search-exercises.tool.ts:13` also remain). Source: smoke-test close-out review R2 (2026-09-25).
+- [ ] Type `evals/lib/scenario-world.ts` `toSetData` against the domain `SetData` / `setDataTypes` (`src/domain/training/set-data.types.ts`) instead of `Record<string, unknown>` with literal type strings, so a domain setData change breaks the seeder at compile time. Source: smoke-test close-out review R2 (2026-09-25).
+
+
+## cache-accounting close-out review advisories (2026-09-26)
+
+- [ ] Move the previous-call lookup (`lookupPreviousCall` + `attributeCache` wiring) out of `llm-call-recorder.ts` into a reader/attribution adapter, so the recorder is a writer again; consider computing attribution off the synchronous path (ADR-0013 §8 amendment 2026-09-26 point 2 records the current cost). Source: cache-accounting close-out review R1 (2026-09-26).
+
+## now-line-last close-out review advisories (2026-09-27)
+
+- [ ] Move `promptVersionExtras` (run context, `graph/state.ts:104`) into a per-run "rendered modules" collector (e.g. on `RunMetricsCollector`): the run context now carries prompt-version facts from agent to commit, which scales poorly as more conditionally sent modules appear. Source: now-line-last close-out review R1 re-run (2026-09-27).
+
+## voice-transcription close-out review advisories (2026-09-27)
+
+- [ ] STT instruction is an inline constant in `infra/ai/gemini-transcriber.ts`, not a versioned prompt module under `infra/ai/prompts/` — a wording change is not traceable like other prompts (ADR-0013 D-09 applicability unclear for run-less calls). Source: voice-transcription review A1 (2026-09-27).
+- [ ] `domain/speech` shape nits: HTTP status map in the domain (`errors.ts:45`, copies the conversation precedent), unused `SpeechError` union (`errors.ts:42`), "disabled" detected twice (`isEnabled()` in the route + the adapter's throw), JSDoc of `NoSpeechError`/port still says "empty transcript" only (sentinel since R1). Source: voice-transcription review A2/A4/A6/A16 (2026-09-27).
+- [ ] STT logging: latency/text length logged by both the route and the adapter; `NoSpeechError` (an expected outcome) logged at error level; Gemini usage parsed by hand beside `infra/ai/usage.ts`. Source: voice-transcription review A7/A9/A15 (2026-09-27).
+- [ ] Bot voice nits: voice IO flow lives in `handlers.ts` (could be its own module); bilingual record + `ru` rule duplicated between `voice.ts` and `error-text.ts`; an entity-dense transcript can still exceed 4096 after escaping the 3500-char cut. Source: voice-transcription review A5/A8/A11 (2026-09-27).
+- [ ] voice-transcription run-2 advisories: duplicated `sendReply` empty-check closures (`/start`, text path); one-call-site `beforeErrorText`; exported-unused `FetchLike`; ADR-0007 Guardrail 3 has no pointer to the ADR-0013 §7 STT carve-out and ADR-0013 §11 map lacks `domain/speech`; bot notices sent outside try (a Telegram failure → unhandled rejection); a failing quote send in `beforeErrorText` skips the error text and mislabels the log; `route-error.ts` uses `in` (prototype chain) — `Object.hasOwn` is exact; `docs/README.md`/`README.md` indexes lack speech/FEAT-0011 (and FEAT-0010). Source: voice-transcription review run 2 (2026-09-27).
+- [ ] voice-transcription run-3 advisories: `getFileStream` pipes through `pump`, so any download failure surfaces as ERR_STREAM_PREMATURE_CLOSE and is retried, and a non-2xx file answer is base64-encoded as audio; `isNetworkError` matches codes inside messages and every EFATAL; retry tests use real timers and do not assert the give-up text; the error text after the threaded quote is sent unthreaded; `route-error.unit.test.ts` describe has no id. Source: voice-transcription review run 3 (2026-09-27).
+- [ ] Voice test hygiene: `handlers.voice.unit.test.ts:231` name claims the 3500 cut but asserts only expandable (unused `chatId`); the split fixture's reply alone exceeds 4096; AC ids only in header comments of `voice.route.unit.test.ts`/`voice.unit.test.ts`. Source: voice-transcription review A12/A13/A14 (2026-09-27).
+
+## fact-provenance close-out review advisories (2026-09-27)
+
+- [ ] `compact.node.ts` (~500 lines) owns compaction, summary insert, the two clocks **and** fact-operation application — candidate: move fact-operation application into its own module (verification already moved out to `verify-fact-operations.ts`, 2026-09-28). Source: fact-provenance review R1 (2026-09-27).
+- [ ] `knownFactLine` is copied verbatim in `prompts/summarizer/v4.ts`, `v5.ts` and `v6.ts` — render helper is code, not wording; v5 could import it. Source: fact-provenance review R2 (2026-09-27).
+- [x] ~~Provenance D4 over-filters legit facts (number words, digit tokens, unit conversions)~~ — resolved 2026-09-28: the string check was replaced by the model verifier (plan `fact-verification`).
+- [ ] The compaction provenance rule (ADR-0009 amendment 2026-09-27/28, now a model verifier) has no BR-*/INV-* id; candidate home `docs/domain/user.spec.md`. Source: fact-provenance review R4 (2026-09-27).
+- [ ] `ARCHITECTURE.md` § User facts / `CONTRIBUTING_AI.md` § User facts still describe `user_facts.v1` rendering and the pre-wave-B hard block for every constraint (ADR-0009 wave B narrowed it to `permanent`). Source: fact-provenance close-out, orchestrator while fixing R4 (2026-09-27).
+
+## fact-verification close-out review advisories (2026-09-28)
+
+- [ ] `manage_fact` (live path) stores no quote: the tool's run context does not carry the current user message, so `user_facts.evidence` stays NULL for conversational facts (plan `fact-verification` D20). Needs the message threaded into `RunContext`. Source: fact-verification Task 5 (2026-09-28).
+- [ ] Scenario/integration journeys never exercise a rejected verdict: `scripted-model.ts` falls back to all-supported verdicts and `enqueueFactVerdicts` has no caller — a regression that bypasses the verifier stays green there (unit tests still catch it). Source: fact-verification review R2 + meta (2026-09-28).
+- [ ] `verify-fact-operations.ts` lives in `graph/nodes/` but is not a node (a schema + one gateway call, like course-check) — candidate move to `infra/ai/`. Section-to-ChatMsg role mapping now exists in three places (verifier, compact, course-check). Source: fact-verification review R1/R2 (2026-09-28).
+- [ ] The ADR-0009 2026-09-27 amendment was rewritten in place when the string check was replaced (only a one-sentence record of the old rule remains). Source: fact-verification review R1 (2026-09-28).

@@ -2,7 +2,10 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 
 import { isToolReturnWithUpdate, type ToolReturn } from '@domain/conversation/tool-outcome';
 import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
+import type { IUserFactsService, UserFact } from '@domain/user/ports/user-facts.ports';
+import type { ExerciseWithMuscles } from '@domain/training/types';
 
+import { HANDOFF_REGISTERED_TEXT } from '@infra/ai/graph/handoff';
 import { toToolMessage } from '@infra/ai/tools/outcome';
 
 import { buildStartTrainingSessionTool } from '../start-training-session.tool';
@@ -57,32 +60,97 @@ const makeWorkoutPlanRepo = (planId = 'plan-1'): jest.Mocked<IWorkoutPlanReposit
     archive: jest.fn(),
   }) as unknown as jest.Mocked<IWorkoutPlanRepository>;
 
-const makeConfig = (userId = 'u1'): RunnableConfig => ({
-  configurable: { userId, thread_id: userId },
-});
+const makeConfig = (userId = 'u1'): RunnableConfig =>
+  // `context` is the LangGraph run context the graph threads to tools (not a
+  // stock RunnableConfig field — hence the cast); ctxOf reads `now` from it for
+  // the facts constraint check (fact-lifecycle Task 1).
+  ({
+    configurable: { userId, thread_id: userId },
+    context: { runId: 'run-test', userId, now: new Date('2026-09-20T12:00:00Z') },
+  }) as unknown as RunnableConfig;
 
 const makeExerciseRepository = (): jest.Mocked<IExerciseRepository> =>
   ({
-    findByIds: jest.fn().mockResolvedValue([{ id: 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95' }]),
+    findByIds: jest.fn().mockResolvedValue([]),
     searchByEmbedding: jest.fn().mockResolvedValue([]),
     updateEmbedding: jest.fn(),
     findAll: jest.fn(),
     findAllWithMuscles: jest.fn(),
     findById: jest.fn(),
     findByIdWithMuscles: jest.fn(),
-    findByIdsWithMuscles: jest.fn(),
+    findByIdsWithMuscles: jest
+      .fn()
+      .mockResolvedValue([makeExerciseWithMuscles([{ muscleGroup: 'chest', involvement: 'primary' }])]),
     findByMuscleGroup: jest.fn(),
     search: jest.fn(),
   }) as unknown as jest.Mocked<IExerciseRepository>;
 
+const makeExerciseWithMuscles = (
+  muscleGroups: ExerciseWithMuscles['muscleGroups'],
+  id = 'c7b0899c-a0f9-47ca-a69d-4bcd531b0c95',
+  name = 'Bench Press',
+): ExerciseWithMuscles => ({
+  id,
+  name,
+  category: 'compound',
+  equipment: 'barbell',
+  exerciseType: 'strength',
+  description: null,
+  energyCost: 'high',
+  complexity: 'intermediate',
+  typicalDurationMinutes: 12,
+  requiresSpotter: false,
+  imageUrl: null,
+  videoUrl: null,
+  createdAt: new Date(),
+  muscleGroups,
+});
+
+const makeConstraintFact = (muscleGroup: UserFact['muscleGroup'], overrides: Partial<UserFact> = {}): UserFact => ({
+  id: 'fact-1',
+  userId: 'u1',
+  category: 'physical_constraint',
+  fact: 'User has a shoulder injury — avoid direct chest pressing.',
+  factKey: 'shoulder-injury',
+  muscleGroup,
+  confirmations: 1,
+  sourceTurnId: null,
+  durability: 'permanent',
+  expiresAt: null,
+  reviewAfter: null,
+  phaseNote: null,
+  phaseAt: null,
+  onExpiry: null,
+  status: 'active',
+  archivedAt: null,
+  archivedReason: null,
+  closedByUserAt: null,
+  supersedesId: null,
+  context: null,
+  evidence: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  ...overrides,
+});
+
+const makeUserFactsService = (constraints: UserFact[] = []): jest.Mocked<IUserFactsService> =>
+  ({
+    upsertMany: jest.fn(),
+    getForPrompt: jest.fn(),
+    getConstraints: jest.fn().mockResolvedValue(constraints),
+  }) as unknown as jest.Mocked<IUserFactsService>;
+
 const buildTools = (
   trainingService: jest.Mocked<ITrainingService>,
   workoutPlanRepository: jest.Mocked<IWorkoutPlanRepository>,
+  userFactsService: jest.Mocked<IUserFactsService> = makeUserFactsService(),
+  exerciseRepository: jest.Mocked<IExerciseRepository> = makeExerciseRepository(),
 ) => {
   const startTrainingSession = buildStartTrainingSessionTool({
     trainingService,
     workoutPlanRepository,
-    exerciseRepository: makeExerciseRepository(),
+    exerciseRepository,
+    userFactsService,
   }) as unknown as InvokableTool;
   return { startTrainingSession };
 };
@@ -156,6 +224,137 @@ describe('start-training-session.tool — start_training_session', () => {
     expect(renderedContent(result)).toContain('session-1');
   });
 
+  it('rejects a session whose exercise PRIMARILY trains a constrained muscle group, quoting the fact', async () => {
+    const trainingService = makeTrainingService();
+    const workoutPlanRepo = makeWorkoutPlanRepo();
+    const fact = makeConstraintFact('chest'); // Bench Press's primary muscle in the mock
+    const { startTrainingSession } = buildTools(trainingService, workoutPlanRepo, makeUserFactsService([fact]));
+
+    const result = (await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig('u1'))) as ToolReturn;
+
+    expect(result).toEqual({
+      ok: false,
+      kind: 'user_error',
+      message: expect.stringContaining('User has a shoulder injury — avoid direct chest pressing.'),
+    });
+    // persists nothing and requests no state update
+    expect(trainingService.startSession).not.toHaveBeenCalled();
+    expect(isToolReturnWithUpdate(result)).toBe(false);
+  });
+
+  it('does NOT reject when the constrained muscle is only a secondary muscle', async () => {
+    const trainingService = makeTrainingService('session-ok');
+    const exerciseRepository = makeExerciseRepository();
+    exerciseRepository.findByIdsWithMuscles.mockResolvedValue([
+      makeExerciseWithMuscles([
+        { muscleGroup: 'chest', involvement: 'primary' },
+        { muscleGroup: 'triceps', involvement: 'secondary' },
+      ]),
+    ]);
+    const { startTrainingSession } = buildTools(
+      trainingService,
+      makeWorkoutPlanRepo(),
+      makeUserFactsService([makeConstraintFact('triceps')]),
+      exerciseRepository,
+    );
+
+    const result = (await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig('u1'))) as ToolReturn;
+
+    expect(isToolReturnWithUpdate(result)).toBe(true);
+    expect(trainingService.startSession).toHaveBeenCalledTimes(1);
+  });
+
+  // AC-FL-6: only a `permanent` constraint blocks; everything else advises.
+  describe('non-permanent constraints advise instead of blocking (AC-FL-6)', () => {
+    const DEADLIFT = { id: '11111111-1111-4111-8111-111111111111', name: 'Conventional Deadlift' };
+    const ROW = { id: '22222222-2222-4222-8222-222222222222', name: 'Barbell Row' };
+    const HYPER = { id: '33333333-3333-4333-8333-333333333333', name: 'Hyperextension' };
+    const lowerBackPrimary = [{ muscleGroup: 'lower_back' as const, involvement: 'primary' as const }];
+
+    const sessionWithThreeProblemExercises = () => ({
+      ...MINIMAL_SESSION_PLAN,
+      exercises: [DEADLIFT, ROW, HYPER].map(e => ({
+        exerciseId: e.id,
+        exerciseName: e.name,
+        targetSets: 3,
+        targetReps: '8',
+        restSeconds: 90,
+      })),
+    });
+    const catalogWithThreeProblemExercises = () => {
+      const exerciseRepository = makeExerciseRepository();
+      exerciseRepository.findByIdsWithMuscles.mockResolvedValue(
+        [DEADLIFT, ROW, HYPER].map(e => makeExerciseWithMuscles(lowerBackPrimary, e.id, e.name)),
+      );
+      return exerciseRepository;
+    };
+
+    it.each(['long_term', 'short'] as const)(
+      'a %s constraint no longer rejects: the session starts and the result names the fact and EVERY conflicting exercise',
+      async durability => {
+        const trainingService = makeTrainingService('session-adv');
+        const fact = makeConstraintFact('lower_back', { durability, fact: 'Lower back is sore after a fall' });
+        const { startTrainingSession } = buildTools(
+          trainingService,
+          makeWorkoutPlanRepo(),
+          makeUserFactsService([fact]),
+          catalogWithThreeProblemExercises(),
+        );
+
+        const result = (await startTrainingSession.invoke(
+          sessionWithThreeProblemExercises(),
+          makeConfig('u1'),
+        )) as ToolReturn;
+
+        expect(trainingService.startSession).toHaveBeenCalledTimes(1); // persisted
+        expect(isToolReturnWithUpdate(result) ? result.update.activeSessionId : undefined).toBe('session-adv');
+        const text = renderedContent(result);
+        expect(text).toContain('Session created (ID: session-adv)');
+        expect(text).toContain('ADVISORY');
+        expect(text).toContain('Lower back is sore after a fall');
+        for (const name of [DEADLIFT.name, ROW.name, HYPER.name]) {
+          expect(text).toContain(name); // not just the first
+        }
+        expect(text).toMatch(/must address/i);
+      },
+    );
+
+    it('a permanent constraint still rejects, listing every conflicting exercise; nothing is persisted', async () => {
+      const trainingService = makeTrainingService();
+      const { startTrainingSession } = buildTools(
+        trainingService,
+        makeWorkoutPlanRepo(),
+        makeUserFactsService([makeConstraintFact('lower_back', { durability: 'permanent' })]),
+        catalogWithThreeProblemExercises(),
+      );
+
+      const result = (await startTrainingSession.invoke(
+        sessionWithThreeProblemExercises(),
+        makeConfig('u1'),
+      )) as ToolReturn;
+
+      expect(result).toMatchObject({ ok: false, kind: 'user_error' });
+      for (const name of [DEADLIFT.name, ROW.name, HYPER.name]) {
+        expect((result as { message: string }).message).toContain(name);
+      }
+      expect(trainingService.startSession).not.toHaveBeenCalled();
+      expect(isToolReturnWithUpdate(result)).toBe(false);
+    });
+
+    it('a non-permanent constraint with no intersecting exercise leaves the summary free of any advisory', async () => {
+      const { startTrainingSession } = buildTools(
+        makeTrainingService('session-1'),
+        makeWorkoutPlanRepo(),
+        makeUserFactsService([makeConstraintFact('abs', { durability: 'short' })]),
+      );
+
+      const result = (await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig('u1'))) as ToolReturn;
+
+      expect(renderedContent(result)).not.toContain('ADVISORY');
+      expect(renderedContent(result)).toContain('Session created (ID: session-1)');
+    });
+  });
+
   it('returns error string when userId is missing', async () => {
     const { startTrainingSession } = buildTools(makeTrainingService(), makeWorkoutPlanRepo());
 
@@ -199,6 +398,50 @@ describe('start-training-session.tool — start_training_session', () => {
     );
   });
 
+  describe('D-5: closing text depends on TRANSITION_HANDOFF_TARGETS', () => {
+    it('keeps the "write a message" wording when the flag is off (no transitionHandoffTargets)', async () => {
+      const { startTrainingSession } = buildTools(makeTrainingService(), makeWorkoutPlanRepo());
+
+      const result = (await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig())) as ToolReturn;
+
+      const text = renderedContent(result);
+      expect(text).toContain('Now write a brief energetic message');
+      expect(text).not.toContain(HANDOFF_REGISTERED_TEXT);
+    });
+
+    it('keeps the "write a message" wording when training is NOT in transitionHandoffTargets', async () => {
+      const startTrainingSession = buildStartTrainingSessionTool({
+        trainingService: makeTrainingService(),
+        workoutPlanRepository: makeWorkoutPlanRepo(),
+        exerciseRepository: makeExerciseRepository(),
+        userFactsService: makeUserFactsService(),
+        transitionHandoffTargets: new Set(['session_planning']),
+      }) as unknown as InvokableTool;
+
+      const result = (await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig())) as ToolReturn;
+
+      expect(renderedContent(result)).toContain('Now write a brief energetic message');
+    });
+
+    it('switches to the neutral hand-off text when training IS a hand-off target', async () => {
+      const startTrainingSession = buildStartTrainingSessionTool({
+        trainingService: makeTrainingService(),
+        workoutPlanRepository: makeWorkoutPlanRepo(),
+        exerciseRepository: makeExerciseRepository(),
+        userFactsService: makeUserFactsService(),
+        transitionHandoffTargets: new Set(['training']),
+      }) as unknown as InvokableTool;
+
+      const result = (await startTrainingSession.invoke(MINIMAL_SESSION_PLAN, makeConfig())) as ToolReturn;
+
+      const text = renderedContent(result);
+      expect(text).toContain(HANDOFF_REGISTERED_TEXT);
+      expect(text).not.toContain('write a brief energetic message');
+      // The session facts still render — only the closing instruction changes.
+      expect(text).toContain('Session created (ID: session-1)');
+    });
+  });
+
   it('each invocation requests its own session — two users do not overwrite each other', async () => {
     const trainingA = makeTrainingService('session-A');
     const trainingB = makeTrainingService('session-B');
@@ -211,5 +454,65 @@ describe('start-training-session.tool — start_training_session', () => {
 
     expect(isToolReturnWithUpdate(a) ? a.update.activeSessionId : undefined).toBe('session-A');
     expect(isToolReturnWithUpdate(b) ? b.update.activeSessionId : undefined).toBe('session-B');
+  });
+
+  // training-history-lookup plan D5/AC-HL-5: the plan's exerciseName must agree with the catalog
+  // name of its exerciseId (BUG-030 D19 aftermath — live 2026-09-25, "Treadmill" naming Rowing
+  // Machine's id).
+  describe('plan name/id check (D5, AC-HL-5)', () => {
+    it("rejects a plan whose exerciseName shares no word with its id's catalog name — nothing persisted", async () => {
+      const trainingService = makeTrainingService();
+      const exerciseRepository = makeExerciseRepository();
+      exerciseRepository.findByIdsWithMuscles.mockResolvedValue([
+        makeExerciseWithMuscles([{ muscleGroup: 'chest', involvement: 'primary' }], undefined, 'Rowing Machine'),
+      ]);
+      const { startTrainingSession } = buildTools(
+        trainingService,
+        makeWorkoutPlanRepo(),
+        makeUserFactsService(),
+        exerciseRepository,
+      );
+
+      const plan = {
+        ...MINIMAL_SESSION_PLAN,
+        exercises: [{ ...MINIMAL_SESSION_PLAN.exercises[0], exerciseName: 'Treadmill' }],
+      };
+      const result = (await startTrainingSession.invoke(plan, makeConfig())) as ToolReturn;
+
+      const text = renderedContent(result);
+      expect(text).toContain('LLM_ERROR');
+      expect(text).toContain('"Treadmill" → id is "Rowing Machine"');
+      expect(trainingService.startSession).not.toHaveBeenCalled();
+      expect(isToolReturnWithUpdate(result)).toBe(false);
+    });
+
+    it('stores the catalog name when the plan only partially names the exercise', async () => {
+      const trainingService = makeTrainingService();
+      const exerciseRepository = makeExerciseRepository();
+      exerciseRepository.findByIdsWithMuscles.mockResolvedValue([
+        makeExerciseWithMuscles([{ muscleGroup: 'chest', involvement: 'primary' }], undefined, 'Barbell Bench Press'),
+      ]);
+      const { startTrainingSession } = buildTools(
+        trainingService,
+        makeWorkoutPlanRepo(),
+        makeUserFactsService(),
+        exerciseRepository,
+      );
+
+      const plan = {
+        ...MINIMAL_SESSION_PLAN,
+        exercises: [{ ...MINIMAL_SESSION_PLAN.exercises[0], exerciseName: 'Bench Press' }],
+      };
+      await startTrainingSession.invoke(plan, makeConfig());
+
+      expect(trainingService.startSession).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          sessionPlanJson: expect.objectContaining({
+            exercises: [expect.objectContaining({ exerciseName: 'Barbell Bench Press' })],
+          }),
+        }),
+      );
+    });
   });
 });

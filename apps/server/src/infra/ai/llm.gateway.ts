@@ -5,6 +5,14 @@ import type { LlmCallOptions, LlmGateway } from '@domain/ai/ports';
 import type { ChatMsg } from '@domain/ai/types';
 
 import { getModel } from '@infra/ai/model.factory';
+import {
+  buildJsonSchemaResponseFormat,
+  buildSchemaInstruction,
+  extractJsonPayload,
+  parseJsonOrUndefined,
+} from '@infra/ai/structured-json';
+
+import { loadConfig } from '@config/index';
 
 import { createLogger } from '@shared/logger';
 
@@ -52,9 +60,13 @@ function isSchemaFailure(err: unknown): boolean {
     return false;
   }
   const { name } = err as { name?: string };
-  // SyntaxError: the model answered with prose instead of a tool call (seen live
-  // on the summarizer profile, dev smoke 2026-09-18) — a format failure like any other.
-  return name === 'ZodError' || name === 'OutputParserException' || name === 'SyntaxError';
+  // A schema failure is the ZodError our own validation throws: the model's
+  // answer (direct JSON, fenced JSON, or prose-recovered JSON — BUG-017) did
+  // not satisfy the schema, or contained no JSON at all. The gateway parses
+  // the raw answer itself (parseJsonOrUndefined swallows SyntaxError), so no
+  // SyntaxError ever reaches here. Provider errors (network/auth) never reach
+  // validation and propagate untouched.
+  return name === 'ZodError' || name === 'OutputParserException';
 }
 
 export class OpenAiLlmGateway implements LlmGateway {
@@ -69,14 +81,52 @@ export class OpenAiLlmGateway implements LlmGateway {
     return { content: textOf(response.content) };
   }
 
+  /**
+   * BUG-017: we send the same json_schema request `withStructuredOutput` builds
+   * (see `buildJsonSchemaResponseFormat`) but parse the answer ourselves. The
+   * SDK-side parse throws on a fenced answer before any message exists; here a
+   * fenced (or prose-wrapped) payload that passes the SAME schema is recovered
+   * from the raw model answer with no second model call, and only an
+   * unrecoverable/invalid answer gets today's single retry.
+   */
   async structured<T>(schema: ZodType<T>, messages: ChatMsg[], opts: LlmCallOptions = {}): Promise<T> {
     const profile = opts.profile ?? 'default';
-    const runnable = getModel(profile).withStructuredOutput(schema, { name: opts.schemaName ?? 'structured_output' });
-    const lcMessages = toLangChain(messages);
+    const schemaName = opts.schemaName ?? 'structured_output';
+    // LLM_STRUCTURED_OUTPUT_MODE (Z.AI route, 2026-09-19): 'json_schema' sends
+    // today's request, byte-identical. 'json_object' is for providers that
+    // ignore json_schema (GLM via Z.AI) — response_format {type:'json_object'}
+    // plus one trailing system message carrying the JSON Schema. In both modes
+    // the raw answer comes back through create() and is parsed/recovered/
+    // validated by the BUG-017 code below, unchanged.
+    const jsonObjectMode = loadConfig().LLM_STRUCTURED_OUTPUT_MODE === 'json_object';
+    const model = getModel(profile).withConfig({
+      response_format: jsonObjectMode ? { type: 'json_object' } : buildJsonSchemaResponseFormat(schema, schemaName),
+    });
+    const lcMessages = jsonObjectMode
+      ? [...toLangChain(messages), new SystemMessage(buildSchemaInstruction(schema, schemaName))]
+      : toLangChain(messages);
     const started = Date.now();
 
+    const attempt = async (): Promise<T> => {
+      const response = await model.invoke(lcMessages, callConfig(opts));
+      const text = textOf(response.content);
+      const direct = parseJsonOrUndefined(text);
+      const payload = direct !== undefined ? direct : extractJsonPayload(text);
+      const result = schema.safeParse(payload);
+      if (!result.success) {
+        throw result.error;
+      }
+      if (direct === undefined) {
+        log.warn(
+          { profile, runId: opts.runId, jobId: opts.jobId, recovery: 'fenced-json' },
+          'Structured output recovered the JSON payload from the raw model answer',
+        );
+      }
+      return result.data;
+    };
+
     try {
-      return (await runnable.invoke(lcMessages, callConfig(opts))) as T;
+      return await attempt();
     } catch (err) {
       if (!isSchemaFailure(err)) {
         throw err;
@@ -85,7 +135,7 @@ export class OpenAiLlmGateway implements LlmGateway {
         { profile, runId: opts.runId, jobId: opts.jobId, err },
         'Structured output failed schema — retrying once',
       );
-      return (await runnable.invoke(lcMessages, callConfig(opts))) as T;
+      return await attempt();
     } finally {
       log.info(
         { profile, runId: opts.runId, jobId: opts.jobId, latencyMs: Date.now() - started, kind: 'structured' },

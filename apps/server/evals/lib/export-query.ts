@@ -38,7 +38,15 @@ export async function fetchRunsSince(since: Date, limit: number): Promise<Export
     })
     .from(conversationTurns)
     .where(and(gte(conversationTurns.createdAt, since), isNotNull(conversationTurns.runId)))
-    .orderBy(asc(conversationTurns.createdAt))
+    // INV-LLM-010: createdAt stays first — this query spans every run since the
+    // cutoff (bucketed into runs below) and is capped by `limit * 4`, so the
+    // ORDER BY decides which whole runs the LIMIT keeps, oldest first, not
+    // just row order inside one run. seq is the tiebreak WITHIN a tied
+    // created_at (closes BUG-029, where that tie left row order at the mercy
+    // of physical row layout); putting seq first would sort every NULL-seq
+    // pre-migration row (nulls last in ASC) behind every seq'd row — the
+    // 2026-09-21 session's turns, cut before any newer run's.
+    .orderBy(asc(conversationTurns.createdAt), asc(conversationTurns.seq))
     .limit(limit * 4);
 
   const byRun = new Map<string, ExportedRun['turns']>();

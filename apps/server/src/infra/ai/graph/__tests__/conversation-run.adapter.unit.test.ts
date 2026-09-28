@@ -5,7 +5,7 @@
  */
 import { AIMessage, HumanMessage } from '@langchain/core/messages';
 
-import type { IConversationRunService } from '@domain/conversation/ports';
+import { CoreError, LlmUnavailableError, type IConversationRunService } from '@domain/conversation/ports';
 import type { IUserService } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
 
@@ -38,7 +38,7 @@ function makeDeps(graph: StubGraph, user: User | null) {
 }
 
 describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
-  it('returns { text, phase, runId } — the text is the last AI message of the channel (P4, ADR-0013 §3.2)', async () => {
+  it('returns { text, phase, runId } — a single-AI run delivers that text byte-for-byte (AC-CC-3)', async () => {
     const graph = {
       invoke: async () => ({
         phase: 'chat',
@@ -55,16 +55,50 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
     });
   });
 
+  // chat-continuity Task 3 (AC-CC-3 / BUG-018): the greeting written alongside
+  // the tool calls reaches the user too — every non-empty AI text of THIS run,
+  // in order, blank line between; the pre-run exchange is never re-sent.
+  it('AC-CC-3: the reply carries every non-empty AI text of the run, not only the last one', async () => {
+    const graph = {
+      invoke: async () => ({
+        phase: 'session_planning',
+        messages: [
+          new HumanMessage('q1'),
+          new AIMessage({ content: 'старый ответ', tool_calls: [] }),
+          new HumanMessage('привет'),
+          new AIMessage({
+            content: 'Привет! Рад тебя видеть.',
+            tool_calls: [{ id: 'c1', name: 'request_transition', args: {}, type: 'tool_call' }],
+          }),
+          new AIMessage({
+            content: '',
+            tool_calls: [{ id: 'c2', name: 'search_exercises', args: {}, type: 'tool_call' }],
+          }),
+          new AIMessage({ content: 'Финальный ответ.', tool_calls: [] }),
+        ],
+      }),
+    };
+    const { deps } = makeDeps(graph, makeUser());
+    const runner = buildConversationRunner(deps);
+
+    const out = await runner.run({ userId: UID, text: 'привет' });
+    expect(out.text).toBe('Привет! Рад тебя видеть.\n\nФинальный ответ.');
+    expect(out.text).not.toContain('старый ответ');
+  });
+
   it('throws before invoke when the user is missing (D-A)', async () => {
     const invoke = jest.fn(async () => ({}));
     const { deps } = makeDeps({ invoke }, null);
     const runner = buildConversationRunner(deps);
 
-    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toThrow('not found');
+    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toMatchObject({
+      name: 'UserNotFoundError',
+      code: 'USER_NOT_FOUND',
+    });
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it('D-F: a throwing graph records outcome core_error and rethrows', async () => {
+  it('D-F/ADR-0013 §6: a throwing graph records outcome core_error and rethrows a typed CoreError', async () => {
     const { deps, recordRun } = makeDeps(
       {
         invoke: async () => {
@@ -75,15 +109,45 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
     );
     const runner = buildConversationRunner(deps);
 
-    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toThrow('boom');
+    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toBeInstanceOf(CoreError);
     expect(recordRun).toHaveBeenCalledTimes(1);
     const [[record]] = recordRun.mock.calls;
     expect(record.outcome).toBe('core_error');
     expect(record.phaseOut).toBeNull();
     expect(record.userId).toBe(UID);
+    // INV-LLM-009: the run carries its cause.
+    expect(record.errorClass).toBe('Error');
+    expect(record.errorMessage).toBe('boom');
   });
 
-  it('D-F: a provider error (status >= 500 / 429) records outcome llm_unavailable', async () => {
+  it('ADR-0013 §6/INV-LLM-006: the thrown CoreError carries a fixed message, not the original — the original rides cause', async () => {
+    const sentinel = 'SENTINEL_ORIGINAL_MESSAGE_e8f2a1';
+    const { deps } = makeDeps(
+      {
+        invoke: async () => {
+          throw new Error(sentinel);
+        },
+      },
+      makeUser(),
+    );
+    const runner = buildConversationRunner(deps);
+
+    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toMatchObject({
+      code: 'CORE_ERROR',
+    });
+    try {
+      await runner.run({ userId: UID, text: 'x' });
+      throw new Error('expected rejection');
+    } catch (thrown) {
+      expect(thrown).toBeInstanceOf(CoreError);
+      const coreError = thrown as CoreError;
+      expect(coreError.message).not.toContain(sentinel);
+      expect(coreError.cause).toBeInstanceOf(Error);
+      expect((coreError.cause as Error).message).toBe(sentinel);
+    }
+  });
+
+  it('D-F/ADR-0013 §6: a provider error (status >= 500 / 429) records outcome llm_unavailable and rethrows a typed LlmUnavailableError', async () => {
     const providerError = Object.assign(new Error('upstream'), { status: 503 });
     const { deps, recordRun } = makeDeps(
       {
@@ -95,11 +159,52 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
     );
     const runner = buildConversationRunner(deps);
 
-    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toThrow('upstream');
+    const rejection = runner.run({ userId: UID, text: 'x' });
+    await expect(rejection).rejects.toBeInstanceOf(LlmUnavailableError);
+    await expect(rejection).rejects.toMatchObject({ code: 'LLM_UNAVAILABLE' });
     expect(recordRun.mock.calls[0][0].outcome).toBe('llm_unavailable');
+    // INV-LLM-009: the cause is recorded on this failure path too, not only core_error's.
+    expect(recordRun.mock.calls[0][0].errorClass).toBe('Error');
+    expect(recordRun.mock.calls[0][0].errorMessage).toBe('upstream');
   });
 
-  it('D-F: a failed recordRun never masks the original error', async () => {
+  it('INV-LLM-009: a long error message is truncated on the run record', async () => {
+    const longMessage = 'x'.repeat(2000);
+    const { deps, recordRun } = makeDeps(
+      {
+        invoke: async () => {
+          throw new Error(longMessage);
+        },
+      },
+      makeUser(),
+    );
+    const runner = buildConversationRunner(deps);
+
+    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toBeInstanceOf(CoreError);
+    const [[record]] = recordRun.mock.calls;
+    expect(record.errorClass).toBe('Error');
+    expect(record.errorMessage.length).toBeLessThan(longMessage.length);
+  });
+
+  it('INV-LLM-009: a non-Error throw still records a class and a message', async () => {
+    const { deps, recordRun } = makeDeps(
+      {
+        invoke: async () => {
+          // eslint-disable-next-line @typescript-eslint/only-throw-error
+          throw 'plain string failure';
+        },
+      },
+      makeUser(),
+    );
+    const runner = buildConversationRunner(deps);
+
+    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toBeInstanceOf(CoreError);
+    const [[record]] = recordRun.mock.calls;
+    expect(record.errorClass).toBeTruthy();
+    expect(record.errorMessage).toContain('plain string failure');
+  });
+
+  it('D-F: a failed recordRun never masks the original error (still a typed CoreError)', async () => {
     const { deps, recordRun } = makeDeps(
       {
         invoke: async () => {
@@ -111,7 +216,7 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
     recordRun.mockRejectedValueOnce(new Error('db down'));
     const runner = buildConversationRunner(deps);
 
-    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toThrow('boom');
+    await expect(runner.run({ userId: UID, text: 'x' })).rejects.toBeInstanceOf(CoreError);
   });
 
   it('carries the invoke config contract: context, metadata.runId, callbacks[0], thread_id (D-B)', async () => {
@@ -157,6 +262,60 @@ describe('buildConversationRunner (ADR-0013 §11, D-F)', () => {
       userId: UID,
       phase: 'training',
       text: 'Контекст диалога очищен.', // ru user (makeUser)
+    });
+  });
+
+  describe('compact (manual /compact)', () => {
+    it('runs the graph compact-only: flagged context, no message appended, no run row, no transcript rows', async () => {
+      const seen: { input?: unknown; config?: unknown } = {};
+      const graph = {
+        invoke: async (input: unknown, config: unknown) => {
+          Object.assign(seen, { input, config });
+          return { episodeId: (config as { context: { runId: string } }).context.runId };
+        },
+      };
+      const { deps, recordRun, appendSystemNote } = makeDeps(graph, makeUser());
+      const runner = buildConversationRunner(deps);
+
+      await expect(runner.compact(UID)).resolves.toBe('compacted');
+
+      const { context, configurable } = seen.config as {
+        context: { compactOnly: boolean; userId: string };
+        configurable: { thread_id: string };
+      };
+      expect(context.compactOnly).toBe(true);
+      expect(context.userId).toBe(UID);
+      expect(configurable.thread_id).toBe(UID);
+      expect(seen.input).toEqual({ messages: [] }); // nothing appended: no HumanMessage
+      expect(recordRun).not.toHaveBeenCalled();
+      expect(appendSystemNote).not.toHaveBeenCalled();
+    });
+
+    it('nothing folded (the episode id did not move) → nothing_to_compact', async () => {
+      const graph = { invoke: async () => ({ episodeId: 'an-older-episode' }) };
+      const { deps } = makeDeps(graph, makeUser());
+
+      await expect(buildConversationRunner(deps).compact(UID)).resolves.toBe('nothing_to_compact');
+    });
+
+    it('a provider failure rethrows typed (503), a bug as CoreError — the message never rides the error', async () => {
+      const providerDown = { invoke: async () => Promise.reject(Object.assign(new Error('secret'), { status: 503 })) };
+      const bug = { invoke: async () => Promise.reject(new Error('secret')) };
+
+      await expect(
+        buildConversationRunner(makeDeps(providerDown, makeUser()).deps).compact(UID),
+      ).rejects.toBeInstanceOf(LlmUnavailableError);
+      await expect(buildConversationRunner(makeDeps(bug, makeUser()).deps).compact(UID)).rejects.toBeInstanceOf(
+        CoreError,
+      );
+    });
+
+    it('an unknown user throws before the graph is entered', async () => {
+      const invoke = jest.fn();
+      const { deps } = makeDeps({ invoke }, null);
+
+      await expect(buildConversationRunner(deps).compact(UID)).rejects.toMatchObject({ code: 'USER_NOT_FOUND' });
+      expect(invoke).not.toHaveBeenCalled();
     });
   });
 });

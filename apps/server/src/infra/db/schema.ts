@@ -1,6 +1,7 @@
 // Database schema definitions
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   boolean,
   check,
   index,
@@ -13,6 +14,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   vector,
 } from 'drizzle-orm/pg-core';
@@ -98,6 +100,11 @@ export const conversationTurns = pgTable(
     runId: uuid('run_id'),
     kind: conversationTurnKindEnum('kind').notNull().default('human'),
     payload: jsonb('payload'),
+    // INV-LLM-010: per-run monotonic order (closes BUG-029). Nullable — rows written
+    // before this column existed, and system notes (no run_id), have none; no
+    // backfill, since a run is one-shot and never receives more rows after a
+    // deploy, so no pre-migration run is ever mixed with post-migration seq'd rows.
+    seq: integer('seq'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   table => {
@@ -107,6 +114,11 @@ export const conversationTurns = pgTable(
         table.phase,
         table.createdAt,
       ),
+      // As-users-grow hardening: DrizzleTranscriptService.appendRunMessages runs a
+      // human-row dedup SELECT and a MAX(seq) SELECT per call, both filtered by
+      // run_id alone — unindexed, this table (append-only, never deleted) scans in
+      // full twice per run. seq semantics (per-run 1..n) are untouched — index only.
+      runIdIdx: index('idx_conversation_turns_run_id').on(table.runId),
     };
   },
 );
@@ -129,11 +141,19 @@ export const conversationRuns = pgTable(
     promptVersions: jsonb('prompt_versions'),
     tokensIn: integer('tokens_in'),
     tokensOut: integer('tokens_out'),
+    // cache-accounting plan Task 1 (AC-CA-2): sums of the run's own calls' cache_read_tokens /
+    // reasoning_tokens — null when no call of the run reported them, never 0 (0 means reported,
+    // none hit/reasoned).
+    tokensCached: integer('tokens_cached'),
+    tokensReasoning: integer('tokens_reasoning'),
     latencyMs: integer('latency_ms').notNull(),
     toolCalls: jsonb('tool_calls'),
     transition: jsonb('transition'),
     outcome: conversationRunOutcomeEnum('outcome').notNull(),
     budgetReport: jsonb('budget_report'),
+    // INV-LLM-009: the cause of a non-'ok' run — null for 'ok' (D-F remainder)
+    errorClass: text('error_class'),
+    errorMessage: text('error_message'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   table => {
@@ -164,6 +184,158 @@ export const conversationSummaries = pgTable(
       userCreatedIdx: index('idx_conversation_summaries_user_created').on(table.userId, table.createdAt),
     };
   },
+);
+
+// INV-LLM-008: a distinct-content-hash-addressed system prompt, stored once and referenced from
+// llm_calls — assemble-context.ts pushes up to six SystemMessages per call (the static rules text,
+// but also the per-profile, per-episode and per-workout blocks, which change on nearly every call),
+// so most blobs are NOT the reusable static one. `content` is nullable since BR-LLM-011's blob-prune:
+// once no unpruned llm_calls row still references a hash (via prompt_hashes below), the CONTENT is
+// dropped — never the row (`hash`/`createdAt` survive, so which prompt versions ever existed is
+// still answerable, matching the "keep the metadata" rule this plan already applies to llm_calls
+// itself). A hash whose content was dropped and is later produced again (identical text → identical
+// sha256) gets its content restored by the recorder's upsert — see llm-call-recorder.ts.
+export const promptBlobs = pgTable('prompt_blobs', {
+  hash: text('hash').primaryKey(),
+  content: text('content'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// INV-LLM-008: one row per model invocation, independent of LOG_LEVEL — run_id is a plain uuid, not a
+// FK, for the same reason as conversation_turns.run_id: the row is written mid-run, before (or
+// without) a conversation_runs row ever existing (D-F: a run that never reaches commit has none).
+export const llmCalls = pgTable(
+  'llm_calls',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    runId: uuid('run_id').notNull(),
+    // cache-accounting plan Task 1 (D1): nullable, no FK — same reason as run_id (a call is
+    // recorded mid-run; the value comes from callback metadata, see conversation-run.adapter.ts).
+    userId: uuid('user_id'),
+    callIndex: integer('call_index').notNull(),
+    model: text('model').notNull(),
+    // The request actually sent (messages, tools, temperature, reasoning effort) — every system
+    // message's `content` is replaced with `{ contentHash }` pointing at prompt_blobs. Nullable since
+    // BR-LLM-011: the prune drops the payload after LLM_CALLS_RETENTION_DAYS, keeping every other column
+    // (this row's metadata) forever — it is never absent for a fresh, unpruned call.
+    request: jsonb('request'),
+    // Null until the call succeeds, or once the prune has dropped it — a failed-but-unpruned call still
+    // has `request` (D-F-style: the cause, not the reply, is missing).
+    response: jsonb('response'),
+    // BR-LLM-011: every prompt_blobs hash this call's request referenced, written once at record time —
+    // NEVER nulled by the prune (it is metadata: a few short hashes, not the bulky text they point at)
+    // so a blob's liveness stays answerable by a join even after `request` itself is gone.
+    promptHashes: text('prompt_hashes').array(),
+    // cache-accounting plan Task 1 (D1/D2): the provider's own usage report — nullable ints, null
+    // meaning "not reported" (never 0; 0 is itself meaningful, see usage.ts). Duplicates
+    // response.usage's JSON fields as top-level columns so AC-CA-5's aggregate queries need no
+    // JSON extraction.
+    inputTokens: integer('input_tokens'),
+    outputTokens: integer('output_tokens'),
+    cacheReadTokens: integer('cache_read_tokens'),
+    reasoningTokens: integer('reasoning_tokens'),
+    // D3-D6: this call's cache attribution against the same user+model's previous call —
+    // `cache-attribution.ts`'s attributeCache output, computed once at record time. Null when
+    // there is no userId to compare by, or D7's attribution failure (never fails the call).
+    cacheExpected: text('cache_expected'),
+    cacheDivergedAt: text('cache_diverged_at'),
+    cacheSharedPrefixTokens: integer('cache_shared_prefix_tokens'),
+    cacheGapMs: integer('cache_gap_ms'),
+    latencyMs: integer('latency_ms').notNull(),
+    errorClass: text('error_class'),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  table => {
+    return {
+      // As-users-grow hardening: llm-call-recorder.ts's next-call_index lookup
+      // (`max(call_index) WHERE run_id = $1`) is on the synchronous path of every
+      // model call. Composite so the max is an index-only lookup, never a scan of
+      // this forever-growing table. No unique constraint on (run_id, call_index) —
+      // see the recorder's own comment: a violation would mean a lost audit row.
+      runIdCallIndexIdx: index('idx_llm_calls_run_id_call_index').on(table.runId, table.callIndex),
+      // As-users-grow hardening: prune-llm-calls.ts's blob-liveness NOT EXISTS
+      // correlates over `unnest(prompt_hashes)` per prompt_blobs row — the product
+      // of two forever-growing tables. A GIN index is the ordinary answer for array
+      // containment; the predicate is rephrased to `@>` in blobsStatement so the
+      // planner can actually pick it (see prune-llm-calls.ts's EXPLAIN-verified note).
+      promptHashesGinIdx: index('idx_llm_calls_prompt_hashes_gin').using('gin', table.promptHashes),
+      // cache-accounting plan Task 1 (D1): the recorder's own previous-call lookup
+      // (same user + model, latest created_at) and AC-CA-5's per-user/day rollup both filter by
+      // user_id and order/window by created_at.
+      userCreatedIdx: index('idx_llm_calls_user_created').on(table.userId, table.createdAt),
+    };
+  },
+);
+
+// Enums for user_facts lifecycle (fact-lifecycle plan Task 1, AC-FL-1) — the
+// owner's durability model (2026-09-20). The class bounds themselves live in
+// code: @domain/user/services/fact-lifecycle (FACT_LIFECYCLE_BOUNDS).
+export const factDurabilityEnum = pgEnum('fact_durability', ['permanent', 'long_term', 'short']);
+export const factOnExpiryEnum = pgEnum('fact_on_expiry', ['forget', 'ask_once']);
+export const factStatusEnum = pgEnum('fact_status', ['active', 'archived']);
+export const factArchivedReasonEnum = pgEnum('fact_archived_reason', [
+  'user_closed',
+  'user_deleted',
+  'expired',
+  'superseded',
+]);
+
+// Durable user facts (ADR-0009 table shape and FactCategory values). Writes are
+// select-then-branch in the repository (fact-lifecycle Tasks 2-3): a new active
+// row, an in-place correction, a superseding row, or an archival — never a blind
+// upsert. Uniqueness of (user_id, category, fact_key) holds among ACTIVE rows
+// only (the partial index), so closed history keeps its key.
+// Lifecycle columns (AC-FL-1): existing rows migrate with defaults that change
+// nothing today — durability=permanent (no dates, never expires), status=active,
+// every date/closure column null.
+export const userFacts = pgTable(
+  'user_facts',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    category: text('category').notNull(),
+    fact: text('fact').notNull(),
+    factKey: text('fact_key').notNull(),
+    muscleGroup: text('muscle_group'),
+    confirmations: integer('confirmations').notNull().default(1),
+    sourceTurnId: uuid('source_turn_id').references(() => conversationTurns.id),
+    durability: factDurabilityEnum('durability').notNull().default('permanent'),
+    expiresAt: timestamp('expires_at'),
+    reviewAfter: timestamp('review_after'),
+    phaseNote: text('phase_note'),
+    phaseAt: timestamp('phase_at'),
+    onExpiry: factOnExpiryEnum('on_expiry'),
+    status: factStatusEnum('status').notNull().default('active'),
+    archivedAt: timestamp('archived_at'),
+    archivedReason: factArchivedReasonEnum('archived_reason'),
+    closedByUserAt: timestamp('closed_by_user_at'),
+    // The history link is optional by nature (close-out finding 3): erasing the
+    // superseded row must succeed — AC-FL-8's "removed entirely, no trace" — so
+    // the link nulls instead of raising an FK violation.
+    supersedesId: uuid('supersedes_id').references((): AnyPgColumn => userFacts.id, {
+      onDelete: 'set null',
+    }),
+    context: text('context'),
+    // fact-verification plan Task 5 (D17): the user's own words that support the
+    // fact — the verifier's userQuote, else the summariser's evidence hint. NULL
+    // on existing rows and whenever none was captured (manage_fact today).
+    evidence: text('evidence'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  table => ({
+    userIdx: index('idx_user_facts_user').on(table.userId),
+    // fact-lifecycle Task 2 fix (AC-FL-3): the uniqueness of (user_id, category,
+    // fact_key) holds among ACTIVE rows only — a closed row keeps its key and
+    // its history, and newer evidence creates a NEW row linked via supersedes_id.
+    // A Postgres UNIQUE constraint cannot be partial, hence a partial unique index.
+    activeUserCategoryFactKeyUnique: uniqueIndex('uq_user_facts_active_user_category_fact_key')
+      .on(table.userId, table.category, table.factKey)
+      .where(sql`status = 'active'`),
+  }),
 );
 
 // --- Training domain enums (see plan: training_session_management_mvp) ---
@@ -314,6 +486,10 @@ export const workoutSessions = pgTable(
     userStatusIdx: index('idx_workout_sessions_user_status').on(table.userId, table.status),
     activityIdx: index('idx_workout_sessions_activity').on(table.userId, table.status, table.lastActivityAt),
     abandonedIdx: index('idx_workout_sessions_abandoned').on(table.status, table.lastActivityAt),
+    // INV-TRAINING-002: at most one in_progress session per user, enforced by the database.
+    oneInProgressPerUser: uniqueIndex('uq_workout_sessions_one_in_progress_per_user')
+      .on(table.userId)
+      .where(sql`${table.status} = 'in_progress'`),
   }),
 );
 
@@ -349,7 +525,7 @@ export const sessionSets = pgTable(
       .references(() => sessionExercises.id, { onDelete: 'cascade' })
       .notNull(),
     setNumber: integer('set_number').notNull(),
-    rpe: integer('rpe'),
+    rpe: numeric('rpe', { precision: 3, scale: 1, mode: 'number' }),
     userFeedback: text('user_feedback'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     completedAt: timestamp('completed_at'),

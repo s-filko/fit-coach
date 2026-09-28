@@ -3,9 +3,9 @@
  * The rules: an episode ends by inactivity gap, committed phase transition or
  * history-budget overflow (in that precedence); the cut removes whole turns
  * (a turn starts at a HumanMessage — an AIMessage(tool_calls) and its
- * ToolMessages always travel together); a trivially short episode is trimmed
- * without a summary. No I/O and no clock — `now` and `estimate` come in as
- * data (BR-LLM-007).
+ * ToolMessages always travel together) and keeps the last `keepTurns` turns
+ * verbatim (AC-CC-1); a part too short to summarise is kept, never dropped.
+ * No I/O and no clock — `now` and `estimate` come in as data (BR-LLM-007).
  */
 import { AIMessage, type BaseMessage } from '@langchain/core/messages';
 
@@ -84,35 +84,82 @@ export interface PlanCompactionInput {
   reason: CompactReason;
   historyBudget: number;
   estimate: Estimate;
+  /** EPISODE_KEEP_TURNS — the verbatim tail every trigger keeps (AC-CC-1). */
+  keepTurns: number;
+  /** D-B inputs: a too-short beyond-tail part is kept, never dropped. */
+  minTurns: number;
+  minTokens: number;
+  /**
+   * EPISODE_BUDGET_LOW_WATER (AC-SI-5a, BUG-038 part 1): the budget branch
+   * cuts to at most `historyBudget * lowWaterMark`, not just-fits-under
+   * `historyBudget` — leaving headroom so ordinary turns right after a
+   * compaction don't cross the cap again and re-trigger every run. Omitted
+   * (or 1) reproduces the old just-fits behaviour exactly — direct callers
+   * that don't pass it are unaffected.
+   */
+  lowWaterMark?: number;
 }
 
 /**
- * What leaves the channel and what stays. inactivity/phase_boundary end the
- * whole episode (removed = history, kept = []); budget removes the minimum
- * number of OLDEST whole turns until the kept history fits. The cut is
- * turn-safe by construction: turns are never split, so tool calls and their
- * results always travel together (D-I, master plan P4 rollback trigger).
+ * What leaves the channel and what stays (AC-CC-1, superseding D-B's
+ * trim-without-summary): every trigger keeps the last `keepTurns` whole
+ * turns verbatim; only what precedes that tail is removed.
+ * inactivity/phase_boundary remove the whole beyond-tail part — unless it
+ * is too short to summarise by D-B's measure, in which case nothing is
+ * removed this run and the part rides along until a later compaction can
+ * summarise it. budget keeps its existing token-driven loop — the minimum
+ * number of OLDEST whole turns until the kept history fits at or under
+ * `historyBudget * (lowWaterMark ?? 1)` (AC-SI-5a) — which respects the tail
+ * by construction: the cut reaches the last `keepTurns` turns only when the
+ * tail alone exceeds the target (then oldest-first). Whatever the
+ * budget removes is ALWAYS summarised by the caller (AC-CC-1, ADR-0013 §3.3
+ * amendment 2026-09-20): no D-B trim-without-summary remains on any trigger.
+ * The cut is turn-safe by construction: turns are never split, so tool calls
+ * and their results always travel together (D-I, master plan P4 rollback
+ * trigger).
  */
 export function planCompaction(input: PlanCompactionInput): { removed: BaseMessage[]; kept: BaseMessage[] } {
-  const { history, reason, historyBudget, estimate } = input;
+  const { history, reason, historyBudget, estimate, keepTurns, minTurns, minTokens, lowWaterMark } = input;
+  const turns = splitTurns(history);
+  const tailCount = Math.max(0, Math.min(keepTurns, turns.length));
+
+  if (reason === 'manual') {
+    // An explicit /compact keeps NO tail: the keep-recent rule protects the
+    // user from a SURPRISE truncation (BUG-018), and this one is asked for.
+    // The min-turns/min-tokens guard stays — a too-short conversation is a
+    // clean no-op with no model call, which also keeps the command from being
+    // spammed into a pile of summariser calls.
+    if (history.length === 0 || isShortEpisode(history, { minTurns, minTokens, estimate })) {
+      return { removed: [], kept: [...history] };
+    }
+    return { removed: [...history], kept: [] };
+  }
+
   if (reason === 'budget') {
-    const turns = splitTurns(history);
+    const target = historyBudget * (lowWaterMark ?? 1);
     const removed: BaseMessage[] = [];
     let kept = [...history];
-    while (turns.length > 0 && estimate(kept) > historyBudget) {
+    while (turns.length > 0 && estimate(kept) > target) {
       removed.push(...turns.shift()!);
       kept = turns.flat();
     }
     return { removed, kept };
   }
-  return { removed: [...history], kept: [] };
+
+  const tail = turns.slice(turns.length - tailCount).flat();
+  const removed = history.slice(0, history.length - tail.length);
+  if (removed.length === 0 || isShortEpisode(removed, { minTurns, minTokens, estimate })) {
+    return { removed: [], kept: [...history] };
+  }
+  return { removed, kept: tail };
 }
 
 /**
- * D-B: an ended episode with fewer than `minTurns` human turns or fewer than
- * `minTokens` estimated tokens is trimmed without a summary — a one-line
- * exchange is not worth a model call and would ride the prompt for three
- * episodes as noise.
+ * D-B, as amended (AC-CC-1): a part with fewer than `minTurns` human turns
+ * or fewer than `minTokens` estimated tokens is too short to be worth a
+ * model call — at inactivity/transition such a part is KEPT verbatim
+ * (planCompaction defers the compaction), never trimmed. No trigger trims
+ * without a summary any more.
  */
 export function isShortEpisode(
   removed: BaseMessage[],

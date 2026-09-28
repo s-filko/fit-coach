@@ -4,9 +4,9 @@ import { ExerciseRepository } from '@infra/db/repositories/exercise.repository';
 import { SessionExerciseRepository } from '@infra/db/repositories/session-exercise.repository';
 import { SessionSetRepository } from '@infra/db/repositories/session-set.repository';
 import { DrizzleUserRepository } from '@infra/db/repositories/user.repository';
-import { WorkoutPlanRepository } from '@infra/db/repositories/workout-plan.repository';
 import { WorkoutSessionRepository } from '@infra/db/repositories/workout-session.repository';
 
+import { buildRealTrainingService } from '../../helpers/training-service';
 import { createTestUserData } from '../../shared/test-factories';
 
 /**
@@ -31,20 +31,8 @@ describe('TrainingService – integration (ADR-0011)', () => {
   let squatId: string;
 
   beforeAll(async () => {
-    userRepo = new DrizzleUserRepository();
-    exerciseRepo = new ExerciseRepository();
-    sessionRepo = new WorkoutSessionRepository();
-    sessionExerciseRepo = new SessionExerciseRepository();
-    sessionSetRepo = new SessionSetRepository();
-
-    service = new TrainingService(
-      new WorkoutPlanRepository(),
-      sessionRepo,
-      exerciseRepo,
-      sessionExerciseRepo,
-      sessionSetRepo,
-      userRepo,
-    );
+    ({ service, userRepo, exerciseRepo, sessionRepo, sessionExerciseRepo, sessionSetRepo } =
+      buildRealTrainingService());
 
     // Resolve exercise IDs from seed data (inserted in global test setup)
     const exercises = await exerciseRepo.findAll();

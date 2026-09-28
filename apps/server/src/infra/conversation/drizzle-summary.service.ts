@@ -18,6 +18,8 @@ export interface SummaryTurnRow {
   role: 'summary';
   content: string;
   payload: InsertSummaryInput['structured'];
+  /** INV-LLM-010: this run's next turn, not a system note — see `insert` for how `seq` is resolved. */
+  seq: number;
 }
 
 /** The `conversation_summaries` row shape (pure mapping, exported for unit tests). */
@@ -34,7 +36,7 @@ export function toSummaryInsert(input: InsertSummaryInput): SummaryInsertRow {
 }
 
 /** The mirrored `kind='summary'` turn row (D-K) — what a P3 rollback reads as context. */
-export function toSummaryTurnRow(input: InsertSummaryInput): SummaryTurnRow {
+export function toSummaryTurnRow(input: InsertSummaryInput, seq: number): SummaryTurnRow {
   return {
     userId: input.userId,
     phase: input.phaseAtEnd,
@@ -43,18 +45,30 @@ export function toSummaryTurnRow(input: InsertSummaryInput): SummaryTurnRow {
     role: 'summary',
     content: input.rendered,
     payload: input.structured,
+    seq,
   };
 }
 
 /** SummaryPort adapter. `insert` writes both rows in one transaction (all or nothing). */
 export class DrizzleSummaryService implements SummaryPort {
-  async insert(input: InsertSummaryInput): Promise<void> {
+  async insert(input: InsertSummaryInput): Promise<{ summaryTurnId: string }> {
     const { db } = await import('@infra/db/drizzle');
     const { conversationSummaries, conversationTurns } = await import('@infra/db/schema');
+    const { nextSeqForRun } = await import('./seq');
     const summaryRow = toSummaryInsert(input);
-    await db.transaction(async tx => {
+    return db.transaction(async tx => {
       await tx.insert(conversationSummaries).values(summaryRow);
-      await tx.insert(conversationTurns).values(toSummaryTurnRow(input));
+      // The summary is this run's own next turn — auto-compaction can fire mid-run
+      // (compact.node.ts), alongside the run's other, already-seq'd turns — so it is numbered the
+      // same way appendRunMessages numbers a run's other turns, never left null. Read inside the
+      // same transaction, both for this and for the existing reason: the mirrored turn row's id
+      // is the fact-extraction provenance (fact-lifecycle plan Task 1).
+      const seq = await nextSeqForRun(tx, input.runId);
+      const [turn] = await tx
+        .insert(conversationTurns)
+        .values(toSummaryTurnRow(input, seq))
+        .returning({ id: conversationTurns.id });
+      return { summaryTurnId: turn.id };
     });
   }
 

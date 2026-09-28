@@ -35,7 +35,13 @@ curl https://fitcoach-dev.filko.dev/health   # → 200
 
 ## LLM
 
-- **Dev (since 2026-09-14): direct Z.AI** `https://api.z.ai/api/coding/paas/v4/` with the **Z.AI subscription token** (the same subscription that powers Claude Code), model `glm-5.3`. Zero per-token cost; quota shared with Claude Code sessions.
+- **Dev (since 2026-09-25, owner request): direct Z.AI** `https://api.z.ai/api/coding/paas/v4/` with the **Z.AI subscription token** (the same subscription that powers Claude Code), model **`glm-5.3-flash`** (owner choice 2026-09-25 after a smoke comparison: 34/34 on both, avg 12.7 s/turn vs 11.0 s on `glm-5.3`, ≈⅓ of the quota; thinking cannot be disabled on Flash), `LLM_STRUCTURED_OUTPUT_MODE=json_object` (Z.AI has no `json_schema`), `LLM_REASONING_EFFORT=low`. Usage consumes the subscription's token limits, shared with development. `glm-5.3-flashx` is **not** in the subscription (429) — PAYG only, e.g. OpenRouter `z-ai/glm-5.3-flashx`. The OpenRouter and `glm-5.3` lines are kept commented in `.env.dev`; `.env.dev.bak.20260925_054102` is the file before the switch.
+- **Dev 2026-09-21 → 2026-09-25: OpenRouter** `https://openrouter.ai/api/v1/`, model `google/gemini-3.8-flash` (Google AI Studio PAYG BYOK — `is_byok: true`), `json_schema`. The cheaper model exposed defects a stronger one used to absorb — see BUG-022…BUG-030 and the memory rule "weak model reveals, does not create".
+- **`LLM_REASONING_EFFORT=off` does not disable reasoning — it omits the parameter**, leaving the depth to the model. On `.env.dev` it was `off` until 2026-09-21 and Gemini reasoned freely: 15 952 output tokens / 55.8 s on a two-set confirmation (run `2ec8c9b2`). Probes on the live dev key, same prompt: no parameter → 264 completion / 248 reasoning tokens; `reasoning_effort: "low"` → 23–25 completion / 0 reasoning. Dev now runs `low` (changed 2026-09-21, `.env.dev.bak.*` keeps the previous file).
+- **Direct Google AI Studio is not a drop-in replacement for the OpenRouter route** — tried on dev
+  2026-09-21 and rolled back: the app's own requests get `400` where OpenRouter works, and the cause
+  is unidentified. Parked; what was ruled out and what is still open is in `docs/BACKLOG.md` § Findings.
+  Do not re-attempt the switch from that section's facts alone.
 - **Z.AI subscription is unusable through OpenRouter** (verified 2026-09-13): it only authorizes the coding endpoint, OpenRouter BYOK calls the standard one — GLM via OpenRouter is billed to credits at list price (`is_byok: false`). Keep this in mind before switching back.
 - **Prod: OpenRouter** (`https://openrouter.ai/api/v1/`) with Google AI Studio PAYG BYOK — that BYOK **does** work (`is_byok: true`), model `google/gemini-3-flash-preview`.
 - Check per-request BYOK via `usage.is_byok` in a completion response, not via `curl /key` alone (byok_usage lags and missed the 09-09 mis-annotation).
@@ -50,7 +56,7 @@ curl https://fitcoach-dev.filko.dev/health   # → 200
 
 ## Gotchas
 
-- **Bot can hang silently**: node-telegram-bot-api polling dies on persistent Telegram errors (502/ECONNRESET, seen 2026-08-08) without exiting the process — Docker restart policy never fires, bot just stops consuming updates. Fix = `docker restart fitcoach-dev-bot`. Proper fix (watchdog on `polling_error` → process exit) not yet implemented
+- **Bot can hang silently**: node-telegram-bot-api polling dies on persistent Telegram errors (502/ECONNRESET, seen 2026-08-08) without exiting the process — Docker restart policy never fires, bot just stops consuming updates. Fix = `docker restart fitcoach-dev-bot`. Proper fix (watchdog on `polling_error` → process exit) implemented in P5 (`apps/bot/watchdog.ts`, wired in `apps/bot/index.ts`): trips on `EFATAL` or 10 errors within 2 minutes, calls `process.exit(1)` so Docker restarts the bot
 - **Bot logs only errors** — a working message flow shows just one "incoming message" INFO line and nothing else. Don't mistake this for a hang; verify via server logs (`docker logs fitcoach-dev-server`) looking for POST /api/bot/user + /api/bot/chat
 - **Deploy workflows run the OLD deploy.sh**: GitHub Actions executes `bash /srv/docker/fitcoach/deploy/deploy.sh <env>` on the VPS before the script pulls the branch — the first deploy after any deploy.sh change runs the previous version. After editing deploy.sh, validate with a manual second run on dev: `ssh filko.dev "cd /srv/docker/fitcoach && ./deploy/deploy.sh dev"`
 - Webapp build is part of the server Docker image (`apps/server/Dockerfile`)
@@ -67,6 +73,11 @@ curl https://fitcoach-dev.filko.dev/health   # → 200
 ## Rules
 
 - Respond in Russian (user preference)
+- **Cleanup after a plan is the orchestrator's job; deleting live work is not (owner rule 2026-09-18, amended 2026-09-21).** This is the single normative statement; other docs and skills only point here. Two cases, never conflated:
+  - **Done and merged → the orchestrator cleans up by procedure, without asking.** Once the plan is `Status: done`, merged into `dev` and pushed, and the worktree has no uncommitted changes and no commits `dev` does not have: release every finished worker (`orca orchestration worker-release --dispatch <ctx>`), close the plan's leftover agent tabs, then remove the worktree and delete the branch, local and remote. Leaving them for the owner is what produced the pile of stale tabs found on 2026-09-21. Release archives nothing — what a worker or an agent tab found must be written into the plan file, `BUGS.md` or `BACKLOG.md` **before** it is closed; where its raw transcript survives afterwards is in `docs/ORCHESTRATION.md` § The cycle.
+  - **A finished task worktree → removed at once, without asking (owner 2026-09-25).** A per-task worktree (`<slug>-tN`, branch `task/<slug>-tN`) whose work is merged into the plan branch, with no uncommitted changes, and that no remaining task will reuse, is removed together with its branch as soon as that is known — not left for plan close-out.
+  - **Anything else stays owner-gated:** a branch with unmerged commits, a worktree with uncommitted changes, a live agent session, an Orca session whose transcript was never archived, or any deletion the owner did not ask for and the procedure above does not cover. Report it as ready to clean up and wait for a command naming the target. Rationale unchanged: Orca binds sessions to worktrees, so one deletion kills every session on that branch and its history becomes unreachable.
+  - The PreToolUse hook `.claude/hooks/owner-gate-branch-delete.sh` still forces an approval prompt on every `git branch -d/-D/--delete`, `git push --delete`/`:branch`, `git worktree remove/prune`, `git update-ref -d` and `orca worktree rm`. It stays: the procedure decides *when* to clean up, the prompt remains the last check that it is the right target.
 - Docs in this repo are English-only; unique IDs (INV-*, BR-*, S-*, AC-*) — see `docs/DOCUMENTATION_GUIDE.md`
 
 ## Spec-Driven Development (Superpowers)
@@ -78,5 +89,5 @@ curl https://fitcoach-dev.filko.dev/health   # → 200
 - Process methodology: Superpowers plugin (brainstorming → writing-plans → TDD execution → verification/review). Design docs go to `docs/superpowers/specs/`, implementation plans to `docs/superpowers/plans/`.
 - Durable specs (ADRs, domain/feature specs, API_SPEC, refactor master plan) stay in `docs/` per the docs-first workflow — they are the law; superpowers artifacts are working documents.
 - Every plan task must reference the AC-#### it implements and its verification command. Never silently edit durable specs — escalate to the owner.
-- **Plan execution is delegated**: an interactive session orchestrates (planning, review, decisions) and hands implementation to a `claude -p` executor on GLM/z.ai via the `delegate-implementation` skill. Review, `Status:` transitions, merge and deploy are never delegated. Contract: `docs/ORCHESTRATION.md`
+- **Plan execution is delegated**: an interactive session orchestrates (planning, review, decisions) and hands implementation to Orca-dispatched worker sessions in a plan worktree (GLM by default, Sonnet/Opus when agreed) via the `delegate-implementation` skill. Review, `Status:` transitions, merge and deploy are never delegated. Contract: `docs/ORCHESTRATION.md`
 - Full contract: `docs/SUPERPOWERS_INTEGRATION.md`

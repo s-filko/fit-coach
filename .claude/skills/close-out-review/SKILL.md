@@ -73,8 +73,22 @@ Show the owner the full list, blocking findings first.
   owner decides what happens next.
 - **Advisory** — offer to file them in `docs/BACKLOG.md` via the `backlog` skill, which
   classifies before writing. They are not fixed on this branch.
+- **Deferred** — a blocking finding whose only possible evidence comes after merge (a deploy,
+  a run against a durable environment) cannot be closed by anyone on the branch. Record it
+  with its owner and the exact command owed; it does not block the verdict. Only genuine
+  impossibility qualifies: anything a worker could close here is open, not deferred.
 
 Write the artifact only as described in the next section.
+
+**What a fix owes, when the owner dispatches one.** Not this skill's work, but its business to
+state, because a review is only as good as the closure it gets:
+
+- **The finding cites one `file:line` because that is where the reviewer stood — not because
+  that is the extent of it.** Close the class: search for the same shape and report the search.
+- **Search before creating anything shared.** The R2 zone's search recipe is written for the
+  reviewer; whoever fixes needs it more, or a DRY fix adds a copy of something already there.
+- **Editing a durable doc is a change, not typing.** Read the whole section, and grep for
+  inbound references to anything renumbered or renamed, before and after.
 
 ## Step 5 — Write the artifact
 
@@ -93,7 +107,9 @@ Today's date, the verdict, the zones that ran. Keep the format exactly: it is pa
 passed" looks like; there is no third value to encode (spec section 5).
 
 **In both cases** — append a `## Review` section at the end of the plan: every blocking
-finding and how it was closed, every advisory finding with the backlog entry it became.
+finding and how it was closed, every advisory finding with the backlog entry it became, every
+deferred one with its owner and command. Write it before any fix is dispatched: the record is
+what a fix is checked against, and what a commit or a code comment can cite.
 
 After a `blocked` review is fixed and re-run, update the same section rather than adding a
 second one, and replace any existing `- Review:` line rather than adding a second — a plan

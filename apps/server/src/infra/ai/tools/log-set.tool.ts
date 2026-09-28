@@ -14,6 +14,8 @@ import {
 } from '@infra/ai/tools/format-exercise-summary';
 
 import { createLogger } from '@shared/logger';
+import { isDatabaseFailure } from '@shared/pg-error-cause';
+import { roundRpeToHalf } from '@shared/rpe';
 
 import { userIdOf } from './format-exercise-summary';
 
@@ -63,6 +65,8 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         return llmError(`Invalid set data: ${parsed.error.message}`);
       }
 
+      const rpe = input.rpe != null ? roundRpeToHalf(input.rpe) : undefined;
+
       try {
         const session = await trainingService.getSessionDetails(sessionId);
         const lastActivity = session?.lastActivityAt ?? session?.updatedAt ?? session?.createdAt;
@@ -79,11 +83,24 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           exerciseId: input.exerciseId,
           exerciseName: input.exerciseName,
           setData: parsed.data,
-          rpe: input.rpe,
+          rpe,
           feedback: input.feedback,
           createdAt: retroCreatedAt,
           skipActivityUpdate: isRetro,
         });
+
+        // Named for the summariser (renderTranscript over this tool's own confirmation) as much
+        // as for the user — a UUID in the transcript names nothing once the set is compacted away.
+        // The set is already saved at this point: a failure resolving the name degrades the
+        // confirmation text, it must never turn a successful write into a reported error.
+        let exerciseName = input.exerciseName ?? '';
+        try {
+          const finalSession = await trainingService.getSessionDetails(sessionId);
+          const named = finalSession?.exercises.find(se => se.id === set.sessionExerciseId)?.exercise.name;
+          exerciseName = named ?? exerciseName;
+        } catch (nameErr) {
+          log.warn({ err: nameErr, sessionId }, 'log_set: could not resolve exercise name for confirmation');
+        }
 
         const { type } = set.setData;
         let summary = '';
@@ -94,9 +111,10 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           summary = type;
         }
 
-        const rpeNote = input.rpe != null ? ` | RPE ${input.rpe}` : '';
+        const rpeNote = rpe != null ? ` | RPE ${rpe}` : '';
         const retroNote = isRetro ? ' (retro-logged)' : '';
-        const setConfirmation = `Set ${setNumber} logged: ${summary}${rpeNote}${retroNote}.`;
+        const namePart = exerciseName ? ` — ${exerciseName}` : '';
+        const setConfirmation = `Set ${setNumber} logged${namePart}: ${summary}${rpeNote}${retroNote}.`;
 
         log.info(
           {
@@ -116,12 +134,18 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         );
 
         if (autoCompleted) {
-          const prevSummary = formatExerciseSummary(autoCompleted);
+          // BUG-037: this transition was triggered by the user's own set — the instruction
+          // must tell the model to confirm that set first, not to lead with the recap.
+          const prevSummary = formatExerciseSummary(autoCompleted, 'set-triggered');
           return ok(`${setConfirmation}\n\n${prevSummary}`);
         }
 
         return ok(setConfirmation);
       } catch (err) {
+        if (isDatabaseFailure(err)) {
+          log.error({ err, sessionId }, 'log_set failed: repository/DB error');
+          return systemError('Could not save the set — a database error occurred. Try again.');
+        }
         const message = err instanceof Error ? err.message : 'Unknown error';
         log.error({ err, sessionId }, 'log_set failed');
         return llmError(message);
@@ -131,7 +155,8 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
       name: 'log_set',
       description: [
         'Log a completed set for the current exercise.',
-        'Always provide exerciseId (from SESSION PLAN or exercise catalog).',
+        'Identify the exercise with exerciseId ONLY when you have its exact UUID — copied verbatim from the SESSION PLAN or from a search_exercises result ("ID:..." line).',
+        'If the exercise is not in the plan and you do not have its exact UUID, pass exerciseName instead (the server resolves it in the catalog) — never invent or guess a UUID.',
         'For strength/weighted exercises: provide reps and weight (in kg).',
         'For bodyweight exercises: provide reps only.',
         'For cardio duration (bike, elliptical): provide durationSeconds only.',
@@ -145,8 +170,15 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
             .string()
             .uuid()
             .optional()
-            .describe('Exercise UUID from the session plan. Preferred over exerciseName.'),
-          exerciseName: z.string().optional().describe('Exercise name — only if exerciseId is unknown.'),
+            .describe(
+              'Exercise UUID copied verbatim from the session plan or search_exercises results. Never invent one.',
+            ),
+          exerciseName: z
+            .string()
+            .optional()
+            .describe(
+              'Exercise name — use when the exercise is not in the session plan and its exact UUID is unknown.',
+            ),
           reps: z.number().int().positive().optional().describe('Number of repetitions performed.'),
           weight: z
             .number()

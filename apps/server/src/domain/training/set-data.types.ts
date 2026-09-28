@@ -3,8 +3,8 @@ import { z } from 'zod';
 /**
  * Set data — single source of truth. The Zod schemas define the shape; the
  * TypeScript type is inferred from them (`SetData` in types.ts), so the pair
- * cannot drift (third-run review, 2026-09-12: the former hand-written twin
- * had already drifted once over inclinePct).
+ * cannot drift — the hand-written twin this replaced had already drifted once
+ * over `inclinePct`.
  */
 const setDataTypes = {
   strength: 'strength',

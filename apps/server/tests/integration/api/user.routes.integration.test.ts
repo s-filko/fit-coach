@@ -21,6 +21,7 @@ describe('POST /api/bot/user – integration', () => {
       userService: container.get(USER_SERVICE_TOKEN) as any,
       trainingService: container.get(TRAINING_SERVICE_TOKEN) as any,
       conversationRun: container.get(CONVERSATION_RUN_PORT_TOKEN) as any,
+      speechTranscriber: { isEnabled: () => false, transcribe: async () => ({ text: '' }) } as never,
     });
 
     await app.ready();
@@ -52,6 +53,24 @@ describe('POST /api/bot/user – integration', () => {
       expect(json).toHaveProperty('data.id');
       expect(typeof json.data.id).toBe('string');
       expect(json.data.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    });
+
+    // BUG-036 + owner language rule (R3): languageCode is additive on this
+    // response — the bot reads the profile language from here, not from
+    // msg.from.language_code.
+    it('should return the seeded languageCode in the response (BUG-036, R3)', async () => {
+      const payload = createTestUserData({ languageCode: 'ru' });
+      const validKey = createTestApiKey();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/bot/user',
+        headers: { 'x-api-key': validKey },
+        payload,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data.languageCode).toBe('ru');
     });
 
     it('should return same user id for same provider account (upsert behavior)', async () => {
@@ -148,6 +167,7 @@ describe('GET /api/bot/user/{id} – integration', () => {
       userService: container.get(USER_SERVICE_TOKEN) as any,
       trainingService: container.get(TRAINING_SERVICE_TOKEN) as any,
       conversationRun: container.get(CONVERSATION_RUN_PORT_TOKEN) as any,
+      speechTranscriber: { isEnabled: () => false, transcribe: async () => ({ text: '' }) } as never,
     });
 
     await app.ready();

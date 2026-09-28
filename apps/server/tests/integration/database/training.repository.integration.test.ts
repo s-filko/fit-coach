@@ -180,6 +180,10 @@ describe('Training Repositories – integration', () => {
       expect(updated).toBeDefined();
       expect(updated?.status).toBe('in_progress');
       expect(updated?.startedAt).toBeDefined();
+
+      // INV-TRAINING-002: the user has at most one in_progress session (partial unique index) —
+      // close this one so the later tests sharing testUserId can open theirs.
+      await sessionRepo.update(session.id, { status: 'skipped' });
     });
 
     it('should complete session with duration', async () => {

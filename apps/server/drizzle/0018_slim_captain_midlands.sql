@@ -1,0 +1,12 @@
+ALTER TABLE "conversation_runs" ADD COLUMN "tokens_cached" integer;--> statement-breakpoint
+ALTER TABLE "conversation_runs" ADD COLUMN "tokens_reasoning" integer;--> statement-breakpoint
+ALTER TABLE "llm_calls" ADD COLUMN "user_id" uuid;--> statement-breakpoint
+ALTER TABLE "llm_calls" ADD COLUMN "input_tokens" integer;--> statement-breakpoint
+ALTER TABLE "llm_calls" ADD COLUMN "output_tokens" integer;--> statement-breakpoint
+ALTER TABLE "llm_calls" ADD COLUMN "cache_read_tokens" integer;--> statement-breakpoint
+ALTER TABLE "llm_calls" ADD COLUMN "reasoning_tokens" integer;--> statement-breakpoint
+ALTER TABLE "llm_calls" ADD COLUMN "cache_expected" text;--> statement-breakpoint
+ALTER TABLE "llm_calls" ADD COLUMN "cache_diverged_at" text;--> statement-breakpoint
+ALTER TABLE "llm_calls" ADD COLUMN "cache_shared_prefix_tokens" integer;--> statement-breakpoint
+ALTER TABLE "llm_calls" ADD COLUMN "cache_gap_ms" integer;--> statement-breakpoint
+CREATE INDEX "idx_llm_calls_user_created" ON "llm_calls" USING btree ("user_id","created_at");

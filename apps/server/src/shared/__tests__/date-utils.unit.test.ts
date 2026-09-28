@@ -1,4 +1,4 @@
-import { calendarDaysAgo } from '../date-utils';
+import { calendarDaysAgo, formatInUserTz } from '../date-utils';
 
 describe('calendarDaysAgo', () => {
   it('returns 0 for the same calendar day', () => {
@@ -47,5 +47,32 @@ describe('calendarDaysAgo', () => {
     const now = new Date('2024-03-01T06:00:00');
     const date = new Date('2024-02-28T22:00:00');
     expect(calendarDaysAgo(date, now)).toBe(2);
+  });
+});
+
+describe('formatInUserTz (transition-handoff plan Task 7, BUG-032 — adds weekday)', () => {
+  it('crosses the UTC date line correctly: 2026-09-25T20:30Z in Asia/Manila is the NEXT day, Saturday', () => {
+    const result = formatInUserTz(new Date('2026-09-25T20:30:00.000Z'), 'Asia/Manila');
+    expect(result).toEqual({
+      dateOnly: '2026-09-26',
+      time: '04:30',
+      weekday: 'Saturday',
+      label: 'Asia/Manila',
+    });
+  });
+
+  it('falls back to UTC (weekday included) when tz is absent', () => {
+    const result = formatInUserTz(new Date('2026-09-25T20:30:00.000Z'), undefined);
+    expect(result).toEqual({
+      dateOnly: '2026-09-25',
+      time: '20:30',
+      weekday: 'Friday',
+      label: 'UTC',
+    });
+  });
+
+  it('falls back to UTC when tz is an invalid IANA name', () => {
+    const result = formatInUserTz(new Date('2026-09-25T20:30:00.000Z'), 'Not/AZone');
+    expect(result.label).toBe('UTC');
   });
 });

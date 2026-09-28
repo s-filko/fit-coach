@@ -1,10 +1,12 @@
-import { and, desc, eq, inArray, isNotNull, lt } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNotNull, lt, ne, type SQL, sql } from 'drizzle-orm';
 
-import type { IWorkoutSessionRepository } from '@domain/training/ports';
+import { ActiveSessionExistsError } from '@domain/training/errors';
+import type { ExerciseLastPerformance, IWorkoutSessionRepository, RecentSessionsFilter } from '@domain/training/ports';
 import type {
   CreateSessionDto,
   Involvement,
   MuscleGroup,
+  SessionExerciseWithDetails,
   WorkoutSession,
   WorkoutSessionWithDetails,
 } from '@domain/training/types';
@@ -12,7 +14,142 @@ import type {
 import { db } from '@infra/db/drizzle';
 import { exerciseMuscleGroups, exercises, sessionExercises, sessionSets, workoutSessions } from '@infra/db/schema';
 
+import { findInErrorCauseChain } from '@shared/pg-error-cause';
+
+/** The partial unique index behind INV-TRAINING-002 (migration 0010). */
+const ONE_IN_PROGRESS_INDEX = 'uq_workout_sessions_one_in_progress_per_user';
+
+/**
+ * Postgres unique-violation on the one-active-session index — matched by SQLSTATE `23505` and the index
+ * name, never by message text.
+ */
+function isActiveSessionViolation(err: unknown): boolean {
+  return (
+    findInErrorCauseChain(err, level =>
+      level.code === '23505' && level.constraint === ONE_IN_PROGRESS_INDEX ? true : null,
+    ) === true
+  );
+}
+
+/** One `session_exercises` row left-joined with its `exercises` row — what both hydration call sites select. */
+interface JoinedSessionExerciseRow {
+  session_exercises: typeof sessionExercises.$inferSelect;
+  exercises: typeof exercises.$inferSelect | null;
+}
+
 export class WorkoutSessionRepository implements IWorkoutSessionRepository {
+  /**
+   * Shared by `findByIdWithDetails` and `findLastPerformancesByExercise` (close-out review R2):
+   * given already-joined session_exercises+exercises rows, batches the muscle-group and set
+   * fetches (two queries total, never N+1) and assembles each into `SessionExerciseWithDetails`,
+   * keyed by session_exercise id. A row whose exercise was not found (should not happen under the
+   * FK, defensive) is left out of the map — callers already filter on map-miss.
+   */
+  private async hydrateSessionExercises(
+    rows: JoinedSessionExerciseRow[],
+  ): Promise<Map<string, SessionExerciseWithDetails>> {
+    const exerciseIdsForMuscles = rows.map(r => r.exercises?.id).filter((id): id is string => id !== undefined);
+    const muscleGroupsList =
+      exerciseIdsForMuscles.length > 0
+        ? await db
+            .select()
+            .from(exerciseMuscleGroups)
+            .where(inArray(exerciseMuscleGroups.exerciseId, exerciseIdsForMuscles))
+        : [];
+
+    const sessionExerciseIds = rows.map(r => r.session_exercises.id);
+    const sets =
+      sessionExerciseIds.length > 0
+        ? await db
+            .select()
+            .from(sessionSets)
+            .where(inArray(sessionSets.sessionExerciseId, sessionExerciseIds))
+            .orderBy(sessionSets.setNumber)
+        : [];
+
+    const result = new Map<string, SessionExerciseWithDetails>();
+    for (const row of rows) {
+      if (!row.exercises) {
+        continue;
+      }
+      result.set(row.session_exercises.id, {
+        ...row.session_exercises,
+        exercise: {
+          ...row.exercises,
+          muscleGroups: muscleGroupsList
+            .filter(mg => mg.exerciseId === row.exercises!.id)
+            .map(mg => ({
+              muscleGroup: mg.muscleGroup as MuscleGroup,
+              involvement: mg.involvement as Involvement,
+            })),
+        },
+        sets: sets.filter(s => s.sessionExerciseId === row.session_exercises.id),
+      } as SessionExerciseWithDetails);
+    }
+    return result;
+  }
+
+  /**
+   * The WHERE predicate common to both "real performance" queries (close-out review item 6,
+   * training-history-lookup plan): completed, has a `completedAt`, and >= 1 real
+   * `session_sets` row. `excludeSessionId: null` (item 5) omits the exclusion entirely — a `uuid`
+   * column errors on `ne(col, '')`, it does not just fail to match, so an absent session must never
+   * reach this as `''`.
+   */
+  private realPerformanceConditions(userId: string, excludeSessionId: string | null): SQL[] {
+    const conditions = [
+      eq(workoutSessions.userId, userId),
+      eq(workoutSessions.status, 'completed'),
+      isNotNull(workoutSessions.completedAt),
+      exists(
+        db
+          .select({ one: sql`1` })
+          .from(sessionSets)
+          .where(eq(sessionSets.sessionExerciseId, sessionExercises.id)),
+      ),
+    ];
+    if (excludeSessionId) {
+      conditions.push(ne(workoutSessions.id, excludeSessionId));
+    }
+    return conditions;
+  }
+
+  /**
+   * The rejoin/hydrate/map tail shared by `findLastPerformancesByExercise` and
+   * `findRecentPerformancesForExercise` (close-out review item 6): given the picked
+   * `{ sessionExerciseId, completedAt }` rows (an anchor per exercise, or the top-N for one),
+   * rehydrates each through the batched `hydrateSessionExercises` path (never N+1) and maps back to
+   * `ExerciseLastPerformance[]`, dropping any row whose exercise was not found (should not happen
+   * under the FK, defensive — same as `findByIdWithDetails`).
+   */
+  private async rehydratePerformances<TPicked extends { sessionExerciseId: string; completedAt: Date | null }>(
+    picked: TPicked[],
+    exerciseIdOf: (row: TPicked) => string,
+  ): Promise<ExerciseLastPerformance[]> {
+    if (picked.length === 0) {
+      return [];
+    }
+
+    const sessionExerciseIds = picked.map(p => p.sessionExerciseId);
+    const rows = await db
+      .select()
+      .from(sessionExercises)
+      .leftJoin(exercises, eq(sessionExercises.exerciseId, exercises.id))
+      .where(inArray(sessionExercises.id, sessionExerciseIds));
+
+    const hydrated = await this.hydrateSessionExercises(rows);
+
+    return picked
+      .map(row => {
+        const sessionExercise = hydrated.get(row.sessionExerciseId);
+        if (!sessionExercise) {
+          return null;
+        }
+        return { exerciseId: exerciseIdOf(row), completedAt: row.completedAt!, sessionExercise };
+      })
+      .filter((p): p is ExerciseLastPerformance => p !== null);
+  }
+
   async create(userId: string, session: CreateSessionDto): Promise<WorkoutSession> {
     const [created] = await db
       .insert(workoutSessions)
@@ -54,7 +191,7 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
       return null;
     }
 
-    // Get session exercises with exercise details
+    // Get session exercises with exercise details, in plan order.
     const sessionExercisesList = await db
       .select()
       .from(sessionExercises)
@@ -62,55 +199,40 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
       .where(eq(sessionExercises.sessionId, sessionId))
       .orderBy(sessionExercises.orderIndex);
 
-    // Get exercise IDs to fetch muscle groups
-    const exerciseIdsForMuscles = sessionExercisesList
-      .map(se => se.exercises?.id)
-      .filter((id): id is string => id !== undefined);
-
-    // Get muscle groups for all exercises
-    const muscleGroupsList =
-      exerciseIdsForMuscles.length > 0
-        ? await db
-            .select()
-            .from(exerciseMuscleGroups)
-            .where(inArray(exerciseMuscleGroups.exerciseId, exerciseIdsForMuscles))
-        : [];
-
-    // Get all sets for these exercises
-    const sessionExerciseIds = sessionExercisesList.map(se => se.session_exercises.id);
-    const sets =
-      sessionExerciseIds.length > 0
-        ? await db
-            .select()
-            .from(sessionSets)
-            .where(inArray(sessionSets.sessionExerciseId, sessionExerciseIds))
-            .orderBy(sessionSets.setNumber)
-        : [];
+    const hydrated = await this.hydrateSessionExercises(sessionExercisesList);
 
     return {
       ...session,
-      exercises: sessionExercisesList.map(se => ({
-        ...se.session_exercises,
-        exercise: {
-          ...se.exercises!,
-          muscleGroups: muscleGroupsList
-            .filter(mg => mg.exerciseId === se.exercises!.id)
-            .map(mg => ({
-              muscleGroup: mg.muscleGroup as MuscleGroup,
-              involvement: mg.involvement as Involvement,
-            })),
-        },
-        sets: sets.filter(s => s.sessionExerciseId === se.session_exercises.id).map(s => s),
-      })),
+      exercises: sessionExercisesList
+        .map(se => hydrated.get(se.session_exercises.id))
+        .filter((ex): ex is SessionExerciseWithDetails => ex !== undefined),
     } as WorkoutSessionWithDetails;
   }
 
-  async findRecentByUserId(userId: string, limit: number): Promise<WorkoutSession[]> {
+  async findRecentByUserId(userId: string, limit: number, filter?: RecentSessionsFilter): Promise<WorkoutSession[]> {
+    // One query: the EXISTS predicate sits in the WHERE, so `limit` counts real workouts only.
+    const conditions = [eq(workoutSessions.userId, userId)];
+    if (filter?.realWorkoutsOnly) {
+      conditions.push(
+        eq(workoutSessions.status, 'completed'),
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(sessionExercises)
+            .innerJoin(sessionSets, eq(sessionSets.sessionExerciseId, sessionExercises.id))
+            .where(eq(sessionExercises.sessionId, workoutSessions.id)),
+        ),
+      );
+    }
+    // realWorkoutsOnly: every row is completed (non-null completedAt), and an imported session's
+    // createdAt does not track when it actually happened — order by completedAt (review advisory
+    // 4), not createdAt. Without the filter, keep createdAt DESC exactly (getActiveSession depends
+    // on it seeing planning/in_progress rows in that order).
     const sessions = await db
       .select()
       .from(workoutSessions)
-      .where(eq(workoutSessions.userId, userId))
-      .orderBy(desc(workoutSessions.createdAt))
+      .where(and(...conditions))
+      .orderBy(filter?.realWorkoutsOnly ? desc(workoutSessions.completedAt) : desc(workoutSessions.createdAt))
       .limit(limit);
 
     return sessions.map(s => ({
@@ -120,8 +242,12 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     })) as WorkoutSession[];
   }
 
-  async findRecentByUserIdWithDetails(userId: string, limit: number): Promise<WorkoutSessionWithDetails[]> {
-    const sessions = await this.findRecentByUserId(userId, limit);
+  async findRecentByUserIdWithDetails(
+    userId: string,
+    limit: number,
+    filter?: RecentSessionsFilter,
+  ): Promise<WorkoutSessionWithDetails[]> {
+    const sessions = await this.findRecentByUserId(userId, limit, filter);
     const detailed = await Promise.all(sessions.map(s => this.findByIdWithDetails(s.id)));
     return detailed.filter((s): s is WorkoutSessionWithDetails => s !== null);
   }
@@ -145,6 +271,8 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
   }
 
   async update(sessionId: string, updates: Partial<WorkoutSession>): Promise<WorkoutSession> {
+    // A concurrent begin/start that lost the race against the one-in_progress index gets the same
+    // domain error the service's sequential check throws — never a driver-shaped failure.
     const [updated] = await db
       .update(workoutSessions)
       .set({
@@ -152,7 +280,10 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
         updatedAt: new Date(),
       })
       .where(eq(workoutSessions.id, sessionId))
-      .returning();
+      .returning()
+      .catch((err: unknown) => {
+        throw isActiveSessionViolation(err) ? new ActiveSessionExistsError() : err;
+      });
 
     return {
       ...updated,
@@ -218,25 +349,65 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     return timedOutSessions.length;
   }
 
-  async findLastCompletedByUserAndKey(userId: string, sessionKey: string): Promise<WorkoutSessionWithDetails | null> {
-    const [session] = await db
-      .select()
-      .from(workoutSessions)
-      .where(
-        and(
-          eq(workoutSessions.userId, userId),
-          eq(workoutSessions.status, 'completed'),
-          eq(workoutSessions.sessionKey, sessionKey),
-          isNotNull(workoutSessions.completedAt),
-        ),
-      )
-      .orderBy(desc(workoutSessions.completedAt))
-      .limit(1);
-
-    if (!session) {
-      return null;
+  async findLastPerformancesByExercise(
+    userId: string,
+    exerciseIds: string[],
+    excludeSessionId: string,
+  ): Promise<ExerciseLastPerformance[]> {
+    if (exerciseIds.length === 0) {
+      return [];
     }
 
-    return this.findByIdWithDetails(session.id);
+    // One query for the pick: DISTINCT ON (exercise_id), newest completed session first — the
+    // anchor is per exercise (BUG-030 D2), not per session_key, and never N+1 over sessions.
+    const anchors = await db
+      .selectDistinctOn([sessionExercises.exerciseId], {
+        sessionExerciseId: sessionExercises.id,
+        exerciseId: sessionExercises.exerciseId,
+        completedAt: workoutSessions.completedAt,
+      })
+      .from(sessionExercises)
+      .innerJoin(workoutSessions, eq(sessionExercises.sessionId, workoutSessions.id))
+      .where(
+        and(
+          ...this.realPerformanceConditions(userId, excludeSessionId),
+          inArray(sessionExercises.exerciseId, exerciseIds),
+        ),
+      )
+      // DISTINCT ON keeps the first row per exerciseId under this order — completedAt DESC picks
+      // the anchor, orderIndex/id DESC only break an exact-timestamp tie deterministically
+      // (close-out review advisory 7); they never affect which *session* wins.
+      .orderBy(
+        sessionExercises.exerciseId,
+        desc(workoutSessions.completedAt),
+        desc(sessionExercises.orderIndex),
+        desc(sessionExercises.id),
+      );
+
+    return this.rehydratePerformances(anchors, anchor => anchor.exerciseId);
+  }
+
+  async findRecentPerformancesForExercise(
+    userId: string,
+    exerciseId: string,
+    excludeSessionId: string | null,
+    limit: number,
+  ): Promise<ExerciseLastPerformance[]> {
+    // Plain filter + order + limit — no DISTINCT ON needed, this is already scoped to one
+    // exercise id (unlike findLastPerformancesByExercise's per-id anchor over many ids).
+    const rows = await db
+      .select({
+        sessionExerciseId: sessionExercises.id,
+        completedAt: workoutSessions.completedAt,
+      })
+      .from(sessionExercises)
+      .innerJoin(workoutSessions, eq(sessionExercises.sessionId, workoutSessions.id))
+      .where(
+        and(...this.realPerformanceConditions(userId, excludeSessionId), eq(sessionExercises.exerciseId, exerciseId)),
+      )
+      .orderBy(desc(workoutSessions.completedAt), desc(sessionExercises.orderIndex), desc(sessionExercises.id))
+      .limit(limit);
+
+    return this.rehydratePerformances(rows, () => exerciseId);
   }
 }

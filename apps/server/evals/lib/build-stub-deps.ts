@@ -4,6 +4,7 @@ import { MemorySaver } from '@langchain/langgraph';
 
 import type { LlmGateway } from '@domain/ai/ports/llm.gateway.ports';
 import type { ConversationRunRecord, InsertSummaryInput, AppendRunMessagesInput } from '@domain/conversation/ports';
+import type { UserFact } from '@domain/user/ports';
 
 import type { ConversationGraphDeps } from '@infra/ai/graph/conversation.graph';
 
@@ -173,6 +174,37 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
   // and a synthetic in-progress session would change what the chat prompt sees.
   const session = fixture.activeSession ? buildTrainingSession(fixture.activeSession) : null;
 
+  // P6 Task 6: fixture facts are the durable rows the case STARTS with — the
+  // extraction itself is proved by Task 3's mocked-summariser test, so evals
+  // never invent facts at runtime. Mapped onto `UserFact` the way the real
+  // service returns rows; a fixture without facts still gets [] (nothing moves
+  // for existing datasets).
+  const facts: UserFact[] = (fixture.facts ?? []).map((fact, index) => ({
+    id: `fact-${index + 1}`,
+    userId,
+    category: fact.category,
+    fact: fact.fact,
+    factKey: `${fact.category}:${fact.fact.toLowerCase()}`,
+    muscleGroup: fact.muscleGroup ?? null,
+    confirmations: 1,
+    sourceTurnId: null,
+    durability: 'permanent',
+    expiresAt: null,
+    reviewAfter: null,
+    phaseNote: null,
+    phaseAt: null,
+    onExpiry: null,
+    status: 'active',
+    archivedAt: null,
+    archivedReason: null,
+    closedByUserAt: null,
+    supersedesId: null,
+    context: null,
+    evidence: null,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+  }));
+
   const deps = {
     // IUserService — the port's method is getUser(id), not getUserById.
     // Verified against src/domain/user/ports/service.ports.ts:5-11.
@@ -335,12 +367,18 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
       // Real names — chat.subgraph.ts:58, training.subgraph.ts:338.
       findRecentByUserIdWithDetails: async () => fixture.sessions ?? [],
       findRecentByUserId: async () => fixture.sessions ?? [],
-      findLastCompletedByUserAndKey: async () => null,
+      // training.spec.ts's loader (BUG-030 fix): no eval fixture asserts on exercise-history
+      // content today, so "nothing on record" is the safe default here.
+      findLastPerformancesByExercise: async () => [],
     },
     exerciseRepository: {
       searchByEmbedding: async () => [],
       // Resolves the catalog UUIDs the stub plan proposes — see CATALOG above.
       findByIds: async (ids: string[] = []) => ids.map(id => ({ id, name: CATALOG.get(id) ?? 'Exercise' })),
+      // training.spec.ts's loader: muscle groups for today's not-yet-started plan exercises.
+      // No eval fixture asserts on muscle overlap, so empty groups are a safe default.
+      findByIdsWithMuscles: async (ids: string[] = []) =>
+        ids.map(id => ({ id, name: CATALOG.get(id) ?? 'Exercise', muscleGroups: [] })),
     },
     embeddingService: {
       embed: async () => new Array(1536).fill(0),
@@ -366,6 +404,29 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
       },
       latestLegacySummary: async () => null,
     },
+    // Facts are never WRITTEN in evals — the summariser stand-in above returns
+    // an empty fact_operations array, so the operation application is skipped
+    // entirely (compact.node). Reading is the fixture's business: getForPrompt
+    // returns the fixture rows as-is (the fixture is authored in the port's
+    // category-then-recency order); getConstraints applies the real port's
+    // subset — physical_constraint with a non-null muscleGroup.
+    userFacts: {
+      // Write methods are stubs: evals use mocked models that never call the
+      // memory tools; they exist only to satisfy the port's surface.
+      rememberFact: async () => {
+        throw new Error('not implemented in eval stubs');
+      },
+      confirmFact: async () => false,
+      supersedeFact: async () => null,
+      retractFact: async () => null,
+      forgetFact: async () => null,
+      listFacts: async () => ({ active: [], archived: [] }),
+      getForPrompt: async () => facts,
+      getExpiredActive: async () => [],
+      archiveExpired: async () => false,
+      getConstraints: async () =>
+        facts.filter(fact => fact.category === 'physical_constraint' && fact.muscleGroup !== null),
+    },
     llmGateway: {
       chat: async () => ({ content: '' }),
       structured: async () => ({
@@ -374,11 +435,12 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
         userState: [],
         trainingFeedback: [],
         openItems: [],
+        facts: [],
       }),
     } as unknown as LlmGateway,
     // P4 Task 6: compaction never fires in evals by default — a year-long gap
     // and no budget overflow; a case that wants compaction overrides it.
-    episodeConfig: { gapMs: 365 * 24 * 3600 * 1000, minTurns: 2, minTokens: 300 },
+    episodeConfig: { gapMs: 365 * 24 * 3600 * 1000, minTurns: 2, minTokens: 300, keepTurns: 6 },
     checkpointer: new MemorySaver(),
   } as unknown as ConversationGraphDeps;
 

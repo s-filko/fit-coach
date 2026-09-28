@@ -50,8 +50,8 @@ idea
       │                            every task references AC-#### it implements
       │                            + verification command (npm scripts / manual check)
  └─ superpowers:executing-plans + test-driven-development
-      │                            executed by a delegated `claude -p` executor on
-      │                            GLM/z.ai (`delegate-implementation` skill);
+      │                            executed by Orca-dispatched worker sessions
+      │                            (GLM by default; `delegate-implementation` skill);
       │                            contract: docs/ORCHESTRATION.md
  └─ verification-before-completion
  └─ close-out-review (MANDATORY) ──▶ four zones: architecture, duplication,

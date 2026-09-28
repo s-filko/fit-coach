@@ -141,6 +141,7 @@ CREATE TABLE conversation_turns (
   role TEXT NOT NULL,             -- 'user' | 'assistant' | 'system' | 'summary'
   content TEXT NOT NULL,
   run_id UUID,                    -- conversation run that produced the turn (nullable, not backfilled)
+  seq INTEGER,                    -- per-run monotonic order; null only on pre-migration rows and rows with no run_id
   kind TEXT NOT NULL DEFAULT 'human',  -- 'human' | 'ai' | 'tool_call' | 'tool_result' | 'system_note' | 'summary'
   payload JSONB,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -149,7 +150,16 @@ CREATE TABLE conversation_turns (
 -- Optimized for loading conversation history by (userId, phase) in chronological order
 CREATE INDEX idx_conversation_turns_user_phase_created
   ON conversation_turns(user_id, phase, created_at);
+
+-- Per-run lookups: the human-row dedup and the MAX(seq) read on every append (BR-LLM-011)
+CREATE INDEX idx_conversation_turns_run_id ON conversation_turns(run_id);
 ```
+
+**Purpose**: The durable record of everything said — read by humans and by the transcript tooling, never by the prompt.
+- **Append-only**: Turns are never updated, only inserted
+- **Not the prompt's history**: since P4 the dialogue the model sees comes from the checkpointed `messages` channel; no node reads this table to build a prompt (ADR-0013 INV-LLM-001). The pre-P4 laws this block used to state — per-phase context isolation and a sliding window of the last 20 turns — were retired with that refactor; `phase` survives as an analytics column
+- **Ordered per run**: rows belonging to a run carry its `run_id` and a `seq` number (`infra/conversation/seq.ts`); only pre-migration rows and rows with no run (a `clearContext` `system_note`) have neither
+- **Cascade delete**: All conversation history deleted when user removed
 
 #### conversation_runs
 One row per conversation run — the measurement base for the LLM core refactor
@@ -171,22 +181,128 @@ CREATE TABLE conversation_runs (
   prompt_versions JSONB,
   tokens_in INTEGER,
   tokens_out INTEGER,
+  tokens_cached INTEGER,           -- cache-accounting plan: sum of the run's calls' cache_read_tokens; null when none reported it
+  tokens_reasoning INTEGER,        -- sum of the run's calls' reasoning_tokens; null when none reported it
   latency_ms INTEGER NOT NULL,
   tool_calls JSONB,               -- [{name, argsHash, outcomeKind}] (ADR-0013 §8)
   transition JSONB,
   outcome conversation_run_outcome NOT NULL,
   budget_report JSONB,
+  error_class TEXT,               -- non-'ok' runs only: the thrown value's class
+  error_message TEXT,             -- non-'ok' runs only: truncated to 500 chars
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_conversation_runs_user_created ON conversation_runs(user_id, created_at);
 ```
 
-**Purpose**: Stores all conversation dialogue for context management.
-- **Append-only**: Turns are never updated, only inserted
-- **Phase isolation**: Each phase has separate conversation context
-- **Sliding window**: Queries use LIMIT to load recent turns (default 20)
-- **Cascade delete**: All conversation history deleted when user removed
+#### llm_calls
+One row per model invocation made on behalf of a conversation run — the exact request sent and the
+answer received, written by the LLM callback handler regardless of `LOG_LEVEL` (INV-LLM-008). A
+run-less call (a background job) is logged but not recorded: `run_id` is `NOT NULL`. Payload columns age out (see `LLM_CALLS_RETENTION_DAYS`);
+the rows themselves are never deleted.
+
+Cache-accounting plan (2026-09-26): `input_tokens`/`output_tokens`/`cache_read_tokens`/`reasoning_tokens`
+are the provider's own usage report — nullable, **null means "not reported", never 0** (0 is itself
+meaningful: reported, nothing cached/no reasoning this call). `user_id` has no FK, same reasoning as
+`run_id` — populated from callback metadata, null only when a call genuinely carries none (not expected
+in practice). `cache_expected`/`cache_diverged_at`/`cache_shared_prefix_tokens`/`cache_gap_ms` are one
+call's cache attribution against the same user+model's previous call (`infra/ai/cache-attribution.ts`),
+computed once at record time and never recomputed:
+- `cache_expected` — one of `cold` (no previous call), `unknown` (the previous request already aged
+  out), `ttl_expired`/`too_short` (only when `LLM_CACHE_TTL_SECONDS`/`LLM_CACHE_MIN_PREFIX_TOKENS` are
+  configured — Z.AI documents neither, so both are unset by default and these two values never appear),
+  `warm` (the previous request is a full prefix of this one), or `prefix_changed:<label>` (the first
+  point the two requests differ — `tools`, `system:prompt`/`facts`/`directive`/`summaries`/`domain`/
+  `gap-note`/`now`, or `history[i]:<role>`).
+- `cache_diverged_at` — `<label>#<messageIndex>@<charOffset>` for the divergence above; null when
+  `cold`/`unknown`/`warm`.
+- `cache_shared_prefix_tokens` — an ESTIMATE (tokenizer-free: `round(input_tokens × sharedChars /
+  totalChars)`), not a provider figure.
+- `cache_gap_ms` — wall-clock time since the previous call, always stored when there was one (even
+  `ttl_expired`/`too_short`), so a real provider TTL can be read off the data before configuring it.
+- An attribution failure (D7) leaves all four null and the call is still recorded — it never fails the call.
+
+```sql
+CREATE TABLE llm_calls (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id UUID NOT NULL,           -- not an FK: a call is recorded before any conversation_runs row need exist
+  user_id UUID,                   -- not an FK either, same reason — from callback metadata
+  call_index INTEGER NOT NULL,    -- 1-based within the run
+  model TEXT NOT NULL,
+  request JSONB,                  -- nullable: the payload ages out, the row does not
+  response JSONB,
+  input_tokens INTEGER,           -- null = not reported, never 0
+  output_tokens INTEGER,
+  cache_read_tokens INTEGER,
+  reasoning_tokens INTEGER,
+  cache_expected TEXT,            -- cold | unknown | ttl_expired | too_short | warm | prefix_changed:<label>
+  cache_diverged_at TEXT,         -- <label>#<messageIndex>@<charOffset>; null when cold/unknown/warm
+  cache_shared_prefix_tokens INTEGER,
+  cache_gap_ms INTEGER,
+  latency_ms INTEGER NOT NULL,
+  error_class TEXT,
+  error_message TEXT,
+  prompt_hashes TEXT[],           -- prompt_blobs referenced by this request; never nulled by retention
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- The recorder's next-call_index lookup, on the synchronous path of every model call (BR-LLM-011)
+CREATE INDEX idx_llm_calls_run_id_call_index ON llm_calls(run_id, call_index);
+-- The retention prune's blob-liveness check: array containment, not a scan of llm_calls (BR-LLM-011)
+CREATE INDEX idx_llm_calls_prompt_hashes_gin ON llm_calls USING gin(prompt_hashes);
+-- The recorder's own previous-call lookup (same user+model, latest created_at) and the cache
+-- efficiency query below (cache-accounting plan)
+CREATE INDEX idx_llm_calls_user_created ON llm_calls(user_id, created_at);
+```
+
+##### Cache efficiency query (AC-CA-5)
+
+Per user/day: calls, input tokens, cached tokens, cache share, a breakdown of `cache_expected`, and
+**unexplained misses** — a miss (`cache_read_tokens = 0`) where `cache_expected` said the cache should
+plausibly have hit (`warm` or `prefix_changed:*`, with a shared estimate at or above the configured
+minimum, or simply `> 0` when no minimum is configured):
+
+```sql
+SELECT
+  user_id,
+  date_trunc('day', created_at) AS day,
+  count(*) AS calls,
+  sum(input_tokens) AS input_tokens,
+  sum(cache_read_tokens) AS cached_tokens,
+  round(sum(cache_read_tokens)::numeric / NULLIF(sum(input_tokens), 0), 4) AS cache_share,
+  count(*) FILTER (WHERE cache_expected = 'cold') AS cold,
+  count(*) FILTER (WHERE cache_expected = 'unknown') AS unknown,
+  count(*) FILTER (WHERE cache_expected = 'ttl_expired') AS ttl_expired,
+  count(*) FILTER (WHERE cache_expected = 'too_short') AS too_short,
+  count(*) FILTER (WHERE cache_expected = 'warm') AS warm,
+  count(*) FILTER (WHERE cache_expected LIKE 'prefix_changed:%') AS prefix_changed,
+  count(*) FILTER (
+    WHERE cache_read_tokens = 0
+      AND (cache_expected = 'warm' OR cache_expected LIKE 'prefix_changed:%')
+      -- > 0 assumes LLM_CACHE_MIN_PREFIX_TOKENS is unset; if it is configured, replace with
+      -- `cache_shared_prefix_tokens >= <that value>` — D5's "at or above the configured minimum".
+      AND cache_shared_prefix_tokens > 0
+  ) AS unexplained_misses
+FROM llm_calls
+WHERE input_tokens IS NOT NULL
+GROUP BY user_id, day
+ORDER BY day DESC, user_id;
+```
+
+#### prompt_blobs
+Each distinct system message stored once by content hash, referenced from `llm_calls.request` instead
+of being repeated per call. Content is nulled when no unpruned call still references it; the hash row
+stays.
+
+```sql
+CREATE TABLE prompt_blobs (
+  hash TEXT PRIMARY KEY,
+  content TEXT,                   -- nullable: aged out by retention
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
 
 ### Schema Management
 

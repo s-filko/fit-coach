@@ -13,8 +13,9 @@ import type { IUserService } from '@domain/user/ports';
 
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
-import { lastAiText } from '../episode';
-import { buildConversationGraph, type ConversationGraphDeps } from '../conversation.graph';
+import { runAiText } from '../episode';
+import { buildConversationGraph, withBudgetOverrides, type ConversationGraphDeps } from '../conversation.graph';
+import { buildPhaseSpecs } from '../phases';
 
 // Mock the model factory so tests don't need a real LLM key
 jest.mock('@infra/ai/model.factory', () => ({
@@ -74,7 +75,7 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
     findRecentByUserId: jest.fn().mockResolvedValue([]),
     findRecentByUserIdWithDetails: jest.fn().mockResolvedValue([]),
     findActiveByUserId: jest.fn().mockResolvedValue(null),
-    findLastCompletedByUserAndKey: jest.fn().mockResolvedValue(null),
+    findLastPerformancesByExercise: jest.fn().mockResolvedValue([]),
     update: jest.fn().mockResolvedValue({}),
     complete: jest.fn(),
     updateActivity: jest.fn(),
@@ -109,8 +110,20 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
     appendSystemNote: async () => undefined,
   },
   summaries: {
-    insert: async () => undefined,
+    insert: async () => ({ summaryTurnId: 'summary-turn-1' }),
     latestLegacySummary: async () => null,
+  },
+  userFacts: {
+    rememberFact: jest.fn(),
+    confirmFact: jest.fn(),
+    supersedeFact: jest.fn(),
+    retractFact: jest.fn(),
+    forgetFact: jest.fn(),
+    listFacts: jest.fn().mockResolvedValue({ active: [], archived: [] }),
+    getForPrompt: jest.fn().mockResolvedValue([]),
+    getConstraints: jest.fn().mockResolvedValue([]),
+    getExpiredActive: jest.fn().mockResolvedValue([]),
+    archiveExpired: jest.fn().mockResolvedValue(false),
   },
   llmGateway: {
     chat: async () => ({ content: '' }),
@@ -121,6 +134,7 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
       userState: [],
       trainingFeedback: [],
       openItems: [],
+      facts: [],
     })) as unknown as LlmGateway['structured'],
   },
   runService: {
@@ -128,7 +142,7 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
       recorded.push(record);
     }),
   },
-  episodeConfig: { gapMs: 365 * 24 * 3600 * 1000, minTurns: 2, minTokens: 300 },
+  episodeConfig: { gapMs: 365 * 24 * 3600 * 1000, minTurns: 2, minTokens: 300, keepTurns: 6 },
   checkpointer: new MemorySaver() as unknown as InstanceType<
     typeof import('@langchain/langgraph-checkpoint-postgres').PostgresSaver
   >,
@@ -170,7 +184,7 @@ describe('ConversationGraph (prepare → route → <phase> → commit)', () => {
 
     expect(result.phase).toBe('chat');
     // commit no longer clears the channel — the reply survives for the next run
-    expect(lastAiText(result.messages)).toBe('Mocked LLM response');
+    expect(runAiText(result.messages)).toBe('Mocked LLM response');
     expect(result.messages.length).toBeGreaterThan(0);
     // one run row with the non-null observability fields
     expect(recorded).toHaveLength(1);
@@ -222,10 +236,10 @@ describe('ConversationGraph (prepare → route → <phase> → commit)', () => {
 
       const ctx = (cfg as { context: { metrics: RunMetricsCollector } }).context;
       void ctx;
-      expect(lastAiText((result as unknown as { messages: BaseMessage[] }).messages)).toContain('completed');
+      expect(runAiText((result as unknown as { messages: BaseMessage[] }).messages)).toContain('completed');
       expect(result.phase).toBe('chat');
       expect(result.activeSessionId).toBeNull();
-      expect(lastAiText((result as unknown as { messages: BaseMessage[] }).messages)).not.toBe('Mocked LLM response');
+      expect(runAiText((result as unknown as { messages: BaseMessage[] }).messages)).not.toBe('Mocked LLM response');
     });
 
     it('training without a session → commit with the catalog reply', async () => {
@@ -236,7 +250,7 @@ describe('ConversationGraph (prepare → route → <phase> → commit)', () => {
         cfg,
       )) as { phase: string };
 
-      expect(lastAiText((result as unknown as { messages: BaseMessage[] }).messages)).toContain('could not be resumed');
+      expect(runAiText((result as unknown as { messages: BaseMessage[] }).messages)).toContain('could not be resumed');
       expect(result.phase).toBe('chat');
     });
 
@@ -321,7 +335,7 @@ describe('ConversationGraph (prepare → route → <phase> → commit)', () => {
     expect(recorded[0]?.transition?.toPhase).toBe('plan_creation');
     expect(result.phase).toBe('plan_creation');
     // The channel persists across the transition — compaction owns removal (INV-LLM-002)
-    expect(lastAiText(result.messages)).toBe('Переношу в планирование!');
+    expect(runAiText(result.messages)).toBe('Переношу в планирование!');
   });
 
   it('INV-LLM-005: a sixth spec gains the graph node and its commit edge — no builder change', () => {
@@ -333,5 +347,37 @@ describe('ConversationGraph (prepare → route → <phase> → commit)', () => {
 
     const edge = [...drawable.edges].find(e => e.source === 'zzz_test');
     expect(edge?.target).toBe('commit');
+  });
+});
+
+describe('withBudgetOverrides (P4 context-budget plan Task 3 — LLM_BUDGET_<PHASE>_<PART>)', () => {
+  const deps = makeDeps();
+
+  it('applies a partial override over the phase default without touching other fields', () => {
+    const specs = buildPhaseSpecs(deps);
+    const defaultChat = specs.find(s => s.name === 'chat')!.budget;
+
+    const overridden = withBudgetOverrides(specs, { chat: { history: 12345 } });
+    const chat = overridden.find(s => s.name === 'chat')!;
+
+    expect(chat.budget.history).toBe(12345);
+    expect(chat.budget.system).toBe(defaultChat.system);
+    expect(chat.budget.domain).toBe(defaultChat.domain);
+  });
+
+  it('leaves phases with no matching override untouched', () => {
+    const specs = buildPhaseSpecs(deps);
+    const overridden = withBudgetOverrides(specs, { chat: { history: 1 } });
+    const training = overridden.find(s => s.name === 'training')!;
+    const originalTraining = specs.find(s => s.name === 'training')!;
+
+    expect(training.budget).toEqual(originalTraining.budget);
+    expect(training).toBe(originalTraining); // untouched entries are the same object
+  });
+
+  it('empty overrides map returns budgets unchanged', () => {
+    const specs = buildPhaseSpecs(deps);
+    const overridden = withBudgetOverrides(specs, {});
+    expect(overridden.map(s => s.budget)).toEqual(specs.map(s => s.budget));
   });
 });

@@ -1,0 +1,133 @@
+# Reply Latency and Live Typing (BUG-019) Implementation Plan
+
+- Status: done
+- Branch: plan/reply-latency-and-typing
+- After: chat-continuity
+- Review: 2026-09-20 | clean | R1,R2,R3,R4
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and superpowers:test-driven-development. One plan task per worker session; stop after the task.
+
+**Goal (owner, 2026-09-20):** answers must not take minutes, and while one is being produced the bot
+must visibly keep typing. BUG-019 has the evidence: a 189 s run whose first model call spent 129 s
+reasoning into a 4096-token cap and returned empty text, after which the code silently re-ran the
+whole call. Meanwhile the bot sends the Telegram "typing" action once, so after ~5 s the chat looks dead.
+
+**Findings this plan builds on (verified 2026-09-20):**
+- Z.AI docs: GLM-5.3 always reasons; depth is `reasoning_effort` = `low` | `high` | `max`;
+  `thinking: {type:"disabled"}` is refused for 5.3 (5.2 still supports it). Reasoning tokens spend the
+  output budget; `finish_reason` can be `stop | tool_calls | length | sensitive | ...`.
+- Probes (5 calls): `reasoning_effort=low` roughly halves per-call latency (13.7 → 9.5 s short;
+  8.8 → 5.0 s with tools) and reduced tool calls 5 → 3 in the plan-creation shape.
+- `model.factory.ts:27` hard-codes `maxTokens: 4096` for every profile; `config.LLM_PROFILES`
+  already supports per-profile `model`/`temperature`/`maxTokens` overrides (`config/llm-profiles.ts`).
+- `agent.node.ts:165-176` retries the whole call once on an empty response, then falls back to the
+  `empty_reply` catalog text. Nothing records `finish_reason` or reasoning-token counts.
+- `apps/bot` sends one `sendChatAction('typing')` per incoming message (one-shot).
+
+**Acceptance criteria:**
+- **AC-RL-1** — the output-token cap and the reasoning depth are configuration, not constants:
+  `LLM_MAX_TOKENS` (default 16384) and `LLM_REASONING_EFFORT` (`low|high|max|off`, default `low`; `off` omits the field),
+  both overridable per profile; `.env.example` documents them; unit tests pin that the built
+  `ChatOpenAI` carries them.
+- **AC-RL-2** — a truncated answer is visible and is not re-run blindly: every model response logs
+  `finish_reason` and completion tokens at info; on `length` the code logs a warn naming it and does
+  **not** repeat the identical call (the existing one-shot retry stays only for a genuinely empty
+  `stop` answer), and the user gets the catalog fallback rather than a second multi-minute wait.
+- **AC-RL-3** — while a reply is being produced, the bot re-sends the Telegram typing action every
+  5–6 s (owner: a ~1 s gap between pulses reads as natural) until the reply, an error or a hard
+  ceiling; the loop always stops (no timer leaks), covered by tests with fake timers.
+
+## Global Constraints
+
+- No model-backed evals (`RUN_LLM_EVALS` / `EVALS_FULL_RUN` never set); mocked models only.
+- Never write any `.env*` file — `.env.example` only.
+- Reserved to the orchestrator: push, ssh, deploy, merge, `npm run db:*`, `docker compose`, durable
+  specs (`docs/adr/**`, `docs/domain/**`, `ARCHITECTURE.md`, `API_SPEC.md`, `LLM_CORE_REFACTOR_PLAN.md`),
+  `docs/STATE.md`, `docs/BUGS.md`, any `Status:`.
+- Model choice stays GLM-5.3 (`reasoning_effort=low`). GLM-5.2 with reasoning off is the fallback the
+  owner may pick after the dev smoke — do not switch models in this plan.
+
+---
+
+### Task 1: Output cap and reasoning depth become configuration (AC-RL-1)
+
+**Files:** `apps/server/src/config/index.ts` (`LLM_MAX_TOKENS`, `LLM_REASONING_EFFORT`),
+`apps/server/src/config/llm-profiles.ts` (per-profile overrides), `apps/server/src/infra/ai/model.factory.ts`,
+`apps/server/.env.example`, their tests.
+
+- [x] **Step 1: Tests first** — the factory passes `maxTokens` from config (default 16384) and, when
+  `LLM_REASONING_EFFORT` is set, a `reasoning_effort` model kwarg; unset → the field is absent from the
+  request; a profile override wins over the global value.
+- [x] **Step 2: Implement.** `reasoning_effort` is an OpenAI-compatible extra: pass it via the
+  ChatOpenAI `modelKwargs` (verify the built request body in the test, not just the field).
+- [x] **Step 3: Commit** — `feat(ai): output cap and reasoning depth are configuration (BUG-019, AC-RL-1)`
+- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-20** (`0bb3c930`, GLM worker via Orca). `LLM_MAX_TOKENS` (16384) and `LLM_REASONING_EFFORT` (`low|high|max|off`, default `low`; `off` omits the field for providers that reject it — prod's Gemini via OpenRouter) with per-profile overrides; `reasoning_effort` rides in `modelKwargs` at the single ChatOpenAI site, asserted on the real `invocationParams()`. Worker raised the default-vs-absent conflict in the spec and was answered (option B + `off`). Orchestrator re-ran: test:unit 897/897, L0 96/96, type-check clean.
+
+**Verification:** `npx jest --ci src/infra/ai src/config` → pass; `npm run test:unit` → green;
+`npm run evals -- --level L0` → green; format + type-check clean.
+
+---
+
+### Task 2: Truncation is visible and never silently repeated (AC-RL-2)
+
+**Files:** `apps/server/src/infra/ai/llm-log-handler.ts` (or the gateway — whichever sees
+`response_metadata.finish_reason`), `apps/server/src/infra/ai/graph/nodes/agent.node.ts`, their tests.
+
+- [x] **Step 1: Tests first** — a `length` response logs a warn naming the truncation and does NOT
+  trigger the identical retry (the user gets the `empty_reply` catalog text); an empty `stop`
+  response still retries once as today; a normal response logs `finish_reason` + completion tokens at info.
+- [x] **Step 2: Implement.**
+- [x] **Step 3: Commit** — `fix(ai): truncated answers are logged, not blindly re-run (BUG-019, AC-RL-2)`
+- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-20** (`094f5569`, GLM worker via Orca). Chosen site: `agent.node` (it sees `response_metadata.finish_reason`, knows phase/userId and owns the retry; `handleLLMEnd`'s debug payload carries bodies and must stay debug). One info line per call (finish reason + token counts, no bodies); `length` adds a warn naming the cap; an empty `length` answer returns the catalog text with zero retries; empty `stop` keeps the one-shot nudge retry. Orchestrator re-ran: test:unit 903/903, L0 96/96.
+
+**Verification:** `npx jest --ci src/infra/ai` → pass; `npm run test:unit` → green; L0 green;
+format + type-check clean.
+
+---
+
+### Task 3: The bot keeps typing while the answer is produced (AC-RL-3)
+
+**Files:** `apps/bot/` — the message handler plus a small `typing-keepalive.ts` helper, its tests
+(`apps/bot` has a jest harness since P5).
+
+- [x] **Step 1: Tests first** (fake timers) — the helper pulses `sendChatAction('typing')` immediately
+  and then every 5–6 s while the request is in flight; it stops on success, on error and at a ceiling
+  (use the server's `requestTimeout`, 420 s, as the cap); a failing `sendChatAction` never breaks the
+  reply path; no timer survives the call.
+- [x] **Step 2: Implement.**
+- [x] **Step 3: Commit** — `feat(bot): keep the typing indicator alive while the reply is produced (BUG-019, AC-RL-3)`
+- [x] **Step 4: STOP** for orchestrator review. **Accepted 2026-09-20** (`8c6fc778`, GLM worker via Orca). `apps/bot/typing-keepalive.ts` — `withTypingIndicator(bot, chatId, fn)` (a wrapper, so no call site can leak a timer): one pulse immediately (fire-and-forget), then every `TYPING_INTERVAL_MS` 5500 ms, ceiling `TYPING_CEILING_MS` 420000 ms, both timers cleared in `finally` on success and error, a failing `sendChatAction` logged and ignored. Wired into all three handler sites. Orchestrator re-ran: apps/bot 22/22 (6 new), tsc clean; apps/server test:unit 903/903, format + type-check clean.
+
+**Verification:** `npx jest --ci` in `apps/bot` → pass; `npm run test:unit` in `apps/server` → green;
+format + type-check clean in both.
+
+---
+
+### Task 4: Close-out (orchestrator)
+
+- [ ] One combined close-out review; `- Status: done`; `state.mjs --write`; merge, push, deploy dev, health 200.
+- [x] ~~Prod step~~ — dropped: **prod is frozen** (owner, 2026-09-20 — unused, only stable versions ever go there).
+  Noted for whenever that changes: the default `low` is sent on every call and prod runs
+  `google/gemini-3-flash-preview` through OpenRouter, so `LLM_REASONING_EFFORT=off` is the switch if that
+  provider rejects the field. No action now.
+- [ ] Dev smoke by the owner: a plan-creation exchange in Telegram — the typing indicator stays alive
+  and the reply arrives materially faster than the 189 s run in BUG-019. Record the new `latency_ms`
+  from `conversation_runs`. If it is still too slow, the owner decides on GLM-5.2 with reasoning off.
+
+## Review
+
+2026-09-20 — first pass **blocked** (one combined agent, R1–R4 lenses); the single blocking finding
+is closed in the close-out commit.
+
+Blocking, closed:
+- R4 `docs/adr/0013-llm-core-target-architecture.md` §7 still said "today one singleton at
+  `maxTokens: 4096` serves everything (`model.factory.ts:117-125`)" — false after this plan (and the
+  line pointer never existed). Replaced with a 2026-09-20 amendment describing the two new knobs.
+  Factual reconciliation with already-approved code, no behaviour change.
+
+Advisory:
+- The AC-RL-1 bullet contradicted the resolved design ("sent only when set") — fixed in place.
+- Task 4 gained an explicit prod step: choose `LLM_REASONING_EFFORT` for `.env.prod` before deploying prod.
+- → `docs/BACKLOG.md` § reply-latency close-out review advisories: per-phase `outputReserve` values were
+  sized against the retired 4096 cap; and no test pins `finish_reason: 'length'` together with tool calls
+  (behaviour unchanged by inspection — `isEmptyAIResponse` requires no tool calls).

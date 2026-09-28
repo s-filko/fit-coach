@@ -7,11 +7,12 @@
  */
 import { AIMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
-import { Command } from '@langchain/langgraph';
+import { Command, END } from '@langchain/langgraph';
 
 import type { ITrainingService } from '@domain/training/ports';
 import type { IUserService } from '@domain/user/ports';
 
+import type { CourseCheckStep } from '@infra/ai/course-check/course-check.step';
 import { type ConversationStateType, ctxOf } from '@infra/ai/graph/state';
 import { langOf, t } from '@infra/ai/messages';
 
@@ -26,10 +27,16 @@ export interface PrepareNodeDeps {
   trainingService: ITrainingService;
   /** The compact step (ADR-0013 §4.1): runs before the phase sync, at most once per run. */
   compact: CompactStep;
+  /**
+   * AC-FL-5 (course-check plan Task 1): the course-check step — after the
+   * phase sync (the fingerprint reads the run's effective phase), at most one
+   * structured call per run, zero on an ordinary turn.
+   */
+  courseCheck: CourseCheckStep;
 }
 
 export function buildPrepareNode(deps: PrepareNodeDeps) {
-  const { userService, trainingService, compact } = deps;
+  const { userService, trainingService, compact, courseCheck } = deps;
 
   return async function prepareNode(
     state: ConversationStateType,
@@ -38,6 +45,14 @@ export function buildPrepareNode(deps: PrepareNodeDeps) {
     const ctx = ctxOf(config as never);
     const { userId, user } = ctx;
     const lang = langOf(user?.languageCode);
+
+    // Manual compaction (`/compact`): the compact step and nothing else — no
+    // phase sync, no course check, no agent, no commit (so no transcript rows
+    // and `lastUserMessageAt` stays). Whatever compaction returns is the whole
+    // update; an empty one is the "nothing to compact" outcome.
+    if (ctx.compactOnly === true) {
+      return new Command({ goto: END, update: await compact(state, config) });
+    }
 
     // Always reset — a stale blocked transition must not leak into this run.
     const updates: Partial<ConversationStateType> = { pendingTransition: null };
@@ -55,7 +70,11 @@ export function buildPrepareNode(deps: PrepareNodeDeps) {
     // timeout: a session stays in_progress until explicitly closed (the
     // training loader lets the model decide on stale sessions).
     if (state.phase === 'training' && state.activeSessionId) {
-      const session = await trainingService.getSessionDetails(state.activeSessionId).catch(() => null);
+      // A REJECTED read is an infrastructure failure, not a domain fact: it propagates (the run
+      // adapter records it and throws a typed error → HTTP status + code, ADR-0013 §6) and commits
+      // nothing. Only a read that RETURNS null (no such session) or a finished session ends the
+      // training phase — never turn "could not look" into "the session ended" (AC-RRP-2).
+      const session = await trainingService.getSessionDetails(state.activeSessionId);
       const isSessionEnded = !session || session.status === 'completed' || session.status === 'skipped';
       if (isSessionEnded) {
         log.info(
@@ -100,6 +119,12 @@ export function buildPrepareNode(deps: PrepareNodeDeps) {
       updates.phase = 'registration';
     }
 
-    return new Command({ goto: 'route', update: { ...updates, ...compactUpdates } });
+    // Course check (AC-FL-5) — AFTER the phase sync so the fingerprint reads
+    // the run's effective phase. The dead-training short-circuits above skip
+    // it deliberately: no prompt is rendered on those runs, and the event
+    // (fingerprint/gap) is still true on the next run that does render one.
+    const courseUpdates = await courseCheck({ ...state, phase: updates.phase ?? state.phase }, config);
+
+    return new Command({ goto: 'route', update: { ...updates, ...compactUpdates, ...courseUpdates } });
   };
 }

@@ -37,3 +37,51 @@ describe('getModel(profile) (AC-1314 — no LLM_PROFILE_* means identical to def
     expect(getModel()).toBe(getModel('default'));
   });
 });
+
+describe('getModel(profile) (AC-RL-1 — cap and reasoning depth from config, asserted on the request payload)', () => {
+  const EFFORT_VARS = [
+    'LLM_MAX_TOKENS',
+    'LLM_REASONING_EFFORT',
+    'LLM_PROFILE_SUMMARIZER_MAX_TOKENS',
+    'LLM_PROFILE_SUMMARIZER_REASONING_EFFORT',
+  ];
+
+  beforeEach(() => {
+    for (const v of EFFORT_VARS) {
+      delete process.env[v];
+    }
+    resetModelCacheForTests();
+  });
+
+  it('defaults to max_tokens 16384 and reasoning_effort low in the request body', () => {
+    const params = getModel().invocationParams() as Record<string, unknown>;
+    expect(params['max_tokens']).toBe(16384);
+    expect(params['reasoning_effort']).toBe('low');
+  });
+
+  it('honours LLM_MAX_TOKENS / LLM_REASONING_EFFORT from the environment', () => {
+    process.env.LLM_MAX_TOKENS = '8192';
+    process.env.LLM_REASONING_EFFORT = 'high';
+    const params = getModel().invocationParams() as Record<string, unknown>;
+    expect(params['max_tokens']).toBe(8192);
+    expect(params['reasoning_effort']).toBe('high');
+  });
+
+  it('a profile override wins over the global value', () => {
+    process.env.LLM_REASONING_EFFORT = 'high';
+    process.env.LLM_PROFILE_SUMMARIZER_MAX_TOKENS = '2048';
+    process.env.LLM_PROFILE_SUMMARIZER_REASONING_EFFORT = 'max';
+    const params = getModel('summarizer').invocationParams() as Record<string, unknown>;
+    expect(params['max_tokens']).toBe(2048);
+    expect(params['reasoning_effort']).toBe('max');
+    // the default profile keeps the global values
+    const globalParams = getModel().invocationParams() as Record<string, unknown>;
+    expect(globalParams['reasoning_effort']).toBe('high');
+  });
+
+  it("omits reasoning_effort entirely for 'off' (providers that reject the field)", () => {
+    process.env.LLM_REASONING_EFFORT = 'off';
+    const params = getModel().invocationParams() as Record<string, unknown>;
+    expect('reasoning_effort' in params).toBe(false);
+  });
+});

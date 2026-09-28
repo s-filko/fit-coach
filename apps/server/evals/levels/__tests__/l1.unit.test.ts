@@ -2,7 +2,7 @@ import type { BudgetReport } from '@domain/conversation/ports';
 
 import type { CaseObservation } from '../../lib/run-case';
 import type { EvalCase } from '../../schema/case.schema';
-import { assertCase } from '../l1';
+import { assertCase, loadCases } from '../l1';
 
 const base: EvalCase = {
   id: 'CH-0001',
@@ -17,7 +17,10 @@ const base: EvalCase = {
 const budgetReport: BudgetReport = {
   estimator: 'chars/4',
   system: 500,
+  longTerm: 0,
   summary: 0,
+  domain: 0,
+  blocks: [],
   history: 100,
   user: 20,
   inFlight: 0,
@@ -34,6 +37,8 @@ const observed = (overrides: Partial<CaseObservation> = {}): CaseObservation => 
   outcome: 'ok',
   threw: null,
   budgetReport: null,
+  lastModelInput: [],
+  assembledInput: 'Assembled prompt without facts',
   ...overrides,
 });
 
@@ -178,5 +183,160 @@ describe('no_redundant_search (AC-1344, D-N)', () => {
     };
     const results = assertCase(noSeeds, observed({ toolCalls: [search('upper body compound')] }));
     expect(results.some(r => r.check === 'no_redundant_search')).toBe(false);
+  });
+
+  // D-C / AC-1343 (P4 context-budget plan Task 4): the two INV-LLM-004 L1 checks.
+  describe('budget-within-limits', () => {
+    it('passes when history is within budget.history', () => {
+      const results = assertCase(
+        base,
+        observed({
+          budgetReport: {
+            ...budgetReport,
+            history: 100,
+            budget: { system: 500, longTerm: 100, domain: 100, history: 8000, outputReserve: 100 },
+          },
+        }),
+      );
+      expect(results.find(r => r.check === 'budget-within-limits')?.passed).toBe(true);
+    });
+
+    it('fails when history exceeds budget.history', () => {
+      const overBudget = { system: 1, longTerm: 1, domain: 1, history: 8000, outputReserve: 1 };
+      const results = assertCase(
+        base,
+        observed({ budgetReport: { ...budgetReport, history: 9000, budget: overBudget } }),
+      );
+      const check = results.find(r => r.check === 'budget-within-limits');
+      expect(check?.passed).toBe(false);
+      expect(check?.detail).toContain('9000');
+    });
+
+    it('fails when total exceeds sum - outputReserve', () => {
+      const budget = { system: 100, longTerm: 100, domain: 100, history: 100, outputReserve: 50 };
+      const results = assertCase(
+        base,
+        observed({ budgetReport: { ...budgetReport, history: 50, total: 10000, budget } }),
+      );
+      expect(results.find(r => r.check === 'budget-within-limits')?.passed).toBe(false);
+    });
+
+    it('is not emitted when no budgetReport was attached (no model call)', () => {
+      const results = assertCase(base, observed({ budgetReport: null }));
+      expect(results.some(r => r.check === 'budget-within-limits')).toBe(false);
+    });
+
+    it('is not emitted when the report carries no budget (pre-Task-3 shape)', () => {
+      const { budget: _b, ...noBudget } = budgetReport;
+      const results = assertCase(base, observed({ budgetReport: noBudget }));
+      expect(results.some(r => r.check === 'budget-within-limits')).toBe(false);
+    });
+  });
+
+  describe('no-orphan-tool-message', () => {
+    it('passes when every ToolMessage answers a tool_call_id present in an AIMessage', () => {
+      const results = assertCase(
+        base,
+        observed({
+          lastModelInput: [
+            { type: 'system', toolCallIds: [] },
+            { type: 'ai', toolCallIds: ['tc1'] },
+            { type: 'tool', toolCallIds: [], toolCallId: 'tc1' },
+          ],
+        }),
+      );
+      expect(results.find(r => r.check === 'no-orphan-tool-message')?.passed).toBe(true);
+    });
+
+    it('fails when a ToolMessage answers a tool_call_id no AIMessage carries', () => {
+      const results = assertCase(
+        base,
+        observed({
+          lastModelInput: [
+            { type: 'system', toolCallIds: [] },
+            { type: 'tool', toolCallIds: [], toolCallId: 'orphan' },
+          ],
+        }),
+      );
+      const check = results.find(r => r.check === 'no-orphan-tool-message');
+      expect(check?.passed).toBe(false);
+      expect(check?.detail).toContain('orphan');
+    });
+
+    it('passes trivially when there are no ToolMessages', () => {
+      const results = assertCase(base, observed({ lastModelInput: [{ type: 'system', toolCallIds: [] }] }));
+      expect(results.find(r => r.check === 'no-orphan-tool-message')?.passed).toBe(true);
+    });
+
+    it('is not emitted when lastModelInput is empty (no model call observed)', () => {
+      const results = assertCase(base, observed({ lastModelInput: [] }));
+      expect(results.some(r => r.check === 'no-orphan-tool-message')).toBe(false);
+    });
+  });
+
+  describe('user-facts-block-present (AC-1361, P6 Task 6)', () => {
+    const factsCase: EvalCase = {
+      ...base,
+      id: 'MF-TEST',
+      phase: 'session_planning',
+      fixture: {
+        ...base.fixture,
+        hasActivePlan: true,
+        facts: [
+          { category: 'physical_constraint', fact: 'Травмировано правое плечо', muscleGroup: 'shoulders_front' },
+          { category: 'exercise_preference', fact: 'Предпочитает гантели штангам', muscleGroup: null },
+        ],
+      },
+    };
+    const assembledWithFacts =
+      '## User Facts\nphysical_constraint:\n- Травмировано правое плечо (shoulders_front)\nexercise_preference:\n- Предпочитает гантели штангам';
+
+    it('passes when the assembled input carries the heading and every fact text', () => {
+      const results = assertCase(factsCase, observed({ assembledInput: assembledWithFacts }));
+      expect(results.find(r => r.check === 'user-facts-block-present')?.passed).toBe(true);
+    });
+
+    it('fails when the ## User Facts heading is missing', () => {
+      const results = assertCase(factsCase, observed({ assembledInput: 'Травмировано правое плечо, но без блока' }));
+      const check = results.find(r => r.check === 'user-facts-block-present');
+      expect(check?.passed).toBe(false);
+      expect(check?.detail).toContain('## User Facts');
+    });
+
+    it('fails when the heading is present but a fact text is missing', () => {
+      const results = assertCase(
+        factsCase,
+        observed({
+          assembledInput: '## User Facts\nphysical_constraint:\n- Травмировано правое плечо (shoulders_front)',
+        }),
+      );
+      const check = results.find(r => r.check === 'user-facts-block-present');
+      expect(check?.passed).toBe(false);
+      expect(check?.detail).toContain('Предпочитает гантели');
+    });
+
+    it('is not emitted for facts-free fixtures (baselines v0–v2 record nothing new)', () => {
+      const results = assertCase(base, observed());
+      expect(results.some(r => r.check === 'user-facts-block-present')).toBe(false);
+    });
+  });
+
+  describe('loadCases (cross-phase directory, P6 Task 6)', () => {
+    it('loads memory/facts — the first cross-phase dataset — via its directory key', () => {
+      const cases = loadCases('memory', 'facts');
+      expect(cases.length).toBeGreaterThanOrEqual(4);
+      expect(cases.every(c => c.id.startsWith('MF-'))).toBe(true);
+      // Routing comes from the case's own phase field, never from the directory.
+      expect(cases.every(c => c.phase === 'session_planning')).toBe(true);
+      expect(cases.every(c => (c.fixture.facts ?? []).length > 0)).toBe(true);
+    });
+
+    it('loads existing phase datasets exactly as before', () => {
+      expect(loadCases('chat').length).toBeGreaterThan(0);
+      const chatIds = loadCases('chat').map(c => c.id);
+      expect(chatIds).toContain('CH-0001');
+      // The memory dataset never leaks into a phase directory's load.
+      expect(chatIds.some(id => id.startsWith('MF-'))).toBe(false);
+    });
   });
 });

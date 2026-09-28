@@ -31,15 +31,31 @@ export function splitEpisode(messages: BaseMessage[]): { history: BaseMessage[];
   return { history: messages.slice(0, lastHuman), current: messages.slice(lastHuman) };
 }
 
-/** Text of the last AI message, null when the channel has none (the reply is the last AIMessage — ADR-0013 §3.2). */
-export function lastAiText(messages: BaseMessage[]): string | null {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const m = messages[i];
+/**
+ * The run's reply (AC-CC-3, chat-continuity Task 3 — supersedes "the reply is
+ * the last AIMessage"): every non-empty AI text of the CURRENT run (from the
+ * last HumanMessage on), in order, joined with one blank line — text written
+ * alongside tool calls arrives too, and nothing from earlier runs is
+ * re-sent. A run with a single AI message delivers exactly that message's
+ * text; no AI text at all → ''.
+ *
+ * `fromIndex` (transition-handoff plan Task 2): cuts `current` at this index
+ * before collecting texts — the looping commit's hop boundary, so a hand-off
+ * run delivers only the SECOND phase's reply. Default 0 = the whole run
+ * (today's behaviour, unchanged when no hop happened).
+ */
+export function runAiText(messages: BaseMessage[], fromIndex = 0): string {
+  const { current } = splitEpisode(messages);
+  const texts: string[] = [];
+  for (const m of current.slice(fromIndex)) {
     if (m?._getType() === 'ai') {
-      return textOf(m.content);
+      const text = textOf(m.content);
+      if (text !== '') {
+        texts.push(text);
+      }
     }
   }
-  return null;
+  return texts.join('\n\n');
 }
 
 /** infra → domain mapping for the transcript projection (commit is its only caller). */

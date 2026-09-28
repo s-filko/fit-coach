@@ -27,6 +27,7 @@ apps/server/src/
   app/                          # HTTP transport (Fastify adapters)
     routes/                     # Route handlers (thin controllers)
       chat.routes.ts            # Thin proxy to ConversationRunPort (DI token CONVERSATION_RUN_PORT_TOKEN)
+      voice.routes.ts           # POST /voice/transcribe — thin proxy to SpeechTranscriberPort (FEAT-0011)
     plugins/                    # Fastify plugins (routes, security, docs)
     middlewares/                # Error, logging, validation hooks
     server.ts                   # Builds Fastify instance (plugins, hooks, routes)
@@ -52,11 +53,17 @@ apps/server/src/
       transitions.ts          # TRANSITION_MATRIX + evaluateTransition — pure domain rules (BR-CONV-015..018, ADR-0013 §4.3)
       events.ts               # PhaseTransitionCommitted event + TransitionHandler type (ADR-0013 §4.3)
       episode.ts              # EpisodeSummary schema/types, StoredEpisodeSummary, CompactReason, TokenBudget (ADR-0013 §3.3)
+      errors.ts                # LlmUnavailableError/ThreadBusyError/CoreError + HTTP_STATUS_BY_CODE (D-B, ADR-0013 §6) — typed errors the adapter throws and chat.routes.ts maps to 503/409/500
       ports/
         transcript.ports.ts   # TranscriptPort (appendRunMessages, appendSystemNote) + TranscriptMessage — transcript projection (§8)
         summary.ports.ts      # SummaryPort (insert, latestLegacySummary) — conversation_summaries (§8)
         conversation-run.ports.ts      # IConversationRunService (run rows, §8) + ConversationRunPort (§11 — run the graph, clearContext; token CONVERSATION_RUN_PORT_TOKEN)
-        index.ts               # Re-exports (incl. ConversationPhase)
+        index.ts               # Re-exports (incl. ConversationPhase, and errors.ts's exports)
+    speech/
+      errors.ts                # NoSpeechError/SttUnavailableError + SPEECH_HTTP_STATUS_BY_CODE (422/503) — mapped by voice.routes.ts
+      ports/
+        speech-transcriber.ports.ts # SpeechTranscriberPort (isEnabled, transcribe; token SPEECH_TRANSCRIBER_TOKEN) — docs/domain/speech.spec.md
+        index.ts               # Re-exports (incl. errors.ts's exports)
     training/
       ports/                   # Named by contract (rule 2)
         index.ts               # Re-exports
@@ -70,6 +77,9 @@ apps/server/src/
       set-data.types.ts        # Zod schemas for set_data — single source of truth for the SetData union
 
   infra/                        # Integrations + drivers
+    conversation/
+      keyed-mutex.ts            # createKeyedMutex({ waitMs }) — generic per-key in-process mutex; a waiter that can't start within waitMs rejects with ThreadBusyError (D-12)
+      with-run-mutex.ts         # withRunMutex(port, opts) — decorator around ConversationRunPort serialising run/clearContext per userId (D-A, ADR-0013 §6/§11); composed in register-infra-services.ts
     db/
       schema.ts                 # Drizzle schema (users, user_accounts, conversation_turns, etc.)
       drizzle.ts                # Pool + drizzle init + health
@@ -80,9 +90,13 @@ apps/server/src/
     ai/
       model.factory.ts          # Single ChatOpenAI construction site (getModel(profile), AC-1313)
       llm.gateway.ts            # OpenAiLlmGateway — LlmGateway port implementation (ADR-0013 §7 D-10)
-      llm-log-handler.ts        # LLM boundary callback: debug logging only (run metrics live in the per-run collector)
+      llm-log-handler.ts        # LLM boundary callback: debug logging + the llm_calls record (run metrics live in the per-run collector)
+      llm-call-recorder.ts      # Writes one llm_calls row per invocation; dedupes system prompts into prompt_blobs by content hash; also the cache-attribution previous-call lookup
+      usage.ts                  # extractUsage/extractUsageFromLLMResult/extractUsageFromMessage — shared token/cache/reasoning extraction (cache-accounting plan)
+      cache-attribution.ts      # attributeCache(prev, current, limits) — pure cache-hit/miss attribution against the previous same-user+model call (cache-accounting plan)
       run-metrics.ts            # RunMetricsCollector — per-run instance carried in run context (ADR-0013 §8; no module state, AC-1331)
       embedding.service.ts      # Local all-MiniLM-L6-v2 via @huggingface/transformers (ONNX)
+      gemini-transcriber.ts     # SpeechTranscriberPort over Google AI Studio generateContent (STT_*; ADR-0013 §7 amendment 2026-09-27)
       embedding-text.util.ts    # buildEmbeddingText() — composite text for exercise embeddings
       graph/
         conversation.graph.ts   # Main StateGraph: prepare→route→<phase>→commit (ADR-0013 §4.1)
@@ -90,7 +104,7 @@ apps/server/src/
         phase-spec.ts           # PhaseSpec — one declarative spec per phase (INV-LLM-005)
         phase-subgraph.factory.ts  # buildPhaseSubgraph(spec) — the single factory building every phase subgraph
         phases/                 # The five PhaseSpecs: registration, chat, plan-creation, session-planning, training
-        episode.ts              # splitEpisode (history vs current, D-I), lastAiText, toTranscriptMessages
+        episode.ts              # splitEpisode (history vs current, D-I), runAiText (the run's reply, AC-CC-3), toTranscriptMessages
         conversation-run.adapter.ts  # ConversationRunPort adapter: loads the user, builds run context, records failed runs, clearContext via the checkpointer (D-F)
         tool-executor.ts        # Shared tool executor: runs every phase's tool calls, answers every tool_call id, serialises ToolOutcome v1, applies ToolStateUpdate (ADR-0013 §4.2/§4.4/§6)
         tool-policy.ts          # ToolPolicy + pure helpers: ordering, batch dedup, search key (AC-1331/AC-1332)
@@ -99,7 +113,7 @@ apps/server/src/
           prepare.node.ts           # pendingTransition reset, episode compaction, training short-circuits → commit, registration↔chat sync
           route.node.ts             # Phase dispatch to the subgraph factory
           commit.node.ts            # transcript projection + run row + evaluateTransition + PhaseTransitionCommitted handlers (§4.1/§4.3; messages are never cleared)
-          finalize.node.ts          # Returns {} (the reply is the last AIMessage in state)
+          finalize.node.ts          # Returns {} (the reply = every AI text of the run, runAiText)
           compact.ts                # Pure compaction rules: decideCompactReason, planCompaction (turn-safe cut), short-episode check, transcript rendering
           compact.node.ts           # buildCompactStep: summarises the ended episode via LlmGateway.structured, keeps max 3 summaries, RemoveMessage trim (BR-LLM-001..004)
         handlers/
@@ -118,8 +132,9 @@ apps/server/src/
       messages/                      # User-facing message catalog (ADR-0013 §11) — en/ru, language_code driven
         catalog.ts / en.ts / ru.ts / index.ts
       context/                      # Context assembler — message order + token accounting (ADR-0013 §3.4)
-        assemble-context.ts         # assembleContext() → { messages, budgetReport }: system → episode summaries → history → current (one shape for every phase; reporting half — enforcement is the context-budget plan)
-        token-estimator.ts          # estimateTokens + TOKEN_ESTIMATOR_ID — the single estimator (app + eval stack)
+        assemble-context.ts         # assembleContext() → { messages, budgetReport }: block 1 system → user facts → course directive → episode summaries → block 3 domain blocks → history → [time-gap note] → NOW line → current (one shape for every phase); calls resolveBudget
+        budget.ts                   # resolveBudget/trimHistory — INV-LLM-004 order: trim history → step block depths → drop oldest summary → D-D floor (block 1 never cut; `system` over budget only reported)
+        token-estimator.ts          # estimateTokens + estimateMessages + TOKEN_ESTIMATOR_ID — the single estimator (app + eval stack)
       prompts/                       # Versioned prompt modules — every model-facing string (ADR-0013 §5)
         types.ts                     # Section, DirectiveModule, PromptModule<TCtx>, PhasePromptEntry
         compose.ts                   # renderDirectives, compose (join '\n\n'), sectionText, promptVersionsOf
@@ -139,16 +154,36 @@ apps/server/src/
           chat/v1.ts                 #   context/rules/tools/no_set_logging (BUG-009 guard)
           plan_creation/v1.ts        #
           session_planning/v1.ts     #
-          training/v1.ts             #   + v1.helpers.ts; DIRECTIVES_WITHOUT_IDENTITY_V1
+          training/v1.ts             #   DIRECTIVES_WITHOUT_IDENTITY_V1 (render helpers live in blocks/ since the context-budget plan)
+          */v2.ts                    #   current for chat/plan_creation/session_planning/training: v1 minus the domain sections (now block 3); registration has no v2
         blocks/                      # Injected fragments that are neither phase prompt nor directive
+          types.ts                   #   ContextBlock<D> (D-A): pure renderer over the phase's loaded data, optional `depths`
+          index.ts                   #   renderBlocks/fullDepth + re-exports
+          user-facts.v1.ts           #   ## User Facts block (ADR-0013 §3.4 block 2, budgeted on `longTerm`) — durable facts extracted at compaction
           episode-summaries.v1.ts    #   ## Previous episodes block — context, not data (numbers come from tools)
           post-tool-nudge.v1.ts      #   post-tool nudge (agent node retry)
+          current-time.v1.ts / time-gap.v1.ts
+                                     #   NOW line / time-gap note — own SystemMessages right before current (ADR-0013 §3.4 amendment 2026-09-27)
+          chat-context.v1.ts / client-profile.v1.ts / session-planning-*.v1.ts / training-workout-overview.v1.ts
+                                     #   domain context blocks (ADR-0013 §3.4 block 3, D-B): one per moved v1 section, byte-equal at full depth; declared on PhaseSpec.contextBlocks
+          training-exercise-history.v1.ts
+                                     #   training.exercise_history / training.recent_workouts (BUG-030 fix, training-exercise-history plan): per-exercise history anchor + 7-day fatigue window with muscle-overlap labels, replacing training.previous_session (same-session_key lookup)
         summarizer/v1.ts             # Legacy end-of-phase summariser (not used by the graph since P4; kept with its snapshot tests)
         summarizer/v2.ts             # Episode summariser — structured EpisodeSummary from the rendered transcript (no previousSummary)
+        summarizer/v3.ts             # v2 plus a typed `facts` array (category, fact, muscleGroup?) — superseded by v4
+        summarizer/v4.ts             # `factOperations` (add / confirm / update / retract) against the known active facts (fact-lifecycle)
+        summarizer/v5.ts             # v4 plus a user `evidence` quote per add/update/retract (fact-provenance) — superseded by v6
+        summarizer/v6.ts             # current: v5 with the provenance rules restated for model verification (fact-verification)
+        fact-verifier/v1.ts          # verifies the summariser's add/update/retract against the episode's user lines (BUG-040, ADR-0009 amendment 2026-09-27/28)
+    observability/
+      transcript-reader.ts      # Reads a run/session/user window from conversation_runs + turns + llm_calls (+ prompt_blobs)
+      transcript-formatter.ts   # Pure renderer: interleaves turns and API calls by (created_at, seq) for a human reader
+      db-target.ts              # Names the database a script opened, and turns a schema-behind error into a sentence
     conversation/
       drizzle-transcript.service.ts             # TranscriptPort impl — projects run messages into conversation_turns (one row per message, run_id always set)
       drizzle-summary.service.ts                # SummaryPort impl — writes conversation_summaries + the mirrored `summary` turn row in one transaction
       drizzle-conversation-run.service.ts       # IConversationRunService impl — writes conversation_runs
+      seq.ts                                    # The one `conversation_turns.seq` policy (MAX(seq) per run_id + 1), shared by both writers above
     di/
       container.ts              # DI container with factory support + lazy initialization
     config/
@@ -303,8 +338,25 @@ Standing exceptions (each names the task that closes it):
 - Base path: `/api` (no versioning for now). If added later: `/api/v1`.
 - JSON only. Use consistent response envelopes:
   - Success: `{ data: <payload> }`
-  - Error: `{ error: { message, code? } }`
+  - Error: `{ error: { message, code? } }` (general routes); the chat routes are the
+    documented exception — see below.
 - Names: plural resources (e.g., `/users/:id`). Custom actions are subresources (e.g., `/messages`).
+- **`POST /api/bot/chat` error codes** (ADR-0013 §6, P5, INV-LLM-006): the catch block maps
+  a typed `ConversationError` (`domain/conversation/errors.ts`) through `HTTP_STATUS_BY_CODE`
+  and replies `{ error: { code } }` — **no `message` field, no exception text, no stack**.
+
+  | HTTP | `code` | Meaning |
+  |---|---|---|
+  | 503 | `LLM_UNAVAILABLE` | The provider (or the network path to it) failed or timed out; run row `outcome: 'llm_unavailable'` |
+  | 409 | `THREAD_BUSY` | The per-user run mutex rejected the request after `LLM_RUN_MUTEX_WAIT_MS`; the graph was never entered, so **no run row is written** (D-D) |
+  | 404 | `USER_NOT_FOUND` | The `userId` has no row; the graph was never entered, so no run row is written. The bot answers this by clearing its cached id, so the next message re-upserts the user (AC-RRP-5, 2026-09-21) |
+  | 500 | `CORE_ERROR` | Anything else (a bug, an unexpected exception); run row `outcome: 'core_error'` |
+
+  `req.log.error({ err })` still carries the original message for logs — only the response
+  body is restricted.
+- **`POST /api/bot/voice/transcribe` error codes** (FEAT-0011, INV-SPEECH-003): same `{ error: { code } }` shape —
+  422 `NO_SPEECH` (no clearly spoken words), 503 `STT_UNAVAILABLE` (disabled, provider error or timeout),
+  500 `CORE_ERROR` (anything else).
 
 ## Testing Strategy
 - Unit: domain services with repository stubs.
@@ -341,11 +393,12 @@ These rules are for any AI assistant working in this repo:
 ## Conversation Context (Session) [FEAT-0009] ✅ IMPLEMENTED (episode memory, refactor P4)
 - **Dialogue memory** is the checkpointed LangGraph `messages` channel (PostgresSaver): it survives runs, interleaves as `BaseMessage`s (human / AI with `tool_calls` / tool results) and is the only source of history for every phase (INV-LLM-001/002). One chat across the app — no per-phase history.
 - **Episodes end by rule** — inactivity gap (`EPISODE_GAP_HOURS`, default 3), a committed phase transition (`compaction-flag.handler` → `compactReason`), or history-budget overflow — and the synchronous `compact` step in `prepare` summarises the ended episode into one independent structured summary; at most 3 are kept and rendered by the `## Previous episodes` block. Summaries are context, not data: facts (weights, reps) come from tools only (INV-LLM-003).
-- **Transcript** (`conversation_turns` table) is an append-only projection: the `commit` node writes one row per message (`kind` human/ai/tool_call/tool_result, plus mirrored `summary` rows and `system_note`s), each carrying the run's `run_id`.
+- **User facts (P6)** — durable facts are written at compaction from the summariser's `factOperations` (v4–v6: add / confirm / update / retract; `confirm` increments `confirmations`, never rewrites `fact`) and in conversation through `manage_fact` (ADR-0009 amendments 2026-09-21); a failed operation is logged and never fails the compaction. Since 2026-09-27/28 (BUG-040) a compaction `add`/`update`/`retract` is applied only when the fact verifier — one extra structured call, made only when such an operation exists — marks it as stated or confirmed by the user; a verifier failure skips them all (`infra/ai/graph/nodes/verify-fact-operations.ts`, ADR-0009 amendment 2026-09-27/28). A verified fact stores the user's supporting words in `user_facts.evidence`, shown by `list_facts` as `said: «…»`, not rendered into `## User Facts`. Facts render as the `## User Facts` block at block 2, ahead of `## Previous episodes`, budgeted against `longTerm` (ADR-0013 §3.4); zero facts render nothing. A `physical_constraint` fact with a `muscleGroup` is hard-enforced by `save_workout_plan` and `start_training_session` (`checkFactConflicts`, `domain/user/services/fact-conflicts.ts`): an exercise whose **primary** muscles include it is rejected with a `user_error` quoting the fact and nothing is persisted; secondary involvement and other categories do not bind (AC-1361).
+- **Transcript** (`conversation_turns` table) is an append-only projection with **three writers**: the conversation-run adapter persists the run's `human` row before the graph runs (so a run that throws still keeps what the user wrote) and writes `system_note`s from `clearContext`; the `commit` node writes one row per remaining message, skipping the human row already stored for that `run_id`; and `DrizzleSummaryService` mirrors the episode `summary` row from the `compact` step (`kind` human/ai/tool_call/tool_result, plus mirrored `summary` rows and `system_note`s). Every row that belongs to a run carries that run's `run_id` and is numbered into its `seq` sequence through the one policy in `infra/conversation/seq.ts`, so the order a run's rows were produced in stays recoverable (BUG-029). A `system_note` from `clearContext` is the exception and the only one: it belongs to no run, so `appendSystemNote` writes it with `run_id` null and no `seq`.
 - **Clear context**: `POST /api/bot/chat/clear-context` calls `ConversationRunPort.clearContext(userId)` — the adapter deletes the checkpoint thread and appends a `context_cleared` system note; the next message starts fresh.
 - **ADR-0005**: original patterns (superseded — no context service, no sliding window; the legacy `IConversationContextService` was deleted in P4).
 - No breaking change to API: `POST /api/chat` contract unchanged [AC-0110].
-- **Database storage**: `conversation_turns` table with (userId, phase, role, content, runId, kind, payload, createdAt); `conversation_summaries` table — structured episode summaries (ADR-0013 §8, written at compaction via `SummaryPort`); `conversation_runs` table — one row per run with model/tokens/latency/outcome (ADR-0013 §8, written by the commit node); `langgraph_checkpoints` table (managed by PostgresSaver).
+- **Database storage**: `conversation_turns` table with (userId, phase, role, content, runId, seq, kind, payload, createdAt) — `seq` is the per-run monotonic order, carried by every row that has a `run_id`; `user_facts` table — durable user facts with a confirmation counter (P6, migration `0005`); `conversation_summaries` table — structured episode summaries (ADR-0013 §8, written at compaction via `SummaryPort`); `conversation_runs` table — one row per run with model/tokens/latency/outcome, plus `error_class`/`error_message` on a non-`ok` run (ADR-0013 §8; written by the commit node, failed runs by the conversation-run adapter); `llm_calls` table — one row per model invocation with the request actually sent, the response, latency and error, written by the LLM callback handler regardless of `LOG_LEVEL`; `prompt_blobs` table — each distinct system message stored once by content hash and referenced from `llm_calls.request`; `langgraph_checkpoints` table (managed by PostgresSaver).
 
 ## LLM Integration
 **Implementation**: `src/infra/ai/model.factory.ts`
@@ -366,10 +419,10 @@ LLM_TEMPERATURE=<0-2>                 # Required: temperature for generation
 
 ### Interaction Pattern (Tool Calling Loop)
 Each phase subgraph runs a tool-calling loop:
-1. `agentNode`: `model.bindTools(tools).invoke(assembleContext(...))` — `[SystemMessage(systemPrompt), (## Previous episodes), ...history, ...current]`, history interleaved from the checkpointed `messages` channel
+1. `agentNode`: `model.bindTools(tools).invoke(assembleContext(...))` — `[SystemMessage(systemPrompt), (## User Facts), (## Previous episodes), (domain blocks), ...history, ...current]`, history interleaved from the checkpointed `messages` channel
 2. If `AIMessage.tool_calls` present → the tool executor runs them → `ToolMessage` results appended
 3. Loop back to `agentNode` with updated messages (tool results visible)
-4. If no `tool_calls` → `finalize` returns `{}` — the reply is the last `AIMessage` in state; `commit` reads `pendingTransition` and projects the run
+4. If no `tool_calls` → `finalize` returns `{}` — the reply is every non-empty `AIMessage` text of the run (`runAiText`, AC-CC-3); `commit` reads `pendingTransition` and projects the run
 
 ### Tool Calling vs JSON Mode
 - **Old approach**: LLM forced to respond in JSON → code parses with Zod → error-prone
@@ -391,7 +444,7 @@ Each phase subgraph runs a tool-calling loop:
 - **ADR-0006**: Session plan storage
 - **ADR-0007**: LangGraph migration — IN PROGRESS (Steps 0–6 done; see `docs/ADR-0007-IMPLEMENTATION-PLAN.md`)
 - **ADR-0008**: Centralized logging with Grafana/Loki
-- **ADR-0009**: User long-term memory — passive fact extraction per conversation turn, persistent `user_facts` table, injected into all phase prompts (PROPOSED)
+- **ADR-0009**: User long-term memory — passive fact extraction per conversation turn, persistent `user_facts` table, injected into all phase prompts (PROPOSED; its per-turn extraction mechanism is superseded by the 2026-09-17 owner decision — P6 reuses its table shape and categories, extraction happens at compaction)
 - **ADR-0010**: Conversation thread summarization (PROPOSED)
 - **ADR-0011**: Training tool execution hardening (PROPOSED, partially implemented)
 - **ADR-0012**: Exercise catalog vector search

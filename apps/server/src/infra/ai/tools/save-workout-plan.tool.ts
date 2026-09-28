@@ -5,12 +5,19 @@ import { z } from 'zod';
 import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
 import type { IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
 import type { MuscleGroup } from '@domain/training/types';
+import type { IUserFactsService } from '@domain/user/ports';
 
+import { ctxOf } from '@infra/ai/graph/state';
+
+import { checkExerciseNamesAgainstCatalog } from './exercise-name-check';
+import { guardFactConstraints } from './fact-constraint-guard';
 import { userIdOf } from './format-exercise-summary';
 
 export interface SaveWorkoutPlanToolDeps {
   workoutPlanRepository: IWorkoutPlanRepository;
   exerciseRepository: IExerciseRepository;
+  /** P6 Task 5: hard validation against physical_constraint facts (D-G). */
+  userFactsService: IUserFactsService;
 }
 
 const MUSCLE_GROUPS: [MuscleGroup, ...MuscleGroup[]] = [
@@ -84,7 +91,7 @@ const SAVE_WORKOUT_PLAN_DESCRIPTION = [
 ].join(' ');
 
 export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
-  const { workoutPlanRepository, exerciseRepository } = deps;
+  const { workoutPlanRepository, exerciseRepository, userFactsService } = deps;
 
   return tool(
     async (input, config) => {
@@ -93,11 +100,14 @@ export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
         return userError('Error: could not identify user. Please try again.');
       }
 
-      // Validate all exerciseIds exist in DB before saving
+      // Validate all exerciseIds exist in DB before saving, and resolve their
+      // muscles in the same call for the constraint check below.
+      let advisory: string | null = null;
+      let correctedTemplates = input.sessionTemplates;
       const allIds = input.sessionTemplates.flatMap(t => t.exercises.map(e => e.exerciseId));
       const uniqueIds = [...new Set(allIds)];
       if (uniqueIds.length > 0) {
-        const found = await exerciseRepository.findByIds(uniqueIds);
+        const found = await exerciseRepository.findByIdsWithMuscles(uniqueIds);
         const foundIds = new Set(found.map(e => e.id));
         const missing = uniqueIds.filter(id => !foundIds.has(id));
         if (missing.length > 0) {
@@ -106,6 +116,30 @@ export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
               'Use search_exercises to find valid exercise IDs.',
           );
         }
+
+        // Plan name/id check (training-history-lookup plan D5): reject before anything is
+        // persisted when an entry's name shares no word with its id's catalog name; otherwise the
+        // stored name is the catalog's, not whatever the plan called it.
+        const catalogNameById = new Map(found.map(e => [e.id, e.name]));
+        const flatExercises = input.sessionTemplates.flatMap(t => t.exercises);
+        const nameCheck = checkExerciseNamesAgainstCatalog(flatExercises, catalogNameById);
+        if (nameCheck.rejection) {
+          return nameCheck.rejection;
+        }
+        let i = 0;
+        correctedTemplates = input.sessionTemplates.map(t => ({
+          ...t,
+          exercises: t.exercises.map(() => nameCheck.corrected[i++]),
+        }));
+
+        // Constraint guard (D-G, narrowed by AC-FL-6): a PERMANENT constraint's
+        // muscle group among an exercise's PRIMARY muscles rejects the call —
+        // nothing is persisted. Any other conflict is an advisory on the result.
+        const verdict = await guardFactConstraints(userFactsService, userId, found, ctxOf(config as never).now);
+        if (verdict.rejection) {
+          return verdict.rejection;
+        }
+        ({ advisory } = verdict);
       }
 
       await workoutPlanRepository.create(userId, {
@@ -115,7 +149,7 @@ export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
           trainingStyle: input.trainingStyle,
           targetMuscleGroups: input.targetMuscleGroups as MuscleGroup[],
           recoveryGuidelines: input.recoveryGuidelines,
-          sessionTemplates: input.sessionTemplates,
+          sessionTemplates: correctedTemplates,
           progressionRules: input.progressionRules,
         },
         status: 'active',
@@ -123,7 +157,9 @@ export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
 
       return {
         outcome: ok(
-          'Plan saved. Now write a brief confirmation to the user in their language — congratulate them and say you are ready to start training.',
+          advisory === null
+            ? 'Plan saved. Now write a brief confirmation to the user in their language — congratulate them and say you are ready to start training.'
+            : `Plan saved.\n${advisory}\nThen write a brief confirmation to the user in their language.`,
         ),
         update: {
           pendingTransition: {

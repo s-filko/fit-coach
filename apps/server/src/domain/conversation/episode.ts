@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { FACT_CATEGORIES, FACT_DURABILITIES, FACT_ON_EXPIRY } from '@domain/user/ports';
+
 import type { ConversationPhase } from './phases';
 
 /**
@@ -9,6 +11,16 @@ import type { ConversationPhase } from './phases';
  * The D-I invariant underneath: the adapter appends exactly one HumanMessage
  * per run and no node adds another — that is what makes "this run's
  * messages" findable by position in `infra/ai/graph/episode.ts`.
+ *
+ * `facts` (P6 Task 2, owner decision 2026-09-17; superseded by v4's
+ * `factOperations` in the fact-lifecycle plan Task 3, AC-FL-4): durable facts
+ * are written at compaction AND in conversation (`manage_fact`, fact-lifecycle
+ * Task 2 — the 2026-09-17 no-per-turn-tool decision was reversed by the owner
+ * on 2026-09-20). v3's blind upsert list became v4's operations below.
+ * D-D: `StoredEpisodeSummary`'s rendering (`episodeParagraph`,
+ * `episode-summaries.v1.ts`) names its five fields explicitly and reads
+ * neither `facts` nor `factOperations` — adding these fields must not change
+ * what the user-visible `## Previous episodes` block renders.
  */
 export const EpisodeSummarySchema = z
   .object({
@@ -17,10 +29,78 @@ export const EpisodeSummarySchema = z
     userState: z.array(z.string()),
     trainingFeedback: z.array(z.string()),
     openItems: z.array(z.string()),
+    facts: z.array(
+      z
+        .object({
+          category: z.enum(FACT_CATEGORIES),
+          fact: z.string(),
+          muscleGroup: z.string().optional(),
+        })
+        .strict(),
+    ),
   })
   .strict();
 
 export type EpisodeSummary = z.infer<typeof EpisodeSummarySchema>;
+
+/**
+ * One fact operation in the v4 summariser's structured output (AC-FL-4): the
+ * summariser SEES the known active facts and says what to do with them, instead
+ * of a blind upsert list. Flat on purpose — the same shape `manage_fact`'s
+ * schema taught the provider family. `factId`s must be copied verbatim from the
+ * known-facts list the prompt rendered; the schema verifies UUID FORMAT only —
+ * a well-formed but invented id resolves to no row later and the operation
+ * becomes a silent no-op in the port (confirm/retract return false/null).
+ */
+export const FactOperationSchema = z
+  .object({
+    op: z.enum(['add', 'confirm', 'update', 'retract']),
+    /** confirm / update / retract: the known fact's id, verbatim from the prompt. */
+    factId: z.string().uuid().optional(),
+    /** retract: why the episode shows the fact stopped being true. */
+    reason: z.string().optional(),
+    category: z.enum(FACT_CATEGORIES).optional(),
+    fact: z.string().optional(),
+    muscleGroup: z.string().optional(),
+    durability: z.enum(FACT_DURABILITIES).optional(),
+    /** add/update + permanent: the user stated irreversibility in the episode, in their own words. */
+    explicitPermanent: z.boolean().optional(),
+    ttlDays: z.number().int().optional(),
+    reviewInDays: z.number().int().optional(),
+    phaseNote: z.string().optional(),
+    onExpiry: z.enum(FACT_ON_EXPIRY).optional(),
+    /**
+     * add/update/retract (BUG-040, fact-provenance D2): a verbatim quote from
+     * one of the episode's USER lines that states the fact — original language,
+     * never translated. Optional on purpose: a missing field SKIPS that
+     * operation in the compaction node (the summary and the other operations
+     * still apply, the fact-lifecycle D-E rule); it never fails the summary.
+     */
+    evidence: z.string().optional(),
+  })
+  .strict();
+
+export type FactOperation = z.infer<typeof FactOperationSchema>;
+
+/**
+ * The episode summariser's structured output, SHARED by prompts v4 and v5
+ * (fact-provenance D14: v5 adds only the provenance rules and the optional
+ * `evidence` on operations, so one schema serves both): v3's five list
+ * fields, with `factOperations` replacing `facts` (AC-FL-4). Empty is the
+ * expected common answer — most episodes state nothing durable.
+ */
+export const EpisodeSummaryV4Schema = z
+  .object({
+    topics: z.array(z.string()),
+    decisions: z.array(z.string()),
+    userState: z.array(z.string()),
+    trainingFeedback: z.array(z.string()),
+    openItems: z.array(z.string()),
+    factOperations: z.array(FactOperationSchema),
+  })
+  .strict();
+
+export type EpisodeSummaryV4 = z.infer<typeof EpisodeSummaryV4Schema>;
 
 /** What `episodeSummaries` state (max 3, oldest first) and the summary table row carry. */
 export interface StoredEpisodeSummary {
@@ -28,11 +108,18 @@ export interface StoredEpisodeSummary {
   phaseAtEnd: ConversationPhase;
   /** ISO timestamp of the compaction that ended the episode. */
   endedAt: string;
-  summary: EpisodeSummary;
+  /** v3 (legacy, `facts`) or v4 (`factOperations`) — renderers read only the five list fields. */
+  summary: EpisodeSummary | EpisodeSummaryV4;
 }
 
-/** Why an episode ended (BR-LLM-001..003). Precedence: phase_boundary > inactivity > budget. */
-export type CompactReason = 'inactivity' | 'phase_boundary' | 'budget';
+/**
+ * Why an episode ended (BR-LLM-001..003). Precedence: manual > phase_boundary >
+ * inactivity > budget. `manual` is the user's own `/compact`: never computed,
+ * only requested — it keeps no verbatim tail (an explicit command is not a
+ * surprise truncation, BUG-018) and, unlike the automatic triggers, fails
+ * loudly when the summariser fails.
+ */
+export type CompactReason = 'inactivity' | 'phase_boundary' | 'budget' | 'manual';
 
 /**
  * Per-phase token budget (ADR-0013 §3.4 table). P4 adds it as data and reads

@@ -1,0 +1,1 @@
+ALTER TABLE "user_facts" ADD COLUMN "evidence" text;

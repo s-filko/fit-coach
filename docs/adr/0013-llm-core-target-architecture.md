@@ -99,7 +99,8 @@ Each decision is expanded below with invariants (`INV-LLM-###`), business rules 
 | Working              | messages of the current run (agent ↔ tools loop)                                                                         | subgraph `messages` (inherits parent channel)             | agent/tools nodes         | recursion limit     |
 | Episode (short-term) | messages of the current episode incl. tool calls/results, `episodeSummaries[]` (≤3), `phase`, `activeSessionId`, `draft` | parent state, PostgresSaver, `thread_id = userId`         | `commit`, `compact`       | token budget (D-03) |
 | Long-term            | profile, plans, sessions, sets (progress); `user_facts`; episode summaries mirrored to DB                                | Postgres domain tables                                    | domain services via tools | schema              |
-| Transcript / runs    | every message and every run's metadata                                                                                   | `conversation_turns` (+ new columns), `conversation_runs` | `commit`                  | retention policy    |
+| Transcript / runs    | every message and every run's metadata                                                                                   | `conversation_turns` (+ new columns), `conversation_runs` | three writers: `commit`; the run adapter (inbound `human` row, failed run, `system_note`s); `DrizzleSummaryService` (mirrored `summary` row) | retention policy |
+| API exchange         | the exact request sent to the model and the answer received, per invocation                                              | `llm_calls`, `prompt_blobs`                               | the LLM callback handler (`LLMLogHandler`) | retention policy (BR-LLM-011) |
 
 INV-LLM-001: The prompt's dialogue history is derived only from the checkpointed `messages` channel; no node reads `conversation_turns` to build a prompt.
 INV-LLM-002: Every tool call and tool result of a completed run is present in `messages` until compacted; compaction is the only way messages leave the channel.
@@ -127,7 +128,7 @@ runId, userId, user (loaded once in prepare), now, client: 'telegram'|'webapp',
 trigger: 'user_message'|'system', promptVersions (filled by assembler), modelProfile
 ```
 
-Run output: the final `AIMessage.content` of the run (text) plus `phase`. No `responseMessage` channel; the route reads the last AI message. Rationale for dropping `user` from state: it is reloaded 3× per turn today (§1.4); a checkpointed copy only adds staleness.
+Run output: every non-empty `AIMessage` text of the run, in order, joined with a blank line (text written alongside tool calls included; amended 2026-09-20, BUG-018 / AC-CC-3), plus `phase`. No `responseMessage` channel. Rationale for dropping `user` from state: it is reloaded 3× per turn today (§1.4); a checkpointed copy only adds staleness.
 
 Rejected: keeping `user` in state "for the LLM to see it" — the assembler renders profile from run context; a per-run load is one indexed SELECT.
 
@@ -142,6 +143,21 @@ Rejected: keeping `user` in state "for the LLM to see it" — the assembler rend
 > context. Pinned by `run-context-propagation.unit.test.ts` (context reaches parent,
 > subgraph and tool).
 
+> **Amendment 2026-09-26 (transition hand-off, plan `transition-handoff` / roadmap U5, owner-approved
+> 2026-09-26):** when `TRANSITION_HANDOFF_TARGETS` lists the target phase, a transition is **answered by
+> the phase it leads to, in the same run** (at most one hop). Run output then carries only the texts
+> produced **after the hop boundary** (`ctx.hopBoundaryIndex`); the outgoing phase's text written alongside
+> the hand-off tool call (the carrier) is emptied, so the user receives one reply, from the last phase.
+> Without a hop the AC-CC-3 rule above is unchanged. Run context gains per-run hop facts —
+> `phasePath`, `hopping`, `hopBoundaryIndex`, `hopTransition` — mutated only by `commit`; like
+> `metrics`, they never enter the checkpoint.
+
+**Amendment 2026-09-21 (manual compaction, `/compact`):** compaction gained a fourth trigger, `manual`, reachable only through the bot's `/compact` command → `POST /api/bot/chat/compact` → `ConversationRunPort`, under the same per-user run mutex, as a compact-only pass through the graph (no agent, no commit, no course check, no transcript writes, `lastUserMessageAt` untouched). It differs from the three automatic triggers in exactly two ways, both deliberate. **It keeps no tail:** the keep-recent rule of the 2026-09-20 amendment protects the user from a *surprise* truncation (BUG-018), and an explicit request is not a surprise — so the whole channel is foldable. That also means the manual pass must not use `splitEpisode`'s history/current split: a manual run appends no `HumanMessage`, so cutting at the last human message would leave the user's freshest turn unfolded and, in a short conversation, nothing to fold at all. The automatic paths keep that split and its one-human-per-run invariant untouched. **It fails loudly:** when the summariser fails, the manual pass throws and removes nothing, where an automatic trigger still trims without a summary (BR-LLM-004) — an automatic trigger fires inside a reply the user is waiting for, while a manual one has no reply to protect and must never answer "folded into memory" over a silently dropped conversation. The min-turns / min-tokens guard applies to both, so a too-short conversation is a clean no-op with no model call.
+
+**Amendment 2026-09-21 (course check, wave B; decided without the owner — see the plan's decision table, reversible):** `prepare` gained one more optional step, the **course check**. It is a single structured call on its own cheap profile, fired **by event, never per turn**: the inputs' fingerprint changed (the active fact set, the stated goal, the phase, the active plan, plus any expired `ask_once` fact now due its one question) or the first run after a long gap. It returns a typed **directive** — the current vector in one line, the constraints in force, the questions to ask now, the facts it suspects are stale — which persists in graph state and renders as one prompt block until the fingerprint moves. An ordinary turn therefore costs exactly what it cost before: the stored directive rides, and no call is made. A failed or malformed call never touches the run: the previous directive keeps rendering and the failure is recorded as `{fingerprint, at}`, so the same fingerprint is not retried until `COURSE_CHECK_RETRY_COOLDOWN_MINUTES` has passed — a provider outage makes the system quieter, not chattier. The layer has an on/off switch, and with it off the graph behaves exactly as before.
+
+**Expiry is now performed, not merely observed (same amendment):** the course-check step is the one place that acts on a lapsed TTL. An expired `ask_once` fact becomes one question in the directive and is then archived `expired`, so it is asked exactly once; an expired `forget` fact is archived `expired` silently; and a fact whose expiry is older than `COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS` (default 7) is archived silently whatever its flag, because asking about a months-old tweak is noise. The archive keeps the row in every case — that history is what any future recurrence counting will read. `getForPrompt` / `getConstraints` are unchanged and still exclude expired and archived rows.
+
 ### 3.3 Episode lifecycle (thread lifecycle)
 
 `thread_id` remains `userId` (stable, trivially discoverable, `clear-context` remains `checkpointer.deleteThread(userId)` instead of raw SQL on three tables — `chat.routes.ts:41-43`).
@@ -153,6 +169,12 @@ An **episode** is a contiguous span of `messages`. `prepare` runs `compact` befo
 - BR-LLM-003 (budget): estimated tokens of `messages` exceed the phase history budget (D-03).
 
 `compact` is synchronous and deterministic: it summarises the messages being removed into **one new `EpisodeSummary`** (independent, not merged with older ones — per ADR-0010 rationale), keeps the last 3 summaries, and emits `RemoveMessage`s for the compacted range. For BR-LLM-003 it removes the oldest whole turns (a turn = human message through the following final AI message, never splitting a tool-call/tool-result pair) until under budget. On summariser failure it falls back to trimming without a summary and logs `warn` (graceful degradation, BR-LLM-004).
+
+**Amendment 2026-09-20 (BUG-018, owner-approved):** Compaction at any trigger (inactivity gap, phase transition, budget) summarises only messages older than the last `EPISODE_KEEP_TURNS` turns (default 6), which stay verbatim; a part too short to summarise is kept, never dropped (supersedes D-B's trim-without-summary). After a gap longer than `EPISODE_GAP_HOURS` a time-gap note precedes the new user message. The user receives every assistant text of the run. The standard summarise-older / keep-recent pattern.
+
+**Amendment 2026-09-21 (fact lifecycle wave A; decided without the owner — see the plan's decision table, reversible):** the summariser's structured output gained a sixth field and compaction gained a fact-writing contract. The schema is now `{ topics[], decisions[], userState[], trainingFeedback[], openItems[], factOperations[] }` (summariser v4; v3, with its blind `facts[]` list, stays beside it). The summariser is shown the user's known **active** facts with their ids and returns operations on them — `add | confirm | update | retract` — instead of restating them into a blind upsert: `confirm` moves the counter only and never rewrites stored text (D-C), `update` supersedes the old row and links the new one, `retract` archives with a reason. Compaction applies each operation independently, one try/catch per operation, so a refused or malformed operation leaves the rest of the batch, the episode summary and the compaction result unchanged (D-E). **Two clocks:** every date written to a fact uses the run clock (`ctx.now`), while the *evidence* clock — what a user closure is compared against — is the compacted episode's newest user message (`state.lastUserMessageAt`, which at compaction still holds the previous run's stamp). Without that split, summarising an old episode would resurrect a fact the user closed after it. Facts extracted at compaction cite the mirrored summary turn as their `source_turn_id`, which is also their time anchor.
+
+**Amendment 2026-09-27/28 (BUG-040; plan `fact-provenance`, replaced by plan `fact-verification` on the owner's decision 2026-09-28):** when the summariser returns a mutating fact operation, compaction makes one more structured call — the fact verifier (`fact-verifier` v1, profile `summarizer`, schema `fact_verdicts_v1`) — and applies only the `add`/`update`/`retract` operations it marks as stated or confirmed by the user; a verifier failure skips them all (fail closed). `confirm` is exempt; a skipped operation is handled like any other refused one (D-E). Rule and rationale: ADR-0009, amendment 2026-09-27/28.
 
 The summariser uses the `LlmGateway.structured` call with schema `{ topics[], decisions[], userState[], trainingFeedback[], openItems[] }` and the ADR-0010 "facts only, no style" instruction; summary text is rendered from that structure (deterministic, evaluable). Summaries are mirrored to `conversation_summaries` (user_id, episode_id, phase_at_end, structured json, created_at) for analytics and eval datasets; the prompt reads them from state, not from the table.
 
@@ -174,6 +196,16 @@ One function, `assembleContext(phaseSpec, state, ctx): { messages: BaseMessage[]
 3. `SystemMessage` — **domain blocks** for the phase (profile, plan, session state, muscle recovery, previous performance). Each block is a pure `render(data) → {id, text, tokens}` with a declared max token share; data loaders are declared in the `PhaseSpec` and run in parallel.
 4. `messages` — the episode history after `trimMessages` to the history budget (strategy `last`, `startOn: human`, `includeSystem: false`, keep tool pairs intact).
 5. In-flight messages are already inside `messages` (they are the same channel) — no separate splice.
+
+> **Amendment 2026-09-27 (`now-line-last`, owner-approved at close-out).** Two messages ride with the
+> current turn, between the history (4) and the current `HumanMessage`, in this order: the time-gap
+> note (AC-CC-2, only after an `EPISODE_GAP_HOURS` pause) and the **`NOW` line** (`CURRENT_TIME_V1`,
+> BUG-032, every call) — `… history → [gap note] → NOW → current`. `NOW` is no longer part of block 1:
+> it changes every minute, and as block 1's last section it kept everything after it (long-term and
+> domain blocks, history) out of the provider's prompt cache. Both survive the D-D floor and are not
+> budgeted. Their versions are stamped in `prompt_versions` (D-09): `block.current_time` on every run,
+> `block.time_gap` on runs that sent the note. Runs recorded before 2026-09-27 carry the NOW version
+> as `directive.current-time` instead.
 
 Budget (per phase, in `PhaseSpec.budget`, tokens estimated with a fixed estimator so results are reproducible offline):
 
@@ -208,6 +240,16 @@ START → prepare → route ──Command(goto=phase)──▶ <phase subgraph> 
 - `commit` (replaces `persist + transition_guard + cleanup`): (1) append run's new messages to `conversation_turns` and write `conversation_runs`; (2) evaluate `pendingTransition` against the matrix and guards (§4.3); (3) execute side effects (session activation/completion as in `cleanupNode`, `conversation.graph.ts:127-151`); (4) set `phase`, set the compaction flag for the next run. Failures in (1) must not fail the reply (BR-CONV-007 kept) but are logged at `error`, not `warn`.
 
 Subgraphs share the parent's `messages` channel (same key in both schemas), so the working tier is the episode tier — one channel, one reducer. Subgraphs are compiled without their own checkpointer (unchanged); only the parent checkpoints.
+
+> **Amendment 2026-09-26 (transition hand-off, U5, owner-approved 2026-09-26):** with the flag on, the
+> parent graph may loop once: `… → commit ──(accepted hand-off, no hop yet)──▶ route → <next phase
+> subgraph> → commit → END`. The phase subgraph gains a third exit, `tools → handoff → END`, taken when a
+> tool registered an accepted hand-off; it skips `finalize` (the outgoing phase owes no reply). The looping
+> `commit` projects the run's messages incrementally and writes **no** run row — the final `commit` writes
+> the single row; a `commit` without its own transition keeps the incoming `compactReason` and
+> `activeSessionId`. The accept/refuse decision is one predicate, `isAcceptedHandoff(…, alreadyHopped)`
+> (`graph/handoff.ts`), shared by the executor, `afterTools` and `commit`. With the flag off the topology
+> above is exactly as written.
 
 > **Amendment 2026-09-18** (P3 implementation, owner-approved at close-out): step (3) of
 > `commit` is realised as the typed `PhaseTransitionCommitted` event
@@ -250,6 +292,8 @@ INV-LLM-005: Adding a phase means adding a `PhaseSpec`, its prompt module, its t
 
 BR-LLM-006: A transition committed in run N takes effect in run N+1's `route`; the reply of run N is produced by the outgoing phase (unchanged from today) — the eval rubric requires that reply to announce the hand-off.
 
+> **Amended 2026-09-26 (U5, owner-approved):** BR-LLM-006 holds for every transition whose target is **not** in `TRANSITION_HANDOFF_TARGETS`. For a listed target the transition takes effect in the **same** run (one hop at most) and the reply is produced by the **incoming** phase; the outgoing phase's tool result tells it not to write to the user.
+
 ### 4.4 Tools
 
 - Tools are pure adapters over domain services (unchanged principle). They receive `userId`, `activeSessionId`, `runId` from `config.configurable`/run context (LangGraph passes `config` to tools; today only `userId` is passed — `chat.subgraph.ts:78-80`).
@@ -275,7 +319,11 @@ Rejected: a single flat agent with all tools and a "phase" instruction — phase
 apps/server/src/infra/ai/prompts/
   directives/            identity.v1.ts, formatting.telegram.v1.ts, formatting.plain.v1.ts,
                          language.v1.ts, timezone.v1.ts, name-usage.v1.ts, tool-reply.v1.ts,
-                         time-reference.v1.ts, greeting.v1.ts, memory-usage.v1.ts
+                         time-reference.v1.ts, greeting.v1.ts, memory-usage.v1.ts,
+                         language.v2.ts (BUG-036)
+  blocks/                injected fragments that are neither phase prompt nor directive — incl.
+                         current-time.v1.ts (BUG-032, U5; moved from directives/ by now-line-last,
+                         2026-09-27) and time-gap.v1.ts (AC-CC-2), the two messages riding with current
   phases/
     registration/ v1.ts ... vN.ts, index.ts (exports current)
     chat/ ...
@@ -346,11 +394,12 @@ The empty-response nudge (`invokeWithRetry`) becomes part of the shared agent no
 
 ## 7. LLM access and the legacy path (D-10)
 
-- The LLM access port is `LlmGateway { chat(messages, opts): { content }; structured<T>(schema, messages, opts): T }` in `domain/ai/ports/llm.gateway.ports.ts`. **Amendment (2026-09-16, shipped in P1):** the port speaks the domain's own `ChatMsg` and returns plain data — not the LangChain `AIMessage` this section originally worded it with — because the domain-purity invariant (§11, D-13 / INV-CONV-004) forbids `@langchain/*` in `domain/**`; the infra implementation (`infra/ai/llm.gateway.ts` over `getModel(profile)`) does the `ChatMsg`→LangChain conversion and flattens the response to text. No `jsonMode`. `structured` uses `withStructuredOutput` (available in `@langchain/openai` 1.x) with one retry on schema failure.
-- `getModel(profile)`: profiles from config `LLM_MODEL`, `LLM_TEMPERATURE` (defaults) with optional `LLM_PROFILE_<NAME>_MODEL/_TEMPERATURE/_MAX_TOKENS` overrides. Rationale: the summariser and the judge want low temperature and possibly a cheaper model; training may want a different one than plan creation; today one singleton at `maxTokens: 4096` serves everything (`model.factory.ts:117-125`).
+- The LLM access port is `LlmGateway { chat(messages, opts): { content }; structured<T>(schema, messages, opts): T }` in `domain/ai/ports/llm.gateway.ports.ts`. **Amendment (2026-09-16, shipped in P1):** the port speaks the domain's own `ChatMsg` and returns plain data — not the LangChain `AIMessage` this section originally worded it with — because the domain-purity invariant (§11, D-13 / INV-CONV-004) forbids `@langchain/*` in `domain/**`; the infra implementation (`infra/ai/llm.gateway.ts` over `getModel(profile)`) does the `ChatMsg`→LangChain conversion and flattens the response to text. No `jsonMode`. `structured` uses `withStructuredOutput` (available in `@langchain/openai` 1.x) with one retry on schema failure. **Amendment (2026-09-19, BUG-017, owner-approved at close-out of `structured-output-fenced-json`):** `structured` sends the same `json_schema` request `withStructuredOutput` would, but the gateway parses the answer itself — the whole content as JSON, else the body of a Markdown code fence, else the JSON value embedded in prose — validates it with the same schema, and retries once only when that fails. **Amendment (2026-09-19, owner-approved, `structured-output-json-object-mode`):** the request mode is chosen per LLM route by `LLM_STRUCTURED_OUTPUT_MODE` — `json_schema` (default; OpenRouter/Gemini enforce it) or `json_object` plus the JSON Schema in one trailing system message, for providers that ignore `json_schema` (the Z.AI endpoint accepts only `text`/`json_object`; its documented recipe); parsing and validation are the same in both modes, and the port is unchanged. Reason for the BUG-017 amendment: the SDK-side parse behind `withStructuredOutput` threw on a fenced answer (GLM via Z.AI) before any message existed, so nothing could be recovered, and LangChain retried that throw 6 more times per attempt; summaries and user facts were never produced on that route.
+- `getModel(profile)`: profiles from config `LLM_MODEL`, `LLM_TEMPERATURE` (defaults) with optional `LLM_PROFILE_<NAME>_MODEL/_TEMPERATURE/_MAX_TOKENS` overrides. Rationale: the summariser and the judge want low temperature and possibly a cheaper model; training may want a different one than plan creation; **Amendment (2026-09-20, BUG-019):** the output cap and the reasoning depth are configuration, not constants — `LLM_MAX_TOKENS` (default 16384) and `LLM_REASONING_EFFORT` (`low|high|max|off`, default `low`, `off` omits the field for providers that reject it), both overridable per profile (`LLM_PROFILE_<NAME>_MAX_TOKENS` / `_REASONING_EFFORT`). Reason: GLM-5.3 always reasons and reasoning spends the same output budget, so the old hard-coded 4096 cap truncated answers into empty content. One instance per profile, built at the single `model.factory.ts` site.
 - Delete now (zero consumers): `PromptService`, `IPromptService`/`PROMPT_SERVICE_TOKEN`, `domain/user/services/prompts/*`, `training-intent.types.ts`, `plan-creation.types.ts`, `parseSessionPlanningResponse` and `SessionPlanningLLMResponseSchema`, `InMemoryConversationContextService` (after tests are moved to the new port).
 - `LLMService` and the four `TrainingService` LLM methods (`createPlanFromPrompt`, `getNextSessionRecommendation`, `recommendForSession`, `generateFreeformRecommendation`): **delete, do not migrate** (OQ-1, answered). `POST /api/app/plan` and `POST /api/app/session/:id/recommend` return `410 { error: { code: 'RETIRED' } }`. Rationale: the mini-app is a state visualization and control surface, not a conversational client (§9) — plan generation is a bot conversation, and "what do I do today" in the UI is deterministic (next session from the saved plan). Precondition before shipping the 410s: check prod access logs for `POST /api/app/*` over the last weeks (usage is [ASSUMPTION]-none, not log-verified); real traffic is surfaced to the owner, not retired silently.
 - If a "smart pick" is ever wanted in the UI, it is a thin `LlmGateway.structured` adapter over the same context blocks and prompt modules (§9), never a separate LLM path.
+- **Amendment (2026-09-27, `voice-transcription`, owner-delegated decision at close-out review):** speech-to-text is a **media capability behind its own port**, not an LLM access path — the same standing as the local `EmbeddingService`. `SpeechTranscriberPort` (`domain/speech`, `docs/domain/speech.spec.md`) is implemented by `infra/ai/gemini-transcriber.ts`, which calls Google AI Studio `generateContent` directly with its own `STT_*` configuration and does **not** go through `getModel(profile)` / `LlmGateway`; ADR-0007 Guardrail 3 and D-10 keep governing every conversational, summariser, course-check and judge call. Reasons: `getModel` builds one OpenAI-compatible chat client bound to the single `LLM_API_URL`/`LLM_API_KEY` route (Z.AI on dev, no audio input), profiles override only model/temperature/limits, and the OpenAI-compatible `input_audio` accepts only wav/mp3 — routing audio through it would mean a multi-provider factory plus transcoding, for a call that has no run, no history, no tools and no structured output. The carve-out is narrow: it covers audio→text only; any model call that produces conversational or structured content stays on `LlmGateway`.
 
 Rejected: keeping `LLMService` "until the mini-app redesign" — it is the only remaining JSON-mode path, has its own model instance, its own logging and no versioning; every month it survives it diverges further from the evaluated core. Also rejected: migrating `recommendForSession` to the gateway "just in case" — it would preserve an endpoint the product intent says should not exist.
 
@@ -358,15 +407,108 @@ Rejected: keeping `LLMService` "until the mini-app redesign" — it is the only 
 
 ## 8. Observability and run records (D-11)
 
-`conversation_runs` (new): `run_id, thread_id (user_id), phase_in, phase_out, trigger, client, model, prompt_versions jsonb, tokens_in, tokens_out, latency_ms, tool_calls jsonb [{name, argsHash, outcomeKind}], transition jsonb, outcome ('ok'|'llm_unavailable'|'core_error'|'budget_exhausted'), budget_report jsonb, created_at`.
+`conversation_runs` (new): `run_id, thread_id (user_id), phase_in, phase_out, trigger, client, model, prompt_versions jsonb, tokens_in, tokens_out, latency_ms, tool_calls jsonb [{name, argsHash, outcomeKind}], transition jsonb, outcome ('ok'|'llm_unavailable'|'core_error'|'budget_exhausted'), budget_report jsonb, error_class, error_message, created_at`.
 
-`conversation_turns` gains: `run_id, thread_episode_id, kind ('human'|'ai'|'tool_call'|'tool_result'|'system_note'|'summary'), payload jsonb` (tool call args / structured summary), while `content` stays for text. Existing rows are kept; `phase` stays for analytics.
+> **Amendment 2026-09-26 (U5):** a run that hops still writes **one** row: `phase_in` = the first phase of `phasePath`, `phase_out` = the last, `transition` = `{ toPhase, reason, path }` (the phase path rides in the existing jsonb — no migration), `prompt_versions` merged across both phases.
+
+`conversation_turns` gains: `run_id, seq, thread_episode_id, kind ('human'|'ai'|'tool_call'|'tool_result'|'system_note'|'summary'), payload jsonb` (tool call args / structured summary), while `content` stays for text. Existing rows are kept; `phase` stays for analytics.
 
 The LLM `info` log line carries `runId, phase, promptVersions, model, tokens, latencyMs`; the full replay payload stays at `debug` (BUG-003 behaviour preserved). LangSmith/OTel tracing is optional and not required by this ADR.
 
-P0 implementation note (2026-09-12): the `info` line ("Conversation run recorded") is emitted by the persist node next to the row write — the module boundary keeps the LLM callback `debug`-only while feeding the run-metrics accumulator. Constraint discovered during execution: LangChain strips `configurable` from the options callback handlers receive (`runnables/base.js` deletes it from callOptions), so run identity must travel via config `metadata`, which is inherited by nested runs — P3's run context must not assume `configurable` reaches callbacks.
+P0 implementation note (2026-09-12): the `info` line ("Conversation run recorded") is emitted next to the row write — by the persist node then, by `nodes/commit.node.ts:130` since P3 absorbed that node. (The rest of this note originally also confined the LLM callback to `debug`; the amendment below retired that clause — see point 2.) Constraint discovered during execution: LangChain strips `configurable` from the options callback handlers receive (`runnables/base.js` deletes it from callOptions), so run identity must travel via config `metadata`, which is inherited by nested runs — P3's run context must not assume `configurable` reaches callbacks.
 
 INV-LLM-007: A run is reproducible offline from `(conversation_runs.prompt_versions, the run's input messages from conversation_turns, the domain snapshot referenced by the eval fixture)`. This is what makes the eval framework possible.
+
+**Amendment 2026-09-22 (`llm-io-audit-trail`, owner-approved at close-out).** Three statements above
+were written before the audit trail existed. Each is corrected where it stands; the retired wording
+is quoted below only where its correction is unreadable without it.
+
+1. **The API exchange is a durable tier of its own.** `llm_calls` (`run_id, call_index, model,
+   request jsonb, response jsonb, latency_ms, error_class, error_message, prompt_hashes text[],
+   created_at`) stores one row per model invocation, and `prompt_blobs` (`hash, content`) stores each
+   distinct system message once, referenced by hash from the request. §8 previously enumerated
+   `conversation_runs` and `conversation_turns` as the whole durable model of a run; it is now those
+   two plus these.
+
+2. **The LLM callback is a durable writer, and its write is part of the call.** The P0 note said the
+   module boundary "keeps the LLM callback `debug`-only while feeding the run-metrics accumulator".
+   What that boundary actually protected was (a) no shared mutable state in a process-wide singleton
+   — the P0 module maps that AC-1331 removed — and (b) one owner of the run's `info` line. Both still
+   hold: the recorder keys its per-call state on LangChain's own per-call run id, never on a shared
+   "most recent run", and the `info` line stays beside the row write, in the node that performs it
+   (`nodes/commit.node.ts:130`). What the
+   boundary did not anticipate is that there would be anything durable to write from there. There is
+   now, and keeping it at `debug` cost the record twice over: with `LOG_LEVEL=info` on dev nothing was
+   captured at all, and `@langchain/core` does not await callback handlers by default
+   (`callbacks/base.js`: `awaitHandlers = getEnvironmentVariable("LANGCHAIN_CALLBACKS_BACKGROUND") === "false"`),
+   so a queued write died with the container on every deploy. `LLMLogHandler` therefore records into
+   `llm_calls` regardless of `LOG_LEVEL` and sets `awaitHandlers = true`, putting the insert on the
+   synchronous path of the call it observes. **This must not be reverted for latency:** the cost is one
+   indexed insert on a call that takes tens of seconds, the recorder swallows its own errors so it
+   cannot fail a reply (the P0 rule that a failed record never breaks a user response still governs),
+   and what it buys is that the record of an API call is never lost to a restart.
+
+3. **INV-LLM-007 is strengthened, not replaced.** Offline reproduction no longer rests on
+   reconstructing the request from `prompt_versions` plus the run's input messages: the exact request
+   sent is stored. INV-LLM-007 stands for runs recorded before this change; from it onward,
+   reproduction reads `llm_calls.request`.
+
+**Amendment 2026-09-26 (`cache-accounting`, owner-approved at close-out).** Usage and prompt-cache
+visibility (spec `2026-09-26-training-history-context-design.md` § 4, items 1 and 4):
+
+1. **Columns.** `llm_calls` gains `user_id` (from callback metadata, no FK — same reason as `run_id`),
+   `input_tokens, output_tokens, cache_read_tokens, reasoning_tokens` (null = not reported by the
+   provider, never 0) and the cache attribution `cache_expected, cache_diverged_at,
+   cache_shared_prefix_tokens, cache_gap_ms`, indexed on `(user_id, created_at)`.
+   `conversation_runs` gains `tokens_cached, tokens_reasoning` — sums over the run's calls. Semantics
+   and the cache-efficiency query: `docs/DB_SETUP.md`.
+2. **The cost basis in amendment 2026-09-22 point 2 changes.** Besides the insert, the recorder now
+   reads the same user's previous call (an indexed lookup plus its `request` and `prompt_blobs`
+   content) and compares the two requests before the reply is released. The rule that point states
+   still holds — the write stays synchronous, and an attribution failure leaves the cache columns
+   null without failing the call — but "one indexed insert" is no longer the whole cost. Moving the
+   lookup out of the writer is a backlog item, not a relaxation of this rule.
+
+INV-LLM-008: Every model invocation **made on behalf of a conversation run** — i.e. one whose callback
+metadata carries a `runId` — is persisted to `llm_calls` with the request actually sent and the
+response received, independently of `LOG_LEVEL`, and the write completes before the run's reply is
+returned. A run-less call (a background job, `LlmCallOptions.jobId`) is logged but not recorded: it
+has no run to belong to, and `llm_calls.run_id` is `NOT NULL`. Logs are a hint; the table is the record. The stored request carries no credential or
+transport field — the recorded parameter set is an explicit allow-list, and a build-enforced guard
+fails when a model sends a parameter that is neither recorded nor named as never-recorded.
+
+INV-LLM-009 (owner-approved 2026-09-22): **What the user sent survives the run that failed.** The
+inbound `human` message is written to `conversation_turns` with its `run_id` before the graph runs, and
+a run that ends non-`ok` is written to `conversation_runs` carrying `error_class` and `error_message`
+(the caught value's class and its message truncated to a fixed maximum — never a stack, never the
+exception text in an API body, per INV-LLM-006). Neither write depends on the run reaching `commit`:
+a run that throws, times out or is killed still leaves what the user wrote and why it ended.
+
+Scope of INV-LLM-009 (owner decision 2026-09-23): **manual compaction is outside the run log.** The
+adapter's `compact()` (`POST /api/bot/compact`, the bot's `/compact`) carries no user message, writes
+no transcript rows and writes no `conversation_runs` row — on success or on failure; a failure is
+logged and mapped to its HTTP code per INV-LLM-006. Recording only the failures would add a run kind
+that never succeeds and skew `outcome` statistics. The summariser's model call is still recorded in
+`llm_calls` under the pass's generated `run_id` (INV-LLM-008), which has no `conversation_runs` row to
+join — expected for this path, since `llm_calls.run_id` has no foreign key.
+
+INV-LLM-010 (owner-approved 2026-09-22): **The order a run's rows were produced in is recoverable.**
+Every `conversation_turns` row carrying a `run_id` also carries a `seq`, monotonic within that
+`run_id` and assigned by the one policy in `infra/conversation/seq.ts` (`MAX(seq) WHERE run_id` + 1),
+whichever writer inserts it. A writer that cannot number its row writes `run_id` NULL instead — the
+`clearContext` system note is the only such case. Rows written before the column existed carry
+neither and are printed with an explicit warning rather than silently reordered. (Closes BUG-029.)
+
+BR-LLM-011: `llm_calls` and `prompt_blobs` payload columns age out after `LLM_CALLS_RETENTION_DAYS`
+(default 30) via an owner-installed cron; the rows themselves are never deleted, and a `prompt_blobs`
+row keeps its `hash` after its `content` is dropped. Metadata — which call happened, when, on which
+model, how long it took, whether it failed — is kept without limit. **Growth ceiling, measured on dev
+2026-09-22:** ~150 KB stored per run across 2–3 model calls (avg 15 k input tokens, p95 33.5 k), so a
+30-day window projects ~0.4 GB at 10 active users, ~3.6 GB at 100 and ~36 GB at 1000, against 8.9 GB
+free on the VPS at the time of writing. Past roughly a hundred users the window, the disk or both need
+a decision; the per-run and per-call lookups are indexed (`idx_llm_calls_run_id_call_index`,
+`idx_llm_calls_prompt_hashes_gin`, `idx_conversation_turns_run_id`) so query cost is not what bounds
+this — storage is.
 
 ---
 
@@ -395,7 +537,7 @@ The mini-app is **not a conversational client**. It has no chat history and will
 | Capability (vision reference)                                    | Exists                                                        | Missing                              | Minimal enabler                                                                                                                                                                            | Justified?                                                |
 | ---------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
 | Long-term user memory (Ongoing Data Collection)                  | profile fields; rolling summary                               | durable facts across phases          | ADR-0009 `user_facts` + `remember_fact` tool in all phases; injected as long-term block, ≤50 facts, hard-constraint category respected by plan/session tools (validation, not just prompt) | Yes                                                       |
-| Progress awareness between sessions (Training Sessions §)        | 5 recent sessions; previous session by `sessionKey` (BUG-005) | per-exercise / per-muscle history    | muscle-centric context blocks (PLAN-muscle-centric-history) as D-03 domain loaders: `muscleRecovery` (session_planning) and `currentExerciseHistory` (training)                            | Yes                                                       |
+| Progress awareness between sessions (Training Sessions §)        | 5 recent sessions; per-exercise history anchor (unbounded in time, `findLastPerformancesByExercise`) + 7-day fatigue-context window with muscle-overlap labels (`training.exercise_history` / `training.recent_workouts`, training-exercise-history plan, BUG-030 fix) | per-muscle session_planning overview (R1.3b) | muscle-centric context blocks (PLAN-muscle-centric-history) as D-03 domain loaders: `muscleRecovery` (session_planning) — `currentExerciseHistory` (training) delivered                    | Yes                                                       |
 | Multi-turn plan iteration (Workout Plan Generation §, steps 3–4) | free-text iteration; `save_workout_plan` at the end           | a structured draft the model edits   | `draft` channel + `propose_plan_draft`/`update_plan_draft` tools; `save_workout_plan` saves the draft (no re-emission of the whole plan); same for session drafts                          | Yes — also makes plan quality evaluable deterministically |
 | Retrieval over conversation history                              | none                                                          | —                                    | **Cut.** Training facts live in tables; episode summaries + facts cover narrative context. Re-open only if evals show "user referenced something older than 3 episodes" failures.          | No                                                        |
 | Proactive session planning / nudges                              | none                                                          | scheduler, outbound send             | **Cut for now** (vision: "Motivation … Planned Expansion"). Keep the cheap seam: `trigger: 'system'` in run context and a bot endpoint contract (`POST /notify`), no implementation.       | Not yet                                                   |

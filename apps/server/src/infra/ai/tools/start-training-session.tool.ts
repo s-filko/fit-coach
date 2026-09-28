@@ -1,16 +1,32 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { tool } from '@langchain/core/tools';
 
+import type { ConversationPhase } from '@domain/conversation/phases';
 import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
 import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
 import { SessionRecommendationSchema } from '@domain/training/session-planning.types';
+import type { IUserFactsService } from '@domain/user/ports';
 
+import { HANDOFF_REGISTERED_TEXT } from '@infra/ai/graph/handoff';
+import { ctxOf } from '@infra/ai/graph/state';
+
+import { checkExerciseNamesAgainstCatalog } from './exercise-name-check';
+import { guardFactConstraints } from './fact-constraint-guard';
 import { userIdOf } from './format-exercise-summary';
 
 export interface StartTrainingSessionToolDeps {
   trainingService: ITrainingService;
   workoutPlanRepository: IWorkoutPlanRepository;
   exerciseRepository: IExerciseRepository;
+  /** P6 Task 5: hard validation against physical_constraint facts (D-G). */
+  userFactsService: IUserFactsService;
+  /**
+   * transition-handoff plan Task 1 (D-5): when 'training' is a configured
+   * hand-off target, the closing text drops "write a message to the user" —
+   * the phase subgraph ends right after this tool, so the model never gets a
+   * turn to act on that instruction. Absent/empty = today's wording.
+   */
+  transitionHandoffTargets?: ReadonlySet<ConversationPhase>;
 }
 
 const START_TRAINING_SESSION_DESCRIPTION = [
@@ -21,7 +37,8 @@ const START_TRAINING_SESSION_DESCRIPTION = [
 ].join(' ');
 
 export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps) {
-  const { trainingService, workoutPlanRepository, exerciseRepository } = deps;
+  const { trainingService, workoutPlanRepository, exerciseRepository, userFactsService } = deps;
+  const isHandoff = deps.transitionHandoffTargets?.has('training') ?? false;
 
   return tool(
     async (input, config) => {
@@ -30,11 +47,14 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
         return userError('Error: could not identify user. Please try again.');
       }
 
-      // Validate all exerciseIds exist in DB before creating the session
+      // Validate all exerciseIds exist in DB before creating the session, and
+      // resolve their muscles in the same call for the constraint check below.
+      let advisory: string | null = null;
+      let correctedExercises = input.exercises;
       const allIds = input.exercises.map((e: { exerciseId: string }) => e.exerciseId);
       const uniqueIds = [...new Set(allIds)];
       if (uniqueIds.length > 0) {
-        const found = await exerciseRepository.findByIds(uniqueIds);
+        const found = await exerciseRepository.findByIdsWithMuscles(uniqueIds);
         const foundIds = new Set(found.map(e => e.id));
         const missing = uniqueIds.filter(id => !foundIds.has(id));
         if (missing.length > 0) {
@@ -43,6 +63,25 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
               'Use search_exercises to find valid exercise IDs, then retry.',
           );
         }
+
+        // Plan name/id check (training-history-lookup plan D5): reject before any state changes
+        // when a plan entry's name shares no word with its id's catalog name; otherwise the stored
+        // name is the catalog's, not whatever the plan called it.
+        const catalogNameById = new Map(found.map(e => [e.id, e.name]));
+        const nameCheck = checkExerciseNamesAgainstCatalog(input.exercises, catalogNameById);
+        if (nameCheck.rejection) {
+          return nameCheck.rejection;
+        }
+        correctedExercises = nameCheck.corrected;
+
+        // Constraint guard (D-G, narrowed by AC-FL-6): a PERMANENT constraint's
+        // muscle group among an exercise's PRIMARY muscles rejects the call —
+        // nothing is persisted. Any other conflict is an advisory on the result.
+        const verdict = await guardFactConstraints(userFactsService, userId, found, ctxOf(config as never).now);
+        if (verdict.rejection) {
+          return verdict.rejection;
+        }
+        ({ advisory } = verdict);
       }
 
       try {
@@ -57,7 +96,7 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
             sessionKey: input.sessionKey,
             sessionName: input.sessionName,
             reasoning: input.reasoning,
-            exercises: input.exercises,
+            exercises: correctedExercises,
             estimatedDuration: input.estimatedDuration,
             timeLimit: input.timeLimit,
             warnings: input.warnings,
@@ -67,13 +106,16 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
 
         const exerciseCount = input.exercises.length;
         const duration = input.estimatedDuration;
+        const closingText = isHandoff
+          ? HANDOFF_REGISTERED_TEXT
+          : 'Now write a brief energetic message to the user in their language — confirm the session started and motivate them for the workout.';
         return {
           outcome: ok(
             [
               `Session created (ID: ${session.id}).`,
               `${exerciseCount} exercises, est. ${duration} min.`,
-              'Now write a brief energetic message to the user in their language',
-              '— confirm the session started and motivate them for the workout.',
+              ...(advisory === null ? [] : [`\n${advisory}\n`]),
+              closingText,
             ].join(' '),
           ),
           update: {
