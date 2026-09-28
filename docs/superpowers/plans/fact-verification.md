@@ -3,9 +3,10 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and
 > test-driven-development. Red tests first, proven red on unchanged production, then the fix.
 
-- Status: in progress
+- Status: done
 - Branch: plan/fact-verification
 - After: fact-provenance
+- Review: 2026-09-28 | clean | R1,R2,R3,R4
 
 **Goal:** replace the string-based provenance check shipped by `fact-provenance` with a
 model-based verification (the industry NLI / faithfulness pattern). Owner, 2026-09-28: «код с
@@ -189,3 +190,38 @@ a DB-backed integration test round-trips the column.
 `db-test-lock.sh npm run db:local:migrate` is NOT to be run by the worker against the dev DB —
 the test DB gets migrations via the test setup; `db-test-lock.sh npm run test:scenarios` and
 `db-test-lock.sh npm run test:integration` green.
+- **D13–D16 (review follow-ups, `0ad92f62`)** — a `retract` now reaches the verifier with the text
+  of the fact it closes (red first: `AC-FV-2 (D13)` failed on `832eddad` sources, re-checked by the
+  orchestrator); the skip log carries op, fact id and verdict status only (the verifier's free-text
+  reason can hold the user's words); v6 says only add/update/retract are re-checked;
+  `clearStructuredScripts()` return type and the v5 test header fixed.
+- **Task 5 (`d9f0f686`)** — `user_facts.evidence` (migration `0019_glamorous_argent.sql`:
+  `ALTER TABLE "user_facts" ADD COLUMN "evidence" text;`), verifier `userQuote` (optional, empty
+  default), stored per D18/D19, shown by `list_facts` per D21. Red re-checked by the orchestrator on
+  the pre-fix sources (`c5e1840d`, ts-jest diagnostics off so the new fixtures compile): 10 failed —
+  compaction add/fallback/update quote, verdict `userQuote` ×2, `list_facts` ×3, v1 prompt, schema
+  column. Green: `test:unit` 155 / 1556 (worker); orchestrator re-run `test:integration` 47 / 636 +
+  1 todo, `test:scenarios` 19 / 392 + 1 todo. **D20 did not apply:** the tool run context carries
+  no current user message, so `manage_fact` writes NULL (no plumbing added) → `BACKLOG.md`.
+  The required `UserFact.evidence` added `evidence: null` to fixtures in 24 test files and updated 5
+  tool-surface snapshots (list_facts description) — mechanical.
+
+## Review
+
+One combined reviewer over all four zones (economical-work), 2026-09-28, diff up to `832eddad`.
+**Verdict: clean — no blocking findings.** Checked correct: fail-closed path (summary and `confirm`
+still apply), verdict index mapping incl. duplicates, `runId`/`userId` on the verifier call, AC-FV
+test names. Advisories and disposition:
+- R1 — ADR-0009 amendment rewritten in place → `BACKLOG.md`. `verify-fact-operations.ts` placement
+  → `BACKLOG.md`.
+- R2 — unused `enqueueFactVerdicts` / all-supported fallback → `BACKLOG.md` (+ meta blind spot);
+  `clearStructuredScripts` type → **fixed** (D16); `knownFactLine` ×3 → existing BACKLOG entry
+  widened; role mapping ×3 → `BACKLOG.md`.
+- R3 — `retract` without the fact text → **fixed** (D13); episode-only scope and reply-path latency
+  → stated in ADR-0009; free-text reason in the log → **fixed** (D14); v6 "every operation" →
+  **fixed** (D15).
+- R4 — `ARCHITECTURE.md` v4/v5 → **fixed**; v5 test header → **fixed** (D16); STATE → updated at
+  merge; `knownFactLine` backlog entry → **fixed**.
+- meta — reply-path latency rule candidate and scripted-fallback blind spot → `REVIEW_FINDINGS.md`.
+Task 5 landed after the review (owner request mid-plan); its red/green evidence is above, and it is
+covered by the orchestrator's own reading of the diff and the full suite re-run.

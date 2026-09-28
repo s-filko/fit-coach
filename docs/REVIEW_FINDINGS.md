@@ -357,6 +357,7 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   cited as in force from ADR-0013. Proposed: list the ADR-0007 guardrails still in force in
   `docs/CONTRIBUTING_AI.md`, or restate Guardrail 3 as an INV-LLM-* in ADR-0013 §11.
   Runs: voice-transcription (2026-09-27, R1).
+- [×1] Scripted-model fallbacks that approve everything (all-supported fact verdicts) turn a safety gate into a no-op for every journey that does not script it; candidate rule for `apps/server/TESTING.md`: a scaffold fallback for a guard/verifier is the fail-closed answer, or at least one scenario scripts the rejecting answer. Runs: fact-verification R3 (2026-09-28).
 
 ## Rule candidates
 
@@ -818,3 +819,4 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   planning gets a new task entry, not only a D-line."
   Runs: voice-transcription (2026-09-27, R3 run 3).
 - [×1] `SUPERPOWERS_INTEGRATION.md` rule 3 (rule-meaning changes are owner-level "without exception") has no written carve-out for an explicit owner autonomy order; it lives only in memory. Proposed: "Under an explicit owner autonomy order for a named bug or plan, a durable-spec amendment recording the shipped rule is allowed if it is dated, marked 'decided without the owner, reversible', and listed in the STATE handoff." Without it R1 must either block every autonomous plan or ignore "always blocking". Runs: fact-provenance R1 (2026-09-27).
+- [×1] "A model call added to the reply path (anything inside prepare/compact) states its latency cost in the plan and the ADR, or is moved off the path" — proposed for `CONTRIBUTING_AI.md` Principles & Boundaries; today no rule lets a reviewer block on it. Runs: fact-verification R3 (2026-09-28).

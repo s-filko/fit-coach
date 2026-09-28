@@ -168,6 +168,21 @@ before they are applied (`infra/ai/graph/nodes/verify-fact-operations.ts`, promp
 - The summariser (`summarizer` v6) still returns an `evidence` quote per operation, as a hint for
   the verifier only; no code compares strings.
 
+- **Scope: this episode only.** The verifier sees the same compacted part the summariser saw — not
+  the kept verbatim tail and not earlier episodes (an `update` also shows the old fact's text, a
+  `retract` the text of the fact it closes). A figure the user gave in an earlier episode, or a «да»
+  that lands after the cut, is judged unsupported; the fact is restated later.
+- **Cost on the reply path.** Compaction runs inline, inside the reply the user is waiting for; when
+  a mutating operation exists, the verifier is a second sequential model call there (≈2.5 s on the
+  dev route, 2026-09-28 probe). No mutating operation → no call. Accepted by the owner («это не
+  происходит постоянно»).
+- **The user's quote is stored with the fact.** `user_facts.evidence` (migration `0019`, nullable):
+  for a verified `add`/`update` the verifier's `userQuote` — the user's own words that support it —
+  or, if empty, the summariser's hint. Not rendered into the prompt every turn; `list_facts` shows
+  it as `said: «…»` so the coach quotes real words when asked where a fact came from and never
+  reconstructs one. The live `manage_fact` path writes NULL for now (its run context does not carry
+  the current message).
+
 The string check of 2026-09-27 (verbatim quote + digits-only number match) was removed: it dropped
 real facts dictated with number words and could not catch a non-numeric coach claim.
 
