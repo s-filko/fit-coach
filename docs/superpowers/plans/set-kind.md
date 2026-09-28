@@ -4,7 +4,7 @@
 > test-driven-development. Red tests first, then the fix. Every task's step 1 is a test that
 > must fail on unchanged code for the stated reason; commit it red before any production change.
 
-- Status: planned
+- Status: in progress
 - Branch: plan/set-kind
 - After: —
 
