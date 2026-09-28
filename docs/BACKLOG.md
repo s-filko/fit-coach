@@ -66,11 +66,7 @@ Rules:
       (4) **Comparability** — history, "last time" and load advice compare weights only within the same
       machine instance (or the same free-weight kind); across places or variants they are shown as
       separate lines, never as progress.
-      (5) **Session place** — each workout knows where it happens (asked or inferred), so the plan uses the
-      equipment that place has. **Delivered (set-kind plan, 2026-09-28):** `workout_sessions.place` +
-      `start_training_session({ place })` + the `set_session_place` tool; recorded only when the user
-      names it (one ask per session only when the last 10 real workouts carry ≥ 2 distinct places).
-      Points 1–4 above remain open.
+      Points 1–4 above remain open — point 5 (session place) delivered by plan `set-kind`.
       Already exists, partly: fact category `equipment` (free text, no link to a place or a machine —
       e.g. the lever-machine fact that BUG-040 misapplied to the leg press); `docs/domain/user.spec.md`
       BR-USER-018…020 specify `trainingLocation` (home|gym|outdoors, one value) and `equipmentPresent[]`, but
@@ -357,15 +353,6 @@ plan/refactor-p0-run-log`) or define the merge-first flow as the contract.
       ToolOutcome, or a prompt rule + eval dataset (`training/anomaly-confirm`).
       Already solved elsewhere: set-number mismatch (DB-derived), exercise ambiguity
       (prompt RULE 0/6). Source: TODO validation review (2026-09-11).
-- [x] Warmup sets are indistinguishable from working sets: `log_set` has no warmup
-      flag and warmup sets count toward target set completion in SESSION GUIDE / ACTIVE
-      STATUS (`training.node.ts:145,205`). Decide: `isWarmup` field on `log_set` +
-      exclusion from set counts, or document "warmups are comments, not sets" as the
-      product rule. Source: TODO warmup review (2026-09-11).
-      Resolved by set-kind (Task 1, D2-D4): `log_set`/`update_last_set` gained `setKind`
-      ('warmup' | 'working', defaults to 'working'); `session_sets.set_kind` persists it;
-      only working sets count toward plan targets in the guide, ACTIVE STATUS and the
-      completion summary's volume line; warm-up sets still list, marked `(w/u)`.
 - [ ] Abandoned `planning` sessions are never closed by anything (the 2h auto-close
       fires only on `startSession`/`getActiveSession`; the router handles only
       `training`). Needs a one-off/cron cleanup; mid-training staleness stays
