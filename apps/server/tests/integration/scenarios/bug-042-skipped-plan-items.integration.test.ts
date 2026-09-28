@@ -185,9 +185,6 @@ describe('bug-042 skipped plan items + session place — scripted training scena
   });
 
   afterAll(() => {
-    for (const [k, v] of [...seenByStep.entries()].sort((a,b)=>a[0]-b[0])) {
-      console.log(`--- STEP ${k} ---\n` + v.split('\n').filter(l => l.includes('===') || l.includes('Pull-ups') || l.includes('Bench') || l.includes('SESSION GUIDE')).slice(0,12).join('\n'));
-    }
     jest.useRealTimers();
   });
 
