@@ -78,6 +78,10 @@ function makeDeps(
   overrides: {
     config?: Partial<EpisodeTunables>;
     structured?: () => Promise<EpisodeSummaryV4>;
+    /** The verifier's answer for the fact_verdicts_v1 call; default = every mutating op supported. */
+    verdicts?: unknown;
+    /** D5's failure mode: the verifier call rejects (fail closed). */
+    verifierRejects?: boolean;
     upsertMany?: () => Promise<number>;
   } = {},
 ) {
@@ -85,9 +89,32 @@ function makeDeps(
     .fn<Promise<{ summaryTurnId: string }>, Parameters<SummaryPort['insert']>[0][]>()
     .mockResolvedValue({ summaryTurnId: 'summary-turn-1' });
   const latestLegacySummary = jest.fn().mockResolvedValue(null);
+  // The schemaName dispatch the production code now does: the summariser
+  // ('episode_summary_v4') gets the summary, the verifier
+  // ('fact_verdicts_v1', fact-verification plan Task 2) gets verdicts — by
+  // default every MUTATING op supported, in the verifier's own numbering
+  // (mutating ops only, 0-based, in batch order).
+  let lastMutating: Array<{ op: string }> = [];
   const structured = jest
     .fn()
-    .mockImplementation(() => (overrides.structured ? overrides.structured() : Promise.resolve(FIXED_SUMMARY)));
+    .mockImplementation((_schema: unknown, _messages: unknown, opts: { schemaName?: string }) => {
+      if (opts?.schemaName !== 'episode_summary_v4') {
+        if (overrides.verifierRejects) {
+          return Promise.reject(new Error('verifier down'));
+        }
+        return Promise.resolve(
+          overrides.verdicts ?? {
+            verdicts: lastMutating.map((_, i) => ({ index: i, supported: true, reason: 'stub: supported' })),
+          },
+        );
+      }
+      return overrides.structured
+        ? overrides.structured().then(resolved => {
+            lastMutating = (resolved.factOperations ?? []).filter(op => op.op !== 'confirm');
+            return resolved;
+          })
+        : Promise.resolve(FIXED_SUMMARY);
+    });
   const upsertMany = jest
     .fn()
     .mockImplementation(() => (overrides.upsertMany ? overrides.upsertMany() : Promise.resolve(0)));
@@ -796,7 +823,10 @@ describe('buildCompactStep — fact operations (fact-lifecycle Task 3, AC-FL-4)'
   });
 });
 
-describe('buildCompactStep — fact provenance (BUG-040, AC-FP-1..4)', () => {
+// fact-verification plan Task 2 (D1): the string check is gone — these
+// AC-FP cases keep their meaning (a coach-only figure is not stored) but the
+// refusal now comes from the verifier verdict the stub answers with.
+describe('buildCompactStep — fact provenance via the verifier (BUG-040, AC-FP-1..4)', () => {
   const KNOWN_FACT_ID = '6e14cfe2-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
   /** The lever-machine fact as it was BEFORE the bad update — carries no "70". */
@@ -855,6 +885,9 @@ describe('buildCompactStep — fact provenance (BUG-040, AC-FP-1..4)', () => {
             { op: 'confirm', factId: KNOWN_FACT_ID },
           ],
         }),
+      // fact-verification D1: the refusal is now the VERIFIER's verdict, not
+      // the string check — the stub answers unsupported for the add.
+      verdicts: { verdicts: [{ index: 0, supported: false, reason: 'the user never stated it' }] },
     });
     const compact = buildCompactStep(deps);
 
@@ -880,12 +913,14 @@ describe('buildCompactStep — fact provenance (BUG-040, AC-FP-1..4)', () => {
             },
           ],
         }),
+      verdicts: { verdicts: [{ index: 0, supported: false, reason: 'the quote is the assistant’s own claim' }] },
     });
     const compact = buildCompactStep(deps);
 
     await compact(episodeState(HUMAN_LINE, AI_LINE), ctxConfig());
 
-    // The quote exists in the episode — but only in the ASSISTANT line.
+    // The quote exists in the episode — but only in the ASSISTANT line: the
+    // verifier says unsupported, so nothing is stored.
     expect(rememberFact).not.toHaveBeenCalled();
   });
 
@@ -905,6 +940,7 @@ describe('buildCompactStep — fact provenance (BUG-040, AC-FP-1..4)', () => {
             },
           ],
         }),
+      verdicts: { verdicts: [{ index: 0, supported: false, reason: 'the ~70% figure is the assistant’s' }] },
     });
     getForPrompt.mockResolvedValue([knownFact()]);
     const compact = buildCompactStep(deps);
@@ -912,7 +948,8 @@ describe('buildCompactStep — fact provenance (BUG-040, AC-FP-1..4)', () => {
     await compact(episodeState(HUMAN_LINE, AI_LINE), ctxConfig());
 
     // The user line is quoted, but the fact's numbers (45, 70) appear in NO user
-    // message and not in the old fact text — the BUG-040 2075cb9f write.
+    // message and not in the old fact text — the BUG-040 2075cb9f write. The
+    // verifier's unsupported verdict is what refuses it now.
     expect(supersedeFact).not.toHaveBeenCalled();
   });
 
@@ -932,14 +969,14 @@ describe('buildCompactStep — fact provenance (BUG-040, AC-FP-1..4)', () => {
             },
           ],
         }),
+      verdicts: { verdicts: [{ index: 0, supported: false, reason: 'the phaseNote repeats the coach’s ~70%' }] },
     });
     const compact = buildCompactStep(deps);
 
     await compact(episodeState('Плечо ещё побаливает', 'Восстановление идёт хорошо — уже ~70% позади.'), ctxConfig());
 
-    // D12: the fact text carries no number and the evidence quotes the user
-    // line — but the phaseNote repeats the coach's "~70%" and phaseNote is
-    // rendered into ## User Facts for long_term facts.
+    // D12 legacy: the phaseNote repeats the coach's "~70%" — the verifier
+    // sees it (D3) and answers unsupported.
     expect(rememberFact).not.toHaveBeenCalled();
   });
 
@@ -957,6 +994,7 @@ describe('buildCompactStep — fact provenance (BUG-040, AC-FP-1..4)', () => {
             },
           ],
         }),
+      verdicts: { verdicts: [{ index: 0, supported: false, reason: 'only the assistant said the shoulder is fine' }] },
     });
     getForPrompt.mockResolvedValue([knownFact()]);
     const compact = buildCompactStep(deps);
@@ -969,7 +1007,8 @@ describe('buildCompactStep — fact provenance (BUG-040, AC-FP-1..4)', () => {
       ctxConfig(),
     );
 
-    // The coach's "your shoulder is fine now" cannot close a user constraint.
+    // The coach's "your shoulder is fine now" cannot close a user constraint —
+    // the verifier's unsupported verdict refuses it.
     expect(retractFact).not.toHaveBeenCalled();
   });
 
@@ -993,6 +1032,7 @@ describe('buildCompactStep — fact provenance (BUG-040, AC-FP-1..4)', () => {
 
     await compact(episodeState('Я жму лёжа 100 кг на 5 повторов', 'Отличный прогресс!'), ctxConfig());
 
+    // The verifier's default stub verdict (supported) is what admits it now.
     expect(rememberFact).toHaveBeenCalledTimes(1);
     expect(rememberFact.mock.calls[0][1]).toMatchObject({
       fact: 'Bench press working weight is 100 kg for 5 reps',
@@ -1010,6 +1050,167 @@ describe('buildCompactStep — fact provenance (BUG-040, AC-FP-1..4)', () => {
 
     expect(confirmFact).toHaveBeenCalledTimes(1);
     expect(rememberFact).not.toHaveBeenCalled();
+  });
+});
+
+// fact-verification plan Task 2: the Task 1 repro cases, promoted (D1/D2/D5)
+// — the gateway stub answers by schemaName, so the verifier call is what
+// decides which mutating operations reach the facts port.
+describe('buildCompactStep — fact verification (BUG-040 follow-up, AC-FV-1..4)', () => {
+  /** The compacted (removed) episode: one human + one assistant line — same shape as the AC-FP block's. */
+  function episodeState(humanText: string, aiText: string): ConversationStateType {
+    return channelState({
+      messages: [
+        new HumanMessage({ content: humanText, id: 'm0' }),
+        new AIMessage({ content: aiText, id: 'm0a', tool_calls: [] }),
+        new HumanMessage({ content: 'Составь план на грудь', id: 'm1' }),
+        new AIMessage({ content: 'Готовим план', id: 'm2', tool_calls: [] }),
+        new HumanMessage({ content: 'Спасибо', id: 'm3' }), // this run's human
+      ],
+    });
+  }
+
+  it('AC-FV-1: a number stated in words by the user («пять дней») is stored when the verifier supports it', async () => {
+    const { deps, rememberFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            {
+              op: 'add',
+              category: 'physical_constraint',
+              fact: 'Knee pain for 5 days',
+              durability: 'long_term',
+              evidence: 'колено болит уже пять дней',
+            },
+          ],
+        }),
+      verdicts: { verdicts: [{ index: 0, supported: true, reason: 'the user said «пять дней» — five days' }] },
+    });
+    const compact = buildCompactStep(deps);
+
+    await compact(episodeState('Колено болит уже пять дней', 'Понял, скорректирую нагрузку на ноги.'), ctxConfig());
+
+    expect(rememberFact).toHaveBeenCalledTimes(1);
+    expect(rememberFact.mock.calls[0][1]).toMatchObject({ fact: 'Knee pain for 5 days' });
+  });
+
+  it('AC-FV-2: a verdict-unsupported coach claim is skipped; a supported sibling in the batch applies', async () => {
+    const { deps, rememberFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            {
+              op: 'add',
+              category: 'equipment',
+              fact: 'The leg press is a lever machine',
+              durability: 'long_term',
+              evidence: 'где тут рычаг',
+            },
+            {
+              op: 'add',
+              category: 'equipment',
+              fact: 'Wants to understand how the machines work',
+              durability: 'short',
+              ttlDays: 30,
+              evidence: 'А где тут рычаг?',
+            },
+          ],
+        }),
+      verdicts: {
+        verdicts: [
+          { index: 0, supported: false, reason: 'only the assistant called it a lever machine' },
+          { index: 1, supported: true, reason: 'the user asked exactly that' },
+        ],
+      },
+    });
+    const compact = buildCompactStep(deps);
+
+    await compact(episodeState('А где тут рычаг?', 'Это рычажный тренажёр, рычаг даёт выигрыш в силе.'), ctxConfig());
+
+    expect(rememberFact).toHaveBeenCalledTimes(1);
+    expect(rememberFact.mock.calls[0][1]).toMatchObject({ fact: 'Wants to understand how the machines work' });
+  });
+
+  it('AC-FV-3: verifier failure → no mutating operation applied; confirm and the summary still apply', async () => {
+    const { deps, insert, rememberFact, confirmFact, supersedeFact, retractFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            {
+              op: 'add',
+              category: 'physical_constraint',
+              fact: 'Knee is painful',
+              durability: 'long_term',
+              evidence: 'Колено болит',
+            },
+            { op: 'confirm', factId: '6e14cfe2-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+          ],
+        }),
+      verifierRejects: true,
+    });
+    const compact = buildCompactStep(deps);
+
+    const update = await compact(episodeState('Колено болит', 'Скорректирую нагрузку.'), ctxConfig());
+
+    expect(rememberFact).not.toHaveBeenCalled();
+    expect(supersedeFact).not.toHaveBeenCalled();
+    expect(retractFact).not.toHaveBeenCalled();
+    expect(confirmFact).toHaveBeenCalledTimes(1);
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(removedIds(update)).toEqual(['m0', 'm0a']); // compaction result unchanged
+  });
+
+  it('AC-FV-4: a confirm-only summary makes exactly ONE structured call — the summariser', async () => {
+    const { deps, structured, confirmFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [{ op: 'confirm', factId: '6e14cfe2-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }],
+        }),
+      verdicts: { verdicts: [] }, // if the verifier were wrongly called, it would void nothing here
+    });
+    const compact = buildCompactStep(deps);
+
+    await compact(episodeState('Колено болит', 'Скорректирую нагрузку.'), ctxConfig());
+
+    expect(structured).toHaveBeenCalledTimes(1);
+    expect(confirmFact).toHaveBeenCalledTimes(1);
+  });
+
+  it('AC-FV-4: a verdict list missing index 1 → operation 1 unsupported and not applied', async () => {
+    const { deps, rememberFact } = makeDeps({
+      structured: () =>
+        Promise.resolve({
+          ...FIXED_SUMMARY,
+          factOperations: [
+            {
+              op: 'add',
+              category: 'equipment',
+              fact: 'Trains with dumbbells',
+              durability: 'short',
+              ttlDays: 30,
+              evidence: 'Я тренируюсь с гантелями',
+            },
+            {
+              op: 'add',
+              category: 'equipment',
+              fact: 'The coach recommends progressive overload',
+              durability: 'long_term',
+              evidence: 'рекомендую прогрессию нагрузки',
+            },
+          ],
+        }),
+      verdicts: { verdicts: [{ index: 0, supported: true, reason: 'the user said it' }] }, // index 1 missing
+    });
+    const compact = buildCompactStep(deps);
+
+    await compact(episodeState('Я тренируюсь с гантелями', 'Рекомендую прогрессию нагрузки.'), ctxConfig());
+
+    expect(rememberFact).toHaveBeenCalledTimes(1);
+    expect(rememberFact.mock.calls[0][1]).toMatchObject({ fact: 'Trains with dumbbells' });
   });
 });
 

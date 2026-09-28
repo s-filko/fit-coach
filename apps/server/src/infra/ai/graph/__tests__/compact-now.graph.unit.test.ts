@@ -39,7 +39,16 @@ const SUMMARY = {
 };
 
 function setup(episode: { minTurns: number; minTokens: number } = { minTurns: 1, minTokens: 0 }) {
-  const structured = jest.fn().mockResolvedValue(SUMMARY);
+  // fact-verification plan Task 2: the structured path answers by schemaName —
+  // the summariser gets SUMMARY, the verifier gets a supported verdict for its
+  // one operation (the fact must LAND, that is the point of the command).
+  const structured = jest
+    .fn()
+    .mockImplementation((_schema: unknown, _messages: unknown, opts: { schemaName?: string }) =>
+      opts?.schemaName === 'fact_verdicts_v1'
+        ? Promise.resolve({ verdicts: [{ index: 0, supported: true, reason: 'the user said it' }] })
+        : Promise.resolve(SUMMARY),
+    );
   const insert = jest.fn().mockResolvedValue({ summaryTurnId: 'st-1' });
   const rememberFact = jest.fn().mockResolvedValue({ outcome: 'created', fact: null });
   const appendRunMessages = jest.fn();
