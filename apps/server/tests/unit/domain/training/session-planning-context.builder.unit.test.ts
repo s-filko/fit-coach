@@ -1,6 +1,10 @@
 import { describe, expect, it, jest } from '@jest/globals';
 
-import type { IWorkoutPlanRepository, IWorkoutSessionRepository } from '@domain/training/ports';
+import type {
+  ExerciseLastSkip,
+  IWorkoutPlanRepository,
+  IWorkoutSessionRepository,
+} from '@domain/training/ports';
 import { SessionPlanningContextBuilder } from '@domain/training/services/session-planning-context.builder';
 import type { WorkoutPlan, WorkoutSessionWithDetails } from '@domain/training/types';
 
@@ -28,6 +32,8 @@ describe('SessionPlanningContextBuilder', () => {
     autoCloseTimedOut: jest.fn(),
     findLastPerformancesByExercise: jest.fn(),
     findRecentPerformancesForExercise: jest.fn(),
+    distinctRecentPlaces: jest.fn<() => Promise<string[]>>().mockResolvedValue([]),
+    findLastSkipsByExercise: jest.fn<() => Promise<ExerciseLastSkip[]>>().mockResolvedValue([]),
   });
 
   const makeMockPlan = (): WorkoutPlan => ({
@@ -58,6 +64,7 @@ describe('SessionPlanningContextBuilder', () => {
     planId: 'plan-1',
     sessionKey: 'push_a',
     status: 'completed',
+    place: null,
     startedAt: completedAt,
     completedAt,
     durationMinutes: 60,

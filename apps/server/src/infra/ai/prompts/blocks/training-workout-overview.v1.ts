@@ -6,6 +6,8 @@
  * `buildStaleSessionSection`'s trailing "\n\n" stays trimmed by the caller —
  * the section separator comes from compose()/assembler instead.
  */
+import { PLACE_AMBIGUOUS_THRESHOLD } from '@domain/training/place';
+import { workingSets } from '@domain/training/sets';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
 import { humanTimeAgo } from '@shared/date-utils';
@@ -22,9 +24,31 @@ const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
  *   EXERCISE DETAIL — sets for in_progress and completed exercises only
  *   ACTIVE STATUS   — explicit "what can be done right now" line
  */
-export function buildWorkoutOverview(session: WorkoutSessionWithDetails, now: Date): string {
+/**
+ * set-kind plan Task 2 (D6): the one place line — the stated place, or (only when the user's
+ * recent real workouts were at >= PLACE_AMBIGUOUS_THRESHOLD distinct places and today's states
+ * none) the single ask, naming the actual count seen. Null when the place is not stated and
+ * there is nothing to ask. Not exported — one caller (close-out review advisory R2).
+ */
+function placeLineOf(place: string | null, recentPlacesCount: number): string | null {
+  if (place) {
+    return `Place: ${place}`;
+  }
+  return recentPlacesCount >= PLACE_AMBIGUOUS_THRESHOLD
+    ? `Place: not stated (ask — recent workouts were at ${recentPlacesCount} places)`
+    : null;
+}
+
+export function buildWorkoutOverview(
+  session: WorkoutSessionWithDetails,
+  now: Date,
+  opts?: { recentPlacesCount?: number },
+): string {
   const plan = session.sessionPlanJson;
   const startedById = new Map(session.exercises.map(ex => [ex.exerciseId, ex]));
+
+  // --- PLACE (set-kind plan Task 2, D6) ---
+  const placeLine = placeLineOf(session.place ?? null, opts?.recentPlacesCount ?? 0);
 
   // --- SESSION GUIDE ---
   const guideLines: string[] = [
@@ -45,7 +69,7 @@ export function buildWorkoutOverview(session: WorkoutSessionWithDetails, now: Da
         marker = 'IN PROGRESS';
       }
       const weight = p.targetWeight ? ` @ ${p.targetWeight} kg` : '';
-      const setsInfo = started ? ` (${started.sets.length}/${p.targetSets} sets)` : '';
+      const setsInfo = started ? ` (${workingSets(started.sets).length}/${p.targetSets} sets)` : '';
       guideLines.push(
         `  [${marker.padEnd(11)}] [ID:${p.exerciseId}] ${p.exerciseName}: ${p.targetSets}×${p.targetReps}${weight}${setsInfo}`,
       );
@@ -91,7 +115,8 @@ export function buildWorkoutOverview(session: WorkoutSessionWithDetails, now: Da
           const timeLabel = minutesAgo === 0 ? 'just now' : `${minutesAgo}min ago`;
           const rpe = s.rpe ? ` | RPE ${s.rpe}` : '';
           const fb = s.userFeedback ? ` | "${s.userFeedback}"` : '';
-          detailLines.push(`    Set ${s.setNumber} (${timeLabel}): ${formatSetData(s.setData)}${rpe}${fb}`);
+          const kindNote = s.setKind === 'warmup' ? ' (w/u)' : '';
+          detailLines.push(`    Set ${s.setNumber} (${timeLabel}): ${formatSetData(s.setData)}${kindNote}${rpe}${fb}`);
         }
       }
       if (ex.userFeedback) {
@@ -104,13 +129,17 @@ export function buildWorkoutOverview(session: WorkoutSessionWithDetails, now: Da
   const current = session.exercises.find(ex => ex.status === 'in_progress');
   let activeStatus: string;
   if (current) {
-    const setsLeft = current.targetSets !== null ? Math.max(0, current.targetSets - current.sets.length) : '?';
-    activeStatus = `ACTIVE: ${current.exercise.name} [ID:${current.exerciseId}] — ${current.sets.length} set(s) done, ${setsLeft} remaining per plan.`;
+    const doneCount = workingSets(current.sets).length;
+    const setsLeft = current.targetSets !== null ? Math.max(0, current.targetSets - doneCount) : '?';
+    activeStatus = `ACTIVE: ${current.exercise.name} [ID:${current.exerciseId}] — ${doneCount} set(s) done, ${setsLeft} remaining per plan.`;
   } else {
     activeStatus = 'ACTIVE: none — log any set to start an exercise (from guide or off-plan).';
   }
 
   const parts = [guideLines.join('\n')];
+  if (placeLine) {
+    parts.push(placeLine);
+  }
   if (detailLines.length > 0) {
     parts.push(detailLines.join('\n'));
   }
@@ -134,9 +163,10 @@ export function formatExerciseSets(
 
   const setsText = sets.map(s => {
     const base = formatSetData(s.setData);
+    const kindNote = s.setKind === 'warmup' ? ' (w/u)' : '';
     const rpe = s.rpe ? ` | RPE ${s.rpe}` : '';
     const fb = s.userFeedback ? ` | "${s.userFeedback}"` : '';
-    return `  Set ${s.setNumber}: ${base}${rpe}${fb}`;
+    return `  Set ${s.setNumber}: ${base}${kindNote}${rpe}${fb}`;
   });
 
   const feedbackLine = userFeedback ? `\n  Overall feedback: "${userFeedback}"` : '';
@@ -164,8 +194,10 @@ export function formatSetData(
   setData: WorkoutSessionWithDetails['exercises'][number]['sets'][number]['setData'],
 ): string {
   switch (setData.type) {
-    case 'strength':
-      return `${setData.reps} reps${setData.weight != null ? ` @ ${setData.weight} ${setData.weightUnit ?? 'kg'}` : ''}`;
+    case 'strength': {
+      const perHandNote = setData.perHand ? ' per hand' : '';
+      return `${setData.reps} reps${setData.weight != null ? ` @ ${setData.weight} ${setData.weightUnit ?? 'kg'}${perHandNote}` : ''}`;
+    }
     case 'cardio_distance': {
       const durStr = setData.duration > 0 ? `${Math.round(setData.duration / 60)}min` : '?min';
       const parts: string[] = [`${setData.distance}${setData.distanceUnit}`, durStr];
@@ -236,13 +268,20 @@ export const TRAINING_CLIENT_V1: ContextBlock<TrainingClientData> = {
 
 export interface TrainingWorkoutOverviewData {
   session: WorkoutSessionWithDetails;
+  /**
+   * set-kind plan Task 2 (D6): distinct places among the last RECENT_PLACES_WINDOW real workouts;
+   * 0 when today's session already states a place (the loader short-circuits, never queries).
+   */
+  recentPlacesCount?: number;
 }
 
 export const TRAINING_WORKOUT_OVERVIEW_V1: ContextBlock<TrainingWorkoutOverviewData> = {
   id: 'training.workout_overview',
   version: 'v1',
   render(data, ctx: ContextBlockCtx) {
-    return `=== WORKOUT OVERVIEW ===\n\n${buildWorkoutOverview(data.session, ctx.now)}`;
+    return `=== WORKOUT OVERVIEW ===\n\n${buildWorkoutOverview(data.session, ctx.now, {
+      recentPlacesCount: data.recentPlacesCount,
+    })}`;
   },
 };
 

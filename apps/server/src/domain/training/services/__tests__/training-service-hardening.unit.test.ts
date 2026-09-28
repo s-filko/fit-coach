@@ -186,6 +186,8 @@ describe('TrainingService.ensureCurrentExercise — auto-complete on switch (ADR
 // ---------------------------------------------------------------------------
 
 describe('TrainingService.completeSession — closes in_progress exercises (BUG-012)', () => {
+  // set-kind plan Task 2 (D7): completeSession loads the session WITH details (sets) now —
+  // the mocks below moved from findById/findBySessionId to findByIdWithDetails accordingly.
   it('should complete all in_progress exercises before closing the session', async () => {
     const { trainingService, mockSessionRepo, mockSessionExerciseRepo } = createMocks();
 
@@ -196,17 +198,16 @@ describe('TrainingService.completeSession — closes in_progress exercises (BUG-
       startedAt: new Date(Date.now() - 30 * 60_000),
       completedAt: null,
       durationMinutes: null,
+      exercises: [
+        { id: 'se-1', status: 'completed', sets: [{}] },
+        { id: 'se-2', status: 'in_progress', sets: [{}] },
+      ],
     };
-    mockSessionRepo.findById.mockResolvedValue(session as never);
-    mockSessionExerciseRepo.findBySessionId.mockResolvedValue([
-      { id: 'se-1', status: 'completed' },
-      { id: 'se-2', status: 'in_progress' },
-    ] as never);
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(session as never);
     mockSessionRepo.complete.mockResolvedValue({ ...session, status: 'completed' } as never);
 
     await trainingService.completeSession('session-1');
 
-    expect(mockSessionExerciseRepo.findBySessionId).toHaveBeenCalledWith('session-1');
     expect(mockSessionExerciseRepo.update).toHaveBeenCalledWith('se-2', { status: 'completed' });
     expect(mockSessionExerciseRepo.update).not.toHaveBeenCalledWith('se-1', expect.anything());
     expect(mockSessionRepo.complete).toHaveBeenCalled();
@@ -222,12 +223,12 @@ describe('TrainingService.completeSession — closes in_progress exercises (BUG-
       startedAt: new Date(Date.now() - 30 * 60_000),
       completedAt: null,
       durationMinutes: null,
+      exercises: [
+        { id: 'se-1', status: 'completed', sets: [{}] },
+        { id: 'se-2', status: 'completed', sets: [{}] },
+      ],
     };
-    mockSessionRepo.findById.mockResolvedValue(session as never);
-    mockSessionExerciseRepo.findBySessionId.mockResolvedValue([
-      { id: 'se-1', status: 'completed' },
-      { id: 'se-2', status: 'completed' },
-    ] as never);
+    mockSessionRepo.findByIdWithDetails.mockResolvedValue(session as never);
     mockSessionRepo.complete.mockResolvedValue({ ...session, status: 'completed' } as never);
 
     await trainingService.completeSession('session-1');

@@ -143,3 +143,67 @@ describe('update-last-set.tool — repository/DB failures (BUG-035 part 3)', () 
     expect(renderedContent(result)).toContain(LLM_ERROR_PREFIX);
   });
 });
+
+// -------------------------------------------------------------------------
+// set-kind plan Task 1 (D3, AC-SK-8): update_last_set can change the kind of the last set and
+// reports before/after. RED today: the schema rejects the unknown field and the service does not
+// accept setKind.
+// -------------------------------------------------------------------------
+
+describe('update-last-set.tool — setKind (set-kind plan D3, AC-SK-8)', () => {
+  it('passes setKind through to updateLastSet', async () => {
+    const trainingService = makeTrainingService();
+    trainingService.updateLastSet.mockResolvedValue({
+      exerciseId: EXERCISE_ID,
+      setNumber: 1,
+      before: {
+        setData: { type: 'strength', reps: 10, weight: 40, weightUnit: 'kg' },
+        rpe: null,
+        userFeedback: null,
+        setKind: 'warmup',
+      },
+      after: {
+        setData: { type: 'strength', reps: 10, weight: 40, weightUnit: 'kg' },
+        rpe: null,
+        userFeedback: null,
+        setKind: 'working',
+      },
+    });
+    const tool = buildUpdateLastSetTool({ trainingService }) as unknown as InvokableTool;
+
+    await tool.invoke({ exercise_id: EXERCISE_ID, setKind: 'working' }, makeConfig());
+
+    expect(trainingService.updateLastSet).toHaveBeenCalledWith(
+      'session-1',
+      EXERCISE_ID,
+      expect.objectContaining({ setKind: 'working' }),
+    );
+  });
+
+  it('reports the before/after kind in the confirmation', async () => {
+    const trainingService = makeTrainingService();
+    trainingService.updateLastSet.mockResolvedValue({
+      exerciseId: EXERCISE_ID,
+      setNumber: 1,
+      before: {
+        setData: { type: 'strength', reps: 10, weight: 40, weightUnit: 'kg' },
+        rpe: null,
+        userFeedback: null,
+        setKind: 'warmup',
+      },
+      after: {
+        setData: { type: 'strength', reps: 10, weight: 40, weightUnit: 'kg' },
+        rpe: null,
+        userFeedback: null,
+        setKind: 'working',
+      },
+    });
+    const tool = buildUpdateLastSetTool({ trainingService }) as unknown as InvokableTool;
+
+    const result = (await tool.invoke({ exercise_id: EXERCISE_ID, setKind: 'working' }, makeConfig())) as ToolReturn;
+    const content = renderedContent(result);
+
+    expect(content).toContain('(warmup)');
+    expect(content).toContain('(working)');
+  });
+});

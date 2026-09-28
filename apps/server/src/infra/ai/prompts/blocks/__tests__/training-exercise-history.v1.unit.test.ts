@@ -97,6 +97,7 @@ function makeWorkout(
     planId: null,
     sessionKey: 'key',
     status: 'completed',
+    place: null,
     startedAt: completedAt,
     completedAt,
     durationMinutes: 30,
@@ -254,5 +255,59 @@ describe('TRAINING_RECENT_WORKOUTS_V1', () => {
     const text = TRAINING_RECENT_WORKOUTS_V1.render({ recentWorkouts: [workout], todayMuscles: [] }, CTX, 0);
 
     expect(text).toContain('2026-09-19 · 5d ago');
+  });
+});
+
+describe('TRAINING_EXERCISE_HISTORY_V1 — the skipped line (set-kind plan D7, BUG-042, AC-SK-6)', () => {
+  const entryOf = (overrides: Partial<ExerciseHistoryEntry>): ExerciseHistoryEntry => ({
+    exerciseId: 'ex-1',
+    exerciseName: 'Pull-ups',
+    performance: null,
+    completedAt: null,
+    ...overrides,
+  });
+
+  it('a skip with no anchor reads "skipped <date>, no completed record" — not a bare "no completed record"', () => {
+    const text = TRAINING_EXERCISE_HISTORY_V1.render(
+      { exerciseHistory: [entryOf({ lastSkippedAt: new Date('2026-09-20T18:00:00.000Z') })] },
+      CTX,
+      0,
+    );
+    expect(text).toContain('Pull-ups [ID:ex-1] — skipped 2026-09-21, no completed record');
+  });
+
+  it('a skip newer than the anchor appends "· skipped <date>" after the anchor line', () => {
+    const performance = makeSessionExercise(makeExercise('ex-1', 'Pull-ups'), [makeSet(1, 0, 8)], {
+      exerciseId: 'ex-1',
+    });
+    const completedAt = new Date('2026-09-16T18:00:00.000Z');
+    const text = TRAINING_EXERCISE_HISTORY_V1.render(
+      {
+        exerciseHistory: [entryOf({ performance, completedAt, lastSkippedAt: new Date('2026-09-20T18:00:00.000Z') })],
+      },
+      CTX,
+      0,
+    );
+    expect(text).toMatch(/last done 2026-09-17 · \d+d ago \(\w+\) · skipped 2026-09-21/);
+  });
+
+  it('a skip older than the anchor adds nothing', () => {
+    const performance = makeSessionExercise(makeExercise('ex-1', 'Pull-ups'), [makeSet(1, 0, 8)], {
+      exerciseId: 'ex-1',
+    });
+    const completedAt = new Date('2026-09-22T18:00:00.000Z');
+    const text = TRAINING_EXERCISE_HISTORY_V1.render(
+      {
+        exerciseHistory: [entryOf({ performance, completedAt, lastSkippedAt: new Date('2026-09-20T18:00:00.000Z') })],
+      },
+      CTX,
+      0,
+    );
+    expect(text).not.toContain('skipped');
+  });
+
+  it("no skip on record keeps today's rendering unchanged", () => {
+    const text = TRAINING_EXERCISE_HISTORY_V1.render({ exerciseHistory: [entryOf({ lastSkippedAt: null })] }, CTX, 0);
+    expect(text).toContain('Pull-ups [ID:ex-1] — no completed record');
   });
 });

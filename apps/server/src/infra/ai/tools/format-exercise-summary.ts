@@ -1,4 +1,5 @@
 import type { AutoCompletedExercise } from '@domain/training/ports';
+import { workingSets } from '@domain/training/sets';
 
 /** A training session idle longer than this is considered stale/retro-logging territory. */
 export const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
@@ -54,11 +55,14 @@ export function formatExerciseSummary(ex: AutoCompletedExercise, mode: ExerciseS
     .join('\n');
   const targetWeightStr = ex.targetWeight ? ` @ ${ex.targetWeight} kg` : '';
   const target = `Target: ${ex.targetSets ?? '?'}x${ex.targetReps ?? '?'}${targetWeightStr}`;
+  // set-kind plan Task 1 (D4, AC-SK-2): the volume line counts only working sets against the
+  // target — warm-ups still appear above in `setsDetail`, listing every set performed.
+  const workingCount = workingSets(ex.sets).length;
   return (
     `Exercise '${ex.exerciseName}' completed.\n` +
     `${target}\n` +
     `Sets performed:\n${setsDetail}\n` +
-    `Total: ${ex.setsLogged}/${ex.targetSets ?? '?'} sets.\n` +
+    `Total: ${workingCount}/${ex.targetSets ?? '?'} sets.\n` +
     (mode === 'set-triggered' ? SET_TRIGGERED_INSTRUCTION : EXPLICIT_INSTRUCTION)
   );
 }

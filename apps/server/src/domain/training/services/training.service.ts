@@ -1,4 +1,5 @@
 import { ActiveSessionExistsError, ExerciseNotFoundError } from '@domain/training/errors';
+import { isValidExerciseId } from '@domain/training/plan-exercise-id';
 import type {
   AutoCompletedExercise,
   CompletedSetDetail,
@@ -21,6 +22,7 @@ import type {
   SessionRecommendation,
   SessionSet,
   SetData,
+  SetKind,
   WorkoutPlan,
   WorkoutSession,
   WorkoutSessionWithDetails,
@@ -30,7 +32,7 @@ import type { UserRepository } from '@domain/user/ports';
 const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 function extractSetDetail(s: SessionSet): CompletedSetDetail {
-  const detail: CompletedSetDetail = { setNumber: s.setNumber, rpe: s.rpe };
+  const detail: CompletedSetDetail = { setNumber: s.setNumber, rpe: s.rpe, setKind: s.setKind };
   const d = s.setData;
   if (d.type === 'strength') {
     detail.reps = d.reps;
@@ -241,17 +243,13 @@ export class TrainingService implements ITrainingService {
   }
 
   async completeSession(sessionId: string, durationMinutes?: number, completedAt?: Date): Promise<WorkoutSession> {
-    const session = await this.sessionRepo.findById(sessionId);
+    // set-kind plan Task 2 (D7): with details — reconciliation needs each row's sets.
+    const session = await this.sessionRepo.findByIdWithDetails(sessionId);
     if (!session) {
       throw new Error('Session not found');
     }
 
-    const exercises = await this.sessionExerciseRepo.findBySessionId(sessionId);
-    for (const ex of exercises) {
-      if (ex.status === 'in_progress') {
-        await this.sessionExerciseRepo.update(ex.id, { status: 'completed' });
-      }
-    }
+    await this.reconcilePlanItems(session);
 
     const resolvedCompletedAt = completedAt ?? new Date();
     const duration =
@@ -268,6 +266,20 @@ export class TrainingService implements ITrainingService {
     }
 
     return this.sessionRepo.update(sessionId, { status: 'skipped' });
+  }
+
+  /**
+   * set-kind plan Task 2 (D6): record where today's session is happening — free text in the
+   * user's own words, written by `set_session_place` (and by `start_training_session`'s
+   * optional `place` argument at creation).
+   */
+  async setSessionPlace(sessionId: string, place: string): Promise<WorkoutSession> {
+    const session = await this.sessionRepo.findById(sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    return this.sessionRepo.update(sessionId, { place });
   }
 
   async getActiveSession(userId: string): Promise<WorkoutSessionWithDetails | null> {
@@ -319,6 +331,8 @@ export class TrainingService implements ITrainingService {
       feedback?: string;
       createdAt?: Date;
       skipActivityUpdate?: boolean;
+      setKind?: SetKind;
+      weightBasis?: 'total';
     },
   ): Promise<{ set: SessionSet; setNumber: number; autoCompleted?: AutoCompletedExercise }> {
     const { exercise: sessionExercise, autoCompleted } = await this.ensureCurrentExercise(sessionId, {
@@ -327,21 +341,45 @@ export class TrainingService implements ITrainingService {
       skipActivityUpdate: opts.skipActivityUpdate,
     });
 
+    // set-kind plan Task 1 (D2, D3): the app layer, not the DB, defaults to 'working' — the DB
+    // default stays absent so legacy (pre-plan) rows keep reading NULL.
+    const setKind: SetKind = opts.setKind ?? 'working';
+    const setData = await this.applyPerHand(sessionExercise.exerciseId, opts.setData, opts.weightBasis);
+
     const set = opts.skipActivityUpdate
       ? await this.sessionSetRepo.create(sessionExercise.id, {
-          setData: opts.setData,
+          setData,
           rpe: opts.rpe,
           userFeedback: opts.feedback,
           createdAt: opts.createdAt,
+          setKind,
         })
       : await this.logSet(sessionExercise.id, {
-          setData: opts.setData,
+          setData,
           rpe: opts.rpe,
           userFeedback: opts.feedback,
           createdAt: opts.createdAt,
+          setKind,
         });
 
     return { set, setNumber: set.setNumber, autoCompleted };
+  }
+
+  /**
+   * set-kind plan Task 1 (D5): resolves the exercise's catalog equipment once and, for a
+   * dumbbell exercise's strength set, sets `perHand` — true by default, false when the caller
+   * said the weight is a total. Every other equipment leaves `setData` untouched (no `perHand`
+   * key at all).
+   */
+  private async applyPerHand(exerciseId: string, setData: SetData, weightBasis?: 'total'): Promise<SetData> {
+    if (setData.type !== 'strength') {
+      return setData;
+    }
+    const exercise = await this.exerciseRepo.findById(exerciseId);
+    if (exercise?.equipment !== 'dumbbell') {
+      return setData;
+    }
+    return { ...setData, perHand: weightBasis !== 'total' };
   }
 
   /**
@@ -402,6 +440,7 @@ export class TrainingService implements ITrainingService {
       durationSeconds?: number;
       distanceKm?: number;
       inclinePct?: number;
+      setKind?: SetKind;
     },
   ): Promise<UpdateSetResult> {
     const session = await this.sessionRepo.findByIdWithDetails(sessionId);
@@ -427,6 +466,7 @@ export class TrainingService implements ITrainingService {
       setData: lastSet.setData,
       rpe: lastSet.rpe,
       userFeedback: lastSet.userFeedback,
+      setKind: lastSet.setKind,
     };
 
     const updatedSetData: SessionSet['setData'] = {
@@ -442,6 +482,7 @@ export class TrainingService implements ITrainingService {
       setData: updatedSetData,
       ...(updates.rpe != null ? { rpe: updates.rpe } : {}),
       ...(updates.feedback != null ? { userFeedback: updates.feedback } : {}),
+      ...(updates.setKind != null ? { setKind: updates.setKind } : {}),
     });
 
     return {
@@ -452,6 +493,7 @@ export class TrainingService implements ITrainingService {
         setData: updatedSet.setData,
         rpe: updatedSet.rpe,
         userFeedback: updatedSet.userFeedback,
+        setKind: updatedSet.setKind,
       },
     };
   }
@@ -505,6 +547,62 @@ export class TrainingService implements ITrainingService {
 
   private async autoCloseTimedOutSessions(userId: string): Promise<void> {
     const cutoffTime = new Date(Date.now() - SESSION_TIMEOUT_MS);
+    // set-kind plan Task 2 (D7): a timed-out session reconciles through the SAME path as an
+    // explicit finish — reconcile before the repo marks the sessions completed.
+    const timedOut = await this.sessionRepo.findTimedOut(cutoffTime);
+    for (const session of timedOut) {
+      if (session.userId !== userId) {
+        continue;
+      }
+      const details = await this.sessionRepo.findByIdWithDetails(session.id);
+      if (details) {
+        await this.reconcilePlanItems(details);
+      }
+    }
     await this.sessionRepo.autoCloseTimedOut(userId, cutoffTime);
+  }
+
+  /**
+   * set-kind plan Task 2 (D7, BUG-042): finish reconciliation, the one path shared by
+   * `completeSession` and the auto-close of timed-out sessions.
+   * (a) every `session_plan_json` exercise with a valid id and no `session_exercises` row
+   *     gets one with `status = 'skipped'` and the plan's targets — a planned exercise the
+   *     user never touched stops vanishing;
+   * (b) an `in_progress` (or still-`pending`) row with zero sets ends `skipped`, not
+   *     `completed` — the same rule `ensureCurrentExercise` applies on a switch.
+   */
+  private async reconcilePlanItems(session: WorkoutSessionWithDetails): Promise<void> {
+    for (const ex of session.exercises) {
+      if (ex.status === 'in_progress' || ex.status === 'pending') {
+        const newStatus = ex.sets.length > 0 ? 'completed' : 'skipped';
+        await this.sessionExerciseRepo.update(ex.id, { status: newStatus });
+      }
+    }
+
+    const existingIds = new Set(session.exercises.map(ex => ex.exerciseId));
+    let orderIndex = session.exercises.length;
+    for (const planEx of session.sessionPlanJson?.exercises ?? []) {
+      if (!isValidExerciseId(planEx.exerciseId) || existingIds.has(planEx.exerciseId)) {
+        continue;
+      }
+      // A well-formed UUID that is not a real catalog exercise (stale/bad plan row) would violate
+      // the exercise FK — check existence first, never rely on the DB to reject (close-out review
+      // advisory R3).
+      const exercise = await this.exerciseRepo.findById(planEx.exerciseId);
+      if (!exercise) {
+        continue;
+      }
+      // Marked BEFORE the write so a plan id repeated in session_plan_json (bad data) creates one
+      // skipped row, not one per occurrence (close-out review advisory R3).
+      existingIds.add(planEx.exerciseId);
+      const created = await this.sessionExerciseRepo.create(session.id, {
+        exerciseId: planEx.exerciseId,
+        orderIndex: orderIndex++,
+        targetSets: planEx.targetSets,
+        targetReps: planEx.targetReps,
+        targetWeight: planEx.targetWeight ?? undefined,
+      });
+      await this.sessionExerciseRepo.update(created.id, { status: 'skipped' });
+    }
   }
 }

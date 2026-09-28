@@ -358,6 +358,27 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   `docs/CONTRIBUTING_AI.md`, or restate Guardrail 3 as an INV-LLM-* in ADR-0013 §11.
   Runs: voice-transcription (2026-09-27, R1).
 - [×1] Scripted-model fallbacks that approve everything (all-supported fact verdicts) turn a safety gate into a no-op for every journey that does not script it; candidate rule for `apps/server/TESTING.md`: a scaffold fallback for a guard/verifier is the fail-closed answer, or at least one scenario scripts the rejecting answer. Runs: fact-verification R3 (2026-09-28).
+- [×1] No zone checks the docs-first gate (`SUPERPOWERS_INTEGRATION.md:47`): code implementing
+  BR ids that exist only as a proposal merges; R1's always-blocking check covers only a durable
+  spec edited instead of escalated. Runs: set-kind (2026-09-29, R1).
+- [×1] The zones do not say whether versioned prompt modules (`prompts/phases/*/vN.ts`, full copies
+  by convention) are exempt from DRY. Proposed: "versioned prompt modules are frozen snapshots and
+  exempt from DRY". Runs: set-kind (2026-09-29, R2).
+- [×1] Where a worker's verification output must live is unstated: the plan says "task report",
+  Orca `worker_done` messages are invisible from the worktree. Proposed for ORCHESTRATION.md:
+  "each task's verification output (command + summary line) is appended to the plan under the task
+  before review; a reviewer treats absence there as absence". Runs: set-kind (2026-09-29, R3).
+- [×1] R4's ID-reuse check greps only `AC-[0-9]{4}`; the BR-TRAINING-014..016 collision with
+  FEAT-0010 shows only with a per-prefix grep across all of `docs/`. Proposed zone wording: "for
+  every new or proposed BR-/INV-/AC- id, grep that exact prefix across all of docs/ (domain specs
+  AND features/FEAT-*)". Runs: set-kind (2026-09-29, R4).
+- [×1] In run ≥ 2 no zone is told to re-verify every advisory the Review lists as "fixed on the
+  branch" (a D6 rename was claimed but missed). Proposed line for r4-documentation.md.
+  Runs: set-kind (2026-09-29, R4 run 2).
+- [×1] A reviewer cannot tell by reading whether a test named for an ordering/window property would
+  fail on the naive alternative (DISTINCT-before-LIMIT passed "dedupes after the window"). Proposed
+  for CONTRIBUTING_AI.md: such a test includes a fixture that fails the naive alternative and names
+  it. Runs: set-kind (2026-09-29, R3 run 2).
 
 ## Rule candidates
 
@@ -820,3 +841,21 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   Runs: voice-transcription (2026-09-27, R3 run 3).
 - [×1] `SUPERPOWERS_INTEGRATION.md` rule 3 (rule-meaning changes are owner-level "without exception") has no written carve-out for an explicit owner autonomy order; it lives only in memory. Proposed: "Under an explicit owner autonomy order for a named bug or plan, a durable-spec amendment recording the shipped rule is allowed if it is dated, marked 'decided without the owner, reversible', and listed in the STATE handoff." Without it R1 must either block every autonomous plan or ignore "always blocking". Runs: fact-provenance R1 (2026-09-27).
 - [×1] "A model call added to the reply path (anything inside prepare/compact) states its latency cost in the plan and the ADR, or is moved off the path" — proposed for `CONTRIBUTING_AI.md` Principles & Boundaries; today no rule lets a reviewer block on it. Runs: fact-verification R3 (2026-09-28).
+- [×1] "Tool-result strings are frozen per tool → bump `TOOL_OUTCOME_FORMAT_ID`" lives only in
+  `docs/CONTRIBUTING_AI.md:141` and an `outcome.ts` comment and has never been applied. Make it
+  binding (ADR-0013 §4.4 / BR-LLM-*: "any change to a tool's rendered result text bumps
+  `TOOL_OUTCOME_FORMAT_ID` and re-freezes the L1 baselines") or drop it. Runs: set-kind (2026-09-29, R1).
+- [×1] BR-LLM-008 ("any wording change creates a new version file") is written for `PromptModule`;
+  whether context blocks follow it is unstated (set-kind and BUG-030 changed v1 blocks in place).
+  Proposed ADR-0013 §5.2 amendment either way. Runs: set-kind (2026-09-29, R1).
+- [×1] Every plan decision (D#) that changes runtime behaviour should name at least one AC — D7's
+  auto-close path had no AC, so its missing test could not be blocking. Proposed for
+  CONTRIBUTING_AI.md. Runs: set-kind (2026-09-29, R3).
+- [×1] BACKLOG.md holds many `[x]` entries against SUPERPOWERS_INTEGRATION § Backlog rule 4.
+  Proposed for the `backlog` skill: "a delivered entry is deleted in the delivering commit; a
+  partially delivered entry keeps only its open points plus a one-line pointer to the plan".
+  Runs: set-kind (2026-09-29, R4).
+- [×1] A closed value set (enum/union) should be declared once as a domain Zod schema, types and
+  tool/API schemas derived from it; only the DB `pgEnum` may restate it with a pointer. The rule
+  lives only in a comment (`types.ts:197-198`). Proposed for CONTRIBUTING_AI.md "Principles &
+  Boundaries". Runs: set-kind (2026-09-29, R2 run 2).

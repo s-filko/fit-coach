@@ -155,6 +155,9 @@ export interface WorkoutSession {
   planId: string | null;
   sessionKey: string | null; // e.g., 'upper_a'
   status: SessionStatus;
+  // set-kind plan Task 2 (D6): where the workout happened, in the user's own words.
+  // NULL = not stated — never inferred.
+  place: string | null;
   startedAt: Date | null;
   completedAt: Date | null;
   durationMinutes: number | null;
@@ -196,6 +199,8 @@ export interface SessionExerciseWithDetails extends SessionExercise {
 // inferred from them so the two cannot drift (they had, over inclinePct).
 export type SetData = z.infer<typeof SetDataSchema>;
 
+export type SetKind = 'warmup' | 'working';
+
 export interface SessionSet {
   id: string;
   sessionExerciseId: string;
@@ -205,6 +210,10 @@ export interface SessionSet {
   createdAt: Date;
   completedAt: Date | null;
   setData: SetData;
+  // set-kind plan Task 1 (D2): NULL = recorded before this plan, unknown. Optional (not just
+  // nullable) so fixtures/stubs that predate this plan and never set it keep compiling —
+  // `workingSets` treats undefined the same as NULL (working).
+  setKind?: SetKind | null;
 }
 
 // --- Session Recommendation ---
@@ -246,6 +255,8 @@ export interface CreateSessionDto {
   userContext?: UserContext;
   status?: SessionStatus;
   sessionPlanJson?: SessionRecommendation;
+  // set-kind plan Task 2 (D6): written by start_training_session's optional `place` argument.
+  place?: string;
 }
 
 export interface CreateSessionExerciseDto {
@@ -261,6 +272,9 @@ export interface CreateSessionSetDto {
   rpe?: number;
   userFeedback?: string;
   createdAt?: Date;
+  // set-kind plan Task 1 (D2): optional so callers who never touch set-kind keep working —
+  // `logSetWithContext` always resolves an explicit value before it reaches the repository.
+  setKind?: SetKind | null;
 }
 
 // --- Training History ---

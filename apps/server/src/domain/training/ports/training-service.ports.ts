@@ -8,6 +8,7 @@ import type {
   SessionRecommendation,
   SessionSet,
   SetData,
+  SetKind,
   WorkoutPlan,
   WorkoutSession,
   WorkoutSessionWithDetails,
@@ -27,6 +28,9 @@ export interface CompletedSetDetail {
   weightUnit?: string;
   duration?: number;
   rpe: number | null;
+  // set-kind plan Task 1 (D4): optional — legacy fixtures/stubs that never set it are treated as
+  // working by `workingSets` (undefined/null !== 'warmup').
+  setKind?: SetKind | null;
 }
 
 /** Metadata returned when an exercise is completed (explicitly or auto-completed on switch). */
@@ -62,8 +66,8 @@ export interface DeletedSetsResult {
 export interface UpdateSetResult {
   exerciseId: string;
   setNumber: number;
-  before: Pick<SessionSet, 'setData' | 'rpe' | 'userFeedback'>;
-  after: Pick<SessionSet, 'setData' | 'rpe' | 'userFeedback'>;
+  before: Pick<SessionSet, 'setData' | 'rpe' | 'userFeedback' | 'setKind'>;
+  after: Pick<SessionSet, 'setData' | 'rpe' | 'userFeedback' | 'setKind'>;
 }
 
 // --- Service Interface ---
@@ -77,6 +81,8 @@ export interface ITrainingService {
   logSet(exerciseId: string, dto: CreateSessionSetDto): Promise<SessionSet>;
   completeSession(sessionId: string, durationMinutes?: number, completedAt?: Date): Promise<WorkoutSession>;
   skipSession(sessionId: string): Promise<WorkoutSession>;
+  // set-kind plan Task 2 (D6): set where today's session is happening, in the user's own words.
+  setSessionPlace(sessionId: string, place: string): Promise<WorkoutSession>;
   getActiveSession(userId: string): Promise<WorkoutSessionWithDetails | null>;
   getTrainingHistory(userId: string, limit?: number): Promise<WorkoutSessionWithDetails[]>;
   getSessionDetails(sessionId: string): Promise<WorkoutSessionWithDetails | null>;
@@ -104,6 +110,8 @@ export interface ITrainingService {
       durationSeconds?: number;
       distanceKm?: number;
       inclinePct?: number;
+      // set-kind plan Task 1 (D3, AC-SK-8)
+      setKind?: SetKind;
     },
   ): Promise<UpdateSetResult>;
 
@@ -126,6 +134,11 @@ export interface ITrainingService {
       feedback?: string;
       createdAt?: Date;
       skipActivityUpdate?: boolean;
+      // set-kind plan Task 1 (D2, D3): defaults to 'working' when absent.
+      setKind?: SetKind;
+      // set-kind plan Task 1 (D5): 'total' overrides the per-hand default on a dumbbell/kettlebell
+      // exercise — the user explicitly stated a combined weight.
+      weightBasis?: 'total';
     },
   ): Promise<{ set: SessionSet; setNumber: number; autoCompleted?: AutoCompletedExercise }>;
 }

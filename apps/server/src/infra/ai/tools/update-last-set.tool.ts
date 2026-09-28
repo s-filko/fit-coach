@@ -39,9 +39,12 @@ export function buildUpdateLastSetTool(deps: UpdateLastSetToolDeps) {
           durationSeconds: input.durationSeconds,
           distanceKm: input.distanceKm,
           inclinePct: input.inclinePct,
+          setKind: input.setKind,
         });
         const beforeStr = JSON.stringify(result.before.setData);
         const afterStr = JSON.stringify(result.after.setData);
+        const beforeKind = result.before.setKind ? ` (${result.before.setKind})` : '';
+        const afterKind = result.after.setKind ? ` (${result.after.setKind})` : '';
         log.info(
           {
             audit: 'update_last_set',
@@ -56,8 +59,8 @@ export function buildUpdateLastSetTool(deps: UpdateLastSetToolDeps) {
         );
         return ok(
           `Set ${result.setNumber} updated for exercise ${input.exercise_id}. ` +
-            `Before: ${beforeStr}${result.before.rpe != null ? ` RPE ${result.before.rpe}` : ''}. ` +
-            `After: ${afterStr}${result.after.rpe != null ? ` RPE ${result.after.rpe}` : ''}.`,
+            `Before: ${beforeStr}${result.before.rpe != null ? ` RPE ${result.before.rpe}` : ''}${beforeKind}. ` +
+            `After: ${afterStr}${result.after.rpe != null ? ` RPE ${result.after.rpe}` : ''}${afterKind}.`,
         );
       } catch (err) {
         if (isDatabaseFailure(err)) {
@@ -97,6 +100,10 @@ export function buildUpdateLastSetTool(deps: UpdateLastSetToolDeps) {
           .max(30)
           .optional()
           .describe('Treadmill incline in percent — use to add/correct incline on a cardio_distance set'),
+        setKind: z
+          .enum(['warmup', 'working'])
+          .optional()
+          .describe('Change whether the last set is a warm-up or a working set.'),
       }),
     },
   );

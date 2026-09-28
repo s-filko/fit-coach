@@ -34,6 +34,7 @@ export {
   buildStartTrainingSessionTool,
   type StartTrainingSessionToolDeps,
 } from '@infra/ai/tools/start-training-session.tool';
+export { buildSetSessionPlaceTool, type SetSessionPlaceToolDeps } from '@infra/ai/tools/set-session-place.tool';
 export { buildListFactsTool, type ListFactsToolDeps } from '@infra/ai/tools/list-facts.tool';
 export { buildManageFactTool, type ManageFactToolDeps } from '@infra/ai/tools/manage-fact.tool';
 export { buildSetLanguageTool, type SetLanguageToolDeps } from '@infra/ai/tools/set-language.tool';

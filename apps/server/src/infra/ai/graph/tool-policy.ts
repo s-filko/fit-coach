@@ -66,6 +66,9 @@ export const TRAINING_TOOL_PRIORITY: Record<string, number> = {
   get_exercise_history: 0,
   log_set: 1,
   complete_current_exercise: 2,
+  // set-kind plan Task 2 (D6): a session-level write, same tier as the other mid-workout
+  // corrections — never blocks or reorders log_set/finish_training.
+  set_session_place: 3,
   delete_last_sets: 3,
   update_last_set: 3,
   finish_training: 4,

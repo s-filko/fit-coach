@@ -32,6 +32,12 @@ export interface ExerciseHistoryEntry {
   /** null = no completed record anywhere for this exercise. */
   performance: SessionExerciseWithDetails | null;
   completedAt: Date | null;
+  /**
+   * set-kind plan Task 2 (D7): the newest `skipped` row for this exercise, when it is newer
+   * than the anchor — a planned-but-untouched exercise (BUG-042) must read as skipped, not as
+   * "never done". null = no skip on record.
+   */
+  lastSkippedAt?: Date | null;
 }
 
 /**
@@ -92,12 +98,20 @@ export const TRAINING_EXERCISE_HISTORY_V1: ContextBlock<TrainingExerciseHistoryD
 
     const blocks = data.exerciseHistory.map(entry => {
       const header = `${entry.exerciseName} [ID:${entry.exerciseId}]`;
+      const skipDate =
+        entry.lastSkippedAt && (!entry.completedAt || entry.lastSkippedAt > entry.completedAt)
+          ? formatInUserTz(entry.lastSkippedAt, resolveTz(ctx)).dateOnly
+          : null;
+
       if (!entry.performance || !entry.completedAt) {
-        return `${header} — no completed record`;
+        // set-kind plan Task 2 (D7): a skip newer than nothing still says the exercise was
+        // planned and consciously left out (BUG-042) — not "never done".
+        return skipDate ? `${header} — skipped ${skipDate}, no completed record` : `${header} — no completed record`;
       }
 
       const when = formatDateAge(entry.completedAt, ctx);
-      return `${header} — last done ${when}\n${formatExerciseSets(entry.performance.sets, entry.performance.userFeedback)}`;
+      const skipNote = skipDate ? ` · skipped ${skipDate}` : '';
+      return `${header} — last done ${when}${skipNote}\n${formatExerciseSets(entry.performance.sets, entry.performance.userFeedback)}`;
     });
 
     return `=== EXERCISE HISTORY (today's exercises — last completed performance) ===\n\n${blocks.join('\n\n')}`;

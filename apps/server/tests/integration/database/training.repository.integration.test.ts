@@ -361,4 +361,89 @@ describe('Training Repositories – integration', () => {
       expect(sets[0].sessionExerciseId).toBe(sessionExerciseId);
     });
   });
+
+  /**
+   * B3 (close-out review, set-kind plan D6, AC-SK-5): real-DB coverage of the window/dedupe/
+   * exclusion rules `distinctRecentPlaces` implements over Postgres — a mocked repository cannot
+   * exercise the actual SQL predicate (real-workout EXISTS join, NULL filter, ORDER BY + LIMIT).
+   * Each test uses its own user so accumulated sessions never leak across assertions.
+   */
+  describe('WorkoutSessionRepository.distinctRecentPlaces', () => {
+    let placesExerciseId: string;
+
+    beforeAll(async () => {
+      const exercises = await exerciseRepo.findAll();
+      placesExerciseId = exercises[0].id;
+    });
+
+    async function newPlacesUser(username: string): Promise<string> {
+      const user = await userRepo.create(
+        createTestUserData({ username, firstName: 'Places', lastName: 'Tester' }),
+      );
+      return user.id;
+    }
+
+    /** A completed session with >= 1 set (the "real workout" predicate) and the given place/time. */
+    async function realWorkout(userId: string, place: string | null, completedAt: Date): Promise<void> {
+      const session = await sessionRepo.create(userId, place ? { place } : {});
+      const sessionExercise = await exerciseSessionRepo.create(session.id, {
+        exerciseId: placesExerciseId,
+        orderIndex: 0,
+      });
+      await setRepo.create(sessionExercise.id, {
+        setData: { type: 'strength', reps: 5, weight: 20, weightUnit: 'kg' },
+      });
+      await sessionRepo.update(session.id, { status: 'in_progress', startedAt: completedAt });
+      await sessionRepo.complete(session.id, completedAt, 30);
+    }
+
+    it('excludes NULL places and returns the distinct places within the window, newest first', async () => {
+      const userId = await newPlacesUser('places_null_test_user');
+      await realWorkout(userId, 'Gym A', new Date('2026-01-01T10:00:00Z'));
+      await realWorkout(userId, null, new Date('2026-01-02T10:00:00Z'));
+      await realWorkout(userId, 'Gym B', new Date('2026-01-03T10:00:00Z'));
+
+      const places = await sessionRepo.distinctRecentPlaces(userId, 10);
+
+      expect(places).toEqual(['Gym B', 'Gym A']);
+    });
+
+    it('dedupes AFTER the window, not before — a place pushed outside the window by newer ones drops off', async () => {
+      const userId = await newPlacesUser('places_window_test_user');
+      // Oldest → newest: A, B, A. With limit 3 both places are within the window, deduped to two.
+      await realWorkout(userId, 'Gym A', new Date('2026-02-01T10:00:00Z'));
+      await realWorkout(userId, 'Gym B', new Date('2026-02-02T10:00:00Z'));
+      await realWorkout(userId, 'Gym A', new Date('2026-02-03T10:00:00Z'));
+
+      expect(await sessionRepo.distinctRecentPlaces(userId, 3)).toEqual(['Gym A', 'Gym B']);
+      // limit 1: only the newest row (Gym A) is in the window — Gym B never enters the dedupe set.
+      expect(await sessionRepo.distinctRecentPlaces(userId, 1)).toEqual(['Gym A']);
+    });
+
+    it('ignores non-real workouts — no sets logged, or not completed — even when they carry a place', async () => {
+      const userId = await newPlacesUser('places_non_real_test_user');
+      await realWorkout(userId, 'Gym A', new Date('2026-03-01T10:00:00Z'));
+
+      // A session with a place but zero sets — completed, but not a "real" workout (BUG-031 rule).
+      const emptySession = await sessionRepo.create(userId, { place: 'Gym C' });
+      await sessionRepo.update(emptySession.id, { status: 'in_progress', startedAt: new Date('2026-03-02T10:00:00Z') });
+      await sessionRepo.complete(emptySession.id, new Date('2026-03-02T10:00:00Z'), 5);
+
+      // A session with a place and a set, but never completed — still in_progress.
+      const openSession = await sessionRepo.create(userId, { place: 'Gym D' });
+      const openExercise = await exerciseSessionRepo.create(openSession.id, {
+        exerciseId: placesExerciseId,
+        orderIndex: 0,
+      });
+      await setRepo.create(openExercise.id, { setData: { type: 'strength', reps: 5, weight: 20, weightUnit: 'kg' } });
+      await sessionRepo.update(openSession.id, { status: 'in_progress', startedAt: new Date('2026-03-03T10:00:00Z') });
+
+      const places = await sessionRepo.distinctRecentPlaces(userId, 10);
+
+      expect(places).toEqual(['Gym A']);
+
+      // Close the still-open session so it never collides with INV-TRAINING-002 in a later test.
+      await sessionRepo.update(openSession.id, { status: 'skipped' });
+    });
+  });
 });

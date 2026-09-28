@@ -6,6 +6,13 @@
  */
 import type { StructuredToolInterface } from '@langchain/core/tools';
 
+// set-kind plan Task 2 (D6): the ask-once window, named (close-out review advisory R1) — the
+// threshold itself is applied by the block that renders the ask line, not the loader.
+import { RECENT_PLACES_WINDOW } from '@domain/training/place';
+// set-kind plan Task 2 (D7): the plan-id guard moved into the domain (plan-exercise-id.ts) so
+// TrainingService's finish reconciliation reuses this one copy — a bad legacy `session_plan_json`
+// row never reaches a DB query (close-out review advisory 6).
+import { isValidExerciseId } from '@domain/training/plan-exercise-id';
 import type { ExerciseWithMuscles, MuscleGroup, WorkoutSessionWithDetails } from '@domain/training/types';
 
 import type {
@@ -32,6 +39,7 @@ import {
   buildGetExerciseHistoryTool,
   buildLogSetTool,
   buildSearchExercisesTool,
+  buildSetSessionPlaceTool,
   buildSharedTools,
   buildUpdateLastSetTool,
 } from '@infra/ai/tools';
@@ -49,23 +57,17 @@ export interface TrainingData {
   exerciseHistory: ExerciseHistoryEntry[];
   recentWorkouts: WorkoutSessionWithDetails[];
   todayMuscles: MuscleGroup[];
+  /**
+   * set-kind plan Task 2 (D6): distinct places among the last RECENT_PLACES_WINDOW real
+   * workouts; 0 when today's session already states a place (short-circuits, never queries the
+   * repository). The overview block renders its one-line ask once this crosses its threshold.
+   */
+  recentPlacesCount: number;
 }
 
 /** Mid-workout session shape the availability filter reads (BUG-008 Plan A). */
 interface SessionLike {
   exercises?: Array<{ status?: string; sets?: unknown[] }>;
-}
-
-/** Generic UUID shape (any version/variant) — matches every real exerciseId the catalog issues. */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/**
- * A bad legacy `session_plan_json` row (empty string, missing, or a placeholder that was never a
- * real catalog id) must not fail the turn — dropped before it ever reaches a DB query
- * (close-out review advisory 6).
- */
-function isValidExerciseId(id: unknown): id is string {
-  return typeof id === 'string' && UUID_RE.test(id);
 }
 
 /**
@@ -103,6 +105,8 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
     buildLogSetTool({ trainingService }),
     buildCompleteCurrentExerciseTool({ trainingService }),
     buildFinishTrainingTool({ trainingService }),
+    // set-kind plan Task 2 (D6): "я сегодня в другом зале" — after the start.
+    buildSetSessionPlaceTool({ trainingService }),
     buildDeleteLastSetsTool({ trainingService }),
     buildUpdateLastSetTool({ trainingService }),
     ...buildSharedTools({ userService, userFacts: deps.userFacts }),
@@ -176,6 +180,13 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
           ? await deps.workoutSessionRepo.findLastPerformancesByExercise(input.userId, todayExerciseIds, session.id)
           : [];
       const performanceById = new Map(performances.map(p => [p.exerciseId, p]));
+      // set-kind plan Task 2 (D7): the newest skip per today's exercise — the history block's
+      // `skipped <date>` line. Not a performance (no sets), so it never feeds the anchor above.
+      const skips =
+        todayExerciseIds.length > 0
+          ? await deps.workoutSessionRepo.findLastSkipsByExercise(input.userId, todayExerciseIds, session.id)
+          : [];
+      const skipById = new Map(skips.map(sk => [sk.exerciseId, sk.skippedAt]));
       const exerciseHistory: ExerciseHistoryEntry[] = todayExerciseIds.map(exerciseId => {
         const performance = performanceById.get(exerciseId);
         return {
@@ -183,8 +194,17 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
           exerciseName: nameById.get(exerciseId) ?? 'Exercise',
           performance: performance?.sessionExercise ?? null,
           completedAt: performance?.completedAt ?? null,
+          lastSkippedAt: skipById.get(exerciseId) ?? null,
         };
       });
+
+      // set-kind plan Task 2 (D6): the distinct places among the user's last RECENT_PLACES_WINDOW
+      // real workouts, so the overview block can decide whether to ask (D6, once per session).
+      // `session.place` short-circuits the ternary — a stated place never reaches the repository
+      // (B3, close-out review).
+      const recentPlacesCount = session.place
+        ? 0
+        : (await deps.workoutSessionRepo.distinctRecentPlaces(input.userId, RECENT_PLACES_WINDOW)).length;
 
       // Fatigue window (D3): up to 7 recent real workouts; the block applies the 7-day cut
       // against ctx.now (the loader never reads the clock). Today's own session is excluded.
@@ -195,7 +215,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
 
       return {
         ok: true,
-        data: { session, exerciseHistory, recentWorkouts, todayMuscles: [...todayMuscleSet] },
+        data: { session, exerciseHistory, recentWorkouts, todayMuscles: [...todayMuscleSet], recentPlacesCount },
       };
     },
     // D-B/D4: v1's `client`, `workout_overview`, `stale_session` sections, plus `exercise_history`

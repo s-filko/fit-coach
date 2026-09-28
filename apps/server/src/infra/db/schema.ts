@@ -388,6 +388,11 @@ export const sessionExerciseStatusEnum = pgEnum('session_exercise_status', [
   'skipped',
 ]);
 
+// set-kind plan Task 1 (D2): warm-up vs working set. Nullable, no default — NULL means "recorded
+// before this plan, unknown"; the load advisor treats it with its own heuristic, never as a
+// certain working set. Every new write sets it explicitly (app-layer default, not backfilled).
+export const setKindEnum = pgEnum('set_kind', ['warmup', 'working']);
+
 // --- Training domain tables ---
 
 export const workoutPlans = pgTable(
@@ -476,6 +481,10 @@ export const workoutSessions = pgTable(
     // Contains: exercises list, reasoning, estimated duration, warnings
     // Updated during session_planning phase, read-only during training
     sessionPlanJson: jsonb('session_plan_json'),
+    // set-kind plan Task 1 (D6): free text in the user's words ("Fitness House на Ленина",
+    // "дома"). Nullable — NULL means not stated. Written by Task 2 (start_training_session's
+    // `place` argument, `set_session_place`); this migration only adds the column.
+    place: text('place'),
     lastActivityAt: timestamp('last_activity_at').defaultNow().notNull(),
     autoCloseReason: text('auto_close_reason'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -530,6 +539,8 @@ export const sessionSets = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
     completedAt: timestamp('completed_at'),
     setData: jsonb('set_data').notNull(),
+    // set-kind plan Task 1 (D2): warm-up vs working. Nullable, no default — see setKindEnum.
+    setKind: setKindEnum('set_kind'),
   },
   table => ({
     exerciseSetIdx: index('idx_session_sets_exercise').on(table.sessionExerciseId, table.setNumber),

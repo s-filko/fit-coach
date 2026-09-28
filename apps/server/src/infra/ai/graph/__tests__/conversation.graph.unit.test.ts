@@ -76,6 +76,8 @@ const makeDeps = (recorded: ConversationRunRecord[] = []): ConversationGraphDeps
     findRecentByUserIdWithDetails: jest.fn().mockResolvedValue([]),
     findActiveByUserId: jest.fn().mockResolvedValue(null),
     findLastPerformancesByExercise: jest.fn().mockResolvedValue([]),
+    distinctRecentPlaces: jest.fn().mockResolvedValue([]),
+    findLastSkipsByExercise: jest.fn().mockResolvedValue([]),
     update: jest.fn().mockResolvedValue({}),
     complete: jest.fn(),
     updateActivity: jest.fn(),

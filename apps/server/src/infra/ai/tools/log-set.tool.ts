@@ -6,6 +6,7 @@ import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import type { ITrainingService } from '@domain/training/ports';
 import { SetDataSchema } from '@domain/training/set-data.types';
 
+import { formatSetData } from '@infra/ai/prompts/blocks/training-workout-overview.v1';
 import {
   formatExerciseSummary,
   RETRO_SET_OFFSET_MS,
@@ -87,6 +88,8 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           feedback: input.feedback,
           createdAt: retroCreatedAt,
           skipActivityUpdate: isRetro,
+          setKind: input.setKind,
+          weightBasis: input.weightBasis,
         });
 
         // Named for the summariser (renderTranscript over this tool's own confirmation) as much
@@ -102,19 +105,15 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           log.warn({ err: nameErr, sessionId }, 'log_set: could not resolve exercise name for confirmation');
         }
 
-        const { type } = set.setData;
-        let summary = '';
-        if (type === 'strength') {
-          const d = set.setData;
-          summary = `${d.reps} reps${d.weight != null ? ` @ ${d.weight} ${d.weightUnit ?? 'kg'}` : ''}`;
-        } else {
-          summary = type;
-        }
+        // B1 (close-out review): the strength confirmation is the same text as every other set
+        // listing — one formatter, no second copy of the per-hand note.
+        const summary = formatSetData(set.setData);
 
+        const kindNote = set.setKind === 'warmup' ? ' (warm-up)' : '';
         const rpeNote = rpe != null ? ` | RPE ${rpe}` : '';
         const retroNote = isRetro ? ' (retro-logged)' : '';
         const namePart = exerciseName ? ` — ${exerciseName}` : '';
-        const setConfirmation = `Set ${setNumber} logged${namePart}: ${summary}${rpeNote}${retroNote}.`;
+        const setConfirmation = `Set ${setNumber} logged${namePart}: ${summary}${kindNote}${rpeNote}${retroNote}.`;
 
         log.info(
           {
@@ -163,6 +162,8 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         'For cardio distance (treadmill, running): provide distanceKm. durationSeconds is optional — if unknown, log without it and ask the user. Optionally: inclinePct (treadmill only).',
         'setNumber is computed automatically — do NOT pass it.',
         'Call once per set. For multiple sets reported at once, call log_set multiple times.',
+        "Pass setKind 'warmup' ONLY when the user's own words say so (разминка, разминочный, warm-up, для разогрева) — never infer warm-up from a light weight alone. Omit for a normal working set.",
+        "For a dumbbell/kettlebell exercise the weight is per hand by default — pass weightBasis 'total' only when the user explicitly says the weight is a combined/total figure (e.g. 'в сумме', 'total').",
       ].join(' '),
       schema: z
         .object({
@@ -206,6 +207,22 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
             .describe('Treadmill incline in percent (0–30). Only for treadmill. Do NOT use for strength exercises.'),
           rpe: z.number().min(1).max(10).optional().describe('Rate of Perceived Exertion (1–10).'),
           feedback: z.string().optional().describe('Any user comment about this set.'),
+          setKind: z
+            .enum(['warmup', 'working'])
+            .optional()
+            .describe(
+              "Mark this set as a warm-up. Only set 'warmup' when the user's own words say so " +
+                '(разминка, разминочный, warm-up, для разогрева) — never infer warm-up from a light ' +
+                'weight alone. Omit for a normal working set.',
+            ),
+          weightBasis: z
+            .enum(['total'])
+            .optional()
+            .describe(
+              'For a dumbbell/kettlebell exercise the coach assumes the weight is per hand. Pass ' +
+                "'total' only when the user explicitly states the weight is a combined/total figure " +
+                "(e.g. 'в сумме', 'total').",
+            ),
           order: z
             .number()
             .int()

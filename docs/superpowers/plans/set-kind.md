@@ -4,9 +4,10 @@
 > test-driven-development. Red tests first, then the fix. Every task's step 1 is a test that
 > must fail on unchanged code for the stated reason; commit it red before any production change.
 
-- Status: in progress
+- Status: done
 - Branch: plan/set-kind
 - After: —
+- Review: 2026-09-29 | clean | R1,R2,R3,R4
 
 **Goal:** the journal stops mixing data that the load advisor (design
 `docs/superpowers/specs/2026-09-28-load-recommendation-architecture-design.md`, §9–§10) will
@@ -26,8 +27,9 @@ explicit. Roadmap step R1.4 widened per design §9.
 всё от начала до конца». The orchestrator runs this plan to the dev deploy without questions to the
 owner: it decides executor, review fixes, merge and deploy, records every decision as a **(D)**
 bullet below, and lists them in the STATE handoff for the owner to review. D11's durable-spec ids
-(BR-TRAINING-014..016) are **proposed** in the PR description and flagged for the owner; the
-`training.spec.md` edit itself waits for the owner unless it is purely factual.
+(BR-TRAINING-027..029) are **proposed** in the plan section "Proposed durable-spec text" and
+flagged for the owner; the `training.spec.md` edit itself waits for the owner unless it is purely
+factual.
 
 **Spec:** roadmap `docs/superpowers/specs/2026-09-24-coach-roadmap.md` R1.4 / U4; design
 `2026-09-28-load-recommendation-architecture-design.md` §3.2 (legacy sets), §9 (U4 row), §10
@@ -71,14 +73,22 @@ entity, machine instances and the clarifying question are **not** this plan).
   is absent. Confirmation and `formatSetData` render `@ 12 kg per hand`. The prompt rule: for
   dumbbells the coach assumes per hand and says so in the confirmation; it asks only if the user's
   words make it ambiguous. Kettlebell single-arm work is per hand by the same rule.
+  - **Worker note (Task 1):** the seeded catalog (`src/infra/db/seeds/exercises.seed.ts`,
+    `Exercise['equipment']` in `types.ts`) has exactly six distinct `equipment` values —
+    `'barbell' | 'dumbbell' | 'bodyweight' | 'machine' | 'cable' | 'none'`. There is **no**
+    separate `'kettlebell'` value anywhere in the catalog or the type — kettlebell exercises, if
+    any are added later, would need their own catalog `equipment` string first. `applyPerHand`
+    (`training.service.ts`) therefore triggers on `equipment === 'dumbbell'` only; the D5 rule's
+    "kettlebell" mentions describe intent for when that equipment value exists, not code today.
 - **D6 — session place** is `workout_sessions.place text` (nullable), free text in the user's
   words ("Fitness House на Ленина", "дома"). Written by an optional `place` argument on
   `start_training_session` and by a new narrow tool `set_session_place(place)` available in
   `training` (for "я сегодня в другом зале" said after the start). No inference, no question in
   every session: the prompt says to record the place **only when the user names it**; the coach
   asks once per session only if the user's last 10 real workouts carry ≥ 2 distinct places
-  (loader-computed boolean `placeAmbiguous`, rendered as one line in WORKOUT OVERVIEW: `Place:
-  <text>` or `Place: not stated (ask — recent workouts were at 2 places)`). `NULL` = not stated;
+  (loader-computed `recentPlacesCount` against the domain constants `PLACE_AMBIGUOUS_WINDOW` /
+  `PLACE_AMBIGUOUS_THRESHOLD` in `domain/training/place.ts`, rendered as one line in WORKOUT
+  OVERVIEW: `Place: <text>` or `Place: not stated (ask — recent workouts were at <n> places)`). `NULL` = not stated;
   U9a compares loads within the same place or unknown.
 - **D7 — BUG-042 at finish.** `completeSession` (a) creates a `session_exercises` row with
   `status = 'skipped'` and the plan's `targetSets`/`targetReps` for every `session_plan_json`
@@ -104,15 +114,32 @@ entity, machine instances and the clarifying question are **not** this plan).
   (economical-work rule). Per-task worktrees `set-kind-t1`, `set-kind-t2`; DB tests serialized via
   `db-test-lock.sh`.
 - **D11 — docs touched by this plan (worker lists exact edits in the task commit):**
-  `docs/domain/training.spec.md` — INV-TRAINING-003 unchanged; add BR-TRAINING-014 (set kind:
-  only working sets count toward targets; NULL = unknown legacy), BR-TRAINING-015 (dumbbell
-  weight is per hand unless stated total), BR-TRAINING-016 (finish reconciles untouched plan items
-  to `skipped`; zero-set exercises are `skipped`), and `workout_sessions.place` in the entity
-  list — **escalate to the owner in the PR description; durable spec ids are minted by the
-  owner** (`docs/DOCUMENTATION_GUIDE.md`), so the worker proposes the text and numbers, the
-  orchestrator confirms with the owner before merge. `docs/BUGS.md` BUG-042 → fixed, BUG-025 note.
+  `docs/domain/training.spec.md` — INV-TRAINING-003 unchanged; add BR-TRAINING-027 (set kind:
+  only working sets count toward targets; NULL counted as working for plan targets, unknown for
+  load metrics), BR-TRAINING-028 (dumbbell weight is per hand unless stated total),
+  BR-TRAINING-029 (finish reconciles untouched plan items to `skipped`; zero-set exercises are
+  `skipped`), and `workout_sessions.place` in the entity list — **escalate to the owner in the
+  plan section "Proposed durable-spec text"; durable spec ids are minted by the
+  owner** (`docs/DOCUMENTATION_GUIDE.md`), so the worker proposes the text and numbers; the
+  owner mints them after merge (D12 — the autonomy order merges with the ids only proposed). `docs/BUGS.md` BUG-042 → fixed, BUG-025 note.
   `docs/BACKLOG.md` — the warm-up entry closed; the places entry keeps points 1–4 open and
   records point 5 as delivered. Roadmap R1.4 row → delivered by this plan.
+- **D12 (orchestrator, 2026-09-28) — merge without the owner's confirmation of D11.** The owner's
+  autonomy order supersedes "confirms with the owner before merge": code merges into `dev` with the
+  BR text only **proposed** (section at the end of this plan), `training.spec.md` untouched; the
+  owner mints or renumbers the ids later. The R1 meta note (docs-first gate) is recorded, not acted on.
+- **D13 (orchestrator) — per hand only for `equipment = 'dumbbell'`.** The catalog has no kettlebell
+  value (Task 1 worker note under D5); kettlebell per-hand waits for a catalog value.
+- **D14 (orchestrator) — reconciliation also closes `pending` zero-set rows as `skipped`** (plan text
+  said `in_progress`); consistent with D7's intent, accepted at Task 2 review.
+- **D15 (orchestrator) — worker incidents.** The GLM Task 2 worker's turn died on a network error
+  (`ENOTFOUND`) with work done but uncommitted; the orchestrator nudged it via `orca terminal send`
+  and it finished. Both workers' `worker-release` answered `retained / user_takeover`; their tabs
+  are closed at final cleanup. Worktree deletions are deferred to the very end of the run (owner
+  2026-09-29: an approval prompt stalls an autonomous run).
+- **D16 (orchestrator) — review fixes stay on this branch** (economical-work rule): all six blocking
+  findings plus the cheap advisories listed in § Review are fixed by one Sonnet fix worker in
+  `set-kind-t1`; the rest go to one grouped `docs/BACKLOG.md` entry.
 
 ## Acceptance criteria
 
@@ -123,7 +150,7 @@ entity, machine instances and the clarifying question are **not** this plan).
 | AC-SK-3 | Rows inserted before the migration read `set_kind = NULL`; the overview counts a NULL-kind set as working (today's behaviour, unchanged) and marks nothing | migration applied over seeded legacy rows in the integration test; block unit test |
 | AC-SK-4 | A set on a dumbbell exercise stores `setData.perHand = true` and renders `@ 12 kg per hand`; the same call with `weightBasis: 'total'` stores `perHand = false`; a barbell set stores no `perHand` | `log-set.tool.unit.test.ts`, `set-data.types` unit test, scenario |
 | AC-SK-5 | `start_training_session({ place })` and `set_session_place` write `workout_sessions.place`; the overview prints `Place: …`; with ≥ 2 distinct places in the last 10 real workouts and no place today the overview prints the ask line, otherwise not | tool unit tests, loader/block unit test, scenario |
-| AC-SK-6 | Finishing a session whose plan lists an exercise with no row creates a `skipped` row with the plan's targets; an `in_progress` exercise with zero sets ends `skipped`; the next session's `training.exercise_history` shows `skipped <date>` for it, not "no completed record" | `tests/integration/scenarios/bug-042-skipped-plan-items.repro.test.ts` → promoted; `training.service.unit.test.ts`; block unit test |
+| AC-SK-6 | Finishing a session whose plan lists an exercise with no row creates a `skipped` row with the plan's targets; an `in_progress` exercise with zero sets ends `skipped`; the next session's `training.exercise_history` shows `skipped <date>` for it, not "no completed record" | `tests/integration/scenarios/bug-042-skipped-plan-items.integration.test.ts`; `training-service-finish-reconcile.unit.test.ts`; block unit test |
 | AC-SK-7 | Prompt `training` v8 carries the three rules and the tool entry; every existing training snapshot changes only in the expected lines (diff reviewed in the task commit) | prompt unit test + snapshot update via the documented command |
 | AC-SK-8 | `update_last_set({ setKind })` changes the kind of the last set and reports before/after | tool unit test |
 
@@ -193,11 +220,11 @@ the fix and gone — promoted — after), `node scripts/state.mjs --check` from 
   ordering table lists tools), `apps/server/src/domain/training/services/training.service.ts`
   (`completeSession` reconciliation, `autoCloseTimedOut` path, `setSessionPlace`),
   `infra/db/repositories/workout-session.repository.ts` (`place`, `distinctRecentPlaces`)
-- `apps/server/src/infra/ai/graph/phases/training.spec.ts` (loader: `placeAmbiguous`),
+- `apps/server/src/infra/ai/graph/phases/training.spec.ts` (loader: `recentPlacesCount`),
   `apps/server/src/infra/ai/prompts/blocks/training-workout-overview.v1.ts` (`Place:` line),
   `training-exercise-history.v1.ts` (`skipped <date>` line; loader query for the newest skip)
-- tests: `tests/integration/scenarios/bug-042-skipped-plan-items.repro.test.ts` → promoted;
-  `training.service.unit.test.ts`; tool unit tests; block unit tests.
+- tests: `tests/integration/scenarios/bug-042-skipped-plan-items.integration.test.ts`;
+  `training-service-finish-reconcile.unit.test.ts`; tool unit tests; block unit tests.
 
 **Steps:**
 
@@ -213,8 +240,8 @@ the fix and gone — promoted — after), `node scripts/state.mjs --check` from 
    private method `reconcilePlanItems(session)`; reuse the plan-id UUID guard from
    `training.spec.ts` (move it to a shared domain helper if it is not already importable — no
    copy).
-3. **Place** (D6): repository `update({ place })`, `distinctPlacesInLastRealWorkouts(userId, 10)`;
-   service `setSessionPlace(sessionId, place)`; tools; loader `placeAmbiguous`; overview line.
+3. **Place** (D6): repository `update({ place })`, `distinctRecentPlaces(userId, 10)`;
+   service `setSessionPlace(sessionId, place)`; tools; loader `recentPlacesCount`; overview line.
 4. **History line** for skips (D7 last sentence): the exercise-history loader also fetches the
    newest `skipped` row per today's exercise; the block prints `· skipped YYYY-MM-DD` after the
    anchor when the skip is newer, or `— skipped YYYY-MM-DD, no completed record` when there is
@@ -222,7 +249,8 @@ the fix and gone — promoted — after), `node scripts/state.mjs --check` from 
 5. Promote the repro; `docs/BUGS.md` BUG-042 → `Status: fixed (set-kind)` with the test paths,
    BUG-025 gains a note that zero-set exercises now end `skipped` at finish too; `docs/BACKLOG.md`
    places entry: point 5 delivered, 1–4 open; roadmap R1.4 row → delivered by this plan;
-   `docs/domain/training.spec.md` proposals per D11 in the PR description.
+   `docs/domain/training.spec.md` proposals per D11 in the plan section "Proposed durable-spec
+   text".
 
 **Verification:** the command list above, results quoted in the task report.
 
@@ -238,4 +266,95 @@ the fix and gone — promoted — after), `node scripts/state.mjs --check` from 
 
 ## Review
 
-(filled at close-out: `- Review: <date> | clean | R1,R2,R3,R4` plus notes)
+Run 1 — 2026-09-29, zones R1, R2, R3, R4 — **blocked** (6 blocking). Fixes dispatched per D16.
+
+**Verification evidence (orchestrator, from the workers' `worker_done` and its own re-runs):**
+Task 1 (Sonnet) — check-all green; test:unit 1583/1583; test:integration 643/643; test:scenarios
+399/399 (+1 todo); repro glob: only the pre-existing BUG-023/025/027 reds. Orchestrator re-run of
+test:scenarios on `6cf32a69`: 20 suites, 399 passed, 1 todo. Task 2 (GLM) — check-all exit 0;
+test:unit 160 suites / 1601; test:integration 49 suites / 648 (+1 todo); test:scenarios 21 suites /
+404 (+1 todo); repro glob: the same 3 pre-existing reds; `state.mjs --check` OK. Orchestrator re-run
+of test:scenarios on `35a99846`: 21 suites, 404 passed, 1 todo.
+
+**Blocking (run 1):**
+- B1 (R2) `log-set.tool.ts:111-112` — strength confirmation copies `formatSetData`, now with a second
+  copy of the per-hand note. → fix: call `formatSetData`.
+- B2 (R3) `phases/training/v8.ts:53` — AC-SK-7: v8 lacks the place rule (D6); the `set_session_place`
+  TOOLS entry and tool description say "Do NOT ask", contradicting the overview's ask line.
+  → fix: add the place rule; align the tool text.
+- B3 (R3) `training.spec.ts:199` — AC-SK-5: `placeAmbiguous === true`, the `!session.place`
+  short-circuit and `distinctRecentPlaces` (window 10, NULL excluded, dedupe after limit) untested.
+  → fix: loader unit tests + a real-DB repository test.
+- B4 (R3) plan — verification results not quoted anywhere on the branch. → closed by the evidence
+  block above (orchestrator).
+- B5 (R4) plan § Proposed durable-spec text — BR-TRAINING-014..016 already exist in
+  `docs/features/FEAT-0010-training-session-management.md` (up to -026). → fix: propose free ids and
+  flag the collision for the owner.
+- B6 (R4) `docs/BACKLOG.md:360` — the delivered warm-up entry must be removed, not ticked.
+  → fix: remove it.
+
+**Advisory (run 1) — fixed on the branch (D16):** R1 `workingSets` domain rule lives in a prompt
+block → move to `domain/training`; R1 `placeAmbiguous` literals 10/2 → named constants; R2 `SetKind`
+union hand-written → import the domain type; R2 `placeLineOf` exported with one use → unexport;
+R3 skipped-row insert for a UUID-shaped id not in the catalog would throw on the FK, and a duplicated
+plan id gives two skipped rows → skip non-catalog ids, update `existingIds`; R3 no test for the
+auto-close reconciliation path → unit test; R3 ask line hardcodes "2 places" → render the count;
+R3 debug `console.log` in `bug-042-…integration.test.ts` afterAll → remove; R4 roadmap §6 U4 and
+R1.4 "Delivered" premature → "code done, live check on dev pending"; R4 BR-014 proposal wording on
+NULL → state both (counted as working for targets, unknown for load metrics); R4 stale test/method
+names and "PR description" wording in this plan → corrected.
+
+**Advisory (run 1) — to `docs/BACKLOG.md` (grouped entry, filed at close-out):** R1
+`findTimedOut` has no `userId` (two reads of "timed out"); R1 `CreateSessionExerciseDto` has no
+status (create-then-update); R1 `SessionSet.setKind` optional + nullable for fixtures; R1
+`format-exercise-summary.ts` mixes concerns; R1 `TOOL_OUTCOME_FORMAT_ID` not bumped; R2 plan-row
+builder duplicated between `reconcilePlanItems` and `ensureCurrentExercise`; R2 warm-up/per-hand
+wording in three places; R3 AC-SK-3/-4 DB halves only unit-tested; R4 places entry carries a
+delivery note; R4 `API_SPEC.md` shared types lack `place`/`setKind`/`perHand`; R4 ADR-0011
+tool-priority table stale.
+
+**Meta (to `docs/REVIEW_FINDINGS.md`):** R1 ×2 rule candidates (TOOL_OUTCOME_FORMAT_ID, block
+versioning), R1 blind spot (docs-first gate), R2 blind spot (versioned prompts vs DRY), R3 blind spot
+(where verification evidence lives), R3 rule candidate (every D names an AC), R4 blind spot (BR id
+grep across docs/), R4 rule candidate (BACKLOG `[x]` entries).
+
+Run 2 — 2026-09-29, zones R2, R3, R4 (the zones that blocked; R1 had no blocking) — **clean**.
+B1, B2, B3, B5, B6 fixed by the fix worker (commits `b77ec189`…`ef7a10e8`, each naming its finding);
+B4 closed by the evidence block above. **Run-2 verification:** fix worker at `ef7a10e8` — check-all
+green, test:unit 1611, test:integration 651 (+1 todo), test:scenarios 404 (+1 todo), repro glob only
+the pre-existing BUG-023/025/027 reds; orchestrator re-run of test:scenarios at `ef7a10e8`: 21 suites,
+404 passed, 1 todo; R3 re-ran the touched unit suites: 53 suites / 452 passed. `state.mjs --check`
+failed only on the stale STATE AUTO block, regenerated by the orchestrator at close-out.
+
+**Advisory (run 2) — fixed by the orchestrator at close-out:** R4 D6 wording (`recentPlacesCount`,
+constants) and D11 / proposed-text intro vs D12; R4 `BUGS.md` BUG-042 status capitalised
+`Fixed (…)`; R4 `MANUAL_TEST_PLAN.md` training-tools row gains `set_session_place`; R4 places
+BACKLOG pointer no longer names a removed "point 5".
+
+**Advisory (run 1 remainder + run 2) — filed:** `docs/BACKLOG.md` § "set-kind close-out review
+advisories (2026-09-29)". **Meta:** filed in `docs/REVIEW_FINDINGS.md` (runs 1 and 2).
+
+## Proposed durable-spec text (for the owner)
+
+D11: durable-spec ids are minted by the owner, so this text is a PROPOSAL — the `docs/domain/
+training.spec.md` edit itself waits for the owner (D12: code merges with the ids only proposed).
+
+**Collision note (B5, close-out review run 1):** `docs/domain/training.spec.md`'s own numbering
+stops at BR-TRAINING-013, but `docs/features/FEAT-0010-training-session-management.md` already
+uses BR-TRAINING-014..026 (its own, unrelated business rules — `grep -rhoE "BR-TRAINING-[0-9]+"
+docs | sort -uV` confirms the highest used anywhere in `docs/` is BR-TRAINING-026). The ids below
+are renumbered to the next free ones, BR-TRAINING-027..029, so the owner does not have to resolve
+a collision before minting them.
+
+In `docs/domain/training.spec.md`:
+
+- Terms, amend the WorkoutSession line:
+  `• WorkoutSession: actual workout session with status tracking (planning|in_progress|completed|skipped) and place (free text, NULL = not stated)`
+
+- Business Rules, append:
+  `• BR-TRAINING-027: Every set carries its kind — 'warmup' or 'working'; only working sets count toward plan targets; a NULL set_kind (pre-2026-09-28 legacy rows) is counted as working for plan targets and treated as unknown by load metrics (design §3.2)`
+  `• BR-TRAINING-028: A dumbbell exercise's weight is per hand unless the user states a total; the confirmation says "per hand"`
+  `• BR-TRAINING-029: Finishing a session (explicit or auto-close) reconciles the plan — every untouched plan exercise gets a session_exercises row with status='skipped' and the plan's targets, and a zero-set exercise ends 'skipped', not 'completed'`
+
+Entity line for the entity list: `workout_sessions.place` — `text`, nullable, free text in the user's
+words, written only when the user names it (`start_training_session({ place })` / `set_session_place`).

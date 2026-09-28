@@ -166,6 +166,8 @@ function makeGraphDeps(getSessionDetails: jest.Mock, recorded: ConversationRunRe
       findRecentByUserIdWithDetails: jest.fn().mockResolvedValue([]),
       findActiveByUserId: jest.fn().mockResolvedValue(null),
       findLastPerformancesByExercise: jest.fn().mockResolvedValue([]),
+      distinctRecentPlaces: jest.fn().mockResolvedValue([]),
+      findLastSkipsByExercise: jest.fn().mockResolvedValue([]),
       update: jest.fn().mockResolvedValue({}),
     } as unknown as IWorkoutSessionRepository,
     exerciseRepository: {
