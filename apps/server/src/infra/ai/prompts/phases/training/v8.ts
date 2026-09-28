@@ -3,13 +3,15 @@ import { DIRECTIVES_WITHOUT_IDENTITY_V2 } from '@infra/ai/prompts/directives';
 import type { DirectiveContext, PromptModule, Section } from '@infra/ai/prompts/types';
 
 /**
- * v8 (set-kind plan Task 1, D9): identical to v7 except — TASK rule 2 gains one sentence on
- * `setKind` ("the user's words decide warm-up, never the weight"); RULE 6 gains one sentence on
- * the dumbbell/kettlebell per-hand default; the RULE 2 confirmation example is widened to show
- * the warm-up and per-hand markers the tool's own confirmation may now carry; TOOLS gains the
- * `set_session_place` entry (its tool is built in Task 2 — the entry text lands here so v8 stays
- * the only new version this plan introduces; Task 2 must not create a v9). Every other TASK/TOOLS/
- * RULES line is unchanged from v7.
+ * v8 (set-kind plan Task 1, D9; place rule added at close-out review B2, D6): identical to v7
+ * except — TASK rule 2 gains one sentence on `setKind` ("the user's words decide warm-up, never
+ * the weight"); RULE 6 gains one sentence on the dumbbell/kettlebell per-hand default; the RULE 2
+ * confirmation example is widened to show the warm-up and per-hand markers the tool's own
+ * confirmation may now carry; TASK gains a place rule (record only when the user names it; ask
+ * once this session ONLY when WORKOUT OVERVIEW shows the ask line, never otherwise); TOOLS gains
+ * the `set_session_place` entry, worded to match (its tool is built in Task 2 — the entry text
+ * lands here so v8 stays the only new version this plan introduces; Task 2 must not create a v9).
+ * Every other TASK/TOOLS/RULES line is unchanged from v7.
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- v8 adds no fields
 export interface TrainingPromptContextV8 extends DirectiveContext {}
@@ -39,7 +41,9 @@ Guide the client through the workout. At each step:
 
 6. <b>Pain or injury</b>: Recommend stopping the affected exercise immediately. Suggest a safe alternative or rest.
 
-7. <b>Session complete</b>: Call finish_training ONLY when the user EXPLICITLY says they want to end the session ("done", "finished", "end workout"). If you are unsure, ASK the user first: "Are you finishing the session?" NEVER call finish_training because an error occurred, an exercise was skipped, or you cannot proceed — those are NOT reasons to end a session.`;
+7. <b>Session complete</b>: Call finish_training ONLY when the user EXPLICITLY says they want to end the session ("done", "finished", "end workout"). If you are unsure, ASK the user first: "Are you finishing the session?" NEVER call finish_training because an error occurred, an exercise was skipped, or you cannot proceed — those are NOT reasons to end a session.
+
+8. <b>Session place</b>: Record where today's session is happening ONLY when the user names it themselves (e.g. "я сегодня в Fitness House", "дома") — call set_session_place, in their own words. Do NOT ask about it on your own. The one exception: if WORKOUT OVERVIEW shows a "Place: not stated (ask — ...)" line, ask the user that one question once this session; if they don't answer, or the line is not shown at all, never ask again this session.`;
 
 const TOOLS_TEXT = `=== TOOLS ===
 
@@ -50,7 +54,7 @@ const TOOLS_TEXT = `=== TOOLS ===
 - <b>finish_training</b>: Call when user confirms the session is complete. This ends the training phase and returns to chat.
 - <b>delete_last_sets</b>: Call when the user says a set was logged by mistake or wants to undo a recent set. Provide exercise_id and count (default 1 — deletes only the most recent set). ALWAYS call delete_last_sets INSTEAD OF logging a corrected set — never log a "replacement" set without deleting the wrong one first.
 - <b>update_last_set</b>: Call when the user corrects the weight, reps, or RPE of the last logged set. Provide exercise_id and only the fields that need to change. ALWAYS prefer update_last_set over delete + re-log when only one field is wrong.
-- <b>set_session_place</b>: Call when the user names or corrects where today's session is happening (e.g. "я сегодня в другом зале", "мы сегодня в Fitness House"), typically said after the session already started. Provide place as free text in the user's own words. Do NOT ask for it and do NOT call it unless the user states the place themselves.`;
+- <b>set_session_place</b>: Call when the user names or corrects where today's session is happening (e.g. "я сегодня в другом зале", "мы сегодня в Fitness House"), typically said after the session already started. Provide place as free text in the user's own words. Do NOT bring this up on your own — the one exception is WORKOUT OVERVIEW's "Place: not stated (ask — ...)" line: ask the user that one question once this session, then call this tool with their answer.`;
 
 const RULES_TEXT = `CRITICAL RULES — NEVER VIOLATE:
 
