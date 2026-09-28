@@ -6,6 +6,7 @@ import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import type { ITrainingService } from '@domain/training/ports';
 import { SetDataSchema } from '@domain/training/set-data.types';
 
+import { formatSetData } from '@infra/ai/prompts/blocks/training-workout-overview.v1';
 import {
   formatExerciseSummary,
   RETRO_SET_OFFSET_MS,
@@ -104,15 +105,9 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           log.warn({ err: nameErr, sessionId }, 'log_set: could not resolve exercise name for confirmation');
         }
 
-        const { type } = set.setData;
-        let summary = '';
-        if (type === 'strength') {
-          const d = set.setData;
-          const perHandNote = d.perHand ? ' per hand' : '';
-          summary = `${d.reps} reps${d.weight != null ? ` @ ${d.weight} ${d.weightUnit ?? 'kg'}${perHandNote}` : ''}`;
-        } else {
-          summary = type;
-        }
+        // B1 (close-out review): the strength confirmation is the same text as every other set
+        // listing — one formatter, no second copy of the per-hand note.
+        const summary = formatSetData(set.setData);
 
         const kindNote = set.setKind === 'warmup' ? ' (warm-up)' : '';
         const rpeNote = rpe != null ? ` | RPE ${rpe}` : '';
