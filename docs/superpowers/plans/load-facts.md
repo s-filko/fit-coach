@@ -389,3 +389,49 @@ candidate (count raised in `docs/REVIEW_FINDINGS.md`).
   (AC-LF-7; the local dev DB is behind migrations, so the run used `.env.test`). Orchestrator
   re-run at acceptance: `db-test-lock.sh npm run test:scenarios` → 22 suites, 407 passed + 1 todo.
 
+## Zero-LLM check on dev (2026-09-29, after deploy `9dc8a4a9`)
+
+Deploy Dev Action run `36520135377` succeeded: no migration in this plan (journal still 21 rows,
+"nothing to stamp"), containers healthy, `GET /health` → 200. Then, inside `fitcoach-dev-server`:
+`npx tsx scripts/print-load-plan.ts --user 60af022f-f041-45d8-a202-0f482af79e1a` → 20 exercises
+from the last 56 days, exit 0; `llm_calls` 183 before and 183 after (AC-LF-7). Journal fill:
+`target_reps` on 70 of 147 exercise rows, RPE on 211 of 446 sets, `set_kind` on 0 (all legacy).
+
+The owner's numbers (reference · working weight · e1RM · gap exercise / primary muscles):
+
+| Exercise | Reference | Working weight | e1RM | Gap |
+|---|---|---|---|---|
+| 45° Leg Press | 09-27: 12×110, 12×130, 12×130, 12×135, RPE 8/9 | 135 kg (5 perf / 8 wk) | insufficient (2) | 2 d / 2 d |
+| Leg Extension | 09-27: 3×15×66 | 66 kg (5) | insufficient (0 with ≤ 10 reps) | 2 d / 2 d |
+| Leg Curl | 09-27: 3×15×66 | 66 kg (5) | insufficient | 2 d / 2 d |
+| Standing Calf Raise Machine | 09-27: 30×40, 30×40, 30×45, 30×45 | no rep range | insufficient | 2 d / 2 d |
+| Lever Lat Pulldown (Plate-Loaded) | 09-25: 4×12×55 | 55 kg (3) | insufficient (1) | 4 d / 4 d |
+| Machine Chest Press | 09-25: 12×60, 10×65, 10×65 | insufficient (1) | insufficient (1) | 4 d / 4 d |
+| Chest-Supported Row, Wide Grip | 09-25: 12×20, 12×20, 12×17.5 | insufficient (1) | 26.7, falling −42.9 % | 4 d / 4 d |
+| Lateral Raise Machine | 09-25: 10/15/12/10 × 2.5 | no load reached the floor 15 | 3.3, falling −50 % | 4 d / 4 d |
+| Cable Tricep Pushdown, Rope | 09-25: 10×45, 8×45, 9×38 | 32 kg (3) | 60.0, rising +25 % | 4 d / 4 d |
+| Barbell Bench Press | 09-20: 8×60, 10×60, 10×60, RPE 8/9 | 60 kg (4) | 80.0, rising +14.3 % | 9 d / 4 d |
+| Lat Pulldown | 09-20: 12×50, 12×50, 10×50, RPE 7/8/10 | 50 kg (2) | insufficient (2) | 9 d / 4 d |
+| Incline Dumbbell Press | 09-17: 10×24, RPE 8 | insufficient (1) | 32.0, rising +6.7 % | 12 d / 4 d |
+| Chest-Supported Row, Narrow Grip | 09-15: 3×12×45 | no rep range | insufficient | 14 d / 4 d |
+| Dumbbell Bicep Curl | 09-15: 10×8, 10×8, 10×6 (drop-set) | no rep range | insufficient | 14 d / 14 d |
+| Machine Shoulder Press | 09-10: 12×23, 11×23, RPE 9 | insufficient (1) | insufficient | 19 d / 12 d |
+| Treadmill, Plank, Side Plank, Cycling, Glute Bridge | dated references printed | n/a (class) / insufficient | n/a | 2–20 d |
+
+Findings from the check (code, not model — split per the "weak model reveals" rule), filed in
+`docs/BACKLOG.md` § load-facts:
+- **The one `equipment` fact (≈ 250 chars, lever machines) is printed in full on every entry** —
+  20 copies in the report, one per exercise in a live LOAD PLAN. Print equipment facts once per
+  block.
+- **`drop-off -2`** is printed when reps rose across sets (Bench 8 → 10); a negative drop-off
+  should read as "none (reps rose)".
+- **e1RM spans all history, working weight only 8 weeks (D9 as written):** Chest-Supported Row
+  Wide shows "falling −42.9 %" and "insufficient (1) / 8 wk" side by side, and Lateral Raise
+  "falling −50 %" on 2.5 kg — likely a basis/machine change in old rows, not a real loss. The
+  owner should say whether these trends match his memory (live check 4).
+- **Cycling** (`cardio_distance`) shows its reference as `600s` — the set was stored as a duration;
+  a data-shape mismatch, printed faithfully.
+- Several old references read `fresh (1st exercise) · 0 min in` — pre-U4 sessions without
+  `startedAt` and with retro-logged set timestamps; the fatigue context is only as good as those
+  timestamps.
+
