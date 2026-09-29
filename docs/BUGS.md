@@ -1959,6 +1959,13 @@ overview for a cardio, duration or off-plan exercise.
 Format every `set_data` type through one formatter in the confirmation, summary and overview; omit the target
 line when there is none; reject or normalise a `targetReps` that repeats the set count.
 
+### Seen again — owner's live dev session 2026-09-29 (run `0858a2e0`, 10:26 UTC)
+
+The `log_set` confirmation now carries the values (`Set 1 logged — Treadmill: 2.26km 17min (warm-up)`), but the
+auto-complete summary of the off-plan treadmill is still junk and now under-counts: `Target: ?x?`, `Set 1:`
+(empty), `Total: 0/? sets.` — one set was logged; the warm-up kind (set-kind, 2026-09-28) is apparently excluded
+from the count while the set line is still printed. The summary half of this bug stays open.
+
 ## BUG-042 — A planned exercise replaced by another leaves no trace: no `skipped` row, the plan line stays pending, and the next session reads "never done"
 
 **Status:** Fixed (set-kind, 2026-09-28)
@@ -2025,3 +2032,272 @@ were not exercised.
   - **S27-J5** (LS-0013, runs `30f3384d` → `412bee90`) — progress is compared with a previous session only on a
     comparable measure; no "reach Monday's level" target when the rep scheme differs (50×20/15/12 vs 40–45×30).
   Not drafted (too minor for a case): «груда-опорная тяга»; finish feedback «50-минутная сессия» for 81 minutes.
+
+## BUG-043 — Retro-logging is sticky: after one >2 h idle gap every later set and the finish get the old timestamp; the session lasts "−1 min"
+
+**Status:** Open
+**Severity:** High — the whole session's timing is wrong in the DB (start, every set, finish, duration); the coach
+repeats "записи идут задним числом" for the rest of the workout
+**Found during:** owner's live dev session 2026-09-29, session `1a136380-245c-42ad-b26c-64cb47996b8e`
+(`upper_b_20260929`), runs `8048812b` (10:21 UTC) … `396ee9a0` (11:33 UTC)
+**Component:** `apps/server/src/infra/ai/tools/log-set.tool.ts:73-90` (retro detection), `finish-training.tool.ts`
+(stale finish), `format-exercise-summary.ts` (`SESSION_TIMEOUT_MS` = 2 h, `RETRO_SET_OFFSET_MS` = 5 min)
+
+### Description
+
+The session was started at 07:28 UTC (15:28 Manila, see BUG-044); the user began training at 10:21 UTC and
+finished at 11:33 UTC. In the DB:
+
+| Field | Stored | Real |
+|---|---|---|
+| `started_at` | 07:28:06.376 | ≈10:21 |
+| `created_at` of all 16 sets | 07:33:06.299 (identical) | 10:21 … 11:33 |
+| `last_activity_at` | 07:28:06.299 (never moved) | 11:33 |
+| `completed_at` | 07:28:06.299 — before `started_at` | 11:33 |
+| `duration_minutes` | −1 | ≈72 |
+
+Every `log_set` confirmation carried `(retro-logged)`; `finish_training` returned `Session completed in -1 min.`
+
+### Root cause
+
+1. `log_set` treats a set as retro when `now − lastActivityAt > SESSION_TIMEOUT_MS` and stamps it
+   `lastActivityAt + 5 min`.
+2. In the retro branch it passes `skipActivityUpdate: isRetro`, so `lastActivityAt` never advances — the next set
+   sees the same >2 h gap and is retro again. One idle gap makes the whole rest of the session retro.
+3. `finish_training` sees the same stale `lastActivityAt` and sets `completedAt = lastActivityAt`, which is ≤
+   `startedAt` (started_at is written a few ms after the row's `now()`), giving `durationMinutes = −1`.
+4. Chat messages do not count as activity, so the 3 h of conversation in the training phase did not move it either.
+   The 2 h auto-close in `TrainingService.autoCloseTimedOutSessions` did not fire during the run (it is called from
+   `getActiveSession` / `startSession`, apparently not on the training tool path — to confirm in the investigation).
+
+The retro heuristic is meant for "the user trained, forgot to log, and reports later"; here it fired on a live
+workout and could never recover.
+
+### Why the tests did not catch it
+
+No test logs a second set after a retro set, and no test finishes a session whose `lastActivityAt` is older than
+the timeout (to confirm in the investigation).
+
+### Fix plan (to design)
+
+At minimum: a retro set must not freeze activity — once the user logs a set "now", the session is live again;
+`completed_at` must never precede `started_at`, duration never negative. Decide with BUG-044 whether `started_at`
+should be the first logged set. Data fix for session `1a136380` (real times are in `conversation_turns`) — owner
+decision.
+
+## BUG-044 — The session starts when the plan is accepted, and the model started it on an answer to a different question
+
+**Status:** Open
+**Severity:** High — trigger of BUG-043: the session was `in_progress` for 3 h before the user reached the gym
+**Found during:** owner's live dev session 2026-09-29, runs `db03d824` → `b83ef865` (07:27–07:28 UTC), `881b9aa8`
+(07:58 UTC)
+**Component:** session_planning phase prompt, `start_training_session` tool (`startedAt` on create)
+
+### Description
+
+The coach asked «Оставляем этот порядок или ставим жим первым?»; the user answered «оставляем» — about the exercise
+order. The model called `start_training_session` in the same run; the session went `in_progress` at 15:28 Manila.
+Thirty minutes later the user wrote «я в зал пока не иду, чуть позже пойду»; the first set came at 18:21 Manila.
+
+- **code:** "plan accepted" and "training started" are one event — `start_training_session` writes `started_at`
+  at plan acceptance.
+- **unguarded:** nothing requires an explicit start («начинаем», «я в зале», a first set) before the session goes
+  `in_progress`; an earlier prompt line in the same exchange («Если да, начинаем») made any "yes" a start.
+- **model:** read an answer to the order question as a start command.
+
+### Fix plan (to design)
+
+Separate plan acceptance from the start of training (e.g. `started_at` = first logged set, or an explicit start
+step); decide together with BUG-043.
+
+## BUG-045 — The coach reported a phantom duplicate of the set it had just logged and implied the user caused it
+
+**Status:** Open
+**Severity:** Medium — false claim about the user's data, blame on the user («Возможно, ты рассказывал о ней раньше»)
+**Found during:** owner's live dev session 2026-09-29, runs `8048812b` (10:21 UTC), `5c1c347c`, `61020c69`
+**Component:** training overview domain block (`training-workout-overview.v1.ts`), `log_set` confirmation text
+
+### Description
+
+The user reported the treadmill warm-up; `log_set` saved it as set 1 (retro, BUG-043). The reply said the session
+"already had" a treadmill warm-up with the same numbers, logged "примерно 169 минут назад", and asked whether to
+delete the duplicate. The user: «я не говорил ничего… это твой баг а не мой». The coach retracted only two turns
+later («Система записала твою разминку как подход №1, значит, дубля нет»).
+
+- **code:** BUG-043 gave the set just logged a timestamp 169 min in the past, so in the overview it looked old.
+- **unguarded:** neither the confirmation nor the overview marks which listed set is the one just written.
+- **model:** inferred a duplicate from one set, and attributed it to the user.
+
+### Fix plan
+
+Fixing BUG-043 removes the trigger; additionally mark the just-logged set in the tool result / overview.
+Eval draft for "never blame the user for a system record".
+
+## BUG-046 — Summariser calls on the OpenRouter Haiku 4.5 route take 15–124 s and block the reply ("привет" answered after 201 s)
+
+**Status:** Open — cause not identified
+**Severity:** High — first reply of the day took 3 min 21 s; a mid-workout set confirmation took 37 s
+**Found during:** owner's live dev session 2026-09-29 (first day on the Sonnet 5.5 / Haiku 4.5 OpenRouter route)
+**Component:** `summarizer` profile (`LLM_PROFILE_SUMMARIZER_MODEL=anthropic/claude-haiku-4.5`), compaction and
+fact verifier on the reply path
+
+### Description
+
+| Run | Call | Latency | In / out / reasoning tokens |
+|---|---|---|---|
+| `ea38dd79` («привет») | compaction | 123.5 s | 6 027 / 897 / 639 |
+| `ea38dd79` | fact verifier | 73.4 s | 1 802 / 1 207 / 970 |
+| `73398d94` | compaction, verifier | 27.3 s, 15.4 s | |
+| `881b9aa8` | compaction, verifier | 34.7 s, 17.0 s | 6 275 / 1 605 / 1 359 |
+| `1bac33d5` (set report) | compaction | 27.4 s | |
+
+7 Haiku calls took 318 s in total — more than all 57 Sonnet calls of the day (276 s). Each Haiku call spends
+600–1 400 reasoning tokens (`reasoningEffort` from `LLM_REASONING_EFFORT=low` + `json_schema`). `llm_calls` does
+not record the OpenRouter provider, so provider routing cannot be checked from the DB.
+
+Compaction running inline on the reply path was already noted on 2026-09-27 (BUG-042 § Related, 35 s / 13 s);
+this route makes it several times worse.
+
+### Fix plan (to investigate)
+
+Record the upstream provider per call; probe (owner-approved) Haiku with/without reasoning and structured output;
+consider moving compaction off the reply path.
+
+## BUG-047 — Episode summaries are labelled with the compaction time, not the conversation time; a finished session's open items reappear as "today"
+
+**Status:** Open
+**Severity:** Medium — the prompt tells the coach that a leg session from 2026-09-27 happened "today" with open items
+**Found during:** owner's live dev session 2026-09-29, summaries at 05:41:14, 05:47:08, 07:58:41 UTC
+**Component:** `prompts/blocks/episode-summaries.v2.ts` (label), compaction input selection
+
+### Description
+
+On 2026-09-29 the first compactions summarised turns from the 2026-09-27 leg workout, but were labelled
+`chat (today 13:39)`, `session_planning (today 13:46)`, `training (today 15:58)` — the time of the compacting run,
+and the phase the compaction ran in, not those of the summarised conversation. Their "Open items" («Complete remaining
+standing calf raise sets», «Planks: 2×45 seconds») belonged to a session completed two days earlier. The coach was
+not visibly misled this time; the context was wrong. AC-SI-5c (BUG-038) added the local time but took it from the
+wrong moment.
+
+### Fix plan
+
+Label a summary with the date/time range and phase of the turns it covers; drop open items of a session that is
+already completed.
+
+## BUG-048 — An exercise missing from the catalog is logged silently under the nearest match (Smith bench press → Machine Chest Press)
+
+**Status:** Open (the catalog gap itself was closed by `7b82ffbc`, 2026-09-29)
+**Severity:** Medium — wrong exercise in history; the next plan quoted numbers for a machine the user never used
+**Found during:** owner's live dev session 2026-09-29, runs `73398d94`, `4dade3df`, `fdd1c740`; origin 2026-09-25
+run `7853c472`
+**Component:** training phase prompt / `log_set` exercise resolution, catalog
+
+### Description
+
+On 2026-09-25 the user wrote «сделал 12 вес 60 кг в тренажере смит»; the catalog had no Smith bench press and the
+coach logged it as `Machine Chest Press`, saying so in passing («тренажер Смита подходит, буду дальше писать туда
+же»). On 2026-09-29 the planning prompt's history showed `Machine Chest Press: 12x60kg, 10x65kg, 10x65kg`; the coach
+planned it; the user: «я не делал его в пятницу… я вообще его не делал в этом году». The coach then discarded the
+numbers instead of asking which machine it was. The 09-25 rows were re-pointed to `Smith Machine Bench Press` after
+the catalog addition.
+
+- **unguarded:** no rule / tool path for "the exercise is not in the catalog" — the model substitutes and moves on.
+- **model:** after the user's objection, did not ask which machine was actually used.
+
+### Fix plan (to design)
+
+A not-in-catalog path (ask, or log with an explicit substitution note visible in history); the owner decides.
+
+## BUG-049 — Coach conduct in the 2026-09-29 session: repeated retro nag, invented equipment increments, second-guessed RPE
+
+**Status:** Open
+**Severity:** Low — noise and wrong load advice, no data damage
+**Found during:** owner's live dev session 2026-09-29
+**Component:** training phase prompt, `log_set` confirmation text, load-advice context
+
+### Description
+
+1. **Retro nag after «я сам потом исправлю, оставь как есть»** (`ed50b86d`): «записи идут задним числом, сессия
+   старая» repeated in 6 later replies (`425834da`, `75b3b9d7`, `d81e02f0`, `f5e32eb4`, `396ee9a0`, …).
+   *code:* every confirmation carries `(retro-logged)` (BUG-043), re-prompting the model each turn; *model:* ignored
+   the user's decision.
+2. **Invented equipment increments:** «Шаг в тренажёре обычно 5 кг» for the Smith machine, then «67.5 или 70 кг»
+   (`689c3dce`); for the reverse pec deck advised 27.5–30 kg and 20–22.5 kg (`222027f9`, `65f9b5dc`) — the machine
+   has only 25 and 32 below that. *unguarded:* no per-machine weight steps in context; *model:* stated a guess as fact.
+3. **RPE second-guessed** (`9bf1b9ac`): «Ты говоришь, что шёл спокойно, но RPE 8 означает запас около двух
+   повторов» — the user then changed it to 7. *model.*
+4. **Warm-up vs working wording** (`e49cefa2`): called the 60 kg Smith set «разминочный подход», then logged it
+   as working (the plan said "первый подход 60 кг"). *model.*
+
+### Fix plan
+
+Item 1 goes with BUG-043. Items 2–4 → eval drafts from this session; per-machine increments as a user-fact /
+equipment-profile idea (backlog).
+
+### Related findings from the same session (2026-09-29)
+
+- **BUG-041** seen again — see its § Seen again.
+- **Prompt cost** → BUG-051; **token estimator under-counts** → BUG-050.
+- **Partial reps:** «11.5 повторов» cannot be stored (integer reps); the coach logged 11 with a note — backlog
+  candidate, not a bug.
+- **Verified correct:** every historical number quoted (row 09-25, lateral raise 10/15/12/10, reverse pec deck
+  2026-04-13 «169 дней назад»); RPE attached to the right set in `c704538b`; no set logged without a weight
+  (`de6a52f6`); set-first reply order on every exercise switch (BUG-037 fix holds).
+
+## BUG-050 — The context budget under-counts real tokens ≈1.7–2×: the "8000-token" history is really ~15 k
+
+**Status:** Open
+**Severity:** Medium — every budget (history 8000, domain 6000, system 5000) is enforced on an estimate about half
+the real size; cost and the compaction trigger follow the estimate, not the bill
+**Found during:** owner's live dev session 2026-09-29 (cost review), run `5f7d8c08` call 1
+**Component:** `apps/server/src/infra/ai/context/token-estimator.ts` (`chars/4 × 1.15`, id `chars4x1.15`)
+
+### Description
+
+Run `5f7d8c08`: the budget report estimates the assembled context at **16 742** tokens (system 4 417, domain
+3 428, history 7 306, …); the provider billed **34 902** input tokens for the call. Tool schemas (13 tools,
+20 298 chars) are outside the budget and explain part of the gap; the rest (≈54 k chars of Russian text and JSON
+→ ≈28 k tokens) tokenises at ≈1.9 chars/token, not the 4 / 1.15 ≈ 3.5 the estimator assumes. The 1.15 "Cyrillic
+safety factor" is far too small for Russian-heavy prompts on the Anthropic tokenizer.
+
+### Fix plan (to investigate)
+
+Calibrate against billed `input_tokens` per call (already stored in `llm_calls`) — per route, or from the
+provider's usage of the previous call; count tool schemas in the budget; re-check the budget sizes after that.
+
+## BUG-051 — One workout costs ≈ $3.6 on the Sonnet 5.5 route: nothing is cached, every tool run sends the full prompt twice, all 13 tools every call
+
+**Status:** Open
+**Severity:** High — $3.63 of $10 OpenRouter credits for one session (owner, 2026-09-29: 6.37 left); ≈1.7 more
+workouts before the dev credits run out
+**Found during:** owner's live dev session 2026-09-29, 64 calls 05:39–11:33 UTC
+**Component:** LLM request assembly (prompt order, `cache_control`), training tool set, agent loop (tool call →
+post-tool call)
+
+### Description
+
+| Model | Calls | Input tokens | Output tokens | List price | Cost |
+|---|---|---|---|---|---|
+| `anthropic/claude-sonnet-5.5` | 57 | 1 668 551 | 19 868 | $2 / $10 per M | $3.54 |
+| `anthropic/claude-haiku-4.5` | 7 | 29 869 | 8 723 | $1 / $5 per M | $0.07 |
+
+Estimate $3.61 vs $3.63 actually charged. **92 % of the cost is input.** One training call (`5f7d8c08`, 34 902
+tokens) by chars: tool schemas 27 %, training system prompt 21 %, history — coach replies 19 %, domain block 16 %
+(load plan ≈1.8 k tokens), history — tool results 9 %, facts/episodes/directive 7 %, the user's own messages 1 %.
+
+1. **Zero cache hits** (`cache_read_tokens = 0` on all 64 calls). The OpenRouter → Anthropic route caches only with
+   explicit `cache_control`, which the app does not send (`CLAUDE.md` § LLM); and `cache_expected` shows
+   `prefix_changed:system:domain` on almost every call — the volatile workout overview sits before stable content,
+   so even with `cache_control` the prefix after the system prompt would break every turn (target order already
+   in `docs/superpowers/specs/2026-09-26-training-history-context-design.md` § 4). Tools + system prompt (≈48 %
+   of a call) are stable and paid in full 57 times.
+2. **Two full calls per tool run:** 22 of 35 runs called a tool; each is a tool-decision call plus a post-tool
+   reply call, both with the full prompt — logging one set costs ≈ $0.14.
+3. **All 13 tool schemas in every training call** (20 k chars), though a set report needs 2–3 of them.
+4. Budgets under-count real tokens (BUG-050), so history and domain are ≈2× their intended size.
+
+### Fix plan (to design; owner decision)
+
+In order of expected saving: `cache_control` + stable-first prompt order; fix BUG-050; a smaller training tool set
+and shorter schemas; then consider the post-tool call. Estimate after the first three: ≈ $1–1.5 per workout
+(unmeasured).
