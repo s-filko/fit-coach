@@ -139,6 +139,19 @@ formatter); load spec `2026-09-24-load-advisor-design.md` §8 (class applicabili
 - **D16 — no durable-spec edit.** Nothing in `docs/domain/`, ADRs or `API_SPEC.md` changes in
   U9a (no new fact category, no call class, no API). The threshold table is for the owner's
   review, not a spec.
+- **D17 — red commits (worker incident, accepted).** The pre-commit hook runs `test:unit`, so a
+  failing unit test cannot be committed; Task 1's worker verified red by running (82 failing
+  against stubs) and made one green commit; Task 2 committed a red test (`f3ec5184`) that the hook would reject, so that commit bypassed
+  the hook; its green successor passed it.
+  Accepted — the rule's aim (a test that fails on unchanged code) was met and observed.
+- **D18 — Task 1 interface choices (worker, accepted at review).** `computeLoadFacts` takes a
+  context `{ constraints, equipmentFacts, workouts, allTimePerformances? }`; reps-vs-range uses
+  the weakest working set; the like-for-like reps test uses today's range only (the
+  reference's own `target_reps` feeds only metrics 4 and 6); weeks at weight is not capped by
+  the 5-performance window; a missing gap prints `> 56 d` as an absent reason.
+- **D19 — GLM notice (incident).** Task 2's worker stopped on the Claude Code "auto mode
+  classifier billing" notice; the orchestrator dismissed it with `terminal send --enter`, as
+  `docs/ORCHESTRATION.md` prescribes. Task 3 reuses Task 1's Sonnet terminal (context kept).
 
 ## R4.0 — sourced thresholds (for the owner's one review; code parameters in U9b)
 
