@@ -12,7 +12,7 @@ Everything below the block is hand-written: only facts no generator can derive.
 _Generated 2026-09-29 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-- `load-facts.md` — Load Facts — Per-Exercise Load Metrics as a Facts-Only `LOAD PLAN` Block and `get_load_plan` (Roadmap U9a) Implementation Plan (branch: `plan/load-facts`, last commit 2026-09-29)
+— none —
 
 **Planned**
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
@@ -29,6 +29,7 @@ _Generated 2026-09-29 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `fact-verification.md` — Fact Verification — a Model Checks Each Compaction Fact Against the User's Words (BUG-040 follow-up) Implementation Plan
 - `llm-io-audit-trail-closeout.md` — LLM I/O Audit Trail — Close-out Remediation Implementation Plan
 - `llm-io-audit-trail.md` — LLM I/O Audit Trail — Nothing the User Wrote, the Model Answered, or the API Received Is Lost Implementation Plan
+- `load-facts.md` — Load Facts — Per-Exercise Load Metrics as a Facts-Only `LOAD PLAN` Block and `get_load_plan` (Roadmap U9a) Implementation Plan
 - `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
 - `now-line-last.md` — NOW Line Last — Move the Current-Time Line out of Block 1 for Prompt Caching Implementation Plan

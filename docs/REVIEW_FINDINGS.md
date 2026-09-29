@@ -503,6 +503,13 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   instead of trusting ticks.
   Second run: R3 could not see Tasks 3–5's verification evidence — it lived only in Orca `worker_done` messages, commit messages held no command output. Proposed for `CONTRIBUTING_AI.md`: "A worker's commit message records each verification command and its summary line (suites/tests passed)."
   Runs: refactor-p0-run-log (2026-09-12), transition-handoff (2026-09-25).
+- [×2] A plan Decision that an AC incorporates by reference ("return the D9 values") cannot be cited
+  as blocking, so a metric deviating from D7 was only advisory. Proposed for
+  `SUPERPOWERS_INTEGRATION.md` Rules of engagement: "A plan Decision that an AC names (e.g. 'per D9')
+  is part of that AC; a deviation from it is an AC violation unless the plan records it as a later
+  (D)." Second run: D7's `(warm-ups estimated)` marker, dropped for the fatigue lines, again only
+  advisory; proposed variant: "a plan D-item that defines observable output is citable as a blocking
+  rule by its plan id". Runs: load-facts (2026-09-29, R3), load-facts (2026-09-29, R3 run 2).
 - [×1] Nothing states where DB persistence may live *inside* infra. `ARCHITECTURE.md:362` only
   says "Keep DB logic in repositories; do not call Drizzle directly from controllers or domain
   services", and neither `infra/ai/llm-call-recorder.ts` nor `infra/observability/transcript-reader.ts`
@@ -871,8 +878,3 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   `CONTRIBUTING_AI.md`: "A change that adds a prompt block, tool or prompt version updates the
   ARCHITECTURE.md file map and the MANUAL_TEST_PLAN.md tool list in the same PR, or logs the drift
   in BACKLOG.md." Runs: load-facts (2026-09-29, R4).
-- [×1] A plan Decision that an AC incorporates by reference ("return the D9 values") cannot be cited
-  as blocking, so a metric deviating from D7 was only advisory. Proposed for
-  `SUPERPOWERS_INTEGRATION.md` Rules of engagement: "A plan Decision that an AC names (e.g. 'per D9')
-  is part of that AC; a deviation from it is an AC violation unless the plan records it as a later
-  (D)." Runs: load-facts (2026-09-29, R3).

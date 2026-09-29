@@ -4,9 +4,10 @@
 > test-driven-development. Red tests first, then the code. Every task's step 1 is a test that
 > must fail on unchanged code for the stated reason; commit it red before any production change.
 
-- Status: in progress
+- Status: done
 - Branch: plan/load-facts
 - After: set-kind
+- Review: 2026-09-29 | clean | R1,R2,R3,R4
 
 **Goal:** at every training request the coach sees, for each of today's exercises, the
 **facts** a load decision rests on — computed in code from the journal, never by the model:
@@ -156,6 +157,13 @@ formatter); load spec `2026-09-24-load-advisor-design.md` §8 (class applicabili
   (`3e75a335`) with tests written first but not run red separately — the same hook constraint as
   D17. The scenario, block and tool tests fail on the pre-Task-3 tree by construction (the block,
   tool and loader did not exist).
+- **D21 — factual code-map edits at close-out.** `docs/ARCHITECTURE.md` (file map: block, loader,
+  tool) and `docs/MANUAL_TEST_PLAN.md` (tool list) gained lines naming the new files (review R4).
+  ARCHITECTURE.md is a durable spec; the edit is additive and factual only — flagged for the owner.
+- **D22 — flaky `chat-concurrency` (observation).** The pre-merge `test:integration` run had one
+  failure in `tests/integration/api/chat-concurrency.integration.test.ts`; the file passed 2/2 when
+  re-run alone on the same tree. It exercises the chat route's mutex timing, not training
+  context. Recorded, not fixed here.
 
 ## R4.0 — sourced thresholds (for the owner's one review; code parameters in U9b)
 
@@ -343,6 +351,26 @@ Advisory — no action: R4 `AC-LF-*` ids follow the established plan-scoped conv
 Meta (filed in `docs/REVIEW_FINDINGS.md`): R1 import-direction table (blind spot), R2 unverified
 citation (prompt defect), R3 D-items incorporated by an AC (rule candidate), R3 where verification
 output lives (existing entry, now ×2), R4 code-map update rule (rule candidate).
+
+**Run 2 (2026-09-29, R3 only — the zone that blocked; Opus) — clean.** B1 closed (evidence
+above; `adb6931a`'s body carries check-all exit 0, test:unit 167 suites / 1716 passed,
+test:scenarios 22 suites / 407 passed + 1 todo). B2 closed (AC-LF-1 in every top-level describe of
+`metrics.unit.test.ts` and `rep-range.unit.test.ts`; AC-LF-2 / AC-LF-3 in the block suite and each
+`it`). The four fixed advisories verified: `workingOtherSets` classifies per exercise row
+(`metrics.ts:241-247`), `currentLoadUnit` (`training-load-plan.v1.ts:112-114`), gap reasons
+`no completed record` / `none in the last 60 workouts` with a loader test for the 90 d fallback,
+and the order test at `phase-specs.unit.test.ts:316`. Run-2 advisories, filed in `docs/BACKLOG.md`
+§ load-facts: `metrics.ts:247` drops the `estimated` flag for fatigue (D7 line marker);
+`metrics.ts:496` hardcodes the 60-workout window text owned by the loader;
+`load-facts.loader.ts:163-176` the fallback session can overstate primary-muscle / any-workout gaps
+for users with > 60 workouts (the owner has 31); `metrics.ts:528` equipment step hardcodes kg;
+`adb6931a` body over-claims AC ids in "each it()". Meta: recurrence of the run-1 D-items rule
+candidate (count raised in `docs/REVIEW_FINDINGS.md`).
+
+**Pre-merge re-run by the orchestrator (branch head `e9308280` + this record):**
+`db-test-lock.sh npm run test:integration` → 49 of 50 suites passed, 653 passed + 1 todo, 1 failed
+(`chat-concurrency`, see D22; re-run alone 2/2 passed twice); `npm run test:unit` → 167 suites,
+1716 passed.
 
 ### Verification evidence
 
