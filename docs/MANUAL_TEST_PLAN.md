@@ -66,7 +66,7 @@ Note the IDs — referred to as `$BENCH_ID`, `$SQUAT_ID`, `$PULLUP_ID`, `$RUN_ID
 | POST /api/user      | Create/upsert user by provider                                                                   |
 | POST /api/chat      | All conversation (registration, chat, training)                                                  |
 | Conversation phases | `registration` → `chat` → `session_planning` → `training` → `chat`                               |
-| Training tools      | `search_exercises`, `get_exercise_history`, `log_set`, `complete_current_exercise`, `finish_training`, `delete_last_sets`, `update_last_set`, `set_session_place` |
+| Training tools      | `search_exercises`, `get_exercise_history`, `get_load_plan`, `log_set`, `complete_current_exercise`, `finish_training`, `delete_last_sets`, `update_last_set`, `set_session_place` |
 | Session lifecycle   | `planning` → `in_progress` → `completed` / `skipped`                                             |
 | Exercise lifecycle  | `pending` → `in_progress` → `completed` / `skipped`                                              |
 
