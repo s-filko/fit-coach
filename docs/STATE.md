@@ -238,6 +238,26 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
+## Handoff (U9a order, 2026-09-29) — next orchestrator runs U9a load-facts autonomously to the dev deploy
+
+Owner order 2026-09-29 (autonomy, relay to a fresh orchestrator; the set-kind orchestrator stays
+open for the owner's live check and possible rework — it does not touch U9a). **Scope:** write plan
+`docs/superpowers/plans/load-facts.md` from design `2026-09-28-load-recommendation-architecture-design.md`
+§3.1–3.4 and §9 (U9a): R4.0 sources, the §3.2 metrics, a facts-only `LOAD PLAN` block (no weight
+recommendation), `get_load_plan`, `formatSetData` reuse; dispatch via `delegate-implementation`
+(Sonnet hard / GLM simple, numbered task worktrees, DB tests via `db-test-lock.sh`); review each task;
+`close-out-review`; `Status: done`; merge into `dev`; push; dev deploy (the push triggers the Deploy
+Dev Action); verify the migration if any and health 200; zero-LLM check over the dev DB, printing
+the owner's real metric numbers in the handoff; STATE handoff with every (D). Then, if budget
+remains, write the U9b plan but do **not** execute it.
+**Pre-decided (record as D):** (1) gap is printed in days, **no tier** in U9a — the sourced
+threshold table (design §11 item 4) goes into the plan for the owner's one review and enters code
+in U9b; (2) `LOAD PLAN` and `EXERCISE HISTORY` coexist in U9a, the duplicated `reference:` line
+removed from one of them; replacement decided in U9b.
+**Never during the run (approval prompts stall it — owner, twice):** no worktree/branch deletion,
+no writes outside the repo (memory included), no prod, no model-backed runs. List cleanup as
+ready-to-run commands in the final report. Stop at the U9a dev deploy + report.
+
 ## Handoff (set-kind, 2026-09-29) — U4 merged and deployed to dev; owner's live check pending
 
 Plan `set-kind` (roadmap U4) is `done`, review clean on run 2 (run 1 blocked on 6, all fixed on the
