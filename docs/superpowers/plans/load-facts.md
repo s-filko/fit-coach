@@ -152,6 +152,10 @@ formatter); load spec `2026-09-24-load-advisor-design.md` §8 (class applicabili
 - **D19 — GLM notice (incident).** Task 2's worker stopped on the Claude Code "auto mode
   classifier billing" notice; the orchestrator dismissed it with `terminal send --enter`, as
   `docs/ORCHESTRATION.md` prescribes. Task 3 reuses Task 1's Sonnet terminal (context kept).
+- **D20 — Task 3 red step (worker incident, accepted).** Task 3 landed as one commit
+  (`3e75a335`) with tests written first but not run red separately — the same hook constraint as
+  D17. The scenario, block and tool tests fail on the pre-Task-3 tree by construction (the block,
+  tool and loader did not exist).
 
 ## R4.0 — sourced thresholds (for the owner's one review; code parameters in U9b)
 
@@ -296,3 +300,64 @@ Verification commands (from `apps/server/`): `npm run check-all`, `npm run test:
 4. The owner compares `print-load-plan` output (STATE handoff) with his memory of the workouts.
 
 ## Review
+
+**Run 1 (2026-09-29, R1–R4) — blocked on 2 (both R3).** Zones: R1 Sonnet, R2 Sonnet, R3 Opus,
+R4 Sonnet, cold contexts over `git diff f1030c66...HEAD`.
+
+Blocking:
+- **B1 (R3)** — `docs/superpowers/plans/load-facts.md:217-218, 286-287` — SUPERPOWERS_INTEGRATION
+  rule 2; AC-LF-5, AC-LF-7: "There is no recorded evidence that the Task 1 and Task 3 verification
+  commands were run. The Task 1 commit `73881293` and the Task 3 commit `3e75a335` have empty
+  bodies." **Closed by recording the evidence here** (§ Verification evidence below: the workers'
+  quoted results and the orchestrator's own re-runs) and by requiring the fix commit to carry its
+  results in the commit body.
+- **B2 (R3)** — `apps/server/src/domain/training/load-facts/__tests__/metrics.unit.test.ts:31`
+  (and `rep-range.unit.test.ts:3`, `training-load-plan.v1.unit.test.ts:60`) — rule 4: "The AC-LF-1
+  suite never names AC-LF-1 … only 2 of its 8 `it`s name AC-LF-2 or AC-LF-3." **Fix dispatched**
+  (review-fix task, run 1).
+
+Advisory — fixed on the branch (same review-fix task), because they change the numbers the owner
+verifies:
+- R3 `metrics.ts:244-245` — fatigue context counts legacy NULL-kind sets on other exercises as
+  working without the D7 heuristic (`OtherSetInput` has no `setData`).
+- R3 `training-load-plan.v1.ts:112` — `wk at <load> kg` hardcodes kg.
+- R3 `metrics.ts:483-485` — absent reasons say `> 56 d` while the loaded window is 60 workouts.
+- R3 `phase-specs.unit.test.ts:239` — no test shows LOAD PLAN placement after RECENT WORKOUTS or
+  plan-then-off-plan order.
+- R4 `docs/ARCHITECTURE.md:166-170` (file map lacks the new block, loader, domain module, tool,
+  prompt v9) and `docs/MANUAL_TEST_PLAN.md:69` (tool list lacks `get_load_plan`) — factual map
+  lines, added by the orchestrator at merge.
+
+Advisory — filed in `docs/BACKLOG.md` § "load-facts close-out review advisories (2026-09-29)":
+R3 query burst (`load-facts.loader.ts:154`), R3 script rep range (`print-load-plan.ts:100`), R3
+unknown exerciseId (`get-load-plan.tool.ts:81-82`), R1 tool → block import
+(`get-load-plan.tool.ts:13`), R1 `metrics.ts` size, R1 `training.spec.ts:227` helper, R2
+resolution duplicate (`get-load-plan.tool.ts:47-66`), R2 `performedAt` idiom
+(`load-facts.loader.ts:92`), R2 `toMuscles` (`load-facts.loader.ts:62-69, 78-82`), R2 script args
+/ `WINDOW_DAYS` (`print-load-plan.ts:24, 30-40`), R2 `NO_SESSION_ID` (`load-facts.loader.ts:32`),
+R4 ADR-0013 row (`0013…md:540`); R4 BACKLOG ADR-0011 line extended with `get_load_plan`.
+
+Advisory — no action: R4 `AC-LF-*` ids follow the established plan-scoped convention (`AC-FP-*`,
+`AC-SK-*`), no reuse. R3 Task 3 landed without a separate red commit — recorded as D20.
+
+Meta (filed in `docs/REVIEW_FINDINGS.md`): R1 import-direction table (blind spot), R2 unverified
+citation (prompt defect), R3 D-items incorporated by an AC (rule candidate), R3 where verification
+output lives (existing entry, now ×2), R4 code-map update rule (rule candidate).
+
+### Verification evidence
+
+- **Task 1** (worker report, `worker_done` 2026-09-29 03:23Z): `npx jest src/domain/training/load-facts`
+  → 2 suites, 82 tests passed; `npm run test:unit` → 163 suites, 1693 passed; `npm run check-all` →
+  exit 0. Orchestrator re-run at acceptance: `npx jest src/domain/training/load-facts` → 82 passed.
+- **Task 2** (commit `3cd6cd00` and worker report): `npm run check-all` clean; `npm run test:unit` →
+  162 suites, 1615 tests, 77 snapshots passed. Orchestrator re-run after merging into the plan
+  branch: `npx jest src/infra/ai/prompts` → 176 passed.
+- **Task 3** (worker report): `check-all` exit 0; `test:unit` → 166 suites, 1711 passed;
+  `db-test-lock.sh npm run test:integration` → 50 suites, 654 passed + 1 todo;
+  `db-test-lock.sh npm run test:scenarios` → 22 suites, 407 passed + 1 todo (incl.
+  `load-facts.integration.test.ts`: reference 2026-09-26, working weight 82 kg with the warm-up
+  excluded, gap 3 d in Manila, `after 6 working sets on triceps`, in the context and in the tool);
+  `print-load-plan` against the seeded test user printed an entry and `llm_calls` stayed at 0
+  (AC-LF-7; the local dev DB is behind migrations, so the run used `.env.test`). Orchestrator
+  re-run at acceptance: `db-test-lock.sh npm run test:scenarios` → 22 suites, 407 passed + 1 todo.
+
