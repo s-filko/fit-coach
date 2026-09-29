@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, inArray, isNotNull, lt, ne, type SQL, sql } from 'drizzle-orm';
+import { and, count, desc, eq, exists, inArray, isNotNull, lt, ne, type SQL, sql } from 'drizzle-orm';
 
 import { ActiveSessionExistsError } from '@domain/training/errors';
 import type {
@@ -400,6 +400,28 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
       );
 
     return this.rehydratePerformances(anchors, anchor => anchor.exerciseId);
+  }
+
+  async countRealPerformancesByExercise(
+    userId: string,
+    exerciseIds: string[],
+    excludeSessionId: string | null,
+  ): Promise<Map<string, number>> {
+    if (exerciseIds.length === 0) {
+      return new Map();
+    }
+    const rows = await db
+      .select({ exerciseId: sessionExercises.exerciseId, performances: count() })
+      .from(sessionExercises)
+      .innerJoin(workoutSessions, eq(sessionExercises.sessionId, workoutSessions.id))
+      .where(
+        and(
+          ...this.realPerformanceConditions(userId, excludeSessionId),
+          inArray(sessionExercises.exerciseId, exerciseIds),
+        ),
+      )
+      .groupBy(sessionExercises.exerciseId);
+    return new Map(rows.map(r => [r.exerciseId, Number(r.performances)]));
   }
 
   async findRecentPerformancesForExercise(

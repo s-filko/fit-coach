@@ -79,7 +79,10 @@ const CASES: ProbeCase[] = [
     // D9 (1) — the BUG-040 shape: the "~70%" is the coach's improvisation;
     // the user line is quoted verbatim but never states the figure.
     name: 'BUG-040 ~70% update on the lever-machine fact',
-    ...episode('Почему ты жим ногами называешь рычажным тренажёром?', '«130 кг» = блины полностью + ~70% веса платформы, реальная нагрузка выше.'),
+    ...episode(
+      'Почему ты жим ногами называешь рычажным тренажёром?',
+      '«130 кг» = блины полностью + ~70% веса платформы, реальная нагрузка выше.',
+    ),
     operations: [
       {
         op: 'update',

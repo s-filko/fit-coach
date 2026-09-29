@@ -101,6 +101,16 @@ export interface IWorkoutSessionRepository {
    * block's `skipped <date>` line. At most one entry per exercise id.
    */
   findLastSkipsByExercise(userId: string, exerciseIds: string[], excludeSessionId: string): Promise<ExerciseLastSkip[]>;
+  /**
+   * load-facts plan D11: all-time count of real (completed, >= 1 set) performances per exercise id,
+   * excluding `excludeSessionId` (null = nothing to exclude) — the `data sufficiency` all-time number.
+   * An exercise with none is absent from the map.
+   */
+  countRealPerformancesByExercise(
+    userId: string,
+    exerciseIds: string[],
+    excludeSessionId: string | null,
+  ): Promise<Map<string, number>>;
 }
 
 export interface ISessionExerciseRepository {

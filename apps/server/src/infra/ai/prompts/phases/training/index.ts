@@ -8,6 +8,7 @@ import { TRAINING_V5, type TrainingPromptContextV5 } from './v5';
 import { TRAINING_V6, type TrainingPromptContextV6 } from './v6';
 import { TRAINING_V7, type TrainingPromptContextV7 } from './v7';
 import { TRAINING_V8, type TrainingPromptContextV8 } from './v8';
+import { TRAINING_V9, type TrainingPromptContextV9 } from './v9';
 
 export type {
   TrainingPromptContext,
@@ -18,8 +19,19 @@ export type {
   TrainingPromptContextV6,
   TrainingPromptContextV7,
   TrainingPromptContextV8,
+  TrainingPromptContextV9,
 };
-export { TRAINING_V1, TRAINING_V2, TRAINING_V3, TRAINING_V4, TRAINING_V5, TRAINING_V6, TRAINING_V7, TRAINING_V8 };
+export {
+  TRAINING_V1,
+  TRAINING_V2,
+  TRAINING_V3,
+  TRAINING_V4,
+  TRAINING_V5,
+  TRAINING_V6,
+  TRAINING_V7,
+  TRAINING_V8,
+  TRAINING_V9,
+};
 
 /**
  * Section contract — a future version must still emit these ids (L0
@@ -27,7 +39,7 @@ export { TRAINING_V1, TRAINING_V2, TRAINING_V3, TRAINING_V4, TRAINING_V5, TRAINI
  * `training.*` domain blocks in v2 (P4 context-budget plan, Task 2, D-B) —
  * neither is a prompt section any more; `task`/`rules` are always emitted.
  */
-export const TRAINING_PROMPT: PhasePromptEntry<TrainingPromptContextV8> = {
-  current: TRAINING_V8,
+export const TRAINING_PROMPT: PhasePromptEntry<TrainingPromptContextV9> = {
+  current: TRAINING_V9,
   requiredSections: ['task', 'tools', 'rules', 'directive.tool-reply'],
 };

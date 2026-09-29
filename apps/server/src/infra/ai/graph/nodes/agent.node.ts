@@ -128,7 +128,7 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     const { history, current } = splitEpisode(state.messages ?? []);
     const lang = langOf(user?.languageCode);
 
-    const loaded = await spec.loadContext({ userId, user, activeSessionId: state.activeSessionId ?? null }, deps);
+    const loaded = await spec.loadContext({ userId, user, activeSessionId: state.activeSessionId ?? null, now }, deps);
     if (!loaded.ok) {
       // D-B: phase data guards are catalog replies — no model call.
       return { messages: [new AIMessage(t(loaded.reply, lang))] };

@@ -23,10 +23,12 @@ import type {
   PhaseSpec,
   PromptContextFor,
 } from '@infra/ai/graph/phase-spec';
+import { loadLoadPlanEntries, planTargetRepsOf, type LoadPlanEntry } from '@infra/ai/load-facts/load-facts.loader';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
 import {
   TRAINING_CLIENT_V1,
   TRAINING_EXERCISE_HISTORY_V1,
+  TRAINING_LOAD_PLAN_V1,
   TRAINING_RECENT_WORKOUTS_V1,
   TRAINING_STALE_SESSION_V1,
   TRAINING_WORKOUT_OVERVIEW_V1,
@@ -37,6 +39,7 @@ import {
   buildDeleteLastSetsTool,
   buildFinishTrainingTool,
   buildGetExerciseHistoryTool,
+  buildGetLoadPlanTool,
   buildLogSetTool,
   buildSearchExercisesTool,
   buildSetSessionPlaceTool,
@@ -44,7 +47,11 @@ import {
   buildUpdateLastSetTool,
 } from '@infra/ai/tools';
 
+import { createLogger } from '@shared/logger';
+
 import { type AvailabilityInput, type ToolPolicy, TRAINING_TOOL_PRIORITY } from '../tool-policy';
+
+const log = createLogger('training-spec');
 
 /**
  * What the training prompt renders beyond the directive base (BUG-030 fix, training-exercise-
@@ -63,6 +70,8 @@ export interface TrainingData {
    * repository). The overview block renders its one-line ask once this crosses its threshold.
    */
   recentPlacesCount: number;
+  /** load-facts plan D11: the computed facts per today's exercise (same order as `exerciseHistory`). */
+  loadPlan: LoadPlanEntry[];
 }
 
 /** Mid-workout session shape the availability filter reads (BUG-008 Plan A). */
@@ -102,6 +111,8 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
   const tools = [
     buildSearchExercisesTool({ embeddingService, exerciseRepository }),
     buildGetExerciseHistoryTool({ trainingService, exerciseRepository, workoutSessionRepo }),
+    // load-facts plan D12: computed facts for an exercise outside today's LOAD PLAN.
+    buildGetLoadPlanTool({ trainingService, exerciseRepository, workoutSessionRepo, userFacts: deps.userFacts }),
     buildLogSetTool({ trainingService }),
     buildCompleteCurrentExerciseTool({ trainingService }),
     buildFinishTrainingTool({ trainingService }),
@@ -213,9 +224,40 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
       });
       const recentWorkouts = recentWorkoutsRaw.filter(s => s.id !== session.id);
 
+      // load-facts plan D11: computed facts per today's exercise. A failure here must not take the
+      // workout chat down — the block is derived data, so log and render nothing.
+      let loadPlan: LoadPlanEntry[] = [];
+      try {
+        loadPlan = await loadLoadPlanEntries(
+          {
+            workoutSessionRepo: deps.workoutSessionRepo,
+            exerciseRepository: deps.exerciseRepository,
+            trainingService: deps.trainingService,
+            userFacts: deps.userFacts,
+          },
+          {
+            userId: input.userId,
+            session,
+            exerciseIds: todayExerciseIds,
+            planTargetReps: planTargetRepsOf(session),
+            now: input.now ?? new Date(),
+            timezone: input.user?.timezone ?? null,
+          },
+        );
+      } catch (err) {
+        log.error({ err, userId: input.userId, sessionId: session.id }, 'load-facts: loader failed');
+      }
+
       return {
         ok: true,
-        data: { session, exerciseHistory, recentWorkouts, todayMuscles: [...todayMuscleSet], recentPlacesCount },
+        data: {
+          session,
+          exerciseHistory,
+          recentWorkouts,
+          todayMuscles: [...todayMuscleSet],
+          recentPlacesCount,
+          loadPlan,
+        },
       };
     },
     // D-B/D4: v1's `client`, `workout_overview`, `stale_session` sections, plus `exercise_history`
@@ -226,6 +268,8 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
       TRAINING_STALE_SESSION_V1,
       TRAINING_EXERCISE_HISTORY_V1,
       TRAINING_RECENT_WORKOUTS_V1,
+      // load-facts plan D5: block 3, after RECENT WORKOUTS.
+      TRAINING_LOAD_PLAN_V1,
     ],
     modelProfile: 'default',
   };
