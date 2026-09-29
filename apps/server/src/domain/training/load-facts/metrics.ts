@@ -369,6 +369,7 @@ export function computeE1rmTrend(
     changePct: change * 100,
     trend,
     flatRun,
+    currentLoad: topLoad(usable[0]),
     weeksAtWeight: weeksAtCurrentWeight(usable, tz),
     performances: window.length,
     lowConfidence: exercise.equipment === 'machine' || exercise.equipment === 'cable' ? 'machine' : null,

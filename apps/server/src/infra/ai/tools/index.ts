@@ -25,6 +25,7 @@ export {
   buildGetExerciseHistoryTool,
   type GetExerciseHistoryToolDeps,
 } from '@infra/ai/tools/get-exercise-history.tool';
+export { buildGetLoadPlanTool, type GetLoadPlanToolDeps } from '@infra/ai/tools/get-load-plan.tool';
 export { buildLogSetTool, type LogSetToolDeps } from '@infra/ai/tools/log-set.tool';
 export { buildRequestTransitionTool, type RequestTransitionVariant } from '@infra/ai/tools/request-transition.tool';
 export { buildSaveProfileFieldsTool, type SaveProfileFieldsToolDeps } from '@infra/ai/tools/save-profile-fields.tool';

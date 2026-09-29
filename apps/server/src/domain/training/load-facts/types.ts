@@ -163,6 +163,8 @@ export interface E1rmTrendFact {
   trend: 'rising' | 'flat' | 'falling';
   /** Consecutive newest performances within ±2.5 % of the newest (the newest counts). */
   flatRun: number;
+  /** Top working load of the newest performance — the weight `weeksAtWeight` refers to. */
+  currentLoad: number;
   weeksAtWeight: number;
   performances: number;
   lowConfidence: 'machine' | null;

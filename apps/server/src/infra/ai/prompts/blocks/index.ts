@@ -93,6 +93,13 @@ export {
   type TrainingExerciseHistoryData,
   type TrainingRecentWorkoutsData,
 } from './training-exercise-history.v1';
+export {
+  LOAD_PLAN_HEADER,
+  renderLoadPlanEntry,
+  TRAINING_LOAD_PLAN_V1,
+  type RenderLoadPlanOpts,
+  type TrainingLoadPlanData,
+} from './training-load-plan.v1';
 
 /** A block renders as one composed string — its own SystemMessage at a fixed position. */
 export function renderBlock<TCtx>(module: PromptModule<TCtx>, ctx: TCtx): string {

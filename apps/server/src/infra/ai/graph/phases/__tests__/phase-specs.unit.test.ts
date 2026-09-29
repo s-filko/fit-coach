@@ -30,7 +30,11 @@ function stubDeps(overrides: Record<string, unknown> = {}): ConversationGraphDep
       // set-kind plan Task 2 (D6/D7): the place-ambiguity and skip lookups.
       distinctRecentPlaces: async () => [],
       findLastSkipsByExercise: async () => [],
+      // load-facts plan D11: the all-time count.
+      countRealPerformancesByExercise: async () => new Map(),
     },
+    // load-facts plan D11: constraint + equipment facts for the LOAD PLAN loader.
+    userFacts: { getConstraints: async () => [], getForPrompt: async () => [] },
     exerciseRepository: { findByIdsWithMuscles: async () => [] },
     trainingService: { getSessionDetails: async () => SESSION_ROW },
     ...overrides,
@@ -78,6 +82,7 @@ const TOOL_NAMES: Record<ConversationPhase, string[]> = {
   training: [
     'search_exercises',
     'get_exercise_history',
+    'get_load_plan',
     'log_set',
     'complete_current_exercise',
     'finish_training',
@@ -142,6 +147,7 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
     expect(toolPolicy.availability?.({ data: { session: fresh } })).toEqual([
       'search_exercises',
       'get_exercise_history',
+      'get_load_plan',
       'log_set',
       'complete_current_exercise',
       'finish_training',
@@ -230,6 +236,7 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
         recentWorkouts: [],
         todayMuscles: [],
         recentPlacesCount: 0,
+        loadPlan: [],
       },
     });
   });
@@ -301,6 +308,7 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
         recentWorkouts: [],
         todayMuscles: ['chest'],
         recentPlacesCount: 0,
+        loadPlan: [],
       },
     });
   });
@@ -339,7 +347,7 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
 
     expect(loaded).toEqual({
       ok: true,
-      data: { session, exerciseHistory: [], recentWorkouts: [], todayMuscles: [], recentPlacesCount: 0 },
+      data: { session, exerciseHistory: [], recentWorkouts: [], todayMuscles: [], recentPlacesCount: 0, loadPlan: [] },
     });
     // Neither bad id ever reached a DB call — the turn does not fail on a legacy plan row.
     expect(findLastPerformancesByExercise).not.toHaveBeenCalled();
@@ -365,7 +373,14 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
 
       expect(loaded).toEqual({
         ok: true,
-        data: { session: SESSION_ROW, exerciseHistory: [], recentWorkouts: [], todayMuscles: [], recentPlacesCount: 2 },
+        data: {
+          session: SESSION_ROW,
+          exerciseHistory: [],
+          recentWorkouts: [],
+          todayMuscles: [],
+          recentPlacesCount: 2,
+          loadPlan: [],
+        },
       });
     });
 
@@ -389,7 +404,14 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
 
       expect(loaded).toEqual({
         ok: true,
-        data: { session, exerciseHistory: [], recentWorkouts: [], todayMuscles: [], recentPlacesCount: 0 },
+        data: {
+          session,
+          exerciseHistory: [],
+          recentWorkouts: [],
+          todayMuscles: [],
+          recentPlacesCount: 0,
+          loadPlan: [],
+        },
       });
       expect(distinctRecentPlaces).not.toHaveBeenCalled();
     });
@@ -412,7 +434,14 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
 
       expect(loaded).toEqual({
         ok: true,
-        data: { session: SESSION_ROW, exerciseHistory: [], recentWorkouts: [], todayMuscles: [], recentPlacesCount: 1 },
+        data: {
+          session: SESSION_ROW,
+          exerciseHistory: [],
+          recentWorkouts: [],
+          todayMuscles: [],
+          recentPlacesCount: 1,
+          loadPlan: [],
+        },
       });
     });
   });
