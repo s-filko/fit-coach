@@ -109,7 +109,9 @@ function metricsLine(facts: LoadFacts): string {
       t.trend === 'flat'
         ? `flat ×${t.flatRun} (${BAND_TEXT})`
         : `${t.trend} (${t.changePct >= 0 ? '+' : ''}${t.changePct.toFixed(1)} %)`;
-    parts.push(`e1RM ${t.newest.toFixed(1)} ${trend}, ${t.weeksAtWeight} wk at ${t.currentLoad} kg`);
+    parts.push(
+      `e1RM ${t.newest.toFixed(1)} ${trend}, ${t.weeksAtWeight} wk at ${t.currentLoad} ${t.currentLoadUnit ?? 'kg'}`,
+    );
     if (t.lowConfidence) {
       parts.push(`low confidence: ${t.lowConfidence}`);
     }

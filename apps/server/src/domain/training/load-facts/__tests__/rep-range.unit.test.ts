@@ -1,6 +1,6 @@
 import { parseRepRange } from '../rep-range';
 
-describe('parseRepRange (D8)', () => {
+describe('AC-LF-1 · parseRepRange (D8)', () => {
   it.each([
     ['8-12', { min: 8, max: 12 }],
     ['8–12', { min: 8, max: 12 }],

@@ -77,7 +77,9 @@ function toOtherSets(session: WorkoutSessionWithDetails, exerciseRowId: string):
     .filter(ex => ex.id !== exerciseRowId)
     .flatMap(ex =>
       ex.sets.map(s => ({
+        exerciseRowId: ex.id,
         exerciseName: ex.exercise.name,
+        setData: s.setData,
         muscles: (ex.exercise.muscleGroups ?? []).map(m => ({
           muscleGroup: m.muscleGroup,
           involvement: m.involvement,

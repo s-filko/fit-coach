@@ -28,7 +28,7 @@ import {
 
 const RANGE = { min: 8, max: 12 };
 
-describe('classifySets (D7)', () => {
+describe('AC-LF-1 · classifySets (D7)', () => {
   it('drops explicit warm-ups, keeps explicit working sets regardless of weight', () => {
     const sets = [
       withKind(strengthSet(20, 10), 'warmup'),
@@ -58,7 +58,7 @@ describe('classifySets (D7)', () => {
   });
 });
 
-describe('metric 1 — data sufficiency', () => {
+describe('AC-LF-1 · metric 1 — data sufficiency', () => {
   it('counts performances in the last 56 days and all-time', () => {
     const perfs = [
       perf('a', 3, [strengthSet(60, 10)]),
@@ -80,7 +80,7 @@ describe('metric 1 — data sufficiency', () => {
   });
 });
 
-describe('metric 2 — reference (D6)', () => {
+describe('AC-LF-1 · metric 2 — reference (D6)', () => {
   it('no performances → absent "no completed record"', () => {
     expect(computeReference([], today(), RANGE, NOW, TZ)).toEqual({ absent: 'no completed record' });
   });
@@ -169,7 +169,7 @@ describe('metric 2 — reference (D6)', () => {
   });
 });
 
-describe('metric 3 — fatigue context', () => {
+describe('AC-LF-1 · metric 3 — fatigue context', () => {
   const t0 = new Date('2026-09-29T01:00:00Z');
   const dips = (min: number) =>
     other(
@@ -269,6 +269,21 @@ describe('metric 3 — fatigue context', () => {
     expect(f.minutesIntoSession).toEqual({ absent: 'no session start' });
   });
 
+  it('classifies legacy NULL-kind sets of other exercises with the D7 heuristic (< 60 % of that exercise top)', () => {
+    const at = (m: number): Date => new Date(t0.getTime() + m * 60_000);
+    const others = [
+      other('Dips', [['triceps', 'secondary']], at(1), null, 20),
+      other('Dips', [['triceps', 'secondary']], at(2), null, 100),
+      other('Dips', [['triceps', 'secondary']], at(3), null, 100),
+    ];
+    const f = computeFatigue(
+      benchPress,
+      { startedAt: t0, sets: [strengthSet(60, 10, { createdAt: at(20) })], otherSets: others },
+      NOW,
+    );
+    expect(f.perMuscle).toEqual([{ muscleGroup: 'triceps', workingSets: 2, exerciseNames: ['Dips'] }]);
+  });
+
   it('computeLoadFacts marks today "same as reference" when the per-muscle counts are equal', () => {
     const refStart = daysBefore(3, -1);
     const refSets = [strengthSet(65, 10, { createdAt: new Date(refStart.getTime() + 20 * 60_000) })];
@@ -287,7 +302,7 @@ describe('metric 3 — fatigue context', () => {
   });
 });
 
-describe('metric 4 — working weight', () => {
+describe('AC-LF-1 · metric 4 — working weight', () => {
   it('highest load at which every working set reached the range floor; warm-ups ignored', () => {
     const perfs = [
       perf('a', 3, [
@@ -380,7 +395,7 @@ describe('metric 4 — working weight', () => {
   });
 });
 
-describe('metric 5 — e1RM trend', () => {
+describe('AC-LF-1 · metric 5 — e1RM trend', () => {
   // Epley: w * (1 + r/30). 60x10 = 80, 60x12 = 84, 66x10 = 88.
   const mk = (id: string, days: number, w: number, r: number) => perf(id, days, [strengthSet(w, r)]);
 
@@ -485,6 +500,19 @@ describe('metric 5 — e1RM trend', () => {
     expect(r.weeksAtWeight).toBe(3); // day 24 -> day 3 = 21 days = 3 weeks
   });
 
+  it('currentLoadUnit carries the stored weight unit (lbs stays lbs)', () => {
+    const lbs = (id: string, d: number) => {
+      const p = perf(id, d, [strengthSet(135, 10)]);
+      p.sets = p.sets.map(x => ({ ...x, setData: { type: 'strength', reps: 10, weight: 135, weightUnit: 'lbs' } }));
+      return p;
+    };
+    const r = computeE1rmTrend([lbs('c', 3), lbs('b', 10), lbs('a', 17)], 'today', benchPress, NOW, TZ);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.currentLoadUnit).toBe('lbs');
+  });
+
   it('low confidence for machine and cable, not barbell', () => {
     const perfs = [mk('c', 3, 60, 10), mk('b', 10, 60, 10), mk('a', 17, 60, 10)];
     const m = computeE1rmTrend(perfs, 'today', benchPress, NOW, TZ);
@@ -518,7 +546,7 @@ describe('metric 5 — e1RM trend', () => {
   });
 });
 
-describe('metric 6 — last-exposure quality', () => {
+describe('AC-LF-1 · metric 6 — last-exposure quality', () => {
   const ref = (sets: ReturnType<typeof strengthSet>[], id = 'ref', days = 3) => perf(id, days, sets);
 
   it('reps vs range: below floor / in range / at or above top (weakest working set decides)', () => {
@@ -592,7 +620,7 @@ describe('metric 6 — last-exposure quality', () => {
   });
 });
 
-describe('metric 7 — gap (calendar days in the user timezone)', () => {
+describe('AC-LF-1 · metric 7 — gap (calendar days in the user timezone)', () => {
   const workouts = [
     { sessionId: 'w1', performedAt: daysBefore(2), primaryMuscles: ['quads' as const] },
     { sessionId: 'w2', performedAt: daysBefore(5), primaryMuscles: ['chest' as const, 'triceps' as const] },
@@ -626,11 +654,11 @@ describe('metric 7 — gap (calendar days in the user timezone)', () => {
     expect(utc.exercise).toEqual({ days: 1 });
   });
 
-  it('nothing loaded → "> 56 d" absent; the exercise with no record says so', () => {
+  it('nothing loaded → truthful absent reasons; the exercise with no record says so', () => {
     const g = computeGap(benchPress, [], [], 'today', NOW, TZ);
-    expect(g.exercise).toEqual({ absent: 'no completed record (> 56 d)' });
-    expect(g.primaryMuscles).toEqual({ absent: 'none in loaded history (> 56 d)' });
-    expect(g.anyWorkout).toEqual({ absent: 'none in loaded history (> 56 d)' });
+    expect(g.exercise).toEqual({ absent: 'no completed record' });
+    expect(g.primaryMuscles).toEqual({ absent: 'none in the last 60 workouts' });
+    expect(g.anyWorkout).toEqual({ absent: 'none in the last 60 workouts' });
   });
 
   it("today's own session is not a workout for the gap", () => {
@@ -642,7 +670,7 @@ describe('metric 7 — gap (calendar days in the user timezone)', () => {
       NOW,
       TZ,
     );
-    expect(g.anyWorkout).toEqual({ absent: 'none in loaded history (> 56 d)' });
+    expect(g.anyWorkout).toEqual({ absent: 'none in the last 60 workouts' });
   });
 
   it('a secondary-only muscle does not count as primary involvement', () => {
@@ -654,12 +682,12 @@ describe('metric 7 — gap (calendar days in the user timezone)', () => {
       NOW,
       TZ,
     );
-    expect(g.primaryMuscles).toEqual({ absent: 'none in loaded history (> 56 d)' });
+    expect(g.primaryMuscles).toEqual({ absent: 'none in the last 60 workouts' });
     expect(g.anyWorkout).toEqual({ days: 1 });
   });
 });
 
-describe('metric 8 — constraints', () => {
+describe('AC-LF-1 · metric 8 — constraints', () => {
   it('active constraints on the exercise muscles with durability; equipment facts as text', () => {
     const c = computeConstraints(benchPress, {
       constraints: [
@@ -675,7 +703,7 @@ describe('metric 8 — constraints', () => {
   });
 });
 
-describe('metric 9 — equipment step', () => {
+describe('AC-LF-1 · metric 9 — equipment step', () => {
   it.each([
     ['barbell', 2.5, false],
     ['dumbbell', 2, true],
@@ -702,7 +730,7 @@ describe('metric 9 — equipment step', () => {
   });
 });
 
-describe('computeLoadFacts (D8 range source, D10 applicability)', () => {
+describe('AC-LF-1 · computeLoadFacts (D8 range source, D10 applicability)', () => {
   it("falls back to the reference performance's target reps when today has none", () => {
     const perfs = [perf('a', 3, [strengthSet(65, 10)], { targetReps: '6-8' })];
     const f = computeLoadFacts(benchPress, perfs, today({ targetReps: null }), emptyContext, NOW, TZ);

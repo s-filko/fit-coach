@@ -18,6 +18,7 @@ import type {
   LoadFactsContext,
   Metric,
   NotLikeForLikeReason,
+  OtherSetInput,
   PerformanceInput,
   ReferenceFact,
   RepRange,
@@ -70,7 +71,7 @@ interface LoadedSet {
 }
 
 /** A strength set with a positive weight, or null (load metrics only ever see these). */
-function loadOf(set: SetInput): LoadedSet | null {
+function loadOf(set: Pick<SetInput, 'setData'>): LoadedSet | null {
   const d = set.setData;
   if (d.type !== 'strength' || d.weight === undefined || d.weight <= 0) {
     return null;
@@ -84,7 +85,7 @@ function repsOf(set: SetInput): number | null {
   return d.type === 'strength' || d.type === 'functional_reps' ? d.reps : null;
 }
 
-function byTime(sets: SetInput[]): SetInput[] {
+function byTime<T extends { createdAt: Date }>(sets: T[]): T[] {
   return [...sets].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
 
@@ -108,7 +109,9 @@ function epley(weight: number, reps: number): number {
  * does; a legacy NULL strength set under 60 % of the performance's top weight is an *estimated*
  * warm-up (`estimated` is true only when that heuristic actually dropped a set).
  */
-export function classifySets(sets: SetInput[]): { working: SetInput[]; estimated: boolean } {
+export function classifySets<T extends Pick<SetInput, 'setData' | 'setKind' | 'createdAt'>>(
+  sets: T[],
+): { working: T[]; estimated: boolean } {
   const candidates = workingSets(sets);
   const top = Math.max(0, ...candidates.map(s => loadOf(s)?.weight ?? 0));
   let estimated = false;
@@ -234,6 +237,15 @@ export function computeReference(
 
 // --- Metric 3 ---
 
+/** D7 per other exercise of the session: explicit kinds first, legacy NULL sets by the < 60 % rule. */
+function workingOtherSets(others: OtherSetInput[]): OtherSetInput[] {
+  const byExercise = new Map<string, OtherSetInput[]>();
+  for (const o of others) {
+    byExercise.set(o.exerciseRowId, [...(byExercise.get(o.exerciseRowId) ?? []), o]);
+  }
+  return [...byExercise.values()].flatMap(sets => classifySets(sets).working);
+}
+
 export function computeFatigue(
   exercise: ExerciseInput,
   slice: Pick<TodayInput, 'startedAt' | 'sets' | 'otherSets'>,
@@ -241,8 +253,8 @@ export function computeFatigue(
 ): FatigueFact {
   const own = byTime(slice.sets);
   const cutoff = own[0]?.createdAt ?? now;
-  const earlier = slice.otherSets
-    .filter(o => o.setKind !== 'warmup' && o.createdAt.getTime() < cutoff.getTime())
+  const earlier = workingOtherSets(slice.otherSets)
+    .filter(o => o.createdAt.getTime() < cutoff.getTime())
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   const muscles = [...new Set(exercise.muscles.map(m => m.muscleGroup))];
   const perMuscle = muscles
@@ -370,6 +382,7 @@ export function computeE1rmTrend(
     trend,
     flatRun,
     currentLoad: topLoad(usable[0]),
+    currentLoadUnit: usable[0].loads.find(l => l.weight === topLoad(usable[0]))?.unit ?? null,
     weeksAtWeight: weeksAtCurrentWeight(usable, tz),
     performances: window.length,
     lowConfidence: exercise.equipment === 'machine' || exercise.equipment === 'cable' ? 'machine' : null,
@@ -480,9 +493,9 @@ export function computeGap(
   );
   const past = workouts.filter(w => w.sessionId !== todaySessionId);
   const reals = realPerformances(perfs, todaySessionId, now, tz);
-  const none = 'none in loaded history (> 56 d)';
+  const none = 'none in the last 60 workouts';
   return {
-    exercise: gapDays(newest(reals.map(r => r.p.performedAt)), now, tz, `${NO_RECORD} (> 56 d)`),
+    exercise: gapDays(newest(reals.map(r => r.p.performedAt)), now, tz, NO_RECORD),
     primaryMuscles: gapDays(
       newest(past.filter(w => w.primaryMuscles.some(m => primary.has(m))).map(w => w.performedAt)),
       now,

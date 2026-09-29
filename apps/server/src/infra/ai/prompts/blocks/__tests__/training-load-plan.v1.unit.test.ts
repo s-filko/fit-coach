@@ -57,8 +57,8 @@ async function entries(d = deps()) {
   });
 }
 
-describe('TRAINING_LOAD_PLAN_V1 / renderLoadPlanEntry', () => {
-  it('renders the fact lines of one exercise (AC-LF-2)', async () => {
+describe('AC-LF-2 / AC-LF-3 · TRAINING_LOAD_PLAN_V1 / renderLoadPlanEntry', () => {
+  it('AC-LF-2: renders the fact lines of one exercise', async () => {
     const [entry] = await entries();
     const text = renderLoadPlanEntry(entry, ctx);
     expect(text).toContain(`Machine Chest Press [ID:${CHEST_PRESS.id}]`);
@@ -79,12 +79,12 @@ describe('TRAINING_LOAD_PLAN_V1 / renderLoadPlanEntry', () => {
     expect(text).toContain('data: 3 performances in 8 wk, 12 all-time');
   });
 
-  it('recommends nothing: no recommend/target/next-weight wording', async () => {
+  it('AC-LF-2: recommends nothing: no recommend/target/next-weight wording', async () => {
     const [entry] = await entries();
     expect(renderLoadPlanEntry(entry, ctx)).not.toMatch(/recommend|should|try |next time|increase/i);
   });
 
-  it('prints constraints with durability and equipment facts as text', async () => {
+  it('AC-LF-2: prints constraints with durability and equipment facts as text', async () => {
     const [entry] = await entries(
       deps(
         [{ muscleGroup: 'triceps', durability: 'short', fact: 'elbow pain' }],
@@ -98,7 +98,7 @@ describe('TRAINING_LOAD_PLAN_V1 / renderLoadPlanEntry', () => {
     expect(text).toContain('constraints: elbow pain (triceps, short) · equipment facts: home: 2 dumbbells');
   });
 
-  it('D2: sets are replaced by "sets as in EXERCISE HISTORY" when the reference is that row', async () => {
+  it('AC-LF-2 (D2): sets are replaced by "sets as in EXERCISE HISTORY" when the reference is that row', async () => {
     const [entry] = await entries();
     const text = renderLoadPlanEntry(entry, ctx, { historyRowId: 'r1b' });
     expect(text).toContain('sets as in EXERCISE HISTORY');
@@ -107,7 +107,7 @@ describe('TRAINING_LOAD_PLAN_V1 / renderLoadPlanEntry', () => {
     expect(other).not.toContain('sets as in EXERCISE HISTORY');
   });
 
-  it('prints the reason of an absent metric instead of guessing', async () => {
+  it('AC-LF-2: prints the reason of an absent metric instead of guessing', async () => {
     const [entry] = await entries({
       ...deps(),
       workoutSessionRepo: {
@@ -120,7 +120,7 @@ describe('TRAINING_LOAD_PLAN_V1 / renderLoadPlanEntry', () => {
     expect(text).toContain('e1RM: insufficient: 1 performances');
   });
 
-  it('no record: reference line says so, and the quality line is left out', async () => {
+  it('AC-LF-2: no record: reference line says so, and the quality line is left out', async () => {
     const [entry] = await entries({
       ...deps(),
       workoutSessionRepo: { ...deps().workoutSessionRepo, findRecentByUserIdWithDetails: async () => [] },
@@ -131,7 +131,7 @@ describe('TRAINING_LOAD_PLAN_V1 / renderLoadPlanEntry', () => {
     expect(text).toContain('gap: exercise');
   });
 
-  it('block: header, one entry, history row matched by exercise id; null when empty', async () => {
+  it('AC-LF-2: block: header, one entry, history row matched by exercise id; null when empty', async () => {
     const loadPlan = await entries();
     const history = [
       {
@@ -145,6 +145,29 @@ describe('TRAINING_LOAD_PLAN_V1 / renderLoadPlanEntry', () => {
     expect(out).toContain('=== LOAD PLAN (computed facts — no recommendation) ===');
     expect(out).toContain('sets as in EXERCISE HISTORY');
     expect(TRAINING_LOAD_PLAN_V1.render({ loadPlan: [], exerciseHistory: [] }, ctx, 0)).toBeNull();
+  });
+
+  it('AC-LF-3: the e1RM weeks-at-weight text uses the stored unit, not a hardcoded kg', async () => {
+    const lbsPerf = (id: string, d: number) => {
+      const row = sessionRow(id, daysBefore(d), [
+        { rowId: `r${id}`, ...CHEST_PRESS, sets: sets(135, [10, 10], daysBefore(d)) },
+      ]);
+      for (const s of row.exercises[0].sets) {
+        s.setData = { type: 'strength', reps: 10, weight: 135, weightUnit: 'lbs' };
+      }
+      return row;
+    };
+    const d = {
+      ...deps(),
+      workoutSessionRepo: {
+        ...deps().workoutSessionRepo,
+        findRecentByUserIdWithDetails: async () => [lbsPerf('a', 3), lbsPerf('b', 10), lbsPerf('c', 17)],
+      },
+    } as LoadFactsLoaderDeps;
+    const [entry] = await entries(d);
+    const text = renderLoadPlanEntry(entry, ctx);
+    expect(text).toMatch(/wk at 135 lbs/);
+    expect(text).not.toContain('wk at 135 kg');
   });
 
   it('AC-LF-3: an isometric exercise prints n/a for metrics 4, 5, 9 and the hold via formatSetData', async () => {

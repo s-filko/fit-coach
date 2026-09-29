@@ -49,7 +49,10 @@ export interface SetInput {
 
 /** A set logged on another exercise of the same session — input for the fatigue context. */
 export interface OtherSetInput {
+  /** Identifies the other exercise within its session — the D7 heuristic runs per exercise. */
+  exerciseRowId: string;
   exerciseName: string;
+  setData: SetData;
   /** All muscles of that exercise (primary and secondary). */
   muscles: { muscleGroup: MuscleGroup; involvement: Involvement }[];
   setKind?: SetKind | null;
@@ -165,6 +168,7 @@ export interface E1rmTrendFact {
   flatRun: number;
   /** Top working load of the newest performance — the weight `weeksAtWeight` refers to. */
   currentLoad: number;
+  currentLoadUnit: 'kg' | 'lbs' | null;
   weeksAtWeight: number;
   performances: number;
   lowConfidence: 'machine' | null;

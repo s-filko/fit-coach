@@ -74,9 +74,12 @@ export function other(
   muscles: [MuscleGroup, 'primary' | 'secondary'][],
   createdAt: Date,
   setKind: SetKind | null = 'working',
+  weight = 50,
 ): OtherSetInput {
   return {
+    exerciseRowId: `row-${name}`,
     exerciseName: name,
+    setData: { type: 'strength', reps: 10, weight },
     muscles: muscles.map(([muscleGroup, involvement]) => ({ muscleGroup, involvement })),
     setKind,
     createdAt,

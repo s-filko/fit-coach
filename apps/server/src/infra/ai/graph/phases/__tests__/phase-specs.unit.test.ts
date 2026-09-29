@@ -313,6 +313,60 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
     });
   });
 
+  it('AC-LF-2: LOAD PLAN renders after RECENT WORKOUTS, entries in plan order then off-plan started (D5)', async () => {
+    const PLAN_ID = 'aaaaaaaa-1111-4111-8111-111111111111';
+    const OFF_PLAN_ID = 'bbbbbbbb-2222-4222-8222-222222222222';
+    const catalog = [
+      { id: OFF_PLAN_ID, name: 'Pull-ups', equipment: 'bodyweight', exerciseType: 'strength', muscleGroups: [] },
+      { id: PLAN_ID, name: 'Barbell Bench Press', equipment: 'barbell', exerciseType: 'strength', muscleGroups: [] },
+    ];
+    const session = {
+      ...SESSION_ROW,
+      place: null,
+      startedAt: new Date('2026-09-01T09:00:00Z'),
+      sessionPlanJson: {
+        sessionKey: 'upper_a',
+        sessionName: 'Upper A',
+        reasoning: 'r',
+        estimatedDuration: 45,
+        exercises: [{ exerciseId: PLAN_ID, exerciseName: 'Bench', targetSets: 3, targetReps: '8', restSeconds: 90 }],
+      },
+      exercises: [{ id: 'se-off', exerciseId: OFF_PLAN_ID, exercise: catalog[0], sets: [], status: 'in_progress' }],
+    };
+    const deps = stubDeps({
+      trainingService: { getSessionDetails: async () => session },
+      workoutSessionRepo: {
+        findRecentByUserIdWithDetails: async () => [],
+        findLastPerformancesByExercise: async () => [],
+        distinctRecentPlaces: async () => [],
+        findLastSkipsByExercise: async () => [],
+        countRealPerformancesByExercise: async () => new Map(),
+      },
+      exerciseRepository: { findByIdsWithMuscles: async () => catalog },
+    });
+    const spec = specOf('training');
+    const loaded = await spec.loadContext(
+      { userId: 'u1', user: null, activeSessionId: 'session-1', now: new Date('2026-09-01T10:00:00Z') },
+      deps,
+    );
+    if (!loaded.ok) {
+      throw new Error('loadContext failed');
+    }
+    const ctx = { now: new Date('2026-09-01T10:00:00Z'), timezone: 'UTC', user: null };
+    const rendered = spec.contextBlocks
+      .map(b => b.render(loaded.data as never, ctx, 0))
+      .filter(Boolean)
+      .join('\n');
+    expect(rendered.indexOf('=== RECENT WORKOUTS')).toBeGreaterThan(-1);
+    expect(rendered.indexOf('=== LOAD PLAN')).toBeGreaterThan(rendered.indexOf('=== RECENT WORKOUTS'));
+    // EXERCISE HISTORY also names both exercises — look only inside the LOAD PLAN block.
+    const loadPlanText = rendered.slice(rendered.indexOf('=== LOAD PLAN'));
+    const plan = loadPlanText.indexOf('Barbell Bench Press [ID:');
+    const off = loadPlanText.indexOf('Pull-ups [ID:');
+    expect(plan).toBeGreaterThan(-1);
+    expect(off).toBeGreaterThan(plan);
+  });
+
   it('training loader drops a bad legacy plan row (empty/non-UUID exerciseId) before any DB query (close-out review advisory 6)', async () => {
     const session = {
       ...SESSION_ROW,
