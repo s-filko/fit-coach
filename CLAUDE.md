@@ -44,6 +44,7 @@ curl https://fitcoach-dev.filko.dev/health   # → 200
   is unidentified. Parked; what was ruled out and what is still open is in `docs/BACKLOG.md` § Findings.
   Do not re-attempt the switch from that section's facts alone.
 - **Z.AI subscription is unusable through OpenRouter** (verified 2026-09-13): it only authorizes the coding endpoint, OpenRouter BYOK calls the standard one — GLM via OpenRouter is billed to credits at list price (`is_byok: false`). Keep this in mind before switching back.
+- **Voice (STT) needs `AISTUDIO_API_KEY`** (Google AI Studio; model `STT_MODEL`, default `gemini-3.8-flash`) — independent of the `LLM_*` route. Unset = voice silently disabled (`Voice transcription requested while STT is disabled` in server logs). It was missing from `.env.dev` from the voice-transcription merge until 2026-09-29 (added then, copied from local `apps/server/.env`); **`.env.prod` still has none**.
 - **Prod: OpenRouter** (`https://openrouter.ai/api/v1/`) with Google AI Studio PAYG BYOK — that BYOK **does** work (`is_byok: true`), model `google/gemini-3-flash-preview`.
 - Check per-request BYOK via `usage.is_byok` in a completion response, not via `curl /key` alone (byok_usage lags and missed the 09-09 mis-annotation).
 - Alternative keys/models are commented in local `apps/server/.env` with status annotations
