@@ -239,6 +239,59 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
+## Handoff (load-facts, 2026-09-29) — U9a merged and deployed to dev; owner's number check pending
+
+Plan `load-facts` (roadmap U9a) is `done`: review run 1 blocked on 2 (R3: verification evidence not
+recorded; AC ids missing in test names), both fixed on the branch, R3 re-run clean; merged into
+`dev` (`9dc8a4a9`), deployed by the Deploy Dev Action (run `36520135377`): no migration (journal 21
+rows), containers healthy, health 200. What ships: a facts-only `=== LOAD PLAN ===` block in training
+(block 3, after RECENT WORKOUTS) — per today's exercise the like-for-like reference (dated, fatigue
+context), today's pre-fatigue, working weight (8 wk, K = 5), e1RM trend (Epley, ≤ 10 reps, ±2.5 %),
+last-exposure quality, gaps in days, constraints, equipment step; **no weight is recommended by
+code**. Tool `get_load_plan` (same producer) for off-plan exercises; prompt training **v9** (rule 1,
+TOOLS, RULE 11); `scripts/print-load-plan.ts` (zero-LLM report).
+
+**Zero-LLM check over the dev DB:** 20 exercises of the owner (`60af022f`), `llm_calls` 183 → 183.
+The owner's numbers are tabled in the plan § "Zero-LLM check on dev" (e.g. 45° Leg Press working
+weight 135 kg, Bench 60 kg with e1RM 80.0 rising +14.3 %, Lat Pulldown 50 kg, Cable Pushdown 32 kg).
+Journal fill: `target_reps` 70/147 rows (no range → working weight "no rep range" for the rest),
+RPE 211/446 sets, `set_kind` 0/446.
+
+**For the owner to review:**
+- **Decisions D1–D22 in the plan.** Pre-decided (yours): D1 gap in days, no tier; D2 LOAD PLAN and
+  EXERCISE HISTORY coexist, the LOAD PLAN reference line prints "sets as in EXERCISE HISTORY"
+  when it is the same row. Orchestrator: D3 one producer shared by block/tool/script; D4 pure
+  domain metrics; **D5 block placed in block 3, not after NOW** (deviation from design §3.4 —
+  WORKOUT OVERVIEW already breaks block-3 caching during training; the tail slot is for U9b);
+  D6 like-for-like reference (place case-folded, reps within range ± 2); D7 legacy NULL sets
+  < 60 % of the top load = estimated warm-ups; D8 rep range from today's plan, else the
+  reference's `target_reps`; D9 exact metric definitions; D10 class applicability; D11 loader
+  (60 recent workouts + all-time count, no migration); D12 tool; D13 prompt v9; D14 report
+  script; D15 executors (Sonnet T1/T3, GLM T2); D16 no durable-spec edit; D17/D20 red commits
+  impossible under the pre-commit hook (accepted); D18 Task 1 interface choices; D19 GLM
+  billing-notice stall dismissed; **D21 additive lines in `ARCHITECTURE.md` file map and
+  `MANUAL_TEST_PLAN.md` tool list** (durable doc, factual only); D22 `chat-concurrency`
+  integration test flaked once (passed 2/2 alone) — backlog.
+- **R4.0 sourced threshold table** (plan § "R4.0 — sourced thresholds") — your one review before
+  U9b turns it into parameters; items marked *verify* need the paper checked.
+- **Numbers to verify against your memory** (live check 4): the plan's zero-LLM table, especially
+  the e1RM trends computed over all history (Chest-Supported Row Wide "falling −42.9 %", Lateral
+  Raise "falling −50 %") next to 8-week working weights.
+- **Live check on dev** (≤ 4 messages, expected replies in the plan § Live check).
+- Advisories: `BACKLOG.md` § "load-facts close-out review advisories (2026-09-29)" (the repeated
+  equipment fact on every entry is the one with prompt-size effect); meta in `REVIEW_FINDINGS.md`.
+
+**Cleanup pending (not run — each raises an approval prompt; ready to run from the repo root):**
+```bash
+orca terminal close --terminal term_2f072fe0-e13d-44a8-867b-13f28d27dac9   # Sonnet worker of T1/T3/fixes, retained after release
+orca worktree rm --worktree "id:88b171fc-bda9-4c6c-b6f3-82b7fb04ae88::/Users/filko/orca/workspaces/fit_coach/load-facts-t1"
+orca worktree rm --worktree "id:88b171fc-bda9-4c6c-b6f3-82b7fb04ae88::/Users/filko/orca/workspaces/fit_coach/load-facts-t2"
+git branch -d plan/load-facts task/load-facts-t2
+git push origin --delete plan/load-facts
+```
+Both worktrees are clean and fully merged into `dev`; Orca run `run_c45942ef0ec8` (all dispatches
+settled). The set-kind cleanup listed below is still pending too.
+
 ## Handoff (U9a order, 2026-09-29) — next orchestrator runs U9a load-facts autonomously to the dev deploy
 
 Owner order 2026-09-29 (autonomy, relay to a fresh orchestrator; the set-kind orchestrator stays
