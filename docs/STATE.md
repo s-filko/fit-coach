@@ -15,6 +15,7 @@ _Generated 2026-09-29 from docs/superpowers/plans/ + git. Never hand-edit; regen
 — none —
 
 **Planned**
+- `load-plan.md` — Load Plan — Decision Order, Progression Schemes, Recommendation Log, Breaks (Roadmap U9b) Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 
@@ -291,6 +292,12 @@ git push origin --delete plan/load-facts
 ```
 Both worktrees are clean and fully merged into `dev`; Orca run `run_c45942ef0ec8` (all dispatches
 settled). The set-kind cleanup listed below is still pending too.
+
+**Next: U9b `load-plan` — plan written, not dispatched** (`docs/superpowers/plans/load-plan.md`,
+`Status: planned`). Before dispatch it needs four owner gates, listed in the plan § "Before
+dispatch": the R4.0 threshold review, the ADR-0009 amendment (`progression_scheme`, `break`), the
+`load_recommendations` table shape, and the proposed three-merge split (9b-1 schemes + decision
+order + log; 9b-2 breaks; 9b-3 planner/prompt rebinding).
 
 ## Handoff (U9a order, 2026-09-29) — next orchestrator runs U9a load-facts autonomously to the dev deploy
 
