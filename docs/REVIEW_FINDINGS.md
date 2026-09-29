@@ -165,6 +165,9 @@ or is inert for the kind of diff under review.
   (only the worker's worker_done prose did) — the reviewer had to check an assumed claim. A re-run
   prompt should quote the fix commits' exact claims; worker reports are not evidence.
   Runs: cache-accounting R3 re-run (2026-09-26).
+- [×1] R2's brief tells it to cite `docs/CONTRIBUTING_AI.md` "Principles & Boundaries" for DRY
+  and YAGNI without saying the section was checked to contain both; the zone cited it unopened.
+  Runs: load-facts (2026-09-29, R2).
 
 ## Blind spots
 
@@ -215,6 +218,10 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   reintroduce the zero-token bug. No zone's mandate covers "plan step-code vs shipped code"
   consistency.
   Runs: refactor-p0-run-log (2026-09-12, R1+R2).
+- [×2] Where a worker's verification output must live is unstated: the plan says "task report",
+  Orca `worker_done` messages are invisible from the worktree. Proposed for ORCHESTRATION.md:
+  "each task's verification output (command + summary line) is appended to the plan under the task
+  before review; a reviewer treats absence there as absence". Runs: set-kind (2026-09-29, R3), load-facts (2026-09-29, R3 — two task commits with empty bodies read as "no evidence"; proposed "a worker report alone is not evidence").
 - [×1] Schema, indexing and unbounded-growth concerns have no owning zone: R1 reads for shape,
   R2 for duplication, R3 for logic, R4 for doc currency. The missing `run_id` index on
   `llm_calls` — queried on every model call, now synchronously — was the most operationally
@@ -364,10 +371,6 @@ a wider reader (the final whole-branch review) or noticed after the fact.
 - [×1] The zones do not say whether versioned prompt modules (`prompts/phases/*/vN.ts`, full copies
   by convention) are exempt from DRY. Proposed: "versioned prompt modules are frozen snapshots and
   exempt from DRY". Runs: set-kind (2026-09-29, R2).
-- [×1] Where a worker's verification output must live is unstated: the plan says "task report",
-  Orca `worker_done` messages are invisible from the worktree. Proposed for ORCHESTRATION.md:
-  "each task's verification output (command + summary line) is appended to the plan under the task
-  before review; a reviewer treats absence there as absence". Runs: set-kind (2026-09-29, R3).
 - [×1] R4's ID-reuse check greps only `AC-[0-9]{4}`; the BR-TRAINING-014..016 collision with
   FEAT-0010 shows only with a per-prefix grep across all of `docs/`. Proposed zone wording: "for
   every new or proposed BR-/INV-/AC- id, grep that exact prefix across all of docs/ (domain specs
@@ -379,6 +382,10 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   fail on the naive alternative (DISTINCT-before-LIMIT passed "dedupes after the window"). Proposed
   for CONTRIBUTING_AI.md: such a test includes a fixture that fails the naive alternative and names
   it. Runs: set-kind (2026-09-29, R3 run 2).
+- [×1] ADR-0013 has no explicit import-direction table, so R1 inferred tool/domain/prompt-block
+  rules from §4.4, §5 and D-13 and could only grade a tool → prompt-block import as advisory.
+  Proposed: a short "import direction" table in the ADR or `CONTRIBUTING_AI.md`.
+  Runs: load-facts (2026-09-29, R1).
 
 ## Rule candidates
 
@@ -859,3 +866,13 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   tool/API schemas derived from it; only the DB `pgEnum` may restate it with a pointer. The rule
   lives only in a comment (`types.ts:197-198`). Proposed for CONTRIBUTING_AI.md "Principles &
   Boundaries". Runs: set-kind (2026-09-29, R2 run 2).
+- [×1] Nothing says which code-map docs (ARCHITECTURE.md file tree, MANUAL_TEST_PLAN.md tool list,
+  ADR table rows) a change adding a prompt block, tool or prompt version must update. Proposed for
+  `CONTRIBUTING_AI.md`: "A change that adds a prompt block, tool or prompt version updates the
+  ARCHITECTURE.md file map and the MANUAL_TEST_PLAN.md tool list in the same PR, or logs the drift
+  in BACKLOG.md." Runs: load-facts (2026-09-29, R4).
+- [×1] A plan Decision that an AC incorporates by reference ("return the D9 values") cannot be cited
+  as blocking, so a metric deviating from D7 was only advisory. Proposed for
+  `SUPERPOWERS_INTEGRATION.md` Rules of engagement: "A plan Decision that an AC names (e.g. 'per D9')
+  is part of that AC; a deviation from it is an AC violation unless the plan records it as a later
+  (D)." Runs: load-facts (2026-09-29, R3).

@@ -128,9 +128,12 @@ apps/server/src/
         log-set.tool.ts / complete-current-exercise.tool.ts / finish-training.tool.ts
         delete-last-sets.tool.ts / update-last-set.tool.ts
         search-exercises.tool.ts / timezone.tool.ts
+        get-exercise-history.tool.ts / get-load-plan.tool.ts   # read-only history lookup / computed load facts (load-facts plan)
         format-exercise-summary.ts   # Shared training summary helper + session constants
       messages/                      # User-facing message catalog (ADR-0013 §11) — en/ru, language_code driven
         catalog.ts / en.ts / ru.ts / index.ts
+      load-facts/
+        load-facts.loader.ts         # Gathers rows for the pure load metrics (`domain/training/load-facts/`) — shared by the LOAD PLAN block, `get_load_plan` and `scripts/print-load-plan.ts`
       context/                      # Context assembler — message order + token accounting (ADR-0013 §3.4)
         assemble-context.ts         # assembleContext() → { messages, budgetReport }: block 1 system → user facts → course directive → episode summaries → block 3 domain blocks → history → [time-gap note] → NOW line → current (one shape for every phase); calls resolveBudget
         budget.ts                   # resolveBudget/trimHistory — INV-LLM-004 order: trim history → step block depths → drop oldest summary → D-D floor (block 1 never cut; `system` over budget only reported)
@@ -168,6 +171,8 @@ apps/server/src/
                                      #   domain context blocks (ADR-0013 §3.4 block 3, D-B): one per moved v1 section, byte-equal at full depth; declared on PhaseSpec.contextBlocks
           training-exercise-history.v1.ts
                                      #   training.exercise_history / training.recent_workouts (BUG-030 fix, training-exercise-history plan): per-exercise history anchor + 7-day fatigue window with muscle-overlap labels, replacing training.previous_session (same-session_key lookup)
+          training-load-plan.v1.ts
+                                     #   training.load_plan (load-facts plan, U9a): computed per-exercise load facts, no recommendation; `renderLoadPlanEntry` is shared with the `get_load_plan` tool
         summarizer/v1.ts             # Legacy end-of-phase summariser (not used by the graph since P4; kept with its snapshot tests)
         summarizer/v2.ts             # Episode summariser — structured EpisodeSummary from the rendered transcript (no previousSummary)
         summarizer/v3.ts             # v2 plus a typed `facts` array (category, fact, muscleGroup?) — superseded by v4
