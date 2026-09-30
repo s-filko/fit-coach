@@ -26,6 +26,8 @@ import type {
 } from '@infra/ai/graph/phase-spec';
 import { loadLoadPlanEntries, planTargetRepsOf, type LoadPlanEntry } from '@infra/ai/load-facts/load-facts.loader';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
+// load-plan plan Task 5b (A5): the rebound training prompt, selected only with the flag on.
+import { TRAINING_PROMPT_V11 } from '@infra/ai/prompts/phases/training';
 import {
   TRAINING_CLIENT_V1,
   TRAINING_EXERCISE_HISTORY_V1,
@@ -34,6 +36,7 @@ import {
   TRAINING_RECENT_WORKOUTS_V1,
   TRAINING_STALE_SESSION_V1,
   TRAINING_WORKOUT_OVERVIEW_V1,
+  TRAINING_WORKOUT_OVERVIEW_V2,
   type ExerciseHistoryEntry,
 } from '@infra/ai/prompts/blocks';
 import {
@@ -110,8 +113,8 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
       suggestion: deps.loadPlanSuggestion === true,
       breaks: deps.loadPlanBreaks === true,
     }),
-    buildLogSetTool({ trainingService }),
-    buildCompleteCurrentExerciseTool({ trainingService }),
+    buildLogSetTool({ trainingService, loadPlanPlannerRebind: deps.loadPlanPlannerRebind }),
+    buildCompleteCurrentExerciseTool({ trainingService, loadPlanPlannerRebind: deps.loadPlanPlannerRebind }),
     buildFinishTrainingTool({ trainingService }),
     // set-kind plan Task 2 (D6): "я сегодня в другом зале" — after the start.
     buildSetSessionPlaceTool({ trainingService }),
@@ -122,7 +125,10 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
 
   return {
     name: 'training',
-    prompt: entry as PhasePromptEntry<PromptContextFor<TrainingData>>,
+    // load-plan plan Task 5b (A5): v11 only with LOAD_PLAN_PLANNER_REBIND on; off = v10 unchanged.
+    prompt: (deps.loadPlanPlannerRebind === true ? TRAINING_PROMPT_V11 : entry) as PhasePromptEntry<
+      PromptContextFor<TrainingData>
+    >,
     tools,
     toolPolicy: buildTrainingToolPolicy(tools),
     // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).
@@ -263,7 +269,8 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
     // and `recent_workouts` (BUG-030 fix) in place of the old same-key `previous_session`.
     contextBlocks: [
       TRAINING_CLIENT_V1,
-      TRAINING_WORKOUT_OVERVIEW_V1,
+      // load-plan plan Task 5b (D10): v2 (sets × reps only) with the flag on; off = v1 unchanged.
+      deps.loadPlanPlannerRebind === true ? TRAINING_WORKOUT_OVERVIEW_V2 : TRAINING_WORKOUT_OVERVIEW_V1,
       TRAINING_STALE_SESSION_V1,
       TRAINING_EXERCISE_HISTORY_V1,
       TRAINING_RECENT_WORKOUTS_V1,

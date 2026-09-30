@@ -82,6 +82,15 @@ export const EnvSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform(v => v === 'true'),
+  // Load plan (load-plan plan A5, Task 5b, D10): `LOAD_PLAN_PLANNER_REBIND` rebinds the planner to LOAD PLAN —
+  // save_workout_plan / start_training_session drop `targetWeight` from their schemas (the DB column stays, it is
+  // simply not written), WORKOUT OVERVIEW and the active-plan block print sets × reps only, and the training /
+  // session_planning prompts are v11 / v5 (the suggestion is the coach's starting point, per O1).
+  // Off = exactly the pre-plan behaviour.
+  LOAD_PLAN_PLANNER_REBIND: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform(v => v === 'true'),
   // How long a FAILED course check is not re-attempted on the same inputs
   // (minutes) — a provider outage must make the layer quieter, not cost one
   // failed call per turn. New inputs are never covered by it.

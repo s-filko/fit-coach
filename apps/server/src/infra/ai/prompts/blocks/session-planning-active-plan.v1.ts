@@ -9,7 +9,11 @@ import type { ContextBlock } from './types';
 
 type ActivePlanJson = NonNullable<SessionPlanningContextData['activePlan']>['planJson'];
 
-export function buildActivePlanSection(name: string, planJson: ActivePlanJson): string {
+export function buildActivePlanSection(
+  name: string,
+  planJson: ActivePlanJson,
+  opts: { omitTargetWeights?: boolean } = {},
+): string {
   if (!planJson) {
     return `Plan: ${name}\n(Plan details not available)`;
   }
@@ -27,7 +31,8 @@ export function buildActivePlanSection(name: string, planJson: ActivePlanJson): 
     lines.push(`Focus: ${template.focus} | Est. ${template.estimatedDuration} min`);
     lines.push('Exercises:');
     for (const ex of template.exercises) {
-      const weight = ex.targetWeight ? ` @ ${ex.targetWeight}kg` : '';
+      // load-plan plan Task 5b (D10): v2 renders sets × reps only — no plan target weight.
+      const weight = !opts.omitTargetWeights && ex.targetWeight ? ` @ ${ex.targetWeight}kg` : '';
       lines.push(
         `  - [ID:${ex.exerciseId}] ${ex.exerciseName}: ${ex.targetSets}x${ex.targetReps}${weight} (rest: ${ex.restSeconds}s)`,
       );

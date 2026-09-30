@@ -255,6 +255,19 @@ in § "Before dispatch".
   range/reps labelled `(scheme default)`. One block never shows two ranges that contradict each other; Task 5b (the planner
   deriving `targetReps` from the scheme) is unaffected.
 
+- **(D) T5b — choices the plan left open (Task 5b, worker):** (a) `formatExerciseSummary` DOES print a plan target
+  (`Target: 3x8-10 @ 70 kg`), so with the flag on its Target line drops the weight too — threaded through the
+  `log_set` / `complete_current_exercise` builders as `loadPlanPlannerRebind`; logged sets always keep their weights.
+  (b) WORKOUT OVERVIEW v2 and `active_plan` v2 omit target weights everywhere, including legacy rows that still carry
+  one (the column stays readable, it is just not printed). (c) v11 / v5 are registered as separate prompt entries
+  (`TRAINING_PROMPT_V11`, `SESSION_PLANNING_PROMPT_V5`) next to `current` (still v10 / v4 per A5); the specs select
+  them by the flag. (d) The agent node stamps the phase module version it actually rendered into the run row's
+  `promptVersionExtras`, so a flag-on run records v11 / v5 instead of the static registry's v10 / v4 (same value with
+  the flag off — today's rows unchanged). (e) `session-planning.types.ts` grows `buildSessionRecommendationSchema({
+  dropTargetWeight })`; zod strips a `targetWeight` sent anyway (tested), so nothing reaches the DB. (f) `session_planning`
+  v5 also rewords STEP 1e's "adapt intensity (reduce weights, …)" to "reduce intensity" — the minimal reading of
+  "minus any instruction to propose or save weights".
+
 ## Acceptance criteria
 
 | AC | Criterion | Verification |

@@ -63,6 +63,7 @@ export {
   SESSION_PLANNING_ACTIVE_PLAN_V1,
   type SessionPlanningActivePlanData,
 } from './session-planning-active-plan.v1';
+export { SESSION_PLANNING_ACTIVE_PLAN_V2 } from './session-planning-active-plan.v2';
 export {
   buildHistorySection,
   SESSION_PLANNING_RECENT_HISTORY_V1,
@@ -88,6 +89,7 @@ export {
   type TrainingStaleSessionData,
   type TrainingWorkoutOverviewData,
 } from './training-workout-overview.v1';
+export { TRAINING_WORKOUT_OVERVIEW_V2 } from './training-workout-overview.v2';
 export {
   TRAINING_EXERCISE_HISTORY_V1,
   TRAINING_RECENT_WORKOUTS_V1,

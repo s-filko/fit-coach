@@ -20,6 +20,8 @@ const log = createLogger('training-tools');
 
 export interface LogSetToolDeps {
   trainingService: ITrainingService;
+  /** Load plan (load-plan plan Task 5b, D10): the completion summary's Target line drops the plan weight. */
+  loadPlanPlannerRebind?: boolean;
 }
 
 export function buildLogSetTool(deps: LogSetToolDeps) {
@@ -141,7 +143,9 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         if (autoCompleted) {
           // BUG-037: this transition was triggered by the user's own set — the instruction
           // must tell the model to confirm that set first, not to lead with the recap.
-          const prevSummary = formatExerciseSummary(autoCompleted, 'set-triggered');
+          const prevSummary = formatExerciseSummary(autoCompleted, 'set-triggered', {
+            omitTargetWeight: deps.loadPlanPlannerRebind === true,
+          });
           return ok(`${setConfirmation}\n\n${prevSummary}`);
         }
 

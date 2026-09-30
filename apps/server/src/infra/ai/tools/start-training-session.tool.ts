@@ -5,7 +5,8 @@ import { z } from 'zod';
 import type { ConversationPhase } from '@domain/conversation/phases';
 import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
 import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
-import { SessionRecommendationSchema } from '@domain/training/session-planning.types';
+import { buildSessionRecommendationSchema, SessionRecommendationSchema } from '@domain/training/session-planning.types';
+import type { RecommendedExercise } from '@domain/training/types';
 import type { IUserFactsService } from '@domain/user/ports';
 
 import { HANDOFF_REGISTERED_TEXT } from '@infra/ai/graph/handoff';
@@ -28,6 +29,11 @@ export interface StartTrainingSessionToolDeps {
    * turn to act on that instruction. Absent/empty = today's wording.
    */
   transitionHandoffTargets?: ReadonlySet<ConversationPhase>;
+  /**
+   * Load plan (load-plan plan Task 5b, D10): drop `targetWeight` from the schema — the session
+   * plan is sets × reps only; loads come from LOAD PLAN during training. Absent = today's schema.
+   */
+  loadPlanPlannerRebind?: boolean;
 }
 
 const START_TRAINING_SESSION_DESCRIPTION = [
@@ -45,9 +51,13 @@ const START_TRAINING_SESSION_DESCRIPTION = [
  * `place` argument. Kept local so `SessionRecommendationSchema` (the stored plan's shape)
  * stays place-free.
  */
-const StartTrainingSessionSchema = SessionRecommendationSchema.extend({
-  place: z.string().min(1).optional(),
-});
+const StartTrainingSessionSchema = (dropTargetWeight: boolean) =>
+  (dropTargetWeight
+    ? buildSessionRecommendationSchema({ dropTargetWeight: true })
+    : SessionRecommendationSchema
+  ).extend({
+    place: z.string().min(1).optional(),
+  });
 
 export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps) {
   const { trainingService, workoutPlanRepository, exerciseRepository, userFactsService } = deps;
@@ -111,7 +121,9 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
             sessionKey: input.sessionKey,
             sessionName: input.sessionName,
             reasoning: input.reasoning,
-            exercises: correctedExercises,
+            // The conditional schema's inferred type carries the dropped-variant union — the
+            // stored shape is the domain one either way (targetWeight simply absent when dropped).
+            exercises: correctedExercises as RecommendedExercise[],
             estimatedDuration: input.estimatedDuration,
             timeLimit: input.timeLimit,
             warnings: input.warnings,
@@ -149,7 +161,7 @@ export function buildStartTrainingSessionTool(deps: StartTrainingSessionToolDeps
     {
       name: 'start_training_session',
       description: START_TRAINING_SESSION_DESCRIPTION,
-      schema: StartTrainingSessionSchema,
+      schema: StartTrainingSessionSchema(deps.loadPlanPlannerRebind === true),
     },
   );
 }

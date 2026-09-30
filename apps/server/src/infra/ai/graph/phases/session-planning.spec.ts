@@ -15,9 +15,12 @@ import type {
   PromptContextFor,
 } from '@infra/ai/graph/phase-spec';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
+// load-plan plan Task 5b (A5): the rebound session-planning prompt, selected only with the flag on.
+import { SESSION_PLANNING_PROMPT_V5 } from '@infra/ai/prompts/phases/session_planning';
 import {
   type ContextBlock,
   SESSION_PLANNING_ACTIVE_PLAN_V1,
+  SESSION_PLANNING_ACTIVE_PLAN_V2,
   SESSION_PLANNING_CLIENT_PROFILE_V1,
   SESSION_PLANNING_RECENT_HISTORY_V1,
   SESSION_PLANNING_RECOVERY_TIMELINE_V1,
@@ -63,7 +66,10 @@ export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec
 
   return {
     name: 'session_planning',
-    prompt: entry as PhasePromptEntry<PromptContextFor<SessionPlanningData>>,
+    // load-plan plan Task 5b (A5): v5 only with LOAD_PLAN_PLANNER_REBIND on; off = v4 unchanged.
+    prompt: (deps.loadPlanPlannerRebind === true ? SESSION_PLANNING_PROMPT_V5 : entry) as PhasePromptEntry<
+      PromptContextFor<SessionPlanningData>
+    >,
     tools: [
       buildSearchExercisesTool({ embeddingService, exerciseRepository }),
       buildStartTrainingSessionTool({
@@ -72,6 +78,8 @@ export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec
         exerciseRepository,
         userFactsService: deps.userFacts,
         transitionHandoffTargets: deps.transitionHandoffTargets,
+        // load-plan plan Task 5b (D10): the session-plan schema drops targetWeight with the flag on.
+        loadPlanPlannerRebind: deps.loadPlanPlannerRebind,
       }),
       buildRequestTransitionTool('session_planning'),
       ...buildSharedTools({ userService, userFacts: deps.userFacts }),
@@ -90,7 +98,8 @@ export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec
     // D-B: v1's `client_profile`, `active_plan`, `recent_history`, `recovery_timeline` sections.
     contextBlocks: [
       SESSION_PLANNING_CLIENT_PROFILE_V1,
-      SESSION_PLANNING_ACTIVE_PLAN_V1,
+      // load-plan plan Task 5b (D10): v2 (sets × reps only) with the flag on; off = v1 unchanged.
+      deps.loadPlanPlannerRebind === true ? SESSION_PLANNING_ACTIVE_PLAN_V2 : SESSION_PLANNING_ACTIVE_PLAN_V1,
       RECENT_HISTORY_BLOCK,
       RECOVERY_TIMELINE_BLOCK,
     ],

@@ -41,7 +41,7 @@ function placeLineOf(place: string | null, recentPlacesCount: number): string | 
 export function buildWorkoutOverview(
   session: WorkoutSessionWithDetails,
   now: Date,
-  opts?: { recentPlacesCount?: number },
+  opts?: { recentPlacesCount?: number; omitTargetWeights?: boolean },
 ): string {
   const plan = session.sessionPlanJson;
   const startedById = new Map(session.exercises.map(ex => [ex.exerciseId, ex]));
@@ -67,7 +67,8 @@ export function buildWorkoutOverview(
       } else if (started?.status === 'in_progress') {
         marker = 'IN PROGRESS';
       }
-      const weight = p.targetWeight ? ` @ ${p.targetWeight} kg` : '';
+      // load-plan plan Task 5b (D10): v2 renders sets × reps only — no plan target weight.
+      const weight = !opts?.omitTargetWeights && p.targetWeight ? ` @ ${p.targetWeight} kg` : '';
       const setsInfo = started ? ` (${workingSets(started.sets).length}/${p.targetSets} sets)` : '';
       guideLines.push(
         `  [${marker.padEnd(11)}] [ID:${p.exerciseId}] ${p.exerciseName}: ${p.targetSets}×${p.targetReps}${weight}${setsInfo}`,
@@ -104,7 +105,7 @@ export function buildWorkoutOverview(
       const statusLabel = ex.status === 'in_progress' ? ' ← ACTIVE' : ` (${ex.status})`;
       detailLines.push(`  ${ex.exercise.name} [ID:${ex.exerciseId}]${statusLabel}`);
       detailLines.push(
-        `    Target: ${ex.targetSets ?? '?'}×${ex.targetReps ?? '?'}${ex.targetWeight ? ` @ ${ex.targetWeight} kg` : ''}`,
+        `    Target: ${ex.targetSets ?? '?'}×${ex.targetReps ?? '?'}${!opts?.omitTargetWeights && ex.targetWeight ? ` @ ${ex.targetWeight} kg` : ''}`,
       );
       if (ex.sets.length === 0) {
         detailLines.push('    No sets logged yet.');

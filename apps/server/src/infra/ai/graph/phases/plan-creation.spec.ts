@@ -39,6 +39,8 @@ export function buildPlanCreationSpec(deps: ConversationGraphDeps): PhaseSpec<Pl
         workoutPlanRepository: deps.workoutPlanRepo,
         exerciseRepository,
         userFactsService: deps.userFacts,
+        // load-plan plan Task 5b (D10): the plan schema drops targetWeight with the flag on.
+        loadPlanPlannerRebind: deps.loadPlanPlannerRebind,
       }),
       buildRequestTransitionTool('plan_creation'),
       ...buildSharedTools({ userService, userFacts: deps.userFacts }),

@@ -205,6 +205,14 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
         ...loaded.data,
       } as PromptContextFor<D>),
     );
+    // load-plan plan Task 5b (AC-LP-7): stamp the phase module version actually rendered — with
+    // LOAD_PLAN_PLANNER_REBIND the graph renders v11/v5 while the static registry still says
+    // v10/v4. `commit` merges these extras over `promptVersionsForPhase`; the value is the same
+    // one when the flag is off, so today's run rows do not change.
+    ctx.promptVersionExtras = {
+      ...ctx.promptVersionExtras,
+      [spec.prompt.current.id]: spec.prompt.current.version,
+    };
 
     // Prompt-caching plan D4: every phase tool is always bound, in the spec's stable order — the tool list is the
     // first thing in the request prefix, so hiding a tool mid-session (the old BUG-008 Plan A availability filter)

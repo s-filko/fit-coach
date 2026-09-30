@@ -154,6 +154,7 @@ export async function registerInfraServices(container: Container = getGlobalCont
     // load-plan plan A5: LOAD PLAN v2 (suggestion) on/off, resolved once here.
     loadPlanSuggestion: config.LOAD_PLAN_SUGGESTION,
     loadPlanBreaks: config.LOAD_PLAN_BREAKS,
+    loadPlanPlannerRebind: config.LOAD_PLAN_PLANNER_REBIND,
     // load-plan Task 4: the training-break context behind the time-gap note (read only with the flag on).
     breakContext: new BreakContext({
       workoutSessionRepo: container.get(WORKOUT_SESSION_REPOSITORY_TOKEN),
