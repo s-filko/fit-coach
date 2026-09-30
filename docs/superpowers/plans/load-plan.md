@@ -5,7 +5,7 @@
 > so a red unit test is verified by running it and stated in the commit body (load-facts D17);
 > DB-backed reds may be committed as `*.repro.test.ts`.
 
-- Status: planned
+- Status: in progress
 - Branch: plan/load-plan
 - After: load-facts
 
