@@ -80,10 +80,13 @@ export type PendingLoadRecommendation = NewLoadRecommendation;
  * into a prompt. Implementations never throw — a log failure must not fail a logged set.
  */
 export interface ILoadRecommendationLog {
-  /** Snapshot BEFORE the set is stored (so "today" excludes it); null = nothing to write. */
+  /**
+   * Snapshot BEFORE the set is stored (so "today" excludes it); null = nothing to write — including when the
+   * exercise already has a working set (D7 trigger: the first working set only). The implementation reads the
+   * session itself, inside its never-throw guard.
+   */
   prepare(input: {
-    userId: string;
-    session: WorkoutSessionWithDetails;
+    sessionId: string;
     sessionExerciseId: string;
     exerciseId: string;
     ctx: LoadPlanLogContext;

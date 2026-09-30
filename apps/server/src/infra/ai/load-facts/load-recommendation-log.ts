@@ -13,6 +13,7 @@ import type {
   IWorkoutSessionRepository,
   LoadPlanSnapshot,
 } from '@domain/training/ports';
+import { workingSets } from '@domain/training/sets';
 import type { UserRepository } from '@domain/user/ports';
 
 import { renderLoadPlanEntryV2 } from '@infra/ai/prompts/blocks/training-load-plan.v2';
@@ -86,15 +87,23 @@ export class LoadRecommendationLog implements ILoadRecommendationLog {
   constructor(
     private snapshots: ILoadPlanSnapshotPort,
     private repository: ILoadRecommendationRepository,
+    private sessions: Pick<IWorkoutSessionRepository, 'findByIdWithDetails'>,
   ) {}
 
   async prepare(
     input: Parameters<ILoadRecommendationLog['prepare']>[0],
   ): ReturnType<ILoadRecommendationLog['prepare']> {
     try {
+      // D7 trigger: only the first working set of the exercise writes a row (warm-ups and legacy NULL kinds as in
+      // `workingSets`). The reads are inside the guard — a failed read skips the log, never the set.
+      const session = await this.sessions.findByIdWithDetails(input.sessionId);
+      const exercise = session?.exercises.find(e => e.id === input.sessionExerciseId);
+      if (!session || !exercise || workingSets(exercise.sets).length > 0) {
+        return null;
+      }
       const snap = await this.snapshots.snapshot({
-        userId: input.userId,
-        session: input.session,
+        userId: session.userId,
+        session,
         exerciseId: input.exerciseId,
         now: input.ctx.now,
         timezone: input.ctx.timezone,
@@ -104,15 +113,15 @@ export class LoadRecommendationLog implements ILoadRecommendationLog {
       }
       return {
         ...snap,
-        userId: input.userId,
-        sessionId: input.session.id,
+        userId: session.userId,
+        sessionId: session.id,
         sessionExerciseId: input.sessionExerciseId,
         exerciseId: input.exerciseId,
         runId: input.ctx.runId,
         advised: input.ctx.advised ?? null,
       };
     } catch (err) {
-      log.error({ err, sessionId: input.session.id }, 'load recommendation snapshot failed');
+      log.error({ err, sessionId: input.sessionId }, 'load recommendation snapshot failed');
       return null;
     }
   }
@@ -148,5 +157,6 @@ export function buildLoadRecommendationLog(
   return new LoadRecommendationLog(
     new LoadPlanSnapshotPort({ ...deps, breaks: flags.LOAD_PLAN_BREAKS === true }),
     new LoadRecommendationRepository(),
+    deps.workoutSessionRepo,
   );
 }

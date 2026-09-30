@@ -19,6 +19,7 @@ import type {
   UpdateSetResult,
 } from '@domain/training/ports';
 import { isLateStart, resolveCompletion, SESSION_TIMEOUT_MS } from '@domain/training/session-timing';
+import { workingSets } from '@domain/training/sets';
 import type {
   CreateSessionDto,
   CreateSessionExerciseDto,
@@ -393,7 +394,7 @@ export class TrainingService implements ITrainingService {
     return { set, setNumber: set.setNumber, autoCompleted };
   }
 
-  /** D7 trigger: the first WORKING set of a session exercise (warm-ups never count). */
+  /** D7 trigger: the first WORKING set of a session exercise (warm-ups never count); the log checks the rest. */
   private async prepareLoadRecommendation(
     sessionId: string,
     sessionExercise: SessionExercise,
@@ -403,17 +404,8 @@ export class TrainingService implements ITrainingService {
     if (!this.loadLog || !ctx || setKind === 'warmup') {
       return null;
     }
-    const earlier = await this.sessionSetRepo.findByExerciseId(sessionExercise.id);
-    if (earlier.some(s => s.setKind !== 'warmup')) {
-      return null;
-    }
-    const session = await this.sessionRepo.findByIdWithDetails(sessionId);
-    if (!session) {
-      return null;
-    }
     return this.loadLog.prepare({
-      userId: session.userId,
-      session,
+      sessionId,
       sessionExerciseId: sessionExercise.id,
       exerciseId: sessionExercise.exerciseId,
       ctx,
@@ -425,12 +417,10 @@ export class TrainingService implements ITrainingService {
     if (!this.loadLog) {
       return;
     }
-    const sets: LoadRecommendationOutcome['sets'] = ex.sets
-      .filter(s => s.setKind !== 'warmup')
-      .map(s => {
-        const { setKind: _kind, ...detail } = extractSetDetail(s);
-        return detail;
-      });
+    const sets: LoadRecommendationOutcome['sets'] = workingSets(ex.sets).map(s => {
+      const { setKind: _kind, ...detail } = extractSetDetail(s);
+      return detail;
+    });
     await this.loadLog.recordOutcome(ex.id, { sets });
   }
 

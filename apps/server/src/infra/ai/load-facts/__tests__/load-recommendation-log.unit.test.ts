@@ -2,7 +2,7 @@
  * load-plan A3: the snapshot port stores the decision behind the rendered v2 entry; a non-strength exercise
  * has no scheme decision (NULL columns, `recommend: n/a`), and the profile drives the D8 default scheme.
  */
-import { LoadPlanSnapshotPort } from '../load-recommendation-log';
+import { LoadPlanSnapshotPort, LoadRecommendationLog } from '../load-recommendation-log';
 import { CHEST_PRESS, daysBefore, NOW, sessionRow, sets, TZ } from './rows';
 
 const PLANK_ID = '33333333-3333-4333-8333-333333333333';
@@ -104,5 +104,39 @@ describe('LoadPlanSnapshotPort and the progression_scheme fact (Task 5a)', () =>
     expect(snap?.schemeId).toBe('linear_progression');
     expect(snap?.rendered).toContain('scheme: linear progression');
     expect(snap?.rendered).toContain('chosen by user 2026-09-20');
+  });
+});
+
+describe('AC-LP-4 LoadRecommendationLog.prepare — the D7 trigger runs inside the never-throw guard', () => {
+  const snap = { rendered: 'entry' } as never;
+  const session = (sets: { setKind: string | null }[]) =>
+    ({ id: 'sess', userId: 'u1', exercises: [{ id: 'row-1', sets }] }) as never;
+  const input = {
+    sessionId: 'sess',
+    sessionExerciseId: 'row-1',
+    exerciseId: CHEST_PRESS.id,
+    ctx: { runId: 'run', now: NOW, timezone: TZ },
+  };
+  const build = (findByIdWithDetails: () => Promise<unknown>) => {
+    const snapshot = jest.fn().mockResolvedValue(snap);
+    const log = new LoadRecommendationLog({ snapshot }, {} as never, { findByIdWithDetails } as never);
+    return { log, snapshot };
+  };
+
+  it('no earlier working set → snapshot taken (warm-ups and only warm-ups do not count)', async () => {
+    const { log, snapshot } = build(async () => session([{ setKind: 'warmup' }]));
+    expect(await log.prepare(input)).toMatchObject({ rendered: 'entry', userId: 'u1', sessionId: 'sess' });
+    expect(snapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([['working'], [null]])('an earlier working set (%s) → no row', async kind => {
+    const { log, snapshot } = build(async () => session([{ setKind: kind }]));
+    expect(await log.prepare(input)).toBeNull();
+    expect(snapshot).not.toHaveBeenCalled();
+  });
+
+  it('a failed session read returns null instead of failing the set', async () => {
+    const { log } = build(() => Promise.reject(new Error('db down')));
+    await expect(log.prepare(input)).resolves.toBeNull();
   });
 });
