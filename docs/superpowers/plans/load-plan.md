@@ -267,6 +267,46 @@ decisions); owner gates are listed in § "Before dispatch".
   dropTargetWeight })`; zod strips a `targetWeight` sent anyway (tested), so nothing reaches the DB. (f) `session_planning`
   v5 also rewords STEP 1e's "adapt intensity (reduce weights, …)" to "reduce intensity" — the minimal reading of
   "minus any instruction to propose or save weights".
+- **(D) Fix-9 — a break fact belongs to a gap only when it covers a day strictly between the workouts (B-code 9, fix
+  worker):** the window's ends are training days, so `breakReasonOf(facts, { from, to })` matches a fact when
+  `fact.to > from` and (`to` is null or `fact.from < to`). `from` = the last workout before the gap; `to` = the
+  workout that ended it, or **null while the gap is still open** (today is not a training day). A marker asked about
+  on the day the user then trained (`to` = that day) therefore never covers the next gap, and a new gap's marker
+  (`from` = that workout day) never colours the ladder gap before it. Used by `BreakContext` (open window) and the
+  loader's `returnBranchOf` (open window for the current gap, closed window for the ladder's own gap).
+- **(D) Fix-2 — wording out of the domain, one decision composer (B-code 2, 3, 6 + R1 folded):** the domain returns
+  typed values only (row id, scheme id, `ProgressionChoice` with `source` / `chosenAt`). `ROW_LABELS`, the scheme
+  display name, the provenance text and the `Progression:` line live in `training-load-plan.v2.ts` (one helper each).
+  `decideLoadPlanEntry` moved to `infra/ai/load-facts/load-decision.ts` (resolve the scheme, then `decide()`; it no
+  longer passes `params`, `decide()` defaults them) and the log imports it, not a block; `progressionOf` is gone
+  (`progressionFromChoice(base, entry.chosenScheme)`). `TrainingBreakNote` is declared by its producer
+  (`break-context.ts`). **Deliberate text change (only one):** the block-level line now spells the scheme the way the
+  entry's `scheme:` line does — `Progression: double progression, confirm ×2 — …` (was `Progression: double, …`);
+  the design §4.2 sample shows the short form, the owner may prefer to shorten the `scheme:` lines instead. LOAD PLAN
+  v2 is not deployed yet, so this edits the module in place.
+- **(D) Fix-S — Stage A takes the more conservative of the matching rows:** a short constraint and a gap row can both
+  match; the lower candidate load wins (a cold start — no load — is lowest), a tie keeps the constraint. A rebuild
+  ladder now beats a constraint's hold; the last rung of a finished-soon ladder (back at the working weight) ties and
+  the constraint row stays. Post-restart rungs follow the rebuild ladder and are labelled `gap_rebuild` (the printed
+  reason still says `restart tier`).
+- **(D) Fix-T — the D7 trigger moved into the log (R3 folded):** `ILoadRecommendationLog.prepare` takes
+  `{ sessionId, sessionExerciseId, exerciseId, ctx }` and reads the session itself inside its never-throw guard; the
+  "no earlier working set" check uses `workingSets()` on the session details (was a separate `findByExerciseId` read
+  and an inline copy of the rule in the service). A failed read skips the log, never the set. `recordLoadOutcome` also
+  uses `workingSets()`.
+- **(D) Fix-R — `LOAD_PLAN_PLANNER_REBIND` needs `LOAD_PLAN_SUGGESTION`:** one predicate, `plannerRebindOn(deps)`
+  (`graph/phases/planner-rebind.ts`), gates everything the flag switched — prompts v11 / v5, WORKOUT OVERVIEW /
+  active-plan v2 and the planner tools' schemas — so rebind-only is exactly the pre-plan behaviour (tested in
+  `phase-specs.unit.test.ts`), never a half-applied planner.
+- **(D) Fix-P — summariser v7 / verifier v2 edited in place (R2 folded):** neither prompt is deployed yet, so the
+  break classes (`BREAK_REASONS`) and the lifecycle numbers (`FACT_LIFECYCLE_BOUNDS`) are derived instead of typed; the
+  rendered text is byte-identical (pinned in `summarizer/__tests__/v7.unit.test.ts`). The TTL / review constants of
+  the compaction node and the marker derive from the same bounds (B-code 8).
+- **(D) Fix-C — small folds:** `maybeCtxOf(config)` next to `ctxOf` is the lenient run-context accessor used by
+  `log_set`; `CONVERSATION_FACT_CATEGORIES` is derived from `FACT_CATEGORIES` minus the compaction-only pair; both
+  `get_load_plan` descriptions share one tail constant (text unchanged); `start_training_session` builds its schema
+  with `buildSessionRecommendationSchema({ dropTargetWeight })`; the dead `hasShortConstraint` / `PLATEAU_FLAT_RUN`
+  are deleted; the 14 new test files carry AC ids in their top-level `describe` names.
 
 ## Acceptance criteria
 

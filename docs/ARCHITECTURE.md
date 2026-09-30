@@ -72,7 +72,17 @@ apps/server/src/
         workout-plan.ports.ts  # IWorkoutPlanRepository
         workout-session.ports.ts   # Session / session-exercise / session-set repositories
         training-service.ports.ts  # ITrainingService + result types (standing exception, rule 3)
+        load-recommendation.ports.ts  # Recommendation-log ports (load-plan plan Task 3): ILoadRecommendationLog (prepare / commit / recordOutcome, never throws), snapshot port, repository
       services/
+      sets.ts                  # workingSets() — the one working-set rule (warm-ups excluded, legacy NULL counts as working)
+      load-facts/              # Pure load metrics over plain inputs (load-facts plan): computeLoadFacts, gap / e1RM / fatigue facts — no I/O
+      load-plan/               # Pure decision layer (load-plan plan): typed values only, no prompt wording
+        schemes/               #   progression-scheme registry (double / linear), params with their citations, the scheme contract
+        decide.ts              #   decision order — Stage A safety rows (short constraint, gap ladder — the more conservative wins, pre-fatigue, below floor) → Stage B → Stage C scheme
+        gap-tier.ts            #   gap tiers and the return ladder (R4.0 thresholds), `gapTierFacts`, `ladderStateOf`
+        break-fact.ts          #   the `break` fact text (reason class, dates) — parse / format, `breakReasonOf` (window strictly between workouts)
+        progression-fact.ts    #   the `progression_scheme` fact text — parse / format, `chosenSchemeOf`
+        scheme-default.ts      #   D8 default scheme from the profile
       types.ts                 # Training DTOs (SessionSet.setData inferred from set-data.types.ts Zod)
       set-data.types.ts        # Zod schemas for set_data — single source of truth for the SetData union
 
@@ -137,7 +147,10 @@ apps/server/src/
       messages/                      # User-facing message catalog (ADR-0013 §11) — en/ru, language_code driven
         catalog.ts / en.ts / ru.ts / index.ts
       load-facts/
-        load-facts.loader.ts         # Gathers rows for the pure load metrics (`domain/training/load-facts/`) — shared by the LOAD PLAN block, `get_load_plan` and `scripts/print-load-plan.ts`
+        load-facts.loader.ts         # Gathers rows for the pure load metrics (`domain/training/load-facts/`) — shared by the LOAD PLAN block, `get_load_plan` and `scripts/print-load-plan.ts`; with LOAD_PLAN_BREAKS also attaches the return ladder and the break reason
+        load-decision.ts             # `decideLoadPlanEntry` — the one composer (scheme in force → `decide()`); block, tool, report and log all call it, none writes prompt text here
+        break-context.ts             # BreakContext (LOAD_PLAN_BREAKS): tier of the gap since the last workout + the one-time reason question (the `break` marker fact is the "asked" state); `TrainingBreakNote`
+        load-recommendation-log.ts   # Recommendation log (LOAD_PLAN_SUGGESTION): snapshot port (v2 entry + its decision) and `LoadRecommendationLog` — first-working-set trigger, never throws, never read back into a prompt
       context/                      # Context assembler — message order + token accounting (ADR-0013 §3.4)
         assemble-context.ts         # assembleContext() → { messages, budgetReport }: ONE stable SystemMessage (block 1 + user facts + course directive + episode summaries) → history → current HumanMessage with a request-only `<context>` part (block 3 domain blocks, time-gap note, NOW line) (one shape for every phase; ADR-0013 §3.4 amendment 2026-09-30); calls resolveBudget
         budget.ts                   # resolveBudget/trimHistory — INV-LLM-004 order: trim history → step block depths → drop oldest summary → D-D floor (block 1 never cut; `system` over budget only reported); all skipped while the prompt cache is warm and under LLM_CONTEXT_HARD_CAP_TOKENS
@@ -165,6 +178,8 @@ apps/server/src/
           plan_creation/v1.ts        #
           session_planning/v1.ts     #
           training/v1.ts             #   DIRECTIVES_WITHOUT_IDENTITY_V1 (render helpers live in blocks/ since the context-budget plan)
+          training/v11.ts / session_planning/v5.ts
+                                     #   rebound planner (load-plan Task 5b): the coach starts from the LOAD PLAN suggestion, the planner writes no `targetWeight` — selected only with LOAD_PLAN_PLANNER_REBIND and LOAD_PLAN_SUGGESTION (`graph/phases/planner-rebind.ts`)
           */v2.ts                    #   current for chat/plan_creation/session_planning/training: v1 minus the domain sections (now block 3); registration has no v2
         blocks/                      # Injected fragments that are neither phase prompt nor directive
           types.ts                   #   ContextBlock<D> (D-A): pure renderer over the phase's loaded data, optional `depths`
@@ -174,19 +189,25 @@ apps/server/src/
           post-tool-nudge.v1.ts      #   post-tool nudge (agent node retry)
           current-time.v1.ts / time-gap.v1.ts
                                      #   NOW line / time-gap note — inside the current HumanMessage's `<context>` part (ADR-0013 §3.4 amendment 2026-09-30)
+          time-gap.v2.ts             #   time-gap note v2 (LOAD_PLAN_BREAKS): v1 sentence + the training-break tier + the one-time reason question
           chat-context.v1.ts / client-profile.v1.ts / session-planning-*.v1.ts / training-workout-overview.v1.ts
                                      #   domain context blocks (ADR-0013 §3.4 block 3, D-B): one per moved v1 section, byte-equal at full depth; declared on PhaseSpec.contextBlocks
           training-exercise-history.v1.ts
                                      #   training.exercise_history / training.recent_workouts (BUG-030 fix, training-exercise-history plan): per-exercise history anchor + 7-day fatigue window with muscle-overlap labels, replacing training.previous_session (same-session_key lookup)
           training-load-plan.v1.ts
                                      #   training.load_plan (load-facts plan, U9a): computed per-exercise load facts, no recommendation; `renderLoadPlanEntry` is shared with the `get_load_plan` tool
+          training-load-plan.v2.ts   #   training.load_plan v2 (LOAD_PLAN_SUGGESTION): v1 facts + scheme, decision stage/row, suggestion with its reason, break / ladder line; owns ALL v2 wording (row labels, scheme name, provenance, `Progression:` line)
+          training-workout-overview.v2.ts / session-planning-active-plan.v2.ts
+                                     #   sets × reps only, no target weights (LOAD_PLAN_PLANNER_REBIND together with LOAD_PLAN_SUGGESTION)
         summarizer/v1.ts             # Legacy end-of-phase summariser (not used by the graph since P4; kept with its snapshot tests)
         summarizer/v2.ts             # Episode summariser — structured EpisodeSummary from the rendered transcript (no previousSummary)
         summarizer/v3.ts             # v2 plus a typed `facts` array (category, fact, muscleGroup?) — superseded by v4
         summarizer/v4.ts             # `factOperations` (add / confirm / update / retract) against the known active facts (fact-lifecycle)
         summarizer/v5.ts             # v4 plus a user `evidence` quote per add/update/retract (fact-provenance) — superseded by v6
         summarizer/v6.ts             # current: v5 with the provenance rules restated for model verification (fact-verification)
+        summarizer/v7.ts             # v6 plus the `break` and `progression_scheme` fact categories (load-plan plan Tasks 4/5a) — selected only with LOAD_PLAN_BREAKS or LOAD_PLAN_SUGGESTION; classes and lifecycle numbers derived from `BREAK_REASONS` / `FACT_LIFECYCLE_BOUNDS`
         fact-verifier/v1.ts          # verifies the summariser's add/update/retract against the episode's user lines (BUG-040, ADR-0009 amendment 2026-09-27/28)
+        fact-verifier/v2.ts          # v1 plus the break / progression_scheme category rules — paired with summariser v7
     observability/
       transcript-reader.ts      # Reads a run/session/user window from conversation_runs + turns + llm_calls (+ prompt_blobs)
       transcript-formatter.ts   # Pure renderer: interleaves turns and API calls by (created_at, seq) for a human reader
@@ -412,7 +433,7 @@ These rules are for any AI assistant working in this repo:
 - **Clear context**: `POST /api/bot/chat/clear-context` calls `ConversationRunPort.clearContext(userId)` — the adapter deletes the checkpoint thread and appends a `context_cleared` system note; the next message starts fresh.
 - **ADR-0005**: original patterns (superseded — no context service, no sliding window; the legacy `IConversationContextService` was deleted in P4).
 - No breaking change to API: `POST /api/chat` contract unchanged [AC-0110].
-- **Database storage**: `conversation_turns` table with (userId, phase, role, content, runId, seq, kind, payload, createdAt) — `seq` is the per-run monotonic order, carried by every row that has a `run_id`; `user_facts` table — durable user facts with a confirmation counter (P6, migration `0005`); `conversation_summaries` table — structured episode summaries (ADR-0013 §8, written at compaction via `SummaryPort`); `conversation_runs` table — one row per run with model/tokens/latency/outcome, plus `error_class`/`error_message` on a non-`ok` run (ADR-0013 §8; written by the commit node, failed runs by the conversation-run adapter); `llm_calls` table — one row per model invocation with the request actually sent, the response, latency and error, written by the LLM callback handler regardless of `LOG_LEVEL`; `prompt_blobs` table — each distinct system message stored once by content hash and referenced from `llm_calls.request`; `langgraph_checkpoints` table (managed by PostgresSaver).
+- **Database storage**: `conversation_turns` table with (userId, phase, role, content, runId, seq, kind, payload, createdAt) — `seq` is the per-run monotonic order, carried by every row that has a `run_id`; `user_facts` table — durable user facts with a confirmation counter (P6, migration `0005`; categories include the compaction-only `break` and `progression_scheme`, load-plan plan); `load_recommendations` table — calibration log of the LOAD PLAN entry and its decision per session exercise, written on the first working set, outcome filled on completion, never read back into a prompt (load-plan plan Task 3, migration `0023`); `conversation_summaries` table — structured episode summaries (ADR-0013 §8, written at compaction via `SummaryPort`); `conversation_runs` table — one row per run with model/tokens/latency/outcome, plus `error_class`/`error_message` on a non-`ok` run (ADR-0013 §8; written by the commit node, failed runs by the conversation-run adapter); `llm_calls` table — one row per model invocation with the request actually sent, the response, latency and error, written by the LLM callback handler regardless of `LOG_LEVEL`; `prompt_blobs` table — each distinct system message stored once by content hash and referenced from `llm_calls.request`; `langgraph_checkpoints` table (managed by PostgresSaver).
 
 ## LLM Integration
 **Implementation**: `src/infra/ai/model.factory.ts`
