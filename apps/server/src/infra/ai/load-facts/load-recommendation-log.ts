@@ -17,7 +17,6 @@ import { workingSets } from '@domain/training/sets';
 import type { UserRepository } from '@domain/user/ports';
 
 import { renderLoadPlanEntryV2 } from '@infra/ai/prompts/blocks/training-load-plan.v2';
-import { LoadRecommendationRepository } from '@infra/db/repositories/load-recommendation.repository';
 
 import { createLogger } from '@shared/logger';
 
@@ -149,6 +148,7 @@ export class LoadRecommendationLog implements ILoadRecommendationLog {
 /** A5: the log exists only with `LOAD_PLAN_SUGGESTION` on; undefined = pre-plan behaviour exactly. */
 export function buildLoadRecommendationLog(
   deps: LoadRecommendationLogDeps,
+  repository: ILoadRecommendationRepository,
   flags: { LOAD_PLAN_SUGGESTION: boolean; LOAD_PLAN_BREAKS?: boolean },
 ): ILoadRecommendationLog | undefined {
   if (!flags.LOAD_PLAN_SUGGESTION) {
@@ -156,7 +156,7 @@ export function buildLoadRecommendationLog(
   }
   return new LoadRecommendationLog(
     new LoadPlanSnapshotPort({ ...deps, breaks: flags.LOAD_PLAN_BREAKS === true }),
-    new LoadRecommendationRepository(),
+    repository,
     deps.workoutSessionRepo,
   );
 }

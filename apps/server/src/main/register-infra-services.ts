@@ -58,6 +58,7 @@ export async function registerInfraServices(container: Container = getGlobalCont
   container.register(SESSION_SET_REPOSITORY_TOKEN, new SessionSetRepository());
 
   const { loadConfig: loadTrainingConfig } = await import('@config/index');
+  const { LoadRecommendationRepository } = await import('@infra/db/repositories/load-recommendation.repository');
   const { buildLoadRecommendationLog } = await import('@infra/ai/load-facts/load-recommendation-log');
 
   container.registerFactory(
@@ -79,6 +80,7 @@ export async function registerInfraServices(container: Container = getGlobalCont
             userFacts: c.get(USER_FACTS_SERVICE_TOKEN),
             userRepository: c.get(USER_REPOSITORY_TOKEN),
           },
+          new LoadRecommendationRepository(),
           loadTrainingConfig(),
         ),
       ),

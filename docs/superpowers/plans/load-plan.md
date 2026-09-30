@@ -313,6 +313,11 @@ decisions); owner gates are listed in § "Before dispatch".
   the user-words hints ("by reps inside a range", …) are a `Record<SchemeId, string>` next to it (a new scheme fails to
   compile until it has one), not the `SCHEMES` descriptions — those are coach-facing sentences and would change the
   prompt text. Rendered text is byte-identical (pinned in `summarizer/__tests__/v7.unit.test.ts`).
+- **(D) Fix-CI — the log takes its repository by injection:** `buildLoadRecommendationLog(deps, repository, flags)` no
+  longer imports the concrete `LoadRecommendationRepository` (→ `@infra/db/drizzle`, which connects on module load);
+  `register-infra-services.ts` constructs it, like the other repositories. CI's `check-server` has no Postgres, and the
+  import crashed `npm run test:unit` with an unhandled `ECONNREFUSED`. Red/green: `DB_PORT=5999 npm run test:unit`. A search
+  of the branch diff found no other non-repository module importing `@infra/db`.
 
 ## Acceptance criteria
 
@@ -503,6 +508,12 @@ Run 2 advisories folded in `48e31a3d`. **Verdict after run 2: clean.**
 `db-test-lock.sh npm run test:integration` — first run 1 failed / 701 passed (the failing test was not captured),
 then three consecutive runs 702 passed / 1 todo. Recorded as an unidentified integration flake (not reproduced);
 see STATE handoff.
+
+**Post-merge CI failure (2026-10-01):** the first dev deploy (run 36774724735, merge `241d2a1f`) failed in
+`ci / check-server`: CI has no Postgres and `load-recommendation-log.ts` imported the concrete repository, so the
+unit suite crashed on `ECONNREFUSED 5432`. Every local run had the DB up, so neither the workers, the review nor the
+acceptance above saw it. Fixed in `54ee7d09` ((D) Fix-CI); `DB_PORT=5999 npm run test:unit` → 2357 passed, no
+connection attempt. The CI-parity run is now part of the acceptance procedure (`docs/ORCHESTRATION.md` § Task spec).
 
 ### Meta
 
