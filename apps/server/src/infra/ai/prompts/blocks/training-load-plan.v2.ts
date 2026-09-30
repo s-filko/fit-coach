@@ -61,12 +61,14 @@ function schemeLine(
   repText: string,
   confirm: number,
   timezone: string | null,
+  repsFromScheme: boolean,
 ): string {
   const provenance =
     choice.source === 'user' && choice.chosenAt
       ? `chosen by user ${calendarDate(choice.chosenAt, timezone)}`
       : 'default, unconfirmed';
-  return `scheme: ${schemeName(d.scheme.id)} ${repText}, confirm ×${confirm} (${provenance})`;
+  const reps = repsFromScheme ? `${repText} (scheme default)` : repText;
+  return `scheme: ${schemeName(d.scheme.id)} ${reps}, confirm ×${confirm} (${provenance})`;
 }
 
 /** The scheme in force for an entry: the user's `progression_scheme` fact if the loader found one, else `base`. */
@@ -154,7 +156,15 @@ function decisionLines(
   const cons = loadText(d.conservative, perHand);
   const lower = d.candidate.load !== null && d.conservative.load !== null ? d.candidate.load - d.conservative.load : 0;
   return [
-    schemeLine(d, progression, repsText(d.candidate.reps), confirmSessions, timezone),
+    schemeLine(
+      d,
+      progression,
+      repsText(d.candidate.reps),
+      confirmSessions,
+      timezone,
+      // The range is the scheme's own when no plan/reference range exists, or the scheme fixes the reps (linear).
+      isAbsent(facts.repRange) || progression.scheme.defaultParams(progression.goal).fixedReps !== undefined,
+    ),
     `tactic: ${d.tactic}`,
     ...breakLine(entry, d),
     `decision: Stage ${d.stage}, ${ROW_LABELS[d.row]} → ${d.outcome}`,

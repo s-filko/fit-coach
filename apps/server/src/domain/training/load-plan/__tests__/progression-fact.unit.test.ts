@@ -72,18 +72,12 @@ describe('progressionFromChoice / progressionLine', () => {
       schemeId: 'double_progression',
       chosenAt: new Date('2026-09-20T03:00:00Z'),
     });
-    expect(progressionLine(chosen, 'Asia/Manila')).toBe(
-      'Progression: double, 8–12, confirm ×2 — chosen by user 2026-09-20',
-    );
-    expect(progressionLine(profile, 'Asia/Manila')).toBe(
-      'Progression: double, 8–12, confirm ×2 — default, unconfirmed',
-    );
+    expect(progressionLine(chosen, 'Asia/Manila')).toBe('Progression: double, confirm ×2 — chosen by user 2026-09-20');
+    expect(progressionLine(profile, 'Asia/Manila')).toBe('Progression: double, confirm ×2 — default, unconfirmed');
     const linear = progressionFromChoice(profile, {
       schemeId: 'linear_progression',
       chosenAt: new Date('2026-09-20T03:00:00Z'),
     });
-    expect(progressionLine(linear, 'Asia/Manila')).toBe(
-      'Progression: linear, 8 reps, confirm ×2 — chosen by user 2026-09-20',
-    );
+    expect(progressionLine(linear, 'Asia/Manila')).toBe('Progression: linear, confirm ×2 — chosen by user 2026-09-20');
   });
 });

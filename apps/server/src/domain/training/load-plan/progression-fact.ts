@@ -44,7 +44,7 @@ export function chosenSchemeOf(facts: { fact: string; createdAt: Date }[]): Chos
   return valid[0] ? { schemeId: valid[0].parsed.schemeId, chosenAt: valid[0].createdAt } : null;
 }
 
-/** The scheme in force: the user's choice when there is one (goal stays the profile's), else the default. */
+/** The scheme in force: the user's choice if there is one (the goal stays the profile's), else the default. */
 export function progressionFromChoice(base: ProgressionChoice, chosen: ChosenScheme | null): ProgressionChoice {
   if (!chosen) {
     return base;
@@ -52,14 +52,12 @@ export function progressionFromChoice(base: ProgressionChoice, chosen: ChosenSch
   return { ...base, scheme: getScheme(chosen.schemeId), source: 'user', chosenAt: chosen.chosenAt };
 }
 
-function repsText(min: number, max: number, fixed: number | undefined): string {
-  if (fixed !== undefined) {
-    return `${fixed} reps`;
-  }
-  return min === max ? `${min}` : `${min}–${max}`;
-}
-
-/** `Progression: double, 8–12, confirm ×2 — chosen by user 2026-09-20` (design §4.2), or `— default, unconfirmed`. */
+/**
+ * `Progression: double, confirm ×2 — chosen by user 2026-09-20` (design §4.2), or `— default, unconfirmed`.
+ * No rep range:
+ * each exercise works on its own (today's range, else the scheme default — printed per entry), so one block never shows
+ * two contradicting ranges.
+ */
 export function progressionLine(choice: ProgressionChoice, timezone: string | null): string {
   const params = choice.scheme.defaultParams(choice.goal);
   const [name] = choice.scheme.id.split('_');
@@ -67,6 +65,5 @@ export function progressionLine(choice: ProgressionChoice, timezone: string | nu
     choice.source === 'user' && choice.chosenAt
       ? `chosen by user ${calendarDate(choice.chosenAt, timezone)}`
       : 'default, unconfirmed';
-  const reps = repsText(params.repRange.min, params.repRange.max, params.fixedReps);
-  return `Progression: ${name}, ${reps}, confirm ×${params.confirmSessions} — ${provenance}`;
+  return `Progression: ${name}, confirm ×${params.confirmSessions} — ${provenance}`;
 }

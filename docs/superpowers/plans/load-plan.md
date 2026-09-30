@@ -248,6 +248,12 @@ in § "Before dispatch".
   provenance. Until Task 5b (the planner derives `targetReps` from the scheme) the entry's rep range is still today's plan
   range, so the two lines can show different ranges (e.g. strength goal: line 4–6, entry 8–12 from the plan). (f) No new
   context block or prompt version outside the LOAD PLAN block; planning-phase context line and prompts are Task 5b.
+- **(D) T5a-fix — one rep range per entry (orchestrator review of Task 5a):** the block-level `Progression:` line (the
+  context line of design §4.2) prints no rep range — `Progression: double, confirm ×2 — chosen by user 2026-09-20` /
+  `— default, unconfirmed`. Each entry's `scheme:` line prints the range that entry actually uses: today's plan range,
+  else the reference performance's; when neither exists, or the scheme fixes the reps (linear), it prints the scheme's own
+  range/reps labelled `(scheme default)`. One block never shows two ranges that contradict each other; Task 5b (the planner
+  deriving `targetReps` from the scheme) is unaffected.
 
 ## Acceptance criteria
 

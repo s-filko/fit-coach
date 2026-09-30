@@ -129,7 +129,7 @@ describe('LOAD PLAN v2 with a progression_scheme fact', () => {
     expect(e.chosenScheme).toEqual({ schemeId: 'double_progression', chosenAt: new Date('2026-09-20T03:00:00Z') });
     const { TRAINING_LOAD_PLAN_V2 } = await import('../training-load-plan.v2');
     const block = TRAINING_LOAD_PLAN_V2.render({ loadPlan: [e], exerciseHistory: [], progression }, ctx, 0) as string;
-    expect(block).toContain('Progression: double, 8–12, confirm ×2 — chosen by user 2026-09-20');
+    expect(block).toContain('Progression: double, confirm ×2 — chosen by user 2026-09-20');
     expect(block).toContain('scheme: double progression 8–12, confirm ×2 (chosen by user 2026-09-20)');
     expect(block).not.toContain('default, unconfirmed');
   });
@@ -139,7 +139,7 @@ describe('LOAD PLAN v2 with a progression_scheme fact', () => {
     expect(e.chosenScheme).toBeNull();
     const { TRAINING_LOAD_PLAN_V2 } = await import('../training-load-plan.v2');
     const block = TRAINING_LOAD_PLAN_V2.render({ loadPlan: [e], exerciseHistory: [], progression }, ctx, 0) as string;
-    expect(block).toContain('Progression: double, 8–12, confirm ×2 — default, unconfirmed');
+    expect(block).toContain('Progression: double, confirm ×2 — default, unconfirmed');
     expect(block).toContain('(default, unconfirmed)');
   });
 
@@ -149,7 +149,9 @@ describe('LOAD PLAN v2 with a progression_scheme fact', () => {
     ]);
     const d = decideLoadPlanEntry(e, { progression });
     expect(d?.scheme).toEqual({ id: 'linear_progression', version: 1 });
-    expect(render(e)).toContain('scheme: linear progression 8, confirm ×2 (chosen by user 2026-09-20)');
+    expect(render(e)).toContain(
+      'scheme: linear progression 8 (scheme default), confirm ×2 (chosen by user 2026-09-20)',
+    );
   });
 
   it('the newest active fact wins; a malformed or unknown-id fact is ignored', async () => {
@@ -159,5 +161,44 @@ describe('LOAD PLAN v2 with a progression_scheme fact', () => {
       schemeFact('progression_scheme id=nonsense', '2026-09-25T00:00:00Z'),
     ]);
     expect(e.chosenScheme?.schemeId).toBe('linear_progression');
+  });
+});
+
+/**
+ * load-plan Task 5a fix: the block-level Progression line carries no rep range (each entry works on its own: today's
+ * range, else the scheme default — labelled), so one block never shows two contradicting ranges.
+ */
+describe('LOAD PLAN v2: one rep range per entry, none on the Progression line', () => {
+  const noRangePerf = (id: string, daysAgo: number) =>
+    sessionRow(id, daysBefore(daysAgo), [
+      { rowId: `r-${id}`, ...CHEST_PRESS, targetReps: '', sets: sets(65, [10, 10, 10], daysBefore(daysAgo)) },
+    ]);
+
+  it('the Progression line has no range, even for a strength goal whose scheme default is 4–6', async () => {
+    const strength = defaultProgression({ fitnessLevel: 'intermediate', fitnessGoal: 'get stronger' });
+    const { TRAINING_LOAD_PLAN_V2 } = await import('../training-load-plan.v2');
+    const e = await entry([perf('a', 3), perf('b', 10), perf('c', 17)], false);
+    const block = TRAINING_LOAD_PLAN_V2.render(
+      { loadPlan: [e], exerciseHistory: [], progression: strength },
+      ctx,
+      0,
+    ) as string;
+    const line = block.split('\n').find(l => l.startsWith('Progression:'));
+    expect(line).toBe('Progression: double, confirm ×2 — default, unconfirmed');
+    expect(line).not.toMatch(/\d+–\d+/);
+    // The entry keeps the range it works on (the reference performance's plan), not the scheme default.
+    expect(block).toContain('scheme: double progression 8–12, confirm ×2');
+    expect(block).not.toContain('4–6');
+  });
+
+  it('with no range from today or the reference, the entry prints the scheme default and says so', async () => {
+    const e = await entry([noRangePerf('a', 3), noRangePerf('b', 10), noRangePerf('c', 17)], false);
+    expect(render(e)).toContain('scheme: double progression 8–12 (scheme default), confirm ×2 (default, unconfirmed)');
+  });
+
+  it('a range from the plan is printed without the label', async () => {
+    const e = await entry([perf('a', 3), perf('b', 10), perf('c', 17)], false);
+    expect(render(e)).toContain('scheme: double progression 8–12, confirm ×2 (default, unconfirmed)');
+    expect(render(e)).not.toContain('(scheme default)');
   });
 });
