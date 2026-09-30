@@ -391,7 +391,11 @@ describe('progression_scheme: chosen by user vs default (AC-LP-5)', () => {
         }
       }
 
-      const text = await blockText({ loadPlanPlannerRebind: true }, legacyId, 'training.workout_overview');
+      const text = await blockText(
+        { loadPlanPlannerRebind: true, loadPlanSuggestion: true },
+        legacyId,
+        'training.workout_overview',
+      );
       expect(text).toContain(`3×${legacyPlanReps}`);
       expect(text).not.toContain('@ 60 kg');
     });

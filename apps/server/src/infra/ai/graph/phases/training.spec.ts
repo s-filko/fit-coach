@@ -55,6 +55,7 @@ import {
 import { createLogger } from '@shared/logger';
 
 import { type ToolPolicy, TRAINING_TOOL_PRIORITY } from '../tool-policy';
+import { plannerRebindOn } from './planner-rebind';
 
 const log = createLogger('training-spec');
 
@@ -113,8 +114,8 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
       suggestion: deps.loadPlanSuggestion === true,
       breaks: deps.loadPlanBreaks === true,
     }),
-    buildLogSetTool({ trainingService, loadPlanPlannerRebind: deps.loadPlanPlannerRebind }),
-    buildCompleteCurrentExerciseTool({ trainingService, loadPlanPlannerRebind: deps.loadPlanPlannerRebind }),
+    buildLogSetTool({ trainingService, loadPlanPlannerRebind: plannerRebindOn(deps) }),
+    buildCompleteCurrentExerciseTool({ trainingService, loadPlanPlannerRebind: plannerRebindOn(deps) }),
     buildFinishTrainingTool({ trainingService }),
     // set-kind plan Task 2 (D6): "я сегодня в другом зале" — after the start.
     buildSetSessionPlaceTool({ trainingService }),
@@ -125,10 +126,8 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
 
   return {
     name: 'training',
-    // load-plan plan Task 5b (A5): v11 only with LOAD_PLAN_PLANNER_REBIND on; off = v10 unchanged.
-    prompt: (deps.loadPlanPlannerRebind === true ? TRAINING_PROMPT_V11 : entry) as PhasePromptEntry<
-      PromptContextFor<TrainingData>
-    >,
+    // load-plan plan Task 5b (A5): v11 with LOAD_PLAN_PLANNER_REBIND + LOAD_PLAN_SUGGESTION; else v10.
+    prompt: (plannerRebindOn(deps) ? TRAINING_PROMPT_V11 : entry) as PhasePromptEntry<PromptContextFor<TrainingData>>,
     tools,
     toolPolicy: buildTrainingToolPolicy(tools),
     // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).
@@ -270,7 +269,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
     contextBlocks: [
       TRAINING_CLIENT_V1,
       // load-plan plan Task 5b (D10): v2 (sets × reps only) with the flag on; off = v1 unchanged.
-      deps.loadPlanPlannerRebind === true ? TRAINING_WORKOUT_OVERVIEW_V2 : TRAINING_WORKOUT_OVERVIEW_V1,
+      plannerRebindOn(deps) ? TRAINING_WORKOUT_OVERVIEW_V2 : TRAINING_WORKOUT_OVERVIEW_V1,
       TRAINING_STALE_SESSION_V1,
       TRAINING_EXERCISE_HISTORY_V1,
       TRAINING_RECENT_WORKOUTS_V1,

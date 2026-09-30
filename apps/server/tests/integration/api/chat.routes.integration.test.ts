@@ -1,7 +1,5 @@
 import { buildServer } from '../../../src/app/server';
-import {
-  CONVERSATION_RUN_PORT_TOKEN,
-} from '../../../src/domain/conversation/ports';
+import { CONVERSATION_RUN_PORT_TOKEN } from '../../../src/domain/conversation/ports';
 import { USER_SERVICE_TOKEN } from '../../../src/domain/user/ports';
 import { TRAINING_SERVICE_TOKEN } from '../../../src/domain/training/ports';
 import { getGlobalContainer, registerInfraServices } from '../../../src/main/register-infra-services';

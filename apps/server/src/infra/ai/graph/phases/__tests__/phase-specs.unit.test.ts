@@ -508,6 +508,31 @@ describe('LOAD_PLAN_PLANNER_REBIND selects the rebound planner (load-plan plan T
   const planCreationSpecOf = (overrides: Record<string, unknown>) =>
     buildPhaseSpecs(stubDeps(overrides)).find(s => s.name === 'plan_creation')!;
 
+  // The rebind needs the suggestion: v11 / v5 start from the LOAD PLAN suggestion.
+  const ON = { loadPlanPlannerRebind: true, loadPlanSuggestion: true };
+
+  it('rebind without the suggestion selects nothing: v10 / v4, v1 blocks, weights in the schemas', () => {
+    const rebindOnly = { loadPlanPlannerRebind: true };
+    const training = trainingSpecOf(rebindOnly);
+    expect(training.prompt.current.version).toBe('v10');
+    expect(training.contextBlocks.find(b => b.id === 'training.workout_overview')?.version).toBe('v1');
+    const planning = planningSpecOf(rebindOnly);
+    expect(planning.prompt.current.version).toBe('v4');
+    expect(planning.contextBlocks.find(b => b.id === 'session_planning.active_plan')?.version).toBe('v1');
+    const start = planning.tools.find(t => t.name === 'start_training_session') as unknown as {
+      schema: { shape: { exercises: { element: { shape: Record<string, unknown> } } } };
+    };
+    expect(start.schema.shape.exercises.element.shape).toHaveProperty('targetWeight');
+    const save = planCreationSpecOf(rebindOnly).tools.find(t => t.name === 'save_workout_plan') as unknown as {
+      schema: {
+        shape: {
+          sessionTemplates: { element: { shape: { exercises: { element: { shape: Record<string, unknown> } } } } };
+        };
+      };
+    };
+    expect(save.schema.shape.sessionTemplates.element.shape.exercises.element.shape).toHaveProperty('targetWeight');
+  });
+
   it('training: v10 prompt + workout_overview v1 with the flag off or absent', () => {
     for (const overrides of [{}, { loadPlanPlannerRebind: false }]) {
       const spec = trainingSpecOf(overrides);
@@ -517,7 +542,7 @@ describe('LOAD_PLAN_PLANNER_REBIND selects the rebound planner (load-plan plan T
   });
 
   it('training: v11 prompt + workout_overview v2 with the flag on', () => {
-    const spec = trainingSpecOf({ loadPlanPlannerRebind: true });
+    const spec = trainingSpecOf(ON);
     expect(spec.prompt.current.version).toBe('v11');
     expect(spec.contextBlocks.find(b => b.id === 'training.workout_overview')?.version).toBe('v2');
   });
@@ -531,7 +556,7 @@ describe('LOAD_PLAN_PLANNER_REBIND selects the rebound planner (load-plan plan T
   });
 
   it('session_planning: v5 prompt + active_plan v2 with the flag on', () => {
-    const spec = planningSpecOf({ loadPlanPlannerRebind: true });
+    const spec = planningSpecOf(ON);
     expect(spec.prompt.current.version).toBe('v5');
     expect(spec.contextBlocks.find(b => b.id === 'session_planning.active_plan')?.version).toBe('v2');
   });
@@ -555,7 +580,7 @@ describe('LOAD_PLAN_PLANNER_REBIND selects the rebound planner (load-plan plan T
       expect(saveExerciseShape(planCreationSpecOf(overrides))).toHaveProperty('targetWeight');
       expect(startExerciseShape(planningSpecOf(overrides))).toHaveProperty('targetWeight');
     }
-    const on = { loadPlanPlannerRebind: true };
+    const on = ON;
     expect(saveExerciseShape(planCreationSpecOf(on))).not.toHaveProperty('targetWeight');
     expect(startExerciseShape(planningSpecOf(on))).not.toHaveProperty('targetWeight');
   });

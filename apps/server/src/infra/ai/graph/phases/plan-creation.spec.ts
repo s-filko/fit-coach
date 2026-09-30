@@ -19,6 +19,7 @@ import {
 } from '@infra/ai/tools';
 
 import { SEARCH_DEDUP_POLICY, type ToolPolicy } from '../tool-policy';
+import { plannerRebindOn } from './planner-rebind';
 
 /** What the plan_creation prompt renders beyond the directive base: nothing. */
 export type PlanCreationData = object;
@@ -40,7 +41,7 @@ export function buildPlanCreationSpec(deps: ConversationGraphDeps): PhaseSpec<Pl
         exerciseRepository,
         userFactsService: deps.userFacts,
         // load-plan plan Task 5b (D10): the plan schema drops targetWeight with the flag on.
-        loadPlanPlannerRebind: deps.loadPlanPlannerRebind,
+        loadPlanPlannerRebind: plannerRebindOn(deps),
       }),
       buildRequestTransitionTool('plan_creation'),
       ...buildSharedTools({ userService, userFacts: deps.userFacts }),

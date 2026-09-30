@@ -87,13 +87,7 @@ describe('get_exercise_history — scripted training scenario (AC-HL-3)', () => 
           return;
         }
         const calls = model.drainChatInputs();
-        seenByStep.set(
-          obs.stepIndex,
-          calls
-            .flat()
-            .map(textOf)
-            .join('\n'),
-        );
+        seenByStep.set(obs.stepIndex, calls.flat().map(textOf).join('\n'));
       },
     });
   });

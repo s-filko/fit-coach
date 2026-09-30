@@ -107,7 +107,10 @@ const scenarioDef: Scenario = {
       action: 'user',
       text: BENCH_1_TEXT,
       script: [
-        { text: BENCH_1_REPLY, toolCall: { name: 'log_set', args: { exerciseId: BENCH_PRESS_ID, reps: 8, weight: 80 } } },
+        {
+          text: BENCH_1_REPLY,
+          toolCall: { name: 'log_set', args: { exerciseId: BENCH_PRESS_ID, reps: 8, weight: 80 } },
+        },
         { text: BENCH_1_FOLLOWUP },
       ],
     },
@@ -116,7 +119,10 @@ const scenarioDef: Scenario = {
       action: 'user',
       text: BENCH_2_TEXT,
       script: [
-        { text: BENCH_2_REPLY, toolCall: { name: 'log_set', args: { exerciseId: BENCH_PRESS_ID, reps: 8, weight: 80 } } },
+        {
+          text: BENCH_2_REPLY,
+          toolCall: { name: 'log_set', args: { exerciseId: BENCH_PRESS_ID, reps: 8, weight: 80 } },
+        },
         { text: BENCH_2_FOLLOWUP },
       ],
     },
@@ -136,7 +142,10 @@ const scenarioDef: Scenario = {
       script: [
         {
           text: D2_GREETING_REPLY,
-          toolCall: { name: 'request_transition', args: { toPhase: 'session_planning', reason: 'user wants to train' } },
+          toolCall: {
+            name: 'request_transition',
+            args: { toPhase: 'session_planning', reason: 'user wants to train' },
+          },
         },
         { text: D2_GREETING_FOLLOWUP },
       ],

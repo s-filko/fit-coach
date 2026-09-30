@@ -33,6 +33,7 @@ import {
 } from '@infra/ai/tools';
 
 import { SEARCH_DEDUP_POLICY, type ToolPolicy } from '../tool-policy';
+import { plannerRebindOn } from './planner-rebind';
 
 /** What the session_planning prompt renders beyond the directive base. */
 export interface SessionPlanningData {
@@ -66,8 +67,8 @@ export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec
 
   return {
     name: 'session_planning',
-    // load-plan plan Task 5b (A5): v5 only with LOAD_PLAN_PLANNER_REBIND on; off = v4 unchanged.
-    prompt: (deps.loadPlanPlannerRebind === true ? SESSION_PLANNING_PROMPT_V5 : entry) as PhasePromptEntry<
+    // load-plan plan Task 5b (A5): v5 with LOAD_PLAN_PLANNER_REBIND + LOAD_PLAN_SUGGESTION; else v4.
+    prompt: (plannerRebindOn(deps) ? SESSION_PLANNING_PROMPT_V5 : entry) as PhasePromptEntry<
       PromptContextFor<SessionPlanningData>
     >,
     tools: [
@@ -79,7 +80,7 @@ export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec
         userFactsService: deps.userFacts,
         transitionHandoffTargets: deps.transitionHandoffTargets,
         // load-plan plan Task 5b (D10): the session-plan schema drops targetWeight with the flag on.
-        loadPlanPlannerRebind: deps.loadPlanPlannerRebind,
+        loadPlanPlannerRebind: plannerRebindOn(deps),
       }),
       buildRequestTransitionTool('session_planning'),
       ...buildSharedTools({ userService, userFacts: deps.userFacts }),
@@ -99,7 +100,7 @@ export function buildSessionPlanningSpec(deps: ConversationGraphDeps): PhaseSpec
     contextBlocks: [
       SESSION_PLANNING_CLIENT_PROFILE_V1,
       // load-plan plan Task 5b (D10): v2 (sets × reps only) with the flag on; off = v1 unchanged.
-      deps.loadPlanPlannerRebind === true ? SESSION_PLANNING_ACTIVE_PLAN_V2 : SESSION_PLANNING_ACTIVE_PLAN_V1,
+      plannerRebindOn(deps) ? SESSION_PLANNING_ACTIVE_PLAN_V2 : SESSION_PLANNING_ACTIVE_PLAN_V1,
       RECENT_HISTORY_BLOCK,
       RECOVERY_TIMELINE_BLOCK,
     ],

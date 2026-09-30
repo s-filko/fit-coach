@@ -58,7 +58,13 @@ const startUpperA = {
       sessionName: 'Upper A',
       reasoning: 'The user wants to start now — open the session in the same run.',
       exercises: [
-        { exerciseId: BENCH_PRESS_ID, exerciseName: 'Barbell Bench Press', targetSets: 3, targetReps: '8-10', restSeconds: 120 },
+        {
+          exerciseId: BENCH_PRESS_ID,
+          exerciseName: 'Barbell Bench Press',
+          targetSets: 3,
+          targetReps: '8-10',
+          restSeconds: 120,
+        },
       ],
       estimatedDuration: 45,
     },
@@ -77,7 +83,10 @@ const chatToPlanning: Scenario = {
         // chat: text + request_transition — the hand-off empties the text (AC-TH-2).
         {
           text: CHAT_TEXT,
-          toolCall: { name: 'request_transition', args: { toPhase: 'session_planning', reason: 'user asks what to train today' } },
+          toolCall: {
+            name: 'request_transition',
+            args: { toPhase: 'session_planning', reason: 'user asks what to train today' },
+          },
         },
         // session_planning, same run (the hop): answers the question itself.
         { text: PLANNING_TEXT },
@@ -97,7 +106,12 @@ const chatToPlanningToTraining: Scenario = {
       action: 'user',
       text: WHAT_TODAY,
       script: [
-        { toolCall: { name: 'request_transition', args: { toPhase: 'session_planning', reason: 'user asks what to train today' } } },
+        {
+          toolCall: {
+            name: 'request_transition',
+            args: { toPhase: 'session_planning', reason: 'user asks what to train today' },
+          },
+        },
         // No text on the tool-call turn — session_planning gets a REQUIRED second
         // turn since this second hand-off-shaped transition is blocked (max 1
         // hop already spent on chat → session_planning); no training call follows.
@@ -167,7 +181,10 @@ describe('U5 transition-handoff — chat → session_planning (R2.2, AC-TH-6)', 
     const runId = handoff.steps[0]?.runRow?.runId;
     expect(runId).toBeDefined();
 
-    const rows = await db.select().from(conversationRuns).where(eq(conversationRuns.runId, runId as string));
+    const rows = await db
+      .select()
+      .from(conversationRuns)
+      .where(eq(conversationRuns.runId, runId as string));
     expect(rows).toHaveLength(1);
 
     const [row] = rows;
@@ -177,9 +194,7 @@ describe('U5 transition-handoff — chat → session_planning (R2.2, AC-TH-6)', 
       toPhase: 'session_planning',
       path: ['chat', 'session_planning'],
     });
-    expect(row?.toolCalls).toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: 'request_transition' })]),
-    );
+    expect(row?.toolCalls).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'request_transition' })]));
   });
 
   it('AC-TH-3: transcript rows of the run have no duplicates, each written under its own phase', async () => {

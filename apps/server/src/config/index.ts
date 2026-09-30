@@ -86,6 +86,7 @@ export const EnvSchema = z.object({
   // save_workout_plan / start_training_session drop `targetWeight` from their schemas (the DB column stays, it is
   // simply not written), WORKOUT OVERVIEW and the active-plan block print sets × reps only, and the training /
   // session_planning prompts are v11 / v5 (the suggestion is the coach's starting point, per O1).
+  // Takes effect only together with LOAD_PLAN_SUGGESTION (the suggestion is the planner's load source).
   // Off = exactly the pre-plan behaviour.
   LOAD_PLAN_PLANNER_REBIND: z
     .enum(['true', 'false'])

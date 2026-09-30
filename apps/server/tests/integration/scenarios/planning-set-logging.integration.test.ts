@@ -45,7 +45,13 @@ const planningSetScenario: Scenario = {
               sessionName: 'Upper A',
               reasoning: 'The user is training right now — open the session and log what they already did.',
               exercises: [
-                { exerciseId: BENCH_PRESS_ID, exerciseName: 'Barbell Bench Press', targetSets: 3, targetReps: '8-10', restSeconds: 120 },
+                {
+                  exerciseId: BENCH_PRESS_ID,
+                  exerciseName: 'Barbell Bench Press',
+                  targetSets: 3,
+                  targetReps: '8-10',
+                  restSeconds: 120,
+                },
               ],
               estimatedDuration: 45,
             },
@@ -120,7 +126,10 @@ describe('U5 transition-handoff — a set reported during session_planning', () 
     const runId = result.steps[2]?.runRow?.runId;
     expect(runId).toBeDefined();
 
-    const [row] = await db.select().from(conversationRuns).where(eq(conversationRuns.runId, runId as string));
+    const [row] = await db
+      .select()
+      .from(conversationRuns)
+      .where(eq(conversationRuns.runId, runId as string));
     expect(row?.phaseIn).toBe('session_planning');
     expect(row?.phaseOut).toBe('training');
     expect(row?.transition).toMatchObject({

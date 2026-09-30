@@ -83,7 +83,13 @@ async function runJourney(scenarioDef: Scenario): Promise<{
         return;
       }
       const calls = model.drainChatInputs();
-      seenByStep.set(obs.stepIndex, calls.flat().map(m => textOf(m)).join('\n'));
+      seenByStep.set(
+        obs.stepIndex,
+        calls
+          .flat()
+          .map(m => textOf(m))
+          .join('\n'),
+      );
     },
   });
   return { result, seenByStep, model };

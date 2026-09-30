@@ -126,3 +126,11 @@ export function ctxOf(config: LangGraphRunnableConfig): RunContextType {
   }
   return ctx;
 }
+
+/**
+ * The lenient twin of `ctxOf`: the run context when there is one, `undefined` otherwise — for best-effort readers
+ * (a tool that only enriches a log row, and is also called without a run in unit tests) that must not throw.
+ */
+export function maybeCtxOf(config: LangGraphRunnableConfig | undefined): Partial<RunContextType> | undefined {
+  return config?.context as Partial<RunContextType> | undefined;
+}

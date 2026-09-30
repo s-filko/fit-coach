@@ -91,7 +91,12 @@ describe('order of the rows of one run is recoverable from the database (BUG-029
   // asks for heap order directly instead of hoping a scan strategy produces it. Fixture soundness 1
   // below proves the rewrite loop actually moved the tuples: it only holds if `rowsOfRun()` is truly
   // reading physical order.
-  const rowsOfRun = () => db.select().from(conversationTurns).where(eq(conversationTurns.runId, runId)).orderBy(sql`ctid`);
+  const rowsOfRun = () =>
+    db
+      .select()
+      .from(conversationTurns)
+      .where(eq(conversationTurns.runId, runId))
+      .orderBy(sql`ctid`);
 
   const readByReader = async (): Promise<string[]> => {
     const run = (await fetchRunsSince(new Date(0), 50)).find(r => r.runId === runId);

@@ -17,7 +17,9 @@ describe('DrizzleTranscriptService / DrizzleSummaryService – integration', () 
   const summaries = new DrizzleSummaryService();
 
   beforeAll(async () => {
-    const user = await new DrizzleUserRepository().create(createTestUserData({ username: `p4_transcript_${Date.now()}` }));
+    const user = await new DrizzleUserRepository().create(
+      createTestUserData({ username: `p4_transcript_${Date.now()}` }),
+    );
     userId = user.id;
   });
 
@@ -62,7 +64,14 @@ describe('DrizzleTranscriptService / DrizzleSummaryService – integration', () 
   });
 
   it('insert writes the conversation_summaries row and mirrors it to a summary turn row in one transaction', async () => {
-    const structured = { topics: ['plan'], decisions: [], userState: [], trainingFeedback: [], openItems: [], facts: [] };
+    const structured = {
+      topics: ['plan'],
+      decisions: [],
+      userState: [],
+      trainingFeedback: [],
+      openItems: [],
+      facts: [],
+    };
     await summaries.insert({
       userId,
       runId: '11111111-1111-4111-8111-111111111110',
@@ -73,14 +82,21 @@ describe('DrizzleTranscriptService / DrizzleSummaryService – integration', () 
     });
 
     const [summaryRow] = await db.select().from(conversationSummaries).where(eq(conversationSummaries.userId, userId));
-    expect(summaryRow).toMatchObject({ episodeId: '11111111-1111-4111-8111-111111111111', phaseAtEnd: 'plan_creation' });
+    expect(summaryRow).toMatchObject({
+      episodeId: '11111111-1111-4111-8111-111111111111',
+      phaseAtEnd: 'plan_creation',
+    });
     expect(summaryRow?.structured).toEqual(structured);
     expect(summaryRow?.rendered).toBe('plan_creation (today): plan discussed');
 
     const turnRows = await db.select().from(conversationTurns).where(eq(conversationTurns.userId, userId));
     const mirrored = turnRows.filter(r => r.kind === 'summary');
     expect(mirrored).toHaveLength(1);
-    expect(mirrored[0]).toMatchObject({ role: 'summary', content: 'plan_creation (today): plan discussed', payload: structured });
+    expect(mirrored[0]).toMatchObject({
+      role: 'summary',
+      content: 'plan_creation (today): plan discussed',
+      payload: structured,
+    });
     // INV-LLM-010: this run_id already has 5 seq'd rows (the appendRunMessages test
     // above, same runId) — the mirrored summary row must continue that SAME run's seq sequence,
     // never leave it null, or a compacting run ends up with a mix of seq'd and seq-less rows.
