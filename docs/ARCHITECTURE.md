@@ -94,6 +94,9 @@ apps/server/src/
       llm-call-recorder.ts      # Writes one llm_calls row per invocation; dedupes system prompts into prompt_blobs by content hash; also the cache-attribution previous-call lookup
       usage.ts                  # extractUsage/extractUsageFromLLMResult/extractUsageFromMessage — shared token/cache/reasoning extraction (cache-accounting plan)
       cache-attribution.ts      # attributeCache(prev, current, limits) — pure cache-hit/miss attribution against the previous same-user+model call (cache-accounting plan)
+      cache-break-reasons.ts    # Declared cache-break reasons (phase_switch, compaction, hard_cap, facts_changed; ttl_expired derived) → llm_calls.cache_break classification (prompt-caching D8)
+      message-text.ts           # textOnly — the one flattener of message content parts to text (null when a part is not text)
+      model-prices.ts           # Per-model list prices for cost reporting (LLM_MODEL_PRICES override)
       run-metrics.ts            # RunMetricsCollector — per-run instance carried in run context (ADR-0013 §8; no module state, AC-1331)
       embedding.service.ts      # Local all-MiniLM-L6-v2 via @huggingface/transformers (ONNX)
       gemini-transcriber.ts     # SpeechTranscriberPort over Google AI Studio generateContent (STT_*; ADR-0013 §7 amendment 2026-09-27)
@@ -127,6 +130,7 @@ apps/server/src/
         save-workout-plan.tool.ts / start-training-session.tool.ts
         log-set.tool.ts / complete-current-exercise.tool.ts / finish-training.tool.ts
         delete-last-sets.tool.ts / update-last-set.tool.ts
+        set-preconditions.ts         # BUG-008 Plan A as a tool refusal: no delete/update before the current exercise has a set (user_error, no error budget)
         search-exercises.tool.ts / timezone.tool.ts
         get-exercise-history.tool.ts / get-load-plan.tool.ts   # read-only history lookup / computed load facts (load-facts plan)
         format-exercise-summary.ts   # Shared training summary helper + session constants
@@ -135,8 +139,10 @@ apps/server/src/
       load-facts/
         load-facts.loader.ts         # Gathers rows for the pure load metrics (`domain/training/load-facts/`) — shared by the LOAD PLAN block, `get_load_plan` and `scripts/print-load-plan.ts`
       context/                      # Context assembler — message order + token accounting (ADR-0013 §3.4)
-        assemble-context.ts         # assembleContext() → { messages, budgetReport }: block 1 system → user facts → course directive → episode summaries → block 3 domain blocks → history → [time-gap note] → NOW line → current (one shape for every phase); calls resolveBudget
-        budget.ts                   # resolveBudget/trimHistory — INV-LLM-004 order: trim history → step block depths → drop oldest summary → D-D floor (block 1 never cut; `system` over budget only reported)
+        assemble-context.ts         # assembleContext() → { messages, budgetReport }: ONE stable SystemMessage (block 1 + user facts + course directive + episode summaries) → history → current HumanMessage with a request-only `<context>` part (block 3 domain blocks, time-gap note, NOW line) (one shape for every phase; ADR-0013 §3.4 amendment 2026-09-30); calls resolveBudget
+        budget.ts                   # resolveBudget/trimHistory — INV-LLM-004 order: trim history → step block depths → drop oldest summary → D-D floor (block 1 never cut; `system` over budget only reported); all skipped while the prompt cache is warm and under LLM_CONTEXT_HARD_CAP_TOKENS
+        cache-breakpoints.ts        # applyCacheBreakpoints — two cache_control breakpoints (stable system message, last history message) with LLM_PROMPT_CACHE=anthropic; withParts clone helper
+        cache-warmth.ts             # warmCacheOf + the one hard-cap measure — shared by the compact step and the assembler (D5)
         token-estimator.ts          # estimateTokens + estimateMessages + TOKEN_ESTIMATOR_ID — the single estimator (app + eval stack)
       prompts/                       # Versioned prompt modules — every model-facing string (ADR-0013 §5)
         types.ts                     # Section, DirectiveModule, PromptModule<TCtx>, PhasePromptEntry
@@ -153,6 +159,7 @@ apps/server/src/
           output.v1.ts               #   plain-text output
           tool-reply.v1.ts           #   reply after every tool call + index.ts (DEFAULT_DIRECTIVES_V1 order)
         phases/                      # Phase system prompts — text identical to the pre-P2 builders
+          context-location.ts        #   withContextLocation — the note that block 3 / gap note / NOW arrive in <context> of the latest user message (chat v4, plan_creation v4, session_planning v4, training v10)
           registration/v1.ts         #   + index.ts (PhasePromptEntry, requiredSections)
           chat/v1.ts                 #   context/rules/tools/no_set_logging (BUG-009 guard)
           plan_creation/v1.ts        #
@@ -166,7 +173,7 @@ apps/server/src/
           episode-summaries.v1.ts    #   ## Previous episodes block — context, not data (numbers come from tools)
           post-tool-nudge.v1.ts      #   post-tool nudge (agent node retry)
           current-time.v1.ts / time-gap.v1.ts
-                                     #   NOW line / time-gap note — own SystemMessages right before current (ADR-0013 §3.4 amendment 2026-09-27)
+                                     #   NOW line / time-gap note — inside the current HumanMessage's `<context>` part (ADR-0013 §3.4 amendment 2026-09-30)
           chat-context.v1.ts / client-profile.v1.ts / session-planning-*.v1.ts / training-workout-overview.v1.ts
                                      #   domain context blocks (ADR-0013 §3.4 block 3, D-B): one per moved v1 section, byte-equal at full depth; declared on PhaseSpec.contextBlocks
           training-exercise-history.v1.ts
@@ -184,6 +191,7 @@ apps/server/src/
       transcript-reader.ts      # Reads a run/session/user window from conversation_runs + turns + llm_calls (+ prompt_blobs)
       transcript-formatter.ts   # Pure renderer: interleaves turns and API calls by (created_at, seq) for a human reader
       db-target.ts              # Names the database a script opened, and turns a schema-behind error into a sentence
+      cache-report.ts           # Zero-LLM prompt-cache report over llm_calls (hit rate, read/write/uncached, cost per model, breaks by money lost) — `npm run cache-report` (scripts/cache-report.ts)
     conversation/
       drizzle-transcript.service.ts             # TranscriptPort impl — projects run messages into conversation_turns (one row per message, run_id always set)
       drizzle-summary.service.ts                # SummaryPort impl — writes conversation_summaries + the mirrored `summary` turn row in one transaction
@@ -424,7 +432,7 @@ LLM_TEMPERATURE=<0-2>                 # Required: temperature for generation
 
 ### Interaction Pattern (Tool Calling Loop)
 Each phase subgraph runs a tool-calling loop:
-1. `agentNode`: `model.bindTools(tools).invoke(assembleContext(...))` — `[SystemMessage(systemPrompt), (## User Facts), (## Previous episodes), (domain blocks), ...history, ...current]`, history interleaved from the checkpointed `messages` channel
+1. `agentNode`: `model.bindTools(tools).invoke(assembleContext(...))` — `[SystemMessage(systemPrompt + ## User Facts + ## Course Directive + ## Previous episodes), ...history, HumanMessage(<context>domain blocks, gap note, NOW</context> + user text), ...in-flight]`, history interleaved from the checkpointed `messages` channel; the post-tool nudge is appended to the last ToolMessage (ADR-0013 §3.4 amendment 2026-09-30)
 2. If `AIMessage.tool_calls` present → the tool executor runs them → `ToolMessage` results appended
 3. Loop back to `agentNode` with updated messages (tool results visible)
 4. If no `tool_calls` → `finalize` returns `{}` — the reply is every non-empty `AIMessage` text of the run (`runAiText`, AC-CC-3); `commit` reads `pendingTransition` and projects the run

@@ -5,7 +5,7 @@
  * context/__tests__/compaction-deferral.repro.test.ts.
  *
  * Interface assumed: `EpisodeTunables` (compact.node.ts) gains `cacheTtlMs?: number` (from
- * LLM_PROMPT_CACHE_TTL_SECONDS; unset/0 = no deferral) and `hardCapTokens?: number`
+ * LLM_PROMPT_CACHE_TTL (5m/1h); unset/0 = no deferral) and `hardCapTokens?: number`
  * (LLM_CONTEXT_HARD_CAP_TOKENS); the step derives "warm" from `state.lastUserMessageAt` vs the run clock.
  */
 import { AIMessage, HumanMessage } from '@langchain/core/messages';

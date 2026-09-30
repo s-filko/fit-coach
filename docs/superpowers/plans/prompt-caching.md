@@ -90,7 +90,7 @@ From `llm_calls.prompt_hashes` / `cache_diverged_at`:
   `delete_last_sets` / `update_last_set` with no set on the current exercise return a tool error from the
   executor with the same meaning. BUG-008 Plan A's intent (no deletion before a set exists) is kept.
 - **D5** Compaction/trim deferral: while the previous call of the same user is younger than
-  `LLM_PROMPT_CACHE_TTL_SECONDS`, budget compaction and `trimHistory` are skipped unless the estimated total
+  `LLM_PROMPT_CACHE_TTL` (5m/1h), budget compaction and `trimHistory` are skipped unless the estimated total
   exceeds `LLM_CONTEXT_HARD_CAP_TOKENS` (default 60 000 estimated ≈ 100 k real per BUG-050 — below the model's
   window). Above the cap the existing path runs unchanged.
 - **D6** Config: `LLM_PROMPT_CACHE=off|anthropic` (default `off` — Z.AI and the Gemini BYOK route are not
@@ -99,8 +99,8 @@ From `llm_calls.prompt_hashes` / `cache_diverged_at`:
   caching and keeps one code path.
 - **D7** Record `cache_write_tokens` on `llm_calls` (new nullable column, migration) and roll it up on
   `conversation_runs`; read it from the raw provider usage (`prompt_tokens_details.cache_write_tokens`), since
-  LangChain's `usage_metadata` has no write field. Attribution (`cache-attribution.ts`) needs no change: its gap
-  is measured to the previous call, which matches the refresh-on-hit TTL.
+  LangChain's `usage_metadata` has no write field. Attribution's gap is measured to the previous call, which matches the refresh-on-hit TTL (the rest of
+  attribution was reworked by D8/T5b).
 
 - **D8** Cache-break guard (owner request 2026-09-30: every break is either declared or alerted). Builds on the
   existing `cache-attribution.ts` / `llm_calls.cache_expected`, which today is recorded and never read:
@@ -155,7 +155,9 @@ From `llm_calls.prompt_hashes` / `cache_diverged_at`:
   money lost (D8.5).
 - **AC-PC-8** Live check on dev (owner's next workout): `cache_read_tokens > 0` on ≥ 80 % of training calls after
   the first; `cache_expected = warm` with a zero read reported as unexplained misses; cost per workout from
-  `cache-report.ts` compared with $3.63; every `unplanned:*` break in the workout explained or turned into a bug.
+  `cache-report.ts` compared with $3.63; every `unplanned:*` break in the workout explained or turned into a bug; **`LLM_CONTEXT_HARD_CAP_TOKENS`
+  recalibrated from the report** (owner 2026-09-30: the 60 000 default is a guess — set it where a compaction pays
+  back within the remaining workout, without compacting so early that conversational detail is lost).
 
 ## Tasks
 
@@ -177,7 +179,7 @@ into the ToolMessage; availability → executor rejection; phase prompts that re
 one-line location note (version bump each). AC-PC-1, -2, -4, -5 green. Verify: `npm run test:unit`,
 `npm run test:scenarios` (self-check), `npm run check-all`.
 
-### T4 — Breakpoints, config, accounting: D1, D6, D7 (worker, GLM)
+### T4 — Breakpoints, config, accounting: D1, D6, D7 (worker, Sonnet — D9)
 
 `cache_control` parts behind `LLM_PROMPT_CACHE`; migration for `cache_write_tokens` (`npm run drizzle:generate`);
 extractor reads raw usage. AC-PC-3, -7 green.
@@ -517,5 +519,12 @@ the Z.AI / Gemini routes; summariser and course-check calls (Haiku 4.5 minimum 4
   headers reference removed `*.repro.test.ts` names. · R4 `.env.example` lacks `LLM_CONTEXT_HARD_CAP_TOKENS`,
   `LLM_INPUT_PRICE_PER_MTOK`; two TTL settings kept in step by hand. · R4 CONTRIBUTING_AI `:164` defaults list. ·
   R4 BUG-008 Plan A rule has no BR-TRAINING id. · R4 ARCHITECTURE `:170` phase-prompt listing stale.
+
+Blocking #1–#8 closed by the orchestrator on the owner's approval (2026-09-30, "обновляй"): ADR-0013 amendments
+2026-09-30 in §3.3 (BR-LLM-003 warm deferral), §3.4 (layout; INV-LLM-004 warm exception), §4.2 (availability
+removed; refusal in tools), §8 (cache-write/cache-break columns, classification, alerts, report); DB_SETUP.md (DDL,
+semantics, unexplained-miss pointer); ARCHITECTURE.md (assembler line, NOW line, tool loop, new modules);
+CONTRIBUTING_AI.md (episode end, message shape, warm no-cut); LOGGING_GUIDE.md (blob rationale). Advisories closed
+alongside: design spec §4 superseded pointer, plan D5 name / D7 wording / T4 heading, two test headers.
 
 Meta findings filed in `docs/REVIEW_FINDINGS.md` (run prompt-caching 2026-09-30).

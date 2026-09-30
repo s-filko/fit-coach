@@ -3,7 +3,7 @@
  * `trimHistory` wait; a hard ceiling stays as the safety net; after the TTL gap today's behaviour holds.
  *
  * Interface assumed (T5 implements to it — recorded in the plan § Evidence, T2). The caller decides "warm"
- * (previous call of the same user younger than LLM_PROMPT_CACHE_TTL_SECONDS) and passes a non-null
+ * (previous call of the same user younger than LLM_PROMPT_CACHE_TTL (5m/1h)) and passes a non-null
  * `cacheWarm` only then; the pure planners never read a clock or config:
  *   decideCompactReason({ …existing…, cacheWarm?: { hardCapTokens: number; estimatedTotalTokens: number } | null })
  *   resolveBudget({ …existing…, cacheWarm?: { hardCapTokens: number } | null })

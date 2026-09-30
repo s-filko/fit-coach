@@ -183,6 +183,7 @@ CREATE TABLE conversation_runs (
   tokens_out INTEGER,
   tokens_cached INTEGER,           -- cache-accounting plan: sum of the run's calls' cache_read_tokens; null when none reported it
   tokens_reasoning INTEGER,        -- sum of the run's calls' reasoning_tokens; null when none reported it
+  tokens_cache_write INTEGER,      -- prompt-caching plan: sum of the run's calls' cache_write_tokens; null when none reported it
   latency_ms INTEGER NOT NULL,
   tool_calls JSONB,               -- [{name, argsHash, outcomeKind}] (ADR-0013 §8)
   transition JSONB,
@@ -213,8 +214,11 @@ computed once at record time and never recomputed:
   out), `ttl_expired`/`too_short` (only when `LLM_CACHE_TTL_SECONDS`/`LLM_CACHE_MIN_PREFIX_TOKENS` are
   configured — Z.AI documents neither, so both are unset by default and these two values never appear),
   `warm` (the previous request is a full prefix of this one), or `prefix_changed:<label>` (the first
-  point the two requests differ — `tools`, `system:prompt`/`facts`/`directive`/`summaries`/`domain`/
-  `gap-note`/`now`, or `history[i]:<role>`).
+  point the two requests differ — `tools`, `system:prompt`/`facts`/`directive`/`summaries`, or
+  `history[i]:<role>`). Since `prompt-caching` (2026-09-30) only the cacheable part is compared — up to
+  the previous request's history breakpoint — so the current turn (where block 3, the gap note and NOW
+  now live) never produces a divergence; the `system:domain`/`gap-note`/`now` labels appear only on
+  rows recorded before that change.
 - `cache_diverged_at` — `<label>#<messageIndex>@<charOffset>` for the divergence above; null when
   `cold`/`unknown`/`warm`.
 - `cache_shared_prefix_tokens` — an ESTIMATE (tokenizer-free: `round(input_tokens × sharedChars /
@@ -222,6 +226,19 @@ computed once at record time and never recomputed:
 - `cache_gap_ms` — wall-clock time since the previous call, always stored when there was one (even
   `ttl_expired`/`too_short`), so a real provider TTL can be read off the data before configuring it.
 - An attribution failure (D7) leaves all four null and the call is still recorded — it never fails the call.
+
+Prompt-caching plan (2026-09-30, BUG-051; ADR-0013 §8 amendment 2026-09-30):
+- `cache_write_tokens` — tokens written to the provider cache this call (billed 1.25× for the 5 min TTL,
+  2× for 1 h), read from the raw provider usage (`prompt_tokens_details.cache_write_tokens`); null = not
+  reported.
+- `cache_break` — set only for calls that sent `cache_control`: `none` · `planned:<reason>` (declared by
+  the run: `phase_switch`, `compaction`, `hard_cap`, `facts_changed`, or the derived `ttl_expired`) ·
+  `unplanned:<where>` (the cacheable prefix changed and no declared reason covers it — logged `warn`
+  "Prompt cache break") · `unexplained_miss` (expected warm, but the provider read less than 0.75 × the
+  shared prefix estimate — logged `warn`). This is the authoritative "unexplained miss" for cached
+  routes; the query below predates it and stays for routes without explicit caching.
+- `cache_break_lost_tokens` — estimated tokens that had to be re-sent uncached because of the break.
+- Report: `npm run cache-report -- <userId> <from> <to>` (zero-LLM).
 
 ```sql
 CREATE TABLE llm_calls (
@@ -240,6 +257,9 @@ CREATE TABLE llm_calls (
   cache_diverged_at TEXT,         -- <label>#<messageIndex>@<charOffset>; null when cold/unknown/warm
   cache_shared_prefix_tokens INTEGER,
   cache_gap_ms INTEGER,
+  cache_write_tokens INTEGER,     -- prompt-caching: tokens written to the provider cache; null = not reported
+  cache_break TEXT,               -- none | planned:<reason> | unplanned:<where> | unexplained_miss; null when no cache_control was sent
+  cache_break_lost_tokens INTEGER,
   latency_ms INTEGER NOT NULL,
   error_class TEXT,
   error_message TEXT,
@@ -259,7 +279,7 @@ CREATE INDEX idx_llm_calls_user_created ON llm_calls(user_id, created_at);
 ##### Cache efficiency query (AC-CA-5)
 
 Per user/day: calls, input tokens, cached tokens, cache share, a breakdown of `cache_expected`, and
-**unexplained misses** — a miss (`cache_read_tokens = 0`) where `cache_expected` said the cache should
+**unexplained misses** (for routes without explicit caching; with `LLM_PROMPT_CACHE=anthropic` use `cache_break = 'unexplained_miss'`) — a miss (`cache_read_tokens = 0`) where `cache_expected` said the cache should
 plausibly have hit (`warm` or `prefix_changed:*`, with a shared estimate at or above the configured
 minimum, or simply `> 0` when no minimum is configured):
 
