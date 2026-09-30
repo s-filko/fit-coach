@@ -76,7 +76,7 @@ apps/server/src/
       services/
       sets.ts                  # workingSets() — the one working-set rule (warm-ups excluded, legacy NULL counts as working)
       load-facts/              # Pure load metrics over plain inputs (load-facts plan): computeLoadFacts, gap / e1RM / fatigue facts — no I/O
-      load-plan/               # Pure decision layer (load-plan plan): typed values only, no prompt wording
+      load-plan/               # Pure decision layer (load-plan plan): typed decisions + scheme/decision reason text (design §4.1); prompt labels and framing live in the v2 block
         schemes/               #   progression-scheme registry (double / linear), params with their citations, the scheme contract
         decide.ts              #   decision order — Stage A safety rows (short constraint, gap ladder — the more conservative wins, pre-fatigue, below floor) → Stage B → Stage C scheme
         gap-tier.ts            #   gap tiers and the return ladder (R4.0 thresholds), `gapTierFacts`, `ladderStateOf`

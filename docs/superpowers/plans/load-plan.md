@@ -467,6 +467,28 @@ orchestrator (B-doc); advisory findings are either folded into the fix pass when
   check). *B-doc pass.*
 - R4 `schema.ts:564` — stale "nullable until the decision order lands" comment. *Folded.*
 
+### Run 2 (2026-10-01, one combined Opus re-reviewer over `87bce74a..HEAD`)
+
+Blocking 1, 4–11 closed with evidence; 12 closed as a gap. New / re-raised:
+
+- **N2 (blocking, R4) — `docs/domain/training.spec.md:36`**: BR-TRAINING-032 already defined in FEAT-0010:108.
+  *Closed:* the load-plan rules are BR-TRAINING-036..039.
+- **N3 (blocking, R4) — `training.spec.md:39`**: the REBIND rule predates `plannerRebindOn` (rebind alone has no
+  effect). *Closed:* the rule states both flags.
+- **N1 (blocking, R1; B2/B3 class) — `decide.ts` / `schemes/shared.ts`**: the domain still builds the `reason` /
+  `outcome` prose the v2 block prints. **(D) A8 — demoted to advisory by the orchestrator:** design §4.1 and D2 make
+  `reason` part of the scheme's output signature (run 1's R1 made the same distinction), so it is not a boundary
+  violation; the real risk (BR-LLM-008 — a reason edit changes v2 output without a version bump) is covered by the
+  v2 block's pinned-text tests and filed as a backlog item (reason codes + wording in the block). The overclaims
+  ("typed values only") in `ARCHITECTURE.md:79` and (D) Fix-2 are corrected.
+- Advisories (folded into a last small pass): stale "only with LOAD_PLAN_PLANNER_REBIND" comments in v11 / v5 /
+  index / v2 blocks; `.env.example` load-plan group placement and "independent" wording; `user-facts.ports.ts:20`
+  "eight"; verifier v2 scheme ids derived from `SCHEMES`; `ladder-input.ts` in the module map; AC ids in
+  `load-recommendation-log.unit.test.ts:45/:81`; `defaultParams` computed separately in v2 (`:81, :91, :156`).
+- Advisories to backlog: Fix-S tie case drops the ladder's confidence/branch note (`decide.ts:212-215`); N6 a break
+  fact whose `to` outlives the workout that ended it covers the next gap (`break-fact.ts:58`); Fix-T moved the D7
+  trigger rule from the domain service into the infra log (`load-recommendation-log.ts:97-103`).
+
 ### Meta
 
-Filed in `docs/REVIEW_FINDINGS.md` (R1 ×2, R2 ×1, R3 ×2, R4 ×3).
+Filed in `docs/REVIEW_FINDINGS.md` (run 1: R1 ×2, R2 ×1, R3 ×2, R4 ×3; run 2: R1 ×1, R4 ×1).
