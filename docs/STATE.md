@@ -16,7 +16,6 @@ _Generated 2026-09-30 from docs/superpowers/plans/ + git. Never hand-edit; regen
 
 **Planned**
 - `load-plan.md` — Load Plan — Decision Order, Progression Schemes, Recommendation Log, Breaks (Roadmap U9b) Implementation Plan
-- `prompt-caching.md` — Prompt Caching (BUG-051) — Stable Prefix, Two Breakpoints, No Mid-Workout Rewrites Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 
@@ -36,6 +35,7 @@ _Generated 2026-09-30 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
 - `now-line-last.md` — NOW Line Last — Move the Current-Time Line out of Block 1 for Prompt Caching Implementation Plan
 - `ports-layout-consistency.md` — Ports Layout Consistency Implementation Plan
+- `prompt-caching.md` — Prompt Caching (BUG-051) — Stable Prefix, Two Breakpoints, No Mid-Workout Rewrites Implementation Plan
 - `refactor-p0-dead-code.md` — Refactor P0 — Dead Code Removal Implementation Plan
 - `refactor-p0-eval-baseline.md` — Refactor P0 — Remaining Datasets and v0 Baseline Implementation Plan
 - `refactor-p0-eval-harness-seeding.md` — Refactor P0 — Harness Episode Seeding and v0 Re-freeze Implementation Plan
@@ -241,6 +241,18 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
 4. **HB-02** (production Docker image) — its own plan, sequenced after HB-01;
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
+
+## Handoff (prompt-caching, 2026-09-30) — BUG-051 merged and deployed to dev; owner's workout is the check
+
+Plan `prompt-caching` is `done` (review clean on run 3; runs 1–2 blocked on 13 + 4, all closed), merged `826f3375`,
+deployed by Deploy Dev. `.env.dev`: `LLM_PROMPT_CACHE=anthropic`, `LLM_PROMPT_CACHE_TTL=5m`,
+`LLM_CACHE_TTL_SECONDS=300` (backup `.env.dev.bak.20260930_134302`). Owner-approved ADR-0013 amendments 2026-09-30
+(§3.3, §3.4, INV-LLM-004, §4.2, §8). Dev smoke on throwaway user `smoke_prompt_cache` (`19594085…`): calls 2–3 read
+~95 % of input from cache; it exposed a false `unplanned:history[i]:assistant` (breakpoint parts vs plain string in
+attribution) — post-merge fix dispatched on the same branch.
+**Next (owner):** one normal workout on dev; then `npm run cache-report -- 60af022f-… <from> <to>` vs $3.63, every
+`unplanned:*` explained, `LLM_CONTEXT_HARD_CAP_TOKENS` recalibrated (AC-PC-8). Advisories:
+`BACKLOG.md` § prompt-caching close-out review advisories. After that: U9b `load-plan` gates (below).
 
 ## Handoff (load-facts, 2026-09-29) — U9a merged and deployed to dev; owner's number check pending
 

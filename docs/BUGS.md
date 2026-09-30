@@ -2267,7 +2267,7 @@ provider's usage of the previous call; count tool schemas in the budget; re-chec
 
 ## BUG-051 — One workout costs ≈ $3.6 on the Sonnet 5.5 route: nothing is cached, every tool run sends the full prompt twice, all 13 tools every call
 
-**Status:** Open — plan `prompt-caching` (planned 2026-09-30)
+**Status:** Fixed in code, deployed to dev 2026-09-30 (plan `prompt-caching`, merge `826f3375`; `LLM_PROMPT_CACHE=anthropic` on dev) — dev smoke: calls 2–3 read 4 768/5 007 and 4 951/5 271 input tokens from cache. Closes after the owner's next workout: `npm run cache-report` cost vs $3.63 and every `unplanned:*` break explained (AC-PC-8)
 **Severity:** High — $3.63 of $10 OpenRouter credits for one session (owner, 2026-09-29: 6.37 left); ≈1.7 more
 workouts before the dev credits run out
 **Found during:** owner's live dev session 2026-09-29, 64 calls 05:39–11:33 UTC
