@@ -128,6 +128,25 @@ in § "Before dispatch".
   (pattern-following prompt versions). Tasks 1 and 4 touch disjoint files and may run in parallel
   worktrees; DB tests via `db-test-lock.sh`.
 
+## Execution decisions (autonomy order 2026-10-01, orchestrator — for the owner to review)
+
+- **(D) A1 — executors per D11:** Tasks 1–4 Sonnet, Task 5 GLM.
+- **(D) A2 — worktrees and order:** Task 1 in `load-plan-t1` (branch `plan/load-plan`) and Task 3 in
+  `load-plan-t3` (branch `task/load-plan-t3`) run in parallel (disjoint files); Task 3 is merged into the plan
+  branch before Task 2. Tasks 2, 4, 5 run sequentially in `load-plan-t1` (Task 4 needs `gap-tier.ts` from Task 2;
+  Tasks 4 and 5 both touch `FACT_CATEGORIES` and the summariser). DB tests via `db-test-lock.sh`.
+- **(D) A3 — log decision columns nullable:** Task 3 creates `load_recommendations` with `scheme_id`,
+  `scheme_version`, `stage`, `row`, `candidate`, `conservative`, `confidence`, `gap_tier` nullable and snapshots
+  the rendered v1 entry through a snapshot port; Task 2 fills the decision fields from `decide()`. A row written
+  with no decision (flag on, decision unavailable) is still calibration data.
+- **(D) A4 — `advised` source:** an optional `advised` object on the `log_set` tool input (load, reps, reason when
+  it departs from the suggestion), stored on the first working set's row; exact shape settled by Task 3's red test.
+  The reply text is never parsed.
+- **(D) A5 — flags:** `LOAD_PLAN_SUGGESTION`, `LOAD_PLAN_BREAKS`, `LOAD_PLAN_PLANNER_REBIND` are booleans in the
+  server env schema, default `false`; with a flag off the code path is exactly the pre-plan behaviour (tests cover
+  both). Prompt versions `training` v11 / `session_planning` v5 (not v10/v4 as the AC table says) are selected
+  only when `LOAD_PLAN_PLANNER_REBIND` is on.
+
 ## Acceptance criteria
 
 | AC | Criterion | Verification |
