@@ -89,11 +89,11 @@ Training session management enables users to:
 - **BR-TRAINING-010**: Session recommendation analyzes last 5 completed sessions, computes muscle group recovery timeline, and applies plan's recovery guidelines
 - **BR-TRAINING-011**: Users must have an active workout plan (status='active') to receive recommendations
 - **BR-TRAINING-012**: AI considers RPE (Rate of Perceived Exertion) from previous sessions when assessing recovery readiness
-- **BR-TRAINING-013**: Starting a session creates workout_session with status='in_progress', sets started_at timestamp, and stores sessionId in conversation context
+- **BR-TRAINING-013**: Starting a session creates workout_session with status='in_progress', sets started_at timestamp, and stores sessionId in conversation context; a late first set re-anchors started_at [BR-TRAINING-031]
 - **BR-TRAINING-014**: Only one session per user can have status='in_progress'; starting a new session auto-closes any existing active session
 - **BR-TRAINING-015**: User context (mood, sleep, energy, notes) is extracted from conversation and stored in workout_sessions.user_context_json
 - **BR-TRAINING-016**: Set logging requires: sessionId (from context), exerciseId (parsed or inferred), set_number (auto-incremented), set_data (discriminated by exercise type)
-- **BR-TRAINING-017**: Every training action (log set, add exercise, complete session) updates workout_sessions.last_activity_at
+- **BR-TRAINING-017**: Every training action (log set, add exercise, complete session) updates workout_sessions.last_activity_at, except a retro-logged catch-up set [BR-TRAINING-030]
 - **BR-TRAINING-018**: AI loads full session details (TrainingService.getSessionDetails) before processing each training message
 - **BR-TRAINING-019**: Exercise completion updates session_exercises.status to 'completed' and session_exercises.actual_reps_range with summary
 - **BR-TRAINING-020**: Adding exercises mid-session appends to session_exercises with incremented order_index
@@ -103,6 +103,9 @@ Training session management enables users to:
 - **BR-TRAINING-024**: Daily cron job (3 AM) globally closes all abandoned sessions (status='in_progress', last_activity_at > 2 hours)
 - **BR-TRAINING-025**: Retrospective logging creates sessions with past timestamps and status='completed' immediately
 - **BR-TRAINING-026**: Training history returns WorkoutSessionWithDetails including exercises, sets, muscle groups, and user context
+- **BR-TRAINING-030**: A set is retro-logged (stamped last activity + 5 min, activity not advanced) only if the in_progress session is idle > 2 h **and** already holds sets; otherwise it is live (owner 2026-09-30, BUG-043)
+- **BR-TRAINING-031**: The first set of a set-less in_progress session idle > 2 h is a late start: stamped now, and it re-anchors started_at to that set (BUG-043)
+- **BR-TRAINING-032**: On every completion path (finish, completeSession, auto-close) completed_at >= started_at and duration_minutes >= 0 [INV-TRAINING-006] (BUG-043)
 
 ## API Mapping
 
