@@ -3,7 +3,7 @@
 > **For agentic workers:** Use superpowers:executing-plans and superpowers:test-driven-development. Red tests first
 > (T2), fix second (T3). Execute only the dispatched task. T1 (this document) changed no production code.
 
-- Status: planned
+- Status: in progress
 - Branch: plan/retro-timestamps
 - After: —
 
