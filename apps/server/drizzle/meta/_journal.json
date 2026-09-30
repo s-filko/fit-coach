@@ -148,6 +148,13 @@
       "when": 1790608336482,
       "tag": "0020_previous_gorilla_man",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790769793136,
+      "tag": "0021_talented_magneto",
+      "breakpoints": true
     }
   ]
 }

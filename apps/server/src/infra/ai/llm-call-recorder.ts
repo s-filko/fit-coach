@@ -59,6 +59,8 @@ export interface RecordLlmCallResponse {
     // (e.g. an older test literal) stays valid; a missing key reads the same as null.
     cacheReadTokens?: number | null;
     reasoningTokens?: number | null;
+    /** Prompt-caching plan D7: tokens written to the provider cache; null/absent = unreported. */
+    cacheWriteTokens?: number | null;
   } | null;
 }
 
@@ -231,6 +233,7 @@ export const recordLlmCall: RecordLlmCall = async input => {
     inputTokens: usage?.promptTokens ?? null,
     outputTokens: usage?.completionTokens ?? null,
     cacheReadTokens: usage?.cacheReadTokens ?? null,
+    cacheWriteTokens: usage?.cacheWriteTokens ?? null,
     reasoningTokens: usage?.reasoningTokens ?? null,
     cacheExpected,
     cacheDivergedAt,

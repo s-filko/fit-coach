@@ -146,6 +146,8 @@ export const conversationRuns = pgTable(
     // none hit/reasoned).
     tokensCached: integer('tokens_cached'),
     tokensReasoning: integer('tokens_reasoning'),
+    // prompt-caching plan D7: sum of the run's calls' cache_write_tokens; null when none reported it, never 0.
+    tokensCacheWrite: integer('tokens_cache_write'),
     latencyMs: integer('latency_ms').notNull(),
     toolCalls: jsonb('tool_calls'),
     transition: jsonb('transition'),
@@ -233,6 +235,8 @@ export const llmCalls = pgTable(
     inputTokens: integer('input_tokens'),
     outputTokens: integer('output_tokens'),
     cacheReadTokens: integer('cache_read_tokens'),
+    // prompt-caching plan D7: tokens written to the provider cache this call (1.25x/2x list price); null = unreported.
+    cacheWriteTokens: integer('cache_write_tokens'),
     reasoningTokens: integer('reasoning_tokens'),
     // D3-D6: this call's cache attribution against the same user+model's previous call —
     // `cache-attribution.ts`'s attributeCache output, computed once at record time. Null when

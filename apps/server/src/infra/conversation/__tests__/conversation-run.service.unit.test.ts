@@ -20,6 +20,7 @@ const record: ConversationRunRecord = {
   tokensOut: 40,
   tokensCached: 30,
   tokensReasoning: 8,
+  tokensCacheWrite: null,
   latencyMs: 1500,
   toolCalls: null,
   transition: null,

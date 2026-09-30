@@ -63,6 +63,8 @@ export function makeCapturingModel(responses: CannedResponse[] = []): { model: C
     model: 'anthropic/claude-sonnet-5.5',
     apiKey: 'test-key',
     maxRetries: 0,
+    // Same as model.factory.ts (prompt-caching plan D7): the raw provider response rides on the AIMessage.
+    __includeRawResponse: true,
     configuration: { baseURL: 'http://capture.invalid/v1', fetch: capturingFetch as never },
   });
   return { model, requests };

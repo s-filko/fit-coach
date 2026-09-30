@@ -302,6 +302,36 @@ join text parts (`evals/lib/run-case.ts`, set-kind, retro-timestamps, harness, a
 
 Interface deviation from T2: none.
 
+### T4 — breakpoints, config, accounting: D1, D6, D7 (worker, Sonnet, 2026-09-30) — done
+
+Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 173 suites / 1756 tests green; `db-test-lock.sh npm run test:scenarios`
+23 suites / 415 passed + 1 todo; DB-backed via `db-test-lock.sh` with `RUN_DB_TESTS=1`: `llm-call-cache-write` + `conversation-run-cache-rollup`
++ `llm-call-recorder` integration 3 suites / 26 tests green. **Migration: `apps/server/drizzle/0021_talented_magneto.sql`**
+(`llm_calls.cache_write_tokens`, `conversation_runs.tokens_cache_write`, both nullable int; generated with `npm run drizzle:generate`; the test
+harness applies migrations itself, nothing was run against dev/prod). Promoted from repro: AC-PC-3 (`prompt-cache-breakpoints.unit.test.ts`,
+`prompt-cache-config.unit.test.ts` — the D6 flags only; the `LLM_CONTEXT_HARD_CAP_TOKENS` / `LLM_INPUT_PRICE_PER_MTOK` tests stay in
+`prompt-cache-config.repro.test.ts` for T5/T5b) and AC-PC-7 (`cache-write-usage.unit.test.ts`, `conversation-run-cache-write.unit.test.ts`,
+new DB test `llm-call-cache-write.integration.test.ts`; the T5b guard test file lost its AC-PC-7 case). Still red as intended: T5/T5b repro files.
+
+- **Config:** `LLM_PROMPT_CACHE` `off|anthropic` (default `off`), `LLM_PROMPT_CACHE_TTL` `5m|1h` (default `5m`), documented in `.env.example`.
+- **Breakpoints — one place:** `infra/ai/context/cache-breakpoints.ts` `applyCacheBreakpoints(messages, currentCount, ttl)`, called by the agent
+  node right after `assembleContext` only when the flag is `anthropic` (the assembler stays pure / config-free). With `off` nothing is
+  converted: the request is byte-identical to T3. Copies, never mutates the checkpointed history. Breakpoint 1 = last part of the (string →
+  one text part) system message; breakpoint 2 = last content part of the last history message, falling back to the nearest earlier history
+  message with text when the last is a tool-calls-only AIMessage (ToolMessage allowed, T1). Empty history (or D-D floor) → only breakpoint 1.
+  `5m` sends `{type:'ephemeral'}` (no `ttl` key), `1h` sends `ttl:'1h'`.
+- **Raw usage:** chosen route is `__includeRawResponse: true` in `model.factory.ts` (LangChain puts the provider response on
+  `additional_kwargs.__raw_response`; a fetch wrapper would have had no per-call correlation to `llmRunId`). `usage.ts`
+  `ExtractedUsage.cacheWriteTokens` reads `prompt_tokens_details.cache_write_tokens` from it (absent/malformed/negative → null, never throws);
+  `LLMLogHandler` → `RecordLlmCallResponse.usage.cacheWriteTokens` → `llm_calls.cache_write_tokens`; `RunMetricsCollector.onEnd(…, cacheWrite)`
+  → `snapshot().tokensCacheWrite` → `ConversationRunRecord.tokensCacheWrite` (commit node, run adapter) → `conversation_runs.tokens_cache_write`.
+  The raw response is stripped from the AIMessage in the agent node right after the handlers ran (`stripRawResponse`), so it is never
+  checkpointed; the `LLM response` info log now also carries `cacheWriteTokens`.
+- **Fix to T3 code found on the way:** `withPostToolNudge` searched the whole array for the last ToolMessage, so an empty-reply retry after a
+  plain answer could append the nudge to an OLD ToolMessage inside the cached history. It now looks only at this run's messages (after the
+  current HumanMessage); otherwise the last message.
+- Interface deviation from T2: none (test helper `request-capture.ts` now sets `__includeRawResponse: true` like the factory).
+
 ## Out of scope
 
 Smaller training tool set and shorter schemas; BUG-050 estimator; the post-tool second call itself; caching on

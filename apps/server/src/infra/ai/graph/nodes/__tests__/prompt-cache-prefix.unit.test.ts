@@ -14,8 +14,14 @@ jest.mock('@infra/ai/model.factory', () => ({
 }));
 jest.mock('@config/index', () => {
   const actual = jest.requireActual('@config/index');
-  const { state } = jest.requireActual('./prompt-cache-harness') as typeof import('./prompt-cache-harness');
-  return { ...actual, loadConfig: () => ({ ...actual.loadConfig(), ...state.config }) };
+  return {
+    ...actual,
+    // Lazy: the harness imports the agent node, which imports this module.
+    loadConfig: () => ({
+      ...actual.loadConfig(),
+      ...(jest.requireActual('./prompt-cache-harness') as typeof import('./prompt-cache-harness')).state.config,
+    }),
+  };
 });
 jest.mock('@shared/logger', () => {
   const fns = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };

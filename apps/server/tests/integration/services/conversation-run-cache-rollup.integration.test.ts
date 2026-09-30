@@ -43,6 +43,7 @@ describe('conversation_runs.tokens_cached / tokens_reasoning (AC-CA-2)', () => {
       tokensOut: 30,
       tokensCached: 5760,
       tokensReasoning: 30,
+      tokensCacheWrite: 110,
       latencyMs: 900,
       outcome: 'ok',
     };
@@ -51,6 +52,7 @@ describe('conversation_runs.tokens_cached / tokens_reasoning (AC-CA-2)', () => {
     const row = await rowFor(runId);
     expect(row.tokensCached).toBe(5760);
     expect(row.tokensReasoning).toBe(30);
+    expect(row.tokensCacheWrite).toBe(110); // AC-PC-7 (D7)
   });
 
   it('persists null when no call of the run reported cache/reasoning tokens', async () => {
@@ -74,5 +76,6 @@ describe('conversation_runs.tokens_cached / tokens_reasoning (AC-CA-2)', () => {
     const row = await rowFor(runId);
     expect(row.tokensCached).toBeNull();
     expect(row.tokensReasoning).toBeNull();
+    expect(row.tokensCacheWrite).toBeNull(); // AC-PC-7 (D7): never 0 when unreported
   });
 });

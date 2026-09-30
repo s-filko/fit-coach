@@ -1,6 +1,6 @@
 /**
- * Prompt-caching plan (BUG-051) T2 — red tests AC-PC-3: `cache_control` breakpoints behind LLM_PROMPT_CACHE
- * (D1, D6) over the serialised request. Red until T4; then renamed `*.unit.test.ts`. Interface: plan § Evidence T2.
+ * Prompt-caching plan (BUG-051) T4 — AC-PC-3: `cache_control` breakpoints behind LLM_PROMPT_CACHE
+ * (D1, D6) over the serialised request. Interface: plan § Evidence T2.
  */
 import { AIMessage, type BaseMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 
@@ -13,8 +13,14 @@ jest.mock('@infra/ai/model.factory', () => ({
 }));
 jest.mock('@config/index', () => {
   const actual = jest.requireActual('@config/index');
-  const { state } = jest.requireActual('./prompt-cache-harness') as typeof import('./prompt-cache-harness');
-  return { ...actual, loadConfig: () => ({ ...actual.loadConfig(), ...state.config }) };
+  return {
+    ...actual,
+    // Lazy: the harness imports the agent node, which imports this module.
+    loadConfig: () => ({
+      ...actual.loadConfig(),
+      ...(jest.requireActual('./prompt-cache-harness') as typeof import('./prompt-cache-harness')).state.config,
+    }),
+  };
 });
 jest.mock('@shared/logger', () => {
   const fns = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };

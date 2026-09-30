@@ -11,6 +11,7 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 import type { StoredEpisodeSummary } from '@domain/conversation/episode';
 
 import { assembleContext } from '@infra/ai/context/assemble-context';
+import { applyCacheBreakpoints } from '@infra/ai/context/cache-breakpoints';
 import type { CourseCheckDirective, StoredCourseDirective } from '@infra/ai/course-check/directive';
 import { splitEpisode } from '@infra/ai/graph/episode';
 import type { ConversationGraphDeps, PhaseSpec, PromptContextFor } from '@infra/ai/graph/phase-spec';
@@ -19,7 +20,7 @@ import { langOf, t } from '@infra/ai/messages';
 import { getModel } from '@infra/ai/model.factory';
 import { CURRENT_TIME_V1, POST_TOOL_NUDGE_V1, renderBlock, TIME_GAP_V1 } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
-import { extractUsageFromMessage } from '@infra/ai/usage';
+import { extractUsageFromMessage, stripRawResponse } from '@infra/ai/usage';
 
 import { loadConfig } from '@config/index';
 
@@ -76,7 +77,8 @@ function finishReasonOf(response: AIMessage): string | undefined {
  */
 function logModelResponse(response: AIMessage, userId: string, phase: string): string | undefined {
   const finishReason = finishReasonOf(response);
-  const { inputTokens, outputTokens, cacheReadTokens, reasoningTokens } = extractUsageFromMessage(response);
+  const { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, reasoningTokens } =
+    extractUsageFromMessage(response);
   log.info(
     {
       userId,
@@ -85,6 +87,7 @@ function logModelResponse(response: AIMessage, userId: string, phase: string): s
       promptTokens: inputTokens,
       completionTokens: outputTokens,
       cacheReadTokens,
+      cacheWriteTokens,
       reasoningTokens,
     },
     'LLM response',
@@ -144,7 +147,9 @@ function withAppendedText(message: BaseMessage, text: string): BaseMessage {
 function withPostToolNudge(messages: BaseMessage[]): BaseMessage[] {
   const nudge = renderBlock(POST_TOOL_NUDGE_V1, {});
   let target = messages.length - 1;
-  for (let i = messages.length - 1; i >= 0; i--) {
+  // Only this run's own tool traffic (after the current HumanMessage) can carry it — an older ToolMessage sits
+  // inside the cached history prefix and must never change.
+  for (let i = messages.length - 1; i >= 0 && typeOf(messages[i]) !== 'human'; i--) {
     if (typeOf(messages[i]) === 'tool') {
       target = i;
       break;
@@ -229,7 +234,7 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     // full depth and enforces the budget via resolveBudget — truncate facts,
     // trim history, step blocks down their depths, drop the oldest summary,
     // D-D floor, in that order. Block 1 (systemPrompt) is never touched here.
-    const { messages: llmMessages, budgetReport } = await assembleContext({
+    const { messages: assembledMessages, budgetReport } = await assembleContext({
       systemPrompt,
       userFacts,
       // AC-FL-5: the directive the course-check step stored (or kept) in
@@ -262,12 +267,21 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
       );
     }
 
+    // Prompt-caching plan D1/D6: the two explicit breakpoints, only when the route is configured for them; with
+    // `off` the request stays exactly what assembleContext built.
+    const cfg = loadConfig();
+    const llmMessages =
+      cfg.LLM_PROMPT_CACHE === 'anthropic'
+        ? applyCacheBreakpoints(assembledMessages, current.length, cfg.LLM_PROMPT_CACHE_TTL)
+        : assembledMessages;
+
     // Post-tool nudge + empty-reply retry, moved verbatim from invokeWithRetry
     // (ADR-0013 §6: every phase, one retry, then the catalog fallback — D-D).
     const postTool = endsWithToolMessage(llmMessages);
     const firstMessages = postTool ? withPostToolNudge(llmMessages) : llmMessages;
     const response = await model.invoke(firstMessages, config);
     const finishReason = logModelResponse(response, userId, spec.name);
+    stripRawResponse(response);
 
     if (isEmptyAIResponse(response)) {
       // BUG-019 / AC-RL-2: an empty answer truncated by the output cap is a
@@ -281,6 +295,7 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
       const retryMessages = postTool ? firstMessages : withPostToolNudge(llmMessages);
       const retried = await model.invoke(retryMessages, config);
       logModelResponse(retried, userId, spec.name);
+      stripRawResponse(retried);
       if (isEmptyAIResponse(retried)) {
         return { messages: [new AIMessage(t('empty_reply', lang))] };
       }

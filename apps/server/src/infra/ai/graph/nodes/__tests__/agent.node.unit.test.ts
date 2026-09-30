@@ -229,6 +229,21 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     expect((out.messages[0] as AIMessage).content).toBe(t('empty_reply', 'ru'));
   });
 
+  it('D7: the raw provider response LangChain carries for usage extraction never reaches the checkpointed reply', async () => {
+    mockInvoke.mockResolvedValueOnce(
+      new AIMessage({
+        content: 'готово',
+        tool_calls: [],
+        additional_kwargs: { __raw_response: { usage: {} }, keep: 1 },
+      }),
+    );
+    const node = buildAgentNode(makeSpec(), makeDeps());
+
+    const out = await node(makeState({ messages: [new HumanMessage('привет')] }), CONFIG);
+
+    expect((out.messages[0] as AIMessage).additional_kwargs).toEqual({ keep: 1 });
+  });
+
   it('non-empty reply skips the retry entirely', async () => {
     mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'готово', tool_calls: [] }));
     const node = buildAgentNode(makeSpec(), makeDeps());

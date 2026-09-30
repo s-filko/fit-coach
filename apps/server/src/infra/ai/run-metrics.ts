@@ -22,6 +22,8 @@ export interface RunMetrics {
   /** AC-CA-2: sums of the run's own calls' cache_read/reasoning — null when none reported them, never 0. */
   tokensCached: number | null;
   tokensReasoning: number | null;
+  /** Prompt-caching plan D7: sum of the run's calls' cache-write tokens — null when none reported them. */
+  tokensCacheWrite: number | null;
   latencyMs: number;
   llmCalls: number;
   budgetReport: BudgetReport | null;
@@ -34,6 +36,7 @@ export class RunMetricsCollector {
   private tokensOut = 0;
   private tokensCached: number | null = null;
   private tokensReasoning: number | null = null;
+  private tokensCacheWrite: number | null = null;
   private llmCalls = 0;
   private budgetReport: BudgetReport | null = null;
   private assemblies = 0;
@@ -73,6 +76,7 @@ export class RunMetricsCollector {
     tokensOut: number,
     cacheReadTokens: number | null = null,
     reasoningTokens: number | null = null,
+    cacheWriteTokens: number | null = null,
   ): void {
     if (this.startedCalls.has(llmRunId)) {
       this.startedCalls.delete(llmRunId);
@@ -84,6 +88,9 @@ export class RunMetricsCollector {
       if (reasoningTokens !== null) {
         this.tokensReasoning = (this.tokensReasoning ?? 0) + reasoningTokens;
       }
+      if (cacheWriteTokens !== null) {
+        this.tokensCacheWrite = (this.tokensCacheWrite ?? 0) + cacheWriteTokens;
+      }
     }
   }
 
@@ -94,6 +101,7 @@ export class RunMetricsCollector {
       tokensOut: this.tokensOut,
       tokensCached: this.tokensCached,
       tokensReasoning: this.tokensReasoning,
+      tokensCacheWrite: this.tokensCacheWrite,
       latencyMs: Date.now() - this.startedAt,
       llmCalls: this.llmCalls,
       budgetReport: this.budgetReport,
@@ -148,6 +156,7 @@ class LlmMetricsHandler extends BaseCallbackHandler {
       usage.outputTokens ?? 0,
       usage.cacheReadTokens,
       usage.reasoningTokens,
+      usage.cacheWriteTokens,
     );
   }
 }

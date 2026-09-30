@@ -67,6 +67,8 @@ export interface ConversationRunRecord {
   /** AC-CA-2: sums of the run's own calls' cache_read/reasoning tokens — null when none reported them, never 0. */
   tokensCached: number | null;
   tokensReasoning: number | null;
+  /** Prompt-caching plan D7: sum of the run's calls' cache-write tokens — null when none reported them, never 0. */
+  tokensCacheWrite: number | null;
   latencyMs: number;
   toolCalls: Array<{ name: string; argsHash: string; outcomeKind: string }> | null;
   /**

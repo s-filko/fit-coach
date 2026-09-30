@@ -1,10 +1,9 @@
 /**
- * Prompt-caching plan (BUG-051) T2 — AC-PC-7 (llm_calls.cache_write_tokens), AC-PC-9 and AC-PC-10 through the
+ * Prompt-caching plan (BUG-051) T2 — AC-PC-9 and AC-PC-10 through the
  * REAL recorder and DB: classification stored in the new `cache_break` column, warn/info logging. DB-backed
  * (`RUN_DB_TESTS=1`), `*.repro.test.ts` so it stays out of the default testMatch until T4/T5b go green.
  *
  * Interface assumed (T4/T5b implement to it — recorded in the plan § Evidence, T2):
- *  - `llm_calls.cache_write_tokens` (nullable int) from `RecordLlmCallResponse.usage.cacheWriteTokens`;
  *  - `llm_calls.cache_break` (nullable text): 'none' | `planned:<reason>` | `unplanned:<where>` | 'unexplained_miss';
  *  - `llm_calls.cache_break_lost_tokens` (nullable int): tokens the break cost (`unplanned:*`,
  *    `unexplained_miss`, planned breaks alike; null for `none`) — the cache report sorts by money from it;
@@ -92,19 +91,6 @@ describe('recorder + DB: cache accounting and the cache-break guard', () => {
   });
   beforeEach(() => {
     Object.values(logFns).forEach(f => f.mockClear());
-  });
-
-  it('AC-PC-7: cache_write_tokens is stored from the provider usage; unreported stays null', async () => {
-    const userId = randomUUID();
-    await recordLlmCall(call(userId, PROMPT, PREV_TAIL, { usage: { cacheWriteTokens: 110 } }));
-    expect((await lastRow(userId))['cacheWriteTokens']).toBe(110);
-    const other = randomUUID();
-    await recordLlmCall(call(other, PROMPT, PREV_TAIL));
-    expect((await lastRow(other))['cacheWriteTokens'] ?? null).toBeNull();
-    // the column must exist and be nullable: 0 is a value, not "unreported"
-    const zero = randomUUID();
-    await recordLlmCall(call(zero, PROMPT, PREV_TAIL, { usage: { cacheWriteTokens: 0 } }));
-    expect((await lastRow(zero))['cacheWriteTokens']).toBe(0);
   });
 
   it('AC-PC-9: a prefix change with no declared reason → cache_break unplanned:<where>, warn with lost tokens and cost', async () => {

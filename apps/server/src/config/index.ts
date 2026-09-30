@@ -107,6 +107,12 @@ export const EnvSchema = z.object({
   // exception as EPISODE_*/LLM_BUDGET_*.
   LLM_CACHE_TTL_SECONDS: z.coerce.number().positive().int().optional(),
   LLM_CACHE_MIN_PREFIX_TOKENS: z.coerce.number().positive().int().optional(),
+  // Prompt caching (prompt-caching plan D6): `anthropic` sends two explicit cache_control breakpoints (Anthropic
+  // models through OpenRouter); `off` sends none — the default, since the Z.AI and Gemini routes are not
+  // probed. The TTL picks the breakpoint lifetime (`1h` writes cost 2x instead of 1.25x). Same
+  // tunables-not-secrets exception as EPISODE_*.
+  LLM_PROMPT_CACHE: z.enum(['off', 'anthropic']).default('off'),
+  LLM_PROMPT_CACHE_TTL: z.enum(['5m', '1h']).default('5m'),
   // Transition hand-off (transition-handoff plan Task 1, D-1, AC-TH-2): comma
   // list of ConversationPhase targets that get a silent same-run hand-off when
   // a transition tool commits to them. Empty/unset = off — byte-for-byte

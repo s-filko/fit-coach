@@ -165,7 +165,11 @@ interface PendingCall {
 
 interface LlmGeneration {
   text: string;
-  message?: { tool_calls?: unknown; usage_metadata?: import('./usage').UsageMetadataLike };
+  message?: {
+    tool_calls?: unknown;
+    usage_metadata?: import('./usage').UsageMetadataLike;
+    additional_kwargs?: Record<string, unknown>;
+  };
   generationInfo?: Record<string, unknown>;
 }
 
@@ -271,7 +275,8 @@ export class LLMLogHandler extends BaseCallbackHandler {
       extracted.inputTokens !== null ||
       extracted.outputTokens !== null ||
       extracted.cacheReadTokens !== null ||
-      extracted.reasoningTokens !== null;
+      extracted.reasoningTokens !== null ||
+      extracted.cacheWriteTokens !== null;
     try {
       await this.recordCall({
         runId: pending.runId,
@@ -288,6 +293,7 @@ export class LLMLogHandler extends BaseCallbackHandler {
                 completionTokens: extracted.outputTokens,
                 cacheReadTokens: extracted.cacheReadTokens,
                 reasoningTokens: extracted.reasoningTokens,
+                cacheWriteTokens: extracted.cacheWriteTokens,
               }
             : null,
         },

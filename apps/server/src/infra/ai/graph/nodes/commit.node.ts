@@ -166,6 +166,7 @@ export function buildCommitNode(deps: CommitNodeDeps) {
           tokensOut: metrics.tokensOut,
           tokensCached: metrics.tokensCached,
           tokensReasoning: metrics.tokensReasoning,
+          tokensCacheWrite: metrics.tokensCacheWrite,
           latencyMs: metrics.latencyMs,
           toolCalls: collectToolCalls(current),
           transition: effectiveTransition
