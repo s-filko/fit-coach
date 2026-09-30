@@ -3,7 +3,7 @@
 > **For agentic workers:** Use superpowers:executing-plans and superpowers:test-driven-development. Red tests
 > first in every task. Execute only the dispatched task.
 
-- Status: planned
+- Status: in progress
 - Branch: plan/prompt-caching
 - After: —
 
