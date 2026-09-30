@@ -29,12 +29,12 @@ in § "Before dispatch".
 
 ## Before dispatch (owner gates — the executing orchestrator asks, one question at a time)
 
-1. **R4.0 threshold table** (`load-facts.md` § "R4.0 — sourced thresholds") reviewed by the owner
+1. ✅ (accepted 2026-09-30) **R4.0 threshold table** (`load-facts.md` § "R4.0 — sourced thresholds") reviewed by the owner
    once (design §11.4); items marked *verify* checked against the papers. Its values become the
    named parameters of D5 below.
    **Accepted by the owner 2026-09-30 as is** (the *verify* items included): under O1 the numbers are a suggestion
    the model may override, so a wrong threshold is cheap; they are refined later from the recommendation log.
-2. **ADR-0009 amendment** — two new fact categories, `progression_scheme` (typed value: a
+2. ✅ (approved 2026-09-30) **ADR-0009 amendment** — two new fact categories, `progression_scheme` (typed value: a
    registry id) and `break` (dates, reason class, free text; `durability = short`, expiry at the
    ladder's end). Durable spec: proposed text in § "Proposed durable-spec text", the owner edits
    or approves.
@@ -183,5 +183,13 @@ through the summariser and the model verifier; the newest active fact is the cho
 `break` — a pause in training with dates, a reason class (illness, injury, holiday/work/no time,
 deliberate deload, stress/poor sleep, unknown) and the user's words; `durability = short`,
 expiring at the end of the return ladder."
+
+Design `2026-09-28-load-recommendation-architecture-design.md` Principle 6 amendment (O1): "The load in `LOAD PLAN`
+is a suggestion with its reason, not a binding value: the model decides the load by its judgement of the current
+situation, and states its reason when it departs from the suggestion; both the suggestion and the advised load are
+logged (D7)."
+
+**Gate 2 approved by the owner 2026-09-30** (both texts above, as written). The ADR-0009 edit is applied by the
+orchestrator in the 9b-1 close-out, in the same diff as the code.
 
 ## Review
