@@ -400,3 +400,85 @@ Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 179 s
 
 Smaller training tool set and shorter schemas; BUG-050 estimator; the post-tool second call itself; caching on
 the Z.AI / Gemini routes; summariser and course-check calls (Haiku 4.5 minimum 4 096 tokens).
+
+## Review
+
+### Run 1 — 2026-09-30, four zones over `c3e3b927...bf34dd0a`: **blocked**
+
+#### Blocking (open)
+
+1. **R1 + R4 — ADR-0013 §3.4 layout.** `assemble-context.ts:212` sends one merged stable SystemMessage and puts
+   block 3, gap note and NOW in a `<context>` part of the current HumanMessage (`:215`); nudge on the ToolMessage;
+   two `cache_control` breakpoints. ADR-0013 §3.4 (`docs/adr/0013…:192-208`) still declares separate
+   SystemMessages and gap note/NOW before `current`; line 197 still names `trimMessages`. Escalated in plan —
+   clears only with the owner-approved §3.4 amendment.
+2. **R1 + R4 — INV-LLM-004 / BR-LLM-003 warm-cache exception.** `budget.ts:181` skips the resolution order and
+   `compact.ts:62` suppresses the budget trigger while warm and under `LLM_CONTEXT_HARD_CAP_TOKENS`; ADR-0013
+   `:169`, `:220` have no such exception. Escalated in plan — owner-approved amendment.
+3. **R4 — ADR-0013 §4.2 (`:272,279`)** still lists `toolPolicy.availability?` / dynamic tool availability, removed
+   by this diff (`tool-policy.ts`; rule now `tools/set-preconditions.ts`). The plan's escalation list wrongly
+   named ADR-0011 (it has no availability text).
+4. **R4 — ADR-0013 §8 cache-accounting amendment (`:456-464`)** lacks `llm_calls.cache_write_tokens`,
+   `cache_break`, `cache_break_lost_tokens`, `conversation_runs.tokens_cache_write` (migrations 0021/0022) and
+   the D8 classification contract / attribution-to-breakpoint-2 change.
+5. **R4 — `docs/DB_SETUP.md:184,205-229,237-240,259-290`**: DDL misses the four columns; `cache_expected` labels
+   (`system:domain`/`gap-note`/`now`) and "compares against the whole previous request" are stale; its
+   "unexplained misses" query (`cache_read_tokens = 0`) diverges from `cache_break = 'unexplained_miss'`
+   (read < 0.75 × shared).
+6. **R4 — `docs/ARCHITECTURE.md:138,176,427`** describe the old layout; the file tree lacks
+   `context/cache-breakpoints.ts`, `ai/cache-break-reasons.ts`, `tools/set-preconditions.ts`,
+   `prompts/phases/context-location.ts`, `observability/cache-report.ts`, `scripts/cache-report.ts`.
+7. **R4 — `docs/CONTRIBUTING_AI.md:162,174`**: "Every phase sends the same message shape" with block 3 before
+   history, `resolveBudget` always enforcing INV-LLM-004, episodes ending on history-budget overflow — none hold
+   after D2/D5.
+8. **R4 — `docs/LOGGING_GUIDE.md:383`**: "pushes up to six `SystemMessage`s per call … per-workout blocks that
+   change on nearly every call" — now exactly one stable SystemMessage; the retention rationale no longer matches.
+9. **R3 + R4 — AC-PC-4 executor half not in CI.** Only
+   `graph/__tests__/training-tool-rejection.repro.test.ts` exists (outside testMatch; CI runs `test:unit`); T3
+   evidence claims a `.unit` promotion and T5b claims no repro left — both false (plan `:280,369`).
+10. **R2 — `llm-call-recorder.ts:164` `systemTextOf()`** near-verbatim copy of `systemText()`
+    (`cache-attribution.ts:145`); both reinvent `textOf()` (`llm.gateway.ts:34`, "one home"); a third copy is
+    `contentText()` (`evals/lib/run-case.ts:61`). One exported helper returning null for non-text parts.
+11. **R2 — `agent.node.ts:116` `withAppendedText()`** copies the tool/human branches of `withBreakpoint()`
+    (`cache-breakpoints.ts:40`, 48–66); `withContext()` (`assemble-context.ts:128`) is a third, human-only copy;
+    `textPartsOf()` (`agent.node.ts:106`) duplicates `partsOf()` (`cache-breakpoints.ts:29`). Already drifted:
+    only `withContext` keeps `response_metadata`. One clone-with-new-parts helper next to cache-breakpoints.
+12. **R2 — `compact.node.ts:167`** inline warm-cache predicate repeats `warmCacheOf()` (`agent.node.ts:165`).
+13. **R2 — `cache-break-reasons.ts:18` `isCacheBreakReason()`** exported, zero callers, not in plan (YAGNI).
+
+#### Advisory (not fixed on this branch unless the owner pulls them in)
+
+- R1 `tool-executor.ts:213` executor branches on `manage_fact` to declare `facts_changed` — let the tool's return
+  carry it. · R1 `run-metrics.ts:70` metrics collector now also carries cache-break intent — own run-context field.
+  · R1 `compact.node.ts:91` cache settings in `EpisodeTunables` while breakpoints read `loadConfig()` directly —
+  one channel. · R1 `cache-attribution.ts:316` breakpoint-2 position defined twice and stable-message layout
+  re-encoded (`SECTION_SEPARATOR_LENGTH = 2`) — one owner of the cacheable boundary. · R1 `model.factory.ts:37`
+  raw response added for every profile, stripped only in the agent node. · R1 `set-preconditions.ts:10` rule
+  belongs in `ITrainingService` as a domain rejection.
+- R2 `agent.node.ts:278` / `compact.node.ts:182` hard-cap declare+log duplicated; `budget.ts:652` /
+  `compact.ts:188` cap rule twice. · R2 `scripts/cache-report.ts:24` third copy of script boilerplate
+  (print-transcript, print-load-plan). · R2 `training.spec.ts:83` `buildTrainingToolPolicy(_tools)` unused param.
+  · R2 `cache-report.ts:20,45` TTL literal type restated (`PromptCacheTtl` exists); TTL→ms inlined in
+  `register-infra-services.ts:131`.
+- R3 `compact.node.ts:168` + `budget.ts:180` two different hard-cap measures — in the band between them the
+  assembler trims (sliding) on every warm call. · R3 `llm-call-recorder.ts:268` guard not gated on
+  `LLM_PROMPT_CACHE`/phase/model — Haiku summariser/course-check and `off` routes will warn "Prompt cache break".
+  · R3 `cache-report.ts:59` sums all models at one Sonnet input price, no output tokens — not comparable with
+  $3.63 (AC-PC-8). · R3 `cache-attribution.ts:427` lost tokens count only chars after divergence; a system break
+  loses tools + whole system block. · R3 `run-metrics.ts:70` declared reasons never cleared within a run — can
+  mask a real break as `planned:compaction`. · R3 `set-preconditions.ts:16` a premature delete/update now spends
+  training's `llmErrorBudget: 1` (can end the run with `tool_error_budget_exhausted`); `getSessionDetails` outside
+  the try/catch. · R3 `assemble-context.ts:215` array content for user/tool roles also with `off` — unprobed on
+  Z.AI / Gemini BYOK. · R3 new test names without AC ids (`cache-breakpoints.unit.test.ts:16`,
+  `cache-break-declarations`, config D5/D6/D8, compact raise sites, recorder+DB). · R3
+  `episode-summaries.v2.ts:29` relative dates in the stable block → first call after local midnight logs
+  `unplanned:system:summaries`.
+- R4 `CLAUDE.md:38` "Unverified… app does not send cache_control" stale (rewrite with the T6 env switch). · R4
+  BUG-051 status line. · R4 design spec §4 lacks a superseded pointer. · R4 plan D5 names non-existent
+  `LLM_PROMPT_CACHE_TTL_SECONDS` (also two test headers); D7 "attribution needs no change" contradicted by D8;
+  T4 heading "(worker, GLM)" vs D9. · R4 `training.spec.ts:5` header still says dynamic tool filtering. · R4 test
+  headers reference removed `*.repro.test.ts` names. · R4 `.env.example` lacks `LLM_CONTEXT_HARD_CAP_TOKENS`,
+  `LLM_INPUT_PRICE_PER_MTOK`; two TTL settings kept in step by hand. · R4 CONTRIBUTING_AI `:164` defaults list. ·
+  R4 BUG-008 Plan A rule has no BR-TRAINING id. · R4 ARCHITECTURE `:170` phase-prompt listing stale.
+
+Meta findings filed in `docs/REVIEW_FINDINGS.md` (run prompt-caching 2026-09-30).
