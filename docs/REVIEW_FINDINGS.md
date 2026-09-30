@@ -227,7 +227,8 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   Orca `worker_done` messages are invisible from the worktree. Proposed for ORCHESTRATION.md:
   "each task's verification output (command + summary line) is appended to the plan under the task
   before review; a reviewer treats absence there as absence". Runs: set-kind (2026-09-29, R3), load-facts (2026-09-29, R3 — two task commits with empty bodies read as "no evidence"; proposed "a worker report alone is not evidence").
-- [×2] Zone R3 says test names carry BR/AC refs "per `docs/CONTRIBUTING_AI.md`", but that file has no such rule, so missing AC refs (`planning-set-logging`, `recent-history-status`) cannot be graded. Proposed wording for CONTRIBUTING_AI Principles: "Every `describe` of a test that proves an AC names that AC id." Runs: coach-baseline 2026-09-25 (R3), retro-timestamps 2026-09-30 (R3: `describe('STALE SESSION gate follows isRetroLog (BUG-043)')` cites neither BR-TRAINING-030 nor AC-RT-4).
+- [×3] Zone R3 says test names carry BR/AC refs "per `docs/CONTRIBUTING_AI.md`", but that file has no such rule, so missing AC refs (`planning-set-logging`, `recent-history-status`) cannot be graded. Proposed wording for CONTRIBUTING_AI Principles: "Every `describe` of a test that proves an AC names that AC id." Runs: coach-baseline 2026-09-25 (R3), retro-timestamps 2026-09-30 (R3: `describe('STALE SESSION gate follows isRetroLog (BUG-043)')` cites neither BR-TRAINING-030 nor AC-RT-4). (+ load-plan 2026-10-01)
+- [×1] R1: the durable-spec rule does not say how to treat an edit that goes beyond the owner-approved text (extra paragraphs next to approved wording); treated as rule 3. Candidate for SUPERPOWERS_INTEGRATION rule 3: "An owner-approved durable-spec amendment is applied verbatim; any added sentence that changes or qualifies its meaning is a new escalation." (load-plan 2026-10-01)
 - [×1] Schema, indexing and unbounded-growth concerns have no owning zone: R1 reads for shape,
   R2 for duplication, R3 for logic, R4 for doc currency. The missing `run_id` index on
   `llm_calls` — queried on every model call, now synchronously — was the most operationally
@@ -403,6 +404,9 @@ backs it. Each entry names the proposed wording and where it would live
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
 
+- [×1] R4: "Every new env variable read by `config/index.ts` gets a commented line in `apps/server/.env.example` with its default and plan reference" — CONTRIBUTING_AI, next to the Config exception list (which also omits COURSE_CHECK_*). (load-plan 2026-10-01)
+- [×1] R4: "A plan whose behaviour survives the merge lists, at its owner gates, the BR-*/INV-* ids it adds or changes in `docs/domain/*.spec.md`; an empty list is stated explicitly" — SUPERPOWERS_INTEGRATION rule 1. (load-plan 2026-10-01)
+- [×1] R1: no written rule keeps prompt/user-facing wording out of `src/domain/`. Proposed INV in ADR-0013 §5 or CONTRIBUTING_AI: "Domain modules return typed values (enums, ids, numbers); every string that reaches a prompt is produced in a versioned module under `infra/ai/prompts`." (load-plan 2026-10-01)
 - [×1] Scrubbing a removed identifier from a plan's historical Evidence by in-sentence replacement left lines stating false current behaviour. Proposed (R4): "Historical Evidence is not rewritten when a later fix removes what it names; add a superseded marker instead."
   Runs: prompt-caching run 3 (2026-09-30) (R4).
 - [×2] A fix commit changed code (the hard-cap measure; a model price) after the ADR amendment / DB-backed evidence describing it was written, leaving the text or the green run stale. Proposed (R1, R3): "an ADR amendment written in the same close-out as a code fix is re-read against that fix's final diff; verification evidence names the commit it ran at, and any later code commit re-runs the DB-backed suites touching the changed module".
@@ -516,7 +520,7 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   `layout`+`blocksForLayout`) — R4's meta proposes the same mechanical cure: a pre-close-out
   grep sweep over docs/ for the names the diff moved, not a hand-written file list.
   Runs: refactor-p2-context-assembler (2026-09-17).
-- [×2] The plan's per-task verification commands are evidenced only by ticked checkboxes;
+- [×3] The plan's per-task verification commands are evidenced only by ticked checkboxes; (+ load-plan 2026-10-01)
   Task 6 was the only task with pasted command output. Proposed rule for
   `SUPERPOWERS_INTEGRATION.md` close-out: a plan records one line of actual command output
   (e.g. the Jest suite summary) per task, so R3's "verification was run" check reads evidence
@@ -843,7 +847,7 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
 - [×1] The owner's rule "real workout = `completed` with ≥1 logged set" (2026-09-24) is enforced by code but lives only in `BUGS.md` BUG-031 and a port JSDoc. Proposed `BR-TRAINING-0xx` in `docs/domain/training.spec.md`: "Recent training history and days-since-last-workout consider only real workouts: status `completed` with at least one logged set." Needs owner approval (durable spec). Runs: coach-baseline 2026-09-25 (R4).
 - [×1] A plan's Global Constraint "flag off must be today's behaviour" carries no AC/BR/INV id, so R3 could report a flag-off regression (commit now carries `compactReason` forward) only as advisory. Proposed for `SUPERPOWERS_INTEGRATION.md` or `CONTRIBUTING_AI.md`: "A feature flag's off state must be proven unchanged by at least one test per changed node; a plan that states a flag-off invariant gives it an AC id."
   Runs: transition-handoff (2026-09-25).
-- [×1] Frozen prompt versions (`phases/*/vN.ts`, pinned by AC-1321 snapshots) are copied whole by convention, which conflicts with DRY as written. Proposed for `CONTRIBUTING_AI.md` "Principles & Boundaries": "DRY exception: a new prompt version under infra/ai/prompts/phases/ is a full copy of its predecessor; frozen versions are never refactored to share code with the current one."
+- [×2] Frozen prompt versions (`phases/*/vN.ts`, pinned by AC-1321 snapshots) are copied whole by convention, which conflicts with DRY as written. Proposed for `CONTRIBUTING_AI.md` "Principles & Boundaries": "DRY exception: a new prompt version under infra/ai/prompts/phases/ is a full copy of its predecessor; frozen versions are never refactored to share code with the current one." (+ load-plan 2026-10-01)
   Runs: transition-handoff (2026-09-25).
 - [×1] When a fix commit reverts an approach (here embedding under Jest), nothing requires checking that what the abandoned approach changed (dropping the `embedBatch` call, a "because of Jest" comment) was reverted too. Proposed for `CONTRIBUTING_AI.md`: "A fix that abandons an approach reverts every change that approach made."
   Runs: transition-handoff (2026-09-25).
@@ -893,7 +897,7 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   tool/API schemas derived from it; only the DB `pgEnum` may restate it with a pointer. The rule
   lives only in a comment (`types.ts:197-198`). Proposed for CONTRIBUTING_AI.md "Principles &
   Boundaries". Runs: set-kind (2026-09-29, R2 run 2).
-- [×1] Nothing says which code-map docs (ARCHITECTURE.md file tree, MANUAL_TEST_PLAN.md tool list,
+- [×2] Nothing says which code-map docs (ARCHITECTURE.md file tree, MANUAL_TEST_PLAN.md tool list, (+ load-plan 2026-10-01)
   ADR table rows) a change adding a prompt block, tool or prompt version must update. Proposed for
   `CONTRIBUTING_AI.md`: "A change that adds a prompt block, tool or prompt version updates the
   ARCHITECTURE.md file map and the MANUAL_TEST_PLAN.md tool list in the same PR, or logs the drift

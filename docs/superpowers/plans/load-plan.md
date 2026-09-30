@@ -17,8 +17,8 @@ log); a break is an event with a reason and a return ladder. The session planner
 `targetWeight`, so `LOAD PLAN` is the only place a load appears (design Principle 1).
 
 **Written 2026-09-29 by the U9a orchestrator under the owner's order ("if budget remains, write
-the U9b plan but do not execute it").** Not dispatched. Owner gates before execution are listed
-in § "Before dispatch".
+the U9b plan but do not execute it").** Executed 2026-10-01 under the owner's autonomy order (§ Execution
+decisions); owner gates are listed in § "Before dispatch".
 
 **Spec:** design `docs/superpowers/specs/2026-09-28-load-recommendation-architecture-design.md`
 §2 (principles), §3.3 (decision order), §3.4 (output), §3.5 (recommendation log), §4 (schemes),
@@ -92,7 +92,7 @@ in § "Before dispatch".
   conservative / confidence` lines of design §3.4; `get_load_plan` returns the same. Folded
   load-facts findings: the `equipment` fact is printed **once per block**, not per entry; a
   negative drop-off reads `none (reps rose)`; the e1RM trend gets the same 8-week window as the
-  working weight or prints its span (decide at Task 2 from the owner's live check 4 answer);
+  working weight or prints its span (decided at Task 2: the span is printed — (D) T2(f));
   the D5 placement question of load-facts is settled here — the block moves to the tail after
   `NOW` **only if** the assembler slot is cheap (one optional `tailText`), otherwise stays in block
   3 and the reason is recorded.
@@ -144,8 +144,8 @@ in § "Before dispatch".
   The reply text is never parsed.
 - **(D) A5 — flags:** `LOAD_PLAN_SUGGESTION`, `LOAD_PLAN_BREAKS`, `LOAD_PLAN_PLANNER_REBIND` are booleans in the
   server env schema, default `false`; with a flag off the code path is exactly the pre-plan behaviour (tests cover
-  both). Prompt versions `training` v11 / `session_planning` v5 (not v10/v4 as the AC table says) are selected
-  only when `LOAD_PLAN_PLANNER_REBIND` is on.
+  both). Prompt versions `training` v11 / `session_planning` v5 are selected only when `LOAD_PLAN_PLANNER_REBIND` is on
+  (with `LOAD_PLAN_SUGGESTION`, per the review fix).
 - **(D) A6 — Task 5 split:** 5a (the `progression_scheme` fact through summariser v7 / verifier v2, the context line,
   the block's "chosen by user <date>") goes to the Sonnet worker that wrote summariser v7 in Task 4; 5b (planner without
   `targetWeight`, WORKOUT OVERVIEW, `session_planning` v5 / `training` v11) goes to GLM per D11. The scheme fact is part
@@ -313,10 +313,10 @@ chat/training prompt line for the one-time question. Red: the scenario.
 
 Files: `FACT_CATEGORIES` (`progression_scheme`), summariser/verifier (typed value), the context
 line; `save-workout-plan.tool.ts`, `session-planning.types.ts`, `session-planning-active-plan.v1.ts`
-→ v2, `training-workout-overview.v1.ts` (no weight); `session_planning/v4.ts`,
-`training/v10.ts`. Red: tool schema test + prompt test.
+→ v2, `training-workout-overview.v1.ts` (no weight); `session_planning/v5.ts`,
+`training/v11.ts`. Red: tool schema test + prompt test.
 
-## Live check (dev, owner — written per merge before its deploy)
+## Live check (dev, owner — one merge, all three flags on; D1 as amended)
 
 - 9b-1: «какой вес на жим?» → the coach names the block's candidate with its reason and the
   conservative option; `load_recommendations` has a row after the first working set.

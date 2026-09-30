@@ -209,7 +209,9 @@ One function, `assembleContext(phaseSpec, state, ctx): { messages: BaseMessage[]
 
 > **Amendment 2026-09-27 (`now-line-last`, owner-approved at close-out).** Two messages ride with the
 > current turn, between the history (4) and the current `HumanMessage`, in this order: the time-gap
-> note (AC-CC-2, only after an `EPISODE_GAP_HOURS` pause) and the **`NOW` line** (`CURRENT_TIME_V1`,
+> note (AC-CC-2, after an `EPISODE_GAP_HOURS` pause — and, with `LOAD_PLAN_BREAKS` on, `block.time_gap` v2 also
+> for a training break of more than 7 days with no message gap, carrying the tier line and the one-time reason
+> question; plan `load-plan` D9, recorded 2026-10-01 for the owner's review) and the **`NOW` line** (`CURRENT_TIME_V1`,
 > BUG-032, every call) — `… history → [gap note] → NOW → current`. `NOW` is no longer part of block 1:
 > it changes every minute, and as block 1's last section it kept everything after it (long-term and
 > domain blocks, history) out of the provider's prompt cache. Both survive the D-D floor and are not

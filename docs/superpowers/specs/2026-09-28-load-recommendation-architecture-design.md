@@ -135,7 +135,9 @@ confidence: medium (machine; 5 performances)
 ```
 
 - **Block** for today's exercises (planned or started), rendered at every training request,
-  placed at the tail after `NOW` (relative times; history-spec §4 caching order). It reuses
+  a normal block-3 context block (since `prompt-caching` block 3 rides in the current user message, so
+  the tail-after-`NOW` placement is moot — plan `load-plan` D1 note 2026-09-30); the e1RM trend prints
+  its span rather than being cut to 8 weeks (plan `load-plan` (D) T2(f)). It reuses
   `formatSetData` / `formatDateAge`; it does not become a third history formatter. Whether it
   replaces `EXERCISE HISTORY` in training or drops its `reference:` line is decided in U9a.
 - **Tool** `get_load_plan(exerciseId | exerciseName)` returning the same text for an exercise
