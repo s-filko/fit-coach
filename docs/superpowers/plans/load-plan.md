@@ -5,9 +5,10 @@
 > so a red unit test is verified by running it and stated in the commit body (load-facts D17);
 > DB-backed reds may be committed as `*.repro.test.ts`.
 
-- Status: in progress
+- Status: done
 - Branch: plan/load-plan
 - After: load-facts
+- Review: 2026-10-01 | clean | R1,R2,R3,R4
 
 **Goal:** the `LOAD PLAN` block stops being facts only: code names the load for every exercise —
 a candidate and a conservative alternative, each with its reason, produced by a fixed decision
@@ -493,6 +494,15 @@ Blocking 1, 4–11 closed with evidence; 12 closed as a gap. New / re-raised:
 - Advisories to backlog: Fix-S tie case drops the ladder's confidence/branch note (`decide.ts:212-215`); N6 a break
   fact whose `to` outlives the workout that ended it covers the next gap (`break-fact.ts:58`); Fix-T moved the D7
   trigger rule from the domain service into the infra log (`load-recommendation-log.ts:97-103`).
+
+Run 2 advisories folded in `48e31a3d`. **Verdict after run 2: clean.**
+
+### Acceptance verification (orchestrator, 2026-10-01, at `48e31a3d`)
+
+`npm run check-all` exit 0; `db-test-lock.sh npm run test:scenarios` 26 suites / 435 passed / 1 todo;
+`db-test-lock.sh npm run test:integration` — first run 1 failed / 701 passed (the failing test was not captured),
+then three consecutive runs 702 passed / 1 todo. Recorded as an unidentified integration flake (not reproduced);
+see STATE handoff.
 
 ### Meta
 

@@ -263,6 +263,8 @@ once.
 | `escalation` for a reserved action | Boundary hit | Do it as orchestrator, or grant narrowly in the reply |
 | Worker reports an unexpected model/provider | Slot misconfigured | Stop; check Orca → Settings → Agents; tell the owner |
 | Auth / quota error from the provider | Token or quota | Stop; tell the owner. Do not switch executors silently |
+| Worker idle at start, screen shows a Claude Code notice (`Enter to continue · Esc to cancel`) | A client notice modal blocks the first turn (seen on the GLM slot 2026-10-01) | `orca terminal read --terminal <h> --screen`; dismiss with `orca terminal send --terminal <h> --enter` **[verified 2026-10-01]** |
+| Worker turn ends with `API Error: Can't reach the API server (ENOTFOUND)` | The Mac's system resolver failed for the provider host (dig resolved it; recovered within minutes, 2026-10-01) | Wait until `curl https://api.z.ai/` stops returning `000` in ~1 ms, then `terminal send` a "continue" prompt; do not relaunch |
 
 ## Scope
 
