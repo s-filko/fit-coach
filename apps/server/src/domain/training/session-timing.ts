@@ -21,18 +21,23 @@ export function hasLoggedSets(session: Pick<TimedSession, 'exercises'>): boolean
   return session.exercises.some(ex => ex.sets.length > 0);
 }
 
+/** The session has been idle past the timeout (the one "idle > timeout" test). */
+export function isStale(session: Pick<TimedSession, 'lastActivityAt' | 'updatedAt' | 'createdAt'>, now: Date): boolean {
+  return now.getTime() - lastActivityOf(session).getTime() > SESSION_TIMEOUT_MS;
+}
+
 /**
  * BUG-043: a set is retro-logged (catch-up on a workout that already happened) only when the session
  * has been idle past the timeout AND already holds sets. A session with no sets never began — the
  * first set after a long gap is a late start, so it is live.
  */
 export function isRetroLog(session: TimedSession, now: Date): boolean {
-  return now.getTime() - lastActivityOf(session).getTime() > SESSION_TIMEOUT_MS && hasLoggedSets(session);
+  return isStale(session, now) && hasLoggedSets(session);
 }
 
 /** A session with no sets that has been idle past the timeout: its first set is a late start. */
 export function isLateStart(session: TimedSession, now: Date): boolean {
-  return now.getTime() - lastActivityOf(session).getTime() > SESSION_TIMEOUT_MS && !hasLoggedSets(session);
+  return isStale(session, now) && !hasLoggedSets(session);
 }
 
 /** Completion never precedes the start; duration is whole minutes and never negative. */

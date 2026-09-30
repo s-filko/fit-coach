@@ -1,6 +1,7 @@
 import { AIMessage, HumanMessage } from '@langchain/core/messages';
 
 import { isToolReturnWithUpdate, type ToolReturn } from '@domain/conversation/tool-outcome';
+import { RETRO_SET_OFFSET_MS } from '@domain/training/session-timing';
 import type { ITrainingService } from '@domain/training/ports';
 import type { SessionSet, WorkoutSessionWithDetails } from '@domain/training/types';
 
@@ -626,7 +627,7 @@ describe('log-set.tool — retro vs live timing (BUG-043, AC-RT-1, AC-RT-4)', ()
 
     const [, opts] = service.logSetWithContext.mock.calls[0]!;
     expect(opts.skipActivityUpdate).toBe(true);
-    expect(opts.createdAt?.getTime()).toBe(session.lastActivityAt.getTime() + 5 * 60 * 1000);
+    expect(opts.createdAt?.getTime()).toBe(session.lastActivityAt.getTime() + RETRO_SET_OFFSET_MS);
     expect(renderedContent(result)).toContain('(retro-logged)');
   });
 });

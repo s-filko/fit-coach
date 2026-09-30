@@ -160,10 +160,9 @@ describe('finish-training.tool — stale finish (BUG-043, AC-RT-2)', () => {
 
     await byName('finish_training').invoke({}, config);
 
+    // The tool hands over the stale lastActivityAt; the service-level clamp (completeSession) makes it
+    // complete AT startedAt with duration 0 — asserted in training.service.integration.test.ts.
     const [, , completedAt] = service.completeSession.mock.calls[0]!;
-    // `undefined` means "now" (fine); an explicit date must not precede startedAt.
-    if (completedAt !== undefined) {
-      expect(completedAt.getTime()).toBeGreaterThanOrEqual(session.startedAt!.getTime());
-    }
+    expect(completedAt).toEqual(lastActivityAt);
   });
 });

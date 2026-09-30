@@ -93,10 +93,15 @@ describe('retro-timestamps scenario (BUG-043, AC-RT-3, AC-RT-4)', () => {
     expect(finalSession().status).toBe('completed');
   });
 
-  it('AC-RT-3: all 16 sets are saved with distinct created_at (not one frozen retro stamp)', () => {
+  it('AC-RT-3: all 16 sets are saved with distinct, strictly increasing created_at (not one frozen retro stamp)', () => {
     const sets = finalSession().exercises.flatMap(ex => ex.sets);
     expect(sets).toHaveLength(SETS);
-    expect(new Set(sets.map(s => s.createdAt.getTime())).size).toBe(SETS);
+    const stamps = sets.map(s => s.createdAt.getTime());
+    expect(new Set(stamps).size).toBe(SETS);
+    // Increasing in set order (live sets take the DB clock, so only order — not the scripted values — is provable).
+    for (let i = 1; i < stamps.length; i++) {
+      expect(stamps[i]!).toBeGreaterThan(stamps[i - 1]!);
+    }
   });
 
   it('AC-RT-3: started_at is the first set (~T0+180m), not plan acceptance', () => {

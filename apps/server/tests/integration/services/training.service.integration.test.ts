@@ -257,7 +257,9 @@ describe('TrainingService – integration (ADR-0011)', () => {
       await service.completeSession(sessionId, undefined, new Date(startedAt.getTime() - 77));
 
       const row = await rowOf(sessionId);
-      expect(row.completedAt!.getTime()).toBeGreaterThanOrEqual(row.startedAt!.getTime());
+      // AC-RT-2 exact clause: completes AT startedAt with duration 0.
+      expect(row.completedAt!.getTime()).toBe(row.startedAt!.getTime());
+      expect(row.durationMinutes).toBe(0);
     });
 
     it('AC-RT-2: auto-close of a timed-out session whose last_activity_at precedes started_at stores completed_at >= started_at', async () => {
