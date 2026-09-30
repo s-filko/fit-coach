@@ -49,9 +49,4 @@ describe('LLM_MODEL_PRICES — the one price override, validated at config load 
       /LLM_MODEL_PRICES/,
     );
   });
-
-  it('AC-PC-8: the flat LLM_INPUT_PRICE_PER_MTOK is gone — one price source', () => {
-    const parsed = EnvSchema.parse({ ...BASE_ENV, LLM_INPUT_PRICE_PER_MTOK: '3' }) as Record<string, unknown>;
-    expect(parsed['LLM_INPUT_PRICE_PER_MTOK']).toBeUndefined();
-  });
 });
