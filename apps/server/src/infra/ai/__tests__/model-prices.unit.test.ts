@@ -2,7 +2,7 @@ import { parseModelPrices, priceOf } from '@infra/ai/model-prices';
 
 describe('model prices (AC-PC-8 cost comparability)', () => {
   it('AC-PC-8: the built-in table prices the app’s Anthropic models incl. output', () => {
-    expect(priceOf('anthropic/claude-sonnet-5.5')).toEqual({ inputPerMTok: 3, outputPerMTok: 15 });
+    expect(priceOf('anthropic/claude-sonnet-5.5')).toEqual({ inputPerMTok: 2, outputPerMTok: 10 });
     expect(priceOf('anthropic/claude-haiku-4.5')).toEqual({ inputPerMTok: 1, outputPerMTok: 5 });
   });
 

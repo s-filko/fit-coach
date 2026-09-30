@@ -13,7 +13,8 @@ export interface ModelPrice {
 }
 
 export const DEFAULT_MODEL_PRICES: Readonly<Record<string, ModelPrice>> = {
-  'anthropic/claude-sonnet-5.5': { inputPerMTok: 3, outputPerMTok: 15 },
+  // $2/$10 reproduced the 2026-09-29 OpenRouter charge ($3.61 est. vs $3.63 billed, BUG-051).
+  'anthropic/claude-sonnet-5.5': { inputPerMTok: 2, outputPerMTok: 10 },
   'anthropic/claude-haiku-4.5': { inputPerMTok: 1, outputPerMTok: 5 },
 };
 
