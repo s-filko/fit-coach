@@ -242,6 +242,22 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
+## Handoff (U9b autonomy order, 2026-10-01) — next orchestrator runs U9b load-plan autonomously to the dev deploy
+
+**Owner order 2026-10-01:** implement U9b `load-plan` in its own branch, fully autonomously, through tests and
+thorough verification; no questions (memory rule "autonomy order": decisions as (D) in the plan, listed here
+for the owner). All four owner gates are closed (plan § Before dispatch: R4.0 accepted, ADR-0009 + Principle 6
+text approved, log shape approved with O1's `advised` column, one merge behind three flags). Owner decision O1:
+the code's load is a suggestion; the model decides and states why; both numbers logged.
+**Model budget rule (owner):** do NOT spend OpenRouter credits. Unit/scenario tests use mocked models. Any
+model-backed check runs locally against the Z.AI subscription (local `apps/server/.env` is already on
+`glm-5.3-flash`, `json_object`; e.g. `npm run smoke`, eval L3) — never against the dev server's OpenRouter route.
+The dev deploy is verified without model calls: health 200, migration applied, flags set in `.env.dev`
+(backup first), zero-LLM report over the owner's history (`scripts/print-load-plan.ts` and the new tiers).
+**Do not** run approval-prompting actions (worktree/branch deletions, memory writes, prod): list them as
+ready-to-run commands in the final handoff. Prompt versions: `training` v11, `session_planning` v5 (v10/v4
+taken by prompt-caching). Pending in parallel: BUG-051 AC-PC-8 closes after the owner's next workout.
+
 ## Handoff (prompt-caching, 2026-09-30) — BUG-051 merged and deployed to dev; owner's workout is the check
 
 Plan `prompt-caching` is `done` (review clean on run 3; runs 1–2 blocked on 13 + 4, all closed), merged `826f3375`,
