@@ -31,6 +31,14 @@ export interface GetLoadPlanToolDeps {
   breaks?: boolean;
 }
 
+/** The part of both descriptions that does not depend on the flag: how to name the exercise, what "no record" means. */
+const LOAD_PLAN_DESCRIPTION_TAIL = [
+  'Identify the exercise with exerciseId when you have its exact UUID; otherwise pass the English catalog',
+  'exerciseName (prefer search_exercises to get an exact exerciseId).',
+  'A plain result saying there is no completed record is normal — never treat it as an error, and never',
+  'tell the user they never did the exercise; say it is not in the records.',
+].join(' ');
+
 // load-plan plan A5: with LOAD_PLAN_SUGGESTION on the tool also returns the suggestion (O1: the model decides).
 const GET_LOAD_PLAN_SUGGESTION_DESCRIPTION = [
   'Computed load facts for ONE exercise plus a suggestion with its reason — reference performance, fatigue',
@@ -38,10 +46,7 @@ const GET_LOAD_PLAN_SUGGESTION_DESCRIPTION = [
   'the scheme, the decision stage, a recommended load and a conservative option. Use it when the user asks',
   'about a weight or progress for an exercise that is NOT in the LOAD PLAN block (e.g. an exercise outside',
   "today's plan). The numbers are a suggestion: you decide the load, and state your reason when you depart from it.",
-  'Identify the exercise with exerciseId when you have its exact UUID; otherwise pass the English catalog',
-  'exerciseName (prefer search_exercises to get an exact exerciseId).',
-  'A plain result saying there is no completed record is normal — never treat it as an error, and never',
-  'tell the user they never did the exercise; say it is not in the records.',
+  LOAD_PLAN_DESCRIPTION_TAIL,
 ].join(' ');
 
 const GET_LOAD_PLAN_DESCRIPTION = [
@@ -49,10 +54,7 @@ const GET_LOAD_PLAN_DESCRIPTION = [
   'trend, last-exposure quality, gap in days, constraints and the equipment step. Use it when the user',
   'asks about a weight or progress for an exercise that is NOT in the LOAD PLAN block (e.g. an exercise',
   "outside today's plan). It returns facts only and recommends nothing: quote them with their dates.",
-  'Identify the exercise with exerciseId when you have its exact UUID; otherwise pass the English catalog',
-  'exerciseName (prefer search_exercises to get an exact exerciseId).',
-  'A plain result saying there is no completed record is normal — never treat it as an error, and never',
-  'tell the user they never did the exercise; say it is not in the records.',
+  LOAD_PLAN_DESCRIPTION_TAIL,
 ].join(' ');
 
 export function buildGetLoadPlanTool(deps: GetLoadPlanToolDeps) {

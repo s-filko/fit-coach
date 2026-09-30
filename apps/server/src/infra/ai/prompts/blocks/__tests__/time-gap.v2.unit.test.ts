@@ -8,7 +8,7 @@ import { TIME_GAP_V2 } from '../time-gap.v2';
 
 const HOUR = 3_600_000;
 
-describe('TIME_GAP_V2', () => {
+describe('AC-LP-6 · TIME_GAP_V2', () => {
   it('without a training break it is v1 byte for byte', () => {
     expect(renderBlock(TIME_GAP_V2, { gapMs: 14 * HOUR })).toBe(renderBlock(TIME_GAP_V1, { gapMs: 14 * HOUR }));
   });

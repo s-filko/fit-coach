@@ -49,17 +49,18 @@ export const FACT_CATEGORIES = [
   'progression_scheme',
 ] as const satisfies readonly FactCategory[];
 
-/** The categories the model may write in conversation (`manage_fact`): all but `break` and `progression_scheme`. */
-export const CONVERSATION_FACT_CATEGORIES = [
-  'physical_constraint',
-  'exercise_preference',
-  'exercise_dislike',
-  'physiological_pattern',
-  'coaching_preference',
-  'schedule_constraint',
-  'equipment',
-  'nutrition_preference',
-] as const satisfies readonly FactCategory[];
+/** Written only by the summariser + verifier pipeline (and the code's own "asked" marker), never by `manage_fact`. */
+const COMPACTION_ONLY_CATEGORIES = ['break', 'progression_scheme'] as const satisfies readonly FactCategory[];
+
+export type ConversationFactCategory = Exclude<FactCategory, (typeof COMPACTION_ONLY_CATEGORIES)[number]>;
+
+/**
+ * The categories the model may write in conversation (`manage_fact`): every category but the compaction-only ones.
+ * A non-empty tuple so `z.enum(...)` accepts it.
+ */
+export const CONVERSATION_FACT_CATEGORIES = FACT_CATEGORIES.filter(
+  (c): c is ConversationFactCategory => !(COMPACTION_ONLY_CATEGORIES as readonly FactCategory[]).includes(c),
+) as [ConversationFactCategory, ...ConversationFactCategory[]];
 
 // Lifecycle types re-exported from their owner module (single source: the bounds).
 export type {

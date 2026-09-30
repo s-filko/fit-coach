@@ -1,6 +1,7 @@
 import type { ConversationPhase } from '@domain/conversation/ports';
-import { SCHEMES } from '@domain/training/load-plan';
+import { BREAK_REASONS, SCHEMES } from '@domain/training/load-plan';
 import type { UserFact } from '@domain/user/ports';
+import { FACT_LIFECYCLE_BOUNDS } from '@domain/user/services/fact-lifecycle';
 
 import type { PromptModule, Section } from '@infra/ai/prompts/types';
 
@@ -37,8 +38,8 @@ function knownFactLine(fact: UserFact): string {
 const BREAK_SECTION = (episodeDate: string | undefined): string => `
 BREAK FACTS — category "break": a pause in the user's training that the user described${episodeDate ? ` (the episode date is ${episodeDate}; resolve "last week", "in August" against it)` : ''}.
 - fact text, exactly this shape: break reason=<class> from=<YYYY-MM-DD> to=<YYYY-MM-DD> — <what the user said, short, English>
-- class (one of): illness | injury | holiday_work_no_time | deliberate_deload | stress_poor_sleep | unknown. Choose by the USER'S words; "unknown" only when the user gave no reason. from = first day without training, to = last day of the break (or the episode date if it is still going on). Never invent a date the user did not give or imply.
-- durability "short", ttlDays 14, onExpiry "forget". A known break fact with reason=unknown is a placeholder for a question the coach asked: when the user answers it in this episode, return op "update" on it (same from/to, the real class, the user's words) — never a second add.
+- class (one of): ${BREAK_REASONS.join(' | ')}. Choose by the USER'S words; "unknown" only when the user gave no reason. from = first day without training, to = last day of the break (or the episode date if it is still going on). Never invent a date the user did not give or imply.
+- durability "short", ttlDays ${FACT_LIFECYCLE_BOUNDS.short.maxDays}, onExpiry "forget". A known break fact with reason=unknown is a placeholder for a question the coach asked: when the user answers it in this episode, return op "update" on it (same from/to, the real class, the user's words) — never a second add.
 - a break caused by an injury also gets its own physical_constraint operation as usual.
 `;
 
@@ -53,7 +54,7 @@ PROGRESSION SCHEME — category "progression_scheme": the user states WHICH WAY 
 - id (one of): ${SCHEME_IDS}
 ${SCHEME_LINES}
 - Only when the USER asked for or accepted a way of progressing in their own words — never the assistant's suggestion the user did not take up, and never a preference about exercises or rep counts of one workout. A change of mind is op "update" on the known progression_scheme fact (new id), never a second add.
-- durability "long_term", reviewInDays 182.
+- durability "long_term", reviewInDays ${FACT_LIFECYCLE_BOUNDS.longTerm.maxDays}.
 `;
 
 /**

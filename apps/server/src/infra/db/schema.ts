@@ -561,8 +561,9 @@ export const sessionSets = pgTable(
 );
 
 // load-plan plan Task 3 (D7, A3): calibration log — one row per session exercise, written on its first working
-// set with the LOAD PLAN entry as rendered for the run. Decision columns are nullable until the decision order
-// lands (A3). Never read back into a prompt. `outcome` + `completed_at` are filled when the exercise completes.
+// set with the LOAD PLAN entry as rendered for the run and the decision behind it. Decision columns are nullable
+// for an exercise the schemes do not cover (non-strength) and for a row written with no decision (A3). Never read
+// back into a prompt. `outcome` + `completed_at` are filled when the exercise completes.
 export const loadRecommendations = pgTable(
   'load_recommendations',
   {

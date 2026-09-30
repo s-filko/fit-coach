@@ -7,6 +7,7 @@ import type { ITrainingService } from '@domain/training/ports';
 import { isRetroLog, lastActivityOf, RETRO_SET_OFFSET_MS } from '@domain/training/session-timing';
 import { SetDataSchema } from '@domain/training/set-data.types';
 
+import { maybeCtxOf } from '@infra/ai/graph/state';
 import { formatSetData } from '@infra/ai/prompts/blocks/training-workout-overview.v1';
 import { formatExerciseSummary, sessionIdOf } from '@infra/ai/tools/format-exercise-summary';
 
@@ -65,9 +66,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
       }
 
       // load-plan plan Task 3: the recommendation log's run context; ignored when the log is off.
-      const runCtx = config?.context as
-        | { runId?: string; now?: Date; user?: { timezone?: string | null } | null }
-        | undefined;
+      const runCtx = maybeCtxOf(config);
 
       const rpe = input.rpe != null ? roundRpeToHalf(input.rpe) : undefined;
 

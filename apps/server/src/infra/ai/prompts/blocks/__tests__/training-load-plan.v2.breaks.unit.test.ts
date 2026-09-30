@@ -48,7 +48,7 @@ async function entry(past: unknown[], breaks: boolean, promptFacts: unknown[] = 
 
 const render = (e: Awaited<ReturnType<typeof entry>>): string => renderLoadPlanEntryV2(e, ctx, { progression });
 
-describe('LOAD PLAN v2 with LOAD_PLAN_BREAKS', () => {
+describe('AC-LP-6 · LOAD PLAN v2 with LOAD_PLAN_BREAKS', () => {
   it('open 31-day gap: tier rebuild and ladder step 1 of 3 are printed, the reason is unknown', async () => {
     const e = await entry([perf('a', 31), perf('b', 40)], true);
     expect(e.returnBranch).toMatchObject({ breakReason: 'unknown' });
@@ -130,7 +130,7 @@ describe('LOAD PLAN v2 with LOAD_PLAN_BREAKS', () => {
  * load-plan Task 5a (AC-LP-5, D8): the user's `progression_scheme` fact replaces the default scheme; the block prints
  * one Progression line and the scheme line says who chose it; without the fact it is "default, unconfirmed".
  */
-describe('LOAD PLAN v2 with a progression_scheme fact', () => {
+describe('AC-LP-5 · LOAD PLAN v2 with a progression_scheme fact', () => {
   const schemeFact = (text: string, iso = '2026-09-20T03:00:00Z') => ({
     category: 'progression_scheme',
     fact: text,
@@ -182,7 +182,7 @@ describe('LOAD PLAN v2 with a progression_scheme fact', () => {
  * load-plan Task 5a fix: the block-level Progression line carries no rep range (each entry works on its own: today's
  * range, else the scheme default — labelled), so one block never shows two contradicting ranges.
  */
-describe('LOAD PLAN v2: one rep range per entry, none on the Progression line', () => {
+describe('AC-LP-5 · LOAD PLAN v2: one rep range per entry, none on the Progression line', () => {
   const noRangePerf = (id: string, daysAgo: number) =>
     sessionRow(id, daysBefore(daysAgo), [
       { rowId: `r-${id}`, ...CHEST_PRESS, targetReps: '', sets: sets(65, [10, 10, 10], daysBefore(daysAgo)) },

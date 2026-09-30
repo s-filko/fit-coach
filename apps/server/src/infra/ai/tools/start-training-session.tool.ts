@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { ConversationPhase } from '@domain/conversation/phases';
 import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
 import type { IExerciseRepository, ITrainingService, IWorkoutPlanRepository } from '@domain/training/ports';
-import { buildSessionRecommendationSchema, SessionRecommendationSchema } from '@domain/training/session-planning.types';
+import { buildSessionRecommendationSchema } from '@domain/training/session-planning.types';
 import type { RecommendedExercise } from '@domain/training/types';
 import type { IUserFactsService } from '@domain/user/ports';
 
@@ -52,10 +52,7 @@ const START_TRAINING_SESSION_DESCRIPTION = [
  * stays place-free.
  */
 const StartTrainingSessionSchema = (dropTargetWeight: boolean) =>
-  (dropTargetWeight
-    ? buildSessionRecommendationSchema({ dropTargetWeight: true })
-    : SessionRecommendationSchema
-  ).extend({
+  buildSessionRecommendationSchema({ dropTargetWeight }).extend({
     place: z.string().min(1).optional(),
   });
 
