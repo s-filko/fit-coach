@@ -275,7 +275,8 @@ decisions); owner gates are listed in § "Before dispatch".
   (`from` = that workout day) never colours the ladder gap before it. Used by `BreakContext` (open window) and the
   loader's `returnBranchOf` (open window for the current gap, closed window for the ladder's own gap).
 - **(D) Fix-2 — wording out of the domain, one decision composer (B-code 2, 3, 6 + R1 folded):** the domain returns
-  typed values only (row id, scheme id, `ProgressionChoice` with `source` / `chosenAt`). `ROW_LABELS`, the scheme
+  typed values (row id, scheme id, `ProgressionChoice` with `source` / `chosenAt`) plus the scheme/decision `reason`
+  and `outcome` text that design §4.1 makes part of the output (see review run 2, (D) A8). `ROW_LABELS`, the scheme
   display name, the provenance text and the `Progression:` line live in `training-load-plan.v2.ts` (one helper each).
   `decideLoadPlanEntry` moved to `infra/ai/load-facts/load-decision.ts` (resolve the scheme, then `decide()`; it no
   longer passes `params`, `decide()` defaults them) and the log imports it, not a block; `progressionOf` is gone
