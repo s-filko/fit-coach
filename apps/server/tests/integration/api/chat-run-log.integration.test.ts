@@ -84,12 +84,7 @@ describe('conversation run log — AC-1301', () => {
     });
 
   /** One run on the shared thread — the adapter's invoke shape, with a chosen clock. */
-  const runAt = async (
-    graph: ReturnType<typeof buildLoggedGraph>,
-    text: string,
-    runId: string,
-    now: Date,
-  ) => {
+  const runAt = async (graph: ReturnType<typeof buildLoggedGraph>, text: string, runId: string, now: Date) => {
     const userId = '22222222-2222-4222-8222-222222222222';
     // The route normally does this (startRun) and the LLM callback handler fills
     // the accumulator (startLlmCall/finishLlmCall). The mocked model bypasses
@@ -146,7 +141,12 @@ describe('conversation run log — AC-1301', () => {
 
     const t0 = new Date('2026-09-27T10:00:00.000Z');
     await runAt(graph, 'привет', '21111111-1111-4111-8111-111111111111', t0);
-    await runAt(graph, 'снова привет', '31111111-1111-4111-8111-111111111111', new Date(t0.getTime() + 25 * 3600 * 1000));
+    await runAt(
+      graph,
+      'снова привет',
+      '31111111-1111-4111-8111-111111111111',
+      new Date(t0.getTime() + 25 * 3600 * 1000),
+    );
 
     expect(recorded).toHaveLength(2);
     expect(recorded[0].promptVersions?.['block.current_time']).toBe('v1');

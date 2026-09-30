@@ -7,6 +7,7 @@ import type { ITrainingService } from '@domain/training/ports';
 import { isRetroLog, lastActivityOf, RETRO_SET_OFFSET_MS } from '@domain/training/session-timing';
 import { SetDataSchema } from '@domain/training/set-data.types';
 
+import { maybeCtxOf } from '@infra/ai/graph/state';
 import { formatSetData } from '@infra/ai/prompts/blocks/training-workout-overview.v1';
 import { formatExerciseSummary, sessionIdOf } from '@infra/ai/tools/format-exercise-summary';
 
@@ -20,6 +21,8 @@ const log = createLogger('training-tools');
 
 export interface LogSetToolDeps {
   trainingService: ITrainingService;
+  /** Load plan (load-plan plan Task 5b, D10): the completion summary's Target line drops the plan weight. */
+  loadPlanPlannerRebind?: boolean;
 }
 
 export function buildLogSetTool(deps: LogSetToolDeps) {
@@ -62,6 +65,9 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         return llmError(`Invalid set data: ${parsed.error.message}`);
       }
 
+      // load-plan plan Task 3: the recommendation log's run context; ignored when the log is off.
+      const runCtx = maybeCtxOf(config);
+
       const rpe = input.rpe != null ? roundRpeToHalf(input.rpe) : undefined;
 
       try {
@@ -85,6 +91,12 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           skipActivityUpdate: isRetro,
           setKind: input.setKind,
           weightBasis: input.weightBasis,
+          loadPlanLog: {
+            runId: runCtx?.runId ?? null,
+            now: runCtx?.now ?? new Date(),
+            timezone: runCtx?.user?.timezone ?? null,
+            advised: input.advised,
+          },
         });
 
         // Named for the summariser (renderTranscript over this tool's own confirmation) as much
@@ -130,7 +142,9 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         if (autoCompleted) {
           // BUG-037: this transition was triggered by the user's own set — the instruction
           // must tell the model to confirm that set first, not to lead with the recap.
-          const prevSummary = formatExerciseSummary(autoCompleted, 'set-triggered');
+          const prevSummary = formatExerciseSummary(autoCompleted, 'set-triggered', {
+            omitTargetWeight: deps.loadPlanPlannerRebind === true,
+          });
           return ok(`${setConfirmation}\n\n${prevSummary}`);
         }
 
@@ -217,6 +231,20 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
               'For a dumbbell/kettlebell exercise the coach assumes the weight is per hand. Pass ' +
                 "'total' only when the user explicitly states the weight is a combined/total figure " +
                 "(e.g. 'в сумме', 'total').",
+            ),
+          advised: z
+            .object({
+              load: z.number().positive().optional().describe('Load in kg you advised for this exercise.'),
+              reps: z.number().int().positive().optional().describe('Reps per set you advised.'),
+              reason: z
+                .string()
+                .optional()
+                .describe('Why the advice departs from the LOAD PLAN suggestion — only when it does.'),
+            })
+            .optional()
+            .describe(
+              'Optional. On the FIRST working set of an exercise: the load/reps you actually advised the user for it ' +
+                '(and the reason when it differs from the LOAD PLAN suggestion). Omit on later sets and when you advised nothing.',
             ),
           order: z
             .number()

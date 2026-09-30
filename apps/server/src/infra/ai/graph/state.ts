@@ -13,6 +13,7 @@ import type { TransitionRequest } from '@domain/conversation/transitions';
 import type { User } from '@domain/user/services/user.service';
 
 import type { CourseCheckFailure, StoredCourseDirective } from '@infra/ai/course-check/directive';
+import type { TrainingBreakNote } from '@infra/ai/load-facts/break-context';
 import type { RunMetricsCollector } from '@infra/ai/run-metrics';
 
 export const ConversationState = Annotation.Root({
@@ -102,6 +103,13 @@ export const RunContext = Annotation.Root({
    * hop facts — never checkpointed. Absent when nothing conditional was sent.
    */
   promptVersionExtras: Annotation<Record<string, string> | undefined>(),
+  /**
+   * load-plan Task 4: the training-break note resolved on the run's FIRST model call — kept on the ctx so the
+   * later calls of the same run (after tool results) render the same note; the reason question's marker is
+   * written once, and a re-resolve would read "already asked" and drop the instruction mid-run. Never
+   * checkpointed. `undefined` = not resolved yet; `null` = resolved, nothing to say.
+   */
+  trainingBreak: Annotation<TrainingBreakNote | null | undefined>(),
 });
 
 export type RunContextType = typeof RunContext.State;
@@ -117,4 +125,12 @@ export function ctxOf(config: LangGraphRunnableConfig): RunContextType {
     throw new Error('Run context is missing — invoke the graph through the conversation-run adapter');
   }
   return ctx;
+}
+
+/**
+ * The lenient twin of `ctxOf`: the run context when there is one, `undefined` otherwise — for best-effort readers
+ * (a tool that only enriches a log row, and is also called without a run in unit tests) that must not throw.
+ */
+export function maybeCtxOf(config: LangGraphRunnableConfig | undefined): Partial<RunContextType> | undefined {
+  return config?.context as Partial<RunContextType> | undefined;
 }

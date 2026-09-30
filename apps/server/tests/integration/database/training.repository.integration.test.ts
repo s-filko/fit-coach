@@ -377,9 +377,7 @@ describe('Training Repositories – integration', () => {
     });
 
     async function newPlacesUser(username: string): Promise<string> {
-      const user = await userRepo.create(
-        createTestUserData({ username, firstName: 'Places', lastName: 'Tester' }),
-      );
+      const user = await userRepo.create(createTestUserData({ username, firstName: 'Places', lastName: 'Tester' }));
       return user.id;
     }
 

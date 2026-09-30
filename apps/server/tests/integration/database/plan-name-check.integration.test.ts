@@ -202,10 +202,7 @@ describe('plan-save name/id check over the real catalog (AC-HL-5)', () => {
       const tool = buildTool();
       const createSpy = jest.spyOn(workoutPlanRepo, 'create');
 
-      const result = (await tool.invoke(
-        basePlan(benchPressId, 'Bench Press'),
-        makeConfig(userId),
-      )) as ToolReturn;
+      const result = (await tool.invoke(basePlan(benchPressId, 'Bench Press'), makeConfig(userId))) as ToolReturn;
 
       expect(isToolReturnWithUpdate(result)).toBe(true);
       expect(createSpy).toHaveBeenCalledWith(

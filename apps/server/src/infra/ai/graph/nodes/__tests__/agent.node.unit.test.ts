@@ -426,6 +426,80 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     });
   });
 
+  // load-plan Task 4 (D9, LOAD_PLAN_BREAKS): the same note carries the training-break tier and the once-only
+  // reason question; off = v1 exactly.
+  describe('time-gap note with breaks (load-plan Task 4)', () => {
+    // A run's ctx is per run (the node memoises the break note on it) — never share CONFIG's object across tests.
+    const freshConfig = (): RunnableConfig => {
+      const base = CONFIG as unknown as { context: Record<string, unknown> };
+      return { ...CONFIG, context: { ...base.context } } as unknown as RunnableConfig;
+    };
+    const FOUR_H_AGO = (): string => new Date(-4 * 3_600_000).toISOString();
+    const SHORT_AGO = (): string => new Date(-60_000).toISOString();
+    const run = async (deps: ConversationGraphDeps, lastUserMessageAt: string | null) => {
+      mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
+      await buildAgentNode(makeSpec(), deps)(
+        { ...makeState(), messages: [new HumanMessage('привет')], lastUserMessageAt },
+        freshConfig(),
+      );
+      return contextOf(mockInvoke.mock.calls[0][0] as BaseMessage[]);
+    };
+    const breakContext = (note: unknown) => ({ resolve: jest.fn(async () => note) });
+
+    it('flag on, training break not yet asked about: the tier and the question ride in the note even without a message gap', async () => {
+      const resolve = breakContext({ tier: 'rebuild', days: 30, ask: true });
+      const context = await run(makeDeps({ loadPlanBreaks: true, breakContext: resolve }), SHORT_AGO());
+      expect(context).toContain('The user returns after a training break of 30 days');
+      expect(context).toContain('tier rebuild');
+      expect(context).toContain('ask ONCE');
+      expect(resolve.resolve).toHaveBeenCalledWith('u1', new Date(0), expect.anything());
+    });
+
+    it('flag on with a message gap: v1 sentence, then the training tier', async () => {
+      const context = await run(
+        makeDeps({ loadPlanBreaks: true, breakContext: breakContext({ tier: 'return', days: 15, ask: false }) }),
+        FOUR_H_AGO(),
+      );
+      expect(context).toContain('The user returns after 4 h.');
+      expect(context).toContain('Training: training break of 15 days');
+      expect(context).not.toContain('ask ONCE');
+    });
+
+    it('flag on, already asked and no message gap: no note at all', async () => {
+      const context = await run(
+        makeDeps({ loadPlanBreaks: true, breakContext: breakContext({ tier: 'return', days: 15, ask: false }) }),
+        SHORT_AGO(),
+      );
+      expect(context).not.toContain('The user returns after');
+    });
+
+    it('flag on, no training break and no message gap: no note', async () => {
+      const context = await run(makeDeps({ loadPlanBreaks: true, breakContext: breakContext(null) }), SHORT_AGO());
+      expect(context).not.toContain('The user returns after');
+    });
+
+    it('the question survives the later model calls of the same run (resolved once per run)', async () => {
+      const resolve = breakContext({ tier: 'rebuild', days: 30, ask: true });
+      const deps = makeDeps({ loadPlanBreaks: true, breakContext: resolve });
+      const node = buildAgentNode(makeSpec(), deps);
+      const state = { ...makeState(), messages: [new HumanMessage('привет')], lastUserMessageAt: SHORT_AGO() };
+      mockInvoke.mockResolvedValue(new AIMessage({ content: 'ok', tool_calls: [] }));
+      const runConfig = freshConfig();
+      await node(state, runConfig);
+      await node(state, runConfig);
+      expect(resolve.resolve).toHaveBeenCalledTimes(1);
+      expect(contextOf(mockInvoke.mock.calls[1][0] as BaseMessage[])).toContain('ask ONCE');
+    });
+
+    it('flag off: the break context is never consulted and the note is v1', async () => {
+      const resolve = breakContext({ tier: 'rebuild', days: 30, ask: true });
+      const context = await run(makeDeps({ breakContext: resolve }), FOUR_H_AGO());
+      expect(resolve.resolve).not.toHaveBeenCalled();
+      expect(context).toContain('The user returns after 4 h. Reply to their new message first');
+      expect(context).not.toContain('training break');
+    });
+  });
+
   // now-line-last plan (BUG-032 amendment, D1/D2): the NOW line left the
   // directives (block 1) and is rendered here — same CURRENT_TIME_V1 renderer,
   // the gap-note wiring — into its own SystemMessage immediately before

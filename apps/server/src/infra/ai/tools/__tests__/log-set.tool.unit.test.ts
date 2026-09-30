@@ -65,6 +65,32 @@ describe('log-set.tool — log_set', () => {
     expect(renderedContent(result)).toContain('10 reps @ 80 kg');
   });
 
+  it('load-plan Task 3 (A4): passes the optional advised object and the run context to logSetWithContext', async () => {
+    const trainingService = makeTrainingService();
+    const set: SessionSet = {
+      id: 'set-1',
+      sessionExerciseId: 'ex-1',
+      setNumber: 1,
+      rpe: null,
+      userFeedback: null,
+      createdAt: new Date(),
+      completedAt: null,
+      setData: EXPECTED_SET_DATA,
+    };
+    trainingService.logSetWithContext.mockResolvedValue({ set, setNumber: 1 });
+    const { byName, config } = makeDeps(trainingService);
+    const now = new Date('2026-09-29T09:30:00Z');
+    const advised = { load: 80, reps: 10, reason: 'fatigue after triceps' };
+    await byName('log_set').invoke({ exerciseId: 'd8794819-ffc6-4d08-8336-d9bedc4e554a', ...FLAT_SET_INPUT, advised }, {
+      ...config,
+      context: { runId: 'run-1', now, user: { timezone: 'Asia/Manila' } },
+    } as never);
+    expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({ loadPlanLog: { runId: 'run-1', now, timezone: 'Asia/Manila', advised } }),
+    );
+  });
+
   it('returns SYSTEM_ERROR when no sessionId is set for the user', async () => {
     const trainingService = makeTrainingService();
 

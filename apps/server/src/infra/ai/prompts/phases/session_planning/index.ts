@@ -4,14 +4,16 @@ import { SESSION_PLANNING_V1, type SessionPlanningPromptContext } from './v1';
 import { SESSION_PLANNING_V2, type SessionPlanningPromptContextV2 } from './v2';
 import { SESSION_PLANNING_V3, type SessionPlanningPromptContextV3 } from './v3';
 import { SESSION_PLANNING_V4, type SessionPlanningPromptContextV4 } from './v4';
+import { SESSION_PLANNING_V5, type SessionPlanningPromptContextV5 } from './v5';
 
 export type {
   SessionPlanningPromptContext,
   SessionPlanningPromptContextV2,
   SessionPlanningPromptContextV3,
   SessionPlanningPromptContextV4,
+  SessionPlanningPromptContextV5,
 };
-export { SESSION_PLANNING_V1, SESSION_PLANNING_V2, SESSION_PLANNING_V3, SESSION_PLANNING_V4 };
+export { SESSION_PLANNING_V1, SESSION_PLANNING_V2, SESSION_PLANNING_V3, SESSION_PLANNING_V4, SESSION_PLANNING_V5 };
 
 /**
  * Section contract — a future version must still emit these ids (L0
@@ -25,5 +27,14 @@ export { SESSION_PLANNING_V1, SESSION_PLANNING_V2, SESSION_PLANNING_V3, SESSION_
  */
 export const SESSION_PLANNING_PROMPT: PhasePromptEntry<SessionPlanningPromptContextV4> = {
   current: SESSION_PLANNING_V4,
+  requiredSections: ['date', 'task', 'tools', 'directive.identity', 'directive.tool-reply'],
+};
+
+/**
+ * Load-plan plan Task 5b (A5): the rebound session-planning prompt — SESSION_PLANNING_V5, selected
+ * only with LOAD_PLAN_PLANNER_REBIND and LOAD_PLAN_SUGGESTION on (session-planning.spec.ts). `current` above stays v4.
+ */
+export const SESSION_PLANNING_PROMPT_V5: PhasePromptEntry<SessionPlanningPromptContextV5> = {
+  current: SESSION_PLANNING_V5,
   requiredSections: ['date', 'task', 'tools', 'directive.identity', 'directive.tool-reply'],
 };

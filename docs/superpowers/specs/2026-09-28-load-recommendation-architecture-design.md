@@ -55,9 +55,10 @@ Owner constraints from the discussion [owner]:
    one result shape.
 5. **Insufficient data beats every rule.** A metric below its evidence threshold is absent, not
    estimated.
-6. **Today's conversation enters the number through one door:** the coach may deviate from the
-   computed plan only on a fact from the current conversation (pain, sleep, feedback, time)
-   and must state that fact. There is no other in-session path.
+6. **The load in `LOAD PLAN` is a suggestion with its reason, not a binding value** (amended 2026-09-30,
+   owner decision O1, plan `load-plan`): the model decides the load by its judgement of the current
+   situation, and states its reason when it departs from the suggestion; both the suggestion and the
+   advised load are logged (D7).
 7. **Precedence is fixed and printed:** safety rows → active tactic → scheme. The block shows
    which stage produced the number.
 8. **Layer 2 never touches a number and never re-evaluates a layer-1 signal.** Phase, trend,
@@ -134,7 +135,9 @@ confidence: medium (machine; 5 performances)
 ```
 
 - **Block** for today's exercises (planned or started), rendered at every training request,
-  placed at the tail after `NOW` (relative times; history-spec §4 caching order). It reuses
+  a normal block-3 context block (since `prompt-caching` block 3 rides in the current user message, so
+  the tail-after-`NOW` placement is moot — plan `load-plan` D1 note 2026-09-30); the e1RM trend prints
+  its span rather than being cut to 8 weeks (plan `load-plan` (D) T2(f)). It reuses
   `formatSetData` / `formatDateAge`; it does not become a third history formatter. Whether it
   replaces `EXERCISE HISTORY` in training or drops its `reference:` line is decided in U9a.
 - **Tool** `get_load_plan(exerciseId | exerciseName)` returning the same text for an exercise
@@ -293,8 +296,8 @@ no new record, layer 1 continues. No split-by-muscle fallback.
 - Training: rule 1 (feedback → ±%, RPE ≤ 5 → +kg), rule 2 (RPE ≥ 8 → adjust), rule 4b
   ("announce the next exercise with a specific recommendation") and the FIRST MESSAGE RULE all
   point to `LOAD PLAN` / `get_load_plan`; the coach quotes its dated facts, always gives the
-  conservative option, says "insufficient data" when the block does, and deviates only on a
-  stated fact from the current conversation (Principle 6).
+  conservative option, says "insufficient data" when the block does, and departs from the
+  suggestion by its judgement, stating the reason (Principle 6 as amended by O1).
 - Session planning: `propose_session` / `save_workout_plan` no longer carry `targetWeight`;
   after a gap at tier `rest_with_question`+ the coach asks the reason once before proposing.
 - Reversible by prompt version (roadmap rule 4).

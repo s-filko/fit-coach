@@ -29,7 +29,15 @@ const EXPLICIT_INSTRUCTION =
 const SET_TRIGGERED_INSTRUCTION =
   'The user just reported a set of a new exercise, which auto-completed this one. First confirm the set the user just reported (the confirmation above this summary) and reply to what they said. At the end, add a brief recap (1-2 lines) of this completed exercise — total volume vs target and one coaching comment. Do not introduce or suggest a next exercise: the user has already moved on to one.';
 
-export function formatExerciseSummary(ex: AutoCompletedExercise, mode: ExerciseSummaryMode = 'explicit'): string {
+/**
+ * Load plan (load-plan plan Task 5b, D10): `omitTargetWeight` (LOAD_PLAN_PLANNER_REBIND on) drops the
+ * plan target weight from the Target line — sets × reps only; the logged sets always keep their weights.
+ */
+export function formatExerciseSummary(
+  ex: AutoCompletedExercise,
+  mode: ExerciseSummaryMode = 'explicit',
+  opts: { omitTargetWeight?: boolean } = {},
+): string {
   const setsDetail = ex.sets
     .map(s => {
       const parts = [`Set ${s.setNumber}:`];
@@ -48,7 +56,7 @@ export function formatExerciseSummary(ex: AutoCompletedExercise, mode: ExerciseS
       return '  ' + parts.join(' ');
     })
     .join('\n');
-  const targetWeightStr = ex.targetWeight ? ` @ ${ex.targetWeight} kg` : '';
+  const targetWeightStr = !opts.omitTargetWeight && ex.targetWeight ? ` @ ${ex.targetWeight} kg` : '';
   const target = `Target: ${ex.targetSets ?? '?'}x${ex.targetReps ?? '?'}${targetWeightStr}`;
   // set-kind plan Task 1 (D4, AC-SK-2): the volume line counts only working sets against the
   // target — warm-ups still appear above in `setsDetail`, listing every set performed.

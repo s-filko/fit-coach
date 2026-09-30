@@ -17,7 +17,7 @@ import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
 import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
-import { FACT_CATEGORIES, type IUserFactsService, type RememberFactOutcome } from '@domain/user/ports';
+import { CONVERSATION_FACT_CATEGORIES, type IUserFactsService, type RememberFactOutcome } from '@domain/user/ports';
 import { PermanentFactRefusal } from '@domain/user/services/fact-lifecycle';
 import { matchFactsByQuery } from '@domain/user/services/fact-query';
 
@@ -195,7 +195,7 @@ export function buildManageFactTool(deps: ManageFactToolDeps) {
           .describe(
             'For retract/delete without a factId: what the user called the fact, in its own distinctive words (e.g. "lower back").',
           ),
-        category: z.enum(FACT_CATEGORIES).optional().describe('For save: the fact category.'),
+        category: z.enum(CONVERSATION_FACT_CATEGORIES).optional().describe('For save: the fact category.'),
         fact: z.string().min(3).optional().describe('For save: the fact in one clear sentence.'),
         muscleGroup: z.string().optional().describe('For save: the muscle group, when the fact is anatomical.'),
         durability: z

@@ -385,6 +385,7 @@ export function computeE1rmTrend(
     currentLoadUnit: usable[0].loads.find(l => l.weight === topLoad(usable[0]))?.unit ?? null,
     weeksAtWeight: weeksAtCurrentWeight(usable, tz),
     performances: window.length,
+    spanDays: calendarDaysAgo(window[window.length - 1].r.p.performedAt, window[0].r.p.performedAt, tz),
     lowConfidence: exercise.equipment === 'machine' || exercise.equipment === 'cable' ? 'machine' : null,
     warmupsEstimated: window.some(s => s.r.estimated),
     mixedBasisExcluded,

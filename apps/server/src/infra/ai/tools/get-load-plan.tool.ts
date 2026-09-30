@@ -5,12 +5,14 @@ import { z } from 'zod';
 import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import { ExerciseNotFoundError } from '@domain/training/errors';
 import { isAbsent } from '@domain/training/load-facts';
+import { defaultProgression } from '@domain/training/load-plan';
 import type { IExerciseRepository, ITrainingService, IWorkoutSessionRepository } from '@domain/training/ports';
 import type { IUserFactsService } from '@domain/user/ports';
 
 import { ctxOf } from '@infra/ai/graph/state';
 import { loadLoadPlanEntries, planTargetRepsOf } from '@infra/ai/load-facts/load-facts.loader';
 import { renderLoadPlanEntry } from '@infra/ai/prompts/blocks/training-load-plan.v1';
+import { renderLoadPlanEntryV2 } from '@infra/ai/prompts/blocks/training-load-plan.v2';
 
 import { createLogger } from '@shared/logger';
 
@@ -23,21 +25,41 @@ export interface GetLoadPlanToolDeps {
   exerciseRepository: IExerciseRepository;
   workoutSessionRepo: IWorkoutSessionRepository;
   userFacts: IUserFactsService;
+  /** LOAD_PLAN_SUGGESTION: return the v2 text (facts + a suggestion with its reason). Default off = v1. */
+  suggestion?: boolean;
+  /** LOAD_PLAN_BREAKS: also compute the return ladder and the break reason. Default off. */
+  breaks?: boolean;
 }
 
-const GET_LOAD_PLAN_DESCRIPTION = [
-  'Computed load facts for ONE exercise — reference performance, fatigue context, working weight, e1RM',
-  'trend, last-exposure quality, gap in days, constraints and the equipment step. Use it when the user',
-  'asks about a weight or progress for an exercise that is NOT in the LOAD PLAN block (e.g. an exercise',
-  "outside today's plan). It returns facts only and recommends nothing: quote them with their dates.",
+/** The part of both descriptions that does not depend on the flag: how to name the exercise, what "no record" means. */
+const LOAD_PLAN_DESCRIPTION_TAIL = [
   'Identify the exercise with exerciseId when you have its exact UUID; otherwise pass the English catalog',
   'exerciseName (prefer search_exercises to get an exact exerciseId).',
   'A plain result saying there is no completed record is normal — never treat it as an error, and never',
   'tell the user they never did the exercise; say it is not in the records.',
 ].join(' ');
 
+// load-plan plan A5: with LOAD_PLAN_SUGGESTION on the tool also returns the suggestion (O1: the model decides).
+const GET_LOAD_PLAN_SUGGESTION_DESCRIPTION = [
+  'Computed load facts for ONE exercise plus a suggestion with its reason — reference performance, fatigue',
+  'context, working weight, e1RM trend, last-exposure quality, gap in days, constraints, the equipment step,',
+  'the scheme, the decision stage, a recommended load and a conservative option. Use it when the user asks',
+  'about a weight or progress for an exercise that is NOT in the LOAD PLAN block (e.g. an exercise outside',
+  "today's plan). The numbers are a suggestion: you decide the load, and state your reason when you depart from it.",
+  LOAD_PLAN_DESCRIPTION_TAIL,
+].join(' ');
+
+const GET_LOAD_PLAN_DESCRIPTION = [
+  'Computed load facts for ONE exercise — reference performance, fatigue context, working weight, e1RM',
+  'trend, last-exposure quality, gap in days, constraints and the equipment step. Use it when the user',
+  'asks about a weight or progress for an exercise that is NOT in the LOAD PLAN block (e.g. an exercise',
+  "outside today's plan). It returns facts only and recommends nothing: quote them with their dates.",
+  LOAD_PLAN_DESCRIPTION_TAIL,
+].join(' ');
+
 export function buildGetLoadPlanTool(deps: GetLoadPlanToolDeps) {
   const { trainingService, exerciseRepository, workoutSessionRepo, userFacts } = deps;
+  const suggestion = deps.suggestion === true;
 
   return tool(
     async (input, config) => {
@@ -75,6 +97,7 @@ export function buildGetLoadPlanTool(deps: GetLoadPlanToolDeps) {
           planTargetReps: planTargetRepsOf(session),
           now: runCtx.now,
           timezone,
+          breaks: deps.breaks === true,
         },
       );
 
@@ -84,11 +107,16 @@ export function buildGetLoadPlanTool(deps: GetLoadPlanToolDeps) {
       if (isAbsent(entry.facts.reference)) {
         return ok(`no completed record of ${entry.exercise.name}`);
       }
-      return ok(renderLoadPlanEntry(entry, { now: runCtx.now, timezone, user: runCtx.user ?? null }));
+      const ctx = { now: runCtx.now, timezone, user: runCtx.user ?? null };
+      return ok(
+        suggestion
+          ? renderLoadPlanEntryV2(entry, ctx, { progression: defaultProgression(runCtx.user) })
+          : renderLoadPlanEntry(entry, ctx),
+      );
     },
     {
       name: 'get_load_plan',
-      description: GET_LOAD_PLAN_DESCRIPTION,
+      description: suggestion ? GET_LOAD_PLAN_SUGGESTION_DESCRIPTION : GET_LOAD_PLAN_DESCRIPTION,
       schema: z
         .object({
           exerciseId: z

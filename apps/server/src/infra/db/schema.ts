@@ -559,3 +559,46 @@ export const sessionSets = pgTable(
     ),
   }),
 );
+
+// load-plan plan Task 3 (D7, A3): calibration log — one row per session exercise, written on its first working
+// set with the LOAD PLAN entry as rendered for the run and the decision behind it. Decision columns are nullable
+// for an exercise the schemes do not cover (non-strength) and for a row written with no decision (A3). Never read
+// back into a prompt. `outcome` + `completed_at` are filled when the exercise completes.
+export const loadRecommendations = pgTable(
+  'load_recommendations',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    sessionId: uuid('session_id')
+      .references(() => workoutSessions.id, { onDelete: 'cascade' })
+      .notNull(),
+    sessionExerciseId: uuid('session_exercise_id')
+      .references(() => sessionExercises.id, { onDelete: 'cascade' })
+      .notNull(),
+    exerciseId: uuid('exercise_id')
+      .references(() => exercises.id)
+      .notNull(),
+    runId: uuid('run_id'),
+    schemeId: text('scheme_id'),
+    schemeVersion: text('scheme_version'),
+    stage: text('stage'),
+    row: text('row'),
+    candidate: jsonb('candidate'),
+    conservative: jsonb('conservative'),
+    confidence: text('confidence'),
+    fatigue: jsonb('fatigue'),
+    gapTier: text('gap_tier'),
+    rendered: text('rendered').notNull(),
+    // O1: what the model actually told the user (load, reps, reason when it departs from the suggestion).
+    advised: jsonb('advised'),
+    outcome: jsonb('outcome'),
+    completedAt: timestamp('completed_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  table => ({
+    sessionExerciseUq: uniqueIndex('uq_load_recommendations_session_exercise').on(table.sessionExerciseId),
+    userCreatedIdx: index('idx_load_recommendations_user_created').on(table.userId, table.createdAt),
+  }),
+);

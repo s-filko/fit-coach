@@ -13,6 +13,7 @@ import { RECENT_PLACES_WINDOW } from '@domain/training/place';
 // TrainingService's finish reconciliation reuses this one copy — a bad legacy `session_plan_json`
 // row never reaches a DB query (close-out review advisory 6).
 import { isValidExerciseId } from '@domain/training/plan-exercise-id';
+import { defaultProgression, type ProgressionChoice } from '@domain/training/load-plan';
 import type { ExerciseWithMuscles, MuscleGroup, WorkoutSessionWithDetails } from '@domain/training/types';
 
 import type {
@@ -25,13 +26,17 @@ import type {
 } from '@infra/ai/graph/phase-spec';
 import { loadLoadPlanEntries, planTargetRepsOf, type LoadPlanEntry } from '@infra/ai/load-facts/load-facts.loader';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
+// load-plan plan Task 5b (A5): the rebound training prompt, selected only with the flag on.
+import { TRAINING_PROMPT_V11 } from '@infra/ai/prompts/phases/training';
 import {
   TRAINING_CLIENT_V1,
   TRAINING_EXERCISE_HISTORY_V1,
   TRAINING_LOAD_PLAN_V1,
+  TRAINING_LOAD_PLAN_V2,
   TRAINING_RECENT_WORKOUTS_V1,
   TRAINING_STALE_SESSION_V1,
   TRAINING_WORKOUT_OVERVIEW_V1,
+  TRAINING_WORKOUT_OVERVIEW_V2,
   type ExerciseHistoryEntry,
 } from '@infra/ai/prompts/blocks';
 import {
@@ -50,6 +55,7 @@ import {
 import { createLogger } from '@shared/logger';
 
 import { type ToolPolicy, TRAINING_TOOL_PRIORITY } from '../tool-policy';
+import { plannerRebindOn } from './planner-rebind';
 
 const log = createLogger('training-spec');
 
@@ -72,6 +78,11 @@ export interface TrainingData {
   recentPlacesCount: number;
   /** load-facts plan D11: the computed facts per today's exercise (same order as `exerciseHistory`). */
   loadPlan: LoadPlanEntry[];
+  /**
+   * load-plan plan D8: the scheme in force — the profile default until the user's choice exists (Task 5).
+   * Set only with LOAD_PLAN_SUGGESTION on, so the flag-off data is unchanged.
+   */
+  progression?: ProgressionChoice;
 }
 
 /**
@@ -95,9 +106,16 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
     buildSearchExercisesTool({ embeddingService, exerciseRepository }),
     buildGetExerciseHistoryTool({ trainingService, exerciseRepository, workoutSessionRepo }),
     // load-facts plan D12: computed facts for an exercise outside today's LOAD PLAN.
-    buildGetLoadPlanTool({ trainingService, exerciseRepository, workoutSessionRepo, userFacts: deps.userFacts }),
-    buildLogSetTool({ trainingService }),
-    buildCompleteCurrentExerciseTool({ trainingService }),
+    buildGetLoadPlanTool({
+      trainingService,
+      exerciseRepository,
+      workoutSessionRepo,
+      userFacts: deps.userFacts,
+      suggestion: deps.loadPlanSuggestion === true,
+      breaks: deps.loadPlanBreaks === true,
+    }),
+    buildLogSetTool({ trainingService, loadPlanPlannerRebind: plannerRebindOn(deps) }),
+    buildCompleteCurrentExerciseTool({ trainingService, loadPlanPlannerRebind: plannerRebindOn(deps) }),
     buildFinishTrainingTool({ trainingService }),
     // set-kind plan Task 2 (D6): "я сегодня в другом зале" — after the start.
     buildSetSessionPlaceTool({ trainingService }),
@@ -108,7 +126,8 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
 
   return {
     name: 'training',
-    prompt: entry as PhasePromptEntry<PromptContextFor<TrainingData>>,
+    // load-plan plan Task 5b (A5): v11 with LOAD_PLAN_PLANNER_REBIND + LOAD_PLAN_SUGGESTION; else v10.
+    prompt: (plannerRebindOn(deps) ? TRAINING_PROMPT_V11 : entry) as PhasePromptEntry<PromptContextFor<TrainingData>>,
     tools,
     toolPolicy: buildTrainingToolPolicy(tools),
     // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).
@@ -225,6 +244,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
             planTargetReps: planTargetRepsOf(session),
             now: input.now ?? new Date(),
             timezone: input.user?.timezone ?? null,
+            breaks: deps.loadPlanBreaks === true,
           },
         );
       } catch (err) {
@@ -240,6 +260,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
           todayMuscles: [...todayMuscleSet],
           recentPlacesCount,
           loadPlan,
+          ...(deps.loadPlanSuggestion === true ? { progression: defaultProgression(input.user) } : {}),
         },
       };
     },
@@ -247,12 +268,14 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
     // and `recent_workouts` (BUG-030 fix) in place of the old same-key `previous_session`.
     contextBlocks: [
       TRAINING_CLIENT_V1,
-      TRAINING_WORKOUT_OVERVIEW_V1,
+      // load-plan plan Task 5b (D10): v2 (sets × reps only) with the flag on; off = v1 unchanged.
+      plannerRebindOn(deps) ? TRAINING_WORKOUT_OVERVIEW_V2 : TRAINING_WORKOUT_OVERVIEW_V1,
       TRAINING_STALE_SESSION_V1,
       TRAINING_EXERCISE_HISTORY_V1,
       TRAINING_RECENT_WORKOUTS_V1,
-      // load-facts plan D5: block 3, after RECENT WORKOUTS.
-      TRAINING_LOAD_PLAN_V1,
+      // load-facts plan D5: block 3, after RECENT WORKOUTS. load-plan plan A5: v2 (suggestion) only with
+      // LOAD_PLAN_SUGGESTION on; off = v1 unchanged.
+      deps.loadPlanSuggestion === true ? TRAINING_LOAD_PLAN_V2 : TRAINING_LOAD_PLAN_V1,
     ],
     modelProfile: 'default',
   };

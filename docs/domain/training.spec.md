@@ -33,6 +33,10 @@ Business Rules
 	• BR-TRAINING-013: Retrospective logging creates sessions with past timestamps, status='completed'
 	• BR-TRAINING-030: A set is retro-logged (stamped last activity + 5 min, activity not advanced) only if the in_progress session is idle > 2 h AND already holds sets (owner 2026-09-30, BUG-043)
 	• BR-TRAINING-031: The first set of a set-less in_progress session idle > 2 h is live: stamped now, and it re-anchors started_at to that set (late start, BUG-043)
+	• BR-TRAINING-036: With LOAD_PLAN_SUGGESTION on, LOAD PLAN names a load per strength exercise — `recommend:` and a lighter `conservative:`, each with its reason — produced in a fixed order (Stage A safety rows → Stage B tactic → Stage C progression scheme) with the deciding stage and row printed; the load is a suggestion, the coach decides by judgement and states its reason when it departs (design Principle 6 as amended by O1; plan load-plan, recorded 2026-10-01 for owner review)
+	• BR-TRAINING-037: With LOAD_PLAN_SUGGESTION on, the first working set of an exercise in a session writes one load_recommendations row (the entry as rendered, the decision, the coach's advised load); completing the exercise fills its outcome; the table is calibration data and never read back into a prompt (plan load-plan D7)
+	• BR-TRAINING-038: With LOAD_PLAN_BREAKS on, a gap since the last workout is classified into general-norm tiers (rest ≤ 7 d, rest_with_question > 7 d, return ≥ 14 d, rebuild ≥ 28 d, restart ≥ 84 d); from rest_with_question on, the reason is asked once per break (the answer is a `break` fact, no answer = unknown), and loads follow a return ladder that advances on a workout in range with reserve (plan load-plan D5, D9)
+	• BR-TRAINING-039: With LOAD_PLAN_PLANNER_REBIND and LOAD_PLAN_SUGGESTION both on (rebind alone has no effect), session planning writes no targetWeight and WORKOUT OVERVIEW / the active-plan block show sets × reps only; loads come from LOAD PLAN during training (plan load-plan D10)
 
 Ports (apps/server/src/domain/training/ports/)
 	• ITrainingService (TRAINING_SERVICE_TOKEN)

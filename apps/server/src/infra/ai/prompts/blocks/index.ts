@@ -36,6 +36,8 @@ export { episodeParagraph } from './episode-summaries.v2';
 export type { EpisodeSummariesContext } from './episode-summaries.v2';
 export { TIME_GAP_V1, TIME_GAP_PREFIX } from './time-gap.v1';
 export type { TimeGapContext } from './time-gap.v1';
+export { TIME_GAP_V2 } from './time-gap.v2';
+export type { TimeGapV2Context } from './time-gap.v2';
 // now-line-last review R1: the NOW line is a standalone message module like
 // the gap note (moved from directives/) — exported with its label prefix (D4).
 export { CURRENT_TIME_PREFIX, CURRENT_TIME_V1 } from './current-time.v1';
@@ -61,6 +63,7 @@ export {
   SESSION_PLANNING_ACTIVE_PLAN_V1,
   type SessionPlanningActivePlanData,
 } from './session-planning-active-plan.v1';
+export { SESSION_PLANNING_ACTIVE_PLAN_V2 } from './session-planning-active-plan.v2';
 export {
   buildHistorySection,
   SESSION_PLANNING_RECENT_HISTORY_V1,
@@ -86,6 +89,7 @@ export {
   type TrainingStaleSessionData,
   type TrainingWorkoutOverviewData,
 } from './training-workout-overview.v1';
+export { TRAINING_WORKOUT_OVERVIEW_V2 } from './training-workout-overview.v2';
 export {
   TRAINING_EXERCISE_HISTORY_V1,
   TRAINING_RECENT_WORKOUTS_V1,
@@ -100,6 +104,13 @@ export {
   type RenderLoadPlanOpts,
   type TrainingLoadPlanData,
 } from './training-load-plan.v1';
+export {
+  LOAD_PLAN_HEADER_V2,
+  renderLoadPlanEntryV2,
+  TRAINING_LOAD_PLAN_V2,
+  type RenderLoadPlanV2Opts,
+  type TrainingLoadPlanV2Data,
+} from './training-load-plan.v2';
 
 /** A block renders as one composed string — its own SystemMessage at a fixed position. */
 export function renderBlock<TCtx>(module: PromptModule<TCtx>, ctx: TCtx): string {

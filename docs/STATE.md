@@ -15,7 +15,6 @@ _Generated 2026-09-30 from docs/superpowers/plans/ + git. Never hand-edit; regen
 — none —
 
 **Planned**
-- `load-plan.md` — Load Plan — Decision Order, Progression Schemes, Recommendation Log, Breaks (Roadmap U9b) Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 
@@ -31,6 +30,7 @@ _Generated 2026-09-30 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `llm-io-audit-trail-closeout.md` — LLM I/O Audit Trail — Close-out Remediation Implementation Plan
 - `llm-io-audit-trail.md` — LLM I/O Audit Trail — Nothing the User Wrote, the Model Answered, or the API Received Is Lost Implementation Plan
 - `load-facts.md` — Load Facts — Per-Exercise Load Metrics as a Facts-Only `LOAD PLAN` Block and `get_load_plan` (Roadmap U9a) Implementation Plan
+- `load-plan.md` — Load Plan — Decision Order, Progression Schemes, Recommendation Log, Breaks (Roadmap U9b) Implementation Plan
 - `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
 - `now-line-last.md` — NOW Line Last — Move the Current-Time Line out of Block 1 for Prompt Caching Implementation Plan

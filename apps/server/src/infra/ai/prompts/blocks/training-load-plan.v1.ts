@@ -35,6 +35,12 @@ export interface RenderLoadPlanOpts {
   historyRowId?: string | null;
   /** false = leave the `today:` line out (the zero-LLM report has no live session). Default true. */
   showToday?: boolean;
+  /** v2 (load-plan D6): `omit` leaves the equipment facts out — the block prints them once. Default `entry`. */
+  equipment?: 'entry' | 'omit';
+  /** v2 (load-plan D6): `plain` words a negative drop-off as "none (reps rose)". Default `raw`. */
+  dropOff?: 'raw' | 'plain';
+  /** v2 (load-plan D6): print the e1RM trend's span (performances over N days). Default false. */
+  e1rmSpan?: boolean;
 }
 
 function orReason<T>(metric: Metric<T>, render: (v: T) => string): string {
@@ -94,7 +100,7 @@ function todayLine(facts: LoadFacts): string {
   return `today: ${parts.join(SEP)}`;
 }
 
-function metricsLine(facts: LoadFacts): string {
+function metricsLine(facts: LoadFacts, opts: RenderLoadPlanOpts): string {
   const ww = orReason(
     facts.workingWeight,
     w => `working weight ${w.weight} ${w.unit ?? 'kg'} (${w.performances} performances / 8 wk)`,
@@ -112,6 +118,9 @@ function metricsLine(facts: LoadFacts): string {
     parts.push(
       `e1RM ${t.newest.toFixed(1)} ${trend}, ${t.weeksAtWeight} wk at ${t.currentLoad} ${t.currentLoadUnit ?? 'kg'}`,
     );
+    if (opts.e1rmSpan) {
+      parts.push(`e1RM over ${t.performances} performances / ${t.spanDays} d`);
+    }
     if (t.lowConfidence) {
       parts.push(`low confidence: ${t.lowConfidence}`);
     }
@@ -134,7 +143,12 @@ function rangeText(range: Metric<RepRangeFact>): string {
   return `range ${span} (${r.source === 'today' ? "today's plan" : "reference performance's plan"})`;
 }
 
-function qualityLine(facts: LoadFacts): string {
+function dropOffText(drop: { value: number; usual: number | null }, opts: RenderLoadPlanOpts): string {
+  const value = opts.dropOff === 'plain' && drop.value < 0 ? 'none (reps rose)' : `${drop.value}`;
+  return `drop-off ${value}${drop.usual === null ? '' : ` vs your usual ${drop.usual}`}`;
+}
+
+function qualityLine(facts: LoadFacts, opts: RenderLoadPlanOpts): string {
   const q = facts.lastExposure;
   if (isAbsent(q)) {
     return `quality: ${q.absent}`;
@@ -151,11 +165,7 @@ function qualityLine(facts: LoadFacts): string {
   }
   const drop = quality.dropOff;
   parts.push(
-    isAbsent(drop)
-      ? `drop-off: ${drop.absent}`
-      : `drop-off ${(drop as { value: number }).value}${
-          (drop as { usual: number | null }).usual === null ? '' : ` vs your usual ${(drop as { usual: number }).usual}`
-        }`,
+    isAbsent(drop) ? `drop-off: ${drop.absent}` : dropOffText(drop as { value: number; usual: number | null }, opts),
   );
   return `quality: ${parts.join(SEP)}`;
 }
@@ -174,14 +184,16 @@ function gapLine(entry: LoadPlanEntry): string {
   ].join(SEP)}`;
 }
 
-function constraintsLine(facts: LoadFacts): string {
+function constraintsLine(facts: LoadFacts, opts: RenderLoadPlanOpts): string {
   const c = facts.constraints;
   const constraints =
     c.constraints.length === 0
       ? 'none'
       : c.constraints.map(x => `${x.text} (${x.muscleGroup}, ${x.durability})`).join('; ');
   const equipment = c.equipment.length === 0 ? 'none' : c.equipment.join('; ');
-  return `constraints: ${constraints}${SEP}equipment facts: ${equipment}`;
+  return opts.equipment === 'omit'
+    ? `constraints: ${constraints}`
+    : `constraints: ${constraints}${SEP}equipment facts: ${equipment}`;
 }
 
 function stepLine(facts: LoadFacts): string {
@@ -200,10 +212,10 @@ export function renderLoadPlanEntry(entry: LoadPlanEntry, ctx: ContextBlockCtx, 
     `${facts.exerciseName} [ID:${facts.exerciseId}]`,
     referenceLine(facts, ctx, opts),
     ...(opts.showToday === false ? [] : [todayLine(facts)]),
-    metricsLine(facts),
-    ...(isAbsent(facts.reference) ? [] : [qualityLine(facts)]),
+    metricsLine(facts, opts),
+    ...(isAbsent(facts.reference) ? [] : [qualityLine(facts, opts)]),
     gapLine(entry),
-    constraintsLine(facts),
+    constraintsLine(facts, opts),
     stepLine(facts),
     dataLine(facts),
   ];

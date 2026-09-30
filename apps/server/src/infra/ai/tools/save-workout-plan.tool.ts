@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { llmError, ok, userError } from '@domain/conversation/tool-outcome';
 import type { IExerciseRepository, IWorkoutPlanRepository } from '@domain/training/ports';
-import type { MuscleGroup } from '@domain/training/types';
+import type { MuscleGroup, SessionTemplate } from '@domain/training/types';
 import type { IUserFactsService } from '@domain/user/ports';
 
 import { ctxOf } from '@infra/ai/graph/state';
@@ -18,6 +18,11 @@ export interface SaveWorkoutPlanToolDeps {
   exerciseRepository: IExerciseRepository;
   /** P6 Task 5: hard validation against physical_constraint facts (D-G). */
   userFactsService: IUserFactsService;
+  /**
+   * Load plan (load-plan plan Task 5b, D10): drop `targetWeight` from the schema — the plan is
+   * sets × reps only; loads come from LOAD PLAN during training. Absent = today's schema.
+   */
+  loadPlanPlannerRebind?: boolean;
 }
 
 const MUSCLE_GROUPS: [MuscleGroup, ...MuscleGroup[]] = [
@@ -45,26 +50,31 @@ const MUSCLE_GROUPS: [MuscleGroup, ...MuscleGroup[]] = [
 
 const ENERGY_COST = ['very_low', 'low', 'medium', 'high', 'very_high'] as const;
 
-const sessionTemplateExerciseSchema = z.object({
-  exerciseId: z.string().uuid().describe('Exact exercise UUID from the list'),
-  exerciseName: z.string().describe('Exercise name in English'),
-  energyCost: z.enum(ENERGY_COST),
-  targetSets: z.number().int().min(1),
-  targetReps: z.string().describe('Rep range, e.g. "8-10" or "12"'),
-  targetWeight: z.number().optional().describe('Starting weight in kg, if applicable'),
-  restSeconds: z.number().int().min(0),
-  estimatedDuration: z.number().int().min(1).describe('Estimated minutes for this exercise block'),
-  notes: z.string().optional(),
-});
+// Load plan (Task 5b, D10): with the rebind flag on the exercise entry carries no targetWeight.
+const sessionTemplateExerciseSchema = (dropTargetWeight: boolean) =>
+  z.object({
+    exerciseId: z.string().uuid().describe('Exact exercise UUID from the list'),
+    exerciseName: z.string().describe('Exercise name in English'),
+    energyCost: z.enum(ENERGY_COST),
+    targetSets: z.number().int().min(1),
+    targetReps: z.string().describe('Rep range, e.g. "8-10" or "12"'),
+    ...(dropTargetWeight
+      ? {}
+      : { targetWeight: z.number().optional().describe('Starting weight in kg, if applicable') }),
+    restSeconds: z.number().int().min(0),
+    estimatedDuration: z.number().int().min(1).describe('Estimated minutes for this exercise block'),
+    notes: z.string().optional(),
+  });
 
-const sessionTemplateSchema = z.object({
-  key: z.string().describe('Unique session key, e.g. "upper_a", "lower_b", "full_body_1"'),
-  name: z.string().describe('Human-readable session name'),
-  focus: z.string().describe('Focus description, e.g. "Push: chest, shoulders, triceps"'),
-  energyCost: z.enum(ENERGY_COST),
-  estimatedDuration: z.number().int().min(1).describe('Total session duration in minutes'),
-  exercises: z.array(sessionTemplateExerciseSchema).min(1),
-});
+const sessionTemplateSchema = (dropTargetWeight: boolean) =>
+  z.object({
+    key: z.string().describe('Unique session key, e.g. "upper_a", "lower_b", "full_body_1"'),
+    name: z.string().describe('Human-readable session name'),
+    focus: z.string().describe('Focus description, e.g. "Push: chest, shoulders, triceps"'),
+    energyCost: z.enum(ENERGY_COST),
+    estimatedDuration: z.number().int().min(1).describe('Total session duration in minutes'),
+    exercises: z.array(sessionTemplateExerciseSchema(dropTargetWeight)).min(1),
+  });
 
 const recoveryGuidelinesSchema = z.object({
   majorMuscleGroups: z.object({
@@ -149,7 +159,9 @@ export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
           trainingStyle: input.trainingStyle,
           targetMuscleGroups: input.targetMuscleGroups as MuscleGroup[],
           recoveryGuidelines: input.recoveryGuidelines,
-          sessionTemplates: correctedTemplates,
+          // The conditional schema's inferred type carries the dropped-variant union — the stored
+          // shape is the domain one either way (targetWeight simply absent when dropped).
+          sessionTemplates: correctedTemplates as SessionTemplate[],
           progressionRules: input.progressionRules,
         },
         status: 'active',
@@ -178,7 +190,10 @@ export function buildSaveWorkoutPlanTool(deps: SaveWorkoutPlanToolDeps) {
         trainingStyle: z.string().describe('Training style, e.g. "Upper-Lower Split", "PPL"'),
         targetMuscleGroups: z.array(z.enum(MUSCLE_GROUPS)).describe('Primary muscle groups targeted'),
         recoveryGuidelines: recoveryGuidelinesSchema,
-        sessionTemplates: z.array(sessionTemplateSchema).min(2).max(7),
+        sessionTemplates: z
+          .array(sessionTemplateSchema(deps.loadPlanPlannerRebind === true))
+          .min(2)
+          .max(7),
         progressionRules: z.array(z.string()).min(1).describe('Specific, actionable progression rules'),
       }),
     },

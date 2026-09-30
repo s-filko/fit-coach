@@ -84,3 +84,24 @@ describe('formatExerciseSummary — volume excludes warm-ups (set-kind plan D4, 
     expect(formatExerciseSummary(exercise)).toContain('Total: 2/3 sets.');
   });
 });
+
+// -------------------------------------------------------------------------
+// load-plan plan Task 5b (D10, AC-LP-7): with LOAD_PLAN_PLANNER_REBIND on, the Target line
+// prints sets × reps only — no plan target weight, even for a legacy row that still carries one.
+// -------------------------------------------------------------------------
+
+describe('formatExerciseSummary — Target line without the plan weight (load-plan plan Task 5b)', () => {
+  const legacyExercise: AutoCompletedExercise = { ...finishedExercise, targetWeight: '10' };
+
+  it('default (flag off) keeps printing the target weight (legacy behaviour)', () => {
+    expect(formatExerciseSummary(legacyExercise)).toContain('Target: 3x12-15 @ 10 kg');
+  });
+
+  it('omitTargetWeight drops the weight, keeps sets × reps and the logged sets untouched', () => {
+    const text = formatExerciseSummary(legacyExercise, 'explicit', { omitTargetWeight: true });
+    expect(text).toContain('Target: 3x12-15');
+    expect(text).not.toContain('Target: 3x12-15 @ 10 kg');
+    // The logged sets are the record of what happened — their weights stay.
+    expect(text).toContain('Set 1: 15 reps @ 10 kg');
+  });
+});

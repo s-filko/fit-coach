@@ -27,8 +27,14 @@ function renderedContent(ret: ToolReturn): string {
 }
 
 describe('get_exercise_history (AC-HL-1, AC-HL-2)', () => {
-  const { service: trainingService, userRepo, exerciseRepo, sessionRepo, sessionExerciseRepo, sessionSetRepo } =
-    buildRealTrainingService();
+  const {
+    service: trainingService,
+    userRepo,
+    exerciseRepo,
+    sessionRepo,
+    sessionExerciseRepo,
+    sessionSetRepo,
+  } = buildRealTrainingService();
 
   let userId: string;
   let todaySessionId: string;
@@ -148,10 +154,7 @@ describe('get_exercise_history (AC-HL-1, AC-HL-2)', () => {
   });
 
   it('AC-HL-2: no record -> a plain ok "no completed record" result, never an error', async () => {
-    const result = (await tool().invoke(
-      { exerciseId: pullUpsId },
-      makeConfig(userId, todaySessionId),
-    )) as ToolReturn;
+    const result = (await tool().invoke({ exerciseId: pullUpsId }, makeConfig(userId, todaySessionId))) as ToolReturn;
     const content = renderedContent(result);
 
     expect(content).toBe('no completed record of Pull-ups');

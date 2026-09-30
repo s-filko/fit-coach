@@ -17,7 +17,7 @@
 // never returned for the prompt or the constraint check; the caller passes the run
 // clock (ctx.now), never the DB clock or a fresh `new Date()`.
 
-/** ADR-0009's eight fact categories. */
+/** ADR-0009's fact categories (ten since the load-plan amendment). */
 export type FactCategory =
   | 'physical_constraint' // hard constraint — never override
   | 'exercise_preference' // soft preference — apply when choice exists
@@ -26,7 +26,14 @@ export type FactCategory =
   | 'coaching_preference'
   | 'schedule_constraint'
   | 'equipment'
-  | 'nutrition_preference';
+  | 'nutrition_preference'
+  // load-plan plan D9 (ADR-0009 amendment): a pause in training — dates, reason class, the user's words.
+  // Short, expiring at the end of the return ladder; written only by the summariser + verifier pipeline
+  // (and the code's own "asked" marker), never by `manage_fact`.
+  | 'break'
+  // load-plan plan D8 (ADR-0009 amendment): the user's chosen progression scheme — a registry id validated in
+  // code; the newest active fact is the choice. Written only by the summariser + verifier, never by `manage_fact`.
+  | 'progression_scheme';
 
 /** `as const` tuple (not `readonly FactCategory[]`) so `z.enum(FACT_CATEGORIES)` infers the literal union. */
 export const FACT_CATEGORIES = [
@@ -38,7 +45,22 @@ export const FACT_CATEGORIES = [
   'schedule_constraint',
   'equipment',
   'nutrition_preference',
+  'break',
+  'progression_scheme',
 ] as const satisfies readonly FactCategory[];
+
+/** Written only by the summariser + verifier pipeline (and the code's own "asked" marker), never by `manage_fact`. */
+const COMPACTION_ONLY_CATEGORIES = ['break', 'progression_scheme'] as const satisfies readonly FactCategory[];
+
+export type ConversationFactCategory = Exclude<FactCategory, (typeof COMPACTION_ONLY_CATEGORIES)[number]>;
+
+/**
+ * The categories the model may write in conversation (`manage_fact`): every category but the compaction-only ones.
+ * A non-empty tuple so `z.enum(...)` accepts it.
+ */
+export const CONVERSATION_FACT_CATEGORIES = FACT_CATEGORIES.filter(
+  (c): c is ConversationFactCategory => !(COMPACTION_ONLY_CATEGORIES as readonly FactCategory[]).includes(c),
+) as [ConversationFactCategory, ...ConversationFactCategory[]];
 
 // Lifecycle types re-exported from their owner module (single source: the bounds).
 export type {
