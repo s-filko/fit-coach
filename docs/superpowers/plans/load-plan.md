@@ -39,7 +39,7 @@ in § "Before dispatch".
    ladder's end). Durable spec: proposed text in § "Proposed durable-spec text", the owner edits
    or approves.
 3. ✅ (approved 2026-09-30, with O1's `advised` column) **Recommendation log table** (additive migration) — the owner confirms the shape in D7.
-4. **Scope split (recommended, D1):** the review (§F) warned that U9′ bundled too much; this plan
+4. ✅ (decided 2026-09-30: **one merge, three flags** — see D1 as amended) **Scope split (recommended, D1):** the review (§F) warned that U9′ bundled too much; this plan
    is already U9b alone, but it still carries three hypotheses. The recommended order is three
    merges, each deployed and live-checked on dev: **9b-1** Tasks 1–3 (schemes + decision order +
    log — the number appears), **9b-2** Task 4 (breaks), **9b-3** Task 5 (planner/prompt
@@ -56,7 +56,17 @@ in § "Before dispatch".
   current conversation" becomes "deviate by judgement, stating the reason"; D7 logs both numbers (below); the
   design's Principle 6 is amended accordingly (durable-spec text at gate 2).
 
-- **D1 — three merges, one plan** (see gate 4). Each merge ends at a dev deploy and its own live
+- **D1 — amended by the owner 2026-09-30: one merge, three feature flags.** Each part ships behind its own env
+  flag, on in `.env.dev`, off by default: `LOAD_PLAN_SUGGESTION` (Tasks 1–3: schemes, decision order, log),
+  `LOAD_PLAN_BREAKS` (Task 4), `LOAD_PLAN_PLANNER_REBIND` (Task 5 — planner without `targetWeight`, prompt
+  rebinding). Any part can be switched off on dev without a revert (compose up, no redeploy). Errors stay
+  attributable: the log row records the stage and row that produced the number, each part has its own commits and
+  tests (flag on and off), one close-out review. Breaks are verified without a real break: dated-clock scenario
+  tests, the zero-LLM report over the owner's real history (which exercises fall into which tier today), and
+  optionally a throwaway dev user with back-dated history. With no exercise in a break tier the part is silent.
+  Placement note (2026-09-30): since `prompt-caching`, all block-3 context already rides in the current user
+  message, so the D6 "tail after NOW" question is moot — the block stays a normal context block.
+- ~~**D1 — three merges, one plan** (see gate 4).~~ Each merge ends at a dev deploy and its own live
   check; `Status: done` only after 9b-3.
 - **D2 — scheme registry in the domain.** `src/domain/training/load-plan/schemes/` — one module per
   scheme `double_progression@1`, `linear_progression@1`, a registry `SCHEMES` keyed by id, and one
