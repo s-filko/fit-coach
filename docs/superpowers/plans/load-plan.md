@@ -146,6 +146,11 @@ in § "Before dispatch".
   server env schema, default `false`; with a flag off the code path is exactly the pre-plan behaviour (tests cover
   both). Prompt versions `training` v11 / `session_planning` v5 (not v10/v4 as the AC table says) are selected
   only when `LOAD_PLAN_PLANNER_REBIND` is on.
+- **(D) A6 — Task 5 split:** 5a (the `progression_scheme` fact through summariser v7 / verifier v2, the context line,
+  the block's "chosen by user <date>") goes to the Sonnet worker that wrote summariser v7 in Task 4; 5b (planner without
+  `targetWeight`, WORKOUT OVERVIEW, `session_planning` v5 / `training` v11) goes to GLM per D11. The scheme fact is part
+  of the suggestion (D1 groups schemes under `LOAD_PLAN_SUGGESTION`): summariser v7 / verifier v2 are selected when
+  `LOAD_PLAN_BREAKS` or `LOAD_PLAN_SUGGESTION` is on, and apply-time validation drops a category whose flag is off.
 - **(D) T1 — scheme details the plan did not settle (Task 1):** (a) `goal` is `strength | hypertrophy | general`;
   `defaultParams(goal)` gives the rep range (double: 4–6 / 8–12 / 8–12) or fixed reps (linear: 5 / 8 / 8), both with
   `confirmSessions` 2 and `stepCapPct` 0.1 from `schemes/params.ts` with the R4.0 citations. (b) A recommendation is
