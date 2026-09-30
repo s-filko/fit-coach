@@ -78,7 +78,7 @@ async function run(): Promise<void> {
       from,
       to,
       inputPricePerMTok: flatPrice,
-      prices: parseModelPrices(cfg.LLM_MODEL_PRICES),
+      prices: cfg.LLM_MODEL_PRICES,
       cacheTtl: ttlArg,
     });
     console.log(formatCacheReport(report));

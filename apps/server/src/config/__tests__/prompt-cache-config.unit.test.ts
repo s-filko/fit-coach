@@ -32,3 +32,26 @@ describe('prompt-cache config (D5, D6)', () => {
     );
   });
 });
+
+describe('LLM_MODEL_PRICES — the one price override, validated at config load (AC-PC-8)', () => {
+  it('AC-PC-8: unset → an empty override; valid JSON → the parsed per-model prices', () => {
+    expect((EnvSchema.parse(BASE_ENV) as Record<string, unknown>)['LLM_MODEL_PRICES']).toEqual({});
+    const parsed = EnvSchema.parse({
+      ...BASE_ENV,
+      LLM_MODEL_PRICES: '{"vendor/m":{"input":2,"output":8}}',
+    }) as Record<string, unknown>;
+    expect(parsed['LLM_MODEL_PRICES']).toEqual({ 'vendor/m': { inputPerMTok: 2, outputPerMTok: 8 } });
+  });
+
+  it('AC-PC-8: malformed JSON or a wrong shape fails the config load (fail fast), naming the variable', () => {
+    expect(() => EnvSchema.parse({ ...BASE_ENV, LLM_MODEL_PRICES: 'not json' })).toThrow(/LLM_MODEL_PRICES/);
+    expect(() => EnvSchema.parse({ ...BASE_ENV, LLM_MODEL_PRICES: '{"m":{"input":-1,"output":1}}' })).toThrow(
+      /LLM_MODEL_PRICES/,
+    );
+  });
+
+  it('AC-PC-8: the flat LLM_INPUT_PRICE_PER_MTOK is gone — one price source', () => {
+    const parsed = EnvSchema.parse({ ...BASE_ENV, LLM_INPUT_PRICE_PER_MTOK: '3' }) as Record<string, unknown>;
+    expect(parsed['LLM_INPUT_PRICE_PER_MTOK']).toBeUndefined();
+  });
+});

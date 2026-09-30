@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { parseLlmBudgetOverrides, type TokenBudgetOverride } from './llm-budget-overrides';
 import { type LlmProfileOverride, parseLlmProfiles, REASONING_EFFORTS } from './llm-profiles';
+import { parseModelPrices } from './model-prices';
 import { parseTransitionHandoffTargets } from './transition-handoff-targets';
 
 /**
@@ -114,15 +115,27 @@ export const EnvSchema = z.object({
   LLM_PROMPT_CACHE: z.enum(['off', 'anthropic']).default('off'),
   LLM_PROMPT_CACHE_TTL: z.enum(['5m', '1h']).default('5m'),
   // Prompt-caching plan D5: while the provider cache is warm, budget compaction and history trimming wait (they
-  // rewrite the cached prefix). This is the safety net — the estimated total (token-estimator units, ≈ 100 k real
-  // tokens by BUG-050) above which they run anyway. Only consulted with LLM_PROMPT_CACHE=anthropic.
-  // Prompt-caching plan D8: list price (USD per 1M uncached input tokens) used to cost cache breaks in the
-  // 'Prompt cache break' log and in scripts/cache-report.ts. Optional — unset omits the cost.
-  LLM_INPUT_PRICE_PER_MTOK: z.coerce.number().positive().optional(),
-  // Per-model list prices for scripts/cache-report.ts and the cache-break cost log (JSON, see
-  // infra/ai/model-prices.ts); merged over the built-in table.
-  LLM_MODEL_PRICES: z.string().optional(),
+  // rewrite the cached prefix). This is the safety net — the estimated conversation (history + current turn, in
+  // token-estimator units, ≈ 100 k real tokens by BUG-050) above which they run anyway. System prompt, facts and
+  // blocks are not counted: they are what the cache holds. Only consulted with LLM_PROMPT_CACHE=anthropic.
   LLM_CONTEXT_HARD_CAP_TOKENS: z.coerce.number().int().positive().default(60_000),
+  // Prompt-caching plan D8: per-model price overrides (JSON `{"<model>": {"input": USD/1M, "output": USD/1M}}`) merged
+  // over the built-in table in infra/ai/model-prices.ts — the ONE price source for the cache-break cost log and
+  // scripts/cache-report.ts. Parsed and validated here, once: a malformed value fails the config load.
+  LLM_MODEL_PRICES: z
+    .string()
+    .optional()
+    .transform((raw, ctx) => {
+      try {
+        return parseModelPrices(raw);
+      } catch (err) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `LLM_MODEL_PRICES is not valid: ${err instanceof Error ? err.message : String(err)}`,
+        });
+        return z.NEVER;
+      }
+    }),
   // Transition hand-off (transition-handoff plan Task 1, D-1, AC-TH-2): comma
   // list of ConversationPhase targets that get a silent same-run hand-off when
   // a transition tool commits to them. Empty/unset = off — byte-for-byte

@@ -7,7 +7,7 @@
 import { createHash } from 'node:crypto';
 
 import { textOnly } from '@infra/ai/message-text';
-import { parseModelPrices, priceOf } from '@infra/ai/model-prices';
+import { priceOf } from '@infra/ai/model-prices';
 
 import { createLogger } from '@shared/logger';
 
@@ -269,8 +269,7 @@ export const recordLlmCall: RecordLlmCall = async input => {
         // D8.4: a break nobody declared (or a miss nothing explains) is alerted; a declared one is silent except the
         // two that are planned but not standard (hard cap, facts) — optimisation candidates. Never fails the call.
         try {
-          const modelPrice = priceOf(input.model, parseModelPrices(cfg.LLM_MODEL_PRICES));
-          logCacheBreak(result, input, cfg.LLM_INPUT_PRICE_PER_MTOK ?? modelPrice?.inputPerMTok);
+          logCacheBreak(result, input, priceOf(input.model, cfg.LLM_MODEL_PRICES)?.inputPerMTok);
         } catch (err) {
           log.error({ err, runId: input.runId }, 'Cache break logging failed — continuing');
         }

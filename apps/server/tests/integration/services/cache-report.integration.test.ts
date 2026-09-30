@@ -162,12 +162,12 @@ describe('AC-PC-11: cache-report over seeded llm_calls rows', () => {
     }
     const report = await buildCacheReport({ userId: user, from: FROM, to: TO, cacheTtl: '5m' });
     const sonnet = report.models.find(m => m.model === 'anthropic/claude-sonnet-5.5')!;
-    // sonnet: read 8000×0.3 + write 1000×3.75 + uncached 1000×3 + output 1000×15, per 1M
-    expect(sonnet.cost!.read).toBeCloseTo((8000 * 0.3) / 1e6, 8);
-    expect(sonnet.cost!.write).toBeCloseTo((1000 * 3.75) / 1e6, 8);
-    expect(sonnet.cost!.uncached).toBeCloseTo((1000 * 3) / 1e6, 8);
-    expect(sonnet.cost!.output).toBeCloseTo((1000 * 15) / 1e6, 8);
-    expect(sonnet.cost!.withoutCaching).toBeCloseTo((10000 * 3 + 1000 * 15) / 1e6, 8);
+    // sonnet ($2/$10 per 1M, fitted to the BUG-051 charge): read 8000×0.2 + write 1000×2.5 + uncached 1000×2 + output 1000×10
+    expect(sonnet.cost!.read).toBeCloseTo((8000 * 0.2) / 1e6, 8);
+    expect(sonnet.cost!.write).toBeCloseTo((1000 * 2.5) / 1e6, 8);
+    expect(sonnet.cost!.uncached).toBeCloseTo((1000 * 2) / 1e6, 8);
+    expect(sonnet.cost!.output).toBeCloseTo((1000 * 10) / 1e6, 8);
+    expect(sonnet.cost!.withoutCaching).toBeCloseTo((10000 * 2 + 1000 * 10) / 1e6, 8);
     const haiku = report.models.find(m => m.model === 'anthropic/claude-haiku-4.5')!;
     expect(haiku.cost!.total).toBeCloseTo((4000 * 1 + 200 * 5) / 1e6, 8);
     expect(report.unpricedModels).toEqual(['vendor/unknown-model']);

@@ -11,7 +11,8 @@
  *  - warn `'Prompt cache break'` with `{ userId, where, lostTokens, lostCostUsd }` for `unplanned:*` and
  *    `unexplained_miss` (`where` = 'unexplained_miss' for the latter); `planned:hard_cap` and
  *    `planned:facts_changed` → info with the same message; every other planned break silent.
- *    `lostCostUsd = lostTokens × LLM_INPUT_PRICE_PER_MTOK / 1e6` (list price), null when the price is unset.
+ *    `lostCostUsd = lostTokens × the model's input price / 1e6` (`priceOf(model)` — built-in table, `LLM_MODEL_PRICES`
+ *    override; null for an unpriced model).
  */
 import { randomUUID } from 'node:crypto';
 
@@ -90,7 +91,6 @@ describe('recorder + DB: cache accounting and the cache-break guard', () => {
   const saved = { ...process.env };
   beforeAll(() => {
     process.env['LLM_CACHE_TTL_SECONDS'] = '300';
-    process.env['LLM_INPUT_PRICE_PER_MTOK'] = '3';
   });
   afterAll(() => {
     process.env = saved;
@@ -117,6 +117,12 @@ describe('recorder + DB: cache accounting and the cache-break guard', () => {
       }),
       'Prompt cache break',
     );
+    // Sonnet 5.5 is $2/M input in the built-in table (BUG-051): the cost is the row's own lost tokens at that price.
+    const warned = logFns.warn.mock.calls.find(c => c[1] === 'Prompt cache break')![0] as {
+      lostTokens: number;
+      lostCostUsd: number;
+    };
+    expect(warned.lostCostUsd).toBeCloseTo((warned.lostTokens * 2) / 1e6, 10);
   });
 
   it('AC-PC-9: the same change with its reason declared → planned:<reason>, no warning', async () => {
@@ -169,5 +175,34 @@ describe('recorder + DB: cache accounting and the cache-break guard', () => {
     expect(row['cacheBreak'] ?? null).toBeNull();
     expect(row['cacheBreakLostTokens'] ?? null).toBeNull();
     expect(logFns.warn).not.toHaveBeenCalledWith(expect.anything(), 'Prompt cache break');
+  });
+
+  it('AC-PC-9: the break cost follows LLM_MODEL_PRICES (the one override); an unpriced model logs no cost', async () => {
+    process.env['LLM_MODEL_PRICES'] = JSON.stringify({ [MODEL]: { input: 5, output: 25 } });
+    const userId = randomUUID();
+    await seedPrevious(userId);
+    await recordLlmCall(
+      call(userId, `${PROMPT}${FACTS}\n- new knee injury`, NEXT_TAIL, { usage: { cacheReadTokens: 0 } }),
+    );
+    const overridden = logFns.warn.mock.calls.find(c => c[1] === 'Prompt cache break')![0] as {
+      lostTokens: number;
+      lostCostUsd: number;
+    };
+    expect(overridden.lostCostUsd).toBeCloseTo((overridden.lostTokens * 5) / 1e6, 10);
+
+    delete process.env['LLM_MODEL_PRICES'];
+    logFns.warn.mockClear();
+    const other = randomUUID();
+    const unpriced = 'vendor/unpriced-model';
+    const unpricedCall = (system: string, tail: Msg[], usage: Record<string, unknown>) => {
+      const base = call(other, system, tail, { usage });
+      return { ...base, model: unpriced, request: { ...base.request, model: unpriced } };
+    };
+    await recordLlmCall(unpricedCall(`${PROMPT}${FACTS}`, PREV_TAIL, {}));
+    await recordLlmCall(unpricedCall(`${PROMPT}${FACTS}\n- new knee injury`, NEXT_TAIL, { cacheReadTokens: 0 }));
+    const noCost = logFns.warn.mock.calls.find(c => c[1] === 'Prompt cache break')![0] as {
+      lostCostUsd: number | null;
+    };
+    expect(noCost.lostCostUsd).toBeNull();
   });
 });

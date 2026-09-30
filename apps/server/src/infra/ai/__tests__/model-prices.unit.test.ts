@@ -1,4 +1,6 @@
-import { parseModelPrices, priceOf } from '@infra/ai/model-prices';
+import { priceOf } from '@infra/ai/model-prices';
+
+import { parseModelPrices } from '@config/model-prices';
 
 describe('model prices (AC-PC-8 cost comparability)', () => {
   it('AC-PC-8: the built-in table prices the app’s Anthropic models incl. output', () => {
