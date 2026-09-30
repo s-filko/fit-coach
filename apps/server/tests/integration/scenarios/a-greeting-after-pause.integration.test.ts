@@ -46,6 +46,10 @@ function typeOf(m: BaseMessage | undefined): string {
 
 function textOf(m: BaseMessage | undefined): string {
   const content = m?.content;
+  if (Array.isArray(content) && content.every(part => part.type === 'text')) {
+    // <context> part + user text (prompt-caching plan D2), joined.
+    return content.map(part => (part as { text: string }).text).join('');
+  }
   return typeof content === 'string' ? content : JSON.stringify(content ?? '');
 }
 
@@ -114,15 +118,17 @@ describe('journey A — greeting after a pause (BUG-018 repro)', () => {
 
     // Point 2 of BUG-018 beyond presence (fixed, Task 2): the note sits right
     // before the current user message ("привет"), not in the long-term blocks.
-    // now-line-last D1: the NOW message is the one touching "привет" now —
-    // the note sits directly before it: [.., gap note, NOW, human].
-    test(`a time-gap note sits right before the NOW line ahead of "привет"`, () => {
+    // Prompt-caching plan D2: the note and the NOW line are consecutive sections of the <context> part of the
+    // current "привет" message — the note directly before NOW.
+    test(`a time-gap note sits right before the NOW line, in the <context> of "привет"`, () => {
       expect(seen).toContain(GAP_NOTE_MARKER);
       const firstCall = seenCalls[0] ?? [];
       const currentIdx = firstCall.findIndex(m => typeOf(m) === 'human' && textOf(m).includes(step.text));
       expect(currentIdx).toBeGreaterThan(0);
-      expect(textOf(firstCall[currentIdx - 1])).toMatch(/^NOW \(/);
-      expect(textOf(firstCall[currentIdx - 2])).toContain(GAP_NOTE_MARKER);
+      const current = textOf(firstCall[currentIdx]);
+      expect(current.startsWith('<context>')).toBe(true);
+      expect(current.indexOf('NOW (')).toBeGreaterThan(current.indexOf(GAP_NOTE_MARKER));
+      expect(current.indexOf(GAP_NOTE_MARKER)).toBeGreaterThan(0);
     });
   });
 

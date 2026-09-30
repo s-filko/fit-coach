@@ -3,9 +3,15 @@ import type { PhasePromptEntry } from '@infra/ai/prompts/types';
 import { SESSION_PLANNING_V1, type SessionPlanningPromptContext } from './v1';
 import { SESSION_PLANNING_V2, type SessionPlanningPromptContextV2 } from './v2';
 import { SESSION_PLANNING_V3, type SessionPlanningPromptContextV3 } from './v3';
+import { SESSION_PLANNING_V4, type SessionPlanningPromptContextV4 } from './v4';
 
-export type { SessionPlanningPromptContext, SessionPlanningPromptContextV2, SessionPlanningPromptContextV3 };
-export { SESSION_PLANNING_V1, SESSION_PLANNING_V2, SESSION_PLANNING_V3 };
+export type {
+  SessionPlanningPromptContext,
+  SessionPlanningPromptContextV2,
+  SessionPlanningPromptContextV3,
+  SessionPlanningPromptContextV4,
+};
+export { SESSION_PLANNING_V1, SESSION_PLANNING_V2, SESSION_PLANNING_V3, SESSION_PLANNING_V4 };
 
 /**
  * Section contract — a future version must still emit these ids (L0
@@ -17,7 +23,7 @@ export { SESSION_PLANNING_V1, SESSION_PLANNING_V2, SESSION_PLANNING_V3 };
  * the NOW line (`blocks/current-time.v1.ts`, its own message before
  * `current` since now-line-last).
  */
-export const SESSION_PLANNING_PROMPT: PhasePromptEntry<SessionPlanningPromptContextV3> = {
-  current: SESSION_PLANNING_V3,
+export const SESSION_PLANNING_PROMPT: PhasePromptEntry<SessionPlanningPromptContextV4> = {
+  current: SESSION_PLANNING_V4,
   requiredSections: ['date', 'task', 'tools', 'directive.identity', 'directive.tool-reply'],
 };

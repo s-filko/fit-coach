@@ -78,7 +78,13 @@ beforeAll(async () => {
   seenThisStep = model
     .drainChatInputs()
     .flat()
-    .map(m => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
+    .map(m =>
+      typeof m.content === 'string'
+        ? m.content
+        : m.content.every(part => part.type === 'text')
+          ? m.content.map(part => (part as { text: string }).text).join('')
+          : JSON.stringify(m.content),
+    )
     .join('\n');
 });
 

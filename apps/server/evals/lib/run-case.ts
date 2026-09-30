@@ -59,7 +59,12 @@ function reduceModelMessage(m: BaseMessage): ModelInputMessage {
 
 /** Message content as flat text — string content verbatim, structured content JSON-encoded. */
 function contentText(m: BaseMessage): string {
-  return typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+  // Text parts (the <context> part and the nudge — prompt-caching plan D2/D3) join to their text.
+  return typeof m.content === 'string'
+    ? m.content
+    : m.content.every(part => part.type === 'text')
+      ? m.content.map(part => (part as { text: string }).text).join('')
+      : JSON.stringify(m.content);
 }
 
 /**

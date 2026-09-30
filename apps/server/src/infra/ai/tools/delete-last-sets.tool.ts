@@ -6,6 +6,7 @@ import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import type { ITrainingService } from '@domain/training/ports';
 
 import { sessionIdOf, userIdOf } from '@infra/ai/tools/format-exercise-summary';
+import { rejectWithoutLoggedSet } from '@infra/ai/tools/set-preconditions';
 
 import { createLogger } from '@shared/logger';
 
@@ -24,6 +25,11 @@ export function buildDeleteLastSetsTool(deps: DeleteLastSetsToolDeps) {
       const sessionId = sessionIdOf(config);
       if (!sessionId) {
         return systemError('No active training session found. Start a session first.');
+      }
+
+      const rejection = await rejectWithoutLoggedSet(trainingService, sessionId, 'delete_last_sets');
+      if (rejection) {
+        return rejection;
       }
 
       const count = input.count ?? 1;

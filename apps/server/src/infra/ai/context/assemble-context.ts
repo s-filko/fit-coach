@@ -3,17 +3,19 @@
  * P4 Task 5, block 3 added in the context-budget plan Task 2, budget
  * enforcement added in Task 3, `## User Facts` added in P6 Task 4): one
  * function builds the message array every phase sends to the model, in ONE
- * fixed order for every phase — the phase system prompt (block 1), the
- * `## User Facts` block (block 2a, when the user has facts — D-F, long-term
- * memory ahead of episode memory), the `## Course Directive` block (block 2a′,
- * when a course-check directive is stored — AC-FL-5, course-check plan Task 1),
- * the `## Previous episodes` block (block
- * 2b, when summaries exist), the rendered domain context blocks (block 3,
- * when any render non-null), the interleaved episode history from the
- * checkpointed `messages` channel (block 4), the time-gap note and the NOW
- * line when present (now-line-last plan D1 — both ride with `current`), and
- * this run's current messages. Consecutive system messages are sent as
- * separate SystemMessages.
+ * fixed shape for every phase (prompt-caching plan D2 — ADR-0013 §3.4's
+ * one-SystemMessage-per-block order superseded): ONE stable SystemMessage —
+ * the phase system prompt (block 1), the `## User Facts` block (block 2a, when
+ * the user has facts — D-F), the `## Course Directive` block (block 2a′, when a
+ * course-check directive is stored — AC-FL-5) and the `## Previous episodes`
+ * block (block 2b, when summaries exist), joined in that order — then the
+ * interleaved episode history from the checkpointed `messages` channel
+ * (block 4), then this run's current messages, whose HumanMessage carries, in
+ * this REQUEST only, a leading `<context>` text part: the rendered domain
+ * context blocks (block 3), the time-gap note and the NOW line. Nothing
+ * volatile is a SystemMessage — OpenRouter hoists every SystemMessage into the
+ * provider's single system prompt, so per-turn system text would change the
+ * whole cached prefix. The checkpointed message stays the raw user text.
  *
  * Enforces INV-LLM-004 via `resolveBudget` (`./budget.ts`, order extended by
  * P6 Task 4): block 1 (`systemPrompt`) is never trimmed or dropped;
@@ -30,7 +32,7 @@
  * data. `async` only because `resolveBudget`'s `trimHistory` wraps
  * LangChain's `trimMessages`, which is `Promise`-typed.
  */
-import { type BaseMessage, SystemMessage } from '@langchain/core/messages';
+import { type BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 
 import type { StoredEpisodeSummary, TokenBudget } from '@domain/conversation/episode';
 import type { BudgetReport } from '@domain/conversation/ports';
@@ -115,6 +117,23 @@ function isHuman(m: BaseMessage): boolean {
   return m._getType() === 'human';
 }
 
+/**
+ * D2: the request's copy of the current HumanMessage — a leading `<context>…</context>` text part, then the
+ * user's own content. Never mutates `message` (the checkpointed one) and keeps its id.
+ */
+function withContext(message: BaseMessage, contextText: string): BaseMessage {
+  const contextPart = { type: 'text' as const, text: `<context>\n${contextText}\n</context>` };
+  const ownParts =
+    typeof message.content === 'string' ? [{ type: 'text' as const, text: message.content }] : [...message.content];
+  return new HumanMessage({
+    content: [contextPart, ...ownParts],
+    id: message.id,
+    name: message.name,
+    additional_kwargs: message.additional_kwargs,
+    response_metadata: message.response_metadata,
+  });
+}
+
 export async function assembleContext<D>(input: AssembleInput<D>): Promise<AssembledContext> {
   const contextBlocks = input.contextBlocks ?? [];
   const blockCtx: ContextBlockCtx = { now: input.now, timezone: input.timezone, user: input.user };
@@ -172,22 +191,25 @@ export async function assembleContext<D>(input: AssembleInput<D>): Promise<Assem
       ? userMessage.content
       : '';
 
-  // Fixed order, identical for every phase (ADR-0013 §3.4): block 1, block 2a
-  // (facts, long-term memory), block 2a′ (course directive), block 2b
-  // (episode summaries), block 3 (domain).
+  // Prompt-caching plan (BUG-051) D2: ONE stable SystemMessage — block 1, block 2a (facts), 2a′ (course
+  // directive), 2b (episode summaries), in that fixed order — because OpenRouter hoists every SystemMessage
+  // into Anthropic's single system prompt, so any per-turn system text would change the whole prefix.
+  // Everything volatile (block 3 domain blocks, gap note, NOW line) rides in the CURRENT HumanMessage of the
+  // request only; the checkpointed message stays the raw user text.
+  const stableText = [input.systemPrompt, userFactsText, directiveText, summariesText]
+    .filter((text): text is string => text !== null && text !== '')
+    .join(SECTION_SEPARATOR);
+  const contextText = [domainText, input.gapNote, input.nowLine]
+    .filter((text): text is string => typeof text === 'string' && text !== '')
+    .join(SECTION_SEPARATOR);
+
   const messages: BaseMessage[] = [
-    new SystemMessage(input.systemPrompt),
-    ...(userFactsText ? [new SystemMessage(userFactsText)] : []),
-    ...(directiveText ? [new SystemMessage(directiveText)] : []),
-    ...(summariesText ? [new SystemMessage(summariesText)] : []),
-    ...(domainText ? [new SystemMessage(domainText)] : []),
+    new SystemMessage(stableText),
     ...history,
-    // AC-CC-2: the gap note belongs to `current`, not to history — placed
-    // immediately before its HumanMessage, never trimmed away. The NOW line
-    // (now-line-last D1) follows it: … history → [gap note] → NOW → current.
-    ...(input.gapNote ? [new SystemMessage(input.gapNote)] : []),
-    ...(input.nowLine ? [new SystemMessage(input.nowLine)] : []),
-    ...input.current,
+    ...(userMessage !== undefined && isHuman(userMessage) && contextText !== ''
+      ? [withContext(userMessage, contextText)]
+      : input.current.slice(0, 1)),
+    ...inFlight,
   ];
 
   const domainTokens = renderedBlocks.reduce((n, b) => n + b.tokens, 0);

@@ -269,6 +269,39 @@ end-to-end (real model → `LLMLogHandler` → recorder input) so it does not fi
 - Note: when T3 moves volatile context into the human message, `phase` for the warn log is not known to the recorder — the test
   asserts `userId`, `where`, `lostTokens`, `lostCostUsd` only.
 
+### T3 — stable prefix D2/D3/D4, prompt bumps (worker, Sonnet, 2026-09-30) — done
+
+Verification (apps/server): `npm run check-all` clean (exit 0); `npm run test:unit` 168 suites / 1729 tests green;
+`db-test-lock.sh npm run test:scenarios` 23 suites, 415 passed + 1 todo. AC-PC-1/2/4/5 promoted:
+`graph/nodes/__tests__/prompt-cache-prefix.unit.test.ts` (AC-PC-1, -2, -4 bound tools, -5) and
+`graph/__tests__/training-tool-rejection.unit.test.ts` (AC-PC-4 executor); `assemble-context.unit.test.ts` gained AC-PC-2 (every input at
+once → exactly one SystemMessage, first). The AC-PC-3 tests moved to `prompt-cache-breakpoints.repro.test.ts` (still red for T4); the
+shared setup is `prompt-cache-harness.ts` (was inline in the T2 file). All other T2 repro files unchanged and still red.
+
+What changed:
+- `assembleContext`: ONE stable SystemMessage = block 1 + facts + directive + summaries joined with the section separator (a **string**,
+  not text parts — the recorder hashes/dedups string system content and attribution diffs it by header offset; **T4 converts it to
+  text parts when it attaches `cache_control`**). Block 3 + gap note + NOW go into a leading `<context>\n…\n</context>` text part of a
+  request-only copy of the current HumanMessage (same id); the checkpointed message is never touched. D-D floor unchanged (block 3 dropped,
+  gap note/NOW stay).
+- `agent.node.ts` D3: the nudge is a text part appended to the LAST ToolMessage (copy; `tool_call_id`/`status` kept); with no ToolMessage
+  (empty-reply retry after a plain answer) it is appended to the last message (the current human). No SystemMessage is inserted anywhere.
+- D4: all `spec.tools` bound in spec order; `ToolPolicy.availability` and `AvailabilityInput` removed. The BUG-008 Plan A rule now lives in
+  the tools: `tools/set-preconditions.ts` `rejectWithoutLoggedSet` (reads `trainingService.getSessionDetails`, current = in-progress
+  exercise with 0 sets, same rule as before) called first by `delete_last_sets` / `update_last_set` → `llm_error`. Executor unchanged
+  (the T2 test's `makeExecutor` needed no change). Cost: one extra `getSessionDetails` read per delete/update call.
+- Prompts: `withContextLocation` (`prompts/phases/context-location.ts`) derives chat v4, plan_creation v4, session_planning v4, training
+  v10 from v3/v3/v3/v9 + a non-required `context-location` section (CONTEXT LOCATION one-liner, appended last). Registration is NOT bumped:
+  it has no block 3 and its prompt does not refer to NOW/gap note. Rolling `*_PROMPT.current` snapshots and the registry/v9 tests updated.
+
+Frozen snapshots changed by design (`evals/snapshots/__tests__/__snapshots__`): `message-assembly` (15 — one system message, `<context>`
+part in the current human, nudge as ToolMessage text part) and `prompt-snapshots` (12 — only the appended CONTEXT LOCATION paragraph in
+chat/plan_creation/session_planning/training v-current). Existing tests that pinned the old layout were updated (assemble-context,
+agent.node, chat-continuity repro, course-check graph, user-facts scenario) and the scenario helpers that flattened message content now
+join text parts (`evals/lib/run-case.ts`, set-kind, retro-timestamps, harness, a-greeting-after-pause).
+
+Interface deviation from T2: none.
+
 ## Out of scope
 
 Smaller training tool set and shorter schemas; BUG-050 estimator; the post-tool second call itself; caching on

@@ -127,7 +127,13 @@ describe('set-kind — scripted training scenario (set-kind plan D2, D3, D4, AC-
           obs.stepIndex,
           calls
             .flat()
-            .map(m => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')))
+            .map(m =>
+              typeof m.content === 'string'
+                ? m.content
+                : m.content.every(part => part.type === 'text')
+                  ? m.content.map(part => (part as { text: string }).text).join('')
+                  : JSON.stringify(m.content ?? ''),
+            )
             .join('\n'),
         );
       },
@@ -169,13 +175,13 @@ describe('set-kind — scripted training scenario (set-kind plan D2, D3, D4, AC-
     expect(seen).not.toContain('(3/3 sets)');
   });
 
-  it('the next turn\'s ACTIVE STATUS reports 1 set done, 2 remaining per plan (AC-SK-2)', () => {
+  it("the next turn's ACTIVE STATUS reports 1 set done, 2 remaining per plan (AC-SK-2)", () => {
     const seen = seenByStep.get(NEXT_STEP_INDEX) ?? '';
 
     expect(seen).toContain('1 set(s) done, 2 remaining per plan.');
   });
 
-  it('the next turn\'s EXERCISE DETAIL lists all three sets, warm-ups marked (w/u) (AC-SK-2)', () => {
+  it("the next turn's EXERCISE DETAIL lists all three sets, warm-ups marked (w/u) (AC-SK-2)", () => {
     const seen = seenByStep.get(NEXT_STEP_INDEX) ?? '';
     const lines = seen.split('\n');
     const set1Line = lines.find(l => l.includes('Set 1 ('));

@@ -5,7 +5,7 @@
  * falls back to a catalog message. Identical for every phase — layout,
  * prompt, tools, policy and loaders all come from the PhaseSpec.
  */
-import { AIMessage, type BaseMessage, SystemMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 
 import type { StoredEpisodeSummary } from '@domain/conversation/episode';
@@ -98,25 +98,62 @@ function logModelResponse(response: AIMessage, userId: string, phase: string): s
   return finishReason;
 }
 
+type TextPart = { type: 'text'; text: string };
+
+function textPartsOf(message: BaseMessage): Array<TextPart | Record<string, unknown>> {
+  return typeof message.content === 'string'
+    ? [{ type: 'text', text: message.content }]
+    : ([...message.content] as Array<Record<string, unknown>>);
+}
+
 /**
- * Appends a system-level nudge before the last ToolMessage so the model
- * understands it must produce a text reply — not call another tool, not stay
- * silent. Inserted as SystemMessage (not HumanMessage) to avoid the model
- * echoing it.
+ * The request's copy of `message` with `text` appended as one more text part. Only the two roles a nudge can
+ * land on are cloned; anything else is returned as is.
+ */
+function withAppendedText(message: BaseMessage, text: string): BaseMessage {
+  const content = [...textPartsOf(message), { type: 'text', text }] as never;
+  if (typeOf(message) === 'tool') {
+    const tool = message as ToolMessage;
+    return new ToolMessage({
+      content,
+      tool_call_id: tool.tool_call_id,
+      id: tool.id,
+      name: tool.name,
+      status: tool.status,
+      artifact: tool.artifact as unknown,
+    });
+  }
+  if (typeOf(message) === 'human') {
+    return new HumanMessage({
+      content,
+      id: message.id,
+      name: message.name,
+      additional_kwargs: message.additional_kwargs,
+    });
+  }
+  return message;
+}
+
+/**
+ * Prompt-caching plan D3: the post-tool nudge — the model must produce a text reply, not call another tool and
+ * not stay silent — rides as a text part appended to the LAST ToolMessage (after cache breakpoint 2: an uncached
+ * tail, never part of the prefix). It is no longer a SystemMessage: OpenRouter hoists every SystemMessage into the
+ * single system prompt, so an inserted one changed the whole cached prefix on every post-tool call. With no
+ * ToolMessage at all (empty-reply retry after a plain answer) it is appended to the last message instead.
  */
 function withPostToolNudge(messages: BaseMessage[]): BaseMessage[] {
-  const nudge = new SystemMessage(renderBlock(POST_TOOL_NUDGE_V1, {}));
-  let lastToolIdx = -1;
+  const nudge = renderBlock(POST_TOOL_NUDGE_V1, {});
+  let target = messages.length - 1;
   for (let i = messages.length - 1; i >= 0; i--) {
     if (typeOf(messages[i]) === 'tool') {
-      lastToolIdx = i;
+      target = i;
       break;
     }
   }
-  if (lastToolIdx < 0) {
-    return [...messages, nudge];
+  if (target < 0) {
+    return messages;
   }
-  return [...messages.slice(0, lastToolIdx), nudge, ...messages.slice(lastToolIdx)];
+  return messages.map((m, i) => (i === target ? withAppendedText(m, nudge) : m));
 }
 
 export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDeps) {
@@ -172,14 +209,10 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
       } as PromptContextFor<D>),
     );
 
-    // Dynamic tool filtering (BUG-008 Plan A): names the model may call now;
-    // null = all. The policy owns the rule.
-    const available = spec.toolPolicy.availability?.({ data: loaded.data }) ?? null;
-    const tools = available === null ? spec.tools : spec.tools.filter(tool => available.includes(tool.name));
-    if (tools.length < spec.tools.length) {
-      const removed = spec.tools.filter(tool => !tools.includes(tool)).map(tool => tool.name);
-      log.debug({ userId, phase: spec.name, removed }, 'Dynamic tools: restricted unavailable tools');
-    }
+    // Prompt-caching plan D4: every phase tool is always bound, in the spec's stable order — the tool list is the
+    // first thing in the request prefix, so hiding a tool mid-session (the old BUG-008 Plan A availability filter)
+    // was a full cache miss. Calls that make no sense yet are rejected by the tool itself instead.
+    const { tools } = spec;
 
     // Pass the node's LangGraph config through so the LLM callback handler sees
     // metadata.runId (run metrics) and metadata.userId (debug logs) — metadata is

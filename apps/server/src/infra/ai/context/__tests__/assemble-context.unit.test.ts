@@ -75,6 +75,27 @@ function isType(m: BaseMessage, type: string): boolean {
   return m._getType() === type;
 }
 
+/** Text of a message whether `content` is a string or a list of text parts. */
+function textOf(m: BaseMessage): string {
+  return typeof m.content === 'string'
+    ? m.content
+    : m.content.map(part => (part as { text?: string }).text ?? '').join('');
+}
+
+/** The current HumanMessage as the request carries it: a `<context>` part first, then the user's own text. */
+function expectCurrentWithContext(m: BaseMessage, context: string[], userText = USER_MESSAGE): void {
+  expect(isType(m, 'human')).toBe(true);
+  expect(Array.isArray(m.content)).toBe(true);
+  const parts = m.content as Array<{ type: string; text: string }>;
+  expect(parts).toHaveLength(2);
+  expect(parts[0]!.text.startsWith('<context>\n')).toBe(true);
+  expect(parts[0]!.text.endsWith('\n</context>')).toBe(true);
+  for (const piece of context) {
+    expect(parts[0]!.text).toContain(piece);
+  }
+  expect(parts[1]!.text).toBe(userText);
+}
+
 describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)', () => {
   it('no summaries, empty history → [system, human]', async () => {
     const { messages, budgetReport } = await assembleContext(input());
@@ -86,17 +107,62 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
     expect(budgetReport.cuts).toEqual([]);
   });
 
-  it('with episode summaries → the two system messages stay separate (§3.4 blocks 1–2)', async () => {
+  it('with episode summaries → one stable system message: block 1 then the summaries block (§3.4 blocks 1–2, D2)', async () => {
     const { messages, budgetReport } = await assembleContext(input({ episodeSummaries: [EPISODE_SUMMARY] }));
 
-    expect(messages).toHaveLength(3);
-    expect(String(messages[0].content)).toBe(SYSTEM);
-    expect(String(messages[1].content)).toContain('## Previous episodes');
-    expect(String(messages[1].content)).toContain('bench press session');
-    expect(String(messages[1].content)).toContain('not authoritative');
-    expect(isType(messages[2], 'human')).toBe(true);
-    expect(budgetReport.messages).toBe(3);
+    expect(messages).toHaveLength(2);
+    const system = String(messages[0].content);
+    expect(system.startsWith(SYSTEM)).toBe(true);
+    expect(system).toContain('## Previous episodes');
+    expect(system.indexOf('## Previous episodes')).toBeGreaterThan(system.indexOf(SYSTEM));
+    expect(system).toContain('bench press session');
+    expect(system).toContain('not authoritative');
+    expect(isType(messages[1], 'human')).toBe(true);
+    expect(budgetReport.messages).toBe(2);
     expect(budgetReport.summary).toBeGreaterThan(0);
+  });
+
+  it('AC-PC-2: every input at once (facts, directive, summaries, blocks, gap note, NOW, history, in-flight) → exactly one SystemMessage, first', async () => {
+    const { messages } = await assembleContext(
+      input({
+        userFacts: [
+          {
+            id: 'f1',
+            userId: 'u1',
+            category: 'equipment',
+            fact: 'Trains at home',
+            factKey: 'trains at home',
+            muscleGroup: null,
+            confirmations: 1,
+            sourceTurnId: null,
+            durability: 'permanent',
+            expiresAt: null,
+            reviewAfter: null,
+            phaseNote: null,
+            phaseAt: null,
+            onExpiry: null,
+            status: 'active',
+            archivedAt: null,
+            archivedReason: null,
+            closedByUserAt: null,
+            supersedesId: null,
+            context: null,
+            evidence: null,
+            createdAt: new Date('2026-09-01T00:00:00Z'),
+            updatedAt: new Date('2026-09-01T00:00:00Z'),
+          },
+        ],
+        episodeSummaries: [EPISODE_SUMMARY],
+        contextBlocks: [block('chat.context', 'CLIENT NAME: Alex')],
+        history: historyFixture(),
+        gapNote: 'The user returns after 14 h.',
+        nowLine: 'NOW (user’s local time): Friday 2026-09-25 14:20 (Asia/Manila)',
+        current: [new HumanMessage(USER_MESSAGE), ...IN_FLIGHT_POST_TOOL],
+      }),
+    );
+
+    expect(isType(messages[0]!, 'system')).toBe(true);
+    expect(messages.slice(1).filter(m => isType(m, 'system'))).toEqual([]);
   });
 
   it('INV-LLM-001: history interleaves as messages for EVERY phase — no frame, no phase parameter', async () => {
@@ -178,7 +244,7 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
       expect(budgetReport.domain).toBe(0);
     });
 
-    it('one block → its own SystemMessage after the summaries block, before history', async () => {
+    it('one block → rides in the current HumanMessage’s <context> part (D2), never as a SystemMessage', async () => {
       const { messages, budgetReport } = await assembleContext(
         input({
           episodeSummaries: [EPISODE_SUMMARY],
@@ -187,20 +253,18 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
         }),
       );
 
-      // [system, summaries, domain block, ...history, human]
-      expect(messages).toHaveLength(6);
-      expect(String(messages[0].content)).toBe(SYSTEM);
-      expect(String(messages[1].content)).toContain('## Previous episodes');
-      expect(isType(messages[2], 'system')).toBe(true);
-      expect(String(messages[2].content)).toBe('CLIENT NAME: Alex');
-      expect(messages.slice(3, 5)).toEqual(historyFixture());
-      expect(isType(messages[5], 'human')).toBe(true);
+      // [system(block 1 + summaries), ...history, human(<context> + user text)]
+      expect(messages).toHaveLength(4);
+      expect(String(messages[0].content)).toContain('## Previous episodes');
+      expect(String(messages[0].content)).not.toContain('CLIENT NAME: Alex');
+      expect(messages.slice(1, 3)).toEqual(historyFixture());
+      expectCurrentWithContext(messages[3]!, ['CLIENT NAME: Alex']);
 
       expect(budgetReport.blocks).toEqual([{ id: 'chat.context', tokens: expect.any(Number), depth: 0 }]);
       expect(budgetReport.domain).toBeGreaterThan(0);
     });
 
-    it('multiple blocks compose into one SystemMessage, spec order, joined like compose()', async () => {
+    it('multiple blocks compose into one <context> section, spec order, joined like compose()', async () => {
       const { messages, budgetReport } = await assembleContext(
         input({
           contextBlocks: [
@@ -210,7 +274,7 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
         }),
       );
 
-      expect(String(messages[1].content)).toBe('CLIENT BLOCK\n\nOVERVIEW BLOCK');
+      expect(textOf(messages[1]!)).toContain('<context>\nCLIENT BLOCK\n\nOVERVIEW BLOCK\n</context>');
       expect(budgetReport.blocks.map(b => b.id)).toEqual(['training.client', 'training.workout_overview']);
     });
 
@@ -239,6 +303,7 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
       expect(messages).toHaveLength(2);
       expect(String(messages[0].content)).toBe(SYSTEM);
       expect(isType(messages[1], 'human')).toBe(true);
+      expect(textOf(messages[1]!)).not.toContain('CLIENT NAME');
       expect(budgetReport.blocks).toEqual([]);
       expect(budgetReport.domain).toBe(0);
       expect(budgetReport.summary).toBe(0);
@@ -304,28 +369,29 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
       expect(withEmptyFacts.budgetReport.longTerm).toBe(0);
     });
 
-    it('with facts → its own SystemMessage BEFORE the episode-summaries block (ADR-0013 §3.4 block 2 ordering)', async () => {
+    it('with facts → facts precede the episode-summaries block inside the one stable system message (§3.4 block 2 ordering)', async () => {
       const { messages, budgetReport } = await assembleContext(
         input({ userFacts: [FACT], episodeSummaries: [EPISODE_SUMMARY] }),
       );
 
-      // [system, facts, summaries, human]
-      expect(messages).toHaveLength(4);
-      expect(String(messages[0].content)).toBe(SYSTEM);
-      expect(String(messages[1].content)).toContain('## User Facts');
-      expect(String(messages[1].content)).toContain('Trains at home with dumbbells only');
-      expect(String(messages[2].content)).toContain('## Previous episodes');
-      expect(isType(messages[3], 'human')).toBe(true);
+      // [system(block 1, facts, summaries), human]
+      expect(messages).toHaveLength(2);
+      const system = String(messages[0].content);
+      expect(system.startsWith(SYSTEM)).toBe(true);
+      expect(system).toContain('## User Facts');
+      expect(system).toContain('Trains at home with dumbbells only');
+      expect(system.indexOf('## User Facts')).toBeLessThan(system.indexOf('## Previous episodes'));
+      expect(isType(messages[1], 'human')).toBe(true);
       expect(budgetReport.longTerm).toBeGreaterThan(0);
     });
 
     it('facts alone (no summaries) render right after block 1, before history', async () => {
       const { messages } = await assembleContext(input({ userFacts: [FACT], history: historyFixture() }));
 
-      expect(String(messages[0].content)).toBe(SYSTEM);
-      expect(String(messages[1].content)).toContain('## User Facts');
-      expect(messages.slice(2, 4)).toEqual(historyFixture());
-      expect(isType(messages[4], 'human')).toBe(true);
+      expect(String(messages[0].content).startsWith(SYSTEM)).toBe(true);
+      expect(String(messages[0].content)).toContain('## User Facts');
+      expect(messages.slice(1, 3)).toEqual(historyFixture());
+      expect(isType(messages[3], 'human')).toBe(true);
     });
 
     it('INV-LLM-004 (d) D-D floor drops facts too: only block 1 and current remain', async () => {
@@ -360,17 +426,15 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
   });
 
   describe('gapNote (chat-continuity Task 2, AC-CC-2)', () => {
-    it("a system note sits immediately before current's HumanMessage, after history", async () => {
+    it('the note rides in the current HumanMessage’s <context> part, after history (D2)', async () => {
       const { messages } = await assembleContext(
         input({ history: historyFixture(), gapNote: 'The user returns after 14 h.' }),
       );
 
-      // [system, ...history(2), note, human]
-      expect(messages).toHaveLength(5);
-      expect(isType(messages[3], 'system')).toBe(true);
-      expect(String(messages[3].content)).toBe('The user returns after 14 h.');
-      expect(isType(messages[4], 'human')).toBe(true);
-      expect(String(messages[4].content)).toBe(USER_MESSAGE);
+      // [system, ...history(2), human(<context>note</context> + user text)]
+      expect(messages).toHaveLength(4);
+      expect(messages.filter(m => isType(m, 'system'))).toHaveLength(1);
+      expectCurrentWithContext(messages[3]!, ['The user returns after 14 h.']);
     });
 
     it('no gapNote → no extra system message (the default shape is unchanged)', async () => {
@@ -392,11 +456,10 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
       );
 
       expect(budgetReport.cuts).toContain('floor');
-      // Block 1, the note, current — the note belongs to `current`, not to history.
-      expect(messages).toHaveLength(3);
-      expect(isType(messages[1], 'system')).toBe(true);
-      expect(String(messages[1].content)).toContain('The user returns after');
-      expect(isType(messages[2], 'human')).toBe(true);
+      // Block 1, current (with the note in its <context>) — the note belongs to `current`, not to history.
+      expect(messages).toHaveLength(2);
+      expect(textOf(messages[1]!)).toContain('The user returns after');
+      expect(isType(messages[1], 'human')).toBe(true);
     });
   });
 
@@ -408,26 +471,23 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
   describe('nowLine (now-line-last plan, AC-NL-1)', () => {
     const NOW_LINE = "NOW (user's local time): Friday 2026-09-25 14:20 (Asia/Manila)";
 
-    it('sits immediately before current’s HumanMessage, after history', async () => {
+    it('rides in the current HumanMessage’s <context> part, after history (D2)', async () => {
       const { messages } = await assembleContext(input({ history: historyFixture(), nowLine: NOW_LINE }));
 
-      // [system, ...history(2), NOW, human]
-      expect(messages).toHaveLength(5);
-      expect(isType(messages[3], 'system')).toBe(true);
-      expect(String(messages[3].content)).toBe(NOW_LINE);
-      expect(isType(messages[4], 'human')).toBe(true);
+      // [system, ...history(2), human(<context>NOW</context> + user text)]
+      expect(messages).toHaveLength(4);
+      expect(messages.filter(m => isType(m, 'system'))).toHaveLength(1);
+      expectCurrentWithContext(messages[3]!, [NOW_LINE]);
     });
 
-    it('after the gap note when there is one: history → gap note → NOW → current', async () => {
+    it('after the gap note when there is one: <context> = gap note, then NOW', async () => {
       const { messages } = await assembleContext(
         input({ history: historyFixture(), gapNote: 'The user returns after 14 h.', nowLine: NOW_LINE }),
       );
 
-      // [system, ...history(2), note, NOW, human]
-      expect(messages).toHaveLength(6);
-      expect(String(messages[3].content)).toContain('The user returns after');
-      expect(String(messages[4].content)).toBe(NOW_LINE);
-      expect(isType(messages[5], 'human')).toBe(true);
+      // [system, ...history(2), human(<context>note\n\nNOW</context> + user text)]
+      expect(messages).toHaveLength(4);
+      expectCurrentWithContext(messages[3]!, ['The user returns after 14 h.\n\n' + NOW_LINE]);
     });
 
     it('no nowLine → no extra system message (the default shape is unchanged)', async () => {
@@ -447,12 +507,11 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
       );
 
       expect(budgetReport.cuts).toContain('floor');
-      // Block 1, the NOW line, current — it belongs to `current`, like the gap note.
-      expect(messages).toHaveLength(3);
-      expect(String(messages[1].content)).toBe(NOW_LINE);
-      expect(isType(messages[2], 'human')).toBe(true);
+      // Block 1, current (NOW in its <context>) — it belongs to `current`, like the gap note.
+      expect(messages).toHaveLength(2);
+      expect(textOf(messages[1]!)).toContain(NOW_LINE);
       // Not budgeted: no dedicated report slot; only counted in `messages`.
-      expect(budgetReport.messages).toBe(3);
+      expect(budgetReport.messages).toBe(2);
     });
   });
 
@@ -496,7 +555,7 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
       exerciseVerdicts: [],
     };
 
-    it('renders as one SystemMessage right after the user-facts block, before summaries', async () => {
+    it('renders inside the stable system message right after the user-facts block, before summaries', async () => {
       const { messages, budgetReport } = await assembleContext(
         input({
           userFacts: userFactsFixture(),
@@ -505,15 +564,19 @@ describe('assembleContext (ADR-0013 §3.4 / AC-1323; one shape — INV-LLM-001)'
         }),
       );
 
-      // [system, facts, directive, summaries, human]
-      expect(messages).toHaveLength(5);
-      expect(String(messages[1].content)).toContain('## User Facts');
-      expect(String(messages[2].content)).toContain('## Course Directive');
-      expect(String(messages[2].content)).toContain('Build muscle 3×/week');
-      expect(String(messages[2].content)).toMatch(/outrank|always wins|takes precedence/i);
-      expect(String(messages[3].content)).toContain('## Previous episodes');
-      expect(isType(messages[4], 'human')).toBe(true);
-      expect(budgetReport.messages).toBe(5);
+      // [system(block 1, facts, directive, summaries), human]
+      expect(messages).toHaveLength(2);
+      const system = String(messages[0].content);
+      const [iFacts, iDirective, iSummaries] = ['## User Facts', '## Course Directive', '## Previous episodes'].map(h =>
+        system.indexOf(h),
+      );
+      expect(iFacts).toBeGreaterThan(0);
+      expect(iDirective).toBeGreaterThan(iFacts!);
+      expect(iSummaries).toBeGreaterThan(iDirective!);
+      expect(system).toContain('Build muscle 3×/week');
+      expect(system).toMatch(/outrank|always wins|takes precedence/i);
+      expect(isType(messages[1], 'human')).toBe(true);
+      expect(budgetReport.messages).toBe(2);
     });
 
     it('its tokens are counted in longTerm (the long-term steering slot — facts + directive)', async () => {

@@ -13,16 +13,6 @@ export interface ToolCallLike {
   id?: string;
 }
 
-/**
- * What the agent node hands `availability`: the phase's loaded render data
- * (`PhaseSpec.loadContext`'s `data`; training reads its `session` field).
- * Loosely typed — the policy lambda installed by the training spec narrows
- * it to the domain shapes.
- */
-export interface AvailabilityInput {
-  data: unknown;
-}
-
 export interface ToolPolicy {
   /**
    * Execution priority (lower first); unknown tools last. Secondary key:
@@ -44,11 +34,6 @@ export interface ToolPolicy {
    * with the catalog message. Infinity = today's unbounded loop.
    */
   llmErrorBudget: number;
-  /**
-   * Names the model may call now, given what the agent node loaded; null =
-   * all. Called by the agent node (D-H).
-   */
-  availability?: (input: AvailabilityInput) => readonly string[] | null;
 }
 
 /** Phases with no training-only protections — today's four non-training subgraphs. */

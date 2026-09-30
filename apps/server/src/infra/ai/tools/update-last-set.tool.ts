@@ -6,6 +6,7 @@ import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import type { ITrainingService } from '@domain/training/ports';
 
 import { sessionIdOf, userIdOf } from '@infra/ai/tools/format-exercise-summary';
+import { rejectWithoutLoggedSet } from '@infra/ai/tools/set-preconditions';
 
 import { createLogger } from '@shared/logger';
 import { isDatabaseFailure } from '@shared/pg-error-cause';
@@ -26,6 +27,11 @@ export function buildUpdateLastSetTool(deps: UpdateLastSetToolDeps) {
       const sessionId = sessionIdOf(config);
       if (!sessionId) {
         return systemError('No active training session found. Start a session first.');
+      }
+
+      const rejection = await rejectWithoutLoggedSet(trainingService, sessionId, 'update_last_set');
+      if (rejection) {
+        return rejection;
       }
 
       const rpe = input.rpe != null ? roundRpeToHalf(input.rpe) : undefined;

@@ -55,7 +55,11 @@ const scenarioDef: Scenario = {
 };
 
 function textOf(m: BaseMessage): string {
-  return typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+  return typeof m.content === 'string'
+    ? m.content
+    : m.content.every(part => part.type === 'text')
+      ? m.content.map(part => (part as { text: string }).text).join('')
+      : JSON.stringify(m.content);
 }
 
 describe('retro-timestamps scenario (BUG-043, AC-RT-3, AC-RT-4)', () => {

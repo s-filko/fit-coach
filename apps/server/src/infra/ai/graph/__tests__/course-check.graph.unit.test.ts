@@ -148,6 +148,7 @@ function lastModelInput(): BaseMessage[] {
   return __recorded[__recorded.length - 1]!;
 }
 
+// D2: the directive is part of the ONE stable system message (block 1 + facts + directive + summaries).
 const directiveBlocks = (input: BaseMessage[]): BaseMessage[] =>
   input.filter(m => m._getType() === 'system' && String(m.content).includes('## Course Directive'));
 
@@ -176,7 +177,7 @@ describe('course check through the graph (AC-FL-5)', () => {
     expect(structured).toHaveBeenCalledTimes(2); // and settles again
   });
 
-  it('the directive reaches the model as ONE block after the facts; the user’s message is last and outranks it', async () => {
+  it('the directive reaches the model once, right after the facts inside the stable system message; the user’s message is last and outranks it', async () => {
     const { deps } = makeHarness();
     const graph = buildConversationGraph(deps);
 
@@ -189,12 +190,14 @@ describe('course check through the graph (AC-FL-5)', () => {
     expect(String(blocks[0]!.content)).toContain('Build muscle 3×/week');
     expect(String(blocks[0]!.content)).toContain('always outranks this directive');
     // Persisted across the checkpointer: run 2 rendered it without a second call.
-    const factsIdx = input.findIndex(m => String(m.content).includes('## User Facts'));
-    expect(factsIdx).toBeGreaterThanOrEqual(0);
-    expect(input.indexOf(blocks[0]!)).toBe(factsIdx + 1);
+    const system = String(blocks[0]!.content);
+    expect(system.indexOf('## User Facts')).toBeGreaterThanOrEqual(0);
+    expect(system.indexOf('## Course Directive')).toBeGreaterThan(system.indexOf('## User Facts'));
     const last = input[input.length - 1]!;
     expect(last._getType()).toBe('human');
-    expect(String(last.content)).toBe('Плечо уже не болит');
+    expect((last.content as Array<{ text: string }>)[(last.content as unknown[]).length - 1]?.text).toBe(
+      'Плечо уже не болит',
+    );
   });
 
   it('a provider failure never blocks the reply: warn logged, the answer still comes, no directive block on a first run', async () => {

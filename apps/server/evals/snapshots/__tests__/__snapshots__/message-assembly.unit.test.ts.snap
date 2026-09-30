@@ -62,23 +62,30 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote.",
     "type": "system",
   },
   {
-    "content": "CLIENT NAME: Тест
+    "content": [
+      {
+        "text": "<context>
+CLIENT NAME: Тест
 CLIENT PROFILE: Age: 34, Gender: male, Height: 182 cm, Weight: 84.5 kg, Fitness level: intermediate, Goal: strength
 WORKOUT PLAN STATUS: User HAS an active workout plan. They can start planning workout sessions.
 RECENT TRAINING HISTORY (last 5 sessions):
-No recent sessions.",
-    "type": "system",
-  },
-  {
-    "content": "NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
-    "type": "system",
-  },
-  {
-    "content": "Привет, что сегодня?",
+No recent sessions.
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)
+</context>",
+        "type": "text",
+      },
+      {
+        "text": "Привет, что сегодня?",
+        "type": "text",
+      },
+    ],
     "type": "human",
   },
 ]
@@ -146,23 +153,30 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote.",
     "type": "system",
   },
   {
-    "content": "CLIENT NAME: Тест
+    "content": [
+      {
+        "text": "<context>
+CLIENT NAME: Тест
 CLIENT PROFILE: Age: 34, Gender: male, Height: 182 cm, Weight: 84.5 kg, Fitness level: intermediate, Goal: strength
 WORKOUT PLAN STATUS: User HAS an active workout plan. They can start planning workout sessions.
 RECENT TRAINING HISTORY (last 5 sessions):
-No recent sessions.",
-    "type": "system",
-  },
-  {
-    "content": "NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
-    "type": "system",
-  },
-  {
-    "content": "Привет, что сегодня?",
+No recent sessions.
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)
+</context>",
+        "type": "text",
+      },
+      {
+        "text": "Привет, что сегодня?",
+        "type": "text",
+      },
+    ],
     "type": "human",
   },
   {
@@ -193,11 +207,16 @@ No recent sessions.",
     "type": "tool",
   },
   {
-    "content": "IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools.",
-    "type": "system",
-  },
-  {
-    "content": "LLM_ERROR: Invalid set data: exercise id not found in session",
+    "content": [
+      {
+        "text": "LLM_ERROR: Invalid set data: exercise id not found in session",
+        "type": "text",
+      },
+      {
+        "text": "IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools.",
+        "type": "text",
+      },
+    ],
     "status": "error",
     "tool_call_id": "call-2",
     "type": "tool",
@@ -267,29 +286,34 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
-    "type": "system",
-  },
-  {
-    "content": "## Previous episodes
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote.
+
+## Previous episodes
 Context only. Numbers below are not authoritative — use tools and the current state.
 training (today 20:00): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
     "type": "system",
   },
   {
-    "content": "CLIENT NAME: Тест
+    "content": [
+      {
+        "text": "<context>
+CLIENT NAME: Тест
 CLIENT PROFILE: Age: 34, Gender: male, Height: 182 cm, Weight: 84.5 kg, Fitness level: intermediate, Goal: strength
 WORKOUT PLAN STATUS: User HAS an active workout plan. They can start planning workout sessions.
 RECENT TRAINING HISTORY (last 5 sessions):
-No recent sessions.",
-    "type": "system",
-  },
-  {
-    "content": "NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
-    "type": "system",
-  },
-  {
-    "content": "Привет, что сегодня?",
+No recent sessions.
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)
+</context>",
+        "type": "text",
+      },
+      {
+        "text": "Привет, что сегодня?",
+        "type": "text",
+      },
+    ],
     "type": "human",
   },
 ]
@@ -386,11 +410,16 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote.",
     "type": "system",
   },
   {
-    "content": "=== CLIENT PROFILE ===
+    "content": [
+      {
+        "text": "<context>
+=== CLIENT PROFILE ===
 
 Name: Тест
 Age: 34
@@ -398,15 +427,17 @@ Gender: male
 Height: 182 cm
 Weight: 84.5 kg
 Fitness Level: intermediate
-Fitness Goal: strength",
-    "type": "system",
-  },
-  {
-    "content": "NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
-    "type": "system",
-  },
-  {
-    "content": "Привет, что сегодня?",
+Fitness Goal: strength
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)
+</context>",
+        "type": "text",
+      },
+      {
+        "text": "Привет, что сегодня?",
+        "type": "text",
+      },
+    ],
     "type": "human",
   },
 ]
@@ -503,11 +534,16 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote.",
     "type": "system",
   },
   {
-    "content": "=== CLIENT PROFILE ===
+    "content": [
+      {
+        "text": "<context>
+=== CLIENT PROFILE ===
 
 Name: Тест
 Age: 34
@@ -515,15 +551,17 @@ Gender: male
 Height: 182 cm
 Weight: 84.5 kg
 Fitness Level: intermediate
-Fitness Goal: strength",
-    "type": "system",
-  },
-  {
-    "content": "NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
-    "type": "system",
-  },
-  {
-    "content": "Привет, что сегодня?",
+Fitness Goal: strength
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)
+</context>",
+        "type": "text",
+      },
+      {
+        "text": "Привет, что сегодня?",
+        "type": "text",
+      },
+    ],
     "type": "human",
   },
   {
@@ -554,11 +592,16 @@ Fitness Goal: strength",
     "type": "tool",
   },
   {
-    "content": "IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools.",
-    "type": "system",
-  },
-  {
-    "content": "LLM_ERROR: Invalid set data: exercise id not found in session",
+    "content": [
+      {
+        "text": "LLM_ERROR: Invalid set data: exercise id not found in session",
+        "type": "text",
+      },
+      {
+        "text": "IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools.",
+        "type": "text",
+      },
+    ],
     "status": "error",
     "tool_call_id": "call-2",
     "type": "tool",
@@ -657,17 +700,20 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
-    "type": "system",
-  },
-  {
-    "content": "## Previous episodes
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote.
+
+## Previous episodes
 Context only. Numbers below are not authoritative — use tools and the current state.
 training (today 20:00): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
     "type": "system",
   },
   {
-    "content": "=== CLIENT PROFILE ===
+    "content": [
+      {
+        "text": "<context>
+=== CLIENT PROFILE ===
 
 Name: Тест
 Age: 34
@@ -675,15 +721,17 @@ Gender: male
 Height: 182 cm
 Weight: 84.5 kg
 Fitness Level: intermediate
-Fitness Goal: strength",
-    "type": "system",
-  },
-  {
-    "content": "NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
-    "type": "system",
-  },
-  {
-    "content": "Привет, что сегодня?",
+Fitness Goal: strength
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)
+</context>",
+        "type": "text",
+      },
+      {
+        "text": "Привет, что сегодня?",
+        "type": "text",
+      },
+    ],
     "type": "human",
   },
 ]
@@ -763,11 +811,18 @@ WRONG (tool call without text — this will break the app):
     "type": "system",
   },
   {
-    "content": "NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
-    "type": "system",
-  },
-  {
-    "content": "Привет, что сегодня?",
+    "content": [
+      {
+        "text": "<context>
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)
+</context>",
+        "type": "text",
+      },
+      {
+        "text": "Привет, что сегодня?",
+        "type": "text",
+      },
+    ],
     "type": "human",
   },
 ]
@@ -847,11 +902,18 @@ WRONG (tool call without text — this will break the app):
     "type": "system",
   },
   {
-    "content": "NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
-    "type": "system",
-  },
-  {
-    "content": "Привет, что сегодня?",
+    "content": [
+      {
+        "text": "<context>
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)
+</context>",
+        "type": "text",
+      },
+      {
+        "text": "Привет, что сегодня?",
+        "type": "text",
+      },
+    ],
     "type": "human",
   },
   {
@@ -882,11 +944,16 @@ WRONG (tool call without text — this will break the app):
     "type": "tool",
   },
   {
-    "content": "IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools.",
-    "type": "system",
-  },
-  {
-    "content": "LLM_ERROR: Invalid set data: exercise id not found in session",
+    "content": [
+      {
+        "text": "LLM_ERROR: Invalid set data: exercise id not found in session",
+        "type": "text",
+      },
+      {
+        "text": "IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools.",
+        "type": "text",
+      },
+    ],
     "status": "error",
     "tool_call_id": "call-2",
     "type": "tool",
@@ -964,21 +1031,26 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
-    "type": "system",
-  },
-  {
-    "content": "## Previous episodes
+  text: ""  ← empty, user sees nothing
+
+## Previous episodes
 Context only. Numbers below are not authoritative — use tools and the current state.
 training (today 20:00): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
     "type": "system",
   },
   {
-    "content": "NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
-    "type": "system",
-  },
-  {
-    "content": "Привет, что сегодня?",
+    "content": [
+      {
+        "text": "<context>
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)
+</context>",
+        "type": "text",
+      },
+      {
+        "text": "Привет, что сегодня?",
+        "type": "text",
+      },
+    ],
     "type": "human",
   },
 ]
@@ -1099,11 +1171,16 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote.",
     "type": "system",
   },
   {
-    "content": "=== CLIENT PROFILE ===
+    "content": [
+      {
+        "text": "<context>
+=== CLIENT PROFILE ===
 
 Name: Тест
 Age: 34
@@ -1124,15 +1201,17 @@ No training history yet. This will be the first session.
 
 === RECOVERY TIMELINE (muscle groups) ===
 
-No muscle group data — fully rested.",
-    "type": "system",
-  },
-  {
-    "content": "NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
-    "type": "system",
-  },
-  {
-    "content": "Привет, что сегодня?",
+No muscle group data — fully rested.
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)
+</context>",
+        "type": "text",
+      },
+      {
+        "text": "Привет, что сегодня?",
+        "type": "text",
+      },
+    ],
     "type": "human",
   },
 ]
@@ -1253,11 +1332,16 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote.",
     "type": "system",
   },
   {
-    "content": "=== CLIENT PROFILE ===
+    "content": [
+      {
+        "text": "<context>
+=== CLIENT PROFILE ===
 
 Name: Тест
 Age: 34
@@ -1278,15 +1362,17 @@ No training history yet. This will be the first session.
 
 === RECOVERY TIMELINE (muscle groups) ===
 
-No muscle group data — fully rested.",
-    "type": "system",
-  },
-  {
-    "content": "NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
-    "type": "system",
-  },
-  {
-    "content": "Привет, что сегодня?",
+No muscle group data — fully rested.
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)
+</context>",
+        "type": "text",
+      },
+      {
+        "text": "Привет, что сегодня?",
+        "type": "text",
+      },
+    ],
     "type": "human",
   },
   {
@@ -1317,11 +1403,16 @@ No muscle group data — fully rested.",
     "type": "tool",
   },
   {
-    "content": "IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools.",
-    "type": "system",
-  },
-  {
-    "content": "LLM_ERROR: Invalid set data: exercise id not found in session",
+    "content": [
+      {
+        "text": "LLM_ERROR: Invalid set data: exercise id not found in session",
+        "type": "text",
+      },
+      {
+        "text": "IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools.",
+        "type": "text",
+      },
+    ],
     "status": "error",
     "tool_call_id": "call-2",
     "type": "tool",
@@ -1444,17 +1535,20 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
-    "type": "system",
-  },
-  {
-    "content": "## Previous episodes
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote.
+
+## Previous episodes
 Context only. Numbers below are not authoritative — use tools and the current state.
 training (today 20:00): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
     "type": "system",
   },
   {
-    "content": "=== CLIENT PROFILE ===
+    "content": [
+      {
+        "text": "<context>
+=== CLIENT PROFILE ===
 
 Name: Тест
 Age: 34
@@ -1475,15 +1569,17 @@ No training history yet. This will be the first session.
 
 === RECOVERY TIMELINE (muscle groups) ===
 
-No muscle group data — fully rested.",
-    "type": "system",
-  },
-  {
-    "content": "NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
-    "type": "system",
-  },
-  {
-    "content": "Привет, что сегодня?",
+No muscle group data — fully rested.
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)
+</context>",
+        "type": "text",
+      },
+      {
+        "text": "Привет, что сегодня?",
+        "type": "text",
+      },
+    ],
     "type": "human",
   },
 ]
@@ -1611,11 +1707,16 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote.",
     "type": "system",
   },
   {
-    "content": "=== CLIENT ===
+    "content": [
+      {
+        "text": "<context>
+=== CLIENT ===
 
 Name: Тест
 Goal: strength
@@ -1646,15 +1747,17 @@ ACTIVE: Жим лёжа (штанга) [ID:11111111-1111-4111-8111-111111111111]
 
 === RECENT WORKOUTS (last 7 days, fatigue context) ===
 
-No completed workouts on record.",
-    "type": "system",
-  },
-  {
-    "content": "NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
-    "type": "system",
-  },
-  {
-    "content": "Привет, что сегодня?",
+No completed workouts on record.
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)
+</context>",
+        "type": "text",
+      },
+      {
+        "text": "Привет, что сегодня?",
+        "type": "text",
+      },
+    ],
     "type": "human",
   },
 ]
@@ -1782,11 +1885,16 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote.",
     "type": "system",
   },
   {
-    "content": "=== CLIENT ===
+    "content": [
+      {
+        "text": "<context>
+=== CLIENT ===
 
 Name: Тест
 Goal: strength
@@ -1817,15 +1925,17 @@ ACTIVE: Жим лёжа (штанга) [ID:11111111-1111-4111-8111-111111111111]
 
 === RECENT WORKOUTS (last 7 days, fatigue context) ===
 
-No completed workouts on record.",
-    "type": "system",
-  },
-  {
-    "content": "NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
-    "type": "system",
-  },
-  {
-    "content": "Привет, что сегодня?",
+No completed workouts on record.
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)
+</context>",
+        "type": "text",
+      },
+      {
+        "text": "Привет, что сегодня?",
+        "type": "text",
+      },
+    ],
     "type": "human",
   },
   {
@@ -1856,11 +1966,16 @@ No completed workouts on record.",
     "type": "tool",
   },
   {
-    "content": "IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools.",
-    "type": "system",
-  },
-  {
-    "content": "LLM_ERROR: Invalid set data: exercise id not found in session",
+    "content": [
+      {
+        "text": "LLM_ERROR: Invalid set data: exercise id not found in session",
+        "type": "text",
+      },
+      {
+        "text": "IMPORTANT: All tool calls are complete. You MUST now write a natural text response to the user. Do NOT call any more tools.",
+        "type": "text",
+      },
+    ],
     "status": "error",
     "tool_call_id": "call-2",
     "type": "tool",
@@ -1990,17 +2105,20 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing",
-    "type": "system",
-  },
-  {
-    "content": "## Previous episodes
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote.
+
+## Previous episodes
 Context only. Numbers below are not authoritative — use tools and the current state.
 training (today 20:00): Topics: training plan discussed. Decisions: upper/lower split, 3 sessions per week. User state: mild shoulder discomfort reported.",
     "type": "system",
   },
   {
-    "content": "=== CLIENT ===
+    "content": [
+      {
+        "text": "<context>
+=== CLIENT ===
 
 Name: Тест
 Goal: strength
@@ -2031,15 +2149,17 @@ ACTIVE: Жим лёжа (штанга) [ID:11111111-1111-4111-8111-111111111111]
 
 === RECENT WORKOUTS (last 7 days, fatigue context) ===
 
-No completed workouts on record.",
-    "type": "system",
-  },
-  {
-    "content": "NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)",
-    "type": "system",
-  },
-  {
-    "content": "Привет, что сегодня?",
+No completed workouts on record.
+
+NOW (user's local time): Sunday 2026-09-13 12:00 (Europe/Berlin)
+</context>",
+        "type": "text",
+      },
+      {
+        "text": "Привет, что сегодня?",
+        "type": "text",
+      },
+    ],
     "type": "human",
   },
 ]

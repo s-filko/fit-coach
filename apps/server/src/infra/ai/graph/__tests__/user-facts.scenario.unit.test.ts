@@ -458,6 +458,13 @@ function makeDeps(userFacts: InMemoryUserFactsService): ConversationGraphDeps {
   } as unknown as ConversationGraphDeps;
 }
 
+/** Text of a message whether `content` is a string or a list of text parts (D2/D3). */
+function textOf(m: BaseMessage): string {
+  return typeof m.content === 'string'
+    ? m.content
+    : m.content.map(part => (part as { text?: string }).text ?? '').join('');
+}
+
 describe('user-facts scenario end to end (AC-1361, fenced summary → fact → block → tool rejection)', () => {
   it('carries a stated constraint through compaction, facts, prompt and hard validation', async () => {
     const facts = new InMemoryUserFactsService();
@@ -520,7 +527,17 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
       ctxConfig({ runId: 'run-1', now: T0 }),
     );
     const run1Input = recorded[0]!;
-    expect(run1Input.some(m => m._getType() === 'human' && String(m.content).includes('поясницы'))).toBe(true);
+    // D2: the current message is a list of text parts (<context>, then the user's own text).
+    expect(
+      run1Input.some(
+        m =>
+          m._getType() === 'human' &&
+          (typeof m.content === 'string'
+            ? m.content
+            : m.content.map(p => (p as { text?: string }).text ?? '').join('')
+          ).includes('поясницы'),
+      ),
+    ).toBe(true);
 
     // --- Step 2: compaction — the summariser answers INSIDE a ```json fence
     // through the REAL gateway; the summary is stored and the add operation applied.
@@ -566,7 +583,11 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
     expect(episodesBlock).toBeDefined();
     expect(String(factsBlock!.content)).toContain('lower back injury');
     expect(String(factsBlock!.content)).toContain('(lower_back)');
-    expect(run3FirstInput.indexOf(factsBlock!)).toBeLessThan(run3FirstInput.indexOf(episodesBlock!));
+    // D2: both blocks live in the one stable system message, facts first.
+    expect(factsBlock).toBe(episodesBlock);
+    expect(String(factsBlock!.content).indexOf('## User Facts')).toBeLessThan(
+      String(factsBlock!.content).indexOf('## Previous episodes'),
+    );
 
     // --- Step 4: hard validation — PRIMARY lower_back is rejected with a
     // user_error quoting the fact (nothing persisted); secondary-only passes.
@@ -575,8 +596,10 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
       (m: BaseMessage) => m._getType() === 'tool' && (m as ToolMessage).tool_call_id === 'call-sts-1',
     ) as ToolMessage | undefined;
     expect(rejection).toBeDefined();
-    expect(String(rejection!.content)).toContain('Cannot proceed');
-    expect(String(rejection!.content)).toContain(FACT_V1);
+    // D3: the post-tool nudge rides on this ToolMessage as an extra text part.
+    const rejectionText = textOf(rejection!);
+    expect(rejectionText).toContain('Cannot proceed');
+    expect(rejectionText).toContain(FACT_V1);
     // Exactly one write — the safe (secondary-only) call — and it is the
     // squat's recommendation, not the rejected deadlift's.
     expect(startSession).toHaveBeenCalledTimes(1);
@@ -588,7 +611,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
     const acceptance = run3ThirdInput.find(
       (m: BaseMessage) => m._getType() === 'tool' && (m as ToolMessage).tool_call_id === 'call-sts-2',
     ) as ToolMessage | undefined;
-    expect(String(acceptance!.content)).toContain('Session created (ID: sess-1)');
+    expect(textOf(acceptance!)).toContain('Session created (ID: sess-1)');
 
     // --- Step 5: a later compaction restating the same fact confirms it.
     await graph.invoke(

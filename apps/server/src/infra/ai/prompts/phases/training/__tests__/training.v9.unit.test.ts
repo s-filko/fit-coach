@@ -19,8 +19,8 @@ function trainingPromptText(): string {
 }
 
 describe('phase.training v9 — LOAD PLAN facts and get_load_plan (load-facts plan D13, AC-LF-6)', () => {
-  it('the current training prompt is v9', () => {
-    expect(PHASE_PROMPTS.training.current.version).toBe('v9');
+  it('the current training prompt is v10 (v9 + the CONTEXT LOCATION note — prompt-caching plan D2)', () => {
+    expect(PHASE_PROMPTS.training.current.version).toBe('v10');
   });
 
   it('rule 1 points to LOAD PLAN for the computed facts and states it recommends no weight', () => {
