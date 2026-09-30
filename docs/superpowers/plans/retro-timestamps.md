@@ -223,3 +223,35 @@ Files it may edit:
   just-logged set"), BUG-049 item 1.
 - Prompt wording of the STALE SESSION block and the retro rules.
 - Running the auto-close on the training path (D4).
+
+## Review
+
+Run 1 — 2026-09-30, one combined reviewer covering R1–R4 (small change; owner's economy rule). Verdict: **blocked**
+(4 blocking). Findings verbatim from the reviewer.
+
+### Blocking (open)
+
+- **B1** | R2 | apps/server/src/infra/ai/tools/finish-training.tool.ts:33-36 vs apps/server/src/domain/training/session-timing.ts:16-18 | DRY (docs/CONTRIBUTING_AI.md, "Principles & Boundaries") | The diff introduces `lastActivityOf()` and routes `log_set` through it, but the same function in `finish_training` — edited three lines below — keeps its own inline `lastActivityAt ?? updatedAt ?? createdAt` copy and its own `> SESSION_TIMEOUT_MS` staleness test. The "stale" predicate now exists twice, in different styles, in the two tools this fix is about.
+- **B2** | R3 | apps/server/tests/integration/scenarios/retro-timestamps.integration.test.ts:96,118 | AC-RT-3 | AC-RT-3 (plan :122) claims set `created_at`s are "distinct, **increasing** and **match the scripted clock**" and `duration_minutes = 70 ± 1`; the test asserts only distinctness and checks 75 ± 1 (16×5-min layout). The header explains why matching the scripted clock is impossible (live sets get the DB clock), but the AC was never amended and "increasing" is testable yet unasserted. Failure: a regression stamping sets in reverse order or with arbitrary distinct past times passes. Fix: assert monotonic order, or amend the AC wording in the plan to what is provable.
+- **B3** | R3 | docs/superpowers/plans/retro-timestamps.md (Evidence) | SUPERPOWERS_INTEGRATION.md Rules of engagement rule 2 | T3's verification includes `node scripts/state.mjs --check` from the repo root; the Evidence table has no row for it. (Reviewer ran it read-only: "state check: OK", exit 0 — the fix is only recording it.)
+- **B4** | R4 | docs/superpowers/plans/retro-timestamps.md (AC-RT table) | SUPERPOWERS_INTEGRATION.md Rules of engagement rule 1 | Three new normative rules live only in `docs/superpowers/` with no BR/INV in `docs/domain/training.spec.md` / `docs/features/FEAT-0010-training-session-management.md`: "a set is retro only if the session is idle > 2 h **and** already holds sets"; "the first set of a zero-set session idle > 2 h re-anchors `started_at`"; "`completed_at >= started_at`, `duration_minutes >= 0` on every completion path". FEAT-0010 BR-TRAINING-013 (starting a session "sets started_at timestamp") is now half the story. Per rule 3 this must go to the owner for BR/INV IDs; the agent must not edit the spec itself.
+
+### Advisory
+
+- R1 | training.service.ts:335-342 | The retro/live decision is split across layers: the tool decides "retro" with `isRetroLog`, the service separately decides "late start" with `isLateStart`, using the caller's `skipActivityUpdate` as a proxy for "this set is live"; each re-reads the session and takes its own `new Date()`. A caller passing `skipActivityUpdate` for another reason would silently skip the re-anchor.
+- R1 | training.service.ts:338 | Every live `logSetWithContext` now runs an extra `findByIdWithDetails` although `log_set` just loaded the same session — hot path, needed only for the rare late-start case.
+- R1 | training.service.ts:335-342 | The re-anchor also applies to the webapp route `app/routes/app/session.routes.ts:292`; probably intended, but neither the plan nor a test covers it.
+- R2 | training-workout-overview.v1.ts:296-298, prompts/phases/training/v1.ts:108-110 | Two more inline copies of the last-activity idle computation remain (plan limited these files to a constant import).
+- R2 | finish-training.tool.ts:38-42 | The tool clamps `completedAt` via `resolveCompletion`, then `TrainingService.completeSession` clamps again — the tool-side clamp is a no-op second copy.
+- R2 | log-set.tool.unit.test.ts:629 | Hardcodes `5 * 60 * 1000` instead of importing `RETRO_SET_OFFSET_MS`, recreating the test-local copy AC-RT-5 removed.
+- R3 | plan Evidence rows | Every T2 red-run row carries SHA `880335e0` (the fix commit); the red results belong to `39753135`.
+- R3 | finish-training.tool.unit.test.ts:165 | Assertion wrapped in `if (completedAt !== undefined)` passes vacuously; AC-RT-2's "completes at `startedAt` with duration 0" is asserted nowhere (only `>=`).
+- R3 | training-workout-overview.v1.ts:234, 296-298 | For a zero-set session idle > 2 h (the 09-29 shape before the first set) the STALE block still says "Retro-logging is active: any sets you log will be timestamped to the original training time", while that first set is now logged live — on exactly the fixed path the model is told the opposite of what the tool does. The gate could use `isRetroLog` without a wording change.
+- R3 | training.service.ts:335-342 | `startedAt` is re-anchored before `ensureCurrentExercise`; if that throws, the start moves with no set logged (self-heals on the next set, but the write is not tied to the set being saved).
+- R4 | docs/BUGS.md BUG-043 | Still `Open`; its Component line names `format-exercise-summary.ts` for the constants, now in `domain/training/session-timing.ts` (orchestrator's close-out edit).
+- R4 | plan § Owner decisions | D2 still reads "Owner to confirm"; commit `bfc2f4be` says option A was "accepted by orchestrator"; no owner answer to D2 recorded. D3 has no follow-up recorded.
+- R4 | docs/domain/training.spec.md:16,29; FEAT-0010 BR-TRAINING-010/017 | Pre-existing: INV-TRAINING-004 ("last_activity_at is updated on every training action") is still contradicted by the retro branch (`skipActivityUpdate`); the fix narrows but does not remove it, and no spec records the exception.
+
+### Meta
+
+Filed in `docs/REVIEW_FINDINGS.md` (AC-<SLUG>-N format entry ×5; prompt-gate blind spot; evidence-SHA rule candidate).

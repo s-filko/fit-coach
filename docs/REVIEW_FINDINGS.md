@@ -387,6 +387,8 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   Proposed: a short "import direction" table in the ADR or `CONTRIBUTING_AI.md`.
   Runs: load-facts (2026-09-29, R1).
 
+- [×1] No zone checks that prompt-layer claims about a tool's behaviour stay in line with that tool. In retro-timestamps the STALE SESSION block still says "Retro-logging is active: any sets you log will be timestamped to the original training time" for a zero-set idle session, while the fixed `log_set` now logs that first set live. Rule candidate for `docs/CONTRIBUTING_AI.md`: "A prompt block that describes a tool's behaviour must gate on the same domain predicate the tool uses." Runs: retro-timestamps 2026-09-30 (R3).
+
 ## Rule candidates
 
 A finding a zone wanted to raise as blocking but could not, because no rule in this repo
@@ -396,16 +398,7 @@ backs it. Each entry names the proposed wording and where it would live
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
 
-- [×4] `CONTRIBUTING_AI.md`'s DRY bullet reads as production-only ("no copy-paste, no
-  reinvention of what the repo already has"); R2 applied it to duplicated test fixtures
-  (`USER`, `ctxConfig`) and blocked, but a reviewer could as reasonably have downgraded them.
-  Third run: the same scripted-model test double reimplemented inline in a second file could
-  only be advisory — DRY as written targets a copied *symbol*, not an unexported shape.
-  Proposed line: "DRY applies to test fixtures and harnesses too, including the same test
-  double reimplemented in two files."
-  Fourth run: R2 applied DRY equally to test/fixture code in `tests/integration/scenarios` and noted the zone file does not say whether it should; that choice produced 2 of its 3 blocking findings.
-  Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19), training-journey-scenarios (2026-09-20), transition-handoff (2026-09-25).
-- [×4] R3's "describe/it names carry BR/AC references per `docs/CONTRIBUTING_AI.md`" has no slot for
+- [×5] R3's "describe/it names carry BR/AC references per `docs/CONTRIBUTING_AI.md`" has no slot for
   `BUG-0NN`, which was this plan's owner-designated source of truth, nor for plan-local `AC-LSR-N`
   acceptance ids that are not durable `AC-####` specs. The six repro files do carry `BUG-0NN` in
   their `describe()` names and both ids in their header docblocks — satisfying CONTRIBUTING_AI.md's
@@ -420,7 +413,16 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   (`AC-[0-9]{4}`) silently misses all of them. Proposed: the guide's ID Conventions line reads
   `AC-####` for durable/cross-cutting criteria and `AC-<SLUG>-N` for plan-scoped ones, and the zone grep
   matches both shapes.
-  Runs: session-2026-09-21-repro (2026-09-22), llm-io-audit-trail (2026-09-22), session-investigation-0925 (2026-09-26), voice-transcription (2026-09-27, R3+R4: `AC-VT-*` vs `AC-####`; the guide still defines only the numeric form).
+  Runs: session-2026-09-21-repro (2026-09-22), llm-io-audit-trail (2026-09-22), session-investigation-0925 (2026-09-26), voice-transcription (2026-09-27, R3+R4: `AC-VT-*` vs `AC-####`; the guide still defines only the numeric form), retro-timestamps (2026-09-30, meta R3/R4: `AC-RT-*`; about 20 plan prefixes now in use).
+- [×4] `CONTRIBUTING_AI.md`'s DRY bullet reads as production-only ("no copy-paste, no
+  reinvention of what the repo already has"); R2 applied it to duplicated test fixtures
+  (`USER`, `ctxConfig`) and blocked, but a reviewer could as reasonably have downgraded them.
+  Third run: the same scripted-model test double reimplemented inline in a second file could
+  only be advisory — DRY as written targets a copied *symbol*, not an unexported shape.
+  Proposed line: "DRY applies to test fixtures and harnesses too, including the same test
+  double reimplemented in two files."
+  Fourth run: R2 applied DRY equally to test/fixture code in `tests/integration/scenarios` and noted the zone file does not say whether it should; that choice produced 2 of its 3 blocking findings.
+  Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19), training-journey-scenarios (2026-09-20), transition-handoff (2026-09-25).
 - [×3] A docs-reconcile task's checklist written from the author's memory left five durable
   docs drifted (API_SPEC.md, three FEAT-* specs, BUGS.md/MANUAL_TEST_PLAN pointers) while
   every enumerated step was ticked done. Proposed sentence for the factual-bucket definition
@@ -878,3 +880,4 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   `CONTRIBUTING_AI.md`: "A change that adds a prompt block, tool or prompt version updates the
   ARCHITECTURE.md file map and the MANUAL_TEST_PLAN.md tool list in the same PR, or logs the drift
   in BACKLOG.md." Runs: load-facts (2026-09-29, R4).
+- [×1] Evidence rows need the SHA the command was actually run at. A single "evidence SHA" commit that fills every row with the head SHA makes red-phase evidence unverifiable (every T2 red row cited the fix commit `880335e0`, where the repros no longer exist). Proposed wording for the Evidence convention in `docs/ORCHESTRATION.md` / `SUPERPOWERS_INTEGRATION.md`: "Red-phase evidence cites the red-test commit; green-phase evidence cites the fix commit." Runs: retro-timestamps 2026-09-30 (R3).
