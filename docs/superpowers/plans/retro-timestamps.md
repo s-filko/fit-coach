@@ -173,10 +173,10 @@ Files (create only):
   calls spread over 70 min, then `finish_training`) (AC-RT-3, AC-RT-4). Scenario definition, if a new file is
   needed: `apps/server/evals/scenarios/retro-timestamps.scenario.ts`.
 
-- [ ] Write the repros; run each and record command, exit code and the failing assertion in Evidence; each must
+- [x] Write the repros; run each and record command, exit code and the failing assertion in Evidence; each must
   fail on unchanged production **for the stated reason** (retro args present / `(retro-logged)` / `completed_at`
   before `started_at` / duration −1), not on setup.
-- [ ] Verify: `cd apps/server && npx jest src/infra/ai/tools/__tests__/retro-timestamps.repro.test.ts`;
+- [x] Verify: `cd apps/server && npx jest --testMatch='**/retro-timestamps.repro.test.ts' src/infra/ai/tools` (the default `testMatch` excludes `*.repro.test.ts`, so the flag is required);
   `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh bash -c 'RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch="**/session-timing.repro.test.ts" --testMatch="**/retro-timestamps.repro.test.ts"'`
   → red for the stated reasons (the AC-RT-1c control green); `npm run test:unit` green.
 
@@ -206,7 +206,11 @@ Files it may edit:
 
 | AC | Command | Exit | Failing assertion / result | SHA |
 |---|---|---|---|---|
-| | | | | |
+| AC-RT-1a/1b/4 (unit) | `npx jest --testMatch='**/retro-timestamps.repro.test.ts' src/infra/ai/tools` | 1 | 1 of 3 red for the AC-RT-1 case: first set of a zero-set session idle 3 h gets `createdAt` = `lastActivityAt + 5 min` (`expect(opts.createdAt).toBeUndefined()` fails; `isRetro: true` in the audit log). Control AC-RT-1c green | (this commit) |
+| AC-RT-2 (unit, `finish_training`) | same command | 1 | red: `completedAt` handed to `completeSession` (`lastActivityAt`) is 77 ms before `startedAt` (`toBeGreaterThanOrEqual` fails) | (this commit) |
+| AC-RT-1a, AC-RT-2 (DB service) | `db-test-lock.sh bash -c 'RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch="**/session-timing.repro.test.ts"'` | 1 | 5/6 red: `completeSession` and `autoCloseTimedOut` with `completedAt`/`last_activity_at` before `started_at` store `completed_at < started_at` (×2) and `duration_minutes = -1` (×2); first set of a zero-set stale session leaves `started_at` at plan acceptance (3 h old). Control (a live set advances `last_activity_at`) green | (this commit) |
+| AC-RT-3, AC-RT-4 (scenario) | `db-test-lock.sh bash -c 'RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch="**/scenarios/retro-timestamps.repro.test.ts"'` | 1 | 7/8 red (the run-to-the-end test green): 1 distinct `created_at` for 16 sets (frozen retro stamp); `started_at` ≈ T0 not T0+180 m; `last_activity_at` never moved (≈ T0); `completed_at` < `started_at`; `duration_minutes = -1` (the 09-29 value); `retro-logged` seen by the model on 16/16 set steps; `=== STALE SESSION ===` still in the prompt of every later run | (this commit) |
+| default suites | `cd apps/server && npm run test:unit` | 0 | 167 suites / 1716 tests green (repro files are outside the default `testMatch`) | (this commit) |
 
 ## Out of scope
 
