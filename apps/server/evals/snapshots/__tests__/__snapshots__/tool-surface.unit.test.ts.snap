@@ -1488,7 +1488,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) tra
     },
   },
   {
-    "description": "Log a completed set for the current exercise. Identify the exercise with exerciseId ONLY when you have its exact UUID — copied verbatim from the SESSION PLAN or from a search_exercises result ("ID:..." line). If the exercise is not in the plan and you do not have its exact UUID, pass exerciseName instead (the server resolves it in the catalog) — never invent or guess a UUID. For strength/weighted exercises: provide reps and weight (in kg). For bodyweight exercises: provide reps only. For cardio duration (bike, elliptical): provide durationSeconds only. For cardio distance (treadmill, running): provide distanceKm. durationSeconds is optional — if unknown, log without it and ask the user. Optionally: inclinePct (treadmill only). setNumber is computed automatically — do NOT pass it. Call once per set. For multiple sets reported at once, call log_set multiple times. Pass setKind 'warmup' ONLY when the user's own words say so (разминка, разминочный, warm-up, для разогрева) — never infer warm-up from a light weight alone. Omit for a normal working set. For a dumbbell/kettlebell exercise the weight is per hand by default — pass weightBasis 'total' only when the user explicitly says the weight is a combined/total figure (e.g. 'в сумме', 'total').",
+    "description": "Log a completed set for the current exercise. Identify the exercise with exerciseId ONLY when you have its exact UUID — copied verbatim from the SESSION PLAN or from a search_exercises result ("ID:..." line). If the exercise is not in the plan and you do not have its exact UUID, pass exerciseName instead (the server resolves it in the catalog) — never invent or guess a UUID. For strength/weighted exercises: provide reps and weight (in kg). For bodyweight exercises: provide reps only. For cardio duration (bike, elliptical): provide durationSeconds only. For isometric holds (plank, side plank, wall sit): provide durationSeconds — the hold time in SECONDS — never reps; the server stores it as a timed hold. For cardio distance (treadmill, running): provide distanceKm. durationSeconds is optional — if unknown, log without it and ask the user. Optionally: inclinePct (treadmill only). setNumber is computed automatically — do NOT pass it. Call once per set. For multiple sets reported at once, call log_set multiple times. Pass setKind 'warmup' ONLY when the user's own words say so (разминка, разминочный, warm-up, для разогрева) — never infer warm-up from a light weight alone. Omit for a normal working set. For a dumbbell/kettlebell exercise the weight is per hand by default — pass weightBasis 'total' only when the user explicitly says the weight is a combined/total figure (e.g. 'в сумме', 'total').",
     "name": "log_set",
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1522,7 +1522,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) tra
           "type": "number",
         },
         "durationSeconds": {
-          "description": "Duration in seconds — for cardio exercises.",
+          "description": "Duration in seconds — for cardio exercises and for isometric holds (plank: the hold time).",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991,
           "type": "integer",

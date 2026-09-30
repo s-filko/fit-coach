@@ -81,5 +81,10 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
   set (2.5 after 5 here); not the cause of C1, left alone.
 - (D) W-2: floor = `stepDown` returns the load itself when one step would reach ≤ 0 ("no lighter option"); the block prints
   `— no lighter option` instead of a lower conservative. Applies to every step-down (all rows + scheme hold).
+- (D) W-3: item 2 lives in `TrainingService.logSetWithContext` (next to the per-hand shaping — the exercise row is resolved there,
+  for a name-only call too), not in the tool: a `cardio_duration` set on an `isometric` exercise is re-keyed to
+  `{type:'isometric', duration}`; cardio exercises unchanged. A reps-only call on an isometric exercise is NOT converted
+  (seconds vs reps is ambiguous) — the tool description now says hold time = `durationSeconds`, never reps. Tool-surface
+  snapshot updated for the new description.
 
 ## Review

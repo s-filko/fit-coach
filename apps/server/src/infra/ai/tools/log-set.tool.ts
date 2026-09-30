@@ -168,6 +168,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         'For strength/weighted exercises: provide reps and weight (in kg).',
         'For bodyweight exercises: provide reps only.',
         'For cardio duration (bike, elliptical): provide durationSeconds only.',
+        'For isometric holds (plank, side plank, wall sit): provide durationSeconds — the hold time in SECONDS — never reps; the server stores it as a timed hold.',
         'For cardio distance (treadmill, running): provide distanceKm. durationSeconds is optional — if unknown, log without it and ask the user. Optionally: inclinePct (treadmill only).',
         'setNumber is computed automatically — do NOT pass it.',
         'Call once per set. For multiple sets reported at once, call log_set multiple times.',
@@ -200,7 +201,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
             .int()
             .positive()
             .optional()
-            .describe('Duration in seconds — for cardio exercises.'),
+            .describe('Duration in seconds — for cardio exercises and for isometric holds (plank: the hold time).'),
           distanceKm: z
             .number()
             .positive()
