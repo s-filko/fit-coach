@@ -331,6 +331,30 @@ describe('AC-LF-1 · metric 4 — working weight', () => {
     expect(r.weight).toBe(65);
   });
 
+  it('lateral-raise replay: one stray 5 kg set in an older session does not beat four sessions at 2.5 kg', () => {
+    // Owner history (replay 2026-10-01, C1): 09-10 was 5×10 then 2.5×10 (legacy NULL kinds); later sessions all 2.5.
+    const perfs = [
+      perf('d', 4, [strengthSet(2.5, 10), strengthSet(2.5, 15), strengthSet(2.5, 12), strengthSet(2.5, 10)]),
+      perf('c', 9, [strengthSet(2.5, 12), strengthSet(2.5, 11), strengthSet(2.5, 8)]),
+      perf('b', 14, [strengthSet(2.5, 12), strengthSet(2.5, 12), strengthSet(2.5, 12)]),
+      perf('a', 19, [strengthSet(5, 10), strengthSet(2.5, 10)]),
+    ];
+    const r = computeWorkingWeight(perfs, 'today', RANGE, benchPress, NOW, TZ);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(2.5);
+  });
+
+  it('a load that recurs in no other performance still counts when nothing recurs (pyramid)', () => {
+    const perfs = [perf('a', 3, [strengthSet(70, 10)]), perf('b', 9, [strengthSet(65, 10)])];
+    const r = computeWorkingWeight(perfs, 'today', RANGE, benchPress, NOW, TZ);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(70);
+  });
+
   it('legacy NULL warm-up under 60 % is dropped and flagged estimated', () => {
     const perfs = [perf('a', 3, [strengthSet(30, 15), strengthSet(65, 10)]), perf('b', 9, [strengthSet(60, 10)])];
     const r = computeWorkingWeight(perfs, 'today', RANGE, benchPress, NOW, TZ);

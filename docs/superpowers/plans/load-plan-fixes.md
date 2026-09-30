@@ -72,4 +72,14 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
 
 ## Execution decisions
 
+- (D) W-1: item 1 root cause — `qualifyingLoad` took the HIGHEST load that cleared the rep floor in any of the last K=5
+  performances; the owner's 2026-09-10 Lateral Raise Machine session had one set 5 kg × 10 (then 2.5 kg × 10), so that
+  single set beat four sessions at 2.5 kg. Fix: among the loads that recur in ≥ 2 of the performances the highest wins;
+  when nothing recurs the old "highest" rule applies (pyramids). This refines the design §3.2 metric-4 wording
+  ("highest load at which every set hit the range") — the orchestrator ratifies / updates the spec line. Observation, not
+  changed: `classifySets` drops a legacy NULL set < 60 % of the top weight as a warm-up even when it comes AFTER the top
+  set (2.5 after 5 here); not the cause of C1, left alone.
+- (D) W-2: floor = `stepDown` returns the load itself when one step would reach ≤ 0 ("no lighter option"); the block prints
+  `— no lighter option` instead of a lower conservative. Applies to every step-down (all rows + scheme hold).
+
 ## Review

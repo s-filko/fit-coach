@@ -5,6 +5,7 @@
  */
 import { defaultProgression } from '@domain/training/load-plan';
 
+import { decideLoadPlanEntry } from '@infra/ai/load-facts/load-decision';
 import { loadLoadPlanEntries, type LoadFactsLoaderDeps } from '@infra/ai/load-facts/load-facts.loader';
 import { CHEST_PRESS, daysBefore, DIPS, NOW, sessionRow, sets, TZ } from '@infra/ai/load-facts/__tests__/rows';
 
@@ -95,6 +96,18 @@ describe('AC-LP-3 · renderLoadPlanEntryV2', () => {
     expect(text).toContain('decision: Stage A, pre-fatigue delta → hold');
     expect(text).toContain('recommend: 65 kg');
     expect(text).toContain('conservative: 60 kg');
+  });
+
+  it('AC-LPF-1: a floored step-down prints "no lighter option", never a 0 kg line or a fake lower conservative', async () => {
+    const [entry] = await entries();
+    const d = decideLoadPlanEntry(entry, { progression });
+    if (d === null) {
+      throw new Error('expected a decision');
+    }
+    const floored = { ...d, candidate: { ...d.candidate, load: 2.5 }, conservative: { ...d.conservative, load: 2.5 } };
+    const text = renderLoadPlanEntryV2(entry, ctx, { progression, decision: floored });
+    expect(text).toContain('conservative: 2.5 kg × 8–12 — no lighter option');
+    expect(text).not.toMatch(/\b0 kg/);
   });
 
   it('no record: recommends a conservative start, never a number', async () => {

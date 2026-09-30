@@ -133,6 +133,14 @@ function breakLine(entry: LoadPlanEntry, d: Decision): string[] {
   return [`break: ${parts.join(' · ')}`];
 }
 
+/** " — 2.5 kg lower", or " — no lighter option" when the floored step-down left the conservative load unchanged. */
+function lowerNote(d: Decision, lower: number): string {
+  if (lower > 0) {
+    return ` — ${lower} ${d.conservative.unit ?? DEFAULT_UNIT} lower`;
+  }
+  return d.candidate.load !== null && d.candidate.load === d.conservative.load ? ' — no lighter option' : '';
+}
+
 function decisionLines(
   entry: LoadPlanEntry,
   d: Decision | null,
@@ -162,7 +170,7 @@ function decisionLines(
     ...breakLine(entry, d),
     `decision: Stage ${d.stage}, ${ROW_LABELS_V2[d.row]} → ${d.outcome}`,
     `recommend: ${rec === null ? d.reason : `${rec} — ${d.reason}`}`,
-    `conservative: ${cons === null ? d.reason : `${cons}${lower > 0 ? ` — ${lower} ${d.conservative.unit ?? DEFAULT_UNIT} lower` : ''}`}`,
+    `conservative: ${cons === null ? d.reason : `${cons}${lowerNote(d, lower)}`}`,
     confidenceText(entry, d),
   ];
 }

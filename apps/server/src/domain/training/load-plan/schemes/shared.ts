@@ -58,8 +58,13 @@ export function stepUp(base: number, step: number | null, capPct: number): Growt
   return { kind: 'grow', load: roundLoad(base + step) };
 }
 
+/**
+ * One step lighter, floored: when the step would take the load to zero or below there is no lighter option,
+ * so the load itself is returned — a candidate or conservative is never ≤ 0. No known step = no step.
+ */
 export function stepDown(load: number, step: number | null): number {
-  return roundLoad(Math.max(0, load - (step ?? 0)));
+  const lighter = roundLoad(load - (step ?? 0));
+  return lighter > 0 ? lighter : load;
 }
 
 export function stepOf(facts: LoadFacts): number | null {

@@ -284,3 +284,59 @@ describe('AC-LP-6 · Task 4 — return ladder from history and the break reason'
     expect(run(makeFacts({ gap: gapOf(3) }), { breakReason: 'illness' }).stage).toBe('C');
   });
 });
+
+describe('AC-LPF-1 · the step-down floor — no candidate or conservative is ever ≤ 0', () => {
+  // Lateral Raise Machine shape (replay C1): working weight 2.5 kg, machine step 5 kg.
+  const lateral = (over: Partial<LoadFacts> = {}): LoadFacts =>
+    makeFacts({
+      workingWeight: { weight: 2.5, unit: 'kg', performances: 4, warmupsEstimated: false, mixedBasisExcluded: 0 },
+      ...over,
+    });
+
+  it('gap rebuild ladder with a step larger than the load keeps a positive candidate and conservative', () => {
+    // 207 d gap before the last workout: the restart ladder's first rung after the cold start is a rebuild rung.
+    const d = run(lateral(), {
+      ladder: {
+        tier: 'restart',
+        gapDays: 207,
+        gapStart: new Date('2026-02-20T00:00:00Z'),
+        gapEnd: new Date('2026-09-10T00:00:00Z'),
+        workoutsSince: 1,
+        performancesSince: 1,
+      },
+    });
+    expect(d.row).toBe('gap_rebuild');
+    expect(d.candidate.load).toBeGreaterThan(0);
+    expect(d.conservative.load).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['return tier', gapOf(15)],
+    ['rebuild tier', gapOf(60)],
+  ])('%s with reason unknown (one extra step) stays positive', (_n, gap) => {
+    const d = run(lateral({ gap }), { breakReason: 'unknown' });
+    expect(d.candidate.load).toBeGreaterThan(0);
+    expect(d.conservative.load).toBeGreaterThan(0);
+  });
+
+  it('short constraint, below floor and pre-fatigue rows stay positive', () => {
+    const constrained = run(lateral({ constraints: { constraints: [SHORT_CONSTRAINT], equipment: [] } }));
+    expect(constrained.conservative.load).toBeGreaterThan(0);
+    const below = run(lateral({ lastExposure: exposure('below floor') }));
+    expect(below.candidate.load).toBeGreaterThan(0);
+    expect(below.conservative.load).toBeGreaterThan(0);
+    const heavy = run(lateral({ fatigueReference: fatigue(0, true), fatigueToday: fatigue(6, false) }));
+    expect(heavy.candidate.load).toBeGreaterThan(0);
+    expect(heavy.conservative.load).toBeGreaterThan(0);
+  });
+
+  it('scheme hold (no growth) conservative stays positive', () => {
+    const d = run(lateral({ lastExposure: exposure('in range') }));
+    expect(d.conservative.load).toBeGreaterThan(0);
+  });
+
+  it('a step that still leaves a positive load is taken as before', () => {
+    const d = run(makeFacts({ gap: gapOf(15) }));
+    expect([d.candidate.load, d.conservative.load]).toEqual([60, 55]);
+  });
+});
