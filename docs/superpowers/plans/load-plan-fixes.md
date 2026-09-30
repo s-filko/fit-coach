@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and
 > test-driven-development. Red tests first (from the replay data below), then the code.
 
-- Status: planned
+- Status: in progress
 - Branch: plan/load-plan-fixes
 - After: load-plan
 
