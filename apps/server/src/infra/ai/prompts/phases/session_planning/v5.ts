@@ -9,7 +9,7 @@ import type { SessionPlanningPromptContextV3 } from './v3';
  * v5 (load-plan plan Task 5b, D10, AC-LP-7): v4 minus any instruction to propose or save weights —
  * the session plan is sets × reps only; loads come from LOAD PLAN during training. Two lines of v3's
  * STEP text change (the v5 unit test enforces the diff is exactly those); the CONTEXT LOCATION note
- * from v4 is kept. Selected only with LOAD_PLAN_PLANNER_REBIND on (session-planning.spec.ts).
+ * from v4 is kept. Selected only with LOAD_PLAN_PLANNER_REBIND and LOAD_PLAN_SUGGESTION on (session-planning.spec.ts).
  */
 export type SessionPlanningPromptContextV5 = SessionPlanningPromptContextV3;
 

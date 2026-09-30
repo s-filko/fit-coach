@@ -308,6 +308,10 @@ decisions); owner gates are listed in § "Before dispatch".
   `get_load_plan` descriptions share one tail constant (text unchanged); `start_training_session` builds its schema
   with `buildSessionRecommendationSchema({ dropTargetWeight })`; the dead `hasShortConstraint` / `PLATEAU_FLAT_RUN`
   are deleted; the 14 new test files carry AC ids in their top-level `describe` names.
+- **(D) Fix-V — verifier v2 scheme ids derived, hints kept:** the `progression_scheme` rule's ids come from `SCHEMES`;
+  the user-words hints ("by reps inside a range", …) are a `Record<SchemeId, string>` next to it (a new scheme fails to
+  compile until it has one), not the `SCHEMES` descriptions — those are coach-facing sentences and would change the
+  prompt text. Rendered text is byte-identical (pinned in `summarizer/__tests__/v7.unit.test.ts`).
 
 ## Acceptance criteria
 

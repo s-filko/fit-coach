@@ -32,7 +32,7 @@ export const SESSION_PLANNING_PROMPT: PhasePromptEntry<SessionPlanningPromptCont
 
 /**
  * Load-plan plan Task 5b (A5): the rebound session-planning prompt — SESSION_PLANNING_V5, selected
- * only with LOAD_PLAN_PLANNER_REBIND on (session-planning.spec.ts). `current` above stays v4.
+ * only with LOAD_PLAN_PLANNER_REBIND and LOAD_PLAN_SUGGESTION on (session-planning.spec.ts). `current` above stays v4.
  */
 export const SESSION_PLANNING_PROMPT_V5: PhasePromptEntry<SessionPlanningPromptContextV5> = {
   current: SESSION_PLANNING_V5,

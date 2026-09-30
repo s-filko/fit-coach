@@ -3,7 +3,8 @@
  * `omitTargetWeights` — sets × reps only. Loads are not planned any more: they come from LOAD
  * PLAN during training, so a legacy row's targetWeight (the DB column stays, it is simply not
  * written) is not printed either. Logged sets keep their weights — they are the record of what
- * happened, not a plan target. Selected only with LOAD_PLAN_PLANNER_REBIND on (training.spec.ts).
+ * happened, not a plan target. Selected only with LOAD_PLAN_PLANNER_REBIND and LOAD_PLAN_SUGGESTION on
+ * (training.spec.ts).
  */
 import {
   buildWorkoutOverview,

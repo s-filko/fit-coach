@@ -2,7 +2,7 @@
  * `session_planning.active_plan` v2 (load-plan plan Task 5b, D10, AC-LP-7): the v1 render with
  * `omitTargetWeights` — sets × reps only, even for a legacy plan that still carries a targetWeight
  * (the DB column stays; it is simply not written). Loads come from LOAD PLAN during training.
- * Selected only with LOAD_PLAN_PLANNER_REBIND on (session-planning.spec.ts).
+ * Selected only with LOAD_PLAN_PLANNER_REBIND and LOAD_PLAN_SUGGESTION on (session-planning.spec.ts).
  */
 import {
   buildActivePlanSection,

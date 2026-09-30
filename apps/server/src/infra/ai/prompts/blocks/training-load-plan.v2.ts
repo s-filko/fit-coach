@@ -84,11 +84,11 @@ function progressionLine(choice: ProgressionChoice, timezone: string | null): st
 
 function schemeLine(
   choice: ProgressionChoice,
+  confirmSessions: number,
   repText: string,
   repsFromScheme: boolean,
   timezone: string | null,
 ): string {
-  const { confirmSessions } = choice.scheme.defaultParams(choice.goal);
   const reps = repsFromScheme ? `${repText} (scheme default)` : repText;
   return `scheme: ${schemeName(choice.scheme.id)} ${reps}, confirm ×${confirmSessions} (${provenanceText(choice, timezone)})`;
 }
@@ -144,6 +144,7 @@ function decisionLines(
     return [`recommend: n/a for ${exercise.exerciseType}`];
   }
   const progression = progressionFromChoice(opts.progression, entry.chosenScheme);
+  const params = progression.scheme.defaultParams(progression.goal);
   const perHand = !isAbsent(facts.equipmentStep) && facts.equipmentStep.perHand;
   const rec = loadText(d.candidate, perHand);
   const cons = loadText(d.conservative, perHand);
@@ -151,9 +152,10 @@ function decisionLines(
   return [
     schemeLine(
       progression,
+      params.confirmSessions,
       repsText(d.candidate.reps),
       // The range is the scheme's own when no plan/reference range exists, or the scheme fixes the reps (linear).
-      isAbsent(facts.repRange) || progression.scheme.defaultParams(progression.goal).fixedReps !== undefined,
+      isAbsent(facts.repRange) || params.fixedReps !== undefined,
       timezone,
     ),
     `tactic: ${d.tactic}`,

@@ -11,7 +11,7 @@ import type { DirectiveContext, PromptModule, Section } from '@infra/ai/prompts/
  * when it departs. The first working set reports what was advised through log_set's `advised`
  * field (D-A4). The session guide shows sets/reps without weight — loads are not planned. Every
  * other TASK/TOOLS/RULES line is unchanged from v9/v10 (the v11 unit test enforces the diff).
- * Selected only with LOAD_PLAN_PLANNER_REBIND on (training.spec.ts).
+ * Selected only with LOAD_PLAN_PLANNER_REBIND and LOAD_PLAN_SUGGESTION on (training.spec.ts).
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- v11 adds no fields
 export interface TrainingPromptContextV11 extends DirectiveContext {}

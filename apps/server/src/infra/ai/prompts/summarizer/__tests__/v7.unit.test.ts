@@ -23,4 +23,11 @@ describe('AC-LP-6 summariser v7 / verifier v2 derived wording', () => {
       '(illness, injury, holiday_work_no_time, deliberate_deload, stress_poor_sleep), and "unknown"',
     );
   });
+
+  it('verifier v2 derives the scheme ids from the registry, text unchanged', () => {
+    const text = system(FACT_VERIFIER_V2.render({ transcript: '', operations: [] }));
+    expect(text).toContain(
+      '(by reps inside a range = double_progression; a fixed rep target with weight added each time = linear_progression)',
+    );
+  });
 });

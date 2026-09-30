@@ -83,6 +83,7 @@ apps/server/src/
         break-fact.ts          #   the `break` fact text (reason class, dates) — parse / format, `breakReasonOf` (window strictly between workouts)
         progression-fact.ts    #   the `progression_scheme` fact text — parse / format, `chosenSchemeOf`
         scheme-default.ts      #   D8 default scheme from the profile
+        ladder-input.ts        #   `performanceSuccess` / `ladderPerformancesOf` — maps loaded performances onto the ladder counter's inputs (a workout in range with reserve)
       types.ts                 # Training DTOs (SessionSet.setData inferred from set-data.types.ts Zod)
       set-data.types.ts        # Zod schemas for set_data — single source of truth for the SetData union
 

@@ -42,7 +42,7 @@ function port(past: unknown[], exercise: unknown, profile: unknown = null): Load
 
 const input = (exerciseId: string) => ({ userId: 'u1', session: today as never, exerciseId, now: NOW, timezone: TZ });
 
-describe('LoadPlanSnapshotPort (A3)', () => {
+describe('AC-LP-4 LoadPlanSnapshotPort (A3)', () => {
   it('strength: decision columns come from decide(); rendered is the v2 entry', async () => {
     const snap = await port([p1, p2], p1.exercises[0].exercise).snapshot(input(CHEST_PRESS.id));
     expect(snap).toMatchObject({ schemeId: 'double_progression', schemeVersion: '1', gapTier: 'rest' });
@@ -78,7 +78,7 @@ describe('LoadPlanSnapshotPort (A3)', () => {
   });
 });
 
-describe('LoadPlanSnapshotPort and the progression_scheme fact (Task 5a)', () => {
+describe('AC-LP-5 LoadPlanSnapshotPort and the progression_scheme fact (Task 5a)', () => {
   it('scheme_id follows the user’s choice (the default would be double)', async () => {
     const p = new LoadPlanSnapshotPort({
       workoutSessionRepo: {

@@ -17,7 +17,7 @@
 // never returned for the prompt or the constraint check; the caller passes the run
 // clock (ctx.now), never the DB clock or a fresh `new Date()`.
 
-/** ADR-0009's eight fact categories. */
+/** ADR-0009's fact categories (ten since the load-plan amendment). */
 export type FactCategory =
   | 'physical_constraint' // hard constraint — never override
   | 'exercise_preference' // soft preference — apply when choice exists
