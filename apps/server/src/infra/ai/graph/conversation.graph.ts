@@ -139,6 +139,7 @@ function buildGraph(deps: ConversationGraphDeps) {
     config: episodeConfig,
     budgetFor,
     loadPlanBreaks: deps.loadPlanBreaks,
+    loadPlanSuggestion: deps.loadPlanSuggestion,
   });
   // AC-FL-5: the course-check step — same gap threshold as compaction and the
   // time-gap note (threaded from episodeConfig, never re-read from env).

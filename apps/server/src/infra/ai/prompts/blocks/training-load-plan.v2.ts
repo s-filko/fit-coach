@@ -10,10 +10,13 @@
  */
 import { isAbsent } from '@domain/training/load-facts';
 import {
+  calendarDate,
   decide,
   type Decision,
   defaultProgression,
   type ProgressionChoice,
+  progressionFromChoice,
+  progressionLine,
   type Recommendation,
   ROW_LABELS,
 } from '@domain/training/load-plan';
@@ -52,9 +55,23 @@ function schemeName(id: string): string {
   return id.replace(/_/g, ' ');
 }
 
-function schemeLine(d: Decision, choice: ProgressionChoice, repText: string, confirm: number): string {
-  const provenance = choice.source === 'default' ? 'default, unconfirmed' : 'chosen by user';
+function schemeLine(
+  d: Decision,
+  choice: ProgressionChoice,
+  repText: string,
+  confirm: number,
+  timezone: string | null,
+): string {
+  const provenance =
+    choice.source === 'user' && choice.chosenAt
+      ? `chosen by user ${calendarDate(choice.chosenAt, timezone)}`
+      : 'default, unconfirmed';
   return `scheme: ${schemeName(d.scheme.id)} ${repText}, confirm ×${confirm} (${provenance})`;
+}
+
+/** The scheme in force for an entry: the user's `progression_scheme` fact if the loader found one, else `base`. */
+export function progressionOf(entry: LoadPlanEntry, base: ProgressionChoice): ProgressionChoice {
+  return progressionFromChoice(base, entry.chosenScheme ?? null);
 }
 
 function loadText(rec: Recommendation, perHand: boolean): string | null {
@@ -93,7 +110,7 @@ export function decideLoadPlanEntry(
   if (entry.exercise.exerciseType !== 'strength') {
     return null;
   }
-  const { progression } = opts;
+  const progression = progressionOf(entry, opts.progression);
   return decide(entry.facts, {
     scheme: progression.scheme,
     goal: progression.goal,
@@ -120,19 +137,24 @@ function breakLine(entry: LoadPlanEntry, d: Decision): string[] {
   return [`break: ${parts.join(' · ')}`];
 }
 
-function decisionLines(entry: LoadPlanEntry, d: Decision | null, opts: RenderLoadPlanV2Opts): string[] {
+function decisionLines(
+  entry: LoadPlanEntry,
+  d: Decision | null,
+  opts: RenderLoadPlanV2Opts,
+  timezone: string | null,
+): string[] {
   const { facts, exercise } = entry;
   if (d === null) {
     return [`recommend: n/a for ${exercise.exerciseType}`];
   }
-  const { progression } = opts;
+  const progression = progressionOf(entry, opts.progression);
   const { confirmSessions } = progression.scheme.defaultParams(progression.goal);
   const perHand = !isAbsent(facts.equipmentStep) && facts.equipmentStep.perHand;
   const rec = loadText(d.candidate, perHand);
   const cons = loadText(d.conservative, perHand);
   const lower = d.candidate.load !== null && d.conservative.load !== null ? d.candidate.load - d.conservative.load : 0;
   return [
-    schemeLine(d, progression, repsText(d.candidate.reps), confirmSessions),
+    schemeLine(d, progression, repsText(d.candidate.reps), confirmSessions, timezone),
     `tactic: ${d.tactic}`,
     ...breakLine(entry, d),
     `decision: Stage ${d.stage}, ${ROW_LABELS[d.row]} → ${d.outcome}`,
@@ -146,7 +168,7 @@ function decisionLines(entry: LoadPlanEntry, d: Decision | null, opts: RenderLoa
 export function renderLoadPlanEntryV2(entry: LoadPlanEntry, ctx: ContextBlockCtx, opts: RenderLoadPlanV2Opts): string {
   const facts = renderLoadPlanEntry(entry, ctx, { ...opts, dropOff: 'plain', e1rmSpan: true });
   const decision = opts.decision === undefined ? decideLoadPlanEntry(entry, opts) : opts.decision;
-  return [facts, ...decisionLines(entry, decision, opts).map(l => `${INDENT}${l}`)].join('\n');
+  return [facts, ...decisionLines(entry, decision, opts, ctx.timezone).map(l => `${INDENT}${l}`)].join('\n');
 }
 
 export const TRAINING_LOAD_PLAN_V2: ContextBlock<TrainingLoadPlanV2Data> = {
@@ -167,7 +189,10 @@ export const TRAINING_LOAD_PLAN_V2: ContextBlock<TrainingLoadPlanV2Data> = {
       }),
     );
     const { equipment } = data.loadPlan[0].facts.constraints;
+    // Task 5a (design §4.2): one line for the scheme in force — the user's choice with its date, or the default.
+    const progression = progressionOf(data.loadPlan[0], data.progression ?? defaultProgression(null));
+    const progressionText = `${progressionLine(progression, ctx.timezone)}\n\n`;
     const equipmentLine = equipment.length === 0 ? '' : `equipment facts (all exercises): ${equipment.join('; ')}\n\n`;
-    return `${LOAD_PLAN_HEADER_V2}\n\n${equipmentLine}${entries.join('\n\n')}`;
+    return `${LOAD_PLAN_HEADER_V2}\n\n${progressionText}${equipmentLine}${entries.join('\n\n')}`;
   },
 };

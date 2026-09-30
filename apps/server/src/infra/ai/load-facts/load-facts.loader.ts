@@ -19,6 +19,8 @@ import {
   type BreakReason,
   breakReasonOf,
   calendarDate,
+  type ChosenScheme,
+  chosenSchemeOf,
   GAP_TIER_PARAMS,
   ladderPerformancesOf,
   type LadderState,
@@ -52,6 +54,8 @@ export interface LoadPlanEntry {
   exercise: ExerciseInput;
   facts: LoadFacts;
   returnBranch?: ReturnBranch;
+  /** Task 5a (AC-LP-5): the user's `progression_scheme` fact (newest active); null/absent = the default applies. */
+  chosenScheme?: ChosenScheme | null;
 }
 
 export interface LoadFactsLoaderDeps {
@@ -201,6 +205,7 @@ async function loadFactsContext(
   constraints: ConstraintInput[];
   equipmentFacts: string[];
   breakFacts: { fact: string; createdAt: Date }[];
+  schemeFacts: { fact: string; createdAt: Date }[];
 }> {
   const [constraintFacts, promptFacts] = await Promise.all([
     deps.userFacts.getConstraints(params.userId, params.now),
@@ -214,6 +219,9 @@ async function loadFactsContext(
     })),
     equipmentFacts: promptFacts.filter(f => f.category === 'equipment').map(f => f.fact),
     breakFacts: promptFacts.filter(f => f.category === 'break').map(f => ({ fact: f.fact, createdAt: f.createdAt })),
+    schemeFacts: promptFacts
+      .filter(f => f.category === 'progression_scheme')
+      .map(f => ({ fact: f.fact, createdAt: f.createdAt })),
   };
 }
 
@@ -276,7 +284,7 @@ export async function loadLoadPlanEntries(
       continue;
     }
     const performances = sessions.flatMap(s => toPerformances(s, id));
-    const { breakFacts, ...context } = factsCtx;
+    const { breakFacts, schemeFacts, ...context } = factsCtx;
     const facts = computeLoadFacts(
       exercise,
       performances,
@@ -288,6 +296,7 @@ export async function loadLoadPlanEntries(
     entries.push({
       exercise,
       facts,
+      chosenScheme: chosenSchemeOf(schemeFacts),
       ...(params.breaks ? { returnBranch: returnBranchOf(performances, todayId, breakFacts, facts, params) } : {}),
     });
   }

@@ -77,3 +77,32 @@ describe('LoadPlanSnapshotPort (A3)', () => {
     expect(snap?.rendered).toContain('recommend: n/a for isometric');
   });
 });
+
+describe('LoadPlanSnapshotPort and the progression_scheme fact (Task 5a)', () => {
+  it('scheme_id follows the user’s choice (the default would be double)', async () => {
+    const p = new LoadPlanSnapshotPort({
+      workoutSessionRepo: {
+        findRecentByUserIdWithDetails: async () => [p1, p2],
+        findLastPerformancesByExercise: async () => [],
+        countRealPerformancesByExercise: async () => new Map(),
+        findByIdWithDetails: async () => today,
+      },
+      exerciseRepository: { findByIdsWithMuscles: async () => [p1.exercises[0].exercise] },
+      userFacts: {
+        getConstraints: async () => [],
+        getForPrompt: async () => [
+          {
+            category: 'progression_scheme',
+            fact: 'progression_scheme id=linear_progression — add weight each time',
+            createdAt: new Date('2026-09-20T03:00:00Z'),
+          },
+        ],
+      },
+      userRepository: { getById: async () => null },
+    } as never);
+    const snap = await p.snapshot(input(CHEST_PRESS.id));
+    expect(snap?.schemeId).toBe('linear_progression');
+    expect(snap?.rendered).toContain('scheme: linear progression');
+    expect(snap?.rendered).toContain('chosen by user 2026-09-20');
+  });
+});

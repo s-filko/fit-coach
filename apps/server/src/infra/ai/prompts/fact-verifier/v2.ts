@@ -10,7 +10,8 @@ export interface FactVerifierV2Context {
 }
 
 /**
- * Fact verifier v2 (load-plan plan Task 4, D9 — `LOAD_PLAN_BREAKS` only): v1 plus the `break` category rule.
+ * Fact verifier v2 (load-plan plan Task 4 + 5a — with `LOAD_PLAN_BREAKS` or `LOAD_PLAN_SUGGESTION`): v1 plus the
+ * `break` and `progression_scheme` category rules.
  * A break fact (break reason=<class> from=<date> to=<date> — <words>) is supported only when the user said
  * that they paused training for that reason and over those dates; the reason class must be the one the user's
  * words name, "unknown" only when the user gave no reason. Everything else is v1 verbatim.
@@ -55,6 +56,7 @@ The rule:
 - An operation is supported ONLY if the user stated it themselves, or explicitly confirmed it — a direct "да" to the assistant’s question about exactly that thing counts. Anything only the assistant said, estimated, explained or suggested is UNSUPPORTED — even if the user asked about it, seemed interested, or thanked for it.
 - Every number or amount in the fact text or the phase note (weights, reps, percentages, days) must match what the user actually said — digits or words, any language, same meaning: «пять дней» = "5 days", «неделю» = "a week" / "7 days". A figure the user never gave makes the operation unsupported.
 - A "break" fact (text: break reason=<class> from=<YYYY-MM-DD> to=<YYYY-MM-DD> — <words>) is supported only if the USER said they stopped training and why: the reason class must be the one their words name (illness, injury, holiday_work_no_time, deliberate_deload, stress_poor_sleep), and "unknown" only when the user gave no reason. The dates must follow from what the user said (a period, "three weeks", "since August"); a date the user neither gave nor implied makes the operation unsupported. An update of a break placeholder with reason=unknown is supported when the user answers the coach's question about the pause.
+- A "progression_scheme" fact (text: progression_scheme id=<id> — <words>) is supported only if the USER asked for, or explicitly accepted, that way of progressing their weights in their own words, and the id matches what they described (by reps inside a range = double_progression; a fixed rep target with weight added each time = linear_progression). A scheme the assistant merely suggested, or that the user did not take up, is unsupported.
 - The user speaks any language; the fact text is in English. Judge by meaning, never by string matching.
 - The summariser’s evidence hint is a suggestion, not proof: it may be wrong, paraphrased, or quote the Assistant. Verify against the transcript’s User lines yourself.
 

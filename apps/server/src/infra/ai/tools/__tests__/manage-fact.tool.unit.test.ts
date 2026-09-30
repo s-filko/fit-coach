@@ -423,3 +423,19 @@ describe('manage_fact and the break category (load-plan Task 4, D9)', () => {
     ).toBe(true);
   });
 });
+
+describe('manage_fact and the progression_scheme category (load-plan Task 5a, D8)', () => {
+  it('the model cannot save a scheme choice: only the summariser + verifier write it', () => {
+    const tool = buildManageFactTool({ userFactsService: {} as IUserFactsService }) as unknown as {
+      schema: { safeParse: (v: unknown) => { success: boolean } };
+    };
+    expect(
+      tool.schema.safeParse({
+        operation: 'save',
+        category: 'progression_scheme',
+        fact: 'progression_scheme id=double_progression',
+        durability: 'long_term',
+      }).success,
+    ).toBe(false);
+  });
+});

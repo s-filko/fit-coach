@@ -233,6 +233,21 @@ in § "Before dispatch".
   (`returnBranch` on the entry: ladder + reason), tool, snapshot port, `print-load-plan` (always on). Independent of
   `LOAD_PLAN_SUGGESTION`; the `break:` LOAD PLAN line needs both. (i) Summariser v7 / verifier v2 replace v6 / v1 only with the
   flag on and are not in `STANDALONE_PROMPTS` (same module id as the current one; its ids must stay unique).
+- **(D) T5a — the `progression_scheme` fact (Task 5a, A6):** (a) **Carrier:** a text fact, `progression_scheme id=<registry
+  id> — <user's words>`; `parseProgressionFact` accepts only ids in `SCHEMES` (an unknown id, `constructor`, free text →
+  rejected at apply time). (b) **Writers/flags:** summariser v7 + verifier v2 are selected when `LOAD_PLAN_BREAKS` or
+  `LOAD_PLAN_SUGGESTION` is on, each prompt section rendered only for its own flag (`breaks` / `schemes` on the v7 context);
+  apply-time drops `break` without `LOAD_PLAN_BREAKS` and `progression_scheme` without `LOAD_PLAN_SUGGESTION`;
+  `manage_fact` cannot write it (`CONVERSATION_FACT_CATEGORIES`). (c) **Lifetime:** forced in code to `long_term`, review in 182
+  days (the class maximum; a standing choice, not a state) — the newest active fact is the choice and a change of mind is an
+  `update` that supersedes it. (d) **Reading:** the loader attaches `chosenScheme` (newest valid active fact + its
+  `createdAt`) to every entry; `progressionOf(entry, base)` in the v2 module overrides the D8 default and is the one place
+  the choice is applied, so `decide()`, the block, the tool, `print-load-plan` and the log's `scheme_id` all follow it; the
+  goal stays the profile's. (e) **Printing:** `Progression: double, 8–12, confirm ×2 — chosen by user 2026-09-20` (or
+  `— default, unconfirmed`) is one line at the top of the LOAD PLAN v2 block; the per-entry `scheme:` line carries the same
+  provenance. Until Task 5b (the planner derives `targetReps` from the scheme) the entry's rep range is still today's plan
+  range, so the two lines can show different ranges (e.g. strength goal: line 4–6, entry 8–12 from the plan). (f) No new
+  context block or prompt version outside the LOAD PLAN block; planning-phase context line and prompts are Task 5b.
 
 ## Acceptance criteria
 

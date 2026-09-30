@@ -111,3 +111,53 @@ describe('LOAD PLAN v2 with LOAD_PLAN_BREAKS', () => {
     expect(text).toContain('recommend: 55 kg');
   });
 });
+
+/**
+ * load-plan Task 5a (AC-LP-5, D8): the user's `progression_scheme` fact replaces the default scheme; the block prints
+ * one Progression line and the scheme line says who chose it; without the fact it is "default, unconfirmed".
+ */
+describe('LOAD PLAN v2 with a progression_scheme fact', () => {
+  const schemeFact = (text: string, iso = '2026-09-20T03:00:00Z') => ({
+    category: 'progression_scheme',
+    fact: text,
+    createdAt: new Date(iso),
+  });
+  const past = () => [perf('a', 3), perf('b', 10), perf('c', 17)];
+
+  it('the block prints the Progression line with the choice and its date, and the scheme line agrees', async () => {
+    const e = await entry(past(), false, [schemeFact('progression_scheme id=double_progression — by reps')]);
+    expect(e.chosenScheme).toEqual({ schemeId: 'double_progression', chosenAt: new Date('2026-09-20T03:00:00Z') });
+    const { TRAINING_LOAD_PLAN_V2 } = await import('../training-load-plan.v2');
+    const block = TRAINING_LOAD_PLAN_V2.render({ loadPlan: [e], exerciseHistory: [], progression }, ctx, 0) as string;
+    expect(block).toContain('Progression: double, 8–12, confirm ×2 — chosen by user 2026-09-20');
+    expect(block).toContain('scheme: double progression 8–12, confirm ×2 (chosen by user 2026-09-20)');
+    expect(block).not.toContain('default, unconfirmed');
+  });
+
+  it('without the fact: default, unconfirmed — in the line and in the entry', async () => {
+    const e = await entry(past(), false);
+    expect(e.chosenScheme).toBeNull();
+    const { TRAINING_LOAD_PLAN_V2 } = await import('../training-load-plan.v2');
+    const block = TRAINING_LOAD_PLAN_V2.render({ loadPlan: [e], exerciseHistory: [], progression }, ctx, 0) as string;
+    expect(block).toContain('Progression: double, 8–12, confirm ×2 — default, unconfirmed');
+    expect(block).toContain('(default, unconfirmed)');
+  });
+
+  it('the choice decides: a linear choice runs linear_progression (decide, and so the log’s scheme_id)', async () => {
+    const e = await entry(past(), false, [
+      schemeFact('progression_scheme id=linear_progression — add weight each time'),
+    ]);
+    const d = decideLoadPlanEntry(e, { progression });
+    expect(d?.scheme).toEqual({ id: 'linear_progression', version: 1 });
+    expect(render(e)).toContain('scheme: linear progression 8, confirm ×2 (chosen by user 2026-09-20)');
+  });
+
+  it('the newest active fact wins; a malformed or unknown-id fact is ignored', async () => {
+    const e = await entry(past(), false, [
+      schemeFact('progression_scheme id=double_progression — old', '2026-09-01T00:00:00Z'),
+      schemeFact('progression_scheme id=linear_progression — new', '2026-09-22T00:00:00Z'),
+      schemeFact('progression_scheme id=nonsense', '2026-09-25T00:00:00Z'),
+    ]);
+    expect(e.chosenScheme?.schemeId).toBe('linear_progression');
+  });
+});

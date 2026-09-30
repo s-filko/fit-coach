@@ -9,8 +9,10 @@ export interface ProgressionProfile {
 export interface ProgressionChoice {
   scheme: ProgressionScheme;
   goal: SchemeGoal;
-  /** `default` = unconfirmed, printed so; `user` arrives with Task 5 (the `progression_scheme` fact). */
+  /** `default` = unconfirmed, printed so; `user` = the `progression_scheme` fact (Task 5a). */
   source: 'default' | 'user';
+  /** When the user's choice was stored — set with `source: 'user'`. */
+  chosenAt?: Date;
 }
 
 const STRENGTH = /strength|stronger|сил/i;

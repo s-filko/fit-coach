@@ -1654,3 +1654,122 @@ describe('buildCompactStep — break facts (load-plan Task 4, D9, LOAD_PLAN_BREA
     expect(verifier).not.toContain('"break" fact');
   });
 });
+
+describe('buildCompactStep — progression_scheme facts (load-plan Task 5a, D8, A6)', () => {
+  const SCHEME_TEXT = 'progression_scheme id=double_progression — I want to progress by reps';
+  const summaryWith = (op: Record<string, unknown>) => () =>
+    Promise.resolve({ ...FIXED_SUMMARY, factOperations: [op] } as unknown as EpisodeSummaryV4);
+  const schemeAdd = (fact: string, extra: Record<string, unknown> = {}) => ({
+    op: 'add',
+    category: 'progression_scheme',
+    fact,
+    durability: 'short',
+    ttlDays: 3,
+    evidence: 'Что делаем сегодня?',
+    ...extra,
+  });
+  const promptsOf = (structured: jest.Mock): string[] =>
+    (structured.mock.calls as unknown as [unknown, { role: string; content: string }[]][]).map(c =>
+      c[1].map(m => m.content).join('\n'),
+    );
+
+  it('LOAD_PLAN_SUGGESTION on: a registry id is stored, lifetime forced to long_term / review in 182 days', async () => {
+    const { deps, rememberFact } = makeDeps({ structured: summaryWith(schemeAdd(SCHEME_TEXT)) });
+    await buildCompactStep({ ...deps, loadPlanSuggestion: true })(channelState(), ctxConfig());
+    expect(rememberFact).toHaveBeenCalledTimes(1);
+    expect(rememberFact).toHaveBeenCalledWith(
+      USER_ID,
+      expect.objectContaining({
+        category: 'progression_scheme',
+        fact: SCHEME_TEXT,
+        durability: 'long_term',
+        reviewInDays: 182,
+        ttlDays: undefined,
+      }),
+      NOW,
+      'summary-turn-1',
+    );
+  });
+
+  it('an unknown scheme id, a wrong shape or free text is rejected at apply time — nothing stored', async () => {
+    for (const fact of [
+      'progression_scheme id=rpe_autoregulation — x',
+      'progression_scheme id=constructor',
+      'I want progression by reps',
+    ]) {
+      const { deps, rememberFact } = makeDeps({ structured: summaryWith(schemeAdd(fact)) });
+      await buildCompactStep({ ...deps, loadPlanSuggestion: true })(channelState(), ctxConfig());
+      expect(rememberFact).not.toHaveBeenCalled();
+    }
+  });
+
+  it('an update of the known scheme fact (change of mind) supersedes it', async () => {
+    const { deps, supersedeFact } = makeDeps({
+      structured: summaryWith({
+        op: 'update',
+        factId: '5b0f8a3e-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        category: 'progression_scheme',
+        fact: 'progression_scheme id=linear_progression — just add weight each time',
+        durability: 'long_term',
+        evidence: 'Что делаем сегодня?',
+      }),
+    });
+    await buildCompactStep({ ...deps, loadPlanSuggestion: true })(channelState(), ctxConfig());
+    expect(supersedeFact).toHaveBeenCalledWith(
+      USER_ID,
+      expect.objectContaining({ category: 'progression_scheme', durability: 'long_term', reviewInDays: 182 }),
+      expect.any(Date),
+      NOW,
+      'summary-turn-1',
+    );
+  });
+
+  it('a category whose flag is off is dropped at apply time: scheme without LOAD_PLAN_SUGGESTION, break without LOAD_PLAN_BREAKS', async () => {
+    const a = makeDeps({ structured: summaryWith(schemeAdd(SCHEME_TEXT)) });
+    await buildCompactStep({ ...a.deps, loadPlanBreaks: true })(channelState(), ctxConfig());
+    expect(a.rememberFact).not.toHaveBeenCalled();
+    const b = makeDeps({
+      structured: summaryWith({
+        op: 'add',
+        category: 'break',
+        fact: 'break reason=illness from=2026-08-28 to=2026-09-18 — flu',
+        durability: 'short',
+        evidence: 'Что делаем сегодня?',
+      }),
+    });
+    await buildCompactStep({ ...b.deps, loadPlanSuggestion: true })(channelState(), ctxConfig());
+    expect(b.rememberFact).not.toHaveBeenCalled();
+  });
+
+  it('A6 selection: suggestion only → v7 with the scheme section and no break section; breaks only → the reverse', async () => {
+    const s = makeDeps({ structured: summaryWith(schemeAdd(SCHEME_TEXT)) });
+    await buildCompactStep({ ...s.deps, loadPlanSuggestion: true })(channelState(), ctxConfig());
+    const [summariser, verifier] = promptsOf(s.structured);
+    expect(summariser).toContain('PROGRESSION SCHEME');
+    expect(summariser).toContain('double_progression | linear_progression');
+    expect(summariser).not.toContain('BREAK FACTS');
+    expect(verifier).toContain('"progression_scheme" fact');
+    const b = makeDeps({ structured: summaryWith(schemeAdd(SCHEME_TEXT)) });
+    await buildCompactStep({ ...b.deps, loadPlanBreaks: true })(channelState(), ctxConfig());
+    const [breakOnly] = promptsOf(b.structured);
+    expect(breakOnly).toContain('BREAK FACTS');
+    expect(breakOnly).not.toContain('PROGRESSION SCHEME');
+    const both = makeDeps({ structured: summaryWith(schemeAdd(SCHEME_TEXT)) });
+    await buildCompactStep({ ...both.deps, loadPlanBreaks: true, loadPlanSuggestion: true })(
+      channelState(),
+      ctxConfig(),
+    );
+    const [all] = promptsOf(both.structured);
+    expect(all).toContain('BREAK FACTS');
+    expect(all).toContain('PROGRESSION SCHEME');
+  });
+
+  it('both flags off: v6 exactly — no scheme or break section anywhere', async () => {
+    const { deps, structured } = makeDeps({ structured: summaryWith(schemeAdd(SCHEME_TEXT)) });
+    await buildCompactStep(deps)(channelState(), ctxConfig());
+    const [summariser, verifier] = promptsOf(structured);
+    expect(summariser).not.toContain('PROGRESSION SCHEME');
+    expect(summariser).not.toContain('BREAK FACTS');
+    expect(verifier).not.toContain('"progression_scheme" fact');
+  });
+});

@@ -1,4 +1,5 @@
 import type { ConversationPhase } from '@domain/conversation/ports';
+import { SCHEMES } from '@domain/training/load-plan';
 import type { UserFact } from '@domain/user/ports';
 
 import type { PromptModule, Section } from '@infra/ai/prompts/types';
@@ -11,6 +12,10 @@ export interface SummarizerV7Context {
   knownFacts: UserFact[];
   /** The episode's date (`YYYY-MM-DD`, the evidence clock) — relative dates in a break fact resolve against it. */
   episodeDate?: string;
+  /** The `break` category is on (LOAD_PLAN_BREAKS). Default true. */
+  breaks?: boolean;
+  /** The `progression_scheme` category is on (LOAD_PLAN_SUGGESTION). Default true. */
+  schemes?: boolean;
 }
 
 /** One known fact as the summariser must see it: the id comes first, verbatim. */
@@ -29,18 +34,41 @@ function knownFactLine(fact: UserFact): string {
   return `- id ${fact.id}: ${fact.fact} (${bits.join(', ')})`;
 }
 
+const BREAK_SECTION = (episodeDate: string | undefined): string => `
+BREAK FACTS — category "break": a pause in the user's training that the user described${episodeDate ? ` (the episode date is ${episodeDate}; resolve "last week", "in August" against it)` : ''}.
+- fact text, exactly this shape: break reason=<class> from=<YYYY-MM-DD> to=<YYYY-MM-DD> — <what the user said, short, English>
+- class (one of): illness | injury | holiday_work_no_time | deliberate_deload | stress_poor_sleep | unknown. Choose by the USER'S words; "unknown" only when the user gave no reason. from = first day without training, to = last day of the break (or the episode date if it is still going on). Never invent a date the user did not give or imply.
+- durability "short", ttlDays 14, onExpiry "forget". A known break fact with reason=unknown is a placeholder for a question the coach asked: when the user answers it in this episode, return op "update" on it (same from/to, the real class, the user's words) — never a second add.
+- a break caused by an injury also gets its own physical_constraint operation as usual.
+`;
+
+const SCHEME_IDS = Object.keys(SCHEMES).join(' | ');
+const SCHEME_LINES = Object.values(SCHEMES)
+  .map(scheme => `  · ${scheme.id}: ${scheme.description}`)
+  .join('\n');
+
+const SCHEME_SECTION = `
+PROGRESSION SCHEME — category "progression_scheme": the user states WHICH WAY they want their weights to progress (for example "I want to progress by reps", "just add weight every session").
+- fact text, exactly this shape: progression_scheme id=<id> — <what the user said, short, English>
+- id (one of): ${SCHEME_IDS}
+${SCHEME_LINES}
+- Only when the USER asked for or accepted a way of progressing in their own words — never the assistant's suggestion the user did not take up, and never a preference about exercises or rep counts of one workout. A change of mind is op "update" on the known progression_scheme fact (new id), never a second add.
+- durability "long_term", reviewInDays 182.
+`;
+
 /**
- * Episode summariser v7 (load-plan plan Task 4, D9 — `LOAD_PLAN_BREAKS` only): v6 plus the `break` fact
- * category — a pause in training with its dates, a reason class and the user's words, in one fixed text
- * shape the code reads back. Everything else is v6 verbatim (PROVENANCE, operations, durability); the
- * added parts are the ninth category, the BREAK FACTS section and the episode date the dates resolve against.
- * The verifier (`fact-verifier/v2`) checks the reason class and dates like any other claim.
+ * Episode summariser v7 (load-plan plan Task 4 + Task 5a, A6 — with `LOAD_PLAN_BREAKS` or `LOAD_PLAN_SUGGESTION`
+ * on): v6 plus two fact categories, each in one fixed text shape the code reads back — `break` (a pause in
+ * training: dates, a reason class, the user's words; BREAK FACTS section and the episode date the dates resolve
+ * against) and `progression_scheme` (the user's chosen scheme, a registry id; PROGRESSION SCHEME section).
+ * `breaks` / `schemes` render only the sections whose flag is on. Everything else is v6 verbatim (PROVENANCE,
+ * operations, durability). The verifier (`fact-verifier/v2`) checks both categories like any other claim.
  */
 export const SUMMARIZER_V7: PromptModule<SummarizerV7Context> = {
   id: 'summarizer',
   version: 'v7',
   directives: [],
-  render({ phase, transcript, knownFacts, episodeDate }): Section[] {
+  render({ phase, transcript, knownFacts, episodeDate, breaks = true, schemes = true }): Section[] {
     const knownList =
       knownFacts.length > 0
         ? `\nKNOWN ACTIVE FACTS (reference these by their id, verbatim):\n${knownFacts.map(knownFactLine).join('\n')}\n`
@@ -84,15 +112,8 @@ Durability for add/update (pick by what the episode shows):
 
 What is NOT a durable fact — leave it out of fact_operations (it belongs in the five list fields, or nowhere): one session's numbers, momentary state, anything a plan or session record already captures, and anything only the Assistant said.
 
-Categories (use exactly one per add/update): physical_constraint, exercise_preference, exercise_dislike, physiological_pattern, coaching_preference, schedule_constraint, equipment, nutrition_preference, break.
-
-BREAK FACTS — category "break": a pause in the user's training that the user described${episodeDate ? ` (the episode date is ${episodeDate}; resolve "last week", "in August" against it)` : ''}.
-- fact text, exactly this shape: break reason=<class> from=<YYYY-MM-DD> to=<YYYY-MM-DD> — <what the user said, short, English>
-- class (one of): illness | injury | holiday_work_no_time | deliberate_deload | stress_poor_sleep | unknown. Choose by the USER'S words; "unknown" only when the user gave no reason. from = first day without training, to = last day of the break (or the episode date if it is still going on). Never invent a date the user did not give or imply.
-- durability "short", ttlDays 14, onExpiry "forget". A known break fact with reason=unknown is a placeholder for a question the coach asked: when the user answers it in this episode, return op "update" on it (same from/to, the real class, the user's words) — never a second add.
-- a break caused by an injury also gets its own physical_constraint operation as usual.
-
-For a physical_constraint, set muscleGroup to the affected muscle group when identifiable (e.g. shoulders_front, lower_back, quads). Omit it otherwise.
+Categories (use exactly one per add/update): physical_constraint, exercise_preference, exercise_dislike, physiological_pattern, coaching_preference, schedule_constraint, equipment, nutrition_preference${breaks ? ', break' : ''}${schemes ? ', progression_scheme' : ''}.
+${breaks ? BREAK_SECTION(episodeDate) : ''}${schemes ? SCHEME_SECTION : ''}For a physical_constraint, set muscleGroup to the affected muscle group when identifiable (e.g. shoulders_front, lower_back, quads). Omit it otherwise.
 
 An empty fact_operations array is the correct, expected answer most of the time — most episodes change nothing durable. Do not invent an operation to avoid an empty array.`,
       },
