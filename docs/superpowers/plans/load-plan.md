@@ -32,6 +32,8 @@ in § "Before dispatch".
 1. **R4.0 threshold table** (`load-facts.md` § "R4.0 — sourced thresholds") reviewed by the owner
    once (design §11.4); items marked *verify* checked against the papers. Its values become the
    named parameters of D5 below.
+   **Accepted by the owner 2026-09-30 as is** (the *verify* items included): under O1 the numbers are a suggestion
+   the model may override, so a wrong threshold is cheap; they are refined later from the recommendation log.
 2. **ADR-0009 amendment** — two new fact categories, `progression_scheme` (typed value: a
    registry id) and `break` (dates, reason class, free text; `durability = short`, expiry at the
    ladder's end). Durable spec: proposed text in § "Proposed durable-spec text", the owner edits
