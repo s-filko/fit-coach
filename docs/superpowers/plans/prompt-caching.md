@@ -248,7 +248,7 @@ end-to-end (real model → `LLMLogHandler` → recorder input) so it does not fi
 
 - Config (`EnvSchema`): `LLM_PROMPT_CACHE` `'off'|'anthropic'` default `off`; `LLM_PROMPT_CACHE_TTL` `'5m'|'1h'` default `5m`;
   `LLM_CONTEXT_HARD_CAP_TOKENS` positive int default `60000`; `LLM_INPUT_PRICE_PER_MTOK` optional number (USD per 1M uncached input
-  tokens, list price — used for lost-cost in warn logs and the report). Flags are read via `loadConfig()` at request time.
+  tokens, list price — used for lost-cost in warn logs and the report) **[historical T2 interface note — superseded by review run 2 fix: the key is removed, `priceOf(model)` + `LLM_MODEL_PRICES` are the one price source]**. Flags are read via `loadConfig()` at request time.
 - D2 wire shape: the current user message content is a list of text parts, the first `<context>…</context>` (block 3 + gap note + NOW);
   the checkpointed HumanMessage stays the raw text. Breakpoints (D1): `{type:'ephemeral'}` (5m: no `ttl` key; 1h: `ttl:'1h'`) on the
   last part of the single stable system message and on the last content part of the last history message (the one right before the
@@ -316,7 +316,7 @@ Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 173 s
 + `llm-call-recorder` integration 3 suites / 26 tests green. **Migration: `apps/server/drizzle/0021_talented_magneto.sql`**
 (`llm_calls.cache_write_tokens`, `conversation_runs.tokens_cache_write`, both nullable int; generated with `npm run drizzle:generate`; the test
 harness applies migrations itself, nothing was run against dev/prod). Promoted from repro: AC-PC-3 (`prompt-cache-breakpoints.unit.test.ts`,
-`prompt-cache-config.unit.test.ts` — the D6 flags only; the `LLM_CONTEXT_HARD_CAP_TOKENS` / `LLM_INPUT_PRICE_PER_MTOK` tests stay in
+`prompt-cache-config.unit.test.ts` — the D6 flags only; the `LLM_CONTEXT_HARD_CAP_TOKENS` / the flat-price key (removed) tests stay in
 `prompt-cache-config.repro.test.ts` for T5/T5b) and AC-PC-7 (`cache-write-usage.unit.test.ts`, `conversation-run-cache-write.unit.test.ts`,
 new DB test `llm-call-cache-write.integration.test.ts`; the T5b guard test file lost its AC-PC-7 case). Still red as intended: T5/T5b repro files.
 
@@ -372,7 +372,7 @@ Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 179 s
 `llm-call-cache-write` integration 4 suites / 31 tests green. **Migration: `apps/server/drizzle/0022_left_blob.sql`** (`llm_calls.cache_break` text,
 `llm_calls.cache_break_lost_tokens` int; `npm run drizzle:generate`). No `*.repro.test.ts` of this plan is left (**true only since review fix 130ca6ec**; at T5b `training-tool-rejection.repro.test.ts` was still there): AC-PC-9/10 →
 `cache-break-attribution.unit`, `cache-break-reasons.unit`, `cache-break-guard.integration`; AC-PC-11 → `cache-report.integration`;
-`prompt-cache-config-price.unit` (LLM_INPUT_PRICE_PER_MTOK); new `cache-break-declarations.unit` + cases in the compact-step and agent-node tests.
+`prompt-cache-config-price.unit` (the flat-price key (removed)); new `cache-break-declarations.unit` + cases in the compact-step and agent-node tests.
 (Other `*.repro.test.ts` files in the tree — tool-ordering, log-set, format-exercise-summary — belong to other plans.)
 
 - **Registry:** `infra/ai/cache-break-reasons.ts` (`CACHE_BREAK_REASONS`, `reasonCovers`). Declarations live on `RunMetricsCollector`
@@ -394,10 +394,10 @@ Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 179 s
   had and this call no longer shares, scaled by `inputTokens / chars` (unexplained_miss: shared − read).
 - **Logs:** `Prompt cache break` warn for `unplanned:*` / `unexplained_miss`, info for `planned:hard_cap` / `planned:facts_changed`; fields
   `{userId, phase, cacheBreak, where, charsInto, lostTokens, lostCostUsd}` — the T2 test names (`lostTokens`, `lostCostUsd`), not the brief's
-  `tokensLost`/`costLostUsd`; cost = tokens × `LLM_INPUT_PRICE_PER_MTOK` / 1e6, null when unset. Logging is wrapped: it can never fail a call.
+  `tokensLost`/`costLostUsd`; cost = tokens × the flat-price key (removed) / 1e6, null when unset. Logging is wrapped: it can never fail a call.
 - **Report:** `infra/observability/cache-report.ts` (`buildCacheReport`, `formatCacheReport`) + `scripts/cache-report.ts`, npm script
   `npm run cache-report -- <userId> <from ISO> <to ISO> [--price <USD/1M>] [--ttl 5m|1h] [--env-file <path>]` (price/ttl default to
-  `LLM_INPUT_PRICE_PER_MTOK` / `LLM_PROMPT_CACHE_TTL`). Not run against any real DB (no DB other than the test one was touched).
+  the flat-price key (removed) / `LLM_PROMPT_CACHE_TTL`). Not run against any real DB (no DB other than the test one was touched).
 - Interface deviation from T2: none apart from the log key names above being the T2 ones.
 
 ### Review fixes — run 1 (worker, Sonnet, 2026-09-30) — commit 130ca6ec
@@ -422,7 +422,7 @@ lists no `*.repro.test.ts`. Docs outside this file untouched (docs sync is the o
   The report prices each model separately (read 0.1×, write 1.25×/2×, uncached 1×, **output at the output price**), returns `models[]`, `cost.output`,
   `cost.withoutCaching`, and lists unpriced models instead of guessing; `--price` forces one flat input price. `lostCostUsd` per break uses the row's model price.
 - **R3 guard gating:** the recorder stores `cache_break` (and lost tokens) and logs ONLY when the request carried a `cache_control` part; `LLM_PROMPT_CACHE=off`,
-  summariser and course-check calls get null and never warn (test: "a call that sent no cache_control …"). The break cost log uses `LLM_INPUT_PRICE_PER_MTOK`
+  summariser and course-check calls get null and never warn (test: "a call that sent no cache_control …"). The break cost log uses the flat-price key (removed)
   if set, else the model's table price.
 - **R3 D4 rejection:** `set-preconditions.ts` returns a `user_error` (a normal tool result, status success) instead of an `llm_error`, so a premature
   delete/update no longer spends training's `llmErrorBudget: 1`; the session read moved inside each tool's `try` (a failing read is handled by the tool).
@@ -431,6 +431,24 @@ lists no `*.repro.test.ts`. Docs outside this file untouched (docs sync is the o
 - **R3 one hard-cap measure:** `cache-warmth.ts` `conversationTokens(history, current, estimate)` (the conversation that grows; system/blocks excluded) is used by both the
   compact step and `resolveBudget`, with the same cap and the same warm predicate — no band where one defers and the other trims (test: at the cap both defer, one token over both act).
 - Left open (not pulled in): the other R1/R2/R3/R4 advisories and Blocking #1–#8.
+
+### Review fixes — run 2 (worker, Sonnet, 2026-09-30) — commits f37d54ce (code), 0f4313a4 (final code state)
+
+Verification at **0f4313a4** (apps/server, clean tree): `npm run check-all` clean; `npm run test:unit` 182 suites / 1826 tests green; `db-test-lock.sh npm run
+test:scenarios` 23 suites / 415 passed + 1 todo; DB-backed cache suites (`cache-report`, `cache-break-guard`, `llm-call-recorder`, `llm-call-cache-write`,
+`conversation-run-cache-rollup`; `RUN_DB_TESTS=1`, db-test-lock) 5 suites / 37 tests green — all run at 0f4313a4, after the Sonnet 2/10 change.
+a grep of `apps docs` for the removed flat-price key → only this plan (the T2 interface note above, marked superseded; the other historical mentions reworded).
+
+- **#3** DB report test expects Sonnet 5.5 at 2/10.
+- **#4 one price source:** the flat-price key gone; `priceOf(model, cfg.LLM_MODEL_PRICES)` prices both the recorder's break-cost log and the report
+  (`--price` = explicit CLI override). New DB test: the break cost follows an `LLM_MODEL_PRICES` override and an unpriced model logs `lostCostUsd: null`;
+  the unplanned-break test asserts cost = lost tokens × $2/M.
+- **`LLM_MODEL_PRICES` parsed once, at config load:** the `EnvSchema` field transforms the JSON into the price record (malformed JSON / shape → the config load
+  fails naming the variable; tests in `prompt-cache-config.unit.test.ts`); callers read the record, nothing re-parses per call. The parser lives in
+  `config/model-prices.ts` (config may not import infra); `infra/ai/model-prices.ts` keeps the table and `priceOf`.
+- **Comments:** D5 comment restored on `LLM_CONTEXT_HARD_CAP_TOKENS` ("estimated conversation (history + current turn)"); `model-prices.ts` header now says the figures are
+  the prices as configured for this app (Sonnet 5.5 fitted to the OpenRouter charge, BUG-051; Haiku 4.5 list). `.env.example` documents `LLM_CONTEXT_HARD_CAP_TOKENS`
+  and `LLM_MODEL_PRICES`.
 
 ## Out of scope
 
@@ -519,7 +537,7 @@ the Z.AI / Gemini routes; summariser and course-check calls (Haiku 4.5 minimum 4
   `LLM_PROMPT_CACHE_TTL_SECONDS` (also two test headers); D7 "attribution needs no change" contradicted by D8;
   T4 heading "(worker, GLM)" vs D9. · R4 `training.spec.ts:5` header still says dynamic tool filtering. · R4 test
   headers reference removed `*.repro.test.ts` names. · R4 `.env.example` lacks `LLM_CONTEXT_HARD_CAP_TOKENS`,
-  `LLM_INPUT_PRICE_PER_MTOK`; two TTL settings kept in step by hand. · R4 CONTRIBUTING_AI `:164` defaults list. ·
+  the flat-price key (removed); two TTL settings kept in step by hand. · R4 CONTRIBUTING_AI `:164` defaults list. ·
   R4 BUG-008 Plan A rule has no BR-TRAINING id. · R4 ARCHITECTURE `:170` phase-prompt listing stale.
 
 Blocking #1–#8 closed by the orchestrator on the owner's approval (2026-09-30, "обновляй"): ADR-0013 amendments
@@ -543,8 +561,10 @@ Meta findings filed in `docs/REVIEW_FINDINGS.md` (run prompt-caching 2026-09-30)
    spent. Closed (orchestrator): AC-PC-4 and D4 amended in place.
 3. **R3 — `tests/integration/services/cache-report.integration.test.ts:165-170`** still expects Sonnet 5.5 at 3/15
    after f5e8bf87 set 2/10; the DB-backed evidence predates the change. Open → worker.
-4. **R2 — price has two sources.** `llm-call-recorder.ts:273` uses `LLM_INPUT_PRICE_PER_MTOK ?? priceOf(model)`,
+   Closed: 0f4313a4 — the Sonnet 5.5 expectations now use 2/10 (read 0.2, write 2.5, uncached 2, output 10 per 1M; built-in price kept per f5e8bf87); the DB-backed cache suites were re-run at 0f4313a4 (see Evidence).
+4. **R2 — price has two sources.** `llm-call-recorder.ts:273` uses the flat-price key `?? priceOf(model)`,
    `cache-report.ts` uses `--price ?? priceOf(model)` — the same break can be costed differently. Open → worker.
+   Closed: 0f4313a4 — the flat-price key removed (config, recorder, tests); the recorder break-cost log and `cache-report` both price via `priceOf(model, cfg.LLM_MODEL_PRICES)`; `--price` stays only as an explicit CLI override (documented in the script header). Class grep: `grep -rn 'priceOf\|inputPerMTok\|LLM_MODEL_PRICES' apps/server/{src,scripts}` → the lookup is `priceOf` (infra/ai/model-prices.ts) used by the recorder and `cache-report.ts`; no other price lookup.
 
 #### Advisory (run 2)
 
