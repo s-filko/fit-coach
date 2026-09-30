@@ -294,8 +294,8 @@ no new record, layer 1 continues. No split-by-muscle fallback.
 - Training: rule 1 (feedback → ±%, RPE ≤ 5 → +kg), rule 2 (RPE ≥ 8 → adjust), rule 4b
   ("announce the next exercise with a specific recommendation") and the FIRST MESSAGE RULE all
   point to `LOAD PLAN` / `get_load_plan`; the coach quotes its dated facts, always gives the
-  conservative option, says "insufficient data" when the block does, and deviates only on a
-  stated fact from the current conversation (Principle 6).
+  conservative option, says "insufficient data" when the block does, and departs from the
+  suggestion by its judgement, stating the reason (Principle 6 as amended by O1).
 - Session planning: `propose_session` / `save_workout_plan` no longer carry `targetWeight`;
   after a gap at tier `rest_with_question`+ the coach asks the reason once before proposing.
 - Reversible by prompt version (roadmap rule 4).
