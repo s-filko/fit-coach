@@ -49,7 +49,7 @@ import {
 
 import { createLogger } from '@shared/logger';
 
-import { type AvailabilityInput, type ToolPolicy, TRAINING_TOOL_PRIORITY } from '../tool-policy';
+import { type ToolPolicy, TRAINING_TOOL_PRIORITY } from '../tool-policy';
 
 const log = createLogger('training-spec');
 
@@ -74,34 +74,17 @@ export interface TrainingData {
   loadPlan: LoadPlanEntry[];
 }
 
-/** Mid-workout session shape the availability filter reads (BUG-008 Plan A). */
-interface SessionLike {
-  exercises?: Array<{ status?: string; sets?: unknown[] }>;
-}
-
 /**
- * The ADR-0011 policy over the phase's toolset. A function (not a constant)
- * because the availability filter derives the allowed names from the tools it
- * is given — same rule, whatever toolset the spec carries.
+ * The ADR-0011 policy over the phase's toolset. Prompt-caching plan D4: no availability filter any more — the
+ * tool list is part of the cached request prefix, so every training tool is always bound; the BUG-008 Plan A rule
+ * (no delete/update before the current exercise has a set) is enforced by the tools themselves
+ * (`rejectWithoutLoggedSet`, tools/set-preconditions.ts) and comes back as an `llm_error`.
  */
-export function buildTrainingToolPolicy(tools: StructuredToolInterface[]): ToolPolicy {
+export function buildTrainingToolPolicy(_tools: StructuredToolInterface[]): ToolPolicy {
   return {
     ordering: TRAINING_TOOL_PRIORITY,
     batchDedup: ['log_set'],
     llmErrorBudget: 1,
-    /**
-     * Dynamic tool filtering (BUG-008 Plan A): names the model may call given
-     * the loaded session; null = all. The policy owns the rule.
-     */
-    availability: (input: AvailabilityInput) => {
-      const session = (input.data as TrainingData).session as SessionLike | null;
-      const currentExercise = session?.exercises?.find(ex => ex.status === 'in_progress');
-      const currentSetsCount = currentExercise?.sets?.length ?? 0;
-      if (currentSetsCount !== 0) {
-        return null;
-      }
-      return tools.filter(t => t.name !== 'delete_last_sets' && t.name !== 'update_last_set').map(t => t.name);
-    },
   };
 }
 

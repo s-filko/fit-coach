@@ -478,7 +478,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing"
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote."
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.chat v3 / complete-profile 1`] = `
@@ -543,7 +545,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing"
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote."
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.chat v3 / empty-profile 1`] = `
@@ -608,7 +612,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing"
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote."
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.plan_creation / active-session 1`] = `
@@ -1294,7 +1300,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing"
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote."
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.plan_creation v3 / complete-profile 1`] = `
@@ -1386,7 +1394,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing"
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote."
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.plan_creation v3 / empty-profile 1`] = `
@@ -1478,7 +1488,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing"
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote."
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.registration / active-session 1`] = `
@@ -2791,7 +2803,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing"
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote."
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.session_planning v3 / complete-profile 1`] = `
@@ -2907,7 +2921,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing"
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote."
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.session_planning v3 / empty-profile 1`] = `
@@ -3023,7 +3039,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing"
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote."
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.training / active-session 1`] = `
@@ -4615,7 +4633,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing"
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote."
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.training v5 / complete-profile 1`] = `
@@ -4738,7 +4758,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing"
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote."
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) phase.training v5 / empty-profile 1`] = `
@@ -4861,7 +4883,9 @@ CORRECT (tool call + text together):
 
 WRONG (tool call without text — this will break the app):
   tool_call: request_transition({ toPhase: "session_planning" })
-  text: ""  ← empty, user sees nothing"
+  text: ""  ← empty, user sees nothing
+
+CONTEXT LOCATION: the per-turn context this prompt refers to (the data blocks, the current time "NOW", any note that the user returns after a pause) arrives in a <context>…</context> part at the start of the user's latest message, not in this system prompt. Read it from the latest message only; it is not something the user wrote."
 `;
 
 exports[`prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2 move) summarizer / system 1`] = `

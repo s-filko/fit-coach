@@ -172,6 +172,16 @@ An **episode** is a contiguous span of `messages`. `prepare` runs `compact` befo
 
 **Amendment 2026-09-20 (BUG-018, owner-approved):** Compaction at any trigger (inactivity gap, phase transition, budget) summarises only messages older than the last `EPISODE_KEEP_TURNS` turns (default 6), which stay verbatim; a part too short to summarise is kept, never dropped (supersedes D-B's trim-without-summary). After a gap longer than `EPISODE_GAP_HOURS` a time-gap note precedes the new user message. The user receives every assistant text of the run. The standard summarise-older / keep-recent pattern.
 
+**Amendment 2026-09-30 (`prompt-caching`, BUG-051, owner-approved at close-out):** with explicit prompt caching on
+(`LLM_PROMPT_CACHE=anthropic`) BR-LLM-003 is **deferred while the cache is warm** — the user's previous message is
+younger than the cache TTL (`LLM_PROMPT_CACHE_TTL`) — and the estimated conversation (history + current turn;
+the stable prefix it rides on is excluded) is under
+`LLM_CONTEXT_HARD_CAP_TOKENS` (default 60 000 estimated). A compaction rewrites the cached prefix (one full write at
+1.25× plus a summariser call), while the history it would remove is read from cache at 0.1×; mid-workout it rarely
+pays back, and it drops conversational detail early. Over the cap, after the TTL, and for BR-LLM-001/002 the rule is
+unchanged. One warm predicate and one cap measure serve the compact step and the assembler
+(`infra/ai/context/cache-warmth.ts`). With `LLM_PROMPT_CACHE=off` nothing changes.
+
 **Amendment 2026-09-21 (fact lifecycle wave A; decided without the owner — see the plan's decision table, reversible):** the summariser's structured output gained a sixth field and compaction gained a fact-writing contract. The schema is now `{ topics[], decisions[], userState[], trainingFeedback[], openItems[], factOperations[] }` (summariser v4; v3, with its blind `facts[]` list, stays beside it). The summariser is shown the user's known **active** facts with their ids and returns operations on them — `add | confirm | update | retract` — instead of restating them into a blind upsert: `confirm` moves the counter only and never rewrites stored text (D-C), `update` supersedes the old row and links the new one, `retract` archives with a reason. Compaction applies each operation independently, one try/catch per operation, so a refused or malformed operation leaves the rest of the batch, the episode summary and the compaction result unchanged (D-E). **Two clocks:** every date written to a fact uses the run clock (`ctx.now`), while the *evidence* clock — what a user closure is compared against — is the compacted episode's newest user message (`state.lastUserMessageAt`, which at compaction still holds the previous run's stamp). Without that split, summarising an old episode would resurrect a fact the user closed after it. Facts extracted at compaction cite the mirrored summary turn as their `source_turn_id`, which is also their time anchor.
 
 **Amendment 2026-09-27/28 (BUG-040; plan `fact-provenance`, replaced by plan `fact-verification` on the owner's decision 2026-09-28):** when the summariser returns a mutating fact operation, compaction makes one more structured call — the fact verifier (`fact-verifier` v1, profile `summarizer`, schema `fact_verdicts_v1`) — and applies only the `add`/`update`/`retract` operations it marks as stated or confirmed by the user; a verifier failure skips them all (fail closed). `confirm` is exempt; a skipped operation is handled like any other refused one (D-E). Rule and rationale: ADR-0009, amendment 2026-09-27/28.
@@ -207,6 +217,27 @@ One function, `assembleContext(phaseSpec, state, ctx): { messages: BaseMessage[]
 > `block.time_gap` on runs that sent the note. Runs recorded before 2026-09-27 carry the NOW version
 > as `directive.current-time` instead.
 
+> **Amendment 2026-09-30 (`prompt-caching`, BUG-051, owner-approved at close-out) — supersedes the message
+> layout above and the `now-line-last` placement.** Probed on the OpenRouter → Anthropic route: every
+> `SystemMessage`, wherever it sits, is hoisted into the provider's single system prompt, so any per-turn system
+> text changes the whole cached prefix. The assembler now sends:
+>
+> 1. **one stable `SystemMessage`** — block 1, `## User Facts`, `## Course Directive`, `## Previous episodes`,
+>    joined in that order (they change only on a fact change, a directive change or a compaction);
+> 2. the episode history;
+> 3. the current `HumanMessage`, which in the **request only** carries a leading `<context>…</context>` text part:
+>    the domain blocks (block 3), the time-gap note and the `NOW` line. The checkpointed message keeps the raw user
+>    text, so history never accumulates old context or old timestamps;
+> 4. in-flight messages; the post-tool nudge is a text part appended to the last `ToolMessage`, never a
+>    `SystemMessage`.
+>
+> No `SystemMessage` follows the first one (AC-PC-2). Phase prompts state where the context arrives
+> (`prompts/phases/context-location.ts`). With `LLM_PROMPT_CACHE=anthropic` two `cache_control` breakpoints are
+> set (`context/cache-breakpoints.ts`): the last part of the stable system message and the last content part of
+> the last history message; the history breakpoint moves forward every turn, so only the new turn is written
+> (1.25×) and everything before it is read (0.1×). History trimming is done by `trimHistory` (LangChain
+> `trimMessages`), subject to the warm-cache exception below.
+
 Budget (per phase, in `PhaseSpec.budget`, tokens estimated with a fixed estimator so results are reproducible offline):
 
 | Phase            | system | long-term | domain | history | output reserve |
@@ -218,6 +249,11 @@ Budget (per phase, in `PhaseSpec.budget`, tokens estimated with a fixed estimato
 | training         |     5k |      1.5k |     6k |      8k |             2k |
 
 Numbers are initial defaults to be tuned with the eval harness; the invariant is the mechanism, not the values. INV-LLM-004: the assembler never drops or truncates block 1; over-budget is resolved by (a) trimming history, (b) reducing domain block depth (e.g. 5 → 3 sessions), (c) dropping oldest episode summary — in that order, and the `budgetReport` is logged per run. **HYPOTHESIS**: today's session-planning system prompt alone is 6–10k tokens (full plan JSON + 5 sessions + recovery + ~130 lines of instructions); measure with the estimator in P2 before choosing values.
+
+> **Amendment 2026-09-30 (`prompt-caching`, owner-approved):** INV-LLM-004's resolution order (and every cut in
+> `resolveBudget`) is skipped while the prompt cache is warm and the estimated conversation (history + current turn) is under
+> `LLM_CONTEXT_HARD_CAP_TOKENS` — any cut would rewrite the cached prefix. Block 1 is still never cut. Same warm
+> predicate and cap measure as the BR-LLM-003 amendment in §3.3.
 
 Training's "history as a system text block" is replaced by the same message channel for all phases; the anti-"act on past messages" protection moves to (i) the `=== TOOL EXECUTION RESULTS ===` block, which stays, and (ii) an eval rubric criterion (TR-4 in the eval spec) instead of a structural hack.
 
@@ -277,6 +313,12 @@ PhaseSpec {
 ```
 
 The five phases become five `PhaseSpec` objects plus one factory. The current training-specific behaviours map onto policy fields: priority ordering (`TOOL_PRIORITY`), batch dedup of `log_set`, `search_exercises` dedup, dynamic tool availability (`training.subgraph.ts` "Dynamic tool filtering"), error budget. The shared tool executor implements all of them once (it replaces `ToolNode`, `dedupToolNode`, `sequentialToolNode`).
+
+> **Amendment 2026-09-30 (`prompt-caching`, owner-approved):** `toolPolicy.availability` is removed — a phase
+> always binds all its tools in a stable order, because a tool list that changes mid-exercise misses the whole
+> prompt cache (tools lead the cached prefix). BUG-008 Plan A's rule (no `delete_last_sets` / `update_last_set`
+> before the current exercise has a set) is now a refusal returned by those tools (`tools/set-preconditions.ts`,
+> a `user_error` the model relays; it does not spend `llmErrorBudget`).
 
 INV-LLM-005: Adding a phase means adding a `PhaseSpec`, its prompt module, its tools, and a row in the transition matrix — no edits to the graph builder.
 
@@ -468,6 +510,27 @@ visibility (spec `2026-09-26-training-history-context-design.md` § 4, items 1 a
    still holds — the write stays synchronous, and an attribution failure leaves the cache columns
    null without failing the call — but "one indexed insert" is no longer the whole cost. Moving the
    lookup out of the writer is a backlog item, not a relaxation of this rule.
+
+**Amendment 2026-09-30 (`prompt-caching`, BUG-051, owner-approved at close-out).** Cache writes and cache-break
+classification:
+
+1. **Columns** (migrations 0021/0022): `llm_calls.cache_write_tokens` (tokens written to the provider cache, read
+   from the raw provider usage — LangChain drops it), `llm_calls.cache_break`, `llm_calls.cache_break_lost_tokens`;
+   `conversation_runs.tokens_cache_write` (sum over the run's calls). Semantics: `docs/DB_SETUP.md`.
+2. **Attribution compares only the cacheable part** — up to the previous request's history breakpoint; a change in
+   the current turn is normal. A divergence inside the stable system message is named by block
+   (`system:prompt|facts|directive|summaries`), otherwise `tools` or `history[i]`.
+3. **Classification** (`cache_break`), only for calls that sent `cache_control`: `none` · `planned:<reason>` — the
+   run declared the break at the code site that causes it (`infra/ai/cache-break-reasons.ts`: `phase_switch`,
+   `compaction`, `hard_cap`, `facts_changed`; `ttl_expired` is derived from the gap) · `unplanned:<where>` — the
+   prefix changed and no declared reason covers it · `unexplained_miss` — expected warm but the provider read less
+   than 0.75 × the shared prefix.
+4. **Alerts.** `unplanned:*` and `unexplained_miss` log `warn` "Prompt cache break" with the lost tokens and cost;
+   `planned:hard_cap` / `planned:facts_changed` log `info` (planned but not standard — optimisation candidates).
+   The guard never fails a call.
+5. **Report.** `npm run cache-report` (`scripts/cache-report.ts`, zero-LLM): hit rate, read/write/uncached
+   tokens, cost per model (`infra/ai/model-prices.ts`, `LLM_MODEL_PRICES` override) and breaks sorted by money
+   lost.
 
 INV-LLM-008: Every model invocation **made on behalf of a conversation run** — i.e. one whose callback
 metadata carries a `runId` — is persisted to `llm_calls` with the request actually sent and the

@@ -51,6 +51,7 @@ describe('POST /api/bot/chat concurrency — AC-1351', () => {
         tokensOut: 1,
         tokensCached: null,
         tokensReasoning: null,
+        tokensCacheWrite: null,
         latencyMs: Date.now() - createdAt.getTime(),
         toolCalls: null,
         transition: null,

@@ -66,6 +66,10 @@ Older workouts are not shown in detail — use get_training_history.
 
 ## 4. Prompt caching [owner concern; mechanics proposed]
 
+> **Superseded 2026-09-30** by plan `prompt-caching` (BUG-051) and ADR-0013 §3.4/§8 amendments 2026-09-30:
+> one stable system message, volatile context in the current user message, two explicit breakpoints. The
+> "Target order" below is historical.
+
 Provider prompt caching is prefix-based: everything after the first changed token is
 recomputed.
 

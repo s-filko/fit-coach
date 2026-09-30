@@ -8,7 +8,7 @@ import { type BaseMessage, ToolMessage } from '@langchain/core/messages';
 
 import type { TranscriptMessage } from '@domain/conversation/ports';
 
-import { textOf } from '@infra/ai/llm.gateway';
+import { textOf } from '@infra/ai/message-text';
 import { outcomeKindOf } from '@infra/ai/tools/outcome';
 
 /**

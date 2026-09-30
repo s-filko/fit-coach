@@ -10,6 +10,8 @@
  * `PostgresSaver` working — green here means the spike succeeded and no `now`
  * seam on the runner deps is needed.
  */
+import { textOnly } from '@infra/ai/message-text';
+
 import { runScenario, type ScenarioRunResult } from '../../../evals/lib/run-scenario';
 import { ScenarioSchema, type Scenario } from '../../../evals/schema/scenario.schema';
 import { REAL_TIMER_APIS } from '../../helpers/real-timers';
@@ -78,7 +80,7 @@ beforeAll(async () => {
   seenThisStep = model
     .drainChatInputs()
     .flat()
-    .map(m => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
+    .map(m => textOnly(m.content) ?? JSON.stringify(m.content))
     .join('\n');
 });
 

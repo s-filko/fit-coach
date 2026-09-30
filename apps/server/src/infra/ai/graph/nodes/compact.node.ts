@@ -50,6 +50,7 @@ import type { LegacySummary, SummaryPort } from '@domain/conversation/ports';
 import type { IUserFactsService } from '@domain/user/ports';
 import { PermanentFactRefusal } from '@domain/user/services/fact-lifecycle';
 
+import { conversationTokens, warmCacheOf } from '@infra/ai/context/cache-warmth';
 import { estimateMessages } from '@infra/ai/context/token-estimator';
 import { splitEpisode } from '@infra/ai/graph/episode';
 import { type ConversationStateType, ctxOf } from '@infra/ai/graph/state';
@@ -82,6 +83,15 @@ export interface EpisodeTunables {
    * callers that build this config without it are unaffected.
    */
   budgetLowWater?: number;
+  /**
+   * Prompt-caching plan D5: LLM_PROMPT_CACHE_TTL in ms — set only with LLM_PROMPT_CACHE=anthropic (unset = no
+   * deferral, today's behaviour). The cache counts as warm while the previous message of this user is younger
+   * than this (`state.lastUserMessageAt`, no extra query; a hit refreshes the TTL, so measuring from the user's
+   * message is the conservative side).
+   */
+  cacheTtlMs?: number;
+  /** LLM_CONTEXT_HARD_CAP_TOKENS — the estimated total above which deferral gives way. */
+  hardCapTokens?: number;
 }
 
 export interface CompactStepDeps {
@@ -101,7 +111,7 @@ export type CompactStep = (
 
 export function buildCompactStep(deps: CompactStepDeps): CompactStep {
   const { llmGateway, summaries, userFacts, config, budgetFor } = deps;
-  const { gapMs, minTurns, minTokens, keepTurns, budgetLowWater = 1 } = config;
+  const { gapMs, minTurns, minTokens, keepTurns, budgetLowWater = 1, cacheTtlMs, hardCapTokens } = config;
 
   return async function compactStep(state, config): Promise<Partial<ConversationStateType>> {
     const ctx = ctxOf(config as never);
@@ -113,6 +123,10 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
     // automatic paths keep splitEpisode's invariant untouched (one appended
     // human per run; compaction never cuts into it).
     const manual = ctx.compactOnly === true;
+    if (state.compactReason === 'phase_boundary') {
+      // D8.1: a phase boundary committed by the previous run — this run's first call is in the new phase.
+      ctx.metrics.declareCacheBreak('phase_switch');
+    }
     const history = manual ? [...state.messages] : splitEpisode(state.messages).history;
 
     // D-E: live-thread import, exactly once — the first P4 run sees an empty
@@ -149,6 +163,15 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
     }
 
     const historyBudget = budgetFor(state.phase);
+    // D5: warm cache → the budget trigger waits unless the estimated total (history + this run's messages) is over
+    // the hard cap. Only used by the automatic budget trigger; inactivity / phase_boundary ignore it.
+    const warm = warmCacheOf({ cacheTtlMs, hardCapTokens }, state.lastUserMessageAt, ctx.now);
+    const cacheWarm = warm
+      ? {
+          hardCapTokens: warm.hardCapTokens,
+          estimatedTotalTokens: conversationTokens(history, splitEpisode(state.messages).current, estimateMessages),
+        }
+      : null;
     const reason: CompactReason | null = manual
       ? 'manual'
       : decideCompactReason({
@@ -158,7 +181,15 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
           gapMs,
           historyBudget,
           estimate: estimateMessages,
+          cacheWarm,
         });
+    if (reason === 'budget' && cacheWarm) {
+      ctx.metrics.declareCacheBreak('hard_cap');
+      log.info(
+        { userId, phase: state.phase, estimatedTotal: cacheWarm.estimatedTotalTokens, cap: cacheWarm.hardCapTokens },
+        'Context hard cap reached while cache warm',
+      );
+    }
     if (reason === null) {
       return {};
     }
@@ -180,6 +211,11 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
       minTokens,
       lowWaterMark: budgetLowWater,
     });
+
+    if (removed.length > 0) {
+      // D8.1: history and summaries are about to be rewritten.
+      ctx.metrics.declareCacheBreak('compaction');
+    }
 
     if (removed.length === 0) {
       if (manual) {
@@ -302,6 +338,7 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
       // stubbed or degraded gateway answer without the field applies nothing.
       const operations = summary.factOperations ?? [];
       if (operations.length > 0) {
+        ctx.metrics.declareCacheBreak('facts_changed'); // D8.1: the stable facts block may change
         // AC-FL-3's evidence clock: the compacted episode's newest user message
         // (still the PREVIOUS run's stamp at this point). Facts stated in that
         // episode can be no newer than this; ctx.now would let a restatement

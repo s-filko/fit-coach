@@ -3,9 +3,10 @@
 > **For agentic workers:** Use superpowers:executing-plans and superpowers:test-driven-development. Red tests
 > first in every task. Execute only the dispatched task.
 
-- Status: planned
+- Status: done
 - Branch: plan/prompt-caching
 - After: —
+- Review: 2026-09-30 | clean | R1,R2,R3,R4
 
 **Goal:** during a workout the request prefix (tools → system prompt → stable blocks → history) is byte-identical
 from call to call and grows only by appending; only the current turn changes. Anthropic prompt caching via
@@ -87,10 +88,10 @@ From `llm_calls.prompt_hashes` / `cache_diverged_at`:
 - **D3** Post-tool nudge: no longer a SystemMessage; rendered as a text part appended to the last ToolMessage's
   content (after breakpoint 2 — uncached tail, never breaks the prefix).
 - **D4** Tool availability moves from hiding to rejecting: all phase tools are always bound (stable order);
-  `delete_last_sets` / `update_last_set` with no set on the current exercise return a tool error from the
-  executor with the same meaning. BUG-008 Plan A's intent (no deletion before a set exists) is kept.
+  `delete_last_sets` / `update_last_set` with no set on the current exercise return a refusal from the tool
+  itself (`user_error`, not counted against `llmErrorBudget` — review run 1). BUG-008 Plan A's intent (no deletion before a set exists) is kept.
 - **D5** Compaction/trim deferral: while the previous call of the same user is younger than
-  `LLM_PROMPT_CACHE_TTL_SECONDS`, budget compaction and `trimHistory` are skipped unless the estimated total
+  `LLM_PROMPT_CACHE_TTL` (5m/1h), budget compaction and `trimHistory` are skipped unless the estimated conversation (history + current turn)
   exceeds `LLM_CONTEXT_HARD_CAP_TOKENS` (default 60 000 estimated ≈ 100 k real per BUG-050 — below the model's
   window). Above the cap the existing path runs unchanged.
 - **D6** Config: `LLM_PROMPT_CACHE=off|anthropic` (default `off` — Z.AI and the Gemini BYOK route are not
@@ -99,8 +100,8 @@ From `llm_calls.prompt_hashes` / `cache_diverged_at`:
   caching and keeps one code path.
 - **D7** Record `cache_write_tokens` on `llm_calls` (new nullable column, migration) and roll it up on
   `conversation_runs`; read it from the raw provider usage (`prompt_tokens_details.cache_write_tokens`), since
-  LangChain's `usage_metadata` has no write field. Attribution (`cache-attribution.ts`) needs no change: its gap
-  is measured to the previous call, which matches the refresh-on-hit TTL.
+  LangChain's `usage_metadata` has no write field. Attribution's gap is measured to the previous call, which matches the refresh-on-hit TTL (the rest of
+  attribution was reworked by D8/T5b).
 
 - **D8** Cache-break guard (owner request 2026-09-30: every break is either declared or alerted). Builds on the
   existing `cache-attribution.ts` / `llm_calls.cache_expected`, which today is recorded and never read:
@@ -121,12 +122,16 @@ From `llm_calls.prompt_hashes` / `cache_diverged_at`:
   6. **Static guard** stays the tests: AC-PC-1/2 fail in CI when a change puts a volatile thing into the prefix,
      before it ever reaches a model.
 
+- **D9** (2026-09-30, orchestrator) T4 ran on Sonnet, not GLM: T2 found LangChain drops the raw usage, so T4 grew a
+  raw-response capture; the Sonnet worker already held the T2/T3 context. Same worker terminal for T2–T5b.
+
 ## Durable spec impact — escalate before merge
 
 - ADR-0013 §3.4 message order: block 3, gap note and `NOW` leave the system message list and ride in the
   current human message (D2); two cache breakpoints.
 - ADR-0013 §3.3 compaction triggers: budget compaction deferred while the cache is warm, hard cap (D5).
-- ADR-0011 / BUG-008 Plan A: availability by rejection instead of hiding (D4).
+- ADR-0013 §4.2 / BUG-008 Plan A: availability by rejection instead of hiding (D4) — the plan first named ADR-0011
+  by mistake.
 - `docs/superpowers/specs/2026-09-26-training-history-context-design.md` § 4 superseded by this plan's findings.
 
 ## Acceptance criteria (mints AC-PC-*)
@@ -139,7 +144,8 @@ From `llm_calls.prompt_hashes` / `cache_diverged_at`:
 - **AC-PC-3** With `LLM_PROMPT_CACHE=anthropic` the request carries exactly two `cache_control` parts (D1),
   with `ttl` per config; with `off`, none.
 - **AC-PC-4** The bound tool list of a phase does not depend on session state; `delete_last_sets` /
-  `update_last_set` before the first set of the current exercise return the executor error (D4).
+  `update_last_set` before the first set of the current exercise return the tools' `user_error` refusal, which does not spend the
+  error budget (D4).
 - **AC-PC-5** The checkpointed HumanMessage carries no `<context>` text (D2).
 - **AC-PC-6** Within the TTL, history over `budget.history` but under the hard cap: no compaction, no trim; over
   the cap: current behaviour. After a gap ≥ TTL: current behaviour (D5).
@@ -152,7 +158,9 @@ From `llm_calls.prompt_hashes` / `cache_diverged_at`:
   money lost (D8.5).
 - **AC-PC-8** Live check on dev (owner's next workout): `cache_read_tokens > 0` on ≥ 80 % of training calls after
   the first; `cache_expected = warm` with a zero read reported as unexplained misses; cost per workout from
-  `cache-report.ts` compared with $3.63; every `unplanned:*` break in the workout explained or turned into a bug.
+  `cache-report.ts` compared with $3.63; every `unplanned:*` break in the workout explained or turned into a bug; **`LLM_CONTEXT_HARD_CAP_TOKENS`
+  recalibrated from the report** (owner 2026-09-30: the 60 000 default is a guess — set it where a compaction pays
+  back within the remaining workout, without compacting so early that conversational detail is lost).
 
 ## Tasks
 
@@ -174,7 +182,7 @@ into the ToolMessage; availability → executor rejection; phase prompts that re
 one-line location note (version bump each). AC-PC-1, -2, -4, -5 green. Verify: `npm run test:unit`,
 `npm run test:scenarios` (self-check), `npm run check-all`.
 
-### T4 — Breakpoints, config, accounting: D1, D6, D7 (worker, GLM)
+### T4 — Breakpoints, config, accounting: D1, D6, D7 (worker, Sonnet — D9)
 
 `cache_control` parts behind `LLM_PROMPT_CACHE`; migration for `cache_write_tokens` (`npm run drizzle:generate`);
 extractor reads raw usage. AC-PC-3, -7 green.
@@ -209,7 +217,368 @@ Review (close-out-review), set `.env.dev` (`LLM_PROMPT_CACHE=anthropic`, `LLM_PR
   probed.
 - **O4 confirmed:** moving bp2 forward writes only the delta (110 tokens), the earlier prefix is read.
 
+### T2 — red tests AC-PC-1..7, AC-PC-9..11 (worker, Sonnet, 2026-09-30) — done
+
+All files are `*.repro.test.ts` (outside the default testMatch); shared helper `apps/server/src/infra/ai/context/__tests__/request-capture.ts`
+(real `ChatOpenAI` + capturing `configuration.fetch` returning a canned completion — no network). Run:
+`npx jest --testMatch='**/*.repro.test.ts' src` (DB ones: `db-test-lock.sh bash -c 'RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch="**/<file>.repro.test.ts"'`).
+Result on unchanged code: every AC has at least one test red for the stated reason; `npm run test:unit` 167 suites / 1721 tests green;
+`npm run type-check` clean (the two not-yet-existing modules are loaded with `require`, so tsc stays clean; jest reports
+"Cannot find module" until T5b).
+
+**Finding for T4 (changes D7's premise):** with a non-streaming `ChatOpenAI` (@langchain/openai 1.2.9) the raw provider usage is
+dropped: `response_metadata` = `{tokenUsage, finish_reason, model_provider, model_name}`, `usage_metadata.input_token_details` has
+`cache_read` but no write field. `prompt_tokens_details.cache_write_tokens` therefore never reaches the extractor as things stand —
+T4 must capture the raw usage itself (fetch wrapper in `model.factory.ts`, or `__includeRawResponse`). The AC-PC-7 test is
+end-to-end (real model → `LLMLogHandler` → recorder input) so it does not fix where.
+
+| AC | File | Red because (first failing assertion on unchanged code) |
+|---|---|---|
+| AC-PC-1 | `graph/nodes/__tests__/prompt-cache-prefix.repro.test.ts` | tools: `expected ["search_exercises","log_set","complete_current_exercise","finish_training"] … received + "delete_last_sets","update_last_set"` (BUG-008 filter); messages: prefix before the first request's current turn differs — first request has the `WORKOUT OVERVIEW\nsquat: 0 sets` system message and the `NOW (…)` system message, second has `… 1 set` and no NOW |
+| AC-PC-2 | same | `systemsAfterFirst` is `[WORKOUT OVERVIEW…, "The user returns after 0 h…", "NOW (user's local time)…"]` (plain), `[…, NOW…, "IMPORTANT: All tool calls are complete…"]` (post-tool), `[WORKOUT OVERVIEW…, NOW…]` (retry) instead of `[]` |
+| AC-PC-3 | same + `config/__tests__/prompt-cache-config.repro.test.ts` | `expect(parts).toHaveLength(2)` — received 0 (no `cache_control` sent); 1h: `[]` ≠ two `{type:'ephemeral',ttl:'1h'}`; config: `LLM_PROMPT_CACHE` / `LLM_PROMPT_CACHE_TTL` undefined. *Green guard:* "off → no cache_control" (holds today) |
+| AC-PC-4 | `graph/__tests__/training-tool-rejection.repro.test.ts` + prefix test | executor: `Expected "llm_error" Received "ok"` (delete_last_sets), `updateLastSet` called once when it must not be; bound tools: `delete_last_sets`,`update_last_set` missing from the request. *Green guard:* calls go through once a set exists |
+| AC-PC-5 | prefix test | `expect("ещё подход").toContain("<context>")` — current user message carries no context (it is in system messages) |
+| AC-PC-6 | `context/__tests__/compaction-deferral.repro.test.ts`, `graph/nodes/__tests__/compaction-deferral.repro.test.ts` | `decideCompactReason` `Received "budget"` (expected null within the TTL under the cap); `resolveBudget` history trimmed (`Expected - 352 / + 27` lines: history not left untouched); compact step returns a compaction update instead of `{}`. *Green guards:* over the cap / after TTL / inactivity keep today's behaviour |
+| AC-PC-7 | `ai/__tests__/cache-write-usage.repro.test.ts`, `conversation/__tests__/conversation-run-cache-write.repro.test.ts`, `tests/integration/services/cache-break-guard.repro.test.ts` | recorder input `usage.cacheWriteTokens` `Expected 110 Received undefined`; `0` not preserved; `RunMetricsCollector.snapshot().tokensCacheWrite` undefined; run insert lacks `tokensCacheWrite`; DB row `cacheWriteTokens` `Expected 110 Received undefined` |
+| AC-PC-9 | `ai/__tests__/cache-break-attribution.repro.test.ts`, `cache-break-reasons.repro.test.ts`, `cache-break-guard.repro.test.ts` | `cacheBreak` `Expected "unplanned:system:facts" Received undefined` (and planned/none/tools/history variants); registry: `Cannot find module '@infra/ai/cache-break-reasons'` (new module); DB: `cacheBreak` undefined |
+| AC-PC-10 | attribution + guard tests | `Expected "warm" Received "prefix_changed:history[2]:user"` (today's attribution compares past breakpoint 2 and flags the current turn); `cacheBreak` `Expected "unexplained_miss" Received undefined` |
+| AC-PC-11 | `tests/integration/services/cache-report.repro.test.ts` | `Cannot find module '@infra/observability/cache-report'` (new module) |
+
+**Interfaces chosen (T3–T5b implement to these; change a signature → update the test in the same commit):**
+
+- Config (`EnvSchema`): `LLM_PROMPT_CACHE` `'off'|'anthropic'` default `off`; `LLM_PROMPT_CACHE_TTL` `'5m'|'1h'` default `5m`;
+  `LLM_CONTEXT_HARD_CAP_TOKENS` positive int default `60000`; `LLM_INPUT_PRICE_PER_MTOK` optional number (USD per 1M uncached input
+  tokens, list price — used for lost-cost in warn logs and the report) **[historical T2 interface note — superseded by review run 2 fix: the key is removed, `priceOf(model)` + `LLM_MODEL_PRICES` are the one price source]**. Flags are read via `loadConfig()` at request time.
+- D2 wire shape: the current user message content is a list of text parts, the first `<context>…</context>` (block 3 + gap note + NOW);
+  the checkpointed HumanMessage stays the raw text. Breakpoints (D1): `{type:'ephemeral'}` (5m: no `ttl` key; 1h: `ttl:'1h'`) on the
+  last part of the single stable system message and on the last content part of the last history message (the one right before the
+  current user message); none on in-flight messages.
+- D4: rejection is observable through `buildToolExecutor(tools, buildTrainingToolPolicy(tools))` over the real tools with
+  `trainingService.getSessionDetails(activeSessionId)` returning the session (in-progress exercise, `sets: []`) — `llm_error`
+  ToolMessage, `deleteLastSets`/`updateLastSet` never called. Where the check lives is T3's call; adapt `makeExecutor()` in the test
+  if the wiring signature changes.
+- D5: `decideCompactReason({… , cacheWarm?: {hardCapTokens, estimatedTotalTokens} | null})`, `resolveBudget({… , cacheWarm?: {hardCapTokens} | null})`
+  — the caller passes non-null only when the previous call is younger than the TTL; `EpisodeTunables` gains `cacheTtlMs?`, `hardCapTokens?`
+  and `buildCompactStep` derives warmth from `state.lastUserMessageAt` vs the run clock.
+- D7: `ExtractedUsage`/recorder `usage.cacheWriteTokens?: number|null` (null = unreported, 0 kept); `RunMetricsCollector.onEnd(id, in, out,
+  cacheRead, reasoning, cacheWrite)` → `snapshot().tokensCacheWrite`; `ConversationRunRecord.tokensCacheWrite`
+  → `conversation_runs.tokens_cache_write`; `llm_calls.cache_write_tokens` (nullable int).
+- D8: `@infra/ai/cache-break-reasons` exports `CACHE_BREAK_REASONS` (the five) and `reasonCovers(reason, where)` (mapping in the test:
+  phase_switch → tools, system:prompt; compaction → history[*], system:summaries; hard_cap → history[*], system:summaries;
+  facts_changed → system:facts, system:directive; ttl_expired → everything). `attributeCache(prev, {request, inputTokens, now,
+  cacheReadTokens?, declaredBreaks?}, limits)` returns additionally `cacheBreak` (`none`|`planned:<reason>`|`unplanned:<where>`|`unexplained_miss`)
+  and `cacheBreakLostTokens`; cacheable part = tools + messages before the previous request's last user message; `where` inside the
+  stable system message names the block by header offset (`system:prompt|facts|directive|summaries`). `RecordLlmCallInput.cacheBreakReasons?: string[]`;
+  columns `llm_calls.cache_break` (text) and `cache_break_lost_tokens` (int). Logging: `'Prompt cache break'` warn for `unplanned:*` /
+  `unexplained_miss` with `{userId, where, lostTokens, lostCostUsd}`, info for `planned:hard_cap` / `planned:facts_changed`.
+  Cache report: `@infra/observability/cache-report` exports `buildCacheReport({userId, from, to, inputPricePerMTok, cacheTtl?})` and
+  `formatCacheReport(report)`; shape in the test header (read 0.1×, write 1.25×/2×, uncached = input − read − write).
+- Note: when T3 moves volatile context into the human message, `phase` for the warn log is not known to the recorder — the test
+  asserts `userId`, `where`, `lostTokens`, `lostCostUsd` only.
+
+### T3 — stable prefix D2/D3/D4, prompt bumps (worker, Sonnet, 2026-09-30) — done
+
+Verification (apps/server): `npm run check-all` clean (exit 0); `npm run test:unit` 168 suites / 1729 tests green;
+`db-test-lock.sh npm run test:scenarios` 23 suites, 415 passed + 1 todo. AC-PC-1/2/4/5 promoted:
+`graph/nodes/__tests__/prompt-cache-prefix.unit.test.ts` (AC-PC-1, -2, -4 bound tools, -5) and
+`graph/__tests__/training-tool-rejection.unit.test.ts` (AC-PC-4 executor — **corrected by review fix 130ca6ec**: at T3 the file was still `.repro.test.ts`, the promotion `git mv` had not run); `assemble-context.unit.test.ts` gained AC-PC-2 (every input at
+once → exactly one SystemMessage, first). The AC-PC-3 tests moved to `prompt-cache-breakpoints.repro.test.ts` (still red for T4); the
+shared setup is `prompt-cache-harness.ts` (was inline in the T2 file). All other T2 repro files unchanged and still red.
+
+What changed:
+- `assembleContext`: ONE stable SystemMessage = block 1 + facts + directive + summaries joined with the section separator (a **string**,
+  not text parts — the recorder hashes/dedups string system content and attribution diffs it by header offset; **T4 converts it to
+  text parts when it attaches `cache_control`**). Block 3 + gap note + NOW go into a leading `<context>\n…\n</context>` text part of a
+  request-only copy of the current HumanMessage (same id); the checkpointed message is never touched. D-D floor unchanged (block 3 dropped,
+  gap note/NOW stay).
+- `agent.node.ts` D3: the nudge is a text part appended to the LAST ToolMessage (copy; `tool_call_id`/`status` kept); with no ToolMessage
+  (empty-reply retry after a plain answer) it is appended to the last message (the current human). No SystemMessage is inserted anywhere.
+- D4: all `spec.tools` bound in spec order; `ToolPolicy.availability` and `AvailabilityInput` removed. The BUG-008 Plan A rule now lives in
+  the tools: `tools/set-preconditions.ts` `rejectWithoutLoggedSet` (reads `trainingService.getSessionDetails`, current = in-progress
+  exercise with 0 sets, same rule as before) called first by `delete_last_sets` / `update_last_set` → `llm_error`. Executor unchanged
+  (the T2 test's `makeExecutor` needed no change). Cost: one extra `getSessionDetails` read per delete/update call.
+- Prompts: `withContextLocation` (`prompts/phases/context-location.ts`) derives chat v4, plan_creation v4, session_planning v4, training
+  v10 from v3/v3/v3/v9 + a non-required `context-location` section (CONTEXT LOCATION one-liner, appended last). Registration is NOT bumped:
+  it has no block 3 and its prompt does not refer to NOW/gap note. Rolling `*_PROMPT.current` snapshots and the registry/v9 tests updated.
+
+Frozen snapshots changed by design (`evals/snapshots/__tests__/__snapshots__`): `message-assembly` (15 — one system message, `<context>`
+part in the current human, nudge as ToolMessage text part) and `prompt-snapshots` (12 — only the appended CONTEXT LOCATION paragraph in
+chat/plan_creation/session_planning/training v-current). Existing tests that pinned the old layout were updated (assemble-context,
+agent.node, chat-continuity repro, course-check graph, user-facts scenario) and the scenario helpers that flattened message content now
+join text parts (`evals/lib/run-case.ts`, set-kind, retro-timestamps, harness, a-greeting-after-pause).
+
+Interface deviation from T2: none.
+
+### T4 — breakpoints, config, accounting: D1, D6, D7 (worker, Sonnet, 2026-09-30) — done
+
+Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 173 suites / 1756 tests green; `db-test-lock.sh npm run test:scenarios`
+23 suites / 415 passed + 1 todo; DB-backed via `db-test-lock.sh` with `RUN_DB_TESTS=1`: `llm-call-cache-write` + `conversation-run-cache-rollup`
++ `llm-call-recorder` integration 3 suites / 26 tests green. **Migration: `apps/server/drizzle/0021_talented_magneto.sql`**
+(`llm_calls.cache_write_tokens`, `conversation_runs.tokens_cache_write`, both nullable int; generated with `npm run drizzle:generate`; the test
+harness applies migrations itself, nothing was run against dev/prod). Promoted from repro: AC-PC-3 (`prompt-cache-breakpoints.unit.test.ts`,
+`prompt-cache-config.unit.test.ts` — the D6 flags only; the `LLM_CONTEXT_HARD_CAP_TOKENS` / the flat-price key (removed) tests stay in
+`prompt-cache-config.repro.test.ts` for T5/T5b) and AC-PC-7 (`cache-write-usage.unit.test.ts`, `conversation-run-cache-write.unit.test.ts`,
+new DB test `llm-call-cache-write.integration.test.ts`; the T5b guard test file lost its AC-PC-7 case). Still red as intended: T5/T5b repro files.
+
+- **Config:** `LLM_PROMPT_CACHE` `off|anthropic` (default `off`), `LLM_PROMPT_CACHE_TTL` `5m|1h` (default `5m`), documented in `.env.example`.
+- **Breakpoints — one place:** `infra/ai/context/cache-breakpoints.ts` `applyCacheBreakpoints(messages, currentCount, ttl)`, called by the agent
+  node right after `assembleContext` only when the flag is `anthropic` (the assembler stays pure / config-free). With `off` nothing is
+  converted: the request is byte-identical to T3. Copies, never mutates the checkpointed history. Breakpoint 1 = last part of the (string →
+  one text part) system message; breakpoint 2 = last content part of the last history message, falling back to the nearest earlier history
+  message with text when the last is a tool-calls-only AIMessage (ToolMessage allowed, T1). Empty history (or D-D floor) → only breakpoint 1.
+  `5m` sends `{type:'ephemeral'}` (no `ttl` key), `1h` sends `ttl:'1h'`.
+- **Raw usage:** chosen route is `__includeRawResponse: true` in `model.factory.ts` (LangChain puts the provider response on
+  `additional_kwargs.__raw_response`; a fetch wrapper would have had no per-call correlation to `llmRunId`). `usage.ts`
+  `ExtractedUsage.cacheWriteTokens` reads `prompt_tokens_details.cache_write_tokens` from it (absent/malformed/negative → null, never throws);
+  `LLMLogHandler` → `RecordLlmCallResponse.usage.cacheWriteTokens` → `llm_calls.cache_write_tokens`; `RunMetricsCollector.onEnd(…, cacheWrite)`
+  → `snapshot().tokensCacheWrite` → `ConversationRunRecord.tokensCacheWrite` (commit node, run adapter) → `conversation_runs.tokens_cache_write`.
+  The raw response is stripped from the AIMessage in the agent node right after the handlers ran (`stripRawResponse`), so it is never
+  checkpointed; the `LLM response` info log now also carries `cacheWriteTokens`.
+- **Fix to T3 code found on the way:** `withPostToolNudge` searched the whole array for the last ToolMessage, so an empty-reply retry after a
+  plain answer could append the nudge to an OLD ToolMessage inside the cached history. It now looks only at this run's messages (after the
+  current HumanMessage); otherwise the last message.
+- Interface deviation from T2: none (test helper `request-capture.ts` now sets `__includeRawResponse: true` like the factory).
+
+### T5 — compaction / trim deferral D5 (worker, Sonnet, 2026-09-30) — done
+
+Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 175 suites / 1771 tests green; `db-test-lock.sh npm run test:scenarios`
+23 suites / 415 passed + 1 todo. AC-PC-6 promoted: `context/__tests__/compaction-deferral.unit.test.ts` (planners),
+`graph/nodes/__tests__/compaction-deferral.unit.test.ts` (compact step wiring), the `LLM_CONTEXT_HARD_CAP_TOKENS` case moved into
+`config/__tests__/prompt-cache-config.unit.test.ts`; new agent-node cases (warm/under cap, warm/over cap + info log, expired, flag off) in
+`agent.node.unit.test.ts`. Still red as intended: T5b (`prompt-cache-config.repro` price key, attribution/reasons/guard/report).
+
+- **Warm source (no new query):** `state.lastUserMessageAt` — the same field the inactivity trigger and gap note use; "warm" =
+  `now − lastUserMessageAt < cacheTtlMs`. Conservative: a cache hit refreshes the TTL after the user's message was stamped, so real warmth
+  is never shorter than measured. The recorder's previous-call lookup was rejected (an extra query per run).
+- **Config:** `LLM_CONTEXT_HARD_CAP_TOKENS` (int > 0, default 60000). `register-infra-services.ts` adds `cacheTtlMs` (300 s / 3600 s from
+  `LLM_PROMPT_CACHE_TTL`) and `hardCapTokens` to `episodeConfig` **only when `LLM_PROMPT_CACHE=anthropic`**; with `off` both are absent, the
+  planners get `cacheWarm: null` everywhere → behaviour exactly as before.
+- **Compact step:** `decideCompactReason(…, cacheWarm)` returns null instead of `'budget'` while warm and `estimateMessages(state.messages)`
+  (history + this run's messages — the compact step has no system/block tokens; a proxy, dominated by history) ≤ cap. `phase_boundary` and
+  `inactivity` are checked earlier and untouched; manual `/compact` untouched.
+- **Assembler:** `resolveBudget(…, cacheWarm)`: while warm and the FULL estimated total (system + facts + directive + summaries + blocks + *[historical — superseded by review runs 1–2: one price source (priceOf + LLM_MODEL_PRICES), cap measured on history + current turn]*
+  history + current) ≤ cap the **whole resolution is skipped** (no `trimHistory`, and also no facts truncation, block depth stepping,
+  summary drop or floor — all of them rewrite the cached prefix; this is broader than the brief's "no trimHistory" on purpose, otherwise
+  a skipped trim would just push the same overflow into the next cut). Over the cap → existing order unchanged, result carries
+  `hardCapExceeded`.
+- **Log:** `log.info "Context hard cap reached while cache warm"` `{userId, phase, estimatedTotal, cap}` from the compact step (budget
+  trigger fired while warm) and from the agent node (assembler cuts ran while warm); T5b turns these into a declared `hard_cap` break.
+- Interface deviation from T2: none.
+
+### T5b — cache-break guard D8 (worker, Sonnet, 2026-09-30) — done
+
+Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 179 suites / 1805 tests green; `db-test-lock.sh npm run test:scenarios`
+23 suites / 415 passed + 1 todo; DB-backed (`RUN_DB_TESTS=1`, db-test-lock) `cache-break-guard` + `cache-report` + `llm-call-recorder` +
+`llm-call-cache-write` integration 4 suites / 31 tests green. **Migration: `apps/server/drizzle/0022_left_blob.sql`** (`llm_calls.cache_break` text,
+`llm_calls.cache_break_lost_tokens` int; `npm run drizzle:generate`). No `*.repro.test.ts` of this plan is left (**true only since review fix 130ca6ec**; at T5b `training-tool-rejection.repro.test.ts` was still there): AC-PC-9/10 →
+`cache-break-attribution.unit`, `cache-break-reasons.unit`, `cache-break-guard.integration`; AC-PC-11 → `cache-report.integration`;
+`prompt-cache-config-price.unit` (the flat-price key (removed)); new `cache-break-declarations.unit` + cases in the compact-step and agent-node tests. *[historical — superseded by review runs 1–2: one price source (priceOf + LLM_MODEL_PRICES), cap measured on history + current turn]*
+(Other `*.repro.test.ts` files in the tree — tool-ordering, log-set, format-exercise-summary — belong to other plans.)
+
+- **Registry:** `infra/ai/cache-break-reasons.ts` (`CACHE_BREAK_REASONS`, `reasonCovers`). Declarations live on `RunMetricsCollector`
+  (`declareCacheBreak` / `declaredCacheBreaks`, never persisted). Raise sites: `phase_switch` — commit node on a same-run hop **and** compact step
+  when the previous run committed a `phase_boundary` (two sites: a hop skips `prepare`); `compaction` — compact step when it removes messages;
+  `hard_cap` — compact step's budget trigger while warm **and** the agent node's assembler cuts while warm (T5's two branches);
+  `facts_changed` — executor after a successful `manage_fact`, compact step when the summariser returned fact operations, course-check step when it stores
+  a new directive; `ttl_expired` — not declared: attribution measures the gap itself (`cacheExpected: ttl_expired` → `cacheBreak: none`).
+- **Per call:** the agent node passes `phase` and the run's declared reasons in the call's callback metadata (`callConfig()`, fresh per call,
+  incl. the retry); `LLMLogHandler` puts them on the recorder input (`phase`, `cacheBreakReasons`).
+- **Attribution:** compares tools + only the previous request's messages before its last `user` message (breakpoint 2); a change in the current turn
+  is `none`. Inside the ONE stable system message `where` is the block the char offset falls in (`system:prompt|facts|directive|summaries`, by
+  the existing headers; the earlier block wins when a block appeared/vanished). Content is normalised before comparing: `cache_control` keys are
+  ignored (breakpoint 2 moves every turn) and a system message sent as text parts equals the same text as a string. The recorder now hashes a
+  parts-system message by its joined text, so prompt_blobs dedup and the previous-call lookup keep working with `LLM_PROMPT_CACHE=anthropic`.
+  `too_short` no longer hides a break (a changed tool list loses the whole previous prefix whatever this call shares); `ttl_expired` still does.
+  `unexplained_miss`: expected warm and `cacheReadTokens < 0.75 × cacheSharedPrefixTokens` (the shared figure is char-estimated, provider reads round
+  to block boundaries — a strict `<` would false-alarm); unreported read (null) is never flagged. Lost tokens = chars the previous cacheable part
+  had and this call no longer shares, scaled by `inputTokens / chars` (unexplained_miss: shared − read).
+- **Logs:** `Prompt cache break` warn for `unplanned:*` / `unexplained_miss`, info for `planned:hard_cap` / `planned:facts_changed`; fields
+  `{userId, phase, cacheBreak, where, charsInto, lostTokens, lostCostUsd}` — the T2 test names (`lostTokens`, `lostCostUsd`), not the brief's
+  `tokensLost`/`costLostUsd`; cost = tokens × the flat-price key (removed) / 1e6, null when unset. Logging is wrapped: it can never fail a call. *[historical — superseded by review runs 1–2: one price source (priceOf + LLM_MODEL_PRICES), cap measured on history + current turn]*
+- **Report:** `infra/observability/cache-report.ts` (`buildCacheReport`, `formatCacheReport`) + `scripts/cache-report.ts`, npm script
+  `npm run cache-report -- <userId> <from ISO> <to ISO> [--price <USD/1M>] [--ttl 5m|1h] [--env-file <path>]` (price/ttl default to
+  the flat-price key (removed) / `LLM_PROMPT_CACHE_TTL`). Not run against any real DB (no DB other than the test one was touched). *[historical — superseded by review runs 1–2: one price source (priceOf + LLM_MODEL_PRICES), cap measured on history + current turn]*
+- Interface deviation from T2: none apart from the log key names above being the T2 ones.
+
+### Review fixes — run 1 (worker, Sonnet, 2026-09-30) — commit 130ca6ec
+
+Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 183 suites / 1825 tests green; `db-test-lock.sh npm run test:scenarios`
+23 suites / 415 passed + 1 todo; DB-backed (`RUN_DB_TESTS=1`) `cache-break-guard` + `cache-report` + `llm-call-recorder` + `llm-call-cache-write` +
+`conversation-run-cache-rollup` integration 5 suites / 36 tests green. `git ls-files '*prompt-cach*' '*cache-break*' '*training-tool-rejection*'`
+lists no `*.repro.test.ts`. Docs outside this file untouched (docs sync is the orchestrator's; Blocking #1–#8 stay open).
+
+- **#9** AC-PC-4 executor tests are in CI (`training-tool-rejection.unit.test.ts`).
+- **#10 text-of-content:** one home `infra/ai/message-text.ts` (`textOf` lossy, `textOnly` → null on any non-text part). *Class search* (src/evals/scripts, non-test):
+  `grep -rnE "\.text \?\? ''|every\(.*'text'\)|filter\(.*type === 'text'"` → only `message-text.ts` itself (+ two unrelated `?? ''` on a response/step field);
+  `grep -rnE "typeof [a-z.]*content === 'string'"` → remaining hits are string-only checks with no part handling (`outcome.ts`, `finalize.node.ts`,
+  `agent.node.ts` empty-reply test, `cache-attribution.ts` label, `assemble-context.ts` user text) or a JSON fallback for the token measure
+  (`token-estimator.ts:31`, `transcript-formatter.ts:80`) — left as is: changing the estimator would move every frozen budget report.
+- **#11 clone:** `grep -rnE "new (Tool|Human|AI|System)Message\(\{" src` (non-test) → `withParts` (cache-breakpoints.ts), `tools/outcome.ts` (fresh tool results, not copies),
+  `tool-executor.ts` (fresh messages) — no other copy of an existing message.
+- **#12 warm predicate:** `grep -rn cacheTtlMs src` → `warmCacheOf` is the only comparison; the rest are the config field and its wiring.
+- **#13** `isCacheBreakReason` removed (grep: no callers).
+- **R3 cache-report pricing (AC-PC-8):** `infra/ai/model-prices.ts` — built-in per-model table (input + output USD/1M: Sonnet 5.5 3/15 at that commit, 2/10 since f5e8bf87 (the price that reproduced the BUG-051 charge), Haiku 4.5 1/5 —
+  *assumed list prices, verify against the provider's page before quoting a bill*), overridable with `LLM_MODEL_PRICES` JSON (`{"model":{"input":..,"output":..}}`).
+  The report prices each model separately (read 0.1×, write 1.25×/2×, uncached 1×, **output at the output price**), returns `models[]`, `cost.output`,
+  `cost.withoutCaching`, and lists unpriced models instead of guessing; `--price` forces one flat input price. `lostCostUsd` per break uses the row's model price.
+- **R3 guard gating:** the recorder stores `cache_break` (and lost tokens) and logs ONLY when the request carried a `cache_control` part; `LLM_PROMPT_CACHE=off`,
+  summariser and course-check calls get null and never warn (test: "a call that sent no cache_control …"). The break cost log uses the flat-price key (removed) *[historical — superseded by review runs 1–2: one price source (priceOf + LLM_MODEL_PRICES), cap measured on history + current turn]*
+  if set, else the model's table price.
+- **R3 D4 rejection:** `set-preconditions.ts` returns a `user_error` (a normal tool result, status success) instead of an `llm_error`, so a premature
+  delete/update no longer spends training's `llmErrorBudget: 1`; the session read moved inside each tool's `try` (a failing read is handled by the tool).
+  This changes the T2/T3 wording "rejected as llm_error": it is now a refusal that the model reads and the budget ignores (tests: two premature calls in one batch → two
+  tool messages, no `tool_error_budget_exhausted`).
+- **R3 one hard-cap measure:** `cache-warmth.ts` `conversationTokens(history, current, estimate)` (the conversation that grows; system/blocks excluded) is used by both the
+  compact step and `resolveBudget`, with the same cap and the same warm predicate — no band where one defers and the other trims (test: at the cap both defer, one token over both act).
+- Left open (not pulled in): the other R1/R2/R3/R4 advisories and Blocking #1–#8.
+
+### Review fixes — run 2 (worker, Sonnet, 2026-09-30) — commits f37d54ce (code), 0f4313a4 (final code state)
+
+Verification at **0f4313a4** (apps/server, clean tree): `npm run check-all` clean; `npm run test:unit` 182 suites / 1826 tests green; `db-test-lock.sh npm run
+test:scenarios` 23 suites / 415 passed + 1 todo; DB-backed cache suites (`cache-report`, `cache-break-guard`, `llm-call-recorder`, `llm-call-cache-write`,
+`conversation-run-cache-rollup`; `RUN_DB_TESTS=1`, db-test-lock) 5 suites / 37 tests green — all run at 0f4313a4, after the Sonnet 2/10 change.
+a grep of `apps docs` for the removed flat-price key → only this plan (the T2 interface note above, marked superseded; the other historical mentions reworded).
+
+- **#3** DB report test expects Sonnet 5.5 at 2/10.
+- **#4 one price source:** the flat-price key gone; `priceOf(model, cfg.LLM_MODEL_PRICES)` prices both the recorder's break-cost log and the report
+  (`--price` = explicit CLI override). New DB test: the break cost follows an `LLM_MODEL_PRICES` override and an unpriced model logs `lostCostUsd: null`;
+  the unplanned-break test asserts cost = lost tokens × $2/M.
+- **`LLM_MODEL_PRICES` parsed once, at config load:** the `EnvSchema` field transforms the JSON into the price record (malformed JSON / shape → the config load
+  fails naming the variable; tests in `prompt-cache-config.unit.test.ts`); callers read the record, nothing re-parses per call. The parser lives in
+  `config/model-prices.ts` (config may not import infra); `infra/ai/model-prices.ts` keeps the table and `priceOf`.
+- **Comments:** D5 comment restored on `LLM_CONTEXT_HARD_CAP_TOKENS` ("estimated conversation (history + current turn)"); `model-prices.ts` header now says the figures are
+  the prices as configured for this app (Sonnet 5.5 fitted to the OpenRouter charge, BUG-051; Haiku 4.5 list). `.env.example` documents `LLM_CONTEXT_HARD_CAP_TOKENS`
+  and `LLM_MODEL_PRICES`.
+
 ## Out of scope
 
 Smaller training tool set and shorter schemas; BUG-050 estimator; the post-tool second call itself; caching on
 the Z.AI / Gemini routes; summariser and course-check calls (Haiku 4.5 minimum 4 096 tokens).
+
+## Review
+
+### Run 1 — 2026-09-30, four zones over `c3e3b927...bf34dd0a`: **blocked**
+
+#### Blocking (open)
+
+1. **R1 + R4 — ADR-0013 §3.4 layout.** `assemble-context.ts:212` sends one merged stable SystemMessage and puts
+   block 3, gap note and NOW in a `<context>` part of the current HumanMessage (`:215`); nudge on the ToolMessage;
+   two `cache_control` breakpoints. ADR-0013 §3.4 (`docs/adr/0013…:192-208`) still declares separate
+   SystemMessages and gap note/NOW before `current`; line 197 still names `trimMessages`. Escalated in plan —
+   clears only with the owner-approved §3.4 amendment.
+2. **R1 + R4 — INV-LLM-004 / BR-LLM-003 warm-cache exception.** `budget.ts:181` skips the resolution order and
+   `compact.ts:62` suppresses the budget trigger while warm and under `LLM_CONTEXT_HARD_CAP_TOKENS`; ADR-0013
+   `:169`, `:220` have no such exception. Escalated in plan — owner-approved amendment.
+3. **R4 — ADR-0013 §4.2 (`:272,279`)** still lists `toolPolicy.availability?` / dynamic tool availability, removed
+   by this diff (`tool-policy.ts`; rule now `tools/set-preconditions.ts`). The plan's escalation list wrongly
+   named ADR-0011 (it has no availability text).
+4. **R4 — ADR-0013 §8 cache-accounting amendment (`:456-464`)** lacks `llm_calls.cache_write_tokens`,
+   `cache_break`, `cache_break_lost_tokens`, `conversation_runs.tokens_cache_write` (migrations 0021/0022) and
+   the D8 classification contract / attribution-to-breakpoint-2 change.
+5. **R4 — `docs/DB_SETUP.md:184,205-229,237-240,259-290`**: DDL misses the four columns; `cache_expected` labels
+   (`system:domain`/`gap-note`/`now`) and "compares against the whole previous request" are stale; its
+   "unexplained misses" query (`cache_read_tokens = 0`) diverges from `cache_break = 'unexplained_miss'`
+   (read < 0.75 × shared).
+6. **R4 — `docs/ARCHITECTURE.md:138,176,427`** describe the old layout; the file tree lacks
+   `context/cache-breakpoints.ts`, `ai/cache-break-reasons.ts`, `tools/set-preconditions.ts`,
+   `prompts/phases/context-location.ts`, `observability/cache-report.ts`, `scripts/cache-report.ts`.
+7. **R4 — `docs/CONTRIBUTING_AI.md:162,174`**: "Every phase sends the same message shape" with block 3 before
+   history, `resolveBudget` always enforcing INV-LLM-004, episodes ending on history-budget overflow — none hold
+   after D2/D5.
+8. **R4 — `docs/LOGGING_GUIDE.md:383`**: "pushes up to six `SystemMessage`s per call … per-workout blocks that
+   change on nearly every call" — now exactly one stable SystemMessage; the retention rationale no longer matches.
+9. **R3 + R4 — AC-PC-4 executor half not in CI.** Only
+   `graph/__tests__/training-tool-rejection.repro.test.ts` exists (outside testMatch; CI runs `test:unit`); T3
+   evidence claims a `.unit` promotion and T5b claims no repro left — both false (plan `:280,369`).
+    Closed: 130ca6ec — `training-tool-rejection.repro.test.ts` renamed to `.unit.test.ts` (now in `test:unit`; my T3 `git mv` had silently not run); the false T3/T5b evidence lines are corrected below.
+10. **R2 — `llm-call-recorder.ts:164` `systemTextOf()`** near-verbatim copy of `systemText()`
+    (`cache-attribution.ts:145`); both reinvent `textOf()` (`llm.gateway.ts:34`, "one home"); a third copy is
+    `contentText()` (`evals/lib/run-case.ts:61`). One exported helper returning null for non-text parts.
+    Closed: 130ca6ec — new `infra/ai/message-text.ts` is the one home: `textOf` moved there (llm.gateway re-uses it) plus `textOnly(content): string | null` (null for any non-text part). `systemTextOf` (recorder) and `systemText` (attribution) now call `textOnly`; `contentText` (evals/lib/run-case.ts) and the test-side flatteners (assemble-context, agent.node, user-facts scenario, retro-timestamps, a-greeting, set-kind, harness) too. Search in § Evidence.
+11. **R2 — `agent.node.ts:116` `withAppendedText()`** copies the tool/human branches of `withBreakpoint()`
+    (`cache-breakpoints.ts:40`, 48–66); `withContext()` (`assemble-context.ts:128`) is a third, human-only copy;
+    `textPartsOf()` (`agent.node.ts:106`) duplicates `partsOf()` (`cache-breakpoints.ts:29`). Already drifted:
+    only `withContext` keeps `response_metadata`. One clone-with-new-parts helper next to cache-breakpoints.
+    Closed: 130ca6ec — `cache-breakpoints.ts` exports `partsOf` + `withParts(message, parts)` (one clone: id, name, additional_kwargs, response_metadata for every role; tool_call_id/status/artifact; ai tool_calls/usage). `withBreakpoint`, agent `withAppendedText` and assembler `withContext` use it; `textPartsOf` deleted. The drift is gone (response_metadata now kept everywhere; test AC-PC-3).
+12. **R2 — `compact.node.ts:167`** inline warm-cache predicate repeats `warmCacheOf()` (`agent.node.ts:165`).
+    Closed: 130ca6ec — new `context/cache-warmth.ts` `warmCacheOf(tunables, lastUserMessageAt, now)` is the only warm predicate (compact step + agent node); the agent's private copy deleted.
+13. **R2 — `cache-break-reasons.ts:18` `isCacheBreakReason()`** exported, zero callers, not in plan (YAGNI).
+    Closed: 130ca6ec — `isCacheBreakReason` removed.
+
+#### Advisory (not fixed on this branch unless the owner pulls them in)
+
+- R1 `tool-executor.ts:213` executor branches on `manage_fact` to declare `facts_changed` — let the tool's return
+  carry it. · R1 `run-metrics.ts:70` metrics collector now also carries cache-break intent — own run-context field.
+  · R1 `compact.node.ts:91` cache settings in `EpisodeTunables` while breakpoints read `loadConfig()` directly —
+  one channel. · R1 `cache-attribution.ts:316` breakpoint-2 position defined twice and stable-message layout
+  re-encoded (`SECTION_SEPARATOR_LENGTH = 2`) — one owner of the cacheable boundary. · R1 `model.factory.ts:37`
+  raw response added for every profile, stripped only in the agent node. · R1 `set-preconditions.ts:10` rule
+  belongs in `ITrainingService` as a domain rejection.
+- R2 `agent.node.ts:278` / `compact.node.ts:182` hard-cap declare+log duplicated; `budget.ts:652` /
+  `compact.ts:188` cap rule twice. · R2 `scripts/cache-report.ts:24` third copy of script boilerplate
+  (print-transcript, print-load-plan). · R2 `training.spec.ts:83` `buildTrainingToolPolicy(_tools)` unused param.
+  · R2 `cache-report.ts:20,45` TTL literal type restated (`PromptCacheTtl` exists); TTL→ms inlined in
+  `register-infra-services.ts:131`.
+- R3 `compact.node.ts:168` + `budget.ts:180` two different hard-cap measures — in the band between them the
+  assembler trims (sliding) on every warm call. · R3 `llm-call-recorder.ts:268` guard not gated on
+  `LLM_PROMPT_CACHE`/phase/model — Haiku summariser/course-check and `off` routes will warn "Prompt cache break".
+  · R3 `cache-report.ts:59` sums all models at one Sonnet input price, no output tokens — not comparable with
+  $3.63 (AC-PC-8). · R3 `cache-attribution.ts:427` lost tokens count only chars after divergence; a system break
+  loses tools + whole system block. · R3 `run-metrics.ts:70` declared reasons never cleared within a run — can
+  mask a real break as `planned:compaction`. · R3 `set-preconditions.ts:16` a premature delete/update now spends
+  training's `llmErrorBudget: 1` (can end the run with `tool_error_budget_exhausted`); `getSessionDetails` outside
+  the try/catch. · R3 `assemble-context.ts:215` array content for user/tool roles also with `off` — unprobed on
+  Z.AI / Gemini BYOK. · R3 new test names without AC ids (`cache-breakpoints.unit.test.ts:16`,
+  `cache-break-declarations`, config D5/D6/D8, compact raise sites, recorder+DB). · R3
+  `episode-summaries.v2.ts:29` relative dates in the stable block → first call after local midnight logs
+  `unplanned:system:summaries`.
+- R4 `CLAUDE.md:38` "Unverified… app does not send cache_control" stale (rewrite with the T6 env switch). · R4
+  BUG-051 status line. · R4 design spec §4 lacks a superseded pointer. · R4 plan D5 names non-existent
+  `LLM_PROMPT_CACHE_TTL_SECONDS` (also two test headers); D7 "attribution needs no change" contradicted by D8;
+  T4 heading "(worker, GLM)" vs D9. · R4 `training.spec.ts:5` header still says dynamic tool filtering. · R4 test
+  headers reference removed `*.repro.test.ts` names. · R4 `.env.example` lacks `LLM_CONTEXT_HARD_CAP_TOKENS`,
+  the flat-price key (removed); two TTL settings kept in step by hand. · R4 CONTRIBUTING_AI `:164` defaults list. ·
+  R4 BUG-008 Plan A rule has no BR-TRAINING id. · R4 ARCHITECTURE `:170` phase-prompt listing stale.
+
+Blocking #1–#8 closed by the orchestrator on the owner's approval (2026-09-30, "обновляй"): ADR-0013 amendments
+2026-09-30 in §3.3 (BR-LLM-003 warm deferral), §3.4 (layout; INV-LLM-004 warm exception), §4.2 (availability
+removed; refusal in tools), §8 (cache-write/cache-break columns, classification, alerts, report); DB_SETUP.md (DDL,
+semantics, unexplained-miss pointer); ARCHITECTURE.md (assembler line, NOW line, tool loop, new modules);
+CONTRIBUTING_AI.md (episode end, message shape, warm no-cut); LOGGING_GUIDE.md (blob rationale). Advisories closed
+alongside: design spec §4 superseded pointer, plan D5 name / D7 wording / T4 heading, two test headers.
+
+Meta findings filed in `docs/REVIEW_FINDINGS.md` (run prompt-caching 2026-09-30).
+
+### Run 2 — 2026-09-30, four zones over `b43ef90d...1e82399a`: **blocked** (all 13 run-1 blocking verified closed)
+
+#### Blocking (new, introduced by the fix commits)
+
+1. **R1 + R4 — cap wording.** ADR-0013 `:177`, `:253` (and CONTRIBUTING_AI `:174`, plan D5, `config/index.ts:116-118`)
+   said "estimated (context) total"; the shared measure `conversationTokens()` (`context/cache-warmth.ts:44`) counts
+   history + current only. Closed (orchestrator, owner's "обновляй" = describe the code): ADR, CONTRIBUTING_AI and
+   D5 now say "estimated conversation (history + current turn)"; the config comment goes with fix 4.
+2. **R4 — AC-PC-4 / D4 text** still said "executor error"; since 130ca6ec the tools return `user_error`, no budget
+   spent. Closed (orchestrator): AC-PC-4 and D4 amended in place.
+3. **R3 — `tests/integration/services/cache-report.integration.test.ts:165-170`** still expects Sonnet 5.5 at 3/15
+   after f5e8bf87 set 2/10; the DB-backed evidence predates the change. Open → worker.
+   Closed: 0f4313a4 — the Sonnet 5.5 expectations now use 2/10 (read 0.2, write 2.5, uncached 2, output 10 per 1M; built-in price kept per f5e8bf87); the DB-backed cache suites were re-run at 0f4313a4 (see Evidence).
+4. **R2 — price has two sources.** `llm-call-recorder.ts:273` uses the flat-price key `?? priceOf(model)`,
+   `cache-report.ts` uses `--price ?? priceOf(model)` — the same break can be costed differently. Open → worker.
+   Closed: 0f4313a4 — the flat-price key removed (config, recorder, tests); the recorder break-cost log and `cache-report` both price via `priceOf(model, cfg.LLM_MODEL_PRICES)`; `--price` stays only as an explicit CLI override (documented in the script header). Class grep: `grep -rn 'priceOf\|inputPerMTok\|LLM_MODEL_PRICES' apps/server/{src,scripts}` → the lookup is `priceOf` (infra/ai/model-prices.ts) used by the recorder and `cache-report.ts`; no other price lookup.
+
+#### Advisory (run 2)
+
+- R2 `request-capture.ts:94` `wireText` leftover test flattener; `textOnly(m.content) ?? JSON.stringify(m.content)`
+  repeated at 6 sites. · R2/R3 `LLM_MODEL_PRICES` parsed on every recorded call, docstring claims fail-fast at
+  config load. · R4 `config/index.ts:116-125` D5 comment split from its variable. · R4 `model-prices.ts:5-6` header
+  calls the figures "Anthropic list prices". · R4 ARCHITECTURE `:410` warm qualifier, plan `:132` ADR-0011 name,
+  Evidence "3/15" — closed by the orchestrator in the same commit as fixes 1–2.
+
+### Run 3 — 2026-09-30, four zones over `1e82399a...f81361e0`: **clean**
+
+Run-2 #1–#4 verified closed by each zone's own search (R1, R2, R3, R4); no new blocking finding. Advisories
+(run 3) filed in `docs/BACKLOG.md` § prompt-caching close-out review advisories, except the trivial doc ones
+closed at close-out: ARCHITECTURE `model-prices.ts` line ("as configured") and the `config/model-prices.ts`
+listing; historical Evidence lines that named the removed flat-price key / the old full-total cap measure now carry
+a superseded marker.

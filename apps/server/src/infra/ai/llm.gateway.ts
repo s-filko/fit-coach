@@ -4,6 +4,7 @@ import type { ZodType } from 'zod';
 import type { LlmCallOptions, LlmGateway } from '@domain/ai/ports';
 import type { ChatMsg } from '@domain/ai/types';
 
+import { textOf } from '@infra/ai/message-text';
 import { getModel } from '@infra/ai/model.factory';
 import {
   buildJsonSchemaResponseFormat,
@@ -28,21 +29,6 @@ function toLangChain(messages: ChatMsg[]): BaseMessage[] {
     }
     return new HumanMessage(m.content);
   });
-}
-
-/** Flattens message content to its text blocks — one home (D-F, BACKLOG consolidation). */
-export function textOf(content: unknown): string {
-  if (typeof content === 'string') {
-    return content;
-  }
-  if (Array.isArray(content)) {
-    return content
-      .filter((b): b is { type: string; text?: string } => typeof b === 'object' && b !== null && 'type' in b)
-      .filter(b => b.type === 'text')
-      .map(b => b.text ?? '')
-      .join('');
-  }
-  return '';
 }
 
 /**

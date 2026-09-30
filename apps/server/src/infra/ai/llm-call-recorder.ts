@@ -6,12 +6,16 @@
  */
 import { createHash } from 'node:crypto';
 
+import { textOnly } from '@infra/ai/message-text';
+import { priceOf } from '@infra/ai/model-prices';
+
 import { createLogger } from '@shared/logger';
 
 import {
   attributeCache,
   type CacheAttributionMessage,
   type CacheAttributionRequest,
+  type CacheAttributionResult,
   type PreviousCallLookup,
 } from './cache-attribution';
 
@@ -59,6 +63,8 @@ export interface RecordLlmCallResponse {
     // (e.g. an older test literal) stays valid; a missing key reads the same as null.
     cacheReadTokens?: number | null;
     reasoningTokens?: number | null;
+    /** Prompt-caching plan D7: tokens written to the provider cache; null/absent = unreported. */
+    cacheWriteTokens?: number | null;
   } | null;
 }
 
@@ -66,6 +72,9 @@ export interface RecordLlmCallInput {
   runId: string;
   /** D1: from callback metadata (conversation-run.adapter.ts) — nullable like `runId`'s FK-free reasoning. */
   userId: string | null;
+  /** Prompt-caching plan D8: the call's phase (log context only) and the run's declared cache-break reasons. */
+  phase?: string | null;
+  cacheBreakReasons?: string[];
   model: string;
   request: RecordLlmCallRequest;
   /** Null when the call failed before any response. */
@@ -154,6 +163,45 @@ async function lookupPreviousCall(
   return { kind: 'available', request, createdAt: prevRow.createdAt };
 }
 
+/** Did this request mark any content part with `cache_control` (i.e. ask the provider for explicit caching)? */
+function sentCacheControl(messages: RecordedRequestMessage[]): boolean {
+  return messages.some(
+    m =>
+      Array.isArray(m.content) &&
+      (m.content as unknown[]).some(p => p !== null && typeof p === 'object' && 'cache_control' in p),
+  );
+}
+
+const PLANNED_BUT_NOTABLE = new Set(['planned:hard_cap', 'planned:facts_changed']);
+
+function logCacheBreak(
+  result: CacheAttributionResult,
+  input: RecordLlmCallInput,
+  pricePerMTok: number | undefined,
+): void {
+  const { cacheBreak } = result;
+  const alert = cacheBreak.startsWith('unplanned:') || cacheBreak === 'unexplained_miss';
+  if (!alert && !PLANNED_BUT_NOTABLE.has(cacheBreak)) {
+    return;
+  }
+  const lostTokens = result.cacheBreakLostTokens;
+  const fields = {
+    userId: input.userId,
+    phase: input.phase ?? null,
+    cacheBreak,
+    where: result.cacheBreakWhere,
+    charsInto: result.cacheBreakCharsInto,
+    lostTokens,
+    // List price of the tokens that were re-read/re-written instead of hitting the cache; omitted without a price.
+    lostCostUsd: lostTokens !== null && pricePerMTok !== undefined ? (lostTokens * pricePerMTok) / 1_000_000 : null,
+  };
+  if (alert) {
+    log.warn(fields, 'Prompt cache break');
+  } else {
+    log.info(fields, 'Prompt cache break');
+  }
+}
+
 export const recordLlmCall: RecordLlmCall = async input => {
   const { db } = await import('@infra/db/drizzle');
   const { llmCalls, promptBlobs } = await import('@infra/db/schema');
@@ -162,15 +210,17 @@ export const recordLlmCall: RecordLlmCall = async input => {
   const promptHashes: string[] = [];
   const messages = await Promise.all(
     input.request.messages.map(async message => {
-      if (message.role !== 'system' || typeof message.content !== 'string') {
+      // D1 (prompt-caching): with breakpoints on, the system message is a list of text parts — deduped by its text.
+      const systemText = message.role === 'system' ? textOnly(message.content) : null;
+      if (systemText === null) {
         return message;
       }
-      const hash = createHash('sha256').update(message.content).digest('hex');
+      const hash = createHash('sha256').update(systemText).digest('hex');
       promptHashes.push(hash);
       await db
         .insert(promptBlobs)
-        .values({ hash, content: message.content })
-        .onConflictDoUpdate({ target: promptBlobs.hash, set: { content: message.content } });
+        .values({ hash, content: systemText })
+        .onConflictDoUpdate({ target: promptBlobs.hash, set: { content: systemText } });
       const { content: _content, ...rest } = message;
       return { ...rest, contentHash: hash };
     }),
@@ -185,6 +235,8 @@ export const recordLlmCall: RecordLlmCall = async input => {
   let cacheDivergedAt: string | null = null;
   let cacheSharedPrefixTokens: number | null = null;
   let cacheGapMs: number | null = null;
+  let cacheBreak: string | null = null;
+  let cacheBreakLostTokens: number | null = null;
   if (input.userId) {
     try {
       const { loadConfig } = await import('@config/index');
@@ -199,10 +251,32 @@ export const recordLlmCall: RecordLlmCall = async input => {
         prev,
         // D5: gap measured from when THIS call was sent, not from now (after the response) —
         // record time would fold the call's own latency into the gap (close-out review R3).
-        { request: currentRequest, inputTokens: usage?.promptTokens ?? null, now: new Date(input.startedAt) },
+        {
+          request: currentRequest,
+          inputTokens: usage?.promptTokens ?? null,
+          now: new Date(input.startedAt),
+          cacheReadTokens: usage?.cacheReadTokens ?? null,
+          declaredBreaks: input.cacheBreakReasons ?? [],
+        },
         { ttlSeconds: cfg.LLM_CACHE_TTL_SECONDS ?? null, minPrefixTokens: cfg.LLM_CACHE_MIN_PREFIX_TOKENS ?? null },
       );
-      ({ cacheExpected, cacheDivergedAt, cacheSharedPrefixTokens, cacheGapMs } = result);
+      ({ cacheExpected, cacheDivergedAt, cacheSharedPrefixTokens, cacheGapMs, cacheBreak, cacheBreakLostTokens } =
+        result);
+      // D8: the guard only judges calls that ASKED for caching — a request with no `cache_control` (the route has
+      // `LLM_PROMPT_CACHE=off`, or it is a summariser / course-check call) has no breakpoints to break: no
+      // classification is stored and nothing is logged.
+      if (sentCacheControl(input.request.messages)) {
+        // D8.4: a break nobody declared (or a miss nothing explains) is alerted; a declared one is silent except the
+        // two that are planned but not standard (hard cap, facts) — optimisation candidates. Never fails the call.
+        try {
+          logCacheBreak(result, input, priceOf(input.model, cfg.LLM_MODEL_PRICES)?.inputPerMTok);
+        } catch (err) {
+          log.error({ err, runId: input.runId }, 'Cache break logging failed — continuing');
+        }
+      } else {
+        cacheBreak = null;
+        cacheBreakLostTokens = null;
+      }
     } catch (err) {
       log.error({ err, runId: input.runId }, 'Cache attribution failed — continuing with null cache columns (D7)');
     }
@@ -231,11 +305,14 @@ export const recordLlmCall: RecordLlmCall = async input => {
     inputTokens: usage?.promptTokens ?? null,
     outputTokens: usage?.completionTokens ?? null,
     cacheReadTokens: usage?.cacheReadTokens ?? null,
+    cacheWriteTokens: usage?.cacheWriteTokens ?? null,
     reasoningTokens: usage?.reasoningTokens ?? null,
     cacheExpected,
     cacheDivergedAt,
     cacheSharedPrefixTokens,
     cacheGapMs,
+    cacheBreak,
+    cacheBreakLostTokens,
     latencyMs: input.latencyMs,
     errorClass: input.errorClass ?? null,
     errorMessage: input.errorMessage ?? null,

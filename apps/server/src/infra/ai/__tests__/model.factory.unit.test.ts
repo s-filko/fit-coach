@@ -85,3 +85,11 @@ describe('getModel(profile) (AC-RL-1 — cap and reasoning depth from config, as
     expect('reasoning_effort' in params).toBe(false);
   });
 });
+
+describe('getModel(profile) (prompt-caching plan D7 — the raw provider response is carried for usage.ts)', () => {
+  it('every profile asks LangChain to attach the raw response (it drops cache_write_tokens otherwise)', () => {
+    resetModelCacheForTests();
+    expect((getModel() as unknown as { __includeRawResponse?: boolean }).__includeRawResponse).toBe(true);
+    expect((getModel('summarizer') as unknown as { __includeRawResponse?: boolean }).__includeRawResponse).toBe(true);
+  });
+});

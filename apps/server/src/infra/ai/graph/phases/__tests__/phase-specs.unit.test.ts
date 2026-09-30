@@ -133,31 +133,14 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
     expect(specOf('session_planning').toolPolicy).toEqual(planning);
   });
 
-  it('training carries the executor policy: priority, log_set dedup, budget 1, BUG-008 availability', () => {
+  it('training carries the executor policy: priority, log_set dedup, budget 1, no availability filter (D4)', () => {
     const { toolPolicy } = specOf('training');
     expect(toolPolicy.ordering).toEqual(TRAINING_TOOL_PRIORITY);
     expect(toolPolicy.batchDedup).toEqual(['log_set']);
     expect(toolPolicy.llmErrorBudget).toBe(1);
 
-    // BUG-008 Plan A: with sets on the in-progress exercise, everything is available;
-    // on a fresh exercise the set-editing tools are hidden.
-    const withSets = { exercises: [{ status: 'in_progress', sets: [{}] }] };
-    expect(toolPolicy.availability?.({ data: { session: withSets } })).toBeNull();
-    const fresh = { exercises: [{ status: 'in_progress', sets: [] }] };
-    expect(toolPolicy.availability?.({ data: { session: fresh } })).toEqual([
-      'search_exercises',
-      'get_exercise_history',
-      'get_load_plan',
-      'log_set',
-      'complete_current_exercise',
-      'finish_training',
-      'set_session_place',
-      'save_timezone',
-      'set_language',
-      // fact-lifecycle Task 2: memory control is never session-gated.
-      'manage_fact',
-      'list_facts',
-    ]);
+    // Prompt-caching plan D4: no availability filter — every tool is always bound; the BUG-008 rule lives in the tools.
+    expect(toolPolicy).not.toHaveProperty('availability');
   });
 
   it('registration loader returns no loader data (lastMessageTime left the Data types — D-M)', async () => {

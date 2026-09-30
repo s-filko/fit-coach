@@ -7,6 +7,7 @@ import type { BudgetReport } from '@domain/conversation/ports';
 
 import { buildConversationRunner } from '@infra/ai/graph/conversation-run.adapter';
 import { buildConversationGraph } from '@infra/ai/graph/conversation.graph';
+import { textOnly } from '@infra/ai/message-text';
 
 import type { EvalCase } from '../schema/case.schema';
 
@@ -57,9 +58,9 @@ function reduceModelMessage(m: BaseMessage): ModelInputMessage {
   return { type: m._getType(), toolCallIds: toolCallIdsOf(m), toolCallId };
 }
 
-/** Message content as flat text — string content verbatim, structured content JSON-encoded. */
+/** Message content as flat text — text parts joined, anything structured JSON-encoded. */
 function contentText(m: BaseMessage): string {
-  return typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+  return textOnly(m.content) ?? JSON.stringify(m.content);
 }
 
 /**

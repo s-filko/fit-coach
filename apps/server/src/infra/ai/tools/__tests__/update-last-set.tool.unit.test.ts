@@ -15,7 +15,8 @@ type InvokableTool = {
 const makeTrainingService = (): jest.Mocked<ITrainingService> =>
   ({
     startSession: jest.fn(),
-    getSessionDetails: jest.fn(),
+    // D4: the tool rejects before the first set of the current exercise — default fixture has one.
+    getSessionDetails: jest.fn().mockResolvedValue({ exercises: [{ status: 'in_progress', sets: [{}] }] }),
     completeSession: jest.fn(),
     skipSession: jest.fn(),
     getTrainingHistory: jest.fn(),

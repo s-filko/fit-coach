@@ -32,6 +32,9 @@ export function getModel(profile = 'default'): ChatOpenAI {
     apiKey: config.LLM_API_KEY,
     configuration: config.LLM_API_URL ? { baseURL: config.LLM_API_URL } : undefined,
     callbacks: [new LLMLogHandler()],
+    // Prompt-caching plan D7: LangChain drops the provider's raw usage (cache_write_tokens) — carry the whole raw
+    // response on the AIMessage so usage.ts can read it; the agent node strips it before anything is checkpointed.
+    __includeRawResponse: true,
     modelKwargs: reasoningEffort === 'off' ? undefined : { reasoning_effort: reasoningEffort },
   });
 

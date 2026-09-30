@@ -41,6 +41,10 @@ describe('attributeCache (D3-D6)', () => {
       cacheDivergedAt: null,
       cacheSharedPrefixTokens: null,
       cacheGapMs: null,
+      cacheBreak: 'none',
+      cacheBreakLostTokens: null,
+      cacheBreakWhere: null,
+      cacheBreakCharsInto: null,
     });
   });
 

@@ -6,6 +6,7 @@ import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import type { ITrainingService } from '@domain/training/ports';
 
 import { sessionIdOf, userIdOf } from '@infra/ai/tools/format-exercise-summary';
+import { rejectWithoutLoggedSet } from '@infra/ai/tools/set-preconditions';
 
 import { createLogger } from '@shared/logger';
 
@@ -28,6 +29,10 @@ export function buildDeleteLastSetsTool(deps: DeleteLastSetsToolDeps) {
 
       const count = input.count ?? 1;
       try {
+        const rejection = await rejectWithoutLoggedSet(trainingService, sessionId, 'delete_last_sets');
+        if (rejection) {
+          return rejection;
+        }
         const result = await trainingService.deleteLastSets(sessionId, input.exercise_id, count);
         const deleted = result.deletedSets
           .map(s => `Set ${s.setNumber}: ${JSON.stringify(s.setData)}${s.rpe != null ? ` RPE ${s.rpe}` : ''}`)

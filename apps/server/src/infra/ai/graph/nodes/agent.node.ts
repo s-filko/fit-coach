@@ -5,12 +5,14 @@
  * falls back to a catalog message. Identical for every phase — layout,
  * prompt, tools, policy and loaders all come from the PhaseSpec.
  */
-import { AIMessage, type BaseMessage, SystemMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 
 import type { StoredEpisodeSummary } from '@domain/conversation/episode';
 
 import { assembleContext } from '@infra/ai/context/assemble-context';
+import { applyCacheBreakpoints, partsOf, withParts } from '@infra/ai/context/cache-breakpoints';
+import { warmCacheOf } from '@infra/ai/context/cache-warmth';
 import type { CourseCheckDirective, StoredCourseDirective } from '@infra/ai/course-check/directive';
 import { splitEpisode } from '@infra/ai/graph/episode';
 import type { ConversationGraphDeps, PhaseSpec, PromptContextFor } from '@infra/ai/graph/phase-spec';
@@ -19,7 +21,7 @@ import { langOf, t } from '@infra/ai/messages';
 import { getModel } from '@infra/ai/model.factory';
 import { CURRENT_TIME_V1, POST_TOOL_NUDGE_V1, renderBlock, TIME_GAP_V1 } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
-import { extractUsageFromMessage } from '@infra/ai/usage';
+import { extractUsageFromMessage, stripRawResponse } from '@infra/ai/usage';
 
 import { loadConfig } from '@config/index';
 
@@ -76,7 +78,8 @@ function finishReasonOf(response: AIMessage): string | undefined {
  */
 function logModelResponse(response: AIMessage, userId: string, phase: string): string | undefined {
   const finishReason = finishReasonOf(response);
-  const { inputTokens, outputTokens, cacheReadTokens, reasoningTokens } = extractUsageFromMessage(response);
+  const { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, reasoningTokens } =
+    extractUsageFromMessage(response);
   log.info(
     {
       userId,
@@ -85,6 +88,7 @@ function logModelResponse(response: AIMessage, userId: string, phase: string): s
       promptTokens: inputTokens,
       completionTokens: outputTokens,
       cacheReadTokens,
+      cacheWriteTokens,
       reasoningTokens,
     },
     'LLM response',
@@ -99,24 +103,38 @@ function logModelResponse(response: AIMessage, userId: string, phase: string): s
 }
 
 /**
- * Appends a system-level nudge before the last ToolMessage so the model
- * understands it must produce a text reply — not call another tool, not stay
- * silent. Inserted as SystemMessage (not HumanMessage) to avoid the model
- * echoing it.
+ * The request's copy of `message` with `text` appended as one more text part. Only the two roles a nudge can
+ * land on are cloned; anything else is returned as is.
+ */
+function withAppendedText(message: BaseMessage, text: string): BaseMessage {
+  const role = typeOf(message);
+  return role === 'tool' || role === 'human'
+    ? withParts(message, [...partsOf(message), { type: 'text', text }])
+    : message;
+}
+
+/**
+ * Prompt-caching plan D3: the post-tool nudge — the model must produce a text reply, not call another tool and
+ * not stay silent — rides as a text part appended to the LAST ToolMessage (after cache breakpoint 2: an uncached
+ * tail, never part of the prefix). It is no longer a SystemMessage: OpenRouter hoists every SystemMessage into the
+ * single system prompt, so an inserted one changed the whole cached prefix on every post-tool call. With no
+ * ToolMessage at all (empty-reply retry after a plain answer) it is appended to the last message instead.
  */
 function withPostToolNudge(messages: BaseMessage[]): BaseMessage[] {
-  const nudge = new SystemMessage(renderBlock(POST_TOOL_NUDGE_V1, {}));
-  let lastToolIdx = -1;
-  for (let i = messages.length - 1; i >= 0; i--) {
+  const nudge = renderBlock(POST_TOOL_NUDGE_V1, {});
+  let target = messages.length - 1;
+  // Only this run's own tool traffic (after the current HumanMessage) can carry it — an older ToolMessage sits
+  // inside the cached history prefix and must never change.
+  for (let i = messages.length - 1; i >= 0 && typeOf(messages[i]) !== 'human'; i--) {
     if (typeOf(messages[i]) === 'tool') {
-      lastToolIdx = i;
+      target = i;
       break;
     }
   }
-  if (lastToolIdx < 0) {
-    return [...messages, nudge];
+  if (target < 0) {
+    return messages;
   }
-  return [...messages.slice(0, lastToolIdx), nudge, ...messages.slice(lastToolIdx)];
+  return messages.map((m, i) => (i === target ? withAppendedText(m, nudge) : m));
 }
 
 export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDeps) {
@@ -172,14 +190,10 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
       } as PromptContextFor<D>),
     );
 
-    // Dynamic tool filtering (BUG-008 Plan A): names the model may call now;
-    // null = all. The policy owns the rule.
-    const available = spec.toolPolicy.availability?.({ data: loaded.data }) ?? null;
-    const tools = available === null ? spec.tools : spec.tools.filter(tool => available.includes(tool.name));
-    if (tools.length < spec.tools.length) {
-      const removed = spec.tools.filter(tool => !tools.includes(tool)).map(tool => tool.name);
-      log.debug({ userId, phase: spec.name, removed }, 'Dynamic tools: restricted unavailable tools');
-    }
+    // Prompt-caching plan D4: every phase tool is always bound, in the spec's stable order — the tool list is the
+    // first thing in the request prefix, so hiding a tool mid-session (the old BUG-008 Plan A availability filter)
+    // was a full cache miss. Calls that make no sense yet are rejected by the tool itself instead.
+    const { tools } = spec;
 
     // Pass the node's LangGraph config through so the LLM callback handler sees
     // metadata.runId (run metrics) and metadata.userId (debug logs) — metadata is
@@ -196,7 +210,16 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     // full depth and enforces the budget via resolveBudget — truncate facts,
     // trim history, step blocks down their depths, drop the oldest summary,
     // D-D floor, in that order. Block 1 (systemPrompt) is never touched here.
-    const { messages: llmMessages, budgetReport } = await assembleContext({
+    // Prompt-caching plan D5: the cache counts as warm while the user's previous message is younger than the TTL
+    // (same source as the compact step: state.lastUserMessageAt, no extra query). Warm → the assembler skips every
+    // budget cut unless the estimated total is over the hard cap.
+    // (episodeConfig is only read once there is a previous message, like the gap note above.)
+    const cacheWarm = warmCacheOf(deps.episodeConfig, state.lastUserMessageAt ?? null, now);
+    const {
+      messages: assembledMessages,
+      budgetReport,
+      hardCapExceeded,
+    } = await assembleContext({
       systemPrompt,
       userFacts,
       // AC-FL-5: the directive the course-check step stored (or kept) in
@@ -210,11 +233,24 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
       gapNote,
       nowLine,
       budget: spec.budget,
+      cacheWarm,
       now,
       timezone: user?.timezone ?? null,
       user,
     });
     ctx.metrics.attachBudgetReport(budgetReport);
+    if (hardCapExceeded) {
+      ctx.metrics.declareCacheBreak('hard_cap'); // D8.1 — the assembler cut the cached prefix anyway
+      log.info(
+        {
+          userId,
+          phase: spec.name,
+          estimatedTotal: hardCapExceeded.estimatedTotalTokens,
+          cap: hardCapExceeded.hardCapTokens,
+        },
+        'Context hard cap reached while cache warm',
+      );
+    }
 
     if (budgetReport.system > spec.budget.system) {
       log.warn(
@@ -229,12 +265,28 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
       );
     }
 
+    // Prompt-caching plan D1/D6: the two explicit breakpoints, only when the route is configured for them; with
+    // `off` the request stays exactly what assembleContext built.
+    const cfg = loadConfig();
+    const llmMessages =
+      cfg.LLM_PROMPT_CACHE === 'anthropic'
+        ? applyCacheBreakpoints(assembledMessages, current.length, cfg.LLM_PROMPT_CACHE_TTL)
+        : assembledMessages;
+
+    // Prompt-caching plan D8: the run's declared cache-break reasons and the phase ride on the call's callback
+    // metadata (read fresh per call — nodes declare reasons as the run goes), so the recorder can classify the call.
+    const callConfig = (): RunnableConfig => ({
+      ...config,
+      metadata: { ...config.metadata, phase: spec.name, cacheBreakReasons: ctx.metrics.declaredCacheBreaks() },
+    });
+
     // Post-tool nudge + empty-reply retry, moved verbatim from invokeWithRetry
     // (ADR-0013 §6: every phase, one retry, then the catalog fallback — D-D).
     const postTool = endsWithToolMessage(llmMessages);
     const firstMessages = postTool ? withPostToolNudge(llmMessages) : llmMessages;
-    const response = await model.invoke(firstMessages, config);
+    const response = await model.invoke(firstMessages, callConfig());
     const finishReason = logModelResponse(response, userId, spec.name);
+    stripRawResponse(response);
 
     if (isEmptyAIResponse(response)) {
       // BUG-019 / AC-RL-2: an empty answer truncated by the output cap is a
@@ -246,8 +298,9 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
       log.warn({ userId, phase: spec.name }, 'LLM returned empty response — retrying once');
       // On retry always include the nudge regardless of message structure
       const retryMessages = postTool ? firstMessages : withPostToolNudge(llmMessages);
-      const retried = await model.invoke(retryMessages, config);
+      const retried = await model.invoke(retryMessages, callConfig());
       logModelResponse(retried, userId, spec.name);
+      stripRawResponse(retried);
       if (isEmptyAIResponse(retried)) {
         return { messages: [new AIMessage(t('empty_reply', lang))] };
       }

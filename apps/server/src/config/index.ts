@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { parseLlmBudgetOverrides, type TokenBudgetOverride } from './llm-budget-overrides';
 import { type LlmProfileOverride, parseLlmProfiles, REASONING_EFFORTS } from './llm-profiles';
+import { parseModelPrices } from './model-prices';
 import { parseTransitionHandoffTargets } from './transition-handoff-targets';
 
 /**
@@ -107,6 +108,34 @@ export const EnvSchema = z.object({
   // exception as EPISODE_*/LLM_BUDGET_*.
   LLM_CACHE_TTL_SECONDS: z.coerce.number().positive().int().optional(),
   LLM_CACHE_MIN_PREFIX_TOKENS: z.coerce.number().positive().int().optional(),
+  // Prompt caching (prompt-caching plan D6): `anthropic` sends two explicit cache_control breakpoints (Anthropic
+  // models through OpenRouter); `off` sends none — the default, since the Z.AI and Gemini routes are not
+  // probed. The TTL picks the breakpoint lifetime (`1h` writes cost 2x instead of 1.25x). Same
+  // tunables-not-secrets exception as EPISODE_*.
+  LLM_PROMPT_CACHE: z.enum(['off', 'anthropic']).default('off'),
+  LLM_PROMPT_CACHE_TTL: z.enum(['5m', '1h']).default('5m'),
+  // Prompt-caching plan D5: while the provider cache is warm, budget compaction and history trimming wait (they
+  // rewrite the cached prefix). This is the safety net — the estimated conversation (history + current turn, in
+  // token-estimator units, ≈ 100 k real tokens by BUG-050) above which they run anyway. System prompt, facts and
+  // blocks are not counted: they are what the cache holds. Only consulted with LLM_PROMPT_CACHE=anthropic.
+  LLM_CONTEXT_HARD_CAP_TOKENS: z.coerce.number().int().positive().default(60_000),
+  // Prompt-caching plan D8: per-model price overrides (JSON `{"<model>": {"input": USD/1M, "output": USD/1M}}`) merged
+  // over the built-in table in infra/ai/model-prices.ts — the ONE price source for the cache-break cost log and
+  // scripts/cache-report.ts. Parsed and validated here, once: a malformed value fails the config load.
+  LLM_MODEL_PRICES: z
+    .string()
+    .optional()
+    .transform((raw, ctx) => {
+      try {
+        return parseModelPrices(raw);
+      } catch (err) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `LLM_MODEL_PRICES is not valid: ${err instanceof Error ? err.message : String(err)}`,
+        });
+        return z.NEVER;
+      }
+    }),
   // Transition hand-off (transition-handoff plan Task 1, D-1, AC-TH-2): comma
   // list of ConversationPhase targets that get a silent same-run hand-off when
   // a transition tool commits to them. Empty/unset = off — byte-for-byte

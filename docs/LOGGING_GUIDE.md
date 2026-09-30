@@ -380,10 +380,12 @@ gone.
 - **`prompt_blobs` ages out too, on the same "keep the row, drop the payload" rule.**
   It is tempting to treat a blob as one row per distinct prompt version and leave the
   table alone; that holds only for the one static rules block.
-  `assemble-context.ts` pushes up to six `SystemMessage`s
-  per call — per-profile, per-episode and per-workout blocks that change on nearly every
-  call — and the recorder hashes every one of them into its own blob, so most blobs are
-  NOT reusable across calls the way the static one is. Leaving them all forever would
+  Until 2026-09-30 `assemble-context.ts` pushed up to six `SystemMessage`s per call, and
+  per-workout blocks changed on nearly every call. Since `prompt-caching` there is ONE stable
+  `SystemMessage` (hashed by its joined text) and the per-workout context rides in the user
+  message, but that stable message still changes with facts, directives and summaries, and
+  older rows carry the six-blob shape — so blobs are still NOT reusable across calls the way
+  a single static block would be. Leaving them all forever would
   have moved the bulky, ever-changing context OUT of the column being pruned and INTO a
   table kept permanently — the opposite of retention. The fix: `llm_calls.prompt_hashes`
   (every hash a call's request referenced) is written once at record time and is NEVER

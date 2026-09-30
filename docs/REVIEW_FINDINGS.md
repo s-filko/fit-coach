@@ -33,6 +33,10 @@ Entry format:
 Wording in a zone prompt or in `SKILL.md` that misleads, contradicts the severity contract,
 or is inert for the kind of diff under review.
 
+- [×1] A re-review brief listed run 1's closure claims; a reviewer trusting it would have skipped the test helpers (only a fresh search found `wireText`). Briefs should say closure claims are re-verified by search, not taken from the plan.
+  Runs: prompt-caching run 2 (2026-09-30) (R2).
+- [×1] R3's zone asks for "the verification command per task", but a plan may name one only for some tasks (here only T3; T4/T5/T5b say "AC-PC-x green"); the zone does not say what to check then. R3 checked recorded evidence instead.
+  Runs: prompt-caching (2026-09-30) (R3).
 - [×3] R4's brief says "If the diff edits a durable spec, that is R1's finding, not yours" —
   but ARCHITECTURE.md is itself listed in DOCUMENTATION_GUIDE § AI Execution Order step 4 as
   architectural truth, and the fix diff edits it. R4 judged the edit to be living-layout
@@ -183,7 +187,7 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   treated the absence as inapplicable rather than a gap, but the zone brief still gives no
   explicit instruction for this plan shape, so the correct call was judgment, not guidance.
   Runs: ports-layout-consistency (2026-09-14), lint-glob-fix (2026-09-14), structured-output-json-object-mode (2026-09-19).
-- [×3] Code that stops matching the *mechanism* a durable spec names (ADR-0013 §7:
+- [×4] Code that stops matching the *mechanism* a durable spec names (ADR-0013 §7:
   "`structured` uses `withStructuredOutput`") is claimed by both R1 ("declared boundaries") and
   R4 (doc currency) — both raised it as blocking this run. Neither zone file says which owns a
   mechanism drift that crosses no layer, nor who escalates a blocking finding on a document the
@@ -191,7 +195,8 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   the skill — mechanism drift is R4's; the orchestrator escalates read-only-spec findings to the
   owner at close-out — would settle both.
   Third run: R1 graded code that contradicts BR-LLM-006 / ADR-0013 §4.1 blocking *pending* the owner-approved amendment the plan schedules as a later orchestrator task, and R4 raised the same ADR lines blocking from the doc side; R1 proposed: "Code that departs from a durable rule is blocking at review unless the owner-approved spec amendment is in the same diff; a scheduled-but-undone amendment task does not discharge it."
-  Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19), transition-handoff (2026-09-25).
+  Fourth run: R1 had to restate as blocking two ADR-0013 deviations the plan already lists under "Durable spec impact — escalate before merge"; proposed: "a deviation the plan lists under Durable spec impact is reported blocking with the note 'escalated in plan', released only by the owner-approved amendment recorded at close-out".
+  Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19), transition-handoff (2026-09-25), prompt-caching (2026-09-30).
 - [×2] A known-and-accepted carve-out (FEAT-0003's stale LLMService diagram is P7-owned)
   lives only in the master plan's phase map; the review brief's known-and-accepted list is
   assembled ad hoc each round, so the same carve-out must be re-derived or gets re-flagged.
@@ -398,6 +403,18 @@ backs it. Each entry names the proposed wording and where it would live
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
 
+- [×1] Scrubbing a removed identifier from a plan's historical Evidence by in-sentence replacement left lines stating false current behaviour. Proposed (R4): "Historical Evidence is not rewritten when a later fix removes what it names; add a superseded marker instead."
+  Runs: prompt-caching run 3 (2026-09-30) (R4).
+- [×2] A fix commit changed code (the hard-cap measure; a model price) after the ADR amendment / DB-backed evidence describing it was written, leaving the text or the green run stale. Proposed (R1, R3): "an ADR amendment written in the same close-out as a code fix is re-read against that fix's final diff; verification evidence names the commit it ran at, and any later code commit re-runs the DB-backed suites touching the changed module".
+  Runs: prompt-caching run 2 (2026-09-30) (R1, R3).
+- [×1] A review fix that changes behaviour an AC-*/D-* states (AC-PC-4: llm_error → user_error) recorded the change only in Evidence. Proposed (R4): "A review fix that changes behaviour an AC-*/D-* states amends that AC/D line in the same commit."
+  Runs: prompt-caching run 2 (2026-09-30) (R4).
+- [×2] A worker's Evidence claim that a repro test was promoted can be false (AC-PC-4: T3 claimed a `.unit` file, T5b claimed no repro left; only the `*.repro.test.ts` existed, outside CI). Proposed (R3, R4): "every test file cited as AC evidence exists at that path and matches a `test:unit` / `test:integration` / `test:scenarios` testMatch glob — checked by `git ls-files`, enforceable in `state.mjs --check` or CI".
+  Runs: prompt-caching (2026-09-30) (R3, R4).
+- [×1] Cross-cutting run intents (cache-break declarations) got attached to whatever object was already threaded through every node (`RunMetricsCollector`). Proposed (R1) for CONTRIBUTING_AI: "Run-scoped state that nodes write for a later consumer lives in the run context as its own field with one owner; the metrics collector accumulates measurements only."
+  Runs: prompt-caching (2026-09-30) (R1).
+- [×1] The DRY rule does not say whether a new copy of a pattern already duplicated before the branch (script boilerplate in print-transcript / print-load-plan) is blocking or advisory. Proposed (R2): "Adding a further copy of a helper that already exists in two or more places is a DRY violation of the new change; extract it rather than copy it a third time."
+  Runs: prompt-caching (2026-09-30) (R2).
 - [×5] R3's "describe/it names carry BR/AC references per `docs/CONTRIBUTING_AI.md`" has no slot for
   `BUG-0NN`, which was this plan's owner-designated source of truth, nor for plan-local `AC-LSR-N`
   acceptance ids that are not durable `AC-####` specs. The six repro files do carry `BUG-0NN` in
@@ -423,7 +440,7 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   double reimplemented in two files."
   Fourth run: R2 applied DRY equally to test/fixture code in `tests/integration/scenarios` and noted the zone file does not say whether it should; that choice produced 2 of its 3 blocking findings.
   Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19), training-journey-scenarios (2026-09-20), transition-handoff (2026-09-25).
-- [×3] A docs-reconcile task's checklist written from the author's memory left five durable
+- [×4] A docs-reconcile task's checklist written from the author's memory left five durable
   docs drifted (API_SPEC.md, three FEAT-* specs, BUGS.md/MANUAL_TEST_PLAN pointers) while
   every enumerated step was ticked done. Proposed sentence for the factual-bucket definition
   in `SUPERPOWERS_INTEGRATION.md` rule 3: a docs-reconcile step's file list must be derived
@@ -435,7 +452,8 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   mechanism deleted — so the checklist author did not notice even while editing an adjacent
   paragraph about it.
   Third run: R4 found the close-out doc task (written before the code) missed CONTRIBUTING_AI.md run-row semantics, ARCHITECTURE.md reply semantics and prompt tree, ADR-0013 §5.1 and BUG-032. Proposed principle for CONTRIBUTING_AI.md: "A plan's close-out doc task is written from the diff, not from the plan: before `Status: done`, grep the durable layer for every symbol the diff changes and list each hit in the close-out task."
-  Runs: refactor-p3-run-context-commit (2026-09-17), refactor-p4-episode-memory (2026-09-18), transition-handoff (2026-09-25).
+  Fourth run: the plan's "Durable spec impact" list named ADR-0013 §3.3/§3.4 (and wrongly ADR-0011) but not ARCHITECTURE.md, CONTRIBUTING_AI.md, LOGGING_GUIDE.md, DB_SETUP.md that restate the same layout; R4 proposed: "a plan's durable-impact list names every doc that restates the changed fact (grep the old term across docs/ and CLAUDE.md)".
+  Runs: refactor-p3-run-context-commit (2026-09-17), refactor-p4-episode-memory (2026-09-18), transition-handoff (2026-09-25), prompt-caching (2026-09-30).
 - [×2] A helper extracted into a shared module leaves its pre-existing call sites untouched,
   and no rule says that is unfinished. On this branch Task 2 moved the domain renderers into
   `prompts/blocks/` and only `training/v1.ts` was repointed; `chat/v1.ts`, `plan_creation/v1.ts`

@@ -7,7 +7,7 @@ import type { ConversationRunRecord } from '@domain/conversation/ports';
  */
 export const BASE_CONVERSATION_RUN_RECORD: Pick<
   ConversationRunRecord,
-  'phaseOut' | 'trigger' | 'client' | 'promptVersions' | 'toolCalls' | 'transition' | 'budgetReport' | 'tokensCached' | 'tokensReasoning'
+  'phaseOut' | 'trigger' | 'client' | 'promptVersions' | 'toolCalls' | 'transition' | 'budgetReport' | 'tokensCached' | 'tokensReasoning' | 'tokensCacheWrite'
 > = {
   phaseOut: null,
   trigger: 'user_message',
@@ -18,4 +18,5 @@ export const BASE_CONVERSATION_RUN_RECORD: Pick<
   budgetReport: null,
   tokensCached: null,
   tokensReasoning: null,
+  tokensCacheWrite: null,
 };
