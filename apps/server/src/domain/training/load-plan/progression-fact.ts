@@ -1,4 +1,3 @@
-import { calendarDate } from './break-fact';
 import type { ProgressionChoice } from './scheme-default';
 import { getScheme, isSchemeId, type SchemeId } from './schemes';
 
@@ -45,25 +44,9 @@ export function chosenSchemeOf(facts: { fact: string; createdAt: Date }[]): Chos
 }
 
 /** The scheme in force: the user's choice if there is one (the goal stays the profile's), else the default. */
-export function progressionFromChoice(base: ProgressionChoice, chosen: ChosenScheme | null): ProgressionChoice {
+export function progressionFromChoice(base: ProgressionChoice, chosen?: ChosenScheme | null): ProgressionChoice {
   if (!chosen) {
     return base;
   }
   return { ...base, scheme: getScheme(chosen.schemeId), source: 'user', chosenAt: chosen.chosenAt };
-}
-
-/**
- * `Progression: double, confirm ×2 — chosen by user 2026-09-20` (design §4.2), or `— default, unconfirmed`.
- * No rep range:
- * each exercise works on its own (today's range, else the scheme default — printed per entry), so one block never shows
- * two contradicting ranges.
- */
-export function progressionLine(choice: ProgressionChoice, timezone: string | null): string {
-  const params = choice.scheme.defaultParams(choice.goal);
-  const [name] = choice.scheme.id.split('_');
-  const provenance =
-    choice.source === 'user' && choice.chosenAt
-      ? `chosen by user ${calendarDate(choice.chosenAt, timezone)}`
-      : 'default, unconfirmed';
-  return `Progression: ${name}, confirm ×${params.confirmSessions} — ${provenance}`;
 }

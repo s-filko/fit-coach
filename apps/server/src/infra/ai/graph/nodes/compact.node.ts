@@ -47,9 +47,9 @@ import {
 } from '@domain/conversation/episode';
 import type { ConversationPhase } from '@domain/conversation/phases';
 import type { LegacySummary, SummaryPort } from '@domain/conversation/ports';
-import { calendarDate, parseBreakFact, parseProgressionFact } from '@domain/training/load-plan';
+import { parseBreakFact, parseProgressionFact } from '@domain/training/load-plan';
 import type { IUserFactsService } from '@domain/user/ports';
-import { PermanentFactRefusal } from '@domain/user/services/fact-lifecycle';
+import { FACT_LIFECYCLE_BOUNDS, PermanentFactRefusal } from '@domain/user/services/fact-lifecycle';
 
 import { conversationTokens, warmCacheOf } from '@infra/ai/context/cache-warmth';
 import { estimateMessages } from '@infra/ai/context/token-estimator';
@@ -58,6 +58,7 @@ import { type ConversationStateType, ctxOf } from '@infra/ai/graph/state';
 import { episodeParagraph } from '@infra/ai/prompts/blocks';
 import { SUMMARIZER_PROMPT, SUMMARIZER_V7 } from '@infra/ai/prompts/summarizer';
 
+import { formatInUserTz } from '@shared/date-utils';
 import { createLogger } from '@shared/logger';
 
 import { decideCompactReason, planCompaction, renderTranscript } from './compact';
@@ -65,8 +66,8 @@ import { type FactVerdictMap, verifyFactOperations } from './verify-fact-operati
 
 const log = createLogger('compact-node');
 
-/** The `break` fact's lifetime: the short-class cap (14 d) — about the length of the return ladder. */
-const BREAK_TTL_DAYS = 14;
+/** The `break` fact's lifetime: the short-class cap — about the length of the return ladder. */
+const BREAK_TTL_DAYS = FACT_LIFECYCLE_BOUNDS.short.maxDays;
 
 /** The D-L tunables, resolved once at the composition root (never read mid-run). */
 export interface EpisodeTunables {
@@ -297,10 +298,10 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
               knownFacts,
               breaks: categoryFlags.breaks,
               schemes: categoryFlags.schemes,
-              episodeDate: calendarDate(
+              episodeDate: formatInUserTz(
                 state.lastUserMessageAt ? new Date(state.lastUserMessageAt) : ctx.now,
                 ctx.user?.timezone ?? null,
-              ),
+              ).dateOnly,
             })
           : SUMMARIZER_PROMPT.render({ phase: state.phase, transcript, knownFacts });
       const messages: ChatMsg[] = sections.map(s => ({
@@ -450,7 +451,7 @@ interface CategoryFlags {
 }
 
 /** The `progression_scheme` fact is a standing choice: long-term, reviewed at the class maximum (182 d). */
-const SCHEME_REVIEW_DAYS = 182;
+const SCHEME_REVIEW_DAYS = FACT_LIFECYCLE_BOUNDS.longTerm.maxDays;
 
 /**
  * load-plan D8/D9 (A6): the gated categories are stored only when their flag is on AND their text is well formed —

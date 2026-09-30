@@ -15,11 +15,12 @@ import type {
 } from '@domain/training/ports';
 import type { UserRepository } from '@domain/user/ports';
 
-import { decideLoadPlanEntry, renderLoadPlanEntryV2 } from '@infra/ai/prompts/blocks/training-load-plan.v2';
+import { renderLoadPlanEntryV2 } from '@infra/ai/prompts/blocks/training-load-plan.v2';
 import { LoadRecommendationRepository } from '@infra/db/repositories/load-recommendation.repository';
 
 import { createLogger } from '@shared/logger';
 
+import { decideLoadPlanEntry } from './load-decision';
 import { type LoadFactsLoaderDeps, loadLoadPlanEntries, planTargetRepsOf } from './load-facts.loader';
 
 const log = createLogger('load-recommendation-log');

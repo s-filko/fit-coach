@@ -12,9 +12,6 @@ export const CONFIRM_SESSIONS_DEFAULT = 2;
 /** Growth step cap: ≤ ~10 % of the load, otherwise progress by reps. ACSM 2009: 2–10 % increments. */
 export const STEP_CAP_PCT = 0.1;
 
-/** Plateau: e1RM flat for ≥ 3 performances. Rippetoe & Baker, Practical Programming (convention). */
-export const PLATEAU_FLAT_RUN = 3;
-
 /** Default double-progression rep ranges by goal (ACSM 2009: 8–12 hypertrophy, heavier for strength). */
 export const DOUBLE_REP_RANGE: Record<SchemeGoal, { min: number; max: number }> = {
   strength: { min: 4, max: 6 },

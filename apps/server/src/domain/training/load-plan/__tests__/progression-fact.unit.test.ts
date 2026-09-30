@@ -3,7 +3,6 @@ import {
   formatProgressionFact,
   parseProgressionFact,
   progressionFromChoice,
-  progressionLine,
 } from '../progression-fact';
 import { defaultProgression } from '../scheme-default';
 
@@ -49,7 +48,7 @@ describe('chosenSchemeOf (newest active fact wins)', () => {
   });
 });
 
-describe('progressionFromChoice / progressionLine', () => {
+describe('progressionFromChoice', () => {
   const profile = defaultProgression({ fitnessLevel: 'intermediate', fitnessGoal: 'build muscle' });
 
   it('the choice overrides the default scheme and keeps the profile goal', () => {
@@ -65,19 +64,5 @@ describe('progressionFromChoice / progressionLine', () => {
 
   it('no choice → the default, unchanged', () => {
     expect(progressionFromChoice(profile, null)).toBe(profile);
-  });
-
-  it('prints the one line with provenance', () => {
-    const chosen = progressionFromChoice(profile, {
-      schemeId: 'double_progression',
-      chosenAt: new Date('2026-09-20T03:00:00Z'),
-    });
-    expect(progressionLine(chosen, 'Asia/Manila')).toBe('Progression: double, confirm ×2 — chosen by user 2026-09-20');
-    expect(progressionLine(profile, 'Asia/Manila')).toBe('Progression: double, confirm ×2 — default, unconfirmed');
-    const linear = progressionFromChoice(profile, {
-      schemeId: 'linear_progression',
-      chosenAt: new Date('2026-09-20T03:00:00Z'),
-    });
-    expect(progressionLine(linear, 'Asia/Manila')).toBe('Progression: linear, confirm ×2 — chosen by user 2026-09-20');
   });
 });

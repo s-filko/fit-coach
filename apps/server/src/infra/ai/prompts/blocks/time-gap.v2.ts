@@ -1,17 +1,7 @@
-import type { GapTier } from '@domain/training/load-plan';
-
+import type { TrainingBreakNote } from '@infra/ai/load-facts/break-context';
 import type { PromptModule, Section } from '@infra/ai/prompts/types';
 
 import { TIME_GAP_PREFIX } from './time-gap.v1';
-
-/** The training break the note also speaks about (load-plan Task 4, D9): the same tier LOAD PLAN reads. */
-export interface TrainingBreakNote {
-  tier: GapTier;
-  /** Calendar days since the last real workout. */
-  days: number;
-  /** The reason question has not been asked for this break: ask it once, now. */
-  ask: boolean;
-}
 
 export interface TimeGapV2Context {
   /** Milliseconds since the user's previous message when it is ≥ the episode gap; null = no message gap. */

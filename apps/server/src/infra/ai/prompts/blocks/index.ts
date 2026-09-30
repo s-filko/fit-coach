@@ -37,7 +37,7 @@ export type { EpisodeSummariesContext } from './episode-summaries.v2';
 export { TIME_GAP_V1, TIME_GAP_PREFIX } from './time-gap.v1';
 export type { TimeGapContext } from './time-gap.v1';
 export { TIME_GAP_V2 } from './time-gap.v2';
-export type { TimeGapV2Context, TrainingBreakNote } from './time-gap.v2';
+export type { TimeGapV2Context } from './time-gap.v2';
 // now-line-last review R1: the NOW line is a standalone message module like
 // the gap note (moved from directives/) — exported with its label prefix (D4).
 export { CURRENT_TIME_PREFIX, CURRENT_TIME_V1 } from './current-time.v1';

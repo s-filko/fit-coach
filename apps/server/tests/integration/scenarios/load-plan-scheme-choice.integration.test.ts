@@ -199,7 +199,7 @@ describe('progression_scheme: chosen by user vs default (AC-LP-5)', () => {
 
   it('without the fact: the block says default, unconfirmed (beginner + strength → linear)', async () => {
     const text = await contextText({ loadPlanSuggestion: true });
-    expect(text).toContain('Progression: linear, confirm ×2 — default, unconfirmed');
+    expect(text).toContain('Progression: linear progression, confirm ×2 — default, unconfirmed');
     expect(text).toContain('scheme: linear progression 5 (scheme default), confirm ×2 (default, unconfirmed)');
   });
 
@@ -219,7 +219,7 @@ describe('progression_scheme: chosen by user vs default (AC-LP-5)', () => {
     expect(facts[0].durability).toBe('long_term');
 
     const text = await contextText({ loadPlanSuggestion: true });
-    expect(text).toContain('Progression: double, confirm ×2 — chosen by user 2026-09-29');
+    expect(text).toContain('Progression: double progression, confirm ×2 — chosen by user 2026-09-29');
     expect(text).toContain('scheme: double progression 8–12, confirm ×2 (chosen by user 2026-09-29)');
     expect(text).not.toContain('default, unconfirmed');
     // One rep range per entry (today's plan), none contradicting it on the Progression line.

@@ -33,18 +33,6 @@ export type DecisionRow =
   | 'scheme_growth'
   | 'scheme_hold';
 
-export const ROW_LABELS: Record<DecisionRow, string> = {
-  insufficient_data: 'insufficient data',
-  short_constraint: 'short constraint',
-  gap_return: 'gap tier return',
-  gap_rebuild: 'gap tier rebuild',
-  gap_restart: 'gap tier restart',
-  pre_fatigue: 'pre-fatigue delta',
-  below_floor: 'last below range floor',
-  scheme_growth: 'scheme growth',
-  scheme_hold: 'scheme hold',
-};
-
 /**
  * Pre-fatigue "materially greater" (design §3.3 row 4): today's working sets on a muscle shared with
  * this exercise exceed the reference performance's by at least this many — about one exercise's worth.
@@ -123,6 +111,11 @@ interface Ctx {
   scheme: ProgressionScheme;
 }
 
+/** Whole load steps from `base` to `load`; 0 when either the load or the step is unknown. */
+function stepsFrom(base: number, load: number | null, step: number | null): number {
+  return load === null || step === null ? 0 : Math.round((load - base) / step);
+}
+
 function loadBelow(c: Ctx, from: number, steps: number): number {
   let load = from;
   for (let i = 0; i < steps; i++) {
@@ -144,11 +137,10 @@ function finish(
   if (notes.length > 0 && !missing.includes(EQUIPMENT_STEP)) {
     missing.push(EQUIPMENT_STEP);
   }
-  const steps = parts.candidate === null ? null : (parts.candidate - c.base) / (c.step ?? Number.POSITIVE_INFINITY);
   return {
     stage,
     row,
-    outcome: parts.candidate === null ? 'conservative start' : stepsWord(Math.round(steps ?? 0)),
+    outcome: parts.candidate === null ? 'conservative start' : stepsWord(stepsFrom(c.base, parts.candidate, c.step)),
     candidate: rec(parts.candidate),
     conservative: rec(parts.conservative),
     reason: [parts.reason, ...notes].join('; '),
@@ -192,7 +184,8 @@ function gapRow(c: Ctx): Decision | null {
     });
   }
   const { tier } = c.ladder;
-  const row: DecisionRow = tier === 'rebuild' ? 'gap_rebuild' : 'gap_return';
+  // Post-restart rungs follow the rebuild ladder, so they are the rebuild row.
+  const row: DecisionRow = tier === 'return' ? 'gap_return' : 'gap_rebuild';
   const branch = reasonBranch(c.breakReason);
   const candidate = loadBelow(c, c.base, c.ladder.stepsBelow + branch.extraSteps);
   const base = confidenceOf(c.facts, c.missing);
@@ -205,18 +198,27 @@ function gapRow(c: Ctx): Decision | null {
   });
 }
 
-function stageA(c: Ctx): Decision | null {
+function constraintRow(c: Ctx): Decision | null {
   const constraint = c.facts.constraints.constraints.find(x => x.durability === 'short');
-  if (constraint) {
-    return finish(c, 'A', 'short_constraint', {
-      candidate: c.base,
-      conservative: loadBelow(c, c.base, 1),
-      reason: `short constraint (${constraint.text}) — no growth`,
-    });
-  }
-  const gap = gapRow(c);
-  if (gap) {
-    return gap;
+  return constraint
+    ? finish(c, 'A', 'short_constraint', {
+        candidate: c.base,
+        conservative: loadBelow(c, c.base, 1),
+        reason: `short constraint (${constraint.text}) — no growth`,
+      })
+    : null;
+}
+
+/** The lower candidate is the more conservative one (no load = a cold start, the lowest); a tie keeps the first. */
+function moreConservative(a: Decision, b: Decision): Decision {
+  return (b.candidate.load ?? Number.NEGATIVE_INFINITY) < (a.candidate.load ?? Number.NEGATIVE_INFINITY) ? b : a;
+}
+
+function stageA(c: Ctx): Decision | null {
+  // Fix-S: a short constraint and a gap row can both match; the more conservative of the two is the decision.
+  const safety = [constraintRow(c), gapRow(c)].filter((d): d is Decision => d !== null);
+  if (safety.length > 0) {
+    return safety.reduce(moreConservative);
   }
   const delta = preFatigueDelta(c.facts);
   if (delta !== null && delta >= PRE_FATIGUE_MATERIAL_SETS) {
@@ -295,9 +297,7 @@ export function decide(facts: LoadFacts, input: DecideInput): Decision {
     ...meta,
     stage: 'C',
     row: grew ? 'scheme_growth' : 'scheme_hold',
-    outcome: stepsWord(
-      out.candidate.load === null || ctx.step === null ? 0 : Math.round((out.candidate.load - ctx.base) / ctx.step),
-    ),
+    outcome: stepsWord(stepsFrom(ctx.base, out.candidate.load, ctx.step)),
     ladder: ctx.ladder,
   };
 }

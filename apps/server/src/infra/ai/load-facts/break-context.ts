@@ -8,19 +8,27 @@
  * covers the gap, even once expired or archived), the honest answer for a user who does not reply, and the
  * placeholder the summariser updates when they do. Never throws — a failure here must not fail a run.
  */
-import { breakReasonOf, calendarDate, formatBreakFact, GAP_TIER_PARAMS, gapTierOf } from '@domain/training/load-plan';
+import { breakReasonOf, formatBreakFact, GAP_TIER_PARAMS, type GapTier, gapTierOf } from '@domain/training/load-plan';
 import type { IWorkoutSessionRepository } from '@domain/training/ports';
 import type { IUserFactsService } from '@domain/user/ports';
+import { FACT_LIFECYCLE_BOUNDS } from '@domain/user/services/fact-lifecycle';
 
-import type { TrainingBreakNote } from '@infra/ai/prompts/blocks';
-
-import { calendarDaysAgo } from '@shared/date-utils';
+import { calendarDaysAgo, formatInUserTz } from '@shared/date-utils';
 import { createLogger } from '@shared/logger';
 
 const log = createLogger('break-context');
 
 /** The marker's lifetime: the short-class cap — about the length of the return ladder. */
-const MARKER_TTL_DAYS = 14;
+const MARKER_TTL_DAYS = FACT_LIFECYCLE_BOUNDS.short.maxDays;
+
+/** The training break the time-gap note speaks about (D9): the same tier LOAD PLAN reads. */
+export interface TrainingBreakNote {
+  tier: GapTier;
+  /** Calendar days since the last real workout. */
+  days: number;
+  /** The reason question has not been asked for this break: ask it once, now. */
+  ask: boolean;
+}
 
 export interface BreakContextDeps {
   workoutSessionRepo: Pick<IWorkoutSessionRepository, 'findRecentByUserIdWithDetails'>;
@@ -57,14 +65,14 @@ export class BreakContext implements IBreakContext {
       return null;
     }
     const tier = gapTierOf(days);
-    const window = { from: calendarDate(last, timezone), to: calendarDate(now, timezone) };
+    const window = { from: formatInUserTz(last, timezone).dateOnly, to: formatInUserTz(now, timezone).dateOnly };
 
     const [listing, expired] = await Promise.all([
       this.deps.userFacts.listFacts(userId, true, now),
       this.deps.userFacts.getExpiredActive(userId, now),
     ]);
     const known = [...listing.active, ...listing.archived, ...expired].filter(f => f.category === 'break');
-    if (known.some(f => breakReasonOf([f], window) !== null)) {
+    if (known.some(f => breakReasonOf([f], { from: window.from, to: null }) !== null)) {
       return { tier, days, ask: false };
     }
     try {

@@ -121,7 +121,7 @@ describe('Stage A — safety rows', () => {
     expect(d.conservative.load).toBe(55);
   });
 
-  it('rows are evaluated in the fixed order: constraint before gap before fatigue before floor', () => {
+  it('rows are evaluated in the fixed order: constraint and gap (more conservative) before fatigue before floor', () => {
     const all = makeFacts({
       constraints: { constraints: [SHORT_CONSTRAINT], equipment: [] },
       gap: gapOf(40),
@@ -129,12 +129,20 @@ describe('Stage A — safety rows', () => {
       fatigueReference: fatigue(0),
       lastExposure: exposure('below floor'),
     });
-    expect(run(all).row).toBe('short_constraint');
+    // Fix-S: the rebuild ladder (−2 steps) is more conservative than the constraint's hold.
+    expect(run(all).row).toBe('gap_rebuild');
+    expect(run({ ...all, gap: gapOf(3) }).row).toBe('short_constraint');
     expect(run({ ...all, constraints: { constraints: [], equipment: [] } }).row).toBe('gap_rebuild');
     expect(run({ ...all, constraints: { constraints: [], equipment: [] }, gap: gapOf(3) }).row).toBe('pre_fatigue');
     expect(
       run({ ...all, constraints: { constraints: [], equipment: [] }, gap: gapOf(3), fatigueToday: fatigue(0) }).row,
     ).toBe('below_floor');
+  });
+
+  it('Fix-S: a restart cold start (no load) beats a short constraint', () => {
+    const d = run(makeFacts({ constraints: { constraints: [SHORT_CONSTRAINT], equipment: [] }, gap: gapOf(100) }));
+    expect(d).toMatchObject({ row: 'gap_restart' });
+    expect(d.candidate.load).toBeNull();
   });
 
   it('a missing equipment step is named in missing and stated in the reason', () => {
@@ -212,6 +220,13 @@ describe('Task 4 — return ladder from history and the break reason', () => {
     expect(d.candidate.load).toBe(65);
   });
 
+  it('Fix-S: a short constraint ties with the last rung of a ladder (both hold) → the constraint row', () => {
+    const d = run(makeFacts({ constraints: { constraints: [SHORT_CONSTRAINT], equipment: [] }, gap: gapOf(3) }), {
+      ladder: ladder(1),
+    });
+    expect(d).toMatchObject({ stage: 'A', row: 'short_constraint' });
+  });
+
   it('a finished ladder falls through to Stage C', () => {
     const d = run(makeFacts({ gap: gapOf(3) }), { ladder: ladder(2) });
     expect(d.stage).toBe('C');
@@ -231,7 +246,10 @@ describe('Task 4 — return ladder from history and the break reason', () => {
   });
 
   it('restart: first workout cold start, the next one follows the rebuild ladder', () => {
-    expect(run(makeFacts({ gap: gapOf(3) }), { ladder: ladder(1, 'restart') }).candidate.load).toBe(55);
+    const d = run(makeFacts({ gap: gapOf(3) }), { ladder: ladder(1, 'restart') });
+    expect(d.candidate.load).toBe(55);
+    // Post-restart rungs are labelled gap_rebuild, not gap_return.
+    expect(d.row).toBe('gap_rebuild');
   });
 
   it('reason unknown → one step lower on the ladder', () => {

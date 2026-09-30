@@ -18,10 +18,10 @@ import {
 import {
   type BreakReason,
   breakReasonOf,
-  calendarDate,
   type ChosenScheme,
   chosenSchemeOf,
   GAP_TIER_PARAMS,
+  gapTierFacts,
   ladderPerformancesOf,
   type LadderState,
   ladderStateOf,
@@ -35,6 +35,8 @@ import type {
   WorkoutSessionWithDetails,
 } from '@domain/training/types';
 import type { IUserFactsService } from '@domain/user/ports';
+
+import { formatInUserTz } from '@shared/date-utils';
 
 /** D11: how many recent real workouts feed the metrics (56-day window + the run for K and norms). */
 export const LOAD_FACTS_RECENT_WORKOUTS = 60;
@@ -225,10 +227,6 @@ async function loadFactsContext(
   };
 }
 
-function daysOf(g: LoadFacts['gap']['exercise']): number | null {
-  return 'absent' in g ? null : g.days;
-}
-
 /**
  * Task 4: the ladder the newest past gap opened, and the reason of the break fact covering the gap the coach is
  * looking at — the open gap (exercise last done `gapDays` ago) when there is one, else the ladder's own gap.
@@ -241,15 +239,18 @@ function returnBranchOf(
   params: LoadFactsParams,
 ): ReturnBranch {
   const ladder = ladderStateOf(ladderPerformancesOf(performances, todayId), params.timezone);
-  const openGapDays = daysOf(facts.gap.exercise) ?? daysOf(facts.gap.primaryMuscles) ?? daysOf(facts.gap.anyWorkout);
+  const openGapDays = gapTierFacts(facts).days;
   const last = performances
     .filter(p => p.sessionId !== todayId)
     .reduce<Date | null>((best, p) => (!best || p.performedAt > best ? p.performedAt : best), null);
-  let window: { from: string; to: string } | null = null;
+  let window: { from: string; to: string | null } | null = null;
   if (openGapDays !== null && last && openGapDays > GAP_TIER_PARAMS.restWithQuestionAboveDays.value) {
-    window = { from: calendarDate(last, params.timezone), to: calendarDate(params.now, params.timezone) };
+    window = { from: formatInUserTz(last, params.timezone).dateOnly, to: null };
   } else if (ladder) {
-    window = { from: calendarDate(ladder.gapStart, params.timezone), to: calendarDate(ladder.gapEnd, params.timezone) };
+    window = {
+      from: formatInUserTz(ladder.gapStart, params.timezone).dateOnly,
+      to: formatInUserTz(ladder.gapEnd, params.timezone).dateOnly,
+    };
   }
   const reason = window ? breakReasonOf(breakFacts, window) : null;
   return { ladder, breakReason: reason ?? 'unknown' };

@@ -44,29 +44,21 @@ export function parseBreakFact(text: string): BreakFact | null {
 }
 
 /**
- * The reason of the newest break fact whose period overlaps the gap `[window.from, window.to]`
- * (`YYYY-MM-DD`); null when none does.
+ * The reason of the newest break fact whose period covers a day of the gap (`YYYY-MM-DD`); null when none does.
+ * The window's ends are training days — `from` the last workout before the gap, `to` the workout that ended it, or
+ * null while the gap is still open — so a fact must reach strictly past `from` and start strictly before `to`: a
+ * marker asked about on the day the user then trained belongs to the gap before that workout, not the next one.
  */
 export function breakReasonOf(
   facts: { fact: string; createdAt: Date }[],
-  window: { from: string; to: string },
+  window: { from: string; to: string | null },
 ): BreakReason | null {
   const overlapping = facts
     .map(f => ({ parsed: parseBreakFact(f.fact), createdAt: f.createdAt }))
     .filter(
       (f): f is { parsed: BreakFact; createdAt: Date } =>
-        f.parsed !== null && f.parsed.from <= window.to && f.parsed.to >= window.from,
+        f.parsed !== null && f.parsed.to > window.from && (window.to === null || f.parsed.from < window.to),
     )
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   return overlapping[0]?.parsed.reason ?? null;
-}
-
-/** The calendar date (`YYYY-MM-DD`) of `date` in `timezone` (UTC when null) — the way break dates are written. */
-export function calendarDate(date: Date, timezone: string | null): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone ?? 'UTC',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date);
 }

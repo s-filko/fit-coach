@@ -10,18 +10,18 @@
  */
 import { isAbsent } from '@domain/training/load-facts';
 import {
-  calendarDate,
-  decide,
   type Decision,
+  type DecisionRow,
   defaultProgression,
   type ProgressionChoice,
   progressionFromChoice,
-  progressionLine,
   type Recommendation,
-  ROW_LABELS,
 } from '@domain/training/load-plan';
 
+import { decideLoadPlanEntry, type LoadDecisionOpts } from '@infra/ai/load-facts/load-decision';
 import type { LoadPlanEntry } from '@infra/ai/load-facts/load-facts.loader';
+
+import { formatInUserTz } from '@shared/date-utils';
 
 import { type ExerciseHistoryEntry } from './training-exercise-history.v1';
 import { renderLoadPlanEntry, type RenderLoadPlanOpts, type TrainingLoadPlanData } from './training-load-plan.v1';
@@ -33,11 +33,7 @@ export const LOAD_PLAN_HEADER_V2 =
 const INDENT = '  ';
 const DEFAULT_UNIT = 'kg';
 
-export interface RenderLoadPlanV2Opts extends RenderLoadPlanOpts {
-  /** The scheme in force: the D8 default until the user's choice exists (Task 5). */
-  progression: ProgressionChoice;
-  /** Real workouts since the gap (Task 4's counter); absent = first rung. */
-  ladderWorkoutsSince?: number;
+export interface RenderLoadPlanV2Opts extends RenderLoadPlanOpts, LoadDecisionOpts {
   /** A decision the caller already took with `decideLoadPlanEntry` (null = non-strength); absent = decide here. */
   decision?: Decision | null;
 }
@@ -51,29 +47,50 @@ function repsText(r: { min: number; max: number }): string {
   return r.min === r.max ? `${r.min}` : `${r.min}–${r.max}`;
 }
 
+/** v2 wording of the decision rows — the domain returns the row id, the words live here (ADR-0013 D-09). */
+const ROW_LABELS_V2: Record<DecisionRow, string> = {
+  insufficient_data: 'insufficient data',
+  short_constraint: 'short constraint',
+  gap_return: 'gap tier return',
+  gap_rebuild: 'gap tier rebuild',
+  gap_restart: 'gap tier restart',
+  pre_fatigue: 'pre-fatigue delta',
+  below_floor: 'last below range floor',
+  scheme_growth: 'scheme growth',
+  scheme_hold: 'scheme hold',
+};
+
+/** The one spelling of a scheme's name in this block: `double progression`, `linear progression`. */
 function schemeName(id: string): string {
   return id.replace(/_/g, ' ');
 }
 
-function schemeLine(
-  d: Decision,
-  choice: ProgressionChoice,
-  repText: string,
-  confirm: number,
-  timezone: string | null,
-  repsFromScheme: boolean,
-): string {
-  const provenance =
-    choice.source === 'user' && choice.chosenAt
-      ? `chosen by user ${calendarDate(choice.chosenAt, timezone)}`
-      : 'default, unconfirmed';
-  const reps = repsFromScheme ? `${repText} (scheme default)` : repText;
-  return `scheme: ${schemeName(d.scheme.id)} ${reps}, confirm ×${confirm} (${provenance})`;
+/** The one spelling of the choice's provenance: the day the user chose it, or `default, unconfirmed`. */
+function provenanceText(choice: ProgressionChoice, timezone: string | null): string {
+  return choice.source === 'user' && choice.chosenAt
+    ? `chosen by user ${formatInUserTz(choice.chosenAt, timezone).dateOnly}`
+    : 'default, unconfirmed';
 }
 
-/** The scheme in force for an entry: the user's `progression_scheme` fact if the loader found one, else `base`. */
-export function progressionOf(entry: LoadPlanEntry, base: ProgressionChoice): ProgressionChoice {
-  return progressionFromChoice(base, entry.chosenScheme ?? null);
+/**
+ * `Progression: double progression, confirm ×2 — chosen by user 2026-09-20` (design §4.2), or `— default, unconfirmed`.
+ * No rep range: each exercise works on its own (today's range, else the scheme default — printed per entry), so one
+ * block never shows two contradicting ranges.
+ */
+function progressionLine(choice: ProgressionChoice, timezone: string | null): string {
+  const { confirmSessions } = choice.scheme.defaultParams(choice.goal);
+  return `Progression: ${schemeName(choice.scheme.id)}, confirm ×${confirmSessions} — ${provenanceText(choice, timezone)}`;
+}
+
+function schemeLine(
+  choice: ProgressionChoice,
+  repText: string,
+  repsFromScheme: boolean,
+  timezone: string | null,
+): string {
+  const { confirmSessions } = choice.scheme.defaultParams(choice.goal);
+  const reps = repsFromScheme ? `${repText} (scheme default)` : repText;
+  return `scheme: ${schemeName(choice.scheme.id)} ${reps}, confirm ×${confirmSessions} (${provenanceText(choice, timezone)})`;
 }
 
 function loadText(rec: Recommendation, perHand: boolean): string | null {
@@ -97,29 +114,6 @@ function confidenceText(entry: LoadPlanEntry, d: Decision): string {
     parts.push(`missing: ${d.missing.join(', ')}`);
   }
   return `confidence: ${d.confidence} (${parts.join('; ')})`;
-}
-
-/**
- * The one decision call path for an entry: the block, the tool, the report and the recommendation log all come here.
- * Null for a non-strength exercise (schemes apply to strength).
- */
-export function decideLoadPlanEntry(
-  entry: LoadPlanEntry,
-  opts: Pick<RenderLoadPlanV2Opts, 'progression' | 'ladderWorkoutsSince'>,
-): Decision | null {
-  // Task 4 (LOAD_PLAN_BREAKS): the loader attached the ladder and the break reason to the entry.
-  const branch = entry.returnBranch;
-  if (entry.exercise.exerciseType !== 'strength') {
-    return null;
-  }
-  const progression = progressionOf(entry, opts.progression);
-  return decide(entry.facts, {
-    scheme: progression.scheme,
-    goal: progression.goal,
-    params: progression.scheme.defaultParams(progression.goal),
-    ladderWorkoutsSince: opts.ladderWorkoutsSince,
-    ...(branch ? { ladder: branch.ladder, breakReason: branch.breakReason } : {}),
-  });
 }
 
 /** Task 4: the tier and the ladder step, printed only with `LOAD_PLAN_BREAKS` on and a gap worth a line. */
@@ -149,25 +143,22 @@ function decisionLines(
   if (d === null) {
     return [`recommend: n/a for ${exercise.exerciseType}`];
   }
-  const progression = progressionOf(entry, opts.progression);
-  const { confirmSessions } = progression.scheme.defaultParams(progression.goal);
+  const progression = progressionFromChoice(opts.progression, entry.chosenScheme);
   const perHand = !isAbsent(facts.equipmentStep) && facts.equipmentStep.perHand;
   const rec = loadText(d.candidate, perHand);
   const cons = loadText(d.conservative, perHand);
   const lower = d.candidate.load !== null && d.conservative.load !== null ? d.candidate.load - d.conservative.load : 0;
   return [
     schemeLine(
-      d,
       progression,
       repsText(d.candidate.reps),
-      confirmSessions,
-      timezone,
       // The range is the scheme's own when no plan/reference range exists, or the scheme fixes the reps (linear).
       isAbsent(facts.repRange) || progression.scheme.defaultParams(progression.goal).fixedReps !== undefined,
+      timezone,
     ),
     `tactic: ${d.tactic}`,
     ...breakLine(entry, d),
-    `decision: Stage ${d.stage}, ${ROW_LABELS[d.row]} → ${d.outcome}`,
+    `decision: Stage ${d.stage}, ${ROW_LABELS_V2[d.row]} → ${d.outcome}`,
     `recommend: ${rec === null ? d.reason : `${rec} — ${d.reason}`}`,
     `conservative: ${cons === null ? d.reason : `${cons}${lower > 0 ? ` — ${lower} ${d.conservative.unit ?? DEFAULT_UNIT} lower` : ''}`}`,
     confidenceText(entry, d),
@@ -200,7 +191,10 @@ export const TRAINING_LOAD_PLAN_V2: ContextBlock<TrainingLoadPlanV2Data> = {
     );
     const { equipment } = data.loadPlan[0].facts.constraints;
     // Task 5a (design §4.2): one line for the scheme in force — the user's choice with its date, or the default.
-    const progression = progressionOf(data.loadPlan[0], data.progression ?? defaultProgression(null));
+    const progression = progressionFromChoice(
+      data.progression ?? defaultProgression(null),
+      data.loadPlan[0].chosenScheme,
+    );
     const progressionText = `${progressionLine(progression, ctx.timezone)}\n\n`;
     const equipmentLine = equipment.length === 0 ? '' : `equipment facts (all exercises): ${equipment.join('; ')}\n\n`;
     return `${LOAD_PLAN_HEADER_V2}\n\n${progressionText}${equipmentLine}${entries.join('\n\n')}`;

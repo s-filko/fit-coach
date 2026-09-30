@@ -13,7 +13,7 @@ import type { TransitionRequest } from '@domain/conversation/transitions';
 import type { User } from '@domain/user/services/user.service';
 
 import type { CourseCheckFailure, StoredCourseDirective } from '@infra/ai/course-check/directive';
-import type { TrainingBreakNote } from '@infra/ai/prompts/blocks';
+import type { TrainingBreakNote } from '@infra/ai/load-facts/break-context';
 import type { RunMetricsCollector } from '@infra/ai/run-metrics';
 
 export const ConversationState = Annotation.Root({

@@ -94,6 +94,14 @@ describe('BreakContext.resolve', () => {
     expect(await ctx.resolve('u1', NOW, TZ)).toMatchObject({ ask: true });
   });
 
+  it('Fix-9: a marker asked on the day the user then trained does not cover the NEXT gap → asked again', async () => {
+    // last workout 2026-08-30 is the day the previous marker was written for (to = that training day).
+    const previous = fact('break reason=unknown from=2026-08-01 to=2026-08-30');
+    const { ctx, rememberFact } = build({ active: [previous], lastWorkoutDaysAgo: 30 });
+    expect(await ctx.resolve('u1', NOW, TZ)).toMatchObject({ ask: true });
+    expect(rememberFact).toHaveBeenCalledTimes(1);
+  });
+
   it('a failed marker write skips the question — never asked on every message', async () => {
     const { ctx } = build({ rememberFails: true });
     expect(await ctx.resolve('u1', NOW, TZ)).toMatchObject({ tier: 'rebuild', ask: false });

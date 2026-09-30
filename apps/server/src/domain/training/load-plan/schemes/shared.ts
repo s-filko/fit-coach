@@ -27,10 +27,6 @@ export function noRecord(reps: RepRange, missing: string[]): SchemeOutput {
   return { candidate: rec, conservative: { ...rec }, reason: NO_RECORD_REASON, confidence: 'low', missing };
 }
 
-export function hasShortConstraint(facts: LoadFacts): boolean {
-  return facts.constraints.constraints.some(c => c.durability === 'short');
-}
-
 export function confidenceOf(facts: LoadFacts, missing: string[]): Confidence {
   if (isAbsent(facts.workingWeight) || missing.length > 0) {
     return 'low';

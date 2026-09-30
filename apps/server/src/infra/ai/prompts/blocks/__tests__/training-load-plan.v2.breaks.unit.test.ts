@@ -6,8 +6,9 @@ import { defaultProgression } from '@domain/training/load-plan';
 
 import { loadLoadPlanEntries, type LoadFactsLoaderDeps } from '@infra/ai/load-facts/load-facts.loader';
 import { CHEST_PRESS, daysBefore, NOW, sessionRow, sets, TZ } from '@infra/ai/load-facts/__tests__/rows';
+import { decideLoadPlanEntry } from '@infra/ai/load-facts/load-decision';
 
-import { decideLoadPlanEntry, renderLoadPlanEntryV2 } from '../training-load-plan.v2';
+import { renderLoadPlanEntryV2 } from '../training-load-plan.v2';
 
 const ctx = { now: NOW, timezone: TZ, user: null };
 const progression = defaultProgression(null);
@@ -102,6 +103,19 @@ describe('LOAD PLAN v2 with LOAD_PLAN_BREAKS', () => {
     expect(text).toMatch(/break: tier rest_with_question \(10 d since exercise, general norm\) · reason unknown/);
   });
 
+  it('Fix-9: break facts that only touch the ladder gap at a workout day do not colour it', async () => {
+    // Ladder gap: performance b (35 d ago) → performance a (2 d ago). Dates in the user's timezone.
+    const day = (n: number) => new Date(NOW.getTime() - n * 86_400_000).toISOString().slice(0, 10);
+    const facts = [
+      // the previous break ended on the day of b — it belongs to the gap BEFORE b
+      { category: 'break', fact: `break reason=holiday_work_no_time from=${day(60)} to=${day(35)}`, createdAt: NOW },
+      // a marker for the gap that opens at a — it belongs to the gap AFTER a
+      { category: 'break', fact: `break reason=illness from=${day(2)} to=${day(0)}`, createdAt: NOW },
+    ];
+    const e = await entry([perf('a', 2), perf('b', 35), perf('c', 40)], true, facts);
+    expect(e.returnBranch).toMatchObject({ breakReason: 'unknown' });
+  });
+
   it('flag off: no returnBranch, no break line, decisions exactly as before the ladder existed', async () => {
     const e = await entry([perf('a', 31), perf('b', 40)], false);
     expect(e.returnBranch).toBeUndefined();
@@ -129,7 +143,7 @@ describe('LOAD PLAN v2 with a progression_scheme fact', () => {
     expect(e.chosenScheme).toEqual({ schemeId: 'double_progression', chosenAt: new Date('2026-09-20T03:00:00Z') });
     const { TRAINING_LOAD_PLAN_V2 } = await import('../training-load-plan.v2');
     const block = TRAINING_LOAD_PLAN_V2.render({ loadPlan: [e], exerciseHistory: [], progression }, ctx, 0) as string;
-    expect(block).toContain('Progression: double, confirm ×2 — chosen by user 2026-09-20');
+    expect(block).toContain('Progression: double progression, confirm ×2 — chosen by user 2026-09-20');
     expect(block).toContain('scheme: double progression 8–12, confirm ×2 (chosen by user 2026-09-20)');
     expect(block).not.toContain('default, unconfirmed');
   });
@@ -139,7 +153,7 @@ describe('LOAD PLAN v2 with a progression_scheme fact', () => {
     expect(e.chosenScheme).toBeNull();
     const { TRAINING_LOAD_PLAN_V2 } = await import('../training-load-plan.v2');
     const block = TRAINING_LOAD_PLAN_V2.render({ loadPlan: [e], exerciseHistory: [], progression }, ctx, 0) as string;
-    expect(block).toContain('Progression: double, confirm ×2 — default, unconfirmed');
+    expect(block).toContain('Progression: double progression, confirm ×2 — default, unconfirmed');
     expect(block).toContain('(default, unconfirmed)');
   });
 
@@ -184,7 +198,7 @@ describe('LOAD PLAN v2: one rep range per entry, none on the Progression line', 
       0,
     ) as string;
     const line = block.split('\n').find(l => l.startsWith('Progression:'));
-    expect(line).toBe('Progression: double, confirm ×2 — default, unconfirmed');
+    expect(line).toBe('Progression: double progression, confirm ×2 — default, unconfirmed');
     expect(line).not.toMatch(/\d+–\d+/);
     // The entry keeps the range it works on (the reference performance's plan), not the scheme default.
     expect(block).toContain('scheme: double progression 8–12, confirm ×2');
