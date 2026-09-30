@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@infra/db/drizzle';
 import { UserFactsRepository } from '@infra/db/repositories/user-facts.repository';
 import { loadRecommendations, workoutSessions } from '@infra/db/schema';
+import { LoadRecommendationRepository } from '@infra/db/repositories/load-recommendation.repository';
 import { buildLoadRecommendationLog } from '@infra/ai/load-facts/load-recommendation-log';
 
 import { buildRealTrainingService } from '../../helpers/training-service';
@@ -27,6 +28,7 @@ describe('load_recommendations log (AC-LP-4)', () => {
   const logged = buildRealTrainingService({
     loadRecommendationLog: buildLoadRecommendationLog(
       { workoutSessionRepo: sessionRepo, exerciseRepository: exerciseRepo, userFacts: new UserFactsRepository() },
+      new LoadRecommendationRepository(),
       { LOAD_PLAN_SUGGESTION: true },
     ),
   });
@@ -249,6 +251,7 @@ describe('load_recommendations log (AC-LP-4)', () => {
     expect(
       buildLoadRecommendationLog(
         { workoutSessionRepo: sessionRepo, exerciseRepository: exerciseRepo, userFacts: new UserFactsRepository() },
+        new LoadRecommendationRepository(),
         { LOAD_PLAN_SUGGESTION: false },
       ),
     ).toBeUndefined();
