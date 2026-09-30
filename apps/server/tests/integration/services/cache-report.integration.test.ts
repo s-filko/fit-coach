@@ -25,29 +25,7 @@ import { randomUUID } from 'node:crypto';
 import { db } from '@infra/db/drizzle';
 import { llmCalls } from '@infra/db/schema';
 
-// Loaded with `require` so `tsc` stays clean while the module does not exist yet (see cache-break-reasons.repro).
-interface CacheReport {
-  calls: number;
-  inputTokens: number;
-  readTokens: number;
-  writeTokens: number;
-  uncachedTokens: number;
-  hitRate: number;
-  cost: { read: number; write: number; uncached: number; total: number };
-  breaks: Array<{ class: string; where: string; count: number; lostTokens: number; lostCostUsd: number }>;
-}
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-const cacheReport = require('@infra/observability/cache-report') as {
-  buildCacheReport: (input: {
-    userId: string;
-    from: Date;
-    to: Date;
-    inputPricePerMTok: number;
-    cacheTtl?: '5m' | '1h';
-  }) => Promise<CacheReport>;
-  formatCacheReport: (report: CacheReport) => string;
-};
-const { buildCacheReport, formatCacheReport } = cacheReport;
+import { buildCacheReport, formatCacheReport } from '@infra/observability/cache-report';
 
 const USER = randomUUID();
 const OTHER_USER = randomUUID();

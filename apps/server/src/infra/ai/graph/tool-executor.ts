@@ -210,6 +210,9 @@ export function buildToolExecutor(
       if (!outcome.ok && outcome.kind === 'system_error') {
         systemError = true;
       }
+      if (outcome.ok && call.name === 'manage_fact') {
+        ctx.metrics.declareCacheBreak('facts_changed'); // D8.1: the stable facts block changes for the next call
+      }
       const message = toToolMessage(outcome, call.id ?? '');
       newMessages.push(message);
       if (perTurnDedup.includes(call.name)) {

@@ -13,6 +13,8 @@ import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 
 import type { BudgetReport } from '@domain/conversation/ports';
 
+import type { CacheBreakReason } from '@infra/ai/cache-break-reasons';
+
 import { extractUsageFromLLMResult, type UsageMetadataLike } from './usage';
 
 export interface RunMetrics {
@@ -42,6 +44,8 @@ export class RunMetricsCollector {
   private assemblies = 0;
   // llRunId → started (bridges handleChatModelStart → handleLLMEnd within this run only)
   private readonly startedCalls = new Set<string>();
+  // Prompt-caching plan D8.1: the reasons THIS run declared for breaking the cached prefix (never persisted).
+  private readonly cacheBreaks = new Set<CacheBreakReason>();
 
   constructor(
     readonly runId: string,
@@ -60,6 +64,16 @@ export class RunMetricsCollector {
 
   handler(): BaseCallbackHandler {
     return new LlmMetricsHandler(this.runId, this);
+  }
+
+  /** D8.1: a code site that is about to change the cached prefix declares why (see cache-break-reasons.ts). */
+  declareCacheBreak(reason: CacheBreakReason): void {
+    this.cacheBreaks.add(reason);
+  }
+
+  /** The reasons declared so far this run, in declaration order. */
+  declaredCacheBreaks(): CacheBreakReason[] {
+    return [...this.cacheBreaks];
   }
 
   /** Called by the handler for a call whose metadata.runId is ours. */

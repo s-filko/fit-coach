@@ -294,6 +294,24 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     });
   });
 
+  it('D8: the call carries the phase and the run’s declared cache-break reasons in its callback metadata', async () => {
+    mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
+    const metrics = new RunMetricsCollector('run-1');
+    metrics.declareCacheBreak('phase_switch');
+    const declaringConfig = {
+      ...(CONFIG as object),
+      context: { ...(CONFIG as never as { context: object }).context, metrics },
+    } as never as RunnableConfig;
+
+    await buildAgentNode(makeSpec(), makeDeps())(
+      makeState({ messages: [new HumanMessage('привет')] }),
+      declaringConfig,
+    );
+
+    const passed = mockInvoke.mock.calls[0][1] as RunnableConfig;
+    expect(passed.metadata).toMatchObject({ phase: 'chat', cacheBreakReasons: ['phase_switch'], runId: 'run-1' });
+  });
+
   it('non-empty reply skips the retry entirely', async () => {
     mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'готово', tool_calls: [] }));
     const node = buildAgentNode(makeSpec(), makeDeps());

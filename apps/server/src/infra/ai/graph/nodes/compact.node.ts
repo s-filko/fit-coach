@@ -122,6 +122,10 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
     // automatic paths keep splitEpisode's invariant untouched (one appended
     // human per run; compaction never cuts into it).
     const manual = ctx.compactOnly === true;
+    if (state.compactReason === 'phase_boundary') {
+      // D8.1: a phase boundary committed by the previous run — this run's first call is in the new phase.
+      ctx.metrics.declareCacheBreak('phase_switch');
+    }
     const history = manual ? [...state.messages] : splitEpisode(state.messages).history;
 
     // D-E: live-thread import, exactly once — the first P4 run sees an empty
@@ -177,6 +181,7 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
           cacheWarm,
         });
     if (reason === 'budget' && cacheWarm) {
+      ctx.metrics.declareCacheBreak('hard_cap');
       log.info(
         { userId, phase: state.phase, estimatedTotal: cacheWarm.estimatedTotalTokens, cap: cacheWarm.hardCapTokens },
         'Context hard cap reached while cache warm',
@@ -203,6 +208,11 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
       minTokens,
       lowWaterMark: budgetLowWater,
     });
+
+    if (removed.length > 0) {
+      // D8.1: history and summaries are about to be rewritten.
+      ctx.metrics.declareCacheBreak('compaction');
+    }
 
     if (removed.length === 0) {
       if (manual) {
@@ -325,6 +335,7 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
       // stubbed or degraded gateway answer without the field applies nothing.
       const operations = summary.factOperations ?? [];
       if (operations.length > 0) {
+        ctx.metrics.declareCacheBreak('facts_changed'); // D8.1: the stable facts block may change
         // AC-FL-3's evidence clock: the compacted episode's newest user message
         // (still the PREVIOUS run's stamp at this point). Facts stated in that
         // episode can be no newer than this; ctx.now would let a restatement

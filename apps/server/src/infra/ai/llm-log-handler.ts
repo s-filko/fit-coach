@@ -158,6 +158,9 @@ interface PendingCall {
   runId: string;
   /** D1: from callback metadata — null when a call genuinely carries none (never expected in practice). */
   userId: string | null;
+  /** Prompt-caching plan D8: the phase of the call and the run's declared cache-break reasons (callback metadata). */
+  phase: string | null;
+  cacheBreakReasons: string[];
   model: string;
   request: RecordLlmCallRequest;
   startedAt: number;
@@ -244,6 +247,10 @@ export class LLMLogHandler extends BaseCallbackHandler {
       this.pending.set(llmRunId, {
         runId,
         userId: userId ?? null,
+        phase: typeof metadata?.['phase'] === 'string' ? metadata['phase'] : null,
+        cacheBreakReasons: Array.isArray(metadata?.['cacheBreakReasons'])
+          ? (metadata['cacheBreakReasons'] as unknown[]).filter((r): r is string => typeof r === 'string')
+          : [],
         model: replayPayload.model,
         request: replayPayload,
         startedAt: Date.now(),
@@ -283,6 +290,8 @@ export class LLMLogHandler extends BaseCallbackHandler {
         userId: pending.userId,
         model: pending.model,
         request: pending.request,
+        phase: pending.phase,
+        cacheBreakReasons: pending.cacheBreakReasons,
         response: {
           text: text ?? '',
           toolCalls: gen?.message?.tool_calls,

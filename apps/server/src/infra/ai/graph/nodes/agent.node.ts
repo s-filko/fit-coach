@@ -275,6 +275,7 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     });
     ctx.metrics.attachBudgetReport(budgetReport);
     if (hardCapExceeded) {
+      ctx.metrics.declareCacheBreak('hard_cap'); // D8.1 — the assembler cut the cached prefix anyway
       log.info(
         {
           userId,
@@ -307,11 +308,18 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
         ? applyCacheBreakpoints(assembledMessages, current.length, cfg.LLM_PROMPT_CACHE_TTL)
         : assembledMessages;
 
+    // Prompt-caching plan D8: the run's declared cache-break reasons and the phase ride on the call's callback
+    // metadata (read fresh per call — nodes declare reasons as the run goes), so the recorder can classify the call.
+    const callConfig = (): RunnableConfig => ({
+      ...config,
+      metadata: { ...config.metadata, phase: spec.name, cacheBreakReasons: ctx.metrics.declaredCacheBreaks() },
+    });
+
     // Post-tool nudge + empty-reply retry, moved verbatim from invokeWithRetry
     // (ADR-0013 §6: every phase, one retry, then the catalog fallback — D-D).
     const postTool = endsWithToolMessage(llmMessages);
     const firstMessages = postTool ? withPostToolNudge(llmMessages) : llmMessages;
-    const response = await model.invoke(firstMessages, config);
+    const response = await model.invoke(firstMessages, callConfig());
     const finishReason = logModelResponse(response, userId, spec.name);
     stripRawResponse(response);
 
@@ -325,7 +333,7 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
       log.warn({ userId, phase: spec.name }, 'LLM returned empty response — retrying once');
       // On retry always include the nudge regardless of message structure
       const retryMessages = postTool ? firstMessages : withPostToolNudge(llmMessages);
-      const retried = await model.invoke(retryMessages, config);
+      const retried = await model.invoke(retryMessages, callConfig());
       logModelResponse(retried, userId, spec.name);
       stripRawResponse(retried);
       if (isEmptyAIResponse(retried)) {

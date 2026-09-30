@@ -111,3 +111,32 @@ describe('AC-PC-6: the compact step defers budget compaction while the cache is 
     expect(insert).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('D8.1 raise sites in the compact step', () => {
+  const declared = async (config: Record<string, unknown>, stateOverrides: Record<string, unknown>, agoMs: number) => {
+    const { step } = makeStep(config);
+    const metrics = new RunMetricsCollector('run-2');
+    const cfg = {
+      configurable: { thread_id: 'u1' },
+      context: { ...(CONFIG as never as { context: object }).context, metrics },
+    } as never as RunnableConfig;
+    await step({ ...state(agoMs), ...stateOverrides } as ConversationStateType, cfg);
+    return metrics.declaredCacheBreaks();
+  };
+
+  it('a compaction that rewrites history declares compaction', async () => {
+    expect(await declared({}, {}, 4 * 3_600_000)).toEqual(['compaction']);
+  });
+
+  it('a committed phase boundary declares phase_switch (and compaction when it compacts)', async () => {
+    expect(await declared({}, { compactReason: 'phase_boundary' }, 60_000)).toEqual(['phase_switch', 'compaction']);
+  });
+
+  it('the budget trigger firing while the cache is warm declares hard_cap', async () => {
+    expect(await declared({ cacheTtlMs: 300_000, hardCapTokens: 1 }, {}, 60_000)).toEqual(['hard_cap', 'compaction']);
+  });
+
+  it('a deferred (warm, under cap) run declares nothing', async () => {
+    expect(await declared({ cacheTtlMs: 300_000, hardCapTokens: 60_000 }, {}, 60_000)).toEqual([]);
+  });
+});

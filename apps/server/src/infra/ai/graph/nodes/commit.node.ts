@@ -120,6 +120,10 @@ export function buildCommitNode(deps: CommitNodeDeps) {
     // carrier and route to 'handoff' — the two can no longer disagree.
     const shouldHop = isAcceptedHandoff(handoffTargets, phase, state.activeSessionId, request, !isFirstCommitOfRun);
     ctx.hopping = shouldHop;
+    if (shouldHop) {
+      // D8.1: the hop's second agent call runs in the target phase — its block 1 and tool set differ.
+      ctx.metrics.declareCacheBreak('phase_switch');
+    }
     if (shouldHop && request) {
       // The final commit's OWN `request` is null by then (this commit already
       // cleared pendingTransition) — its run row still needs the toPhase/reason

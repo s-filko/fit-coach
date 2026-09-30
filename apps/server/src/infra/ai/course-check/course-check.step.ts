@@ -213,6 +213,7 @@ export function buildCourseCheckStep(deps: CourseCheckStepDeps): CourseCheckStep
       // The question is in the directive — only now are the ask_once facts archived
       // (asked once; a failed call above leaves them due, so nothing is lost).
       await archiveExpired(ask, userId, runId, now);
+      ctx.metrics.declareCacheBreak('facts_changed'); // D8.1: a new directive changes the stable block
       return {
         courseDirective: { fingerprint: settledFingerprint, directive, generatedAt: now.toISOString() },
         courseCheckFailure: null,

@@ -8,14 +8,7 @@
  *   `where` is what attribution reports: 'tools' | 'system:prompt' | 'system:facts' | 'system:directive' |
  *   'system:summaries' | `history[<i>]:<role>`.
  */
-// Loaded with `require` so `tsc` (type-check, which includes this file) stays clean while the module does not
-// exist yet; jest resolves the alias at run time and the suite is red with "Cannot find module" until T5b.
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-const registry = require('@infra/ai/cache-break-reasons') as {
-  CACHE_BREAK_REASONS: readonly string[];
-  reasonCovers: (reason: string, where: string) => boolean;
-};
-const { CACHE_BREAK_REASONS, reasonCovers } = registry;
+import { CACHE_BREAK_REASONS, reasonCovers } from '@infra/ai/cache-break-reasons';
 
 describe('cache-break reason registry (D8.1)', () => {
   it('AC-PC-9: the registry lists exactly the five declared reasons', () => {

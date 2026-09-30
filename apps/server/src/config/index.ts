@@ -116,6 +116,9 @@ export const EnvSchema = z.object({
   // Prompt-caching plan D5: while the provider cache is warm, budget compaction and history trimming wait (they
   // rewrite the cached prefix). This is the safety net — the estimated total (token-estimator units, ≈ 100 k real
   // tokens by BUG-050) above which they run anyway. Only consulted with LLM_PROMPT_CACHE=anthropic.
+  // Prompt-caching plan D8: list price (USD per 1M uncached input tokens) used to cost cache breaks in the
+  // 'Prompt cache break' log and in scripts/cache-report.ts. Optional — unset omits the cost.
+  LLM_INPUT_PRICE_PER_MTOK: z.coerce.number().positive().optional(),
   LLM_CONTEXT_HARD_CAP_TOKENS: z.coerce.number().int().positive().default(60_000),
   // Transition hand-off (transition-handoff plan Task 1, D-1, AC-TH-2): comma
   // list of ConversationPhase targets that get a silent same-run hand-off when

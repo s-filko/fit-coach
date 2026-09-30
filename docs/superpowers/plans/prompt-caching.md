@@ -358,6 +358,41 @@ Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 175 s
   trigger fired while warm) and from the agent node (assembler cuts ran while warm); T5b turns these into a declared `hard_cap` break.
 - Interface deviation from T2: none.
 
+### T5b — cache-break guard D8 (worker, Sonnet, 2026-09-30) — done
+
+Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 179 suites / 1805 tests green; `db-test-lock.sh npm run test:scenarios`
+23 suites / 415 passed + 1 todo; DB-backed (`RUN_DB_TESTS=1`, db-test-lock) `cache-break-guard` + `cache-report` + `llm-call-recorder` +
+`llm-call-cache-write` integration 4 suites / 31 tests green. **Migration: `apps/server/drizzle/0022_left_blob.sql`** (`llm_calls.cache_break` text,
+`llm_calls.cache_break_lost_tokens` int; `npm run drizzle:generate`). No `*.repro.test.ts` of this plan is left: AC-PC-9/10 →
+`cache-break-attribution.unit`, `cache-break-reasons.unit`, `cache-break-guard.integration`; AC-PC-11 → `cache-report.integration`;
+`prompt-cache-config-price.unit` (LLM_INPUT_PRICE_PER_MTOK); new `cache-break-declarations.unit` + cases in the compact-step and agent-node tests.
+(Other `*.repro.test.ts` files in the tree — tool-ordering, log-set, format-exercise-summary — belong to other plans.)
+
+- **Registry:** `infra/ai/cache-break-reasons.ts` (`CACHE_BREAK_REASONS`, `reasonCovers`). Declarations live on `RunMetricsCollector`
+  (`declareCacheBreak` / `declaredCacheBreaks`, never persisted). Raise sites: `phase_switch` — commit node on a same-run hop **and** compact step
+  when the previous run committed a `phase_boundary` (two sites: a hop skips `prepare`); `compaction` — compact step when it removes messages;
+  `hard_cap` — compact step's budget trigger while warm **and** the agent node's assembler cuts while warm (T5's two branches);
+  `facts_changed` — executor after a successful `manage_fact`, compact step when the summariser returned fact operations, course-check step when it stores
+  a new directive; `ttl_expired` — not declared: attribution measures the gap itself (`cacheExpected: ttl_expired` → `cacheBreak: none`).
+- **Per call:** the agent node passes `phase` and the run's declared reasons in the call's callback metadata (`callConfig()`, fresh per call,
+  incl. the retry); `LLMLogHandler` puts them on the recorder input (`phase`, `cacheBreakReasons`).
+- **Attribution:** compares tools + only the previous request's messages before its last `user` message (breakpoint 2); a change in the current turn
+  is `none`. Inside the ONE stable system message `where` is the block the char offset falls in (`system:prompt|facts|directive|summaries`, by
+  the existing headers; the earlier block wins when a block appeared/vanished). Content is normalised before comparing: `cache_control` keys are
+  ignored (breakpoint 2 moves every turn) and a system message sent as text parts equals the same text as a string. The recorder now hashes a
+  parts-system message by its joined text, so prompt_blobs dedup and the previous-call lookup keep working with `LLM_PROMPT_CACHE=anthropic`.
+  `too_short` no longer hides a break (a changed tool list loses the whole previous prefix whatever this call shares); `ttl_expired` still does.
+  `unexplained_miss`: expected warm and `cacheReadTokens < 0.75 × cacheSharedPrefixTokens` (the shared figure is char-estimated, provider reads round
+  to block boundaries — a strict `<` would false-alarm); unreported read (null) is never flagged. Lost tokens = chars the previous cacheable part
+  had and this call no longer shares, scaled by `inputTokens / chars` (unexplained_miss: shared − read).
+- **Logs:** `Prompt cache break` warn for `unplanned:*` / `unexplained_miss`, info for `planned:hard_cap` / `planned:facts_changed`; fields
+  `{userId, phase, cacheBreak, where, charsInto, lostTokens, lostCostUsd}` — the T2 test names (`lostTokens`, `lostCostUsd`), not the brief's
+  `tokensLost`/`costLostUsd`; cost = tokens × `LLM_INPUT_PRICE_PER_MTOK` / 1e6, null when unset. Logging is wrapped: it can never fail a call.
+- **Report:** `infra/observability/cache-report.ts` (`buildCacheReport`, `formatCacheReport`) + `scripts/cache-report.ts`, npm script
+  `npm run cache-report -- <userId> <from ISO> <to ISO> [--price <USD/1M>] [--ttl 5m|1h] [--env-file <path>]` (price/ttl default to
+  `LLM_INPUT_PRICE_PER_MTOK` / `LLM_PROMPT_CACHE_TTL`). Not run against any real DB (no DB other than the test one was touched).
+- Interface deviation from T2: none apart from the log key names above being the T2 ones.
+
 ## Out of scope
 
 Smaller training tool set and shorter schemas; BUG-050 estimator; the post-tool second call itself; caching on

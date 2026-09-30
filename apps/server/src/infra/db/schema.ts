@@ -245,6 +245,10 @@ export const llmCalls = pgTable(
     cacheDivergedAt: text('cache_diverged_at'),
     cacheSharedPrefixTokens: integer('cache_shared_prefix_tokens'),
     cacheGapMs: integer('cache_gap_ms'),
+    // prompt-caching plan D8.3: none | planned:<reason> | unplanned:<where> | unexplained_miss (cache-attribution.ts);
+    // null when attribution did not run. `cache_break_lost_tokens`: what the break cost (null for none).
+    cacheBreak: text('cache_break'),
+    cacheBreakLostTokens: integer('cache_break_lost_tokens'),
     latencyMs: integer('latency_ms').notNull(),
     errorClass: text('error_class'),
     errorMessage: text('error_message'),
