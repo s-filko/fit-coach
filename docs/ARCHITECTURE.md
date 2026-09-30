@@ -96,7 +96,7 @@ apps/server/src/
       cache-attribution.ts      # attributeCache(prev, current, limits) — pure cache-hit/miss attribution against the previous same-user+model call (cache-accounting plan)
       cache-break-reasons.ts    # Declared cache-break reasons (phase_switch, compaction, hard_cap, facts_changed; ttl_expired derived) → llm_calls.cache_break classification (prompt-caching D8)
       message-text.ts           # textOnly — the one flattener of message content parts to text (null when a part is not text)
-      model-prices.ts           # Per-model list prices for cost reporting (LLM_MODEL_PRICES override)
+      model-prices.ts           # Per-model prices as configured for this app, for cost reporting (priceOf; LLM_MODEL_PRICES override)
       run-metrics.ts            # RunMetricsCollector — per-run instance carried in run context (ADR-0013 §8; no module state, AC-1331)
       embedding.service.ts      # Local all-MiniLM-L6-v2 via @huggingface/transformers (ONNX)
       gemini-transcriber.ts     # SpeechTranscriberPort over Google AI Studio generateContent (STT_*; ADR-0013 §7 amendment 2026-09-27)
@@ -201,6 +201,7 @@ apps/server/src/
       container.ts              # DI container with factory support + lazy initialization
     config/
       index.ts                  # Env loading + Zod validation
+      model-prices.ts           # LLM_MODEL_PRICES parser/validator (parsed once at config load; ModelPrice type)
 
   shared/
     errors.ts                   # AppError and error helpers

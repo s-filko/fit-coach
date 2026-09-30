@@ -3,9 +3,10 @@
 > **For agentic workers:** Use superpowers:executing-plans and superpowers:test-driven-development. Red tests
 > first in every task. Execute only the dispatched task.
 
-- Status: in progress
+- Status: done
 - Branch: plan/prompt-caching
 - After: —
+- Review: 2026-09-30 | clean | R1,R2,R3,R4
 
 **Goal:** during a workout the request prefix (tools → system prompt → stable blocks → history) is byte-identical
 from call to call and grows only by appending; only the current turn changes. Anthropic prompt caching via
@@ -356,7 +357,7 @@ Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 175 s
 - **Compact step:** `decideCompactReason(…, cacheWarm)` returns null instead of `'budget'` while warm and `estimateMessages(state.messages)`
   (history + this run's messages — the compact step has no system/block tokens; a proxy, dominated by history) ≤ cap. `phase_boundary` and
   `inactivity` are checked earlier and untouched; manual `/compact` untouched.
-- **Assembler:** `resolveBudget(…, cacheWarm)`: while warm and the FULL estimated total (system + facts + directive + summaries + blocks +
+- **Assembler:** `resolveBudget(…, cacheWarm)`: while warm and the FULL estimated total (system + facts + directive + summaries + blocks + *[historical — superseded by review runs 1–2: one price source (priceOf + LLM_MODEL_PRICES), cap measured on history + current turn]*
   history + current) ≤ cap the **whole resolution is skipped** (no `trimHistory`, and also no facts truncation, block depth stepping,
   summary drop or floor — all of them rewrite the cached prefix; this is broader than the brief's "no trimHistory" on purpose, otherwise
   a skipped trim would just push the same overflow into the next cut). Over the cap → existing order unchanged, result carries
@@ -372,7 +373,7 @@ Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 179 s
 `llm-call-cache-write` integration 4 suites / 31 tests green. **Migration: `apps/server/drizzle/0022_left_blob.sql`** (`llm_calls.cache_break` text,
 `llm_calls.cache_break_lost_tokens` int; `npm run drizzle:generate`). No `*.repro.test.ts` of this plan is left (**true only since review fix 130ca6ec**; at T5b `training-tool-rejection.repro.test.ts` was still there): AC-PC-9/10 →
 `cache-break-attribution.unit`, `cache-break-reasons.unit`, `cache-break-guard.integration`; AC-PC-11 → `cache-report.integration`;
-`prompt-cache-config-price.unit` (the flat-price key (removed)); new `cache-break-declarations.unit` + cases in the compact-step and agent-node tests.
+`prompt-cache-config-price.unit` (the flat-price key (removed)); new `cache-break-declarations.unit` + cases in the compact-step and agent-node tests. *[historical — superseded by review runs 1–2: one price source (priceOf + LLM_MODEL_PRICES), cap measured on history + current turn]*
 (Other `*.repro.test.ts` files in the tree — tool-ordering, log-set, format-exercise-summary — belong to other plans.)
 
 - **Registry:** `infra/ai/cache-break-reasons.ts` (`CACHE_BREAK_REASONS`, `reasonCovers`). Declarations live on `RunMetricsCollector`
@@ -394,10 +395,10 @@ Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 179 s
   had and this call no longer shares, scaled by `inputTokens / chars` (unexplained_miss: shared − read).
 - **Logs:** `Prompt cache break` warn for `unplanned:*` / `unexplained_miss`, info for `planned:hard_cap` / `planned:facts_changed`; fields
   `{userId, phase, cacheBreak, where, charsInto, lostTokens, lostCostUsd}` — the T2 test names (`lostTokens`, `lostCostUsd`), not the brief's
-  `tokensLost`/`costLostUsd`; cost = tokens × the flat-price key (removed) / 1e6, null when unset. Logging is wrapped: it can never fail a call.
+  `tokensLost`/`costLostUsd`; cost = tokens × the flat-price key (removed) / 1e6, null when unset. Logging is wrapped: it can never fail a call. *[historical — superseded by review runs 1–2: one price source (priceOf + LLM_MODEL_PRICES), cap measured on history + current turn]*
 - **Report:** `infra/observability/cache-report.ts` (`buildCacheReport`, `formatCacheReport`) + `scripts/cache-report.ts`, npm script
   `npm run cache-report -- <userId> <from ISO> <to ISO> [--price <USD/1M>] [--ttl 5m|1h] [--env-file <path>]` (price/ttl default to
-  the flat-price key (removed) / `LLM_PROMPT_CACHE_TTL`). Not run against any real DB (no DB other than the test one was touched).
+  the flat-price key (removed) / `LLM_PROMPT_CACHE_TTL`). Not run against any real DB (no DB other than the test one was touched). *[historical — superseded by review runs 1–2: one price source (priceOf + LLM_MODEL_PRICES), cap measured on history + current turn]*
 - Interface deviation from T2: none apart from the log key names above being the T2 ones.
 
 ### Review fixes — run 1 (worker, Sonnet, 2026-09-30) — commit 130ca6ec
@@ -422,7 +423,7 @@ lists no `*.repro.test.ts`. Docs outside this file untouched (docs sync is the o
   The report prices each model separately (read 0.1×, write 1.25×/2×, uncached 1×, **output at the output price**), returns `models[]`, `cost.output`,
   `cost.withoutCaching`, and lists unpriced models instead of guessing; `--price` forces one flat input price. `lostCostUsd` per break uses the row's model price.
 - **R3 guard gating:** the recorder stores `cache_break` (and lost tokens) and logs ONLY when the request carried a `cache_control` part; `LLM_PROMPT_CACHE=off`,
-  summariser and course-check calls get null and never warn (test: "a call that sent no cache_control …"). The break cost log uses the flat-price key (removed)
+  summariser and course-check calls get null and never warn (test: "a call that sent no cache_control …"). The break cost log uses the flat-price key (removed) *[historical — superseded by review runs 1–2: one price source (priceOf + LLM_MODEL_PRICES), cap measured on history + current turn]*
   if set, else the model's table price.
 - **R3 D4 rejection:** `set-preconditions.ts` returns a `user_error` (a normal tool result, status success) instead of an `llm_error`, so a premature
   delete/update no longer spends training's `llmErrorBudget: 1`; the session read moved inside each tool's `try` (a failing read is handled by the tool).
@@ -573,3 +574,11 @@ Meta findings filed in `docs/REVIEW_FINDINGS.md` (run prompt-caching 2026-09-30)
   config load. · R4 `config/index.ts:116-125` D5 comment split from its variable. · R4 `model-prices.ts:5-6` header
   calls the figures "Anthropic list prices". · R4 ARCHITECTURE `:410` warm qualifier, plan `:132` ADR-0011 name,
   Evidence "3/15" — closed by the orchestrator in the same commit as fixes 1–2.
+
+### Run 3 — 2026-09-30, four zones over `1e82399a...f81361e0`: **clean**
+
+Run-2 #1–#4 verified closed by each zone's own search (R1, R2, R3, R4); no new blocking finding. Advisories
+(run 3) filed in `docs/BACKLOG.md` § prompt-caching close-out review advisories, except the trivial doc ones
+closed at close-out: ARCHITECTURE `model-prices.ts` line ("as configured") and the `config/model-prices.ts`
+listing; historical Evidence lines that named the removed flat-price key / the old full-total cap measure now carry
+a superseded marker.

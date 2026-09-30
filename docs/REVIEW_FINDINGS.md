@@ -403,6 +403,8 @@ backs it. Each entry names the proposed wording and where it would live
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
 
+- [×1] Scrubbing a removed identifier from a plan's historical Evidence by in-sentence replacement left lines stating false current behaviour. Proposed (R4): "Historical Evidence is not rewritten when a later fix removes what it names; add a superseded marker instead."
+  Runs: prompt-caching run 3 (2026-09-30) (R4).
 - [×2] A fix commit changed code (the hard-cap measure; a model price) after the ADR amendment / DB-backed evidence describing it was written, leaving the text or the green run stale. Proposed (R1, R3): "an ADR amendment written in the same close-out as a code fix is re-read against that fix's final diff; verification evidence names the commit it ran at, and any later code commit re-runs the DB-backed suites touching the changed module".
   Runs: prompt-caching run 2 (2026-09-30) (R1, R3).
 - [×1] A review fix that changes behaviour an AC-*/D-* states (AC-PC-4: llm_error → user_error) recorded the change only in Evidence. Proposed (R4): "A review fix that changes behaviour an AC-*/D-* states amends that AC/D line in the same commit."
