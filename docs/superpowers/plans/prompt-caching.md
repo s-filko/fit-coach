@@ -277,7 +277,7 @@ end-to-end (real model → `LLMLogHandler` → recorder input) so it does not fi
 Verification (apps/server): `npm run check-all` clean (exit 0); `npm run test:unit` 168 suites / 1729 tests green;
 `db-test-lock.sh npm run test:scenarios` 23 suites, 415 passed + 1 todo. AC-PC-1/2/4/5 promoted:
 `graph/nodes/__tests__/prompt-cache-prefix.unit.test.ts` (AC-PC-1, -2, -4 bound tools, -5) and
-`graph/__tests__/training-tool-rejection.unit.test.ts` (AC-PC-4 executor); `assemble-context.unit.test.ts` gained AC-PC-2 (every input at
+`graph/__tests__/training-tool-rejection.unit.test.ts` (AC-PC-4 executor — **corrected by review fix 130ca6ec**: at T3 the file was still `.repro.test.ts`, the promotion `git mv` had not run); `assemble-context.unit.test.ts` gained AC-PC-2 (every input at
 once → exactly one SystemMessage, first). The AC-PC-3 tests moved to `prompt-cache-breakpoints.repro.test.ts` (still red for T4); the
 shared setup is `prompt-cache-harness.ts` (was inline in the T2 file). All other T2 repro files unchanged and still red.
 
@@ -366,7 +366,7 @@ Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 175 s
 Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 179 suites / 1805 tests green; `db-test-lock.sh npm run test:scenarios`
 23 suites / 415 passed + 1 todo; DB-backed (`RUN_DB_TESTS=1`, db-test-lock) `cache-break-guard` + `cache-report` + `llm-call-recorder` +
 `llm-call-cache-write` integration 4 suites / 31 tests green. **Migration: `apps/server/drizzle/0022_left_blob.sql`** (`llm_calls.cache_break` text,
-`llm_calls.cache_break_lost_tokens` int; `npm run drizzle:generate`). No `*.repro.test.ts` of this plan is left: AC-PC-9/10 →
+`llm_calls.cache_break_lost_tokens` int; `npm run drizzle:generate`). No `*.repro.test.ts` of this plan is left (**true only since review fix 130ca6ec**; at T5b `training-tool-rejection.repro.test.ts` was still there): AC-PC-9/10 →
 `cache-break-attribution.unit`, `cache-break-reasons.unit`, `cache-break-guard.integration`; AC-PC-11 → `cache-report.integration`;
 `prompt-cache-config-price.unit` (LLM_INPUT_PRICE_PER_MTOK); new `cache-break-declarations.unit` + cases in the compact-step and agent-node tests.
 (Other `*.repro.test.ts` files in the tree — tool-ordering, log-set, format-exercise-summary — belong to other plans.)
@@ -395,6 +395,38 @@ Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 179 s
   `npm run cache-report -- <userId> <from ISO> <to ISO> [--price <USD/1M>] [--ttl 5m|1h] [--env-file <path>]` (price/ttl default to
   `LLM_INPUT_PRICE_PER_MTOK` / `LLM_PROMPT_CACHE_TTL`). Not run against any real DB (no DB other than the test one was touched).
 - Interface deviation from T2: none apart from the log key names above being the T2 ones.
+
+### Review fixes — run 1 (worker, Sonnet, 2026-09-30) — commit 130ca6ec
+
+Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 183 suites / 1825 tests green; `db-test-lock.sh npm run test:scenarios`
+23 suites / 415 passed + 1 todo; DB-backed (`RUN_DB_TESTS=1`) `cache-break-guard` + `cache-report` + `llm-call-recorder` + `llm-call-cache-write` +
+`conversation-run-cache-rollup` integration 5 suites / 36 tests green. `git ls-files '*prompt-cach*' '*cache-break*' '*training-tool-rejection*'`
+lists no `*.repro.test.ts`. Docs outside this file untouched (docs sync is the orchestrator's; Blocking #1–#8 stay open).
+
+- **#9** AC-PC-4 executor tests are in CI (`training-tool-rejection.unit.test.ts`).
+- **#10 text-of-content:** one home `infra/ai/message-text.ts` (`textOf` lossy, `textOnly` → null on any non-text part). *Class search* (src/evals/scripts, non-test):
+  `grep -rnE "\.text \?\? ''|every\(.*'text'\)|filter\(.*type === 'text'"` → only `message-text.ts` itself (+ two unrelated `?? ''` on a response/step field);
+  `grep -rnE "typeof [a-z.]*content === 'string'"` → remaining hits are string-only checks with no part handling (`outcome.ts`, `finalize.node.ts`,
+  `agent.node.ts` empty-reply test, `cache-attribution.ts` label, `assemble-context.ts` user text) or a JSON fallback for the token measure
+  (`token-estimator.ts:31`, `transcript-formatter.ts:80`) — left as is: changing the estimator would move every frozen budget report.
+- **#11 clone:** `grep -rnE "new (Tool|Human|AI|System)Message\(\{" src` (non-test) → `withParts` (cache-breakpoints.ts), `tools/outcome.ts` (fresh tool results, not copies),
+  `tool-executor.ts` (fresh messages) — no other copy of an existing message.
+- **#12 warm predicate:** `grep -rn cacheTtlMs src` → `warmCacheOf` is the only comparison; the rest are the config field and its wiring.
+- **#13** `isCacheBreakReason` removed (grep: no callers).
+- **R3 cache-report pricing (AC-PC-8):** `infra/ai/model-prices.ts` — built-in per-model table (input + output USD/1M: Sonnet 5.5 3/15, Haiku 4.5 1/5 —
+  *assumed list prices, verify against the provider's page before quoting a bill*), overridable with `LLM_MODEL_PRICES` JSON (`{"model":{"input":..,"output":..}}`).
+  The report prices each model separately (read 0.1×, write 1.25×/2×, uncached 1×, **output at the output price**), returns `models[]`, `cost.output`,
+  `cost.withoutCaching`, and lists unpriced models instead of guessing; `--price` forces one flat input price. `lostCostUsd` per break uses the row's model price.
+- **R3 guard gating:** the recorder stores `cache_break` (and lost tokens) and logs ONLY when the request carried a `cache_control` part; `LLM_PROMPT_CACHE=off`,
+  summariser and course-check calls get null and never warn (test: "a call that sent no cache_control …"). The break cost log uses `LLM_INPUT_PRICE_PER_MTOK`
+  if set, else the model's table price.
+- **R3 D4 rejection:** `set-preconditions.ts` returns a `user_error` (a normal tool result, status success) instead of an `llm_error`, so a premature
+  delete/update no longer spends training's `llmErrorBudget: 1`; the session read moved inside each tool's `try` (a failing read is handled by the tool).
+  This changes the T2/T3 wording "rejected as llm_error": it is now a refusal that the model reads and the budget ignores (tests: two premature calls in one batch → two
+  tool messages, no `tool_error_budget_exhausted`).
+- **R3 one hard-cap measure:** `cache-warmth.ts` `conversationTokens(history, current, estimate)` (the conversation that grows; system/blocks excluded) is used by both the
+  compact step and `resolveBudget`, with the same cap and the same warm predicate — no band where one defers and the other trims (test: at the cap both defer, one token over both act).
+- Left open (not pulled in): the other R1/R2/R3/R4 advisories and Blocking #1–#8.
 
 ## Out of scope
 
@@ -436,15 +468,20 @@ the Z.AI / Gemini routes; summariser and course-check calls (Haiku 4.5 minimum 4
 9. **R3 + R4 — AC-PC-4 executor half not in CI.** Only
    `graph/__tests__/training-tool-rejection.repro.test.ts` exists (outside testMatch; CI runs `test:unit`); T3
    evidence claims a `.unit` promotion and T5b claims no repro left — both false (plan `:280,369`).
+    Closed: 130ca6ec — `training-tool-rejection.repro.test.ts` renamed to `.unit.test.ts` (now in `test:unit`; my T3 `git mv` had silently not run); the false T3/T5b evidence lines are corrected below.
 10. **R2 — `llm-call-recorder.ts:164` `systemTextOf()`** near-verbatim copy of `systemText()`
     (`cache-attribution.ts:145`); both reinvent `textOf()` (`llm.gateway.ts:34`, "one home"); a third copy is
     `contentText()` (`evals/lib/run-case.ts:61`). One exported helper returning null for non-text parts.
+    Closed: 130ca6ec — new `infra/ai/message-text.ts` is the one home: `textOf` moved there (llm.gateway re-uses it) plus `textOnly(content): string | null` (null for any non-text part). `systemTextOf` (recorder) and `systemText` (attribution) now call `textOnly`; `contentText` (evals/lib/run-case.ts) and the test-side flatteners (assemble-context, agent.node, user-facts scenario, retro-timestamps, a-greeting, set-kind, harness) too. Search in § Evidence.
 11. **R2 — `agent.node.ts:116` `withAppendedText()`** copies the tool/human branches of `withBreakpoint()`
     (`cache-breakpoints.ts:40`, 48–66); `withContext()` (`assemble-context.ts:128`) is a third, human-only copy;
     `textPartsOf()` (`agent.node.ts:106`) duplicates `partsOf()` (`cache-breakpoints.ts:29`). Already drifted:
     only `withContext` keeps `response_metadata`. One clone-with-new-parts helper next to cache-breakpoints.
+    Closed: 130ca6ec — `cache-breakpoints.ts` exports `partsOf` + `withParts(message, parts)` (one clone: id, name, additional_kwargs, response_metadata for every role; tool_call_id/status/artifact; ai tool_calls/usage). `withBreakpoint`, agent `withAppendedText` and assembler `withContext` use it; `textPartsOf` deleted. The drift is gone (response_metadata now kept everywhere; test AC-PC-3).
 12. **R2 — `compact.node.ts:167`** inline warm-cache predicate repeats `warmCacheOf()` (`agent.node.ts:165`).
+    Closed: 130ca6ec — new `context/cache-warmth.ts` `warmCacheOf(tunables, lastUserMessageAt, now)` is the only warm predicate (compact step + agent node); the agent's private copy deleted.
 13. **R2 — `cache-break-reasons.ts:18` `isCacheBreakReason()`** exported, zero callers, not in plan (YAGNI).
+    Closed: 130ca6ec — `isCacheBreakReason` removed.
 
 #### Advisory (not fixed on this branch unless the owner pulls them in)
 
