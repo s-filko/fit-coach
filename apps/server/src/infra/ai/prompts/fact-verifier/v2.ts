@@ -1,0 +1,70 @@
+import type { PromptModule, Section } from '@infra/ai/prompts/types';
+
+import type { FactVerifierOperation } from './v1';
+
+export interface FactVerifierV2Context {
+  /** compact's renderTranscript of the removed episode — the same transcript the summariser saw (D3). */
+  transcript: string;
+  /** The candidate operations, numbered. */
+  operations: FactVerifierOperation[];
+}
+
+/**
+ * Fact verifier v2 (load-plan plan Task 4, D9 — `LOAD_PLAN_BREAKS` only): v1 plus the `break` category rule.
+ * A break fact (break reason=<class> from=<date> to=<date> — <words>) is supported only when the user said
+ * that they paused training for that reason and over those dates; the reason class must be the one the user's
+ * words name, "unknown" only when the user gave no reason. Everything else is v1 verbatim.
+ */
+export const FACT_VERIFIER_V2: PromptModule<FactVerifierV2Context> = {
+  id: 'fact-verifier',
+  version: 'v2',
+  directives: [],
+  render({ transcript, operations }): Section[] {
+    const opLines = operations
+      .map(op => {
+        const bits = [`[${op.index}] ${op.op}`];
+        if (op.fact !== undefined) {
+          bits.push(`fact: "${op.fact}"`);
+        }
+        if (op.oldFactText !== undefined) {
+          bits.push(`replaces the known fact: "${op.oldFactText}"`);
+        }
+        if (op.retractedFactText !== undefined) {
+          bits.push(`fact being retracted: "${op.retractedFactText}"`);
+        }
+        if (op.reason !== undefined) {
+          bits.push(`reason: "${op.reason}"`);
+        }
+        if (op.phaseNote !== undefined) {
+          bits.push(`phase note: "${op.phaseNote}"`);
+        }
+        if (op.evidence !== undefined) {
+          bits.push(`summariser’s evidence hint: «${op.evidence}»`);
+        }
+        return bits.join(' — ');
+      })
+      .join('\n');
+
+    return [
+      {
+        id: 'system',
+        required: true,
+        text: `You are the fact-verification layer of a fitness-coaching chat. You get the transcript of one ended conversation episode (User / Assistant / tool lines labelled) and numbered candidate fact operations the episode summariser extracted. For EACH operation decide one thing: did the USER state it, or explicitly confirm it?
+
+The rule:
+- An operation is supported ONLY if the user stated it themselves, or explicitly confirmed it — a direct "да" to the assistant’s question about exactly that thing counts. Anything only the assistant said, estimated, explained or suggested is UNSUPPORTED — even if the user asked about it, seemed interested, or thanked for it.
+- Every number or amount in the fact text or the phase note (weights, reps, percentages, days) must match what the user actually said — digits or words, any language, same meaning: «пять дней» = "5 days", «неделю» = "a week" / "7 days". A figure the user never gave makes the operation unsupported.
+- A "break" fact (text: break reason=<class> from=<YYYY-MM-DD> to=<YYYY-MM-DD> — <words>) is supported only if the USER said they stopped training and why: the reason class must be the one their words name (illness, injury, holiday_work_no_time, deliberate_deload, stress_poor_sleep), and "unknown" only when the user gave no reason. The dates must follow from what the user said (a period, "three weeks", "since August"); a date the user neither gave nor implied makes the operation unsupported. An update of a break placeholder with reason=unknown is supported when the user answers the coach's question about the pause.
+- The user speaks any language; the fact text is in English. Judge by meaning, never by string matching.
+- The summariser’s evidence hint is a suggestion, not proof: it may be wrong, paraphrased, or quote the Assistant. Verify against the transcript’s User lines yourself.
+
+Return ONLY the structured output: verdicts, exactly one per operation, each { index, supported, reason, userQuote }. index = the operation’s [n] number, verbatim. reason = one short English sentence naming what in the transcript (or its absence) decided it. userQuote = the user’s own words from the transcript that support the operation — a short exact quote from one User line, in the original language, never translated, never the assistant’s words; empty when unsupported.`,
+      },
+      {
+        id: 'user',
+        required: true,
+        text: `EPISODE TRANSCRIPT:\n${transcript}\n\nOPERATIONS TO VERIFY:\n${opLines}\n\nVerdicts:`,
+      },
+    ];
+  },
+};

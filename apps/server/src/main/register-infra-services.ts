@@ -110,6 +110,7 @@ export async function registerInfraServices(container: Container = getGlobalCont
 
   const { buildConversationGraph, CONVERSATION_GRAPH_TOKEN } = await import('@infra/ai/graph/conversation.graph');
   const { buildConversationRunner } = await import('@infra/ai/graph/conversation-run.adapter');
+  const { BreakContext } = await import('@infra/ai/load-facts/break-context');
   const { CONVERSATION_RUN_SERVICE_TOKEN, CONVERSATION_RUN_PORT_TOKEN } = await import('@domain/conversation/ports');
   const { DrizzleConversationRunService } = await import('@infra/conversation/drizzle-conversation-run.service');
   container.register(CONVERSATION_RUN_SERVICE_TOKEN, new DrizzleConversationRunService());
@@ -152,6 +153,12 @@ export async function registerInfraServices(container: Container = getGlobalCont
     courseCheckEnabled: config.COURSE_CHECK_ENABLED,
     // load-plan plan A5: LOAD PLAN v2 (suggestion) on/off, resolved once here.
     loadPlanSuggestion: config.LOAD_PLAN_SUGGESTION,
+    loadPlanBreaks: config.LOAD_PLAN_BREAKS,
+    // load-plan Task 4: the training-break context behind the time-gap note (read only with the flag on).
+    breakContext: new BreakContext({
+      workoutSessionRepo: container.get(WORKOUT_SESSION_REPOSITORY_TOKEN),
+      userFacts: container.get(USER_FACTS_SERVICE_TOKEN),
+    }),
     courseCheckRetryCooldownMs: config.COURSE_CHECK_RETRY_COOLDOWN_MINUTES * 60_000,
     courseCheckExpiryAskWindowMs: config.COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS * 86_400_000,
     // transition-handoff plan Task 1 (D-1): empty set = off, resolved once here.

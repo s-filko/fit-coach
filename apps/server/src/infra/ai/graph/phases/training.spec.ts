@@ -108,6 +108,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
       workoutSessionRepo,
       userFacts: deps.userFacts,
       suggestion: deps.loadPlanSuggestion === true,
+      breaks: deps.loadPlanBreaks === true,
     }),
     buildLogSetTool({ trainingService }),
     buildCompleteCurrentExerciseTool({ trainingService }),
@@ -238,6 +239,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
             planTargetReps: planTargetRepsOf(session),
             now: input.now ?? new Date(),
             timezone: input.user?.timezone ?? null,
+            breaks: deps.loadPlanBreaks === true,
           },
         );
       } catch (err) {

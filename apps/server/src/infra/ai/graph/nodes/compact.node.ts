@@ -47,6 +47,7 @@ import {
 } from '@domain/conversation/episode';
 import type { ConversationPhase } from '@domain/conversation/phases';
 import type { LegacySummary, SummaryPort } from '@domain/conversation/ports';
+import { calendarDate, parseBreakFact } from '@domain/training/load-plan';
 import type { IUserFactsService } from '@domain/user/ports';
 import { PermanentFactRefusal } from '@domain/user/services/fact-lifecycle';
 
@@ -55,7 +56,7 @@ import { estimateMessages } from '@infra/ai/context/token-estimator';
 import { splitEpisode } from '@infra/ai/graph/episode';
 import { type ConversationStateType, ctxOf } from '@infra/ai/graph/state';
 import { episodeParagraph } from '@infra/ai/prompts/blocks';
-import { SUMMARIZER_PROMPT } from '@infra/ai/prompts/summarizer';
+import { SUMMARIZER_PROMPT, SUMMARIZER_V7 } from '@infra/ai/prompts/summarizer';
 
 import { createLogger } from '@shared/logger';
 
@@ -63,6 +64,9 @@ import { decideCompactReason, planCompaction, renderTranscript } from './compact
 import { type FactVerdictMap, verifyFactOperations } from './verify-fact-operations';
 
 const log = createLogger('compact-node');
+
+/** The `break` fact's lifetime: the short-class cap (14 d) — about the length of the return ladder. */
+const BREAK_TTL_DAYS = 14;
 
 /** The D-L tunables, resolved once at the composition root (never read mid-run). */
 export interface EpisodeTunables {
@@ -102,6 +106,8 @@ export interface CompactStepDeps {
   config: EpisodeTunables;
   /** PhaseSpec.budget.history (D-D) — the BR-LLM-003 trigger input. */
   budgetFor: (phase: ConversationPhase) => number;
+  /** LOAD_PLAN_BREAKS (load-plan Task 4): summariser v7 + verifier v2 (the `break` category). Absent = off. */
+  loadPlanBreaks?: boolean;
 }
 
 export type CompactStep = (
@@ -274,11 +280,19 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
     // D3: the verifier must see the SAME transcript the summariser saw.
     const transcript = renderTranscript(removed);
     try {
-      const sections = SUMMARIZER_PROMPT.render({
-        phase: state.phase,
-        transcript,
-        knownFacts,
-      });
+      // load-plan Task 4: v7 (adds the `break` category) only with LOAD_PLAN_BREAKS on; off = v6 exactly.
+      const sections =
+        deps.loadPlanBreaks === true
+          ? SUMMARIZER_V7.render({
+              phase: state.phase,
+              transcript,
+              knownFacts,
+              episodeDate: calendarDate(
+                state.lastUserMessageAt ? new Date(state.lastUserMessageAt) : ctx.now,
+                ctx.user?.timezone ?? null,
+              ),
+            })
+          : SUMMARIZER_PROMPT.render({ phase: state.phase, transcript, knownFacts });
       const messages: ChatMsg[] = sections.map(s => ({
         role: s.id === 'system' ? 'system' : 'user',
         content: s.text,
@@ -360,6 +374,7 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
             knownFacts,
             runId,
             userId,
+            breaks: deps.loadPlanBreaks === true,
           });
         }
         let mutatingIndex = -1; // the verifier numbers the mutating ops 0..n-1, in this order
@@ -419,6 +434,24 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
 }
 
 /**
+ * load-plan D9: a `break` operation is stored only when its text is a well-formed break fact (known reason
+ * class, valid dates) — the code reads the reason back from it. Its lifetime is forced to the class rule:
+ * short, expiring with the return ladder (≈ the 14-day short cap), forgotten silently.
+ */
+function breakOperationValid(op: FactOperation): boolean {
+  if (op.category !== 'break') {
+    return true;
+  }
+  if (op.fact === undefined || parseBreakFact(op.fact) === null) {
+    return false;
+  }
+  op.durability = 'short';
+  op.ttlDays = BREAK_TTL_DAYS;
+  op.onExpiry = 'forget';
+  return true;
+}
+
+/**
  * Applies ONE summariser fact operation (AC-FL-4). Malformed operations (a
  * missing factId, or an add without category/fact/durability) are skipped
  * silently — the schema verifies UUID FORMAT only, so a well-formed invented id
@@ -438,6 +471,9 @@ async function applyFactOperation(
   switch (op.op) {
     case 'add': {
       if (op.category === undefined || op.fact === undefined || op.durability === undefined) {
+        return;
+      }
+      if (!breakOperationValid(op)) {
         return;
       }
       await rememberFromEpisode(
@@ -477,6 +513,9 @@ async function applyFactOperation(
         op.fact === undefined ||
         op.durability === undefined
       ) {
+        return;
+      }
+      if (!breakOperationValid(op)) {
         return;
       }
       await supersedeFromEpisode(

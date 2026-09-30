@@ -1,3 +1,5 @@
+import { calendarDaysAgo } from '@shared/date-utils';
+
 import { type GapDays, isAbsent, type LoadFacts } from '../load-facts';
 
 /**
@@ -97,13 +99,17 @@ export interface LadderStep {
 }
 
 /**
- * The rung for the next workout. `workoutsSince` is the counter of real workouts since the gap; the
- * counter itself (and the `break` fact) arrive with Task 4 — until then callers pass 0 (first rung).
- * Null = not in a ladder (tier below `return`, or the ladder is finished).
+ * The rung for the next workout. `workoutsSince` is the counter of successful real workouts since the gap
+ * (`ladderStateOf`); 0 = the first rung. After a `restart` the first workout is the cold start, the ones
+ * after it follow the rebuild ladder. Null = not in a ladder (tier below `return`, or the ladder is finished).
  */
 export function returnLadderStep(tier: GapTier, workoutsSince = 0): LadderStep | null {
   if (tier === 'restart') {
-    return { tier, workout: workoutsSince + 1, of: 0, stepsBelow: 0, coldStart: true };
+    if (workoutsSince === 0) {
+      return { tier, workout: 1, of: 0, stepsBelow: 0, coldStart: true };
+    }
+    const after = returnLadderStep('rebuild', workoutsSince - 1);
+    return after && { ...after, tier };
   }
   if (tier !== 'return' && tier !== 'rebuild') {
     return null;
@@ -119,4 +125,47 @@ export function returnLadderStep(tier: GapTier, workoutsSince = 0): LadderStep |
     stepsBelow: Math.max(0, startStepsBelow - workoutsSince),
     coldStart: false,
   };
+}
+
+/** One real performance of the exercise, with whether it counts as a rung (`performanceSuccess`). */
+export interface LadderPerformance {
+  performedAt: Date;
+  success: boolean;
+}
+
+/** Where the user stands in the ladder opened by the newest gap in the history. */
+export interface LadderState {
+  /** The tier of that gap. */
+  tier: 'return' | 'rebuild' | 'restart';
+  gapDays: number;
+  /** The last performance before the gap, and the first one after it. */
+  gapStart: Date;
+  gapEnd: Date;
+  /** Successful workouts since the gap — the rungs done; a miss does not advance it. */
+  workoutsSince: number;
+  /** All performances since the gap, successful or not. */
+  performancesSince: number;
+}
+
+/**
+ * The counter of real workouts since the newest gap (≥ the `return` threshold between two consecutive
+ * performances). Null when the history holds no such gap. The open gap up to now is `gapTierFacts`' business.
+ */
+export function ladderStateOf(performances: LadderPerformance[], tz: string | null): LadderState | null {
+  const desc = [...performances].sort((a, b) => b.performedAt.getTime() - a.performedAt.getTime());
+  for (let i = 0; i + 1 < desc.length; i++) {
+    const gapDays = calendarDaysAgo(desc[i + 1].performedAt, desc[i].performedAt, tz);
+    if (gapDays >= GAP_TIER_PARAMS.returnFromDays.value) {
+      const since = desc.slice(0, i + 1);
+      return {
+        tier: gapTierOf(gapDays) as LadderState['tier'],
+        gapDays,
+        gapStart: desc[i + 1].performedAt,
+        gapEnd: desc[i].performedAt,
+        workoutsSince: since.filter(p => p.success).length,
+        performancesSince: since.length,
+      };
+    }
+  }
+  return null;
 }

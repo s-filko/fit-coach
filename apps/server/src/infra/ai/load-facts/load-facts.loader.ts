@@ -15,6 +15,15 @@ import {
   type TodayInput,
   type WorkoutSummaryInput,
 } from '@domain/training/load-facts';
+import {
+  type BreakReason,
+  breakReasonOf,
+  calendarDate,
+  GAP_TIER_PARAMS,
+  ladderPerformancesOf,
+  type LadderState,
+  ladderStateOf,
+} from '@domain/training/load-plan';
 import type { IExerciseRepository, ITrainingService, IWorkoutSessionRepository } from '@domain/training/ports';
 import type {
   ExerciseWithMuscles,
@@ -31,9 +40,18 @@ export const LOAD_FACTS_RECENT_WORKOUTS = 60;
 /** A uuid-typed exclusion needs a real uuid; used only when there is no active session at all. */
 const NO_SESSION_ID = '00000000-0000-0000-0000-000000000000';
 
+/** Task 4 (AC-LP-6): the return-ladder inputs of one entry — present only with `LOAD_PLAN_BREAKS` on. */
+export interface ReturnBranch {
+  /** The ladder the newest past gap opened (workouts since it); null when the history holds no gap. */
+  ladder: LadderState | null;
+  /** The reason of the break fact covering the gap; `unknown` when none does (most conservative branch). */
+  breakReason: BreakReason;
+}
+
 export interface LoadPlanEntry {
   exercise: ExerciseInput;
   facts: LoadFacts;
+  returnBranch?: ReturnBranch;
 }
 
 export interface LoadFactsLoaderDeps {
@@ -56,6 +74,8 @@ export interface LoadFactsParams {
   planTargetReps: Map<string, string>;
   now: Date;
   timezone: string | null;
+  /** LOAD_PLAN_BREAKS: also compute the return ladder and the break reason (Task 4). Default off. */
+  breaks?: boolean;
 }
 
 function toExerciseInput(e: ExerciseWithMuscles): ExerciseInput {
@@ -177,7 +197,11 @@ async function loadSessions(
 async function loadFactsContext(
   deps: LoadFactsLoaderDeps,
   params: LoadFactsParams,
-): Promise<{ constraints: ConstraintInput[]; equipmentFacts: string[] }> {
+): Promise<{
+  constraints: ConstraintInput[];
+  equipmentFacts: string[];
+  breakFacts: { fact: string; createdAt: Date }[];
+}> {
   const [constraintFacts, promptFacts] = await Promise.all([
     deps.userFacts.getConstraints(params.userId, params.now),
     deps.userFacts.getForPrompt(params.userId, params.now),
@@ -189,7 +213,38 @@ async function loadFactsContext(
       text: f.fact,
     })),
     equipmentFacts: promptFacts.filter(f => f.category === 'equipment').map(f => f.fact),
+    breakFacts: promptFacts.filter(f => f.category === 'break').map(f => ({ fact: f.fact, createdAt: f.createdAt })),
   };
+}
+
+function daysOf(g: LoadFacts['gap']['exercise']): number | null {
+  return 'absent' in g ? null : g.days;
+}
+
+/**
+ * Task 4: the ladder the newest past gap opened, and the reason of the break fact covering the gap the coach is
+ * looking at — the open gap (exercise last done `gapDays` ago) when there is one, else the ladder's own gap.
+ */
+function returnBranchOf(
+  performances: PerformanceInput[],
+  todayId: string,
+  breakFacts: { fact: string; createdAt: Date }[],
+  facts: LoadFacts,
+  params: LoadFactsParams,
+): ReturnBranch {
+  const ladder = ladderStateOf(ladderPerformancesOf(performances, todayId), params.timezone);
+  const openGapDays = daysOf(facts.gap.exercise) ?? daysOf(facts.gap.primaryMuscles) ?? daysOf(facts.gap.anyWorkout);
+  const last = performances
+    .filter(p => p.sessionId !== todayId)
+    .reduce<Date | null>((best, p) => (!best || p.performedAt > best ? p.performedAt : best), null);
+  let window: { from: string; to: string } | null = null;
+  if (openGapDays !== null && last && openGapDays > GAP_TIER_PARAMS.restWithQuestionAboveDays.value) {
+    window = { from: calendarDate(last, params.timezone), to: calendarDate(params.now, params.timezone) };
+  } else if (ladder) {
+    window = { from: calendarDate(ladder.gapStart, params.timezone), to: calendarDate(ladder.gapEnd, params.timezone) };
+  }
+  const reason = window ? breakReasonOf(breakFacts, window) : null;
+  return { ladder, breakReason: reason ?? 'unknown' };
 }
 
 /** One `LoadPlanEntry` per requested exercise (unknown ids are left out), computed for `now`. */
@@ -221,15 +276,20 @@ export async function loadLoadPlanEntries(
       continue;
     }
     const performances = sessions.flatMap(s => toPerformances(s, id));
+    const { breakFacts, ...context } = factsCtx;
     const facts = computeLoadFacts(
       exercise,
       performances,
       buildToday(params, id),
-      { ...factsCtx, workouts, allTimePerformances: counts.get(id) ?? 0 },
+      { ...context, workouts, allTimePerformances: counts.get(id) ?? 0 },
       params.now,
       params.timezone,
     );
-    entries.push({ exercise, facts });
+    entries.push({
+      exercise,
+      facts,
+      ...(params.breaks ? { returnBranch: returnBranchOf(performances, todayId, breakFacts, facts, params) } : {}),
+    });
   }
   return entries;
 }

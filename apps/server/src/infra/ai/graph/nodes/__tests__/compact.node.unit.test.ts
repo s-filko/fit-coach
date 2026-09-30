@@ -1556,3 +1556,101 @@ describe('buildCompactStep — manual pass (/compact)', () => {
     expect(rememberFact).not.toHaveBeenCalled();
   });
 });
+
+describe('buildCompactStep — break facts (load-plan Task 4, D9, LOAD_PLAN_BREAKS)', () => {
+  const BREAK_TEXT = 'break reason=illness from=2026-08-28 to=2026-09-18 — I had the flu';
+  const summaryWith = (op: Record<string, unknown>) => () =>
+    Promise.resolve({ ...FIXED_SUMMARY, factOperations: [op] } as unknown as EpisodeSummaryV4);
+  const breakAdd = (fact: string, extra: Record<string, unknown> = {}) => ({
+    op: 'add',
+    category: 'break',
+    fact,
+    durability: 'long_term',
+    evidence: 'Что делаем сегодня?',
+    ...extra,
+  });
+  const promptsOf = (structured: jest.Mock): string[] =>
+    (structured.mock.calls as unknown as [unknown, { role: string; content: string }[]][]).map(c =>
+      c[1].map(m => m.content).join('\n'),
+    );
+
+  it('flag on: a well-formed break add is stored, its lifetime forced to short / 14 days / forget', async () => {
+    const { deps, rememberFact } = makeDeps({ structured: summaryWith(breakAdd(BREAK_TEXT)) });
+    const compact = buildCompactStep({ ...deps, loadPlanBreaks: true });
+
+    await compact(channelState(), ctxConfig());
+
+    expect(rememberFact).toHaveBeenCalledTimes(1);
+    expect(rememberFact).toHaveBeenCalledWith(
+      USER_ID,
+      expect.objectContaining({
+        category: 'break',
+        fact: BREAK_TEXT,
+        durability: 'short',
+        ttlDays: 14,
+        onExpiry: 'forget',
+      }),
+      NOW,
+      'summary-turn-1',
+    );
+  });
+
+  it('a malformed break add (unknown reason class, bad dates, free text) is skipped — nothing stored', async () => {
+    for (const fact of [
+      'break reason=vacation from=2026-08-28 to=2026-09-18 — trip',
+      'break reason=illness from=last-week to=2026-09-18',
+      'I was ill for three weeks',
+    ]) {
+      const { deps, rememberFact } = makeDeps({ structured: summaryWith(breakAdd(fact)) });
+      await buildCompactStep({ ...deps, loadPlanBreaks: true })(channelState(), ctxConfig());
+      expect(rememberFact).not.toHaveBeenCalled();
+    }
+  });
+
+  it('an update of the asked-marker placeholder supersedes it with the real reason', async () => {
+    const { deps, supersedeFact } = makeDeps({
+      structured: summaryWith({
+        op: 'update',
+        factId: '5b0f8a3e-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        category: 'break',
+        fact: BREAK_TEXT,
+        durability: 'short',
+        evidence: 'Что делаем сегодня?',
+      }),
+    });
+    await buildCompactStep({ ...deps, loadPlanBreaks: true })(channelState(), ctxConfig());
+    expect(supersedeFact).toHaveBeenCalledWith(
+      USER_ID,
+      expect.objectContaining({ category: 'break', fact: BREAK_TEXT, durability: 'short', ttlDays: 14 }),
+      expect.any(Date),
+      NOW,
+      'summary-turn-1',
+    );
+  });
+
+  it('flag on: summariser v7 (with the BREAK FACTS section and the episode date) and verifier v2 run', async () => {
+    const { deps, structured } = makeDeps({ structured: summaryWith(breakAdd(BREAK_TEXT)) });
+    await buildCompactStep({ ...deps, loadPlanBreaks: true })(channelState(), ctxConfig());
+    const [summariser, verifier] = promptsOf(structured);
+    expect(summariser).toContain('BREAK FACTS');
+    expect(summariser).toContain('the episode date is 2026-09-18');
+    expect(verifier).toContain('A "break" fact');
+  });
+
+  it('flag off: summariser v6 and verifier v1 exactly — no break section anywhere', async () => {
+    const { deps, structured } = makeDeps({
+      structured: summaryWith({
+        op: 'add',
+        category: 'physical_constraint',
+        fact: 'Broken wrist',
+        durability: 'long_term',
+        reviewInDays: 60,
+        evidence: 'Что делаем сегодня?',
+      }),
+    });
+    await buildCompactStep(deps)(channelState(), ctxConfig());
+    const [summariser, verifier] = promptsOf(structured);
+    expect(summariser).not.toContain('BREAK FACTS');
+    expect(verifier).not.toContain('"break" fact');
+  });
+});

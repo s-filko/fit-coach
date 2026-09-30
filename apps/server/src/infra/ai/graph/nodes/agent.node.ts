@@ -19,7 +19,7 @@ import type { ConversationGraphDeps, PhaseSpec, PromptContextFor } from '@infra/
 import { ctxOf } from '@infra/ai/graph/state';
 import { langOf, t } from '@infra/ai/messages';
 import { getModel } from '@infra/ai/model.factory';
-import { CURRENT_TIME_V1, POST_TOOL_NUDGE_V1, renderBlock, TIME_GAP_V1 } from '@infra/ai/prompts/blocks';
+import { CURRENT_TIME_V1, POST_TOOL_NUDGE_V1, renderBlock, TIME_GAP_V1, TIME_GAP_V2 } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
 import { extractUsageFromMessage, stripRawResponse } from '@infra/ai/usage';
 
@@ -160,11 +160,27 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     // holds the previous run's time here; commit.node stamps the new one
     // after the run, and compaction never clears it.
     const gapMs = lastMessageTime !== null ? now.getTime() - lastMessageTime.getTime() : null;
-    const gapNote = gapMs !== null && gapMs >= deps.episodeConfig.gapMs ? renderBlock(TIME_GAP_V1, { gapMs }) : null;
+    const messageGapMs = gapMs !== null && gapMs >= deps.episodeConfig.gapMs ? gapMs : null;
+    let gapNote: string | null = null;
+    let gapModule: typeof TIME_GAP_V1 | typeof TIME_GAP_V2 = TIME_GAP_V1;
+    if (deps.loadPlanBreaks === true) {
+      // load-plan Task 4 (D9): the same note also carries the training-break tier and, once per break, the
+      // reason question — one "long time no see" mechanism. Off = v1 exactly.
+      if (ctx.trainingBreak === undefined) {
+        ctx.trainingBreak = (await deps.breakContext?.resolve(userId, now, user?.timezone ?? null)) ?? null;
+      }
+      const training = ctx.trainingBreak ?? undefined;
+      if (messageGapMs !== null || training?.ask) {
+        gapModule = TIME_GAP_V2;
+        gapNote = renderBlock(TIME_GAP_V2, { gapMs: messageGapMs, training });
+      }
+    } else if (messageGapMs !== null) {
+      gapNote = renderBlock(TIME_GAP_V1, { gapMs: messageGapMs });
+    }
     if (gapNote !== null) {
       // Review R1 (BR-LLM-008): the note reached the request, so the run row
       // must stamp it — `commit` merges these into the row's promptVersions.
-      ctx.promptVersionExtras = { [TIME_GAP_V1.id]: TIME_GAP_V1.version };
+      ctx.promptVersionExtras = { [gapModule.id]: gapModule.version };
     }
     // The shared render context (review R2: built once) — the NOW line and the
     // phase prompt render from the same `now`/`timezone`/`user` (BR-LLM-007:

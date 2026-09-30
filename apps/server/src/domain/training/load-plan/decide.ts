@@ -1,6 +1,7 @@
 import { isAbsent, type LoadFacts } from '../load-facts';
 
-import { gapTierFacts, type GapTierInfo, type LadderStep, returnLadderStep } from './gap-tier';
+import type { BreakReason } from './break-fact';
+import { gapTierFacts, type GapTierInfo, type LadderState, type LadderStep, returnLadderStep } from './gap-tier';
 import type { Confidence, ProgressionScheme, Recommendation, SchemeGoal, SchemeOutput, SchemeParams } from './schemes';
 import {
   confidenceOf,
@@ -58,8 +59,12 @@ export interface DecideInput {
   goal: SchemeGoal;
   /** Defaults to `scheme.defaultParams(goal)`. */
   params?: SchemeParams;
-  /** Real workouts since the gap (Task 4's counter); default 0 = first rung. */
+  /** Successful workouts since the CURRENT gap; default 0 = first rung. */
   ladderWorkoutsSince?: number;
+  /** The ladder opened by the newest gap in the history (`ladderStateOf`) — advances while the gap is closed. */
+  ladder?: LadderState | null;
+  /** The reason of the break fact covering the gap (design §5 branch table); null/absent = no fact. */
+  breakReason?: BreakReason | null;
 }
 
 export interface Decision extends SchemeOutput {
@@ -112,6 +117,9 @@ interface Ctx {
   missing: string[];
   gap: GapTierInfo;
   ladder: LadderStep | null;
+  /** The gap the ladder belongs to, as printed: "20 d since exercise" / "30 d gap before the last workout". */
+  ladderBasis: string;
+  breakReason: BreakReason | null;
   scheme: ProgressionScheme;
 }
 
@@ -153,13 +161,28 @@ function finish(
   };
 }
 
+/**
+ * Design §5 branch table: the reason selects the return branch, the tier its depth. No reason given (null:
+ * breaks off, or no break fact considered) = the tier's standard ladder; `unknown` = one step lower.
+ */
+function reasonBranch(reason: BreakReason | null): { extraSteps: number; note: string | null } {
+  switch (reason) {
+    case 'unknown':
+      return { extraSteps: 1, note: 'reason unknown — one step lower' };
+    case 'illness':
+      return { extraSteps: 1, note: 'illness — one step lower, well-being check before the first workout' };
+    case 'stress_poor_sleep':
+      return { extraSteps: 0, note: 'stress / poor sleep — caution for the first week' };
+    default:
+      return { extraSteps: 0, note: null };
+  }
+}
+
 function gapRow(c: Ctx): Decision | null {
-  const { tier } = c.gap;
-  const days = c.gap.days ?? 0;
   if (c.ladder === null) {
     return null;
   }
-  const basis = `${days} d since ${c.gap.basis ?? 'last workout'}`;
+  const basis = c.ladderBasis;
   if (c.ladder.coldStart) {
     return finish(c, 'A', 'gap_restart', {
       candidate: null,
@@ -168,14 +191,17 @@ function gapRow(c: Ctx): Decision | null {
       confidence: 'low',
     });
   }
+  const { tier } = c.ladder;
   const row: DecisionRow = tier === 'rebuild' ? 'gap_rebuild' : 'gap_return';
-  const candidate = loadBelow(c, c.base, c.ladder.stepsBelow);
+  const branch = reasonBranch(c.breakReason);
+  const candidate = loadBelow(c, c.base, c.ladder.stepsBelow + branch.extraSteps);
   const base = confidenceOf(c.facts, c.missing);
+  const reason = `${tier} tier (${basis}; general norm), return workout ${c.ladder.workout} of ${c.ladder.of}`;
   return finish(c, 'A', row, {
     candidate,
     conservative: loadBelow(c, candidate, 1),
-    reason: `${tier} tier (${basis}; general norm), return workout ${c.ladder.workout} of ${c.ladder.of}`,
-    confidence: tier === 'rebuild' ? 'low' : oneLevelDown(base),
+    reason: branch.note ? `${reason}; ${branch.note}` : reason,
+    confidence: tier === 'rebuild' || tier === 'restart' ? 'low' : oneLevelDown(base),
   });
 }
 
@@ -240,9 +266,20 @@ export function decide(facts: LoadFacts, input: DecideInput): Decision {
     reps,
     missing: [],
     gap,
-    ladder: returnLadderStep(gap.tier, input.ladderWorkoutsSince ?? 0),
+    ladder: null,
+    ladderBasis: '',
+    breakReason: input.breakReason ?? null,
     scheme,
   };
+  // The current gap wins; else the ladder the newest past gap opened, while it still has rungs.
+  const current = returnLadderStep(gap.tier, input.ladderWorkoutsSince ?? 0);
+  if (current) {
+    ctx.ladder = current;
+    ctx.ladderBasis = `${gap.days ?? 0} d since ${gap.basis ?? 'last workout'}`;
+  } else if (input.ladder) {
+    ctx.ladder = returnLadderStep(input.ladder.tier, input.ladder.workoutsSince);
+    ctx.ladderBasis = `${input.ladder.gapDays} d gap before the last workout`;
+  }
   if (ctx.step === null) {
     ctx.missing.push(EQUIPMENT_STEP);
   }

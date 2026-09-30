@@ -88,6 +88,8 @@ export function decideLoadPlanEntry(
   entry: LoadPlanEntry,
   opts: Pick<RenderLoadPlanV2Opts, 'progression' | 'ladderWorkoutsSince'>,
 ): Decision | null {
+  // Task 4 (LOAD_PLAN_BREAKS): the loader attached the ladder and the break reason to the entry.
+  const branch = entry.returnBranch;
   if (entry.exercise.exerciseType !== 'strength') {
     return null;
   }
@@ -97,7 +99,25 @@ export function decideLoadPlanEntry(
     goal: progression.goal,
     params: progression.scheme.defaultParams(progression.goal),
     ladderWorkoutsSince: opts.ladderWorkoutsSince,
+    ...(branch ? { ladder: branch.ladder, breakReason: branch.breakReason } : {}),
   });
+}
+
+/** Task 4: the tier and the ladder step, printed only with `LOAD_PLAN_BREAKS` on and a gap worth a line. */
+function breakLine(entry: LoadPlanEntry, d: Decision): string[] {
+  const branch = entry.returnBranch;
+  if (!branch || (d.ladder === null && d.gap.tier === 'rest')) {
+    return [];
+  }
+  const parts: string[] = [];
+  if (d.ladder) {
+    const step = d.ladder.coldStart ? 'cold start' : `return workout ${d.ladder.workout} of ${d.ladder.of}`;
+    parts.push(`tier ${d.ladder.tier} (general norm)`, step);
+  } else {
+    parts.push(`tier ${d.gap.tier} (${d.gap.days} d since ${d.gap.basis}, general norm)`);
+  }
+  parts.push(`reason ${branch.breakReason}`);
+  return [`break: ${parts.join(' · ')}`];
 }
 
 function decisionLines(entry: LoadPlanEntry, d: Decision | null, opts: RenderLoadPlanV2Opts): string[] {
@@ -114,6 +134,7 @@ function decisionLines(entry: LoadPlanEntry, d: Decision | null, opts: RenderLoa
   return [
     schemeLine(d, progression, repsText(d.candidate.reps), confirmSessions),
     `tactic: ${d.tactic}`,
+    ...breakLine(entry, d),
     `decision: Stage ${d.stage}, ${ROW_LABELS[d.row]} → ${d.outcome}`,
     `recommend: ${rec === null ? d.reason : `${rec} — ${d.reason}`}`,
     `conservative: ${cons === null ? d.reason : `${cons}${lower > 0 ? ` — ${lower} ${d.conservative.unit ?? DEFAULT_UNIT} lower` : ''}`}`,

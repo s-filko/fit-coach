@@ -17,6 +17,7 @@ import {
   DEFAULT_EXPIRY_ASK_WINDOW_MS,
   DEFAULT_RETRY_COOLDOWN_MS,
 } from '@infra/ai/course-check/course-check.step';
+import type { IBreakContext } from '@infra/ai/load-facts/break-context';
 
 import type { TokenBudgetOverride } from '@config/llm-budget-overrides';
 
@@ -61,6 +62,14 @@ export interface ConversationGraphDeps {
    * `training.load_plan` v2 and `get_load_plan` returns the v2 text. Optional; absent = off (the v1 behaviour).
    */
   loadPlanSuggestion?: boolean;
+  /**
+   * LOAD_PLAN_BREAKS (load-plan plan A5, Task 4), resolved once at the composition root: the break fact pipeline
+   * (summariser v7, verifier v2), the return ladder in LOAD PLAN and the one-time reason question in the time-gap
+   * note. Optional; absent = off (today's behaviour).
+   */
+  loadPlanBreaks?: boolean;
+  /** Task 4: the training-break context for the time-gap note; read only with `loadPlanBreaks` on. */
+  breakContext?: IBreakContext;
   /**
    * COURSE_CHECK_RETRY_COOLDOWN_MINUTES in ms — how long a failed check is not
    * retried on the same fingerprint. Optional like the switch; absent = 15 min.
@@ -123,7 +132,14 @@ function buildGraph(deps: ConversationGraphDeps) {
   // context-budget plan).
   const budgetFor = (phase: ConversationPhase): number =>
     specs.find(s => s.name === phase)?.budget.history ?? Number.POSITIVE_INFINITY;
-  const compactStep = buildCompactStep({ llmGateway, summaries, userFacts, config: episodeConfig, budgetFor });
+  const compactStep = buildCompactStep({
+    llmGateway,
+    summaries,
+    userFacts,
+    config: episodeConfig,
+    budgetFor,
+    loadPlanBreaks: deps.loadPlanBreaks,
+  });
   // AC-FL-5: the course-check step — same gap threshold as compaction and the
   // time-gap note (threaded from episodeConfig, never re-read from env).
   const courseCheckStep = buildCourseCheckStep({

@@ -31,6 +31,8 @@ export interface LoadRecommendationLogDeps {
   userFacts: LoadFactsLoaderDeps['userFacts'];
   /** For the D8 default scheme (profile level + goal); absent = the profile-less default. */
   userRepository?: Pick<UserRepository, 'getById'>;
+  /** LOAD_PLAN_BREAKS: the snapshot's decision also reads the return ladder and the break reason. */
+  breaks?: boolean;
 }
 
 export class LoadPlanSnapshotPort implements ILoadPlanSnapshotPort {
@@ -52,6 +54,7 @@ export class LoadPlanSnapshotPort implements ILoadPlanSnapshotPort {
         planTargetReps: planTargetRepsOf(input.session),
         now: input.now,
         timezone: input.timezone,
+        breaks: this.deps.breaks === true,
       },
     );
     if (!entry) {
@@ -136,10 +139,13 @@ export class LoadRecommendationLog implements ILoadRecommendationLog {
 /** A5: the log exists only with `LOAD_PLAN_SUGGESTION` on; undefined = pre-plan behaviour exactly. */
 export function buildLoadRecommendationLog(
   deps: LoadRecommendationLogDeps,
-  flags: { LOAD_PLAN_SUGGESTION: boolean },
+  flags: { LOAD_PLAN_SUGGESTION: boolean; LOAD_PLAN_BREAKS?: boolean },
 ): ILoadRecommendationLog | undefined {
   if (!flags.LOAD_PLAN_SUGGESTION) {
     return undefined;
   }
-  return new LoadRecommendationLog(new LoadPlanSnapshotPort(deps), new LoadRecommendationRepository());
+  return new LoadRecommendationLog(
+    new LoadPlanSnapshotPort({ ...deps, breaks: flags.LOAD_PLAN_BREAKS === true }),
+    new LoadRecommendationRepository(),
+  );
 }

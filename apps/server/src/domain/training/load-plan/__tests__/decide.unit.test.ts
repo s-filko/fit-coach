@@ -190,3 +190,79 @@ describe('Stage C — scheme', () => {
     expect(JSON.stringify(f)).toBe(snap);
   });
 });
+
+/**
+ * Task 4 (AC-LP-6, D5, D9): the ladder counter from history, the break reason selects the branch.
+ */
+describe('Task 4 — return ladder from history and the break reason', () => {
+  const GAP_DAYS = { return: 20, rebuild: 30, restart: 100 } as const;
+  const ladder = (workoutsSince: number, tier: 'return' | 'rebuild' | 'restart' = 'return') => ({
+    tier,
+    gapDays: GAP_DAYS[tier],
+    gapStart: new Date('2026-08-01T10:00:00Z'),
+    gapEnd: new Date('2026-08-25T10:00:00Z'),
+    workoutsSince,
+    performancesSince: workoutsSince,
+  });
+
+  it('after a gap, with the gap closed: workout 2 of 2 → back at the working weight, row stays gap_return', () => {
+    const d = run(makeFacts({ gap: gapOf(3) }), { ladder: ladder(1) });
+    expect(d).toMatchObject({ stage: 'A', row: 'gap_return' });
+    expect(d.ladder).toMatchObject({ workout: 2, of: 2, stepsBelow: 0 });
+    expect(d.candidate.load).toBe(65);
+  });
+
+  it('a finished ladder falls through to Stage C', () => {
+    const d = run(makeFacts({ gap: gapOf(3) }), { ladder: ladder(2) });
+    expect(d.stage).toBe('C');
+    expect(d.ladder).toBeNull();
+  });
+
+  it('a miss repeats the rung: no successful workout yet → still workout 1', () => {
+    const d = run(makeFacts({ gap: gapOf(3) }), { ladder: { ...ladder(0), performancesSince: 1 } });
+    expect(d.ladder).toMatchObject({ workout: 1, stepsBelow: 1 });
+    expect(d.candidate.load).toBe(60);
+  });
+
+  it('the current gap wins over an old ladder', () => {
+    const d = run(makeFacts({ gap: gapOf(40) }), { ladder: ladder(1) });
+    expect(d).toMatchObject({ row: 'gap_rebuild' });
+    expect(d.ladder).toMatchObject({ workout: 1, of: 3 });
+  });
+
+  it('restart: first workout cold start, the next one follows the rebuild ladder', () => {
+    expect(run(makeFacts({ gap: gapOf(3) }), { ladder: ladder(1, 'restart') }).candidate.load).toBe(55);
+  });
+
+  it('reason unknown → one step lower on the ladder', () => {
+    const d = run(makeFacts({ gap: gapOf(15) }), { breakReason: 'unknown' });
+    expect(d.candidate.load).toBe(55);
+    expect(d.reason).toContain('reason unknown');
+  });
+
+  it('illness → one step lower as well, with a well-being check printed', () => {
+    const d = run(makeFacts({ gap: gapOf(15) }), { breakReason: 'illness' });
+    expect(d.candidate.load).toBe(55);
+    expect(d.reason).toContain('illness');
+    expect(d.reason).toContain('well-being');
+  });
+
+  it.each(['holiday_work_no_time', 'deliberate_deload', 'injury'] as const)('%s → the standard ladder', reason => {
+    expect(run(makeFacts({ gap: gapOf(15) }), { breakReason: reason }).candidate.load).toBe(60);
+  });
+
+  it('stress / poor sleep → standard ladder plus a caution for the first week', () => {
+    const d = run(makeFacts({ gap: gapOf(15) }), { breakReason: 'stress_poor_sleep' });
+    expect(d.candidate.load).toBe(60);
+    expect(d.reason).toContain('caution');
+  });
+
+  it('deliberate deload at rest_with_question: no reduction, Stage C', () => {
+    const d = run(makeFacts({ gap: gapOf(10) }), { breakReason: 'deliberate_deload' });
+    expect(d.stage).toBe('C');
+  });
+
+  it('the reason never reaches a tier below the ladder (rest stays rest)', () => {
+    expect(run(makeFacts({ gap: gapOf(3) }), { breakReason: 'illness' }).stage).toBe('C');
+  });
+});

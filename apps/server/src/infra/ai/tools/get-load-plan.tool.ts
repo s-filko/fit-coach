@@ -27,6 +27,8 @@ export interface GetLoadPlanToolDeps {
   userFacts: IUserFactsService;
   /** LOAD_PLAN_SUGGESTION: return the v2 text (facts + a suggestion with its reason). Default off = v1. */
   suggestion?: boolean;
+  /** LOAD_PLAN_BREAKS: also compute the return ladder and the break reason. Default off. */
+  breaks?: boolean;
 }
 
 // load-plan plan A5: with LOAD_PLAN_SUGGESTION on the tool also returns the suggestion (O1: the model decides).
@@ -93,6 +95,7 @@ export function buildGetLoadPlanTool(deps: GetLoadPlanToolDeps) {
           planTargetReps: planTargetRepsOf(session),
           now: runCtx.now,
           timezone,
+          breaks: deps.breaks === true,
         },
       );
 

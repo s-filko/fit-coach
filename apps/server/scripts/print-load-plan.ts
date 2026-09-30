@@ -105,7 +105,7 @@ async function run(): Promise<void> {
         trainingService: { getSessionDetails: id => sessionRepo.findByIdWithDetails(id) },
         userFacts: new UserFactsRepository(),
       },
-      { userId, session: null, exerciseIds, planTargetReps: new Map(), now, timezone },
+      { userId, session: null, exerciseIds, planTargetReps: new Map(), now, timezone, breaks: true },
     );
 
     console.log(`\nLOAD PLAN report for ${userId} at ${now.toISOString()} (timezone: ${timezone ?? 'none'})`);

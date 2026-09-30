@@ -26,10 +26,27 @@ export type FactCategory =
   | 'coaching_preference'
   | 'schedule_constraint'
   | 'equipment'
-  | 'nutrition_preference';
+  | 'nutrition_preference'
+  // load-plan plan D9 (ADR-0009 amendment): a pause in training — dates, reason class, the user's words.
+  // Short, expiring at the end of the return ladder; written only by the summariser + verifier pipeline
+  // (and the code's own "asked" marker), never by `manage_fact`.
+  | 'break';
 
 /** `as const` tuple (not `readonly FactCategory[]`) so `z.enum(FACT_CATEGORIES)` infers the literal union. */
 export const FACT_CATEGORIES = [
+  'physical_constraint',
+  'exercise_preference',
+  'exercise_dislike',
+  'physiological_pattern',
+  'coaching_preference',
+  'schedule_constraint',
+  'equipment',
+  'nutrition_preference',
+  'break',
+] as const satisfies readonly FactCategory[];
+
+/** The categories the model may write in conversation (`manage_fact`): every one except `break`. */
+export const CONVERSATION_FACT_CATEGORIES = [
   'physical_constraint',
   'exercise_preference',
   'exercise_dislike',

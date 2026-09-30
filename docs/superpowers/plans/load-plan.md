@@ -199,6 +199,35 @@ in § "Before dispatch".
   n/a for <type>`. The log exists only with `LOAD_PLAN_SUGGESTION` on, so the v1-only snapshot path is gone (v1 remains
   the flag-off block/tool). The D8 default scheme reads the profile through an optional `userRepository` dep (wired in
   `register-infra-services.ts`); absent = the profile-less default. T3-1's "v1 entry" reads "v2 entry" from here on.
+- **(D) T4 — breaks (Task 4, `LOAD_PLAN_BREAKS`):** (a) **Carrier:** the `break` fact is a text fact in the existing
+  `user_facts` table (no schema change): `break reason=<class> from=<YYYY-MM-DD> to=<YYYY-MM-DD> — <user words>`;
+  `parseBreakFact` rejects an unknown class, bad or reversed dates, free text — such an operation is skipped at apply time.
+  (b) **Writers:** the summariser (v7) + verifier (v2) only — `manage_fact` takes `CONVERSATION_FACT_CATEGORIES` (every
+  category but `break`). The one code-written row is the "asked" marker below (reason `unknown`, no claim about the user).
+  (c) **Lifetime:** forced in code to `short`, `ttlDays 14` (the short-class cap), `onExpiry forget`; "expiring at the end of
+  the ladder" is approximated by that cap. (d) **One-time question:** `BreakContext.resolve` (per run, first model call; kept on
+  the run ctx so later calls of the run render the same note): last real workout > 7 d ago and no `break` fact of ANY status
+  (active, archived, expired-not-yet-archived) overlapping `[last workout day, today]` → `ask: true` and the marker
+  `break reason=unknown from=<last workout day> to=<today>` is stored first (the fact is the persisted "asked" state — it
+  survives restarts and expiry checks; a failed write means no question, never a question per message). No answer = the
+  marker stays `unknown` = the most conservative branch. The answer arrives at compaction as an `update` of the marker
+  (summariser v7 is told to); until then the reason stays `unknown` (one step lower) — known gap, conservative side.
+  (e) **Note:** `block.time_gap` v2 = v1 sentence for a message gap + `Training: training break of N days (tier X, general
+  norm)` + the ask sentence; rendered when there is a message gap or a question pending; every text starts with the v1
+  prefix (cache attribution). No new prompt version and no `training` v11 — the question rides in the note. (f) **Ladder
+  counter:** per exercise, from its real performances: the newest gap ≥ 14 d between consecutive performances opens the
+  ladder; `workoutsSince` counts the SUCCESSFUL performances since it (success = every working set ≥ the rep floor of
+  that performance's own `targetReps`, and any recorded RPE ≤ 8 (`RESERVE_RPE_MAX`, a convention, no sourced gate); missing
+  range/RPE is never a miss); a miss leaves the rung, a success advances it. The open (current) gap wins over an old
+  ladder; a closed gap keeps the ladder until its rungs are done. After `restart` the first workout is a cold start, the
+  next ones follow the rebuild ladder. (g) **Reason branch:** `unknown` and `illness` one step lower (illness adds a
+  well-being check line), `stress_poor_sleep` standard ladder + "caution for the first week", `holiday_work_no_time`,
+  `deliberate_deload`, `injury` standard ladder (an injury is the `physical_constraint` fact's job). Flag on: no covering fact
+  = `unknown`; flag off: no adjustment at all (Task 2 behaviour). (h) **Flag plumbing:** `ConversationGraphDeps.loadPlanBreaks`
+  → compact step (v7 + verifier v2 + the episode date), agent node (note v2 + `breakContext`), loader `breaks` param
+  (`returnBranch` on the entry: ladder + reason), tool, snapshot port, `print-load-plan` (always on). Independent of
+  `LOAD_PLAN_SUGGESTION`; the `break:` LOAD PLAN line needs both. (i) Summariser v7 / verifier v2 replace v6 / v1 only with the
+  flag on and are not in `STANDALONE_PROMPTS` (same module id as the current one; its ids must stay unique).
 
 ## Acceptance criteria
 

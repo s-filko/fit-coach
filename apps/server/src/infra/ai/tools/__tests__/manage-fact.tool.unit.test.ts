@@ -403,3 +403,23 @@ describe('manage_fact — resolving the target WITHOUT a factId (BUG-020)', () =
     expect(svc.listFacts).not.toHaveBeenCalled();
   });
 });
+
+describe('manage_fact and the break category (load-plan Task 4, D9)', () => {
+  it('the model cannot save a break fact: the category is not in the tool schema', () => {
+    const tool = buildManageFactTool({ userFactsService: {} as IUserFactsService }) as unknown as {
+      schema: { safeParse: (v: unknown) => { success: boolean } };
+    };
+    expect(
+      tool.schema.safeParse({ operation: 'save', category: 'break', fact: 'break reason=illness', durability: 'short' })
+        .success,
+    ).toBe(false);
+    expect(
+      tool.schema.safeParse({
+        operation: 'save',
+        category: 'equipment',
+        fact: 'home: dumbbells',
+        durability: 'long_term',
+      }).success,
+    ).toBe(true);
+  });
+});

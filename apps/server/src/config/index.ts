@@ -75,6 +75,13 @@ export const EnvSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform(v => v === 'true'),
+  // Load plan (load-plan plan A5, Task 4): `LOAD_PLAN_BREAKS` switches on the break handling — the `break` fact
+  // (summariser v7 / verifier v2), the return ladder counter, the one-time reason question in the time-gap note.
+  // Off = exactly the pre-plan behaviour.
+  LOAD_PLAN_BREAKS: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform(v => v === 'true'),
   // How long a FAILED course check is not re-attempted on the same inputs
   // (minutes) — a provider outage must make the layer quieter, not cost one
   // failed call per turn. New inputs are never covered by it.

@@ -22,7 +22,7 @@ import type { ChatMsg } from '@domain/ai/types';
 import type { FactOperation } from '@domain/conversation/episode';
 import type { UserFact } from '@domain/user/ports';
 
-import { FACT_VERIFIER_V1, type FactVerifierOperation } from '@infra/ai/prompts/fact-verifier';
+import { FACT_VERIFIER_V1, FACT_VERIFIER_V2, type FactVerifierOperation } from '@infra/ai/prompts/fact-verifier';
 
 import { createLogger } from '@shared/logger';
 
@@ -68,6 +68,8 @@ export interface VerifyFactOperationsParams {
   knownFacts: UserFact[];
   runId: string;
   userId: string;
+  /** LOAD_PLAN_BREAKS: verify with v2 (adds the `break` category rule) instead of v1. */
+  breaks?: boolean;
 }
 
 /**
@@ -90,7 +92,8 @@ export async function verifyFactOperations(params: VerifyFactOperationsParams): 
     evidence: op.evidence,
   }));
 
-  const sections = FACT_VERIFIER_V1.render({ transcript, operations: verifierOps });
+  const verifier = params.breaks === true ? FACT_VERIFIER_V2 : FACT_VERIFIER_V1;
+  const sections = verifier.render({ transcript, operations: verifierOps });
   const messages: ChatMsg[] = sections.map(s => ({
     role: s.id === 'system' ? 'system' : 'user',
     content: s.text,
