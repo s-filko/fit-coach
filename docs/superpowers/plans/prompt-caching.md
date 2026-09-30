@@ -121,6 +121,9 @@ From `llm_calls.prompt_hashes` / `cache_diverged_at`:
   6. **Static guard** stays the tests: AC-PC-1/2 fail in CI when a change puts a volatile thing into the prefix,
      before it ever reaches a model.
 
+- **D9** (2026-09-30, orchestrator) T4 ran on Sonnet, not GLM: T2 found LangChain drops the raw usage, so T4 grew a
+  raw-response capture; the Sonnet worker already held the T2/T3 context. Same worker terminal for T2–T5b.
+
 ## Durable spec impact — escalate before merge
 
 - ADR-0013 §3.4 message order: block 3, gap note and `NOW` leave the system message list and ride in the
