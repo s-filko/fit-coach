@@ -2267,7 +2267,7 @@ provider's usage of the previous call; count tool schemas in the budget; re-chec
 
 ## BUG-051 — One workout costs ≈ $3.6 on the Sonnet 5.5 route: nothing is cached, every tool run sends the full prompt twice, all 13 tools every call
 
-**Status:** Open
+**Status:** Open — plan `prompt-caching` (planned 2026-09-30)
 **Severity:** High — $3.63 of $10 OpenRouter credits for one session (owner, 2026-09-29: 6.37 left); ≈1.7 more
 workouts before the dev credits run out
 **Found during:** owner's live dev session 2026-09-29, 64 calls 05:39–11:33 UTC
@@ -2301,3 +2301,9 @@ tokens) by chars: tool schemas 27 %, training system prompt 21 %, history — co
 In order of expected saving: `cache_control` + stable-first prompt order; fix BUG-050; a smaller training tool set
 and shorter schemas; then consider the post-tool call. Estimate after the first three: ≈ $1–1.5 per workout
 (unmeasured).
+
+**Plan `prompt-caching` (2026-09-30, owner go).** Live probe on the dev key (13 calls): caching works on the
+route only with explicit `cache_control` breakpoints; OpenRouter hoists every SystemMessage into the one system
+prompt, so any per-turn SystemMessage (domain block, `NOW`, gap note, post-tool nudge) misses the whole cache; a
+hit refreshes the 5 min TTL; 1 h TTL available (write 2×). Dev session 2026-09-29: the domain block changed in
+43 of 44 calls, the tool set twice. Details and the fix: `docs/superpowers/plans/prompt-caching.md`.
