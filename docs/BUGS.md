@@ -2307,3 +2307,26 @@ route only with explicit `cache_control` breakpoints; OpenRouter hoists every Sy
 prompt, so any per-turn SystemMessage (domain block, `NOW`, gap note, post-tool nudge) misses the whole cache; a
 hit refreshes the 5 min TTL; 1 h TTL available (write 2×). Dev session 2026-09-29: the domain block changed in
 43 of 44 calls, the tool set twice. Details and the fix: `docs/superpowers/plans/prompt-caching.md`.
+
+## BUG-052 — In plan_creation the coach says «Записал» for reported sets although the phase has no logging tool
+
+**Status:** Open
+**Severity:** Medium — the user believes sets are in the journal; nothing was stored
+**Found during:** live GLM replay of the owner's 2026-09-27 workout, run 1 without a plan (2026-10-01,
+`data/replay-2026-10-01/replay-report.md` § 4, local `glm-5.3-flash`)
+**Component:** plan_creation phase prompt / tool set (`infra/ai/graph/phases/plan-creation.spec.ts`)
+
+### Description
+
+In phase `plan_creation` the owner's «110 на 12 пошло хорошо» and «130 х12 рпе 8» got «Записал: **жим ногами 110 кг
+× 12**» / «Принял: … 130 кг × 12, RPE 8» with no tool call at all (`tool_calls` empty on all 25 plan_creation runs).
+plan_creation offers no `log_set` (its tools: search, save plan, transition, shared), so nothing could be logged.
+
+- **unguarded:** nothing in the plan_creation prompt says sets reported there are not logged, or tells the coach to
+  start the session (transition) first; nothing checks a "logged" claim against a tool call.
+- **model:** claims an action it did not perform (truthfulness).
+
+### Fix plan (to design)
+
+A plan_creation rule for reported sets (say they are not logged yet and offer to start the session), and/or a
+post-reply check of "записал/logged" claims against the run's tool calls; the owner decides.
