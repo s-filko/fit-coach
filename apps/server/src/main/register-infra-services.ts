@@ -125,6 +125,13 @@ export async function registerInfraServices(container: Container = getGlobalCont
       minTokens: config.EPISODE_MIN_TOKENS,
       keepTurns: config.EPISODE_KEEP_TURNS,
       budgetLowWater: config.EPISODE_BUDGET_LOW_WATER,
+      // Prompt-caching plan D5: deferral applies only with explicit breakpoints on; off = today's behaviour.
+      ...(config.LLM_PROMPT_CACHE === 'anthropic'
+        ? {
+            cacheTtlMs: (config.LLM_PROMPT_CACHE_TTL === '1h' ? 3600 : 300) * 1000,
+            hardCapTokens: config.LLM_CONTEXT_HARD_CAP_TOKENS,
+          }
+        : {}),
     },
     // LLM_BUDGET_* overrides (P4 context-budget plan Task 3), resolved once here.
     budgetOverrides: config.LLM_BUDGETS,

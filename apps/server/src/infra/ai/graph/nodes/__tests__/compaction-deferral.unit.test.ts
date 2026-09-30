@@ -1,5 +1,5 @@
 /**
- * Prompt-caching plan (BUG-051) T2 — AC-PC-6 (D5), wiring half: the compact step defers BUDGET compaction
+ * Prompt-caching plan (BUG-051) T5 — AC-PC-6 (D5), wiring half: the compact step defers BUDGET compaction
  * while the previous call of the same user is younger than the cache TTL, unless the estimated total
  * exceeds the hard cap; after a gap ≥ TTL it behaves as today. Pure planner interface: see
  * context/__tests__/compaction-deferral.repro.test.ts.

@@ -82,6 +82,15 @@ export interface EpisodeTunables {
    * callers that build this config without it are unaffected.
    */
   budgetLowWater?: number;
+  /**
+   * Prompt-caching plan D5: LLM_PROMPT_CACHE_TTL in ms — set only with LLM_PROMPT_CACHE=anthropic (unset = no
+   * deferral, today's behaviour). The cache counts as warm while the previous message of this user is younger
+   * than this (`state.lastUserMessageAt`, no extra query; a hit refreshes the TTL, so measuring from the user's
+   * message is the conservative side).
+   */
+  cacheTtlMs?: number;
+  /** LLM_CONTEXT_HARD_CAP_TOKENS — the estimated total above which deferral gives way. */
+  hardCapTokens?: number;
 }
 
 export interface CompactStepDeps {
@@ -101,7 +110,7 @@ export type CompactStep = (
 
 export function buildCompactStep(deps: CompactStepDeps): CompactStep {
   const { llmGateway, summaries, userFacts, config, budgetFor } = deps;
-  const { gapMs, minTurns, minTokens, keepTurns, budgetLowWater = 1 } = config;
+  const { gapMs, minTurns, minTokens, keepTurns, budgetLowWater = 1, cacheTtlMs, hardCapTokens } = config;
 
   return async function compactStep(state, config): Promise<Partial<ConversationStateType>> {
     const ctx = ctxOf(config as never);
@@ -149,6 +158,13 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
     }
 
     const historyBudget = budgetFor(state.phase);
+    // D5: warm cache → the budget trigger waits unless the estimated total (history + this run's messages) is over
+    // the hard cap. Only used by the automatic budget trigger; inactivity / phase_boundary ignore it.
+    const warmSince = state.lastUserMessageAt !== null ? ctx.now.getTime() - Date.parse(state.lastUserMessageAt) : null;
+    const cacheWarm =
+      cacheTtlMs !== undefined && hardCapTokens !== undefined && warmSince !== null && warmSince < cacheTtlMs
+        ? { hardCapTokens, estimatedTotalTokens: estimateMessages(state.messages) }
+        : null;
     const reason: CompactReason | null = manual
       ? 'manual'
       : decideCompactReason({
@@ -158,7 +174,14 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
           gapMs,
           historyBudget,
           estimate: estimateMessages,
+          cacheWarm,
         });
+    if (reason === 'budget' && cacheWarm) {
+      log.info(
+        { userId, phase: state.phase, estimatedTotal: cacheWarm.estimatedTotalTokens, cap: cacheWarm.hardCapTokens },
+        'Context hard cap reached while cache warm',
+      );
+    }
     if (reason === null) {
       return {};
     }

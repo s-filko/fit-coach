@@ -74,6 +74,13 @@ export interface ResolveBudgetInput<D> {
   current: BaseMessage[];
   budget: TokenBudget;
   estimate: (messages: readonly BaseMessage[]) => number;
+  /**
+   * Prompt-caching plan D5: non-null only while the provider cache is warm (the caller compares the previous call's
+   * age with the cache TTL). Then NO cut runs — facts, history, block depths and summaries all sit in the cached
+   * prefix, and rewriting any of them is a full miss — unless the estimated total exceeds `hardCapTokens`, where
+   * today's resolution order runs unchanged.
+   */
+  cacheWarm?: { hardCapTokens: number } | null;
 }
 
 export interface ResolveBudgetResult {
@@ -85,6 +92,8 @@ export interface ResolveBudgetResult {
   /** Oldest-dropped-first tail of the input `summaries` — what still renders. */
   summaries: StoredEpisodeSummary[];
   cuts: BudgetCut[];
+  /** D5: set when the cache was warm but the estimated total exceeded the hard cap, so the cuts ran anyway. */
+  hardCapExceeded?: { estimatedTotalTokens: number; hardCapTokens: number };
 }
 
 /**
@@ -165,6 +174,22 @@ export async function resolveBudget<D>(input: ResolveBudgetInput<D>): Promise<Re
       estimate(history) +
       currentTokens
     );
+  }
+
+  // D5: warm cache and under the hard cap → leave everything as it is (the whole resolution is a cache breaker).
+  let hardCapExceeded: ResolveBudgetResult['hardCapExceeded'];
+  if (input.cacheWarm) {
+    const estimatedTotalTokens = totalNow(input.facts, input.history, input.summaries);
+    if (estimatedTotalTokens <= input.cacheWarm.hardCapTokens) {
+      return {
+        facts: input.facts,
+        history: input.history,
+        blockDepths,
+        summaries: input.summaries,
+        cuts,
+      };
+    }
+    hardCapExceeded = { estimatedTotalTokens, hardCapTokens: input.cacheWarm.hardCapTokens };
   }
 
   // (0) [P6 Task 4, deliberate extension of INV-LLM-004's published order — see
@@ -250,5 +275,5 @@ export async function resolveBudget<D>(input: ResolveBudgetInput<D>): Promise<Re
     cuts.push('floor');
   }
 
-  return { facts, history, blockDepths, summaries, cuts };
+  return { facts, history, blockDepths, summaries, cuts, ...(hardCapExceeded ? { hardCapExceeded } : {}) };
 }

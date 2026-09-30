@@ -33,6 +33,12 @@ export interface DecideCompactInput {
   gapMs: number;
   historyBudget: number;
   estimate: Estimate;
+  /**
+   * Prompt-caching plan D5: non-null only while the provider cache is warm (the caller compares the previous
+   * call's age with the cache TTL). Then the BUDGET trigger waits — compacting rewrites the cached prefix —
+   * unless the estimated total already exceeds the hard cap. Never affects phase_boundary or inactivity.
+   */
+  cacheWarm?: { hardCapTokens: number; estimatedTotalTokens: number } | null;
 }
 
 /**
@@ -42,7 +48,7 @@ export interface DecideCompactInput {
  * non-empty history; inactivity additionally needs `lastUserMessageAt` set.
  */
 export function decideCompactReason(input: DecideCompactInput): CompactReason | null {
-  const { state, history, now, gapMs, historyBudget, estimate } = input;
+  const { state, history, now, gapMs, historyBudget, estimate, cacheWarm } = input;
   if (state.compactReason !== null) {
     return state.compactReason;
   }
@@ -53,6 +59,9 @@ export function decideCompactReason(input: DecideCompactInput): CompactReason | 
     return 'inactivity';
   }
   if (estimate(history) > historyBudget) {
+    if (cacheWarm && cacheWarm.estimatedTotalTokens <= cacheWarm.hardCapTokens) {
+      return null;
+    }
     return 'budget';
   }
   return null;

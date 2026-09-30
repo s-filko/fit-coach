@@ -113,6 +113,10 @@ export const EnvSchema = z.object({
   // tunables-not-secrets exception as EPISODE_*.
   LLM_PROMPT_CACHE: z.enum(['off', 'anthropic']).default('off'),
   LLM_PROMPT_CACHE_TTL: z.enum(['5m', '1h']).default('5m'),
+  // Prompt-caching plan D5: while the provider cache is warm, budget compaction and history trimming wait (they
+  // rewrite the cached prefix). This is the safety net — the estimated total (token-estimator units, ≈ 100 k real
+  // tokens by BUG-050) above which they run anyway. Only consulted with LLM_PROMPT_CACHE=anthropic.
+  LLM_CONTEXT_HARD_CAP_TOKENS: z.coerce.number().int().positive().default(60_000),
   // Transition hand-off (transition-handoff plan Task 1, D-1, AC-TH-2): comma
   // list of ConversationPhase targets that get a silent same-run hand-off when
   // a transition tool commits to them. Empty/unset = off — byte-for-byte

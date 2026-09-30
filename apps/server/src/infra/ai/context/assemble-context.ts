@@ -102,6 +102,8 @@ export interface AssembleInput<D = unknown> {
   nowLine?: string | null;
   /** PhaseSpec.budget (Task 1's table / LLM_BUDGET_* overrides). Enforced via resolveBudget. */
   budget: TokenBudget;
+  /** Prompt-caching plan D5: non-null only while the provider cache is warm — see `resolveBudget`. */
+  cacheWarm?: { hardCapTokens: number } | null;
   now: Date;
   timezone: string | null;
   /** The block-render context's `user` (e.g. `training.client` reads firstName/fitnessGoal). */
@@ -111,6 +113,8 @@ export interface AssembleInput<D = unknown> {
 export interface AssembledContext {
   messages: BaseMessage[];
   budgetReport: BudgetReport;
+  /** D5: the cache was warm but the estimated total exceeded the hard cap, so the budget cuts ran anyway. */
+  hardCapExceeded?: { estimatedTotalTokens: number; hardCapTokens: number };
 }
 
 function isHuman(m: BaseMessage): boolean {
@@ -151,6 +155,7 @@ export async function assembleContext<D>(input: AssembleInput<D>): Promise<Assem
     current: input.current,
     budget: input.budget,
     estimate: estimateMessages,
+    cacheWarm: input.cacheWarm ?? null,
   });
 
   const { facts, summaries } = resolved;
@@ -246,5 +251,5 @@ export async function assembleContext<D>(input: AssembleInput<D>): Promise<Assem
     budgetReport.inFlight +
     budgetReport.toolResults;
 
-  return { messages, budgetReport };
+  return { messages, budgetReport, ...(resolved.hardCapExceeded ? { hardCapExceeded: resolved.hardCapExceeded } : {}) };
 }

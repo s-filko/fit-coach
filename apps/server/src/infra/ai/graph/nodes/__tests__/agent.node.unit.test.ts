@@ -244,6 +244,56 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     expect((out.messages[0] as AIMessage).additional_kwargs).toEqual({ keep: 1 });
   });
 
+  // Prompt-caching plan D5 (AC-PC-6): while the cache is warm the assembler skips every budget cut.
+  describe('cache-warm deferral of budget cuts (D5, AC-PC-6)', () => {
+    const bigHistory = (): BaseMessage[] => [
+      new HumanMessage('старый вопрос ' + 'x'.repeat(8000)),
+      new AIMessage({ content: 'старый ответ', tool_calls: [] }),
+    ];
+    const run = async (episodeConfig: Record<string, unknown>, lastAgoMs: number) => {
+      mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
+      const deps = makeDeps({
+        episodeConfig: { gapMs: 3 * 3_600_000, minTurns: 2, minTokens: 300, keepTurns: 6, ...episodeConfig },
+      });
+      await buildAgentNode(makeSpec(), deps)(
+        {
+          ...makeState(),
+          messages: [...bigHistory(), new HumanMessage('дальше')],
+          lastUserMessageAt: new Date(-lastAgoMs).toISOString(),
+        },
+        CONFIG,
+      );
+      return mockInvoke.mock.calls[0][0] as BaseMessage[];
+    };
+    const hasOldHistory = (sent: BaseMessage[]): boolean => sent.some(m => textOf(m).startsWith('старый вопрос'));
+
+    it('warm (previous message 1 min ago) and under the hard cap → history untouched despite the tiny budget', async () => {
+      const sent = await run({ cacheTtlMs: 300_000, hardCapTokens: 60_000 }, 60_000);
+      expect(hasOldHistory(sent)).toBe(true);
+      expect(attachSpy).toHaveBeenCalledWith(expect.objectContaining({ cuts: [] }));
+    });
+
+    it('warm but over the hard cap → today’s cuts run, and the cap is logged at info', async () => {
+      logFns.info.mockClear();
+      const sent = await run({ cacheTtlMs: 300_000, hardCapTokens: 1 }, 60_000);
+      expect(hasOldHistory(sent)).toBe(false);
+      expect(logFns.info).toHaveBeenCalledWith(
+        expect.objectContaining({ phase: 'chat', cap: 1, estimatedTotal: expect.any(Number) }),
+        'Context hard cap reached while cache warm',
+      );
+    });
+
+    it('cache expired (previous message ≥ TTL ago) → today’s cuts run', async () => {
+      const sent = await run({ cacheTtlMs: 300_000, hardCapTokens: 60_000 }, 300_001);
+      expect(hasOldHistory(sent)).toBe(false);
+    });
+
+    it('LLM_PROMPT_CACHE off (no cacheTtlMs configured) → today’s cuts run', async () => {
+      const sent = await run({}, 60_000);
+      expect(hasOldHistory(sent)).toBe(false);
+    });
+  });
+
   it('non-empty reply skips the retry entirely', async () => {
     mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'готово', tool_calls: [] }));
     const node = buildAgentNode(makeSpec(), makeDeps());

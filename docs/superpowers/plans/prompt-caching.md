@@ -332,6 +332,32 @@ new DB test `llm-call-cache-write.integration.test.ts`; the T5b guard test file 
   current HumanMessage); otherwise the last message.
 - Interface deviation from T2: none (test helper `request-capture.ts` now sets `__includeRawResponse: true` like the factory).
 
+### T5 — compaction / trim deferral D5 (worker, Sonnet, 2026-09-30) — done
+
+Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 175 suites / 1771 tests green; `db-test-lock.sh npm run test:scenarios`
+23 suites / 415 passed + 1 todo. AC-PC-6 promoted: `context/__tests__/compaction-deferral.unit.test.ts` (planners),
+`graph/nodes/__tests__/compaction-deferral.unit.test.ts` (compact step wiring), the `LLM_CONTEXT_HARD_CAP_TOKENS` case moved into
+`config/__tests__/prompt-cache-config.unit.test.ts`; new agent-node cases (warm/under cap, warm/over cap + info log, expired, flag off) in
+`agent.node.unit.test.ts`. Still red as intended: T5b (`prompt-cache-config.repro` price key, attribution/reasons/guard/report).
+
+- **Warm source (no new query):** `state.lastUserMessageAt` — the same field the inactivity trigger and gap note use; "warm" =
+  `now − lastUserMessageAt < cacheTtlMs`. Conservative: a cache hit refreshes the TTL after the user's message was stamped, so real warmth
+  is never shorter than measured. The recorder's previous-call lookup was rejected (an extra query per run).
+- **Config:** `LLM_CONTEXT_HARD_CAP_TOKENS` (int > 0, default 60000). `register-infra-services.ts` adds `cacheTtlMs` (300 s / 3600 s from
+  `LLM_PROMPT_CACHE_TTL`) and `hardCapTokens` to `episodeConfig` **only when `LLM_PROMPT_CACHE=anthropic`**; with `off` both are absent, the
+  planners get `cacheWarm: null` everywhere → behaviour exactly as before.
+- **Compact step:** `decideCompactReason(…, cacheWarm)` returns null instead of `'budget'` while warm and `estimateMessages(state.messages)`
+  (history + this run's messages — the compact step has no system/block tokens; a proxy, dominated by history) ≤ cap. `phase_boundary` and
+  `inactivity` are checked earlier and untouched; manual `/compact` untouched.
+- **Assembler:** `resolveBudget(…, cacheWarm)`: while warm and the FULL estimated total (system + facts + directive + summaries + blocks +
+  history + current) ≤ cap the **whole resolution is skipped** (no `trimHistory`, and also no facts truncation, block depth stepping,
+  summary drop or floor — all of them rewrite the cached prefix; this is broader than the brief's "no trimHistory" on purpose, otherwise
+  a skipped trim would just push the same overflow into the next cut). Over the cap → existing order unchanged, result carries
+  `hardCapExceeded`.
+- **Log:** `log.info "Context hard cap reached while cache warm"` `{userId, phase, estimatedTotal, cap}` from the compact step (budget
+  trigger fired while warm) and from the agent node (assembler cuts ran while warm); T5b turns these into a declared `hard_cap` break.
+- Interface deviation from T2: none.
+
 ## Out of scope
 
 Smaller training tool set and shorter schemas; BUG-050 estimator; the post-tool second call itself; caching on

@@ -1,5 +1,5 @@
 /**
- * Prompt-caching plan (BUG-051) T2 — AC-PC-6 (D5): while the provider cache is warm, budget compaction and
+ * Prompt-caching plan (BUG-051) T5 — AC-PC-6 (D5): while the provider cache is warm, budget compaction and
  * `trimHistory` wait; a hard ceiling stays as the safety net; after the TTL gap today's behaviour holds.
  *
  * Interface assumed (T5 implements to it — recorded in the plan § Evidence, T2). The caller decides "warm"

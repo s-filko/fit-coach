@@ -161,6 +161,16 @@ function withPostToolNudge(messages: BaseMessage[]): BaseMessage[] {
   return messages.map((m, i) => (i === target ? withAppendedText(m, nudge) : m));
 }
 
+/** D5: `{ hardCapTokens }` while the previous message is younger than the configured cache TTL; null otherwise. */
+function warmCacheOf(
+  { cacheTtlMs, hardCapTokens }: { cacheTtlMs?: number; hardCapTokens?: number },
+  sinceLastMessageMs: number,
+): { hardCapTokens: number } | null {
+  return cacheTtlMs !== undefined && hardCapTokens !== undefined && sinceLastMessageMs < cacheTtlMs
+    ? { hardCapTokens }
+    : null;
+}
+
 export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDeps) {
   return async (state: AgentNodeState, config: RunnableConfig): Promise<{ messages: BaseMessage[] }> => {
     const ctx = ctxOf(config as never);
@@ -234,7 +244,17 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     // full depth and enforces the budget via resolveBudget — truncate facts,
     // trim history, step blocks down their depths, drop the oldest summary,
     // D-D floor, in that order. Block 1 (systemPrompt) is never touched here.
-    const { messages: assembledMessages, budgetReport } = await assembleContext({
+    // Prompt-caching plan D5: the cache counts as warm while the user's previous message is younger than the TTL
+    // (same source as the compact step: state.lastUserMessageAt, no extra query). Warm → the assembler skips every
+    // budget cut unless the estimated total is over the hard cap.
+    // (episodeConfig is only read once there is a previous message, like the gap note above.)
+    const cacheWarm =
+      lastMessageTime !== null ? warmCacheOf(deps.episodeConfig, now.getTime() - lastMessageTime.getTime()) : null;
+    const {
+      messages: assembledMessages,
+      budgetReport,
+      hardCapExceeded,
+    } = await assembleContext({
       systemPrompt,
       userFacts,
       // AC-FL-5: the directive the course-check step stored (or kept) in
@@ -248,11 +268,23 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
       gapNote,
       nowLine,
       budget: spec.budget,
+      cacheWarm,
       now,
       timezone: user?.timezone ?? null,
       user,
     });
     ctx.metrics.attachBudgetReport(budgetReport);
+    if (hardCapExceeded) {
+      log.info(
+        {
+          userId,
+          phase: spec.name,
+          estimatedTotal: hardCapExceeded.estimatedTotalTokens,
+          cap: hardCapExceeded.hardCapTokens,
+        },
+        'Context hard cap reached while cache warm',
+      );
+    }
 
     if (budgetReport.system > spec.budget.system) {
       log.warn(
