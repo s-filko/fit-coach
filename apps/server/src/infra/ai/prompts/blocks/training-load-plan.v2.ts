@@ -169,8 +169,8 @@ function decisionLines(
     `tactic: ${d.tactic}`,
     ...breakLine(entry, d),
     `decision: Stage ${d.stage}, ${ROW_LABELS_V2[d.row]} → ${d.outcome}`,
-    `recommend: ${rec === null ? d.reason : `${rec} — ${d.reason}`}`,
-    `conservative: ${cons === null ? d.reason : `${cons}${lowerNote(d, lower)}`}`,
+    `recommend: ${rec === null ? `no number — ${d.reason}` : `${rec} — ${d.reason}`}`,
+    `conservative: ${cons === null ? `no conservative option — ${d.reason}` : `${cons}${lowerNote(d, lower)}`}`,
     confidenceText(entry, d),
   ];
 }

@@ -242,6 +242,57 @@ function stageA(c: Ctx): Decision | null {
   return null;
 }
 
+/** The reference performance's load: the load used in most of its working sets, the heavier on a tie. */
+function referenceLoad(facts: LoadFacts): { weight: number; unit: 'kg' | 'lbs' | null } | null {
+  if (isAbsent(facts.reference)) {
+    return null;
+  }
+  const counts = new Map<number, { count: number; unit: 'kg' | 'lbs' | null }>();
+  for (const { setData } of facts.reference.sets) {
+    if (setData.type === 'strength' && setData.weight !== undefined && setData.weight > 0) {
+      const seen = counts.get(setData.weight);
+      counts.set(setData.weight, { count: (seen?.count ?? 0) + 1, unit: setData.weightUnit ?? null });
+    }
+  }
+  const [best] = [...counts.entries()].sort(([wa, a], [wb, b]) => b.count - a.count || wb - wa);
+  return best ? { weight: best[0], unit: best[1].unit } : null;
+}
+
+/**
+ * Stage A "insufficient data" (no working weight). With a reference that carried a load, the number is the
+ * reference's (one step down after a break tier) with one step lower as the conservative option, low confidence,
+ * and the reason says why; with no reference there is no number and no conservative option.
+ */
+function insufficientData(
+  facts: LoadFacts,
+  reps: Recommendation['reps'],
+  gap: GapTierInfo,
+  meta: Pick<Decision, 'scheme' | 'tactic' | 'gap'>,
+  why: string,
+): Decision {
+  const base = { ...meta, stage: 'A' as const, row: 'insufficient_data' as const, ladder: null };
+  const ref = referenceLoad(facts);
+  if (isAbsent(facts.reference) || ref === null) {
+    return { ...noRecord(reps, [WORKING_WEIGHT]), ...base, outcome: 'conservative start', reason: NO_RECORD_REASON };
+  }
+  const step = stepOf(facts);
+  const afterBreak = gap.tier === 'return' || gap.tier === 'rebuild' || gap.tier === 'restart';
+  const candidate = afterBreak ? stepDown(ref.weight, step) : ref.weight;
+  const rec = (load: number): Recommendation => ({ load, unit: ref.unit, reps });
+  const tier = afterBreak
+    ? `; ${gap.tier} tier (${gap.days ?? 0} d since ${gap.basis ?? 'last workout'}, general norm) — one step below it`
+    : '';
+  return {
+    ...base,
+    outcome: afterBreak ? 'one step below the reference' : 'reference load',
+    candidate: rec(candidate),
+    conservative: rec(stepDown(candidate, step)),
+    reason: `${why}; last performance ${ref.weight} ${ref.unit ?? 'kg'} ${facts.reference.daysAgo} d ago used as the reference${tier}`,
+    confidence: 'low',
+    missing: [WORKING_WEIGHT],
+  };
+}
+
 export function decide(facts: LoadFacts, input: DecideInput): Decision {
   const { scheme, goal } = input;
   const params = input.params ?? scheme.defaultParams(goal);
@@ -250,15 +301,7 @@ export function decide(facts: LoadFacts, input: DecideInput): Decision {
   const meta = { scheme: { id: scheme.id, version: scheme.version }, tactic: 'none active' as const, gap };
 
   if (isAbsent(facts.workingWeight)) {
-    return {
-      ...noRecord(reps, [WORKING_WEIGHT]),
-      ...meta,
-      stage: 'A',
-      row: 'insufficient_data',
-      outcome: 'conservative start',
-      reason: NO_RECORD_REASON,
-      ladder: null,
-    };
+    return insufficientData(facts, reps, gap, meta, facts.workingWeight.absent);
   }
   const ctx: Ctx = {
     facts,

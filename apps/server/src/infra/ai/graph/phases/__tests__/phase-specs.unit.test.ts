@@ -541,9 +541,9 @@ describe('LOAD_PLAN_PLANNER_REBIND selects the rebound planner (load-plan plan T
     }
   });
 
-  it('training: v11 prompt + workout_overview v2 with the flag on', () => {
+  it('training: v12 prompt + workout_overview v2 with the flag on', () => {
     const spec = trainingSpecOf(ON);
-    expect(spec.prompt.current.version).toBe('v11');
+    expect(spec.prompt.current.version).toBe('v12');
     expect(spec.contextBlocks.find(b => b.id === 'training.workout_overview')?.version).toBe('v2');
   });
 

@@ -86,5 +86,14 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
   `{type:'isometric', duration}`; cardio exercises unchanged. A reps-only call on an isometric exercise is NOT converted
   (seconds vs reps is ambiguous) — the tool description now says hold time = `durationSeconds`, never reps. Tool-surface
   snapshot updated for the new description.
+- (D) W-4: item 3 — `decide()` (Stage A `insufficient_data`) with a reference that carried a load: candidate = the reference's
+  most-used working load (heavier on a tie), conservative = one step down (floored, W-2), confidence low, reason =
+  the Metric's own absent text + "last performance X kg N d ago used as the reference". After a break tier
+  (return / rebuild / restart) the candidate is one step below the reference and the tier is named in the reason.
+  No reference, or a reference with no loaded set (bodyweight): no number, no conservative; `NO_RECORD_REASON` is now
+  `no record, no reference load` (the old "conservative start" wording invited the coach to invent one); the block prints
+  `recommend: no number — …` / `conservative: no conservative option — …`.
+- (D) W-5: training prompt v12 = v11 derived by three exact-text replacements (rule 1 ×2 lines, rule 4b; a missing needle throws),
+  v11 file untouched; `training.spec.ts` selects v12 instead of v11 with `LOAD_PLAN_PLANNER_REBIND`; v11 stays registered.
 
 ## Review

@@ -173,7 +173,7 @@ describe.each(schemes.map(s => [s.id, s] as const))('AC-LP-1 · scheme contract:
       );
       expect(out.candidate.load).toBeNull();
       expect(out.conservative.load).toBeNull();
-      expect(out.reason).toBe('no record — conservative start');
+      expect(out.reason).toBe('no record, no reference load');
       expect(out.confidence).toBe('low');
       expect(out.missing).toContain('workingWeight');
     });

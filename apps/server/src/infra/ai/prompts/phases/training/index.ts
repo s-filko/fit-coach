@@ -3,6 +3,7 @@ import type { PhasePromptEntry } from '@infra/ai/prompts/types';
 import { TRAINING_V1, type TrainingPromptContext } from './v1';
 import { TRAINING_V10, type TrainingPromptContextV10 } from './v10';
 import { TRAINING_V11, type TrainingPromptContextV11 } from './v11';
+import { TRAINING_V12, type TrainingPromptContextV12 } from './v12';
 import { TRAINING_V2, type TrainingPromptContextV2 } from './v2';
 import { TRAINING_V3, type TrainingPromptContextV3 } from './v3';
 import { TRAINING_V4, type TrainingPromptContextV4 } from './v4';
@@ -24,6 +25,7 @@ export type {
   TrainingPromptContextV9,
   TrainingPromptContextV10,
   TrainingPromptContextV11,
+  TrainingPromptContextV12,
 };
 export {
   TRAINING_V1,
@@ -37,6 +39,7 @@ export {
   TRAINING_V9,
   TRAINING_V10,
   TRAINING_V11,
+  TRAINING_V12,
 };
 
 /**
@@ -56,5 +59,14 @@ export const TRAINING_PROMPT: PhasePromptEntry<TrainingPromptContextV10> = {
  */
 export const TRAINING_PROMPT_V11: PhasePromptEntry<TrainingPromptContextV11> = {
   current: TRAINING_V11,
+  requiredSections: ['task', 'tools', 'rules', 'directive.tool-reply'],
+};
+
+/**
+ * Load-plan-fixes item 3 (BR-LLM-008): v11 plus the no-invented-conservative-option wording — selected instead of
+ * `TRAINING_PROMPT_V11` with LOAD_PLAN_PLANNER_REBIND on (training.spec.ts).
+ */
+export const TRAINING_PROMPT_V12: PhasePromptEntry<TrainingPromptContextV12> = {
+  current: TRAINING_V12,
   requiredSections: ['task', 'tools', 'rules', 'directive.tool-reply'],
 };

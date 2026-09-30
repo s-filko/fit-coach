@@ -110,13 +110,26 @@ describe('AC-LP-3 · renderLoadPlanEntryV2', () => {
     expect(text).not.toMatch(/\b0 kg/);
   });
 
-  it('no record: recommends a conservative start, never a number', async () => {
+  it('AC-LPF-3: no record and no reference — the block says there is no number and no conservative option', async () => {
     const [entry] = await entries(deps([]));
     const text = renderLoadPlanEntryV2(entry, ctx, { progression });
     expect(text).toContain('decision: Stage A, insufficient data → conservative start');
-    expect(text).toContain('recommend: no record — conservative start');
-    expect(text).toMatch(/conservative: no record/);
+    expect(text).toContain('recommend: no number — no record, no reference load');
+    expect(text).toContain('conservative: no conservative option — no record, no reference load');
     expect(text).toContain('confidence: low');
+  });
+
+  it('AC-LPF-3: one performance (Stage A insufficient data) with a reference still prints a number and a lower conservative', async () => {
+    const [entry] = await entries(deps([p2]));
+    const text = renderLoadPlanEntryV2(entry, ctx, { progression });
+    expect(text).toMatch(/\n {2}reference: /);
+    expect(text).toContain('decision: Stage A, insufficient data');
+    expect(text).toMatch(
+      /\n {2}recommend: 65 kg × 8–12 — insufficient: 1 performances \/ 8 wk; last performance 65 kg 10 d ago/,
+    );
+    expect(text).toMatch(/\n {2}conservative: 60 kg × 8–12 — 5 kg lower/);
+    expect(text).toContain('confidence: low');
+    expect(text).not.toContain('no record');
   });
 
   it('prints the e1RM span and a plain negative drop-off (D6)', async () => {

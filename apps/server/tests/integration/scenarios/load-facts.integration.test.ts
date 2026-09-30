@@ -210,8 +210,8 @@ describe('LOAD PLAN over the real DB (AC-LF-5)', () => {
     expect(context).toMatch(/recommend: 79.5 kg × 8–12 — 6 more working sets on a shared muscle today/);
     expect(context).toMatch(/conservative: 77 kg × 8–12 — 2.5 kg lower/);
     expect(context).toMatch(/confidence: (low|medium|high) \(/);
-    // No record for the pushdown: a conservative start, never a number.
-    expect(context).toContain('recommend: no record — conservative start');
+    // No record for the pushdown: no number and no conservative option (AC-LPF-3).
+    expect(context).toContain('recommend: no number — no record, no reference load');
   });
 
   it('get_load_plan returns the same facts, with the sets in full', async () => {

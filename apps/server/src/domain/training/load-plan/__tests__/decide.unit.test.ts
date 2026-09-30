@@ -1,4 +1,4 @@
-import type { E1rmTrendFact, FatigueFact, LoadFacts } from '../../load-facts';
+import type { E1rmTrendFact, FatigueFact, LoadFacts, PerformanceInput, SetInput } from '../../load-facts';
 import { decide, type Decision } from '../decide';
 import { getScheme } from '../schemes';
 import { SHORT_CONSTRAINT, makeFacts } from './fixtures';
@@ -39,7 +39,7 @@ describe('AC-LP-2 · Stage A — safety rows', () => {
     const d = run(makeFacts({ workingWeight: { absent: 'insufficient' } }));
     expect(d).toMatchObject({ stage: 'A', row: 'insufficient_data' });
     expect(d.candidate.load).toBeNull();
-    expect(d.reason).toBe('no record — conservative start');
+    expect(d.reason).toBe('no record, no reference load');
   });
 
   it('short constraint → hold at most the working weight, conservative one step lower', () => {
@@ -338,5 +338,70 @@ describe('AC-LPF-1 · the step-down floor — no candidate or conservative is ev
   it('a step that still leaves a positive load is taken as before', () => {
     const d = run(makeFacts({ gap: gapOf(15) }));
     expect([d.candidate.load, d.conservative.load]).toEqual([60, 55]);
+  });
+});
+
+describe('AC-LPF-3 · insufficient data with a reference still names a number', () => {
+  const PERFORMED = new Date('2026-09-25T10:00:00Z');
+  const setOf = (weight: number, reps: number): SetInput => ({
+    setData: { type: 'strength', reps, weight, weightUnit: 'kg' },
+    setKind: 'working',
+    rpe: null,
+    userFeedback: null,
+    createdAt: PERFORMED,
+  });
+  /** The `reference:` line's performance — e.g. Chest-Supported Row, 20 kg, replay U2/U6. */
+  const reference = (sets: SetInput[], daysAgo = 4): LoadFacts['reference'] => ({
+    performance: { id: 'p1', sessionId: 's1', performedAt: PERFORMED, sets } as unknown as PerformanceInput,
+    daysAgo,
+    sets,
+    likeForLike: true,
+    warmupsEstimated: false,
+    rpe: [],
+    feedback: [],
+  });
+  const few = { absent: 'insufficient: 1 performances / 8 wk' };
+  const row = (sets: SetInput[], over: Partial<LoadFacts> = {}): LoadFacts =>
+    makeFacts({ workingWeight: few, reference: reference(sets), ...over });
+
+  it('prints the reference load as the candidate and one step down as the conservative, low confidence, with the reason', () => {
+    const d = run(row([setOf(20, 10), setOf(20, 10), setOf(20, 9)]));
+    expect(d).toMatchObject({ stage: 'A', row: 'insufficient_data' });
+    expect([d.candidate.load, d.conservative.load]).toEqual([20, 15]);
+    expect(d.candidate.unit).toBe('kg');
+    expect(d.confidence).toBe('low');
+    expect(d.reason).toContain('insufficient: 1 performances / 8 wk');
+    expect(d.reason).toContain('last performance');
+    expect(d.reason).toContain('4 d ago');
+  });
+
+  it('the reference load is the load used in most working sets (heavier on a tie)', () => {
+    const d = run(row([setOf(50, 10), setOf(55, 8), setOf(55, 8)]));
+    expect(d.candidate.load).toBe(55);
+    const tie = run(row([setOf(50, 10), setOf(55, 8)]));
+    expect(tie.candidate.load).toBe(55);
+  });
+
+  it('the conservative is floored — a step larger than the reference load leaves no lighter option, never 0', () => {
+    const d = run(row([setOf(2.5, 12), setOf(2.5, 12)]));
+    expect([d.candidate.load, d.conservative.load]).toEqual([2.5, 2.5]);
+  });
+
+  it('a break tier starts one step below the reference and says so', () => {
+    const d = run(row([setOf(60, 8), setOf(60, 8)], { gap: gapOf(169) }));
+    expect([d.candidate.load, d.conservative.load]).toEqual([55, 50]);
+    expect(d.reason).toContain('restart tier');
+  });
+
+  it('with no reference at all there is no number and no conservative', () => {
+    const d = run(makeFacts({ workingWeight: few, reference: { absent: 'no completed record' } }));
+    expect(d.candidate.load).toBeNull();
+    expect(d.conservative.load).toBeNull();
+    expect(d.reason).toBe('no record, no reference load');
+  });
+
+  it('a reference with no loaded set (bodyweight) gives no number either', () => {
+    const bodyweight: SetInput = { ...setOf(0, 8), setData: { type: 'strength', reps: 8, weight: 0 } };
+    expect(run(row([bodyweight])).candidate.load).toBeNull();
   });
 });
