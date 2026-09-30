@@ -4,8 +4,9 @@ import { z } from 'zod';
 
 import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import type { ITrainingService } from '@domain/training/ports';
+import { isStale, lastActivityOf } from '@domain/training/session-timing';
 
-import { SESSION_TIMEOUT_MS, sessionIdOf, userIdOf } from '@infra/ai/tools/format-exercise-summary';
+import { sessionIdOf, userIdOf } from '@infra/ai/tools/format-exercise-summary';
 
 import { createLogger } from '@shared/logger';
 
@@ -29,12 +30,9 @@ export function buildFinishTrainingTool(deps: FinishTrainingToolDeps) {
 
       try {
         const currentSession = await trainingService.getSessionDetails(sessionId);
-        const lastActivity = currentSession?.lastActivityAt ?? currentSession?.updatedAt ?? currentSession?.createdAt;
-        const lastActivityDate = lastActivity ? new Date(lastActivity) : undefined;
-        const sessionIdleMs = lastActivityDate ? Date.now() - lastActivityDate.getTime() : 0;
-        const isStale = sessionIdleMs > SESSION_TIMEOUT_MS;
-
-        const completedAt = isStale ? lastActivityDate : undefined;
+        const stale = currentSession ? isStale(currentSession, new Date()) : false;
+        // BUG-043: completeSession clamps completedAt to startedAt.
+        const completedAt = stale && currentSession ? lastActivityOf(currentSession) : undefined;
         const session = await trainingService.completeSession(sessionId, undefined, completedAt);
         const duration = session.durationMinutes ?? 0;
 
@@ -44,7 +42,7 @@ export function buildFinishTrainingTool(deps: FinishTrainingToolDeps) {
             userId,
             sessionId,
             durationMinutes: duration,
-            isStale,
+            isStale: stale,
             completedAt: completedAt ?? null,
             feedback: input.feedback ?? null,
           },

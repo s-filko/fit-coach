@@ -13,6 +13,10 @@ import { TRAINING_V1 } from '@infra/ai/prompts/phases/training/v1';
 import { ALL_FIXTURES } from '../../../../../../evals/fixtures/personas';
 import { buildFixtureSession, contextsForModule, FIXED_NOW } from '../../../../../../evals/fixtures/prompt-contexts';
 import {
+  makeExerciseWithDetails,
+  makeSessionSet,
+} from '../../../../../domain/training/services/__tests__/training-service-test-support';
+import {
   TRAINING_CLIENT_V1,
   TRAINING_PREVIOUS_SESSION_V1,
   TRAINING_STALE_SESSION_V1,
@@ -56,10 +60,11 @@ describe('TRAINING_STALE_SESSION_V1 gate matches v1 isStale', () => {
     expect(TRAINING_STALE_SESSION_V1.render({ session: v1Ctx.session }, blockCtx, 0)).toBeNull();
   });
 
-  it('present and byte-identical to v1 when the session is stale (> 2h inactive)', () => {
+  it('present and byte-identical to v1 when the session is stale (> 2h inactive) and holds sets', () => {
     const staleSession: WorkoutSessionWithDetails = {
       ...buildFixtureSession(ALL_FIXTURES[2].fixture, FIXED_NOW),
       lastActivityAt: new Date(FIXED_NOW.getTime() - 3 * 60 * 60 * 1000),
+      exercises: [makeExerciseWithDetails({ sets: [makeSessionSet()] })],
     };
     const v1Ctx: V1Ctx = {
       ...(contextsForModule('phase.training', ALL_FIXTURES[2].fixture) as V1Ctx),
@@ -71,6 +76,33 @@ describe('TRAINING_STALE_SESSION_V1 gate matches v1 isStale', () => {
     const actual = TRAINING_STALE_SESSION_V1.render({ session: staleSession }, blockCtx, 0);
 
     expect(actual).toBe(expected);
+  });
+});
+
+describe('STALE SESSION gate follows isRetroLog (BUG-043)', () => {
+  const idle = new Date(FIXED_NOW.getTime() - 3 * 60 * 60 * 1000);
+  const base = buildFixtureSession(ALL_FIXTURES[2].fixture, FIXED_NOW);
+  const withSets: WorkoutSessionWithDetails = {
+    ...base,
+    lastActivityAt: idle,
+    exercises: [makeExerciseWithDetails({ sets: [makeSessionSet()] })],
+  };
+  const noSets: WorkoutSessionWithDetails = {
+    ...base,
+    lastActivityAt: idle,
+    exercises: base.exercises.map(ex => ({ ...ex, sets: [] })),
+  };
+  const v1Ctx = contextsForModule('phase.training', ALL_FIXTURES[2].fixture) as V1Ctx;
+  const blockCtx: ContextBlockCtx = { now: v1Ctx.now, timezone: v1Ctx.timezone, user: v1Ctx.user };
+
+  it('set-less session idle > 2 h: no STALE block (block and v1)', () => {
+    expect(TRAINING_STALE_SESSION_V1.render({ session: noSets }, blockCtx, 0)).toBeNull();
+    expect(TRAINING_V1.render({ ...v1Ctx, session: noSets }).map(s => s.id)).not.toContain('stale_session');
+  });
+
+  it('session with sets idle > 2 h: STALE block present (block and v1)', () => {
+    expect(TRAINING_STALE_SESSION_V1.render({ session: withSets }, blockCtx, 0)).toContain('STALE SESSION');
+    expect(TRAINING_V1.render({ ...v1Ctx, session: withSets }).map(s => s.id)).toContain('stale_session');
   });
 });
 

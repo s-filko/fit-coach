@@ -1,0 +1,296 @@
+# Retro Timestamps (BUG-043) — Investigation, Red Tests, Fix Implementation Plan
+
+> **For agentic workers:** Use superpowers:executing-plans and superpowers:test-driven-development. Red tests first
+> (T2), fix second (T3). Execute only the dispatched task. T1 (this document) changed no production code.
+
+- Status: done
+- Branch: plan/retro-timestamps
+- After: —
+- Review: 2026-09-30 | clean | R1,R2,R3,R4
+
+**Goal:** a live workout that starts after a long idle gap must get live timestamps: sets stamped "now", activity
+advancing, `completed_at >= started_at`, duration never negative — without breaking the deliberate catch-up logging
+of a finished workout (owner ruling 2026-09-20, pinned by `c-catch-up-logging`).
+
+**Source:** `docs/BUGS.md` § BUG-043. Dev session `1a136380-245c-42ad-b26c-64cb47996b8e` (`upper_b_20260929`):
+`started_at` 07:28:06.376, `last_activity_at` 07:28:06.299 (never moved), all 16 sets `created_at` 07:33:06.299,
+`completed_at` 07:28:06.299 (< `started_at`), `duration_minutes` −1; real training 10:21–11:33 UTC.
+
+## Findings
+
+### Root cause chain (verified in code, `apps/server`)
+
+1. **Session goes `in_progress` at plan acceptance** (BUG-044, out of scope): `TrainingService.startSession`
+   (`training.service.ts:110`) / `beginSession` (`:130`) / `session-lifecycle.handler.ts:26` write
+   `startedAt = new Date()`; `last_activity_at` comes from the column default `now()` at row creation
+   (`schema.ts:488`). The app-clock `startedAt` lands a few ms *after* the DB-clock `last_activity_at`
+   (07:28:06.376 vs .299) — the seed of the `−1` below.
+2. **No activity for 3 h.** `lastActivityAt` is written only by `sessionRepo.updateActivity`
+   (`workout-session.repository.ts:318`), called from `addExerciseToSession` (`training.service.ts:136`),
+   `logSet` (`:148`), the create branch of `ensureCurrentExercise` (`:240`) and `completeCurrentExercise` (`:319`).
+   **Chat messages never touch it** — nothing under `src/infra/ai/graph` calls it (confirmed by grep), so 3 h of
+   conversation left it frozen.
+3. **`log_set` classifies the first live set as retro** (`log-set.tool.ts:73-76`): `now − lastActivityAt >
+   SESSION_TIMEOUT_MS` (2 h, `format-exercise-summary.ts:5`). It never asks whether the session had any sets, so a
+   session that never began is treated as "a finished workout being catch-up-logged".
+4. **The retro branch freezes the session.** `retroCreatedAt = lastActivityAt + RETRO_SET_OFFSET_MS` (5 min;
+   `:79-81`, `format-exercise-summary.ts:7`) — a constant derived from the frozen value, hence 16 identical
+   `created_at`s — and `skipActivityUpdate: isRetro` (`:90`) is honoured in `ensureCurrentExercise` (`:239`) and
+   `logSetWithContext` (`:349`, direct `sessionSetRepo.create`, bypassing `logSet`'s `updateActivity`). The next
+   `log_set` reads the same stale value → retro again. The confirmation appends `(retro-logged)` (`:114`).
+5. **`finish_training` inherits the frozen value** (`finish-training.tool.ts:32-38`): `isStale` on the same
+   `lastActivityAt` → `completedAt = lastActivityDate` → `completeSession` (`training.service.ts:245-260`) computes
+   `floor((completedAt − startedAt)/60000)` = `floor(−77 ms / 60000)` = **−1** and `repository.complete` stores it
+   (`:310`). Nothing clamps.
+6. **The 2 h auto-close never ran on the training path.** `autoCloseTimedOutSessions` (`training.service.ts:548`)
+   has three callers — `startSession` (planning branch, `:95`), `assertNoActiveSession` (`:508`, from `beginSession`
+   and the non-planning start), `getActiveSession` (`:286`) — and the only non-test caller of `getActiveSession` is
+   the webapp route `session.routes.ts:103`. No tool or graph node calls it mid-run. (Had it fired it would have
+   closed the live session at 07:28 with duration 0 — a different wrong outcome; see Owner decisions D4.)
+
+**Corrections to the brief's facts:** none — all confirmed. Additions: (a) the same negative-duration hazard exists
+in `autoCloseTimedOut` (`workout-session.repository.ts:348-350`, `lastActivityAt − startedAt`, no clamp);
+(b) `SESSION_TIMEOUT_MS` is defined 4× (`format-exercise-summary.ts:5`, `prompts/blocks/training-workout-overview.v1.ts:17`,
+`prompts/phases/training/v1.ts:19`, `training.service.ts:32`) and `RETRO_SET_OFFSET_MS` is copied into the test
+`c-catch-up-logging.integration.test.ts:47`.
+
+### Every reader/writer of the four fields
+
+| Field | Writers | Readers |
+|---|---|---|
+| `lastActivityAt` | column default (`schema.ts:488`); `updateActivity` (`repository:318`, callers above) | `log-set.tool.ts:73`, `finish-training.tool.ts:32`, `prompts/phases/training/v1.ts:109`, `training-workout-overview.v1.ts:297` (`TRAINING_STALE_SESSION_V1`), `repository.findTimedOut/autoCloseTimedOut` (`:326,343,349,356`), `transcript-reader.ts:197` |
+| `startedAt` | `startSession:110`, `beginSession:130`, `session-lifecycle.handler.ts:26` | `completeSession:257`, `autoCloseTimedOut:348`, `load-facts.loader.ts:105,138` + `metrics.ts:276` (today's duration; falls back to the first set when null), `session-planning-recovery-timeline.v1.ts:18`, `session-planning-recent-history.v1.ts:22`, `chat-context.v1.ts:29`, `transcript-reader.ts:196` |
+| `completedAt` | `repository.complete` (`:310`), `autoCloseTimedOut:356` | history/anchor queries (`repository:99-153,242-250,382-495`), `training-exercise-history.v1.ts`, `session-planning-context.builder.ts:41`, prompts `previousSession` (`v1.ts:137`, `training-workout-overview.v1.ts:319`) — all order or label by it, so a wrong `completedAt` misplaces the session in every "last time" lookup |
+| `durationMinutes` | `completeSession:256`, `autoCloseTimedOut:348` | `finish-training.tool.ts:39,46`, `session-planning-recent-history.v1.ts:41`, `chat-context.v1.ts:32` |
+
+### What the prompt layer does with it
+
+`buildWorkoutOverview`/`TRAINING_STALE_SESSION_V1` (`training-workout-overview.v1.ts:231-247, 293-303`) emit a
+`=== STALE SESSION ===` block when `now − lastActivityAt > 2 h`: "Retro-logging is active: any sets you log will be
+timestamped to the original training time", plus a rule to ask "adding to the previous session or starting fresh?".
+On 09-29 the block was rendered every turn (activity frozen) and told the model to treat the live workout as
+retro — the prompt side of the same stickiness; after the fix the block disappears with the first live set because
+it reads the same `lastActivityAt`. Prompt wording itself is out of scope.
+
+## Why the tests did not catch it
+
+- `c-catch-up-logging.integration.test.ts` (steps 9–11) is the **only** test that exercises retro logging and it
+  pins the sticky behaviour as *correct* ("The pull-up sets were retro … the session stayed stale"): its session
+  already has two real sets before the pause. No scenario has a session with **zero sets** and a long idle gap, and
+  none follows a retro set with a live one. Its `finish_training` assertion (`durationMinutes 11`, `completedAt ==
+  lastActivityAt`) only works because that session's `lastActivityAt` is after `startedAt`.
+- `log-set.tool.unit.test.ts` — no case sets `lastActivityAt` older than 2 h (mocks return a fresh session); the
+  retro branch, `retroCreatedAt`, `skipActivityUpdate` and `(retro-logged)` have no unit coverage at all.
+- `finish-training.tool.unit.test.ts:61,117` — `lastActivityAt: new Date()` only; the `isStale` branch is never taken.
+- `training.service.integration.test.ts` / `log-set.integration.test.ts` — no `completeSession` with
+  `completedAt < startedAt`, no `skipActivityUpdate` case, no idle-session case; `training-service-test-support.ts`
+  builds sessions with `startedAt`/`lastActivityAt` both `new Date()`.
+- Every scenario runs on a scripted clock in minutes; none idles > 2 h between `start_training_session` and the
+  first set, i.e. the 09-29 shape (plan accepted, gym 3 h later) never occurs.
+- No invariant test anywhere states `completedAt >= startedAt` / `durationMinutes >= 0`.
+
+## Design options (fix)
+
+The constraint that shapes everything: after a gap, "the user reports an old workout" and "the user starts the
+workout now" are indistinguishable from the timestamps alone. The catch-up ruling (2026-09-20) must stay.
+
+- **A — "no prior sets ⇒ not a catch-up" + clamps (recommended).** A retro set requires idle > 2 h **and** the
+  session already has ≥ 1 logged set (there is a real workout to catch up on). A session with zero sets is a late
+  start: the first set is live (stamped now, advances `lastActivityAt`) and re-anchors `startedAt` to that moment,
+  so duration is the real ~70 min. Everything after is live. Independently: `completeSession` and
+  `autoCloseTimedOut` clamp `completedAt >= startedAt` and `duration >= 0`. One shared timing module replaces the 4
+  duplicated constants. Fixes the 09-29 shape completely; keeps `c-catch-up-logging` green unchanged.
+  Residual: a session with sets, a pause > 2 h, then a *live* continuation is still treated as catch-up (existing
+  ruling; the STALE block already asks the user).
+- **B — retro is model-declared** (`log_set` gets `performedEarlier`/`performedAt`); default live. Removes all
+  inference, but needs a schema change plus a prompt-block rewrite (out of scope) and depends on the model flagging
+  correctly — the same class of weakness BUG-044 showed.
+- **C — chat messages count as activity.** Rejected: the catch-up message itself would reset the idle clock before
+  the tool runs, killing legitimate retro logging; and a 07:58 "not going yet" message would still leave a 2 h 23 m
+  gap at 10:21.
+- **D — retro sets advance `lastActivityAt` to now while stamping from the last set.** Ends the freeze but makes
+  the 2nd..Nth set of one catch-up message live (breaks `c-catch-up`'s three retro pull-ups) unless tracked per run.
+
+**Recommendation: A.** Smallest change that fixes the observed defect, satisfies the ACs below, and leaves the
+owner's ruling intact. B is the follow-up if catch-up-vs-live misclassification shows up again.
+
+## Acceptance criteria (mints AC-RT-*)
+
+| ID | Observable outcome |
+|---|---|
+| AC-RT-1 | (a) In a session with **no sets** and `lastActivityAt` > 2 h ago, `log_set` stamps the set at "now" (no `createdAt` override, no `skipActivityUpdate`) and `lastActivityAt` becomes ≈ now; (b) a second `log_set` right after is live too — **no `(retro-logged)`** in either confirmation; (c) **unchanged:** in a session that already has sets, a set after a > 2 h gap is still retro (`lastActivity + 5 min`), so `c-catch-up-logging` passes as is |
+| AC-RT-2 | For every completion path — `finish_training` on a stale session, `TrainingService.completeSession`, `autoCloseTimedOut` — `completed_at >= started_at` and `duration_minutes >= 0`; a stale finish whose `lastActivityAt` precedes `startedAt` completes at `startedAt` with duration 0 |
+| AC-RT-3 | DB-backed scenario in the 09-29 shape: session created and started, > 2 h idle, 16 sets over ~75 min (16 × 5-min layout, scripted clock), `finish_training` → set `created_at`s are distinct and strictly increasing in set order (live sets take the DB clock, so matching the scripted clock exactly is not provable); `started_at` ≈ first set; `last_activity_at` ≈ last set; `completed_at` ≈ last set (`>= started_at`); `duration_minutes` = 75 ± 1 |
+| AC-RT-4 | The `log_set` confirmation for a live set never contains "retro-logged"; it still does for AC-RT-1(c). The `STALE SESSION` block is absent from the prompt of the run after the first live set |
+| AC-RT-5 | One home for `SESSION_TIMEOUT_MS` / `RETRO_SET_OFFSET_MS`: the four duplicates and the test-local copy import it; `grep -rn "SESSION_TIMEOUT_MS =" src` finds one definition |
+
+## Owner decisions
+
+- **D1 — BUG-044** (session starts at plan acceptance; `started_at` = first set). **Recommendation: separate
+  plan.** T3 does only the minimal re-anchor needed for AC-RT-3: `startedAt = now` at the first set of a
+  zero-set session idle > 2 h. Not implemented here: explicit start step, `startedAt` at plan acceptance, prompt
+  changes.
+- **D2 — literal "after one retro set a set logged now is not retro"** conflicts with the 2026-09-20 catch-up
+  ruling for sessions **with** sets (a catch-up message logs several retro sets in a row; without a per-run marker
+  or model-declared flag they are indistinguishable from live ones). **Recommendation:** keep catch-up sticky
+  where the session has sets (AC-RT-1c) and fix the no-sets case (AC-RT-1a/b); revisit with option B only if
+  needed. **Owner confirmed 2026-09-30** («да, утверждаю»), together with recording the rule in the durable spec (BR-TRAINING-030/031/032, INV-TRAINING-006).
+- **D3 — data fix for `1a136380`** (real times from `conversation_turns`): orchestrator, needs ssh; recommendation:
+  yes, once T3 is deployed, from the transcript.
+- **D4 — run `autoCloseTimedOutSessions` on the training path?** Recommendation: **no** — it would close a
+  planning-accepted session mid-wait with duration 0; the late-start rule of A is the safer answer. Log as backlog
+  if the owner wants stale sessions closed proactively.
+- **D5 — chat messages as activity:** recommendation **no** (option C above).
+
+## Global Constraints
+
+- T2 red tests live in `*.repro.test.ts` (outside default suites, so pre-commit stays green) and are promoted into
+  their home suites in T3. No `skip`, no `test.failing`, no inverted assertions. A test that unexpectedly passes is
+  reported **unconfirmed**, never weakened.
+- No live model (`RUN_LLM_EVALS`/`EVALS_FULL_RUN` never set, no `npm run smoke`), no ssh, no dev data.
+- Every `RUN_DB_TESTS=1` command goes through `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh <cmd>`
+  (from `apps/server`).
+- Reserved to the orchestrator: push, merge, ssh, deploy, `npm run db:*`, `docker compose`, branch/worktree
+  deletion, durable specs, `docs/STATE.md`, `docs/BUGS.md`, `Status:` transitions.
+
+## Tasks
+
+### T2 — Red tests (AC-RT-1..4)
+
+Files (create only): 
+- `apps/server/src/infra/ai/tools/__tests__/retro-timestamps.repro.test.ts` — unit, mocked service per
+  `log-set-test-support.ts` / `finish-training.tool.unit.test.ts`: (1) zero-set session, `lastActivityAt` 3 h old →
+  `logSetWithContext` called without `createdAt`/`skipActivityUpdate: true`, confirmation lacks `retro-logged`
+  (AC-RT-1a/1b/4); (2) control: session **with** a set + 3 h gap → retro args and marker present (AC-RT-1c, green
+  on unchanged production — proves the ruling is preserved); (3) `finish_training` with `lastActivityAt` older than
+  2 h and before `startedAt` → the `completedAt` handed to `completeSession` is `>= startedAt` (AC-RT-2).
+- `apps/server/tests/integration/services/session-timing.repro.test.ts` — real DB, real `TrainingService`:
+  `completeSession(id, undefined, completedAt < startedAt)` → stored duration `>= 0` and `completed_at >=
+  started_at`; `autoCloseTimedOut` with `last_activity_at < started_at` → same; zero-set stale session first
+  `logSetWithContext` advances `last_activity_at` and re-anchors `started_at` (AC-RT-1a, AC-RT-2).
+- `apps/server/tests/integration/scenarios/retro-timestamps.repro.test.ts` — the 09-29 shape via `runScenario` +
+  `scripted-model.ts` (pattern: `set-error-recovery.integration.test.ts`; setup steps from
+  `b-full-workout.scenario`; scripted clock jumps +2 h 50 m after `start_training_session`, then 16 `log_set`
+  calls spread over 70 min, then `finish_training`) (AC-RT-3, AC-RT-4). Scenario definition, if a new file is
+  needed: `apps/server/evals/scenarios/retro-timestamps.scenario.ts`.
+
+- [x] Write the repros; run each and record command, exit code and the failing assertion in Evidence; each must
+  fail on unchanged production **for the stated reason** (retro args present / `(retro-logged)` / `completed_at`
+  before `started_at` / duration −1), not on setup.
+- [x] Verify: `cd apps/server && npx jest --testMatch='**/retro-timestamps.repro.test.ts' src/infra/ai/tools` (the default `testMatch` excludes `*.repro.test.ts`, so the flag is required);
+  `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh bash -c 'RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch="**/session-timing.repro.test.ts" --testMatch="**/retro-timestamps.repro.test.ts"'`
+  → red for the stated reasons (the AC-RT-1c control green); `npm run test:unit` green.
+
+### T3 — The fix, red tests promoted (AC-RT-1..5)
+
+Files it may edit:
+- create `apps/server/src/domain/training/session-timing.ts` (constants + `isRetroLog(session, now)` +
+  completion clamp helper);
+- `apps/server/src/infra/ai/tools/log-set.tool.ts`, `finish-training.tool.ts`, `format-exercise-summary.ts`
+  (re-export or drop the constants), `prompts/blocks/training-workout-overview.v1.ts` and
+  `prompts/phases/training/v1.ts` (constant import only — **no wording change**);
+- `apps/server/src/domain/training/services/training.service.ts` (`completeSession` clamp, first-set re-anchor of
+  `startedAt`, constant import; port `training-service.ports.ts` only if a signature changes);
+- `apps/server/src/infra/db/repositories/workout-session.repository.ts` (`autoCloseTimedOut` clamp);
+- tests: promote T2's files into `log-set.tool.unit.test.ts`, `finish-training.tool.unit.test.ts`,
+  `training.service.integration.test.ts`, and a scenario `tests/integration/scenarios/` file; drop the local
+  `RETRO_SET_OFFSET_MS` copy in `c-catch-up-logging.integration.test.ts` (import it).
+
+- [x] Implement option A; promote the repros (delete the `*.repro.test.ts` files); `c-catch-up-logging` untouched
+  and green.
+- [x] Verify: `cd apps/server && npm run lint && npm run type-check && npm run test:unit`;
+  `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh npm run test:scenarios` and
+  `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh bash -c 'RUN_DB_TESTS=1 NODE_ENV=test npx jest tests/integration/services/training.service.integration.test.ts'`
+  green; `grep -rn "SESSION_TIMEOUT_MS =" src` → one match (AC-RT-5); `node scripts/state.mjs --check` from repo root.
+
+## Evidence (filled by workers)
+
+| AC | Command | Exit | Failing assertion / result | SHA |
+|---|---|---|---|---|
+| AC-RT-1a/1b/4 (unit) | `npx jest --testMatch='**/retro-timestamps.repro.test.ts' src/infra/ai/tools` | 1 | 1 of 3 red for the AC-RT-1 case: first set of a zero-set session idle 3 h gets `createdAt` = `lastActivityAt + 5 min` (`expect(opts.createdAt).toBeUndefined()` fails; `isRetro: true` in the audit log). Control AC-RT-1c green | 39753135 |
+| AC-RT-2 (unit, `finish_training`) | same command | 1 | red: `completedAt` handed to `completeSession` (`lastActivityAt`) is 77 ms before `startedAt` (`toBeGreaterThanOrEqual` fails) | 39753135 |
+| AC-RT-1a, AC-RT-2 (DB service) | `db-test-lock.sh bash -c 'RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch="**/session-timing.repro.test.ts"'` | 1 | 5/6 red: `completeSession` and `autoCloseTimedOut` with `completedAt`/`last_activity_at` before `started_at` store `completed_at < started_at` (×2) and `duration_minutes = -1` (×2); first set of a zero-set stale session leaves `started_at` at plan acceptance (3 h old). Control (a live set advances `last_activity_at`) green | 39753135 |
+| AC-RT-3, AC-RT-4 (scenario) | `db-test-lock.sh bash -c 'RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch="**/scenarios/retro-timestamps.repro.test.ts"'` | 1 | 7/8 red (the run-to-the-end test green): 1 distinct `created_at` for 16 sets (frozen retro stamp); `started_at` ≈ T0 not T0+180 m; `last_activity_at` never moved (≈ T0); `completed_at` < `started_at`; `duration_minutes = -1` (the 09-29 value); `retro-logged` seen by the model on 16/16 set steps; `=== STALE SESSION ===` still in the prompt of every later run | 39753135 |
+| default suites | `cd apps/server && npm run test:unit` | 0 | 167 suites / 1716 tests green (repro files are outside the default `testMatch`) | 880335e0 |
+| AC-RT-1..5 (T3 fix) | `npm run lint && npm run type-check && npm run test:unit` | 0 | lint 0 errors; tsc clean; unit 167 suites / 1719 tests green | 880335e0 |
+| AC-RT-1..4 | `db-test-lock.sh npm run test:scenarios` | 0 | 23 suites / 415 passed + 1 todo (incl. `c-catch-up-logging` unchanged but for the constant import, and the promoted `retro-timestamps.integration.test.ts`) | 880335e0 |
+| AC-RT-1a, AC-RT-2 | `db-test-lock.sh bash -c 'RUN_DB_TESTS=1 NODE_ENV=test npx jest tests/integration/services/training.service.integration.test.ts'` | 0 | 1 suite / 14 tests green (incl. the promoted session-timing block) | 880335e0 |
+| AC-RT-5 | `grep -rn "SESSION_TIMEOUT_MS =" src` | 0 | one match: `domain/training/session-timing.ts:4` | 880335e0 |
+| AC-RT-1..5 (review round T4) | `cd apps/server && npm run lint && npm run type-check && npm run test:unit` | 0 | lint 0 errors; tsc clean; unit 167 suites / 1721 tests green | 4f282806 |
+| AC-RT-1..4 (review round T4) | `db-test-lock.sh npm run test:scenarios` | 0 | 23 suites / 415 passed + 1 todo (scenario now asserts strictly increasing `created_at`) | 4f282806 |
+| AC-RT-2 (review round T4) | `db-test-lock.sh bash -c 'RUN_DB_TESTS=1 NODE_ENV=test npx jest tests/integration/services/training.service.integration.test.ts'` | 0 | 1 suite / 14 tests green (stale finish completes AT `started_at`, duration 0) | 4f282806 |
+| AC-RT-5 (review round T4) | `grep -rn "SESSION_TIMEOUT_MS" src \| grep -v "import\|session-timing.ts"` | 0 | one line: `training.service.ts:555` (auto-close cutoff query, not a staleness test); all idle-vs-timeout decisions go through `isStale` / `isRetroLog` | 4f282806 |
+| T3 close-out | `node scripts/state.mjs --check` (repo root) | 0 | `state check: OK` | 4f282806 |
+
+## Out of scope
+
+- Data fix of dev session `1a136380` (orchestrator, ssh).
+- BUG-044 proper (explicit start / `started_at` at plan acceptance), BUG-045 (phantom duplicate; "mark the
+  just-logged set"), BUG-049 item 1.
+- Prompt wording of the STALE SESSION block and the retro rules.
+- Running the auto-close on the training path (D4).
+
+## Review
+
+Run 1 — 2026-09-30 (verdict below), run 2 — 2026-09-30 **clean**.
+
+Run 1 — one combined reviewer covering R1–R4 (small change; owner's economy rule). Verdict: **blocked**
+(4 blocking). Findings verbatim from the reviewer.
+
+### Blocking (all closed — see run 2)
+
+- **B1** (fixed in 4f282806; evidence in the table) | R2 | apps/server/src/infra/ai/tools/finish-training.tool.ts:33-36 vs apps/server/src/domain/training/session-timing.ts:16-18 | DRY (docs/CONTRIBUTING_AI.md, "Principles & Boundaries") | The diff introduces `lastActivityOf()` and routes `log_set` through it, but the same function in `finish_training` — edited three lines below — keeps its own inline `lastActivityAt ?? updatedAt ?? createdAt` copy and its own `> SESSION_TIMEOUT_MS` staleness test. The "stale" predicate now exists twice, in different styles, in the two tools this fix is about.
+- **B2** (fixed in 4f282806; evidence in the table) | R3 | apps/server/tests/integration/scenarios/retro-timestamps.integration.test.ts:96,118 | AC-RT-3 | AC-RT-3 (plan :122) claims set `created_at`s are "distinct, **increasing** and **match the scripted clock**" and `duration_minutes = 70 ± 1`; the test asserts only distinctness and checks 75 ± 1 (16×5-min layout). The header explains why matching the scripted clock is impossible (live sets get the DB clock), but the AC was never amended and "increasing" is testable yet unasserted. Failure: a regression stamping sets in reverse order or with arbitrary distinct past times passes. Fix: assert monotonic order, or amend the AC wording in the plan to what is provable.
+- **B3** (fixed in the T4 doc commit; row added to Evidence) | R3 | docs/superpowers/plans/retro-timestamps.md (Evidence) | SUPERPOWERS_INTEGRATION.md Rules of engagement rule 2 | T3's verification includes `node scripts/state.mjs --check` from the repo root; the Evidence table has no row for it. (Reviewer ran it read-only: "state check: OK", exit 0 — the fix is only recording it.)
+- **B4** (closed by orchestrator 2026-09-30: BR-TRAINING-030/031 + INV-TRAINING-006 in `docs/domain/training.spec.md`, BR-TRAINING-030/031/032 in FEAT-0010, BR-013/017 and INV-004 cross-referenced; owner approved) | R4 | docs/superpowers/plans/retro-timestamps.md (AC-RT table) | SUPERPOWERS_INTEGRATION.md Rules of engagement rule 1 | Three new normative rules live only in `docs/superpowers/` with no BR/INV in `docs/domain/training.spec.md` / `docs/features/FEAT-0010-training-session-management.md`: "a set is retro only if the session is idle > 2 h **and** already holds sets"; "the first set of a zero-set session idle > 2 h re-anchors `started_at`"; "`completed_at >= started_at`, `duration_minutes >= 0` on every completion path". FEAT-0010 BR-TRAINING-013 (starting a session "sets started_at timestamp") is now half the story. Per rule 3 this must go to the owner for BR/INV IDs; the agent must not edit the spec itself.
+
+### Advisory
+
+- R1 | training.service.ts:335-342 | The retro/live decision is split across layers: the tool decides "retro" with `isRetroLog`, the service separately decides "late start" with `isLateStart`, using the caller's `skipActivityUpdate` as a proxy for "this set is live"; each re-reads the session and takes its own `new Date()`. A caller passing `skipActivityUpdate` for another reason would silently skip the re-anchor.
+- R1 | training.service.ts:338 | Every live `logSetWithContext` now runs an extra `findByIdWithDetails` although `log_set` just loaded the same session — hot path, needed only for the rare late-start case.
+- R1 | training.service.ts:335-342 | The re-anchor also applies to the webapp route `app/routes/app/session.routes.ts:292`; probably intended, but neither the plan nor a test covers it.
+- R2 | training-workout-overview.v1.ts:296-298, prompts/phases/training/v1.ts:108-110 | **fixed in 4f282806** — Two more inline copies of the last-activity idle computation remain (plan limited these files to a constant import).
+- R2 | finish-training.tool.ts:38-42 | **fixed in 4f282806** — | The tool clamps `completedAt` via `resolveCompletion`, then `TrainingService.completeSession` clamps again — the tool-side clamp is a no-op second copy.
+- R2 | log-set.tool.unit.test.ts:629 | **fixed in 4f282806** — | Hardcodes `5 * 60 * 1000` instead of importing `RETRO_SET_OFFSET_MS`, recreating the test-local copy AC-RT-5 removed.
+- R3 | plan Evidence rows | **fixed in the T4 doc commit** — | Every T2 red-run row carries SHA `880335e0` (the fix commit); the red results belong to `39753135`.
+- R3 | finish-training.tool.unit.test.ts:165 | **fixed in 4f282806** — | Assertion wrapped in `if (completedAt !== undefined)` passes vacuously; AC-RT-2's "completes at `startedAt` with duration 0" is asserted nowhere (only `>=`).
+- R3 | training-workout-overview.v1.ts:234, 296-298 | **fixed in 4f282806** — | For a zero-set session idle > 2 h (the 09-29 shape before the first set) the STALE block still says "Retro-logging is active: any sets you log will be timestamped to the original training time", while that first set is now logged live — on exactly the fixed path the model is told the opposite of what the tool does. The gate could use `isRetroLog` without a wording change.
+- R3 | training.service.ts:335-342 | `startedAt` is re-anchored before `ensureCurrentExercise`; if that throws, the start moves with no set logged (self-heals on the next set, but the write is not tied to the set being saved).
+- R4 | docs/BUGS.md BUG-043 | Still `Open`; its Component line names `format-exercise-summary.ts` for the constants, now in `domain/training/session-timing.ts` (orchestrator's close-out edit).
+- R4 | plan § Owner decisions | D2 still reads "Owner to confirm"; commit `bfc2f4be` says option A was "accepted by orchestrator"; no owner answer to D2 recorded. D3 has no follow-up recorded.
+- R4 | docs/domain/training.spec.md:16,29; FEAT-0010 BR-TRAINING-010/017 | Pre-existing: INV-TRAINING-004 ("last_activity_at is updated on every training action") is still contradicted by the retro branch (`skipActivityUpdate`); the fix narrows but does not remove it, and no spec records the exception.
+
+### Meta
+
+Filed in `docs/REVIEW_FINDINGS.md` (AC-<SLUG>-N format entry ×5; prompt-gate blind spot; evidence-SHA rule candidate).
+
+### Run 2 — 2026-09-30, re-review of R2/R3/R4 (the zones that blocked): **clean**
+
+Closure verified by the reviewer: B1 (one `isStale()` predicate, class covered repo-wide), B2 (strictly increasing
+`created_at`, AC-RT-3 reworded), B3 (state-check evidence row), B4 (BR-TRAINING-030/031/032, INV-TRAINING-006 unique
+and consistent with the code), D2 (owner confirmed 2026-09-30), and every advisory marked fixed. New findings, all
+advisory, verbatim in substance:
+
+- R2 | prompts/phases/training/v1.ts:108 | naming | local `const isStale = isRetroLog(...)` shadows the meaning of
+  the exported domain `isStale()`; the describe title "gate matches v1 isStale" (training-blocks.v1.unit.test.ts:53)
+  now refers to that local.
+- R2 | training-workout-overview.v1.ts:299, phases/training/v1.ts:109, session-timing.ts:26 | DRY (minor) | idle ms
+  `now − lastActivityOf(s)` computed in three places; an `idleMs()` helper could feed all three.
+- R2 | training-blocks.v1.unit.test.ts:63-67 vs :85-89 | "stale session with one set" fixture built twice.
+- R3 | finish-training.tool.ts:46 | the audit log records the unclamped `completedAt` (`lastActivityOf`); for a stale
+  set-less finish it shows a value earlier than `started_at` while the DB stores `started_at`.
+- R3 | training-workout-overview.v1.ts:296 | gating on `isRetroLog` also drops the STALE rule "START a new workout /
+  chat casually → call finish_training first" for a set-less session idle > 2 h (e.g. yesterday's untouched session);
+  consistent with BR-TRAINING-031, untested for model behaviour.
+- R3 | retro-timestamps.integration.test.ts:7-9 | header comment still says created_at is "asserted for distinctness
+  only".
+- R4 | docs/domain/training.spec.md:29 | domain BR-TRAINING-010 lacked the retro exception now on INV-004/FEAT BR-017 —
+  **fixed by the orchestrator at close-out** (owner-approved rule, same wording as FEAT BR-017).
+- R4 | training.spec.md:33-34 | "retrospective logging" (BR-013, completed past session) vs "retro-logged" catch-up set
+  (BR-030) share a name with nothing telling them apart.
+- R4 | training.spec.md:34 vs FEAT-0010:106-108 | the domain spec states BR-032 only as INV-006 and omits "otherwise it
+  is live"; no contradiction.
+- R4 | this section | heading/mangled advisory line — **fixed at close-out**.
+- meta | R3 | rule candidate — filed in `docs/REVIEW_FINDINGS.md`.
+
+Open advisories above are not fixed on this branch; candidates for the backlog (owner's call).

@@ -6,6 +6,7 @@ import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
 import { LLM_ERROR_PREFIX, SYSTEM_ERROR_PREFIX, toToolMessage } from '@infra/ai/tools/outcome';
 
+import { makeSession } from '../../../../domain/training/services/__tests__/training-service-test-support';
 import { buildFinishTrainingTool } from '../finish-training.tool';
 
 /** Renders a tool return exactly as the executor will (Task 5 contract). */
@@ -138,5 +139,30 @@ describe('finish-training.tool — finish_training', () => {
       toPhase: 'chat',
       reason: 'training_completed',
     });
+  });
+});
+
+const HOUR = 60 * 60 * 1000;
+
+describe('finish-training.tool — stale finish (BUG-043, AC-RT-2)', () => {
+  it('AC-RT-2: a stale finish whose lastActivityAt precedes startedAt does not complete the session before it started', async () => {
+    const service = makeTrainingService();
+    const lastActivityAt = new Date(Date.now() - 3 * HOUR);
+    const session: WorkoutSessionWithDetails = {
+      ...makeSession(),
+      lastActivityAt,
+      // startedAt is written by the app clock a few ms after the row's DB-clock last_activity_at.
+      startedAt: new Date(lastActivityAt.getTime() + 77),
+    };
+    service.getSessionDetails.mockResolvedValue(session);
+    service.completeSession.mockResolvedValue({ ...session, status: 'completed', durationMinutes: 0 });
+    const { byName, config } = makeDeps(service);
+
+    await byName('finish_training').invoke({}, config);
+
+    // The tool hands over the stale lastActivityAt; the service-level clamp (completeSession) makes it
+    // complete AT startedAt with duration 0 — asserted in training.service.integration.test.ts.
+    const [, , completedAt] = service.completeSession.mock.calls[0]!;
+    expect(completedAt).toEqual(lastActivityAt);
   });
 });

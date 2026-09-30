@@ -9,7 +9,7 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-09-29 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-09-30 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
 — none —
@@ -53,6 +53,7 @@ _Generated 2026-09-29 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `refactor-p5-concurrency-delivery.md` — Refactor P5 — Concurrency and Delivery Hardening Implementation Plan
 - `refactor-p6-facts-and-progress-blocks.md` — Refactor P6 — User Facts (Group 1) Implementation Plan
 - `reply-latency-and-typing.md` — Reply Latency and Live Typing (BUG-019) Implementation Plan
+- `retro-timestamps.md` — Retro Timestamps (BUG-043) — Investigation, Red Tests, Fix Implementation Plan
 - `review-regression-proof.md` — Review Findings — Reproduction Before Remediation Implementation Plan
 - `review-self-improvement.md` — Review Self-Improvement Implementation Plan
 - `session-2026-09-21-repro.md` — Live-Session Findings (BUG-022…BUG-030) — Reproduction Before Remediation Implementation Plan

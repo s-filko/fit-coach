@@ -13,8 +13,9 @@ Invariants
 	• INV-TRAINING-001: A user can have at most one WorkoutPlan with status='active'
 	• INV-TRAINING-002: A user can have at most one WorkoutSession with status='in_progress'
 	• INV-TRAINING-003: session_sets.set_data JSONB must have 'type' field (discriminated union)
-	• INV-TRAINING-004: workout_sessions.last_activity_at is updated on every training action
+	• INV-TRAINING-004: workout_sessions.last_activity_at is updated on every training action, except a retro-logged catch-up set [BR-TRAINING-030]
 	• INV-TRAINING-005: Sessions with last_activity_at > 2 hours and status='in_progress' are auto-closed
+	• INV-TRAINING-006: On every completion path (finish, completeSession, auto-close) completed_at >= started_at and duration_minutes >= 0
 
 Business Rules
 	• BR-TRAINING-001: All training interactions happen through /api/chat; no separate REST endpoints
@@ -26,10 +27,12 @@ Business Rules
 	• BR-TRAINING-007: session_exercises created dynamically during 'training' phase as user performs them
 	• BR-TRAINING-008: Starting training transitions session to status='in_progress', stores sessionId in context
 	• BR-TRAINING-009: Only one active session per user; starting new session auto-closes previous [INV-TRAINING-002]
-	• BR-TRAINING-010: Set logging updates workout_sessions.last_activity_at to prevent timeout [INV-TRAINING-004]
+	• BR-TRAINING-010: Set logging updates workout_sessions.last_activity_at to prevent timeout, except a retro-logged catch-up set [INV-TRAINING-004][BR-TRAINING-030]
 	• BR-TRAINING-011: Sessions auto-close after 2 hours inactivity (lazy on interaction + daily cron) [INV-TRAINING-005]
 	• BR-TRAINING-012: Completing session updates status='completed', sets completed_at, clears context
 	• BR-TRAINING-013: Retrospective logging creates sessions with past timestamps, status='completed'
+	• BR-TRAINING-030: A set is retro-logged (stamped last activity + 5 min, activity not advanced) only if the in_progress session is idle > 2 h AND already holds sets (owner 2026-09-30, BUG-043)
+	• BR-TRAINING-031: The first set of a set-less in_progress session idle > 2 h is live: stamped now, and it re-anchors started_at to that set (late start, BUG-043)
 
 Ports (apps/server/src/domain/training/ports/)
 	• ITrainingService (TRAINING_SERVICE_TOKEN)

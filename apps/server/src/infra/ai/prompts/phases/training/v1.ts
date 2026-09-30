@@ -1,3 +1,4 @@
+import { isRetroLog, lastActivityOf } from '@domain/training/session-timing';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
 import {
@@ -15,8 +16,6 @@ export interface TrainingPromptContext extends DirectiveContext {
   session: WorkoutSessionWithDetails;
   previousSession: WorkoutSessionWithDetails | null;
 }
-
-const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 const TASK_TEXT = `=== YOUR TASK ===
 
@@ -106,9 +105,8 @@ export const TRAINING_V1: PromptModule<TrainingPromptContext> = {
     const clientName = user?.firstName ?? 'Client';
     const fitnessGoal = user?.fitnessGoal ?? null;
 
-    const lastActivity = session.lastActivityAt ?? session.updatedAt ?? session.createdAt;
-    const sessionAgeMs = now.getTime() - new Date(lastActivity).getTime();
-    const isStale = sessionAgeMs > SESSION_TIMEOUT_MS;
+    const isStale = isRetroLog(session, now);
+    const sessionAgeMs = now.getTime() - lastActivityOf(session).getTime();
 
     const sections: Section[] = [
       {

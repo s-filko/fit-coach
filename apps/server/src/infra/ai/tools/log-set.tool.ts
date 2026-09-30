@@ -4,15 +4,11 @@ import { z } from 'zod';
 
 import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import type { ITrainingService } from '@domain/training/ports';
+import { isRetroLog, lastActivityOf, RETRO_SET_OFFSET_MS } from '@domain/training/session-timing';
 import { SetDataSchema } from '@domain/training/set-data.types';
 
 import { formatSetData } from '@infra/ai/prompts/blocks/training-workout-overview.v1';
-import {
-  formatExerciseSummary,
-  RETRO_SET_OFFSET_MS,
-  SESSION_TIMEOUT_MS,
-  sessionIdOf,
-} from '@infra/ai/tools/format-exercise-summary';
+import { formatExerciseSummary, sessionIdOf } from '@infra/ai/tools/format-exercise-summary';
 
 import { createLogger } from '@shared/logger';
 import { isDatabaseFailure } from '@shared/pg-error-cause';
@@ -70,10 +66,9 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
 
       try {
         const session = await trainingService.getSessionDetails(sessionId);
-        const lastActivity = session?.lastActivityAt ?? session?.updatedAt ?? session?.createdAt;
-        const lastActivityDate = lastActivity ? new Date(lastActivity) : new Date();
-        const sessionIdleMs = Date.now() - lastActivityDate.getTime();
-        const isRetro = sessionIdleMs > SESSION_TIMEOUT_MS;
+        const lastActivityDate = session ? lastActivityOf(session) : new Date();
+        // BUG-043: retro only for a session that already holds sets; a late start is live.
+        const isRetro = session ? isRetroLog(session, new Date()) : false;
 
         let retroCreatedAt: Date | undefined;
         if (isRetro) {

@@ -7,6 +7,7 @@ import type {
   IWorkoutSessionRepository,
   RecentSessionsFilter,
 } from '@domain/training/ports';
+import { resolveCompletion } from '@domain/training/session-timing';
 import type {
   CreateSessionDto,
   Involvement,
@@ -345,15 +346,14 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
       );
 
     for (const session of timedOutSessions) {
-      const duration = session.startedAt
-        ? Math.floor((session.lastActivityAt.getTime() - session.startedAt.getTime()) / 60000)
-        : null;
+      // BUG-043: last activity can precede started_at (DB vs app clock, or a never-started session).
+      const { completedAt, durationMinutes: duration } = resolveCompletion(session.startedAt, session.lastActivityAt);
 
       await db
         .update(workoutSessions)
         .set({
           status: 'completed',
-          completedAt: session.lastActivityAt,
+          completedAt,
           durationMinutes: duration,
           autoCloseReason: 'timeout',
           updatedAt: new Date(),

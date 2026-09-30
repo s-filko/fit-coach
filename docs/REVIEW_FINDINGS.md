@@ -222,6 +222,7 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   Orca `worker_done` messages are invisible from the worktree. Proposed for ORCHESTRATION.md:
   "each task's verification output (command + summary line) is appended to the plan under the task
   before review; a reviewer treats absence there as absence". Runs: set-kind (2026-09-29, R3), load-facts (2026-09-29, R3 — two task commits with empty bodies read as "no evidence"; proposed "a worker report alone is not evidence").
+- [×2] Zone R3 says test names carry BR/AC refs "per `docs/CONTRIBUTING_AI.md`", but that file has no such rule, so missing AC refs (`planning-set-logging`, `recent-history-status`) cannot be graded. Proposed wording for CONTRIBUTING_AI Principles: "Every `describe` of a test that proves an AC names that AC id." Runs: coach-baseline 2026-09-25 (R3), retro-timestamps 2026-09-30 (R3: `describe('STALE SESSION gate follows isRetroLog (BUG-043)')` cites neither BR-TRAINING-030 nor AC-RT-4).
 - [×1] Schema, indexing and unbounded-growth concerns have no owning zone: R1 reads for shape,
   R2 for duplication, R3 for logic, R4 for doc currency. The missing `run_id` index on
   `llm_calls` — queried on every model call, now synchronously — was the most operationally
@@ -337,7 +338,6 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   named artifact is absent." Distinct from the absence-shaped-AC entry above: that one
   discharges by re-executing a stated command, this one by an artifact the plan names.
   Runs: refactor-p4-episode-memory (2026-09-18).
-- [×1] Zone R3 says test names carry BR/AC refs "per `docs/CONTRIBUTING_AI.md`", but that file has no such rule, so missing AC refs (`planning-set-logging`, `recent-history-status`) cannot be graded. Proposed wording for CONTRIBUTING_AI Principles: "Every `describe` of a test that proves an AC names that AC id." Runs: coach-baseline 2026-09-25 (R3).
 - [×1] R3 checks AC-to-test mapping but not teardown coverage of CLI entry points; the smoke's `exitAfterCleanup` was proven only by live runs. Proposed for CONTRIBUTING_AI: "A CLI entry point that owns process-level resources (DB pools, native sessions) proves its teardown on the success, refusal and thrown-error paths; a live run covers only the first." Runs: smoke-test 2026-09-25 (R3).
 - [×1] For hand-off paths the review verified only what gets delivered (scripted text on the blocked turn), not what the model is told in that turn (tool-result wording, tool description) — R3 found both stale on the re-run. Proposed: a hand-off change's review checks the tool-result text and tool description the model sees on every branch of the hand-off decision.
   Runs: transition-handoff (2026-09-25).
@@ -387,6 +387,8 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   Proposed: a short "import direction" table in the ADR or `CONTRIBUTING_AI.md`.
   Runs: load-facts (2026-09-29, R1).
 
+- [×1] No zone checks that prompt-layer claims about a tool's behaviour stay in line with that tool. In retro-timestamps the STALE SESSION block still says "Retro-logging is active: any sets you log will be timestamped to the original training time" for a zero-set idle session, while the fixed `log_set` now logs that first set live. Rule candidate for `docs/CONTRIBUTING_AI.md`: "A prompt block that describes a tool's behaviour must gate on the same domain predicate the tool uses." Runs: retro-timestamps 2026-09-30 (R3).
+
 ## Rule candidates
 
 A finding a zone wanted to raise as blocking but could not, because no rule in this repo
@@ -396,16 +398,7 @@ backs it. Each entry names the proposed wording and where it would live
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
 
-- [×4] `CONTRIBUTING_AI.md`'s DRY bullet reads as production-only ("no copy-paste, no
-  reinvention of what the repo already has"); R2 applied it to duplicated test fixtures
-  (`USER`, `ctxConfig`) and blocked, but a reviewer could as reasonably have downgraded them.
-  Third run: the same scripted-model test double reimplemented inline in a second file could
-  only be advisory — DRY as written targets a copied *symbol*, not an unexported shape.
-  Proposed line: "DRY applies to test fixtures and harnesses too, including the same test
-  double reimplemented in two files."
-  Fourth run: R2 applied DRY equally to test/fixture code in `tests/integration/scenarios` and noted the zone file does not say whether it should; that choice produced 2 of its 3 blocking findings.
-  Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19), training-journey-scenarios (2026-09-20), transition-handoff (2026-09-25).
-- [×4] R3's "describe/it names carry BR/AC references per `docs/CONTRIBUTING_AI.md`" has no slot for
+- [×5] R3's "describe/it names carry BR/AC references per `docs/CONTRIBUTING_AI.md`" has no slot for
   `BUG-0NN`, which was this plan's owner-designated source of truth, nor for plan-local `AC-LSR-N`
   acceptance ids that are not durable `AC-####` specs. The six repro files do carry `BUG-0NN` in
   their `describe()` names and both ids in their header docblocks — satisfying CONTRIBUTING_AI.md's
@@ -420,7 +413,16 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   (`AC-[0-9]{4}`) silently misses all of them. Proposed: the guide's ID Conventions line reads
   `AC-####` for durable/cross-cutting criteria and `AC-<SLUG>-N` for plan-scoped ones, and the zone grep
   matches both shapes.
-  Runs: session-2026-09-21-repro (2026-09-22), llm-io-audit-trail (2026-09-22), session-investigation-0925 (2026-09-26), voice-transcription (2026-09-27, R3+R4: `AC-VT-*` vs `AC-####`; the guide still defines only the numeric form).
+  Runs: session-2026-09-21-repro (2026-09-22), llm-io-audit-trail (2026-09-22), session-investigation-0925 (2026-09-26), voice-transcription (2026-09-27, R3+R4: `AC-VT-*` vs `AC-####`; the guide still defines only the numeric form), retro-timestamps (2026-09-30, meta R3/R4: `AC-RT-*`; about 20 plan prefixes now in use).
+- [×4] `CONTRIBUTING_AI.md`'s DRY bullet reads as production-only ("no copy-paste, no
+  reinvention of what the repo already has"); R2 applied it to duplicated test fixtures
+  (`USER`, `ctxConfig`) and blocked, but a reviewer could as reasonably have downgraded them.
+  Third run: the same scripted-model test double reimplemented inline in a second file could
+  only be advisory — DRY as written targets a copied *symbol*, not an unexported shape.
+  Proposed line: "DRY applies to test fixtures and harnesses too, including the same test
+  double reimplemented in two files."
+  Fourth run: R2 applied DRY equally to test/fixture code in `tests/integration/scenarios` and noted the zone file does not say whether it should; that choice produced 2 of its 3 blocking findings.
+  Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19), training-journey-scenarios (2026-09-20), transition-handoff (2026-09-25).
 - [×3] A docs-reconcile task's checklist written from the author's memory left five durable
   docs drifted (API_SPEC.md, three FEAT-* specs, BUGS.md/MANUAL_TEST_PLAN pointers) while
   every enumerated step was ticked done. Proposed sentence for the factual-bucket definition
@@ -878,3 +880,4 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   `CONTRIBUTING_AI.md`: "A change that adds a prompt block, tool or prompt version updates the
   ARCHITECTURE.md file map and the MANUAL_TEST_PLAN.md tool list in the same PR, or logs the drift
   in BACKLOG.md." Runs: load-facts (2026-09-29, R4).
+- [×1] Evidence rows need the SHA the command was actually run at. A single "evidence SHA" commit that fills every row with the head SHA makes red-phase evidence unverifiable (every T2 red row cited the fix commit `880335e0`, where the repros no longer exist). Proposed wording for the Evidence convention in `docs/ORCHESTRATION.md` / `SUPERPOWERS_INTEGRATION.md`: "Red-phase evidence cites the red-test commit; green-phase evidence cites the fix commit." Runs: retro-timestamps 2026-09-30 (R3).

@@ -7,14 +7,13 @@
  * the section separator comes from compose()/assembler instead.
  */
 import { PLACE_AMBIGUOUS_THRESHOLD } from '@domain/training/place';
+import { isRetroLog, lastActivityOf } from '@domain/training/session-timing';
 import { workingSets } from '@domain/training/sets';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
 import { humanTimeAgo } from '@shared/date-utils';
 
 import type { ContextBlock, ContextBlockCtx } from './types';
-
-const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 /**
  * Single source of truth for the LLM about what has been done and what is planned.
@@ -289,16 +288,15 @@ export interface TrainingStaleSessionData {
   session: WorkoutSessionWithDetails;
 }
 
-/** Absent (null) unless the session has been inactive past SESSION_TIMEOUT_MS — v1's `isStale` gate. */
+/** Absent (null) unless the session has been inactive past the timeout and holds sets (`isRetroLog`). */
 export const TRAINING_STALE_SESSION_V1: ContextBlock<TrainingStaleSessionData> = {
   id: 'training.stale_session',
   version: 'v1',
   render(data, ctx: ContextBlockCtx) {
-    const lastActivity = data.session.lastActivityAt ?? data.session.updatedAt ?? data.session.createdAt;
-    const sessionAgeMs = ctx.now.getTime() - new Date(lastActivity).getTime();
-    if (sessionAgeMs <= SESSION_TIMEOUT_MS) {
+    if (!isRetroLog(data.session, ctx.now)) {
       return null;
     }
+    const sessionAgeMs = ctx.now.getTime() - lastActivityOf(data.session).getTime();
     return buildStaleSessionSection(sessionAgeMs).trimEnd();
   },
 };
