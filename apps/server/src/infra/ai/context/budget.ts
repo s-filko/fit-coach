@@ -45,6 +45,7 @@ import {
   USER_FACTS_V2,
 } from '@infra/ai/prompts/blocks';
 
+import { conversationTokens } from './cache-warmth';
 import { estimateTokens } from './token-estimator';
 
 export type BudgetCut = 'facts' | 'history' | `block:${string}` | 'summary' | 'floor';
@@ -77,7 +78,8 @@ export interface ResolveBudgetInput<D> {
   /**
    * Prompt-caching plan D5: non-null only while the provider cache is warm (the caller compares the previous call's
    * age with the cache TTL). Then NO cut runs — facts, history, block depths and summaries all sit in the cached
-   * prefix, and rewriting any of them is a full miss — unless the estimated total exceeds `hardCapTokens`, where
+   * prefix, and rewriting any of them is a full miss — unless the conversation (history + current, the same measure
+   * the compact step uses: `conversationTokens`) exceeds `hardCapTokens`, where
    * today's resolution order runs unchanged.
    */
   cacheWarm?: { hardCapTokens: number } | null;
@@ -179,7 +181,7 @@ export async function resolveBudget<D>(input: ResolveBudgetInput<D>): Promise<Re
   // D5: warm cache and under the hard cap → leave everything as it is (the whole resolution is a cache breaker).
   let hardCapExceeded: ResolveBudgetResult['hardCapExceeded'];
   if (input.cacheWarm) {
-    const estimatedTotalTokens = totalNow(input.facts, input.history, input.summaries);
+    const estimatedTotalTokens = conversationTokens(input.history, input.current, estimate);
     if (estimatedTotalTokens <= input.cacheWarm.hardCapTokens) {
       return {
         facts: input.facts,

@@ -5,7 +5,9 @@
  * Run: npm run cache-report -- <userId> <from ISO> <to ISO> [--price <USD per 1M input tokens>] [--ttl 5m|1h]
  *      [--env-file <path>]
  *
- * The price defaults to LLM_INPUT_PRICE_PER_MTOK, the TTL to LLM_PROMPT_CACHE_TTL. `--env-file` works as in
+ * Every model is priced from its own list price (input, cache multipliers, OUTPUT — src/infra/ai/model-prices.ts,
+ * overridable with LLM_MODEL_PRICES); `--price` forces one flat input price on all models (output unpriced). The TTL
+ * defaults to LLM_PROMPT_CACHE_TTL. `--env-file` works as in
  * print-transcript: the imports that open a database connection are dynamic, so they resolve only after the
  * override has loaded its file.
  */
@@ -54,9 +56,10 @@ async function run(): Promise<void> {
     import('@infra/observability/db-target'),
   ]);
   const cfg = loadConfig();
-  const price = Number(argValue(args, '--price') ?? cfg.LLM_INPUT_PRICE_PER_MTOK);
-  if (!Number.isFinite(price) || price <= 0) {
-    usageError('a price is required: --price <USD per 1M input tokens> or LLM_INPUT_PRICE_PER_MTOK');
+  const priceArg = argValue(args, '--price');
+  const flatPrice = priceArg === undefined ? undefined : Number(priceArg);
+  if (flatPrice !== undefined && (!Number.isFinite(flatPrice) || flatPrice <= 0)) {
+    usageError('--price must be a positive number (USD per 1M input tokens)');
   }
   const ttlArg = argValue(args, '--ttl') ?? cfg.LLM_PROMPT_CACHE_TTL;
   if (ttlArg !== '5m' && ttlArg !== '1h') {
@@ -70,7 +73,14 @@ async function run(): Promise<void> {
   };
   console.log(formatDatabaseTarget(target));
   try {
-    const report = await buildCacheReport({ userId, from, to, inputPricePerMTok: price, cacheTtl: ttlArg });
+    const report = await buildCacheReport({
+      userId,
+      from,
+      to,
+      inputPricePerMTok: flatPrice,
+      prices: parseModelPrices(cfg.LLM_MODEL_PRICES),
+      cacheTtl: ttlArg,
+    });
     console.log(formatCacheReport(report));
   } catch (err) {
     const friendly = describeSchemaError(err, target);

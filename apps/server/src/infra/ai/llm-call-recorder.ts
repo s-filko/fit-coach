@@ -6,6 +6,9 @@
  */
 import { createHash } from 'node:crypto';
 
+import { textOnly } from '@infra/ai/message-text';
+import { parseModelPrices, priceOf } from '@infra/ai/model-prices';
+
 import { createLogger } from '@shared/logger';
 
 import {
@@ -160,18 +163,13 @@ async function lookupPreviousCall(
   return { kind: 'available', request, createdAt: prevRow.createdAt };
 }
 
-/** A system message's text: a string as is, a list of text parts joined (cache_control ignored); else null. */
-function systemTextOf(content: unknown): string | null {
-  if (typeof content === 'string') {
-    return content;
-  }
-  if (
-    Array.isArray(content) &&
-    content.every(p => p !== null && typeof p === 'object' && (p as { type?: string }).type === 'text')
-  ) {
-    return content.map(p => (p as { text?: string }).text ?? '').join('');
-  }
-  return null;
+/** Did this request mark any content part with `cache_control` (i.e. ask the provider for explicit caching)? */
+function sentCacheControl(messages: RecordedRequestMessage[]): boolean {
+  return messages.some(
+    m =>
+      Array.isArray(m.content) &&
+      (m.content as unknown[]).some(p => p !== null && typeof p === 'object' && 'cache_control' in p),
+  );
 }
 
 const PLANNED_BUT_NOTABLE = new Set(['planned:hard_cap', 'planned:facts_changed']);
@@ -213,7 +211,7 @@ export const recordLlmCall: RecordLlmCall = async input => {
   const messages = await Promise.all(
     input.request.messages.map(async message => {
       // D1 (prompt-caching): with breakpoints on, the system message is a list of text parts — deduped by its text.
-      const systemText = message.role === 'system' ? systemTextOf(message.content) : null;
+      const systemText = message.role === 'system' ? textOnly(message.content) : null;
       if (systemText === null) {
         return message;
       }
@@ -264,12 +262,21 @@ export const recordLlmCall: RecordLlmCall = async input => {
       );
       ({ cacheExpected, cacheDivergedAt, cacheSharedPrefixTokens, cacheGapMs, cacheBreak, cacheBreakLostTokens } =
         result);
-      // D8.4: a break nobody declared (or a miss nothing explains) is alerted; a declared one is silent except the
-      // two that are planned but not standard (hard cap, facts) — optimisation candidates. Never fails the call.
-      try {
-        logCacheBreak(result, input, cfg.LLM_INPUT_PRICE_PER_MTOK);
-      } catch (err) {
-        log.error({ err, runId: input.runId }, 'Cache break logging failed — continuing');
+      // D8: the guard only judges calls that ASKED for caching — a request with no `cache_control` (the route has
+      // `LLM_PROMPT_CACHE=off`, or it is a summariser / course-check call) has no breakpoints to break: no
+      // classification is stored and nothing is logged.
+      if (sentCacheControl(input.request.messages)) {
+        // D8.4: a break nobody declared (or a miss nothing explains) is alerted; a declared one is silent except the
+        // two that are planned but not standard (hard cap, facts) — optimisation candidates. Never fails the call.
+        try {
+          const modelPrice = priceOf(input.model, parseModelPrices(cfg.LLM_MODEL_PRICES));
+          logCacheBreak(result, input, cfg.LLM_INPUT_PRICE_PER_MTOK ?? modelPrice?.inputPerMTok);
+        } catch (err) {
+          log.error({ err, runId: input.runId }, 'Cache break logging failed — continuing');
+        }
+      } else {
+        cacheBreak = null;
+        cacheBreakLostTokens = null;
       }
     } catch (err) {
       log.error({ err, runId: input.runId }, 'Cache attribution failed — continuing with null cache columns (D7)');

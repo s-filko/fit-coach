@@ -133,4 +133,75 @@ describe('AC-PC-11: cache-report over seeded llm_calls rows', () => {
     expect(facts).toBeGreaterThan(miss);
     expect(cap).toBeGreaterThan(facts);
   });
+
+  it('AC-PC-11: per-model list prices incl. output tokens, comparable with a bill; an unpriced model is left out, never guessed', async () => {
+    const user = randomUUID();
+    const rows = [
+      { model: 'anthropic/claude-sonnet-5.5', input: 10000, output: 1000, read: 8000, write: 1000 },
+      { model: 'anthropic/claude-haiku-4.5', input: 4000, output: 200, read: 0, write: 0 },
+      { model: 'vendor/unknown-model', input: 500, output: 50, read: 0, write: 0 },
+    ];
+    let idx = 0;
+    for (const r of rows) {
+      idx += 1;
+      await db.insert(llmCalls).values({
+        runId: randomUUID(),
+        userId: user,
+        callIndex: idx,
+        model: r.model,
+        request: null,
+        response: null,
+        promptHashes: [],
+        inputTokens: r.input,
+        outputTokens: r.output,
+        cacheReadTokens: r.read,
+        cacheWriteTokens: r.write,
+        latencyMs: 100,
+        createdAt: at(10),
+      } as never);
+    }
+    const report = await buildCacheReport({ userId: user, from: FROM, to: TO, cacheTtl: '5m' });
+    const sonnet = report.models.find(m => m.model === 'anthropic/claude-sonnet-5.5')!;
+    // sonnet: read 8000×0.3 + write 1000×3.75 + uncached 1000×3 + output 1000×15, per 1M
+    expect(sonnet.cost!.read).toBeCloseTo((8000 * 0.3) / 1e6, 8);
+    expect(sonnet.cost!.write).toBeCloseTo((1000 * 3.75) / 1e6, 8);
+    expect(sonnet.cost!.uncached).toBeCloseTo((1000 * 3) / 1e6, 8);
+    expect(sonnet.cost!.output).toBeCloseTo((1000 * 15) / 1e6, 8);
+    expect(sonnet.cost!.withoutCaching).toBeCloseTo((10000 * 3 + 1000 * 15) / 1e6, 8);
+    const haiku = report.models.find(m => m.model === 'anthropic/claude-haiku-4.5')!;
+    expect(haiku.cost!.total).toBeCloseTo((4000 * 1 + 200 * 5) / 1e6, 8);
+    expect(report.unpricedModels).toEqual(['vendor/unknown-model']);
+    expect(report.cost.total).toBeCloseTo(sonnet.cost!.total + haiku.cost!.total, 8);
+    expect(report.outputTokens).toBe(1250);
+    const text = formatCacheReport(report);
+    expect(text).toContain('vendor/unknown-model');
+    expect(text).toContain('no price');
+  });
+
+  it('AC-PC-11: a per-model price override (LLM_MODEL_PRICES) wins over the built-in table', async () => {
+    const user = randomUUID();
+    await db.insert(llmCalls).values({
+      runId: randomUUID(),
+      userId: user,
+      callIndex: 1,
+      model: 'vendor/unknown-model',
+      request: null,
+      response: null,
+      promptHashes: [],
+      inputTokens: 1000,
+      outputTokens: 100,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      latencyMs: 100,
+      createdAt: at(11),
+    } as never);
+    const report = await buildCacheReport({
+      userId: user,
+      from: FROM,
+      to: TO,
+      prices: { 'vendor/unknown-model': { inputPerMTok: 2, outputPerMTok: 10 } },
+    });
+    expect(report.unpricedModels).toEqual([]);
+    expect(report.cost.total).toBeCloseTo((1000 * 2 + 100 * 10) / 1e6, 8);
+  });
 });

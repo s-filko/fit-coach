@@ -5,13 +5,14 @@
  * falls back to a catalog message. Identical for every phase — layout,
  * prompt, tools, policy and loaders all come from the PhaseSpec.
  */
-import { AIMessage, type BaseMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 
 import type { StoredEpisodeSummary } from '@domain/conversation/episode';
 
 import { assembleContext } from '@infra/ai/context/assemble-context';
-import { applyCacheBreakpoints } from '@infra/ai/context/cache-breakpoints';
+import { applyCacheBreakpoints, partsOf, withParts } from '@infra/ai/context/cache-breakpoints';
+import { warmCacheOf } from '@infra/ai/context/cache-warmth';
 import type { CourseCheckDirective, StoredCourseDirective } from '@infra/ai/course-check/directive';
 import { splitEpisode } from '@infra/ai/graph/episode';
 import type { ConversationGraphDeps, PhaseSpec, PromptContextFor } from '@infra/ai/graph/phase-spec';
@@ -101,40 +102,15 @@ function logModelResponse(response: AIMessage, userId: string, phase: string): s
   return finishReason;
 }
 
-type TextPart = { type: 'text'; text: string };
-
-function textPartsOf(message: BaseMessage): Array<TextPart | Record<string, unknown>> {
-  return typeof message.content === 'string'
-    ? [{ type: 'text', text: message.content }]
-    : ([...message.content] as Array<Record<string, unknown>>);
-}
-
 /**
  * The request's copy of `message` with `text` appended as one more text part. Only the two roles a nudge can
  * land on are cloned; anything else is returned as is.
  */
 function withAppendedText(message: BaseMessage, text: string): BaseMessage {
-  const content = [...textPartsOf(message), { type: 'text', text }] as never;
-  if (typeOf(message) === 'tool') {
-    const tool = message as ToolMessage;
-    return new ToolMessage({
-      content,
-      tool_call_id: tool.tool_call_id,
-      id: tool.id,
-      name: tool.name,
-      status: tool.status,
-      artifact: tool.artifact as unknown,
-    });
-  }
-  if (typeOf(message) === 'human') {
-    return new HumanMessage({
-      content,
-      id: message.id,
-      name: message.name,
-      additional_kwargs: message.additional_kwargs,
-    });
-  }
-  return message;
+  const role = typeOf(message);
+  return role === 'tool' || role === 'human'
+    ? withParts(message, [...partsOf(message), { type: 'text', text }])
+    : message;
 }
 
 /**
@@ -159,16 +135,6 @@ function withPostToolNudge(messages: BaseMessage[]): BaseMessage[] {
     return messages;
   }
   return messages.map((m, i) => (i === target ? withAppendedText(m, nudge) : m));
-}
-
-/** D5: `{ hardCapTokens }` while the previous message is younger than the configured cache TTL; null otherwise. */
-function warmCacheOf(
-  { cacheTtlMs, hardCapTokens }: { cacheTtlMs?: number; hardCapTokens?: number },
-  sinceLastMessageMs: number,
-): { hardCapTokens: number } | null {
-  return cacheTtlMs !== undefined && hardCapTokens !== undefined && sinceLastMessageMs < cacheTtlMs
-    ? { hardCapTokens }
-    : null;
 }
 
 export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDeps) {
@@ -248,8 +214,7 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     // (same source as the compact step: state.lastUserMessageAt, no extra query). Warm → the assembler skips every
     // budget cut unless the estimated total is over the hard cap.
     // (episodeConfig is only read once there is a previous message, like the gap note above.)
-    const cacheWarm =
-      lastMessageTime !== null ? warmCacheOf(deps.episodeConfig, now.getTime() - lastMessageTime.getTime()) : null;
+    const cacheWarm = warmCacheOf(deps.episodeConfig, state.lastUserMessageAt ?? null, now);
     const {
       messages: assembledMessages,
       budgetReport,

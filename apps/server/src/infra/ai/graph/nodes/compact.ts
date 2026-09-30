@@ -11,7 +11,7 @@ import { AIMessage, type BaseMessage } from '@langchain/core/messages';
 
 import type { CompactReason } from '@domain/conversation/episode';
 
-import { textOf } from '@infra/ai/llm.gateway';
+import { textOf } from '@infra/ai/message-text';
 
 /** Tool results are truncated at this many characters in the summariser transcript. */
 const TOOL_RESULT_MAX_CHARS = 500;

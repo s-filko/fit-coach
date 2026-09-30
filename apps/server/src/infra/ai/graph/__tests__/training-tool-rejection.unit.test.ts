@@ -1,8 +1,8 @@
 /**
- * Prompt-caching plan (BUG-051) T2 — AC-PC-4, executor half (D4): availability moves from hiding to
- * rejecting. `delete_last_sets` / `update_last_set` called before the current exercise has a set must come
- * back as an `llm_error` ToolMessage (same meaning BUG-008 Plan A gave by hiding them) and must never reach
- * the training service.
+ * Prompt-caching plan (BUG-051) AC-PC-4, executor half (D4): availability moves from hiding to rejecting.
+ * `delete_last_sets` / `update_last_set` called before the current exercise has a set come back as a refusal
+ * ToolMessage (same meaning BUG-008 Plan A gave by hiding them), never reach the training service, and — review
+ * fix — never spend training's `llmErrorBudget` (a `user_error`, not an `llm_error`).
  *
  * Interface assumed: the rejection is observable through `buildToolExecutor` over the REAL training tools
  * and policy, with the session read via `trainingService.getSessionDetails(activeSessionId)`. Where the
@@ -72,26 +72,51 @@ function stateCalling(name: string, args: Record<string, unknown>) {
 }
 
 describe('AC-PC-4: delete_last_sets / update_last_set before the first set are rejected by the executor (D4)', () => {
-  it('AC-PC-4: delete_last_sets with no set on the current exercise → llm_error, training service never called', async () => {
+  it('AC-PC-4: delete_last_sets with no set on the current exercise → refusal (not an llm_error), training service never called', async () => {
     const trainingService = makeTrainingService([]);
     const result = await makeExecutor(trainingService)(
       stateCalling('delete_last_sets', { exercise_id: EXERCISE_ID }),
       CONFIG,
     );
     const message = result.messages[0] as ToolMessage;
-    expect(outcomeKindOf(message)).toBe('llm_error');
+    expect(outcomeKindOf(message)).toBe('ok');
+    expect(String(message.content)).toContain('delete_last_sets is not available yet');
     expect(trainingService.deleteLastSets).not.toHaveBeenCalled();
   });
 
-  it('AC-PC-4: update_last_set with no set on the current exercise → llm_error, training service never called', async () => {
+  it('AC-PC-4: update_last_set with no set on the current exercise → refusal (not an llm_error), training service never called', async () => {
     const trainingService = makeTrainingService([]);
     const result = await makeExecutor(trainingService)(
       stateCalling('update_last_set', { exercise_id: EXERCISE_ID, reps: 9 }),
       CONFIG,
     );
     const message = result.messages[0] as ToolMessage;
-    expect(outcomeKindOf(message)).toBe('llm_error');
+    expect(outcomeKindOf(message)).toBe('ok');
+    expect(String(message.content)).toContain('update_last_set is not available yet');
     expect(trainingService.updateLastSet).not.toHaveBeenCalled();
+  });
+
+  it('AC-PC-4: a premature delete/update does not spend the tool-error budget (no tool_error_budget_exhausted)', async () => {
+    const trainingService = makeTrainingService([]);
+    const state = stateCalling('delete_last_sets', { exercise_id: EXERCISE_ID });
+    (state.messages[1] as AIMessage).tool_calls = [
+      { id: 'c1', name: 'delete_last_sets', args: { exercise_id: EXERCISE_ID }, type: 'tool_call' },
+      { id: 'c2', name: 'update_last_set', args: { exercise_id: EXERCISE_ID, reps: 9 }, type: 'tool_call' },
+    ];
+    const result = await makeExecutor(trainingService)(state, CONFIG);
+    expect(result.messages).toHaveLength(2);
+    expect(result.messages.every(m => m._getType() === 'tool')).toBe(true);
+  });
+
+  it('AC-PC-4: a failing session read inside the tool is handled by the tool, not thrown out of it', async () => {
+    const trainingService = makeTrainingService([]);
+    (trainingService.getSessionDetails as jest.Mock).mockRejectedValue(new Error('db down'));
+    const result = await makeExecutor(trainingService)(
+      stateCalling('delete_last_sets', { exercise_id: EXERCISE_ID }),
+      CONFIG,
+    );
+    expect(result.messages[0]!._getType()).toBe('tool');
+    expect(trainingService.deleteLastSets).not.toHaveBeenCalled();
   });
 
   it('AC-PC-4: once a set exists the same calls go through', async () => {

@@ -17,6 +17,8 @@ import { REAL_TIMER_APIS } from '../../helpers/real-timers';
 
 import { installScriptedModel } from './scripted-model';
 
+import { textOnly } from '@infra/ai/message-text';
+
 const T0 = new Date('2026-09-25T09:00:00.000Z');
 const MIN = 60_000;
 const SETS = 16;
@@ -55,11 +57,7 @@ const scenarioDef: Scenario = {
 };
 
 function textOf(m: BaseMessage): string {
-  return typeof m.content === 'string'
-    ? m.content
-    : m.content.every(part => part.type === 'text')
-      ? m.content.map(part => (part as { text: string }).text).join('')
-      : JSON.stringify(m.content);
+  return textOnly(m.content) ?? JSON.stringify(m.content);
 }
 
 describe('retro-timestamps scenario (BUG-043, AC-RT-3, AC-RT-4)', () => {

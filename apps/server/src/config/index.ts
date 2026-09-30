@@ -119,6 +119,9 @@ export const EnvSchema = z.object({
   // Prompt-caching plan D8: list price (USD per 1M uncached input tokens) used to cost cache breaks in the
   // 'Prompt cache break' log and in scripts/cache-report.ts. Optional — unset omits the cost.
   LLM_INPUT_PRICE_PER_MTOK: z.coerce.number().positive().optional(),
+  // Per-model list prices for scripts/cache-report.ts and the cache-break cost log (JSON, see
+  // infra/ai/model-prices.ts); merged over the built-in table.
+  LLM_MODEL_PRICES: z.string().optional(),
   LLM_CONTEXT_HARD_CAP_TOKENS: z.coerce.number().int().positive().default(60_000),
   // Transition hand-off (transition-handoff plan Task 1, D-1, AC-TH-2): comma
   // list of ConversationPhase targets that get a silent same-run hand-off when

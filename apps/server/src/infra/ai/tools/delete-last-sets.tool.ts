@@ -27,13 +27,12 @@ export function buildDeleteLastSetsTool(deps: DeleteLastSetsToolDeps) {
         return systemError('No active training session found. Start a session first.');
       }
 
-      const rejection = await rejectWithoutLoggedSet(trainingService, sessionId, 'delete_last_sets');
-      if (rejection) {
-        return rejection;
-      }
-
       const count = input.count ?? 1;
       try {
+        const rejection = await rejectWithoutLoggedSet(trainingService, sessionId, 'delete_last_sets');
+        if (rejection) {
+          return rejection;
+        }
         const result = await trainingService.deleteLastSets(sessionId, input.exercise_id, count);
         const deleted = result.deletedSets
           .map(s => `Set ${s.setNumber}: ${JSON.stringify(s.setData)}${s.rpe != null ? ` RPE ${s.rpe}` : ''}`)

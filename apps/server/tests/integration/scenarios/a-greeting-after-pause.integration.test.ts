@@ -17,6 +17,7 @@ import { eq } from 'drizzle-orm';
 
 import { db } from '@infra/db/drizzle';
 import { conversationTurns } from '@infra/db/schema';
+import { textOnly } from '@infra/ai/message-text';
 import type { BaseMessage } from '@langchain/core/messages';
 
 import { runScenario, type ScenarioRunResult } from '../../../evals/lib/run-scenario';
@@ -45,12 +46,7 @@ function typeOf(m: BaseMessage | undefined): string {
 }
 
 function textOf(m: BaseMessage | undefined): string {
-  const content = m?.content;
-  if (Array.isArray(content) && content.every(part => part.type === 'text')) {
-    // <context> part + user text (prompt-caching plan D2), joined.
-    return content.map(part => (part as { text: string }).text).join('');
-  }
-  return typeof content === 'string' ? content : JSON.stringify(content ?? '');
+  return textOnly(m?.content) ?? JSON.stringify(m?.content ?? '');
 }
 
 const step = scenario.steps[0]!;

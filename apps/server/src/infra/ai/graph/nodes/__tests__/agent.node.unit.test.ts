@@ -13,6 +13,7 @@ import type { ConversationGraphDeps, PhaseSpec } from '@infra/ai/graph/phase-spe
 import { t } from '@infra/ai/messages';
 import { POST_TOOL_NUDGE_V1, renderBlock } from '@infra/ai/prompts/blocks';
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
+import { textOnly } from '@infra/ai/message-text';
 
 const mockInvoke = jest.fn();
 const mockBindTools = jest.fn(() => ({ invoke: mockInvoke }));
@@ -94,9 +95,7 @@ const CONFIG = {
 
 /** Text of a message whether `content` is a string or a list of text parts. */
 function textOf(m: BaseMessage): string {
-  return typeof m.content === 'string'
-    ? m.content
-    : m.content.map(part => (part as { text?: string }).text ?? '').join('');
+  return textOnly(m.content) ?? JSON.stringify(m.content);
 }
 
 /** The current HumanMessage's <context> text as the request carries it (D2). */

@@ -13,6 +13,8 @@
  * Reuses journey B's setup (`setupSteps`/`sharedPast` — greeting → session_planning → proposal →
  * start_training_session), same production wiring as `exercise-history-lookup-scripted.integration.test.ts`.
  */
+import { textOnly } from '@infra/ai/message-text';
+
 import { runScenario, type ScenarioRunResult } from '../../../evals/lib/run-scenario';
 import type { Scenario } from '../../../evals/schema/scenario.schema';
 import { BENCH_PRESS_ID, setupSteps, sharedPast } from '../../../evals/scenarios/b-full-workout.scenario';
@@ -127,13 +129,7 @@ describe('set-kind — scripted training scenario (set-kind plan D2, D3, D4, AC-
           obs.stepIndex,
           calls
             .flat()
-            .map(m =>
-              typeof m.content === 'string'
-                ? m.content
-                : m.content.every(part => part.type === 'text')
-                  ? m.content.map(part => (part as { text: string }).text).join('')
-                  : JSON.stringify(m.content ?? ''),
-            )
+            .map(m => textOnly(m.content) ?? JSON.stringify(m.content ?? ''))
             .join('\n'),
         );
       },

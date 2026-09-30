@@ -30,6 +30,7 @@ import type {
 } from '@domain/user/ports';
 
 import { OpenAiLlmGateway } from '@infra/ai/llm.gateway';
+import { textOnly } from '@infra/ai/message-text';
 import type { ExerciseWithMuscles } from '@domain/training/types';
 import { computeFactKey } from '@domain/user/services/fact-key';
 import { closureMoment, isActiveForPrompt, isExpired } from '@domain/user/services/fact-lifecycle';
@@ -460,9 +461,7 @@ function makeDeps(userFacts: InMemoryUserFactsService): ConversationGraphDeps {
 
 /** Text of a message whether `content` is a string or a list of text parts (D2/D3). */
 function textOf(m: BaseMessage): string {
-  return typeof m.content === 'string'
-    ? m.content
-    : m.content.map(part => (part as { text?: string }).text ?? '').join('');
+  return textOnly(m.content) ?? JSON.stringify(m.content);
 }
 
 describe('user-facts scenario end to end (AC-1361, fenced summary → fact → block → tool rejection)', () => {
@@ -528,16 +527,7 @@ describe('user-facts scenario end to end (AC-1361, fenced summary → fact → b
     );
     const run1Input = recorded[0]!;
     // D2: the current message is a list of text parts (<context>, then the user's own text).
-    expect(
-      run1Input.some(
-        m =>
-          m._getType() === 'human' &&
-          (typeof m.content === 'string'
-            ? m.content
-            : m.content.map(p => (p as { text?: string }).text ?? '').join('')
-          ).includes('поясницы'),
-      ),
-    ).toBe(true);
+    expect(run1Input.some(m => m._getType() === 'human' && textOf(m).includes('поясницы'))).toBe(true);
 
     // --- Step 2: compaction — the summariser answers INSIDE a ```json fence
     // through the REAL gateway; the summary is stored and the add operation applied.

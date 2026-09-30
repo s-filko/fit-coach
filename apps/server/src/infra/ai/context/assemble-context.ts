@@ -32,7 +32,7 @@
  * data. `async` only because `resolveBudget`'s `trimHistory` wraps
  * LangChain's `trimMessages`, which is `Promise`-typed.
  */
-import { type BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { type BaseMessage, SystemMessage } from '@langchain/core/messages';
 
 import type { StoredEpisodeSummary, TokenBudget } from '@domain/conversation/episode';
 import type { BudgetReport } from '@domain/conversation/ports';
@@ -54,6 +54,7 @@ import {
 import { SECTION_SEPARATOR } from '@infra/ai/prompts/compose';
 
 import { resolveBudget } from './budget';
+import { partsOf, withParts } from './cache-breakpoints';
 import { estimateMessages, estimateTokens, TOKEN_ESTIMATOR_ID } from './token-estimator';
 
 export interface AssembleInput<D = unknown> {
@@ -126,16 +127,8 @@ function isHuman(m: BaseMessage): boolean {
  * user's own content. Never mutates `message` (the checkpointed one) and keeps its id.
  */
 function withContext(message: BaseMessage, contextText: string): BaseMessage {
-  const contextPart = { type: 'text' as const, text: `<context>\n${contextText}\n</context>` };
-  const ownParts =
-    typeof message.content === 'string' ? [{ type: 'text' as const, text: message.content }] : [...message.content];
-  return new HumanMessage({
-    content: [contextPart, ...ownParts],
-    id: message.id,
-    name: message.name,
-    additional_kwargs: message.additional_kwargs,
-    response_metadata: message.response_metadata,
-  });
+  const contextPart = { type: 'text', text: `<context>\n${contextText}\n</context>` };
+  return withParts(message, [contextPart, ...partsOf(message)]);
 }
 
 export async function assembleContext<D>(input: AssembleInput<D>): Promise<AssembledContext> {

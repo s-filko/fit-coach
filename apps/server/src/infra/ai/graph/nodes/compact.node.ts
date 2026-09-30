@@ -50,6 +50,7 @@ import type { LegacySummary, SummaryPort } from '@domain/conversation/ports';
 import type { IUserFactsService } from '@domain/user/ports';
 import { PermanentFactRefusal } from '@domain/user/services/fact-lifecycle';
 
+import { conversationTokens, warmCacheOf } from '@infra/ai/context/cache-warmth';
 import { estimateMessages } from '@infra/ai/context/token-estimator';
 import { splitEpisode } from '@infra/ai/graph/episode';
 import { type ConversationStateType, ctxOf } from '@infra/ai/graph/state';
@@ -164,11 +165,13 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
     const historyBudget = budgetFor(state.phase);
     // D5: warm cache → the budget trigger waits unless the estimated total (history + this run's messages) is over
     // the hard cap. Only used by the automatic budget trigger; inactivity / phase_boundary ignore it.
-    const warmSince = state.lastUserMessageAt !== null ? ctx.now.getTime() - Date.parse(state.lastUserMessageAt) : null;
-    const cacheWarm =
-      cacheTtlMs !== undefined && hardCapTokens !== undefined && warmSince !== null && warmSince < cacheTtlMs
-        ? { hardCapTokens, estimatedTotalTokens: estimateMessages(state.messages) }
-        : null;
+    const warm = warmCacheOf({ cacheTtlMs, hardCapTokens }, state.lastUserMessageAt, ctx.now);
+    const cacheWarm = warm
+      ? {
+          hardCapTokens: warm.hardCapTokens,
+          estimatedTotalTokens: conversationTokens(history, splitEpisode(state.messages).current, estimateMessages),
+        }
+      : null;
     const reason: CompactReason | null = manual
       ? 'manual'
       : decideCompactReason({

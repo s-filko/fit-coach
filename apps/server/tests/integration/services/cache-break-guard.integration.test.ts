@@ -34,6 +34,8 @@ const FACTS = '\n\n## User Facts\n- likes squats';
 const MODEL = 'anthropic/claude-sonnet-5.5';
 
 type Msg = { role: string; content: string };
+/** With `LLM_PROMPT_CACHE=anthropic` the system message goes out as text parts, the last one carrying cache_control. */
+const cachedSystem = (text: string) => [{ type: 'text', text, cache_control: { type: 'ephemeral' } }];
 const H0: Msg = { role: 'user', content: 'привет' };
 const A0: Msg = { role: 'assistant', content: 'Привет! Начинаем?' };
 
@@ -41,16 +43,20 @@ function call(
   userId: string,
   system: string,
   tail: Msg[],
-  extra: Partial<RecordLlmCallInput> & { usage?: Record<string, unknown>; cacheBreakReasons?: string[] } = {},
+  extra: Partial<RecordLlmCallInput> & {
+    usage?: Record<string, unknown>;
+    cacheBreakReasons?: string[];
+    noCacheControl?: boolean;
+  } = {},
 ): RecordLlmCallInput {
-  const { usage, ...rest } = extra;
+  const { usage, noCacheControl, ...rest } = extra;
   return {
     runId: randomUUID(),
     userId,
     model: MODEL,
     request: {
       model: MODEL,
-      messages: [{ role: 'system', content: system }, H0, A0, ...tail],
+      messages: [{ role: 'system', content: noCacheControl ? system : cachedSystem(system) }, H0, A0, ...tail],
       tools: [{ n: 'log_set' }],
     },
     response: {
@@ -148,5 +154,20 @@ describe('recorder + DB: cache accounting and the cache-break guard', () => {
       expect.objectContaining({ userId, where: 'unexplained_miss', lostTokens: expect.any(Number) }),
       'Prompt cache break',
     );
+  });
+
+  it('AC-PC-9: a call that sent no cache_control (LLM_PROMPT_CACHE=off, summariser, course-check) is never classified or warned', async () => {
+    const userId = randomUUID();
+    await recordLlmCall(call(userId, `${PROMPT}${FACTS}`, PREV_TAIL, { noCacheControl: true }));
+    await recordLlmCall(
+      call(userId, `${PROMPT}${FACTS}\n- new knee injury`, NEXT_TAIL, {
+        noCacheControl: true,
+        usage: { cacheReadTokens: 0 },
+      }),
+    );
+    const row = await lastRow(userId);
+    expect(row['cacheBreak'] ?? null).toBeNull();
+    expect(row['cacheBreakLostTokens'] ?? null).toBeNull();
+    expect(logFns.warn).not.toHaveBeenCalledWith(expect.anything(), 'Prompt cache break');
   });
 });

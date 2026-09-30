@@ -14,6 +14,7 @@ import { AIMessage, type BaseMessage, HumanMessage, SystemMessage } from '@langc
 import type { StoredEpisodeSummary, TokenBudget } from '@domain/conversation/episode';
 
 import type { RenderableBlock } from '@infra/ai/prompts/blocks';
+import { textOnly } from '@infra/ai/message-text';
 
 import { IN_FLIGHT_POST_TOOL } from '../../../../../evals/fixtures/assembly-scenarios';
 import { assembleContext, type AssembleInput } from '../assemble-context';
@@ -77,9 +78,7 @@ function isType(m: BaseMessage, type: string): boolean {
 
 /** Text of a message whether `content` is a string or a list of text parts. */
 function textOf(m: BaseMessage): string {
-  return typeof m.content === 'string'
-    ? m.content
-    : m.content.map(part => (part as { text?: string }).text ?? '').join('');
+  return textOnly(m.content) ?? JSON.stringify(m.content);
 }
 
 /** The current HumanMessage as the request carries it: a `<context>` part first, then the user's own text. */

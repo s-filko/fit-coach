@@ -16,6 +16,7 @@
  * so both sides compare on the same footing regardless of which one round-tripped through jsonb.
  */
 import { reasonCovers } from '@infra/ai/cache-break-reasons';
+import { textOnly } from '@infra/ai/message-text';
 import {
   COURSE_DIRECTIVE_HEADER,
   CURRENT_TIME_PREFIX,
@@ -143,17 +144,8 @@ function normalisedContent(content: unknown): unknown {
 }
 
 function systemText(content: unknown): string {
-  if (typeof content === 'string') {
-    return content;
-  }
   const parts = normalisedContent(content);
-  if (
-    Array.isArray(parts) &&
-    parts.every(p => p !== null && typeof p === 'object' && (p as { type?: string }).type === 'text')
-  ) {
-    return parts.map(p => (p as { text?: string }).text ?? '').join('');
-  }
-  return canonicalStringify(parts ?? null);
+  return textOnly(parts) ?? canonicalStringify(parts ?? null);
 }
 
 function comparableText(m: CacheAttributionMessage): string {

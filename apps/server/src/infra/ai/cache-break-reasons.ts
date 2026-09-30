@@ -15,10 +15,6 @@ export const CACHE_BREAK_REASONS = ['phase_switch', 'compaction', 'hard_cap', 'f
 
 export type CacheBreakReason = (typeof CACHE_BREAK_REASONS)[number];
 
-export function isCacheBreakReason(value: string): value is CacheBreakReason {
-  return (CACHE_BREAK_REASONS as readonly string[]).includes(value);
-}
-
 /**
  * Does a declared reason explain a divergence at `where` (what attribution reports: `tools`, `system:prompt`,
  * `system:facts`, `system:directive`, `system:summaries`, `history[<i>]:<role>`)?

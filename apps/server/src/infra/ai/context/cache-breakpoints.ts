@@ -19,14 +19,15 @@ interface CacheControl {
   ttl?: '1h';
 }
 
-type Part = { type: string; text?: string; cache_control?: CacheControl };
+export type Part = { type: string; text?: string; cache_control?: CacheControl };
 
 /** `5m` is the provider default, so no `ttl` key is sent; `1h` is explicit. */
 function cacheControlFor(ttl: PromptCacheTtl): CacheControl {
   return ttl === '1h' ? { type: 'ephemeral', ttl: '1h' } : { type: 'ephemeral' };
 }
 
-function partsOf(message: BaseMessage): Part[] {
+/** The message's content as a fresh list of parts (a string becomes one text part). */
+export function partsOf(message: BaseMessage): Part[] {
   return typeof message.content === 'string'
     ? [{ type: 'text', text: message.content }]
     : (message.content.map(part => ({ ...part })) as Part[]);
@@ -36,29 +37,31 @@ function hasText(message: BaseMessage): boolean {
   return partsOf(message).some(part => part.type === 'text' && typeof part.text === 'string' && part.text !== '');
 }
 
-/** Duck-typed (_getType): jest.resetModules can re-evaluate @langchain/core, breaking instanceof. */
-function withBreakpoint(message: BaseMessage, control: CacheControl): BaseMessage {
-  const parts = partsOf(message);
-  const last = parts.length - 1;
-  parts[last] = { ...parts[last], cache_control: control };
+/**
+ * The ONE way the request path copies a message with new content parts (breakpoints, the `<context>` part, the
+ * post-tool nudge): every field of the original that identifies or describes it is carried over, nothing is mutated —
+ * history messages are the checkpointed objects. Duck-typed (_getType): jest.resetModules can re-evaluate
+ * @langchain/core, breaking instanceof. An unknown role is returned as is.
+ */
+export function withParts(message: BaseMessage, parts: Part[]): BaseMessage {
   const content = parts as never;
+  const common = {
+    content,
+    id: message.id,
+    name: message.name,
+    additional_kwargs: message.additional_kwargs,
+    response_metadata: message.response_metadata,
+  };
   switch (message._getType()) {
     case 'system':
-      return new SystemMessage({ content, id: message.id, name: message.name });
+      return new SystemMessage(common);
     case 'human':
-      return new HumanMessage({
-        content,
-        id: message.id,
-        name: message.name,
-        additional_kwargs: message.additional_kwargs,
-      });
+      return new HumanMessage(common);
     case 'tool': {
       const tool = message as ToolMessage;
       return new ToolMessage({
-        content,
+        ...common,
         tool_call_id: tool.tool_call_id,
-        id: tool.id,
-        name: tool.name,
         status: tool.status,
         artifact: tool.artifact as unknown,
       });
@@ -66,19 +69,22 @@ function withBreakpoint(message: BaseMessage, control: CacheControl): BaseMessag
     case 'ai': {
       const ai = message as AIMessage;
       return new AIMessage({
-        content,
-        id: ai.id,
-        name: ai.name,
+        ...common,
         tool_calls: ai.tool_calls,
         invalid_tool_calls: ai.invalid_tool_calls,
-        additional_kwargs: ai.additional_kwargs,
-        response_metadata: ai.response_metadata,
         usage_metadata: ai.usage_metadata,
       });
     }
     default:
       return message;
   }
+}
+
+function withBreakpoint(message: BaseMessage, control: CacheControl): BaseMessage {
+  const parts = partsOf(message);
+  const last = parts.length - 1;
+  parts[last] = { ...parts[last], cache_control: control };
+  return withParts(message, parts);
 }
 
 /**

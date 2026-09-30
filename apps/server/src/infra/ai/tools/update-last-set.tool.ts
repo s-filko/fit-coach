@@ -29,14 +29,13 @@ export function buildUpdateLastSetTool(deps: UpdateLastSetToolDeps) {
         return systemError('No active training session found. Start a session first.');
       }
 
-      const rejection = await rejectWithoutLoggedSet(trainingService, sessionId, 'update_last_set');
-      if (rejection) {
-        return rejection;
-      }
-
       const rpe = input.rpe != null ? roundRpeToHalf(input.rpe) : undefined;
 
       try {
+        const rejection = await rejectWithoutLoggedSet(trainingService, sessionId, 'update_last_set');
+        if (rejection) {
+          return rejection;
+        }
         const result = await trainingService.updateLastSet(sessionId, input.exercise_id, {
           weight: input.weight,
           reps: input.reps,
