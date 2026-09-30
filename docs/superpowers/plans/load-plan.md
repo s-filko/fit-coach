@@ -45,6 +45,15 @@ in § "Before dispatch".
 
 ## Decisions (D) — proposed, to be confirmed at dispatch
 
+- **O1 — owner decision 2026-09-30: the code's number is a cheat sheet, the model decides.** `LOAD PLAN` hands the
+  model the scheme's candidate and conservative option **as a suggestion with a comment**, framed as: "this is what
+  the rules give; the decision is yours, to the extent of your awareness of the situation". The model may pick
+  another load when the conversation gives a reason (sleep, pain, crowded gym, how the last set felt) and says why
+  in its reply. Rationale (owner): a rigid formula errs where the model, with the whole context, reads the situation
+  better; formulas are a guide, not the final word. Consequences: D10's "deviate only on a stated fact from the
+  current conversation" becomes "deviate by judgement, stating the reason"; D7 logs both numbers (below); the
+  design's Principle 6 is amended accordingly (durable-spec text at gate 2).
+
 - **D1 — three merges, one plan** (see gate 4). Each merge ends at a dev deploy and its own live
   check; `Status: done` only after 9b-3.
 - **D2 — scheme registry in the domain.** `src/domain/training/load-plan/schemes/` — one module per
@@ -81,6 +90,10 @@ in § "Before dispatch".
   completed_at filled when the exercise completes). Written when `log_set` stores the **first
   working set** of an exercise in a session (design §3.5), with the entry as rendered for that
   run; never read back into the prompt (calibration data, not a cache).
+  **Amended by O1:** the row also stores what the model actually told the user (`advised` jsonb — load, reps, and
+  its stated reason when it differs from the candidate/conservative), so code-vs-model divergence and its outcome
+  can be compared after a few workouts. Source of `advised`: the first working set's reply text is not parsed —
+  the model states it through the `log_set` / a small `advise_load` field (Task 3 decides, red test first).
 - **D8 — `progression_scheme` fact** (design §4.2): written only by the summariser + verifier
   from the user's verbatim quote; typed value validated against `SCHEMES`; newest active wins;
   default from profile (novice + strength → linear, else double) printed as "default,
@@ -96,8 +109,9 @@ in § "Before dispatch".
   stays (legacy rows, API) but is no longer written. Prompts: `session_planning` v4 and
   `training` v10 rebind v8/v9 rules 1, 2, 4b and the FIRST MESSAGE RULE to `LOAD PLAN` /
   `get_load_plan` (quote dated facts, always give the conservative option, say "insufficient
-  data" when the block does, deviate only on a stated fact from the current conversation —
-  Principle 6).
+  data" when the block does, and — per O1 — treat the numbers as a suggestion: deviate by judgement, stating the
+  reason). **Version note (2026-09-30):** `session_planning` v4 and `training` v10 were taken by `prompt-caching`;
+  this plan's prompt versions are `session_planning` v5 and `training` v11.
 - **D11 — executors.** Tasks 1, 2, 3 Sonnet (judgement-heavy); Task 4 Sonnet; Task 5 GLM
   (pattern-following prompt versions). Tasks 1 and 4 touch disjoint files and may run in parallel
   worktrees; DB tests via `db-test-lock.sh`.
