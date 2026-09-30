@@ -62,6 +62,11 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         return llmError(`Invalid set data: ${parsed.error.message}`);
       }
 
+      // load-plan plan Task 3: the recommendation log's run context; ignored when the log is off.
+      const runCtx = config?.context as
+        | { runId?: string; now?: Date; user?: { timezone?: string | null } | null }
+        | undefined;
+
       const rpe = input.rpe != null ? roundRpeToHalf(input.rpe) : undefined;
 
       try {
@@ -85,6 +90,12 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           skipActivityUpdate: isRetro,
           setKind: input.setKind,
           weightBasis: input.weightBasis,
+          loadPlanLog: {
+            runId: runCtx?.runId ?? null,
+            now: runCtx?.now ?? new Date(),
+            timezone: runCtx?.user?.timezone ?? null,
+            advised: input.advised,
+          },
         });
 
         // Named for the summariser (renderTranscript over this tool's own confirmation) as much
@@ -217,6 +228,20 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
               'For a dumbbell/kettlebell exercise the coach assumes the weight is per hand. Pass ' +
                 "'total' only when the user explicitly states the weight is a combined/total figure " +
                 "(e.g. 'в сумме', 'total').",
+            ),
+          advised: z
+            .object({
+              load: z.number().positive().optional().describe('Load in kg you advised for this exercise.'),
+              reps: z.number().int().positive().optional().describe('Reps per set you advised.'),
+              reason: z
+                .string()
+                .optional()
+                .describe('Why the advice departs from the LOAD PLAN suggestion — only when it does.'),
+            })
+            .optional()
+            .describe(
+              'Optional. On the FIRST working set of an exercise: the load/reps you actually advised the user for it ' +
+                '(and the reason when it differs from the LOAD PLAN suggestion). Omit on later sets and when you advised nothing.',
             ),
           order: z
             .number()

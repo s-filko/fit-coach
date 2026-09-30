@@ -69,7 +69,8 @@ export const EnvSchema = z.object({
     .default('true')
     .transform(v => v === 'true'),
   // Load plan (load-plan plan A5): `LOAD_PLAN_SUGGESTION` switches the LOAD PLAN block and `get_load_plan` from
-  // v1 (facts only) to v2 (facts + a suggestion with its reason). Off = exactly the pre-plan behaviour.
+  // v1 (facts only) to v2 (facts + a suggestion with its reason) and writes the `load_recommendations` calibration
+  // log (first working set of an exercise, D7; never read back into a prompt). Off = exactly the pre-plan behaviour.
   LOAD_PLAN_SUGGESTION: z
     .enum(['true', 'false'])
     .default('false')

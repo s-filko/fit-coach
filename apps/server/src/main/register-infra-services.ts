@@ -57,6 +57,9 @@ export async function registerInfraServices(container: Container = getGlobalCont
   container.register(SESSION_EXERCISE_REPOSITORY_TOKEN, new SessionExerciseRepository());
   container.register(SESSION_SET_REPOSITORY_TOKEN, new SessionSetRepository());
 
+  const { loadConfig: loadTrainingConfig } = await import('@config/index');
+  const { buildLoadRecommendationLog } = await import('@infra/ai/load-facts/load-recommendation-log');
+
   container.registerFactory(
     TRAINING_SERVICE_TOKEN,
     c =>
@@ -68,6 +71,15 @@ export async function registerInfraServices(container: Container = getGlobalCont
         c.get(SESSION_SET_REPOSITORY_TOKEN),
         c.get(USER_REPOSITORY_TOKEN),
         c.get(EMBEDDING_SERVICE_TOKEN),
+        // load-plan plan A5: the recommendation log exists only with LOAD_PLAN_SUGGESTION on.
+        buildLoadRecommendationLog(
+          {
+            workoutSessionRepo: c.get(WORKOUT_SESSION_REPOSITORY_TOKEN),
+            exerciseRepository: c.get(EXERCISE_REPOSITORY_TOKEN),
+            userFacts: c.get(USER_FACTS_SERVICE_TOKEN),
+          },
+          loadTrainingConfig(),
+        ),
       ),
   );
 

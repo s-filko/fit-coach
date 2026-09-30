@@ -162,6 +162,13 @@
       "when": 1790770872876,
       "tag": "0022_left_blob",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790790076326,
+      "tag": "0023_smooth_warhawk",
+      "breakpoints": true
     }
   ]
 }
