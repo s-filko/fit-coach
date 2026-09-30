@@ -242,21 +242,44 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
-## Handoff (U9b autonomy order, 2026-10-01) — next orchestrator runs U9b load-plan autonomously to the dev deploy
+## Handoff (U9b load-plan, 2026-10-01) — merged, deployed to dev, flags on; owner review + live workout pending
 
-**Owner order 2026-10-01:** implement U9b `load-plan` in its own branch, fully autonomously, through tests and
-thorough verification; no questions (memory rule "autonomy order": decisions as (D) in the plan, listed here
-for the owner). All four owner gates are closed (plan § Before dispatch: R4.0 accepted, ADR-0009 + Principle 6
-text approved, log shape approved with O1's `advised` column, one merge behind three flags). Owner decision O1:
-the code's load is a suggestion; the model decides and states why; both numbers logged.
-**Model budget rule (owner):** do NOT spend OpenRouter credits. Unit/scenario tests use mocked models. Any
-model-backed check runs locally against the Z.AI subscription (local `apps/server/.env` is already on
-`glm-5.3-flash`, `json_object`; e.g. `npm run smoke`, eval L3) — never against the dev server's OpenRouter route.
-The dev deploy is verified without model calls: health 200, migration applied, flags set in `.env.dev`
-(backup first), zero-LLM report over the owner's history (`scripts/print-load-plan.ts` and the new tiers).
-**Do not** run approval-prompting actions (worktree/branch deletions, memory writes, prod): list them as
-ready-to-run commands in the final handoff. Prompt versions: `training` v11, `session_planning` v5 (v10/v4
-taken by prompt-caching). Pending in parallel: BUG-051 AC-PC-8 closes after the owner's next workout.
+**Done under the owner's autonomy order (2026-10-01):** U9b `load-plan` (`docs/superpowers/plans/load-plan.md`,
+`Status: done`, review clean after run 2) merged into `dev` (`241d2a1f` + Fix-CI `bce87394`) and deployed (run
+36775788188 green; the first deploy run 36774724735 failed in CI — a unit test connected to Postgres, fixed, see plan).
+**Dev verified without model calls:** health 200; migration 0023 applied (`load_recommendations` exists, 0 rows);
+`.env.dev` backed up to `.env.dev.bak.20260930_205818`, then `LOAD_PLAN_SUGGESTION` / `LOAD_PLAN_BREAKS` /
+`LOAD_PLAN_PLANNER_REBIND=true`, server recreated (`printenv` shows all three); zero-LLM report over the owner's
+history: 21 exercises — Stage C scheme 5, Stage A insufficient data 7, gap/return ladder 4, below range 1 (rest
+non-strength); `llm_calls` 254→254, `user_facts` 20→20. No OpenRouter credits spent; no model-backed run at all.
+
+**For the owner to review** — every decision is a `(D)` bullet in the plan § Execution decisions:
+- A1–A6 (executors, parallel t1/t3, nullable decision columns, `advised` on `log_set`, flags default off, Task 5
+  split); A7 (review routing under autonomy); **A8 — review N1 demoted:** scheme/decision `reason` prose stays in
+  the domain per design §4.1 (backlog item filed); T1–T5b, T3-1..5, Fix-* worker choices (notably T1(c) confirmation
+  read from `e1rmTrend.flatRun`; T4(c) `break` expiry approximated by the 14-day `short` cap; T4(d) the "asked"
+  marker is a `break reason=unknown` fact; Fix-9 break windows strictly between workouts; Fix-S the more
+  conservative Stage A row wins).
+- **Durable edits made under autonomy, flagged:** ADR-0009 amendment 2026-10-01 (approved text, verbatim); design
+  Principle 6 (approved text) + §7/§3.4 follow-ups; **not pre-approved, factual:** ADR-0013 time-gap note sentence,
+  `docs/domain/training.spec.md` BR-TRAINING-036..039, `CONTRIBUTING_AI.md` categories/flags lines.
+- **Findings:** (1) zero-LLM report: a machine exercise on the restart ladder prints `conservative: 0 kg` (5 kg
+  minus a 5 kg step) — backlog; under O1 the coach may override. (2) One unidentified integration-test failure in
+  one local run, not reproduced in three reruns. (3) GLM worker blocked by a Claude Code notice modal and by a
+  transient DNS failure for `api.z.ai` — both now in `docs/ORCHESTRATION.md` § Failure handling.
+- **Live check (owner's next workout, dev, all flags on):** «какой вес на жим?» → candidate + conservative with
+  reasons; `load_recommendations` gets a row after the first working set; a new session plan shows sets × reps only;
+  «хочу прогрессию по повторам» → after compaction the block says "chosen by user <date>". Any part can be switched
+  off in `.env.dev` + `docker compose … up -d server` (no redeploy). BUG-051 AC-PC-8 still closes on the same workout.
+
+**Ready-to-run cleanup (owner-gated deletions; plan merged, pushed, worktrees clean):**
+```bash
+orca worktree rm --worktree id:88b171fc-bda9-4c6c-b6f3-82b7fb04ae88::/Users/filko/orca/workspaces/fit_coach/load-plan-t3
+orca worktree rm --worktree id:88b171fc-bda9-4c6c-b6f3-82b7fb04ae88::/Users/filko/orca/workspaces/fit_coach/load-plan-t1
+git branch -D task/load-plan-t3 plan/load-plan
+git push origin --delete plan/load-plan
+```
+Orca run `run_b7745615cfb5`: all workers released (none reclaimable).
 
 ## Handoff (prompt-caching, 2026-09-30) — BUG-051 merged and deployed to dev; owner's workout is the check
 

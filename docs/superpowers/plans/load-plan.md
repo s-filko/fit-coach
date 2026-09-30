@@ -515,6 +515,16 @@ unit suite crashed on `ECONNREFUSED 5432`. Every local run had the DB up, so nei
 acceptance above saw it. Fixed in `54ee7d09` ((D) Fix-CI); `DB_PORT=5999 npm run test:unit` → 2357 passed, no
 connection attempt. The CI-parity run is now part of the acceptance procedure (`docs/ORCHESTRATION.md` § Task spec).
 
+### Dev deploy verification (orchestrator, 2026-10-01, no model calls)
+
+Deploy run 36775788188 (`bce87394`) green; health 200; migration 0023 applied (`load_recommendations` exists).
+`.env.dev` backed up to `.env.dev.bak.20260930_205818`; the three flags set `true`; server recreated with
+`up -d --no-build server` (DB_* / DEPLOY_ENV exported as `deploy.sh` does); `printenv` shows the flags; health 200.
+Zero-LLM report (`npx tsx scripts/print-load-plan.ts --user 60af022f-…` in `fitcoach-dev-server`): 21 exercises;
+decisions — Stage A insufficient 7, Stage C scheme 5, Stage A gap 4, Stage A below range 1; break lines on 9
+exercises (return 5, restart 4 — per-exercise ladders); `llm_calls` 254→254, `user_facts` 20→20,
+`load_recommendations` 0→0. Finding: a restart-ladder machine entry prints `conservative: 0 kg × 12` — backlog.
+
 ### Meta
 
 Filed in `docs/REVIEW_FINDINGS.md` (run 1: R1 ×2, R2 ×1, R3 ×2, R4 ×3; run 2: R1 ×1, R4 ×1).
