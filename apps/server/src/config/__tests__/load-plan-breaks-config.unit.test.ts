@@ -4,7 +4,7 @@
 import { EnvSchema } from '../index';
 import { BASE_ENV } from './base-env.fixture';
 
-describe('LOAD_PLAN_BREAKS (A5)', () => {
+describe('AC-LP-6 · LOAD_PLAN_BREAKS (A5)', () => {
   it('defaults to false, independent of LOAD_PLAN_SUGGESTION', () => {
     const parsed = EnvSchema.parse(BASE_ENV) as Record<string, unknown>;
     expect(parsed['LOAD_PLAN_BREAKS']).toBe(false);

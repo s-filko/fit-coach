@@ -42,7 +42,7 @@ function build(
   return { ctx, rememberFact };
 }
 
-describe('BreakContext.resolve', () => {
+describe('AC-LP-6 · BreakContext.resolve', () => {
   it('no workout yet, or within the normal spacing → nothing to say, nothing stored', async () => {
     for (const d of [null, 0, 7]) {
       const { ctx, rememberFact } = build({ lastWorkoutDaysAgo: d });

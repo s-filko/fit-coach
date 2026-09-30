@@ -58,7 +58,7 @@ function fixtureSet(): { name: string; facts: LoadFacts }[] {
   ];
 }
 
-describe('scheme registry', () => {
+describe('AC-LP-1 · scheme registry', () => {
   it('registers double_progression and linear_progression at version 1', () => {
     expect(Object.keys(SCHEMES).sort()).toEqual(['double_progression', 'linear_progression']);
     for (const s of schemes) {
@@ -78,7 +78,7 @@ describe('scheme registry', () => {
   });
 });
 
-describe.each(schemes.map(s => [s.id, s] as const))('scheme contract: %s', (_id, scheme) => {
+describe.each(schemes.map(s => [s.id, s] as const))('AC-LP-1 · scheme contract: %s', (_id, scheme) => {
   it('carries its definition: description, coach rule, citation, applicable classes', () => {
     expect(scheme.description.length).toBeGreaterThan(20);
     expect(scheme.coachRule.length).toBeGreaterThan(10);
@@ -194,7 +194,7 @@ describe.each(schemes.map(s => [s.id, s] as const))('scheme contract: %s', (_id,
   });
 });
 
-describe('double_progression specifics', () => {
+describe('AC-LP-1 · double_progression specifics', () => {
   const s = getScheme('double_progression');
   const p = () => s.defaultParams('hypertrophy');
 
@@ -239,7 +239,7 @@ describe('double_progression specifics', () => {
   });
 });
 
-describe('linear_progression specifics', () => {
+describe('AC-LP-1 · linear_progression specifics', () => {
   const s = getScheme('linear_progression');
 
   it('uses fixed reps that override the goal range', () => {

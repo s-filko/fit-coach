@@ -1,7 +1,7 @@
 import { defaultProgression, goalFromProfile } from '../scheme-default';
 
 /** D8: until the user chooses, novice + strength → linear, otherwise double; printed "default, unconfirmed". */
-describe('goalFromProfile', () => {
+describe('AC-LP-2 · goalFromProfile', () => {
   it.each([
     ['get stronger', 'strength'],
     ['increase strength', 'strength'],
@@ -15,7 +15,7 @@ describe('goalFromProfile', () => {
   });
 });
 
-describe('defaultProgression', () => {
+describe('AC-LP-2 · defaultProgression', () => {
   it('beginner + strength → linear', () => {
     const d = defaultProgression({ fitnessLevel: 'beginner', fitnessGoal: 'get stronger' });
     expect(d.scheme.id).toBe('linear_progression');

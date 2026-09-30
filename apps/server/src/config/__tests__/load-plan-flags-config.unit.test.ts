@@ -2,7 +2,7 @@
 import { EnvSchema } from '../index';
 import { BASE_ENV } from './base-env.fixture';
 
-describe('load-plan flags (A5)', () => {
+describe('AC-LP-3, AC-LP-6, AC-LP-7 · load-plan flags (A5)', () => {
   it('LOAD_PLAN_SUGGESTION defaults to false, accepts true/false, rejects anything else', () => {
     const off = EnvSchema.parse(BASE_ENV) as Record<string, unknown>;
     expect(off['LOAD_PLAN_SUGGESTION']).toBe(false);

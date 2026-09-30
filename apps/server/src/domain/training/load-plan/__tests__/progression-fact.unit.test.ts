@@ -7,7 +7,7 @@ import {
 import { defaultProgression } from '../scheme-default';
 
 /** D8: the `progression_scheme` fact — a registry id validated in code, the user's words, newest active wins. */
-describe('progression_scheme fact text', () => {
+describe('AC-LP-5 · progression_scheme fact text', () => {
   it('round-trips the registry id and the user words', () => {
     const text = formatProgressionFact({ schemeId: 'double_progression', words: 'I want rep progression' });
     expect(text).toBe('progression_scheme id=double_progression — I want rep progression');
@@ -32,7 +32,7 @@ describe('progression_scheme fact text', () => {
   });
 });
 
-describe('chosenSchemeOf (newest active fact wins)', () => {
+describe('AC-LP-5 · chosenSchemeOf (newest active fact wins)', () => {
   const f = (text: string, iso: string) => ({ fact: text, createdAt: new Date(iso) });
   it('picks the newest valid fact and ignores malformed ones', () => {
     const chosen = chosenSchemeOf([
@@ -48,7 +48,7 @@ describe('chosenSchemeOf (newest active fact wins)', () => {
   });
 });
 
-describe('progressionFromChoice', () => {
+describe('AC-LP-5 · progressionFromChoice', () => {
   const profile = defaultProgression({ fitnessLevel: 'intermediate', fitnessGoal: 'build muscle' });
 
   it('the choice overrides the default scheme and keeps the profile goal', () => {

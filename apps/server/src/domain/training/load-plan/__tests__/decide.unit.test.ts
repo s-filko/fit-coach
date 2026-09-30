@@ -34,7 +34,7 @@ function exposure(repsVsRange: 'below floor' | 'in range' | 'at or above top'): 
   return { ...(makeFacts().lastExposure as object), repsVsRange } as LoadFacts['lastExposure'];
 }
 
-describe('Stage A — safety rows', () => {
+describe('AC-LP-2 · Stage A — safety rows', () => {
   it('insufficient data → no record, conservative start', () => {
     const d = run(makeFacts({ workingWeight: { absent: 'insufficient' } }));
     expect(d).toMatchObject({ stage: 'A', row: 'insufficient_data' });
@@ -153,14 +153,14 @@ describe('Stage A — safety rows', () => {
   });
 });
 
-describe('Stage B — no tactic until layer 2', () => {
+describe('AC-LP-2 · Stage B — no tactic until layer 2', () => {
   it('prints tactic none active on every decision', () => {
     expect(run(makeFacts()).tactic).toBe('none active');
     expect(run(makeFacts({ gap: gapOf(40) })).tactic).toBe('none active');
   });
 });
 
-describe('Stage C — scheme', () => {
+describe('AC-LP-2 · Stage C — scheme', () => {
   it('growth: top of the range confirmed twice → one step up', () => {
     const d = run(makeFacts());
     expect(d).toMatchObject({ stage: 'C', row: 'scheme_growth', scheme: { id: 'double_progression', version: 1 } });
@@ -202,7 +202,7 @@ describe('Stage C — scheme', () => {
 /**
  * Task 4 (AC-LP-6, D5, D9): the ladder counter from history, the break reason selects the branch.
  */
-describe('Task 4 — return ladder from history and the break reason', () => {
+describe('AC-LP-6 · Task 4 — return ladder from history and the break reason', () => {
   const GAP_DAYS = { return: 20, rebuild: 30, restart: 100 } as const;
   const ladder = (workoutsSince: number, tier: 'return' | 'rebuild' | 'restart' = 'return') => ({
     tier,

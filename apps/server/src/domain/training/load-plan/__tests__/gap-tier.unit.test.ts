@@ -11,7 +11,7 @@ import { performanceSuccess } from '../ladder-input';
 import { makeFacts } from './fixtures';
 
 /** D5 / R4.0: tier thresholds are named parameters; the ladder is a counter of real workouts. */
-describe('gapTierOf (R4.0 thresholds)', () => {
+describe('AC-LP-2 · gapTierOf (R4.0 thresholds)', () => {
   it.each<[number, GapTier]>([
     [0, 'rest'],
     [7, 'rest'],
@@ -38,7 +38,7 @@ describe('gapTierOf (R4.0 thresholds)', () => {
   });
 });
 
-describe('gapTierFacts', () => {
+describe('AC-LP-2 · gapTierFacts', () => {
   it('reads the exercise gap first', () => {
     const f = makeFacts({ gap: { exercise: { days: 30 }, primaryMuscles: { days: 3 }, anyWorkout: { days: 1 } } });
     expect(gapTierFacts(f)).toEqual({ tier: 'rebuild', days: 30, basis: 'exercise' });
@@ -63,7 +63,7 @@ describe('gapTierFacts', () => {
   });
 });
 
-describe('returnLadderStep', () => {
+describe('AC-LP-6 · returnLadderStep', () => {
   it('has no ladder below the return tier', () => {
     expect(returnLadderStep('rest', 0)).toBeNull();
     expect(returnLadderStep('rest_with_question', 0)).toBeNull();
@@ -102,7 +102,7 @@ const TZ_UTC = 'UTC';
 const day = (iso: string): Date => new Date(`${iso}T10:00:00Z`);
 const lp = (iso: string, success = true): LadderPerformance => ({ performedAt: day(iso), success });
 
-describe('ladderStateOf (workouts since the gap)', () => {
+describe('AC-LP-6 · ladderStateOf (workouts since the gap)', () => {
   it('no gap in the history → null', () => {
     expect(ladderStateOf([lp('2026-09-25'), lp('2026-09-18'), lp('2026-09-11')], TZ_UTC)).toBeNull();
     expect(ladderStateOf([], TZ_UTC)).toBeNull();
@@ -130,7 +130,7 @@ describe('ladderStateOf (workouts since the gap)', () => {
   });
 });
 
-describe('returnLadderStep after a restart', () => {
+describe('AC-LP-6 · returnLadderStep after a restart', () => {
   it('the first workout is a cold start, the ones after follow the rebuild ladder', () => {
     expect(returnLadderStep('restart', 0)).toMatchObject({ coldStart: true });
     expect(returnLadderStep('restart', 1)).toMatchObject({ coldStart: false, workout: 1, of: 3, stepsBelow: 2 });
@@ -139,7 +139,7 @@ describe('returnLadderStep after a restart', () => {
   });
 });
 
-describe('performanceSuccess (a workout in range with reserve)', () => {
+describe('AC-LP-6 · performanceSuccess (a workout in range with reserve)', () => {
   const set = (reps: number, rpe: number | null): Parameters<typeof performanceSuccess>[0]['sets'][number] =>
     ({
       setData: { type: 'strength', reps, weight: 60 },
