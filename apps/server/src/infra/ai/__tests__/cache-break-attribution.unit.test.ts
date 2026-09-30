@@ -148,3 +148,106 @@ describe('AC-PC-10: expected warm, provider read below the shared prefix (D8.3)'
     return attribute(cur, { cacheReadTokens: 0 });
   }
 });
+
+describe('AC-PC-9 / AC-PC-10: the breakpoint marker and the string/parts shape never make a break (dev smoke 2026-09-30)', () => {
+  const bp = { type: 'ephemeral' };
+  const parts = (text: string, marker?: unknown) => [
+    { type: 'text', text, ...(marker ? { cache_control: marker } : {}) },
+  ];
+  const req = (system: unknown, history: Array<{ role: string; content: unknown }>, current: string) =>
+    ({
+      tools: [{ n: 'log_set' }],
+      messages: [{ role: 'system', content: system }, ...history, { role: 'user', content: current }],
+    }) as CacheAttributionRequest;
+  const H1 = { role: 'user', content: 'привет' };
+  const A1 = 'Привет! Начинаем тренировку?';
+
+  it('AC-PC-9: last history assistant sent as parts+cache_control (bp2), next call as a plain string → warm, none', () => {
+    const previous = req(stable(), [H1, { role: 'assistant', content: parts(A1, bp) }], '<context>a</context>жим');
+    const cur = req(
+      stable(),
+      [
+        H1,
+        { role: 'assistant', content: A1 },
+        { role: 'user', content: 'жим' },
+        { role: 'assistant', content: parts('Записал', bp) },
+      ],
+      '<context>b</context>ещё',
+    );
+    const result = attributeCache(
+      { kind: 'available', request: previous, createdAt: ago(60) },
+      { request: cur, inputTokens: 5271, now: NOW, cacheReadTokens: 4951 },
+      LIMITS,
+    );
+    expect(result.cacheExpected).toBe('warm');
+    expect(result.cacheBreak).toBe('none');
+    expect(result.cacheDivergedAt).toBeNull();
+  });
+
+  it('AC-PC-9: the stable system message — parts with bp1 vs the same text as a string — compares equal', () => {
+    const previous = req(parts(stable(), bp), [H1, { role: 'assistant', content: A1 }], 'x');
+    const cur = req(
+      stable(),
+      [H1, { role: 'assistant', content: A1 }, { role: 'user', content: 'x' }, { role: 'assistant', content: 'ok' }],
+      'y',
+    );
+    const result = attributeCache(
+      { kind: 'available', request: previous, createdAt: ago(60) },
+      { request: cur, inputTokens: 5000, now: NOW, cacheReadTokens: 4500 },
+      LIMITS,
+    );
+    expect(result.cacheBreak).toBe('none');
+  });
+
+  it('AC-PC-10: a ToolMessage carrying bp2 (parts) then the same result as a string compares equal — no false break, no false miss', () => {
+    const tool = (content: unknown) => ({ role: 'tool', content, toolCallId: 'c1' });
+    const previous = req(stable(), [H1, tool(parts('Logged set 1', bp))], 'x');
+    const cur = req(stable(), [H1, tool('Logged set 1'), { role: 'assistant', content: 'ok' }], 'y');
+    const result = attributeCache(
+      { kind: 'available', request: previous, createdAt: ago(60) },
+      { request: cur, inputTokens: 5000, now: NOW, cacheReadTokens: 4500 },
+      LIMITS,
+    );
+    expect(result.cacheExpected).toBe('warm');
+    expect(result.cacheBreak).toBe('none');
+  });
+
+  it('AC-PC-9: a real text change is still a break (the normalisation only removes shape and marker)', () => {
+    const previous = req(stable(), [H1, { role: 'assistant', content: parts(A1, bp) }], 'x');
+    const cur = req(
+      stable(),
+      [H1, { role: 'assistant', content: 'Совсем другой ответ' }, { role: 'user', content: 'x' }],
+      'y',
+    );
+    const result = attributeCache(
+      { kind: 'available', request: previous, createdAt: ago(60) },
+      { request: cur, inputTokens: 5000, now: NOW, cacheReadTokens: 0 },
+      LIMITS,
+    );
+    expect(result.cacheBreak).toBe('unplanned:history[1]:assistant');
+  });
+
+  it('AC-PC-9: content with a non-text part is not flattened — an image part vs its text-only twin still differs', () => {
+    const previous = req(
+      stable(),
+      [
+        H1,
+        {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: A1 },
+            { type: 'image_url', image_url: { url: 'u' } },
+          ],
+        },
+      ],
+      'x',
+    );
+    const cur = req(stable(), [H1, { role: 'assistant', content: A1 }, { role: 'user', content: 'x' }], 'y');
+    const result = attributeCache(
+      { kind: 'available', request: previous, createdAt: ago(60) },
+      { request: cur, inputTokens: 5000, now: NOW, cacheReadTokens: 0 },
+      LIMITS,
+    );
+    expect(result.cacheBreak).toBe('unplanned:history[1]:assistant');
+  });
+});

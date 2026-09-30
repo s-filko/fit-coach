@@ -127,33 +127,31 @@ function canonicalStringify(value: unknown): string {
   return JSON.stringify(value) ?? 'null';
 }
 
-/** D4: system messages compare (and diff) by their resolved text; everything else by canonical serialized equality. */
 /**
- * Content with the volatile markers removed: `cache_control` parts move every turn (breakpoint 2 rides the last
- * history message), and a system message sent as text parts must compare equal to the same text sent as a string.
+ * Content in its comparison form, for EVERY role: `cache_control` keys removed (breakpoint 2 rides the last history
+ * message and moves every turn — the message was sent as marked parts one call and as a plain string the next), and a
+ * list of text-only parts equal to its joined string (`textOnly`, the one flattener). Anything with a non-text part
+ * keeps its structure, so a real change is still a change.
  */
-function normalisedContent(content: unknown): unknown {
-  if (!Array.isArray(content)) {
-    return content;
-  }
-  return (content as unknown[]).map(part =>
-    part !== null && typeof part === 'object'
-      ? Object.fromEntries(Object.entries(part as Record<string, unknown>).filter(([k]) => k !== 'cache_control'))
-      : part,
-  );
+function comparableContent(content: unknown): unknown {
+  const stripped = !Array.isArray(content)
+    ? content
+    : (content as unknown[]).map(part =>
+        part !== null && typeof part === 'object'
+          ? Object.fromEntries(Object.entries(part as Record<string, unknown>).filter(([k]) => k !== 'cache_control'))
+          : part,
+      );
+  return textOnly(stripped) ?? stripped;
 }
 
-function systemText(content: unknown): string {
-  const parts = normalisedContent(content);
-  return textOnly(parts) ?? canonicalStringify(parts ?? null);
-}
-
+/** D4: system messages compare (and diff) by their resolved text; everything else by canonical serialized equality. */
 function comparableText(m: CacheAttributionMessage): string {
+  const content = comparableContent(m.content);
   if (m.role === 'system') {
-    return systemText(m.content);
+    return typeof content === 'string' ? content : canonicalStringify(content ?? null);
   }
   return canonicalStringify({
-    content: normalisedContent(m.content) ?? null,
+    content: content ?? null,
     toolCalls: m.toolCalls ?? null,
     toolCallId: m.toolCallId ?? null,
   });

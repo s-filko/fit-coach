@@ -456,6 +456,19 @@ a grep of `apps docs` for the removed flat-price key → only this plan (the T2 
 Smaller training tool set and shorter schemas; BUG-050 estimator; the post-tool second call itself; caching on
 the Z.AI / Gemini routes; summariser and course-check calls (Haiku 4.5 minimum 4 096 tokens).
 
+### Post-merge fix (dev smoke)
+
+Dev smoke 2026-09-30, user 19594085…: call 2 sent the last history assistant message as parts `[{type:'text', text, cache_control:{type:'ephemeral'}}]`
+(breakpoint 2); call 3 sent the same message as a plain string (the breakpoint had moved on). The provider cached it (read 4951 of 5271) but attribution
+compared the raw shapes → false `unplanned:history[1]:assistant` (diverged at `#2@11`) + "Prompt cache break" warn — it would have fired every turn.
+Cause: the T5b normalisation (drop `cache_control`, all-text parts ≡ string) was applied to the system message only; user/assistant/tool content was compared as
+canonical JSON of the raw parts. Fix: `cache-attribution.ts` `comparableContent()` is the comparison form for EVERY role (drop `cache_control`; text-only parts ≡ their
+`textOnly` string — the one flattener, no new one; a non-text part keeps the structure, so a real change is still a break). Tests (AC-PC-9/AC-PC-10, red first for the
+history-assistant and ToolMessage shapes, the system case already held): the exact two-request shape above → `warm` / `none`; system parts+bp1 vs string → `none`;
+ToolMessage bp2 (parts) vs string → `warm` / `none`; a real text change and an image-part twin still `unplanned:history[1]:assistant`.
+Verification (apps/server): `npm run check-all` clean; `npm run test:unit` 182 suites / 1831 tests green; DB-backed `cache-break-guard.integration.test.ts`
+via db-test-lock (`RUN_DB_TESTS=1`) 6 tests green.
+
 ## Review
 
 ### Run 1 — 2026-09-30, four zones over `c3e3b927...bf34dd0a`: **blocked**
