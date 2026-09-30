@@ -343,3 +343,90 @@ logged (D7)."
 orchestrator in the 9b-1 close-out, in the same diff as the code.
 
 ## Review
+
+Close-out review 2026-10-01 (R1, R2, R3, R4; four isolated Opus zones over `ae9a48a8...plan/load-plan`).
+**Verdict: blocked** (13 blocking, one shared by R1 and R4). Under the autonomy order the orchestrator routes them
+(**(D) A7**): blocking code findings go to one Sonnet fix worker (B-code below); blocking doc findings are fixed by the
+orchestrator (B-doc); advisory findings are either folded into the fix pass when they are a line or two (marked
+*folded*) or filed in `docs/BACKLOG.md` (marked *backlog*). Findings are recorded in the reviewers' words, shortened.
+
+### Blocking
+
+1. **R1 + R4 — `docs/adr/0009-user-long-term-memory.md:220` / `:206`** (SI rules 3 and 7). The paragraph after the
+   approved amendment text was not approved and writes the T4(c) approximation ("expiry approximated by the `short`
+   cap") into the durable ADR; the table example `progression_scheme=double_progression` does not match the code's
+   carrier `progression_scheme id=<id>` (`progression-fact.ts:17`). *B-doc:* paragraph removed (T4(c) stays a (D)
+   for the owner), example corrected to the parsed shape.
+2. **R1 — `progression-fact.ts:61`** (ADR-0013 D-09/D-13, BR-LLM-008). `progressionLine()` builds prompt wording in
+   the domain layer; its only consumer is the v2 block, so block output can change without a version bump. *B-code.*
+3. **R1 — `decide.ts:36`** (same rule). `ROW_LABELS` holds prompt presentation strings used only by the v2 block's
+   `decision:` line. *B-code.*
+4. **R2 — `training.service.ts:407` / `:429`** (CONTRIBUTING_AI DRY). The working-set rule is re-written inline;
+   `workingSets()` in `domain/training/sets.ts:10` is the one copy. *B-code.*
+5. **R2 — `load-facts.loader.ts:228` / `:244`** (DRY). `daysOf` and the `exercise ?? primaryMuscles ?? anyWorkout`
+   chain copy `gap-tier.ts:66–82`; `gapTierFacts(facts).days` returns the same number. *B-code.*
+6. **R2 — `training-load-plan.v2.ts:66`** (DRY). `schemeLine` copies `progressionLine`'s provenance text, and the two
+   spell the scheme name differently ("double progression" vs "double") in one block. *B-code* (with 2).
+7. **R2 — `break-fact.ts:65`** (DRY). `calendarDate` rebuilds `formatInUserTz(date, tz).dateOnly`
+   (`shared/date-utils.ts:33`) and throws where the shared one falls back to UTC; imported at 5 new sites. *B-code.*
+8. **R2 — `compact.node.ts:69`, `break-context.ts:23`, `compact.node.ts:453`** (DRY). `BREAK_TTL_DAYS = 14`,
+   `MARKER_TTL_DAYS = 14`, `SCHEME_REVIEW_DAYS = 182` restate `FACT_LIFECYCLE_BOUNDS` (`fact-lifecycle.ts:37/39`).
+   *B-code.*
+9. **R3 — `break-context.ts:66-67` + `break-fact.ts:58`** (AC-LP-6 / D9). The asked-check matches any break fact of
+   any status overlapping `[last workout day, today]` inclusively; the marker's `to` is the day asked — usually a
+   training day that starts the next window — so every later break is never asked about, and while the old fact is
+   active a new gap takes the old reason (`returnBranchOf`). Confirmed with tsx. *B-code* (red test on the adjacent
+   case first).
+10. **R4 — `docs/CONTRIBUTING_AI.md:167`** (SI rule 7). "Categories are ADR-0009's eight" — now ten; the two new ones
+    are compaction-only (summariser v7 / verifier v2, behind flags). *B-doc.*
+11. **R4 — `docs/adr/0013-llm-core-target-architecture.md:211-212`** (SI rule 7). The time-gap note is documented as
+    sent only after an `EPISODE_GAP_HOURS` pause; with `LOAD_PLAN_BREAKS` on, `block.time_gap` v2 is also sent for a
+    training break with no message gap and carries the one-time question. *B-doc* (factual, flagged for the owner).
+12. **R4 — `docs/domain/training.spec.md:23`** (SI rule 1). Lasting rules exist only in `docs/superpowers/` (planner
+    writes no `targetWeight`; fixed precedence and the non-binding suggestion; the one-time reason question; gap
+    tiers and the ladder; the never-read-back recommendation log). *B-doc:* added as flag-gated BR entries describing
+    shipped behaviour, flagged for the owner's review (autonomy rule: factual durable edits only).
+
+### Advisory
+
+- R1 `training-load-plan.v2.ts:106` — decision composition (`decideLoadPlanEntry`, `progressionOf`) lives in a prompt
+  block; the log imports a block to get its decision. *Folded* (moves with B-code 2/3/6).
+- R1 `agent.node.ts:170` — `BreakContext.resolve` writes a fact during prompt assembly, outside a PhaseSpec loader.
+  *Backlog.*
+- R1 `compact.node.ts:461` — per-category fact policy lives in the compaction node; belongs with `fact-lifecycle`.
+  *Backlog* (the duplicated bounds are B-code 8).
+- R1 `load-recommendation.ports.ts:38` / R2 same — snapshot and repository ports used only inside infra;
+  `unknown`-typed `candidate` / `conservative` / `fatigue`. *Backlog.*
+- R1 `break-context.ts:15` — data service imports its return type from a prompt block. *Folded.*
+- R1 `break-fact.ts:65` — general date formatter in the break module. *Folded* (B-code 7).
+- R2 `user-facts.ports.ts:53` — `CONVERSATION_FACT_CATEGORIES` retyped by hand. *Folded.*
+- R2 `get-load-plan.tool.ts:35` — two descriptions share a verbatim tail. *Folded.*
+- R2 `schemes/shared.ts:30` — dead `hasShortConstraint`; R2 `params.ts:16` — unread `PLATEAU_FLAT_RUN`. *Folded.*
+- R2 `training-load-plan.v2.ts:75` — pass-through `progressionOf`, `defaultParams` computed twice. *Folded.*
+- R2 `decide.ts:298` — step-count computation repeated. *Folded.*
+- R2 `start-training-session.tool.ts:55` — needless ternary. *Folded.*
+- R2 `format-exercise-summary.ts:59` — target-weight suffix formatted at four sites. *Backlog* (predates the branch).
+- R2 `log-set.tool.ts:68` — ad-hoc context cast instead of `ctxOf()`. *Folded* (document or use a lenient accessor).
+- R2 `summarizer/v7.ts:40` — break reasons and lifecycle numbers hard-coded in prompt text. *Folded* (derive from
+  `BREAK_REASONS` / bounds, as v7 already does for `SCHEMES`).
+- R3 `gap-tier.ts:154-168` — a ladder's lifetime is bounded only by loaded history; routine misses can hold
+  `gap_return` for months. *Backlog* (needs the log's calibration data; under O1 the model can override).
+- R3 `decide.ts:195` — post-`restart` rungs are labelled `gap_return`. *Folded.*
+- R3 `decide.ts:208-220` — a `short` constraint wins over a more conservative gap row. *Folded* (take the more
+  conservative of the matching Stage A rows, or record why not).
+- R3 `training.spec.ts:129` — `LOAD_PLAN_PLANNER_REBIND` without `LOAD_PLAN_SUGGESTION` leaves v11 without a load
+  source. *Folded* (v11 / v5 only when both are on; test the combination).
+- R3 `load-recommendation.repository.ts:42` — outcome not refreshed after a reopened exercise. *Backlog.*
+- R3 `training.service.ts:371` — trigger reads outside the log's try/catch can fail a set. *Folded.*
+- R3 `break-context.ts:71` — the marker is stored before the model replies. *Backlog.*
+- R3 tests — 14 new test files carry no AC id in `describe`/`it` names. *Folded.*
+- R4 `ARCHITECTURE.md:139-189,415` — module map / storage list not updated. *Folded* (fix worker).
+- R4 `apps/server/.env.example:63` — the three flags are missing. *B-doc pass.*
+- R4 design §3.4 — tail placement and 8-week e1RM window are stale in the working design doc. *B-doc pass.*
+- R4 plan stale lines (header "Not dispatched", D6 "decide at Task 2", A5 AC note, Task 5 file names, per-merge live
+  check). *B-doc pass.*
+- R4 `schema.ts:564` — stale "nullable until the decision order lands" comment. *Folded.*
+
+### Meta
+
+Filed in `docs/REVIEW_FINDINGS.md` (R1 ×2, R2 ×1, R3 ×2, R4 ×3).
