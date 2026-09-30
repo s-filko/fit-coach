@@ -38,7 +38,7 @@ in § "Before dispatch".
    registry id) and `break` (dates, reason class, free text; `durability = short`, expiry at the
    ladder's end). Durable spec: proposed text in § "Proposed durable-spec text", the owner edits
    or approves.
-3. **Recommendation log table** (additive migration) — the owner confirms the shape in D7.
+3. ✅ (approved 2026-09-30, with O1's `advised` column) **Recommendation log table** (additive migration) — the owner confirms the shape in D7.
 4. **Scope split (recommended, D1):** the review (§F) warned that U9′ bundled too much; this plan
    is already U9b alone, but it still carries three hypotheses. The recommended order is three
    merges, each deployed and live-checked on dev: **9b-1** Tasks 1–3 (schemes + decision order +
