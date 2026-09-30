@@ -4,8 +4,9 @@ import { z } from 'zod';
 
 import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
 import type { ITrainingService } from '@domain/training/ports';
+import { resolveCompletion, SESSION_TIMEOUT_MS } from '@domain/training/session-timing';
 
-import { SESSION_TIMEOUT_MS, sessionIdOf, userIdOf } from '@infra/ai/tools/format-exercise-summary';
+import { sessionIdOf, userIdOf } from '@infra/ai/tools/format-exercise-summary';
 
 import { createLogger } from '@shared/logger';
 
@@ -34,7 +35,11 @@ export function buildFinishTrainingTool(deps: FinishTrainingToolDeps) {
         const sessionIdleMs = lastActivityDate ? Date.now() - lastActivityDate.getTime() : 0;
         const isStale = sessionIdleMs > SESSION_TIMEOUT_MS;
 
-        const completedAt = isStale ? lastActivityDate : undefined;
+        // BUG-043: never complete before the session started.
+        const completedAt =
+          isStale && lastActivityDate
+            ? resolveCompletion(currentSession?.startedAt ?? null, lastActivityDate).completedAt
+            : undefined;
         const session = await trainingService.completeSession(sessionId, undefined, completedAt);
         const duration = session.durationMinutes ?? 0;
 

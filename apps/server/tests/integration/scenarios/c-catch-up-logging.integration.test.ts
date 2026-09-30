@@ -20,6 +20,8 @@
  */
 import { eq } from 'drizzle-orm';
 
+import { RETRO_SET_OFFSET_MS } from '@domain/training/session-timing';
+
 import { db } from '@infra/db/drizzle';
 import { conversationTurns } from '@infra/db/schema';
 import type { BaseMessage } from '@langchain/core/messages';
@@ -42,9 +44,6 @@ import { installScriptedModel, type ScriptedModelHandle } from './scripted-model
 
 /** The scenario's "3 hours" stale label and its 11-minute duration are pinned to this T0. */
 const T0 = new Date('2026-09-20T10:00:00.000Z');
-
-/** The offset `log_set` stamps a stale-session set with (format-exercise-summary.ts). */
-const RETRO_SET_OFFSET_MS = 5 * 60_000;
 
 function textOf(m: BaseMessage | undefined): string {
   const content = m?.content;

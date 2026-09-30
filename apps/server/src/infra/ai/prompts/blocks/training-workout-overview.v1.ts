@@ -7,14 +7,13 @@
  * the section separator comes from compose()/assembler instead.
  */
 import { PLACE_AMBIGUOUS_THRESHOLD } from '@domain/training/place';
+import { SESSION_TIMEOUT_MS } from '@domain/training/session-timing';
 import { workingSets } from '@domain/training/sets';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
 import { humanTimeAgo } from '@shared/date-utils';
 
 import type { ContextBlock, ContextBlockCtx } from './types';
-
-const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 /**
  * Single source of truth for the LLM about what has been done and what is planned.

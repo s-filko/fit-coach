@@ -14,6 +14,7 @@ import type {
   IWorkoutSessionRepository,
   UpdateSetResult,
 } from '@domain/training/ports';
+import { isLateStart, resolveCompletion, SESSION_TIMEOUT_MS } from '@domain/training/session-timing';
 import type {
   CreateSessionDto,
   CreateSessionExerciseDto,
@@ -28,8 +29,6 @@ import type {
   WorkoutSessionWithDetails,
 } from '@domain/training/types';
 import type { UserRepository } from '@domain/user/ports';
-
-const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 function extractSetDetail(s: SessionSet): CompletedSetDetail {
   const detail: CompletedSetDetail = { setNumber: s.setNumber, rpe: s.rpe, setKind: s.setKind };
@@ -251,12 +250,10 @@ export class TrainingService implements ITrainingService {
 
     await this.reconcilePlanItems(session);
 
-    const resolvedCompletedAt = completedAt ?? new Date();
-    const duration =
-      durationMinutes ??
-      (session.startedAt ? Math.floor((resolvedCompletedAt.getTime() - session.startedAt.getTime()) / 60000) : null);
+    // BUG-043: completion never precedes the start, duration never negative.
+    const resolved = resolveCompletion(session.startedAt, completedAt ?? new Date());
 
-    return this.sessionRepo.complete(sessionId, resolvedCompletedAt, duration ?? 0);
+    return this.sessionRepo.complete(sessionId, resolved.completedAt, durationMinutes ?? resolved.durationMinutes ?? 0);
   }
 
   async skipSession(sessionId: string): Promise<WorkoutSession> {
@@ -335,6 +332,15 @@ export class TrainingService implements ITrainingService {
       weightBasis?: 'total';
     },
   ): Promise<{ set: SessionSet; setNumber: number; autoCompleted?: AutoCompletedExercise }> {
+    // BUG-043: the first live set of a session that never had one (plan accepted long ago) is when the
+    // workout really began — re-anchor `startedAt` there. Read BEFORE ensureCurrentExercise bumps activity.
+    if (!opts.skipActivityUpdate) {
+      const before = await this.sessionRepo.findByIdWithDetails(sessionId);
+      if (before?.startedAt && isLateStart(before, new Date())) {
+        await this.sessionRepo.update(sessionId, { startedAt: new Date() });
+      }
+    }
+
     const { exercise: sessionExercise, autoCompleted } = await this.ensureCurrentExercise(sessionId, {
       exerciseId: opts.exerciseId,
       exerciseName: opts.exerciseName,

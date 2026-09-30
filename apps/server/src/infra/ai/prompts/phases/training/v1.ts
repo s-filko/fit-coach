@@ -1,3 +1,4 @@
+import { SESSION_TIMEOUT_MS } from '@domain/training/session-timing';
 import type { WorkoutSessionWithDetails } from '@domain/training/types';
 
 import {
@@ -15,8 +16,6 @@ export interface TrainingPromptContext extends DirectiveContext {
   session: WorkoutSessionWithDetails;
   previousSession: WorkoutSessionWithDetails | null;
 }
-
-const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 const TASK_TEXT = `=== YOUR TASK ===
 

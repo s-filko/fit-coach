@@ -195,9 +195,9 @@ Files it may edit:
   `training.service.integration.test.ts`, and a scenario `tests/integration/scenarios/` file; drop the local
   `RETRO_SET_OFFSET_MS` copy in `c-catch-up-logging.integration.test.ts` (import it).
 
-- [ ] Implement option A; promote the repros (delete the `*.repro.test.ts` files); `c-catch-up-logging` untouched
+- [x] Implement option A; promote the repros (delete the `*.repro.test.ts` files); `c-catch-up-logging` untouched
   and green.
-- [ ] Verify: `cd apps/server && npm run lint && npm run type-check && npm run test:unit`;
+- [x] Verify: `cd apps/server && npm run lint && npm run type-check && npm run test:unit`;
   `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh npm run test:scenarios` and
   `/Users/filko/orca/workspaces/fit_coach/db-test-lock.sh bash -c 'RUN_DB_TESTS=1 NODE_ENV=test npx jest tests/integration/services/training.service.integration.test.ts'`
   green; `grep -rn "SESSION_TIMEOUT_MS =" src` → one match (AC-RT-5); `node scripts/state.mjs --check` from repo root.
@@ -211,6 +211,10 @@ Files it may edit:
 | AC-RT-1a, AC-RT-2 (DB service) | `db-test-lock.sh bash -c 'RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch="**/session-timing.repro.test.ts"'` | 1 | 5/6 red: `completeSession` and `autoCloseTimedOut` with `completedAt`/`last_activity_at` before `started_at` store `completed_at < started_at` (×2) and `duration_minutes = -1` (×2); first set of a zero-set stale session leaves `started_at` at plan acceptance (3 h old). Control (a live set advances `last_activity_at`) green | (this commit) |
 | AC-RT-3, AC-RT-4 (scenario) | `db-test-lock.sh bash -c 'RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch="**/scenarios/retro-timestamps.repro.test.ts"'` | 1 | 7/8 red (the run-to-the-end test green): 1 distinct `created_at` for 16 sets (frozen retro stamp); `started_at` ≈ T0 not T0+180 m; `last_activity_at` never moved (≈ T0); `completed_at` < `started_at`; `duration_minutes = -1` (the 09-29 value); `retro-logged` seen by the model on 16/16 set steps; `=== STALE SESSION ===` still in the prompt of every later run | (this commit) |
 | default suites | `cd apps/server && npm run test:unit` | 0 | 167 suites / 1716 tests green (repro files are outside the default `testMatch`) | (this commit) |
+| AC-RT-1..5 (T3 fix) | `npm run lint && npm run type-check && npm run test:unit` | 0 | lint 0 errors; tsc clean; unit 167 suites / 1719 tests green | (this commit) |
+| AC-RT-1..4 | `db-test-lock.sh npm run test:scenarios` | 0 | 23 suites / 415 passed + 1 todo (incl. `c-catch-up-logging` unchanged but for the constant import, and the promoted `retro-timestamps.integration.test.ts`) | (this commit) |
+| AC-RT-1a, AC-RT-2 | `db-test-lock.sh bash -c 'RUN_DB_TESTS=1 NODE_ENV=test npx jest tests/integration/services/training.service.integration.test.ts'` | 0 | 1 suite / 14 tests green (incl. the promoted session-timing block) | (this commit) |
+| AC-RT-5 | `grep -rn "SESSION_TIMEOUT_MS =" src` | 0 | one match: `domain/training/session-timing.ts:4` | (this commit) |
 
 ## Out of scope
 

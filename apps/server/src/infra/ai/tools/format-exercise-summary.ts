@@ -1,11 +1,6 @@
 import type { AutoCompletedExercise } from '@domain/training/ports';
 import { workingSets } from '@domain/training/sets';
 
-/** A training session idle longer than this is considered stale/retro-logging territory. */
-export const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
-/** Retro-logged sets are offset from the last real activity by this much. */
-export const RETRO_SET_OFFSET_MS = 5 * 60 * 1000;
-
 /** Reads the user id the executor put into the tool config; null when absent. */
 export function userIdOf(config: { configurable?: Record<string, unknown> } | undefined): string | null {
   const userId = config?.configurable?.['userId'];

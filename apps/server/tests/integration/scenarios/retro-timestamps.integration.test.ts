@@ -1,6 +1,6 @@
 /**
  * retro-timestamps plan, T2 (BUG-043) — AC-RT-3 and AC-RT-4 over the real test DB.
- * Home test at promotion (T3): a scenario file next to this one.
+ *
  *
  * The 2026-09-29 shape: the session is created and started at plan acceptance, the user reaches the
  * gym 3 h later, logs 16 sets over 75 minutes, then finishes. Scripted clock (Date-only fake timers).
