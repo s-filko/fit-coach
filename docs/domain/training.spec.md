@@ -27,7 +27,7 @@ Business Rules
 	• BR-TRAINING-007: session_exercises created dynamically during 'training' phase as user performs them
 	• BR-TRAINING-008: Starting training transitions session to status='in_progress', stores sessionId in context
 	• BR-TRAINING-009: Only one active session per user; starting new session auto-closes previous [INV-TRAINING-002]
-	• BR-TRAINING-010: Set logging updates workout_sessions.last_activity_at to prevent timeout [INV-TRAINING-004]
+	• BR-TRAINING-010: Set logging updates workout_sessions.last_activity_at to prevent timeout, except a retro-logged catch-up set [INV-TRAINING-004][BR-TRAINING-030]
 	• BR-TRAINING-011: Sessions auto-close after 2 hours inactivity (lazy on interaction + daily cron) [INV-TRAINING-005]
 	• BR-TRAINING-012: Completing session updates status='completed', sets completed_at, clears context
 	• BR-TRAINING-013: Retrospective logging creates sessions with past timestamps, status='completed'

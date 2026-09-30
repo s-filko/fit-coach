@@ -222,6 +222,7 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   Orca `worker_done` messages are invisible from the worktree. Proposed for ORCHESTRATION.md:
   "each task's verification output (command + summary line) is appended to the plan under the task
   before review; a reviewer treats absence there as absence". Runs: set-kind (2026-09-29, R3), load-facts (2026-09-29, R3 — two task commits with empty bodies read as "no evidence"; proposed "a worker report alone is not evidence").
+- [×2] Zone R3 says test names carry BR/AC refs "per `docs/CONTRIBUTING_AI.md`", but that file has no such rule, so missing AC refs (`planning-set-logging`, `recent-history-status`) cannot be graded. Proposed wording for CONTRIBUTING_AI Principles: "Every `describe` of a test that proves an AC names that AC id." Runs: coach-baseline 2026-09-25 (R3), retro-timestamps 2026-09-30 (R3: `describe('STALE SESSION gate follows isRetroLog (BUG-043)')` cites neither BR-TRAINING-030 nor AC-RT-4).
 - [×1] Schema, indexing and unbounded-growth concerns have no owning zone: R1 reads for shape,
   R2 for duplication, R3 for logic, R4 for doc currency. The missing `run_id` index on
   `llm_calls` — queried on every model call, now synchronously — was the most operationally
@@ -337,7 +338,6 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   named artifact is absent." Distinct from the absence-shaped-AC entry above: that one
   discharges by re-executing a stated command, this one by an artifact the plan names.
   Runs: refactor-p4-episode-memory (2026-09-18).
-- [×1] Zone R3 says test names carry BR/AC refs "per `docs/CONTRIBUTING_AI.md`", but that file has no such rule, so missing AC refs (`planning-set-logging`, `recent-history-status`) cannot be graded. Proposed wording for CONTRIBUTING_AI Principles: "Every `describe` of a test that proves an AC names that AC id." Runs: coach-baseline 2026-09-25 (R3).
 - [×1] R3 checks AC-to-test mapping but not teardown coverage of CLI entry points; the smoke's `exitAfterCleanup` was proven only by live runs. Proposed for CONTRIBUTING_AI: "A CLI entry point that owns process-level resources (DB pools, native sessions) proves its teardown on the success, refusal and thrown-error paths; a live run covers only the first." Runs: smoke-test 2026-09-25 (R3).
 - [×1] For hand-off paths the review verified only what gets delivered (scripted text on the blocked turn), not what the model is told in that turn (tool-result wording, tool description) — R3 found both stale on the re-run. Proposed: a hand-off change's review checks the tool-result text and tool description the model sees on every branch of the hand-off decision.
   Runs: transition-handoff (2026-09-25).

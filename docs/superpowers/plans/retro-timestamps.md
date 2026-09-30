@@ -3,9 +3,10 @@
 > **For agentic workers:** Use superpowers:executing-plans and superpowers:test-driven-development. Red tests first
 > (T2), fix second (T3). Execute only the dispatched task. T1 (this document) changed no production code.
 
-- Status: in progress
+- Status: done
 - Branch: plan/retro-timestamps
 - After: —
+- Review: 2026-09-30 | clean | R1,R2,R3,R4
 
 **Goal:** a live workout that starts after a long idle gap must get live timestamps: sets stamped "now", activity
 advancing, `completed_at >= started_at`, duration never negative — without breaking the deliberate catch-up logging
@@ -231,10 +232,12 @@ Files it may edit:
 
 ## Review
 
-Run 1 — 2026-09-30, one combined reviewer covering R1–R4 (small change; owner's economy rule). Verdict: **blocked**
+Run 1 — 2026-09-30 (verdict below), run 2 — 2026-09-30 **clean**.
+
+Run 1 — one combined reviewer covering R1–R4 (small change; owner's economy rule). Verdict: **blocked**
 (4 blocking). Findings verbatim from the reviewer.
 
-### Blocking (open)
+### Blocking (all closed — see run 2)
 
 - **B1** (fixed in 4f282806; evidence in the table) | R2 | apps/server/src/infra/ai/tools/finish-training.tool.ts:33-36 vs apps/server/src/domain/training/session-timing.ts:16-18 | DRY (docs/CONTRIBUTING_AI.md, "Principles & Boundaries") | The diff introduces `lastActivityOf()` and routes `log_set` through it, but the same function in `finish_training` — edited three lines below — keeps its own inline `lastActivityAt ?? updatedAt ?? createdAt` copy and its own `> SESSION_TIMEOUT_MS` staleness test. The "stale" predicate now exists twice, in different styles, in the two tools this fix is about.
 - **B2** (fixed in 4f282806; evidence in the table) | R3 | apps/server/tests/integration/scenarios/retro-timestamps.integration.test.ts:96,118 | AC-RT-3 | AC-RT-3 (plan :122) claims set `created_at`s are "distinct, **increasing** and **match the scripted clock**" and `duration_minutes = 70 ± 1`; the test asserts only distinctness and checks 75 ± 1 (16×5-min layout). The header explains why matching the scripted clock is impossible (live sets get the DB clock), but the AC was never amended and "increasing" is testable yet unasserted. Failure: a regression stamping sets in reverse order or with arbitrary distinct past times passes. Fix: assert monotonic order, or amend the AC wording in the plan to what is provable.
@@ -246,7 +249,7 @@ Run 1 — 2026-09-30, one combined reviewer covering R1–R4 (small change; owne
 - R1 | training.service.ts:335-342 | The retro/live decision is split across layers: the tool decides "retro" with `isRetroLog`, the service separately decides "late start" with `isLateStart`, using the caller's `skipActivityUpdate` as a proxy for "this set is live"; each re-reads the session and takes its own `new Date()`. A caller passing `skipActivityUpdate` for another reason would silently skip the re-anchor.
 - R1 | training.service.ts:338 | Every live `logSetWithContext` now runs an extra `findByIdWithDetails` although `log_set` just loaded the same session — hot path, needed only for the rare late-start case.
 - R1 | training.service.ts:335-342 | The re-anchor also applies to the webapp route `app/routes/app/session.routes.ts:292`; probably intended, but neither the plan nor a test covers it.
-- R2 | training-workout-overview.v1.ts:296-298 | **fixed in 4f282806** —, prompts/phases/training/v1.ts:108-110 | Two more inline copies of the last-activity idle computation remain (plan limited these files to a constant import).
+- R2 | training-workout-overview.v1.ts:296-298, prompts/phases/training/v1.ts:108-110 | **fixed in 4f282806** — Two more inline copies of the last-activity idle computation remain (plan limited these files to a constant import).
 - R2 | finish-training.tool.ts:38-42 | **fixed in 4f282806** — | The tool clamps `completedAt` via `resolveCompletion`, then `TrainingService.completeSession` clamps again — the tool-side clamp is a no-op second copy.
 - R2 | log-set.tool.unit.test.ts:629 | **fixed in 4f282806** — | Hardcodes `5 * 60 * 1000` instead of importing `RETRO_SET_OFFSET_MS`, recreating the test-local copy AC-RT-5 removed.
 - R3 | plan Evidence rows | **fixed in the T4 doc commit** — | Every T2 red-run row carries SHA `880335e0` (the fix commit); the red results belong to `39753135`.
@@ -260,3 +263,34 @@ Run 1 — 2026-09-30, one combined reviewer covering R1–R4 (small change; owne
 ### Meta
 
 Filed in `docs/REVIEW_FINDINGS.md` (AC-<SLUG>-N format entry ×5; prompt-gate blind spot; evidence-SHA rule candidate).
+
+### Run 2 — 2026-09-30, re-review of R2/R3/R4 (the zones that blocked): **clean**
+
+Closure verified by the reviewer: B1 (one `isStale()` predicate, class covered repo-wide), B2 (strictly increasing
+`created_at`, AC-RT-3 reworded), B3 (state-check evidence row), B4 (BR-TRAINING-030/031/032, INV-TRAINING-006 unique
+and consistent with the code), D2 (owner confirmed 2026-09-30), and every advisory marked fixed. New findings, all
+advisory, verbatim in substance:
+
+- R2 | prompts/phases/training/v1.ts:108 | naming | local `const isStale = isRetroLog(...)` shadows the meaning of
+  the exported domain `isStale()`; the describe title "gate matches v1 isStale" (training-blocks.v1.unit.test.ts:53)
+  now refers to that local.
+- R2 | training-workout-overview.v1.ts:299, phases/training/v1.ts:109, session-timing.ts:26 | DRY (minor) | idle ms
+  `now − lastActivityOf(s)` computed in three places; an `idleMs()` helper could feed all three.
+- R2 | training-blocks.v1.unit.test.ts:63-67 vs :85-89 | "stale session with one set" fixture built twice.
+- R3 | finish-training.tool.ts:46 | the audit log records the unclamped `completedAt` (`lastActivityOf`); for a stale
+  set-less finish it shows a value earlier than `started_at` while the DB stores `started_at`.
+- R3 | training-workout-overview.v1.ts:296 | gating on `isRetroLog` also drops the STALE rule "START a new workout /
+  chat casually → call finish_training first" for a set-less session idle > 2 h (e.g. yesterday's untouched session);
+  consistent with BR-TRAINING-031, untested for model behaviour.
+- R3 | retro-timestamps.integration.test.ts:7-9 | header comment still says created_at is "asserted for distinctness
+  only".
+- R4 | docs/domain/training.spec.md:29 | domain BR-TRAINING-010 lacked the retro exception now on INV-004/FEAT BR-017 —
+  **fixed by the orchestrator at close-out** (owner-approved rule, same wording as FEAT BR-017).
+- R4 | training.spec.md:33-34 | "retrospective logging" (BR-013, completed past session) vs "retro-logged" catch-up set
+  (BR-030) share a name with nothing telling them apart.
+- R4 | training.spec.md:34 vs FEAT-0010:106-108 | the domain spec states BR-032 only as INV-006 and omits "otherwise it
+  is live"; no contradiction.
+- R4 | this section | heading/mangled advisory line — **fixed at close-out**.
+- meta | R3 | rule candidate — filed in `docs/REVIEW_FINDINGS.md`.
+
+Open advisories above are not fixed on this branch; candidates for the backlog (owner's call).
