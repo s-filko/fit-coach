@@ -509,6 +509,12 @@ Run 2 advisories folded in `48e31a3d`. **Verdict after run 2: clean.**
 then three consecutive runs 702 passed / 1 todo. Recorded as an unidentified integration flake (not reproduced);
 see STATE handoff.
 
+**Post-merge CI failure (2026-10-01):** the first dev deploy (run 36774724735, merge `241d2a1f`) failed in
+`ci / check-server`: CI has no Postgres and `load-recommendation-log.ts` imported the concrete repository, so the
+unit suite crashed on `ECONNREFUSED 5432`. Every local run had the DB up, so neither the workers, the review nor the
+acceptance above saw it. Fixed in `54ee7d09` ((D) Fix-CI); `DB_PORT=5999 npm run test:unit` → 2357 passed, no
+connection attempt. The CI-parity run is now part of the acceptance procedure (`docs/ORCHESTRATION.md` § Task spec).
+
 ### Meta
 
 Filed in `docs/REVIEW_FINDINGS.md` (run 1: R1 ×2, R2 ×1, R3 ×2, R4 ×3; run 2: R1 ×1, R4 ×1).

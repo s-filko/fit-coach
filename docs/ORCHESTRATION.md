@@ -242,6 +242,11 @@ short — the worker reads the plan itself. Every spec names:
    through the preamble's `ask`, never a local prompt; send `worker_done --outcome
    failed` after a second failed verification rather than looping.
 
+**CI parity:** CI's `check-server` has no Postgres, while the local test DB is always up. The orchestrator's
+acceptance of a task that adds imports under `infra/` also runs `DB_PORT=5999 npm run test:unit` (from
+`apps/server/`); a crash on `ECONNREFUSED` means a module a unit test loads connects to the DB on import (load-plan,
+2026-10-01: the first dev deploy failed on exactly this).
+
 ### Scenario self-check
 
 The DB-backed training-journey scenarios (`npm run test:scenarios`, plan
