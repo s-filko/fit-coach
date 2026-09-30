@@ -209,6 +209,66 @@ Review (close-out-review), set `.env.dev` (`LLM_PROMPT_CACHE=anthropic`, `LLM_PR
   probed.
 - **O4 confirmed:** moving bp2 forward writes only the delta (110 tokens), the earlier prefix is read.
 
+### T2 — red tests AC-PC-1..7, AC-PC-9..11 (worker, Sonnet, 2026-09-30) — done
+
+All files are `*.repro.test.ts` (outside the default testMatch); shared helper `apps/server/src/infra/ai/context/__tests__/request-capture.ts`
+(real `ChatOpenAI` + capturing `configuration.fetch` returning a canned completion — no network). Run:
+`npx jest --testMatch='**/*.repro.test.ts' src` (DB ones: `db-test-lock.sh bash -c 'RUN_DB_TESTS=1 NODE_ENV=test npx jest --testMatch="**/<file>.repro.test.ts"'`).
+Result on unchanged code: every AC has at least one test red for the stated reason; `npm run test:unit` 167 suites / 1721 tests green;
+`npm run type-check` clean (the two not-yet-existing modules are loaded with `require`, so tsc stays clean; jest reports
+"Cannot find module" until T5b).
+
+**Finding for T4 (changes D7's premise):** with a non-streaming `ChatOpenAI` (@langchain/openai 1.2.9) the raw provider usage is
+dropped: `response_metadata` = `{tokenUsage, finish_reason, model_provider, model_name}`, `usage_metadata.input_token_details` has
+`cache_read` but no write field. `prompt_tokens_details.cache_write_tokens` therefore never reaches the extractor as things stand —
+T4 must capture the raw usage itself (fetch wrapper in `model.factory.ts`, or `__includeRawResponse`). The AC-PC-7 test is
+end-to-end (real model → `LLMLogHandler` → recorder input) so it does not fix where.
+
+| AC | File | Red because (first failing assertion on unchanged code) |
+|---|---|---|
+| AC-PC-1 | `graph/nodes/__tests__/prompt-cache-prefix.repro.test.ts` | tools: `expected ["search_exercises","log_set","complete_current_exercise","finish_training"] … received + "delete_last_sets","update_last_set"` (BUG-008 filter); messages: prefix before the first request's current turn differs — first request has the `WORKOUT OVERVIEW\nsquat: 0 sets` system message and the `NOW (…)` system message, second has `… 1 set` and no NOW |
+| AC-PC-2 | same | `systemsAfterFirst` is `[WORKOUT OVERVIEW…, "The user returns after 0 h…", "NOW (user's local time)…"]` (plain), `[…, NOW…, "IMPORTANT: All tool calls are complete…"]` (post-tool), `[WORKOUT OVERVIEW…, NOW…]` (retry) instead of `[]` |
+| AC-PC-3 | same + `config/__tests__/prompt-cache-config.repro.test.ts` | `expect(parts).toHaveLength(2)` — received 0 (no `cache_control` sent); 1h: `[]` ≠ two `{type:'ephemeral',ttl:'1h'}`; config: `LLM_PROMPT_CACHE` / `LLM_PROMPT_CACHE_TTL` undefined. *Green guard:* "off → no cache_control" (holds today) |
+| AC-PC-4 | `graph/__tests__/training-tool-rejection.repro.test.ts` + prefix test | executor: `Expected "llm_error" Received "ok"` (delete_last_sets), `updateLastSet` called once when it must not be; bound tools: `delete_last_sets`,`update_last_set` missing from the request. *Green guard:* calls go through once a set exists |
+| AC-PC-5 | prefix test | `expect("ещё подход").toContain("<context>")` — current user message carries no context (it is in system messages) |
+| AC-PC-6 | `context/__tests__/compaction-deferral.repro.test.ts`, `graph/nodes/__tests__/compaction-deferral.repro.test.ts` | `decideCompactReason` `Received "budget"` (expected null within the TTL under the cap); `resolveBudget` history trimmed (`Expected - 352 / + 27` lines: history not left untouched); compact step returns a compaction update instead of `{}`. *Green guards:* over the cap / after TTL / inactivity keep today's behaviour |
+| AC-PC-7 | `ai/__tests__/cache-write-usage.repro.test.ts`, `conversation/__tests__/conversation-run-cache-write.repro.test.ts`, `tests/integration/services/cache-break-guard.repro.test.ts` | recorder input `usage.cacheWriteTokens` `Expected 110 Received undefined`; `0` not preserved; `RunMetricsCollector.snapshot().tokensCacheWrite` undefined; run insert lacks `tokensCacheWrite`; DB row `cacheWriteTokens` `Expected 110 Received undefined` |
+| AC-PC-9 | `ai/__tests__/cache-break-attribution.repro.test.ts`, `cache-break-reasons.repro.test.ts`, `cache-break-guard.repro.test.ts` | `cacheBreak` `Expected "unplanned:system:facts" Received undefined` (and planned/none/tools/history variants); registry: `Cannot find module '@infra/ai/cache-break-reasons'` (new module); DB: `cacheBreak` undefined |
+| AC-PC-10 | attribution + guard tests | `Expected "warm" Received "prefix_changed:history[2]:user"` (today's attribution compares past breakpoint 2 and flags the current turn); `cacheBreak` `Expected "unexplained_miss" Received undefined` |
+| AC-PC-11 | `tests/integration/services/cache-report.repro.test.ts` | `Cannot find module '@infra/observability/cache-report'` (new module) |
+
+**Interfaces chosen (T3–T5b implement to these; change a signature → update the test in the same commit):**
+
+- Config (`EnvSchema`): `LLM_PROMPT_CACHE` `'off'|'anthropic'` default `off`; `LLM_PROMPT_CACHE_TTL` `'5m'|'1h'` default `5m`;
+  `LLM_CONTEXT_HARD_CAP_TOKENS` positive int default `60000`; `LLM_INPUT_PRICE_PER_MTOK` optional number (USD per 1M uncached input
+  tokens, list price — used for lost-cost in warn logs and the report). Flags are read via `loadConfig()` at request time.
+- D2 wire shape: the current user message content is a list of text parts, the first `<context>…</context>` (block 3 + gap note + NOW);
+  the checkpointed HumanMessage stays the raw text. Breakpoints (D1): `{type:'ephemeral'}` (5m: no `ttl` key; 1h: `ttl:'1h'`) on the
+  last part of the single stable system message and on the last content part of the last history message (the one right before the
+  current user message); none on in-flight messages.
+- D4: rejection is observable through `buildToolExecutor(tools, buildTrainingToolPolicy(tools))` over the real tools with
+  `trainingService.getSessionDetails(activeSessionId)` returning the session (in-progress exercise, `sets: []`) — `llm_error`
+  ToolMessage, `deleteLastSets`/`updateLastSet` never called. Where the check lives is T3's call; adapt `makeExecutor()` in the test
+  if the wiring signature changes.
+- D5: `decideCompactReason({… , cacheWarm?: {hardCapTokens, estimatedTotalTokens} | null})`, `resolveBudget({… , cacheWarm?: {hardCapTokens} | null})`
+  — the caller passes non-null only when the previous call is younger than the TTL; `EpisodeTunables` gains `cacheTtlMs?`, `hardCapTokens?`
+  and `buildCompactStep` derives warmth from `state.lastUserMessageAt` vs the run clock.
+- D7: `ExtractedUsage`/recorder `usage.cacheWriteTokens?: number|null` (null = unreported, 0 kept); `RunMetricsCollector.onEnd(id, in, out,
+  cacheRead, reasoning, cacheWrite)` → `snapshot().tokensCacheWrite`; `ConversationRunRecord.tokensCacheWrite`
+  → `conversation_runs.tokens_cache_write`; `llm_calls.cache_write_tokens` (nullable int).
+- D8: `@infra/ai/cache-break-reasons` exports `CACHE_BREAK_REASONS` (the five) and `reasonCovers(reason, where)` (mapping in the test:
+  phase_switch → tools, system:prompt; compaction → history[*], system:summaries; hard_cap → history[*], system:summaries;
+  facts_changed → system:facts, system:directive; ttl_expired → everything). `attributeCache(prev, {request, inputTokens, now,
+  cacheReadTokens?, declaredBreaks?}, limits)` returns additionally `cacheBreak` (`none`|`planned:<reason>`|`unplanned:<where>`|`unexplained_miss`)
+  and `cacheBreakLostTokens`; cacheable part = tools + messages before the previous request's last user message; `where` inside the
+  stable system message names the block by header offset (`system:prompt|facts|directive|summaries`). `RecordLlmCallInput.cacheBreakReasons?: string[]`;
+  columns `llm_calls.cache_break` (text) and `cache_break_lost_tokens` (int). Logging: `'Prompt cache break'` warn for `unplanned:*` /
+  `unexplained_miss` with `{userId, where, lostTokens, lostCostUsd}`, info for `planned:hard_cap` / `planned:facts_changed`.
+  Cache report: `@infra/observability/cache-report` exports `buildCacheReport({userId, from, to, inputPricePerMTok, cacheTtl?})` and
+  `formatCacheReport(report)`; shape in the test header (read 0.1×, write 1.25×/2×, uncached = input − read − write).
+- Note: when T3 moves volatile context into the human message, `phase` for the warn log is not known to the recorder — the test
+  asserts `userId`, `where`, `lostTokens`, `lostCostUsd` only.
+
 ## Out of scope
 
 Smaller training tool set and shorter schemas; BUG-050 estimator; the post-tool second call itself; caching on
