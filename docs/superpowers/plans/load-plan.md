@@ -146,6 +146,17 @@ in § "Before dispatch".
   server env schema, default `false`; with a flag off the code path is exactly the pre-plan behaviour (tests cover
   both). Prompt versions `training` v11 / `session_planning` v5 (not v10/v4 as the AC table says) are selected
   only when `LOAD_PLAN_PLANNER_REBIND` is on.
+- **(D) T1 — scheme details the plan did not settle (Task 1):** (a) `goal` is `strength | hypertrophy | general`;
+  `defaultParams(goal)` gives the rep range (double: 4–6 / 8–12 / 8–12) or fixed reps (linear: 5 / 8 / 8), both with
+  `confirmSessions` 2 and `stepCapPct` 0.1 from `schemes/params.ts` with the R4.0 citations. (b) A recommendation is
+  `{ load | null, unit, reps }`; insufficient data (no working weight) returns `load: null`, reason
+  `no record — conservative start`, `missing: ['workingWeight']`. (c) `LoadFacts` carries no per-session rep history, so
+  "confirmed ×N" is read from `e1rmTrend.flatRun` (consecutive performances within ±2.5 % of the newest) plus
+  `lastExposure.repsVsRange`; an absent trend goes to `missing` and holds the load. (d) `LoadFacts.constraints` is
+  already filtered to the exercise's muscles (any involvement, no involvement field), so any `short` constraint there
+  forbids growth. (e) Linear counts "reps made" as `in range` or above (the planner derives `targetReps` = fixed reps).
+  (f) A step above the 10 % cap holds the load and the reason says "progress by reps". (g) `getScheme(id)` throws
+  `UnknownSchemeError`; `SCHEMES` is keyed by id without the version.
 
 ## Acceptance criteria
 
