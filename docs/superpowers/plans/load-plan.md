@@ -278,7 +278,7 @@ in § "Before dispatch".
 | AC-LP-4 | The first working set of an exercise writes one `load_recommendations` row with the rendered entry; a second set does not; completion fills `outcome` | `tests/integration/scenarios/load-recommendation-log.integration.test.ts` |
 | AC-LP-5 | A `progression_scheme` fact is stored only from a verified user quote; the block prints "chosen by user <date>", or "default, unconfirmed" without one | summariser/verifier unit tests + scenario |
 | AC-LP-6 | A 30-day gap prints the tier and ladder step; the next conversation asks the reason once; the answer is a `break` fact; the ladder advances on a workout in range with reserve | unit + scenario |
-| AC-LP-7 | Session planning writes no `targetWeight`; WORKOUT OVERVIEW shows sets × reps only; prompts `session_planning` v4 / `training` v10 differ from their predecessors only in the D10 lines | tool/block/prompt unit tests + snapshots |
+| AC-LP-7 | Session planning writes no `targetWeight`; WORKOUT OVERVIEW shows sets × reps only; prompts `session_planning` v5 / `training` v11 differ from `session_planning` v4 / `training` v10 only in the D10 lines | tool/block/prompt unit tests + snapshots |
 
 Verification commands (from `apps/server/`): `npm run check-all`, `npm run test:unit`,
 `db-test-lock.sh npm run test:integration`, `db-test-lock.sh npm run test:scenarios`,

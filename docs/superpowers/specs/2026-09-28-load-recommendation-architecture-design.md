@@ -55,9 +55,10 @@ Owner constraints from the discussion [owner]:
    one result shape.
 5. **Insufficient data beats every rule.** A metric below its evidence threshold is absent, not
    estimated.
-6. **Today's conversation enters the number through one door:** the coach may deviate from the
-   computed plan only on a fact from the current conversation (pain, sleep, feedback, time)
-   and must state that fact. There is no other in-session path.
+6. **The load in `LOAD PLAN` is a suggestion with its reason, not a binding value** (amended 2026-09-30,
+   owner decision O1, plan `load-plan`): the model decides the load by its judgement of the current
+   situation, and states its reason when it departs from the suggestion; both the suggestion and the
+   advised load are logged (D7).
 7. **Precedence is fixed and printed:** safety rows → active tactic → scheme. The block shows
    which stage produced the number.
 8. **Layer 2 never touches a number and never re-evaluates a layer-1 signal.** Phase, trend,

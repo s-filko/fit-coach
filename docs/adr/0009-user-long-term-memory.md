@@ -203,6 +203,23 @@ the current message itself.
 | `schedule_constraint` | Availability, training days, timing | "Can only train Mon/Wed/Fri, works late on Tuesdays" |
 | `equipment` | Available equipment, gym access | "Has access to full gym, no home equipment" |
 | `nutrition_preference` | Dietary notes relevant to coaching | "Does not eat meat, high-protein plant-based diet" |
+| `progression_scheme` | The user's chosen progression scheme — **code-read typed value** (amendment 2026-10-01) | "progression_scheme=double_progression — «хочу прогрессию по повторам»" |
+| `break` | A pause in training with dates and a reason class — **code-read, `short`** (amendment 2026-10-01) | "break reason=illness from=2026-09-01 to=2026-09-20 — «болел две недели»" |
+
+### Amendment 2026-10-01 — two code-read categories (plan `load-plan`, roadmap U9b)
+
+Approved by the owner 2026-09-30 (plan `load-plan` gate 2):
+
+- `progression_scheme` — the user's chosen progression scheme; value is a registry id validated in code; written
+  only from the user's verbatim words through the summariser and the model verifier; the newest active fact is the
+  choice.
+- `break` — a pause in training with dates, a reason class (illness, injury, holiday/work/no time, deliberate
+  deload, stress/poor sleep, unknown) and the user's words; `durability = short`, expiring at the end of the return
+  ladder.
+
+Both ship behind env flags (`LOAD_PLAN_SUGGESTION` / `LOAD_PLAN_BREAKS`); `manage_fact` cannot write either. The
+implementation's carrier and lifetimes (a text fact parsed in code; the `break` expiry approximated by the `short`
+cap) are recorded in the plan's Execution decisions (D) T4, T5a.
 
 ---
 
