@@ -1,0 +1,192 @@
+import type { E1rmTrendFact, FatigueFact, LoadFacts } from '../../load-facts';
+import { decide, type Decision } from '../decide';
+import { getScheme } from '../schemes';
+import { SHORT_CONSTRAINT, makeFacts } from './fixtures';
+
+/**
+ * AC-LP-2: the decision order of design §3.3 — Stage A safety rows (insufficient data, short
+ * constraint, gap tier ≥ return, pre-fatigue, below floor) → Stage B (no tactic) → Stage C scheme.
+ * The matching stage and row are part of the output.
+ */
+const double = { scheme: getScheme('double_progression'), goal: 'hypertrophy' as const };
+
+function run(facts: LoadFacts, extra: Partial<Parameters<typeof decide>[1]> = {}): Decision {
+  return decide(facts, { ...double, ...extra });
+}
+
+const gapOf = (days: number): LoadFacts['gap'] => ({
+  exercise: { days },
+  primaryMuscles: { days },
+  anyWorkout: { days: 1 },
+});
+
+const fatigue = (sets: number, fresh = sets === 0): FatigueFact => ({
+  perMuscle: sets === 0 ? [] : [{ muscleGroup: 'triceps', workingSets: sets, exerciseNames: ['Dips'] }],
+  fresh,
+  minutesIntoSession: { absent: 'n/a' },
+});
+
+function trend(over: Partial<E1rmTrendFact> = {}): LoadFacts['e1rmTrend'] {
+  return { ...(makeFacts().e1rmTrend as E1rmTrendFact), ...over };
+}
+
+function exposure(repsVsRange: 'below floor' | 'in range' | 'at or above top'): LoadFacts['lastExposure'] {
+  return { ...(makeFacts().lastExposure as object), repsVsRange } as LoadFacts['lastExposure'];
+}
+
+describe('Stage A — safety rows', () => {
+  it('insufficient data → no record, conservative start', () => {
+    const d = run(makeFacts({ workingWeight: { absent: 'insufficient' } }));
+    expect(d).toMatchObject({ stage: 'A', row: 'insufficient_data' });
+    expect(d.candidate.load).toBeNull();
+    expect(d.reason).toBe('no record — conservative start');
+  });
+
+  it('short constraint → hold at most the working weight, conservative one step lower', () => {
+    const d = run(makeFacts({ constraints: { constraints: [SHORT_CONSTRAINT], equipment: [] } }));
+    expect(d).toMatchObject({ stage: 'A', row: 'short_constraint' });
+    expect(d.candidate.load).toBe(65);
+    expect(d.conservative.load).toBe(60);
+    expect(d.reason).toContain('sore shoulder');
+  });
+
+  it('gap tier return → one step below the working weight, conservative one lower, confidence one level down', () => {
+    const d = run(makeFacts({ gap: gapOf(15) }));
+    expect(d).toMatchObject({ stage: 'A', row: 'gap_return' });
+    expect(d.candidate.load).toBe(60);
+    expect(d.conservative.load).toBe(55);
+    expect(d.gap).toEqual({ tier: 'return', days: 15, basis: 'exercise' });
+    expect(d.ladder).toMatchObject({ workout: 1, of: 2 });
+    expect(d.confidence).toBe('medium');
+  });
+
+  it('gap tier rebuild → two steps below, confidence low', () => {
+    const d = run(makeFacts({ gap: gapOf(40) }));
+    expect(d).toMatchObject({ stage: 'A', row: 'gap_rebuild' });
+    expect(d.candidate.load).toBe(55);
+    expect(d.conservative.load).toBe(50);
+    expect(d.confidence).toBe('low');
+  });
+
+  it('gap tier restart → cold start, history is a dated reference only', () => {
+    const d = run(makeFacts({ gap: gapOf(100) }));
+    expect(d).toMatchObject({ stage: 'A', row: 'gap_restart' });
+    expect(d.candidate.load).toBeNull();
+    expect(d.conservative.load).toBeNull();
+    expect(d.confidence).toBe('low');
+    expect(d.reason).toContain('cold start');
+  });
+
+  it('the ladder counter advances the return rung (workout 2 of 2 → back to working weight, Stage C takes over)', () => {
+    const d = run(makeFacts({ gap: gapOf(15) }), { ladderWorkoutsSince: 1 });
+    expect(d.ladder).toMatchObject({ workout: 2, of: 2, stepsBelow: 0 });
+    expect(d).toMatchObject({ stage: 'A', row: 'gap_return' });
+    expect(d.candidate.load).toBe(65);
+    expect(d.conservative.load).toBe(60);
+  });
+
+  it('a gap at rest_with_question does not reduce the load', () => {
+    const d = run(makeFacts({ gap: gapOf(10) }));
+    expect(d.stage).toBe('C');
+    expect(d.gap.tier).toBe('rest_with_question');
+  });
+
+  it('pre-fatigue materially greater than the reference → hold, conservative one step lower', () => {
+    const d = run(makeFacts({ fatigueToday: fatigue(4), fatigueReference: fatigue(0) }));
+    expect(d).toMatchObject({ stage: 'A', row: 'pre_fatigue' });
+    expect(d.candidate.load).toBe(65);
+    expect(d.conservative.load).toBe(60);
+  });
+
+  it('very heavy pre-fatigue → the candidate drops one step as well', () => {
+    const d = run(makeFacts({ fatigueToday: fatigue(9), fatigueReference: fatigue(0) }));
+    expect(d).toMatchObject({ stage: 'A', row: 'pre_fatigue' });
+    expect(d.candidate.load).toBe(60);
+    expect(d.conservative.load).toBe(55);
+  });
+
+  it('fatigue equal to the reference adds nothing', () => {
+    const d = run(makeFacts({ fatigueToday: { ...fatigue(6), sameAsReference: true }, fatigueReference: fatigue(6) }));
+    expect(d.stage).toBe('C');
+  });
+
+  it('a small pre-fatigue difference is not material', () => {
+    expect(run(makeFacts({ fatigueToday: fatigue(2), fatigueReference: fatigue(0) })).stage).toBe('C');
+  });
+
+  it('below the range floor → −1 step, conservative −2 steps', () => {
+    const d = run(makeFacts({ lastExposure: exposure('below floor') }));
+    expect(d).toMatchObject({ stage: 'A', row: 'below_floor' });
+    expect(d.candidate.load).toBe(60);
+    expect(d.conservative.load).toBe(55);
+  });
+
+  it('rows are evaluated in the fixed order: constraint before gap before fatigue before floor', () => {
+    const all = makeFacts({
+      constraints: { constraints: [SHORT_CONSTRAINT], equipment: [] },
+      gap: gapOf(40),
+      fatigueToday: fatigue(9),
+      fatigueReference: fatigue(0),
+      lastExposure: exposure('below floor'),
+    });
+    expect(run(all).row).toBe('short_constraint');
+    expect(run({ ...all, constraints: { constraints: [], equipment: [] } }).row).toBe('gap_rebuild');
+    expect(run({ ...all, constraints: { constraints: [], equipment: [] }, gap: gapOf(3) }).row).toBe('pre_fatigue');
+    expect(
+      run({ ...all, constraints: { constraints: [], equipment: [] }, gap: gapOf(3), fatigueToday: fatigue(0) }).row,
+    ).toBe('below_floor');
+  });
+
+  it('a missing equipment step is named in missing and stated in the reason', () => {
+    const d = run(makeFacts({ gap: gapOf(15), equipmentStep: { absent: 'n/a for bodyweight' } }));
+    expect(d.missing).toContain('equipmentStep');
+    expect(d.reason).toContain('equipmentStep');
+    expect(d.candidate.load).toBe(65);
+  });
+});
+
+describe('Stage B — no tactic until layer 2', () => {
+  it('prints tactic none active on every decision', () => {
+    expect(run(makeFacts()).tactic).toBe('none active');
+    expect(run(makeFacts({ gap: gapOf(40) })).tactic).toBe('none active');
+  });
+});
+
+describe('Stage C — scheme', () => {
+  it('growth: top of the range confirmed twice → one step up', () => {
+    const d = run(makeFacts());
+    expect(d).toMatchObject({ stage: 'C', row: 'scheme_growth', scheme: { id: 'double_progression', version: 1 } });
+    expect(d.candidate.load).toBe(70);
+    expect(d.conservative.load).toBe(65);
+  });
+
+  it('hold: one confirmation only', () => {
+    const d = run(makeFacts({ e1rmTrend: trend({ flatRun: 1 }) }));
+    expect(d).toMatchObject({ stage: 'C', row: 'scheme_hold' });
+    expect(d.candidate.load).toBe(65);
+  });
+
+  it('hold: in range', () => {
+    expect(run(makeFacts({ lastExposure: exposure('in range') })).row).toBe('scheme_hold');
+  });
+
+  it('runs the scheme it is given (linear)', () => {
+    const d = run(makeFacts(), { scheme: getScheme('linear_progression'), goal: 'strength' });
+    expect(d.scheme.id).toBe('linear_progression');
+    expect(d.candidate.reps).toEqual({ min: 5, max: 5 });
+  });
+
+  it('carries the printed outcome word', () => {
+    expect(run(makeFacts()).outcome).toBe('one step up');
+    expect(run(makeFacts({ lastExposure: exposure('in range') })).outcome).toBe('hold');
+    expect(run(makeFacts({ lastExposure: exposure('below floor') })).outcome).toBe('one step down');
+    expect(run(makeFacts({ workingWeight: { absent: 'x' } })).outcome).toBe('conservative start');
+  });
+
+  it('is pure', () => {
+    const f = makeFacts({ gap: gapOf(15) });
+    const snap = JSON.stringify(f);
+    expect(run(f)).toEqual(run(f));
+    expect(JSON.stringify(f)).toBe(snap);
+  });
+});

@@ -137,6 +137,8 @@ export async function registerInfraServices(container: Container = getGlobalCont
     budgetOverrides: config.LLM_BUDGETS,
     // AC-FL-5 (course-check plan Task 1): the layer's on/off switch, resolved once here.
     courseCheckEnabled: config.COURSE_CHECK_ENABLED,
+    // load-plan plan A5: LOAD PLAN v2 (suggestion) on/off, resolved once here.
+    loadPlanSuggestion: config.LOAD_PLAN_SUGGESTION,
     courseCheckRetryCooldownMs: config.COURSE_CHECK_RETRY_COOLDOWN_MINUTES * 60_000,
     courseCheckExpiryAskWindowMs: config.COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS * 86_400_000,
     // transition-handoff plan Task 1 (D-1): empty set = off, resolved once here.

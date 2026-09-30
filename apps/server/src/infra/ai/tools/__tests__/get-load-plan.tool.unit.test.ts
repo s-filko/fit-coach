@@ -28,7 +28,7 @@ const past = [
 ];
 const today = sessionRow('today', daysBefore(0, -30), [], { status: 'in_progress' });
 
-function build(overrides: { resolve?: jest.Mock; recent?: unknown[] } = {}) {
+function build(overrides: { resolve?: jest.Mock; recent?: unknown[]; suggestion?: boolean } = {}) {
   const trainingService = {
     resolveExerciseIdByName: overrides.resolve ?? jest.fn().mockResolvedValue(CHEST_PRESS.id),
     getSessionDetails: jest.fn().mockResolvedValue(today),
@@ -42,6 +42,7 @@ function build(overrides: { resolve?: jest.Mock; recent?: unknown[] } = {}) {
       countRealPerformancesByExercise: async () => new Map([[CHEST_PRESS.id, 2]]),
     },
     userFacts: { getConstraints: async () => [], getForPrompt: async () => [] },
+    suggestion: overrides.suggestion,
   } as never) as unknown as InvokableTool;
   return { tool, trainingService };
 }
@@ -93,5 +94,31 @@ describe('get_load_plan (AC-LF-4)', () => {
   it('needs an id or a name', async () => {
     const { tool } = build();
     await expect(tool.invoke({}, config)).rejects.toBeDefined();
+  });
+});
+
+describe('get_load_plan with LOAD_PLAN_SUGGESTION (load-plan AC-LP-3, A5)', () => {
+  it('on: returns the v2 text — the v1 facts plus scheme, decision, recommend, conservative, confidence', async () => {
+    const { tool } = build({ suggestion: true });
+    const text = rendered(await tool.invoke({ exerciseId: CHEST_PRESS.id }, config));
+    expect(text).toContain('reference: 2026-09-26');
+    expect(text).toContain('scheme: double progression');
+    expect(text).toContain('tactic: none active');
+    expect(text).toMatch(/decision: Stage [ABC], /);
+    expect(text).toMatch(/recommend: /);
+    expect(text).toMatch(/conservative: /);
+    expect(text).toMatch(/confidence: /);
+  });
+
+  it('on: the description says the numbers are a suggestion the model decides on', () => {
+    const { tool } = build({ suggestion: true });
+    expect((tool as unknown as { description: string }).description).toMatch(/you decide the load/);
+  });
+
+  it('off (default): the v1 text, byte-compatible — no decision lines', async () => {
+    const { tool } = build();
+    const text = rendered(await tool.invoke({ exerciseId: CHEST_PRESS.id }, config));
+    expect(text).not.toMatch(/recommend:|decision:|scheme:|conservative:/);
+    expect((tool as unknown as { description: string }).description).toMatch(/recommends nothing/);
   });
 });

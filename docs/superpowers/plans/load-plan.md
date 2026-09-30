@@ -157,6 +157,27 @@ in § "Before dispatch".
   forbids growth. (e) Linear counts "reps made" as `in range` or above (the planner derives `targetReps` = fixed reps).
   (f) A step above the 10 % cap holds the load and the reason says "progress by reps". (g) `getScheme(id)` throws
   `UnknownSchemeError`; `SCHEMES` is keyed by id without the version.
+- **(D) T2 — decision order, tiers, block v2 (Task 2):** (a) **Tier source:** the exercise's own gap, else its primary
+  muscles', else any workout's (`gapTierFacts`); thresholds `> 7 d` rest_with_question, `≥ 14` return, `≥ 28` rebuild,
+  `≥ 84` restart, each a named parameter with its R4.0 citation in `gap-tier.ts`. (b) **Ladder stub:** `returnLadderStep(tier,
+  workoutsSince = 0)` — return 2 rungs from 1 step below, rebuild 3 rungs from 2 steps below, restart = cold start (no load);
+  the counter's source and the `break` fact are Task 4. A finished ladder falls through to Stage C. (c) **Pre-fatigue
+  "materially greater":** the largest per-muscle increase in working sets on shared muscles (today − reference) ≥ 3 → hold;
+  ≥ 6 → one step down. Reasoned caution parameters, not sourced; the log (R4.4) calibrates them. The design's "−1 step if
+  the delta exceeds the user's own drop-off norm" is not implemented: the norm is in reps, the delta in sets — no
+  unit-compatible comparison; revisit with the log data. (d) **Non-strength exercises** print `recommend: n/a for <type>`
+  and no decision lines (schemes apply to strength). (e) **Scheme until Task 5:** `defaultProgression(profile)` — beginner
+  (`users.fitness_level`) + a strength goal (`users.fitness_goal` text matching strength/stronger) → linear, else double;
+  goal hypertrophy when the text names muscle/mass; printed `(default, unconfirmed)`. (f) **e1RM window (D6):** not cut to 8
+  weeks — the v2 entry prints the span instead (`e1RM over N performances / D d`, new `spanDays` on `E1rmTrendFact`, additive;
+  v1 output unchanged), so the owner's live check 4 can still judge the trend; the scheme's confirmation still reads
+  `flatRun`. (g) **Flag plumbing:** `LOAD_PLAN_SUGGESTION` (env enum true/false → boolean, default false) →
+  `ConversationGraphDeps.loadPlanSuggestion` (composition root) → `training.spec.ts` picks `TRAINING_LOAD_PLAN_V2` and
+  `get_load_plan` renders v2 (its description switches to the suggestion wording); `TrainingData.progression` is set only
+  with the flag on, so flag-off data is identical. (h) **Known gap until Task 5:** prompt `training` v9 rule 1 still says
+  "LOAD PLAN recommends no weight" while the v2 header says suggestion; the rebinding is Task 5 (`LOAD_PLAN_PLANNER_REBIND`).
+  (i) `renderLoadPlanEntry` (v1) gained opt-in `equipment` / `dropOff` / `e1rmSpan` options — defaults reproduce v1 exactly.
+  (j) The zero-LLM `print-load-plan` prints v2 by default (`--v1` = facts only).
 
 ## Acceptance criteria
 

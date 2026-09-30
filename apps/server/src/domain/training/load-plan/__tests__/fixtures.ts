@@ -21,6 +21,7 @@ export function makeFacts(over: Partial<LoadFacts> = {}): LoadFacts {
       currentLoadUnit: 'kg',
       weeksAtWeight: 2,
       performances: 5,
+      spanDays: 35,
       lowConfidence: null,
       warmupsEstimated: false,
       mixedBasisExcluded: 0,

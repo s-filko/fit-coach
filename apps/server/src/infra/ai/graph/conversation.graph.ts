@@ -57,6 +57,11 @@ export interface ConversationGraphDeps {
    */
   courseCheckEnabled?: boolean;
   /**
+   * LOAD_PLAN_SUGGESTION (load-plan plan A5), resolved once at the composition root: the training phase renders
+   * `training.load_plan` v2 and `get_load_plan` returns the v2 text. Optional; absent = off (the v1 behaviour).
+   */
+  loadPlanSuggestion?: boolean;
+  /**
    * COURSE_CHECK_RETRY_COOLDOWN_MINUTES in ms — how long a failed check is not
    * retried on the same fingerprint. Optional like the switch; absent = 15 min.
    */

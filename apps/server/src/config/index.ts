@@ -68,6 +68,12 @@ export const EnvSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform(v => v === 'true'),
+  // Load plan (load-plan plan A5): `LOAD_PLAN_SUGGESTION` switches the LOAD PLAN block and `get_load_plan` from
+  // v1 (facts only) to v2 (facts + a suggestion with its reason). Off = exactly the pre-plan behaviour.
+  LOAD_PLAN_SUGGESTION: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform(v => v === 'true'),
   // How long a FAILED course check is not re-attempted on the same inputs
   // (minutes) — a provider outage must make the layer quieter, not cost one
   // failed call per turn. New inputs are never covered by it.

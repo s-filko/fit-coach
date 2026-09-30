@@ -1,11 +1,12 @@
 /**
- * Zero-LLM report of the `LOAD PLAN` facts (load-facts plan D14): prints the same entry the
- * training block and `get_load_plan` render, for every exercise the user performed in the last
+ * Zero-LLM report of the `LOAD PLAN` (load-facts plan D14; v2 since load-plan Task 2): prints the same entry the
+ * training block and `get_load_plan` render — the facts plus scheme, decision, recommend, conservative and
+ * confidence (`--v1` for the facts only; the scheme is the profile default, as in the block), for every exercise the user performed in the last
  * 56 days, or for one exercise. Read-only, no model call — the owner compares it with their memory
  * of the workouts (live check 4). The entry is rendered by the same producer, so what is printed
  * here is what the coach sees (minus the EXERCISE HISTORY de-duplication: sets are always in full).
  *
- * Run: npm run print-load-plan -- --user <userId> [--exercise <exerciseId>] [--env-file <path>]
+ * Run: npm run print-load-plan -- --user <userId> [--exercise <exerciseId>] [--v1] [--env-file <path>]
  *
  * `--env-file` works as in print-transcript: the imports that open a database connection are dynamic,
  * below, so they resolve only after the override has loaded its file.
@@ -18,7 +19,9 @@ const WINDOW_DAYS = 56;
 
 function usageError(message: string): never {
   console.error(`${message}\n`);
-  console.error('Usage: npm run print-load-plan -- --user <userId> [--exercise <exerciseId>] [--env-file <path>]');
+  console.error(
+    'Usage: npm run print-load-plan -- --user <userId> [--exercise <exerciseId>] [--v1] [--env-file <path>]',
+  );
   process.exit(2);
 }
 
@@ -32,6 +35,7 @@ async function run(): Promise<void> {
   const userId = argValue(args, '--user');
   const onlyExercise = argValue(args, '--exercise');
   const envFile = argValue(args, '--env-file');
+  const factsOnly = args.includes('--v1');
   if (!userId) {
     usageError('--user is required');
   }
@@ -47,6 +51,8 @@ async function run(): Promise<void> {
     { DrizzleUserRepository },
     loader,
     { renderLoadPlanEntry },
+    { renderLoadPlanEntryV2 },
+    { defaultProgression },
     { calendarDaysAgo },
     { formatDatabaseTarget, describeSchemaError },
   ] = await Promise.all([
@@ -57,6 +63,8 @@ async function run(): Promise<void> {
     import('@infra/db/repositories/user.repository'),
     import('@infra/ai/load-facts/load-facts.loader'),
     import('@infra/ai/prompts/blocks/training-load-plan.v1'),
+    import('@infra/ai/prompts/blocks/training-load-plan.v2'),
+    import('@domain/training/load-plan'),
     import('@shared/date-utils'),
     import('@infra/observability/db-target'),
   ]);
@@ -102,8 +110,18 @@ async function run(): Promise<void> {
 
     console.log(`\nLOAD PLAN report for ${userId} at ${now.toISOString()} (timezone: ${timezone ?? 'none'})`);
     console.log(`${entries.length} exercise(s), no LLM call.\n`);
+    const progression = defaultProgression(user);
+    const equipment = entries[0]?.facts.constraints.equipment ?? [];
+    if (!factsOnly && equipment.length > 0) {
+      console.log(`equipment facts (all exercises): ${equipment.join('; ')}\n`);
+    }
     for (const entry of entries) {
-      console.log(renderLoadPlanEntry(entry, { now, timezone, user: null }, { showToday: false }));
+      const ctx = { now, timezone, user: null };
+      console.log(
+        factsOnly
+          ? renderLoadPlanEntry(entry, ctx, { showToday: false })
+          : renderLoadPlanEntryV2(entry, ctx, { progression, showToday: false, equipment: 'omit' }),
+      );
       console.log('');
     }
   } catch (err) {

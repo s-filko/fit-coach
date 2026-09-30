@@ -350,6 +350,16 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
     expect(off).toBeGreaterThan(plan);
   });
 
+  it('LOAD_PLAN_SUGGESTION selects training.load_plan v2; off or absent keeps v1 (load-plan A5)', () => {
+    const versionOf = (overrides: Record<string, unknown>): string | undefined =>
+      buildPhaseSpecs(stubDeps(overrides))
+        .find(s => s.name === 'training')
+        ?.contextBlocks.find(b => b.id === 'training.load_plan')?.version;
+    expect(versionOf({})).toBe('v1');
+    expect(versionOf({ loadPlanSuggestion: false })).toBe('v1');
+    expect(versionOf({ loadPlanSuggestion: true })).toBe('v2');
+  });
+
   it('training loader drops a bad legacy plan row (empty/non-UUID exerciseId) before any DB query (close-out review advisory 6)', async () => {
     const session = {
       ...SESSION_ROW,

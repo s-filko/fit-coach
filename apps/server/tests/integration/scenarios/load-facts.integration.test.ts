@@ -182,6 +182,38 @@ describe('LOAD PLAN over the real DB (AC-LF-5)', () => {
     expect(context).toContain('sets as in EXERCISE HISTORY');
   });
 
+  it('LOAD_PLAN_SUGGESTION on: the context carries LOAD PLAN v2 — the suggestion with its decision row (AC-LP-3)', async () => {
+    const on = { ...(deps() as object), loadPlanSuggestion: true } as never;
+    const spec = buildTrainingSpec(on);
+    const loaded = await spec.loadContext(
+      { userId, user: { timezone: TIMEZONE } as never, activeSessionId: todayId, now: NOW },
+      on,
+    );
+    if (!loaded.ok) {
+      throw new Error(`loadContext failed: ${loaded.reply}`);
+    }
+    const context = spec.contextBlocks
+      .map(b => b.render(loaded.data as never, { now: NOW, timezone: TIMEZONE, user: null }, 0))
+      .filter(Boolean)
+      .join('\n');
+
+    expect(context).toMatch(/=== LOAD PLAN \(computed facts and a suggestion with its reason — you decide the load/);
+    expect(context).not.toContain('=== LOAD PLAN (computed facts — no recommendation) ===');
+    // The v1 fact lines are still there.
+    expect(context).toContain('working weight 82 kg (2 performances / 8 wk)');
+    expect(context).toContain('gap: exercise 3 d');
+    // v2 lines: default scheme (no profile), no tactic, the Stage A pre-fatigue row (6 triceps sets today, none
+    // before the reference), the suggestion one step down with the conservative option below it.
+    expect(context).toContain('scheme: double progression 8–12, confirm ×2 (default, unconfirmed)');
+    expect(context).toContain('tactic: none active');
+    expect(context).toContain('decision: Stage A, pre-fatigue delta → one step down');
+    expect(context).toMatch(/recommend: 79.5 kg × 8–12 — 6 more working sets on a shared muscle today/);
+    expect(context).toMatch(/conservative: 77 kg × 8–12 — 2.5 kg lower/);
+    expect(context).toMatch(/confidence: (low|medium|high) \(/);
+    // No record for the pushdown: a conservative start, never a number.
+    expect(context).toContain('recommend: no record — conservative start');
+  });
+
   it('get_load_plan returns the same facts, with the sets in full', async () => {
     const tool = buildGetLoadPlanTool({
       trainingService,

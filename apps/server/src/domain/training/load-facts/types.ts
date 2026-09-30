@@ -171,6 +171,8 @@ export interface E1rmTrendFact {
   currentLoadUnit: 'kg' | 'lbs' | null;
   weeksAtWeight: number;
   performances: number;
+  /** Calendar days between the oldest and the newest performance the trend covers (load-plan D6: printed span). */
+  spanDays: number;
   lowConfidence: 'machine' | null;
   warmupsEstimated: boolean;
   mixedBasisExcluded: number;

@@ -13,6 +13,7 @@ import { RECENT_PLACES_WINDOW } from '@domain/training/place';
 // TrainingService's finish reconciliation reuses this one copy — a bad legacy `session_plan_json`
 // row never reaches a DB query (close-out review advisory 6).
 import { isValidExerciseId } from '@domain/training/plan-exercise-id';
+import { defaultProgression, type ProgressionChoice } from '@domain/training/load-plan';
 import type { ExerciseWithMuscles, MuscleGroup, WorkoutSessionWithDetails } from '@domain/training/types';
 
 import type {
@@ -29,6 +30,7 @@ import {
   TRAINING_CLIENT_V1,
   TRAINING_EXERCISE_HISTORY_V1,
   TRAINING_LOAD_PLAN_V1,
+  TRAINING_LOAD_PLAN_V2,
   TRAINING_RECENT_WORKOUTS_V1,
   TRAINING_STALE_SESSION_V1,
   TRAINING_WORKOUT_OVERVIEW_V1,
@@ -72,6 +74,11 @@ export interface TrainingData {
   recentPlacesCount: number;
   /** load-facts plan D11: the computed facts per today's exercise (same order as `exerciseHistory`). */
   loadPlan: LoadPlanEntry[];
+  /**
+   * load-plan plan D8: the scheme in force — the profile default until the user's choice exists (Task 5).
+   * Set only with LOAD_PLAN_SUGGESTION on, so the flag-off data is unchanged.
+   */
+  progression?: ProgressionChoice;
 }
 
 /**
@@ -95,7 +102,13 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
     buildSearchExercisesTool({ embeddingService, exerciseRepository }),
     buildGetExerciseHistoryTool({ trainingService, exerciseRepository, workoutSessionRepo }),
     // load-facts plan D12: computed facts for an exercise outside today's LOAD PLAN.
-    buildGetLoadPlanTool({ trainingService, exerciseRepository, workoutSessionRepo, userFacts: deps.userFacts }),
+    buildGetLoadPlanTool({
+      trainingService,
+      exerciseRepository,
+      workoutSessionRepo,
+      userFacts: deps.userFacts,
+      suggestion: deps.loadPlanSuggestion === true,
+    }),
     buildLogSetTool({ trainingService }),
     buildCompleteCurrentExerciseTool({ trainingService }),
     buildFinishTrainingTool({ trainingService }),
@@ -240,6 +253,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
           todayMuscles: [...todayMuscleSet],
           recentPlacesCount,
           loadPlan,
+          ...(deps.loadPlanSuggestion === true ? { progression: defaultProgression(input.user) } : {}),
         },
       };
     },
@@ -251,8 +265,9 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
       TRAINING_STALE_SESSION_V1,
       TRAINING_EXERCISE_HISTORY_V1,
       TRAINING_RECENT_WORKOUTS_V1,
-      // load-facts plan D5: block 3, after RECENT WORKOUTS.
-      TRAINING_LOAD_PLAN_V1,
+      // load-facts plan D5: block 3, after RECENT WORKOUTS. load-plan plan A5: v2 (suggestion) only with
+      // LOAD_PLAN_SUGGESTION on; off = v1 unchanged.
+      deps.loadPlanSuggestion === true ? TRAINING_LOAD_PLAN_V2 : TRAINING_LOAD_PLAN_V1,
     ],
     modelProfile: 'default',
   };

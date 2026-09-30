@@ -100,6 +100,13 @@ export {
   type RenderLoadPlanOpts,
   type TrainingLoadPlanData,
 } from './training-load-plan.v1';
+export {
+  LOAD_PLAN_HEADER_V2,
+  renderLoadPlanEntryV2,
+  TRAINING_LOAD_PLAN_V2,
+  type RenderLoadPlanV2Opts,
+  type TrainingLoadPlanV2Data,
+} from './training-load-plan.v2';
 
 /** A block renders as one composed string — its own SystemMessage at a fixed position. */
 export function renderBlock<TCtx>(module: PromptModule<TCtx>, ctx: TCtx): string {
