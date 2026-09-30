@@ -15,6 +15,7 @@ _Generated 2026-09-30 from docs/superpowers/plans/ + git. Never hand-edit; regen
 — none —
 
 **Planned**
+- `load-plan-fixes.md` — Load Plan Fixes — zero-kg ladder, isometric holds, no-record with a reference (U9b follow-up) Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 
@@ -241,6 +242,17 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
 4. **HB-02** (production Docker image) — its own plan, sequenced after HB-01;
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
+
+## Handoff (load-plan-fixes, 2026-10-01) — next orchestrator: fix three replay defects before the owner's workout
+
+**Owner order 2026-10-01 («да в новой сессии»):** execute `docs/superpowers/plans/load-plan-fixes.md` (items 1–3:
+0 kg on the return ladder + wrong working weight; isometric holds via `log_set`; a number on no-record rows that have
+a reference) in a fresh plan worktree, one Sonnet worker, red tests from the replay data, one combined review, merge,
+dev deploy (no model calls on dev), then re-run the two-workout replay locally on GLM (runner and data in
+`data/replay-2026-10-01/`, gitignored). Also route the plan's out-of-scope list (one BUGS entry, BACKLOG lines).
+The owner is present (not an autonomy order), but approval prompts are still to be avoided: text mentioning
+deletion commands goes through Write/Edit only (the owner-gate hook greps the whole Bash command).
+The previous orchestrator's leftover cleanup (U9b worktrees/branches) is still listed below for the owner.
 
 ## Handoff (U9b load-plan, 2026-10-01) — merged, deployed to dev, flags on; owner review + live workout pending
 
