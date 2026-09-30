@@ -112,6 +112,12 @@ export const EnvSchema = z.object({
   // models through OpenRouter); `off` sends none — the default, since the Z.AI and Gemini routes are not
   // probed. The TTL picks the breakpoint lifetime (`1h` writes cost 2x instead of 1.25x). Same
   // tunables-not-secrets exception as EPISODE_*.
+  // load-plan plan A5: writes the `load_recommendations` calibration log (first working set of an exercise, D7).
+  // Off = the code path is exactly the pre-plan behaviour. Never read back into a prompt.
+  LOAD_PLAN_SUGGESTION: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform(v => v === 'true'),
   LLM_PROMPT_CACHE: z.enum(['off', 'anthropic']).default('off'),
   LLM_PROMPT_CACHE_TTL: z.enum(['5m', '1h']).default('5m'),
   // Prompt-caching plan D5: while the provider cache is warm, budget compaction and history trimming wait (they

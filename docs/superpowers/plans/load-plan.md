@@ -128,6 +128,21 @@ in § "Before dispatch".
   (pattern-following prompt versions). Tasks 1 and 4 touch disjoint files and may run in parallel
   worktrees; DB tests via `db-test-lock.sh`.
 
+## Execution decisions (autonomy order 2026-10-01, orchestrator — for the owner to review)
+
+- **(D) T3-1 — snapshot before the set, write after it:** `logSetWithContext` renders the v1 entry before the set is
+  stored (so `today:` excludes the set that triggers the row) and inserts it after the set succeeded; a unique index on
+  `session_exercise_id` (+ `ON CONFLICT DO NOTHING`) keeps parallel first sets to one row. Trigger = no earlier set of
+  that row with `set_kind <> 'warmup'` (legacy NULL counts as working).
+- **(D) T3-2 — log never fails a set:** the log implementation swallows and logs errors (snapshot, insert, outcome).
+- **(D) T3-3 — `advised` shape:** `log_set` input `advised?: { load?: kg, reps?: int, reason?: string }`; stored
+  as-is on the first working set's row. The schema is visible to the model even with `LOAD_PLAN_SUGGESTION` off (tool
+  surface snapshot updated); with the flag off the field is ignored — no row, no behaviour change.
+- **(D) T3-4 — `outcome` shape:** `{ sets: [{ setNumber, reps?, weight?, weightUnit?, duration?, rpe }] }`, working sets
+  only, written when the exercise completes (`complete_current_exercise`, switch auto-complete, or the session ends
+  with the exercise still open); `completed_at` = now. `fatigue` is filled from the fact package's `fatigueToday`;
+  the other decision columns stay NULL for Task 2 (A3).
+
 ## Acceptance criteria
 
 | AC | Criterion | Verification |

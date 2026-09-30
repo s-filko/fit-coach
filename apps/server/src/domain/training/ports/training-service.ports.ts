@@ -14,6 +14,8 @@ import type {
   WorkoutSessionWithDetails,
 } from '@domain/training/types';
 
+import type { LoadPlanLogContext } from './load-recommendation.ports';
+
 // --- DI Tokens ---
 
 export const TRAINING_SERVICE_TOKEN = Symbol('TrainingService');
@@ -139,6 +141,8 @@ export interface ITrainingService {
       // set-kind plan Task 1 (D5): 'total' overrides the per-hand default on a dumbbell/kettlebell
       // exercise — the user explicitly stated a combined weight.
       weightBasis?: 'total';
+      // load-plan plan Task 3: run context + advised for the recommendation log (ignored when it is off).
+      loadPlanLog?: LoadPlanLogContext;
     },
   ): Promise<{ set: SessionSet; setNumber: number; autoCompleted?: AutoCompletedExercise }>;
 }
