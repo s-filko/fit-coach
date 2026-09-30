@@ -87,10 +87,10 @@ From `llm_calls.prompt_hashes` / `cache_diverged_at`:
 - **D3** Post-tool nudge: no longer a SystemMessage; rendered as a text part appended to the last ToolMessage's
   content (after breakpoint 2 — uncached tail, never breaks the prefix).
 - **D4** Tool availability moves from hiding to rejecting: all phase tools are always bound (stable order);
-  `delete_last_sets` / `update_last_set` with no set on the current exercise return a tool error from the
-  executor with the same meaning. BUG-008 Plan A's intent (no deletion before a set exists) is kept.
+  `delete_last_sets` / `update_last_set` with no set on the current exercise return a refusal from the tool
+  itself (`user_error`, not counted against `llmErrorBudget` — review run 1). BUG-008 Plan A's intent (no deletion before a set exists) is kept.
 - **D5** Compaction/trim deferral: while the previous call of the same user is younger than
-  `LLM_PROMPT_CACHE_TTL` (5m/1h), budget compaction and `trimHistory` are skipped unless the estimated total
+  `LLM_PROMPT_CACHE_TTL` (5m/1h), budget compaction and `trimHistory` are skipped unless the estimated conversation (history + current turn)
   exceeds `LLM_CONTEXT_HARD_CAP_TOKENS` (default 60 000 estimated ≈ 100 k real per BUG-050 — below the model's
   window). Above the cap the existing path runs unchanged.
 - **D6** Config: `LLM_PROMPT_CACHE=off|anthropic` (default `off` — Z.AI and the Gemini BYOK route are not
@@ -129,7 +129,8 @@ From `llm_calls.prompt_hashes` / `cache_diverged_at`:
 - ADR-0013 §3.4 message order: block 3, gap note and `NOW` leave the system message list and ride in the
   current human message (D2); two cache breakpoints.
 - ADR-0013 §3.3 compaction triggers: budget compaction deferred while the cache is warm, hard cap (D5).
-- ADR-0011 / BUG-008 Plan A: availability by rejection instead of hiding (D4).
+- ADR-0013 §4.2 / BUG-008 Plan A: availability by rejection instead of hiding (D4) — the plan first named ADR-0011
+  by mistake.
 - `docs/superpowers/specs/2026-09-26-training-history-context-design.md` § 4 superseded by this plan's findings.
 
 ## Acceptance criteria (mints AC-PC-*)
@@ -142,7 +143,8 @@ From `llm_calls.prompt_hashes` / `cache_diverged_at`:
 - **AC-PC-3** With `LLM_PROMPT_CACHE=anthropic` the request carries exactly two `cache_control` parts (D1),
   with `ttl` per config; with `off`, none.
 - **AC-PC-4** The bound tool list of a phase does not depend on session state; `delete_last_sets` /
-  `update_last_set` before the first set of the current exercise return the executor error (D4).
+  `update_last_set` before the first set of the current exercise return the tools' `user_error` refusal, which does not spend the
+  error budget (D4).
 - **AC-PC-5** The checkpointed HumanMessage carries no `<context>` text (D2).
 - **AC-PC-6** Within the TTL, history over `budget.history` but under the hard cap: no compaction, no trim; over
   the cap: current behaviour. After a gap ≥ TTL: current behaviour (D5).
@@ -415,7 +417,7 @@ lists no `*.repro.test.ts`. Docs outside this file untouched (docs sync is the o
   `tool-executor.ts` (fresh messages) — no other copy of an existing message.
 - **#12 warm predicate:** `grep -rn cacheTtlMs src` → `warmCacheOf` is the only comparison; the rest are the config field and its wiring.
 - **#13** `isCacheBreakReason` removed (grep: no callers).
-- **R3 cache-report pricing (AC-PC-8):** `infra/ai/model-prices.ts` — built-in per-model table (input + output USD/1M: Sonnet 5.5 3/15, Haiku 4.5 1/5 —
+- **R3 cache-report pricing (AC-PC-8):** `infra/ai/model-prices.ts` — built-in per-model table (input + output USD/1M: Sonnet 5.5 3/15 at that commit, 2/10 since f5e8bf87 (the price that reproduced the BUG-051 charge), Haiku 4.5 1/5 —
   *assumed list prices, verify against the provider's page before quoting a bill*), overridable with `LLM_MODEL_PRICES` JSON (`{"model":{"input":..,"output":..}}`).
   The report prices each model separately (read 0.1×, write 1.25×/2×, uncached 1×, **output at the output price**), returns `models[]`, `cost.output`,
   `cost.withoutCaching`, and lists unpriced models instead of guessing; `--price` forces one flat input price. `lostCostUsd` per break uses the row's model price.
@@ -528,3 +530,26 @@ CONTRIBUTING_AI.md (episode end, message shape, warm no-cut); LOGGING_GUIDE.md (
 alongside: design spec §4 superseded pointer, plan D5 name / D7 wording / T4 heading, two test headers.
 
 Meta findings filed in `docs/REVIEW_FINDINGS.md` (run prompt-caching 2026-09-30).
+
+### Run 2 — 2026-09-30, four zones over `b43ef90d...1e82399a`: **blocked** (all 13 run-1 blocking verified closed)
+
+#### Blocking (new, introduced by the fix commits)
+
+1. **R1 + R4 — cap wording.** ADR-0013 `:177`, `:253` (and CONTRIBUTING_AI `:174`, plan D5, `config/index.ts:116-118`)
+   said "estimated (context) total"; the shared measure `conversationTokens()` (`context/cache-warmth.ts:44`) counts
+   history + current only. Closed (orchestrator, owner's "обновляй" = describe the code): ADR, CONTRIBUTING_AI and
+   D5 now say "estimated conversation (history + current turn)"; the config comment goes with fix 4.
+2. **R4 — AC-PC-4 / D4 text** still said "executor error"; since 130ca6ec the tools return `user_error`, no budget
+   spent. Closed (orchestrator): AC-PC-4 and D4 amended in place.
+3. **R3 — `tests/integration/services/cache-report.integration.test.ts:165-170`** still expects Sonnet 5.5 at 3/15
+   after f5e8bf87 set 2/10; the DB-backed evidence predates the change. Open → worker.
+4. **R2 — price has two sources.** `llm-call-recorder.ts:273` uses `LLM_INPUT_PRICE_PER_MTOK ?? priceOf(model)`,
+   `cache-report.ts` uses `--price ?? priceOf(model)` — the same break can be costed differently. Open → worker.
+
+#### Advisory (run 2)
+
+- R2 `request-capture.ts:94` `wireText` leftover test flattener; `textOnly(m.content) ?? JSON.stringify(m.content)`
+  repeated at 6 sites. · R2/R3 `LLM_MODEL_PRICES` parsed on every recorded call, docstring claims fail-fast at
+  config load. · R4 `config/index.ts:116-125` D5 comment split from its variable. · R4 `model-prices.ts:5-6` header
+  calls the figures "Anthropic list prices". · R4 ARCHITECTURE `:410` warm qualifier, plan `:132` ADR-0011 name,
+  Evidence "3/15" — closed by the orchestrator in the same commit as fixes 1–2.

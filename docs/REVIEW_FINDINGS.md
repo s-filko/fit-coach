@@ -33,6 +33,8 @@ Entry format:
 Wording in a zone prompt or in `SKILL.md` that misleads, contradicts the severity contract,
 or is inert for the kind of diff under review.
 
+- [×1] A re-review brief listed run 1's closure claims; a reviewer trusting it would have skipped the test helpers (only a fresh search found `wireText`). Briefs should say closure claims are re-verified by search, not taken from the plan.
+  Runs: prompt-caching run 2 (2026-09-30) (R2).
 - [×1] R3's zone asks for "the verification command per task", but a plan may name one only for some tasks (here only T3; T4/T5/T5b say "AC-PC-x green"); the zone does not say what to check then. R3 checked recorded evidence instead.
   Runs: prompt-caching (2026-09-30) (R3).
 - [×3] R4's brief says "If the diff edits a durable spec, that is R1's finding, not yours" —
@@ -401,6 +403,10 @@ backs it. Each entry names the proposed wording and where it would live
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
 
+- [×2] A fix commit changed code (the hard-cap measure; a model price) after the ADR amendment / DB-backed evidence describing it was written, leaving the text or the green run stale. Proposed (R1, R3): "an ADR amendment written in the same close-out as a code fix is re-read against that fix's final diff; verification evidence names the commit it ran at, and any later code commit re-runs the DB-backed suites touching the changed module".
+  Runs: prompt-caching run 2 (2026-09-30) (R1, R3).
+- [×1] A review fix that changes behaviour an AC-*/D-* states (AC-PC-4: llm_error → user_error) recorded the change only in Evidence. Proposed (R4): "A review fix that changes behaviour an AC-*/D-* states amends that AC/D line in the same commit."
+  Runs: prompt-caching run 2 (2026-09-30) (R4).
 - [×2] A worker's Evidence claim that a repro test was promoted can be false (AC-PC-4: T3 claimed a `.unit` file, T5b claimed no repro left; only the `*.repro.test.ts` existed, outside CI). Proposed (R3, R4): "every test file cited as AC evidence exists at that path and matches a `test:unit` / `test:integration` / `test:scenarios` testMatch glob — checked by `git ls-files`, enforceable in `state.mjs --check` or CI".
   Runs: prompt-caching (2026-09-30) (R3, R4).
 - [×1] Cross-cutting run intents (cache-break declarations) got attached to whatever object was already threaded through every node (`RunMetricsCollector`). Proposed (R1) for CONTRIBUTING_AI: "Run-scoped state that nodes write for a later consumer lives in the run context as its own field with one owner; the metrics collector accumulates measurements only."

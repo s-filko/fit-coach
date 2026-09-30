@@ -174,7 +174,8 @@ An **episode** is a contiguous span of `messages`. `prepare` runs `compact` befo
 
 **Amendment 2026-09-30 (`prompt-caching`, BUG-051, owner-approved at close-out):** with explicit prompt caching on
 (`LLM_PROMPT_CACHE=anthropic`) BR-LLM-003 is **deferred while the cache is warm** — the user's previous message is
-younger than the cache TTL (`LLM_PROMPT_CACHE_TTL`) — and the estimated context total is under
+younger than the cache TTL (`LLM_PROMPT_CACHE_TTL`) — and the estimated conversation (history + current turn;
+the stable prefix it rides on is excluded) is under
 `LLM_CONTEXT_HARD_CAP_TOKENS` (default 60 000 estimated). A compaction rewrites the cached prefix (one full write at
 1.25× plus a summariser call), while the history it would remove is read from cache at 0.1×; mid-workout it rarely
 pays back, and it drops conversational detail early. Over the cap, after the TTL, and for BR-LLM-001/002 the rule is
@@ -250,7 +251,7 @@ Budget (per phase, in `PhaseSpec.budget`, tokens estimated with a fixed estimato
 Numbers are initial defaults to be tuned with the eval harness; the invariant is the mechanism, not the values. INV-LLM-004: the assembler never drops or truncates block 1; over-budget is resolved by (a) trimming history, (b) reducing domain block depth (e.g. 5 → 3 sessions), (c) dropping oldest episode summary — in that order, and the `budgetReport` is logged per run. **HYPOTHESIS**: today's session-planning system prompt alone is 6–10k tokens (full plan JSON + 5 sessions + recovery + ~130 lines of instructions); measure with the estimator in P2 before choosing values.
 
 > **Amendment 2026-09-30 (`prompt-caching`, owner-approved):** INV-LLM-004's resolution order (and every cut in
-> `resolveBudget`) is skipped while the prompt cache is warm and the estimated total is under
+> `resolveBudget`) is skipped while the prompt cache is warm and the estimated conversation (history + current turn) is under
 > `LLM_CONTEXT_HARD_CAP_TOKENS` — any cut would rewrite the cached prefix. Block 1 is still never cut. Same warm
 > predicate and cap measure as the BR-LLM-003 amendment in §3.3.
 
