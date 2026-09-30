@@ -282,16 +282,9 @@ RPE 211/446 sets, `set_kind` 0/446.
 - Advisories: `BACKLOG.md` § "load-facts close-out review advisories (2026-09-29)" (the repeated
   equipment fact on every entry is the one with prompt-size effect); meta in `REVIEW_FINDINGS.md`.
 
-**Cleanup pending (not run — each raises an approval prompt; ready to run from the repo root):**
-```bash
-orca terminal close --terminal term_2f072fe0-e13d-44a8-867b-13f28d27dac9   # Sonnet worker of T1/T3/fixes, retained after release
-orca worktree rm --worktree "id:88b171fc-bda9-4c6c-b6f3-82b7fb04ae88::/Users/filko/orca/workspaces/fit_coach/load-facts-t1"
-orca worktree rm --worktree "id:88b171fc-bda9-4c6c-b6f3-82b7fb04ae88::/Users/filko/orca/workspaces/fit_coach/load-facts-t2"
-git branch -d plan/load-facts task/load-facts-t2
-git push origin --delete plan/load-facts
-```
-Both worktrees are clean and fully merged into `dev`; Orca run `run_c45942ef0ec8` (all dispatches
-settled). The set-kind cleanup listed below is still pending too.
+**Cleanup done 2026-09-30 (owner present):** worker terminal closed, worktrees `load-facts-t1` / `-t2`
+removed, branches `plan/load-facts` (local + remote) and `task/load-facts-t2` deleted. The set-kind
+cleanup listed below is still pending (its orchestrator session is the owner's).
 
 **Next: U9b `load-plan` — plan written, not dispatched** (`docs/superpowers/plans/load-plan.md`,
 `Status: planned`). Before dispatch it needs four owner gates, listed in the plan § "Before
