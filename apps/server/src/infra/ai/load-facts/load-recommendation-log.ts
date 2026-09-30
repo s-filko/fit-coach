@@ -1,8 +1,11 @@
 /**
- * load-plan plan Task 3 (D7): the recommendation log. The snapshot port renders today's v1 LOAD PLAN
- * entry through the shared loader and renderer (no second copy of either); the log composes it with the
- * repository and never throws — calibration data must not fail a logged set.
+ * load-plan plan Task 3 (D7): the recommendation log. The snapshot port renders today's v2 LOAD PLAN entry
+ * and stores the decision behind its numbers (A3), through the shared loader, the one decision call
+ * (`decideLoadPlanEntry`) and the v2 renderer — no second copy of any; the log composes it with the
+ * repository and never throws — calibration data must not fail a logged set. The log exists only with
+ * `LOAD_PLAN_SUGGESTION` on, so the snapshot is always v2.
  */
+import { defaultProgression } from '@domain/training/load-plan';
 import type {
   ILoadPlanSnapshotPort,
   ILoadRecommendationLog,
@@ -10,8 +13,9 @@ import type {
   IWorkoutSessionRepository,
   LoadPlanSnapshot,
 } from '@domain/training/ports';
+import type { UserRepository } from '@domain/user/ports';
 
-import { renderLoadPlanEntry } from '@infra/ai/prompts/blocks/training-load-plan.v1';
+import { decideLoadPlanEntry, renderLoadPlanEntryV2 } from '@infra/ai/prompts/blocks/training-load-plan.v2';
 import { LoadRecommendationRepository } from '@infra/db/repositories/load-recommendation.repository';
 
 import { createLogger } from '@shared/logger';
@@ -25,6 +29,8 @@ export interface LoadRecommendationLogDeps {
     Pick<IWorkoutSessionRepository, 'findByIdWithDetails'>;
   exerciseRepository: LoadFactsLoaderDeps['exerciseRepository'];
   userFacts: LoadFactsLoaderDeps['userFacts'];
+  /** For the D8 default scheme (profile level + goal); absent = the profile-less default. */
+  userRepository?: Pick<UserRepository, 'getById'>;
 }
 
 export class LoadPlanSnapshotPort implements ILoadPlanSnapshotPort {
@@ -51,18 +57,23 @@ export class LoadPlanSnapshotPort implements ILoadPlanSnapshotPort {
     if (!entry) {
       return null;
     }
+    const progression = defaultProgression(await this.deps.userRepository?.getById(input.userId));
+    const decision = decideLoadPlanEntry(entry, { progression });
     return {
-      rendered: renderLoadPlanEntry(entry, { now: input.now, timezone: input.timezone, user: null }),
+      rendered: renderLoadPlanEntryV2(
+        entry,
+        { now: input.now, timezone: input.timezone, user: null },
+        { progression, decision },
+      ),
       fatigue: entry.facts.fatigueToday,
-      // A3: the decision order (Task 2) fills these; until then they stay NULL.
-      schemeId: null,
-      schemeVersion: null,
-      stage: null,
-      row: null,
-      candidate: null,
-      conservative: null,
-      confidence: null,
-      gapTier: null,
+      schemeId: decision?.scheme.id ?? null,
+      schemeVersion: decision ? String(decision.scheme.version) : null,
+      stage: decision?.stage ?? null,
+      row: decision?.row ?? null,
+      candidate: decision?.candidate ?? null,
+      conservative: decision?.conservative ?? null,
+      confidence: decision?.confidence ?? null,
+      gapTier: decision?.gap.tier ?? null,
     };
   }
 }

@@ -77,6 +77,7 @@ export async function registerInfraServices(container: Container = getGlobalCont
             workoutSessionRepo: c.get(WORKOUT_SESSION_REPOSITORY_TOKEN),
             exerciseRepository: c.get(EXERCISE_REPOSITORY_TOKEN),
             userFacts: c.get(USER_FACTS_SERVICE_TOKEN),
+            userRepository: c.get(USER_REPOSITORY_TOKEN),
           },
           loadTrainingConfig(),
         ),

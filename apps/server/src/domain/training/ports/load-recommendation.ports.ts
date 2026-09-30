@@ -17,8 +17,9 @@ export interface LoadPlanLogContext {
 }
 
 /**
- * The LOAD PLAN entry of one exercise as it was rendered for the run. Decision fields stay null
- * until the decision order exists (A3); `fatigue` is the fact package's fatigue context.
+ * The v2 LOAD PLAN entry of one exercise as it was rendered for the run, with the decision (`decide()`) that
+ * produced its numbers (A3). Decision fields are null for an exercise the schemes do not cover (non-strength);
+ * `fatigue` is the fact package's fatigue context.
  */
 export interface LoadPlanSnapshot {
   rendered: string;
@@ -33,7 +34,7 @@ export interface LoadPlanSnapshot {
   gapTier: string | null;
 }
 
-/** Snapshot port: renders the v1 entry for one exercise; null when there is nothing to render. */
+/** Snapshot port: renders the v2 entry and its decision for one exercise; null when there is nothing to render. */
 export interface ILoadPlanSnapshotPort {
   snapshot(input: {
     userId: string;

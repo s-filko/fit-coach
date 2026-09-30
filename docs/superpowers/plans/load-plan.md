@@ -190,6 +190,15 @@ in § "Before dispatch".
   only, written when the exercise completes (`complete_current_exercise`, switch auto-complete, or the session ends
   with the exercise still open); `completed_at` = now. `fatigue` is filled from the fact package's `fatigueToday`;
   the other decision columns stay NULL for Task 2 (A3).
+- **(D) T3-5 — decision columns filled (A3, Task 2 follow-up):** the snapshot port calls `decideLoadPlanEntry` (the one
+  decision call path, exported from `training-load-plan.v2.ts` and shared with the block, tool and report) and renders
+  the **v2** entry from that same decision (`opts.decision`), so `rendered` is what the coach saw and the columns are the
+  decision behind it: `scheme_id`, `scheme_version` (text, `'1'`), `stage` (`A|B|C`), `row` (the `DecisionRow` id, e.g.
+  `scheme_hold`), `candidate` / `conservative` (the `Recommendation` `{ load | null, unit, reps }`), `confidence`,
+  `gap_tier`. A non-strength exercise has no scheme decision: those columns stay NULL and the entry prints `recommend:
+  n/a for <type>`. The log exists only with `LOAD_PLAN_SUGGESTION` on, so the v1-only snapshot path is gone (v1 remains
+  the flag-off block/tool). The D8 default scheme reads the profile through an optional `userRepository` dep (wired in
+  `register-infra-services.ts`); absent = the profile-less default. T3-1's "v1 entry" reads "v2 entry" from here on.
 
 ## Acceptance criteria
 

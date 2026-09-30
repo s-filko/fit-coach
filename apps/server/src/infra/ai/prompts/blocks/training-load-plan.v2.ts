@@ -35,6 +35,8 @@ export interface RenderLoadPlanV2Opts extends RenderLoadPlanOpts {
   progression: ProgressionChoice;
   /** Real workouts since the gap (Task 4's counter); absent = first rung. */
   ladderWorkoutsSince?: number;
+  /** A decision the caller already took with `decideLoadPlanEntry` (null = non-strength); absent = decide here. */
+  decision?: Decision | null;
 }
 
 export interface TrainingLoadPlanV2Data extends TrainingLoadPlanData {
@@ -78,25 +80,39 @@ function confidenceText(entry: LoadPlanEntry, d: Decision): string {
   return `confidence: ${d.confidence} (${parts.join('; ')})`;
 }
 
-function decisionLines(entry: LoadPlanEntry, opts: RenderLoadPlanV2Opts): string[] {
+/**
+ * The one decision call path for an entry: the block, the tool, the report and the recommendation log all come here.
+ * Null for a non-strength exercise (schemes apply to strength).
+ */
+export function decideLoadPlanEntry(
+  entry: LoadPlanEntry,
+  opts: Pick<RenderLoadPlanV2Opts, 'progression' | 'ladderWorkoutsSince'>,
+): Decision | null {
+  if (entry.exercise.exerciseType !== 'strength') {
+    return null;
+  }
+  const { progression } = opts;
+  return decide(entry.facts, {
+    scheme: progression.scheme,
+    goal: progression.goal,
+    params: progression.scheme.defaultParams(progression.goal),
+    ladderWorkoutsSince: opts.ladderWorkoutsSince,
+  });
+}
+
+function decisionLines(entry: LoadPlanEntry, d: Decision | null, opts: RenderLoadPlanV2Opts): string[] {
   const { facts, exercise } = entry;
-  if (exercise.exerciseType !== 'strength') {
+  if (d === null) {
     return [`recommend: n/a for ${exercise.exerciseType}`];
   }
   const { progression } = opts;
-  const params = progression.scheme.defaultParams(progression.goal);
-  const d = decide(facts, {
-    scheme: progression.scheme,
-    goal: progression.goal,
-    params,
-    ladderWorkoutsSince: opts.ladderWorkoutsSince,
-  });
+  const { confirmSessions } = progression.scheme.defaultParams(progression.goal);
   const perHand = !isAbsent(facts.equipmentStep) && facts.equipmentStep.perHand;
   const rec = loadText(d.candidate, perHand);
   const cons = loadText(d.conservative, perHand);
   const lower = d.candidate.load !== null && d.conservative.load !== null ? d.candidate.load - d.conservative.load : 0;
   return [
-    schemeLine(d, progression, repsText(d.candidate.reps), params.confirmSessions),
+    schemeLine(d, progression, repsText(d.candidate.reps), confirmSessions),
     `tactic: ${d.tactic}`,
     `decision: Stage ${d.stage}, ${ROW_LABELS[d.row]} → ${d.outcome}`,
     `recommend: ${rec === null ? d.reason : `${rec} — ${d.reason}`}`,
@@ -108,7 +124,8 @@ function decisionLines(entry: LoadPlanEntry, opts: RenderLoadPlanV2Opts): string
 /** One exercise's entry: the v1 fact lines (v2 wording) plus the decision lines. */
 export function renderLoadPlanEntryV2(entry: LoadPlanEntry, ctx: ContextBlockCtx, opts: RenderLoadPlanV2Opts): string {
   const facts = renderLoadPlanEntry(entry, ctx, { ...opts, dropOff: 'plain', e1rmSpan: true });
-  return [facts, ...decisionLines(entry, opts).map(l => `${INDENT}${l}`)].join('\n');
+  const decision = opts.decision === undefined ? decideLoadPlanEntry(entry, opts) : opts.decision;
+  return [facts, ...decisionLines(entry, decision, opts).map(l => `${INDENT}${l}`)].join('\n');
 }
 
 export const TRAINING_LOAD_PLAN_V2: ContextBlock<TrainingLoadPlanV2Data> = {
