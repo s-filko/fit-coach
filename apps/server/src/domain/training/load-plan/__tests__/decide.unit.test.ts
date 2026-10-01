@@ -972,4 +972,31 @@ describe('AC-LPF-12 · golden-table rulings in the domain', () => {
     );
     expect(d).toMatchObject({ row: 'scheme_growth', outcome: 'one step up' });
   });
+
+  it('orchestrator ruling 2026-10-01: insufficient data after a rebuild starts two steps below (the break ladder), a return one', () => {
+    const at = (days: number) => {
+      const reference = {
+        performance: {} as never,
+        daysAgo: days,
+        sets: [
+          { setData: { type: 'strength', reps: 10, weight: 40 }, rpe: null, userFeedback: null, createdAt: new Date() },
+        ],
+        likeForLike: true,
+        warmupsEstimated: false,
+        rpe: [],
+        feedback: [],
+      } as unknown as LoadFacts['reference'];
+      return run(
+        makeFacts({
+          workingWeight: { absent: 'insufficient: 1 performances / 8 wk' },
+          indicativeLoad: { weight: 40, unit: 'kg' },
+          reference,
+          gap: gapOf(days),
+        }),
+      );
+    };
+    expect([at(30).candidate.load, at(30).conservative.load]).toEqual([30, 25]);
+    expect(at(30).outcome).toBe('2 steps below the reference');
+    expect([at(20).candidate.load, at(20).conservative.load]).toEqual([35, 30]);
+  });
 });

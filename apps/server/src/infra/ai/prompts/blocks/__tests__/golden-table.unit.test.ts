@@ -142,18 +142,20 @@ const RULINGS: Record<string, { ruling: string; expected: Partial<GoldenCase['ex
     },
   },
   // O-2: the 10 % cap does not apply to a machine whose own weight is not in the displayed load → growth is named.
-  'G-32': { ruling: 'O-2', expected: { next_step_gist: 'last set >= 14 twice -> growth (7.5)' } },
+  'G-32': { ruling: 'O-2 + step from history', expected: { next_step_gist: 'last set >= 14 twice -> growth (5)' } },
   'G-33': {
-    ruling: 'O-2',
+    ruling: 'O-2 + step from history',
     expected: {
       decision: 'grow',
-      recommend_kg: 7.5,
+      recommend_kg: 5,
       conservative_kg: 2.5,
       conservative_is_floor_no_lighter: false,
-      next_step_gist: 'sets at 7.5 in range',
+      next_step_gist: 'sets at 5 in range',
       reason_contains: 'relatively small',
     },
   },
+  // Orchestrator ruling 2026-10-01 (1): the insufficient-data rebuild start follows the break ladder — two steps below.
+  'G-47': { ruling: 'rebuild ladder 2 steps', expected: { recommend_kg: 35, conservative_kg: 32.5 } },
   // O-3: after a restart the start is never lighter than after a rebuild: two steps below, then the ladder.
   'G-46': {
     ruling: 'O-3',

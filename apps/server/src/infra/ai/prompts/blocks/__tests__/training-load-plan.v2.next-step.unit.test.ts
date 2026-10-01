@@ -121,7 +121,7 @@ describe('AC-LPF-8 · owner Lateral Raise Machine row', () => {
     expect(line(text, 'recommend')).toMatch(/^recommend: 2\.5 kg × 10–15 — /);
     expect(line(text, 'conservative')).toContain('2.5 kg × 10–15 — no lighter option');
     expect(line(text, 'next step')).toBe(
-      'next step: last set at 2.5 kg ≥ 17 reps in 2 workouts in a row (or ≥ 18 reps once at RPE ≤ 8, recovered) → +1 step (7.5 kg)',
+      'next step: last set at 2.5 kg ≥ 17 reps in 2 workouts in a row (or ≥ 18 reps once at RPE ≤ 8, recovered) → +1 step (5 kg)',
     );
   });
 });

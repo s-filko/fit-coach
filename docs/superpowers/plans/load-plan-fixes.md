@@ -375,6 +375,22 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
   conservative 45 + "skip / substitute"; G-17 grow 55 / 50; G-33 grow 7.5 / 2.5 + "relatively small"; G-46 55 / 52.5 + the ladder;
   **G-32 ("certain") next-step intent changes from "progress by reps" to growth (7.5 kg) under O-2** — the only certain row whose
   expectation a ruling overrides. Everything else (58 rows) passes as written.
+- (D) W-27 (orchestrator ruling 2026-10-01, 1): insufficient data after a break starts per the break ladder — return 1 step, rebuild 2
+  (BR-TRAINING-036 "lowered per the break ladder"), restart 2 (O-3). G-47 (one performance at 40 kg, 30 d ago) is asserted against
+  this ruling (title "rebuild ladder 2 steps"): 35 / 32.5, the table's 37.5 / 35 overridden; the fixture is not edited.
+- (D) W-28 (orchestrator ruling 2026-10-01, 2): pre-fatigue is measured against the NEWEST real performance (`fatigueReference` no longer
+  follows the like-for-like reference), consistent with W-13. A residual reference flip surfaced in the insufficient-data load (unknown
+  step, no estimate: the fallback was the REFERENCE's most-used load): `indicativeLoad` now falls back to the newest performance's
+  most-used load (heavier on a tie) when nothing reached the floor. The reps-monotonicity invariant is asserted with nothing held
+  constant — not the working weight, not the reference, not the decision path (2500 cases, ≥ 800 compared); no residual flip remains.
+- (D) W-29 (orchestrator ruling 2026-10-01, 3): equipment step from history. `computeEquipmentStep(exercise, recordedLoads)`: when a recorded
+  working load of the exercise (all real performances, warm-ups out, no window) is not a multiple of the default step, the step is the
+  largest value dividing every recorded load on a 0.25 kg grid (gcd), never above the default, never below 0.5 kg; the `step:` line
+  says "(from history)". Otherwise the default stays ("default for machine"). The indirect estimate rounds to this step too. Owner
+  Lateral Raise Machine (2.5 and 5 kg loads): step 2.5 — recommend 2.5, conservative 2.5 (no lighter option), growth 2.5 → 5 kg
+  ("last set at 2.5 kg ≥ 17 reps in 2 workouts in a row … → +1 step (5 kg)" for range 10–15). G-32 / G-33 are asserted against
+  "O-2 + step from history": G-33 recommends 5 / 2.5 (was 7.5 / 2.5 under the 5 kg default). Leg press keeps the default (all loads
+  multiples of 5).
 
 ## Review
 

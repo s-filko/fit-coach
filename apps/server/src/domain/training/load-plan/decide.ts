@@ -362,6 +362,13 @@ function referenceLoad(facts: LoadFacts): { weight: number; unit: 'kg' | 'lbs' |
  * reference's (one step down after a break tier) with one step lower as the conservative option, low confidence,
  * and the reason says why; with no reference there is no number and no conservative option.
  */
+function startStepsBelow(tier: GapTierInfo['tier']): number {
+  if (tier === 'restart') {
+    return RESTART_STEPS_BELOW;
+  }
+  return tier === 'rebuild' ? LADDER.rebuild.startStepsBelow : LADDER.return.startStepsBelow;
+}
+
 function insufficientData(
   facts: LoadFacts,
   reps: Recommendation['reps'],
@@ -394,7 +401,8 @@ function insufficientData(
   const step = stepOf(facts);
   const afterBreak = gap.tier === 'return' || gap.tier === 'rebuild' || gap.tier === 'restart';
   // Owner ruling O-3: after a restart the start is never lighter than after a rebuild (two steps below, then ladder).
-  const stepsBelow = gap.tier === 'restart' ? RESTART_STEPS_BELOW : 1;
+  // Orchestrator ruling 2026-10-01: the start follows the break ladder — return 1, rebuild 2, restart 2.
+  const stepsBelow = startStepsBelow(gap.tier);
   let candidate = ref.weight;
   if (afterBreak) {
     for (let i = 0; i < stepsBelow; i++) {

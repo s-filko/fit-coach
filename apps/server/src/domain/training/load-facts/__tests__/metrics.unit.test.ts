@@ -1397,3 +1397,54 @@ describe('AC-LPF-12 · indicative load of the newest single performance (ruling 
     expect(computeIndicativeLoad([], 'today', R810, plank, NOW, TZ)).toEqual({ absent: 'n/a for isometric' });
   });
 });
+
+describe('AC-LPF-12 · equipment step from history (orchestrator ruling 2026-10-01, W-27)', () => {
+  const step = (loads: number[], ex = benchPress) => computeEquipmentStep(ex, loads);
+
+  it('loads that are not multiples of the default step give the largest dividing step: 2.5 and 5 on a 5 kg machine → 2.5', () => {
+    expect(step([2.5, 5, 2.5, 2.5])).toMatchObject({ step: 2.5, basis: 'from history' });
+  });
+
+  it('every recorded load a multiple of the default → the default stays (and the basis says so)', () => {
+    expect(step([45, 55, 60])).toMatchObject({ step: 5, basis: 'default for machine' });
+  });
+
+  it('rounded to 0.25 kg, never above the default, never below 0.5 kg', () => {
+    expect(step([7.5, 12.5])).toMatchObject({ step: 2.5 });
+    expect(step([1.25, 2.5], { ...benchPress, equipment: 'barbell' })).toMatchObject({ step: 1.25 });
+    expect(step([0.3, 0.6])).toMatchObject({ step: 0.5 });
+    expect(step([3, 6], { ...benchPress, equipment: 'barbell' })).toMatchObject({ step: 2.5 });
+  });
+
+  it('unknown step stays unknown; non-strength stays n/a; no loads = the default', () => {
+    expect(step([2.5], { ...benchPress, equipment: 'none' })).toEqual({ absent: 'n/a for none' });
+    expect(step([])).toMatchObject({ step: 5, basis: 'default for machine' });
+  });
+
+  it('computeLoadFacts reads the history: the owner lateral raise (2.5 and 5 kg loads) has a 2.5 kg step', () => {
+    const f = computeLoadFacts(
+      lateralRaise,
+      ownerPerfs(lateralRaise.id, LATERAL_RAISE_ROWS, '2026-09-25'),
+      today({ targetReps: '10-12' }),
+      emptyContext,
+      ownerNow('2026-09-25', 4),
+      TZ,
+    );
+    expect(f.equipmentStep).toMatchObject({ step: 2.5, basis: 'from history', capApplies: false });
+  });
+});
+
+describe('AC-LPF-12 · pre-fatigue is measured against the NEWEST performance (orchestrator ruling 2026-10-01, W-27)', () => {
+  it('the fatigue baseline is the newest session even when the reference is an older like-for-like pick', () => {
+    const newest = perf('new', 3, [strengthSet(60, 20)], {
+      otherSets: [other('Fly', [['chest', 'primary']], daysBefore(3, -30))],
+    });
+    const old = perf('old', 10, [strengthSet(60, 10)]);
+    const f = computeLoadFacts(benchPress, [newest, old], today({ targetReps: '8-10' }), emptyContext, NOW, TZ);
+    if (isAbsent(f.reference) || isAbsent(f.fatigueReference)) {
+      throw new Error('expected values');
+    }
+    expect(f.reference.performance.id).toBe('old'); // like-for-like: 20 reps is outside 8–10 ± 2
+    expect(f.fatigueReference.perMuscle.map(m => m.workingSets)).toEqual([1]); // the newest's one earlier chest set
+  });
+});

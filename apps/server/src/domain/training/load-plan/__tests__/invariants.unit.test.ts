@@ -112,10 +112,8 @@ describe('AC-LPF-12 · invariants over generated histories', () => {
   });
 
   it('more reps at the same load never lowers the recommendation (newest session, every set +2)', () => {
-    // The working weight is NOT held constant any more (W-23 made it monotone). Held: the reference performance
-    // (a like-for-like flip switches the pre-fatigue baseline — reported, W-24) and the decision PATH: a bump that
-    // creates a working weight moves a case from the insufficient-data path to the ladder, and after a rebuild the
-    // two start differently by the golden table itself (G-47: one step; G-43: two) — reported, W-24.
+    // Nothing is held constant any more: not the working weight (monotone since W-23), not the reference or the
+    // decision path (pre-fatigue and the insufficient-data load read the newest performance since W-27).
     let compared = 0;
     const lowers = ({ c, facts, d }: Run): string | null => {
       const [newest] = [...c.performances].sort((a, b) => b.performedAt.getTime() - a.performedAt.getTime());
@@ -134,14 +132,7 @@ describe('AC-LPF-12 · invariants over generated histories', () => {
             }
           : p;
       const bumpedFacts = factsOf(c, c.performances.map(bump));
-      const refId = (f: LoadFacts): string | null => (isAbsent(f.reference) ? null : f.reference.performance.id);
-      if (refId(bumpedFacts) !== refId(facts)) {
-        return null;
-      }
       const more = decide(bumpedFacts, double);
-      if ((more.row === 'insufficient_data') !== (d.row === 'insufficient_data')) {
-        return null;
-      }
       compared++;
       const before = d.candidate.load ?? 0;
       return (more.candidate.load ?? 0) >= before - EPS ? null : `+2 reps lowered ${before} → ${more.candidate.load}`;
