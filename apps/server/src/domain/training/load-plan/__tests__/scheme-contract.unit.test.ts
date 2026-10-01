@@ -37,7 +37,7 @@ function fixtureSet(): { name: string; facts: LoadFacts }[] {
       name: 'light load, step over the 10 % cap',
       facts: makeFacts({
         workingWeight: { weight: 20, unit: 'kg', performances: 4, warmupsEstimated: false, mixedBasisExcluded: 0 },
-        equipmentStep: { step: 2.5, unit: 'kg', perHand: false, basis: 'default for cable' },
+        equipmentStep: { step: 2.5, unit: 'kg', perHand: false, basis: 'default for cable', capApplies: true },
       }),
     },
     { name: 'no equipment step', facts: makeFacts({ equipmentStep: { absent: 'n/a for bodyweight' } }) },
@@ -124,14 +124,25 @@ describe.each(schemes.map(s => [s.id, s] as const))('AC-LP-1 · scheme contract:
       expect(Math.abs(steps - Math.round(steps))).toBeLessThan(1e-6);
     });
 
-    it.each(fixtureSet())('$name: no step above the 10 % cap', ({ facts }) => {
-      const out = scheme.decide(facts, goal, params());
-      if (out.candidate.load === null || 'absent' in facts.workingWeight) {
-        return;
-      }
-      const base = facts.workingWeight.weight;
-      expect(out.candidate.load - base).toBeLessThanOrEqual(base * STEP_CAP + EPS);
-    });
+    it.each(fixtureSet())(
+      '$name: no step above the 10 % cap — except the equipment smallest step, reps reset',
+      ({ facts }) => {
+        const out = scheme.decide(facts, goal, params());
+        if (out.candidate.load === null || 'absent' in facts.workingWeight) {
+          return;
+        }
+        const base = facts.workingWeight.weight;
+        const over = out.candidate.load - base > base * STEP_CAP + EPS;
+        if (over) {
+          // Run 3: a met growth condition under a blocking cap offers the SMALLEST step (one equipment step) with reps
+          // reset to the floor; never more than one step.
+          const step = 'absent' in facts.equipmentStep ? 0 : facts.equipmentStep.step;
+          expect(out.candidate.load - base).toBeLessThanOrEqual(step + EPS);
+          expect(out.candidate.reps.min).toBe(out.candidate.reps.max);
+          expect(out.reason).toContain('smallest step');
+        }
+      },
+    );
 
     it.each(fixtureSet())('$name: every output carries a reason, a confidence and a missing list', ({ facts }) => {
       const out = scheme.decide(facts, goal, params());
@@ -212,17 +223,18 @@ describe('AC-LP-1 · double_progression specifics', () => {
     expect(out.reason).toContain('1 of 2');
   });
 
-  it('progresses by reps, not load, when one step exceeds the 10 % cap', () => {
+  it('a step over the 10 % cap with the growth condition met → the smallest step, reps reset to the floor (run 3)', () => {
     const out = s.decide(
       makeFacts({
         workingWeight: { weight: 20, unit: 'kg', performances: 4, warmupsEstimated: false, mixedBasisExcluded: 0 },
-        equipmentStep: { step: 2.5, unit: 'kg', perHand: false, basis: 'x' },
+        equipmentStep: { step: 2.5, unit: 'kg', perHand: false, basis: 'x', capApplies: true },
       }),
       'hypertrophy',
       p(),
     );
-    expect(out.candidate.load).toBe(20);
+    expect(out.candidate.load).toBe(22.5);
     expect(out.reason).toContain('10 %');
+    expect(out.reason).toContain('smallest step');
   });
 
   it('steps down one step below the range floor', () => {

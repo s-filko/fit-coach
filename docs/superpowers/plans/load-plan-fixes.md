@@ -41,6 +41,119 @@ subscription, all three flags on). Report and raw artefacts (gitignored, local o
    reason saying why (few performances / old reference / break tier). With no reference at all, the block says so
    and v11 (or a new training version) says: when the block has no conservative option, do not invent one.
 
+## Scope extension — cautiously optimistic progression (owner-approved 2026-10-01, after the GLM replay)
+
+The local GLM replay of the merged items 1–3 (AC-LPF-4 run, `6eb7ce01`) showed the W-1 recurring-load rule pulling the
+45° Leg Press working weight back to 110 kg (history 110 ×3 → 110,110,120,120 → 110,130,130,135; 120 occurred in one
+session only), and the block never proposes growth for the owner's 12–15-rep sets (report U7: `e1rmTrend missing —
+cannot count confirming sessions`). Owner, 2026-10-01: «важно строить осторожно оптимистические рекомендации на объемах и
+силе. т.е. если прошлый раз я жал 3 подхода по 15 на 50, тренер может сказать, если отдохнул за 4 дня то можно
+попробовать взять 55 и сделать 8-10 повторов». Items:
+
+4. **Working weight follows the newest session.** Working weight = max(highest recurring load (W-1), the newest
+   performance's highest load at which every working set reached the rep floor). Lateral raise stays 2.5 kg (its 5 kg set
+   is in the oldest session); leg press → 120 after 09-21, ≥ 130 after 09-27.
+5. **Growth rule, from the literature (owner-approved 2026-10-01; the 50×15 → 55 case is an example, not a formula).**
+   Sources: NSCA "2-for-2" (Essentials of Strength Training and Conditioning — ≥ 2 reps above the target on the last set in
+   two consecutive sessions → increase; increments ≈ 1–4.5 kg upper / 2.5–7 kg lower ≈ one equipment step); APRE (Mann et
+   al. 2010, JSCR — the next session's load is set from the reps achieved on the final set; more surplus → larger
+   increase); RIR-based RPE (Helms et al. 2018, Front. Physiol. — ≈ 4 % load per RPE point). **Rejected:** Epley
+   prediction above ~10 reps (Reynolds et al. 2006, JSCR — accuracy degrades above 10 reps, equations underestimate leg
+   press) and fixed %1RM↔reps tables across exercises (Hoeger et al. 1990: ≈ 19 leg-press vs ≈ 12 bench reps at 80 % 1RM) — `E1RM_MAX_REPS`
+   stays 10 and no load is predicted by formula. Rule, judged on the sets AT the working weight (last such set = "last
+   set"):
+   - **one-session growth:** last set ≥ range top + 3 reps, its RPE ≤ 8 or absent, recovered (gap tier `rest`, no `short`
+     constraint on a primary muscle, no material pre-fatigue today) → recommend +1 step with the range reps;
+     conservative = the working weight; confidence ≤ medium; never more than one step whatever the surplus;
+   - **2-for-2:** last set ≥ range top + 2 in the two newest consecutive performances at the working weight → +1 step;
+     this replaces "e1rmTrend missing — cannot count confirming sessions" as the confirmation path for rep data (U7);
+   - otherwise hold, and state what is missing (item 7).
+6. **A badly chosen first set does not distort the decision (owner-approved 2026-10-01).**
+   - Each load is judged on its own sets: a set at another load (a too-heavy opener, 135 × 6 before 130 × 12 ×3) is a
+     probe — it does not make the performance `below floor` and does not trigger a step down for the working weight
+     (today `repsVsRange` takes the weakest set at any load).
+   - **Uneven performance:** drop-off at the working weight (first − last set reps) far above the user's usual
+     (`dropOff.usual`, threshold set by the worker as a (D) — e.g. > usual + 3, or > 4 with no norm) → the performance
+     counts neither for growth nor for a step down; hold, and the reason says the opener was too heavy / too light.
+   - **In-session hint (APRE set-to-set):** v12 tells the coach that when a working set lands clearly outside the range
+     (≥ 3 reps above the top, or below the floor), it suggests one step up / down for the NEXT set.
+7. **Expectation management (owner 2026-10-01: «тренер пояснял выбор текущего веса и также пояснял план, если вес может
+   казаться ниже чем хочется, почему такой и когда мы увеличим»).**
+   - Every LOAD PLAN row carries a `next step:` line naming the concrete condition for the next increase (2-for-2 one
+     session short: "+2 reps on the last set once more → +1 step"; return ladder: "2 more workouts → back to 130"; uneven:
+     "even sets at 120 → growth"; after a step down: "back to 65 when …").
+   - Training v12 (unreleased; v11 untouched): when giving a load, the coach briefly says why (from the block reason) and,
+     when the recommendation is below the user's recent best, says plainly why and when it will rise (`next step:`);
+     cautiously optimistic — offers a block-proposed step with the working weight as fallback, mentions volume progress
+     as encouragement, never pressures, never promises what the block does not offer.
+8. **Volume as context, not a decision input.** The block prints volume load (Σ reps × kg of working sets) of the newest
+   performance vs the previous one ("volume +15 % vs last"); no decision reads it.
+
+9. **Indirect working-weight estimate (owner-approved 2026-10-01).** Working weight = max(item-4 value, Epley estimate):
+   the LOWEST e1RM among working sets with reps ≤ 10 (later sets carry fatigue, so it never overestimates; Reynolds 2006 —
+   Epley is reliable below ~10 reps), converted to the load for range-min reps, rounded down to the step; used only when a
+   set fell short of the floor (W-16). Owner cases (8–10): 60×6, 55×8, 45×12 → 55; 60×6, 55×7, 45×12 → 50. The reason
+   names the source set. Safety rows (`below_floor`, uneven) judge the NEWEST performance, like growth (W-13 → decided by
+   the orchestrator 2026-10-01).
+10. **Reps in reserve and asking for effort (owner-approved 2026-10-01).** Source: RIR-based RPE (Helms et al. 2016/2018 —
+    RPE 10 = no reps left, 9 = 1, 8 = 2, ≤ 7 = 3+).
+    - When RPE is recorded, floor / growth / uneven checks use capacity = reps + RIR (8 @ RPE 8 counts as 10). One-session
+      growth still requires RPE ≤ 8 or absent.
+    - A set below the floor with RPE ≤ 7 is an early stop, not a failure: no step down, hold, the `next step:` says "take
+      it to the floor next time — the load is within reach".
+    - No RPE: nothing is inferred; a lone below-floor set without RPE does not trigger a step down on its own (hold, ask).
+    - **Effort prompt:** when `log_set` stores a decision-critical set without RPE (the last set at the working weight; a set
+      below the floor; a set ≥ 3 reps outside the range, the opener included), its tool result carries a hint to ask the
+      effort — once per exercise per session, never when the user already gave RPE or a phrase. Code decides, not the model.
+    - **Plain language (v12):** the coach asks «Сколько ещё раз смог бы сделать на этом весе? 0, 1–2 или 3 и больше?» and
+      maps answers and phrases («еле дожал» → 10, «ещё пару мог» → 8, «боялся без страховки, силы были» → ≤ 7) to `rpe`
+      in `log_set`; uses the term RPE only if the user does; explains RPE in one line only when asked or misused; the
+      preference is kept as a user fact (understands RPE / plain answers) so it is not re-explained.
+11. **Verification against the literature (owner-approved 2026-10-01).** (a) Formula check against published %1RM↔reps
+    tables (NSCA: 10 ≈ 75 %, 8 ≈ 80 %, 6 ≈ 85 %) within a tolerance, and no formula use above 10 reps; (b) a "golden table"
+    of 40–60 situations with expected recommend / conservative / next step, written by an independent Opus agent from the
+    sources and this plan's rule text only (no code access), run as a parametrised test — mismatches go to the owner, not
+    silently "fixed" in the table; mandatory owner cases: unlabelled warm-up 30×12 without RPE before 60; a light back-off
+    30×15 after 60 (neither working weight nor growth); early stop from laziness/fear (6 @ RPE 7, 8 @ RPE 8); descending
+    60/55/45; breaks; 5 kg machine step on a small load; unknown step; per-hand dumbbells; (c) invariants over thousands of
+    seeded generated histories (no new dependency): load > 0; never more than +1 step; no growth at RPE ≥ 9, after a break
+    ≥ return, with a short constraint or material pre-fatigue; more reps at the same load never lowers the recommendation;
+    every row has `next step:`.
+
+### Golden-table rulings (2026-10-01) — independent Opus table, 60 cases (41 certain, 19 ambiguous)
+
+Owner rulings:
+- **O-2 Unknown machine base weight:** the "step ≤ ~10 % of the load" cap does not apply where the displayed load excludes
+  the machine's own weight (lever/plate-loaded machines, stacks with an unknown base — equipment fact); the normal growth rule
+  applies, the coach says the step is relatively small because the machine adds its own weight, and may offer dumbbells as an
+  alternative when no step fits (G-33, G-40, G-60 for such machines; free weights keep the cap).
+- **O-3 Restart ≥ rebuild:** after a restart-tier break with a known load, the start is never lighter than after a rebuild
+  (≥ 2 steps below + the return ladder); losses grow with time off (Mujika & Padilla 2000; Bosquet et al. 2013) (G-46).
+  BR-TRAINING-036 "(one step lower after a break tier)" becomes "(lowered per the break ladder)".
+
+Orchestrator rulings (consistency with approved rules):
+- G-06/G-07: any number of below-floor sets without RPE → hold + ask the first time; the same in the next performance
+  (still no RPE) → one step down.
+- G-10: the estimate is the formula; 50 holds with a 5 kg step, 52.5 with a 2.5 kg step.
+- G-11: with one performance, the insufficient-data reference load is the working-weight value (qualifying load / estimate)
+  when one exists, not the most-used load — a failed opener is never the recommendation.
+- G-15: "recovered" = exercise gap tier `rest` or `rest_with_question` (strength retained by the tier definition).
+- G-16: a `short` constraint keeps W-2 (one step down, floored) and the reason adds "or skip / substitute".
+- G-17: growth is blocked by a `short` constraint on a PRIMARY muscle (item 5 text); W-11 aligned to it.
+- G-21/G-25: growth thresholds use capacity (reps + RIR) like every other check (item 10).
+- G-26: 2-for-2 has no RPE condition (NSCA; two sessions are the evidence); the "no growth at RPE ≥ 9" invariant covers
+  one-session growth only.
+- G-37/G-38: unknown step → no growth, conservative = recommend with the "equipmentStep missing" note (W-7).
+- G-41: an unknown reason at `rest_with_question` asks once and does not lower the load.
+- G-45: ladder rungs per load-plan T2 as implemented; the ladder works from the pre-gap working weight.
+- G-51: bodyweight strength → reps-only path, no load number.
+- G-56: 135 from a single 135 × 12 set stands (each load judged on its own sets, owner-approved).
+- Worker W-22 (1): working weight must be monotone in reps — more reps at the same loads never lowers it (fix the W-1
+  "recurring replaces fallback" flip); the reference flip by like-for-like is checked and either fixed or reported.
+- Worker (3): "last set at the working weight" for the effort hint = the last planned set — accepted.
+- Citation fix: Hoeger et al. 1990 — at 80 % 1RM trained men did ≈ 19 leg-press vs ≈ 12 bench reps (not "70 %"); the
+  conclusion (reps-at-%1RM depend on the exercise) stands.
+
 ## Out of scope (route, do not fix here)
 
 - Report C3 / U1 (`advised` written from the model's after-the-fact recollection) — BACKLOG (calibration data only).
@@ -57,6 +170,14 @@ subscription, all three flags on). Report and raw artefacts (gitignored, local o
 | AC-LPF-1 | The lateral-raise shape (recent 2.5 kg sessions, 5 kg step, rebuild ladder) yields a positive working weight from the recent sessions and no 0 kg candidate or conservative; no step-down anywhere goes below the floor | domain unit tests on fixtures from `data/replay-2026-10-01/upper-*.json` |
 | AC-LPF-2 | A plank / side plank reported in seconds is stored as an `isometric` set with its duration; cardio unchanged | `log-set.tool` unit tests + a scenario |
 | AC-LPF-3 | An exercise with a reference but insufficient data prints a numeric `recommend:` (the reference load) and a lower `conservative:`; with no reference the block says there is no number and the prompt forbids inventing a conservative option | block v2 (or v3) unit tests + scenario |
+| AC-LPF-5 | Leg-press history (110 ×3 → 110,110,120,120) gives working weight 120, not 110; lateral raise stays 2.5 kg | metrics unit tests on the owner-history fixture |
+| AC-LPF-6 | 2-for-2: last set ≥ top+2 in two consecutive performances at the working weight → +1 step; one only → hold with the `next step:` condition; `E1RM_MAX_REPS` unchanged | decide unit tests on owner-history fixtures |
+| AC-LPF-7 | One-session growth: last set ≥ top+3, RPE ≤ 8/absent, recovered → +1 step, conservative = working weight, never > 1 step; RPE 9, short constraint, pre-fatigue or gap ≥ return → no jump. Opener at another load does not cause below-floor; uneven drop-off → hold with the reason | decide + metrics unit tests |
+| AC-LPF-8 | Every row prints `next step:`; v12 rules: explain the load, explain a below-recent-best load and when it rises, offer a block step with fallback, in-session one-step hint when a set lands clearly outside the range | block v2 + v12 unit tests; GLM replay transcript |
+| AC-LPF-10 | Estimate cases (60/55/45 ×2) → 55 / 50 with the source set named; safety rows judge the newest performance | decide + metrics unit tests |
+| AC-LPF-11 | RIR capacity in floor/growth/uneven; early stop at RPE ≤ 7 → hold, no step down; effort hint on decision-critical sets without RPE, once per exercise per session; v12 plain-language question and phrase→RPE rules | metrics/decide + log_set unit tests + v12 tests; GLM replay transcript |
+| AC-LPF-12 | Golden table (independent, ≥ 40 cases incl. the owner's mandatory ones) passes or each mismatch is owner-decided; formula-vs-table check; invariants over generated histories hold | parametrised unit tests |
+| AC-LPF-9 | Block prints volume of the newest vs previous performance; no decision changes when only volume changes | block + decide unit tests |
 | AC-LPF-4 | Re-run of the two-workout replay on GLM (local Z.AI only) shows no 0 kg, planks stored as isometric, numbers on the former no-record rows | replay runner in `data/replay-2026-10-01/src/`, report diff |
 
 Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `DB_PORT=5999 npm run test:unit`
@@ -109,6 +230,255 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
   "equipmentStep missing — steps cannot be computed"; the block prints "no lighter option" only when the step is known.
   No-reference outcome is `no number`. v12 rule 1 now says a `no lighter option` conservative line means the load is the
   lightest — never present it as a variant (v11 untouched).
+- (D) W-8: item 4 — `qualifyingLoad` (metrics.ts) returns the larger of (a) the W-1 reading (highest recurring load that reached
+  the floor; nothing recurs → highest) and (b) the highest load of the NEWEST performance (newest usable one inside the K = 5
+  window) at which every set AT THAT LOAD reached the floor. "Every working set" is read per load, as W-1 already does, not per
+  performance: a last heavy single set of 3 reps must not discard the whole session (per-performance reading would). A heavier
+  load of an older session never wins unless it recurs. Owner history: leg press 120 after 09-21, 135 after 09-27 (a single set
+  at 135 ×12 — the rule as ordered; recorded so the owner can see it), lateral raise 2.5. Decisions on the new working weight
+  are unchanged (e.g. 09-21 now prints `recommend: 120 kg` — growth rules 5–7 are on hold, see the scope change below).
+- (D) W-9: item 8 — new load metric 10 `volume` (`computeVolume`, `LoadFacts.volume`, pure): Σ reps × load over the working sets
+  (warm-ups out by D7, per-hand/total mixes left out as in metrics 4–5) of the newest vs the previous real performance with a
+  load, no 56-day window (ages are printed). The block prints `volume: +16 % vs last (5520 vs 4760 kg×reps, working sets;
+  4 d and 9 d ago)` after the confidence line; absent / no previous volume → no line. `decide()` and the schemes never read
+  the field (unit tests: identical decision with absent / large up / large down volume).
+- (D) W-10 (orchestrator scope change, owner 2026-10-01): items 5, 6, 7 (e1RM rep cap 10 → 15, rep-history confirmation, one-session
+  jump, v12 wording) are **on hold** — to be redefined from the strength-training literature. The worker had started them and
+  reverted all of it uncommitted: `E1RM_MAX_REPS` stays 10, confirmation logic and training v12 are unchanged. AC-LPF-6 and
+  AC-LPF-7 and AC-LPF-8 are open; items 4 and 8 (AC-LPF-5, AC-LPF-9) are implemented.
+- (D) W-11: items 5 (rule rewritten in 451af616) integrated into the existing machinery, no parallel ladder. 2-for-2 lives in the
+  scheme (`decideProgression` with `ProgressionRule.surplusReps`, set by double progression only): `LoadFacts.repHistory`
+  (new metric 4b: per performance of the working-weight set, the reps at the working weight and the RPE of the last such set;
+  a set at another load is not in it) → the last set must be ≥ range top + 2 in `confirmSessions` (2) consecutive performances,
+  else hold with "confirmation k of 2". A performance at another load breaks the run. Linear progression and facts without a
+  rep history keep the old last-exposure + e1RM-trend confirmation (so "e1rmTrend missing — cannot count confirming sessions"
+  now appears only when BOTH sources are missing). One-session growth is a Stage C override in `decide()` (row `early_growth`,
+  label "one-session growth"): newest performance's last set ≥ top + 3, its RPE ≤ 8 or absent, gap tier `rest`, step within the
+  10 % cap, range schemes only; it runs only after Stage A found nothing, so a short constraint (any muscle of the exercise —
+  stricter than "primary"), a return/rebuild/restart gap, material pre-fatigue (≥ 3 extra working sets, the existing row) and an
+  uneven performance never reach it. Conservative = the working weight, confidence capped at medium, never > 1 step. Parameters
+  with their sources are in `schemes/params.ts` (`TWO_FOR_TWO_SURPLUS` NSCA, `ONE_SESSION_SURPLUS` APRE-inspired, `ONE_SESSION_MAX_RPE`
+  RIR-RPE). `E1RM_MAX_REPS` stays 10; no load is predicted by formula (the first draft's Epley check was dropped).
+- (D) W-12: item 6 — `computeLastExposure` takes the working weight: `repsVsRange` and `dropOff` are judged on the sets AT that load
+  (a probe at another load never reads "below floor"); the usual drop-off is the median over earlier performances that used the
+  same load; with no set at the working weight in the reference it falls back to the old top-load reading. **Uneven threshold:**
+  drop-off (first − last set reps at the working weight) > usual + 3 (`UNEVEN_ABOVE_USUAL`), or > 4 with no norm
+  (`UNEVEN_WITHOUT_NORM`) → Stage A row `uneven_performance` (after pre-fatigue, before below floor): hold the working weight,
+  conservative one step lower, reason "reps fell by N from the first to the last set (usual U) — the opening set was probably
+  too light for this load; the performance counts neither for growth nor for a step down". Only a FALL is "uneven" (rising reps
+  after a weak opener are the benign case the owner described as warm-up).
+- (D) W-13: observation, not changed — the reference (like-for-like pick, D6) can be an older performance than the newest one
+  (the lateral raise 2026-09-25 session has a 15-rep top set, outside range 10–12 ± 2, so the 09-20 session is the reference and
+  its 8-rep set triggers "below floor"). Below floor and uneven judge the reference; the growth rules judge the newest performance
+  at the working weight. Proposal for the owner: judge the safety rows on the newest performance at the working weight too.
+- (D) W-14: item 7 — every `Decision` and `SchemeOutput` carries `next: NextStep` (domain data: growth / after_growth / reps_only /
+  ladder / uneven / step_down / constraint / pre_fatigue / insufficient / no_number / hold); the words live in block v2
+  (`nextStepText`), printed as `next step: …` after `conservative:` on every strength row. Examples: "last set at 120 kg ≥ 14 reps in
+  2 workouts in a row (or ≥ 15 reps once at RPE ≤ 8, recovered) → +1 step (125 kg)", "1 more workout → back to 130 kg",
+  "back to 65 kg when the sets at 60 kg reach 8+ reps", "log this exercise once — that performance becomes the reference".
+  A hold from the old path prints the reason's own cause as the next step (nothing invented).
+- (D) W-15: training v12 (still unreleased) gets two added lines under rule 1 — "Explain the load" (why, `next step:`, why a
+  below-recent-best load is lower and when it rises, cautious optimism with the conservative/working weight as fallback, never
+  pressure or invent a step, volume as encouragement) and "In-session hint" (a set ≥ 3 reps above the top or below the floor →
+  one step up/down for the NEXT set only); line-diff test now expects 5 added lines. v11 untouched.
+- (D) W-16: indirect working-weight estimate (item 4 addition, owner-approved): working weight = max(item-4 value, estimate), also when
+  no load reached the floor. Estimate = Epley e1RM of the newest performance's loaded working sets with reps ≤ 10
+  (`E1RM_MAX_REPS` stays 10), converted to the load for the range MIN reps (e1RM / (1 + min/30)), rounded DOWN to the equipment
+  step (epsilon 1e-6 so an exact grid value stays); unknown step (bodyweight/none) → no estimate. **Which set:** the brief's
+  "heaviest working set" cannot give the owner case 60×6, 55×7, 45×12 → 50 (60×6 would give 55), so the LOWEST e1RM of the sets
+  ≤ 10 reps is read (cautious; 55×7 → 50, 55×8 → 55; the opener never lifts it) — asked of the orchestrator, no answer by the
+  time of the commit; revisit if a different rule is wanted. `WorkingWeightFact.estimatedFrom {weight, reps}`; the metrics line
+  prints "(2 performances / 8 wk, estimated from 55×7)". Stage A rows still apply on top, except below floor: an estimated
+  weight is itself the answer to the below-floor performance, so it is not stepped down again; the hold reason is "working weight
+  estimated from 55×7 (short of the rep floor at the heavier load) — hold", next step `estimated` ("sets at 50 kg reaching 8+ reps
+  confirm it, then the growth rule applies"), confidence ≤ medium. **Gate added (deviation from the brief's bare max):** the
+  estimate applies only when its source set fell SHORT of the floor (reps < range min). Without it 80×10 for 8–12 was
+  "estimated" up to 82.5 kg — above anything the user demonstrated (caught by four scenario tests). The owner cases are unchanged.
+- (D) W-17: item 9 (W-13 change) — `lastExposure` is now computed from the NEWEST real performance, not the reference (the
+  like-for-like pick stays the `reference:` line); below floor and uneven therefore judge what growth judges. Lateral raise
+  2026-09-25 (range 10–12) no longer reads the 8-rep 09-20 session. **Two findings the invariant test surfaced, NOT fixed
+  (owner decision):** (1) W-1 flip — extra reps can make an older load "recur" in two performances, and the recurring-load rule
+  then replaces the "highest load" fallback, so the working weight can DROP when reps rise (generated seed 45: 70 → 65);
+  (2) reference flip — extra reps can push the newest session outside the like-for-like tolerance (top set > range top + 2),
+  the reference switches to an older session and with it the pre-fatigue baseline / the insufficient-data reference load
+  (seeds 249, 491). The "more reps never lowers the recommendation" invariant is therefore asserted with the working weight
+  and the reference performance held constant (≥ 800 of 2500 cases still compared). **Interpretation to confirm:** "no growth
+  at RPE ≥ 9" is asserted for one-session growth only; 2-for-2 has no RPE guard (capacity already adds the reserve) — add one
+  if the owner wants it.
+- (D) W-18: item 10 — capacity = reps + (10 − RPE) when RPE is recorded (RPE above 10 counts as 10; no RPE → the reps,
+  nothing inferred), used by `repsVsRange` (floor / top), `dropOff` (uneven) and both growth paths (last-set capacity ≥ range
+  top + 2 / + 3; the one-session RPE ≤ 8 guard stays). New `LastExposureFact.effort`: `earlyStop` = a set below the floor at
+  RPE ≤ 7 while no set is below the floor by capacity; `unclearBelowFloor` = exactly one set below the floor by capacity and it
+  has no RPE (two such sets, or one with RPE, are a real miss). Stage A rows after `uneven_performance`, before `below_floor`:
+  `early_stop` (hold, conservative one step lower, next step "take it to the floor next time (8+ reps at 60 kg) — the load is
+  within reach") and `unclear_effort` (hold + ask: "3+ → an early stop, the load stays; 0–2 → one step down"). They hold the
+  working weight, so a short constraint / gap row still wins when more conservative. Owner cases at 60 kg, range 8–10: 6 @ RPE 7
+  → early stop, hold 60; 6 with no RPE → unclear, hold 60; 6 @ RPE 9 → one step down (real miss); 8 @ RPE 8 counts as 10 → hold
+  60 (not growth: needs ≥ 12).
+- (D) W-19: the effort hint is pure domain code (`load-plan/effort-hint.ts`, `effortHint`), appended to the `log_set` result by
+  the tool. A stored set gets it when it is loaded, not a warm-up, has no RPE and no feedback phrase AND is decision-critical:
+  below the floor, ≥ 3 reps above the top (the opener included), or the last PLANNED set (set number ≥ `target_sets`) — the tool
+  has no load facts at log time, so "last set at the working weight" is approximated by the planned count. Once per exercise per
+  session without any stored state: no hint when an earlier set of the exercise carried an RPE (the user already speaks it) or was
+  itself critical without RPE (it already got the hint). Text: the plain-language question + "record the answer with
+  update_last_set rpe (0 → 10, 1–2 → 8, 3+ → 7)". A session read that fails or has no row never breaks the log. The `rpe` field
+  description of `log_set` now says RIR = 10 − RPE and the answer mapping. Not covered: an exercise with no `target_sets` and no
+  range gets no hint (nothing to call critical).
+- (D) W-20: v12 gets a third added line under rule 1, "Effort in plain language" (ask once on an `Effort hint`, never otherwise;
+  answer/phrase → `rpe`: 0 more / «еле дожал» → 10, 1–2 / «ещё пару мог» → 8, 3+ / «боялся без страховки, силы были» → 7; the
+  term RPE only if the client uses it; one-line explanation only when asked or misused; the preference kept as a client fact).
+  **No new fact category:** `manage_fact` with the existing `coaching_preference` ("understands RPE" / "prefers plain-word effort
+  questions"). v12 now adds 6 lines over v11 (line-diff test updated); v11 untouched.
+- (D) W-21: item 11(a) — tolerance 2 percentage points of 1RM. Epley (what the code uses) gives 75.0 / 78.9 / 83.3 % at 10 / 8 / 6
+  reps against NSCA's 75 / 80 / 85 (differences 0 / 1.1 / 1.7). No formula above 10 reps: the e1RM trend scores sets ≤ 10 only
+  (10 scored, 11 not) and the indirect working-weight estimate never reads a set above 10, even far below a 15–20 floor.
+- (D) W-22: item 11(c) — `load-plan/__tests__/history-generator.ts` (mulberry32, seeds 1…2500, deterministic): ranges 8–10 … 12–15,
+  five equipment kinds incl. an unknown step, 0–6 sessions, odd gaps up to 90 d, warm-ups, openers at another load, RPE on 35 % of
+  sets, pre-fatigue today / in the reference, a short constraint on 15 %. `invariants.unit.test.ts` checks, for double and linear
+  progression: load > 0 and finite; never more than +1 step; one-session growth never at RPE ≥ 9; no growth with a gap ≥ 14 d, a
+  short constraint or material pre-fatigue; more reps (+2 on every working set of the newest session) never lower the
+  recommendation (held constant: see W-17); every row has a next step — plus a block-level test over 400 cases that the printed
+  `next step:` line exists and no load line is ≤ 0. Runs in ~0.5 s; the load facts take `timezone: null` there (an `Intl`
+  zone made the same 2500 cases 15× slower).
+- (D) W-23: working weight is monotone in reps (ruling W-22 (1)). `qualifyingLoad` = the highest load whose sets all reached the floor AND
+  that is eligible: it RECURS (appears in the sets of ≥ 2 of the up-to-5 performances — presence, not success) or the NEWEST
+  performance reached it; when no load recurs at all (singles, a pyramid) every reached load is eligible. Recurrence by presence is
+  rep-independent and "reached" only grows with reps, so no bump can lower it; the old rule (reached in ≥ 2, else "highest overall")
+  flipped (generated seed 45: 70 → 65). Nothing eligible → the indirect estimate from a short set, else "no load reached the floor".
+  Unchanged: leg press 120 / 135, lateral raise 2.5, the owner estimate cases. Changed edge: 60×6, 55×7 style performances with
+  an older single heavier load no longer fall back to that load — they use the estimate.
+- (D) W-24: invariants without the working-weight hold (item W-22 (1)); two scopes stay and are REPORTED, not fixed: (a) the reference
+  flip — extra reps can push the newest session outside the like-for-like tolerance and switch the reference (pre-fatigue baseline);
+  no local fix (the reference is also the displayed line); proposal: measure pre-fatigue against the newest performance, as the
+  safety rows now do. (b) the decision path — a bump can create a working weight and move a case from insufficient data to the ladder;
+  after a rebuild the two paths start differently BY THE TABLE (G-47 insufficient: one step below; G-43 with a working weight: two
+  steps), seed 491 (38 → 36). Proposal: align the insufficient-data rebuild start to two steps — needs the owner because G-47 is
+  a "certain" row. The invariant compares only cases that stay on the same path (≥ 800 of 2500 compared).
+- (D) W-25: rulings implemented — **O-2** `EquipmentStepFact.capApplies` (false for machine and cable = the equipment kind, the existing
+  equipment signal; barbell / dumbbell keep the cap); growth reasons add "(a relatively small step: the machine adds its own weight to
+  the displayed load)" when the step would have exceeded the cap; v12 tells the coach to say so and to offer dumbbells / the smallest
+  increment when `next step:` says no load step fits. **O-3** insufficient data after a `restart` tier starts two steps below the
+  reference (outcome "2 steps below the reference", next step = the ladder, 2 more workouts); return / rebuild keep one step (G-47).
+  **G-06/07** any number of below-floor sets without RPE is `unclear_effort` (hold + ask) the first time; when the previous
+  performance at that load was also below the floor with no RPE on those sets, it is a real miss (step down). **G-11** new fact
+  `indicativeLoad` (the newest performance's qualifying load or estimate, no minimum count, no window) is the insufficient-data
+  reference load — 60×6, 55×7, 45×12 alone → 50 / 45, never the failed opener. **G-15** one-session growth needs gap tier `rest` or
+  `rest_with_question`. **G-16** a short constraint on a primary muscle keeps one step down; reason "… no growth, or skip /
+  substitute". **G-17** only a short constraint on a PRIMARY muscle (`ConstraintInput.onPrimary`) stops growth. **G-21/25** capacity
+  everywhere (already W-18). **G-26** 2-for-2 has no RPE condition (decide test); the RPE ≥ 9 invariant is one-session only.
+  **G-37/38** unknown step → no growth, conservative = recommend, `equipmentStep` missing (golden cases pass unchanged). **G-41**
+  unknown reason at `rest_with_question` asks once and does not lower (golden pass). **G-51** a record without a load (bodyweight)
+  gives no load number and the reason "no load to recommend (bodyweight or unloaded sets) — progress by reps" (it said "no record").
+  An estimated working weight skips the effort rows too (its short sets are at other loads).
+- (D) W-26: golden-table test — `blocks/__tests__/golden-table.unit.test.ts` (infra, because it checks the printed `next step:`),
+  60 cases × (decision numbers, block text). Mapping and intent rules are in the file header; the fixture is untouched. Ruling
+  overrides (id → what the ruling says instead of the table): G-07 hold + ask (60 / 57.5); G-11 50 / 45; G-15 grow 55 / 50; G-16
+  conservative 45 + "skip / substitute"; G-17 grow 55 / 50; G-33 grow 7.5 / 2.5 + "relatively small"; G-46 55 / 52.5 + the ladder;
+  **G-32 ("certain") next-step intent changes from "progress by reps" to growth (7.5 kg) under O-2** — the only certain row whose
+  expectation a ruling overrides. Everything else (58 rows) passes as written.
+- (D) W-27 (orchestrator ruling 2026-10-01, 1): insufficient data after a break starts per the break ladder — return 1 step, rebuild 2
+  (BR-TRAINING-036 "lowered per the break ladder"), restart 2 (O-3). G-47 (one performance at 40 kg, 30 d ago) is asserted against
+  this ruling (title "rebuild ladder 2 steps"): 35 / 32.5, the table's 37.5 / 35 overridden; the fixture is not edited.
+- (D) W-28 (orchestrator ruling 2026-10-01, 2): pre-fatigue is measured against the NEWEST real performance (`fatigueReference` no longer
+  follows the like-for-like reference), consistent with W-13. A residual reference flip surfaced in the insufficient-data load (unknown
+  step, no estimate: the fallback was the REFERENCE's most-used load): `indicativeLoad` now falls back to the newest performance's
+  most-used load (heavier on a tie) when nothing reached the floor. The reps-monotonicity invariant is asserted with nothing held
+  constant — not the working weight, not the reference, not the decision path (2500 cases, ≥ 800 compared); no residual flip remains.
+- (D) W-29 (orchestrator ruling 2026-10-01, 3): equipment step from history. `computeEquipmentStep(exercise, recordedLoads)`: when a recorded
+  working load of the exercise (all real performances, warm-ups out, no window) is not a multiple of the default step, the step is the
+  largest value dividing every recorded load on a 0.25 kg grid (gcd), never above the default, never below 0.5 kg; the `step:` line
+  says "(from history)". Otherwise the default stays ("default for machine"). The indirect estimate rounds to this step too. Owner
+  Lateral Raise Machine (2.5 and 5 kg loads): step 2.5 — recommend 2.5, conservative 2.5 (no lighter option), growth 2.5 → 5 kg
+  ("last set at 2.5 kg ≥ 17 reps in 2 workouts in a row … → +1 step (5 kg)" for range 10–15). G-32 / G-33 are asserted against
+  "O-2 + step from history": G-33 recommends 5 / 2.5 (was 7.5 / 2.5 under the 5 kg default). Leg press keeps the default (all loads
+  multiples of 5).
+- (D) W-30 (review run 3, R1 + R2 advisory): the effort hint is data — `effortHint` returns `{ reason: 'below_floor' | 'above_range' |
+  'last_planned_set' }`; the words (the Russian question, the RPE mapping, `update_last_set`) live in `log-set.tool.ts` and ONE source,
+  `infra/ai/prompts/effort.ts` (`EFFORT_QUESTION`, `EFFORT_RPE_BY_ANSWER`, `EFFORT_MAPPING_TEXT`), which the tool description and v12
+  quote; a v12 test checks the prompt text against the constants. The hint reaches the coach only with `LOAD_PLAN_SUGGESTION` on
+  (`buildLogSetTool({ effortHints })`, wired in `training.spec.ts`).
+- (D) W-31 (R2 + R3 + advisories): one `pickWorkingLoad` (reached load vs the Epley estimate, newest performance) serves
+  `computeWorkingWeight` and `computeIndicativeLoad`. `qualifyingLoad` and the estimate read CAPACITY (reps + 10 − RPE): the reviewer's
+  probes are red tests — 60×10,10,9 twice then 65×9,8,6 @ RPE 7 → working weight 65 with an early stop AT 65 (no hold at 60); a single
+  60×9,8,6 @ RPE 7 → 60, no Epley "failure" estimate. The estimate only reads sets of capacity ≤ 10 and targets min(range.min, 10)
+  reps (range 12–15, 100×8 → 95). Effort rows (`early_stop`, `unclear_effort`) judge sets AT the working weight only — no fallback to
+  another load — and "repeated" needs the previous performance at the SAME load.
+- (D) W-32 (R3-2, R3-4): equipment step from history reads the last 8 weeks only and an off-grid load counts only when it occurs in ≥ 2
+  performances (one 22.7 / 20.4 kg set keeps the default). `capApplies` is false for `machine` only (a machine's displayed load
+  excludes its unknown own weight — the equipment kind is the signal; there is no equipment fact for the base); cables keep the cap.
+  When the cap blocks a MET growth condition (2-for-2 or one-session), the smallest step (one equipment step) is offered with the reps
+  reset to the floor (`reps {min, min}`) and the reason "the step (2.5 kg, 12.5 % of 20 kg) is over the 10 % cap but the growth
+  condition is met: the smallest step, reps reset to the floor 8" — no dead end for free weights; not yet met → `next step:` names that
+  step. The `reps_only` next-step kind is gone. **Golden rows moved by this ruling (named in the test titles, fixture untouched):
+  G-40 (8 kg dumbbell, "certain": table hold / progress by reps → grow 10 × 10, conservative 8) and G-60 (20 kg barbell: table hold →
+  grow 22.5 × 8, conservative 20).** G-32 / G-33 (machine) unchanged.
+- (D) W-33 (R3 test strength): the golden next-step check now requires EVERY load and threshold of a gist (> 10 or decimal) in the printed
+  line — the block prints the one-session alternative also when one session is missing ("≥ 12 reps once more (or ≥ 13 reps once at RPE ≤ 8,
+  recovered)"); the generator has a growth-biased mode (`generateCase(seed, 'growth')`, 1000 extra cases; floor ≥ 60 % end in a growth row —
+  746 of 1000 at the run); the reps-monotonicity invariant also runs for linear progression and found a real flaw: the e1RM flat run is not
+  monotone in reps (a stronger newest session breaks "flat"), so linear progression now confirms "all fixed reps made twice in a row" from
+  the rep history; every describe carries an AC id.
+- (D) W-34 (R3 verification evidence, rule 2) — run of `1ee7a1c8` (before this fix): check-all 0; test:unit 211 suites / 2659; test:integration
+  59 / 707 (1 todo); test:scenarios 28 / 440 (1 todo); golden 60/60 (121 tests) with rulings in the titles. This fix: check-all 0; test:unit 211 / 2677;
+  integration 59 / 707; scenarios 28 / 440; the load-facts scenario is back to 79.5 / 77 (the seeded 82 kg is an outlier under W-32). Red-then-green per change was
+  recorded in the worker reports of each dispatch (compile- or assertion-red first, then green); the owner rows are unchanged (leg press 09-21
+  120 / 115, 09-27 135 / 130, lateral raise 2.5 / 2.5 → 5 kg step from history).
+- (D) W-35 (orchestrator addition): prompt-cache guard with the LOAD_PLAN flags on — `prompt-cache-harness.ts` gains `makeLoadPlanTrainingSpec`
+  (the REAL training spec — tools, v12 selection, LOAD PLAN v2 — with SUGGESTION + BREAKS + PLANNER_REBIND on over fixed `TrainingData`
+  built from the owner leg-press history) and `prompt-cache-prefix` / `-breakpoints` tests use it: two consecutive turns, the second after a
+  `log_set` whose result carries the effort hint, keep the system message (the v12 text) and the tool list byte-identical and the history
+  prefix unchanged; LOAD PLAN sits only in the `<context>` of the current user message, never in the system message or the history; the
+  two `cache_control` breakpoints (system, last history message) never carry it. It passed on the first run (a guard, no red).
+- (D) W-36 (review run 4 R3): (1) step from history truly divides the recorded loads. Plate grids first (the default's halves / quarters,
+  2.5, 1.25, 1, 0.5 — exact fits of every off-grid load, so a lone 2.5 kg stays a 2.5 step and G-35 / G-36 are unchanged); else the
+  largest step s (0.01 kg resolution, 0.5 … 2× the default) with every off-grid load that recurs in ≥ 2 performances within 0.1 kg of a
+  multiple of s — lb dumbbells in kg (22.7 ×2 sessions + 20.4 ×2 sessions) → 2.27 kg, growth 22.7 → 25.0 (0.1 kg grid), hold row
+  conservative 20.4, never the 23.2 the 0.5 step printed. No fit, or only one-off off-grid loads (a single 22.7 session) → the step is
+  UNKNOWN (`equipmentStep` absent "recorded loads do not fit one step"; the default would print 20.7 / 24.7): no growth,
+  `equipmentStep` missing, and the conservative is the nearest RECORDED load below (new fact `recordedLoads`, last 8 weeks), else the
+  load itself (`lighterLoad`). Scenario effect: the seeded 82 kg barbell (twice) fits the 1 kg plate grid → `step: 1 kg (from history)`,
+  one step down 81 / conservative 80 (load-facts and load-recommendation-log scenarios updated). Block: the "N kg lower" note rounds to 0.01. (2) Reps in reserve count at
+  most 3 toward capacity (`min(10 − RPE, 3)`), matching "3+ → 7": 60×10 ×2 sessions then 60×10,10 + 100×3 @ RPE 5 (8–12) stays 60.
+  (3) The capped smallest step with reps reset is offered by 2-for-2 only; one-session growth under a blocking cap holds, and the next
+  step names the smallest step as the way up (10 kg cable at 15 reps once → hold, "→ +1 step (15 kg)"). (4) Comments W-35 → W-32,
+  the stale `metrics.unit.test.ts` comment. Golden 60/60 unchanged — no row moved.
+- (D) W-37 (review run 5 R3, orchestrator ruling — REPLACES the W-36 step search): step from history counts only CONFIRMED loads (a working
+  load in ≥ 2 performances of the last 8 weeks). Every recorded load on the default grid (within 0.1 kg) → the default; else the step is
+  the smallest positive difference between two adjacent distinct confirmed loads, accepted in [0.5 kg, 2 × default] when ≥ 2 confirmed
+  loads exist; else UNKNOWN (no growth, conservative = the nearest recorded load below, else the load itself, block "no lighter option
+  on record"). The exact-grid list and the free divisor search are gone. Predicted loads (base ± step) snap to a recorded load within
+  0.3 kg (in the right direction). Cases (printed step / recommend / conservative): lone recurring 22.7 → "recorded loads do not fit
+  one step" / 22.7 / 22.7; 17.5-20-22.5 each ×2 → 2.5 per hand, growth 25 (conservative 22.5; a hold row 20); 22.5 once next to 20 ×2 →
+  unknown; lb 20.4 / 22.7 ×2 each → 2.3, growth 25 (capped: 2.3 is 10.1 % of 22.7, so 2-for-2 offers 25 × 8), hold row conservative
+  20.4; barbell 61.25 ×2 alone → unknown, with 60 ×2 → 1.25; gaps < 0.5 or > 2 × default refused. **Owner lateral raise (5 kg once,
+  2.5 kg every session): only 2.5 is confirmed → UNKNOWN step** — 2.5 hold, no growth named ("no load step known"); with 5 kg also in
+  two sessions it gives 2.5. Leg press unchanged (120 / 115, 135 / 130). **Golden rows moved (rulings in the titles, fixture untouched):
+  G-32 (next-step intent: growth → "needs a known equipment step"; certain row) and G-33 (grow 5 → hold 2.5, floor flag true).** G-34 / G-35 /
+  G-36 keep passing because the block prints "no lighter option on record" for an unknown-from-history step with nothing recorded below.
+  Also: next-step text names the one-session alternative only where the cap does not block (`growth` / `after_growth` carry `capped`;
+  BR-042, both tested); `per hand` comes from the exercise, so an unknown step does not turn dumbbell loads into totals; the dead
+  `capped` branch of `earlyGrowth` is removed.
+  With an unknown step a lighter candidate is a recorded load, so the outcome / reason say "nearest recorded lighter load" (not "one step
+  down"); the seeded 82 kg barbell scenarios now print `step: recorded loads do not fit one step` (pre-fatigue row 80 / conservative 80 "no lighter
+  option on record"; the log scenarios 82 / 82).
+- (D) W-38 (orchestrator ruling, review run 5): with an UNKNOWN step growth goes to the nearest RECORDED heavier working load (last 8 weeks,
+  at most 2 × the default step above the working weight — new fact `heavierRecordedLoad`), under the same conditions (2-for-2 /
+  one-session); the distance to that load is the step for the cap logic (`growthStepOf`), so a 100 % jump (2.5 → 5) is a capped step:
+  2-for-2 only, reps reset to the floor, no one-session text. The reason / outcome say "to the nearest recorded heavier load" (no
+  "one step up"); the next step names that load. Nothing heavier on record → no number: new next-step kind `ask_heavier` ("the next
+  available load is unknown — ask which heavier load the equipment has (no number to suggest)"). Owner lateral raise (2.5 every
+  session, 5 kg once on 09-10): next step "last set at 2.5 kg ≥ 17 reps in 2 workouts in a row → +1 step (5 kg)"; with the
+  condition met the growth row recommends 5 kg × 10 (floor), conservative 2.5. Lone recurring 22.7 dumbbell: ask-which-heavier-load.
+  Golden (titles name W-38): G-32 back to "growth (5)" (a 5 kg set is on record); G-33 (2.5 kg only on record) hold 2.5 with
+  `ask_heavier`; the other rows are unchanged.
+- (D) W-39 (review run 6 R3): `capAppliesOf` reads the equipment KIND, never defaults to "cap applies" when the step is absent — new fact
+  `stepCapApplies` (machine → no cap; cable / free weights / unknown equipment keep it) is used when `equipmentStep` is absent. Probe: a
+  machine, 47 kg ×2 confirmed + 52 kg once → unknown step, 2-for-2 met → 52 kg with the RANGE reps (no cap, no reps reset, reason names
+  "the machine adds its own weight"); one-session (15 @ RPE 7, recovered) → early growth to 52; the same history on a CABLE holds on one
+  session and offers the capped smallest step (reps reset) on 2-for-2. Consequence: the owner lateral raise (a machine) grows 2.5 → 5 kg
+  with the range reps (10–15), and its next step keeps the one-session alternative. The next-step line with an unknown step says "→ to the
+  nearest recorded heavier load (N kg)" instead of "+1 step (N kg)" (`toRecorded` on the `growth` next step). The stale divisor-rule
+  doc comment above the step-from-history constants is gone. No golden row moved (60/60).
 
 ## Review
 
@@ -219,3 +589,75 @@ no-reference outcome (W-6, W-7).
   handoff at close-out.
 
 **Meta (run 2)** filed in `docs/REVIEW_FINDINGS.md`: R3 — evidence must name the head it ran on.
+
+### Run 3 — 2026-10-01 — scope extension (items 4–11, `66221076...1ee7a1c8`), Opus zones — blocked (R1 1 / R2 1 / R3 2 / R4 8)
+
+**Blocking**
+
+- R1 | `load-plan/effort-hint.ts:51,72-77` | ADR-0013 D-08/D-09/D-13 — the domain returns LLM-facing prose with a tool name and a
+  Russian user-facing literal; the domain must return data, the words belong to `log-set.tool.ts` / a prompt module.
+- R2 | `load-facts/metrics.ts:338-345` vs `:514-522` | DRY — `computeWorkingWeight` and `computeIndicativeLoad` repeat the
+  reached-vs-estimate selection; one helper.
+- R3 | `load-facts/metrics.ts:406` (+ `:377-380`) | AC-LPF-11 — `qualifyingLoad` and the indirect estimate use raw reps, not
+  capacity: an early stop at a NEW load (60 ×3 sessions, then 65×9,8,6 @ RPE 7) holds 60 and names the wrong load; a single
+  60×9,8,6 @ RPE 7 becomes an Epley "failure" estimate of 55.
+- R3 | plan § Verification evidence | rule 2 — nothing recorded after `6eb7ce01`; record the `1ee7a1c8` run and red-then-green.
+- R4 | `training.spec.md:36` | BR-TRAINING-036 insufficient-data clause says "that performance's load"; code uses the
+  indicative load (G-11). Owner.
+- R4 | `training.spec.md` | missing BRs (rule 1): growth rule; reps in reserve + early_stop / unclear_effort / uneven rows;
+  `log_set` effort hint + plain-answer mapping (unflagged — reaches v11); working-weight definition; equipment step from
+  history; O-2 machine cap waiver. Owner (texts consolidated by the orchestrator).
+- R4 | design `:88`, `:93` | metric 4 and metric 9 stale (rule 7) — reconciled after the BRs.
+- R4 | `ARCHITECTURE.md:81,184` | v12 entry, Stage A rows, `effort-hint.ts` missing — factual, orchestrator.
+
+**Advisory taken into the fix dispatch (orchestrator ruling — correctness, cheap):** R3-1 effort rows fall back to sets at
+another load (`atLoad`) and `previousBelowWithoutRpe` counts another load as "repeated"; R3-2 step from history has no window
+/ outlier guard (22.7 / 20.4 kg → 0.5 kg step); R3-4 `capApplies` waives the cap for every machine and cable — O-2 meant
+unknown machine base only; with the cap kept, free weights hit a dead end, so when the growth condition is met and the cap
+blocks, the smallest step is offered with reps reset to the range bottom (NSCA smallest increment); R3-5 estimate target reps
+capped at 10; R3-3/R3-6/R3-7 test strength (gist thresholds, growth-biased generator mode, AC ids in names); R2 the effort
+question / RPE mapping single source; the effort hint gated behind `LOAD_PLAN_SUGGESTION`.
+
+**Advisory → BACKLOG at close-out:** R1 renderer computes thresholds / parses absent-reason prose / growth split between
+scheme and `earlyGrowth` / `metrics.ts` size; R2 `loadBelow` loop copy, dead branch, reps-only hold twice, `RepGrowthCtx`,
+cap test twice, `atMostMedium`, `hintSetOf` vs `repsOf`, `roundDownToStep`; R4 superseded (D) entries need forward pointers,
+AC table order, cold-start stub detail, Cyrillic quotes.
+
+**Meta** → `REVIEW_FINDINGS.md` at close-out: R1 domain-returns-data INV; R2 versioned prompt may quote a domain constant
+with a test; R3 certain oracle rows overridden only by owner-approved rulings; R3 probe adjacent histories; R4 Cyrillic
+quote exception; R4 scope extension keeps the previous `- Review:` line.
+
+**Run 3 closures (2026-10-01):** code blocking R1 / R2 / R3-1 and the taken advisories fixed in `c941e8f2` (W-30..W-35);
+R4 BRs written after owner approval (BR-TRAINING-036 amended, BR-TRAINING-041..045, `e8858ca2`); ARCHITECTURE and design
+reconciled (`e8858ca2`). Golden rows G-40 / G-60 (certain) moved under BR-TRAINING-042's owner-approved "smallest step with
+reps reset" clause; fixture byte-identical to `d5685c64`. Added: prompt-cache guard with all LOAD_PLAN flags on (system
+message and tools byte-identical across turns incl. an effort-hint `log_set`; LOAD PLAN only in `<context>`).
+
+- Orchestrator run on `c941e8f2` (2026-10-01): `check-all` exit 0; `DB_PORT=5999 test:unit` 2681 passed; `db-test-lock
+  test:integration` 707 passed (1 todo); `db-test-lock test:scenarios` 440 passed (1 todo); golden 60/60; generator 3500
+  cases (746/1000 growth in the biased mode). Red-then-green per item: worker reports for items 4–11 and W-30..W-35.
+
+### Runs 4–6 — 2026-10-01 — scope extension re-reviews (Opus) — clean after run 6 fixes
+
+- **Run 4:** R1 clean; R2 clean (advisories below); R4 6 blocking — BR-041/043 precision, `effort.ts` missing from
+  ARCHITECTURE, design Stage A rows / pre-fatigue row / contract list — **closed** `319f74ca` (wording aligned to the plan's
+  recorded (D) W-16/W-18/W-31; no change of meaning); R3 1 blocking — step from history rounding lb dumbbells to 0.5 kg
+  (recommend 23.2) — plus RIR uncapped, one-session capped step — **closed** `cb72e1fb` (W-36), BR-042/043/045 reworded
+  `94e6c697`, `7f84fdec`.
+- **Run 5:** R3 3 blocking — degenerate divisor (22.7 → step 3.8 / 26.5), kg rack 1.25 step, next-step text offering the
+  one-session path under the cap — **closed** by replacing the rule (W-37, `f4fada4d`; BR-045 `fe975fa5`) and W-38
+  (unknown step grows to the nearest recorded heavier load, `c7bfd6a5`; BR-045 `6b250d34`).
+- **Run 6:** R3 1 blocking — `capAppliesOf` defaulted to "cap" with an unknown step, capping machines — **closed** `7b4ed2fc`
+  (W-39); orchestrator re-ran the reviewer probe on `7b4ed2fc`: machine 47 ×2 + 52 once → 52 × 8–12 (no cap), owner-like
+  lateral raise → 5 × 10–15 with the machine note. BR-045 growth limit `b9a6d7ac`.
+
+**Evidence on `7b4ed2fc` (orchestrator, 2026-10-01):** `check-all` exit 0; `DB_PORT=5999 test:unit` 2712 passed;
+`db-test-lock test:integration` 707 passed (1 todo); `db-test-lock test:scenarios` 440 passed (1 todo); golden 60/60,
+fixture byte-identical to `d5685c64`.
+
+**Deferred:** AC-LPF-4 / AC-LPF-8 / AC-LPF-11 live parts — the local GLM replay of the two workouts after the merge
+(orchestrator, `glm-5.3-flash`, runner in `data/replay-2026-10-01/src/`), recorded in `docs/STATE.md` § Handoff.
+
+**Advisory → `docs/BACKLOG.md` § load-plan-fixes extension review advisories:** run 3 list above; run 4 R2 (capped-growth
+reps-reset built twice, `resetReps` flag, presence counted twice, `atLoad`/`onlyAtLoad`, `hintSetOf` literal, test builders);
+run 6 R3 mixed weight units (lb/kg) compared raw in step / recorded loads.

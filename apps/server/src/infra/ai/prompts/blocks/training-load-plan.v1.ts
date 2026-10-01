@@ -103,7 +103,10 @@ function todayLine(facts: LoadFacts): string {
 function metricsLine(facts: LoadFacts, opts: RenderLoadPlanOpts): string {
   const ww = orReason(
     facts.workingWeight,
-    w => `working weight ${w.weight} ${w.unit ?? 'kg'} (${w.performances} performances / 8 wk)`,
+    w =>
+      `working weight ${w.weight} ${w.unit ?? 'kg'} (${w.performances} performances / 8 wk${
+        w.estimatedFrom ? `, estimated from ${w.estimatedFrom.weight}×${w.estimatedFrom.reps}` : ''
+      })`,
   );
   const parts = [isAbsent(facts.workingWeight) ? `working weight: ${ww}` : ww];
   const e = facts.e1rmTrend;

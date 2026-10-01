@@ -96,6 +96,8 @@ export interface WorkoutSummaryInput {
 }
 
 export interface ConstraintInput {
+  /** Set by `computeConstraints`: the muscle is a PRIMARY one of the exercise (absent = treated as primary). */
+  onPrimary?: boolean;
   muscleGroup: MuscleGroup | null;
   durability: 'short' | 'long_term' | 'permanent';
   text: string;
@@ -157,6 +159,16 @@ export interface WorkingWeightFact {
   performances: number;
   warmupsEstimated: boolean;
   mixedBasisExcluded: number;
+  /** Set when the weight came from the indirect Epley estimate (the set it was read from), not from a reached load. */
+  estimatedFrom?: { weight: number; reps: number };
+}
+
+/** The load the newest single performance points to (ruling G-11): the insufficient-data reference load. */
+export interface IndicativeLoadFact {
+  weight: number;
+  unit: 'kg' | 'lbs' | null;
+  /** Set when the load is the indirect estimate from a short set, not a reached load. */
+  estimatedFrom?: { weight: number; reps: number };
 }
 
 export interface E1rmTrendFact {
@@ -178,9 +190,44 @@ export interface E1rmTrendFact {
   mixedBasisExcluded: number;
 }
 
+/** One performance's sets at the working weight (load-plan-fixes items 5–7); a probe at another load is not here. */
+export interface RepHistoryEntry {
+  daysAgo: number;
+  /** Reps of the working sets done at the working weight, in set order; empty = the performance used another load. */
+  repsAtWorkingWeight: number[];
+  /** RPE of the last set at the working weight, null when not recorded. */
+  lastSetRpe: number | null;
+}
+
+export interface RepHistoryFact {
+  weight: number;
+  unit: 'kg' | 'lbs' | null;
+  /** The performances behind the working weight (the same set as metric 4), newest first. */
+  entries: RepHistoryEntry[];
+}
+
+export interface VolumeFact {
+  unit: 'kg' | 'lbs' | null;
+  newest: { volume: number; daysAgo: number };
+  previous: { volume: number; daysAgo: number };
+  /** (newest − previous) / previous, in percent. */
+  changePct: number;
+}
+
 export type RepsVsRange = 'below floor' | 'in range' | 'at or above top';
 
+/** Effort read from the newest performance's sets at the working weight (reps in reserve, load-plan-fixes item 10). */
+export interface EffortFact {
+  /** A set below the floor at RPE ≤ 7 whose capacity still reaches the floor: stopped early, not failed. */
+  earlyStop: boolean;
+  /** Exactly one set is below the floor and it has no RPE — an early stop cannot be told from a failure. */
+  unclearBelowFloor: boolean;
+  /** The set behind either flag (reps, RPE); null when neither is set. */
+  set: { reps: number; rpe: number | null } | null;
+}
+
 export interface LastExposureFact {
+  effort: EffortFact;
   repsVsRange: Metric<RepsVsRange>;
   rpe: Metric<{ values: number[] }>;
   dropOff: Metric<{ value: number; usual: number | null }>;
@@ -199,7 +246,18 @@ export interface ConstraintsFact {
   equipment: string[];
 }
 
-export type EquipmentStepFact = Metric<{ step: number; unit: 'kg'; perHand: boolean; basis: string }>;
+export type EquipmentStepFact = Metric<{
+  step: number;
+  unit: 'kg';
+  perHand: boolean;
+  basis: string;
+  /**
+   * Whether the "one step ≤ ~10 % of the load" cap applies (owner ruling O-2): false for machines (cables keep it,
+   * W-32), whose displayed load excludes the machine's own weight, so a step is relatively small whatever the
+   * displayed figure.
+   */
+  capApplies: boolean;
+}>;
 
 export interface LoadFacts {
   exerciseId: string;
@@ -210,7 +268,25 @@ export interface LoadFacts {
   fatigueReference: Metric<FatigueFact>;
   fatigueToday: FatigueFact;
   workingWeight: Metric<WorkingWeightFact>;
+  /** The newest performance's own working-weight reading, with no minimum count — for the insufficient-data path. */
+  indicativeLoad: Metric<IndicativeLoadFact>;
   e1rmTrend: Metric<E1rmTrendFact>;
+  /** Sets at the working weight per performance — the evidence of the growth rule (load-plan-fixes item 5). */
+  repHistory: Metric<RepHistoryFact>;
+  /** Distinct working loads of the last 8 weeks, ascending — anchors for an unknown step. */
+  recordedLoads: number[];
+  /**
+   * Whether the "one step ≤ ~10 % of the load" cap applies — from the equipment KIND (a machine shows a load without
+   * its own weight; cables and free weights keep the cap), so it holds also when the step is unknown (W-39).
+   */
+  stepCapApplies: boolean;
+  /**
+   * The nearest recorded working load above the working weight (last 8 weeks, at most 2 × the default step above) —
+   * where growth goes when the equipment step is unknown (W-38). Null when none.
+   */
+  heavierRecordedLoad: number | null;
+  /** Context only: no decision reads it (load-plan-fixes item 8). */
+  volume: Metric<VolumeFact>;
   lastExposure: Metric<LastExposureFact>;
   gap: GapFact;
   constraints: ConstraintsFact;

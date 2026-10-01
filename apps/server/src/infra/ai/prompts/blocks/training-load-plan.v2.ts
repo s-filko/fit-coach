@@ -13,9 +13,13 @@ import {
   type Decision,
   type DecisionRow,
   defaultProgression,
+  type NextStep,
+  ONE_SESSION_MAX_RPE,
+  ONE_SESSION_SURPLUS,
   type ProgressionChoice,
   progressionFromChoice,
   type Recommendation,
+  TWO_FOR_TWO_SURPLUS,
 } from '@domain/training/load-plan';
 
 import { decideLoadPlanEntry, type LoadDecisionOpts } from '@infra/ai/load-facts/load-decision';
@@ -55,7 +59,11 @@ const ROW_LABELS_V2: Record<DecisionRow, string> = {
   gap_rebuild: 'gap tier rebuild',
   gap_restart: 'gap tier restart',
   pre_fatigue: 'pre-fatigue delta',
+  uneven_performance: 'uneven performance',
+  early_stop: 'early stop',
+  unclear_effort: 'unclear effort',
   below_floor: 'last below range floor',
+  early_growth: 'one-session growth',
   scheme_growth: 'scheme growth',
   scheme_hold: 'scheme hold',
 };
@@ -134,15 +142,98 @@ function breakLine(entry: LoadPlanEntry, d: Decision): string[] {
 }
 
 /** " — 2.5 kg lower", or " — no lighter option" when the floored step-down left the conservative load unchanged. */
-function lowerNote(d: Decision, lower: number): string {
+function lowerNote(d: Decision, lower: number, onRecordOnly: boolean): string {
   if (lower > 0) {
-    return ` — ${lower} ${d.conservative.unit ?? DEFAULT_UNIT} lower`;
+    return ` — ${Math.round(lower * 100) / 100} ${d.conservative.unit ?? DEFAULT_UNIT} lower`;
   }
   // Without a known step the equal load is "steps cannot be computed" (named in the reason), not a floor.
   const stepKnown = !d.missing.includes('equipmentStep');
-  return stepKnown && d.candidate.load !== null && d.candidate.load === d.conservative.load
-    ? ' — no lighter option'
-    : '';
+  if (d.candidate.load === null || d.candidate.load !== d.conservative.load) {
+    return '';
+  }
+  // A step the history does not fix: the conservative is the nearest RECORDED load below — none is recorded.
+  if (stepKnown) {
+    return ' — no lighter option';
+  }
+  return onRecordOnly ? ' — no lighter option on record' : '';
+}
+
+const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** What would give the user a working weight: the words for the working-weight fact's absent reason. */
+function workingWeightPath(why: string): string {
+  if (why.startsWith('insufficient')) {
+    return 'two performances at one load within 8 weeks set the working weight, and the growth rule then applies';
+  }
+  if (why === 'no rep range') {
+    return 'a rep range (a plan target for the exercise) is needed to set the working weight';
+  }
+  return 'a load where every set reaches the rep floor sets the working weight, and the growth rule then applies';
+}
+
+/** The words of a `NextStep` — the concrete condition of the next increase (item 7); the domain gives data only. */
+function nextStepText(n: NextStep, d: Decision): string {
+  const unit = d.candidate.unit ?? DEFAULT_UNIT;
+  const now = `${d.candidate.load} ${unit}`;
+  switch (n.kind) {
+    case 'growth': {
+      // Where the cap blocks the step only 2-for-2 offers the capped smallest step (BR-042): no one-session path named.
+      const once = n.capped
+        ? ''
+        : ` (or ≥ ${n.reps - TWO_FOR_TWO_SURPLUS + ONE_SESSION_SURPLUS} reps once at RPE ≤ ${ONE_SESSION_MAX_RPE}, recovered)`;
+      // An unknown step: growth goes to a load the client recorded, not to a counted step.
+      const target = n.toRecorded
+        ? `to the nearest recorded heavier load (${n.load} ${unit})`
+        : `+1 step (${n.load} ${unit})`;
+      return n.sessions === 1
+        ? `last set at ${now} ≥ ${n.reps} reps once more${once} → ${target}`
+        : `last set at ${now} ≥ ${n.reps} reps in ${n.sessions} workouts in a row${once} → ${target}`;
+    }
+    case 'after_growth':
+      return `after the step up, hold ${n.load} ${unit} until the last set reaches ${n.reps + TWO_FOR_TWO_SURPLUS} reps in 2 workouts in a row${
+        n.capped ? '' : ` (or ${n.reps + ONE_SESSION_SURPLUS} reps once at RPE ≤ ${ONE_SESSION_MAX_RPE}, recovered)`
+      }`;
+    case 'ladder':
+      if (n.remaining === 0) {
+        return 'last workout of the return ladder — the growth rule applies again after it';
+      }
+      return `${n.cold ? 'cold start now, then ' : ''}${plural(n.remaining, 'more workout')} → back to ${n.backTo} ${unit}`;
+    case 'uneven':
+      return `even sets at ${n.load} ${unit} (reps falling by at most ${n.maxDrop} from the first to the last set) → the growth rule applies`;
+    case 'step_down':
+      return `back to ${n.backTo} ${unit} when the sets at ${n.atLoad} ${unit} reach ${n.reps}+ reps`;
+    case 'early_stop':
+      return `take it to the floor next time (${n.reps}+ reps at ${n.load} ${unit}) — the load is within reach`;
+    case 'ask_effort':
+      return `ask how many more reps that set had in it (0, 1–2 or 3+): 3+ → an early stop, the load stays ${n.load} ${unit}; 0–2 → ${n.stepDownTo} ${unit}`;
+    case 'constraint':
+      return 'no growth while the short constraint is active; the growth rule applies again after it';
+    case 'pre_fatigue':
+      return `the same ${n.load} ${unit} without the extra pre-fatigue → the usual growth rule applies`;
+    case 'insufficient':
+      return workingWeightPath(n.why);
+    case 'estimated':
+      return `the working weight is an estimate — sets at ${n.load} ${unit} reaching ${n.reps}+ reps confirm it, then the growth rule applies`;
+    case 'ask_heavier':
+      return 'the next available load is unknown — ask which heavier load the equipment has (no number to suggest)';
+    case 'no_number':
+      return 'log this exercise once — that performance becomes the reference';
+    case 'hold':
+      return n.why;
+  }
+}
+
+/** `volume: +16 % vs last (5520 vs 4760 kg×reps, working sets; 4 d and 9 d ago)` — context, no decision reads it. */
+function volumeLine(entry: LoadPlanEntry): string[] {
+  const { volume } = entry.facts;
+  if (isAbsent(volume) || volume.previous.volume <= 0) {
+    return [];
+  }
+  const pct = Math.round(volume.changePct);
+  const num = (v: number): number => Math.round(v * 10) / 10;
+  return [
+    `volume: ${pct > 0 ? '+' : ''}${pct} % vs last (${num(volume.newest.volume)} vs ${num(volume.previous.volume)} ${volume.unit ?? DEFAULT_UNIT}×reps, working sets; ${volume.newest.daysAgo} d and ${volume.previous.daysAgo} d ago)`,
+  ];
 }
 
 function decisionLines(
@@ -157,7 +248,9 @@ function decisionLines(
   }
   const progression = progressionFromChoice(opts.progression, entry.chosenScheme);
   const params = progression.scheme.defaultParams(progression.goal);
-  const perHand = !isAbsent(facts.equipmentStep) && facts.equipmentStep.perHand;
+  // Per hand from the exercise, so an unknown step does not turn dumbbell loads into totals.
+  const historyUnknown = isAbsent(facts.equipmentStep) && facts.equipmentStep.absent.startsWith('recorded loads');
+  const perHand = exercise.equipment === 'dumbbell' || (!isAbsent(facts.equipmentStep) && facts.equipmentStep.perHand);
   const rec = loadText(d.candidate, perHand);
   const cons = loadText(d.conservative, perHand);
   const lower = d.candidate.load !== null && d.conservative.load !== null ? d.candidate.load - d.conservative.load : 0;
@@ -174,8 +267,10 @@ function decisionLines(
     ...breakLine(entry, d),
     `decision: Stage ${d.stage}, ${ROW_LABELS_V2[d.row]} → ${d.outcome}`,
     `recommend: ${rec === null ? `no number — ${d.reason}` : `${rec} — ${d.reason}`}`,
-    `conservative: ${cons === null ? `no conservative option — ${d.reason}` : `${cons}${lowerNote(d, lower)}`}`,
+    `conservative: ${cons === null ? `no conservative option — ${d.reason}` : `${cons}${lowerNote(d, lower, historyUnknown)}`}`,
+    `next step: ${nextStepText(d.next, d)}`,
     confidenceText(entry, d),
+    ...volumeLine(entry),
   ];
 }
 

@@ -10,6 +10,10 @@ import {
   computeGap,
   computeConstraints,
   computeEquipmentStep,
+  computeVolume,
+  computeRepHistory,
+  computeIndicativeLoad,
+  capacityOf,
   classifySets,
 } from '../index';
 import {
@@ -19,7 +23,13 @@ import {
   benchPress,
   daysBefore,
   emptyContext,
+  LATERAL_RAISE_ROWS,
+  lateralRaise,
+  LEG_PRESS_ROWS,
+  legPress,
   other,
+  ownerNow,
+  ownerPerfs,
   perf,
   strengthSet,
   today,
@@ -27,6 +37,7 @@ import {
 } from './fixtures';
 
 const RANGE = { min: 8, max: 12 };
+const R810 = { min: 8, max: 10 };
 
 describe('AC-LF-1 · classifySets (D7)', () => {
   it('drops explicit warm-ups, keeps explicit working sets regardless of weight', () => {
@@ -391,11 +402,21 @@ describe('AC-LF-1 · metric 4 — working weight', () => {
     expect(computeWorkingWeight(perfs, 'today', null, benchPress, NOW, TZ)).toEqual({ absent: 'no rep range' });
   });
 
-  it('no load reached the floor → absent', () => {
+  it('no load reached the floor and no equipment step → absent', () => {
     const perfs = [perf('a', 3, [strengthSet(65, 5)]), perf('b', 6, [strengthSet(65, 6)])];
-    expect(computeWorkingWeight(perfs, 'today', RANGE, benchPress, NOW, TZ)).toEqual({
+    const bodyweight = { ...benchPress, equipment: 'bodyweight' as const };
+    expect(computeWorkingWeight(perfs, 'today', RANGE, bodyweight, NOW, TZ)).toEqual({
       absent: 'no load reached the rep floor',
     });
+  });
+
+  it('no load reached the floor, step known → the indirect estimate (65×5 for 8–12 → 55)', () => {
+    const perfs = [perf('a', 3, [strengthSet(65, 5)]), perf('b', 6, [strengthSet(65, 6)])];
+    const r = computeWorkingWeight(perfs, 'today', RANGE, benchPress, NOW, TZ);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect([r.weight, r.estimatedFrom]).toEqual([55, { weight: 65, reps: 5 }]);
   });
 
   it('a performance mixing per-hand and total loads is excluded and counted', () => {
@@ -722,23 +743,26 @@ describe('AC-LF-1 · metric 8 — constraints', () => {
       equipmentFacts: ['home: 2 dumbbells'],
       workouts: [],
     });
-    expect(c.constraints).toEqual([{ muscleGroup: 'triceps', durability: 'short', text: 'elbow pain' }]);
+    expect(c.constraints).toEqual([
+      { muscleGroup: 'triceps', durability: 'short', text: 'elbow pain', onPrimary: false },
+    ]);
     expect(c.equipment).toEqual(['home: 2 dumbbells']);
   });
 });
 
 describe('AC-LF-1 · metric 9 — equipment step', () => {
   it.each([
-    ['barbell', 2.5, false],
-    ['dumbbell', 2, true],
-    ['machine', 5, false],
-    ['cable', 5, false],
-  ] as const)('%s → %s kg', (equipment, step, perHand) => {
+    ['barbell', 2.5, false, true],
+    ['dumbbell', 2, true, true],
+    ['machine', 5, false, false],
+    ['cable', 5, false, true],
+  ] as const)('%s → %s kg (10 % cap applies: %s)', (equipment, step, perHand, capApplies) => {
     expect(computeEquipmentStep({ ...benchPress, equipment })).toEqual({
       step,
       unit: 'kg',
       perHand,
       basis: `default for ${equipment}`,
+      capApplies, // O-2 narrowed (W-32): only machines are uncapped; cables keep the cap
     });
   });
 
@@ -825,5 +849,834 @@ describe('AC-LF-1 · computeLoadFacts (D8 range source, D10 applicability)', () 
       throw new Error('expected a reference');
     }
     expect(f.reference.performance.id).toBe('new');
+  });
+});
+
+describe('AC-LPF-5 · working weight follows the newest session (owner history)', () => {
+  const ww = (
+    rows: Parameters<typeof ownerPerfs>[1],
+    last: string,
+    ex: typeof legPress,
+    range = { min: 10, max: 12 },
+  ) => {
+    const r = computeWorkingWeight(ownerPerfs(ex.id, rows, last), 'today', range, ex, ownerNow(last, 4), TZ);
+    if (isAbsent(r)) {
+      throw new Error(`expected a value, got ${r.absent}`);
+    }
+    return r;
+  };
+
+  it('leg press after 09-21 (110 ×3 → 110,110,120,120) is 120, not the recurring 110', () => {
+    expect(ww(LEG_PRESS_ROWS, '2026-09-21', legPress).weight).toBe(120);
+  });
+
+  it('leg press after 09-27 (110,130,130,135) is at least 130', () => {
+    expect(ww(LEG_PRESS_ROWS, '2026-09-27', legPress).weight).toBeGreaterThanOrEqual(130);
+  });
+
+  it('lateral raise stays 2.5 kg — its 5 kg set is in the oldest session, not the newest', () => {
+    expect(ww(LATERAL_RAISE_ROWS, '2026-09-25', lateralRaise, RANGE).weight).toBe(2.5);
+  });
+
+  it('the newest performance counts only at a load where EVERY set at that load reached the floor', () => {
+    const perfs = [
+      perf('a', 3, [strengthSet(65, 10), strengthSet(70, 12), strengthSet(70, 4)]),
+      perf('b', 9, [strengthSet(65, 10)]),
+      perf('c', 16, [strengthSet(65, 10)]),
+    ];
+    const r = computeWorkingWeight(perfs, 'today', RANGE, benchPress, NOW, TZ);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(65);
+  });
+
+  it('a heavier load that only an OLDER performance reached still does not win unless it recurs', () => {
+    const perfs = [
+      perf('a', 3, [strengthSet(60, 10), strengthSet(60, 10)]),
+      perf('b', 9, [strengthSet(60, 10)]),
+      perf('c', 16, [strengthSet(80, 10)]),
+    ];
+    const r = computeWorkingWeight(perfs, 'today', RANGE, benchPress, NOW, TZ);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(60);
+  });
+});
+
+describe('AC-LPF-9 · metric 10 — volume load of the newest vs the previous performance', () => {
+  const volume = (last: string) =>
+    computeVolume(ownerPerfs(legPress.id, LEG_PRESS_ROWS, last), 'today', legPress, ownerNow(last, 4), TZ);
+
+  it('sums reps × load of the working sets; leg press 09-21 vs 09-16', () => {
+    const v = volume('2026-09-21');
+    if (isAbsent(v)) {
+      throw new Error('expected a value');
+    }
+    expect(v.newest).toEqual({ volume: 110 * 12 * 2 + 120 * 12 * 2, daysAgo: 4 });
+    expect(v.previous).toEqual({ volume: 80 * 10 + 110 * 12 * 3, daysAgo: 9 });
+    expect(v.changePct).toBeCloseTo(((5520 - 4760) / 4760) * 100, 5);
+    expect(v.unit).toBeNull(); // the fixtures store no weight unit; the block prints kg by default
+  });
+
+  it('leg press 09-27 vs 09-21', () => {
+    const v = volume('2026-09-27');
+    if (isAbsent(v)) {
+      throw new Error('expected a value');
+    }
+    expect(v.newest.volume).toBe(110 * 12 + 130 * 12 * 2 + 135 * 12);
+    expect(v.previous.volume).toBe(5520);
+  });
+
+  it('warm-ups never count', () => {
+    const perfs = [
+      perf('a', 3, [withKind(strengthSet(20, 15), 'warmup'), strengthSet(60, 10)]),
+      perf('b', 9, [strengthSet(60, 10), withKind(strengthSet(20, 15), 'warmup')]),
+    ];
+    const v = computeVolume(perfs, 'today', benchPress, NOW, TZ);
+    if (isAbsent(v)) {
+      throw new Error('expected a value');
+    }
+    expect([v.newest.volume, v.previous.volume, v.changePct]).toEqual([600, 600, 0]);
+  });
+
+  it('absent with the reason when fewer than two performances carry a load', () => {
+    const one = [perf('a', 3, [strengthSet(60, 10)])];
+    expect(computeVolume(one, 'today', benchPress, NOW, TZ)).toEqual({
+      absent: 'fewer than 2 performances with a load',
+    });
+  });
+
+  it('today is not a performance; non-strength is n/a', () => {
+    const perfs = [perf('today', 0, [strengthSet(60, 10)]), perf('a', 3, [strengthSet(60, 10)])];
+    expect(isAbsent(computeVolume(perfs, 's-today', benchPress, NOW, TZ))).toBe(true);
+    const plank = { ...benchPress, exerciseType: 'isometric' as const };
+    expect(computeVolume(perfs, 'today', plank, NOW, TZ)).toEqual({ absent: 'n/a for isometric' });
+  });
+
+  it('is part of computeLoadFacts', () => {
+    const f = computeLoadFacts(
+      legPress,
+      ownerPerfs(legPress.id, LEG_PRESS_ROWS, '2026-09-21'),
+      today({ targetReps: '10-12' }),
+      emptyContext,
+      ownerNow('2026-09-21', 4),
+      TZ,
+    );
+    expect(isAbsent(f.volume)).toBe(false);
+  });
+});
+
+describe('AC-LPF-6/7 · metric 4b — sets at the working weight', () => {
+  const facts = (last: string, targetReps: string) =>
+    computeLoadFacts(
+      legPress,
+      ownerPerfs(legPress.id, LEG_PRESS_ROWS, last),
+      today({ targetReps }),
+      emptyContext,
+      ownerNow(last, 4),
+      TZ,
+    );
+
+  it('leg press after 09-21: the working weight is 120, only the 09-21 performance has sets at it', () => {
+    const f = facts('2026-09-21', '10-12');
+    if (isAbsent(f.repHistory)) {
+      throw new Error('expected a value');
+    }
+    expect(f.repHistory.weight).toBe(120);
+    expect(f.repHistory.entries.map(e => e.repsAtWorkingWeight)).toEqual([[12, 12], [], [], [], []]);
+    expect(f.repHistory.entries[0].daysAgo).toBe(4);
+  });
+
+  it('carries the RPE of the last set at the working weight', () => {
+    const perfs = [
+      perf('a', 3, [strengthSet(60, 10, { rpe: 6 }), strengthSet(60, 12, { rpe: 9 })]),
+      perf('b', 9, [strengthSet(60, 10, { rpe: 7 }), strengthSet(60, 10)]),
+    ];
+    const f = computeLoadFacts(benchPress, perfs, today(), emptyContext, NOW, TZ);
+    if (isAbsent(f.repHistory)) {
+      throw new Error('expected a value');
+    }
+    expect(f.repHistory.entries.map(e => e.lastSetRpe)).toEqual([9, null]);
+  });
+
+  it('absent without a working weight; n/a for non-strength', () => {
+    expect(computeRepHistory([], 'today', { absent: 'x' }, benchPress, NOW, TZ)).toEqual({
+      absent: 'no working weight',
+    });
+    const plank = { ...benchPress, exerciseType: 'isometric' as const };
+    expect(computeRepHistory([], 'today', { absent: 'x' }, plank, NOW, TZ)).toEqual({ absent: 'n/a for isometric' });
+  });
+});
+
+describe('AC-LPF-7 · each load is judged on its own sets (a too-heavy opener is a probe)', () => {
+  // 135 × 6 as the opener, then 130 × 12 ×3; the two older sessions are 130 × 12 ×3 too. Range 8–12.
+  const withOpener = [
+    perf('a', 3, [strengthSet(135, 6), strengthSet(130, 12), strengthSet(130, 12), strengthSet(130, 12)]),
+    perf('b', 9, [strengthSet(130, 12), strengthSet(130, 12), strengthSet(130, 12)]),
+    perf('c', 16, [strengthSet(130, 12), strengthSet(130, 12), strengthSet(130, 12)]),
+  ];
+  const f = () => computeLoadFacts(legPress, withOpener, today({ targetReps: '8-12' }), emptyContext, NOW, TZ);
+
+  it('the working weight is 130 and the performance is not "below floor" because of the 135 × 6 probe', () => {
+    const facts = f();
+    if (isAbsent(facts.workingWeight) || isAbsent(facts.lastExposure) || isAbsent(facts.lastExposure.repsVsRange)) {
+      throw new Error('expected values');
+    }
+    expect(facts.workingWeight.weight).toBe(130);
+    expect(facts.lastExposure.repsVsRange).toBe('at or above top');
+  });
+
+  it('drop-off is measured at the working weight, the usual from earlier performances at that load', () => {
+    const uneven = [
+      perf('a', 3, [strengthSet(135, 6), strengthSet(130, 14), strengthSet(130, 12), strengthSet(130, 8)]),
+      ...withOpener.slice(1),
+      perf('d', 23, [strengthSet(130, 12), strengthSet(130, 11), strengthSet(130, 11)]),
+    ];
+    const facts = computeLoadFacts(legPress, uneven, today({ targetReps: '8-12' }), emptyContext, NOW, TZ);
+    if (isAbsent(facts.lastExposure) || isAbsent(facts.lastExposure.dropOff)) {
+      throw new Error('expected a value');
+    }
+    expect(facts.lastExposure.dropOff.value).toBe(6);
+    expect(facts.lastExposure.dropOff.usual).toBe(0);
+  });
+
+  it('with no set at the working weight in the reference the old top-load reading stays', () => {
+    const r = computeLastExposure(perf('x', 3, [strengthSet(70, 5), strengthSet(70, 5)]), [], RANGE, benchPress, 60);
+    if (isAbsent(r.repsVsRange)) {
+      throw new Error('expected a value');
+    }
+    expect(r.repsVsRange).toBe('below floor');
+  });
+});
+
+describe('AC-LPF-5 · indirect working-weight estimate (Epley from sets ≤ 10 reps, rounded down to the step)', () => {
+  const R810 = { min: 8, max: 10 };
+  const older = perf('older', 9, [strengthSet(45, 12), strengthSet(45, 12)]);
+  const ww = (sets: [number, number][], range = R810, ex = benchPress, extra = [older]) => {
+    const perfs = [
+      perf(
+        'newest',
+        3,
+        sets.map(([w, r]) => strengthSet(w, r)),
+      ),
+      ...extra,
+    ];
+    return computeWorkingWeight(perfs, 'today', range, ex, NOW, TZ);
+  };
+
+  it('60×6, 55×8, 45×12 (range 8–10) → 55, from the reached load; the estimate does not lift it', () => {
+    const r = ww([
+      [60, 6],
+      [55, 8],
+      [45, 12],
+    ]);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(55);
+    expect(r.estimatedFrom).toBeUndefined();
+  });
+
+  it('60×6, 55×7, 45×12 (range 8–10) → 50, not 45, and says where it came from', () => {
+    const r = ww([
+      [60, 6],
+      [55, 7],
+      [45, 12],
+    ]);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(50);
+    expect(r.estimatedFrom).toEqual({ weight: 55, reps: 7 });
+  });
+
+  it('is rounded DOWN to the equipment step (barbell 2.5)', () => {
+    // 100×7 → e1RM 123.3 → for 8 reps 97.4 → 95 (2.5 grid: 97.5 > 97.4 → 95).
+    const r = ww([[100, 7]], R810, barbellBench, [perf('o', 9, [strengthSet(90, 10), strengthSet(90, 10)])]);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(95);
+    expect(r.estimatedFrom).toEqual({ weight: 100, reps: 7 });
+  });
+
+  it('a set that reached the floor is never "estimated" upwards (80×10 for 8–12 stays 80)', () => {
+    const r = ww(
+      [
+        [80, 10],
+        [80, 10],
+      ],
+      { min: 8, max: 12 },
+      benchPress,
+      [perf('o', 9, [strengthSet(80, 10)])],
+    );
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(80);
+    expect(r.estimatedFrom).toBeUndefined();
+  });
+
+  it('sets above 10 reps carry no estimate (E1RM_MAX_REPS stays 10)', () => {
+    const r = ww([
+      [45, 12],
+      [45, 12],
+    ]);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(45);
+    expect(r.estimatedFrom).toBeUndefined();
+  });
+
+  it('no estimate when the equipment step is unknown (bodyweight / none)', () => {
+    const bodyweight = { ...benchPress, equipment: 'bodyweight' as const };
+    const r = ww(
+      [
+        [60, 6],
+        [55, 7],
+        [45, 12],
+      ],
+      R810,
+      bodyweight,
+    );
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(45);
+    expect(r.estimatedFrom).toBeUndefined();
+  });
+
+  it('only the newest performance is read', () => {
+    const r = ww(
+      [
+        [45, 12],
+        [45, 12],
+      ],
+      R810,
+      benchPress,
+      [perf('o', 9, [strengthSet(60, 6), strengthSet(55, 7)])],
+    );
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(45);
+  });
+
+  it('when no load reached the floor the estimate still gives a working weight', () => {
+    const r = ww(
+      [
+        [60, 6],
+        [55, 7],
+      ],
+      R810,
+      benchPress,
+      [perf('o', 9, [strengthSet(60, 6), strengthSet(55, 7)])],
+    );
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(50);
+    expect(r.estimatedFrom).toEqual({ weight: 55, reps: 7 });
+  });
+});
+
+describe('AC-LPF-10 · the safety rows judge the NEWEST performance (W-13)', () => {
+  it('lateral raise 09-25 (15-rep top set → not like-for-like): last exposure is 09-25, not the 8-rep 09-20 reference', () => {
+    const f = computeLoadFacts(
+      lateralRaise,
+      ownerPerfs(lateralRaise.id, LATERAL_RAISE_ROWS, '2026-09-25'),
+      today({ targetReps: '10-12' }),
+      emptyContext,
+      ownerNow('2026-09-25', 4),
+      TZ,
+    );
+    if (isAbsent(f.reference) || isAbsent(f.lastExposure) || isAbsent(f.lastExposure.repsVsRange)) {
+      throw new Error('expected values');
+    }
+    expect(f.reference.daysAgo).toBe(9); // the reference stays the like-for-like pick
+    expect(f.lastExposure.repsVsRange).toBe('in range'); // 10, 15, 12, 10 at 2.5 kg — newest, not 09-20's 8
+  });
+
+  it('with the newest performance as the reference nothing changes', () => {
+    const perfs = [perf('a', 3, [strengthSet(65, 6)]), perf('b', 10, [strengthSet(65, 10)])];
+    const f = computeLoadFacts(benchPress, perfs, today(), emptyContext, NOW, TZ);
+    if (isAbsent(f.lastExposure) || isAbsent(f.lastExposure.repsVsRange)) {
+      throw new Error('expected values');
+    }
+    expect(f.lastExposure.repsVsRange).toBe('below floor');
+  });
+});
+
+describe('AC-LPF-11 · reps in reserve: capacity = reps + (10 − RPE) when RPE is recorded (Helms et al.)', () => {
+  const R810 = { min: 8, max: 10 };
+  const exposure = (sets: ReturnType<typeof strengthSet>[], range = R810) =>
+    computeLastExposure(perf('x', 3, sets), [], range, benchPress, 60);
+
+  it('capacityOf: no RPE → the reps; RPE 10 → the reps; RPE 8 → +2; RPE 7 → +3', () => {
+    expect([capacityOf(8, null), capacityOf(8, 10), capacityOf(8, 8), capacityOf(6, 7), capacityOf(8, 11)]).toEqual([
+      8, 8, 10, 9, 8,
+    ]);
+  });
+
+  it('8 @ RPE 8 counts as 10: at the top of 8–10', () => {
+    expect(exposure([strengthSet(60, 8, { rpe: 8 }), strengthSet(60, 8, { rpe: 8 })]).repsVsRange).toBe(
+      'at or above top',
+    );
+  });
+
+  it('6 @ RPE 7 is an early stop: capacity 9 is not below the floor, and the effort flags say so', () => {
+    const e = exposure([strengthSet(60, 10), strengthSet(60, 9), strengthSet(60, 6, { rpe: 7 })]);
+    expect(e.repsVsRange).toBe('in range');
+    expect(e.effort).toEqual({ earlyStop: true, unclearBelowFloor: false, set: { reps: 6, rpe: 7 } });
+  });
+
+  it('6 @ RPE 9 is genuinely below the floor (capacity 7): no early stop, nothing unclear', () => {
+    const e = exposure([strengthSet(60, 10), strengthSet(60, 6, { rpe: 9 })]);
+    expect(e.repsVsRange).toBe('below floor');
+    expect(e.effort).toMatchObject({ earlyStop: false, unclearBelowFloor: false });
+  });
+
+  it('a lone below-floor set without RPE is unclear — below floor, but not provable', () => {
+    const e = exposure([strengthSet(60, 10), strengthSet(60, 10), strengthSet(60, 6)]);
+    expect(e.repsVsRange).toBe('below floor');
+    expect(e.effort).toEqual({ earlyStop: false, unclearBelowFloor: true, set: { reps: 6, rpe: null } });
+  });
+
+  it('G-06/07: any number of below-floor sets without RPE is unclear the FIRST time', () => {
+    const e = exposure([strengthSet(60, 7), strengthSet(60, 7), strengthSet(60, 6)]);
+    expect(e.repsVsRange).toBe('below floor');
+    expect(e.effort).toMatchObject({ unclearBelowFloor: true });
+  });
+
+  it('G-06/07: the same again in the next performance (still no RPE) is a real miss', () => {
+    const e = computeLastExposure(
+      perf('x', 3, [strengthSet(60, 7), strengthSet(60, 6)]),
+      [perf('prev', 7, [strengthSet(60, 7), strengthSet(60, 6)])],
+      R810,
+      benchPress,
+      60,
+    );
+    expect(e.effort.unclearBelowFloor).toBe(false);
+  });
+
+  it('G-06/07: the previous performance being fine (or having an RPE) keeps it unclear', () => {
+    const fine = computeLastExposure(
+      perf('x', 3, [strengthSet(60, 6)]),
+      [perf('prev', 7, [strengthSet(60, 9), strengthSet(60, 9)])],
+      R810,
+      benchPress,
+      60,
+    );
+    expect(fine.effort.unclearBelowFloor).toBe(true);
+    const withRpe = computeLastExposure(
+      perf('x', 3, [strengthSet(60, 6)]),
+      [perf('prev', 7, [strengthSet(60, 6, { rpe: 9 })])],
+      R810,
+      benchPress,
+      60,
+    );
+    expect(withRpe.effort.unclearBelowFloor).toBe(true);
+  });
+
+  it('a lone below-floor set at RPE 10 is a real miss', () => {
+    const e = exposure([strengthSet(60, 10), strengthSet(60, 6, { rpe: 10 })]);
+    expect(e.effort).toMatchObject({ earlyStop: false, unclearBelowFloor: false });
+  });
+
+  it('drop-off is measured in capacity: 12 @ 8 (14) → 8 @ 10 (8) is 6, not 4', () => {
+    const e = exposure(
+      [strengthSet(60, 12, { rpe: 8 }), strengthSet(60, 10, { rpe: 9 }), strengthSet(60, 8, { rpe: 10 })],
+      { min: 6, max: 10 },
+    );
+    if (isAbsent(e.dropOff)) {
+      throw new Error('expected a value');
+    }
+    expect(e.dropOff.value).toBe(6);
+  });
+
+  it('without any RPE nothing changes (reps are the capacity)', () => {
+    const e = exposure([strengthSet(60, 12), strengthSet(60, 10), strengthSet(60, 8)], { min: 6, max: 10 });
+    if (isAbsent(e.dropOff)) {
+      throw new Error('expected a value');
+    }
+    expect(e.dropOff.value).toBe(4);
+  });
+});
+
+describe('AC-LPF-12 · working weight is monotone in reps (W-22 (1), W-23)', () => {
+  it('the generated flip (seed 45): extra reps that make 65 recur no longer displace the older 70', () => {
+    // Before W-23 nothing recurred → "highest overall" (70); with +2 reps 65 recurred → 65 won: reps up, weight down.
+    const mk = (extra: number) => [
+      perf('a', 3, [strengthSet(65, 7 + extra), strengthSet(60, 12), strengthSet(60, 6)]),
+      perf('b', 10, [strengthSet(60, 10)]),
+      perf('c', 12, [strengthSet(65, 14), strengthSet(65, 12), strengthSet(65, 10), strengthSet(65, 8)]),
+      perf('d', 22, [strengthSet(70, 6), strengthSet(70, 4)]),
+      perf('e', 30, [strengthSet(70, 16), strengthSet(70, 13)]),
+    ];
+    const ww = (extra: number): number => {
+      const r = computeWorkingWeight(mk(extra), 'today', R810, benchPress, NOW, TZ);
+      return isAbsent(r) ? 0 : r.weight;
+    };
+    expect(ww(2)).toBeGreaterThanOrEqual(ww(0));
+    expect(ww(4)).toBeGreaterThanOrEqual(ww(2));
+  });
+
+  it('a load that recurs but was never reached, with nothing reached in the newest session → the estimate speaks', () => {
+    const perfs = [perf('a', 3, [strengthSet(70, 5)]), perf('b', 9, [strengthSet(70, 6)])];
+    const r = computeWorkingWeight(perfs, 'today', R810, benchPress, NOW, TZ);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect([r.weight, r.estimatedFrom]).toEqual([60, { weight: 70, reps: 5 }]);
+  });
+
+  it('nothing recurs at all (singles, a pyramid) → every reached load is eligible, the highest wins', () => {
+    const perfs = [perf('a', 3, [strengthSet(65, 10)]), perf('b', 9, [strengthSet(70, 10)])];
+    const r = computeWorkingWeight(perfs, 'today', R810, benchPress, NOW, TZ);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(70);
+  });
+});
+
+describe('AC-LPF-12 · indicative load of the newest single performance (ruling G-11)', () => {
+  const ind = (sets: [number, number][], ex = benchPress) =>
+    computeIndicativeLoad(
+      [
+        perf(
+          'a',
+          3,
+          sets.map(([w, r]) => strengthSet(w, r)),
+        ),
+      ],
+      'today',
+      R810,
+      ex,
+      NOW,
+      TZ,
+    );
+
+  it('60×6, 55×7, 45×12 (8–10, step 5) → 50 estimated from 55×7, not the failed opener 60', () => {
+    expect(
+      ind([
+        [60, 6],
+        [55, 7],
+        [45, 12],
+      ]),
+    ).toEqual({ weight: 50, unit: null, estimatedFrom: { weight: 55, reps: 7 } });
+  });
+
+  it('the highest load at which every set reached the floor; the tie on 40/45 goes to the heavier', () => {
+    expect(
+      ind([
+        [40, 10],
+        [40, 10],
+        [45, 8],
+        [45, 8],
+      ]),
+    ).toMatchObject({ weight: 45 });
+    expect(
+      ind([
+        [40, 10],
+        [40, 10],
+        [40, 9],
+      ]),
+    ).toMatchObject({ weight: 40 });
+  });
+
+  it('absent without a performance or a range; n/a for non-strength', () => {
+    expect(computeIndicativeLoad([], 'today', R810, benchPress, NOW, TZ)).toEqual({ absent: 'no completed record' });
+    expect(computeIndicativeLoad([perf('a', 3, [strengthSet(60, 10)])], 'today', null, benchPress, NOW, TZ)).toEqual({
+      absent: 'no rep range',
+    });
+    const plank = { ...benchPress, exerciseType: 'isometric' as const };
+    expect(computeIndicativeLoad([], 'today', R810, plank, NOW, TZ)).toEqual({ absent: 'n/a for isometric' });
+  });
+});
+
+describe('AC-LPF-12 · pre-fatigue is measured against the NEWEST performance (orchestrator ruling 2026-10-01, W-27)', () => {
+  it('the fatigue baseline is the newest session even when the reference is an older like-for-like pick', () => {
+    const newest = perf('new', 3, [strengthSet(60, 20)], {
+      otherSets: [other('Fly', [['chest', 'primary']], daysBefore(3, -30))],
+    });
+    const old = perf('old', 10, [strengthSet(60, 10)]);
+    const f = computeLoadFacts(benchPress, [newest, old], today({ targetReps: '8-10' }), emptyContext, NOW, TZ);
+    if (isAbsent(f.reference) || isAbsent(f.fatigueReference)) {
+      throw new Error('expected values');
+    }
+    expect(f.reference.performance.id).toBe('old'); // like-for-like: 20 reps is outside 8–10 ± 2
+    expect(f.fatigueReference.perMuscle.map(m => m.workingSets)).toEqual([1]); // the newest's one earlier chest set
+  });
+});
+
+describe('AC-LPF-11 · capacity in the working weight and the estimate (run 3, W-30)', () => {
+  const R = { min: 8, max: 10 };
+
+  it('an early stop at a NEW load is judged at that load: 60 ×3 sessions, then 65×9,8,6 @ RPE 7 → working weight 65, early stop', () => {
+    const perfs = [
+      perf('new', 3, [strengthSet(65, 9), strengthSet(65, 8), strengthSet(65, 6, { rpe: 7 })]),
+      perf('a', 8, [strengthSet(60, 10), strengthSet(60, 10), strengthSet(60, 9)]),
+      perf('b', 13, [strengthSet(60, 10), strengthSet(60, 10), strengthSet(60, 9)]),
+    ];
+    const f = computeLoadFacts(benchPress, perfs, today({ targetReps: '8-10' }), emptyContext, NOW, TZ);
+    if (isAbsent(f.workingWeight) || isAbsent(f.lastExposure)) {
+      throw new Error('expected values');
+    }
+    expect(f.workingWeight.weight).toBe(65);
+    expect(f.workingWeight.estimatedFrom).toBeUndefined();
+    expect(f.lastExposure.effort).toMatchObject({ earlyStop: true, set: { reps: 6, rpe: 7 } });
+  });
+
+  it('a single 60×9,8,6 @ RPE 7 is no Epley "failure": capacity 9 reached the floor, so no estimate', () => {
+    const one = [perf('a', 3, [strengthSet(60, 9), strengthSet(60, 8), strengthSet(60, 6, { rpe: 7 })])];
+    expect(computeIndicativeLoad(one, 'today', R, benchPress, NOW, TZ)).toEqual({ weight: 60, unit: null });
+    const two = [...one, perf('b', 9, [strengthSet(60, 10), strengthSet(60, 9)])];
+    const ww = computeWorkingWeight(two, 'today', R, benchPress, NOW, TZ);
+    if (isAbsent(ww)) {
+      throw new Error('expected a value');
+    }
+    expect([ww.weight, ww.estimatedFrom]).toEqual([60, undefined]);
+  });
+
+  it('the estimate reads capacity too: 60×6 @ RPE 9 (capacity 7) still falls short → estimated from its capacity', () => {
+    const perfs = [perf('a', 3, [strengthSet(60, 6, { rpe: 9 })]), perf('b', 9, [strengthSet(60, 6, { rpe: 9 })])];
+    const ww = computeWorkingWeight(perfs, 'today', R, benchPress, NOW, TZ);
+    if (isAbsent(ww)) {
+      throw new Error('expected a value');
+    }
+    expect(ww.estimatedFrom).toEqual({ weight: 60, reps: 6 });
+  });
+
+  it('the estimate targets min(range.min, 10) reps: range 12–15, 100×8 → 95 (a 10-rep target), not 90 (12)', () => {
+    const perfs = [perf('a', 3, [strengthSet(100, 8)]), perf('b', 9, [strengthSet(100, 8)])];
+    const ww = computeWorkingWeight(perfs, 'today', { min: 12, max: 15 }, benchPress, NOW, TZ);
+    if (isAbsent(ww)) {
+      throw new Error('expected a value');
+    }
+    expect(ww.weight).toBe(95);
+  });
+});
+
+describe('AC-LPF-11 · effort rows judge sets at the working weight only (run 3, W-30)', () => {
+  const R = { min: 8, max: 10 };
+
+  it('a performance with no set at the working weight is not judged: 6, 6 at another load → no effort flags', () => {
+    const e = computeLastExposure(perf('x', 3, [strengthSet(65, 6), strengthSet(65, 6)]), [], R, benchPress, 60);
+    expect(e.effort).toEqual({ earlyStop: false, unclearBelowFloor: false, set: null });
+  });
+
+  it('"repeated" needs the same load: a previous below-floor session at ANOTHER load does not make it a real miss', () => {
+    const e = computeLastExposure(
+      perf('x', 3, [strengthSet(60, 6)]),
+      [perf('prev', 7, [strengthSet(65, 6), strengthSet(65, 6)])],
+      R,
+      benchPress,
+      60,
+    );
+    expect(e.effort.unclearBelowFloor).toBe(true);
+  });
+});
+
+describe('AC-LPF-11 · reps in reserve count at most 3 toward capacity (run 4 R3, W-36)', () => {
+  it('capacityOf caps the reserve: RPE 5 adds 3, not 5', () => {
+    expect([capacityOf(3, 5), capacityOf(8, 8), capacityOf(6, 7), capacityOf(6, 4)]).toEqual([6, 10, 9, 9]);
+  });
+
+  it('the reviewer probe: 60×10 ×2 sessions then 60×10,10 + 100×3 @ RPE 5 (8–12) does not make 100 the working weight', () => {
+    const perfs = [
+      perf('new', 3, [strengthSet(60, 10), strengthSet(60, 10), strengthSet(100, 3, { rpe: 5 })]),
+      perf('a', 8, [strengthSet(60, 10), strengthSet(60, 10), strengthSet(60, 10)]),
+      perf('b', 13, [strengthSet(60, 10), strengthSet(60, 10), strengthSet(60, 10)]),
+    ];
+    const ww = computeWorkingWeight(perfs, 'today', { min: 8, max: 12 }, benchPress, NOW, TZ);
+    if (isAbsent(ww)) {
+      throw new Error('expected a value');
+    }
+    expect(ww.weight).toBe(60);
+  });
+});
+
+describe('AC-LPF-12 · step from history — confirmed loads only (run 5 R3, W-37)', () => {
+  const dumbbell = { ...benchPress, equipment: 'dumbbell' as const };
+  const barbell = { ...benchPress, equipment: 'barbell' as const };
+  const step = (loads: number[][], ex = benchPress) => computeEquipmentStep(ex, loads);
+  const UNKNOWN = { absent: 'recorded loads do not fit one step' };
+
+  it('every recorded load on the default grid → the default, whatever the confirmed differences are', () => {
+    expect(step([[45, 55], [60]])).toMatchObject({ step: 5, basis: 'default for machine' });
+    expect(
+      step([
+        [40, 50],
+        [40, 50],
+      ]),
+    ).toMatchObject({ step: 5, basis: 'default for machine' });
+    expect(step([])).toMatchObject({ step: 5, basis: 'default for machine' });
+    expect(step([[]])).toMatchObject({ step: 5, basis: 'default for machine' });
+  });
+
+  it('17.5 / 20 / 22.5 kg dumbbells, each in two sessions → the smallest adjacent difference, 2.5', () => {
+    expect(
+      step(
+        [
+          [17.5, 20, 22.5],
+          [17.5, 20, 22.5],
+        ],
+        dumbbell,
+      ),
+    ).toMatchObject({ step: 2.5, basis: 'from history' });
+  });
+
+  it('lb dumbbells logged in kg, 20.4 / 22.7 twice each → 2.3', () => {
+    expect(
+      step(
+        [
+          [20.4, 22.7],
+          [20.4, 22.7],
+        ],
+        dumbbell,
+      ),
+    ).toMatchObject({ step: 2.3, basis: 'from history' });
+  });
+
+  it('a lone recurring off-grid load (22.7 lb dumbbell in two sessions) → unknown, never a made-up 3.8 / 26.5', () => {
+    expect(step([[22.7], [22.7]], dumbbell)).toEqual(UNKNOWN);
+  });
+
+  it('22.5 once next to 20 ×2 on dumbbells (default 2): 22.5 is off the grid, one confirmed load → unknown', () => {
+    expect(step([[22.5, 20], [20]], dumbbell)).toEqual(UNKNOWN);
+  });
+
+  it('barbell 61.25 ×2 alone → unknown; with 60 ×2 beside it → 1.25', () => {
+    expect(step([[61.25], [61.25]], barbell)).toEqual(UNKNOWN);
+    expect(
+      step(
+        [
+          [61.25, 60],
+          [61.25, 60],
+        ],
+        barbell,
+      ),
+    ).toMatchObject({ step: 1.25, basis: 'from history' });
+  });
+
+  it('the difference must lie in [0.5 kg, 2 × default]: 0.2 and 12 kg gaps are refused', () => {
+    expect(
+      step(
+        [
+          [20.2, 20],
+          [20.2, 20],
+        ],
+        dumbbell,
+      ),
+    ).toEqual(UNKNOWN);
+    expect(
+      step(
+        [
+          [20, 32.2],
+          [20, 32.2],
+        ],
+        dumbbell,
+      ),
+    ).toEqual(UNKNOWN);
+  });
+
+  it('one-off loads never count: 22.7 once and 20.4 once → unknown', () => {
+    expect(step([[22.7], [20.4]], dumbbell)).toEqual(UNKNOWN);
+  });
+
+  it('non-strength and unknown equipment stay n/a', () => {
+    expect(step([[2.5]], { ...benchPress, equipment: 'none' })).toEqual({ absent: 'n/a for none' });
+  });
+
+  it('only the last 8 weeks are read: a 2.5 / 5 kg history older than that does not set the step', () => {
+    const f = computeLoadFacts(
+      lateralRaise,
+      ownerPerfs(lateralRaise.id, LATERAL_RAISE_ROWS, '2026-09-25'),
+      today({ targetReps: '10-12' }),
+      emptyContext,
+      ownerNow('2026-09-25', 70),
+      TZ,
+    );
+    expect(f.equipmentStep).toMatchObject({ step: 5, basis: 'default for machine' });
+  });
+
+  it('the owner lateral raise (5 kg once, 2.5 kg in every session): only 2.5 is confirmed → unknown step', () => {
+    const f = computeLoadFacts(
+      lateralRaise,
+      ownerPerfs(lateralRaise.id, LATERAL_RAISE_ROWS, '2026-09-25'),
+      today({ targetReps: '10-12' }),
+      emptyContext,
+      ownerNow('2026-09-25', 4),
+      TZ,
+    );
+    expect(f.equipmentStep).toEqual(UNKNOWN);
+  });
+
+  it('the owner lateral raise with 5 kg confirmed too (two sessions, explicit working sets) → 2.5', () => {
+    const w = (weight: number, reps: number) => strengthSet(weight, reps, { setKind: 'working' });
+    const perfs = [
+      perf('a', 4, [w(2.5, 12), w(2.5, 11)]),
+      perf('b', 9, [w(5, 10), w(2.5, 10)]),
+      perf('c', 14, [w(5, 10), w(2.5, 10)]),
+    ];
+    const f = computeLoadFacts(lateralRaise, perfs, today({ targetReps: '10-12' }), emptyContext, NOW, TZ);
+    expect(f.equipmentStep).toMatchObject({ step: 2.5, basis: 'from history', capApplies: false });
+  });
+});
+
+describe('AC-LPF-12 · the nearest recorded heavier load (orchestrator ruling, W-38)', () => {
+  const facts = (rows: Parameters<typeof ownerPerfs>[1], ex = lateralRaise, range = '10-12') =>
+    computeLoadFacts(
+      ex,
+      ownerPerfs(ex.id, rows, '2026-09-25'),
+      today({ targetReps: range }),
+      emptyContext,
+      ownerNow('2026-09-25', 4),
+      TZ,
+    );
+
+  it('owner lateral raise: working weight 2.5, the 5 kg set of 09-10 is the nearest recorded heavier load', () => {
+    expect(facts(LATERAL_RAISE_ROWS).heavierRecordedLoad).toBe(5);
+  });
+
+  it('none recorded above the working weight, or farther than 2 × the default step → null', () => {
+    const w = (weight: number) => perf('x', 3, [strengthSet(weight, 10, { setKind: 'working' })]);
+    const f = computeLoadFacts(
+      benchPress,
+      [
+        w(60),
+        { ...w(60), id: 'y', sessionId: 's-y', performedAt: daysBefore(9) },
+        { ...w(80), id: 'z', sessionId: 's-z', performedAt: daysBefore(12) },
+      ],
+      today({ targetReps: '8-12' }),
+      emptyContext,
+      NOW,
+      TZ,
+    );
+    expect(f.heavierRecordedLoad).toBeNull(); // 80 is 20 kg above 60, the machine limit is 10
+  });
+});
+
+describe('AC-LPF-7 · the cap flag follows the equipment kind, whatever the step (run 6 R3, W-39)', () => {
+  const f = (equipment: 'machine' | 'cable' | 'barbell' | 'none') =>
+    computeLoadFacts(
+      { ...benchPress, equipment },
+      [perf('a', 3, [strengthSet(47, 10)]), perf('b', 9, [strengthSet(47, 10)]), perf('c', 15, [strengthSet(52, 10)])],
+      today({ targetReps: '8-12' }),
+      emptyContext,
+      NOW,
+      TZ,
+    );
+
+  it('a machine with an unknown step is uncapped; a cable, a barbell and unknown equipment keep the cap', () => {
+    expect(f('machine').equipmentStep).toEqual({ absent: 'recorded loads do not fit one step' });
+    expect(f('machine').stepCapApplies).toBe(false);
+    expect(f('cable').stepCapApplies).toBe(true);
+    expect(f('barbell').stepCapApplies).toBe(true);
+    expect(f('none').stepCapApplies).toBe(true);
   });
 });

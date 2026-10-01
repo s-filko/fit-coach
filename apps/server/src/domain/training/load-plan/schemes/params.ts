@@ -31,3 +31,23 @@ export const LINEAR_FIXED_REPS: Record<SchemeGoal, number> = {
 export const HIGH_CONFIDENCE_PERFORMANCES = 5;
 /** Below this many performances confidence is `low`. */
 export const LOW_CONFIDENCE_PERFORMANCES = 3;
+
+/** 2-for-2 (NSCA, Baechle & Earle): the last set at the working weight beats the top of the range by at least this
+ *  many reps in two consecutive sessions → add one step. */
+export const TWO_FOR_TWO_SURPLUS = 2;
+
+/** One-session growth: the last set at the working weight beats the top of the range by at least this many reps.
+ *  Reasoned from APRE (Mann et al. 2010, JSCR: the next load follows the reps on the final set, more surplus → more
+ *  load); a caution parameter the recommendation log (R4.4) calibrates. */
+export const ONE_SESSION_SURPLUS = 3;
+
+/** One-session growth needs the last set no harder than this RPE (RIR-based RPE, Helms et al. 2018, Front. Physiol.);
+ *  an absent RPE does not block. */
+export const ONE_SESSION_MAX_RPE = 8;
+
+/** Uneven performance: drop-off at the working weight above the user's usual by more than this many reps. Reasoned
+ *  parameter (the usual drop-off itself is the median of up to 5 earlier performances). */
+export const UNEVEN_ABOVE_USUAL = 3;
+
+/** Uneven performance with no usual to compare with: a drop-off above this many reps. */
+export const UNEVEN_WITHOUT_NORM = 4;

@@ -10,6 +10,10 @@ export function makeFacts(over: Partial<LoadFacts> = {}): LoadFacts {
     reference: { absent: 'not needed by schemes' },
     fatigueReference: { absent: 'not needed by schemes' },
     fatigueToday: { perMuscle: [], fresh: true, minutesIntoSession: { absent: 'n/a' } },
+    recordedLoads: [],
+    heavierRecordedLoad: null,
+    stepCapApplies: true,
+    indicativeLoad: { absent: 'not needed by schemes' },
     workingWeight: { weight: 65, unit: 'kg', performances: 5, warmupsEstimated: false, mixedBasisExcluded: 0 },
     e1rmTrend: {
       newest: 86,
@@ -26,7 +30,10 @@ export function makeFacts(over: Partial<LoadFacts> = {}): LoadFacts {
       warmupsEstimated: false,
       mixedBasisExcluded: 0,
     },
+    repHistory: { absent: 'no rep history' },
+    volume: { absent: 'fewer than 2 performances with a load' },
     lastExposure: {
+      effort: { earlyStop: false, unclearBelowFloor: false, set: null },
       repsVsRange: 'at or above top',
       rpe: { absent: 'no RPE recorded' },
       dropOff: { absent: 'fewer than 2 sets at the top load' },
@@ -34,7 +41,7 @@ export function makeFacts(over: Partial<LoadFacts> = {}): LoadFacts {
     },
     gap: { exercise: { days: 3 }, primaryMuscles: { days: 3 }, anyWorkout: { days: 1 } },
     constraints: { constraints: [], equipment: [] },
-    equipmentStep: { step: 5, unit: 'kg', perHand: false, basis: 'default for machine' },
+    equipmentStep: { step: 5, unit: 'kg', perHand: false, basis: 'default for machine', capApplies: true },
     ...over,
   };
 }
@@ -44,3 +51,19 @@ export const SHORT_CONSTRAINT = {
   durability: 'short' as const,
   text: 'sore shoulder',
 };
+
+/** Rep history at the working weight, newest first: reps per performance (`[]` = another load that day). */
+export function repHistoryOf(
+  weight: number,
+  perfs: { reps: number[]; rpe?: number | null; daysAgo?: number }[],
+): LoadFacts['repHistory'] {
+  return {
+    weight,
+    unit: 'kg',
+    entries: perfs.map((p, i) => ({
+      daysAgo: p.daysAgo ?? 4 + i * 4,
+      repsAtWorkingWeight: p.reps,
+      lastSetRpe: p.rpe ?? null,
+    })),
+  };
+}

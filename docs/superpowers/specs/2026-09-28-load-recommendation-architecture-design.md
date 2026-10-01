@@ -84,13 +84,13 @@ his own history — roadmap R4.2)
 |---|---|---|---|
 | 1 | Data sufficiency | real performances (completed, ≥ 1 working set) in the last 8 weeks and all-time | per metric; below → absent |
 | 2 | Reference performance | the newest comparable performance (same rep range, same place when known): working sets, date, age, RPE, **feedback verbatim** | ≥ 1 |
-| 3 | Fatigue context of a performance | working sets done earlier in the same session on this exercise's primary and secondary muscles, and minutes since session start; computed for the reference performance **and for today** from set timestamps | always |
-| 4 | Working weight | highest load at which every working set hit the scheme's rep range, over the last K performances / 8 weeks — never all-time; among such loads the highest that recurs in ≥ 2 performances wins, the highest overall only when none recurs (load-plan-fixes W-1) | ≥ 2 |
+| 3 | Fatigue context of a performance | working sets done earlier in the same session on this exercise's primary and secondary muscles, and minutes since session start; computed for the newest performance **and for today** from set timestamps (load-plan-fixes W-28; was the reference performance) | always |
+| 4 | Working weight | highest load at which every working set hit the scheme's rep range, over the last K performances / 8 weeks — never all-time; definition now in BR-TRAINING-041 (recurring or reached in the newest performance, judged by capacity, raised to the indirect estimate after a short set; monotone in reps) | ≥ 2 |
 | 5 | e1RM trend | Epley on the best working set per performance, sets ≤ 10 reps only, last 3–5 performances; rising / flat / falling with a tolerance band (≈ ±2.5 %); weeks at current weight; machines low confidence | ≥ 3 |
-| 6 | Last-exposure quality | reps vs range; RPE vs the scheme's target RPE; rep drop-off across sets vs the user's own norm | ≥ 1 (norm ≥ 3) |
+| 6 | Last-exposure quality | of the newest performance, by capacity (BR-TRAINING-043): reps vs range; RPE vs the scheme's target RPE; rep drop-off across sets vs the user's own norm | ≥ 1 (norm ≥ 3) |
 | 7 | Gap | days since this exercise, since its primary muscles, since any real workout; the gap tier (§5) and the return-ladder step | always |
 | 8 | Constraints | `physical_constraint` facts with a `muscle_group` touching the exercise (`short` → growth forbidden; `long_term`/`permanent` → step capped, printed); `equipment` facts printed, never matched | always |
-| 9 | Equipment step | default per `exercises.equipment` (bar 2.5, dumbbell 2 per hand, stack 5) until machine instances exist; the candidate is a multiple of the step from the last used load | always |
+| 9 | Equipment step | default per `exercises.equipment` (bar 2.5, dumbbell 2 per hand, stack 5), or from history (BR-TRAINING-045) until machine instances exist; the candidate is a multiple of the step from the last used load | always |
 
 Pre-U4 legacy sets have no kind: a set below ~60 % of that performance's top load is treated
 as a warm-up, printed as "estimated", flagged as a heuristic in the block.
@@ -101,11 +101,14 @@ as a warm-up, printed as "estimated", flagged as a heuristic in the block.
 
 | Condition | Candidate | Conservative |
 |---|---|---|
-| data insufficient | with a loaded reference: its most-used load (one step lower after a break tier), low confidence (load-plan-fixes W-4); without one: no number; after U11: probe per cold-start protocol | one step lower, never ≤ 0 ("no lighter option", W-2); without a reference: none |
+| data insufficient | with a loaded reference: the newest performance's working-weight value, lowered per the break ladder (BR-TRAINING-036), low confidence; without one: no number; after U11: probe per cold-start protocol | one step lower, never ≤ 0 ("no lighter option", W-2); without a reference: none |
 | `short` constraint on a primary muscle | ≤ working weight; growth forbidden | skip or substitute |
 | gap tier ≥ *return* (§5) | the return ladder's step for this workout | one step lower |
-| today's pre-fatigue **materially greater** than the reference performance's (metric 3 delta) | hold; −1 step if the delta exceeds the user's own drop-off norm | −1 step |
-| last: below range floor | −1 step | −2 steps |
+| today's pre-fatigue **materially greater** than the newest performance's (metric 3 delta, W-28) | hold; −1 step if the delta exceeds the user's own drop-off norm | −1 step |
+| last: below the floor by capacity at the working weight (BR-TRAINING-043) | −1 step | −2 steps |
+| early stop: below the floor by reps, not by capacity (RPE ≤ 7) | hold | −1 step |
+| unclear effort: below the floor, no RPE (first time; the same again at the same load → −1 step) | hold, ask the effort | −1 step |
+| uneven performance: drop-off > the user's usual + 3 (or > 4 with no norm) | hold | −1 step |
 
 Fatigue equal to the reference (same order as last time) adds nothing and prints one line.
 No flat "48 h" penalty: within-session order effects support like-for-like comparison, not a
@@ -114,8 +117,8 @@ reduction.
 **Stage B — active tactic** (layer 2, when present): selects a scheme branch (hold / rep
 progression only / deload branch / technique-first). Never a number.
 
-**Stage C — scheme** (§4): growth decision inside the rep range; step capped at ≈ 10 % of
-the load, otherwise progress by reps; confirming sessions = scheme parameter, default 2
+**Stage C — scheme** (§4): growth decision inside the rep range (BR-TRAINING-042: 2-for-2 and one-session growth); step capped at ≈ 10 % of
+a known total load, otherwise the smallest step with reps reset (no cap where the machine's own weight is unknown); confirming sessions = scheme parameter, default 2
 (ACSM / NSCA "2-for-2"); e1RM flat ≥ 3 performances → plateau printed (a variable change is a
 tactic, Stage B).
 
@@ -172,10 +175,11 @@ from them. A scheme with fixed reps (linear) overrides the goal's range.
 **Contract tests** run every scheme over one fixture set: candidate ≤ working weight + 1 step;
 conservative ≤ candidate; a `short` constraint on a primary muscle forbids growth; insufficient
 data yields the Stage A answer; the candidate is a multiple of the step from the last load;
-no step above the 10 % cap.
+no step above the 10 % cap, except the capped-growth path (the smallest step with reps reset, BR-TRAINING-042) and
+machines, which have no cap.
 
 Initial set: `double_progression`, `linear_progression`. When reps in reserve is recorded:
-`rpe_autoregulation`. Not planned: percentage-based, APRE, DUP. Deload is a shared detector,
+`rpe_autoregulation`. Not planned: percentage-based, APRE (as a scheme — its next-session rule informs one-session growth inside double progression, BR-TRAINING-042), DUP. Deload is a shared detector,
 not a scheme.
 
 ### 4.2 The user's choice (append-only, deterministic provenance) [owner: choose once; coach
@@ -206,7 +210,7 @@ literature puts maximal-strength retention at roughly three weeks). Tiers, names
 `return` (strength largely retained, first workout one step down, confidence one level down)
 · `rebuild` (marked loss; working weight and trend marked stale; start clearly below, ladder
 of several workouts) · `restart` (history shown as dated reference only; cold-start probes;
-confidence low — except Stage A row 1: with a loaded reference the candidate is one step below it, load-plan-fixes W-4). The scheme choice is unaffected by any tier.
+confidence low — except Stage A row 1: with a loaded reference the start is never lighter than a rebuild's, BR-TRAINING-036). The scheme choice is unaffected by any tier.
 
 **Reason (user, once).** Code cannot know why. In the first conversation after a gap at tier
 `rest_with_question` or above, the coach asks once what happened, before any training. The

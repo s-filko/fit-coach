@@ -1560,7 +1560,7 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) tra
           "type": "integer",
         },
         "rpe": {
-          "description": "Rate of Perceived Exertion (1–10).",
+          "description": "Rate of Perceived Exertion (1–10): reps left in reserve = 10 − RPE. Pass it when the user gives it, or maps from their plain answer on how many more reps they could have done (0 → 10, 1–2 → 8, 3+ → 7).",
           "maximum": 10,
           "minimum": 1,
           "type": "number",
