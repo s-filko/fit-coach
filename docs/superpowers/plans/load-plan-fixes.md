@@ -88,6 +88,37 @@ cannot count confirming sessions`). Owner, 2026-10-01: «важно строит
 8. **Volume as context, not a decision input.** The block prints volume load (Σ reps × kg of working sets) of the newest
    performance vs the previous one ("volume +15 % vs last"); no decision reads it.
 
+9. **Indirect working-weight estimate (owner-approved 2026-10-01).** Working weight = max(item-4 value, Epley estimate):
+   the LOWEST e1RM among working sets with reps ≤ 10 (later sets carry fatigue, so it never overestimates; Reynolds 2006 —
+   Epley is reliable below ~10 reps), converted to the load for range-min reps, rounded down to the step; used only when a
+   set fell short of the floor (W-16). Owner cases (8–10): 60×6, 55×8, 45×12 → 55; 60×6, 55×7, 45×12 → 50. The reason
+   names the source set. Safety rows (`below_floor`, uneven) judge the NEWEST performance, like growth (W-13 → decided by
+   the orchestrator 2026-10-01).
+10. **Reps in reserve and asking for effort (owner-approved 2026-10-01).** Source: RIR-based RPE (Helms et al. 2016/2018 —
+    RPE 10 = no reps left, 9 = 1, 8 = 2, ≤ 7 = 3+).
+    - When RPE is recorded, floor / growth / uneven checks use capacity = reps + RIR (8 @ RPE 8 counts as 10). One-session
+      growth still requires RPE ≤ 8 or absent.
+    - A set below the floor with RPE ≤ 7 is an early stop, not a failure: no step down, hold, the `next step:` says "take
+      it to the floor next time — the load is within reach".
+    - No RPE: nothing is inferred; a lone below-floor set without RPE does not trigger a step down on its own (hold, ask).
+    - **Effort prompt:** when `log_set` stores a decision-critical set without RPE (the last set at the working weight; a set
+      below the floor; a set ≥ 3 reps outside the range, the opener included), its tool result carries a hint to ask the
+      effort — once per exercise per session, never when the user already gave RPE or a phrase. Code decides, not the model.
+    - **Plain language (v12):** the coach asks «Сколько ещё раз смог бы сделать на этом весе? 0, 1–2 или 3 и больше?» and
+      maps answers and phrases («еле дожал» → 10, «ещё пару мог» → 8, «боялся без страховки, силы были» → ≤ 7) to `rpe`
+      in `log_set`; uses the term RPE only if the user does; explains RPE in one line only when asked or misused; the
+      preference is kept as a user fact (understands RPE / plain answers) so it is not re-explained.
+11. **Verification against the literature (owner-approved 2026-10-01).** (a) Formula check against published %1RM↔reps
+    tables (NSCA: 10 ≈ 75 %, 8 ≈ 80 %, 6 ≈ 85 %) within a tolerance, and no formula use above 10 reps; (b) a "golden table"
+    of 40–60 situations with expected recommend / conservative / next step, written by an independent Opus agent from the
+    sources and this plan's rule text only (no code access), run as a parametrised test — mismatches go to the owner, not
+    silently "fixed" in the table; mandatory owner cases: unlabelled warm-up 30×12 without RPE before 60; a light back-off
+    30×15 after 60 (neither working weight nor growth); early stop from laziness/fear (6 @ RPE 7, 8 @ RPE 8); descending
+    60/55/45; breaks; 5 kg machine step on a small load; unknown step; per-hand dumbbells; (c) invariants over thousands of
+    seeded generated histories (no new dependency): load > 0; never more than +1 step; no growth at RPE ≥ 9, after a break
+    ≥ return, with a short constraint or material pre-fatigue; more reps at the same load never lowers the recommendation;
+    every row has `next step:`.
+
 ## Out of scope (route, do not fix here)
 
 - Report C3 / U1 (`advised` written from the model's after-the-fact recollection) — BACKLOG (calibration data only).
@@ -108,6 +139,9 @@ cannot count confirming sessions`). Owner, 2026-10-01: «важно строит
 | AC-LPF-6 | 2-for-2: last set ≥ top+2 in two consecutive performances at the working weight → +1 step; one only → hold with the `next step:` condition; `E1RM_MAX_REPS` unchanged | decide unit tests on owner-history fixtures |
 | AC-LPF-7 | One-session growth: last set ≥ top+3, RPE ≤ 8/absent, recovered → +1 step, conservative = working weight, never > 1 step; RPE 9, short constraint, pre-fatigue or gap ≥ return → no jump. Opener at another load does not cause below-floor; uneven drop-off → hold with the reason | decide + metrics unit tests |
 | AC-LPF-8 | Every row prints `next step:`; v12 rules: explain the load, explain a below-recent-best load and when it rises, offer a block step with fallback, in-session one-step hint when a set lands clearly outside the range | block v2 + v12 unit tests; GLM replay transcript |
+| AC-LPF-10 | Estimate cases (60/55/45 ×2) → 55 / 50 with the source set named; safety rows judge the newest performance | decide + metrics unit tests |
+| AC-LPF-11 | RIR capacity in floor/growth/uneven; early stop at RPE ≤ 7 → hold, no step down; effort hint on decision-critical sets without RPE, once per exercise per session; v12 plain-language question and phrase→RPE rules | metrics/decide + log_set unit tests + v12 tests; GLM replay transcript |
+| AC-LPF-12 | Golden table (independent, ≥ 40 cases incl. the owner's mandatory ones) passes or each mismatch is owner-decided; formula-vs-table check; invariants over generated histories hold | parametrised unit tests |
 | AC-LPF-9 | Block prints volume of the newest vs previous performance; no decision changes when only volume changes | block + decide unit tests |
 | AC-LPF-4 | Re-run of the two-workout replay on GLM (local Z.AI only) shows no 0 kg, planks stored as isometric, numbers on the former no-record rows | replay runner in `data/replay-2026-10-01/src/`, report diff |
 
