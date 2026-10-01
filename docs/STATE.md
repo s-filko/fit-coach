@@ -15,6 +15,7 @@ _Generated 2026-10-01 from docs/superpowers/plans/ + git. Never hand-edit; regen
 — none —
 
 **Planned**
+- `cold-start.md` — Cold Start — a load for a user with no history (U11) Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
 
