@@ -108,16 +108,16 @@ describe('load_recommendations log (AC-LP-4)', () => {
     // The snapshot is taken BEFORE the set counts: today has no sets yet.
     expect(row.rendered).toContain('today: fresh (1st exercise)');
     expect(row.advised).toEqual({ load: 80, reps: 10, reason: 'fatigue after triceps' });
-    // One past performance and no plan range: Stage A, insufficient data — no load, a conservative start.
+    // One past performance and no plan range: Stage A, insufficient data — but the reference (82 kg) gives the number.
     expect(row.schemeId).toBe('double_progression');
     expect(row.schemeVersion).toBe('1');
     expect(row.stage).toBe('A');
     expect(row.row).toBe('insufficient_data');
-    expect(row.candidate).toMatchObject({ load: null });
-    expect(row.conservative).toMatchObject({ load: null });
+    expect(row.candidate).toMatchObject({ load: 82 });
+    expect(row.conservative).toMatchObject({ load: 79.5 });
     expect(row.confidence).toBe('low');
     expect(row.gapTier).toBe('rest');
-    expect(row.rendered).toContain('decision: Stage A, insufficient data → conservative start');
+    expect(row.rendered).toContain('decision: Stage A, insufficient data → reference load');
     expect(row.outcome).toBeNull();
     expect(row.completedAt).toBeNull();
   });

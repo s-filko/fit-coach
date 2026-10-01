@@ -116,6 +116,13 @@ function stepsFrom(base: number, load: number | null, step: number | null): numb
   return load === null || step === null ? 0 : Math.round((load - base) / step);
 }
 
+const NO_LIGHTER = 'no lighter option — the load holds';
+
+/** Whether `steps` whole steps down from `from` to `to` were stopped by the floor (the step is known). */
+function floored(c: Ctx, from: number, to: number, steps: number): boolean {
+  return c.step !== null && steps > 0 && -stepsFrom(from, to, c.step) < steps;
+}
+
 function loadBelow(c: Ctx, from: number, steps: number): number {
   let load = from;
   for (let i = 0; i < steps; i++) {
@@ -187,13 +194,16 @@ function gapRow(c: Ctx): Decision | null {
   // Post-restart rungs follow the rebuild ladder, so they are the rebuild row.
   const row: DecisionRow = tier === 'return' ? 'gap_return' : 'gap_rebuild';
   const branch = reasonBranch(c.breakReason);
-  const candidate = loadBelow(c, c.base, c.ladder.stepsBelow + branch.extraSteps);
+  const requested = c.ladder.stepsBelow + branch.extraSteps;
+  const candidate = loadBelow(c, c.base, requested);
   const base = confidenceOf(c.facts, c.missing);
   const reason = `${tier} tier (${basis}; general norm), return workout ${c.ladder.workout} of ${c.ladder.of}`;
   return finish(c, 'A', row, {
     candidate,
     conservative: loadBelow(c, candidate, 1),
-    reason: branch.note ? `${reason}; ${branch.note}` : reason,
+    reason: branch.note
+      ? `${reason}; ${floored(c, c.base, candidate, requested) ? `${branch.note.split(' — ')[0]} — ${NO_LIGHTER}` : branch.note}`
+      : reason,
     confidence: tier === 'rebuild' || tier === 'restart' ? 'low' : oneLevelDown(base),
   });
 }
@@ -224,10 +234,12 @@ function stageA(c: Ctx): Decision | null {
   if (delta !== null && delta >= PRE_FATIGUE_MATERIAL_SETS) {
     const heavy = delta >= PRE_FATIGUE_HEAVY_SETS;
     const candidate = heavy ? loadBelow(c, c.base, 1) : c.base;
+    const stepWord = floored(c, c.base, candidate, 1) ? NO_LIGHTER : 'one step down';
+    const move = heavy ? stepWord : 'hold';
     return finish(c, 'A', 'pre_fatigue', {
       candidate,
       conservative: loadBelow(c, candidate, 1),
-      reason: `${delta} more working sets on a shared muscle today than before the reference — ${heavy ? 'one step down' : 'hold'}`,
+      reason: `${delta} more working sets on a shared muscle today than before the reference — ${move}`,
     });
   }
   const last = c.facts.lastExposure;
@@ -236,10 +248,69 @@ function stageA(c: Ctx): Decision | null {
     return finish(c, 'A', 'below_floor', {
       candidate,
       conservative: loadBelow(c, c.base, 2),
-      reason: 'last exposure below the rep floor — one step down',
+      reason: `last exposure below the rep floor — ${floored(c, c.base, candidate, 1) ? NO_LIGHTER : 'one step down'}`,
     });
   }
   return null;
+}
+
+/** The reference performance's load: the load used in most of its working sets, the heavier on a tie. */
+function referenceLoad(facts: LoadFacts): { weight: number; unit: 'kg' | 'lbs' | null } | null {
+  if (isAbsent(facts.reference)) {
+    return null;
+  }
+  const counts = new Map<number, { count: number; unit: 'kg' | 'lbs' | null }>();
+  for (const { setData } of facts.reference.sets) {
+    if (setData.type === 'strength' && setData.weight !== undefined && setData.weight > 0) {
+      const seen = counts.get(setData.weight);
+      counts.set(setData.weight, { count: (seen?.count ?? 0) + 1, unit: setData.weightUnit ?? null });
+    }
+  }
+  const [best] = [...counts.entries()].sort(([wa, a], [wb, b]) => b.count - a.count || wb - wa);
+  return best ? { weight: best[0], unit: best[1].unit } : null;
+}
+
+/**
+ * Stage A "insufficient data" (no working weight). With a reference that carried a load, the number is the
+ * reference's (one step down after a break tier) with one step lower as the conservative option, low confidence,
+ * and the reason says why; with no reference there is no number and no conservative option.
+ */
+function insufficientData(
+  facts: LoadFacts,
+  reps: Recommendation['reps'],
+  gap: GapTierInfo,
+  meta: Pick<Decision, 'scheme' | 'tactic' | 'gap'>,
+  why: string,
+): Decision {
+  const base = { ...meta, stage: 'A' as const, row: 'insufficient_data' as const, ladder: null };
+  const ref = referenceLoad(facts);
+  if (isAbsent(facts.reference) || ref === null) {
+    return { ...noRecord(reps, [WORKING_WEIGHT]), ...base, outcome: 'no number', reason: NO_RECORD_REASON };
+  }
+  const step = stepOf(facts);
+  const afterBreak = gap.tier === 'return' || gap.tier === 'rebuild' || gap.tier === 'restart';
+  const candidate = afterBreak ? stepDown(ref.weight, step) : ref.weight;
+  const rec = (load: number): Recommendation => ({ load, unit: ref.unit, reps });
+  const tierName = `${gap.tier} tier (${gap.days ?? 0} d since ${gap.basis ?? 'last workout'}, general norm)`;
+  const heldByFloor = afterBreak && step !== null && candidate === ref.weight;
+  const tier = !afterBreak ? '' : `; ${tierName} — ${heldByFloor ? NO_LIGHTER : 'one step below it'}`;
+  const stepNote = step === null ? [`${EQUIPMENT_STEP} missing — steps cannot be computed`] : [];
+  let outcome = 'reference load';
+  if (afterBreak) {
+    outcome = heldByFloor ? 'reference load, no lighter option' : 'one step below the reference';
+  }
+  return {
+    ...base,
+    outcome,
+    candidate: rec(candidate),
+    conservative: rec(stepDown(candidate, step)),
+    reason: [
+      `${why}; last performance ${ref.weight} ${ref.unit ?? 'kg'} ${facts.reference.daysAgo} d ago used as the reference${tier}`,
+      ...stepNote,
+    ].join('; '),
+    confidence: 'low',
+    missing: step === null ? [WORKING_WEIGHT, EQUIPMENT_STEP] : [WORKING_WEIGHT],
+  };
 }
 
 export function decide(facts: LoadFacts, input: DecideInput): Decision {
@@ -250,15 +321,7 @@ export function decide(facts: LoadFacts, input: DecideInput): Decision {
   const meta = { scheme: { id: scheme.id, version: scheme.version }, tactic: 'none active' as const, gap };
 
   if (isAbsent(facts.workingWeight)) {
-    return {
-      ...noRecord(reps, [WORKING_WEIGHT]),
-      ...meta,
-      stage: 'A',
-      row: 'insufficient_data',
-      outcome: 'conservative start',
-      reason: NO_RECORD_REASON,
-      ladder: null,
-    };
+    return insufficientData(facts, reps, gap, meta, facts.workingWeight.absent);
   }
   const ctx: Ctx = {
     facts,

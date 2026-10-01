@@ -2,11 +2,11 @@
  * REPRODUCTION (RED) — AC-LSR-1 / BUG-023. Runs only via an explicit --testMatch; promoted to
  * log-set.tool.unit.test.ts when the fix lands.
  *
- * The log_set description documents exactly three set shapes: strength (reps + weight),
- * bodyweight ("reps only") and cardio duration ("durationSeconds", for bike/elliptical). A timed
- * hold — a 45-second plank — has no documented shape, so a model following the description sends
- * the seconds as `reps`, and the tool stores "45 reps". Live evidence: session fa293e20, 2026-09-21
- * (Plank 45 / Side Plank 30 stored as functional_reps).
+ * Since load-plan-fixes (BR-TRAINING-040) a hold sent as `durationSeconds` on an isometric exercise
+ * is stored as `isometric`, and the description says hold time = durationSeconds, never reps. This
+ * probe stays red by design (W-3): a hold sent as `reps` (a 45-second plank as "45 reps") is still
+ * stored as given. Live evidence: session fa293e20, 2026-09-21 (Plank 45 / Side Plank 30 stored as
+ * functional_reps).
  */
 import type { SessionSet } from '@domain/training/types';
 

@@ -226,6 +226,30 @@ describe('log-set.tool — log_set', () => {
   });
 });
 
+describe('log-set.tool — isometric holds (AC-LPF-2)', () => {
+  it('tells the model to log a plank / side plank hold as durationSeconds, never reps', () => {
+    const { tools } = makeDeps(makeTrainingService());
+    const { description } = tools[0] as unknown as { description: string };
+    expect(description).toMatch(/isometric holds \(plank, side plank/);
+    expect(description).toMatch(/durationSeconds.*SECONDS.*never reps/);
+  });
+
+  it('passes a hold as a duration set; the service re-keys it by the exercise type', async () => {
+    const trainingService = makeTrainingService();
+    trainingService.getSessionDetails.mockResolvedValue(null);
+    trainingService.logSetWithContext.mockResolvedValue({
+      set: makeSessionSet({ setNumber: 1 }),
+      setNumber: 1,
+    });
+    const { tools, config } = makeDeps(trainingService);
+    await tools[0].invoke({ exerciseName: 'Plank', durationSeconds: 45 }, config);
+    expect(trainingService.logSetWithContext).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({ exerciseName: 'Plank', setData: { type: 'cardio_duration', duration: 45 } }),
+    );
+  });
+});
+
 describe('log-set.tool — auto-complete notice (ADR-0011 Fix 1.3)', () => {
   it('should include auto-complete notice when exercise switches', async () => {
     const trainingService = makeTrainingService();

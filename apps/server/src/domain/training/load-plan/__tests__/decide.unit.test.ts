@@ -1,4 +1,4 @@
-import type { E1rmTrendFact, FatigueFact, LoadFacts } from '../../load-facts';
+import type { E1rmTrendFact, FatigueFact, LoadFacts, PerformanceInput, SetInput } from '../../load-facts';
 import { decide, type Decision } from '../decide';
 import { getScheme } from '../schemes';
 import { SHORT_CONSTRAINT, makeFacts } from './fixtures';
@@ -39,7 +39,7 @@ describe('AC-LP-2 · Stage A — safety rows', () => {
     const d = run(makeFacts({ workingWeight: { absent: 'insufficient' } }));
     expect(d).toMatchObject({ stage: 'A', row: 'insufficient_data' });
     expect(d.candidate.load).toBeNull();
-    expect(d.reason).toBe('no record — conservative start');
+    expect(d.reason).toBe('no record, no reference load');
   });
 
   it('short constraint → hold at most the working weight, conservative one step lower', () => {
@@ -188,7 +188,7 @@ describe('AC-LP-2 · Stage C — scheme', () => {
     expect(run(makeFacts()).outcome).toBe('one step up');
     expect(run(makeFacts({ lastExposure: exposure('in range') })).outcome).toBe('hold');
     expect(run(makeFacts({ lastExposure: exposure('below floor') })).outcome).toBe('one step down');
-    expect(run(makeFacts({ workingWeight: { absent: 'x' } })).outcome).toBe('conservative start');
+    expect(run(makeFacts({ workingWeight: { absent: 'x' } })).outcome).toBe('no number');
   });
 
   it('is pure', () => {
@@ -282,5 +282,216 @@ describe('AC-LP-6 · Task 4 — return ladder from history and the break reason'
 
   it('the reason never reaches a tier below the ladder (rest stays rest)', () => {
     expect(run(makeFacts({ gap: gapOf(3) }), { breakReason: 'illness' }).stage).toBe('C');
+  });
+});
+
+describe('AC-LPF-1 · the step-down floor — no candidate or conservative is ever ≤ 0', () => {
+  // Lateral Raise Machine shape (replay C1): working weight 2.5 kg, machine step 5 kg.
+  const lateral = (over: Partial<LoadFacts> = {}): LoadFacts =>
+    makeFacts({
+      workingWeight: { weight: 2.5, unit: 'kg', performances: 4, warmupsEstimated: false, mixedBasisExcluded: 0 },
+      ...over,
+    });
+
+  it('gap rebuild ladder with a step larger than the load keeps a positive candidate and conservative', () => {
+    // 207 d gap before the last workout: the restart ladder's first rung after the cold start is a rebuild rung.
+    const d = run(lateral(), {
+      ladder: {
+        tier: 'restart',
+        gapDays: 207,
+        gapStart: new Date('2026-02-20T00:00:00Z'),
+        gapEnd: new Date('2026-09-10T00:00:00Z'),
+        workoutsSince: 1,
+        performancesSince: 1,
+      },
+    });
+    expect(d.row).toBe('gap_rebuild');
+    expect(d.candidate.load).toBeGreaterThan(0);
+    expect(d.conservative.load).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['return tier', gapOf(15)],
+    ['rebuild tier', gapOf(60)],
+  ])('%s with reason unknown (one extra step) stays positive', (_n, gap) => {
+    const d = run(lateral({ gap }), { breakReason: 'unknown' });
+    expect(d.candidate.load).toBeGreaterThan(0);
+    expect(d.conservative.load).toBeGreaterThan(0);
+  });
+
+  it('short constraint, below floor and pre-fatigue rows stay positive', () => {
+    const constrained = run(lateral({ constraints: { constraints: [SHORT_CONSTRAINT], equipment: [] } }));
+    expect(constrained.conservative.load).toBeGreaterThan(0);
+    const below = run(lateral({ lastExposure: exposure('below floor') }));
+    expect(below.candidate.load).toBeGreaterThan(0);
+    expect(below.conservative.load).toBeGreaterThan(0);
+    const heavy = run(lateral({ fatigueReference: fatigue(0, true), fatigueToday: fatigue(6, false) }));
+    expect(heavy.candidate.load).toBeGreaterThan(0);
+    expect(heavy.conservative.load).toBeGreaterThan(0);
+  });
+
+  it('scheme hold (no growth) conservative stays positive', () => {
+    const d = run(lateral({ lastExposure: exposure('in range') }));
+    expect(d.conservative.load).toBeGreaterThan(0);
+  });
+
+  it('a step that still leaves a positive load is taken as before', () => {
+    const d = run(makeFacts({ gap: gapOf(15) }));
+    expect([d.candidate.load, d.conservative.load]).toEqual([60, 55]);
+  });
+});
+
+describe('AC-LPF-3 · insufficient data with a reference still names a number', () => {
+  const PERFORMED = new Date('2026-09-25T10:00:00Z');
+  const setOf = (weight: number, reps: number): SetInput => ({
+    setData: { type: 'strength', reps, weight, weightUnit: 'kg' },
+    setKind: 'working',
+    rpe: null,
+    userFeedback: null,
+    createdAt: PERFORMED,
+  });
+  /** The `reference:` line's performance — e.g. Chest-Supported Row, 20 kg, replay U2/U6. */
+  const reference = (sets: SetInput[], daysAgo = 4): LoadFacts['reference'] => ({
+    performance: { id: 'p1', sessionId: 's1', performedAt: PERFORMED, sets } as unknown as PerformanceInput,
+    daysAgo,
+    sets,
+    likeForLike: true,
+    warmupsEstimated: false,
+    rpe: [],
+    feedback: [],
+  });
+  const few = { absent: 'insufficient: 1 performances / 8 wk' };
+  const row = (sets: SetInput[], over: Partial<LoadFacts> = {}): LoadFacts =>
+    makeFacts({ workingWeight: few, reference: reference(sets), ...over });
+
+  it('prints the reference load as the candidate and one step down as the conservative, low confidence, with the reason', () => {
+    const d = run(row([setOf(20, 10), setOf(20, 10), setOf(20, 9)]));
+    expect(d).toMatchObject({ stage: 'A', row: 'insufficient_data' });
+    expect([d.candidate.load, d.conservative.load]).toEqual([20, 15]);
+    expect(d.candidate.unit).toBe('kg');
+    expect(d.confidence).toBe('low');
+    expect(d.reason).toContain('insufficient: 1 performances / 8 wk');
+    expect(d.reason).toContain('last performance');
+    expect(d.reason).toContain('4 d ago');
+  });
+
+  it('the reference load is the load used in most working sets (heavier on a tie)', () => {
+    const d = run(row([setOf(50, 10), setOf(55, 8), setOf(55, 8)]));
+    expect(d.candidate.load).toBe(55);
+    const tie = run(row([setOf(50, 10), setOf(55, 8)]));
+    expect(tie.candidate.load).toBe(55);
+  });
+
+  it('the conservative is floored — a step larger than the reference load leaves no lighter option, never 0', () => {
+    const d = run(row([setOf(2.5, 12), setOf(2.5, 12)]));
+    expect([d.candidate.load, d.conservative.load]).toEqual([2.5, 2.5]);
+  });
+
+  it('a break tier starts one step below the reference and says so', () => {
+    const d = run(row([setOf(60, 8), setOf(60, 8)], { gap: gapOf(169) }));
+    expect([d.candidate.load, d.conservative.load]).toEqual([55, 50]);
+    expect(d.reason).toContain('restart tier');
+  });
+
+  it('with no reference at all there is no number and no conservative', () => {
+    const d = run(makeFacts({ workingWeight: few, reference: { absent: 'no completed record' } }));
+    expect(d.candidate.load).toBeNull();
+    expect(d.conservative.load).toBeNull();
+    expect(d.reason).toBe('no record, no reference load');
+  });
+
+  it('a reference with no loaded set (bodyweight) gives no number either', () => {
+    const bodyweight: SetInput = { ...setOf(0, 8), setData: { type: 'strength', reps: 8, weight: 0 } };
+    expect(run(row([bodyweight])).candidate.load).toBeNull();
+  });
+});
+
+describe('LPF review · a floored step-down never claims a step was taken', () => {
+  const lateral = (over: Partial<LoadFacts> = {}): LoadFacts =>
+    makeFacts({
+      workingWeight: { weight: 2.5, unit: 'kg', performances: 4, warmupsEstimated: false, mixedBasisExcluded: 0 },
+      ...over,
+    });
+  const claimsStep = /one step (down|lower|below)/;
+
+  it('pre-fatigue (heavy) floored: the reason says no lighter option, hold', () => {
+    const d = run(lateral({ fatigueReference: fatigue(0, true), fatigueToday: fatigue(6, false) }));
+    expect(d.row).toBe('pre_fatigue');
+    expect(d.candidate.load).toBe(2.5);
+    expect(d.reason).not.toMatch(claimsStep);
+    expect(d.reason).toContain('no lighter option');
+  });
+
+  it('pre-fatigue (heavy) with room: still "one step down"', () => {
+    const d = run(makeFacts({ fatigueReference: fatigue(0, true), fatigueToday: fatigue(6, false) }));
+    expect(d.reason).toContain('one step down');
+  });
+
+  it('below floor floored: the reason says no lighter option, hold', () => {
+    const d = run(lateral({ lastExposure: exposure('below floor') }));
+    expect(d.row).toBe('below_floor');
+    expect(d.reason).not.toMatch(claimsStep);
+    expect(d.reason).toContain('no lighter option');
+  });
+
+  it('gap ladder with reason unknown, floored: no "one step lower" claim', () => {
+    const d = run(lateral({ gap: gapOf(15) }), { breakReason: 'unknown' });
+    expect(d.candidate.load).toBe(2.5);
+    expect(d.reason).not.toMatch(claimsStep);
+    expect(d.reason).toContain('no lighter option');
+  });
+
+  it('insufficient data after a break tier, floored: outcome and reason do not claim a step', () => {
+    const set = (w: number): SetInput => ({
+      setData: { type: 'strength', reps: 10, weight: w, weightUnit: 'kg' },
+      setKind: 'working',
+      rpe: null,
+      userFeedback: null,
+      createdAt: new Date('2026-09-25T10:00:00Z'),
+    });
+    const reference = {
+      performance: { id: 'p', sessionId: 's', performedAt: new Date(), sets: [set(2.5)] },
+      daysAgo: 60,
+      sets: [set(2.5), set(2.5)],
+      likeForLike: true,
+      warmupsEstimated: false,
+      rpe: [],
+      feedback: [],
+    } as unknown as LoadFacts['reference'];
+    const d = run(makeFacts({ workingWeight: { absent: 'insufficient' }, reference, gap: gapOf(60) }));
+    expect(d.candidate.load).toBe(2.5);
+    expect(d.outcome).not.toMatch(claimsStep);
+    expect(d.reason).not.toMatch(claimsStep);
+    expect(d.reason).toContain('no lighter option');
+  });
+
+  it('insufficient data with an unknown step: the equipmentStep note, missing, and no lighter-option claim', () => {
+    const set: SetInput = {
+      setData: { type: 'strength', reps: 10, weight: 20, weightUnit: 'kg' },
+      setKind: 'working',
+      rpe: null,
+      userFeedback: null,
+      createdAt: new Date(),
+    };
+    const reference = {
+      performance: { id: 'p', sessionId: 's', performedAt: new Date(), sets: [set] },
+      daysAgo: 4,
+      sets: [set],
+      likeForLike: true,
+      warmupsEstimated: false,
+      rpe: [],
+      feedback: [],
+    } as unknown as LoadFacts['reference'];
+    const d = run(
+      makeFacts({ workingWeight: { absent: 'insufficient' }, reference, equipmentStep: { absent: 'unknown' } }),
+    );
+    expect(d.missing).toContain('equipmentStep');
+    expect(d.reason).toContain('equipmentStep missing — steps cannot be computed');
+    expect(d.reason).not.toContain('no lighter option');
+  });
+
+  it('no reference: the outcome says no number, never "conservative start"', () => {
+    const d = run(makeFacts({ workingWeight: { absent: 'insufficient' }, reference: { absent: 'none' } }));
+    expect(d.outcome).toBe('no number');
   });
 });

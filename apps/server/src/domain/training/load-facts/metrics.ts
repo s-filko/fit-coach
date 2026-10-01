@@ -34,6 +34,7 @@ import type {
 
 const WINDOW_DAYS = 56;
 const WORKING_WEIGHT_K = 5;
+const RECURRING_PERFORMANCES = 2;
 const E1RM_WINDOW = 5;
 const E1RM_MIN_PERFORMANCES = 3;
 const E1RM_MAX_REPS = 10;
@@ -324,17 +325,23 @@ export function computeWorkingWeight(
   };
 }
 
+/**
+ * The highest load at which every set of a performance reached the floor — among the loads that RECUR in at least
+ * `RECURRING_PERFORMANCES` of the performances, so one stray heavier set in a single older session (replay C1: a
+ * lone 5 kg set before four 2.5 kg sessions) is not the working weight. Nothing recurs → the highest load, as before.
+ */
 function qualifyingLoad(used: LoadPerformance[], floor: number): LoadedSet | null {
-  let best: LoadedSet | null = null;
-  for (const r of used) {
-    for (const l of r.loads) {
-      const sameLoad = r.loads.filter(o => o.weight === l.weight);
-      if (sameLoad.every(o => o.reps >= floor) && (!best || l.weight > best.weight)) {
-        best = l;
-      }
-    }
-  }
-  return best;
+  const reached = used.map(r =>
+    r.loads.filter(l => r.loads.filter(o => o.weight === l.weight).every(o => o.reps >= floor)),
+  );
+  const highest = (sets: LoadedSet[]): LoadedSet | null =>
+    sets.reduce<LoadedSet | null>((best, l) => (!best || l.weight > best.weight ? l : best), null);
+  const recurring = reached
+    .flat()
+    .filter(
+      l => reached.filter(perfSets => perfSets.some(o => o.weight === l.weight)).length >= RECURRING_PERFORMANCES,
+    );
+  return highest(recurring) ?? highest(reached.flat());
 }
 
 // --- Metric 5 ---

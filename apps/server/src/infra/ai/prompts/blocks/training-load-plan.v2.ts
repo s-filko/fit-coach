@@ -133,6 +133,18 @@ function breakLine(entry: LoadPlanEntry, d: Decision): string[] {
   return [`break: ${parts.join(' · ')}`];
 }
 
+/** " — 2.5 kg lower", or " — no lighter option" when the floored step-down left the conservative load unchanged. */
+function lowerNote(d: Decision, lower: number): string {
+  if (lower > 0) {
+    return ` — ${lower} ${d.conservative.unit ?? DEFAULT_UNIT} lower`;
+  }
+  // Without a known step the equal load is "steps cannot be computed" (named in the reason), not a floor.
+  const stepKnown = !d.missing.includes('equipmentStep');
+  return stepKnown && d.candidate.load !== null && d.candidate.load === d.conservative.load
+    ? ' — no lighter option'
+    : '';
+}
+
 function decisionLines(
   entry: LoadPlanEntry,
   d: Decision | null,
@@ -161,8 +173,8 @@ function decisionLines(
     `tactic: ${d.tactic}`,
     ...breakLine(entry, d),
     `decision: Stage ${d.stage}, ${ROW_LABELS_V2[d.row]} → ${d.outcome}`,
-    `recommend: ${rec === null ? d.reason : `${rec} — ${d.reason}`}`,
-    `conservative: ${cons === null ? d.reason : `${cons}${lower > 0 ? ` — ${lower} ${d.conservative.unit ?? DEFAULT_UNIT} lower` : ''}`}`,
+    `recommend: ${rec === null ? `no number — ${d.reason}` : `${rec} — ${d.reason}`}`,
+    `conservative: ${cons === null ? `no conservative option — ${d.reason}` : `${cons}${lowerNote(d, lower)}`}`,
     confidenceText(entry, d),
   ];
 }

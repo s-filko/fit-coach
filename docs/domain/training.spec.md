@@ -33,16 +33,17 @@ Business Rules
 	• BR-TRAINING-013: Retrospective logging creates sessions with past timestamps, status='completed'
 	• BR-TRAINING-030: A set is retro-logged (stamped last activity + 5 min, activity not advanced) only if the in_progress session is idle > 2 h AND already holds sets (owner 2026-09-30, BUG-043)
 	• BR-TRAINING-031: The first set of a set-less in_progress session idle > 2 h is live: stamped now, and it re-anchors started_at to that set (late start, BUG-043)
-	• BR-TRAINING-036: With LOAD_PLAN_SUGGESTION on, LOAD PLAN names a load per strength exercise — `recommend:` and a lighter `conservative:`, each with its reason — produced in a fixed order (Stage A safety rows → Stage B tactic → Stage C progression scheme) with the deciding stage and row printed; the load is a suggestion, the coach decides by judgement and states its reason when it departs (design Principle 6 as amended by O1; plan load-plan, recorded 2026-10-01 for owner review)
+	• BR-TRAINING-036: With LOAD_PLAN_SUGGESTION on, LOAD PLAN names a load per strength exercise — `recommend:` and a `conservative:` one step lighter, each with its reason; when one step down would reach ≤ 0 kg the load holds and the block says "no lighter option"; with insufficient data but a last performance that carried a load, `recommend:` is that performance's load (one step lower after a break tier) at low confidence; with no such reference the block names no number and no conservative option, and the coach does not invent them (amended by plan load-plan-fixes, owner-approved 2026-10-01) — produced in a fixed order (Stage A safety rows → Stage B tactic → Stage C progression scheme) with the deciding stage and row printed; the load is a suggestion, the coach decides by judgement and states its reason when it departs (design Principle 6 as amended by O1; plan load-plan, recorded 2026-10-01 for owner review)
 	• BR-TRAINING-037: With LOAD_PLAN_SUGGESTION on, the first working set of an exercise in a session writes one load_recommendations row (the entry as rendered, the decision, the coach's advised load); completing the exercise fills its outcome; the table is calibration data and never read back into a prompt (plan load-plan D7)
 	• BR-TRAINING-038: With LOAD_PLAN_BREAKS on, a gap since the last workout is classified into general-norm tiers (rest ≤ 7 d, rest_with_question > 7 d, return ≥ 14 d, rebuild ≥ 28 d, restart ≥ 84 d); from rest_with_question on, the reason is asked once per break (the answer is a `break` fact, no answer = unknown), and loads follow a return ladder that advances on a workout in range with reserve (plan load-plan D5, D9)
 	• BR-TRAINING-039: With LOAD_PLAN_PLANNER_REBIND and LOAD_PLAN_SUGGESTION both on (rebind alone has no effect), session planning writes no targetWeight and WORKOUT OVERVIEW / the active-plan block show sets × reps only; loads come from LOAD PLAN during training (plan load-plan D10)
+	• BR-TRAINING-040: log_set: a hold time (`durationSeconds`) on an exercise of type isometric is stored as an isometric set with its duration; cardio is unchanged; a reps-only call on an isometric exercise is stored as given (plan load-plan-fixes W-3, owner-approved 2026-10-01)
 
 Ports (apps/server/src/domain/training/ports/)
 	• ITrainingService (TRAINING_SERVICE_TOKEN)
 		• startSession(userId, dto): WorkoutSession [BR-TRAINING-004][BR-TRAINING-005]
 		• addExerciseToSession(sessionId, dto): SessionExercise
-		• logSet(exerciseId, dto): SessionSet [BR-TRAINING-006]
+		• logSet(exerciseId, dto): SessionSet [BR-TRAINING-006, BR-TRAINING-040]
 		• completeSession(sessionId, duration?): WorkoutSession [BR-TRAINING-008]
 		• getTrainingHistory(userId, limit?): WorkoutSessionWithDetails[]
 		• getSessionDetails(sessionId): WorkoutSessionWithDetails | null [BR-TRAINING-002]

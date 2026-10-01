@@ -180,7 +180,8 @@ apps/server/src/
           session_planning/v1.ts     #
           training/v1.ts             #   DIRECTIVES_WITHOUT_IDENTITY_V1 (render helpers live in blocks/ since the context-budget plan)
           training/v11.ts / session_planning/v5.ts
-                                     #   rebound planner (load-plan Task 5b): the coach starts from the LOAD PLAN suggestion, the planner writes no `targetWeight` — selected only with LOAD_PLAN_PLANNER_REBIND and LOAD_PLAN_SUGGESTION (`graph/phases/planner-rebind.ts`)
+                                     #   rebound planner (load-plan Task 5b): the coach starts from the LOAD PLAN suggestion, the planner writes no `targetWeight` (v11 kept registered, superseded by v12)
+          training/v12.ts            #   v11 + no invented conservative option / "no lighter option" rules (load-plan-fixes) — selected with LOAD_PLAN_PLANNER_REBIND and LOAD_PLAN_SUGGESTION (`graph/phases/planner-rebind.ts`)
           */v2.ts                    #   current for chat/plan_creation/session_planning/training: v1 minus the domain sections (now block 3); registration has no v2
         blocks/                      # Injected fragments that are neither phase prompt nor directive
           types.ts                   #   ContextBlock<D> (D-A): pure renderer over the phase's loaded data, optional `depths`

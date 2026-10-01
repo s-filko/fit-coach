@@ -9,7 +9,8 @@ export const EQUIPMENT_STEP = 'equipmentStep';
 export const E1RM_TREND = 'e1rmTrend';
 export const LAST_EXPOSURE = 'lastExposure';
 
-export const NO_RECORD_REASON = 'no record — conservative start';
+/** Printed when there is no number to give: no working weight AND no reference load — the coach invents no option. */
+export const NO_RECORD_REASON = 'no record, no reference load';
 
 export function targetReps(facts: LoadFacts, params: SchemeParams): RepRange {
   if (params.fixedReps !== undefined) {
@@ -21,7 +22,7 @@ export function targetReps(facts: LoadFacts, params: SchemeParams): RepRange {
   return { ...params.repRange };
 }
 
-/** Stage A "data insufficient" answer: no load, the coach starts conservatively. */
+/** Stage A "data insufficient" answer with nothing to base a number on: no load, no conservative option. */
 export function noRecord(reps: RepRange, missing: string[]): SchemeOutput {
   const rec: Recommendation = { load: null, unit: null, reps };
   return { candidate: rec, conservative: { ...rec }, reason: NO_RECORD_REASON, confidence: 'low', missing };
@@ -58,8 +59,13 @@ export function stepUp(base: number, step: number | null, capPct: number): Growt
   return { kind: 'grow', load: roundLoad(base + step) };
 }
 
+/**
+ * One step lighter, floored: when the step would take the load to zero or below there is no lighter option,
+ * so the load itself is returned — a candidate or conservative is never ≤ 0. No known step = no step.
+ */
 export function stepDown(load: number, step: number | null): number {
-  return roundLoad(Math.max(0, load - (step ?? 0)));
+  const lighter = roundLoad(load - (step ?? 0));
+  return lighter > 0 ? lighter : load;
 }
 
 export function stepOf(facts: LoadFacts): number | null {

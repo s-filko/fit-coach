@@ -85,7 +85,7 @@ his own history — roadmap R4.2)
 | 1 | Data sufficiency | real performances (completed, ≥ 1 working set) in the last 8 weeks and all-time | per metric; below → absent |
 | 2 | Reference performance | the newest comparable performance (same rep range, same place when known): working sets, date, age, RPE, **feedback verbatim** | ≥ 1 |
 | 3 | Fatigue context of a performance | working sets done earlier in the same session on this exercise's primary and secondary muscles, and minutes since session start; computed for the reference performance **and for today** from set timestamps | always |
-| 4 | Working weight | highest load at which every working set hit the scheme's rep range, over the last K performances / 8 weeks — never all-time | ≥ 2 |
+| 4 | Working weight | highest load at which every working set hit the scheme's rep range, over the last K performances / 8 weeks — never all-time; among such loads the highest that recurs in ≥ 2 performances wins, the highest overall only when none recurs (load-plan-fixes W-1) | ≥ 2 |
 | 5 | e1RM trend | Epley on the best working set per performance, sets ≤ 10 reps only, last 3–5 performances; rising / flat / falling with a tolerance band (≈ ±2.5 %); weeks at current weight; machines low confidence | ≥ 3 |
 | 6 | Last-exposure quality | reps vs range; RPE vs the scheme's target RPE; rep drop-off across sets vs the user's own norm | ≥ 1 (norm ≥ 3) |
 | 7 | Gap | days since this exercise, since its primary muscles, since any real workout; the gap tier (§5) and the return-ladder step | always |
@@ -101,7 +101,7 @@ as a warm-up, printed as "estimated", flagged as a heuristic in the block.
 
 | Condition | Candidate | Conservative |
 |---|---|---|
-| data insufficient | until U11: "no record — conservative start" as today; after U11: probe per cold-start protocol | lighter probe |
+| data insufficient | with a loaded reference: its most-used load (one step lower after a break tier), low confidence (load-plan-fixes W-4); without one: no number; after U11: probe per cold-start protocol | one step lower, never ≤ 0 ("no lighter option", W-2); without a reference: none |
 | `short` constraint on a primary muscle | ≤ working weight; growth forbidden | skip or substitute |
 | gap tier ≥ *return* (§5) | the return ladder's step for this workout | one step lower |
 | today's pre-fatigue **materially greater** than the reference performance's (metric 3 delta) | hold; −1 step if the delta exceeds the user's own drop-off norm | −1 step |
@@ -206,7 +206,7 @@ literature puts maximal-strength retention at roughly three weeks). Tiers, names
 `return` (strength largely retained, first workout one step down, confidence one level down)
 · `rebuild` (marked loss; working weight and trend marked stale; start clearly below, ladder
 of several workouts) · `restart` (history shown as dated reference only; cold-start probes;
-confidence low). The scheme choice is unaffected by any tier.
+confidence low — except Stage A row 1: with a loaded reference the candidate is one step below it, load-plan-fixes W-4). The scheme choice is unaffected by any tier.
 
 **Reason (user, once).** Code cannot know why. In the first conversation after a gap at tier
 `rest_with_question` or above, the coach asks once what happened, before any training. The

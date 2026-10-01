@@ -82,14 +82,14 @@ or is inert for the kind of diff under review.
   should say "a durable spec the plan reserves to the orchestrator", or name the list, so the
   reviewer is not choosing between its mandate and the plan.
   Runs: llm-io-audit-trail (2026-09-22).
-- [×1] R3's mandate says "verification commands were run ... if the evidence is absent, that is
+- [×2] R3's mandate says "verification commands were run ... if the evidence is absent, that is
   blocking", but two tasks here state verifications only the orchestrator can perform (a dev
   deploy, a manual dev run), and `SUPERPOWERS_INTEGRATION.md:176` itself sequences AC verification
   after merge and deploy. A pre-merge reviewer cannot satisfy the rule by any available means, so
   those findings are structural rather than closable on the branch. The skill should say what
   evidence a deploy-gated verification needs — a recorded dry run, an explicit deferral line in
   the plan, or a scheduled post-deploy re-review.
-  Runs: llm-io-audit-trail (2026-09-22).
+  Runs: llm-io-audit-trail (2026-09-22), load-plan-fixes (2026-10-01, R3: a post-deploy replay AC; proposed "an AC verified only after deploy is marked `post-deploy` in the AC table; close-out needs its pre-deploy proxies evidenced").
 - [×1] R1's "Declared boundaries" check (ADR-0013: domain must not import `@langchain/*`,
   INV-CONV-004) had zero instances to bind to on a test-only diff — every new file sat in infra
   `__tests__` or `tests/integration`. The zone does not say whether a boundary check with no
@@ -223,11 +223,13 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   reintroduce the zero-token bug. No zone's mandate covers "plan step-code vs shipped code"
   consistency.
   Runs: refactor-p0-run-log (2026-09-12, R1+R2).
-- [×2] Where a worker's verification output must live is unstated: the plan says "task report",
+- [×1] Closing an evidence finding has no rule that the evidence ran on the head being merged: run 1's closure recorded runs on `d7888c80`, then a review-fix commit landed. Candidate for ORCHESTRATION acceptance: "Verification evidence in a plan names the commit it ran on; any code commit after it needs a re-run recorded against the new head before Status: done." (load-plan-fixes 2026-10-01, R3 run 2)
+- [×3] Where a worker's verification output must live is unstated: the plan says "task report",
   Orca `worker_done` messages are invisible from the worktree. Proposed for ORCHESTRATION.md:
   "each task's verification output (command + summary line) is appended to the plan under the task
-  before review; a reviewer treats absence there as absence". Runs: set-kind (2026-09-29, R3), load-facts (2026-09-29, R3 — two task commits with empty bodies read as "no evidence"; proposed "a worker report alone is not evidence").
+  before review; a reviewer treats absence there as absence". Runs: set-kind (2026-09-29, R3), load-facts (2026-09-29, R3 — two task commits with empty bodies read as "no evidence"; proposed "a worker report alone is not evidence"), load-plan-fixes (2026-10-01, R3 — proposed a `## Verification evidence` section in every plan, filled by the orchestrator before Status: done).
 - [×3] Zone R3 says test names carry BR/AC refs "per `docs/CONTRIBUTING_AI.md`", but that file has no such rule, so missing AC refs (`planning-set-logging`, `recent-history-status`) cannot be graded. Proposed wording for CONTRIBUTING_AI Principles: "Every `describe` of a test that proves an AC names that AC id." Runs: coach-baseline 2026-09-25 (R3), retro-timestamps 2026-09-30 (R3: `describe('STALE SESSION gate follows isRetroLog (BUG-043)')` cites neither BR-TRAINING-030 nor AC-RT-4). (+ load-plan 2026-10-01)
+- [×1] R1 + R4: a rule stated only in a superpowers design doc (load-plan metric 4, the Stage A rows, the step-down floor) has no durable home, so R1 can only grade a departure from it as advisory and R4 cannot check a refinement against any durable rule. R4 proposed BR-TRAINING ids for working weight and the step-down floor. (load-plan-fixes 2026-10-01)
 - [×1] R1: the durable-spec rule does not say how to treat an edit that goes beyond the owner-approved text (extra paragraphs next to approved wording); treated as rule 3. Candidate for SUPERPOWERS_INTEGRATION rule 3: "An owner-approved durable-spec amendment is applied verbatim; any added sentence that changes or qualifies its meaning is a new escalation." (load-plan 2026-10-01)
 - [×1] Schema, indexing and unbounded-growth concerns have no owning zone: R1 reads for shape,
   R2 for duplication, R3 for logic, R4 for doc currency. The missing `run_id` index on
@@ -404,6 +406,8 @@ backs it. Each entry names the proposed wording and where it would live
 Precedent: YAGNI and DRY lived only in agent culture until 2026-09-12, so R2 could not block
 on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitimate.
 
+- [×1] R1: "An execution decision (D) that changes behaviour a parent design doc states verbatim names the design section it departs from and is marked 'orchestrator ratifies / updates the design line'" — CONTRIBUTING_AI. (load-plan-fixes 2026-10-01)
+- [×1] R2: "A new prompt version is either a full text file or a derivation of the previous version by exact-text replacements that fail loudly when a needle is missing; a derived version's unit test asserts the full line diff against its parent" — next to BR-LLM-008. (load-plan-fixes 2026-10-01)
 - [×1] R1 (run 2): nothing says how a durable edit mandated by a blocking finding under an autonomy order is graded. Proposed for the SUPERPOWERS_INTEGRATION rule 3 note: "A durable edit mandated by a blocking review finding under an autonomy order is allowed when it is factual and listed for the owner's review in the plan; the re-review verifies accuracy, not permission." (load-plan 2026-10-01)
 - [×1] R4: "Every new env variable read by `config/index.ts` gets a commented line in `apps/server/.env.example` with its default and plan reference" — CONTRIBUTING_AI, next to the Config exception list (which also omits COURSE_CHECK_*). (load-plan 2026-10-01)
 - [×1] R4: "A plan whose behaviour survives the merge lists, at its owner gates, the BR-*/INV-* ids it adds or changes in `docs/domain/*.spec.md`; an empty list is stated explicitly" — SUPERPOWERS_INTEGRATION rule 1. (load-plan 2026-10-01)

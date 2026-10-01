@@ -425,16 +425,19 @@ export class TrainingService implements ITrainingService {
   }
 
   /**
-   * set-kind plan Task 1 (D5): resolves the exercise's catalog equipment once and, for a
-   * dumbbell exercise's strength set, sets `perHand` — true by default, false when the caller
-   * said the weight is a total. Every other equipment leaves `setData` untouched (no `perHand`
-   * key at all).
+   * Shapes `setData` by the exercise's catalog row, resolved once. set-kind plan Task 1 (D5): a dumbbell exercise's
+   * strength set gets `perHand` — true by default, false when the caller said the weight is a total; every other
+   * equipment leaves it untouched (no `perHand` key). load-plan-fixes item 2: `log_set` sends every duration as
+   * `cardio_duration`, so a duration on an isometric exercise (Plank, Side Plank) is re-keyed to an `isometric` set.
    */
   private async applyPerHand(exerciseId: string, setData: SetData, weightBasis?: 'total'): Promise<SetData> {
-    if (setData.type !== 'strength') {
+    if (setData.type !== 'strength' && setData.type !== 'cardio_duration') {
       return setData;
     }
     const exercise = await this.exerciseRepo.findById(exerciseId);
+    if (setData.type === 'cardio_duration') {
+      return exercise?.exerciseType === 'isometric' ? { type: 'isometric', duration: setData.duration } : setData;
+    }
     if (exercise?.equipment !== 'dumbbell') {
       return setData;
     }

@@ -27,7 +27,7 @@ import type {
 import { loadLoadPlanEntries, planTargetRepsOf, type LoadPlanEntry } from '@infra/ai/load-facts/load-facts.loader';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
 // load-plan plan Task 5b (A5): the rebound training prompt, selected only with the flag on.
-import { TRAINING_PROMPT_V11 } from '@infra/ai/prompts/phases/training';
+import { TRAINING_PROMPT_V12 } from '@infra/ai/prompts/phases/training';
 import {
   TRAINING_CLIENT_V1,
   TRAINING_EXERCISE_HISTORY_V1,
@@ -126,8 +126,9 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
 
   return {
     name: 'training',
-    // load-plan plan Task 5b (A5): v11 with LOAD_PLAN_PLANNER_REBIND + LOAD_PLAN_SUGGESTION; else v10.
-    prompt: (plannerRebindOn(deps) ? TRAINING_PROMPT_V11 : entry) as PhasePromptEntry<PromptContextFor<TrainingData>>,
+    // Task 5b (A5) / load-plan-fixes item 3: v12 (v11 + no invented conservative option) with
+    // LOAD_PLAN_PLANNER_REBIND + LOAD_PLAN_SUGGESTION; else v10.
+    prompt: (plannerRebindOn(deps) ? TRAINING_PROMPT_V12 : entry) as PhasePromptEntry<PromptContextFor<TrainingData>>,
     tools,
     toolPolicy: buildTrainingToolPolicy(tools),
     // ADR-0013 §3.4 table values (D-D — data; P4 reads only `history`).
