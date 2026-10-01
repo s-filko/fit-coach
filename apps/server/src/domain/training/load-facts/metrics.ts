@@ -14,6 +14,7 @@ import {
   type FatigueFact,
   type GapDays,
   type GapFact,
+  type IndicativeLoadFact,
   isAbsent,
   type LastExposureFact,
   type LoadFacts,
@@ -388,27 +389,24 @@ function roundDownToStep(load: number, step: number): number {
 }
 
 /**
- * The working weight: the larger of two readings of the performances (newest first).
- * (1) The highest load at which every set at that load reached the floor, among the loads that RECUR in at least
- * `RECURRING_PERFORMANCES` of the performances — so one stray heavier set in a single older session (replay C1: a
- * lone 5 kg set before four 2.5 kg sessions) is not the working weight; nothing recurs → the highest load, as before.
- * (2) The same "reached the floor" load of the NEWEST performance alone — the owner moved up and the weight follows
- * that session (item 4: leg press 110 → 120 after one session at 120). A heavier load of an older session never wins.
+ * The working weight = the highest ELIGIBLE load among those at which every set at that load reached the floor.
+ * Eligible: the load RECURS (appears in the sets of at least `RECURRING_PERFORMANCES` performances) — so one stray
+ * heavier set in a single older session (replay C1, a lone 5 kg set before four 2.5 kg sessions) is not the working
+ * weight — or the NEWEST performance reached it (the owner moved up and the weight follows, item 4). When no load
+ * recurs at all (a pyramid, singles) every reached load is eligible. Recurrence counts presence, not success, and a
+ * reached load is only ever added by more reps — so more reps never lower the working weight (W-22 (1), W-23). Nothing
+ * eligible → null; the indirect estimate (a short set) or "no load reached the floor" speaks instead.
  */
 function qualifyingLoad(used: LoadPerformance[], floor: number): LoadedSet | null {
   const reached = used.map(r =>
     r.loads.filter(l => r.loads.filter(o => o.weight === l.weight).every(o => o.reps >= floor)),
   );
+  const presence = (weight: number): number => used.filter(r => r.loads.some(l => l.weight === weight)).length;
   const highest = (sets: LoadedSet[]): LoadedSet | null =>
     sets.reduce<LoadedSet | null>((best, l) => (!best || l.weight > best.weight ? l : best), null);
-  const recurring = reached
-    .flat()
-    .filter(
-      l => reached.filter(perfSets => perfSets.some(o => o.weight === l.weight)).length >= RECURRING_PERFORMANCES,
-    );
-  const settled = highest(recurring) ?? highest(reached.flat());
-  const newestLoad = highest(reached[0] ?? []);
-  return settled && newestLoad && newestLoad.weight > settled.weight ? newestLoad : settled;
+  const anyRecurs = used.some(r => r.loads.some(l => presence(l.weight) >= RECURRING_PERFORMANCES));
+  const recurring = reached.flat().filter(l => presence(l.weight) >= RECURRING_PERFORMANCES);
+  return highest([...recurring, ...(reached[0] ?? []), ...(anyRecurs ? [] : reached.flat())]);
 }
 
 // --- Metric 5 ---
@@ -481,6 +479,40 @@ function weeksAtCurrentWeight(usable: LoadPerformance[], tz: string | null): num
   }
   const days = calendarDaysAgo(usable[end].p.performedAt, usable[0].p.performedAt, tz);
   return Math.floor(days / DAYS_PER_WEEK);
+}
+
+// --- Metric 4a (insufficient-data path) ---
+
+/**
+ * What the newest single performance points to (golden-table ruling G-11): its qualifying load (the highest load at
+ * which every set at that load reached the floor) or the indirect estimate from a short set, whichever is higher — a
+ * failed opener (60×6 before 55×7, 45×12) is never the recommendation. No minimum count, no window: this serves the
+ * insufficient-data path, where the reference load is what the coach has.
+ */
+export function computeIndicativeLoad(
+  perfs: PerformanceInput[],
+  todaySessionId: string,
+  range: RepRange | null,
+  exercise: ExerciseInput,
+  now: Date,
+  tz: string | null,
+): Metric<IndicativeLoadFact> {
+  if (exercise.exerciseType !== 'strength') {
+    return notApplicable(exercise);
+  }
+  if (!range) {
+    return absent(NO_RANGE);
+  }
+  const [newest] = loadPerformances(realPerformances(perfs, todaySessionId, now, tz)).usable;
+  if (!newest) {
+    return absent(NO_RECORD);
+  }
+  const reached = qualifyingLoad([newest], range.min);
+  const estimate = indirectEstimate(newest, range.min, computeEquipmentStep(exercise));
+  if (estimate !== null && (!reached || estimate.weight > reached.weight)) {
+    return { weight: estimate.weight, unit: estimate.unit, estimatedFrom: estimate.from };
+  }
+  return reached ? { weight: reached.weight, unit: reached.unit } : absent('no load reached the rep floor');
 }
 
 // --- Metric 4b ---
@@ -571,21 +603,44 @@ function dropOffOf(allWorking: SetInput[], weight?: number): number | null {
   return (capacityOfSet(sets[0]) ?? 0) - (capacityOfSet(sets[sets.length - 1]) ?? 0);
 }
 
-function pickEffortSet(early: SetInput | undefined, unclear: SetInput | undefined): SetInput | undefined {
-  return early ?? unclear;
+function belowFloorSets(working: SetInput[], range: RepRange): SetInput[] {
+  return working.filter(s => (capacityOfSet(s) ?? Infinity) < range.min);
 }
 
-function effortOf(working: SetInput[], range: RepRange | null): EffortFact {
+/**
+ * Effort of the newest performance (item 10; golden-table ruling G-06/07). Early stop: a set below the floor at RPE ≤ 7
+ * while nothing is below the floor by capacity. Unclear: below-floor sets exist and NONE has an RPE — an early stop
+ * cannot be told from a failure, so hold and ask the first time; when the previous performance at this load was also
+ * below the floor without RPE (`repeated`), it is a real miss.
+ */
+function effortOf(working: SetInput[], range: RepRange | null, repeated: boolean): EffortFact {
   const none: EffortFact = { earlyStop: false, unclearBelowFloor: false, set: null };
   if (!range) {
     return none;
   }
-  const below = working.filter(s => (capacityOfSet(s) ?? Infinity) < range.min);
+  const below = belowFloorSets(working, range);
   const early = working.find(s => (repsOf(s) ?? Infinity) < range.min && s.rpe !== null && s.rpe <= EARLY_STOP_MAX_RPE);
   const earlyStop = below.length === 0 && early !== undefined;
-  const unclearBelowFloor = below.length === 1 && below[0].rpe === null;
-  const set = pickEffortSet(earlyStop ? early : undefined, unclearBelowFloor ? below[0] : undefined);
+  const unclearBelowFloor = below.length > 0 && below.every(s => s.rpe === null) && !repeated;
+  const set = earlyStop ? early : below.find(() => unclearBelowFloor);
   return { earlyStop, unclearBelowFloor, set: set ? { reps: repsOf(set) ?? 0, rpe: set.rpe } : null };
+}
+
+/** The previous performance at this load was also below the floor, with no RPE on any below-floor set. */
+function previousBelowWithoutRpe(
+  earlier: PerformanceInput[],
+  range: RepRange | null,
+  workingWeight: number | undefined,
+): boolean {
+  if (!range) {
+    return false;
+  }
+  const previous = [...earlier]
+    .sort((a, b) => b.performedAt.getTime() - a.performedAt.getTime())
+    .map(p => atLoad(classifySets(p.sets).working, workingWeight))
+    .find(w => w.length > 0);
+  const below = previous ? belowFloorSets(previous, range) : [];
+  return below.length > 0 && below.every(s => s.rpe === null);
 }
 
 function repsVsRange(working: SetInput[], range: RepRange | null): Metric<RepsVsRange> {
@@ -627,7 +682,7 @@ export function computeLastExposure(
   const value = dropOffOf(working);
   const atWeight = workingWeight !== undefined && working.some(s => loadOf(s)?.weight === workingWeight);
   return {
-    effort: effortOf(working, range),
+    effort: effortOf(working, range, previousBelowWithoutRpe(earlier, range, workingWeight)),
     repsVsRange: repsVsRange(working, range),
     rpe: rpeFact,
     dropOff:
@@ -690,8 +745,11 @@ export function computeGap(
 
 export function computeConstraints(exercise: ExerciseInput, context: LoadFactsContext): ConstraintsFact {
   const muscles = new Set(exercise.muscles.map(m => m.muscleGroup));
+  const primary = new Set(exercise.muscles.filter(m => m.involvement === 'primary').map(m => m.muscleGroup));
   return {
-    constraints: context.constraints.filter(c => c.muscleGroup !== null && muscles.has(c.muscleGroup)),
+    constraints: context.constraints
+      .filter(c => c.muscleGroup !== null && muscles.has(c.muscleGroup))
+      .map(c => ({ ...c, onPrimary: c.muscleGroup !== null && primary.has(c.muscleGroup) })),
     equipment: [...context.equipmentFacts],
   };
 }
@@ -708,6 +766,7 @@ export function computeEquipmentStep(exercise: ExerciseInput): EquipmentStepFact
     unit: 'kg',
     perHand: exercise.equipment === 'dumbbell',
     basis: `default for ${exercise.equipment}`,
+    capApplies: exercise.equipment !== 'machine' && exercise.equipment !== 'cable',
   };
 }
 
@@ -754,6 +813,7 @@ export function computeLoadFacts(
     fatigueReference,
     fatigueToday,
     workingWeight,
+    indicativeLoad: computeIndicativeLoad(performances, todayId, range, exercise, now, timezone),
     e1rmTrend: computeE1rmTrend(performances, todayId, exercise, now, timezone),
     repHistory: computeRepHistory(performances, todayId, workingWeight, exercise, now, timezone),
     volume: computeVolume(performances, todayId, exercise, now, timezone),

@@ -20,6 +20,8 @@ import type {
 } from './schemes';
 import { ONE_SESSION_MAX_RPE, ONE_SESSION_SURPLUS, UNEVEN_ABOVE_USUAL, UNEVEN_WITHOUT_NORM } from './schemes/params';
 import {
+  blockingConstraint,
+  capAppliesOf,
   confidenceOf,
   EQUIPMENT_STEP,
   lastSetCapacity,
@@ -27,6 +29,7 @@ import {
   NO_RECORD_REASON,
   noRecord,
   roundLoad,
+  smallStepNote,
   stepDown,
   stepOf,
   stepUp,
@@ -64,6 +67,8 @@ export type DecisionRow =
 export const PRE_FATIGUE_MATERIAL_SETS = 3;
 /** With this many extra pre-fatigue sets the candidate drops one step too (two exercises' worth). */
 export const PRE_FATIGUE_HEAVY_SETS = 6;
+/** Insufficient data after a restart: steps below the reference (owner ruling O-3 — never lighter than a rebuild). */
+const RESTART_STEPS_BELOW = 2;
 
 export interface DecideInput {
   scheme: ProgressionScheme;
@@ -243,12 +248,12 @@ function gapRow(c: Ctx): Decision | null {
 }
 
 function constraintRow(c: Ctx): Decision | null {
-  const constraint = c.facts.constraints.constraints.find(x => x.durability === 'short');
+  const constraint = blockingConstraint(c.facts);
   return constraint
     ? finish(c, 'A', 'short_constraint', {
         candidate: c.base,
         conservative: loadBelow(c, c.base, 1),
-        reason: `short constraint (${constraint.text}) — no growth`,
+        reason: `short constraint (${constraint.text}) — no growth, or skip / substitute`,
         next: { kind: 'constraint' },
       })
     : null;
@@ -303,7 +308,9 @@ function stageA(c: Ctx): Decision | null {
     });
   }
   const last = c.facts.lastExposure;
-  const effort = isAbsent(last) ? null : last.effort;
+  // An estimated working weight already is the answer to a short performance: sets at OTHER loads are not judged again.
+  const estimated = !isAbsent(c.facts.workingWeight) && c.facts.workingWeight.estimatedFrom !== undefined;
+  const effort = isAbsent(last) || estimated ? null : last.effort;
   if (effort?.earlyStop && effort.set) {
     return finish(c, 'A', 'early_stop', {
       candidate: c.base,
@@ -322,7 +329,6 @@ function stageA(c: Ctx): Decision | null {
     });
   }
   // An estimated working weight already is the answer to a below-floor performance — no second step down on top of it.
-  const estimated = !isAbsent(c.facts.workingWeight) && c.facts.workingWeight.estimatedFrom !== undefined;
   if (!estimated && !isAbsent(last) && !isAbsent(last.repsVsRange) && last.repsVsRange === 'below floor') {
     const candidate = loadBelow(c, c.base, 1);
     return finish(c, 'A', 'below_floor', {
@@ -364,8 +370,7 @@ function insufficientData(
   why: string,
 ): Decision {
   const base = { ...meta, stage: 'A' as const, row: 'insufficient_data' as const, ladder: null };
-  const ref = referenceLoad(facts);
-  if (isAbsent(facts.reference) || ref === null) {
+  if (isAbsent(facts.reference)) {
     return {
       ...noRecord(reps, [WORKING_WEIGHT]),
       ...base,
@@ -374,30 +379,57 @@ function insufficientData(
       next: { kind: 'no_number' },
     };
   }
+  const indicative = isAbsent(facts.indicativeLoad) ? null : facts.indicativeLoad;
+  const ref = indicative ?? referenceLoad(facts);
+  if (ref === null) {
+    // A record without a load (bodyweight, unloaded sets): the reps-only path — no load number to give (ruling G-51).
+    return {
+      ...noRecord(reps, [WORKING_WEIGHT]),
+      ...base,
+      outcome: 'no number',
+      reason: 'no load to recommend (bodyweight or unloaded sets) — progress by reps',
+      next: { kind: 'hold', why: 'progress by reps — there is no load to raise' },
+    };
+  }
   const step = stepOf(facts);
   const afterBreak = gap.tier === 'return' || gap.tier === 'rebuild' || gap.tier === 'restart';
-  const candidate = afterBreak ? stepDown(ref.weight, step) : ref.weight;
+  // Owner ruling O-3: after a restart the start is never lighter than after a rebuild (two steps below, then ladder).
+  const stepsBelow = gap.tier === 'restart' ? RESTART_STEPS_BELOW : 1;
+  let candidate = ref.weight;
+  if (afterBreak) {
+    for (let i = 0; i < stepsBelow; i++) {
+      candidate = stepDown(candidate, step);
+    }
+  }
   const rec = (load: number): Recommendation => ({ load, unit: ref.unit, reps });
   const tierName = `${gap.tier} tier (${gap.days ?? 0} d since ${gap.basis ?? 'last workout'}, general norm)`;
   const heldByFloor = afterBreak && step !== null && candidate === ref.weight;
-  const tier = !afterBreak ? '' : `; ${tierName} — ${heldByFloor ? NO_LIGHTER : 'one step below it'}`;
+  const below = stepsBelow === 1 ? 'one step below it' : `${stepsBelow} steps below it, then the return ladder`;
+  const tier = !afterBreak ? '' : `; ${tierName} — ${heldByFloor ? NO_LIGHTER : below}`;
   const stepNote = step === null ? [`${EQUIPMENT_STEP} missing — steps cannot be computed`] : [];
   let outcome = 'reference load';
   if (afterBreak) {
     outcome = heldByFloor ? 'reference load, no lighter option' : 'one step below the reference';
+    if (!heldByFloor && stepsBelow > 1) {
+      outcome = `${stepsBelow} steps below the reference`;
+    }
   }
+  const source =
+    indicative?.estimatedFrom === undefined
+      ? `last performance ${ref.weight} ${ref.unit ?? 'kg'} ${facts.reference.daysAgo} d ago used as the reference`
+      : `last performance ${facts.reference.daysAgo} d ago used as the reference — ${ref.weight} ${ref.unit ?? 'kg'} estimated from ${indicative.estimatedFrom.weight}×${indicative.estimatedFrom.reps}`;
+  const restart = gap.tier === 'restart';
   return {
     ...base,
     outcome,
     candidate: rec(candidate),
     conservative: rec(stepDown(candidate, step)),
-    reason: [
-      `${why}; last performance ${ref.weight} ${ref.unit ?? 'kg'} ${facts.reference.daysAgo} d ago used as the reference${tier}`,
-      ...stepNote,
-    ].join('; '),
+    reason: [`${why}; ${source}${tier}`, ...stepNote].join('; '),
     confidence: 'low',
     missing: step === null ? [WORKING_WEIGHT, EQUIPMENT_STEP] : [WORKING_WEIGHT],
-    next: { kind: 'insufficient', why },
+    next: restart
+      ? { kind: 'ladder', remaining: LADDER.rebuild.workouts - 1, backTo: ref.weight, cold: false }
+      : { kind: 'insufficient', why },
   };
 }
 
@@ -414,7 +446,11 @@ function repsText(reps: number[]): string {
  */
 function earlyGrowth(c: Ctx, params: SchemeParams, out: SchemeOutput): SchemeOutput | null {
   const history = c.facts.repHistory;
-  if (isAbsent(history) || params.fixedReps !== undefined || c.gap.tier !== 'rest') {
+  if (
+    isAbsent(history) ||
+    params.fixedReps !== undefined ||
+    (c.gap.tier !== 'rest' && c.gap.tier !== 'rest_with_question')
+  ) {
     return null;
   }
   const [newest] = history.entries;
@@ -426,7 +462,7 @@ function earlyGrowth(c: Ctx, params: SchemeParams, out: SchemeOutput): SchemeOut
   if (newest.lastSetRpe !== null && newest.lastSetRpe > ONE_SESSION_MAX_RPE) {
     return null;
   }
-  const growth = stepUp(c.base, c.step, params.stepCapPct);
+  const growth = stepUp(c.base, c.step, params.stepCapPct, capAppliesOf(c.facts));
   if (growth.kind !== 'grow') {
     return null;
   }
@@ -434,7 +470,7 @@ function earlyGrowth(c: Ctx, params: SchemeParams, out: SchemeOutput): SchemeOut
   return {
     candidate: { load: growth.load, unit: c.unit, reps },
     conservative: { load: c.base, unit: c.unit, reps },
-    reason: `last set at the working weight ${lastSetText(newest)} (range top ${reps.max} + ${ONE_SESSION_SURPLUS} or more; ${repsText(newest.repsAtWorkingWeight)} at ${c.base} ${unit} ${newest.daysAgo} d ago); recovered (${c.gap.days ?? 0} d since ${c.gap.basis ?? 'last workout'}, no short constraint, no material pre-fatigue) — one step up`,
+    reason: `last set at the working weight ${lastSetText(newest)} (range top ${reps.max} + ${ONE_SESSION_SURPLUS} or more; ${repsText(newest.repsAtWorkingWeight)} at ${c.base} ${unit} ${newest.daysAgo} d ago); recovered (${c.gap.days ?? 0} d since ${c.gap.basis ?? 'last workout'}, no short constraint, no material pre-fatigue) — one step up${smallStepNote(c.facts, c.base, c.step, params.stepCapPct)}`,
     confidence: LEVELS[Math.min(LEVELS.indexOf('medium'), LEVELS.indexOf(confidenceOf(c.facts, out.missing)))],
     missing: out.missing,
     next: { kind: 'after_growth', load: growth.load, reps: reps.max },

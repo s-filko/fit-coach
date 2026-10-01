@@ -111,7 +111,7 @@ describe('AC-LPF-8 · owner 45° Leg Press rows', () => {
 });
 
 describe('AC-LPF-8 · owner Lateral Raise Machine row', () => {
-  it('2.5 kg with a 5 kg machine step: no load step fits, progress by reps', async () => {
+  it('2.5 kg on a machine with a 5 kg step (O-2: the cap is waived — the machine adds its own weight): growth is named', async () => {
     const text = await entryText(
       LATERAL_RAISE,
       ownerSessions(LATERAL_RAISE, LATERAL_RAISE_ROWS, '2026-09-25'),
@@ -121,7 +121,7 @@ describe('AC-LPF-8 · owner Lateral Raise Machine row', () => {
     expect(line(text, 'recommend')).toMatch(/^recommend: 2\.5 kg × 10–15 — /);
     expect(line(text, 'conservative')).toContain('2.5 kg × 10–15 — no lighter option');
     expect(line(text, 'next step')).toBe(
-      'next step: no load step fits (5 kg is over 10 % of 2.5 kg) — progress by reps',
+      'next step: last set at 2.5 kg ≥ 17 reps in 2 workouts in a row (or ≥ 18 reps once at RPE ≤ 8, recovered) → +1 step (7.5 kg)',
     );
   });
 });

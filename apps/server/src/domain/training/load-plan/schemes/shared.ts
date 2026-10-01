@@ -56,11 +56,11 @@ export function roundLoad(value: number): number {
 export type Growth = { kind: 'grow'; load: number } | { kind: 'reps-only' } | { kind: 'no-step' };
 
 /** Load after one step, or why there is none: no step known, or the step exceeds the cap. */
-export function stepUp(base: number, step: number | null, capPct: number): Growth {
+export function stepUp(base: number, step: number | null, capPct: number, capApplies = true): Growth {
   if (step === null) {
     return { kind: 'no-step' };
   }
-  if (step > base * capPct + Number.EPSILON) {
+  if (capApplies && step > base * capPct + Number.EPSILON) {
     return { kind: 'reps-only' };
   }
   return { kind: 'grow', load: roundLoad(base + step) };
@@ -73,6 +73,23 @@ export function stepUp(base: number, step: number | null, capPct: number): Growt
 export function stepDown(load: number, step: number | null): number {
   const lighter = roundLoad(load - (step ?? 0));
   return lighter > 0 ? lighter : load;
+}
+
+/** Whether the "step ≤ ~10 % of the load" cap applies (ruling O-2: not to machines / cables, own weight unknown). */
+export function capAppliesOf(facts: LoadFacts): boolean {
+  return isAbsent(facts.equipmentStep) ? true : facts.equipmentStep.capApplies;
+}
+
+/** The note a growth reason carries when the cap was waived and the step is large next to the displayed load. */
+export function smallStepNote(facts: LoadFacts, base: number, step: number | null, capPct: number): string {
+  return !capAppliesOf(facts) && step !== null && step > base * capPct + Number.EPSILON
+    ? ' (a relatively small step: the machine adds its own weight to the displayed load)'
+    : '';
+}
+
+/** A short constraint that blocks growth: on a PRIMARY muscle (a secondary-only one does not, ruling G-17). */
+export function blockingConstraint(facts: LoadFacts): LoadFacts['constraints']['constraints'][number] | undefined {
+  return facts.constraints.constraints.find(c => c.durability === 'short' && c.onPrimary !== false);
 }
 
 export function stepOf(facts: LoadFacts): number | null {
@@ -166,12 +183,20 @@ export function decideProgression(facts: LoadFacts, params: SchemeParams, rule: 
     next: { kind: 'after_growth', load, reps: reps.max },
   });
 
-  const shortConstraint = facts.constraints.constraints.find(c => c.durability === 'short');
+  const shortConstraint = blockingConstraint(facts);
   if (shortConstraint) {
     return hold(`short constraint (${shortConstraint.text}) — no growth`, { kind: 'constraint' });
   }
   if (rule.surplusReps !== undefined && !isAbsent(facts.repHistory)) {
-    return decideFromRepHistory(facts, params, rule.surplusReps, { base, step, reps, hold, grown });
+    return decideFromRepHistory(facts, params, rule.surplusReps, {
+      base,
+      step,
+      reps,
+      hold,
+      grown,
+      capApplies: capAppliesOf(facts),
+      smallStep: smallStepNote(facts, base, step, params.stepCapPct),
+    });
   }
   if (isAbsent(facts.lastExposure) || isAbsent(facts.lastExposure.repsVsRange)) {
     missing.push(LAST_EXPOSURE);
@@ -192,9 +217,12 @@ export function decideProgression(facts: LoadFacts, params: SchemeParams, rule: 
   if (seen < params.confirmSessions) {
     return hold(`${rule.successLabel}, confirmation ${seen} of ${params.confirmSessions}`);
   }
-  const growth = stepUp(base, step, params.stepCapPct);
+  const growth = stepUp(base, step, params.stepCapPct, capAppliesOf(facts));
   if (growth.kind === 'grow') {
-    return grown(growth.load, `${rule.successLabel} for ${params.confirmSessions} sessions — one step up`);
+    return grown(
+      growth.load,
+      `${rule.successLabel} for ${params.confirmSessions} sessions — one step up${smallStepNote(facts, base, step, params.stepCapPct)}`,
+    );
   }
   if (growth.kind === 'reps-only') {
     const pct = Math.round(params.stepCapPct * 100);
@@ -213,6 +241,8 @@ interface RepGrowthCtx {
   reps: RepRange;
   hold: (why: string, next?: NextStep) => SchemeOutput;
   grown: (load: number, why: string) => SchemeOutput;
+  capApplies: boolean;
+  smallStep: string;
 }
 
 /**
@@ -226,11 +256,11 @@ function decideFromRepHistory(facts: LoadFacts, params: SchemeParams, surplus: n
   const needReps = c.reps.max + surplus;
   const seen = surplusRun(entries, needReps);
   const lastText = entries[0] ? lastSetText(entries[0]) : 'no set at the working weight in the newest performance';
-  const growth = stepUp(c.base, c.step, params.stepCapPct);
+  const growth = stepUp(c.base, c.step, params.stepCapPct, c.capApplies);
   if (seen >= params.confirmSessions && growth.kind === 'grow') {
     return c.grown(
       growth.load,
-      `last set at the working weight ≥ ${needReps} reps (range top ${c.reps.max} + ${surplus}) in ${seen} sessions in a row — one step up`,
+      `last set at the working weight ≥ ${needReps} reps (range top ${c.reps.max} + ${surplus}) in ${seen} sessions in a row — one step up${c.smallStep}`,
     );
   }
   if (growth.kind === 'reps-only') {

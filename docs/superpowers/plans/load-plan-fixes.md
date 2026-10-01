@@ -339,6 +339,42 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
   recommendation (held constant: see W-17); every row has a next step — plus a block-level test over 400 cases that the printed
   `next step:` line exists and no load line is ≤ 0. Runs in ~0.5 s; the load facts take `timezone: null` there (an `Intl`
   zone made the same 2500 cases 15× slower).
+- (D) W-23: working weight is monotone in reps (ruling W-22 (1)). `qualifyingLoad` = the highest load whose sets all reached the floor AND
+  that is eligible: it RECURS (appears in the sets of ≥ 2 of the up-to-5 performances — presence, not success) or the NEWEST
+  performance reached it; when no load recurs at all (singles, a pyramid) every reached load is eligible. Recurrence by presence is
+  rep-independent and "reached" only grows with reps, so no bump can lower it; the old rule (reached in ≥ 2, else "highest overall")
+  flipped (generated seed 45: 70 → 65). Nothing eligible → the indirect estimate from a short set, else "no load reached the floor".
+  Unchanged: leg press 120 / 135, lateral raise 2.5, the owner estimate cases. Changed edge: 60×6, 55×7 style performances with
+  an older single heavier load no longer fall back to that load — they use the estimate.
+- (D) W-24: invariants without the working-weight hold (item W-22 (1)); two scopes stay and are REPORTED, not fixed: (a) the reference
+  flip — extra reps can push the newest session outside the like-for-like tolerance and switch the reference (pre-fatigue baseline);
+  no local fix (the reference is also the displayed line); proposal: measure pre-fatigue against the newest performance, as the
+  safety rows now do. (b) the decision path — a bump can create a working weight and move a case from insufficient data to the ladder;
+  after a rebuild the two paths start differently BY THE TABLE (G-47 insufficient: one step below; G-43 with a working weight: two
+  steps), seed 491 (38 → 36). Proposal: align the insufficient-data rebuild start to two steps — needs the owner because G-47 is
+  a "certain" row. The invariant compares only cases that stay on the same path (≥ 800 of 2500 compared).
+- (D) W-25: rulings implemented — **O-2** `EquipmentStepFact.capApplies` (false for machine and cable = the equipment kind, the existing
+  equipment signal; barbell / dumbbell keep the cap); growth reasons add "(a relatively small step: the machine adds its own weight to
+  the displayed load)" when the step would have exceeded the cap; v12 tells the coach to say so and to offer dumbbells / the smallest
+  increment when `next step:` says no load step fits. **O-3** insufficient data after a `restart` tier starts two steps below the
+  reference (outcome "2 steps below the reference", next step = the ladder, 2 more workouts); return / rebuild keep one step (G-47).
+  **G-06/07** any number of below-floor sets without RPE is `unclear_effort` (hold + ask) the first time; when the previous
+  performance at that load was also below the floor with no RPE on those sets, it is a real miss (step down). **G-11** new fact
+  `indicativeLoad` (the newest performance's qualifying load or estimate, no minimum count, no window) is the insufficient-data
+  reference load — 60×6, 55×7, 45×12 alone → 50 / 45, never the failed opener. **G-15** one-session growth needs gap tier `rest` or
+  `rest_with_question`. **G-16** a short constraint on a primary muscle keeps one step down; reason "… no growth, or skip /
+  substitute". **G-17** only a short constraint on a PRIMARY muscle (`ConstraintInput.onPrimary`) stops growth. **G-21/25** capacity
+  everywhere (already W-18). **G-26** 2-for-2 has no RPE condition (decide test); the RPE ≥ 9 invariant is one-session only.
+  **G-37/38** unknown step → no growth, conservative = recommend, `equipmentStep` missing (golden cases pass unchanged). **G-41**
+  unknown reason at `rest_with_question` asks once and does not lower (golden pass). **G-51** a record without a load (bodyweight)
+  gives no load number and the reason "no load to recommend (bodyweight or unloaded sets) — progress by reps" (it said "no record").
+  An estimated working weight skips the effort rows too (its short sets are at other loads).
+- (D) W-26: golden-table test — `blocks/__tests__/golden-table.unit.test.ts` (infra, because it checks the printed `next step:`),
+  60 cases × (decision numbers, block text). Mapping and intent rules are in the file header; the fixture is untouched. Ruling
+  overrides (id → what the ruling says instead of the table): G-07 hold + ask (60 / 57.5); G-11 50 / 45; G-15 grow 55 / 50; G-16
+  conservative 45 + "skip / substitute"; G-17 grow 55 / 50; G-33 grow 7.5 / 2.5 + "relatively small"; G-46 55 / 52.5 + the ladder;
+  **G-32 ("certain") next-step intent changes from "progress by reps" to growth (7.5 kg) under O-2** — the only certain row whose
+  expectation a ruling overrides. Everything else (58 rows) passes as written.
 
 ## Review
 

@@ -12,6 +12,7 @@ import {
   computeEquipmentStep,
   computeVolume,
   computeRepHistory,
+  computeIndicativeLoad,
   capacityOf,
   classifySets,
 } from '../index';
@@ -36,6 +37,7 @@ import {
 } from './fixtures';
 
 const RANGE = { min: 8, max: 12 };
+const R810 = { min: 8, max: 10 };
 
 describe('AC-LF-1 · classifySets (D7)', () => {
   it('drops explicit warm-ups, keeps explicit working sets regardless of weight', () => {
@@ -741,23 +743,26 @@ describe('AC-LF-1 · metric 8 — constraints', () => {
       equipmentFacts: ['home: 2 dumbbells'],
       workouts: [],
     });
-    expect(c.constraints).toEqual([{ muscleGroup: 'triceps', durability: 'short', text: 'elbow pain' }]);
+    expect(c.constraints).toEqual([
+      { muscleGroup: 'triceps', durability: 'short', text: 'elbow pain', onPrimary: false },
+    ]);
     expect(c.equipment).toEqual(['home: 2 dumbbells']);
   });
 });
 
 describe('AC-LF-1 · metric 9 — equipment step', () => {
   it.each([
-    ['barbell', 2.5, false],
-    ['dumbbell', 2, true],
-    ['machine', 5, false],
-    ['cable', 5, false],
-  ] as const)('%s → %s kg', (equipment, step, perHand) => {
+    ['barbell', 2.5, false, true],
+    ['dumbbell', 2, true, true],
+    ['machine', 5, false, false],
+    ['cable', 5, false, false],
+  ] as const)('%s → %s kg (10 % cap applies: %s)', (equipment, step, perHand, capApplies) => {
     expect(computeEquipmentStep({ ...benchPress, equipment })).toEqual({
       step,
       unit: 'kg',
       perHand,
       basis: `default for ${equipment}`,
+      capApplies, // O-2: machines and cables show a load that excludes their own weight
     });
   });
 
@@ -1240,9 +1245,40 @@ describe('AC-LPF-11 · reps in reserve: capacity = reps + (10 − RPE) when RPE 
     expect(e.effort).toEqual({ earlyStop: false, unclearBelowFloor: true, set: { reps: 6, rpe: null } });
   });
 
-  it('two below-floor sets without RPE are a real miss, not unclear', () => {
-    const e = exposure([strengthSet(60, 6), strengthSet(60, 6)]);
+  it('G-06/07: any number of below-floor sets without RPE is unclear the FIRST time', () => {
+    const e = exposure([strengthSet(60, 7), strengthSet(60, 7), strengthSet(60, 6)]);
+    expect(e.repsVsRange).toBe('below floor');
+    expect(e.effort).toMatchObject({ unclearBelowFloor: true });
+  });
+
+  it('G-06/07: the same again in the next performance (still no RPE) is a real miss', () => {
+    const e = computeLastExposure(
+      perf('x', 3, [strengthSet(60, 7), strengthSet(60, 6)]),
+      [perf('prev', 7, [strengthSet(60, 7), strengthSet(60, 6)])],
+      R810,
+      benchPress,
+      60,
+    );
     expect(e.effort.unclearBelowFloor).toBe(false);
+  });
+
+  it('G-06/07: the previous performance being fine (or having an RPE) keeps it unclear', () => {
+    const fine = computeLastExposure(
+      perf('x', 3, [strengthSet(60, 6)]),
+      [perf('prev', 7, [strengthSet(60, 9), strengthSet(60, 9)])],
+      R810,
+      benchPress,
+      60,
+    );
+    expect(fine.effort.unclearBelowFloor).toBe(true);
+    const withRpe = computeLastExposure(
+      perf('x', 3, [strengthSet(60, 6)]),
+      [perf('prev', 7, [strengthSet(60, 6, { rpe: 9 })])],
+      R810,
+      benchPress,
+      60,
+    );
+    expect(withRpe.effort.unclearBelowFloor).toBe(true);
   });
 
   it('a lone below-floor set at RPE 10 is a real miss', () => {
@@ -1267,5 +1303,97 @@ describe('AC-LPF-11 · reps in reserve: capacity = reps + (10 − RPE) when RPE 
       throw new Error('expected a value');
     }
     expect(e.dropOff.value).toBe(4);
+  });
+});
+
+describe('AC-LPF-12 · working weight is monotone in reps (W-22 (1), W-23)', () => {
+  it('the generated flip (seed 45): extra reps that make 65 recur no longer displace the older 70', () => {
+    // Before W-23 nothing recurred → "highest overall" (70); with +2 reps 65 recurred → 65 won: reps up, weight down.
+    const mk = (extra: number) => [
+      perf('a', 3, [strengthSet(65, 7 + extra), strengthSet(60, 12), strengthSet(60, 6)]),
+      perf('b', 10, [strengthSet(60, 10)]),
+      perf('c', 12, [strengthSet(65, 14), strengthSet(65, 12), strengthSet(65, 10), strengthSet(65, 8)]),
+      perf('d', 22, [strengthSet(70, 6), strengthSet(70, 4)]),
+      perf('e', 30, [strengthSet(70, 16), strengthSet(70, 13)]),
+    ];
+    const ww = (extra: number): number => {
+      const r = computeWorkingWeight(mk(extra), 'today', R810, benchPress, NOW, TZ);
+      return isAbsent(r) ? 0 : r.weight;
+    };
+    expect(ww(2)).toBeGreaterThanOrEqual(ww(0));
+    expect(ww(4)).toBeGreaterThanOrEqual(ww(2));
+  });
+
+  it('a load that recurs but was never reached, with nothing reached in the newest session → the estimate speaks', () => {
+    const perfs = [perf('a', 3, [strengthSet(70, 5)]), perf('b', 9, [strengthSet(70, 6)])];
+    const r = computeWorkingWeight(perfs, 'today', R810, benchPress, NOW, TZ);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect([r.weight, r.estimatedFrom]).toEqual([60, { weight: 70, reps: 5 }]);
+  });
+
+  it('nothing recurs at all (singles, a pyramid) → every reached load is eligible, the highest wins', () => {
+    const perfs = [perf('a', 3, [strengthSet(65, 10)]), perf('b', 9, [strengthSet(70, 10)])];
+    const r = computeWorkingWeight(perfs, 'today', R810, benchPress, NOW, TZ);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(70);
+  });
+});
+
+describe('AC-LPF-12 · indicative load of the newest single performance (ruling G-11)', () => {
+  const ind = (sets: [number, number][], ex = benchPress) =>
+    computeIndicativeLoad(
+      [
+        perf(
+          'a',
+          3,
+          sets.map(([w, r]) => strengthSet(w, r)),
+        ),
+      ],
+      'today',
+      R810,
+      ex,
+      NOW,
+      TZ,
+    );
+
+  it('60×6, 55×7, 45×12 (8–10, step 5) → 50 estimated from 55×7, not the failed opener 60', () => {
+    expect(
+      ind([
+        [60, 6],
+        [55, 7],
+        [45, 12],
+      ]),
+    ).toEqual({ weight: 50, unit: null, estimatedFrom: { weight: 55, reps: 7 } });
+  });
+
+  it('the highest load at which every set reached the floor; the tie on 40/45 goes to the heavier', () => {
+    expect(
+      ind([
+        [40, 10],
+        [40, 10],
+        [45, 8],
+        [45, 8],
+      ]),
+    ).toMatchObject({ weight: 45 });
+    expect(
+      ind([
+        [40, 10],
+        [40, 10],
+        [40, 9],
+      ]),
+    ).toMatchObject({ weight: 40 });
+  });
+
+  it('absent without a performance or a range; n/a for non-strength', () => {
+    expect(computeIndicativeLoad([], 'today', R810, benchPress, NOW, TZ)).toEqual({ absent: 'no completed record' });
+    expect(computeIndicativeLoad([perf('a', 3, [strengthSet(60, 10)])], 'today', null, benchPress, NOW, TZ)).toEqual({
+      absent: 'no rep range',
+    });
+    const plank = { ...benchPress, exerciseType: 'isometric' as const };
+    expect(computeIndicativeLoad([], 'today', R810, plank, NOW, TZ)).toEqual({ absent: 'n/a for isometric' });
   });
 });

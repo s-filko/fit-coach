@@ -96,6 +96,8 @@ export interface WorkoutSummaryInput {
 }
 
 export interface ConstraintInput {
+  /** Set by `computeConstraints`: the muscle is a PRIMARY one of the exercise (absent = treated as primary). */
+  onPrimary?: boolean;
   muscleGroup: MuscleGroup | null;
   durability: 'short' | 'long_term' | 'permanent';
   text: string;
@@ -158,6 +160,14 @@ export interface WorkingWeightFact {
   warmupsEstimated: boolean;
   mixedBasisExcluded: number;
   /** Set when the weight came from the indirect Epley estimate (the set it was read from), not from a reached load. */
+  estimatedFrom?: { weight: number; reps: number };
+}
+
+/** The load the newest single performance points to (ruling G-11): the insufficient-data reference load. */
+export interface IndicativeLoadFact {
+  weight: number;
+  unit: 'kg' | 'lbs' | null;
+  /** Set when the load is the indirect estimate from a short set, not a reached load. */
   estimatedFrom?: { weight: number; reps: number };
 }
 
@@ -236,7 +246,17 @@ export interface ConstraintsFact {
   equipment: string[];
 }
 
-export type EquipmentStepFact = Metric<{ step: number; unit: 'kg'; perHand: boolean; basis: string }>;
+export type EquipmentStepFact = Metric<{
+  step: number;
+  unit: 'kg';
+  perHand: boolean;
+  basis: string;
+  /**
+   * Whether the "one step ≤ ~10 % of the load" cap applies (owner ruling O-2): false for machines and cables, whose
+   * displayed load excludes the machine's own weight, so a step is relatively small whatever the displayed figure.
+   */
+  capApplies: boolean;
+}>;
 
 export interface LoadFacts {
   exerciseId: string;
@@ -247,6 +267,8 @@ export interface LoadFacts {
   fatigueReference: Metric<FatigueFact>;
   fatigueToday: FatigueFact;
   workingWeight: Metric<WorkingWeightFact>;
+  /** The newest performance's own working-weight reading, with no minimum count — for the insufficient-data path. */
+  indicativeLoad: Metric<IndicativeLoadFact>;
   e1rmTrend: Metric<E1rmTrendFact>;
   /** Sets at the working weight per performance — the evidence of the growth rule (load-plan-fixes item 5). */
   repHistory: Metric<RepHistoryFact>;

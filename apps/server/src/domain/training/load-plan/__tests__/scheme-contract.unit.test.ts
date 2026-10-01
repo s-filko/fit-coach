@@ -37,7 +37,7 @@ function fixtureSet(): { name: string; facts: LoadFacts }[] {
       name: 'light load, step over the 10 % cap',
       facts: makeFacts({
         workingWeight: { weight: 20, unit: 'kg', performances: 4, warmupsEstimated: false, mixedBasisExcluded: 0 },
-        equipmentStep: { step: 2.5, unit: 'kg', perHand: false, basis: 'default for cable' },
+        equipmentStep: { step: 2.5, unit: 'kg', perHand: false, basis: 'default for cable', capApplies: true },
       }),
     },
     { name: 'no equipment step', facts: makeFacts({ equipmentStep: { absent: 'n/a for bodyweight' } }) },
@@ -216,7 +216,7 @@ describe('AC-LP-1 · double_progression specifics', () => {
     const out = s.decide(
       makeFacts({
         workingWeight: { weight: 20, unit: 'kg', performances: 4, warmupsEstimated: false, mixedBasisExcluded: 0 },
-        equipmentStep: { step: 2.5, unit: 'kg', perHand: false, basis: 'x' },
+        equipmentStep: { step: 2.5, unit: 'kg', perHand: false, basis: 'x', capApplies: true },
       }),
       'hypertrophy',
       p(),

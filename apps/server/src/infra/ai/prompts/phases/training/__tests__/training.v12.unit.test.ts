@@ -75,6 +75,8 @@ describe('phase.training v12 — no invented conservative option (AC-LPF-3)', ()
     expect(task).toContain('never promise one, never pressure the client');
     expect(task).toContain('never invent a step the block does not offer');
     expect(task).toContain('encouragement; it never changes the load');
+    expect(task).toContain('relatively small because the machine adds its own weight');
+    expect(task).toContain('offer dumbbells');
   });
 
   it('AC-LPF-8: in-session hint — a set ≥ 3 reps above the top or below the floor → one step for the NEXT set', () => {

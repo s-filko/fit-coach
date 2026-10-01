@@ -10,6 +10,7 @@ export function makeFacts(over: Partial<LoadFacts> = {}): LoadFacts {
     reference: { absent: 'not needed by schemes' },
     fatigueReference: { absent: 'not needed by schemes' },
     fatigueToday: { perMuscle: [], fresh: true, minutesIntoSession: { absent: 'n/a' } },
+    indicativeLoad: { absent: 'not needed by schemes' },
     workingWeight: { weight: 65, unit: 'kg', performances: 5, warmupsEstimated: false, mixedBasisExcluded: 0 },
     e1rmTrend: {
       newest: 86,
@@ -37,7 +38,7 @@ export function makeFacts(over: Partial<LoadFacts> = {}): LoadFacts {
     },
     gap: { exercise: { days: 3 }, primaryMuscles: { days: 3 }, anyWorkout: { days: 1 } },
     constraints: { constraints: [], equipment: [] },
-    equipmentStep: { step: 5, unit: 'kg', perHand: false, basis: 'default for machine' },
+    equipmentStep: { step: 5, unit: 'kg', perHand: false, basis: 'default for machine', capApplies: true },
     ...over,
   };
 }

@@ -389,8 +389,11 @@ describe('AC-LPF-3 · insufficient data with a reference still names a number', 
 
   it('a break tier starts one step below the reference and says so', () => {
     const d = run(row([setOf(60, 8), setOf(60, 8)], { gap: gapOf(169) }));
-    expect([d.candidate.load, d.conservative.load]).toEqual([55, 50]);
+    // O-3: a restart is never lighter than a rebuild — two steps below the reference, then the ladder.
+    expect([d.candidate.load, d.conservative.load]).toEqual([50, 45]);
     expect(d.reason).toContain('restart tier');
+    expect(d.reason).toContain('2 steps below it');
+    expect(d.next).toEqual({ kind: 'ladder', remaining: 2, backTo: 60, cold: false });
   });
 
   it('with no reference at all there is no number and no conservative', () => {
@@ -630,7 +633,6 @@ describe('AC-LPF-7 · one-session growth (APRE-style surplus on the last set)', 
 
   it.each([
     ['a short constraint', { constraints: { constraints: [SHORT_CONSTRAINT], equipment: [] } }, 'short_constraint'],
-    ['a gap beyond a week (rest_with_question)', { gap: gapOf(10) }, 'scheme_hold'],
     ['a return-tier gap', { gap: gapOf(15) }, 'gap_return'],
     ['material pre-fatigue today', { fatigueToday: fatigue(3), fatigueReference: fatigue(0) }, 'pre_fatigue'],
   ] as [string, Partial<LoadFacts>, string][])('no jump with %s', (_name, over, row) => {
@@ -842,5 +844,132 @@ describe('AC-LPF-11 · reps in reserve in the decision rows', () => {
       });
     expect(run(f(15)).row).toBe('early_growth');
     expect(run(f(13)).row).toBe('scheme_hold');
+  });
+});
+
+describe('AC-LPF-12 · golden-table rulings in the domain', () => {
+  const grown = (over: Partial<LoadFacts> = {}): LoadFacts =>
+    makeFacts({
+      workingWeight: { weight: 50, unit: 'kg', performances: 5, warmupsEstimated: false, mixedBasisExcluded: 0 },
+      repRange: { min: 8, max: 10, source: 'today' },
+      e1rmTrend: { absent: 'x' },
+      repHistory: repHistoryOf(50, [{ reps: [15, 15, 15] }]),
+      gap: gapOf(4),
+      ...over,
+    });
+
+  it('G-15: recovered = gap tier rest OR rest_with_question — 9 d off the exercise still allows one-session growth', () => {
+    expect(run(grown({ gap: gapOf(9) }))).toMatchObject({ row: 'early_growth' });
+    expect(run(grown({ gap: gapOf(15) })).row).toBe('gap_return');
+  });
+
+  it('G-16: a short constraint on a primary muscle keeps one step down and adds "or skip / substitute"', () => {
+    const d = run(grown({ constraints: { constraints: [{ ...SHORT_CONSTRAINT, onPrimary: true }], equipment: [] } }));
+    expect(d.row).toBe('short_constraint');
+    expect(d.conservative.load).toBe(45);
+    expect(d.reason).toContain('or skip / substitute');
+  });
+
+  it('G-17: a short constraint on a secondary muscle only does not block growth', () => {
+    const d = run(grown({ constraints: { constraints: [{ ...SHORT_CONSTRAINT, onPrimary: false }], equipment: [] } }));
+    expect(d.row).toBe('early_growth');
+    expect(d.candidate.load).toBe(55);
+  });
+
+  it('O-2: where the machine adds its own weight the 10 % cap is waived — 2.5 kg + 5 kg, with the small-step note', () => {
+    const d = run(
+      grown({
+        workingWeight: { weight: 2.5, unit: 'kg', performances: 5, warmupsEstimated: false, mixedBasisExcluded: 0 },
+        equipmentStep: { step: 5, unit: 'kg', perHand: false, basis: 'default for machine', capApplies: false },
+        repHistory: repHistoryOf(2.5, [{ reps: [15, 15, 15] }, { reps: [15, 15, 15] }]),
+        repRange: { min: 10, max: 12, source: 'today' },
+      }),
+    );
+    expect(d).toMatchObject({ row: 'scheme_growth', outcome: 'one step up' });
+    expect(d.candidate.load).toBe(7.5);
+    expect(d.reason).toContain('relatively small step');
+  });
+
+  it('O-2: free weights keep the cap — 20 kg + 2.5 kg barbell step holds, progress by reps', () => {
+    const d = run(
+      grown({
+        workingWeight: { weight: 20, unit: 'kg', performances: 5, warmupsEstimated: false, mixedBasisExcluded: 0 },
+        equipmentStep: { step: 2.5, unit: 'kg', perHand: false, basis: 'default for barbell', capApplies: true },
+        repHistory: repHistoryOf(20, [{ reps: [12, 12, 12] }, { reps: [12, 12, 12] }]),
+      }),
+    );
+    expect(d.row).toBe('scheme_hold');
+    expect(d.next).toEqual({ kind: 'reps_only', step: 2.5, load: 20 });
+  });
+
+  it('G-11: with one performance the insufficient-data load is the working-weight value, not the failed opener', () => {
+    const d = run(
+      makeFacts({
+        workingWeight: { absent: 'insufficient: 1 performances / 8 wk' },
+        indicativeLoad: { weight: 50, unit: 'kg', estimatedFrom: { weight: 55, reps: 7 } },
+        reference: { absent: 'x' } as never,
+      }),
+    );
+    expect(d.row).toBe('insufficient_data');
+  });
+
+  it('G-51: a record without a load (bodyweight) is the reps-only path — no load number, and not "no record"', () => {
+    const reference = {
+      performance: {} as never,
+      daysAgo: 4,
+      sets: [{ setData: { type: 'strength', reps: 8 }, rpe: null, userFeedback: null, createdAt: new Date() }],
+      likeForLike: true,
+      warmupsEstimated: false,
+      rpe: [],
+      feedback: [],
+    } as unknown as LoadFacts['reference'];
+    const d = run(
+      makeFacts({
+        workingWeight: { absent: 'insufficient: 1 performances / 8 wk' },
+        indicativeLoad: { absent: 'no load reached the rep floor' },
+        reference,
+      }),
+    );
+    expect(d.candidate.load).toBeNull();
+    expect(d.reason).toContain('progress by reps');
+    expect(d.reason).not.toContain('no record');
+    expect(d.next).toMatchObject({ kind: 'hold' });
+  });
+
+  it('O-3: after a restart the start is never lighter than after a rebuild — two steps below, then the ladder', () => {
+    const reference = {
+      performance: {} as never,
+      daysAgo: 100,
+      sets: [
+        { setData: { type: 'strength', reps: 10, weight: 60 }, rpe: null, userFeedback: null, createdAt: new Date() },
+      ],
+      likeForLike: true,
+      warmupsEstimated: false,
+      rpe: [],
+      feedback: [],
+    } as unknown as LoadFacts['reference'];
+    const d = run(
+      makeFacts({
+        workingWeight: { absent: 'insufficient: 0 performances / 8 wk' },
+        indicativeLoad: { weight: 60, unit: 'kg' },
+        reference,
+        gap: gapOf(100),
+      }),
+    );
+    expect([d.candidate.load, d.conservative.load]).toEqual([50, 45]);
+    expect(d.outcome).toBe('2 steps below the reference');
+    expect(d.next).toEqual({ kind: 'ladder', remaining: 2, backTo: 60, cold: false });
+  });
+
+  it('G-26: 2-for-2 has no RPE condition — 12 @ RPE 9 twice grows (the RPE ≥ 9 guard is one-session growth only)', () => {
+    const d = run(
+      grown({
+        repHistory: repHistoryOf(50, [
+          { reps: [12, 12, 12], rpe: 9 },
+          { reps: [12, 12, 12], rpe: 9 },
+        ]),
+      }),
+    );
+    expect(d).toMatchObject({ row: 'scheme_growth', outcome: 'one step up' });
   });
 });

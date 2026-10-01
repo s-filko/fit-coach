@@ -112,9 +112,10 @@ describe('AC-LPF-12 · invariants over generated histories', () => {
   });
 
   it('more reps at the same load never lowers the recommendation (newest session, every set +2)', () => {
-    // Held constant: the working weight and the reference performance. Two documented exceptions are NOT held (W-17):
-    // extra reps can make an older load "recur" (W-1) and flip the working weight; extra reps can push the newest
-    // session out of like-for-like (D6) and switch the reference — both are findings for the owner, not silent fixes.
+    // The working weight is NOT held constant any more (W-23 made it monotone). Held: the reference performance
+    // (a like-for-like flip switches the pre-fatigue baseline — reported, W-24) and the decision PATH: a bump that
+    // creates a working weight moves a case from the insufficient-data path to the ladder, and after a rebuild the
+    // two start differently by the golden table itself (G-47: one step; G-43: two) — reported, W-24.
     let compared = 0;
     const lowers = ({ c, facts, d }: Run): string | null => {
       const [newest] = [...c.performances].sort((a, b) => b.performedAt.getTime() - a.performedAt.getTime());
@@ -133,13 +134,15 @@ describe('AC-LPF-12 · invariants over generated histories', () => {
             }
           : p;
       const bumpedFacts = factsOf(c, c.performances.map(bump));
-      const sameWeight = base(bumpedFacts) === base(facts);
       const refId = (f: LoadFacts): string | null => (isAbsent(f.reference) ? null : f.reference.performance.id);
-      if (!sameWeight || refId(bumpedFacts) !== refId(facts)) {
+      if (refId(bumpedFacts) !== refId(facts)) {
+        return null;
+      }
+      const more = decide(bumpedFacts, double);
+      if ((more.row === 'insufficient_data') !== (d.row === 'insufficient_data')) {
         return null;
       }
       compared++;
-      const more = decide(bumpedFacts, double);
       const before = d.candidate.load ?? 0;
       return (more.candidate.load ?? 0) >= before - EPS ? null : `+2 reps lowered ${before} → ${more.candidate.load}`;
     };
