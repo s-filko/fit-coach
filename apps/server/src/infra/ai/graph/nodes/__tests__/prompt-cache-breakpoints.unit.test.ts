@@ -6,7 +6,16 @@ import { AIMessage, type BaseMessage, HumanMessage, ToolMessage } from '@langcha
 
 import { cacheControlParts, wireText } from '../../../context/__tests__/request-capture';
 
-import { history0, lastHumanIndex, noSets, run, state, T0 } from './prompt-cache-harness';
+import {
+  history0,
+  lastHumanIndex,
+  loadPlanTrainingData,
+  makeLoadPlanTrainingSpec,
+  noSets,
+  run,
+  state,
+  T0,
+} from './prompt-cache-harness';
 
 jest.mock('@infra/ai/model.factory', () => ({
   getModel: () => (jest.requireActual('./prompt-cache-harness') as typeof import('./prompt-cache-harness')).state.model,
@@ -84,5 +93,25 @@ describe('AC-PC-3: cache_control breakpoints behind LLM_PROMPT_CACHE (D1, D6)', 
     const parts = cacheControlParts(r);
     expect(parts).toHaveLength(2);
     expect(parts[1]!.messageIndex).toBeLessThan(lastHumanIndex(r));
+  });
+});
+
+describe('AC-PC-3 + AC-LPF-8: breakpoints on the real training phase with the LOAD_PLAN flags on', () => {
+  it('AC-PC-3: two breakpoints (system, last history message) — the LOAD PLAN block is in neither, it stays in the <context> of the current turn', async () => {
+    state.config = { LLM_PROMPT_CACHE: 'anthropic', LLM_PROMPT_CACHE_TTL: '5m' };
+    const { spec, deps } = makeLoadPlanTrainingSpec(() => loadPlanTrainingData(0));
+    const { requests } = await run([...history0(), new HumanMessage({ content: 'жим ногами 120 на 12', id: 'h1' })], {
+      now: T0,
+      spec,
+      deps,
+    });
+    const r = requests[0]!;
+    const parts = cacheControlParts(r);
+    expect(parts).toHaveLength(2);
+    expect(parts[1]!.messageIndex).toBe(lastHumanIndex(r) - 1);
+    for (const p of parts) {
+      expect(wireText(r.messages[p.messageIndex]!)).not.toContain('=== LOAD PLAN');
+    }
+    expect(wireText(r.messages[lastHumanIndex(r)]!)).toContain('=== LOAD PLAN');
   });
 });

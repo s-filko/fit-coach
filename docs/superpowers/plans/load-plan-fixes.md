@@ -391,6 +391,43 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
   ("last set at 2.5 kg ≥ 17 reps in 2 workouts in a row … → +1 step (5 kg)" for range 10–15). G-32 / G-33 are asserted against
   "O-2 + step from history": G-33 recommends 5 / 2.5 (was 7.5 / 2.5 under the 5 kg default). Leg press keeps the default (all loads
   multiples of 5).
+- (D) W-30 (review run 3, R1 + R2 advisory): the effort hint is data — `effortHint` returns `{ reason: 'below_floor' | 'above_range' |
+  'last_planned_set' }`; the words (the Russian question, the RPE mapping, `update_last_set`) live in `log-set.tool.ts` and ONE source,
+  `infra/ai/prompts/effort.ts` (`EFFORT_QUESTION`, `EFFORT_RPE_BY_ANSWER`, `EFFORT_MAPPING_TEXT`), which the tool description and v12
+  quote; a v12 test checks the prompt text against the constants. The hint reaches the coach only with `LOAD_PLAN_SUGGESTION` on
+  (`buildLogSetTool({ effortHints })`, wired in `training.spec.ts`).
+- (D) W-31 (R2 + R3 + advisories): one `pickWorkingLoad` (reached load vs the Epley estimate, newest performance) serves
+  `computeWorkingWeight` and `computeIndicativeLoad`. `qualifyingLoad` and the estimate read CAPACITY (reps + 10 − RPE): the reviewer's
+  probes are red tests — 60×10,10,9 twice then 65×9,8,6 @ RPE 7 → working weight 65 with an early stop AT 65 (no hold at 60); a single
+  60×9,8,6 @ RPE 7 → 60, no Epley "failure" estimate. The estimate only reads sets of capacity ≤ 10 and targets min(range.min, 10)
+  reps (range 12–15, 100×8 → 95). Effort rows (`early_stop`, `unclear_effort`) judge sets AT the working weight only — no fallback to
+  another load — and "repeated" needs the previous performance at the SAME load.
+- (D) W-32 (R3-2, R3-4): equipment step from history reads the last 8 weeks only and an off-grid load counts only when it occurs in ≥ 2
+  performances (one 22.7 / 20.4 kg set keeps the default). `capApplies` is false for `machine` only (a machine's displayed load
+  excludes its unknown own weight — the equipment kind is the signal; there is no equipment fact for the base); cables keep the cap.
+  When the cap blocks a MET growth condition (2-for-2 or one-session), the smallest step (one equipment step) is offered with the reps
+  reset to the floor (`reps {min, min}`) and the reason "the step (2.5 kg, 12.5 % of 20 kg) is over the 10 % cap but the growth
+  condition is met: the smallest step, reps reset to the floor 8" — no dead end for free weights; not yet met → `next step:` names that
+  step. The `reps_only` next-step kind is gone. **Golden rows moved by this ruling (named in the test titles, fixture untouched):
+  G-40 (8 kg dumbbell, "certain": table hold / progress by reps → grow 10 × 10, conservative 8) and G-60 (20 kg barbell: table hold →
+  grow 22.5 × 8, conservative 20).** G-32 / G-33 (machine) unchanged.
+- (D) W-33 (R3 test strength): the golden next-step check now requires EVERY load and threshold of a gist (> 10 or decimal) in the printed
+  line — the block prints the one-session alternative also when one session is missing ("≥ 12 reps once more (or ≥ 13 reps once at RPE ≤ 8,
+  recovered)"); the generator has a growth-biased mode (`generateCase(seed, 'growth')`, 1000 extra cases; floor ≥ 60 % end in a growth row —
+  746 of 1000 at the run); the reps-monotonicity invariant also runs for linear progression and found a real flaw: the e1RM flat run is not
+  monotone in reps (a stronger newest session breaks "flat"), so linear progression now confirms "all fixed reps made twice in a row" from
+  the rep history; every describe carries an AC id.
+- (D) W-34 (R3 verification evidence, rule 2) — run of `1ee7a1c8` (before this fix): check-all 0; test:unit 211 suites / 2659; test:integration
+  59 / 707 (1 todo); test:scenarios 28 / 440 (1 todo); golden 60/60 (121 tests) with rulings in the titles. This fix: check-all 0; test:unit 211 / 2677;
+  integration 59 / 707; scenarios 28 / 440; the load-facts scenario is back to 79.5 / 77 (the seeded 82 kg is an outlier under W-32). Red-then-green per change was
+  recorded in the worker reports of each dispatch (compile- or assertion-red first, then green); the owner rows are unchanged (leg press 09-21
+  120 / 115, 09-27 135 / 130, lateral raise 2.5 / 2.5 → 5 kg step from history).
+- (D) W-35 (orchestrator addition): prompt-cache guard with the LOAD_PLAN flags on — `prompt-cache-harness.ts` gains `makeLoadPlanTrainingSpec`
+  (the REAL training spec — tools, v12 selection, LOAD PLAN v2 — with SUGGESTION + BREAKS + PLANNER_REBIND on over fixed `TrainingData`
+  built from the owner leg-press history) and `prompt-cache-prefix` / `-breakpoints` tests use it: two consecutive turns, the second after a
+  `log_set` whose result carries the effort hint, keep the system message (the v12 text) and the tool list byte-identical and the history
+  prefix unchanged; LOAD PLAN sits only in the `<context>` of the current user message, never in the system message or the history; the
+  two `cache_control` breakpoints (system, last history message) never carry it. It passed on the first run (a guard, no red).
 
 ## Review
 

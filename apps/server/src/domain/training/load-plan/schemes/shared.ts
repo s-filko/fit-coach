@@ -53,7 +53,12 @@ export function roundLoad(value: number): number {
   return Math.round(value * PRECISION) / PRECISION;
 }
 
-export type Growth = { kind: 'grow'; load: number } | { kind: 'reps-only' } | { kind: 'no-step' };
+/**
+ * `grow`: one step up within the cap. `capped`: the step is over the cap but is still the smallest increment the
+ * equipment has — offered with reps reset to the floor when the growth condition is met (NSCA: use the smallest
+ * available increment). `no-step`: no equipment step known.
+ */
+export type Growth = { kind: 'grow'; load: number } | { kind: 'capped'; load: number } | { kind: 'no-step' };
 
 /** Load after one step, or why there is none: no step known, or the step exceeds the cap. */
 export function stepUp(base: number, step: number | null, capPct: number, capApplies = true): Growth {
@@ -61,7 +66,7 @@ export function stepUp(base: number, step: number | null, capPct: number, capApp
     return { kind: 'no-step' };
   }
   if (capApplies && step > base * capPct + Number.EPSILON) {
-    return { kind: 'reps-only' };
+    return { kind: 'capped', load: roundLoad(base + step) };
   }
   return { kind: 'grow', load: roundLoad(base + step) };
 }
@@ -78,6 +83,15 @@ export function stepDown(load: number, step: number | null): number {
 /** Whether the "step ≤ ~10 % of the load" cap applies (ruling O-2: not to machines / cables, own weight unknown). */
 export function capAppliesOf(facts: LoadFacts): boolean {
   return isAbsent(facts.equipmentStep) ? true : facts.equipmentStep.capApplies;
+}
+
+/**
+ * The reason of a growth the cap would have blocked (run 3): the growth condition is met, the equipment's smallest step
+ * is over the cap, so that smallest step is offered with the reps reset to the floor — never a dead end.
+ */
+export function cappedNote(base: number, step: number, capPct: number, floor: number): string {
+  const pct = Math.round((step / base) * 100);
+  return `the step (${step} kg, ${pct} % of ${base} kg) is over the ${Math.round(capPct * 100)} % cap but the growth condition is met: the smallest step, reps reset to the floor ${floor}`;
 }
 
 /** The note a growth reason carries when the cap was waived and the step is large next to the displayed load. */
@@ -138,6 +152,18 @@ export function lastSetText(entry: RepEntry): string {
     : `${reps} reps at RPE ${entry.lastSetRpe} (counts as ${capacityOf(reps, entry.lastSetRpe)})`;
 }
 
+/** Consecutive newest performances at the working weight in which EVERY set reached `reps`. */
+function floorRun(entries: RepEntry[], reps: number): number {
+  let run = 0;
+  while (run < entries.length && entries[run].repsAtWorkingWeight.length > 0) {
+    if (entries[run].repsAtWorkingWeight.some(r => r < reps)) {
+      break;
+    }
+    run++;
+  }
+  return run;
+}
+
 /** Consecutive newest performances whose last set at the working weight had a capacity of at least `reps`. */
 function surplusRun(entries: RepEntry[], reps: number): number {
   let run = 0;
@@ -174,8 +200,8 @@ export function decideProgression(facts: LoadFacts, params: SchemeParams, rule: 
     missing,
     next,
   });
-  const grown = (load: number, why: string): SchemeOutput => ({
-    candidate: make(load),
+  const grown = (load: number, why: string, resetReps = false): SchemeOutput => ({
+    candidate: resetReps ? { load, unit, reps: { min: reps.min, max: reps.min } } : make(load),
     conservative: make(base),
     reason: why,
     confidence: confidenceOf(facts, missing),
@@ -209,7 +235,12 @@ export function decideProgression(facts: LoadFacts, params: SchemeParams, rule: 
   if (!rule.succeeded(vsRange)) {
     return hold(`last exposure ${vsRange}; growth needs ${rule.successLabel} — hold`);
   }
-  const seen = confirmations(facts);
+  // Fixed reps (linear): "make all the reps twice in a row" is read from the rep history — the e1RM flat run is not
+  // monotone in reps (a stronger newest session breaks "flat"), the rep history is.
+  const seen =
+    params.fixedReps !== undefined && !isAbsent(facts.repHistory)
+      ? floorRun(facts.repHistory.entries, params.fixedReps)
+      : confirmations(facts);
   if (seen === null) {
     missing.push(E1RM_TREND);
     return hold(`${E1RM_TREND} missing — cannot count confirming sessions`);
@@ -224,13 +255,12 @@ export function decideProgression(facts: LoadFacts, params: SchemeParams, rule: 
       `${rule.successLabel} for ${params.confirmSessions} sessions — one step up${smallStepNote(facts, base, step, params.stepCapPct)}`,
     );
   }
-  if (growth.kind === 'reps-only') {
-    const pct = Math.round(params.stepCapPct * 100);
-    return hold(`${rule.successLabel}; one step exceeds ${pct} % of the load — progress by reps, not load`, {
-      kind: 'reps_only',
-      step: step ?? 0,
-      load: base,
-    });
+  if (growth.kind === 'capped') {
+    return grown(
+      growth.load,
+      `${rule.successLabel} for ${params.confirmSessions} sessions — ${cappedNote(base, step ?? 0, params.stepCapPct, reps.min)}`,
+      true,
+    );
   }
   return hold(`${rule.successLabel}; no load step known`);
 }
@@ -240,7 +270,7 @@ interface RepGrowthCtx {
   step: number | null;
   reps: RepRange;
   hold: (why: string, next?: NextStep) => SchemeOutput;
-  grown: (load: number, why: string) => SchemeOutput;
+  grown: (load: number, why: string, resetReps?: boolean) => SchemeOutput;
   capApplies: boolean;
   smallStep: string;
 }
@@ -263,15 +293,11 @@ function decideFromRepHistory(facts: LoadFacts, params: SchemeParams, surplus: n
       `last set at the working weight ≥ ${needReps} reps (range top ${c.reps.max} + ${surplus}) in ${seen} sessions in a row — one step up${c.smallStep}`,
     );
   }
-  if (growth.kind === 'reps-only') {
-    const pct = Math.round(params.stepCapPct * 100);
-    return c.hold(
-      `last set at the working weight ${lastText}; one step exceeds ${pct} % of the load — progress by reps, not load`,
-      {
-        kind: 'reps_only',
-        step: c.step ?? 0,
-        load: c.base,
-      },
+  if (seen >= params.confirmSessions && growth.kind === 'capped') {
+    return c.grown(
+      growth.load,
+      `last set at the working weight ≥ ${needReps} reps (range top ${c.reps.max} + ${surplus}) in ${seen} sessions in a row — ${cappedNote(c.base, c.step ?? 0, params.stepCapPct, c.reps.min)}`,
+      true,
     );
   }
   if (growth.kind === 'no-step') {
@@ -279,9 +305,6 @@ function decideFromRepHistory(facts: LoadFacts, params: SchemeParams, surplus: n
       kind: 'hold',
       why: 'no load step known',
     });
-  }
-  if (growth.kind !== 'grow') {
-    return c.hold(`last set at the working weight ${lastText}; no load step known`);
   }
   const missing = params.confirmSessions - seen;
   const why =

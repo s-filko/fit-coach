@@ -76,17 +76,24 @@ function notApplicable(exercise: ExerciseInput): { absent: string } {
 interface LoadedSet {
   weight: number;
   reps: number;
+  rpe: number | null;
   unit: 'kg' | 'lbs' | null;
   perHand: boolean;
 }
 
 /** A strength set with a positive weight, or null (load metrics only ever see these). */
-function loadOf(set: Pick<SetInput, 'setData'>): LoadedSet | null {
+function loadOf(set: Pick<SetInput, 'setData'> & { rpe?: number | null }): LoadedSet | null {
   const d = set.setData;
   if (d.type !== 'strength' || d.weight === undefined || d.weight <= 0) {
     return null;
   }
-  return { weight: d.weight, reps: d.reps, unit: d.weightUnit ?? null, perHand: d.perHand === true };
+  return {
+    weight: d.weight,
+    reps: d.reps,
+    rpe: set.rpe ?? null,
+    unit: d.weightUnit ?? null,
+    perHand: d.perHand === true,
+  };
 }
 
 /** Reps of a rep-counted set (strength, functional_reps), else null. */
@@ -335,14 +342,7 @@ export function computeWorkingWeight(
   if (!range) {
     return absent(NO_RANGE);
   }
-  const reached = qualifyingLoad(used, range.min);
-  const estimate = indirectEstimate(
-    used[0],
-    range.min,
-    computeEquipmentStep(exercise, recordedLoadsOf(perfs, todaySessionId, now, tz)),
-  );
-  const fromEstimate = estimate !== null && (!reached || estimate.weight > reached.weight);
-  const best = fromEstimate ? { weight: estimate.weight, unit: estimate.unit } : reached;
+  const best = pickWorkingLoad(used, range.min, equipmentStepOf(exercise, perfs, todaySessionId, now, tz));
   if (!best) {
     return absent('no load reached the rep floor');
   }
@@ -352,7 +352,7 @@ export function computeWorkingWeight(
     performances: used.length,
     warmupsEstimated: used.some(r => r.estimated),
     mixedBasisExcluded,
-    ...(fromEstimate ? { estimatedFrom: estimate.from } : {}),
+    ...(best.estimatedFrom ? { estimatedFrom: best.estimatedFrom } : {}),
   };
 }
 
@@ -371,19 +371,40 @@ function indirectEstimate(
   if (isAbsent(stepFact)) {
     return null;
   }
-  const sets = newest.loads.filter(l => l.reps >= 1 && l.reps <= E1RM_MAX_REPS);
+  // Capacity (reps + reps in reserve) is what the set shows; no formula above E1RM_MAX_REPS of it.
+  const sets = newest.loads.filter(l => capacityOf(l.reps, l.rpe) >= 1 && capacityOf(l.reps, l.rpe) <= E1RM_MAX_REPS);
   if (sets.length === 0) {
     return null;
   }
-  const lowest = sets.reduce((a, b) => (epley(b.weight, b.reps) < epley(a.weight, a.reps) ? b : a));
-  const load = epley(lowest.weight, lowest.reps) / (1 + floor / EPLEY_DIVISOR);
+  const e1rm = (l: LoadedSet): number => epley(l.weight, capacityOf(l.reps, l.rpe));
+  const lowest = sets.reduce((a, b) => (e1rm(b) < e1rm(a) ? b : a));
   // Only a set that fell short of the floor asks for a lighter load; a set that reached it is already what the reached
   // load says (80×10 for 8–12 must not be "estimated" up to 82.5).
-  if (lowest.reps >= floor) {
+  if (capacityOf(lowest.reps, lowest.rpe) >= floor) {
     return null;
   }
+  // The target is the floor, but never above the reps the formula is trusted for (a 12–15 range targets 10 reps).
+  const load = e1rm(lowest) / (1 + Math.min(floor, E1RM_MAX_REPS) / EPLEY_DIVISOR);
   const weight = roundDownToStep(load, stepFact.step);
   return weight > 0 ? { weight, unit: lowest.unit, from: { weight: lowest.weight, reps: lowest.reps } } : null;
+}
+
+/**
+ * The working-weight reading of one set of performances: the reached load, or the indirect estimate from the NEWEST
+ * performance when it is higher (a short set asked for a lighter load than the one tried, but heavier than anything
+ * reached). One place for both `computeWorkingWeight` and `computeIndicativeLoad`.
+ */
+function pickWorkingLoad(
+  used: LoadPerformance[],
+  floor: number,
+  step: Metric<{ step: number }>,
+): { weight: number; unit: 'kg' | 'lbs' | null; estimatedFrom?: { weight: number; reps: number } } | null {
+  const reached = qualifyingLoad(used, floor);
+  const estimate = indirectEstimate(used[0], floor, step);
+  if (estimate !== null && (!reached || estimate.weight > reached.weight)) {
+    return { weight: estimate.weight, unit: estimate.unit, estimatedFrom: estimate.from };
+  }
+  return reached ? { weight: reached.weight, unit: reached.unit } : null;
 }
 
 /** Round down to the load grid; the epsilon keeps an exact grid value (55.0000000001 or 54.99999999) on its step. */
@@ -403,7 +424,7 @@ function roundDownToStep(load: number, step: number): number {
  */
 function qualifyingLoad(used: LoadPerformance[], floor: number): LoadedSet | null {
   const reached = used.map(r =>
-    r.loads.filter(l => r.loads.filter(o => o.weight === l.weight).every(o => o.reps >= floor)),
+    r.loads.filter(l => r.loads.filter(o => o.weight === l.weight).every(o => capacityOf(o.reps, o.rpe) >= floor)),
   );
   const presence = (weight: number): number => used.filter(r => r.loads.some(l => l.weight === weight)).length;
   const highest = (sets: LoadedSet[]): LoadedSet | null =>
@@ -511,17 +532,9 @@ export function computeIndicativeLoad(
   if (!newest) {
     return absent(NO_RECORD);
   }
-  const reached = qualifyingLoad([newest], range.min);
-  const estimate = indirectEstimate(
-    newest,
-    range.min,
-    computeEquipmentStep(exercise, recordedLoadsOf(perfs, todaySessionId, now, tz)),
-  );
-  if (estimate !== null && (!reached || estimate.weight > reached.weight)) {
-    return { weight: estimate.weight, unit: estimate.unit, estimatedFrom: estimate.from };
-  }
-  if (reached) {
-    return { weight: reached.weight, unit: reached.unit };
+  const picked = pickWorkingLoad([newest], range.min, equipmentStepOf(exercise, perfs, todaySessionId, now, tz));
+  if (picked) {
+    return picked;
   }
   // Nothing reached the floor and no estimate (unknown step): the newest performance's most-used load (heavier on tie).
   const counts = new Map<number, { count: number; unit: 'kg' | 'lbs' | null }>();
@@ -609,6 +622,15 @@ function atLoad(working: SetInput[], weight: number | undefined): SetInput[] {
   return own.length > 0 ? own : working;
 }
 
+/**
+ * Sets at exactly `weight`; with a known working weight and none at it, nothing — the effort rows judge sets AT the
+ * working weight only (a probe, or a session at another load, is not an early stop or a miss at this one). Without a
+ * working weight, all sets, as before.
+ */
+function onlyAtLoad(working: SetInput[], weight: number | undefined): SetInput[] {
+  return weight === undefined ? working : working.filter(s => loadOf(s)?.weight === weight);
+}
+
 function dropOffOf(allWorking: SetInput[], weight?: number): number | null {
   const working = atLoad(allWorking, weight);
   const loads = working.map(loadOf);
@@ -654,7 +676,7 @@ function previousBelowWithoutRpe(
   }
   const previous = [...earlier]
     .sort((a, b) => b.performedAt.getTime() - a.performedAt.getTime())
-    .map(p => atLoad(classifySets(p.sets).working, workingWeight))
+    .map(p => onlyAtLoad(classifySets(p.sets).working, workingWeight))
     .find(w => w.length > 0);
   const below = previous ? belowFloorSets(previous, range) : [];
   return below.length > 0 && below.every(s => s.rpe === null);
@@ -699,7 +721,11 @@ export function computeLastExposure(
   const value = dropOffOf(working);
   const atWeight = workingWeight !== undefined && working.some(s => loadOf(s)?.weight === workingWeight);
   return {
-    effort: effortOf(working, range, previousBelowWithoutRpe(earlier, range, workingWeight)),
+    effort: effortOf(
+      onlyAtLoad(allWorking, workingWeight),
+      range,
+      previousBelowWithoutRpe(earlier, range, workingWeight),
+    ),
     repsVsRange: repsVsRange(working, range),
     rpe: rpeFact,
     dropOff:
@@ -781,19 +807,29 @@ function gcd(a: number, b: number): number {
 /**
  * The step the recorded working loads actually use (orchestrator ruling 2026-10-01): when a load is not a multiple of
  * the default step, the step is the largest value that divides every recorded load — on a 0.25 kg grid, never above the
- * default, never below 0.5 kg. Null = the default stands (every load is a multiple, or nothing is recorded).
+ * default, never below 0.5 kg. Evidence = the working loads of each performance of the last 8 weeks; an off-grid load
+ * counts only when it occurs in at least two performances (a lone 22.7 / 20.4 kg set is an outlier, not a step).
+ * Null = the default stands.
  */
-function stepFromHistory(defaultStep: number, loads: number[]): number | null {
-  const grid = loads.map(l => Math.round(l / GRID_KG));
+function stepFromHistory(defaultStep: number, loadsByPerformance: number[][]): number | null {
   const onDefault = (l: number): boolean => Math.abs(l / defaultStep - Math.round(l / defaultStep)) < 1e-9;
-  if (grid.length === 0 || loads.every(onDefault) || grid.some(g => g <= 0)) {
+  const presence = new Map<number, number>();
+  for (const perfLoads of loadsByPerformance) {
+    for (const l of new Set(perfLoads)) {
+      presence.set(l, (presence.get(l) ?? 0) + 1);
+    }
+  }
+  const offGrid = [...presence.entries()].filter(([l, n]) => !onDefault(l) && n >= RECURRING_PERFORMANCES);
+  const grid = [...presence.keys()]
+    .filter(l => onDefault(l) || offGrid.some(([o]) => o === l))
+    .map(l => Math.round(l / GRID_KG));
+  if (offGrid.length === 0 || grid.some(g => g <= 0)) {
     return null;
   }
-  const step = grid.reduce(gcd) * GRID_KG;
-  return Math.min(defaultStep, Math.max(MIN_STEP_KG, step));
+  return Math.min(defaultStep, Math.max(MIN_STEP_KG, grid.reduce(gcd) * GRID_KG));
 }
 
-export function computeEquipmentStep(exercise: ExerciseInput, recordedLoads: number[] = []): EquipmentStepFact {
+export function computeEquipmentStep(exercise: ExerciseInput, loadsByPerformance: number[][] = []): EquipmentStepFact {
   if (exercise.exerciseType !== 'strength') {
     return notApplicable(exercise);
   }
@@ -801,19 +837,31 @@ export function computeEquipmentStep(exercise: ExerciseInput, recordedLoads: num
     return absent(`n/a for ${exercise.equipment}`);
   }
   const fallback = STEP_BY_EQUIPMENT[exercise.equipment];
-  const fromHistory = stepFromHistory(fallback, recordedLoads);
+  const fromHistory = stepFromHistory(fallback, loadsByPerformance);
   return {
     step: fromHistory ?? fallback,
     unit: 'kg',
     perHand: exercise.equipment === 'dumbbell',
     basis: fromHistory === null ? `default for ${exercise.equipment}` : 'from history',
-    capApplies: exercise.equipment !== 'machine' && exercise.equipment !== 'cable',
+    // Owner ruling O-2, narrowed (run 3): only a machine's displayed load excludes its own (unknown) weight; a cable
+    // stack shows the real load, so the cap stays.
+    capApplies: exercise.equipment !== 'machine',
   };
 }
 
-/** The working loads the exercise's real performances recorded (all of them, no window) — the step's evidence. */
-function recordedLoadsOf(perfs: PerformanceInput[], todaySessionId: string, now: Date, tz: string | null): number[] {
-  return realPerformances(perfs, todaySessionId, now, tz).flatMap(r => loadedSets(r).map(l => l.weight));
+/** The step of the exercise given its real performances of the last 8 weeks (the evidence of "from history"). */
+function equipmentStepOf(
+  exercise: ExerciseInput,
+  perfs: PerformanceInput[],
+  todaySessionId: string,
+  now: Date,
+  tz: string | null,
+): EquipmentStepFact {
+  const recent = realPerformances(perfs, todaySessionId, now, tz).filter(r => r.daysAgo <= WINDOW_DAYS);
+  return computeEquipmentStep(
+    exercise,
+    recent.map(r => loadedSets(r).map(l => l.weight)),
+  );
 }
 
 // --- Assembly ---
@@ -868,7 +916,7 @@ export function computeLoadFacts(
     lastExposure: lastExposureOf(performances, todayId, now, timezone, range, exercise, workingWeight),
     gap: computeGap(exercise, performances, context.workouts, todayId, now, timezone),
     constraints: computeConstraints(exercise, context),
-    equipmentStep: computeEquipmentStep(exercise, recordedLoadsOf(performances, todayId, now, timezone)),
+    equipmentStep: equipmentStepOf(exercise, performances, todayId, now, timezone),
   };
 }
 

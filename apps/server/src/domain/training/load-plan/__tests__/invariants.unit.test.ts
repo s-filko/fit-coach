@@ -9,6 +9,7 @@ import { factsOf, generateCase, type GeneratedCase } from './history-generator';
  * a failure names the seed, so `generateCase(seed)` reproduces it).
  */
 const CASES = 2500;
+const GROWTH_CASES = 1000;
 const EPS = 1e-6;
 const double: DecideInput = { scheme: getScheme('double_progression'), goal: 'hypertrophy' };
 const linear: DecideInput = { scheme: getScheme('linear_progression'), goal: 'strength' };
@@ -20,6 +21,7 @@ interface Run {
 }
 
 const seeds = Array.from({ length: CASES }, (_v, i) => i + 1);
+const growthSeeds = Array.from({ length: GROWTH_CASES }, (_v, i) => 100_000 + i);
 const cache = new Map<DecideInput, Run[]>();
 
 function runAll(scheme: DecideInput): Run[] {
@@ -27,11 +29,12 @@ function runAll(scheme: DecideInput): Run[] {
   if (cached) {
     return cached;
   }
-  const runs = seeds.map(seed => {
-    const c = generateCase(seed);
-    const facts = factsOf(c);
-    return { c, facts, d: decide(facts, scheme) };
-  });
+  const runs = [...seeds.map(seed => generateCase(seed)), ...growthSeeds.map(seed => generateCase(seed, 'growth'))].map(
+    c => {
+      const facts = factsOf(c);
+      return { c, facts, d: decide(facts, scheme) };
+    },
+  );
   cache.set(scheme, runs);
   return runs;
 }
@@ -111,34 +114,47 @@ describe('AC-LPF-12 · invariants over generated histories', () => {
     expect(each(bad)).toEqual([]);
   });
 
-  it('more reps at the same load never lowers the recommendation (newest session, every set +2)', () => {
-    // Nothing is held constant any more: not the working weight (monotone since W-23), not the reference or the
-    // decision path (pre-fatigue and the insufficient-data load read the newest performance since W-27).
-    let compared = 0;
-    const lowers = ({ c, facts, d }: Run): string | null => {
-      const [newest] = [...c.performances].sort((a, b) => b.performedAt.getTime() - a.performedAt.getTime());
-      if (!newest) {
-        return null;
-      }
-      const bump = (p: PerformanceInput): PerformanceInput =>
-        p === newest
-          ? {
-              ...p,
-              sets: p.sets.map(s =>
-                s.setData.type === 'strength' && s.setKind !== 'warmup'
-                  ? { ...s, setData: { ...s.setData, reps: s.setData.reps + 2 } }
-                  : s,
-              ),
-            }
-          : p;
-      const bumpedFacts = factsOf(c, c.performances.map(bump));
-      const more = decide(bumpedFacts, double);
-      compared++;
-      const before = d.candidate.load ?? 0;
-      return (more.candidate.load ?? 0) >= before - EPS ? null : `+2 reps lowered ${before} → ${more.candidate.load}`;
-    };
-    expect(each(lowers)).toEqual([]);
-    expect(compared).toBeGreaterThan(800); // the held-constant filter must leave a real sample
+  it.each([
+    ['double progression', double],
+    ['linear progression', linear],
+  ])(
+    'more reps at the same load never lowers the recommendation (%s; newest session, every set +2)',
+    (_name, scheme) => {
+      // Nothing is held constant any more: not the working weight (monotone since W-23), not the reference or the
+      // decision path (pre-fatigue and the insufficient-data load read the newest performance since W-27).
+      let compared = 0;
+      const lowers = ({ c, d }: Run): string | null => {
+        const [newest] = [...c.performances].sort((a, b) => b.performedAt.getTime() - a.performedAt.getTime());
+        if (!newest) {
+          return null;
+        }
+        const bump = (p: PerformanceInput): PerformanceInput =>
+          p === newest
+            ? {
+                ...p,
+                sets: p.sets.map(s =>
+                  s.setData.type === 'strength' && s.setKind !== 'warmup'
+                    ? { ...s, setData: { ...s.setData, reps: s.setData.reps + 2 } }
+                    : s,
+                ),
+              }
+            : p;
+        const more = decide(factsOf(c, c.performances.map(bump)), scheme);
+        compared++;
+        const before = d.candidate.load ?? 0;
+        return (more.candidate.load ?? 0) >= before - EPS ? null : `+2 reps lowered ${before} → ${more.candidate.load}`;
+      };
+      expect(each(lowers, scheme)).toEqual([]);
+      expect(compared).toBeGreaterThan(800);
+    },
+  );
+
+  it('the growth-biased mode reaches growth: at least 60 % of the growth cases end in a growth row (floor)', () => {
+    const growthRuns = runAll(double).filter(r => r.c.seed >= 100_000);
+    const growing = growthRuns.filter(r => r.d.row === 'scheme_growth' || r.d.row === 'early_growth');
+    // eslint-disable-next-line no-console
+    console.log(`GROWTH CASES ${growing.length} of ${growthRuns.length}`);
+    expect(growing.length).toBeGreaterThanOrEqual(GROWTH_CASES * 0.6);
   });
 
   it('every row carries a next step', () => {

@@ -207,11 +207,10 @@ describe('LOAD PLAN over the real DB (AC-LF-5)', () => {
     expect(context).toContain('scheme: double progression 8–12, confirm ×2 (default, unconfirmed)');
     expect(context).toContain('tactic: none active');
     expect(context).toContain('decision: Stage A, pre-fatigue delta → one step down');
-    // The seeded loads (82 kg) are not multiples of the barbell default 2.5, so the step comes from history
-    // (orchestrator ruling 2026-10-01, W-29): 2 kg, and the one-step-down suggestion is 80 / 78.
-    expect(context).toContain('step: 2 kg (from history)');
-    expect(context).toMatch(/recommend: 80 kg × 8–12 — 6 more working sets on a shared muscle today/);
-    expect(context).toMatch(/conservative: 78 kg × 8–12 — 2 kg lower/);
+    // The seeded 82 kg is off the barbell 2.5 grid but occurs in one performance only: an outlier, not a step
+    // (run 3, W-32) — the default step stays, so the one-step-down suggestion is 79.5 / 77 as before.
+    expect(context).toMatch(/recommend: 79.5 kg × 8–12 — 6 more working sets on a shared muscle today/);
+    expect(context).toMatch(/conservative: 77 kg × 8–12 — 2.5 kg lower/);
     expect(context).toMatch(/confidence: (low|medium|high) \(/);
     // No record for the pushdown: no number and no conservative option (AC-LPF-3).
     expect(context).toContain('recommend: no number — no record, no reference load');

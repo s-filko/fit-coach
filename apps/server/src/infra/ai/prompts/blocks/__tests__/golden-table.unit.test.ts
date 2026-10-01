@@ -154,6 +154,30 @@ const RULINGS: Record<string, { ruling: string; expected: Partial<GoldenCase['ex
       reason_contains: 'relatively small',
     },
   },
+  // Run 3 (orchestrator ruling): when the 10 % cap blocks a met growth condition the SMALLEST step is offered, reps
+  // reset to the floor (NSCA smallest increment) — no dead end. Moves two table rows (G-40 "certain", G-60).
+  'G-40': {
+    ruling: 'run 3 smallest step under the cap',
+    expected: {
+      decision: 'grow',
+      recommend_kg: 10,
+      conservative_kg: 8,
+      reps: '10-10',
+      next_step_gist: 'sets at 10 in range',
+      reason_contains: 'smallest step',
+    },
+  },
+  'G-60': {
+    ruling: 'run 3 smallest step under the cap',
+    expected: {
+      decision: 'grow',
+      recommend_kg: 22.5,
+      conservative_kg: 20,
+      reps: '8-8',
+      next_step_gist: 'sets at 22.5 in range',
+      reason_contains: 'smallest step',
+    },
+  },
   // Orchestrator ruling 2026-10-01 (1): the insufficient-data rebuild start follows the break ladder — two steps below.
   'G-47': { ruling: 'rebuild ladder 2 steps', expected: { recommend_kg: 35, conservative_kg: 32.5 } },
   // O-3: after a restart the start is never lighter than after a rebuild: two steps below, then the ladder.
@@ -306,24 +330,15 @@ function intentKinds(gist: string): string[] | null {
 }
 
 /**
- * Numbers a gist commits to, by intent class: a growth line must carry the first load/threshold (> 10) and the final
- * load it names; loads in the other classes (> 10 or with a decimal point) must appear; ask / reps / ladder-count
- * wording carries no numeric commitment.
+ * Numbers a gist commits to: every load and every threshold (a number > 10 or with a decimal point) must appear in the
+ * printed `next step:` line — including the one-session alternative a gist names. Ask / ladder-count / constraint /
+ * uneven wording carries no numeric commitment.
  */
 function committedNumbers(gist: string, kinds: string[]): string[] {
-  const all = gist.match(/\d+(?:\.\d+)?/g) ?? [];
-  const loads = all.filter(n => Number(n) > 10 || n.includes('.'));
-  if (kinds.includes('growth')) {
-    return [loads[0], all[all.length - 1]].filter((n): n is string => n !== undefined);
-  }
-  if (
-    kinds.some(k =>
-      ['ask_effort', 'reps_only', 'hold', 'insufficient', 'no_number', 'constraint', 'uneven'].includes(k),
-    )
-  ) {
+  if (kinds.some(k => ['ask_effort', 'hold', 'insufficient', 'no_number', 'constraint', 'uneven'].includes(k))) {
     return [];
   }
-  return loads;
+  return (gist.match(/\d+(?:\.\d+)?/g) ?? []).filter(n => Number(n) > 10 || n.includes('.'));
 }
 
 const LEVELS = ['low', 'medium', 'high'];

@@ -23,22 +23,19 @@ const input = (over: Partial<EffortHintInput> = {}): EffortHintInput => ({
 });
 
 describe('AC-LPF-11 · effortHint', () => {
-  it('a set below the floor without RPE → hint with the plain-language question and the RPE mapping', () => {
-    const h = effortHint(input({ set: strength(6) }));
-    expect(h).toContain('below the rep floor');
-    expect(h).toContain('Сколько ещё раз смог бы сделать на этом весе? 0, 1–2 или 3 и больше?');
-    expect(h).toContain('update_last_set');
-    expect(h).toMatch(/0 → 10.*1–2 → 8.*3\+ → 7/);
+  it('a set below the floor without RPE → the reason as data', () => {
+    // The domain returns data only (ADR-0013 D-09): no prose, no tool names, no user-facing literal.
+    expect(effortHint(input({ set: strength(6) }))).toEqual({ reason: 'below_floor' });
   });
 
   it('a set ≥ 3 reps above the top (the opener too) → hint; 2 above is not critical', () => {
-    expect(effortHint(input({ set: strength(13) }))).toContain('above the rep range');
+    expect(effortHint(input({ set: strength(13) }))).toEqual({ reason: 'above_range' });
     expect(effortHint(input({ set: strength(12) }))).toBeNull();
   });
 
   it('the last planned set → hint; an earlier in-range set → none', () => {
     const earlier = [strength(9), strength(9)];
-    expect(effortHint(input({ set: strength(9), earlier }))).toContain('last planned set');
+    expect(effortHint(input({ set: strength(9), earlier }))).toEqual({ reason: 'last_planned_set' });
     expect(effortHint(input({ set: strength(9), earlier: [strength(9)] }))).toBeNull();
   });
 

@@ -22,6 +22,7 @@ import { ONE_SESSION_MAX_RPE, ONE_SESSION_SURPLUS, UNEVEN_ABOVE_USUAL, UNEVEN_WI
 import {
   blockingConstraint,
   capAppliesOf,
+  cappedNote,
   confidenceOf,
   EQUIPMENT_STEP,
   lastSetCapacity,
@@ -471,14 +472,19 @@ function earlyGrowth(c: Ctx, params: SchemeParams, out: SchemeOutput): SchemeOut
     return null;
   }
   const growth = stepUp(c.base, c.step, params.stepCapPct, capAppliesOf(c.facts));
-  if (growth.kind !== 'grow') {
+  if (growth.kind === 'no-step') {
     return null;
   }
+  const capped = growth.kind === 'capped';
   const unit = c.unit ?? 'kg';
   return {
-    candidate: { load: growth.load, unit: c.unit, reps },
+    candidate: { load: growth.load, unit: c.unit, reps: capped ? { min: reps.min, max: reps.min } : reps },
     conservative: { load: c.base, unit: c.unit, reps },
-    reason: `last set at the working weight ${lastSetText(newest)} (range top ${reps.max} + ${ONE_SESSION_SURPLUS} or more; ${repsText(newest.repsAtWorkingWeight)} at ${c.base} ${unit} ${newest.daysAgo} d ago); recovered (${c.gap.days ?? 0} d since ${c.gap.basis ?? 'last workout'}, no short constraint, no material pre-fatigue) — one step up${smallStepNote(c.facts, c.base, c.step, params.stepCapPct)}`,
+    reason: `last set at the working weight ${lastSetText(newest)} (range top ${reps.max} + ${ONE_SESSION_SURPLUS} or more; ${repsText(newest.repsAtWorkingWeight)} at ${c.base} ${unit} ${newest.daysAgo} d ago); recovered (${c.gap.days ?? 0} d since ${c.gap.basis ?? 'last workout'}, no short constraint, no material pre-fatigue) — ${
+      capped
+        ? cappedNote(c.base, c.step ?? 0, params.stepCapPct, reps.min)
+        : `one step up${smallStepNote(c.facts, c.base, c.step, params.stepCapPct)}`
+    }`,
     confidence: LEVELS[Math.min(LEVELS.indexOf('medium'), LEVELS.indexOf(confidenceOf(c.facts, out.missing)))],
     missing: out.missing,
     next: { kind: 'after_growth', load: growth.load, reps: reps.max },

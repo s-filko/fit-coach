@@ -114,7 +114,11 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
       suggestion: deps.loadPlanSuggestion === true,
       breaks: deps.loadPlanBreaks === true,
     }),
-    buildLogSetTool({ trainingService, loadPlanPlannerRebind: plannerRebindOn(deps) }),
+    buildLogSetTool({
+      trainingService,
+      loadPlanPlannerRebind: plannerRebindOn(deps),
+      effortHints: deps.loadPlanSuggestion === true,
+    }),
     buildCompleteCurrentExerciseTool({ trainingService, loadPlanPlannerRebind: plannerRebindOn(deps) }),
     buildFinishTrainingTool({ trainingService }),
     // set-kind plan Task 2 (D6): "я сегодня в другом зале" — after the start.

@@ -409,7 +409,7 @@ describe('AC-LPF-3 · insufficient data with a reference still names a number', 
   });
 });
 
-describe('LPF review · a floored step-down never claims a step was taken', () => {
+describe('AC-LPF-1 · LPF review · a floored step-down never claims a step was taken', () => {
   const lateral = (over: Partial<LoadFacts> = {}): LoadFacts =>
     makeFacts({
       workingWeight: { weight: 2.5, unit: 'kg', performances: 4, warmupsEstimated: false, mixedBasisExcluded: 0 },
@@ -562,7 +562,7 @@ describe('AC-LPF-6 · 2-for-2 on the sets at the working weight (NSCA)', () => {
     expect(d.candidate.load).toBe(70);
   });
 
-  it('a load step above 10 % of the load progresses by reps, with that as the next step', () => {
+  it('a load step above 10 % of the load, growth condition met → the smallest step with reps reset to the floor (run 3)', () => {
     const d = run(
       makeFacts({
         ...noTrend,
@@ -571,9 +571,8 @@ describe('AC-LPF-6 · 2-for-2 on the sets at the working weight (NSCA)', () => {
         repHistory: repHistoryOf(2.5, [{ reps: [15] }, { reps: [15] }]),
       }),
     );
-    expect(d.candidate.load).toBe(2.5);
-    expect(d.reason).toContain('progress by reps');
-    expect(d.next).toEqual({ kind: 'reps_only', step: 5, load: 2.5 });
+    expect(d.candidate).toEqual({ load: 7.5, unit: 'kg', reps: { min: 10, max: 10 } });
+    expect(d.reason).toContain('smallest step');
   });
 
   it('owner leg press after 09-21 (last set 12 vs top 12, range 10–12): hold, two sessions at ≥ 14', () => {
@@ -641,15 +640,15 @@ describe('AC-LPF-7 · one-session growth (APRE-style surplus on the last set)', 
     expect(d.candidate.load).toBeLessThanOrEqual(50);
   });
 
-  it('no jump when the step exceeds the 10 % cap (lateral raise)', () => {
+  it('the step over the 10 % cap: one-session growth offers the smallest step with reps reset (run 3)', () => {
     const d = run(
       base({
         workingWeight: { weight: 2.5, unit: 'kg', performances: 5, warmupsEstimated: false, mixedBasisExcluded: 0 },
         repHistory: repHistoryOf(2.5, [{ reps: [15, 15, 15] }]),
       }),
     );
-    expect(d.row).toBe('scheme_hold');
-    expect(d.candidate.load).toBe(2.5);
+    expect(d.row).toBe('early_growth');
+    expect(d.candidate).toEqual({ load: 7.5, unit: 'kg', reps: { min: 8, max: 8 } });
   });
 
   it('a fixed-rep scheme never takes the one-session jump', () => {
@@ -890,7 +889,7 @@ describe('AC-LPF-12 · golden-table rulings in the domain', () => {
     expect(d.reason).toContain('relatively small step');
   });
 
-  it('O-2: free weights keep the cap — 20 kg + 2.5 kg barbell step holds, progress by reps', () => {
+  it('O-2 narrowed: free weights keep the cap — 20 kg + 2.5 kg offers the smallest step with reps reset (not a dead end)', () => {
     const d = run(
       grown({
         workingWeight: { weight: 20, unit: 'kg', performances: 5, warmupsEstimated: false, mixedBasisExcluded: 0 },
@@ -898,8 +897,8 @@ describe('AC-LPF-12 · golden-table rulings in the domain', () => {
         repHistory: repHistoryOf(20, [{ reps: [12, 12, 12] }, { reps: [12, 12, 12] }]),
       }),
     );
-    expect(d.row).toBe('scheme_hold');
-    expect(d.next).toEqual({ kind: 'reps_only', step: 2.5, load: 20 });
+    expect(d.row).toBe('scheme_growth');
+    expect(d.candidate.load).toBe(22.5);
   });
 
   it('G-11: with one performance the insufficient-data load is the working-weight value, not the failed opener', () => {
@@ -998,5 +997,82 @@ describe('AC-LPF-12 · golden-table rulings in the domain', () => {
     expect([at(30).candidate.load, at(30).conservative.load]).toEqual([30, 25]);
     expect(at(30).outcome).toBe('2 steps below the reference');
     expect([at(20).candidate.load, at(20).conservative.load]).toEqual([35, 30]);
+  });
+
+  describe('AC-LPF-7 · the cap blocks a met growth condition → the smallest step, reps reset to the floor (run 3, W-30)', () => {
+    const curl = (over: Partial<LoadFacts> = {}): LoadFacts =>
+      grown({
+        workingWeight: { weight: 20, unit: 'kg', performances: 5, warmupsEstimated: false, mixedBasisExcluded: 0 },
+        equipmentStep: { step: 2.5, unit: 'kg', perHand: false, basis: 'default for barbell', capApplies: true },
+        ...over,
+      });
+
+    it('2-for-2 met, 2.5 kg is 12.5 % of 20 kg → 22.5 kg × the floor (8), conservative = the working weight', () => {
+      const d = run(curl({ repHistory: repHistoryOf(20, [{ reps: [12, 12, 12] }, { reps: [12, 12, 12] }]) }));
+      expect(d).toMatchObject({ row: 'scheme_growth', outcome: 'one step up' });
+      expect(d.candidate).toEqual({ load: 22.5, unit: 'kg', reps: { min: 8, max: 8 } });
+      expect(d.conservative.load).toBe(20);
+      expect(d.reason).toContain('smallest step');
+      expect(d.reason).toContain('reps reset to the floor 8');
+    });
+
+    it('one-session growth met under the cap → the same smallest-step offer', () => {
+      const d = run(curl({ repHistory: repHistoryOf(20, [{ reps: [15, 15, 15] }]) }));
+      expect(d).toMatchObject({ row: 'early_growth' });
+      expect(d.candidate).toEqual({ load: 22.5, unit: 'kg', reps: { min: 8, max: 8 } });
+    });
+
+    it('condition not met yet → hold, and the next step names the smallest step as the way up', () => {
+      const d = run(curl({ repHistory: repHistoryOf(20, [{ reps: [12, 12, 12] }, { reps: [10, 10, 10] }]) }));
+      expect(d.row).toBe('scheme_hold');
+      expect(d.next).toEqual({ kind: 'growth', sessions: 1, reps: 12, load: 22.5 });
+    });
+
+    it('never more than one step, even under the cap', () => {
+      const d = run(curl({ repHistory: repHistoryOf(20, [{ reps: [20, 20, 20] }, { reps: [20, 20, 20] }]) }));
+      expect(d.candidate.load).toBe(22.5);
+    });
+  });
+});
+
+describe('AC-LPF-6 · linear progression confirms from the rep history (monotone in reps, run 3)', () => {
+  const lin = (reps: number[][]): LoadFacts =>
+    makeFacts({
+      repRange: { min: 5, max: 5, source: 'today' },
+      repHistory: repHistoryOf(
+        65,
+        reps.map(r => ({ reps: r })),
+      ),
+    });
+  const run5 = (f: LoadFacts): Decision => decide(f, { scheme: getScheme('linear_progression'), goal: 'strength' });
+
+  it('all fixed reps made in two consecutive performances at the working weight → one step up', () => {
+    expect(
+      run5(
+        lin([
+          [5, 5, 5],
+          [6, 5, 5],
+        ]),
+      ).candidate.load,
+    ).toBe(70);
+  });
+
+  it('one short set in the newest performance, or in the previous one, → hold; more reps in the newest never lose it', () => {
+    expect(
+      run5(
+        lin([
+          [5, 5, 4],
+          [5, 5, 5],
+        ]),
+      ).candidate.load,
+    ).toBe(65);
+    expect(
+      run5(
+        lin([
+          [7, 7, 7],
+          [5, 5, 5],
+        ]),
+      ).candidate.load,
+    ).toBe(70);
   });
 });

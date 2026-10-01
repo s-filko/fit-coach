@@ -755,7 +755,7 @@ describe('AC-LF-1 · metric 9 — equipment step', () => {
     ['barbell', 2.5, false, true],
     ['dumbbell', 2, true, true],
     ['machine', 5, false, false],
-    ['cable', 5, false, false],
+    ['cable', 5, false, true],
   ] as const)('%s → %s kg (10 % cap applies: %s)', (equipment, step, perHand, capApplies) => {
     expect(computeEquipmentStep({ ...benchPress, equipment })).toEqual({
       step,
@@ -1399,26 +1399,53 @@ describe('AC-LPF-12 · indicative load of the newest single performance (ruling 
 });
 
 describe('AC-LPF-12 · equipment step from history (orchestrator ruling 2026-10-01, W-27)', () => {
-  const step = (loads: number[], ex = benchPress) => computeEquipmentStep(ex, loads);
+  const step = (loads: number[][], ex = benchPress) => computeEquipmentStep(ex, loads);
 
   it('loads that are not multiples of the default step give the largest dividing step: 2.5 and 5 on a 5 kg machine → 2.5', () => {
-    expect(step([2.5, 5, 2.5, 2.5])).toMatchObject({ step: 2.5, basis: 'from history' });
+    expect(step([[2.5, 5], [2.5], [2.5]])).toMatchObject({ step: 2.5, basis: 'from history' });
   });
 
   it('every recorded load a multiple of the default → the default stays (and the basis says so)', () => {
-    expect(step([45, 55, 60])).toMatchObject({ step: 5, basis: 'default for machine' });
+    expect(step([[45, 55], [60]])).toMatchObject({ step: 5, basis: 'default for machine' });
   });
 
   it('rounded to 0.25 kg, never above the default, never below 0.5 kg', () => {
-    expect(step([7.5, 12.5])).toMatchObject({ step: 2.5 });
-    expect(step([1.25, 2.5], { ...benchPress, equipment: 'barbell' })).toMatchObject({ step: 1.25 });
-    expect(step([0.3, 0.6])).toMatchObject({ step: 0.5 });
-    expect(step([3, 6], { ...benchPress, equipment: 'barbell' })).toMatchObject({ step: 2.5 });
+    expect(
+      step([
+        [7.5, 12.5],
+        [7.5, 12.5],
+      ]),
+    ).toMatchObject({ step: 2.5 });
+    expect(
+      step(
+        [
+          [1.25, 2.5],
+          [1.25, 2.5],
+        ],
+        { ...benchPress, equipment: 'barbell' },
+      ),
+    ).toMatchObject({ step: 1.25 });
+    expect(
+      step([
+        [0.3, 0.6],
+        [0.3, 0.6],
+      ]),
+    ).toMatchObject({ step: 0.5 });
+    expect(
+      step(
+        [
+          [3, 6],
+          [3, 6],
+        ],
+        { ...benchPress, equipment: 'barbell' },
+      ),
+    ).toMatchObject({ step: 2.5 });
   });
 
   it('unknown step stays unknown; non-strength stays n/a; no loads = the default', () => {
-    expect(step([2.5], { ...benchPress, equipment: 'none' })).toEqual({ absent: 'n/a for none' });
+    expect(step([[2.5]], { ...benchPress, equipment: 'none' })).toEqual({ absent: 'n/a for none' });
     expect(step([])).toMatchObject({ step: 5, basis: 'default for machine' });
+    expect(step([[]])).toMatchObject({ step: 5, basis: 'default for machine' });
   });
 
   it('computeLoadFacts reads the history: the owner lateral raise (2.5 and 5 kg loads) has a 2.5 kg step', () => {
@@ -1446,5 +1473,99 @@ describe('AC-LPF-12 · pre-fatigue is measured against the NEWEST performance (o
     }
     expect(f.reference.performance.id).toBe('old'); // like-for-like: 20 reps is outside 8–10 ± 2
     expect(f.fatigueReference.perMuscle.map(m => m.workingSets)).toEqual([1]); // the newest's one earlier chest set
+  });
+});
+
+describe('AC-LPF-12 · equipment step from history — outlier and window guards (run 3, W-30)', () => {
+  it('an off-grid load that occurs in ONE performance only is an outlier: 22.7 / 20.4 kg keep the default step', () => {
+    expect(computeEquipmentStep(benchPress, [[22.7], [20.4], [20]])).toMatchObject({
+      step: 5,
+      basis: 'default for machine',
+    });
+  });
+
+  it('an off-grid load that recurs in two performances counts', () => {
+    expect(computeEquipmentStep(benchPress, [[2.5], [2.5], [5]])).toMatchObject({ step: 2.5, basis: 'from history' });
+  });
+
+  it('only the last 8 weeks are read: a 2.5 kg history older than that does not set the step', () => {
+    const old = LATERAL_RAISE_ROWS.map(r => ({ ...r, date: r.date }));
+    const f = computeLoadFacts(
+      lateralRaise,
+      ownerPerfs(lateralRaise.id, old, '2026-09-25'),
+      today({ targetReps: '10-12' }),
+      emptyContext,
+      ownerNow('2026-09-25', 70),
+      TZ,
+    );
+    expect(f.equipmentStep).toMatchObject({ step: 5, basis: 'default for machine' });
+  });
+});
+
+describe('AC-LPF-11 · capacity in the working weight and the estimate (run 3, W-30)', () => {
+  const R = { min: 8, max: 10 };
+
+  it('an early stop at a NEW load is judged at that load: 60 ×3 sessions, then 65×9,8,6 @ RPE 7 → working weight 65, early stop', () => {
+    const perfs = [
+      perf('new', 3, [strengthSet(65, 9), strengthSet(65, 8), strengthSet(65, 6, { rpe: 7 })]),
+      perf('a', 8, [strengthSet(60, 10), strengthSet(60, 10), strengthSet(60, 9)]),
+      perf('b', 13, [strengthSet(60, 10), strengthSet(60, 10), strengthSet(60, 9)]),
+    ];
+    const f = computeLoadFacts(benchPress, perfs, today({ targetReps: '8-10' }), emptyContext, NOW, TZ);
+    if (isAbsent(f.workingWeight) || isAbsent(f.lastExposure)) {
+      throw new Error('expected values');
+    }
+    expect(f.workingWeight.weight).toBe(65);
+    expect(f.workingWeight.estimatedFrom).toBeUndefined();
+    expect(f.lastExposure.effort).toMatchObject({ earlyStop: true, set: { reps: 6, rpe: 7 } });
+  });
+
+  it('a single 60×9,8,6 @ RPE 7 is no Epley "failure": capacity 9 reached the floor, so no estimate', () => {
+    const one = [perf('a', 3, [strengthSet(60, 9), strengthSet(60, 8), strengthSet(60, 6, { rpe: 7 })])];
+    expect(computeIndicativeLoad(one, 'today', R, benchPress, NOW, TZ)).toEqual({ weight: 60, unit: null });
+    const two = [...one, perf('b', 9, [strengthSet(60, 10), strengthSet(60, 9)])];
+    const ww = computeWorkingWeight(two, 'today', R, benchPress, NOW, TZ);
+    if (isAbsent(ww)) {
+      throw new Error('expected a value');
+    }
+    expect([ww.weight, ww.estimatedFrom]).toEqual([60, undefined]);
+  });
+
+  it('the estimate reads capacity too: 60×6 @ RPE 9 (capacity 7) still falls short → estimated from its capacity', () => {
+    const perfs = [perf('a', 3, [strengthSet(60, 6, { rpe: 9 })]), perf('b', 9, [strengthSet(60, 6, { rpe: 9 })])];
+    const ww = computeWorkingWeight(perfs, 'today', R, benchPress, NOW, TZ);
+    if (isAbsent(ww)) {
+      throw new Error('expected a value');
+    }
+    expect(ww.estimatedFrom).toEqual({ weight: 60, reps: 6 });
+  });
+
+  it('the estimate targets min(range.min, 10) reps: range 12–15, 100×8 → 95 (a 10-rep target), not 90 (12)', () => {
+    const perfs = [perf('a', 3, [strengthSet(100, 8)]), perf('b', 9, [strengthSet(100, 8)])];
+    const ww = computeWorkingWeight(perfs, 'today', { min: 12, max: 15 }, benchPress, NOW, TZ);
+    if (isAbsent(ww)) {
+      throw new Error('expected a value');
+    }
+    expect(ww.weight).toBe(95);
+  });
+});
+
+describe('AC-LPF-11 · effort rows judge sets at the working weight only (run 3, W-30)', () => {
+  const R = { min: 8, max: 10 };
+
+  it('a performance with no set at the working weight is not judged: 6, 6 at another load → no effort flags', () => {
+    const e = computeLastExposure(perf('x', 3, [strengthSet(65, 6), strengthSet(65, 6)]), [], R, benchPress, 60);
+    expect(e.effort).toEqual({ earlyStop: false, unclearBelowFloor: false, set: null });
+  });
+
+  it('"repeated" needs the same load: a previous below-floor session at ANOTHER load does not make it a real miss', () => {
+    const e = computeLastExposure(
+      perf('x', 3, [strengthSet(60, 6)]),
+      [perf('prev', 7, [strengthSet(65, 6), strengthSet(65, 6)])],
+      R,
+      benchPress,
+      60,
+    );
+    expect(e.effort.unclearBelowFloor).toBe(true);
   });
 });

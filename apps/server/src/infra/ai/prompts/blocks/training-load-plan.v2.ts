@@ -19,7 +19,6 @@ import {
   type ProgressionChoice,
   progressionFromChoice,
   type Recommendation,
-  STEP_CAP_PCT,
   TWO_FOR_TWO_SURPLUS,
 } from '@domain/training/load-plan';
 
@@ -175,13 +174,11 @@ function nextStepText(n: NextStep, d: Decision): string {
     case 'growth': {
       const once = n.reps - TWO_FOR_TWO_SURPLUS + ONE_SESSION_SURPLUS;
       return n.sessions === 1
-        ? `last set at ${now} ≥ ${n.reps} reps once more → +1 step (${n.load} ${unit})`
+        ? `last set at ${now} ≥ ${n.reps} reps once more (or ≥ ${once} reps once at RPE ≤ ${ONE_SESSION_MAX_RPE}, recovered) → +1 step (${n.load} ${unit})`
         : `last set at ${now} ≥ ${n.reps} reps in ${n.sessions} workouts in a row (or ≥ ${once} reps once at RPE ≤ ${ONE_SESSION_MAX_RPE}, recovered) → +1 step (${n.load} ${unit})`;
     }
     case 'after_growth':
       return `after the step up, hold ${n.load} ${unit} until the last set reaches ${n.reps + TWO_FOR_TWO_SURPLUS} reps in 2 workouts in a row (or ${n.reps + ONE_SESSION_SURPLUS} reps once at RPE ≤ ${ONE_SESSION_MAX_RPE}, recovered)`;
-    case 'reps_only':
-      return `no load step fits (${n.step} ${unit} is over ${Math.round(STEP_CAP_PCT * 100)} % of ${n.load} ${unit}) — progress by reps`;
     case 'ladder':
       if (n.remaining === 0) {
         return 'last workout of the return ladder — the growth rule applies again after it';

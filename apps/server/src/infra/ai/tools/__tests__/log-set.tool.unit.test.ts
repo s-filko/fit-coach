@@ -682,7 +682,7 @@ describe('log-set.tool — retro vs live timing (BUG-043, AC-RT-1, AC-RT-4)', ()
   });
 });
 
-describe('log-set.tool — effort hint (load-plan-fixes item 10)', () => {
+describe('log-set.tool — effort hint (AC-LPF-11, load-plan-fixes item 10)', () => {
   const EXERCISE_ID = 'd8794819-ffc6-4d08-8336-d9bedc4e554a';
 
   /** Logs `reps` as set `number` after `earlier` sets; the session mock holds earlier + the new set. */
@@ -693,6 +693,7 @@ describe('log-set.tool — effort hint (load-plan-fixes item 10)', () => {
     feedback?: string;
     targetSets?: number | null;
     targetReps?: string | null;
+    hints?: boolean;
   }): Promise<string> {
     const trainingService = makeTrainingService();
     const earlier = (opts.earlier ?? []).map((e, i) =>
@@ -722,7 +723,7 @@ describe('log-set.tool — effort hint (load-plan-fixes item 10)', () => {
         }),
       ]),
     );
-    const { byName, config } = makeDeps(trainingService);
+    const { byName, config } = makeDeps(trainingService, 'session-1', { effortHints: opts.hints ?? true });
     const result = (await byName('log_set').invoke(
       { exerciseId: EXERCISE_ID, reps: opts.reps, weight: 60, rpe: opts.rpe, feedback: opts.feedback },
       config,
@@ -758,11 +759,15 @@ describe('log-set.tool — effort hint (load-plan-fixes item 10)', () => {
     });
     trainingService.logSetWithContext.mockResolvedValue({ set, setNumber: 1 });
     trainingService.getSessionDetails.mockResolvedValue(makeSession([]));
-    const { byName, config } = makeDeps(trainingService);
+    const { byName, config } = makeDeps(trainingService, 'session-1', { effortHints: true });
     const out = renderedContent(
       (await byName('log_set').invoke({ exerciseId: EXERCISE_ID, reps: 6, weight: 60 }, config)) as ToolReturn,
     );
     expect(out).toContain('Set 1 logged');
     expect(out).not.toContain('Effort hint');
+  });
+
+  it('only with LOAD_PLAN_SUGGESTION on (effortHints): off → no hint, whatever the set', async () => {
+    expect(await logAs({ reps: 6, hints: false })).not.toContain('Effort hint');
   });
 });

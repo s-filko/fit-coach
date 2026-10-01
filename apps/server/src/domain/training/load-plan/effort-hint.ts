@@ -2,8 +2,9 @@ import { parseRepRange } from '../load-facts';
 
 /**
  * The effort hint (load-plan-fixes item 10, owner 2026-10-01): when `log_set` stores a decision-critical set without
- * RPE, its tool result tells the coach to ask the client one plain-language question. The code decides when; the model
- * only asks. Pure over the set, the exercise's earlier sets of this session and the plan target.
+ * RPE, the tool tells the coach to ask the client one plain-language question. The code decides WHEN — this module
+ * returns data (the reason); the words (question, RPE mapping, tool names) live in `@infra/ai/prompts/effort` and the
+ * tool. Pure over the set, the exercise's earlier sets of this session and the plan target.
  */
 
 /** A set ≥ this many reps above the top of the range is decision-critical (the opener included). */
@@ -29,29 +30,31 @@ export interface EffortHintInput {
   targetSets: number | null;
 }
 
-type Critical = 'below the rep floor' | 'above the rep range by 3+ reps' | 'the last planned set';
+export type EffortHintReason = 'below_floor' | 'above_range' | 'last_planned_set';
+
+export interface EffortHint {
+  reason: EffortHintReason;
+}
 
 function criticalReason(
   set: HintSet,
   workingIndex: number,
   range: { min: number; max: number } | null,
   targetSets: number | null,
-): Critical | null {
+): EffortHintReason | null {
   if (range && set.reps < range.min) {
-    return 'below the rep floor';
+    return 'below_floor';
   }
   if (range && set.reps >= range.max + HINT_ABOVE_TOP) {
-    return 'above the rep range by 3+ reps';
+    return 'above_range';
   }
-  return targetSets !== null && workingIndex >= targetSets ? 'the last planned set' : null;
+  return targetSets !== null && workingIndex >= targetSets ? 'last_planned_set' : null;
 }
 
 const isLoadedWorking = (s: HintSet): boolean => !s.isWarmup && s.weight !== null && s.weight > 0;
 
-export const EFFORT_QUESTION = 'Сколько ещё раз смог бы сделать на этом весе? 0, 1–2 или 3 и больше?';
-
-/** The hint text for the tool result, or null when no hint is due. */
-export function effortHint(input: EffortHintInput): string | null {
+/** Why the effort should be asked about this set, or null when no hint is due. */
+export function effortHint(input: EffortHintInput): EffortHint | null {
   const { set, earlier } = input;
   if (!isLoadedWorking(set) || set.rpe !== null || (set.feedback ?? '').trim() !== '') {
     return null;
@@ -69,10 +72,5 @@ export function effortHint(input: EffortHintInput): string | null {
   if (reason === null || alreadyHinted) {
     return null;
   }
-  return [
-    `Effort hint: this set is decision-critical (${reason}) and was stored without RPE.`,
-    `Ask once, in plain words: «${EFFORT_QUESTION}»`,
-    'Then record the answer on this set with update_last_set rpe (0 → 10, 1–2 → 8, 3+ → 7).',
-    'Do not ask again for this exercise today.',
-  ].join(' ');
+  return { reason };
 }

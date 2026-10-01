@@ -96,7 +96,67 @@ function sessionSets(rng: Rng, at: Date, load: number, step: number, range: { mi
   return sets;
 }
 
-export function generateCase(seed: number): GeneratedCase {
+/**
+ * `growth` mode (run 3): histories built to REACH the growth rows — 2–4 recent sessions at one load, three sets that
+ * all beat the range top by 2–5 reps with a small fade, short gaps, no probes / warm-ups / constraints / pre-fatigue —
+ * so the invariants are exercised on growth decisions, not only on the messy mixed cases.
+ */
+function generateGrowthCase(seed: number): GeneratedCase {
+  const rng = new Rng(mulberry32(seed));
+  const targetReps = rng.pick(['8-10', '8-12', '10-15', '6-10']);
+  const [lo, hi] = targetReps.split('-').map(Number);
+  const equipment = rng.pick(['machine', 'barbell', 'dumbbell', 'cable'] as const);
+  const step = STEP[equipment];
+  const load = step * rng.int(4, 30);
+  let days = rng.int(2, 7);
+  const performances: PerformanceInput[] = Array.from({ length: rng.int(2, 4) }, (_v, i) => {
+    const performedAt = daysBefore(days);
+    days += rng.int(3, 7);
+    const start = hi + rng.int(2, 5);
+    const sets = [0, 1, 2].map(n =>
+      strengthSet(load, Math.max(lo, start - n * rng.int(0, 1)), {
+        createdAt: new Date(performedAt.getTime() + n * 120_000),
+        rpe: rng.chance(0.3) ? rng.pick([6, 7, 8]) : null,
+      }),
+    );
+    return {
+      id: `p${i}`,
+      sessionId: `s${i}`,
+      place: null,
+      startedAt: new Date(performedAt.getTime() - 3_600_000),
+      performedAt,
+      targetReps,
+      sets,
+      otherSets: [],
+    };
+  });
+  return {
+    seed,
+    exercise: {
+      id: 'ex-gen',
+      name: 'Generated Press',
+      exerciseType: 'strength',
+      equipment,
+      muscles: [{ muscleGroup: 'chest', involvement: 'primary' }],
+    },
+    performances,
+    today: {
+      sessionId: 'today',
+      place: null,
+      startedAt: new Date(NOW.getTime() - 40 * 60_000),
+      targetReps,
+      sets: [],
+      otherSets: [],
+    },
+    context: { constraints: [], equipmentFacts: [], workouts: [] },
+    targetReps,
+  };
+}
+
+export function generateCase(seed: number, mode: 'mixed' | 'growth' = 'mixed'): GeneratedCase {
+  if (mode === 'growth') {
+    return generateGrowthCase(seed);
+  }
   const rng = new Rng(mulberry32(seed));
   const targetReps = rng.pick(RANGES);
   const [lo, hi] = targetReps.includes('-')

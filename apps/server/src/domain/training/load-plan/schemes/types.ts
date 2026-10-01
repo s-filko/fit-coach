@@ -24,8 +24,6 @@ export type NextStep =
   | { kind: 'growth'; sessions: number; reps: number; load: number }
   /** Growth was just recommended: after it the same rule applies at `load` (range top `reps`). */
   | { kind: 'after_growth'; load: number; reps: number }
-  /** A load step over the cap — progress by reps at `load`. */
-  | { kind: 'reps_only'; step: number; load: number }
   /** The return ladder: `remaining` more workouts until back at `backTo`; `cold` = a restart cold start. */
   | { kind: 'ladder'; remaining: number; backTo: number; cold: boolean }
   /** Uneven performance: even sets (reps falling by at most `maxDrop`) at `load` → the growth rule applies. */

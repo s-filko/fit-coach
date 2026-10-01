@@ -3,7 +3,7 @@ import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
 import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
-import { effortHint, type HintSet } from '@domain/training/load-plan';
+import { effortHint, type EffortHintReason, type HintSet } from '@domain/training/load-plan';
 import type { ITrainingService } from '@domain/training/ports';
 import { isRetroLog, lastActivityOf, RETRO_SET_OFFSET_MS } from '@domain/training/session-timing';
 import { SetDataSchema } from '@domain/training/set-data.types';
@@ -11,6 +11,7 @@ import type { SessionSet } from '@domain/training/types';
 
 import { maybeCtxOf } from '@infra/ai/graph/state';
 import { formatSetData } from '@infra/ai/prompts/blocks/training-workout-overview.v1';
+import { EFFORT_MAPPING_TEXT, EFFORT_QUESTION } from '@infra/ai/prompts/effort';
 import { formatExerciseSummary, sessionIdOf } from '@infra/ai/tools/format-exercise-summary';
 
 import { createLogger } from '@shared/logger';
@@ -25,6 +26,26 @@ export interface LogSetToolDeps {
   trainingService: ITrainingService;
   /** Load plan (load-plan plan Task 5b, D10): the completion summary's Target line drops the plan weight. */
   loadPlanPlannerRebind?: boolean;
+  /** LOAD_PLAN_SUGGESTION: the effort hint reaches the coach only where the v2 block / v12 rules are (item 10). */
+  effortHints?: boolean;
+}
+
+const HINT_REASON_TEXT: Record<EffortHintReason, string> = {
+  below_floor: 'below the rep floor',
+  above_range: 'above the rep range by 3+ reps',
+  last_planned_set: 'the last planned set',
+};
+
+/** The tool-result words of an effort hint (the domain says WHY; words and mapping live here / in effort.ts). */
+function effortText(hint: { reason: EffortHintReason } | null): string | null {
+  return hint === null
+    ? null
+    : [
+        `Effort hint: this set is decision-critical (${HINT_REASON_TEXT[hint.reason]}) and was stored without RPE.`,
+        `Ask once, in plain words: «${EFFORT_QUESTION}»`,
+        `Then record the answer on this set with update_last_set rpe (${EFFORT_MAPPING_TEXT}).`,
+        'Do not ask again for this exercise today.',
+      ].join(' ');
 }
 
 /** A stored set as the effort hint reads it. */
@@ -124,14 +145,17 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
           const row = finalSession?.exercises.find(se => se.id === set.sessionExerciseId);
           exerciseName = row?.exercise.name ?? exerciseName;
           // Item 10: code decides when the coach asks the effort — a decision-critical set stored without RPE.
-          hint = row
-            ? effortHint({
-                set: hintSetOf(set),
-                earlier: (row.sets ?? []).filter(s => s.id !== set.id && s.setNumber < setNumber).map(hintSetOf),
-                targetReps: row.targetReps ?? null,
-                targetSets: row.targetSets ?? null,
-              })
-            : null;
+          hint =
+            deps.effortHints === true && row
+              ? effortText(
+                  effortHint({
+                    set: hintSetOf(set),
+                    earlier: (row.sets ?? []).filter(s => s.id !== set.id && s.setNumber < setNumber).map(hintSetOf),
+                    targetReps: row.targetReps ?? null,
+                    targetSets: row.targetSets ?? null,
+                  }),
+                )
+              : null;
         } catch (nameErr) {
           log.warn({ err: nameErr, sessionId }, 'log_set: could not resolve exercise name for confirmation');
         }
@@ -248,7 +272,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
             .optional()
             .describe(
               'Rate of Perceived Exertion (1–10): reps left in reserve = 10 − RPE. Pass it when the user gives it, or maps ' +
-                'from their plain answer on how many more reps they could have done (0 → 10, 1–2 → 8, 3+ → 7).',
+                `from their plain answer on how many more reps they could have done (${EFFORT_MAPPING_TEXT}).`,
             ),
           feedback: z.string().optional().describe('Any user comment about this set.'),
           setKind: z

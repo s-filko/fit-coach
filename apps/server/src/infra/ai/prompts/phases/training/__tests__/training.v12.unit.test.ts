@@ -1,6 +1,7 @@
 import { compose } from '@infra/ai/prompts/compose';
 
 import { TRAINING_PROMPT_V12 } from '../index';
+import { EFFORT_QUESTION, EFFORT_RPE_BY_ANSWER } from '../../../effort';
 import { TRAINING_V11 } from '../v11';
 import { TRAINING_V12 } from '../v12';
 
@@ -90,7 +91,11 @@ describe('phase.training v12 — no invented conservative option (AC-LPF-3)', ()
   it('AC-LPF-11: plain-language effort question, phrase → RPE mapping, RPE term only if the user uses it, kept as a fact', () => {
     const task = TRAINING_V12.render(RENDER_CTX).find(s => s.id === 'task')!.text;
     const [rule] = /Effort in plain language:[^\n]*/.exec(task)!;
-    expect(rule).toContain('Сколько ещё раз смог бы сделать на этом весе? 0, 1–2 или 3 и больше?');
+    // One source (R2 run 3): the prompt quotes the constants, the test checks the quotation against them.
+    expect(rule).toContain(`«${EFFORT_QUESTION}»`);
+    expect(rule).toContain(`«еле дожал» → ${EFFORT_RPE_BY_ANSWER.none}`);
+    expect(rule).toContain(`«ещё пару мог» → ${EFFORT_RPE_BY_ANSWER.oneOrTwo}`);
+    expect(rule).toContain(`силы были» → ${EFFORT_RPE_BY_ANSWER.threeOrMore}`);
     expect(rule).toContain('`Effort hint`');
     expect(rule).toContain('never ask on your own initiative');
     expect(rule).toMatch(/«еле дожал» → 10.*«ещё пару мог» → 8.*«боялся без страховки, силы были» → 7/);

@@ -31,8 +31,12 @@ export const makeConfig = (userId = 'u1', sessionId: string | null = 'session-1'
   configurable: { userId, thread_id: userId, activeSessionId: sessionId },
 });
 
-export const makeDeps = (trainingService: jest.Mocked<ITrainingService>, sessionId: string | null = 'session-1') => {
-  const logSet = buildLogSetTool({ trainingService }) as unknown as InvokableTool;
+export const makeDeps = (
+  trainingService: jest.Mocked<ITrainingService>,
+  sessionId: string | null = 'session-1',
+  extra: { effortHints?: boolean } = {},
+) => {
+  const logSet = buildLogSetTool({ trainingService, ...extra }) as unknown as InvokableTool;
   const tools = [logSet];
   const byName = (_name: string) => logSet;
   const config = makeConfig('u1', sessionId);
