@@ -52,17 +52,39 @@ cannot count confirming sessions`). Owner, 2026-10-01: «важно строит
 4. **Working weight follows the newest session.** Working weight = max(highest recurring load (W-1), the newest
    performance's highest load at which every working set reached the rep floor). Lateral raise stays 2.5 kg (its 5 kg set
    is in the oldest session); leg press → 120 after 09-21, ≥ 130 after 09-27.
-5. **Reps count (strength).** e1RM (Epley) uses working sets up to 15 reps (was ≤ 10), so a heavier-reps session counts as
-   strength; growth is confirmed by the e1RM trend OR by rep history (U7 closed): two sessions in a row with every working
-   set at/above the range top at the working weight → recommend +1 step.
-6. **One-session growth when clearly above the range (owner's example).** The newest performance at the working weight
-   has every working set ABOVE the range top (e.g. 3×15 vs 8–10) and the muscles are recovered (gap tier `rest`, no
-   `short` constraint, no pre-fatigue today) → recommend one step up with the range reps when Epley from that performance
-   predicts ≥ range min reps at the new load (50×15 → 55 × 8–10); conservative = the current working weight; confidence
-   medium at most; the reason names the evidence ("3×15 at 50 kg 4 d ago, recovered").
-7. **The coach states the path to growth.** When one of two confirming sessions is in, the block says so ("one more
-   session at the top of the range → +1 step"), and training v12 tells the coach to say it — cautiously optimistic: offer
-   the step when the block offers it, with the current load as the fallback, never pressure.
+5. **Growth rule, from the literature (owner-approved 2026-10-01; the 50×15 → 55 case is an example, not a formula).**
+   Sources: NSCA "2-for-2" (Essentials of Strength Training and Conditioning — ≥ 2 reps above the target on the last set in
+   two consecutive sessions → increase; increments ≈ 1–4.5 kg upper / 2.5–7 kg lower ≈ one equipment step); APRE (Mann et
+   al. 2010, JSCR — the next session's load is set from the reps achieved on the final set; more surplus → larger
+   increase); RIR-based RPE (Helms et al. 2018, Front. Physiol. — ≈ 4 % load per RPE point). **Rejected:** Epley
+   prediction above ~10 reps (Reynolds et al. 2006, JSCR — accuracy degrades above 10 reps, equations underestimate leg
+   press) and fixed %1RM↔reps tables across exercises (leg press ≈ 19 vs bench ≈ 14 reps at 70 % 1RM) — `E1RM_MAX_REPS`
+   stays 10 and no load is predicted by formula. Rule, judged on the sets AT the working weight (last such set = "last
+   set"):
+   - **one-session growth:** last set ≥ range top + 3 reps, its RPE ≤ 8 or absent, recovered (gap tier `rest`, no `short`
+     constraint on a primary muscle, no material pre-fatigue today) → recommend +1 step with the range reps;
+     conservative = the working weight; confidence ≤ medium; never more than one step whatever the surplus;
+   - **2-for-2:** last set ≥ range top + 2 in the two newest consecutive performances at the working weight → +1 step;
+     this replaces "e1rmTrend missing — cannot count confirming sessions" as the confirmation path for rep data (U7);
+   - otherwise hold, and state what is missing (item 7).
+6. **A badly chosen first set does not distort the decision (owner-approved 2026-10-01).**
+   - Each load is judged on its own sets: a set at another load (a too-heavy opener, 135 × 6 before 130 × 12 ×3) is a
+     probe — it does not make the performance `below floor` and does not trigger a step down for the working weight
+     (today `repsVsRange` takes the weakest set at any load).
+   - **Uneven performance:** drop-off at the working weight (first − last set reps) far above the user's usual
+     (`dropOff.usual`, threshold set by the worker as a (D) — e.g. > usual + 3, or > 4 with no norm) → the performance
+     counts neither for growth nor for a step down; hold, and the reason says the opener was too heavy / too light.
+   - **In-session hint (APRE set-to-set):** v12 tells the coach that when a working set lands clearly outside the range
+     (≥ 3 reps above the top, or below the floor), it suggests one step up / down for the NEXT set.
+7. **Expectation management (owner 2026-10-01: «тренер пояснял выбор текущего веса и также пояснял план, если вес может
+   казаться ниже чем хочется, почему такой и когда мы увеличим»).**
+   - Every LOAD PLAN row carries a `next step:` line naming the concrete condition for the next increase (2-for-2 one
+     session short: "+2 reps on the last set once more → +1 step"; return ladder: "2 more workouts → back to 130"; uneven:
+     "even sets at 120 → growth"; after a step down: "back to 65 when …").
+   - Training v12 (unreleased; v11 untouched): when giving a load, the coach briefly says why (from the block reason) and,
+     when the recommendation is below the user's recent best, says plainly why and when it will rise (`next step:`);
+     cautiously optimistic — offers a block-proposed step with the working weight as fallback, mentions volume progress
+     as encouragement, never pressures, never promises what the block does not offer.
 8. **Volume as context, not a decision input.** The block prints volume load (Σ reps × kg of working sets) of the newest
    performance vs the previous one ("volume +15 % vs last"); no decision reads it.
 
@@ -83,9 +105,9 @@ cannot count confirming sessions`). Owner, 2026-10-01: «важно строит
 | AC-LPF-2 | A plank / side plank reported in seconds is stored as an `isometric` set with its duration; cardio unchanged | `log-set.tool` unit tests + a scenario |
 | AC-LPF-3 | An exercise with a reference but insufficient data prints a numeric `recommend:` (the reference load) and a lower `conservative:`; with no reference the block says there is no number and the prompt forbids inventing a conservative option | block v2 (or v3) unit tests + scenario |
 | AC-LPF-5 | Leg-press history (110 ×3 → 110,110,120,120) gives working weight 120, not 110; lateral raise stays 2.5 kg | metrics unit tests on the owner-history fixture |
-| AC-LPF-6 | e1RM counts sets ≤ 15 reps; two sessions with every set at/above the top at the working weight → recommend +1 step (leg press no longer "cannot count confirming sessions") | metrics + decide unit tests |
-| AC-LPF-7 | 3×15 @ 50 kg (range 8–10), recovered → recommend 55 × 8–10, conservative 50; not recovered (short constraint / pre-fatigue / gap ≥ return) → no jump | decide unit tests |
-| AC-LPF-8 | One confirming session in → block line names the remaining condition; v12 tells the coach to say it and to offer a block-proposed step with the current load as fallback | block v2 + v12 unit tests |
+| AC-LPF-6 | 2-for-2: last set ≥ top+2 in two consecutive performances at the working weight → +1 step; one only → hold with the `next step:` condition; `E1RM_MAX_REPS` unchanged | decide unit tests on owner-history fixtures |
+| AC-LPF-7 | One-session growth: last set ≥ top+3, RPE ≤ 8/absent, recovered → +1 step, conservative = working weight, never > 1 step; RPE 9, short constraint, pre-fatigue or gap ≥ return → no jump. Opener at another load does not cause below-floor; uneven drop-off → hold with the reason | decide + metrics unit tests |
+| AC-LPF-8 | Every row prints `next step:`; v12 rules: explain the load, explain a below-recent-best load and when it rises, offer a block step with fallback, in-session one-step hint when a set lands clearly outside the range | block v2 + v12 unit tests; GLM replay transcript |
 | AC-LPF-9 | Block prints volume of the newest vs previous performance; no decision changes when only volume changes | block + decide unit tests |
 | AC-LPF-4 | Re-run of the two-workout replay on GLM (local Z.AI only) shows no 0 kg, planks stored as isometric, numbers on the former no-record rows | replay runner in `data/replay-2026-10-01/src/`, report diff |
 
