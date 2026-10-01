@@ -223,6 +223,7 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   reintroduce the zero-token bug. No zone's mandate covers "plan step-code vs shipped code"
   consistency.
   Runs: refactor-p0-run-log (2026-09-12, R1+R2).
+- [×1] Closing an evidence finding has no rule that the evidence ran on the head being merged: run 1's closure recorded runs on `d7888c80`, then a review-fix commit landed. Candidate for ORCHESTRATION acceptance: "Verification evidence in a plan names the commit it ran on; any code commit after it needs a re-run recorded against the new head before Status: done." (load-plan-fixes 2026-10-01, R3 run 2)
 - [×3] Where a worker's verification output must live is unstated: the plan says "task report",
   Orca `worker_done` messages are invisible from the worktree. Proposed for ORCHESTRATION.md:
   "each task's verification output (command + summary line) is appended to the plan under the task

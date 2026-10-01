@@ -3,9 +3,10 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and
 > test-driven-development. Red tests first (from the replay data below), then the code.
 
-- Status: in progress
+- Status: done
 - Branch: plan/load-plan-fixes
 - After: load-plan
+- Review: 2026-10-01 | clean | R1,R2,R3,R4
 
 **Goal:** fix the three defects the live GLM replay of two real owner workouts exposed in U9b, before the owner's
 next workout on dev (all three `LOAD_PLAN_*` flags are on there). Owner order 2026-10-01: «да в новой сессии» —
@@ -100,10 +101,18 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
   `{reps:30, functional_reps}` → `{type:'isometric', duration:45 / 30}`; stored as `cardio_duration` → isometric:
   2026-09-20 upper_a_press Plank 2×45, 2026-09-27 lower_a Plank 2×45 + Side Plank 2×30, 2026-09-29 upper_b Plank 2×45
   (verify on dev — some may be replay artefacts).
+- (D) W-6: review fixes — every reason/outcome that claims a step now checks the floor: `pre_fatigue`, `below_floor`, the gap-ladder
+  branch notes (unknown / illness) and the insufficient-data break-tier line say "no lighter option — the load holds" when the
+  floor stopped the step; the insufficient-data outcome is `reference load, no lighter option` in that case. Unchanged on purpose:
+  the restart cold start (`gap_restart`, no reference-less number) still prints outcome `conservative start`.
+- (D) W-7: unknown equipment step on the insufficient-data path adds `equipmentStep` to `missing` and the note
+  "equipmentStep missing — steps cannot be computed"; the block prints "no lighter option" only when the step is known.
+  No-reference outcome is `no number`. v12 rule 1 now says a `no lighter option` conservative line means the load is the
+  lightest — never present it as a variant (v11 untouched).
 
 ## Review
 
-### Run 1 — 2026-10-01 — blocked (R1 0 / R2 0 / R3 2 / R4 3 blocking)
+### Run 1 — 2026-10-01 — blocked (R1 0 / R2 0 / R3 2 / R4 3 blocking); run 2 (R3, R4 re-run) — clean
 
 **Blocking**
 
@@ -173,11 +182,40 @@ R4 ×1 (load-plan metric definitions have no durable home).
 - Orchestrator re-run (2026-10-01, `d7888c80`): `DB_PORT=5999 npm run test:unit` 204 suites / 2381 passed;
   `db-test-lock.sh npm run test:scenarios` 28 suites / 440 passed (1 todo); `state.mjs --check` OK. R3 zone: type-check,
   lint (0 errors), format:check clean.
-- (D) W-6: review fixes — every reason/outcome that claims a step now checks the floor: `pre_fatigue`, `below_floor`, the gap-ladder
-  branch notes (unknown / illness) and the insufficient-data break-tier line say "no lighter option — the load holds" when the
-  floor stopped the step; the insufficient-data outcome is `reference load, no lighter option` in that case. Unchanged on purpose:
-  the restart cold start (`gap_restart`, no reference-less number) still prints outcome `conservative start`.
-- (D) W-7: unknown equipment step on the insufficient-data path adds `equipmentStep` to `missing` and the note
-  "equipmentStep missing — steps cannot be computed"; the block prints "no lighter option" only when the step is known.
-  No-reference outcome is `no number`. v12 rule 1 now says a `no lighter option` conservative line means the load is the
-  lightest — never present it as a variant (v11 untouched).
+- Orchestrator re-run on the merge head (2026-10-01, `6eb7ce01`, after the review-fix commit `2eb710ec`): `npm run
+  check-all` exit 0; `DB_PORT=5999 npm run test:unit` 204 suites / 2390 passed; `db-test-lock.sh npm run
+  test:integration` 59 suites / 707 passed (1 todo); `db-test-lock.sh npm run test:scenarios` 28 suites / 440 passed
+  (1 todo); `state.mjs --check` OK.
+
+### Run 2 — 2026-10-01 — clean (R3, R4 re-run on the whole diff; R1/R2 had no blocking in run 1)
+
+Run-1 blocking closures, re-verified by the zones: R4 BR-TRAINING-036 amended and BR-TRAINING-040 added (owner-approved
+2026-10-01, `ab858c55`; R4 confirmed the English text is faithful); R4 ARCHITECTURE v12 line (`ab858c55`); R3 evidence
+(§ Verification evidence); R3 AC-LPF-4 accepted as deferred (owner = orchestrator, command recorded). Review-fix commit
+`2eb710ec` closed the run-1 R3 advisories on floored reasons, v12 "no lighter option", and the "conservative start"
+no-reference outcome (W-6, W-7).
+
+**Blocking (run 2)**
+
+- R3 | `docs/superpowers/plans/load-plan-fixes.md:167-175` | SUPERPOWERS_INTEGRATION rule 2 — evidence covered only
+  `d7888c80`, not the review-fix head. **Closed:** full re-run on `6eb7ce01` recorded above.
+
+**Advisory (run 2)** — routed to `docs/BACKLOG.md` § load-plan-fixes close-out review advisories unless closed here
+
+- R3 | `decide.ts:204-206` — a partial floor in `gapRow` (3 steps requested, floor after one) says "no lighter option —
+  the load holds" while the outcome says "one step down"; no test.
+- R3 | `decide.ts:295-301` — insufficient data after a break tier with an unknown step still claims "one step below the
+  reference"; same pre-branch claim in `gapRow` / `pre_fatigue` with an unknown step.
+- R3 | `training-load-plan.v2.ts:141-145` — with an unknown step, `conservative` equals `recommend` with no note (U2 pattern
+  on unknown-step rows).
+- R3 | `training-service-isometric.unit.test.ts:45` — BR-TRAINING-040's third clause (reps-only stored as given) has no
+  test; no test cites BR-TRAINING-040 / 036.
+- R3 | `metrics.ts:333-345` — recurring-load rule ignores recency (repeat of run 1).
+- R4 | `log-set.tool.repro.test.ts:4-8` — header stale. **Closed:** `6eb7ce01`.
+- R4 | design `:207-208` — §5 restart vs amended Stage A row 1. **Closed:** `6eb7ce01`.
+- R4 | design `:88` — working-weight rule has no durable home (same class as run-1 meta).
+- R4 | `training.spec.md:36` — BR-TRAINING-036 does not cover an unknown equipment step (pre-existing).
+- R4 | `docs/STATE.md:277` — U9b handoff still routes the 0 kg conservative to backlog. **Closed** in this plan's STATE
+  handoff at close-out.
+
+**Meta (run 2)** filed in `docs/REVIEW_FINDINGS.md`: R3 — evidence must name the head it ran on.
