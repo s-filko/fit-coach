@@ -1244,7 +1244,7 @@ Deterministic red: `planning-set-logging.repro.test.ts` (AC-CB-2). Fix owner: ro
 
 ## BUG-023 — Isometric holds are stored as repetitions: 45-second planks become "45 reps"
 
-**Status:** Open — not fixed in code: the RED probe `log-set.tool.repro.test.ts` (AC-LSR-1) is still red. Live 2026-09-27 (`a8d3b20b`) the planks were stored as `cardio_duration` only because the model chose `durationSeconds`; the documented bodyweight path (`reps: 45`) still stores reps
+**Status:** Partly fixed (plan `load-plan-fixes`, 2026-10-01, BR-TRAINING-040): a hold time (`durationSeconds`) on an isometric exercise is now stored as `isometric` with its duration, and the `log_set` description says hold time = `durationSeconds`, never reps. Still open by design (W-3): a reps-only call on an isometric exercise is stored as given, so the RED probe `log-set.tool.repro.test.ts` (AC-LSR-1) stays red. The owner's earlier plank sets need a data correction (plan `load-plan-fixes` (D) O-1, owner-gated)
 **Severity:** High — training history is factually wrong; hold-time progression cannot be tracked
 **Found during:** Live dev training session 2026-09-21 (owner review)
 **Component:** `apps/server/src/infra/ai/tools/log-set.tool.ts:38-58,135-142`, `apps/server/src/infra/ai/prompts/phases/training/v3.ts:70-73`

@@ -95,5 +95,81 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
   `recommend: no number — …` / `conservative: no conservative option — …`.
 - (D) W-5: training prompt v12 = v11 derived by three exact-text replacements (rule 1 ×2 lines, rule 4b; a missing needle throws),
   v11 file untouched; `training.spec.ts` selects v12 instead of v11 with `LOAD_PLAN_PLANNER_REBIND`; v11 stays registered.
+- (D) O-1 (orchestrator): dev data correction for isometric sets — **not run; owner-gated, DB backup first.** From the worker's
+  read of the owner's history export: 2026-09-21 lower_a Plank 2 × `{reps:45, functional_reps}` and Side Plank 2 ×
+  `{reps:30, functional_reps}` → `{type:'isometric', duration:45 / 30}`; stored as `cardio_duration` → isometric:
+  2026-09-20 upper_a_press Plank 2×45, 2026-09-27 lower_a Plank 2×45 + Side Plank 2×30, 2026-09-29 upper_b Plank 2×45
+  (verify on dev — some may be replay artefacts).
 
 ## Review
+
+### Run 1 — 2026-10-01 — blocked (R1 0 / R2 0 / R3 2 / R4 3 blocking)
+
+**Blocking**
+
+- R3 | `docs/superpowers/plans/load-plan-fixes.md:48-50` | SUPERPOWERS_INTEGRATION rules of engagement rule 2 — the plan's
+  verification commands have no recorded evidence (DB-backed `test:integration` / `test:scenarios` are the only runs of the
+  scenario proofs for AC-LPF-1/2/3). **Closing:** evidence recorded below (§ Verification evidence).
+- R3 | `docs/superpowers/plans/load-plan-fixes.md:44` | AC-LPF-4 — the GLM replay re-run has no result. **Deferred:** the
+  owner's order puts the replay after the dev deploy; owner = orchestrator, command =
+  `data/replay-2026-10-01/src/run.ts` (local `glm-5.3-flash` only), result recorded in this plan after deploy.
+- R4 | `docs/domain/training.spec.md:36` | SUPERPOWERS_INTEGRATION rule 7 (+ rule 3 escalation) — BR-TRAINING-036 still says
+  LOAD PLAN names "a lighter `conservative:`"; after W-2 conservative can equal recommend ("no lighter option"), after W-4 no
+  load is named without a reference, and Stage A insufficient data now gives the reference load. Owner-level: escalated.
+- R4 | `apps/server/src/domain/training/services/training.service.ts:437-440` | SUPERPOWERS_INTEGRATION rule 1 — the new rule
+  (`cardio_duration` on an `isometric` exercise stored as `{type:'isometric', duration}`; reps-only not converted, W-3) has
+  no BR-* ID. Owner-level: escalated.
+- R4 | `docs/ARCHITECTURE.md:182-183` | SUPERPOWERS_INTEGRATION rule 7 — still names `training/v11.ts` as the prompt selected
+  under the load-plan flags; `v12.ts` missing from the tree listing. Factual reconciliation.
+
+**Advisory** (not fixed on this branch unless noted)
+
+- R1+R2 | `training.service.ts:433` — `applyPerHand` now has two reasons to change (per-hand shaping and isometric re-key); name
+  no longer describes it.
+- R1+R2 | `decide.ts:246` — `referenceLoad()` derives a load fact inside the decision module and repeats `loadOf`'s
+  loaded-set rule (drops `perHand`); belongs next to Metric 2 in `load-facts` as a `ReferenceFact` field.
+- R1+R2 | `decide.ts:271/279` — `insufficientData()` / `afterBreak` is a second "after a break, one step below" ladder beside
+  `gap-tier.ts` `LADDER`; the two disagree (restart with a working weight → no number, without one → a number).
+- R2 | `decide.ts:285` — `insufficientData` assembles the Decision by hand instead of `finish()`; the `equipmentStep missing`
+  note is lost, so `step === null` prints "no lighter option" without saying why.
+- R1 | `training-load-plan.v2.ts:137` — the renderer infers "floored" from `candidate.load === conservative.load`; also true
+  when the step is unknown; an explicit field would state it.
+- R1 | `v12.ts:30` — v12 is derived at render time by exact-text replacement on v11; a missing needle throws in a live turn,
+  not at load/build.
+- R2 | `prompts/phases/training/index.ts:60` — `TRAINING_PROMPT_V11` wrapper has no production call site; third copy of the
+  `requiredSections` literal.
+- R2 | `tests/integration/scenarios/load-plan-fixes.integration.test.ts:34` — `seedWorkout` / `loadPlanOf` are a third copy
+  of scenario helpers; move to `tests/helpers`.
+- R3 | `metrics.ts:333-345` — the recurring-load rule ignores recency: a first session at a heavier load (60, 60, then 65 all
+  in range) keeps working weight at 60 until 65 recurs; no test for "latest session progressed".
+- R3 | `decide.ts:278-282` — the insufficient-data-with-reference path ignores break reason (unknown/illness extra step) and
+  gives restart a number where design §3.3/§5 say no number; for gaps > 56 d this path is now the usual one.
+- R3 | `decide.ts:246-259` — `referenceLoad` ignores `perHand`; a mixed per-hand/total dumbbell reference can be printed as
+  per-hand.
+- R3 | `decide.ts:224-239` — when the floor stops a step-down, `pre_fatigue` / `below_floor` reasons still say "one step down"
+  while the outcome says `hold`.
+- R3 | `training-load-plan.v2.ts:172` — floored rows print `conservative: 2.5 kg × … — no lighter option` while v12 says "show
+  the conservative option whenever the block gives one" (U2 pattern); the no-reference case still prints
+  `decision: … → conservative start`.
+- R3 | `training.service.ts:436-439` — a reps-only plank is still stored as `functional_reps` (W-3, deliberate); no test pins it.
+- R4 | `docs/BUGS.md:1247` — BUG-023 status should say the duration path is fixed, reps-only stays open, AC-LSR-1 probe red by
+  design.
+- R4 | `log-set.tool.repro.test.ts:4-8` — header says a timed hold has no documented shape; now false.
+- R4 | `docs/BACKLOG.md:911` — the 0 kg item is W-2. **Closed:** removed on `dev` in `8f1d85e0` (promoted to this plan).
+- R4 | design `2026-09-28-load-recommendation-architecture-design.md:88,104` — metric 4 and the Stage A insufficient-data row are
+  stale after W-1/W-4; the step-down floor is stated nowhere.
+- R4 | plan item 2 — the dev data correction for isometric sets is not listed. **Closed:** listed in § Execution decisions O-1.
+
+**Meta** (filed in `docs/REVIEW_FINDINGS.md`): R1 ×2 (design departure not flagged for ratification; superpowers design as
+the only statement of a rule), R2 ×1 (derived prompt versions), R3 ×2 (post-deploy ACs at close-out; no evidence section),
+R4 ×1 (load-plan metric definitions have no durable home).
+
+### Verification evidence
+
+- Worker (2026-10-01, reported): `check-all` exit 0; `test:unit` 204 suites / 2381; `DB_PORT=5999 test:unit` 2381;
+  `test:integration` 59 suites / 707; `test:scenarios` 28 suites / 440. Red-then-green per item in the worker report
+  (item 1: 6/7 new domain tests red; item 2: service 1/2, tool description, scenario plank red; item 3: 4 decide tests,
+  scenario 3/3 red).
+- Orchestrator re-run (2026-10-01, `d7888c80`): `DB_PORT=5999 npm run test:unit` 204 suites / 2381 passed;
+  `db-test-lock.sh npm run test:scenarios` 28 suites / 440 passed (1 todo); `state.mjs --check` OK. R3 zone: type-check,
+  lint (0 errors), format:check clean.
