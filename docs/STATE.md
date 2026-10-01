@@ -244,6 +244,21 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
 
+## Handoff (load-plan-fixes done, 2026-10-01) — merged into dev, pushed; owner's workout is the live check
+
+`docs/superpowers/plans/load-plan-fixes.md` is `Status: done`, review clean (Opus zones, runs 1–6). Scope grew with the
+owner in-session: items 1–3 (0 kg ladder, isometric holds, numbers on no-record rows) and the extension 4–11 —
+working weight from the newest session + indirect estimate, literature-based growth (NSCA 2-for-2, one-session growth,
+APRE / RIR-based RPE), reps in reserve + plain-language effort question, `next step:` on every row, volume line, step
+from history, an independent Opus golden table (60/60) and generated invariants. Durable: BR-TRAINING-036 amended,
+BR-TRAINING-040..045 new (all owner-approved 2026-10-01). Local GLM replay after the merge (`glm-5.3-flash`, test DB,
+flags on): upper 52 calls / lower 50 calls, 0 errors; no 0 kg; planks isometric; effort question asked in plain words;
+Reverse Pec Deck after 169 d → 28 / 23 (restart ≥ rebuild). Model-revealed leftovers in BACKLOG (duplicate sets on
+clarifications, RPE-vs-reps correction).
+**Owed:** dev deploy verification (health, zero-LLM `print-load-plan` over the owner's history, no model calls);
+owner-gated dev data correction for old plank sets (plan (D) O-1); next plan `cold-start` (U11, stub in place);
+cleanup of the `load-plan-fixes` worktree/branch and the old U9b ones (list below).
+
 ## Handoff (load-plan-fixes, 2026-10-01) — next orchestrator: fix three replay defects before the owner's workout
 
 **Owner order 2026-10-01 («да в новой сессии»):** execute `docs/superpowers/plans/load-plan-fixes.md` (items 1–3:
