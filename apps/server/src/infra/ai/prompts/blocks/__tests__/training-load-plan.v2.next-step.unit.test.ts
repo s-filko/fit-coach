@@ -162,3 +162,47 @@ describe('AC-LPF-8 · the other rows each carry a next step', () => {
     expect(line(text, 'next step')).toBe('next step: log this exercise once — that performance becomes the reference');
   });
 });
+
+describe('AC-LPF-5 · the metrics line says when the working weight is an estimate', () => {
+  const PRESS = { ...LEG_PRESS, id: '77777777-7777-4777-8777-777777777777', name: 'Incline Press Machine' };
+  const sessionOf = (id: string, days: number, rows: [number, number][]) =>
+    sessionRow(id, daysBefore(days, -60), [
+      {
+        rowId: `r-${id}`,
+        ...PRESS,
+        sets: rows.flatMap(([w, r], i) => sets(w, [r], new Date(daysBefore(days).getTime() + i * 120_000))),
+      },
+    ]);
+  const older = sessionOf('o', 9, [
+    [45, 12],
+    [45, 12],
+  ]);
+
+  it('60×6, 55×7, 45×12 (range 8–10) → working weight 50 kg, estimated from 55×7', async () => {
+    const past = [
+      sessionOf('n', 3, [
+        [60, 6],
+        [55, 7],
+        [45, 12],
+      ]),
+      older,
+    ];
+    const text = await entryText(PRESS, past, daysBefore(0), '8-10');
+    expect(text).toMatch(/metrics: working weight 50 kg \(2 performances \/ 8 wk, estimated from 55×7\)/);
+    expect(line(text, 'recommend')).toMatch(/^recommend: 50 kg × 8–10 — /);
+  });
+
+  it('60×6, 55×8, 45×12 → 55 kg from a reached load, no "estimated"', async () => {
+    const past = [
+      sessionOf('n', 3, [
+        [60, 6],
+        [55, 8],
+        [45, 12],
+      ]),
+      older,
+    ];
+    const text = await entryText(PRESS, past, daysBefore(0), '8-10');
+    expect(text).toMatch(/metrics: working weight 55 kg \(2 performances \/ 8 wk\)/);
+    expect(text).not.toContain('estimated from');
+  });
+});

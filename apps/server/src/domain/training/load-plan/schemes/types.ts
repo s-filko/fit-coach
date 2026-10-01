@@ -37,6 +37,8 @@ export type NextStep =
   /** A number exists, but not a working weight yet; `why` is the working-weight fact's absent reason. */
   | { kind: 'insufficient'; why: string }
   | { kind: 'no_number' }
+  /** The working weight is an indirect estimate; sets at `load` reaching `reps` confirm it. */
+  | { kind: 'estimated'; load: number; reps: number }
   /** Nothing to wait for or a data gap: `why` is a short domain phrase. */
   | { kind: 'hold'; why: string };
 

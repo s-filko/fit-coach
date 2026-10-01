@@ -195,6 +195,8 @@ function nextStepText(n: NextStep, d: Decision): string {
       return `the same ${n.load} ${unit} without the extra pre-fatigue → the usual growth rule applies`;
     case 'insufficient':
       return workingWeightPath(n.why);
+    case 'estimated':
+      return `the working weight is an estimate — sets at ${n.load} ${unit} reaching ${n.reps}+ reps confirm it, then the growth rule applies`;
     case 'no_number':
       return 'log this exercise once — that performance becomes the reference';
     case 'hold':

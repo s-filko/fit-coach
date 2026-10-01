@@ -157,6 +157,8 @@ export interface WorkingWeightFact {
   performances: number;
   warmupsEstimated: boolean;
   mixedBasisExcluded: number;
+  /** Set when the weight came from the indirect Epley estimate (the set it was read from), not from a reached load. */
+  estimatedFrom?: { weight: number; reps: number };
 }
 
 export interface E1rmTrendFact {

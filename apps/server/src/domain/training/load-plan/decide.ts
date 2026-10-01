@@ -300,7 +300,9 @@ function stageA(c: Ctx): Decision | null {
     });
   }
   const last = c.facts.lastExposure;
-  if (!isAbsent(last) && !isAbsent(last.repsVsRange) && last.repsVsRange === 'below floor') {
+  // An estimated working weight already is the answer to a below-floor performance — no second step down on top of it.
+  const estimated = !isAbsent(c.facts.workingWeight) && c.facts.workingWeight.estimatedFrom !== undefined;
+  if (!estimated && !isAbsent(last) && !isAbsent(last.repsVsRange) && last.repsVsRange === 'below floor') {
     const candidate = loadBelow(c, c.base, 1);
     return finish(c, 'A', 'below_floor', {
       candidate,
@@ -419,6 +421,24 @@ function earlyGrowth(c: Ctx, params: SchemeParams, out: SchemeOutput): SchemeOut
   };
 }
 
+/**
+ * The working weight is an indirect estimate (the newest performance fell short of the floor at heavier loads): the
+ * scheme's reason about "the last set at the working weight" would be about sets that do not exist, so the hold says
+ * where the load came from and what confirms it. Confidence at most medium. Other outputs pass through.
+ */
+function estimatedHold(c: Ctx, out: SchemeOutput): SchemeOutput {
+  const w = c.facts.workingWeight;
+  if (isAbsent(w) || w.estimatedFrom === undefined) {
+    return out;
+  }
+  return {
+    ...out,
+    reason: `working weight estimated from ${w.estimatedFrom.weight}×${w.estimatedFrom.reps} (short of the rep floor at the heavier load) — hold`,
+    confidence: LEVELS[Math.min(LEVELS.indexOf('medium'), LEVELS.indexOf(out.confidence))],
+    next: { kind: 'estimated', load: c.base, reps: c.reps.min },
+  };
+}
+
 function rowOf(early: boolean, grew: boolean): DecisionRow {
   if (early) {
     return 'early_growth';
@@ -469,7 +489,7 @@ export function decide(facts: LoadFacts, input: DecideInput): Decision {
   const schemeOut = scheme.decide(facts, goal, params);
   const grew = schemeOut.candidate.load !== null && schemeOut.candidate.load > ctx.base;
   const early = grew ? null : earlyGrowth(ctx, params, schemeOut);
-  const out = early ?? schemeOut;
+  const out = early ?? (grew ? schemeOut : estimatedHold(ctx, schemeOut));
   return {
     ...out,
     ...meta,

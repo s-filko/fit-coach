@@ -399,11 +399,21 @@ describe('AC-LF-1 · metric 4 — working weight', () => {
     expect(computeWorkingWeight(perfs, 'today', null, benchPress, NOW, TZ)).toEqual({ absent: 'no rep range' });
   });
 
-  it('no load reached the floor → absent', () => {
+  it('no load reached the floor and no equipment step → absent', () => {
     const perfs = [perf('a', 3, [strengthSet(65, 5)]), perf('b', 6, [strengthSet(65, 6)])];
-    expect(computeWorkingWeight(perfs, 'today', RANGE, benchPress, NOW, TZ)).toEqual({
+    const bodyweight = { ...benchPress, equipment: 'bodyweight' as const };
+    expect(computeWorkingWeight(perfs, 'today', RANGE, bodyweight, NOW, TZ)).toEqual({
       absent: 'no load reached the rep floor',
     });
+  });
+
+  it('no load reached the floor, step known → the indirect estimate (65×5 for 8–12 → 55)', () => {
+    const perfs = [perf('a', 3, [strengthSet(65, 5)]), perf('b', 6, [strengthSet(65, 6)])];
+    const r = computeWorkingWeight(perfs, 'today', RANGE, benchPress, NOW, TZ);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect([r.weight, r.estimatedFrom]).toEqual([55, { weight: 65, reps: 5 }]);
   });
 
   it('a performance mixing per-hand and total loads is excluded and counted', () => {
@@ -1032,5 +1042,137 @@ describe('AC-LPF-7 · each load is judged on its own sets (a too-heavy opener is
       throw new Error('expected a value');
     }
     expect(r.repsVsRange).toBe('below floor');
+  });
+});
+
+describe('AC-LPF-5 · indirect working-weight estimate (Epley from sets ≤ 10 reps, rounded down to the step)', () => {
+  const R810 = { min: 8, max: 10 };
+  const older = perf('older', 9, [strengthSet(45, 12), strengthSet(45, 12)]);
+  const ww = (sets: [number, number][], range = R810, ex = benchPress, extra = [older]) => {
+    const perfs = [
+      perf(
+        'newest',
+        3,
+        sets.map(([w, r]) => strengthSet(w, r)),
+      ),
+      ...extra,
+    ];
+    return computeWorkingWeight(perfs, 'today', range, ex, NOW, TZ);
+  };
+
+  it('60×6, 55×8, 45×12 (range 8–10) → 55, from the reached load; the estimate does not lift it', () => {
+    const r = ww([
+      [60, 6],
+      [55, 8],
+      [45, 12],
+    ]);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(55);
+    expect(r.estimatedFrom).toBeUndefined();
+  });
+
+  it('60×6, 55×7, 45×12 (range 8–10) → 50, not 45, and says where it came from', () => {
+    const r = ww([
+      [60, 6],
+      [55, 7],
+      [45, 12],
+    ]);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(50);
+    expect(r.estimatedFrom).toEqual({ weight: 55, reps: 7 });
+  });
+
+  it('is rounded DOWN to the equipment step (barbell 2.5)', () => {
+    // 100×7 → e1RM 123.3 → for 8 reps 97.4 → 95 (2.5 grid: 97.5 > 97.4 → 95).
+    const r = ww([[100, 7]], R810, barbellBench, [perf('o', 9, [strengthSet(90, 10), strengthSet(90, 10)])]);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(95);
+    expect(r.estimatedFrom).toEqual({ weight: 100, reps: 7 });
+  });
+
+  it('a set that reached the floor is never "estimated" upwards (80×10 for 8–12 stays 80)', () => {
+    const r = ww(
+      [
+        [80, 10],
+        [80, 10],
+      ],
+      { min: 8, max: 12 },
+      benchPress,
+      [perf('o', 9, [strengthSet(80, 10)])],
+    );
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(80);
+    expect(r.estimatedFrom).toBeUndefined();
+  });
+
+  it('sets above 10 reps carry no estimate (E1RM_MAX_REPS stays 10)', () => {
+    const r = ww([
+      [45, 12],
+      [45, 12],
+    ]);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(45);
+    expect(r.estimatedFrom).toBeUndefined();
+  });
+
+  it('no estimate when the equipment step is unknown (bodyweight / none)', () => {
+    const bodyweight = { ...benchPress, equipment: 'bodyweight' as const };
+    const r = ww(
+      [
+        [60, 6],
+        [55, 7],
+        [45, 12],
+      ],
+      R810,
+      bodyweight,
+    );
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(45);
+    expect(r.estimatedFrom).toBeUndefined();
+  });
+
+  it('only the newest performance is read', () => {
+    const r = ww(
+      [
+        [45, 12],
+        [45, 12],
+      ],
+      R810,
+      benchPress,
+      [perf('o', 9, [strengthSet(60, 6), strengthSet(55, 7)])],
+    );
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(45);
+  });
+
+  it('when no load reached the floor the estimate still gives a working weight', () => {
+    const r = ww(
+      [
+        [60, 6],
+        [55, 7],
+      ],
+      R810,
+      benchPress,
+      [perf('o', 9, [strengthSet(60, 6), strengthSet(55, 7)])],
+    );
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(50);
+    expect(r.estimatedFrom).toEqual({ weight: 55, reps: 7 });
   });
 });

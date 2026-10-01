@@ -316,7 +316,10 @@ export function computeWorkingWeight(
   if (!range) {
     return absent(NO_RANGE);
   }
-  const best = qualifyingLoad(used, range.min);
+  const reached = qualifyingLoad(used, range.min);
+  const estimate = indirectEstimate(used[0], range.min, computeEquipmentStep(exercise));
+  const fromEstimate = estimate !== null && (!reached || estimate.weight > reached.weight);
+  const best = fromEstimate ? { weight: estimate.weight, unit: estimate.unit } : reached;
   if (!best) {
     return absent('no load reached the rep floor');
   }
@@ -326,7 +329,44 @@ export function computeWorkingWeight(
     performances: used.length,
     warmupsEstimated: used.some(r => r.estimated),
     mixedBasisExcluded,
+    ...(fromEstimate ? { estimatedFrom: estimate.from } : {}),
   };
+}
+
+/**
+ * Indirect estimate (owner-approved 2026-10-01): when the newest performance fell short of the floor at a heavier load
+ * (60×6, 55×7 for 8–10) no load "reached" it, yet the sets say what would. Epley e1RM of the working sets up to
+ * `E1RM_MAX_REPS` reps (reliable below ~10, Reynolds 2006) — the LOWEST of them, the cautious reading, so a too-heavy
+ * opener does not lift it — converted to the load for the range MIN reps and rounded DOWN to the equipment step. No
+ * known step → no estimate. `from` names the set it was read from.
+ */
+function indirectEstimate(
+  newest: LoadPerformance,
+  floor: number,
+  stepFact: Metric<{ step: number }>,
+): { weight: number; unit: 'kg' | 'lbs' | null; from: { weight: number; reps: number } } | null {
+  if (isAbsent(stepFact)) {
+    return null;
+  }
+  const sets = newest.loads.filter(l => l.reps >= 1 && l.reps <= E1RM_MAX_REPS);
+  if (sets.length === 0) {
+    return null;
+  }
+  const lowest = sets.reduce((a, b) => (epley(b.weight, b.reps) < epley(a.weight, a.reps) ? b : a));
+  const load = epley(lowest.weight, lowest.reps) / (1 + floor / EPLEY_DIVISOR);
+  // Only a set that fell short of the floor asks for a lighter load; a set that reached it is already what the reached
+  // load says (80×10 for 8–12 must not be "estimated" up to 82.5).
+  if (lowest.reps >= floor) {
+    return null;
+  }
+  const weight = roundDownToStep(load, stepFact.step);
+  return weight > 0 ? { weight, unit: lowest.unit, from: { weight: lowest.weight, reps: lowest.reps } } : null;
+}
+
+/** Round down to the load grid; the epsilon keeps an exact grid value (55.0000000001 or 54.99999999) on its step. */
+function roundDownToStep(load: number, step: number): number {
+  const GRID_EPSILON = 1e-6;
+  return Math.round(Math.floor(load / step + GRID_EPSILON) * step * 1000) / 1000;
 }
 
 /**

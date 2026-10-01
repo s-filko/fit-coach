@@ -212,6 +212,19 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
   below-recent-best load is lower and when it rises, cautious optimism with the conservative/working weight as fallback, never
   pressure or invent a step, volume as encouragement) and "In-session hint" (a set ≥ 3 reps above the top or below the floor →
   one step up/down for the NEXT set only); line-diff test now expects 5 added lines. v11 untouched.
+- (D) W-16: indirect working-weight estimate (item 4 addition, owner-approved): working weight = max(item-4 value, estimate), also when
+  no load reached the floor. Estimate = Epley e1RM of the newest performance's loaded working sets with reps ≤ 10
+  (`E1RM_MAX_REPS` stays 10), converted to the load for the range MIN reps (e1RM / (1 + min/30)), rounded DOWN to the equipment
+  step (epsilon 1e-6 so an exact grid value stays); unknown step (bodyweight/none) → no estimate. **Which set:** the brief's
+  "heaviest working set" cannot give the owner case 60×6, 55×7, 45×12 → 50 (60×6 would give 55), so the LOWEST e1RM of the sets
+  ≤ 10 reps is read (cautious; 55×7 → 50, 55×8 → 55; the opener never lifts it) — asked of the orchestrator, no answer by the
+  time of the commit; revisit if a different rule is wanted. `WorkingWeightFact.estimatedFrom {weight, reps}`; the metrics line
+  prints "(2 performances / 8 wk, estimated from 55×7)". Stage A rows still apply on top, except below floor: an estimated
+  weight is itself the answer to the below-floor performance, so it is not stepped down again; the hold reason is "working weight
+  estimated from 55×7 (short of the rep floor at the heavier load) — hold", next step `estimated` ("sets at 50 kg reaching 8+ reps
+  confirm it, then the growth rule applies"), confidence ≤ medium. **Gate added (deviation from the brief's bare max):** the
+  estimate applies only when its source set fell SHORT of the floor (reps < range min). Without it 80×10 for 8–12 was
+  "estimated" up to 82.5 kg — above anything the user demonstrated (caught by four scenario tests). The owner cases are unchanged.
 
 ## Review
 

@@ -724,3 +724,37 @@ describe('AC-LPF-8 · every decision carries the next step', () => {
     expect(d.next).toEqual({ kind: 'ladder', remaining: 0, backTo: 65, cold: false });
   });
 });
+
+describe('AC-LPF-5 · an estimated working weight', () => {
+  const estimated = (over: Partial<LoadFacts> = {}): LoadFacts =>
+    makeFacts({
+      workingWeight: {
+        weight: 50,
+        unit: 'kg',
+        performances: 2,
+        warmupsEstimated: false,
+        mixedBasisExcluded: 0,
+        estimatedFrom: { weight: 55, reps: 7 },
+      },
+      repRange: { min: 8, max: 10, source: 'today' },
+      repHistory: repHistoryOf(50, [{ reps: [] }, { reps: [] }]),
+      lastExposure: exposure('below floor'),
+      ...over,
+    });
+
+  it('is not stepped down again for the same below-floor performance; the reason says where it came from', () => {
+    const d = run(estimated());
+    expect(d).toMatchObject({ stage: 'C', row: 'scheme_hold' });
+    expect(d.candidate.load).toBe(50);
+    expect(d.reason).toBe('working weight estimated from 55×7 (short of the rep floor at the heavier load) — hold');
+    expect(d.next).toEqual({ kind: 'estimated', load: 50, reps: 8 });
+    expect(d.confidence).not.toBe('high');
+  });
+
+  it('Stage A safety rows still apply on top (short constraint, gap)', () => {
+    expect(run(estimated({ constraints: { constraints: [SHORT_CONSTRAINT], equipment: [] } })).row).toBe(
+      'short_constraint',
+    );
+    expect(run(estimated({ gap: gapOf(15) })).row).toBe('gap_return');
+  });
+});
