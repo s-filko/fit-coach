@@ -78,7 +78,8 @@ apps/server/src/
       load-facts/              # Pure load metrics over plain inputs (load-facts plan): computeLoadFacts, gap / e1RM / fatigue facts — no I/O
       load-plan/               # Pure decision layer (load-plan plan): typed decisions + scheme/decision reason text (design §4.1); prompt labels and framing live in the v2 block
         schemes/               #   progression-scheme registry (double / linear), params with their citations, the scheme contract
-        decide.ts              #   decision order — Stage A safety rows (short constraint, gap ladder — the more conservative wins, pre-fatigue, below floor) → Stage B → Stage C scheme
+        decide.ts              #   decision order — Stage A safety rows (short constraint, gap ladder — the more conservative wins, pre-fatigue, early stop / unclear effort / below floor, uneven performance, insufficient data) → Stage B → Stage C scheme (2-for-2) with the one-session growth and estimate-hold overrides; every decision carries a `NextStep`
+        effort-hint.ts         #   which logged set is decision-critical and lacks effort (data only; the wording lives in `log-set.tool.ts`)
         gap-tier.ts            #   gap tiers and the return ladder (R4.0 thresholds), `gapTierFacts`, `ladderStateOf`
         break-fact.ts          #   the `break` fact text (reason class, dates) — parse / format, `breakReasonOf` (window strictly between workouts)
         progression-fact.ts    #   the `progression_scheme` fact text — parse / format, `chosenSchemeOf`
@@ -181,7 +182,7 @@ apps/server/src/
           training/v1.ts             #   DIRECTIVES_WITHOUT_IDENTITY_V1 (render helpers live in blocks/ since the context-budget plan)
           training/v11.ts / session_planning/v5.ts
                                      #   rebound planner (load-plan Task 5b): the coach starts from the LOAD PLAN suggestion, the planner writes no `targetWeight` (v11 kept registered, superseded by v12)
-          training/v12.ts            #   v11 + no invented conservative option / "no lighter option" rules (load-plan-fixes) — selected with LOAD_PLAN_PLANNER_REBIND and LOAD_PLAN_SUGGESTION (`graph/phases/planner-rebind.ts`)
+          training/v12.ts            #   v11 + no invented conservative option / "no lighter option", explain the load and the next step, in-session one-step hint, effort in plain language, machine small-step note (load-plan-fixes) — selected with LOAD_PLAN_PLANNER_REBIND and LOAD_PLAN_SUGGESTION (`graph/phases/planner-rebind.ts`)
           */v2.ts                    #   current for chat/plan_creation/session_planning/training: v1 minus the domain sections (now block 3); registration has no v2
         blocks/                      # Injected fragments that are neither phase prompt nor directive
           types.ts                   #   ContextBlock<D> (D-A): pure renderer over the phase's loaded data, optional `depths`
