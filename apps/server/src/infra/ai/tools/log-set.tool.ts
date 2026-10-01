@@ -3,9 +3,11 @@ import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 
 import { llmError, ok, systemError } from '@domain/conversation/tool-outcome';
+import { effortHint, type HintSet } from '@domain/training/load-plan';
 import type { ITrainingService } from '@domain/training/ports';
 import { isRetroLog, lastActivityOf, RETRO_SET_OFFSET_MS } from '@domain/training/session-timing';
 import { SetDataSchema } from '@domain/training/set-data.types';
+import type { SessionSet } from '@domain/training/types';
 
 import { maybeCtxOf } from '@infra/ai/graph/state';
 import { formatSetData } from '@infra/ai/prompts/blocks/training-workout-overview.v1';
@@ -23,6 +25,18 @@ export interface LogSetToolDeps {
   trainingService: ITrainingService;
   /** Load plan (load-plan plan Task 5b, D10): the completion summary's Target line drops the plan weight. */
   loadPlanPlannerRebind?: boolean;
+}
+
+/** A stored set as the effort hint reads it. */
+function hintSetOf(s: SessionSet): HintSet {
+  const d = s.setData;
+  return {
+    reps: d.type === 'strength' || d.type === 'functional_reps' ? d.reps : 0,
+    weight: d.type === 'strength' ? (d.weight ?? null) : null,
+    rpe: s.rpe,
+    feedback: s.userFeedback,
+    isWarmup: s.setKind === 'warmup',
+  };
 }
 
 export function buildLogSetTool(deps: LogSetToolDeps) {
@@ -104,10 +118,20 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         // The set is already saved at this point: a failure resolving the name degrades the
         // confirmation text, it must never turn a successful write into a reported error.
         let exerciseName = input.exerciseName ?? '';
+        let hint: string | null = null;
         try {
           const finalSession = await trainingService.getSessionDetails(sessionId);
-          const named = finalSession?.exercises.find(se => se.id === set.sessionExerciseId)?.exercise.name;
-          exerciseName = named ?? exerciseName;
+          const row = finalSession?.exercises.find(se => se.id === set.sessionExerciseId);
+          exerciseName = row?.exercise.name ?? exerciseName;
+          // Item 10: code decides when the coach asks the effort — a decision-critical set stored without RPE.
+          hint = row
+            ? effortHint({
+                set: hintSetOf(set),
+                earlier: (row.sets ?? []).filter(s => s.id !== set.id && s.setNumber < setNumber).map(hintSetOf),
+                targetReps: row.targetReps ?? null,
+                targetSets: row.targetSets ?? null,
+              })
+            : null;
         } catch (nameErr) {
           log.warn({ err: nameErr, sessionId }, 'log_set: could not resolve exercise name for confirmation');
         }
@@ -120,7 +144,9 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         const rpeNote = rpe != null ? ` | RPE ${rpe}` : '';
         const retroNote = isRetro ? ' (retro-logged)' : '';
         const namePart = exerciseName ? ` — ${exerciseName}` : '';
-        const setConfirmation = `Set ${setNumber} logged${namePart}: ${summary}${kindNote}${rpeNote}${retroNote}.`;
+        const setConfirmation = `Set ${setNumber} logged${namePart}: ${summary}${kindNote}${rpeNote}${retroNote}.${
+          hint ? `\n\n${hint}` : ''
+        }`;
 
         log.info(
           {
@@ -215,7 +241,15 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
             .max(30)
             .optional()
             .describe('Treadmill incline in percent (0–30). Only for treadmill. Do NOT use for strength exercises.'),
-          rpe: z.number().min(1).max(10).optional().describe('Rate of Perceived Exertion (1–10).'),
+          rpe: z
+            .number()
+            .min(1)
+            .max(10)
+            .optional()
+            .describe(
+              'Rate of Perceived Exertion (1–10): reps left in reserve = 10 − RPE. Pass it when the user gives it, or maps ' +
+                'from their plain answer on how many more reps they could have done (0 → 10, 1–2 → 8, 3+ → 7).',
+            ),
           feedback: z.string().optional().describe('Any user comment about this set.'),
           setKind: z
             .enum(['warmup', 'working'])

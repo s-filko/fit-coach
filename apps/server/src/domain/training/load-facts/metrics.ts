@@ -8,6 +8,7 @@ import {
   type ConstraintsFact,
   type DataSufficiency,
   type E1rmTrendFact,
+  type EffortFact,
   type EquipmentStepFact,
   type ExerciseInput,
   type FatigueFact,
@@ -51,6 +52,9 @@ const MS_PER_MINUTE = 60_000;
 const DAYS_PER_WEEK = 7;
 const EPLEY_DIVISOR = 30;
 const HALF = 2;
+const MAX_RPE = 10;
+/** RPE at or below this is "three or more reps left" (RPE ≤ 7): a stop below the floor is an early stop. */
+const EARLY_STOP_MAX_RPE = 7;
 const PERCENT = 100;
 
 const STEP_BY_EQUIPMENT = { barbell: 2.5, dumbbell: 2, machine: 5, cable: 5 } as const;
@@ -85,6 +89,20 @@ function loadOf(set: Pick<SetInput, 'setData'>): LoadedSet | null {
 }
 
 /** Reps of a rep-counted set (strength, functional_reps), else null. */
+/**
+ * Capacity of a set = reps + reps in reserve, RIR = 10 − RPE (Helms et al. 2016/2018: RPE 10 = no reps left, 8 = two).
+ * No RPE → the reps themselves (nothing is inferred); RPE above 10 counts as 10.
+ */
+export function capacityOf(reps: number, rpe: number | null): number {
+  return rpe === null ? reps : reps + Math.max(0, MAX_RPE - rpe);
+}
+
+/** Capacity of a rep-counted set, else null. */
+function capacityOfSet(set: SetInput): number | null {
+  const reps = repsOf(set);
+  return reps === null ? null : capacityOf(reps, set.rpe);
+}
+
 function repsOf(set: SetInput): number | null {
   const d = set.setData;
   return d.type === 'strength' || d.type === 'functional_reps' ? d.reps : null;
@@ -550,14 +568,31 @@ function dropOffOf(allWorking: SetInput[], weight?: number): number | null {
   if (sets.length < HALF) {
     return null;
   }
-  return (repsOf(sets[0]) ?? 0) - (repsOf(sets[sets.length - 1]) ?? 0);
+  return (capacityOfSet(sets[0]) ?? 0) - (capacityOfSet(sets[sets.length - 1]) ?? 0);
+}
+
+function pickEffortSet(early: SetInput | undefined, unclear: SetInput | undefined): SetInput | undefined {
+  return early ?? unclear;
+}
+
+function effortOf(working: SetInput[], range: RepRange | null): EffortFact {
+  const none: EffortFact = { earlyStop: false, unclearBelowFloor: false, set: null };
+  if (!range) {
+    return none;
+  }
+  const below = working.filter(s => (capacityOfSet(s) ?? Infinity) < range.min);
+  const early = working.find(s => (repsOf(s) ?? Infinity) < range.min && s.rpe !== null && s.rpe <= EARLY_STOP_MAX_RPE);
+  const earlyStop = below.length === 0 && early !== undefined;
+  const unclearBelowFloor = below.length === 1 && below[0].rpe === null;
+  const set = pickEffortSet(earlyStop ? early : undefined, unclearBelowFloor ? below[0] : undefined);
+  return { earlyStop, unclearBelowFloor, set: set ? { reps: repsOf(set) ?? 0, rpe: set.rpe } : null };
 }
 
 function repsVsRange(working: SetInput[], range: RepRange | null): Metric<RepsVsRange> {
   if (!range) {
     return absent(NO_RANGE);
   }
-  const reps = working.map(repsOf).filter((v): v is number => v !== null);
+  const reps = working.map(capacityOfSet).filter((v): v is number => v !== null);
   if (reps.length === 0) {
     return absent('no reps recorded');
   }
@@ -582,6 +617,7 @@ export function computeLastExposure(
   const rpeFact = rpe.length > 0 ? { values: rpe } : absent('no RPE recorded');
   if (exercise.exerciseType !== 'strength' && exercise.exerciseType !== 'functional_reps') {
     return {
+      effort: { earlyStop: false, unclearBelowFloor: false, set: null },
       repsVsRange: notApplicable(exercise),
       rpe: rpeFact,
       dropOff: notApplicable(exercise),
@@ -591,6 +627,7 @@ export function computeLastExposure(
   const value = dropOffOf(working);
   const atWeight = workingWeight !== undefined && working.some(s => loadOf(s)?.weight === workingWeight);
   return {
+    effort: effortOf(working, range),
     repsVsRange: repsVsRange(working, range),
     rpe: rpeFact,
     dropOff:
@@ -720,32 +757,39 @@ export function computeLoadFacts(
     e1rmTrend: computeE1rmTrend(performances, todayId, exercise, now, timezone),
     repHistory: computeRepHistory(performances, todayId, workingWeight, exercise, now, timezone),
     volume: computeVolume(performances, todayId, exercise, now, timezone),
-    lastExposure:
-      'absent' in reference
-        ? reference
-        : lastExposureOf(
-            reference,
-            performances,
-            range,
-            exercise,
-            isAbsent(workingWeight) ? undefined : workingWeight.weight,
-          ),
+    lastExposure: lastExposureOf(performances, todayId, now, timezone, range, exercise, workingWeight),
     gap: computeGap(exercise, performances, context.workouts, todayId, now, timezone),
     constraints: computeConstraints(exercise, context),
     equipmentStep: computeEquipmentStep(exercise),
   };
 }
 
+/**
+ * Last-exposure quality of the NEWEST real performance — the one growth reads too (W-13). The reference (like-for-like
+ * pick, D6) may be an older session; the safety rows must not judge a session the user has already moved past.
+ */
 function lastExposureOf(
-  reference: ReferenceFact,
   performances: PerformanceInput[],
+  todaySessionId: string,
+  now: Date,
+  tz: string | null,
   range: RepRange | null,
   exercise: ExerciseInput,
-  workingWeight?: number,
-): LastExposureFact {
-  const refTime = reference.performance.performedAt.getTime();
+  workingWeight: Metric<WorkingWeightFact>,
+): Metric<LastExposureFact> {
+  const [newest] = realPerformances(performances, todaySessionId, now, tz);
+  if (!newest) {
+    return absent(NO_RECORD);
+  }
+  const newestTime = newest.p.performedAt.getTime();
   const earlier = performances.filter(
-    p => p.sessionId !== reference.performance.sessionId && p.performedAt.getTime() < refTime,
+    p => p.sessionId !== newest.p.sessionId && p.sessionId !== todaySessionId && p.performedAt.getTime() < newestTime,
   );
-  return computeLastExposure(reference.performance, earlier, range, exercise, workingWeight);
+  return computeLastExposure(
+    newest.p,
+    earlier,
+    range,
+    exercise,
+    isAbsent(workingWeight) ? undefined : workingWeight.weight,
+  );
 }

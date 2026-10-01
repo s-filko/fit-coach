@@ -758,3 +758,89 @@ describe('AC-LPF-5 · an estimated working weight', () => {
     expect(run(estimated({ gap: gapOf(15) })).row).toBe('gap_return');
   });
 });
+
+describe('AC-LPF-11 · reps in reserve in the decision rows', () => {
+  const withEffort = (
+    effort: Partial<NonNullable<Extract<LoadFacts['lastExposure'], { effort: unknown }>['effort']>>,
+    vs: 'below floor' | 'in range' | 'at or above top' = 'in range',
+  ): LoadFacts['lastExposure'] =>
+    ({
+      ...(makeFacts().lastExposure as object),
+      repsVsRange: vs,
+      effort: { earlyStop: false, unclearBelowFloor: false, set: null, ...effort },
+    }) as LoadFacts['lastExposure'];
+
+  it('early stop (6 @ RPE 7): hold, NO step down, the next step says the load is within reach', () => {
+    const d = run(makeFacts({ lastExposure: withEffort({ earlyStop: true, set: { reps: 6, rpe: 7 } }) }));
+    expect(d).toMatchObject({ stage: 'A', row: 'early_stop', outcome: 'hold' });
+    expect(d.candidate.load).toBe(65);
+    expect(d.reason).toContain('6 reps at RPE 7');
+    expect(d.reason).toContain('early stop');
+    expect(d.next).toEqual({ kind: 'early_stop', load: 65, reps: 8 });
+  });
+
+  it('an early stop beats growth evidence in the same performance', () => {
+    const d = run(
+      makeFacts({
+        lastExposure: withEffort({ earlyStop: true, set: { reps: 6, rpe: 7 } }),
+        repHistory: repHistoryOf(65, [{ reps: [14] }, { reps: [14] }]),
+      }),
+    );
+    expect(d.row).toBe('early_stop');
+  });
+
+  it('a lone below-floor set without RPE never steps down on its own: hold and ask', () => {
+    const d = run(
+      makeFacts({ lastExposure: withEffort({ unclearBelowFloor: true, set: { reps: 6, rpe: null } }, 'below floor') }),
+    );
+    expect(d).toMatchObject({ stage: 'A', row: 'unclear_effort', outcome: 'hold' });
+    expect(d.candidate.load).toBe(65);
+    expect(d.reason).toContain('6 reps');
+    expect(d.reason).toContain('without RPE');
+    expect(d.next).toEqual({ kind: 'ask_effort', load: 65, stepDownTo: 60 });
+  });
+
+  it('a below-floor performance that is a real miss (RPE given, or several sets) still steps down', () => {
+    const d = run(makeFacts({ lastExposure: withEffort({}, 'below floor') }));
+    expect(d.row).toBe('below_floor');
+    expect(d.candidate.load).toBe(60);
+  });
+
+  it('growth reads capacity: 12 reps @ RPE 8 (14) twice in a row is 2-for-2 at top 12', () => {
+    const d = run(
+      makeFacts({
+        e1rmTrend: { absent: 'x' },
+        repRange: { min: 10, max: 12, source: 'today' },
+        repHistory: repHistoryOf(65, [
+          { reps: [12, 12], rpe: 8 },
+          { reps: [12, 12], rpe: 8 },
+        ]),
+      }),
+    );
+    expect(d).toMatchObject({ row: 'scheme_growth', outcome: 'one step up' });
+  });
+
+  it('one-session growth reads capacity too: 13 @ RPE 8 (15) vs top 12; RPE 9 still blocks it', () => {
+    const base = (rpe: number) =>
+      makeFacts({
+        e1rmTrend: { absent: 'x' },
+        repRange: { min: 10, max: 12, source: 'today' },
+        gap: gapOf(4),
+        repHistory: repHistoryOf(65, [{ reps: [12, 13], rpe }]),
+      });
+    expect(run(base(8)).row).toBe('early_growth');
+    expect(run(base(9)).row).toBe('scheme_hold');
+  });
+
+  it('without RPE the reps are the capacity: 13 vs top 12 → one-session growth, 12 → hold', () => {
+    const f = (last: number) =>
+      makeFacts({
+        e1rmTrend: { absent: 'x' },
+        repRange: { min: 10, max: 12, source: 'today' },
+        gap: gapOf(4),
+        repHistory: repHistoryOf(65, [{ reps: [12, last] }]),
+      });
+    expect(run(f(15)).row).toBe('early_growth');
+    expect(run(f(13)).row).toBe('scheme_hold');
+  });
+});

@@ -22,7 +22,8 @@ import { ONE_SESSION_MAX_RPE, ONE_SESSION_SURPLUS, UNEVEN_ABOVE_USUAL, UNEVEN_WI
 import {
   confidenceOf,
   EQUIPMENT_STEP,
-  lastSetReps,
+  lastSetCapacity,
+  lastSetText,
   NO_RECORD_REASON,
   noRecord,
   roundLoad,
@@ -48,6 +49,8 @@ export type DecisionRow =
   | 'gap_restart'
   | 'pre_fatigue'
   | 'uneven_performance'
+  | 'early_stop'
+  | 'unclear_effort'
   | 'below_floor'
   | 'early_growth'
   | 'scheme_growth'
@@ -300,6 +303,24 @@ function stageA(c: Ctx): Decision | null {
     });
   }
   const last = c.facts.lastExposure;
+  const effort = isAbsent(last) ? null : last.effort;
+  if (effort?.earlyStop && effort.set) {
+    return finish(c, 'A', 'early_stop', {
+      candidate: c.base,
+      conservative: loadBelow(c, c.base, 1),
+      reason: `a set stopped below the floor (${effort.set.reps} reps at RPE ${effort.set.rpe}) with reps still in reserve: an early stop, not a failure — hold, no step down`,
+      next: { kind: 'early_stop', load: c.base, reps: c.reps.min },
+    });
+  }
+  if (effort?.unclearBelowFloor && effort.set) {
+    const lower = loadBelow(c, c.base, 1);
+    return finish(c, 'A', 'unclear_effort', {
+      candidate: c.base,
+      conservative: lower,
+      reason: `one set below the floor (${effort.set.reps} reps) without RPE — an early stop cannot be told from a failure; hold and ask how many more reps it would have been`,
+      next: { kind: 'ask_effort', load: c.base, stepDownTo: lower },
+    });
+  }
   // An estimated working weight already is the answer to a below-floor performance — no second step down on top of it.
   const estimated = !isAbsent(c.facts.workingWeight) && c.facts.workingWeight.estimatedFrom !== undefined;
   if (!estimated && !isAbsent(last) && !isAbsent(last.repsVsRange) && last.repsVsRange === 'below floor') {
@@ -397,7 +418,7 @@ function earlyGrowth(c: Ctx, params: SchemeParams, out: SchemeOutput): SchemeOut
     return null;
   }
   const [newest] = history.entries;
-  const last = newest ? lastSetReps(newest) : null;
+  const last = newest ? lastSetCapacity(newest) : null;
   const { reps } = out.candidate;
   if (!newest || last === null || last < reps.max + ONE_SESSION_SURPLUS) {
     return null;
@@ -410,11 +431,10 @@ function earlyGrowth(c: Ctx, params: SchemeParams, out: SchemeOutput): SchemeOut
     return null;
   }
   const unit = c.unit ?? 'kg';
-  const rpe = newest.lastSetRpe === null ? '' : ` at RPE ${newest.lastSetRpe}`;
   return {
     candidate: { load: growth.load, unit: c.unit, reps },
     conservative: { load: c.base, unit: c.unit, reps },
-    reason: `last set at the working weight ${last} reps${rpe} (range top ${reps.max} + ${ONE_SESSION_SURPLUS} or more; ${repsText(newest.repsAtWorkingWeight)} at ${c.base} ${unit} ${newest.daysAgo} d ago); recovered (${c.gap.days ?? 0} d since ${c.gap.basis ?? 'last workout'}, no short constraint, no material pre-fatigue) — one step up`,
+    reason: `last set at the working weight ${lastSetText(newest)} (range top ${reps.max} + ${ONE_SESSION_SURPLUS} or more; ${repsText(newest.repsAtWorkingWeight)} at ${c.base} ${unit} ${newest.daysAgo} d ago); recovered (${c.gap.days ?? 0} d since ${c.gap.basis ?? 'last workout'}, no short constraint, no material pre-fatigue) — one step up`,
     confidence: LEVELS[Math.min(LEVELS.indexOf('medium'), LEVELS.indexOf(confidenceOf(c.facts, out.missing)))],
     missing: out.missing,
     next: { kind: 'after_growth', load: growth.load, reps: reps.max },

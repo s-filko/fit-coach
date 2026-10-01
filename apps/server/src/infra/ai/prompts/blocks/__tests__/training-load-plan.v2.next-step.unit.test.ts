@@ -206,3 +206,89 @@ describe('AC-LPF-5 · the metrics line says when the working weight is an estima
     expect(text).not.toContain('estimated from');
   });
 });
+
+describe('AC-LPF-11 · the owner early-stop cases at 60 kg, range 8–10', () => {
+  const PRESS = { ...LEG_PRESS, id: '88888888-8888-4888-8888-888888888888', name: 'Shoulder Press Machine' };
+  const sessionWith = (id: string, days: number, rows: [number, number, number?][]) =>
+    sessionRow(id, daysBefore(days, -60), [
+      {
+        rowId: `r-${id}`,
+        ...PRESS,
+        sets: rows.map(([w, r, rpe], i) => ({
+          weight: w,
+          reps: r,
+          at: new Date(daysBefore(days).getTime() + i * 120_000),
+          ...(rpe === undefined ? {} : { rpe }),
+        })),
+      },
+    ]);
+  const older = sessionWith('o', 9, [
+    [60, 9],
+    [60, 9],
+    [60, 9],
+  ]);
+
+  it('6 @ RPE 7 (stopped early): hold 60, no step down, "take it to the floor next time"', async () => {
+    const past = [
+      sessionWith('n', 3, [
+        [60, 10],
+        [60, 9],
+        [60, 6, 7],
+      ]),
+      older,
+    ];
+    const text = await entryText(PRESS, past, daysBefore(0), '8-10');
+    expect(line(text, 'decision')).toBe('decision: Stage A, early stop → hold');
+    expect(line(text, 'recommend')).toMatch(
+      /^recommend: 60 kg × 8–10 — a set stopped below the floor \(6 reps at RPE 7\)/,
+    );
+    expect(line(text, 'conservative')).toBe('conservative: 55 kg × 8–10 — 5 kg lower');
+    expect(line(text, 'next step')).toBe(
+      'next step: take it to the floor next time (8+ reps at 60 kg) — the load is within reach',
+    );
+  });
+
+  it('6 with no RPE (a lone weak set): hold and ask, never a step down by itself', async () => {
+    const past = [
+      sessionWith('n', 3, [
+        [60, 10],
+        [60, 9],
+        [60, 6],
+      ]),
+      older,
+    ];
+    const text = await entryText(PRESS, past, daysBefore(0), '8-10');
+    expect(line(text, 'decision')).toBe('decision: Stage A, unclear effort → hold');
+    expect(line(text, 'recommend')).toMatch(/^recommend: 60 kg/);
+    expect(line(text, 'next step')).toContain('ask how many more reps that set had in it (0, 1–2 or 3+)');
+  });
+
+  it('6 @ RPE 9 is a real miss: one step down', async () => {
+    const past = [
+      sessionWith('n', 3, [
+        [60, 10],
+        [60, 9],
+        [60, 6, 9],
+      ]),
+      older,
+    ];
+    const text = await entryText(PRESS, past, daysBefore(0), '8-10');
+    expect(line(text, 'decision')).toBe('decision: Stage A, last below range floor → one step down');
+    expect(line(text, 'recommend')).toMatch(/^recommend: 55 kg/);
+  });
+
+  it('8 @ RPE 8 counts as 10: not a failure, not growth either — hold at 60', async () => {
+    const past = [
+      sessionWith('n', 3, [
+        [60, 10],
+        [60, 9],
+        [60, 8, 8],
+      ]),
+      older,
+    ];
+    const text = await entryText(PRESS, past, daysBefore(0), '8-10');
+    expect(line(text, 'decision')).toBe('decision: Stage C, scheme hold → hold');
+    expect(line(text, 'recommend')).toMatch(/^recommend: 60 kg × 8–10 — /);
+    expect(line(text, 'next step')).toContain('+1 step (65 kg)');
+  });
+});

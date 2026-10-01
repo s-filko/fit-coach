@@ -61,6 +61,8 @@ const ROW_LABELS_V2: Record<DecisionRow, string> = {
   gap_restart: 'gap tier restart',
   pre_fatigue: 'pre-fatigue delta',
   uneven_performance: 'uneven performance',
+  early_stop: 'early stop',
+  unclear_effort: 'unclear effort',
   below_floor: 'last below range floor',
   early_growth: 'one-session growth',
   scheme_growth: 'scheme growth',
@@ -189,6 +191,10 @@ function nextStepText(n: NextStep, d: Decision): string {
       return `even sets at ${n.load} ${unit} (reps falling by at most ${n.maxDrop} from the first to the last set) → the growth rule applies`;
     case 'step_down':
       return `back to ${n.backTo} ${unit} when the sets at ${n.atLoad} ${unit} reach ${n.reps}+ reps`;
+    case 'early_stop':
+      return `take it to the floor next time (${n.reps}+ reps at ${n.load} ${unit}) — the load is within reach`;
+    case 'ask_effort':
+      return `ask how many more reps that set had in it (0, 1–2 or 3+): 3+ → an early stop, the load stays ${n.load} ${unit}; 0–2 → ${n.stepDownTo} ${unit}`;
     case 'constraint':
       return 'no growth while the short constraint is active; the growth rule applies again after it';
     case 'pre_fatigue':

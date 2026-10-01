@@ -12,6 +12,7 @@ import {
   computeEquipmentStep,
   computeVolume,
   computeRepHistory,
+  capacityOf,
   classifySets,
 } from '../index';
 import {
@@ -1174,5 +1175,97 @@ describe('AC-LPF-5 · indirect working-weight estimate (Epley from sets ≤ 10 r
     }
     expect(r.weight).toBe(50);
     expect(r.estimatedFrom).toEqual({ weight: 55, reps: 7 });
+  });
+});
+
+describe('AC-LPF-10 · the safety rows judge the NEWEST performance (W-13)', () => {
+  it('lateral raise 09-25 (15-rep top set → not like-for-like): last exposure is 09-25, not the 8-rep 09-20 reference', () => {
+    const f = computeLoadFacts(
+      lateralRaise,
+      ownerPerfs(lateralRaise.id, LATERAL_RAISE_ROWS, '2026-09-25'),
+      today({ targetReps: '10-12' }),
+      emptyContext,
+      ownerNow('2026-09-25', 4),
+      TZ,
+    );
+    if (isAbsent(f.reference) || isAbsent(f.lastExposure) || isAbsent(f.lastExposure.repsVsRange)) {
+      throw new Error('expected values');
+    }
+    expect(f.reference.daysAgo).toBe(9); // the reference stays the like-for-like pick
+    expect(f.lastExposure.repsVsRange).toBe('in range'); // 10, 15, 12, 10 at 2.5 kg — newest, not 09-20's 8
+  });
+
+  it('with the newest performance as the reference nothing changes', () => {
+    const perfs = [perf('a', 3, [strengthSet(65, 6)]), perf('b', 10, [strengthSet(65, 10)])];
+    const f = computeLoadFacts(benchPress, perfs, today(), emptyContext, NOW, TZ);
+    if (isAbsent(f.lastExposure) || isAbsent(f.lastExposure.repsVsRange)) {
+      throw new Error('expected values');
+    }
+    expect(f.lastExposure.repsVsRange).toBe('below floor');
+  });
+});
+
+describe('AC-LPF-11 · reps in reserve: capacity = reps + (10 − RPE) when RPE is recorded (Helms et al.)', () => {
+  const R810 = { min: 8, max: 10 };
+  const exposure = (sets: ReturnType<typeof strengthSet>[], range = R810) =>
+    computeLastExposure(perf('x', 3, sets), [], range, benchPress, 60);
+
+  it('capacityOf: no RPE → the reps; RPE 10 → the reps; RPE 8 → +2; RPE 7 → +3', () => {
+    expect([capacityOf(8, null), capacityOf(8, 10), capacityOf(8, 8), capacityOf(6, 7), capacityOf(8, 11)]).toEqual([
+      8, 8, 10, 9, 8,
+    ]);
+  });
+
+  it('8 @ RPE 8 counts as 10: at the top of 8–10', () => {
+    expect(exposure([strengthSet(60, 8, { rpe: 8 }), strengthSet(60, 8, { rpe: 8 })]).repsVsRange).toBe(
+      'at or above top',
+    );
+  });
+
+  it('6 @ RPE 7 is an early stop: capacity 9 is not below the floor, and the effort flags say so', () => {
+    const e = exposure([strengthSet(60, 10), strengthSet(60, 9), strengthSet(60, 6, { rpe: 7 })]);
+    expect(e.repsVsRange).toBe('in range');
+    expect(e.effort).toEqual({ earlyStop: true, unclearBelowFloor: false, set: { reps: 6, rpe: 7 } });
+  });
+
+  it('6 @ RPE 9 is genuinely below the floor (capacity 7): no early stop, nothing unclear', () => {
+    const e = exposure([strengthSet(60, 10), strengthSet(60, 6, { rpe: 9 })]);
+    expect(e.repsVsRange).toBe('below floor');
+    expect(e.effort).toMatchObject({ earlyStop: false, unclearBelowFloor: false });
+  });
+
+  it('a lone below-floor set without RPE is unclear — below floor, but not provable', () => {
+    const e = exposure([strengthSet(60, 10), strengthSet(60, 10), strengthSet(60, 6)]);
+    expect(e.repsVsRange).toBe('below floor');
+    expect(e.effort).toEqual({ earlyStop: false, unclearBelowFloor: true, set: { reps: 6, rpe: null } });
+  });
+
+  it('two below-floor sets without RPE are a real miss, not unclear', () => {
+    const e = exposure([strengthSet(60, 6), strengthSet(60, 6)]);
+    expect(e.effort.unclearBelowFloor).toBe(false);
+  });
+
+  it('a lone below-floor set at RPE 10 is a real miss', () => {
+    const e = exposure([strengthSet(60, 10), strengthSet(60, 6, { rpe: 10 })]);
+    expect(e.effort).toMatchObject({ earlyStop: false, unclearBelowFloor: false });
+  });
+
+  it('drop-off is measured in capacity: 12 @ 8 (14) → 8 @ 10 (8) is 6, not 4', () => {
+    const e = exposure(
+      [strengthSet(60, 12, { rpe: 8 }), strengthSet(60, 10, { rpe: 9 }), strengthSet(60, 8, { rpe: 10 })],
+      { min: 6, max: 10 },
+    );
+    if (isAbsent(e.dropOff)) {
+      throw new Error('expected a value');
+    }
+    expect(e.dropOff.value).toBe(6);
+  });
+
+  it('without any RPE nothing changes (reps are the capacity)', () => {
+    const e = exposure([strengthSet(60, 12), strengthSet(60, 10), strengthSet(60, 8)], { min: 6, max: 10 });
+    if (isAbsent(e.dropOff)) {
+      throw new Error('expected a value');
+    }
+    expect(e.dropOff.value).toBe(4);
   });
 });

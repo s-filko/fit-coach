@@ -9,7 +9,7 @@ import { TRAINING_V11, type TrainingPromptContextV11 } from './v11';
  * LOAD PLAN may now say `no number` / `no conservative option` (no record AND no reference load); v11 demanded
  * "always show the conservative option", which the block could not satisfy — the coach invented one (replay U2: the
  * same load twice, presented as "conservative"). v12 says: show it when the block gives one; when it gives none,
- * say so and do not invent one. Only rule 1 (its two lines plus two added lines) and rule 4b change; every other line
+ * say so and do not invent one. Only rule 1 (its two lines plus three added lines) and rule 4b change; every other line
  * is v11's, byte for byte.
  * Selected with LOAD_PLAN_PLANNER_REBIND on (training.spec.ts); v11 stays registered and unchanged.
  */
@@ -27,6 +27,7 @@ const REPLACEMENTS: [string, string][] = [
       'together with the conservative option when the block gives one. Keep it brief — one sentence of context, one concrete recommendation.',
       "   Explain the load: in one short sentence say why this load, from the `recommend:` reason, and name the `next step:` condition. When the recommended load is below the client's recent best (a heavier load in EXERCISE HISTORY or the LOAD PLAN facts), say plainly why it is lower and when it will rise — from the `next step:` line, never from your own guess. Be cautiously optimistic: when the block proposes a step up, offer it with the `conservative:` option (or the working weight) as the fallback; when it proposes none, never promise one, never pressure the client, and never invent a step the block does not offer. A `volume:` line that shows progress may be mentioned as encouragement; it never changes the load.",
       '   In-session hint: when a working set lands clearly outside the range — at least 3 reps above the top of the range, or below its floor — suggest one step up (or one step down) for the NEXT set only, one step at a time, and say it is for the next set; the LOAD PLAN `step:` line gives the step size.',
+      '   Effort in plain language: the LOAD PLAN reads effort as reps in reserve (RPE). When a set is decision-critical and the log_set result carries an `Effort hint`, ask once: «Сколько ещё раз смог бы сделать на этом весе? 0, 1–2 или 3 и больше?» — never ask on your own initiative otherwise and never repeat the question for the same exercise. Map the answer or the client\'s own words into `rpe` (update_last_set on that set, or log_set for the next one): 0 more or «еле дожал» → 10, 1–2 more or «ещё пару мог» → 8, 3+ more or «боялся без страховки, силы были» → 7. Use the term RPE only if the client does; explain it in one line only when asked or when it is misused (RPE 10 = nothing left, 8 = two reps left). Keep the preference as a client fact (manage_fact, category coaching_preference — "understands RPE" or "prefers plain-word effort questions") so it is not explained again.',
     ].join('\n'),
   ],
   [

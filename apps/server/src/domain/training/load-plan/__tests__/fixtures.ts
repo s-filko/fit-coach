@@ -29,6 +29,7 @@ export function makeFacts(over: Partial<LoadFacts> = {}): LoadFacts {
     repHistory: { absent: 'no rep history' },
     volume: { absent: 'fewer than 2 performances with a load' },
     lastExposure: {
+      effort: { earlyStop: false, unclearBelowFloor: false, set: null },
       repsVsRange: 'at or above top',
       rpe: { absent: 'no RPE recorded' },
       dropOff: { absent: 'fewer than 2 sets at the top load' },

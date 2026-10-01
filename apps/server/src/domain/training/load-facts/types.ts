@@ -206,7 +206,18 @@ export interface VolumeFact {
 
 export type RepsVsRange = 'below floor' | 'in range' | 'at or above top';
 
+/** Effort read from the newest performance's sets at the working weight (reps in reserve, load-plan-fixes item 10). */
+export interface EffortFact {
+  /** A set below the floor at RPE ≤ 7 whose capacity still reaches the floor: stopped early, not failed. */
+  earlyStop: boolean;
+  /** Exactly one set is below the floor and it has no RPE — an early stop cannot be told from a failure. */
+  unclearBelowFloor: boolean;
+  /** The set behind either flag (reps, RPE); null when neither is set. */
+  set: { reps: number; rpe: number | null } | null;
+}
+
 export interface LastExposureFact {
+  effort: EffortFact;
   repsVsRange: Metric<RepsVsRange>;
   rpe: Metric<{ values: number[] }>;
   dropOff: Metric<{ value: number; usual: number | null }>;

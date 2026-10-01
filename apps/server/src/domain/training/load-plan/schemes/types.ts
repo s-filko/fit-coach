@@ -32,6 +32,10 @@ export type NextStep =
   | { kind: 'uneven'; load: number; maxDrop: number }
   /** After a step down: back to `backTo` when the sets at `atLoad` reach `reps`. */
   | { kind: 'step_down'; backTo: number; atLoad: number; reps: number }
+  /** A set stopped below the floor with reps in reserve: take it to the floor next time at `load`. */
+  | { kind: 'early_stop'; load: number; reps: number }
+  /** One below-floor set without RPE: the answer to "how many more reps" decides between hold and `stepDownTo`. */
+  | { kind: 'ask_effort'; load: number; stepDownTo: number }
   | { kind: 'constraint' }
   | { kind: 'pre_fatigue'; load: number }
   /** A number exists, but not a working weight yet; `why` is the working-weight fact's absent reason. */

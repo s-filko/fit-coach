@@ -85,21 +85,35 @@ describe('phase.training v12 — no invented conservative option (AC-LPF-3)', ()
     expect(hint).toContain('for the NEXT set only, one step at a time');
   });
 
+  it('AC-LPF-11: plain-language effort question, phrase → RPE mapping, RPE term only if the user uses it, kept as a fact', () => {
+    const task = TRAINING_V12.render(RENDER_CTX).find(s => s.id === 'task')!.text;
+    const [rule] = /Effort in plain language:[^\n]*/.exec(task)!;
+    expect(rule).toContain('Сколько ещё раз смог бы сделать на этом весе? 0, 1–2 или 3 и больше?');
+    expect(rule).toContain('`Effort hint`');
+    expect(rule).toContain('never ask on your own initiative');
+    expect(rule).toMatch(/«еле дожал» → 10.*«ещё пару мог» → 8.*«боялся без страховки, силы были» → 7/);
+    expect(rule).toContain('Use the term RPE only if the client does');
+    expect(rule).toContain('explain it in one line only when asked');
+    expect(rule).toContain('manage_fact, category coaching_preference');
+  });
+
   it('v11 carries none of the expectation-management rules', () => {
     const v11 = textOf(TRAINING_V11);
     expect(v11).not.toContain('Explain the load');
     expect(v11).not.toContain('In-session hint');
+    expect(v11).not.toContain('Effort in plain language');
   });
 
-  it('differs from v11 only in rule 1 (two lines + two added lines) and rule 4b', () => {
+  it('differs from v11 only in rule 1 (two lines + three added lines) and rule 4b', () => {
     const lines = (t: string): string[] => t.split('\n');
     const v11 = new Set(lines(textOf(TRAINING_V11)));
     const added = lines(textOf(TRAINING_V12)).filter(l => !v11.has(l));
-    expect(added).toHaveLength(5);
+    expect(added).toHaveLength(6);
     expect(added.some(l => l.includes('First set of each exercise'))).toBe(true);
     expect(added.some(l => l.includes('Then give a specific recommendation'))).toBe(true);
     expect(added.some(l => l.includes('Explain the load:'))).toBe(true);
     expect(added.some(l => l.includes('In-session hint:'))).toBe(true);
+    expect(added.some(l => l.includes('Effort in plain language:'))).toBe(true);
     expect(added.some(l => l.includes('b) The user explicitly asked to move on'))).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import { isAbsent, type LoadFacts, type RepRange } from '../../load-facts';
+import { capacityOf, isAbsent, type LoadFacts, type RepRange } from '../../load-facts';
 
 import { HIGH_CONFIDENCE_PERFORMANCES, LOW_CONFIDENCE_PERFORMANCES } from './params';
 import type { Confidence, NextStep, Recommendation, SchemeOutput, SchemeParams } from './types';
@@ -102,10 +102,29 @@ export function lastSetReps(entry: { repsAtWorkingWeight: number[] }): number | 
   return entry.repsAtWorkingWeight.length > 0 ? entry.repsAtWorkingWeight[entry.repsAtWorkingWeight.length - 1] : null;
 }
 
-/** Consecutive newest performances whose last set at the working weight reached `reps`. */
-function surplusRun(entries: { repsAtWorkingWeight: number[] }[], reps: number): number {
+type RepEntry = { repsAtWorkingWeight: number[]; lastSetRpe: number | null };
+
+/** Capacity (reps + reps in reserve) of the last set at the working weight; null when it used another load. */
+export function lastSetCapacity(entry: RepEntry): number | null {
+  const reps = lastSetReps(entry);
+  return reps === null ? null : capacityOf(reps, entry.lastSetRpe);
+}
+
+/** "12 reps", or "12 reps at RPE 8 (counts as 14)" when the effort was recorded. */
+export function lastSetText(entry: RepEntry): string {
+  const reps = lastSetReps(entry);
+  if (reps === null) {
+    return 'no set at the working weight in the newest performance';
+  }
+  return entry.lastSetRpe === null
+    ? `${reps} reps`
+    : `${reps} reps at RPE ${entry.lastSetRpe} (counts as ${capacityOf(reps, entry.lastSetRpe)})`;
+}
+
+/** Consecutive newest performances whose last set at the working weight had a capacity of at least `reps`. */
+function surplusRun(entries: RepEntry[], reps: number): number {
   let run = 0;
-  while (run < entries.length && (lastSetReps(entries[run]) ?? -1) >= reps) {
+  while (run < entries.length && (lastSetCapacity(entries[run]) ?? -1) >= reps) {
     run++;
   }
   return run;
@@ -206,8 +225,7 @@ function decideFromRepHistory(facts: LoadFacts, params: SchemeParams, surplus: n
   const { entries } = facts.repHistory as Extract<LoadFacts['repHistory'], { entries: unknown }>;
   const needReps = c.reps.max + surplus;
   const seen = surplusRun(entries, needReps);
-  const last = entries[0] ? lastSetReps(entries[0]) : null;
-  const lastText = last === null ? 'no set at the working weight in the newest performance' : `${last} reps`;
+  const lastText = entries[0] ? lastSetText(entries[0]) : 'no set at the working weight in the newest performance';
   const growth = stepUp(c.base, c.step, params.stepCapPct);
   if (seen >= params.confirmSessions && growth.kind === 'grow') {
     return c.grown(

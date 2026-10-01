@@ -259,6 +259,52 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
   confirm it, then the growth rule applies"), confidence ≤ medium. **Gate added (deviation from the brief's bare max):** the
   estimate applies only when its source set fell SHORT of the floor (reps < range min). Without it 80×10 for 8–12 was
   "estimated" up to 82.5 kg — above anything the user demonstrated (caught by four scenario tests). The owner cases are unchanged.
+- (D) W-17: item 9 (W-13 change) — `lastExposure` is now computed from the NEWEST real performance, not the reference (the
+  like-for-like pick stays the `reference:` line); below floor and uneven therefore judge what growth judges. Lateral raise
+  2026-09-25 (range 10–12) no longer reads the 8-rep 09-20 session. **Two findings the invariant test surfaced, NOT fixed
+  (owner decision):** (1) W-1 flip — extra reps can make an older load "recur" in two performances, and the recurring-load rule
+  then replaces the "highest load" fallback, so the working weight can DROP when reps rise (generated seed 45: 70 → 65);
+  (2) reference flip — extra reps can push the newest session outside the like-for-like tolerance (top set > range top + 2),
+  the reference switches to an older session and with it the pre-fatigue baseline / the insufficient-data reference load
+  (seeds 249, 491). The "more reps never lowers the recommendation" invariant is therefore asserted with the working weight
+  and the reference performance held constant (≥ 800 of 2500 cases still compared). **Interpretation to confirm:** "no growth
+  at RPE ≥ 9" is asserted for one-session growth only; 2-for-2 has no RPE guard (capacity already adds the reserve) — add one
+  if the owner wants it.
+- (D) W-18: item 10 — capacity = reps + (10 − RPE) when RPE is recorded (RPE above 10 counts as 10; no RPE → the reps,
+  nothing inferred), used by `repsVsRange` (floor / top), `dropOff` (uneven) and both growth paths (last-set capacity ≥ range
+  top + 2 / + 3; the one-session RPE ≤ 8 guard stays). New `LastExposureFact.effort`: `earlyStop` = a set below the floor at
+  RPE ≤ 7 while no set is below the floor by capacity; `unclearBelowFloor` = exactly one set below the floor by capacity and it
+  has no RPE (two such sets, or one with RPE, are a real miss). Stage A rows after `uneven_performance`, before `below_floor`:
+  `early_stop` (hold, conservative one step lower, next step "take it to the floor next time (8+ reps at 60 kg) — the load is
+  within reach") and `unclear_effort` (hold + ask: "3+ → an early stop, the load stays; 0–2 → one step down"). They hold the
+  working weight, so a short constraint / gap row still wins when more conservative. Owner cases at 60 kg, range 8–10: 6 @ RPE 7
+  → early stop, hold 60; 6 with no RPE → unclear, hold 60; 6 @ RPE 9 → one step down (real miss); 8 @ RPE 8 counts as 10 → hold
+  60 (not growth: needs ≥ 12).
+- (D) W-19: the effort hint is pure domain code (`load-plan/effort-hint.ts`, `effortHint`), appended to the `log_set` result by
+  the tool. A stored set gets it when it is loaded, not a warm-up, has no RPE and no feedback phrase AND is decision-critical:
+  below the floor, ≥ 3 reps above the top (the opener included), or the last PLANNED set (set number ≥ `target_sets`) — the tool
+  has no load facts at log time, so "last set at the working weight" is approximated by the planned count. Once per exercise per
+  session without any stored state: no hint when an earlier set of the exercise carried an RPE (the user already speaks it) or was
+  itself critical without RPE (it already got the hint). Text: the plain-language question + "record the answer with
+  update_last_set rpe (0 → 10, 1–2 → 8, 3+ → 7)". A session read that fails or has no row never breaks the log. The `rpe` field
+  description of `log_set` now says RIR = 10 − RPE and the answer mapping. Not covered: an exercise with no `target_sets` and no
+  range gets no hint (nothing to call critical).
+- (D) W-20: v12 gets a third added line under rule 1, "Effort in plain language" (ask once on an `Effort hint`, never otherwise;
+  answer/phrase → `rpe`: 0 more / «еле дожал» → 10, 1–2 / «ещё пару мог» → 8, 3+ / «боялся без страховки, силы были» → 7; the
+  term RPE only if the client uses it; one-line explanation only when asked or misused; the preference kept as a client fact).
+  **No new fact category:** `manage_fact` with the existing `coaching_preference` ("understands RPE" / "prefers plain-word effort
+  questions"). v12 now adds 6 lines over v11 (line-diff test updated); v11 untouched.
+- (D) W-21: item 11(a) — tolerance 2 percentage points of 1RM. Epley (what the code uses) gives 75.0 / 78.9 / 83.3 % at 10 / 8 / 6
+  reps against NSCA's 75 / 80 / 85 (differences 0 / 1.1 / 1.7). No formula above 10 reps: the e1RM trend scores sets ≤ 10 only
+  (10 scored, 11 not) and the indirect working-weight estimate never reads a set above 10, even far below a 15–20 floor.
+- (D) W-22: item 11(c) — `load-plan/__tests__/history-generator.ts` (mulberry32, seeds 1…2500, deterministic): ranges 8–10 … 12–15,
+  five equipment kinds incl. an unknown step, 0–6 sessions, odd gaps up to 90 d, warm-ups, openers at another load, RPE on 35 % of
+  sets, pre-fatigue today / in the reference, a short constraint on 15 %. `invariants.unit.test.ts` checks, for double and linear
+  progression: load > 0 and finite; never more than +1 step; one-session growth never at RPE ≥ 9; no growth with a gap ≥ 14 d, a
+  short constraint or material pre-fatigue; more reps (+2 on every working set of the newest session) never lower the
+  recommendation (held constant: see W-17); every row has a next step — plus a block-level test over 400 cases that the printed
+  `next step:` line exists and no load line is ≤ 0. Runs in ~0.5 s; the load facts take `timezone: null` there (an `Intl`
+  zone made the same 2500 cases 15× slower).
 
 ## Review
 
