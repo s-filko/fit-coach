@@ -53,6 +53,13 @@ describe('phase.training v12 — no invented conservative option (AC-LPF-3)', ()
     expect(rule1).not.toContain('suggest a conservative start');
   });
 
+  it('tells the coach a "no lighter option" conservative line means the load is the lightest, not a variant', () => {
+    const task = TRAINING_V12.render(RENDER_CTX).find(s => s.id === 'task')!.text;
+    expect(task).toContain('no lighter option');
+    expect(task).toContain('the lightest');
+    expect(task).toContain('never present the same load as a conservative variant');
+  });
+
   it('differs from v11 only in rule 1 (two lines) and rule 4b', () => {
     const lines = (t: string): string[] => t.split('\n');
     const v11 = new Set(lines(textOf(TRAINING_V11)));

@@ -138,7 +138,11 @@ function lowerNote(d: Decision, lower: number): string {
   if (lower > 0) {
     return ` — ${lower} ${d.conservative.unit ?? DEFAULT_UNIT} lower`;
   }
-  return d.candidate.load !== null && d.candidate.load === d.conservative.load ? ' — no lighter option' : '';
+  // Without a known step the equal load is "steps cannot be computed" (named in the reason), not a floor.
+  const stepKnown = !d.missing.includes('equipmentStep');
+  return stepKnown && d.candidate.load !== null && d.candidate.load === d.conservative.load
+    ? ' — no lighter option'
+    : '';
 }
 
 function decisionLines(

@@ -173,3 +173,11 @@ R4 ×1 (load-plan metric definitions have no durable home).
 - Orchestrator re-run (2026-10-01, `d7888c80`): `DB_PORT=5999 npm run test:unit` 204 suites / 2381 passed;
   `db-test-lock.sh npm run test:scenarios` 28 suites / 440 passed (1 todo); `state.mjs --check` OK. R3 zone: type-check,
   lint (0 errors), format:check clean.
+- (D) W-6: review fixes — every reason/outcome that claims a step now checks the floor: `pre_fatigue`, `below_floor`, the gap-ladder
+  branch notes (unknown / illness) and the insufficient-data break-tier line say "no lighter option — the load holds" when the
+  floor stopped the step; the insufficient-data outcome is `reference load, no lighter option` in that case. Unchanged on purpose:
+  the restart cold start (`gap_restart`, no reference-less number) still prints outcome `conservative start`.
+- (D) W-7: unknown equipment step on the insufficient-data path adds `equipmentStep` to `missing` and the note
+  "equipmentStep missing — steps cannot be computed"; the block prints "no lighter option" only when the step is known.
+  No-reference outcome is `no number`. v12 rule 1 now says a `no lighter option` conservative line means the load is the
+  lightest — never present it as a variant (v11 untouched).

@@ -110,10 +110,27 @@ describe('AC-LP-3 · renderLoadPlanEntryV2', () => {
     expect(text).not.toMatch(/\b0 kg/);
   });
 
+  it('an unknown equipment step never prints "no lighter option" (the missing-step note stands instead)', async () => {
+    const [entry] = await entries();
+    const d = decideLoadPlanEntry(entry, { progression });
+    if (d === null) {
+      throw new Error('expected a decision');
+    }
+    const same = {
+      ...d,
+      candidate: { ...d.candidate, load: 65 },
+      conservative: { ...d.conservative, load: 65 },
+      missing: ['equipmentStep'],
+    };
+    const text = renderLoadPlanEntryV2(entry, ctx, { progression, decision: same });
+    expect(text).not.toContain('no lighter option');
+  });
+
   it('AC-LPF-3: no record and no reference — the block says there is no number and no conservative option', async () => {
     const [entry] = await entries(deps([]));
     const text = renderLoadPlanEntryV2(entry, ctx, { progression });
-    expect(text).toContain('decision: Stage A, insufficient data → conservative start');
+    expect(text).toContain('decision: Stage A, insufficient data → no number');
+    expect(text).not.toContain('conservative start');
     expect(text).toContain('recommend: no number — no record, no reference load');
     expect(text).toContain('conservative: no conservative option — no record, no reference load');
     expect(text).toContain('confidence: low');
