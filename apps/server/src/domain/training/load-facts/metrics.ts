@@ -881,6 +881,24 @@ function recordedLoadsOf(perfs: PerformanceInput[], todaySessionId: string, now:
   return [...new Set(recent.flatMap(r => loadedSets(r).map(l => l.weight)))].sort((a, b) => a - b);
 }
 
+/** Where growth goes with an unknown step: the nearest recorded load above the working weight (≤ 2 × default step). */
+function heavierRecordedLoadOf(
+  exercise: ExerciseInput,
+  workingWeight: Metric<WorkingWeightFact>,
+  recordedLoads: number[],
+): number | null {
+  if (isAbsent(workingWeight)) {
+    return null;
+  }
+  const defaultStep =
+    exercise.equipment in STEP_BY_EQUIPMENT
+      ? STEP_BY_EQUIPMENT[exercise.equipment as keyof typeof STEP_BY_EQUIPMENT]
+      : 5;
+  const limit = workingWeight.weight + STEP_MAX_FACTOR * defaultStep;
+  const heavier = recordedLoads.filter(l => l > workingWeight.weight + 1e-9 && l <= limit + 1e-9);
+  return heavier.length > 0 ? heavier[0] : null;
+}
+
 /** The step of the exercise given its real performances of the last 8 weeks (the evidence of "from history"). */
 function equipmentStepOf(
   exercise: ExerciseInput,
@@ -932,6 +950,7 @@ export function computeLoadFacts(
     fatigueToday.sameAsReference = sameFatigue(fatigueToday, fatigueReference);
   }
   const workingWeight = computeWorkingWeight(performances, todayId, range, exercise, now, timezone);
+  const recordedLoads = recordedLoadsOf(performances, todayId, now, timezone);
   return {
     exerciseId: exercise.id,
     exerciseName: exercise.name,
@@ -949,7 +968,8 @@ export function computeLoadFacts(
     gap: computeGap(exercise, performances, context.workouts, todayId, now, timezone),
     constraints: computeConstraints(exercise, context),
     equipmentStep: equipmentStepOf(exercise, performances, todayId, now, timezone),
-    recordedLoads: recordedLoadsOf(performances, todayId, now, timezone),
+    recordedLoads,
+    heavierRecordedLoad: heavierRecordedLoadOf(exercise, workingWeight, recordedLoads),
   };
 }
 

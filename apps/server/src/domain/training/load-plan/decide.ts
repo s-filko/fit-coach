@@ -24,6 +24,7 @@ import {
   capAppliesOf,
   confidenceOf,
   EQUIPMENT_STEP,
+  growthStepOf,
   lastSetCapacity,
   lastSetText,
   lighterLoad,
@@ -34,6 +35,7 @@ import {
   stepOf,
   stepUp,
   targetReps,
+  upWord,
   WORKING_WEIGHT,
 } from './schemes/shared';
 
@@ -490,7 +492,8 @@ function earlyGrowth(c: Ctx, params: SchemeParams, out: SchemeOutput): SchemeOut
   if (newest.lastSetRpe !== null && newest.lastSetRpe > ONE_SESSION_MAX_RPE) {
     return null;
   }
-  const growth = stepUp(c.base, c.step, params.stepCapPct, capAppliesOf(c.facts), c.facts.recordedLoads);
+  const growthStep = growthStepOf(c.facts, c.base);
+  const growth = stepUp(c.base, growthStep, params.stepCapPct, capAppliesOf(c.facts), c.facts.recordedLoads);
   // No step known, or the cap blocks it: the capped smallest step needs two sessions of evidence (2-for-2) — one
   // session never offers it (BR-042).
   if (growth.kind !== 'grow') {
@@ -500,7 +503,7 @@ function earlyGrowth(c: Ctx, params: SchemeParams, out: SchemeOutput): SchemeOut
   return {
     candidate: { load: growth.load, unit: c.unit, reps },
     conservative: { load: c.base, unit: c.unit, reps },
-    reason: `last set at the working weight ${lastSetText(newest)} (range top ${reps.max} + ${ONE_SESSION_SURPLUS} or more; ${repsText(newest.repsAtWorkingWeight)} at ${c.base} ${unit} ${newest.daysAgo} d ago); recovered (${c.gap.days ?? 0} d since ${c.gap.basis ?? 'last workout'}, no short constraint, no material pre-fatigue) — one step up${smallStepNote(c.facts, c.base, c.step, params.stepCapPct)}`,
+    reason: `last set at the working weight ${lastSetText(newest)} (range top ${reps.max} + ${ONE_SESSION_SURPLUS} or more; ${repsText(newest.repsAtWorkingWeight)} at ${c.base} ${unit} ${newest.daysAgo} d ago); recovered (${c.gap.days ?? 0} d since ${c.gap.basis ?? 'last workout'}, no short constraint, no material pre-fatigue) — ${upWord(c.step)}${smallStepNote(c.facts, c.base, growthStep, params.stepCapPct)}`,
     confidence: LEVELS[Math.min(LEVELS.indexOf('medium'), LEVELS.indexOf(confidenceOf(c.facts, out.missing)))],
     missing: out.missing,
     next: { kind: 'after_growth', load: growth.load, reps: reps.max },
@@ -523,6 +526,14 @@ function estimatedHold(c: Ctx, out: SchemeOutput): SchemeOutput {
     confidence: LEVELS[Math.min(LEVELS.indexOf('medium'), LEVELS.indexOf(out.confidence))],
     next: { kind: 'estimated', load: c.base, reps: c.reps.min },
   };
+}
+
+/** The printed outcome of a Stage C row: counted steps, or — step unknown — the recorded heavier load it went to. */
+function growthOutcome(c: Ctx, candidate: number | null): string {
+  if (c.step === null && candidate !== null && candidate > c.base + 1e-9) {
+    return 'nearest recorded heavier load';
+  }
+  return stepsWord(stepsFrom(c.base, candidate, c.step));
 }
 
 function rowOf(early: boolean, grew: boolean): DecisionRow {
@@ -581,7 +592,7 @@ export function decide(facts: LoadFacts, input: DecideInput): Decision {
     ...meta,
     stage: 'C',
     row: rowOf(early !== null, grew),
-    outcome: stepsWord(stepsFrom(ctx.base, out.candidate.load, ctx.step)),
+    outcome: growthOutcome(ctx, out.candidate.load),
     ladder: ctx.ladder,
   };
 }

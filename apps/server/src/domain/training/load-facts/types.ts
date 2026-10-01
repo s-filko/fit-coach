@@ -275,6 +275,11 @@ export interface LoadFacts {
   repHistory: Metric<RepHistoryFact>;
   /** Distinct working loads of the last 8 weeks, ascending — anchors for an unknown step. */
   recordedLoads: number[];
+  /**
+   * The nearest recorded working load above the working weight (last 8 weeks, at most 2 × the default step above) —
+   * where growth goes when the equipment step is unknown (W-38). Null when none.
+   */
+  heavierRecordedLoad: number | null;
   /** Context only: no decision reads it (load-plan-fixes item 8). */
   volume: Metric<VolumeFact>;
   lastExposure: Metric<LastExposureFact>;

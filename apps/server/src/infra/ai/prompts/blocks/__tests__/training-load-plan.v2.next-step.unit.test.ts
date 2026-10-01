@@ -111,7 +111,7 @@ describe('AC-LPF-8 · owner 45° Leg Press rows', () => {
 });
 
 describe('AC-LPF-8 · owner Lateral Raise Machine row', () => {
-  it('2.5 kg (5 kg seen once): the step from history is unknown (W-37) — no growth is named, no lighter option on record', async () => {
+  it('2.5 kg (5 kg seen once): the step is unknown (W-37) — growth names the recorded 5 kg (W-38), no lighter option on record', async () => {
     const text = await entryText(
       LATERAL_RAISE,
       ownerSessions(LATERAL_RAISE, LATERAL_RAISE_ROWS, '2026-09-25'),
@@ -120,9 +120,12 @@ describe('AC-LPF-8 · owner Lateral Raise Machine row', () => {
     );
     expect(line(text, 'recommend')).toMatch(/^recommend: 2\.5 kg × 10–15 — /);
     expect(line(text, 'conservative')).toContain('2.5 kg × 10–15 — no lighter option on record');
-    // W-37: 5 kg occurs once, so only 2.5 is confirmed — the step is unknown, growth waits for a known step.
+    // W-37: 5 kg occurs once, so only 2.5 is confirmed — the step is unknown. W-38: growth goes to the nearest RECORDED
+    // heavier load (the 5 kg set of 09-10); 2.5 → 5 is over the cap, so only 2-for-2 offers it (no one-session text).
     expect(line(text, 'step')).toMatch(/^step: recorded loads do not fit one step/);
-    expect(line(text, 'next step')).toBe('next step: no load step known');
+    expect(line(text, 'next step')).toBe(
+      'next step: last set at 2.5 kg ≥ 17 reps in 2 workouts in a row → +1 step (5 kg)',
+    );
   });
 });
 
@@ -406,6 +409,10 @@ describe('AC-LPF-8 · per hand is printed from the exercise even when the step i
     expect(line(text, 'conservative')).toMatch(
       /^conservative: 22\.7 kg per hand × 8–12 — no lighter option on record$/,
     );
+    // W-38: nothing heavier is recorded — no number, ask which heavier load the equipment has.
+    expect(line(text, 'next step')).toBe(
+      'next step: the next available load is unknown — ask which heavier load the equipment has (no number to suggest)',
+    );
   });
 
   it('17.5 / 20 / 22.5 kg each twice: step 2.5, growth snaps to 25', async () => {
@@ -422,5 +429,39 @@ describe('AC-LPF-8 · per hand is printed from the exercise even when the step i
     const text = await entryText(DB as never, past, daysBefore(0), '8-12');
     expect(line(text, 'step')).toBe('step: 2.5 kg per hand (from history)');
     expect(line(text, 'recommend')).toMatch(/^recommend: 25 kg per hand/);
+  });
+});
+
+describe('AC-LPF-7 · unknown step, growth to the recorded heavier load through the block (W-38)', () => {
+  it('owner lateral raise, 2-for-2 met (2.5 kg x17 twice, 5 kg on record): recommends 5 kg, conservative 2.5', async () => {
+    const w = (weight: number, reps: number) => ({ weight, reps });
+    const sess = (id: string, days: number, rows: { weight: number; reps: number }[]) =>
+      sessionRow(id, daysBefore(days, -60), [
+        {
+          rowId: `r-${id}`,
+          ...LATERAL_RAISE,
+          targetReps: '10-15',
+          sets: rows.map((r, i) => ({
+            ...r,
+            at: new Date(daysBefore(days).getTime() + i * 120_000),
+            kind: 'working' as const,
+          })),
+        },
+      ]);
+    const past = [
+      sess('a', 3, [w(2.5, 17), w(2.5, 17)]),
+      sess('b', 7, [w(2.5, 17), w(2.5, 17)]),
+      sess('c', 11, [w(2.5, 12), w(2.5, 12)]),
+      sess('d', 15, [w(5, 10), w(2.5, 10)]),
+    ];
+    const text = await entryText(LATERAL_RAISE, past, daysBefore(0), '10-15');
+    expect(line(text, 'step')).toMatch(/^step: recorded loads do not fit one step/);
+    expect(line(text, 'decision')).toBe('decision: Stage C, scheme growth → nearest recorded heavier load');
+    expect(line(text, 'recommend')).toMatch(/^recommend: 5 kg × 10 — /);
+    // 2.5 → 5 kg is 100 % of the load: over the cap, so 2-for-2 offers it as the smallest step with reps reset.
+    expect(line(text, 'recommend')).toContain(
+      'the growth condition is met: the smallest step, reps reset to the floor 10',
+    );
+    expect(line(text, 'conservative')).toMatch(/^conservative: 2\.5 kg × 10–15/);
   });
 });

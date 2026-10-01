@@ -460,6 +460,16 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
   With an unknown step a lighter candidate is a recorded load, so the outcome / reason say "nearest recorded lighter load" (not "one step
   down"); the seeded 82 kg barbell scenarios now print `step: recorded loads do not fit one step` (pre-fatigue row 80 / conservative 80 "no lighter
   option on record"; the log scenarios 82 / 82).
+- (D) W-38 (orchestrator ruling, review run 5): with an UNKNOWN step growth goes to the nearest RECORDED heavier working load (last 8 weeks,
+  at most 2 × the default step above the working weight — new fact `heavierRecordedLoad`), under the same conditions (2-for-2 /
+  one-session); the distance to that load is the step for the cap logic (`growthStepOf`), so a 100 % jump (2.5 → 5) is a capped step:
+  2-for-2 only, reps reset to the floor, no one-session text. The reason / outcome say "to the nearest recorded heavier load" (no
+  "one step up"); the next step names that load. Nothing heavier on record → no number: new next-step kind `ask_heavier` ("the next
+  available load is unknown — ask which heavier load the equipment has (no number to suggest)"). Owner lateral raise (2.5 every
+  session, 5 kg once on 09-10): next step "last set at 2.5 kg ≥ 17 reps in 2 workouts in a row → +1 step (5 kg)"; with the
+  condition met the growth row recommends 5 kg × 10 (floor), conservative 2.5. Lone recurring 22.7 dumbbell: ask-which-heavier-load.
+  Golden (titles name W-38): G-32 back to "growth (5)" (a 5 kg set is on record); G-33 (2.5 kg only on record) hold 2.5 with
+  `ask_heavier`; the other rows are unchanged.
 
 ## Review
 

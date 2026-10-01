@@ -48,7 +48,14 @@ const each = (check: (r: Run) => string | null, scheme = double): string[] =>
   });
 
 const base = (f: LoadFacts): number | null => (isAbsent(f.workingWeight) ? null : f.workingWeight.weight);
-const stepOf = (f: LoadFacts): number | null => (isAbsent(f.equipmentStep) ? null : f.equipmentStep.step);
+// The step growth may use: the equipment step, or — unknown step — the distance to the nearest recorded heavier load.
+const stepOf = (f: LoadFacts): number | null => {
+  if (!isAbsent(f.equipmentStep)) {
+    return f.equipmentStep.step;
+  }
+  const b = isAbsent(f.workingWeight) ? null : f.workingWeight.weight;
+  return b !== null && f.heavierRecordedLoad !== null ? f.heavierRecordedLoad - b : null;
+};
 const grew = ({ facts, d }: Run): boolean => {
   const b = base(facts);
   return b !== null && d.candidate.load !== null && d.candidate.load > b + EPS;

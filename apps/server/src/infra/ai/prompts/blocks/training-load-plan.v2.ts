@@ -210,6 +210,8 @@ function nextStepText(n: NextStep, d: Decision): string {
       return workingWeightPath(n.why);
     case 'estimated':
       return `the working weight is an estimate — sets at ${n.load} ${unit} reaching ${n.reps}+ reps confirm it, then the growth rule applies`;
+    case 'ask_heavier':
+      return 'the next available load is unknown — ask which heavier load the equipment has (no number to suggest)';
     case 'no_number':
       return 'log this exercise once — that performance becomes the reference';
     case 'hold':

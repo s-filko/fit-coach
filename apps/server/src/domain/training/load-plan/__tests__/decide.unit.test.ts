@@ -1146,3 +1146,64 @@ describe('AC-LPF-12 · an unknown step steps down to a recorded load and says so
     expect(d.reason).not.toContain('one step down');
   });
 });
+
+describe('AC-LPF-7 · unknown step: growth goes to the nearest RECORDED heavier load (orchestrator ruling, W-38)', () => {
+  const unknown = (over: Partial<LoadFacts> = {}): LoadFacts =>
+    makeFacts({
+      workingWeight: { weight: 2.5, unit: 'kg', performances: 5, warmupsEstimated: false, mixedBasisExcluded: 0 },
+      equipmentStep: { absent: 'recorded loads do not fit one step' },
+      recordedLoads: [2.5, 5],
+      heavierRecordedLoad: 5,
+      repRange: { min: 10, max: 12, source: 'today' },
+      e1rmTrend: { absent: 'x' },
+      gap: gapOf(4),
+      ...over,
+    });
+
+  it('2-for-2 met → the heavier recorded load (5 kg), conservative 2.5; the difference (2.5 kg) is the step for the cap', () => {
+    const d = run(unknown({ repHistory: repHistoryOf(2.5, [{ reps: [14, 14, 14] }, { reps: [14, 14, 14] }]) }));
+    expect(d).toMatchObject({ row: 'scheme_growth' });
+    expect(d.candidate.load).toBe(5);
+    expect(d.conservative.load).toBe(2.5);
+  });
+
+  it('one-session growth under the cap: the capped step (2.5 on 2.5 = 100 %) is NOT offered by one session', () => {
+    const d = run(
+      unknown({
+        repHistory: repHistoryOf(2.5, [{ reps: [15, 15, 15] }]),
+        equipmentStep: { absent: 'recorded loads do not fit one step' },
+      }),
+    );
+    expect(d.row).toBe('scheme_hold');
+    expect(d.next).toMatchObject({ kind: 'growth', load: 5, capped: true });
+  });
+
+  it('not yet met → hold, and the next step names the heavier recorded load', () => {
+    const d = run(unknown({ repHistory: repHistoryOf(2.5, [{ reps: [12, 12, 12] }, { reps: [11, 11, 11] }]) }));
+    expect(d.row).toBe('scheme_hold');
+    expect(d.next).toMatchObject({ kind: 'growth', load: 5, sessions: 2 });
+  });
+
+  it('no heavier load recorded → no number: the next step says to ask which heavier load the equipment has', () => {
+    const d = run(
+      unknown({
+        heavierRecordedLoad: null,
+        recordedLoads: [2.5],
+        repHistory: repHistoryOf(2.5, [{ reps: [14, 14, 14] }, { reps: [14, 14, 14] }]),
+      }),
+    );
+    expect(d.row).toBe('scheme_hold');
+    expect(d.candidate.load).toBe(2.5);
+    expect(d.next).toEqual({ kind: 'ask_heavier' });
+  });
+
+  it('a known step is unaffected by a recorded heavier load', () => {
+    const d = run(
+      unknown({
+        equipmentStep: { step: 2.5, unit: 'kg', perHand: false, basis: 'default for barbell', capApplies: false },
+        repHistory: repHistoryOf(2.5, [{ reps: [14, 14, 14] }, { reps: [14, 14, 14] }]),
+      }),
+    );
+    expect(d.candidate.load).toBe(5);
+  });
+});

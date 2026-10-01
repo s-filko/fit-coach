@@ -1627,3 +1627,36 @@ describe('AC-LPF-12 · step from history — confirmed loads only (run 5 R3, W-3
     expect(f.equipmentStep).toMatchObject({ step: 2.5, basis: 'from history', capApplies: false });
   });
 });
+
+describe('AC-LPF-12 · the nearest recorded heavier load (orchestrator ruling, W-38)', () => {
+  const facts = (rows: Parameters<typeof ownerPerfs>[1], ex = lateralRaise, range = '10-12') =>
+    computeLoadFacts(
+      ex,
+      ownerPerfs(ex.id, rows, '2026-09-25'),
+      today({ targetReps: range }),
+      emptyContext,
+      ownerNow('2026-09-25', 4),
+      TZ,
+    );
+
+  it('owner lateral raise: working weight 2.5, the 5 kg set of 09-10 is the nearest recorded heavier load', () => {
+    expect(facts(LATERAL_RAISE_ROWS).heavierRecordedLoad).toBe(5);
+  });
+
+  it('none recorded above the working weight, or farther than 2 × the default step → null', () => {
+    const w = (weight: number) => perf('x', 3, [strengthSet(weight, 10, { setKind: 'working' })]);
+    const f = computeLoadFacts(
+      benchPress,
+      [
+        w(60),
+        { ...w(60), id: 'y', sessionId: 's-y', performedAt: daysBefore(9) },
+        { ...w(80), id: 'z', sessionId: 's-z', performedAt: daysBefore(12) },
+      ],
+      today({ targetReps: '8-12' }),
+      emptyContext,
+      NOW,
+      TZ,
+    );
+    expect(f.heavierRecordedLoad).toBeNull(); // 80 is 20 kg above 60, the machine limit is 10
+  });
+});

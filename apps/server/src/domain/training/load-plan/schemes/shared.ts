@@ -143,6 +143,23 @@ export function blockingConstraint(facts: LoadFacts): LoadFacts['constraints']['
   return facts.constraints.constraints.find(c => c.durability === 'short' && c.onPrimary !== false);
 }
 
+/** A growth reason's words: one equipment step, or — step unknown — the nearest recorded heavier load (W-38). */
+export function upWord(knownStep: number | null): string {
+  return knownStep === null ? 'to the nearest recorded heavier load' : 'one step up';
+}
+
+/**
+ * The step growth uses: the equipment step when known; with an UNKNOWN step the distance to the nearest RECORDED
+ * heavier working load (W-38) — the cap logic treats that difference as the step. Null = nothing to grow to.
+ */
+export function growthStepOf(facts: LoadFacts, base: number): number | null {
+  const known = stepOf(facts);
+  if (known !== null) {
+    return known;
+  }
+  return facts.heavierRecordedLoad === null ? null : roundLoad(facts.heavierRecordedLoad - base);
+}
+
 export function stepOf(facts: LoadFacts): number | null {
   return isAbsent(facts.equipmentStep) ? null : facts.equipmentStep.step;
 }
@@ -222,12 +239,15 @@ export function decideProgression(facts: LoadFacts, params: SchemeParams, rule: 
   }
   const { weight: base, unit } = facts.workingWeight;
   const step = stepOf(facts);
+  const growthStep = growthStepOf(facts, base);
   const make = (load: number): Recommendation => ({ load, unit, reps });
   const missing: string[] = [];
   const notes: string[] = [];
   if (step === null) {
     missing.push(EQUIPMENT_STEP);
-    notes.push(`${EQUIPMENT_STEP} missing — the load is held`);
+    if (growthStep === null) {
+      notes.push(`${EQUIPMENT_STEP} missing — the load is held`);
+    }
   }
   const hold = (why: string, next: NextStep = { kind: 'hold', why }): SchemeOutput => ({
     candidate: make(base),
@@ -253,12 +273,13 @@ export function decideProgression(facts: LoadFacts, params: SchemeParams, rule: 
   if (rule.surplusReps !== undefined && !isAbsent(facts.repHistory)) {
     return decideFromRepHistory(facts, params, rule.surplusReps, {
       base,
-      step,
+      step: growthStep,
       reps,
       hold,
       grown,
       capApplies: capAppliesOf(facts),
-      smallStep: smallStepNote(facts, base, step, params.stepCapPct),
+      smallStep: smallStepNote(facts, base, growthStep, params.stepCapPct),
+      upWord: upWord(step),
     });
   }
   if (isAbsent(facts.lastExposure) || isAbsent(facts.lastExposure.repsVsRange)) {
@@ -285,21 +306,21 @@ export function decideProgression(facts: LoadFacts, params: SchemeParams, rule: 
   if (seen < params.confirmSessions) {
     return hold(`${rule.successLabel}, confirmation ${seen} of ${params.confirmSessions}`);
   }
-  const growth = stepUp(base, step, params.stepCapPct, capAppliesOf(facts), facts.recordedLoads);
+  const growth = stepUp(base, growthStep, params.stepCapPct, capAppliesOf(facts), facts.recordedLoads);
   if (growth.kind === 'grow') {
     return grown(
       growth.load,
-      `${rule.successLabel} for ${params.confirmSessions} sessions — one step up${smallStepNote(facts, base, step, params.stepCapPct)}`,
+      `${rule.successLabel} for ${params.confirmSessions} sessions — ${upWord(step)}${smallStepNote(facts, base, growthStep, params.stepCapPct)}`,
     );
   }
   if (growth.kind === 'capped') {
     return grown(
       growth.load,
-      `${rule.successLabel} for ${params.confirmSessions} sessions — ${cappedNote(base, step ?? 0, params.stepCapPct, reps.min)}`,
+      `${rule.successLabel} for ${params.confirmSessions} sessions — ${cappedNote(base, growthStep ?? 0, params.stepCapPct, reps.min)}`,
       true,
     );
   }
-  return hold(`${rule.successLabel}; no load step known`);
+  return hold(`${rule.successLabel}; no load step known and no heavier load on record`, { kind: 'ask_heavier' });
 }
 
 interface RepGrowthCtx {
@@ -310,6 +331,8 @@ interface RepGrowthCtx {
   grown: (load: number, why: string, resetReps?: boolean) => SchemeOutput;
   capApplies: boolean;
   smallStep: string;
+  /** "one step up", or — with an unknown step — "to the nearest recorded heavier load". */
+  upWord: string;
 }
 
 /**
@@ -327,7 +350,7 @@ function decideFromRepHistory(facts: LoadFacts, params: SchemeParams, surplus: n
   if (seen >= params.confirmSessions && growth.kind === 'grow') {
     return c.grown(
       growth.load,
-      `last set at the working weight ≥ ${needReps} reps (range top ${c.reps.max} + ${surplus}) in ${seen} sessions in a row — one step up${c.smallStep}`,
+      `last set at the working weight ≥ ${needReps} reps (range top ${c.reps.max} + ${surplus}) in ${seen} sessions in a row — ${c.upWord}${c.smallStep}`,
     );
   }
   if (seen >= params.confirmSessions && growth.kind === 'capped') {
@@ -338,9 +361,8 @@ function decideFromRepHistory(facts: LoadFacts, params: SchemeParams, surplus: n
     );
   }
   if (growth.kind === 'no-step') {
-    return c.hold(`last set at the working weight ${lastText}; no load step known`, {
-      kind: 'hold',
-      why: 'no load step known',
+    return c.hold(`last set at the working weight ${lastText}; no load step known and no heavier load on record`, {
+      kind: 'ask_heavier',
     });
   }
   const missing = params.confirmSessions - seen;

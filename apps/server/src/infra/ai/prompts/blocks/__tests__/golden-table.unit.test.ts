@@ -142,12 +142,12 @@ const RULINGS: Record<string, { ruling: string; expected: Partial<GoldenCase['ex
     },
   },
   // O-2: the 10 % cap does not apply to a machine whose own weight is not in the displayed load → growth is named.
-  // Run 5 R3 (W-37): only a step the history CONFIRMS counts — the lateral raise shape (2.5 kg every session, no second
-  // confirmed load) has an UNKNOWN step: no growth is named, the conservative is the load itself ("no lighter option on
-  // record"). Moves G-32 (next-step intent; "certain") and G-33 (grow 5 → hold 2.5).
-  'G-32': { ruling: 'W-37 unknown step', expected: { next_step_gist: 'growth needs a known equipment step' } },
+  // Run 5 R3 (W-37) + W-38: only a CONFIRMED step counts, so the lateral raise shape has an UNKNOWN step. Growth then
+  // goes to the nearest RECORDED heavier load: G-32 has a 5 kg set on record (next step names 5 kg, as the table says);
+  // G-33's history is 2.5 kg only — nothing heavier on record, so no growth and no number: "ask which heavier load".
+  'G-32': { ruling: 'W-38 recorded heavier load', expected: { next_step_gist: 'last set >= 14 twice -> growth (5)' } },
   'G-33': {
-    ruling: 'W-37 unknown step',
+    ruling: 'W-37/W-38 unknown step, no heavier on record',
     expected: {
       decision: 'hold',
       recommend_kg: 2.5,
@@ -320,7 +320,7 @@ const INTENTS: [RegExp, string[]][] = [
   [/constraint closes|growth resumes|growth when the constraint/i, ['constraint']],
   [/fresh order/i, ['pre_fatigue']],
   [/progress by (reps|hold time)/i, ['reps_only', 'hold']],
-  [/known equipment step/i, ['hold']],
+  [/known equipment step/i, ['hold', 'ask_heavier']],
   [/log (it|this exercise)/i, ['insufficient', 'no_number']],
   [/confirm it, then the growth rule|reaching 8\+ reps confirm|reaching 8\+ confirm/i, ['estimated']],
   [/in range( confirm)?$|sets at [\d.]+ (per hand )?in range/i, ['after_growth']],
@@ -338,7 +338,11 @@ function intentKinds(gist: string): string[] | null {
  * uneven wording carries no numeric commitment.
  */
 function committedNumbers(gist: string, kinds: string[]): string[] {
-  if (kinds.some(k => ['ask_effort', 'hold', 'insufficient', 'no_number', 'constraint', 'uneven'].includes(k))) {
+  if (
+    kinds.some(k =>
+      ['ask_effort', 'hold', 'ask_heavier', 'insufficient', 'no_number', 'constraint', 'uneven'].includes(k),
+    )
+  ) {
     return [];
   }
   return (gist.match(/\d+(?:\.\d+)?/g) ?? []).filter(n => Number(n) > 10 || n.includes('.'));
