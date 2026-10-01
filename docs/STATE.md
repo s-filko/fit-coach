@@ -18,6 +18,7 @@ _Generated 2026-10-01 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `cold-start.md` — Cold Start — a load for a user with no history (U11) Implementation Plan
 - `refactor-p4-evals-verify.md` — Refactor P4 — Evals Verify (mini-freeze + compare) Micro-Task
 - `refactor-p6-progress-and-drafts.md` — Refactor P6 — Muscle-Centric Progress Blocks and Structured Drafts Implementation Plan
+- `restart-ladder.md` — Restart Ladder — the return ladder closes on fresh workouts Implementation Plan
 
 **Done**
 - `2026-09-14-lint-glob-fix.md` — Lint Glob Fix Implementation Plan
@@ -255,9 +256,22 @@ BR-TRAINING-040..045 new (all owner-approved 2026-10-01). Local GLM replay after
 flags on): upper 52 calls / lower 50 calls, 0 errors; no 0 kg; planks isometric; effort question asked in plain words;
 Reverse Pec Deck after 169 d → 28 / 23 (restart ≥ rebuild). Model-revealed leftovers in BACKLOG (duplicate sets on
 clarifications, RPE-vs-reps correction).
-**Owed:** dev deploy verification (health, zero-LLM `print-load-plan` over the owner's history, no model calls);
-owner-gated dev data correction for old plank sets (plan (D) O-1); next plan `cold-start` (U11, stub in place);
-cleanup of the `load-plan-fixes` worktree/branch and the old U9b ones (list below).
+**Dev verified 2026-10-01 (`ce70268a`, run 36839827834 green):** health 200; zero-LLM `print-load-plan` over the
+owner's history (322 lines): no 0 kg recommendation (the only "0 kg" is a bodyweight reference line); leg press
+135 × 12 / 130, next step ≥ 14 twice → 140; `llm_calls` 254 → 254 (no model calls). **Found:** Lateral Raise Machine
+prints `restart … cold start`, `no number` despite 5 performances at 2.5 kg in 8 weeks — the return ladder never
+advances at RPE 9–10 (BR-TRAINING-038 "with reserve"). Owner 2026-10-01: separate short plan
+`docs/superpowers/plans/restart-ladder.md` (stub, next). Tonight the coach falls back on history for that row.
+**Next, in order:** `restart-ladder` → `cold-start` (U11). Owner-gated: dev data correction for old plank sets
+(plan (D) O-1, DB backup first).
+
+**Ready-to-run cleanup (merged, pushed, worktree clean, worker released; owner-gated — the deletion hook prompts):**
+```bash
+orca worktree rm --worktree id:88b171fc-bda9-4c6c-b6f3-82b7fb04ae88::/Users/filko/orca/workspaces/fit_coach/load-plan-fixes
+git branch -D plan/load-plan-fixes
+git push origin --delete plan/load-plan-fixes
+```
+Plus the U9b list in the handoff below (load-plan-t1 / load-plan-t3, `task/load-plan-t3`, `plan/load-plan`).
 
 ## Handoff (load-plan-fixes, 2026-10-01) — next orchestrator: fix three replay defects before the owner's workout
 
