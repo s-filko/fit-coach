@@ -206,7 +206,7 @@ literature puts maximal-strength retention at roughly three weeks). Tiers, names
 `return` (strength largely retained, first workout one step down, confidence one level down)
 · `rebuild` (marked loss; working weight and trend marked stale; start clearly below, ladder
 of several workouts) · `restart` (history shown as dated reference only; cold-start probes;
-confidence low). The scheme choice is unaffected by any tier.
+confidence low — except Stage A row 1: with a loaded reference the candidate is one step below it, load-plan-fixes W-4). The scheme choice is unaffected by any tier.
 
 **Reason (user, once).** Code cannot know why. In the first conversation after a gap at tier
 `rest_with_question` or above, the coach asks once what happened, before any training. The
