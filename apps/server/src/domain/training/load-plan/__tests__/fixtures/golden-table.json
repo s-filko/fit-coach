@@ -1,0 +1,5151 @@
+[
+ {
+  "id": "G-01",
+  "title": "Unlabelled warm-up 30x12 (no RPE) before 3x10 @ 60",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 30,
+      "reps": 12,
+      "rpe": null,
+      "kind": null
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": null
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": null
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": null
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 30,
+      "reps": 12,
+      "rpe": null,
+      "kind": null
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": null
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": null
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": null
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "hold",
+   "recommend_kg": 60,
+   "conservative_kg": 57.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set at 60 >= 12 reps in 2 workouts in a row (or >= 13 once, RPE <= 8, recovered) -> 62.5",
+   "must_not": [
+    "working weight 30",
+    "count 30x12 as first set for drop-off/uneven",
+    "grow",
+    "step down"
+   ]
+  },
+  "rule_basis": "Design §3.2 legacy heuristic: NULL-kind set < ~60 % of the session top load (30 < 36) is a warm-up (W-1 note); item 6 / W-12 judge only sets at the working weight; item 5 growth needs last set >= top+3 / 2-for-2 at top+2",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-02",
+  "title": "Light back-off 30x15 unlabelled after 60x10,9,8",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": null
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": null
+     },
+     {
+      "weight_kg": 60,
+      "reps": 8,
+      "rpe": null,
+      "kind": null
+     },
+     {
+      "weight_kg": 30,
+      "reps": 15,
+      "rpe": null,
+      "kind": null
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": null
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": null
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": null
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "hold",
+   "recommend_kg": 60,
+   "conservative_kg": 57.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set at 60 reaching the range top+2 twice -> 62.5",
+   "must_not": [
+    "working weight 30",
+    "grow (30x15 is not at the working weight)",
+    "step down"
+   ]
+  },
+  "rule_basis": "W-1 observation: NULL set < 60 % of top dropped as warm-up even after the top set; item 5 growth judged on the last set AT the working weight (8)",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-03",
+  "title": "Back-off 30x15 explicitly labelled working after 60x10,9,8",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 30,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "hold",
+   "recommend_kg": 60,
+   "conservative_kg": 57.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set at 60 >= 12 twice -> 62.5",
+   "must_not": [
+    "working weight 30",
+    "grow via 30x15 surplus",
+    "one-session growth"
+   ]
+  },
+  "rule_basis": "Item 4: highest load of the newest performance where every set at that load reached the floor = 60 (> 30); item 5: last set = last set AT the working weight (60x8); item 6: back-off at another load is judged on its own",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-04",
+  "title": "Early stop: last set 6 @ RPE 7 at 60 (range 8-10)",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 6,
+      "rpe": 7,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "hold",
+   "recommend_kg": 60,
+   "conservative_kg": 57.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "take it to the floor (8+) next time - the load is within reach",
+   "must_not": [
+    "step down",
+    "below floor",
+    "uneven"
+   ]
+  },
+  "rule_basis": "Item 10: RPE <= 7 = 3+ RIR, capacity 6+3 = 9 >= 8; a below-floor set at RPE <= 7 is an early stop -> hold, no step down (Helms 2016 RIR-RPE)",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-05",
+  "title": "8 @ RPE 8 in range 10-12 (capacity 10)",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 10,
+   "max": 12
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 8,
+      "rpe": 8,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "hold",
+   "recommend_kg": 60,
+   "conservative_kg": 57.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set at 60 >= 14 (capacity) twice -> 62.5",
+   "must_not": [
+    "step down",
+    "below floor"
+   ]
+  },
+  "rule_basis": "Item 10: capacity = reps + RIR; RPE 8 = 2 RIR -> 10 = range floor -> not below floor",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-06",
+  "title": "Lone below-floor last set without RPE: 60x12,10,8 in range 10-12",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 10,
+   "max": 12
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "hold",
+   "recommend_kg": 60,
+   "conservative_kg": 57.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "ask the effort; last set at 60 reaching 10 confirms the load",
+   "must_not": [
+    "step down to 57.5 as the candidate"
+   ],
+   "ask_effort": true
+  },
+  "rule_basis": "Item 10: 'a lone below-floor set without RPE does not trigger a step down on its own (hold, ask)'",
+  "confidence": "ambiguous",
+  "ambiguity_note": "'Lone' is undefined: one below-floor set among in-floor sets (assumed here) vs a performance with a single set. Design Stage A 'last: below range floor -> -1 step' would give 57.5/55 if 'lone' is read narrowly."
+ },
+ {
+  "id": "G-07",
+  "title": "All sets below floor without RPE: 60x7,7,6 (range 8-10), earlier 60x8,8,8",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 7,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 7,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 6,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "step_down",
+   "recommend_kg": 57.5,
+   "conservative_kg": 55,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "back to 60 when the sets at 57.5 reach 8+ reps",
+   "must_not": [
+    "hold at 60",
+    "recommend 55 as candidate (double step)",
+    "grow"
+   ]
+  },
+  "rule_basis": "W-1 (nothing recurs -> highest floor-reaching load 60); W-16 estimate from lowest e1RM 60x6 = 72 -> 72/1.2667 = 56.8 -> 55 < 60 so not the working weight; Stage A below floor at the newest performance (item 9) -> -1 step, conservative -2 steps (design §3.3). NSCA: 7 reps ~83 %, 8 ~80 % -> ~58 kg for 8, so 57.5 matches the table",
+  "confidence": "ambiguous",
+  "ambiguity_note": "Whether three sets short count as more than 'a lone below-floor set without RPE' (item 10) is assumed yes. Also whether W-1 'recurs' counts 60 as recurring (it appears in both sessions but reached the floor in one) - both readings give 60."
+ },
+ {
+  "id": "G-08",
+  "title": "Descending 60x6, 55x8, 45x12 (machine, step 5) -> 55",
+  "exercise": {
+   "name": "Machine Chest Press",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 6,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 55,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 45,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 45,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 45,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 45,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 55,
+   "decision": "hold",
+   "recommend_kg": 55,
+   "conservative_kg": 50,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set at 55 >= 12 twice (or >= 13 once) -> 60",
+   "must_not": [
+    "working weight 60",
+    "working weight 45",
+    "step down",
+    "below floor from 60x6"
+   ]
+  },
+  "rule_basis": "Item 4/W-8: newest performance, highest load whose sets all reached 8 = 55; W-16 gate: lowest-e1RM set 55x8 (69.7) is not short -> no estimate (would be 55 anyway); item 6: 60x6 is a probe. Owner case (item 9). NSCA 8 reps ~80 %: 60x6 (85 %) -> 1RM 70.6 -> 8RM 56.5",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-09",
+  "title": "Descending 60x6, 55x7, 45x12 (machine, step 5) -> 50 estimated",
+  "exercise": {
+   "name": "Machine Chest Press",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 6,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 55,
+      "reps": 7,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 45,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 45,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 45,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 45,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 50,
+   "decision": "hold",
+   "recommend_kg": 50,
+   "conservative_kg": 45,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "sets at 50 reaching 8+ reps confirm it, then the growth rule applies",
+   "must_not": [
+    "working weight 55 or 60",
+    "working weight 45",
+    "step down below 50 as candidate"
+   ],
+   "estimated_from": "55x7",
+   "confidence_max": "medium"
+  },
+  "rule_basis": "W-16: lowest e1RM <= 10 reps = 55x7 -> 67.83 -> /1.2667 = 53.55 -> floor to step 5 = 50; source set short of floor -> applies; max(item-4 = 45, 50) = 50; estimated weight is not stepped down again. Owner case (item 9)",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-10",
+  "title": "Descending 60x6, 55x7, 45x12 with a barbell (step 2.5)",
+  "exercise": {
+   "name": "Barbell Row",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 6,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 55,
+      "reps": 7,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 45,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 45,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 45,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 45,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 52.5,
+   "decision": "hold",
+   "recommend_kg": 52.5,
+   "conservative_kg": 50,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "sets at 52.5 reaching 8+ confirm it",
+   "must_not": [
+    "working weight 55",
+    "working weight 60"
+   ],
+   "estimated_from": "55x7"
+  },
+  "rule_basis": "W-16 formula: 53.55 rounded DOWN to 2.5 = 52.5",
+  "confidence": "ambiguous",
+  "ambiguity_note": "The owner case states '-> 50' without naming the step; by the W-16 formula a 2.5 kg step gives 52.5. NSCA table (7 reps ~83 %, 8 ~80 %) gives 55*80/83 = 53.0 - 52.5 is consistent with the literature; 50 is only right for a 5 kg step."
+ },
+ {
+  "id": "G-11",
+  "title": "Descending 60x6, 55x7, 45x12 as the ONLY performance (machine)",
+  "exercise": {
+   "name": "Machine Chest Press",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 6,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 55,
+      "reps": 7,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 45,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": null,
+   "decision": "insufficient_reference",
+   "recommend_kg": 60,
+   "conservative_kg": 55,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "log it once more - that performance becomes the working-weight basis",
+   "must_not": [
+    "0",
+    "no number"
+   ]
+  },
+  "rule_basis": "W-4: one performance -> Stage A insufficient data; candidate = reference's most-used working load, heavier on a tie (60/55/45 one set each -> 60); conservative one step down",
+  "confidence": "ambiguous",
+  "ambiguity_note": "W-4 gives 60/55, but item 9 / W-16 ('also when no load reached the floor') would give the 50 estimate the owner expects. Whether the estimate overrides the insufficient-data reference (and whether 1 performance is 'insufficient' at all - metric 4 needs >= 2) is not settled. Literature (NSCA, Epley) supports ~50-53 for 8 reps; 60 is the load the user failed at (6 reps)."
+ },
+ {
+  "id": "G-12",
+  "title": "One-session growth: 3x15 @ 50 (range 8-10), 4 d rest, no RPE (machine, step 5)",
+  "exercise": {
+   "name": "Machine Chest Press",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 4,
+    "sets": [
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 8,
+    "sets": [
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 4,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 50,
+   "decision": "grow",
+   "recommend_kg": 55,
+   "conservative_kg": 50,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "sets at 55 reaching 8-10; last set >= 13 again -> next step",
+   "must_not": [
+    "60",
+    "more than one step",
+    "hold"
+   ],
+   "reps": "8-10",
+   "confidence_max": "medium"
+  },
+  "rule_basis": "Item 5 one-session growth: last set 15 >= 10+3, RPE absent, gap tier rest, no short/pre-fatigue -> +1 step, conservative = working weight; step 5/50 = 10 % <= cap (design §3.3). APRE (Mann 2010): +7 over target -> add load",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-13",
+  "title": "Same 3x15 @ 50 but last set RPE 9",
+  "exercise": {
+   "name": "Machine Chest Press",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 4,
+    "sets": [
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": 9,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 8,
+    "sets": [
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 4,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 50,
+   "decision": "hold",
+   "recommend_kg": 50,
+   "conservative_kg": 45,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set at 50 >= 12 once more -> +1 step (55)",
+   "must_not": [
+    "55",
+    "grow"
+   ]
+  },
+  "rule_basis": "Item 5: one-session growth needs RPE <= 8 or absent; 2-for-2 has 1 of 2 (older last set 9 < 12)",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-14",
+  "title": "Same 3x15 @ 50 with a barbell (step 2.5)",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 4,
+    "sets": [
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 8,
+    "sets": [
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 4,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 50,
+   "decision": "grow",
+   "recommend_kg": 52.5,
+   "conservative_kg": 50,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "sets at 52.5 in range confirm",
+   "must_not": [
+    "55",
+    "more than one step"
+   ],
+   "reps": "8-10"
+  },
+  "rule_basis": "Item 5: +1 STEP (not +10 %); owner's 55 is 'an example, not a formula'",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-15",
+  "title": "3x15 @ 50, exercise last done 9 d ago, other workouts 2 d ago",
+  "exercise": {
+   "name": "Machine Chest Press",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 9,
+    "sets": [
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 13,
+    "sets": [
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 2,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 50,
+   "decision": "hold",
+   "recommend_kg": 50,
+   "conservative_kg": 45,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set >= 12 once more -> 55",
+   "must_not": [
+    "55",
+    "return ladder step down"
+   ]
+  },
+  "rule_basis": "Item 5 requires gap tier 'rest'; T2(a) tier source = the exercise's own gap (9 d -> rest_with_question); no Stage A gap row below 'return'",
+  "confidence": "ambiguous",
+  "ambiguity_note": "'Recovered' is defined via the gap tier, and the tier from the exercise's own gap; 9 days off this exercise is physiologically MORE recovered, yet blocks one-session growth. Literal rule -> hold."
+ },
+ {
+  "id": "G-16",
+  "title": "3x15 @ 50 with a short constraint on a primary muscle",
+  "exercise": {
+   "name": "Machine Chest Press",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 4,
+    "sets": [
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 8,
+    "sets": [
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 4,
+   "short_constraint_primary": true,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 50,
+   "decision": "hold",
+   "recommend_kg": 50,
+   "conservative_kg": null,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "growth resumes when the constraint closes",
+   "must_not": [
+    "55",
+    "grow"
+   ]
+  },
+  "rule_basis": "Design Stage A: short constraint -> candidate <= working weight, growth forbidden",
+  "confidence": "ambiguous",
+  "ambiguity_note": "Conservative for this row is 'skip or substitute' in design §3.3, not a load; whether the block prints 45 (one step, W-2 'every step-down') or no load option is unsettled."
+ },
+ {
+  "id": "G-17",
+  "title": "3x15 @ 50 with a short constraint on a SECONDARY muscle only",
+  "exercise": {
+   "name": "Machine Chest Press",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 4,
+    "sets": [
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 8,
+    "sets": [
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 4,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false,
+   "short_constraint_secondary_only": true
+  },
+  "expected": {
+   "working_weight_kg": 50,
+   "decision": "hold",
+   "recommend_kg": 50,
+   "conservative_kg": 45,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "growth when the constraint closes",
+   "must_not": [
+    "more than one step"
+   ]
+  },
+  "rule_basis": "W-11: one-session growth blocked by a short constraint on ANY muscle of the exercise",
+  "confidence": "ambiguous",
+  "ambiguity_note": "Item 5 text: 'no short constraint on a PRIMARY muscle' -> 55/50; W-11 deliberately stricter ('any muscle') -> hold 50. Expected follows W-11 (the later decision) but the two texts disagree."
+ },
+ {
+  "id": "G-18",
+  "title": "3x15 @ 50 with material pre-fatigue today",
+  "exercise": {
+   "name": "Machine Chest Press",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 4,
+    "sets": [
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 8,
+    "sets": [
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 4,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": true
+  },
+  "expected": {
+   "working_weight_kg": 50,
+   "decision": "hold",
+   "recommend_kg": 50,
+   "conservative_kg": 45,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "fresh order -> the growth rule applies",
+   "must_not": [
+    "55",
+    "grow"
+   ]
+  },
+  "rule_basis": "Design Stage A pre-fatigue row: hold (T2(c) >= 3 extra sets); item 5 needs no material pre-fatigue",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-19",
+  "title": "Huge surplus 50x20,20,20 (range 8-10) - never more than one step",
+  "exercise": {
+   "name": "Machine Chest Press",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 4,
+    "sets": [
+     {
+      "weight_kg": 50,
+      "reps": 20,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 20,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 20,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 8,
+    "sets": [
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 50,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 4,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 50,
+   "decision": "grow",
+   "recommend_kg": 55,
+   "conservative_kg": 50,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "sets at 55 in range",
+   "must_not": [
+    "60",
+    "65",
+    "more than one step"
+   ],
+   "reps": "8-10"
+  },
+  "rule_basis": "Item 5: 'never more than one step whatever the surplus'; invariant 11(c)",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-20",
+  "title": "Threshold: last set exactly top+3 at RPE 8 (60x13,13,13 @8, range 8-10)",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 13,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 13,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 13,
+      "rpe": 8,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "grow",
+   "recommend_kg": 62.5,
+   "conservative_kg": 60,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "sets at 62.5 in range",
+   "must_not": [
+    "65"
+   ]
+  },
+  "rule_basis": "Item 5: last set >= top+3 (raw 13; capacity 15), RPE <= 8 -> one-session growth",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-21",
+  "title": "Capacity growth: last set 11 @ RPE 8 (capacity 13), range 8-10",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 11,
+      "rpe": 8,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "grow",
+   "recommend_kg": 62.5,
+   "conservative_kg": 60,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "sets at 62.5 in range",
+   "must_not": [
+    "hold because raw 11 < 13"
+   ]
+  },
+  "rule_basis": "Item 10: growth checks use capacity = reps + RIR (11+2 = 13 >= top+3); RPE 8 allowed",
+  "confidence": "ambiguous",
+  "ambiguity_note": "Item 10 says capacity applies to 'floor / growth / uneven checks'; item 5 states the growth trigger in reps ('last set >= range top + 3 reps'). Combining them gives growth on 11 reps; read literally on raw reps it is a hold."
+ },
+ {
+  "id": "G-22",
+  "title": "Last set 12 without RPE in one performance (top+2 only)",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "hold",
+   "recommend_kg": 60,
+   "conservative_kg": 57.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set >= 12 once more (or >= 13 once at RPE <= 8) -> 62.5",
+   "must_not": [
+    "62.5",
+    "grow"
+   ]
+  },
+  "rule_basis": "Item 5: 12 < top+3 (no one-session growth); 2-for-2 confirmation 1 of 2",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-23",
+  "title": "2-for-2 positive: 60x12,12,12 in two consecutive performances",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 10,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "grow",
+   "recommend_kg": 62.5,
+   "conservative_kg": 60,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "sets at 62.5 in range",
+   "must_not": [
+    "65",
+    "hold"
+   ]
+  },
+  "rule_basis": "Item 5 / W-11 2-for-2 (NSCA Essentials: >= 2 reps over the goal on the last set in two consecutive workouts); 2.5 kg = one bar step, within NSCA upper-body increment",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-24",
+  "title": "2-for-2 one session short: newest last set 12, previous last set 10",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "hold",
+   "recommend_kg": 60,
+   "conservative_kg": 57.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "+2 reps on the last set once more -> +1 step (62.5)",
+   "must_not": [
+    "62.5"
+   ]
+  },
+  "rule_basis": "Item 5 / item 7 example 'confirmation 1 of 2'",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-25",
+  "title": "2-for-2 via RPE capacity: last set 10 @ RPE 8 twice (capacity 12)",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": 8,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": 8,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "grow",
+   "recommend_kg": 62.5,
+   "conservative_kg": 60,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "sets at 62.5 in range",
+   "must_not": [
+    "hold"
+   ]
+  },
+  "rule_basis": "Item 10: capacity in growth checks; 10+2 = 12 >= top+2 in two consecutive performances",
+  "confidence": "ambiguous",
+  "ambiguity_note": "Same as the capacity-growth case: item 5 states the 2-for-2 trigger in reps; item 10 says growth checks use capacity. Raw-reps reading -> hold."
+ },
+ {
+  "id": "G-26",
+  "title": "2-for-2 at RPE 9: last set 12 @ RPE 9 twice",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": 9,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": 9,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "grow",
+   "recommend_kg": 62.5,
+   "conservative_kg": 60,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "sets at 62.5 in range",
+   "must_not": [
+    "more than one step"
+   ]
+  },
+  "rule_basis": "Item 5 2-for-2 has no RPE condition (only one-session growth requires RPE <= 8); NSCA 2-for-2 does not use RPE",
+  "confidence": "ambiguous",
+  "ambiguity_note": "Item 11(c) invariant says 'no growth at RPE >= 9' without restricting it to one-session growth; the 2-for-2 rule text says +1 step. One of the two must give."
+ },
+ {
+  "id": "G-27",
+  "title": "Classic double progression: 10,10,10 at the range top in two sessions",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "hold",
+   "recommend_kg": 60,
+   "conservative_kg": 57.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set >= 12 in 2 workouts (or >= 13 once) -> 62.5",
+   "must_not": [
+    "62.5"
+   ]
+  },
+  "rule_basis": "Item 5: 2-for-2 needs top+2; 'otherwise hold' (W-11 replaced the old double-progression confirmation for rep data)",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-28",
+  "title": "Uneven: 60x14,10,8 (drop 6, no personal norm)",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 14,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "hold",
+   "recommend_kg": 60,
+   "conservative_kg": 57.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "even sets at 60 -> growth",
+   "must_not": [
+    "grow",
+    "step down",
+    "62.5"
+   ],
+   "reason_contains": "opening set"
+  },
+  "rule_basis": "Item 6 / W-12: drop-off 6 > 4 with no norm (norm needs >= 3 performances, design metric 6) -> uneven_performance, counts neither for growth nor for a step down",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-29",
+  "title": "High personal drop-off norm: usual 4, newest 14,11,8 (drop 6 <= 4+3)",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 14,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 6,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 9,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 12,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "hold",
+   "recommend_kg": 60,
+   "conservative_kg": 57.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set at 60 >= 12 twice -> 62.5",
+   "must_not": [
+    "uneven",
+    "step down"
+   ]
+  },
+  "rule_basis": "W-12: uneven only if drop > usual + 3 (usual = median 4 over earlier performances at 60)",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-30",
+  "title": "Rising reps 60x9,11,13 - not uneven, one-session growth",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 13,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "grow",
+   "recommend_kg": 62.5,
+   "conservative_kg": 60,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "sets at 62.5 in range",
+   "must_not": [
+    "uneven",
+    "65"
+   ]
+  },
+  "rule_basis": "W-12: only a FALL is uneven; item 5: last set 13 >= top+3, no RPE, rest",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-31",
+  "title": "Heavy opener probe 135x6 before 130x12,12,12 (range 10-12, leg press)",
+  "exercise": {
+   "name": "45° Leg Press",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 10,
+   "max": 12
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 135,
+      "reps": 6,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 130,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 130,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 130,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 130,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 130,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 130,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 130,
+   "decision": "hold",
+   "recommend_kg": 130,
+   "conservative_kg": 125,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set at 130 >= 14 twice (or >= 15 once) -> 135",
+   "must_not": [
+    "below floor",
+    "step down to 125",
+    "working weight 135",
+    "working weight 120"
+   ]
+  },
+  "rule_basis": "Item 6 example: a set at another load is a probe - no below-floor, no step down; W-16 estimate from 135x6 (162 -> 121.5 -> 120) < 130 so max keeps 130",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-32",
+  "title": "Lateral Raise Machine 2.5 kg, 5 kg step (owner shape, old single 5 kg set)",
+  "exercise": {
+   "name": "Lateral Raise Machine",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 10,
+   "max": 12
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 6,
+    "sets": [
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 9,
+    "sets": [
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 12,
+    "sets": [
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 15,
+    "sets": [
+     {
+      "weight_kg": 5,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 10,
+      "rpe": null,
+      "kind": null
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 2.5,
+   "decision": "hold",
+   "recommend_kg": 2.5,
+   "conservative_kg": 2.5,
+   "conservative_is_floor_no_lighter": true,
+   "next_step_gist": "last set >= 14 twice -> growth (step exceeds 10 % - progress by reps)",
+   "must_not": [
+    "0",
+    "conservative 0",
+    "working weight 5",
+    "negative load"
+   ]
+  },
+  "rule_basis": "Item 1 / W-1 (5 kg in one old session does not recur) / W-2 floor: one step down reaches <= 0 -> 'no lighter option'",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-33",
+  "title": "Lateral raise 2.5 kg, 15,15,15 twice - step 5 is 200 % of the load",
+  "exercise": {
+   "name": "Lateral Raise Machine",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 10,
+   "max": 12
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 2.5,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 6,
+    "sets": [
+     {
+      "weight_kg": 2.5,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 15,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 9,
+    "sets": [
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 2.5,
+   "decision": "hold",
+   "recommend_kg": 2.5,
+   "conservative_kg": 2.5,
+   "conservative_is_floor_no_lighter": true,
+   "next_step_gist": "progress by reps (step above the 10 % cap)",
+   "must_not": [
+    "7.5",
+    "0"
+   ]
+  },
+  "rule_basis": "Design §3.3 Stage C 10 % cap / T1(f): a step above the cap holds and says 'progress by reps'; W-11 one-session growth also 'within the 10 % cap'",
+  "confidence": "ambiguous",
+  "ambiguity_note": "Rule text settles 'hold', but it is a permanent dead end: with a 5 kg stack step on 2.5 kg the cap can never be met, so the block can never propose growth. No rule says what happens when reps keep climbing (NSCA would still add the smallest available increment)."
+ },
+ {
+  "id": "G-34",
+  "title": "Lateral raise 2.5 kg after a 30-day gap (rebuild)",
+  "exercise": {
+   "name": "Lateral Raise Machine",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 10,
+   "max": 12
+  },
+  "history": [
+   {
+    "days_ago": 30,
+    "sets": [
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 33,
+    "sets": [
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 36,
+    "sets": [
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 30,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false,
+   "break_reason": "holiday_work_no_time"
+  },
+  "expected": {
+   "working_weight_kg": 2.5,
+   "decision": "ladder",
+   "recommend_kg": 2.5,
+   "conservative_kg": 2.5,
+   "conservative_is_floor_no_lighter": true,
+   "next_step_gist": "rebuild ladder - workout 1 of 3",
+   "must_not": [
+    "0",
+    "negative load"
+   ]
+  },
+  "rule_basis": "BR-038 rebuild >= 28 d; T2(b) rebuild ladder from 2 steps below; W-2 / W-6 floor -> 'no lighter option - the load holds'",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-35",
+  "title": "Insufficient data, lateral raise: one performance at 2.5 kg",
+  "exercise": {
+   "name": "Lateral Raise Machine",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 10,
+   "max": 12
+  },
+  "history": [
+   {
+    "days_ago": 4,
+    "sets": [
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 4,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": null,
+   "decision": "insufficient_reference",
+   "recommend_kg": 2.5,
+   "conservative_kg": 2.5,
+   "conservative_is_floor_no_lighter": true,
+   "next_step_gist": "log this exercise once more - the working weight follows",
+   "must_not": [
+    "0",
+    "no number"
+   ],
+   "confidence": "low"
+  },
+  "rule_basis": "W-4 + W-2: reference load, conservative floored, outcome 'reference load, no lighter option' (W-6)",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-36",
+  "title": "Insufficient data + return tier + floor: one performance at 2.5 kg, 20 d ago",
+  "exercise": {
+   "name": "Lateral Raise Machine",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 10,
+   "max": 12
+  },
+  "history": [
+   {
+    "days_ago": 20,
+    "sets": [
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 2.5,
+      "reps": 11,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 20,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false,
+   "break_reason": "holiday_work_no_time"
+  },
+  "expected": {
+   "working_weight_kg": null,
+   "decision": "insufficient_reference",
+   "recommend_kg": 2.5,
+   "conservative_kg": 2.5,
+   "conservative_is_floor_no_lighter": true,
+   "next_step_gist": "log it once - that performance becomes the reference",
+   "must_not": [
+    "0"
+   ],
+   "confidence": "low"
+  },
+  "rule_basis": "W-4 (after a break tier one step below the reference) + W-6 (floor stops the step: 'no lighter option - the load holds')",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-37",
+  "title": "Unknown step, insufficient data with a loaded reference",
+  "exercise": {
+   "name": "Hammer Strength Row (catalog equipment missing)",
+   "equipment": "machine",
+   "step_kg": null,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 4,
+    "sets": [
+     {
+      "weight_kg": 40,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 40,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 40,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 4,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": null,
+   "decision": "insufficient_reference",
+   "recommend_kg": 40,
+   "conservative_kg": 40,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "log it once more",
+   "must_not": [
+    "no lighter option",
+    "35",
+    "37.5",
+    "0"
+   ],
+   "missing_contains": "equipmentStep"
+  },
+  "rule_basis": "W-7: unknown step adds equipmentStep to missing, note 'steps cannot be computed'; 'no lighter option' printed only when the step is known",
+  "confidence": "ambiguous",
+  "ambiguity_note": "What conservative is printed with an unknown step is not stated: equal to recommend (R3 run-2 advisory says that is what happens, 'with no note') or omitted. Expected: no lower invented load; equal-to-recommend tolerated."
+ },
+ {
+  "id": "G-38",
+  "title": "Unknown step, 2-for-2 positive history",
+  "exercise": {
+   "name": "Hammer Strength Row (catalog equipment missing)",
+   "equipment": "machine",
+   "step_kg": null,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 40,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 40,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 40,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 40,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 40,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 40,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 40,
+   "decision": "hold",
+   "recommend_kg": 40,
+   "conservative_kg": 40,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "growth needs a known equipment step",
+   "must_not": [
+    "42.5",
+    "45",
+    "any load above 40"
+   ],
+   "missing_contains": "equipmentStep"
+  },
+  "rule_basis": "Design §4.1: unmet requirements -> missing + printed fallback, never a silent branch; W-16: unknown step -> no estimate",
+  "confidence": "ambiguous",
+  "ambiguity_note": "No rule says what growth does without a step (hold + missing is the cautious reading; a default per equipment would give +5). Conservative with unknown step unsettled as above."
+ },
+ {
+  "id": "G-39",
+  "title": "Dumbbell per hand: 2-for-2 at 22 kg per hand",
+  "exercise": {
+   "name": "Dumbbell Bench Press",
+   "equipment": "dumbbell",
+   "step_kg": 2,
+   "per_hand": true
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 22,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 22,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 22,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 22,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 22,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 22,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 22,
+   "decision": "grow",
+   "recommend_kg": 24,
+   "conservative_kg": 22,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "sets at 24 per hand in range",
+   "must_not": [
+    "44",
+    "46",
+    "48 total",
+    "23",
+    "26"
+   ]
+  },
+  "rule_basis": "Design metric 9: dumbbell step 2 kg per hand; 2/22 = 9.1 % <= 10 % cap; loads stay per hand",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-40",
+  "title": "Light dumbbell 8 kg per hand, 2-for-2 - step is 25 % of the load",
+  "exercise": {
+   "name": "Dumbbell Lateral Raise",
+   "equipment": "dumbbell",
+   "step_kg": 2,
+   "per_hand": true
+  },
+  "rep_range": {
+   "min": 10,
+   "max": 12
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 8,
+      "reps": 14,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 8,
+      "reps": 14,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 8,
+      "reps": 14,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 8,
+      "reps": 14,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 8,
+      "reps": 14,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 8,
+      "reps": 14,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 8,
+   "decision": "hold",
+   "recommend_kg": 8,
+   "conservative_kg": 6,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "progress by reps (step above the 10 % cap)",
+   "must_not": [
+    "10",
+    "16"
+   ]
+  },
+  "rule_basis": "Design §3.3 Stage C 10 % cap / T1(f)",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-41",
+  "title": "10-day break after a 2-for-2 positive history (reason holiday)",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 10,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 13,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 10,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false,
+   "break_reason": "holiday_work_no_time"
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "grow",
+   "recommend_kg": 62.5,
+   "conservative_kg": 60,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "sets at 62.5 in range",
+   "must_not": [
+    "65"
+   ]
+  },
+  "rule_basis": "2-for-2 has no recovery condition; invariant 11(c) forbids growth only after a break >= return. Detraining literature: strength retained ~3 weeks (McMaster 2013, Bosquet 2013)",
+  "confidence": "ambiguous",
+  "ambiguity_note": "Design §5 table implies reasons other than deliberate deload may reduce at rest_with_question; with reason unknown (no answer) the rule text does not say whether 'one step lower' applies below 'return'."
+ },
+ {
+  "id": "G-42",
+  "title": "20-day break (return) after a 2-for-2 positive history, reason holiday",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 20,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 23,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 20,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false,
+   "break_reason": "holiday_work_no_time"
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "ladder",
+   "recommend_kg": 57.5,
+   "conservative_kg": 55,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "1 more workout -> back to 60",
+   "must_not": [
+    "62.5",
+    "grow",
+    "60 as candidate"
+   ]
+  },
+  "rule_basis": "BR-038 return >= 14 d; T2(b) return ladder 2 rungs from 1 step below; invariant 11(c) no growth after a break >= return",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-43",
+  "title": "40-day break (rebuild), reason holiday",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 40,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 43,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 46,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 40,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false,
+   "break_reason": "holiday_work_no_time"
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "ladder",
+   "recommend_kg": 55,
+   "conservative_kg": 52.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "rebuild workout 1 of 3 -> back to 60 by the third",
+   "must_not": [
+    "grow",
+    "60",
+    "57.5 as candidate"
+   ]
+  },
+  "rule_basis": "BR-038 rebuild >= 28 d; T2(b) 3 rungs from 2 steps below",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-44",
+  "title": "40-day break (rebuild), reason unknown",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 40,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 43,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 46,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 40,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false,
+   "break_reason": "unknown"
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "ladder",
+   "recommend_kg": 52.5,
+   "conservative_kg": 50,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "rebuild ladder, 3 workouts",
+   "must_not": [
+    "grow",
+    "60"
+   ]
+  },
+  "rule_basis": "T2(b) + T4(g): two steps below plus one for unknown",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-45",
+  "title": "Rebuild ladder after one successful return workout at 55",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 55,
+      "reps": 10,
+      "rpe": 7,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 55,
+      "reps": 10,
+      "rpe": 7,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 55,
+      "reps": 10,
+      "rpe": 7,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 43,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 46,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 49,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false,
+   "break_reason": "holiday_work_no_time"
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "ladder",
+   "recommend_kg": 57.5,
+   "conservative_kg": 55,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "1 more workout -> back to 60",
+   "must_not": [
+    "62.5",
+    "grow"
+   ]
+  },
+  "rule_basis": "T4(f): a success (sets >= floor, RPE <= 8) advances the rung; rebuild 3 rungs from 2 steps below",
+  "confidence": "ambiguous",
+  "ambiguity_note": "Rung values are not written out: '3 rungs from 2 steps below' is read as 55 -> 57.5 -> 60. Also whether metric 4 now reads 55 (newest) as the working weight (item 4 / W-8) instead of 60 is unsettled during a ladder."
+ },
+ {
+  "id": "G-46",
+  "title": "100-day break (restart) with a loaded reference",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 100,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 103,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 106,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 100,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false,
+   "break_reason": "holiday_work_no_time"
+  },
+  "expected": {
+   "working_weight_kg": null,
+   "decision": "insufficient_reference",
+   "recommend_kg": 57.5,
+   "conservative_kg": 55,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "restart: after this workout the rebuild ladder follows",
+   "must_not": [
+    "60",
+    "0",
+    "grow"
+   ],
+   "confidence": "low"
+  },
+  "rule_basis": "Design §5 as amended: restart -> Stage A row 1, with a loaded reference the candidate is one step below it (W-4); no performance in 8 weeks -> insufficient",
+  "confidence": "ambiguous",
+  "ambiguity_note": "T2(b)/W-6 restart = cold start (no number), and Fix-S 'lower candidate wins - a cold start is lowest' could make the restart row win over W-4's number; review run-1 advisory notes the two paths disagree. Detraining after ~3 months (Mujika & Padilla 2000) supports reducing more than one step for strength; one step is optimistic. Non-monotonic: a 40-day rebuild starts 2 steps below (55), a 100-day restart via W-4 only 1 step below (57.5)."
+ },
+ {
+  "id": "G-47",
+  "title": "Insufficient data + rebuild tier: one performance at 40, 30 d ago",
+  "exercise": {
+   "name": "Barbell Row",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 30,
+    "sets": [
+     {
+      "weight_kg": 40,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 40,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 40,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 30,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false,
+   "break_reason": "holiday_work_no_time"
+  },
+  "expected": {
+   "working_weight_kg": null,
+   "decision": "insufficient_reference",
+   "recommend_kg": 37.5,
+   "conservative_kg": 35,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "log it once - that performance becomes the reference",
+   "must_not": [
+    "40",
+    "0"
+   ],
+   "confidence": "low"
+  },
+  "rule_basis": "W-4: after a break tier (return/rebuild/restart) one step below the reference, tier named in the reason (not the tier's ladder depth)",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-48",
+  "title": "Insufficient data with a loaded reference: one performance 40x10,10,9",
+  "exercise": {
+   "name": "Barbell Row",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 6,
+    "sets": [
+     {
+      "weight_kg": 40,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 40,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 40,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 6,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": null,
+   "decision": "insufficient_reference",
+   "recommend_kg": 40,
+   "conservative_kg": 37.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "log it once more - working weight follows",
+   "must_not": [
+    "no number",
+    "invented load"
+   ],
+   "confidence": "low"
+  },
+  "rule_basis": "Item 3 / W-4 / BR-036",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-49",
+  "title": "Insufficient data, tie on the most-used load: 40x10,40x10,45x8,45x8",
+  "exercise": {
+   "name": "Barbell Row",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 6,
+    "sets": [
+     {
+      "weight_kg": 40,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 40,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 45,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 45,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 6,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": null,
+   "decision": "insufficient_reference",
+   "recommend_kg": 45,
+   "conservative_kg": 42.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "log it once more",
+   "must_not": [
+    "40"
+   ],
+   "confidence": "low"
+  },
+  "rule_basis": "W-4: most-used working load, heavier on a tie",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-50",
+  "title": "No history at all (new exercise)",
+  "exercise": {
+   "name": "Barbell Hip Thrust",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": null,
+   "decision": "no_number",
+   "recommend_kg": null,
+   "conservative_kg": null,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "log this exercise once - that performance becomes the reference",
+   "must_not": [
+    "any kg number",
+    "invented conservative option"
+   ]
+  },
+  "rule_basis": "W-4 / BR-036: no reference -> no number, no conservative; v12 forbids inventing one",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-51",
+  "title": "Bodyweight pull-up, history without load",
+  "exercise": {
+   "name": "Pull-up",
+   "equipment": "bodyweight",
+   "step_kg": null,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 6,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 4,
+    "sets": [
+     {
+      "weight_kg": 0,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 0,
+      "reps": 7,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 0,
+      "reps": 6,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 8,
+    "sets": [
+     {
+      "weight_kg": 0,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 0,
+      "reps": 7,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 0,
+      "reps": 6,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 4,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": null,
+   "decision": "no_number",
+   "recommend_kg": null,
+   "conservative_kg": null,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "progress by reps",
+   "must_not": [
+    "any kg number"
+   ]
+  },
+  "rule_basis": "W-4: a reference with no loaded set (bodyweight) -> no number; design §3.4 bodyweight progresses by reps",
+  "confidence": "ambiguous",
+  "ambiguity_note": "Whether a bodyweight strength exercise with >= 2 performances goes through Stage A insufficient data (no number) or through the scheme on reps only (rep target, no load) is not stated; expected only pins 'no kg number'."
+ },
+ {
+  "id": "G-52",
+  "title": "Plank (isometric) - non-strength",
+  "exercise": {
+   "name": "Plank",
+   "equipment": "bodyweight",
+   "step_kg": null,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 30,
+   "max": 60
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": null,
+      "reps": null,
+      "duration_s": 45,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": null,
+      "reps": null,
+      "duration_s": 45,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": null,
+   "decision": "no_number",
+   "recommend_kg": null,
+   "conservative_kg": null,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "progress by hold time",
+   "must_not": [
+    "any kg number"
+   ]
+  },
+  "rule_basis": "Load-plan T2(d): non-strength exercises print 'recommend: n/a for <type>'; design §3.4 isometric progresses by hold time",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-53",
+  "title": "Leg press after session 1 only (110x12 x3), range 8-10",
+  "exercise": {
+   "name": "45° Leg Press",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 6,
+    "sets": [
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 6,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": null,
+   "decision": "insufficient_reference",
+   "recommend_kg": 110,
+   "conservative_kg": 105,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "log it once more",
+   "must_not": [
+    "0",
+    "no number"
+   ],
+   "confidence": "low"
+  },
+  "rule_basis": "W-4: one performance -> reference load",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-54",
+  "title": "Leg press after 110x3 -> 110,110,120,120, range 8-10",
+  "exercise": {
+   "name": "45° Leg Press",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 6,
+    "sets": [
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 120,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 120,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 12,
+    "sets": [
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 6,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 120,
+   "decision": "hold",
+   "recommend_kg": 120,
+   "conservative_kg": 115,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set at 120 >= 12 once more -> 125",
+   "must_not": [
+    "working weight 110",
+    "125",
+    "130"
+   ]
+  },
+  "rule_basis": "Item 4 / W-8 (AC-LPF-5): newest performance's highest load with all its sets >= floor = 120 > W-1 recurring 110; 2-for-2 at 120: 1 of 2; one-session: 12 < 13",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-55",
+  "title": "Leg press after 110x3 -> 110,110,120,120, range 10-12",
+  "exercise": {
+   "name": "45° Leg Press",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 10,
+   "max": 12
+  },
+  "history": [
+   {
+    "days_ago": 6,
+    "sets": [
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 120,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 120,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 12,
+    "sets": [
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 6,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 120,
+   "decision": "hold",
+   "recommend_kg": 120,
+   "conservative_kg": 115,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set at 120 >= 14 twice (or >= 15 once) -> 125",
+   "must_not": [
+    "working weight 110",
+    "125"
+   ]
+  },
+  "rule_basis": "Item 4 / W-8; item 5 thresholds top+2 = 14, top+3 = 15",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-56",
+  "title": "Leg press after 110,130,130,135 (owner full history), range 8-10",
+  "exercise": {
+   "name": "45° Leg Press",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 130,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 130,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 135,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 9,
+    "sets": [
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 120,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 120,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 15,
+    "sets": [
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 135,
+   "decision": "hold",
+   "recommend_kg": 135,
+   "conservative_kg": 130,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set at 135 >= 12 once more -> 140",
+   "must_not": [
+    "working weight 110",
+    "working weight 130",
+    "140",
+    "step down"
+   ]
+  },
+  "rule_basis": "Item 4 / W-8 'leg press ... 135 after 09-27' (single set at 135 x12 reached the floor); 2-for-2 1 of 2; 12 < 13",
+  "confidence": "ambiguous",
+  "ambiguity_note": "W-8 records 135 'as ordered' from a single set; item 4 says '>= 130'. The literal rule gives 135. Literature-wise a single top set is a thin basis but 135x12 is above range in 8-10, so the load is demonstrated."
+ },
+ {
+  "id": "G-57",
+  "title": "Leg press after 110,130,130,135 (owner full history), range 10-12",
+  "exercise": {
+   "name": "45° Leg Press",
+   "equipment": "machine",
+   "step_kg": 5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 10,
+   "max": 12
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 130,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 130,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 135,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 9,
+    "sets": [
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 120,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 120,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 15,
+    "sets": [
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 110,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 135,
+   "decision": "hold",
+   "recommend_kg": 135,
+   "conservative_kg": 130,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set at 135 >= 14 twice (or >= 15 once) -> 140",
+   "must_not": [
+    "working weight 110",
+    "140"
+   ]
+  },
+  "rule_basis": "Item 4 / W-8; item 5",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-58",
+  "title": "Newest session progressed: 60,60 then 65x9,9,8 (range 8-10)",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 65,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 65,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 65,
+      "reps": 8,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 10,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 9,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 65,
+   "decision": "hold",
+   "recommend_kg": 65,
+   "conservative_kg": 62.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set at 65 >= 12 twice -> 67.5",
+   "must_not": [
+    "working weight 60"
+   ]
+  },
+  "rule_basis": "Item 4 / W-8: newest performance's load whose sets all reached the floor wins over the recurring 60 (closes the R3 recency advisory)",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-59",
+  "title": "Volume-only change: 5x10 @ 60 vs 3x10 @ 60 earlier",
+  "exercise": {
+   "name": "Barbell Bench Press",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 60,
+      "reps": 10,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 60,
+   "decision": "hold",
+   "recommend_kg": 60,
+   "conservative_kg": 57.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "last set >= 12 twice -> 62.5",
+   "must_not": [
+    "grow"
+   ],
+   "volume_line": "+67 % vs last"
+  },
+  "rule_basis": "Item 8 / W-9: volume is printed, never a decision input",
+  "confidence": "certain",
+  "ambiguity_note": ""
+ },
+ {
+  "id": "G-60",
+  "title": "Barbell curl 20 kg, 2-for-2 positive - 2.5 kg step is 12.5 %",
+  "exercise": {
+   "name": "Barbell Curl",
+   "equipment": "barbell",
+   "step_kg": 2.5,
+   "per_hand": false
+  },
+  "rep_range": {
+   "min": 8,
+   "max": 10
+  },
+  "history": [
+   {
+    "days_ago": 3,
+    "sets": [
+     {
+      "weight_kg": 20,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 20,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 20,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   },
+   {
+    "days_ago": 7,
+    "sets": [
+     {
+      "weight_kg": 20,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 20,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     },
+     {
+      "weight_kg": 20,
+      "reps": 12,
+      "rpe": null,
+      "kind": "working"
+     }
+    ]
+   }
+  ],
+  "today": {
+   "days_since_last_workout_any": 3,
+   "short_constraint_primary": false,
+   "pre_fatigue_material": false
+  },
+  "expected": {
+   "working_weight_kg": 20,
+   "decision": "hold",
+   "recommend_kg": 20,
+   "conservative_kg": 17.5,
+   "conservative_is_floor_no_lighter": false,
+   "next_step_gist": "progress by reps (step above the 10 % cap)",
+   "must_not": [
+    "25"
+   ]
+  },
+  "rule_basis": "Design §3.3 Stage C '≈ 10 %' cap / T1(f)",
+  "confidence": "ambiguous",
+  "ambiguity_note": "'≈ 10 %' - whether 12.5 % passes is not settled; strict reading holds at 20, a tolerant one grows to 22.5. NSCA lists 1-2 kg upper-body increments for small lifts, so 2.5 kg on 20 kg is the smallest practical bar increment."
+ }
+]

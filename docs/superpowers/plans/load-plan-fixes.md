@@ -58,7 +58,7 @@ cannot count confirming sessions`). Owner, 2026-10-01: «важно строит
    al. 2010, JSCR — the next session's load is set from the reps achieved on the final set; more surplus → larger
    increase); RIR-based RPE (Helms et al. 2018, Front. Physiol. — ≈ 4 % load per RPE point). **Rejected:** Epley
    prediction above ~10 reps (Reynolds et al. 2006, JSCR — accuracy degrades above 10 reps, equations underestimate leg
-   press) and fixed %1RM↔reps tables across exercises (leg press ≈ 19 vs bench ≈ 14 reps at 70 % 1RM) — `E1RM_MAX_REPS`
+   press) and fixed %1RM↔reps tables across exercises (Hoeger et al. 1990: ≈ 19 leg-press vs ≈ 12 bench reps at 80 % 1RM) — `E1RM_MAX_REPS`
    stays 10 and no load is predicted by formula. Rule, judged on the sets AT the working weight (last such set = "last
    set"):
    - **one-session growth:** last set ≥ range top + 3 reps, its RPE ≤ 8 or absent, recovered (gap tier `rest`, no `short`
@@ -118,6 +118,40 @@ cannot count confirming sessions`). Owner, 2026-10-01: «важно строит
     seeded generated histories (no new dependency): load > 0; never more than +1 step; no growth at RPE ≥ 9, after a break
     ≥ return, with a short constraint or material pre-fatigue; more reps at the same load never lowers the recommendation;
     every row has `next step:`.
+
+### Golden-table rulings (2026-10-01) — independent Opus table, 60 cases (41 certain, 19 ambiguous)
+
+Owner rulings:
+- **O-2 Unknown machine base weight:** the "step ≤ ~10 % of the load" cap does not apply where the displayed load excludes
+  the machine's own weight (lever/plate-loaded machines, stacks with an unknown base — equipment fact); the normal growth rule
+  applies, the coach says the step is relatively small because the machine adds its own weight, and may offer dumbbells as an
+  alternative when no step fits (G-33, G-40, G-60 for such machines; free weights keep the cap).
+- **O-3 Restart ≥ rebuild:** after a restart-tier break with a known load, the start is never lighter than after a rebuild
+  (≥ 2 steps below + the return ladder); losses grow with time off (Mujika & Padilla 2000; Bosquet et al. 2013) (G-46).
+  BR-TRAINING-036 "(one step lower after a break tier)" becomes "(lowered per the break ladder)".
+
+Orchestrator rulings (consistency with approved rules):
+- G-06/G-07: any number of below-floor sets without RPE → hold + ask the first time; the same in the next performance
+  (still no RPE) → one step down.
+- G-10: the estimate is the formula; 50 holds with a 5 kg step, 52.5 with a 2.5 kg step.
+- G-11: with one performance, the insufficient-data reference load is the working-weight value (qualifying load / estimate)
+  when one exists, not the most-used load — a failed opener is never the recommendation.
+- G-15: "recovered" = exercise gap tier `rest` or `rest_with_question` (strength retained by the tier definition).
+- G-16: a `short` constraint keeps W-2 (one step down, floored) and the reason adds "or skip / substitute".
+- G-17: growth is blocked by a `short` constraint on a PRIMARY muscle (item 5 text); W-11 aligned to it.
+- G-21/G-25: growth thresholds use capacity (reps + RIR) like every other check (item 10).
+- G-26: 2-for-2 has no RPE condition (NSCA; two sessions are the evidence); the "no growth at RPE ≥ 9" invariant covers
+  one-session growth only.
+- G-37/G-38: unknown step → no growth, conservative = recommend with the "equipmentStep missing" note (W-7).
+- G-41: an unknown reason at `rest_with_question` asks once and does not lower the load.
+- G-45: ladder rungs per load-plan T2 as implemented; the ladder works from the pre-gap working weight.
+- G-51: bodyweight strength → reps-only path, no load number.
+- G-56: 135 from a single 135 × 12 set stands (each load judged on its own sets, owner-approved).
+- Worker W-22 (1): working weight must be monotone in reps — more reps at the same loads never lowers it (fix the W-1
+  "recurring replaces fallback" flip); the reference flip by like-for-like is checked and either fixed or reported.
+- Worker (3): "last set at the working weight" for the effort hint = the last planned set — accepted.
+- Citation fix: Hoeger et al. 1990 — at 80 % 1RM trained men did ≈ 19 leg-press vs ≈ 12 bench reps (not "70 %"); the
+  conclusion (reps-at-%1RM depend on the exercise) stands.
 
 ## Out of scope (route, do not fix here)
 
