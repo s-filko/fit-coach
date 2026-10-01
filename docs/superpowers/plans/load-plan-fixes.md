@@ -3,9 +3,10 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and
 > test-driven-development. Red tests first (from the replay data below), then the code.
 
-- Status: in progress
+- Status: done
 - Branch: plan/load-plan-fixes
 - After: load-plan
+- Review: 2026-10-01 | clean | R1,R2,R3,R4
 
 **Goal:** fix the three defects the live GLM replay of two real owner workouts exposed in U9b, before the owner's
 next workout on dev (all three `LOAD_PLAN_*` flags are on there). Owner order 2026-10-01: «да в новой сессии» —
@@ -635,3 +636,28 @@ message and tools byte-identical across turns incl. an effort-hint `log_set`; LO
 - Orchestrator run on `c941e8f2` (2026-10-01): `check-all` exit 0; `DB_PORT=5999 test:unit` 2681 passed; `db-test-lock
   test:integration` 707 passed (1 todo); `db-test-lock test:scenarios` 440 passed (1 todo); golden 60/60; generator 3500
   cases (746/1000 growth in the biased mode). Red-then-green per item: worker reports for items 4–11 and W-30..W-35.
+
+### Runs 4–6 — 2026-10-01 — scope extension re-reviews (Opus) — clean after run 6 fixes
+
+- **Run 4:** R1 clean; R2 clean (advisories below); R4 6 blocking — BR-041/043 precision, `effort.ts` missing from
+  ARCHITECTURE, design Stage A rows / pre-fatigue row / contract list — **closed** `319f74ca` (wording aligned to the plan's
+  recorded (D) W-16/W-18/W-31; no change of meaning); R3 1 blocking — step from history rounding lb dumbbells to 0.5 kg
+  (recommend 23.2) — plus RIR uncapped, one-session capped step — **closed** `cb72e1fb` (W-36), BR-042/043/045 reworded
+  `94e6c697`, `7f84fdec`.
+- **Run 5:** R3 3 blocking — degenerate divisor (22.7 → step 3.8 / 26.5), kg rack 1.25 step, next-step text offering the
+  one-session path under the cap — **closed** by replacing the rule (W-37, `f4fada4d`; BR-045 `fe975fa5`) and W-38
+  (unknown step grows to the nearest recorded heavier load, `c7bfd6a5`; BR-045 `6b250d34`).
+- **Run 6:** R3 1 blocking — `capAppliesOf` defaulted to "cap" with an unknown step, capping machines — **closed** `7b4ed2fc`
+  (W-39); orchestrator re-ran the reviewer probe on `7b4ed2fc`: machine 47 ×2 + 52 once → 52 × 8–12 (no cap), owner-like
+  lateral raise → 5 × 10–15 with the machine note. BR-045 growth limit `b9a6d7ac`.
+
+**Evidence on `7b4ed2fc` (orchestrator, 2026-10-01):** `check-all` exit 0; `DB_PORT=5999 test:unit` 2712 passed;
+`db-test-lock test:integration` 707 passed (1 todo); `db-test-lock test:scenarios` 440 passed (1 todo); golden 60/60,
+fixture byte-identical to `d5685c64`.
+
+**Deferred:** AC-LPF-4 / AC-LPF-8 / AC-LPF-11 live parts — the local GLM replay of the two workouts after the merge
+(orchestrator, `glm-5.3-flash`, runner in `data/replay-2026-10-01/src/`), recorded in `docs/STATE.md` § Handoff.
+
+**Advisory → `docs/BACKLOG.md` § load-plan-fixes extension review advisories:** run 3 list above; run 4 R2 (capped-growth
+reps-reset built twice, `resetReps` flag, presence counted twice, `atLoad`/`onlyAtLoad`, `hintSetOf` literal, test builders);
+run 6 R3 mixed weight units (lb/kg) compared raw in step / recorded loads.
