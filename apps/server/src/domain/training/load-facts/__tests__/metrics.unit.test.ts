@@ -1660,3 +1660,23 @@ describe('AC-LPF-12 · the nearest recorded heavier load (orchestrator ruling, W
     expect(f.heavierRecordedLoad).toBeNull(); // 80 is 20 kg above 60, the machine limit is 10
   });
 });
+
+describe('AC-LPF-7 · the cap flag follows the equipment kind, whatever the step (run 6 R3, W-39)', () => {
+  const f = (equipment: 'machine' | 'cable' | 'barbell' | 'none') =>
+    computeLoadFacts(
+      { ...benchPress, equipment },
+      [perf('a', 3, [strengthSet(47, 10)]), perf('b', 9, [strengthSet(47, 10)]), perf('c', 15, [strengthSet(52, 10)])],
+      today({ targetReps: '8-12' }),
+      emptyContext,
+      NOW,
+      TZ,
+    );
+
+  it('a machine with an unknown step is uncapped; a cable, a barbell and unknown equipment keep the cap', () => {
+    expect(f('machine').equipmentStep).toEqual({ absent: 'recorded loads do not fit one step' });
+    expect(f('machine').stepCapApplies).toBe(false);
+    expect(f('cable').stepCapApplies).toBe(true);
+    expect(f('barbell').stepCapApplies).toBe(true);
+    expect(f('none').stepCapApplies).toBe(true);
+  });
+});

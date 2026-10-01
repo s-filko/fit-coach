@@ -276,6 +276,11 @@ export interface LoadFacts {
   /** Distinct working loads of the last 8 weeks, ascending — anchors for an unknown step. */
   recordedLoads: number[];
   /**
+   * Whether the "one step ≤ ~10 % of the load" cap applies — from the equipment KIND (a machine shows a load without
+   * its own weight; cables and free weights keep the cap), so it holds also when the step is unknown (W-39).
+   */
+  stepCapApplies: boolean;
+  /**
    * The nearest recorded working load above the working weight (last 8 weeks, at most 2 × the default step above) —
    * where growth goes when the equipment step is unknown (W-38). Null when none.
    */

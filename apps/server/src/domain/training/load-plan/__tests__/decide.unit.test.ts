@@ -1207,3 +1207,45 @@ describe('AC-LPF-7 · unknown step: growth goes to the nearest RECORDED heavier 
     expect(d.candidate.load).toBe(5);
   });
 });
+
+describe('AC-LPF-7 · the cap follows the equipment kind, also when the step is unknown (run 6 R3, W-39)', () => {
+  // A MACHINE: 47 kg confirmed twice, 52 kg recorded once → unknown step, growth to the recorded 52; no cap.
+  const machine = (over: Partial<LoadFacts> = {}): LoadFacts =>
+    makeFacts({
+      workingWeight: { weight: 47, unit: 'kg', performances: 5, warmupsEstimated: false, mixedBasisExcluded: 0 },
+      equipmentStep: { absent: 'recorded loads do not fit one step' },
+      stepCapApplies: false,
+      recordedLoads: [47, 52],
+      heavierRecordedLoad: 52,
+      repRange: { min: 8, max: 12, source: 'today' },
+      e1rmTrend: { absent: 'x' },
+      gap: gapOf(4),
+      ...over,
+    });
+
+  it('2-for-2 met on a machine with an unknown step → 52 kg with the RANGE reps (no cap, no reps reset), small-step note', () => {
+    const d = run(machine({ repHistory: repHistoryOf(47, [{ reps: [14, 14, 14] }, { reps: [14, 14, 14] }]) }));
+    expect(d).toMatchObject({ row: 'scheme_growth', outcome: 'nearest recorded heavier load' });
+    expect(d.candidate).toEqual({ load: 52, unit: 'kg', reps: { min: 8, max: 12 } });
+    expect(d.conservative.load).toBe(47);
+    expect(d.reason).toContain('machine adds its own weight');
+  });
+
+  it('one-session growth on a machine with an unknown step (15 @ RPE 7, recovered) → early growth to 52', () => {
+    const d = run(machine({ repHistory: repHistoryOf(47, [{ reps: [15, 15, 15], rpe: 7 }]) }));
+    expect(d).toMatchObject({ row: 'early_growth' });
+    expect(d.candidate).toEqual({ load: 52, unit: 'kg', reps: { min: 8, max: 12 } });
+  });
+
+  it('the same history on a CABLE (cap applies): one session holds, 2-for-2 offers the capped smallest step with reps reset', () => {
+    const cable = (over: Partial<LoadFacts> = {}) => machine({ stepCapApplies: true, ...over });
+    expect(run(cable({ repHistory: repHistoryOf(47, [{ reps: [15, 15, 15], rpe: 7 }]) })).row).toBe('scheme_hold');
+    const d = run(cable({ repHistory: repHistoryOf(47, [{ reps: [14, 14, 14] }, { reps: [14, 14, 14] }]) }));
+    expect(d.candidate).toEqual({ load: 52, unit: 'kg', reps: { min: 8, max: 8 } });
+  });
+
+  it('the next step with an unknown step names the recorded load, not "+1 step"', () => {
+    const d = run(machine({ repHistory: repHistoryOf(47, [{ reps: [12, 12, 12] }, { reps: [11, 11, 11] }]) }));
+    expect(d.next).toMatchObject({ kind: 'growth', load: 52, toRecorded: true });
+  });
+});

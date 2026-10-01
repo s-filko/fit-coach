@@ -801,13 +801,6 @@ export function computeConstraints(exercise: ExerciseInput, context: LoadFactsCo
 
 const MIN_STEP_KG = 0.5;
 
-/**
- * The step the recorded working loads actually use (orchestrator ruling 2026-10-01): when a load is not a multiple of
- * the default step, the step is the largest value that divides every recorded load — on a 0.25 kg grid, never above the
- * default, never below 0.5 kg. Evidence = the working loads of each performance of the last 8 weeks; an off-grid load
- * counts only when it occurs in at least two performances (a lone 22.7 / 20.4 kg set is an outlier, not a step).
- * Null = the default stands.
- */
 const LOAD_TOLERANCE_KG = 0.1;
 /** The step may be at most this multiple of the default (lb dumbbells logged in kg run ≈ 2.3 kg apart against 2). */
 const STEP_MAX_FACTOR = 2;
@@ -852,6 +845,11 @@ function stepFromHistory(defaultStep: number, loadsByPerformance: number[][]): S
   return { kind: 'unknown' };
 }
 
+/** Owner ruling O-2 (narrowed): only a machine's displayed load excludes its own weight; the rest keep the cap. */
+function capAppliesFor(exercise: ExerciseInput): boolean {
+  return exercise.equipment !== 'machine';
+}
+
 export function computeEquipmentStep(exercise: ExerciseInput, loadsByPerformance: number[][] = []): EquipmentStepFact {
   if (exercise.exerciseType !== 'strength') {
     return notApplicable(exercise);
@@ -871,7 +869,7 @@ export function computeEquipmentStep(exercise: ExerciseInput, loadsByPerformance
     basis: history.kind === 'step' ? 'from history' : `default for ${exercise.equipment}`,
     // Owner ruling O-2, narrowed (W-32): only a machine's displayed load excludes its own (unknown) weight; a cable
     // stack shows the real load, so the cap stays.
-    capApplies: exercise.equipment !== 'machine',
+    capApplies: capAppliesFor(exercise),
   };
 }
 
@@ -970,6 +968,7 @@ export function computeLoadFacts(
     equipmentStep: equipmentStepOf(exercise, performances, todayId, now, timezone),
     recordedLoads,
     heavierRecordedLoad: heavierRecordedLoadOf(exercise, workingWeight, recordedLoads),
+    stepCapApplies: capAppliesFor(exercise),
   };
 }
 

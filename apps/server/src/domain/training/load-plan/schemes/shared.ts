@@ -119,7 +119,7 @@ export function stepDown(load: number, step: number | null): number {
  * cables keep it, W-32).
  */
 export function capAppliesOf(facts: LoadFacts): boolean {
-  return isAbsent(facts.equipmentStep) ? true : facts.equipmentStep.capApplies;
+  return isAbsent(facts.equipmentStep) ? facts.stepCapApplies : facts.equipmentStep.capApplies;
 }
 
 /**
@@ -280,6 +280,7 @@ export function decideProgression(facts: LoadFacts, params: SchemeParams, rule: 
       capApplies: capAppliesOf(facts),
       smallStep: smallStepNote(facts, base, growthStep, params.stepCapPct),
       upWord: upWord(step),
+      toRecorded: step === null,
     });
   }
   if (isAbsent(facts.lastExposure) || isAbsent(facts.lastExposure.repsVsRange)) {
@@ -327,6 +328,8 @@ interface RepGrowthCtx {
   base: number;
   step: number | null;
   reps: RepRange;
+  /** The step is unknown: growth goes to a recorded heavier load (the next step says so). */
+  toRecorded: boolean;
   hold: (why: string, next?: NextStep) => SchemeOutput;
   grown: (load: number, why: string, resetReps?: boolean) => SchemeOutput;
   capApplies: boolean;
@@ -376,5 +379,6 @@ function decideFromRepHistory(facts: LoadFacts, params: SchemeParams, surplus: n
     reps: needReps,
     load: growth.load,
     ...(growth.kind === 'capped' ? { capped: true } : {}),
+    ...(c.toRecorded ? { toRecorded: true } : {}),
   });
 }

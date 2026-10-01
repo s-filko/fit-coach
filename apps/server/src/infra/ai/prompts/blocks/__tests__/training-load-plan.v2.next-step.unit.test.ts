@@ -121,10 +121,10 @@ describe('AC-LPF-8 · owner Lateral Raise Machine row', () => {
     expect(line(text, 'recommend')).toMatch(/^recommend: 2\.5 kg × 10–15 — /);
     expect(line(text, 'conservative')).toContain('2.5 kg × 10–15 — no lighter option on record');
     // W-37: 5 kg occurs once, so only 2.5 is confirmed — the step is unknown. W-38: growth goes to the nearest RECORDED
-    // heavier load (the 5 kg set of 09-10); 2.5 → 5 is over the cap, so only 2-for-2 offers it (no one-session text).
+    // heavier load (the 5 kg set of 09-10). W-39: a MACHINE is uncapped (own weight), so the one-session path stays.
     expect(line(text, 'step')).toMatch(/^step: recorded loads do not fit one step/);
     expect(line(text, 'next step')).toBe(
-      'next step: last set at 2.5 kg ≥ 17 reps in 2 workouts in a row → +1 step (5 kg)',
+      'next step: last set at 2.5 kg ≥ 17 reps in 2 workouts in a row (or ≥ 18 reps once at RPE ≤ 8, recovered) → to the nearest recorded heavier load (5 kg)',
     );
   });
 });
@@ -457,11 +457,9 @@ describe('AC-LPF-7 · unknown step, growth to the recorded heavier load through 
     const text = await entryText(LATERAL_RAISE, past, daysBefore(0), '10-15');
     expect(line(text, 'step')).toMatch(/^step: recorded loads do not fit one step/);
     expect(line(text, 'decision')).toBe('decision: Stage C, scheme growth → nearest recorded heavier load');
-    expect(line(text, 'recommend')).toMatch(/^recommend: 5 kg × 10 — /);
-    // 2.5 → 5 kg is 100 % of the load: over the cap, so 2-for-2 offers it as the smallest step with reps reset.
-    expect(line(text, 'recommend')).toContain(
-      'the growth condition is met: the smallest step, reps reset to the floor 10',
-    );
+    // A machine is uncapped (W-39): 5 kg with the RANGE reps, the reason says the machine adds its own weight.
+    expect(line(text, 'recommend')).toMatch(/^recommend: 5 kg × 10–15 — /);
+    expect(line(text, 'recommend')).toContain('machine adds its own weight');
     expect(line(text, 'conservative')).toMatch(/^conservative: 2\.5 kg × 10–15/);
   });
 });

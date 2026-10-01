@@ -181,9 +181,13 @@ function nextStepText(n: NextStep, d: Decision): string {
       const once = n.capped
         ? ''
         : ` (or ≥ ${n.reps - TWO_FOR_TWO_SURPLUS + ONE_SESSION_SURPLUS} reps once at RPE ≤ ${ONE_SESSION_MAX_RPE}, recovered)`;
+      // An unknown step: growth goes to a load the client recorded, not to a counted step.
+      const target = n.toRecorded
+        ? `to the nearest recorded heavier load (${n.load} ${unit})`
+        : `+1 step (${n.load} ${unit})`;
       return n.sessions === 1
-        ? `last set at ${now} ≥ ${n.reps} reps once more${once} → +1 step (${n.load} ${unit})`
-        : `last set at ${now} ≥ ${n.reps} reps in ${n.sessions} workouts in a row${once} → +1 step (${n.load} ${unit})`;
+        ? `last set at ${now} ≥ ${n.reps} reps once more${once} → ${target}`
+        : `last set at ${now} ≥ ${n.reps} reps in ${n.sessions} workouts in a row${once} → ${target}`;
     }
     case 'after_growth':
       return `after the step up, hold ${n.load} ${unit} until the last set reaches ${n.reps + TWO_FOR_TWO_SURPLUS} reps in 2 workouts in a row${

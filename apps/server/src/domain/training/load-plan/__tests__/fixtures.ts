@@ -12,6 +12,7 @@ export function makeFacts(over: Partial<LoadFacts> = {}): LoadFacts {
     fatigueToday: { perMuscle: [], fresh: true, minutesIntoSession: { absent: 'n/a' } },
     recordedLoads: [],
     heavierRecordedLoad: null,
+    stepCapApplies: true,
     indicativeLoad: { absent: 'not needed by schemes' },
     workingWeight: { weight: 65, unit: 'kg', performances: 5, warmupsEstimated: false, mixedBasisExcluded: 0 },
     e1rmTrend: {

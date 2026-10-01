@@ -470,6 +470,14 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
   condition met the growth row recommends 5 kg × 10 (floor), conservative 2.5. Lone recurring 22.7 dumbbell: ask-which-heavier-load.
   Golden (titles name W-38): G-32 back to "growth (5)" (a 5 kg set is on record); G-33 (2.5 kg only on record) hold 2.5 with
   `ask_heavier`; the other rows are unchanged.
+- (D) W-39 (review run 6 R3): `capAppliesOf` reads the equipment KIND, never defaults to "cap applies" when the step is absent — new fact
+  `stepCapApplies` (machine → no cap; cable / free weights / unknown equipment keep it) is used when `equipmentStep` is absent. Probe: a
+  machine, 47 kg ×2 confirmed + 52 kg once → unknown step, 2-for-2 met → 52 kg with the RANGE reps (no cap, no reps reset, reason names
+  "the machine adds its own weight"); one-session (15 @ RPE 7, recovered) → early growth to 52; the same history on a CABLE holds on one
+  session and offers the capped smallest step (reps reset) on 2-for-2. Consequence: the owner lateral raise (a machine) grows 2.5 → 5 kg
+  with the range reps (10–15), and its next step keeps the one-session alternative. The next-step line with an unknown step says "→ to the
+  nearest recorded heavier load (N kg)" instead of "+1 step (N kg)" (`toRecorded` on the `growth` next step). The stale divisor-rule
+  doc comment above the step-from-history constants is gone. No golden row moved (60/60).
 
 ## Review
 
