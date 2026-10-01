@@ -142,16 +142,19 @@ const RULINGS: Record<string, { ruling: string; expected: Partial<GoldenCase['ex
     },
   },
   // O-2: the 10 % cap does not apply to a machine whose own weight is not in the displayed load → growth is named.
-  'G-32': { ruling: 'O-2 + step from history', expected: { next_step_gist: 'last set >= 14 twice -> growth (5)' } },
+  // Run 5 R3 (W-37): only a step the history CONFIRMS counts — the lateral raise shape (2.5 kg every session, no second
+  // confirmed load) has an UNKNOWN step: no growth is named, the conservative is the load itself ("no lighter option on
+  // record"). Moves G-32 (next-step intent; "certain") and G-33 (grow 5 → hold 2.5).
+  'G-32': { ruling: 'W-37 unknown step', expected: { next_step_gist: 'growth needs a known equipment step' } },
   'G-33': {
-    ruling: 'O-2 + step from history',
+    ruling: 'W-37 unknown step',
     expected: {
-      decision: 'grow',
-      recommend_kg: 5,
+      decision: 'hold',
+      recommend_kg: 2.5,
       conservative_kg: 2.5,
-      conservative_is_floor_no_lighter: false,
-      next_step_gist: 'sets at 5 in range',
-      reason_contains: 'relatively small',
+      conservative_is_floor_no_lighter: true,
+      next_step_gist: 'growth needs a known equipment step',
+      reason_contains: '',
     },
   },
   // Run 3 (orchestrator ruling): when the 10 % cap blocks a met growth condition the SMALLEST step is offered, reps

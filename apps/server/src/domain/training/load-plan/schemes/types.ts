@@ -21,9 +21,9 @@ export interface SchemeParams {
  */
 export type NextStep =
   /** Growth waits for `sessions` more session(s) with the last set at the working weight ≥ `reps`; `load` is next. */
-  | { kind: 'growth'; sessions: number; reps: number; load: number }
+  | { kind: 'growth'; sessions: number; reps: number; load: number; capped?: boolean }
   /** Growth was just recommended: after it the same rule applies at `load` (range top `reps`). */
-  | { kind: 'after_growth'; load: number; reps: number }
+  | { kind: 'after_growth'; load: number; reps: number; capped?: boolean }
   /** The return ladder: `remaining` more workouts until back at `backTo`; `cold` = a restart cold start. */
   | { kind: 'ladder'; remaining: number; backTo: number; cold: boolean }
   /** Uneven performance: even sets (reps falling by at most `maxDrop`) at `load` → the growth rule applies. */

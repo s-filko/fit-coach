@@ -22,7 +22,6 @@ import { ONE_SESSION_MAX_RPE, ONE_SESSION_SURPLUS, UNEVEN_ABOVE_USUAL, UNEVEN_WI
 import {
   blockingConstraint,
   capAppliesOf,
-  cappedNote,
   confidenceOf,
   EQUIPMENT_STEP,
   lastSetCapacity,
@@ -154,12 +153,31 @@ function floored(c: Ctx, from: number, to: number, steps: number): boolean {
   return c.step !== null && steps > 0 && -stepsFrom(from, to, c.step) < steps;
 }
 
+/** The reason's words for a step down: floored, one step, or — with no known step — the nearest recorded load. */
+function lowerWord(c: Ctx, from: number, to: number): string {
+  if (c.step === null) {
+    return to < from - 1e-9 ? 'the nearest recorded lighter load' : 'no lighter load on record — the load holds';
+  }
+  return floored(c, from, to, 1) ? NO_LIGHTER : 'one step down';
+}
+
 function loadBelow(c: Ctx, from: number, steps: number): number {
   let load = from;
   for (let i = 0; i < steps; i++) {
     load = lighterLoad(c.facts, load, c.step);
   }
   return roundLoad(load);
+}
+
+/** The printed outcome; with an unknown step a lighter candidate is a recorded load, not a counted step. */
+function outcomeOf(c: Ctx, candidate: number | null): string {
+  if (candidate === null) {
+    return 'conservative start';
+  }
+  if (c.step === null && candidate < c.base - 1e-9) {
+    return 'nearest recorded lighter load';
+  }
+  return stepsWord(stepsFrom(c.base, candidate, c.step));
 }
 
 function finish(
@@ -184,7 +202,7 @@ function finish(
   return {
     stage,
     row,
-    outcome: parts.candidate === null ? 'conservative start' : stepsWord(stepsFrom(c.base, parts.candidate, c.step)),
+    outcome: outcomeOf(c, parts.candidate),
     candidate: rec(parts.candidate),
     conservative: rec(parts.conservative),
     reason: [parts.reason, ...notes].join('; '),
@@ -290,7 +308,7 @@ function stageA(c: Ctx): Decision | null {
   if (delta !== null && delta >= PRE_FATIGUE_MATERIAL_SETS) {
     const heavy = delta >= PRE_FATIGUE_HEAVY_SETS;
     const candidate = heavy ? loadBelow(c, c.base, 1) : c.base;
-    const stepWord = floored(c, c.base, candidate, 1) ? NO_LIGHTER : 'one step down';
+    const stepWord = lowerWord(c, c.base, candidate);
     const move = heavy ? stepWord : 'hold';
     return finish(c, 'A', 'pre_fatigue', {
       candidate,
@@ -335,7 +353,7 @@ function stageA(c: Ctx): Decision | null {
     return finish(c, 'A', 'below_floor', {
       candidate,
       conservative: loadBelow(c, c.base, 2),
-      reason: `last exposure below the rep floor — ${floored(c, c.base, candidate, 1) ? NO_LIGHTER : 'one step down'}`,
+      reason: `last exposure below the rep floor — ${lowerWord(c, c.base, candidate)}`,
       next: { kind: 'step_down', backTo: c.base, atLoad: candidate, reps: c.reps.min },
     });
   }
@@ -472,24 +490,17 @@ function earlyGrowth(c: Ctx, params: SchemeParams, out: SchemeOutput): SchemeOut
   if (newest.lastSetRpe !== null && newest.lastSetRpe > ONE_SESSION_MAX_RPE) {
     return null;
   }
-  const growth = stepUp(c.base, c.step, params.stepCapPct, capAppliesOf(c.facts));
-  if (growth.kind === 'no-step') {
+  const growth = stepUp(c.base, c.step, params.stepCapPct, capAppliesOf(c.facts), c.facts.recordedLoads);
+  // No step known, or the cap blocks it: the capped smallest step needs two sessions of evidence (2-for-2) — one
+  // session never offers it (BR-042).
+  if (growth.kind !== 'grow') {
     return null;
   }
-  // The capped smallest step needs two sessions of evidence (2-for-2); one session never offers it.
-  if (growth.kind === 'capped') {
-    return null;
-  }
-  const capped = false;
   const unit = c.unit ?? 'kg';
   return {
-    candidate: { load: growth.load, unit: c.unit, reps: capped ? { min: reps.min, max: reps.min } : reps },
+    candidate: { load: growth.load, unit: c.unit, reps },
     conservative: { load: c.base, unit: c.unit, reps },
-    reason: `last set at the working weight ${lastSetText(newest)} (range top ${reps.max} + ${ONE_SESSION_SURPLUS} or more; ${repsText(newest.repsAtWorkingWeight)} at ${c.base} ${unit} ${newest.daysAgo} d ago); recovered (${c.gap.days ?? 0} d since ${c.gap.basis ?? 'last workout'}, no short constraint, no material pre-fatigue) — ${
-      capped
-        ? cappedNote(c.base, c.step ?? 0, params.stepCapPct, reps.min)
-        : `one step up${smallStepNote(c.facts, c.base, c.step, params.stepCapPct)}`
-    }`,
+    reason: `last set at the working weight ${lastSetText(newest)} (range top ${reps.max} + ${ONE_SESSION_SURPLUS} or more; ${repsText(newest.repsAtWorkingWeight)} at ${c.base} ${unit} ${newest.daysAgo} d ago); recovered (${c.gap.days ?? 0} d since ${c.gap.basis ?? 'last workout'}, no short constraint, no material pre-fatigue) — one step up${smallStepNote(c.facts, c.base, c.step, params.stepCapPct)}`,
     confidence: LEVELS[Math.min(LEVELS.indexOf('medium'), LEVELS.indexOf(confidenceOf(c.facts, out.missing)))],
     missing: out.missing,
     next: { kind: 'after_growth', load: growth.load, reps: reps.max },

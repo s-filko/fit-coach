@@ -441,6 +441,25 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
   (3) The capped smallest step with reps reset is offered by 2-for-2 only; one-session growth under a blocking cap holds, and the next
   step names the smallest step as the way up (10 kg cable at 15 reps once → hold, "→ +1 step (15 kg)"). (4) Comments W-35 → W-32,
   the stale `metrics.unit.test.ts` comment. Golden 60/60 unchanged — no row moved.
+- (D) W-37 (review run 5 R3, orchestrator ruling — REPLACES the W-36 step search): step from history counts only CONFIRMED loads (a working
+  load in ≥ 2 performances of the last 8 weeks). Every recorded load on the default grid (within 0.1 kg) → the default; else the step is
+  the smallest positive difference between two adjacent distinct confirmed loads, accepted in [0.5 kg, 2 × default] when ≥ 2 confirmed
+  loads exist; else UNKNOWN (no growth, conservative = the nearest recorded load below, else the load itself, block "no lighter option
+  on record"). The exact-grid list and the free divisor search are gone. Predicted loads (base ± step) snap to a recorded load within
+  0.3 kg (in the right direction). Cases (printed step / recommend / conservative): lone recurring 22.7 → "recorded loads do not fit
+  one step" / 22.7 / 22.7; 17.5-20-22.5 each ×2 → 2.5 per hand, growth 25 (conservative 22.5; a hold row 20); 22.5 once next to 20 ×2 →
+  unknown; lb 20.4 / 22.7 ×2 each → 2.3, growth 25 (capped: 2.3 is 10.1 % of 22.7, so 2-for-2 offers 25 × 8), hold row conservative
+  20.4; barbell 61.25 ×2 alone → unknown, with 60 ×2 → 1.25; gaps < 0.5 or > 2 × default refused. **Owner lateral raise (5 kg once,
+  2.5 kg every session): only 2.5 is confirmed → UNKNOWN step** — 2.5 hold, no growth named ("no load step known"); with 5 kg also in
+  two sessions it gives 2.5. Leg press unchanged (120 / 115, 135 / 130). **Golden rows moved (rulings in the titles, fixture untouched):
+  G-32 (next-step intent: growth → "needs a known equipment step"; certain row) and G-33 (grow 5 → hold 2.5, floor flag true).** G-34 / G-35 /
+  G-36 keep passing because the block prints "no lighter option on record" for an unknown-from-history step with nothing recorded below.
+  Also: next-step text names the one-session alternative only where the cap does not block (`growth` / `after_growth` carry `capped`;
+  BR-042, both tested); `per hand` comes from the exercise, so an unknown step does not turn dumbbell loads into totals; the dead
+  `capped` branch of `earlyGrowth` is removed.
+  With an unknown step a lighter candidate is a recorded load, so the outcome / reason say "nearest recorded lighter load" (not "one step
+  down"); the seeded 82 kg barbell scenarios now print `step: recorded loads do not fit one step` (pre-fatigue row 80 / conservative 80 "no lighter
+  option on record"; the log scenarios 82 / 82).
 
 ## Review
 

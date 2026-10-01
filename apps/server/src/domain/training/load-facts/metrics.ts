@@ -809,12 +809,12 @@ const MIN_STEP_KG = 0.5;
  * Null = the default stands.
  */
 const LOAD_TOLERANCE_KG = 0.1;
+/** The step may be at most this multiple of the default (lb dumbbells logged in kg run ≈ 2.3 kg apart against 2). */
+const STEP_MAX_FACTOR = 2;
 const STEP_RESOLUTION = 100;
-/** The search may go above the default: lb dumbbells logged in kg run ≈ 2.27 kg apart against a 2 kg default. */
-const STEP_SEARCH_FACTOR = 2;
 
 /** The load sits within the tolerance of a (positive) multiple of `step`. */
-function fitsStep(load: number, step: number): boolean {
+function onGrid(load: number, step: number): boolean {
   const k = Math.max(1, Math.round(load / step));
   return Math.abs(load - k * step) <= LOAD_TOLERANCE_KG + 1e-9;
 }
@@ -822,12 +822,11 @@ function fitsStep(load: number, step: number): boolean {
 type StepFromHistory = { kind: 'default' } | { kind: 'step'; step: number } | { kind: 'unknown' };
 
 /**
- * The step the recorded working loads actually use (orchestrator rulings 2026-10-01 + run 4 R3). Loads on the default
- * grid → the default. Otherwise a plate grid that fits every off-grid load exactly (halves / quarters of the default,
- * 2.5, 1.25, 1, 0.5), else the largest step `s` (0.01 kg resolution, 0.5 … 2× the default) such that EVERY off-grid
- * load recurring in ≥ 2 performances of the last 8 weeks is within 0.1 kg of a multiple of `s` — lb dumbbells logged in
- * kg (22.7 / 20.4) give ≈ 2.27. No such step (or only one-off off-grid loads) → unknown: the default would print loads
- * that never existed (22.7 ± 2 = 20.7 / 24.7).
+ * The step the recorded working loads actually use (orchestrator ruling run 5 R3, W-37). Only CONFIRMED loads count —
+ * a working load present in ≥ 2 performances of the last 8 weeks. Every recorded load on the default grid → the
+ * default. Otherwise the step is the smallest positive difference between two adjacent distinct confirmed loads,
+ * accepted in [0.5 kg, 2 × default] when at least two confirmed loads exist (17.5 / 20 / 22.5 → 2.5; lb dumbbells
+ * 20.4 / 22.7 → 2.3). Anything else → unknown: the default would print loads that never existed (22.7 ± 2).
  */
 function stepFromHistory(defaultStep: number, loadsByPerformance: number[][]): StepFromHistory {
   const presence = new Map<number, number>();
@@ -836,27 +835,18 @@ function stepFromHistory(defaultStep: number, loadsByPerformance: number[][]): S
       presence.set(l, (presence.get(l) ?? 0) + 1);
     }
   }
-  const offGrid = [...presence.entries()].filter(([l]) => !fitsStep(l, defaultStep));
-  if (offGrid.length === 0) {
+  if ([...presence.keys()].every(l => onGrid(l, defaultStep))) {
     return { kind: 'default' };
   }
-  const confirmed = offGrid.filter(([, n]) => n >= RECURRING_PERFORMANCES).map(([l]) => l);
-  // Plate / dumbbell grids first (the default's halves and quarters, 2.5, 1.25, 1, 0.5) — exact fits; a free search
-  // would otherwise "improve" a lone 2.5 kg load to a 2.6 kg step.
-  const nice = [defaultStep, defaultStep / 2, defaultStep / 4, 2.5, 1.25, 1, MIN_STEP_KG]
-    .filter(s => s >= MIN_STEP_KG && s <= defaultStep)
-    .sort((a, b) => b - a);
-  const exact = nice.find(s => offGrid.every(([l]) => Math.abs(l - Math.round(l / s) * s) < 0.01));
-  if (exact !== undefined) {
-    return { kind: 'step', step: exact };
-  }
-  if (confirmed.length > 0) {
-    const top = Math.round(defaultStep * STEP_SEARCH_FACTOR * STEP_RESOLUTION);
-    for (let h = top; h >= Math.round(MIN_STEP_KG * STEP_RESOLUTION); h--) {
-      const step = h / STEP_RESOLUTION;
-      if (confirmed.every(l => fitsStep(l, step))) {
-        return { kind: 'step', step };
-      }
+  const confirmed = [...presence.entries()]
+    .filter(([, n]) => n >= RECURRING_PERFORMANCES)
+    .map(([l]) => l)
+    .sort((a, b) => a - b);
+  if (confirmed.length >= 2) {
+    const smallest = Math.min(...confirmed.slice(1).map((l, i) => l - confirmed[i]));
+    const step = Math.round(smallest * STEP_RESOLUTION) / STEP_RESOLUTION;
+    if (step >= MIN_STEP_KG && step <= defaultStep * STEP_MAX_FACTOR) {
+      return { kind: 'step', step };
     }
   }
   return { kind: 'unknown' };

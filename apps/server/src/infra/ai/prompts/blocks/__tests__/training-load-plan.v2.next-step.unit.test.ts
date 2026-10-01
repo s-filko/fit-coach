@@ -111,7 +111,7 @@ describe('AC-LPF-8 · owner 45° Leg Press rows', () => {
 });
 
 describe('AC-LPF-8 · owner Lateral Raise Machine row', () => {
-  it('2.5 kg on a machine with a 5 kg step (O-2: the cap is waived — the machine adds its own weight): growth is named', async () => {
+  it('2.5 kg (5 kg seen once): the step from history is unknown (W-37) — no growth is named, no lighter option on record', async () => {
     const text = await entryText(
       LATERAL_RAISE,
       ownerSessions(LATERAL_RAISE, LATERAL_RAISE_ROWS, '2026-09-25'),
@@ -119,10 +119,10 @@ describe('AC-LPF-8 · owner Lateral Raise Machine row', () => {
       '10-15',
     );
     expect(line(text, 'recommend')).toMatch(/^recommend: 2\.5 kg × 10–15 — /);
-    expect(line(text, 'conservative')).toContain('2.5 kg × 10–15 — no lighter option');
-    expect(line(text, 'next step')).toBe(
-      'next step: last set at 2.5 kg ≥ 17 reps in 2 workouts in a row (or ≥ 18 reps once at RPE ≤ 8, recovered) → +1 step (5 kg)',
-    );
+    expect(line(text, 'conservative')).toContain('2.5 kg × 10–15 — no lighter option on record');
+    // W-37: 5 kg occurs once, so only 2.5 is confirmed — the step is unknown, growth waits for a known step.
+    expect(line(text, 'step')).toMatch(/^step: recorded loads do not fit one step/);
+    expect(line(text, 'next step')).toBe('next step: no load step known');
   });
 });
 
@@ -303,7 +303,7 @@ describe('AC-LPF-12 · step from history through the block — lb dumbbells logg
   const sess = (id: string, days: number, weight: number, reps: number[]) =>
     sessionRow(id, daysBefore(days, -60), [{ rowId: `r-${id}`, ...DB, sets: sets(weight, reps, daysBefore(days)) }]);
 
-  it('22.7 ×14 ×2 sessions + 20.4 ×12 ×2 sessions (8–12): a 2.27 kg step; growth 25 / conservative 20.4 — no 23.2', async () => {
+  it('22.7 ×14 ×2 sessions + 20.4 ×12 ×2 sessions (8–12): a 2.3 kg step; growth 25 / conservative 22.7 — no 23.2', async () => {
     const past = [
       sess('a', 3, 22.7, [14, 14, 14]),
       sess('b', 7, 22.7, [14, 14, 14]),
@@ -311,8 +311,9 @@ describe('AC-LPF-12 · step from history through the block — lb dumbbells logg
       sess('d', 15, 20.4, [12, 12, 12]),
     ];
     const text = await entryText(DB as never, past, daysBefore(0), '8-12');
-    expect(line(text, 'step')).toBe('step: 2.27 kg per hand (from history)');
-    expect(line(text, 'recommend')).toMatch(/^recommend: 25 kg per hand × 8–12 — /);
+    expect(line(text, 'step')).toBe('step: 2.3 kg per hand (from history)');
+    // 2.3 kg is 10.1 % of 22.7 kg — over the cap, but 2-for-2 is met: the smallest step, reps reset to the floor.
+    expect(line(text, 'recommend')).toMatch(/^recommend: 25 kg per hand × 8 — /);
     expect(line(text, 'conservative')).toMatch(/^conservative: 22\.7 kg per hand/);
     expect(text).not.toContain('23.2');
   });
@@ -333,5 +334,93 @@ describe('AC-LPF-12 · step from history through the block — lb dumbbells logg
     const text = await entryText(DB as never, [sess('a', 3, 22.7, [10, 10, 9])], daysBefore(0), '8-12');
     expect(text).not.toMatch(/20\.7|24\.7/);
     expect(line(text, 'recommend')).toMatch(/^recommend: 22\.7 kg/);
+  });
+});
+
+describe('AC-LPF-8 · the one-session path is not offered where the cap blocks it (run 5 R3, W-37, BR-042)', () => {
+  const CABLE = {
+    id: '98989898-9898-4898-8898-989898989898',
+    name: 'Cable Curl',
+    equipment: 'machine' as const,
+    muscles: [['biceps', 'primary']] as RowExercise['muscles'],
+  };
+  const session = (id: string, days: number, weight: number, reps: number[]) =>
+    sessionRow(id, daysBefore(days, -60), [{ rowId: `r-${id}`, ...CABLE, sets: sets(weight, reps, daysBefore(days)) }]);
+
+  it('a barbell at 20 kg (2.5 kg = 12.5 %): growth and after-growth lines name 2-for-2 only', async () => {
+    const BAR = {
+      ...CABLE,
+      id: '97979797-9797-4797-8797-979797979797',
+      name: 'Barbell Curl',
+      equipment: 'barbell' as const,
+    };
+    const mk = (id: string, days: number, reps: number[]) =>
+      sessionRow(id, daysBefore(days, -60), [{ rowId: `r-${id}`, ...BAR, sets: sets(20, reps, daysBefore(days)) }]);
+    const held = await entryText(
+      BAR as never,
+      [mk('a', 3, [12, 12, 12]), mk('b', 7, [10, 10, 10])],
+      daysBefore(0),
+      '8-10',
+    );
+    expect(line(held, 'next step')).toBe('next step: last set at 20 kg ≥ 12 reps once more → +1 step (22.5 kg)');
+    const grown = await entryText(
+      BAR as never,
+      [mk('a', 3, [12, 12, 12]), mk('b', 7, [12, 12, 12])],
+      daysBefore(0),
+      '8-10',
+    );
+    expect(line(grown, 'decision')).toBe('decision: Stage C, scheme growth → one step up');
+    expect(line(grown, 'next step')).toBe(
+      'next step: after the step up, hold 22.5 kg until the last set reaches 12 reps in 2 workouts in a row',
+    );
+    expect(line(grown, 'next step')).not.toContain('once at RPE');
+  });
+
+  it('where the step is within the cap the one-session alternative stays', async () => {
+    const text = await entryText(
+      CABLE as never,
+      [session('a', 3, 50, [10, 10, 10]), session('b', 7, 50, [10, 10, 10])],
+      daysBefore(0),
+      '8-10',
+    );
+    expect(line(text, 'next step')).toContain('(or ≥ 13 reps once at RPE ≤ 8, recovered)');
+  });
+});
+
+describe('AC-LPF-8 · per hand is printed from the exercise even when the step is unknown (run 5 R3, W-37)', () => {
+  const DB = {
+    id: '96969696-9696-4696-8696-969696969696',
+    name: 'Dumbbell Fly',
+    equipment: 'dumbbell' as const,
+    muscles: [['chest', 'primary']] as RowExercise['muscles'],
+  };
+
+  it('a lone recurring 22.7 kg dumbbell load: unknown step, loads still "per hand"', async () => {
+    const past = [
+      sessionRow('a', daysBefore(3, -60), [{ rowId: 'ra', ...DB, sets: sets(22.7, [10, 10, 10], daysBefore(3)) }]),
+      sessionRow('b', daysBefore(8, -60), [{ rowId: 'rb', ...DB, sets: sets(22.7, [10, 10, 10], daysBefore(8)) }]),
+    ];
+    const text = await entryText(DB as never, past, daysBefore(0), '8-12');
+    expect(line(text, 'step')).toMatch(/^step: recorded loads do not fit one step/);
+    expect(line(text, 'recommend')).toMatch(/^recommend: 22\.7 kg per hand × 8–12/);
+    expect(line(text, 'conservative')).toMatch(
+      /^conservative: 22\.7 kg per hand × 8–12 — no lighter option on record$/,
+    );
+  });
+
+  it('17.5 / 20 / 22.5 kg each twice: step 2.5, growth snaps to 25', async () => {
+    const mk = (id: string, days: number, weight: number, reps: number[]) =>
+      sessionRow(id, daysBefore(days, -60), [{ rowId: `r-${id}`, ...DB, sets: sets(weight, reps, daysBefore(days)) }]);
+    const past = [
+      mk('a', 3, 22.5, [14, 14, 14]),
+      mk('b', 7, 22.5, [14, 14, 14]),
+      mk('c', 11, 20, [12, 12, 12]),
+      mk('d', 15, 20, [12, 12, 12]),
+      mk('e', 19, 17.5, [12, 12, 12]),
+      mk('f', 23, 17.5, [12, 12, 12]),
+    ];
+    const text = await entryText(DB as never, past, daysBefore(0), '8-12');
+    expect(line(text, 'step')).toBe('step: 2.5 kg per hand (from history)');
+    expect(line(text, 'recommend')).toMatch(/^recommend: 25 kg per hand/);
   });
 });

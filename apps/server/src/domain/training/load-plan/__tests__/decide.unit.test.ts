@@ -1025,7 +1025,7 @@ describe('AC-LPF-12 · golden-table rulings in the domain', () => {
     it('condition not met yet → hold, and the next step names the smallest step as the way up', () => {
       const d = run(curl({ repHistory: repHistoryOf(20, [{ reps: [12, 12, 12] }, { reps: [10, 10, 10] }]) }));
       expect(d.row).toBe('scheme_hold');
-      expect(d.next).toEqual({ kind: 'growth', sessions: 1, reps: 12, load: 22.5 });
+      expect(d.next).toEqual({ kind: 'growth', sessions: 1, reps: 12, load: 22.5, capped: true });
     });
 
     it('never more than one step, even under the cap', () => {
@@ -1090,7 +1090,7 @@ describe('AC-LPF-12 · run 4 R3 probes through the decision (W-36)', () => {
     const d = run(f);
     expect(d.row).toBe('scheme_hold');
     expect(d.candidate.load).toBe(10);
-    expect(d.next).toEqual({ kind: 'growth', sessions: 1, reps: 14, load: 15 });
+    expect(d.next).toEqual({ kind: 'growth', sessions: 1, reps: 14, load: 15, capped: true });
   });
 
   it('the capped smallest step still comes with two sessions of evidence (2-for-2)', () => {
@@ -1126,5 +1126,23 @@ describe('AC-LPF-12 · run 4 R3 probes through the decision (W-36)', () => {
     const d = run(f);
     expect(d.conservative.load).toBe(22.7);
     expect(d.missing).toContain('equipmentStep');
+  });
+});
+
+describe('AC-LPF-12 · an unknown step steps down to a recorded load and says so (run 5 R3, W-37)', () => {
+  it('heavy pre-fatigue with an unknown step: the nearest recorded lighter load, not "one step down"', () => {
+    const d = run(
+      makeFacts({
+        workingWeight: { weight: 82, unit: 'kg', performances: 4, warmupsEstimated: false, mixedBasisExcluded: 0 },
+        equipmentStep: { absent: 'recorded loads do not fit one step' },
+        recordedLoads: [80, 82],
+        fatigueToday: fatigue(6),
+        fatigueReference: fatigue(0),
+      }),
+    );
+    expect(d).toMatchObject({ row: 'pre_fatigue', outcome: 'nearest recorded lighter load' });
+    expect(d.candidate.load).toBe(80);
+    expect(d.reason).toContain('the nearest recorded lighter load');
+    expect(d.reason).not.toContain('one step down');
   });
 });

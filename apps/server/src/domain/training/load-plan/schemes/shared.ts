@@ -59,7 +59,7 @@ export function roundToStep(value: number, step: number | null): number {
  */
 export function lighterLoad(facts: LoadFacts, load: number, step: number | null): number {
   if (step !== null) {
-    return stepDown(load, step);
+    return snapToRecorded(stepDown(load, step), load, facts.recordedLoads, -1);
   }
   const below = facts.recordedLoads.filter(l => l < load - 1e-9);
   return below.length > 0 ? below[below.length - 1] : load;
@@ -79,14 +79,30 @@ export function roundLoad(value: number): number {
 export type Growth = { kind: 'grow'; load: number } | { kind: 'capped'; load: number } | { kind: 'no-step' };
 
 /** Load after one step, or why there is none: no step known, or the step exceeds the cap. */
-export function stepUp(base: number, step: number | null, capPct: number, capApplies = true): Growth {
+/** A predicted load snaps to a load the client actually recorded when one lies within this distance (W-37). */
+const SNAP_KG = 0.3;
+
+function snapToRecorded(value: number, from: number, recorded: number[], direction: 1 | -1): number {
+  const near = recorded
+    .filter(l => Math.abs(l - value) <= SNAP_KG + 1e-9 && (l - from) * direction > 1e-9)
+    .sort((a, b) => Math.abs(a - value) - Math.abs(b - value));
+  return near[0] ?? value;
+}
+
+export function stepUp(
+  base: number,
+  step: number | null,
+  capPct: number,
+  capApplies = true,
+  recorded: number[] = [],
+): Growth {
   if (step === null) {
     return { kind: 'no-step' };
   }
   if (capApplies && step > base * capPct + Number.EPSILON) {
-    return { kind: 'capped', load: roundToStep(base + step, step) };
+    return { kind: 'capped', load: snapToRecorded(roundToStep(base + step, step), base, recorded, 1) };
   }
-  return { kind: 'grow', load: roundToStep(base + step, step) };
+  return { kind: 'grow', load: snapToRecorded(roundToStep(base + step, step), base, recorded, 1) };
 }
 
 /**
@@ -227,7 +243,7 @@ export function decideProgression(facts: LoadFacts, params: SchemeParams, rule: 
     reason: why,
     confidence: confidenceOf(facts, missing),
     missing,
-    next: { kind: 'after_growth', load, reps: reps.max },
+    next: { kind: 'after_growth', load, reps: reps.max, ...(resetReps ? { capped: true } : {}) },
   });
 
   const shortConstraint = blockingConstraint(facts);
@@ -269,7 +285,7 @@ export function decideProgression(facts: LoadFacts, params: SchemeParams, rule: 
   if (seen < params.confirmSessions) {
     return hold(`${rule.successLabel}, confirmation ${seen} of ${params.confirmSessions}`);
   }
-  const growth = stepUp(base, step, params.stepCapPct, capAppliesOf(facts));
+  const growth = stepUp(base, step, params.stepCapPct, capAppliesOf(facts), facts.recordedLoads);
   if (growth.kind === 'grow') {
     return grown(
       growth.load,
@@ -307,7 +323,7 @@ function decideFromRepHistory(facts: LoadFacts, params: SchemeParams, surplus: n
   const needReps = c.reps.max + surplus;
   const seen = surplusRun(entries, needReps);
   const lastText = entries[0] ? lastSetText(entries[0]) : 'no set at the working weight in the newest performance';
-  const growth = stepUp(c.base, c.step, params.stepCapPct, c.capApplies);
+  const growth = stepUp(c.base, c.step, params.stepCapPct, c.capApplies, facts.recordedLoads);
   if (seen >= params.confirmSessions && growth.kind === 'grow') {
     return c.grown(
       growth.load,
@@ -332,5 +348,11 @@ function decideFromRepHistory(facts: LoadFacts, params: SchemeParams, surplus: n
     seen > 0
       ? `last set at the working weight reached ${needReps}+ reps, confirmation ${seen} of ${params.confirmSessions}`
       : `last set at the working weight ${lastText}; growth needs ≥ ${needReps} reps (range top ${c.reps.max} + ${surplus}) in ${params.confirmSessions} sessions in a row — hold`;
-  return c.hold(why, { kind: 'growth', sessions: missing, reps: needReps, load: growth.load });
+  return c.hold(why, {
+    kind: 'growth',
+    sessions: missing,
+    reps: needReps,
+    load: growth.load,
+    ...(growth.kind === 'capped' ? { capped: true } : {}),
+  });
 }

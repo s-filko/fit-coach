@@ -114,7 +114,7 @@ describe('load_recommendations log (AC-LP-4)', () => {
     expect(row.stage).toBe('A');
     expect(row.row).toBe('insufficient_data');
     expect(row.candidate).toMatchObject({ load: 82 });
-    expect(row.conservative).toMatchObject({ load: 81 }); // 1 kg step from the 82 kg history (W-36)
+    expect(row.conservative).toMatchObject({ load: 82 }); // unknown step (W-37), no lighter load on record
     expect(row.confidence).toBe('low');
     expect(row.gapTier).toBe('rest');
     expect(row.rendered).toContain('decision: Stage A, insufficient data → reference load');
@@ -184,7 +184,7 @@ describe('load_recommendations log (AC-LP-4)', () => {
     expect(row.stage).toBe('C');
     expect(row.row).toBe('scheme_hold');
     expect(row.candidate).toEqual({ load: 82, unit: 'kg', reps: { min: 8, max: 12 } });
-    expect(row.conservative).toEqual({ load: 81, unit: 'kg', reps: { min: 8, max: 12 } });
+    expect(row.conservative).toEqual({ load: 82, unit: 'kg', reps: { min: 8, max: 12 } });
     expect(row.confidence).toBe('low');
     expect(row.gapTier).toBe('rest');
     // The rendered text is the v2 entry — the same text the block prints, decision lines included.
@@ -192,7 +192,7 @@ describe('load_recommendations log (AC-LP-4)', () => {
     expect(row.rendered).toContain('tactic: none active');
     expect(row.rendered).toContain('decision: Stage C, scheme hold → hold');
     expect(row.rendered).toContain('recommend: 82 kg × 8–12');
-    expect(row.rendered).toContain('conservative: 81 kg × 8–12');
+    expect(row.rendered).toContain('conservative: 82 kg × 8–12');
   });
 
   it('a second working set writes nothing more; a warm-up first defers the row to the first working set', async () => {

@@ -142,15 +142,20 @@ function breakLine(entry: LoadPlanEntry, d: Decision): string[] {
 }
 
 /** " — 2.5 kg lower", or " — no lighter option" when the floored step-down left the conservative load unchanged. */
-function lowerNote(d: Decision, lower: number): string {
+function lowerNote(d: Decision, lower: number, onRecordOnly: boolean): string {
   if (lower > 0) {
     return ` — ${Math.round(lower * 100) / 100} ${d.conservative.unit ?? DEFAULT_UNIT} lower`;
   }
   // Without a known step the equal load is "steps cannot be computed" (named in the reason), not a floor.
   const stepKnown = !d.missing.includes('equipmentStep');
-  return stepKnown && d.candidate.load !== null && d.candidate.load === d.conservative.load
-    ? ' — no lighter option'
-    : '';
+  if (d.candidate.load === null || d.candidate.load !== d.conservative.load) {
+    return '';
+  }
+  // A step the history does not fix: the conservative is the nearest RECORDED load below — none is recorded.
+  if (stepKnown) {
+    return ' — no lighter option';
+  }
+  return onRecordOnly ? ' — no lighter option on record' : '';
 }
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -172,13 +177,18 @@ function nextStepText(n: NextStep, d: Decision): string {
   const now = `${d.candidate.load} ${unit}`;
   switch (n.kind) {
     case 'growth': {
-      const once = n.reps - TWO_FOR_TWO_SURPLUS + ONE_SESSION_SURPLUS;
+      // Where the cap blocks the step only 2-for-2 offers the capped smallest step (BR-042): no one-session path named.
+      const once = n.capped
+        ? ''
+        : ` (or ≥ ${n.reps - TWO_FOR_TWO_SURPLUS + ONE_SESSION_SURPLUS} reps once at RPE ≤ ${ONE_SESSION_MAX_RPE}, recovered)`;
       return n.sessions === 1
-        ? `last set at ${now} ≥ ${n.reps} reps once more (or ≥ ${once} reps once at RPE ≤ ${ONE_SESSION_MAX_RPE}, recovered) → +1 step (${n.load} ${unit})`
-        : `last set at ${now} ≥ ${n.reps} reps in ${n.sessions} workouts in a row (or ≥ ${once} reps once at RPE ≤ ${ONE_SESSION_MAX_RPE}, recovered) → +1 step (${n.load} ${unit})`;
+        ? `last set at ${now} ≥ ${n.reps} reps once more${once} → +1 step (${n.load} ${unit})`
+        : `last set at ${now} ≥ ${n.reps} reps in ${n.sessions} workouts in a row${once} → +1 step (${n.load} ${unit})`;
     }
     case 'after_growth':
-      return `after the step up, hold ${n.load} ${unit} until the last set reaches ${n.reps + TWO_FOR_TWO_SURPLUS} reps in 2 workouts in a row (or ${n.reps + ONE_SESSION_SURPLUS} reps once at RPE ≤ ${ONE_SESSION_MAX_RPE}, recovered)`;
+      return `after the step up, hold ${n.load} ${unit} until the last set reaches ${n.reps + TWO_FOR_TWO_SURPLUS} reps in 2 workouts in a row${
+        n.capped ? '' : ` (or ${n.reps + ONE_SESSION_SURPLUS} reps once at RPE ≤ ${ONE_SESSION_MAX_RPE}, recovered)`
+      }`;
     case 'ladder':
       if (n.remaining === 0) {
         return 'last workout of the return ladder — the growth rule applies again after it';
@@ -232,7 +242,9 @@ function decisionLines(
   }
   const progression = progressionFromChoice(opts.progression, entry.chosenScheme);
   const params = progression.scheme.defaultParams(progression.goal);
-  const perHand = !isAbsent(facts.equipmentStep) && facts.equipmentStep.perHand;
+  // Per hand from the exercise, so an unknown step does not turn dumbbell loads into totals.
+  const historyUnknown = isAbsent(facts.equipmentStep) && facts.equipmentStep.absent.startsWith('recorded loads');
+  const perHand = exercise.equipment === 'dumbbell' || (!isAbsent(facts.equipmentStep) && facts.equipmentStep.perHand);
   const rec = loadText(d.candidate, perHand);
   const cons = loadText(d.conservative, perHand);
   const lower = d.candidate.load !== null && d.conservative.load !== null ? d.candidate.load - d.conservative.load : 0;
@@ -249,7 +261,7 @@ function decisionLines(
     ...breakLine(entry, d),
     `decision: Stage ${d.stage}, ${ROW_LABELS_V2[d.row]} → ${d.outcome}`,
     `recommend: ${rec === null ? `no number — ${d.reason}` : `${rec} — ${d.reason}`}`,
-    `conservative: ${cons === null ? `no conservative option — ${d.reason}` : `${cons}${lowerNote(d, lower)}`}`,
+    `conservative: ${cons === null ? `no conservative option — ${d.reason}` : `${cons}${lowerNote(d, lower, historyUnknown)}`}`,
     `next step: ${nextStepText(d.next, d)}`,
     confidenceText(entry, d),
     ...volumeLine(entry),
