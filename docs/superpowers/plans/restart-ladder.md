@@ -16,6 +16,14 @@ cases, invariants, Opus review, local GLM check), BR-TRAINING-038 amended with t
 ladder, and the ladder advances only on "a workout in range with reserve" (BR-TRAINING-038) — the owner's sets there
 are RPE 9–10, so it never advances.
 
+**Live confirmation (owner session 2026-10-01, `lower_a_20261001`).** Standing Calf Raise Machine records:
+2026-04-24, then 2026-09-21 (20/15/12 × 50 kg), 2026-09-27 (30 × 40, 40, 45, 45), 2026-10-01 — the third workout in
+a row after the 150-day gap. The LOAD PLAN still said `cold start`, `no number`; the coach told the owner there was a
+"long break", then invented that past calf work was "probably logged under another exercise", picked 40 kg itself
+(Sunday's top was 45 kg), held it, and demanded RPE ≤ 8 on a third set after RPE 9. Owner: «так не бывает в
+принципе», «я сделал столько, сколько ты сказал, мог бы и больше». Adds to scope: the coach never explains a ladder
+or a gap the client cannot see in their own recent training, and never guesses at missing records.
+
 ## Scope (outline, owner-agreed 2026-10-01)
 
 1. The ladder advances on every post-gap workout at the exercise that reached the rep floor (by capacity,
