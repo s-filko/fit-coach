@@ -501,3 +501,40 @@ no-reference outcome (W-6, W-7).
   handoff at close-out.
 
 **Meta (run 2)** filed in `docs/REVIEW_FINDINGS.md`: R3 — evidence must name the head it ran on.
+
+### Run 3 — 2026-10-01 — scope extension (items 4–11, `66221076...1ee7a1c8`), Opus zones — blocked (R1 1 / R2 1 / R3 2 / R4 8)
+
+**Blocking**
+
+- R1 | `load-plan/effort-hint.ts:51,72-77` | ADR-0013 D-08/D-09/D-13 — the domain returns LLM-facing prose with a tool name and a
+  Russian user-facing literal; the domain must return data, the words belong to `log-set.tool.ts` / a prompt module.
+- R2 | `load-facts/metrics.ts:338-345` vs `:514-522` | DRY — `computeWorkingWeight` and `computeIndicativeLoad` repeat the
+  reached-vs-estimate selection; one helper.
+- R3 | `load-facts/metrics.ts:406` (+ `:377-380`) | AC-LPF-11 — `qualifyingLoad` and the indirect estimate use raw reps, not
+  capacity: an early stop at a NEW load (60 ×3 sessions, then 65×9,8,6 @ RPE 7) holds 60 and names the wrong load; a single
+  60×9,8,6 @ RPE 7 becomes an Epley "failure" estimate of 55.
+- R3 | plan § Verification evidence | rule 2 — nothing recorded after `6eb7ce01`; record the `1ee7a1c8` run and red-then-green.
+- R4 | `training.spec.md:36` | BR-TRAINING-036 insufficient-data clause says "that performance's load"; code uses the
+  indicative load (G-11). Owner.
+- R4 | `training.spec.md` | missing BRs (rule 1): growth rule; reps in reserve + early_stop / unclear_effort / uneven rows;
+  `log_set` effort hint + plain-answer mapping (unflagged — reaches v11); working-weight definition; equipment step from
+  history; O-2 machine cap waiver. Owner (texts consolidated by the orchestrator).
+- R4 | design `:88`, `:93` | metric 4 and metric 9 stale (rule 7) — reconciled after the BRs.
+- R4 | `ARCHITECTURE.md:81,184` | v12 entry, Stage A rows, `effort-hint.ts` missing — factual, orchestrator.
+
+**Advisory taken into the fix dispatch (orchestrator ruling — correctness, cheap):** R3-1 effort rows fall back to sets at
+another load (`atLoad`) and `previousBelowWithoutRpe` counts another load as "repeated"; R3-2 step from history has no window
+/ outlier guard (22.7 / 20.4 kg → 0.5 kg step); R3-4 `capApplies` waives the cap for every machine and cable — O-2 meant
+unknown machine base only; with the cap kept, free weights hit a dead end, so when the growth condition is met and the cap
+blocks, the smallest step is offered with reps reset to the range bottom (NSCA smallest increment); R3-5 estimate target reps
+capped at 10; R3-3/R3-6/R3-7 test strength (gist thresholds, growth-biased generator mode, AC ids in names); R2 the effort
+question / RPE mapping single source; the effort hint gated behind `LOAD_PLAN_SUGGESTION`.
+
+**Advisory → BACKLOG at close-out:** R1 renderer computes thresholds / parses absent-reason prose / growth split between
+scheme and `earlyGrowth` / `metrics.ts` size; R2 `loadBelow` loop copy, dead branch, reps-only hold twice, `RepGrowthCtx`,
+cap test twice, `atMostMedium`, `hintSetOf` vs `repsOf`, `roundDownToStep`; R4 superseded (D) entries need forward pointers,
+AC table order, cold-start stub detail, Cyrillic quotes.
+
+**Meta** → `REVIEW_FINDINGS.md` at close-out: R1 domain-returns-data INV; R2 versioned prompt may quote a domain constant
+with a test; R3 certain oracle rows overridden only by owner-approved rulings; R3 probe adjacent histories; R4 Cyrillic
+quote exception; R4 scope extension keeps the previous `- Review:` line.
