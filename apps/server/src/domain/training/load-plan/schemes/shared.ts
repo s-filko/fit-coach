@@ -80,7 +80,10 @@ export function stepDown(load: number, step: number | null): number {
   return lighter > 0 ? lighter : load;
 }
 
-/** Whether the "step ≤ ~10 % of the load" cap applies (ruling O-2: not to machines / cables, own weight unknown). */
+/**
+ * Whether the "step ≤ ~10 % of the load" cap applies (ruling O-2: not to machines, own weight unknown;
+ * cables keep it, W-35).
+ */
 export function capAppliesOf(facts: LoadFacts): boolean {
   return isAbsent(facts.equipmentStep) ? true : facts.equipmentStep.capApplies;
 }

@@ -104,8 +104,11 @@ as a warm-up, printed as "estimated", flagged as a heuristic in the block.
 | data insufficient | with a loaded reference: the newest performance's working-weight value, lowered per the break ladder (BR-TRAINING-036), low confidence; without one: no number; after U11: probe per cold-start protocol | one step lower, never ≤ 0 ("no lighter option", W-2); without a reference: none |
 | `short` constraint on a primary muscle | ≤ working weight; growth forbidden | skip or substitute |
 | gap tier ≥ *return* (§5) | the return ladder's step for this workout | one step lower |
-| today's pre-fatigue **materially greater** than the reference performance's (metric 3 delta) | hold; −1 step if the delta exceeds the user's own drop-off norm | −1 step |
-| last: below range floor | −1 step | −2 steps |
+| today's pre-fatigue **materially greater** than the newest performance's (metric 3 delta, W-28) | hold; −1 step if the delta exceeds the user's own drop-off norm | −1 step |
+| last: below the floor by capacity at the working weight (BR-TRAINING-043) | −1 step | −2 steps |
+| early stop: below the floor by reps, not by capacity (RPE ≤ 7) | hold | −1 step |
+| unclear effort: below the floor, no RPE (first time; the same again at the same load → −1 step) | hold, ask the effort | −1 step |
+| uneven performance: drop-off > the user's usual + 3 (or > 4 with no norm) | hold | −1 step |
 
 Fatigue equal to the reference (same order as last time) adds nothing and prints one line.
 No flat "48 h" penalty: within-session order effects support like-for-like comparison, not a
@@ -172,10 +175,11 @@ from them. A scheme with fixed reps (linear) overrides the goal's range.
 **Contract tests** run every scheme over one fixture set: candidate ≤ working weight + 1 step;
 conservative ≤ candidate; a `short` constraint on a primary muscle forbids growth; insufficient
 data yields the Stage A answer; the candidate is a multiple of the step from the last load;
-no step above the 10 % cap.
+no step above the 10 % cap, except the capped-growth path (the smallest step with reps reset, BR-TRAINING-042) and
+machines, which have no cap.
 
 Initial set: `double_progression`, `linear_progression`. When reps in reserve is recorded:
-`rpe_autoregulation`. Not planned: percentage-based, APRE, DUP. Deload is a shared detector,
+`rpe_autoregulation`. Not planned: percentage-based, APRE (as a scheme — its next-session rule informs one-session growth inside double progression, BR-TRAINING-042), DUP. Deload is a shared detector,
 not a scheme.
 
 ### 4.2 The user's choice (append-only, deterministic provenance) [owner: choose once; coach

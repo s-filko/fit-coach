@@ -163,6 +163,7 @@ apps/server/src/
         types.ts                     # Section, DirectiveModule, PromptModule<TCtx>, PhasePromptEntry
         compose.ts                   # renderDirectives, compose (join '\n\n'), sectionText, promptVersionsOf
         index.ts                     # Registry: PHASE_PROMPTS, STANDALONE_PROMPTS, promptVersionsForPhase
+        effort.ts                    # EFFORT_QUESTION + the plain answer → RPE mapping — one source for the log_set hint / rpe description and training v12 (BR-TRAINING-044)
         directives/                  # The nine directives, one versioned module each
           identity.v1.ts             #   FitCoach persona
           greeting.v1.ts             #   new-day greeting (driven by ctx.now, not the clock)

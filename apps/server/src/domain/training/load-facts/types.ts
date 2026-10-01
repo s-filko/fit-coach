@@ -252,8 +252,9 @@ export type EquipmentStepFact = Metric<{
   perHand: boolean;
   basis: string;
   /**
-   * Whether the "one step ≤ ~10 % of the load" cap applies (owner ruling O-2): false for machines and cables, whose
-   * displayed load excludes the machine's own weight, so a step is relatively small whatever the displayed figure.
+   * Whether the "one step ≤ ~10 % of the load" cap applies (owner ruling O-2): false for machines (cables keep it,
+   * W-35), whose displayed load excludes the machine's own weight, so a step is relatively small whatever the
+   * displayed figure.
    */
   capApplies: boolean;
 }>;

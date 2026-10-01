@@ -359,8 +359,9 @@ function referenceLoad(facts: LoadFacts): { weight: number; unit: 'kg' | 'lbs' |
 }
 
 /**
- * Stage A "insufficient data" (no working weight). With a reference that carried a load, the number is the
- * reference's (one step down after a break tier) with one step lower as the conservative option, low confidence,
+ * Stage A "insufficient data" (no working weight). With a reference that carried a load, the number is the newest
+ * performance's indicative load lowered per the break ladder (BR-TRAINING-036), with one step lower as the
+ * conservative option, low confidence,
  * and the reason says why; with no reference there is no number and no conservative option.
  */
 function startStepsBelow(tier: GapTierInfo['tier']): number {
