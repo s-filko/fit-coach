@@ -575,3 +575,13 @@ AC table order, cold-start stub detail, Cyrillic quotes.
 **Meta** → `REVIEW_FINDINGS.md` at close-out: R1 domain-returns-data INV; R2 versioned prompt may quote a domain constant
 with a test; R3 certain oracle rows overridden only by owner-approved rulings; R3 probe adjacent histories; R4 Cyrillic
 quote exception; R4 scope extension keeps the previous `- Review:` line.
+
+**Run 3 closures (2026-10-01):** code blocking R1 / R2 / R3-1 and the taken advisories fixed in `c941e8f2` (W-30..W-35);
+R4 BRs written after owner approval (BR-TRAINING-036 amended, BR-TRAINING-041..045, `e8858ca2`); ARCHITECTURE and design
+reconciled (`e8858ca2`). Golden rows G-40 / G-60 (certain) moved under BR-TRAINING-042's owner-approved "smallest step with
+reps reset" clause; fixture byte-identical to `d5685c64`. Added: prompt-cache guard with all LOAD_PLAN flags on (system
+message and tools byte-identical across turns incl. an effort-hint `log_set`; LOAD PLAN only in `<context>`).
+
+- Orchestrator run on `c941e8f2` (2026-10-01): `check-all` exit 0; `DB_PORT=5999 test:unit` 2681 passed; `db-test-lock
+  test:integration` 707 passed (1 todo); `db-test-lock test:scenarios` 440 passed (1 todo); golden 60/60; generator 3500
+  cases (746/1000 growth in the biased mode). Red-then-green per item: worker reports for items 4–11 and W-30..W-35.
