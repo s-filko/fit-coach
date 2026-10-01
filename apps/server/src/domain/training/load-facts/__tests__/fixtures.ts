@@ -104,3 +104,148 @@ export const emptyContext: LoadFactsContext = {
   equipmentFacts: [],
   workouts: [],
 };
+
+// --- Owner history (copied from the dev export of 2026-10-01; tests never read the replay folder) ---
+
+export const legPress: ExerciseInput = {
+  id: 'ex-leg-press',
+  name: '45° Leg Press',
+  exerciseType: 'strength',
+  equipment: 'machine',
+  muscles: [
+    { muscleGroup: 'quads', involvement: 'primary' },
+    { muscleGroup: 'glutes', involvement: 'primary' },
+  ],
+};
+
+export const lateralRaise: ExerciseInput = {
+  id: 'ex-lat-raise',
+  name: 'Lateral Raise Machine',
+  exerciseType: 'strength',
+  equipment: 'machine',
+  muscles: [{ muscleGroup: 'shoulders_side', involvement: 'primary' }],
+};
+
+type OwnerRow = { date: string; targetReps: string | null; sets: [number, number][] };
+
+/** 45° Leg Press, legacy NULL set kinds (owner dev export). */
+export const LEG_PRESS_ROWS: OwnerRow[] = [
+  {
+    date: '2026-09-07',
+    targetReps: null,
+    sets: [
+      [100, 10],
+      [100, 12],
+    ],
+  },
+  {
+    date: '2026-09-09',
+    targetReps: null,
+    sets: [
+      [100, 12],
+      [100, 12],
+      [100, 12],
+    ],
+  },
+  {
+    date: '2026-09-12',
+    targetReps: null,
+    sets: [
+      [100, 12],
+      [100, 12],
+      [100, 12],
+    ],
+  },
+  {
+    date: '2026-09-16',
+    targetReps: null,
+    sets: [
+      [80, 10],
+      [110, 12],
+      [110, 12],
+      [110, 12],
+    ],
+  },
+  {
+    date: '2026-09-21',
+    targetReps: '10-12',
+    sets: [
+      [110, 12],
+      [110, 12],
+      [120, 12],
+      [120, 12],
+    ],
+  },
+  {
+    date: '2026-09-27',
+    targetReps: '12',
+    sets: [
+      [110, 12],
+      [130, 12],
+      [130, 12],
+      [135, 12],
+    ],
+  },
+];
+
+/** Lateral Raise Machine: an old 5 kg × 10 set, recent sessions 2.5 kg. */
+export const LATERAL_RAISE_ROWS: OwnerRow[] = [
+  {
+    date: '2026-09-10',
+    targetReps: null,
+    sets: [
+      [5, 10],
+      [2.5, 10],
+    ],
+  },
+  {
+    date: '2026-09-15',
+    targetReps: null,
+    sets: [
+      [2.5, 12],
+      [2.5, 12],
+      [2.5, 12],
+    ],
+  },
+  {
+    date: '2026-09-20',
+    targetReps: '12',
+    sets: [
+      [2.5, 12],
+      [2.5, 11],
+      [2.5, 8],
+    ],
+  },
+  {
+    date: '2026-09-25',
+    targetReps: '15',
+    sets: [
+      [2.5, 10],
+      [2.5, 15],
+      [2.5, 12],
+      [2.5, 10],
+    ],
+  },
+];
+
+/** Performances for the owner rows up to and including `lastDate` (Manila noon of each date). */
+export function ownerPerfs(exerciseKey: string, rows: OwnerRow[], lastDate: string): PerformanceInput[] {
+  return rows
+    .filter(r => r.date <= lastDate)
+    .map(r => {
+      const performedAt = new Date(`${r.date}T04:00:00Z`);
+      return perf(
+        `${exerciseKey}-${r.date}`,
+        0,
+        r.sets.map(([w, reps], i) =>
+          strengthSet(w, reps, { createdAt: new Date(performedAt.getTime() + i * 120_000) }),
+        ),
+        { performedAt, targetReps: r.targetReps, startedAt: new Date(performedAt.getTime() - 3_600_000) },
+      );
+    });
+}
+
+/** A clock `days` after an owner performance date (Manila 10:00). */
+export function ownerNow(date: string, days: number): Date {
+  return new Date(new Date(`${date}T02:00:00Z`).getTime() + days * 86_400_000);
+}

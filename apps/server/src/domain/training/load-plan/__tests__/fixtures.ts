@@ -26,6 +26,7 @@ export function makeFacts(over: Partial<LoadFacts> = {}): LoadFacts {
       warmupsEstimated: false,
       mixedBasisExcluded: 0,
     },
+    volume: { absent: 'fewer than 2 performances with a load' },
     lastExposure: {
       repsVsRange: 'at or above top',
       rpe: { absent: 'no RPE recorded' },

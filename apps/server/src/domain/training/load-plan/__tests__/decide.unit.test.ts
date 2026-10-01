@@ -495,3 +495,20 @@ describe('LPF review · a floored step-down never claims a step was taken', () =
     expect(d.outcome).toBe('no number');
   });
 });
+
+describe('AC-LPF-9 · volume is context, not a decision input', () => {
+  const volume = (newest: number, previous: number): LoadFacts['volume'] => ({
+    unit: 'kg',
+    newest: { volume: newest, daysAgo: 4 },
+    previous: { volume: previous, daysAgo: 9 },
+    changePct: ((newest - previous) / previous) * 100,
+  });
+
+  it.each([
+    ['absent', { absent: 'fewer than 2 performances with a load' }],
+    ['up a lot', volume(9000, 1000)],
+    ['down a lot', volume(100, 9000)],
+  ] as [string, LoadFacts['volume']][])('volume %s changes no decision field', (_name, v) => {
+    expect(run(makeFacts({ volume: v }))).toEqual(run(makeFacts()));
+  });
+});

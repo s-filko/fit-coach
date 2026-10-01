@@ -139,6 +139,22 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
   "equipmentStep missing — steps cannot be computed"; the block prints "no lighter option" only when the step is known.
   No-reference outcome is `no number`. v12 rule 1 now says a `no lighter option` conservative line means the load is the
   lightest — never present it as a variant (v11 untouched).
+- (D) W-8: item 4 — `qualifyingLoad` (metrics.ts) returns the larger of (a) the W-1 reading (highest recurring load that reached
+  the floor; nothing recurs → highest) and (b) the highest load of the NEWEST performance (newest usable one inside the K = 5
+  window) at which every set AT THAT LOAD reached the floor. "Every working set" is read per load, as W-1 already does, not per
+  performance: a last heavy single set of 3 reps must not discard the whole session (per-performance reading would). A heavier
+  load of an older session never wins unless it recurs. Owner history: leg press 120 after 09-21, 135 after 09-27 (a single set
+  at 135 ×12 — the rule as ordered; recorded so the owner can see it), lateral raise 2.5. Decisions on the new working weight
+  are unchanged (e.g. 09-21 now prints `recommend: 120 kg` — growth rules 5–7 are on hold, see the scope change below).
+- (D) W-9: item 8 — new load metric 10 `volume` (`computeVolume`, `LoadFacts.volume`, pure): Σ reps × load over the working sets
+  (warm-ups out by D7, per-hand/total mixes left out as in metrics 4–5) of the newest vs the previous real performance with a
+  load, no 56-day window (ages are printed). The block prints `volume: +16 % vs last (5520 vs 4760 kg×reps, working sets;
+  4 d and 9 d ago)` after the confidence line; absent / no previous volume → no line. `decide()` and the schemes never read
+  the field (unit tests: identical decision with absent / large up / large down volume).
+- (D) W-10 (orchestrator scope change, owner 2026-10-01): items 5, 6, 7 (e1RM rep cap 10 → 15, rep-history confirmation, one-session
+  jump, v12 wording) are **on hold** — to be redefined from the strength-training literature. The worker had started them and
+  reverted all of it uncommitted: `E1RM_MAX_REPS` stays 10, confirmation logic and training v12 are unchanged. AC-LPF-6 and
+  AC-LPF-7 and AC-LPF-8 are open; items 4 and 8 (AC-LPF-5, AC-LPF-9) are implemented.
 
 ## Review
 

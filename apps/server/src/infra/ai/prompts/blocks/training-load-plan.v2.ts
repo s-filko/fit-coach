@@ -145,6 +145,19 @@ function lowerNote(d: Decision, lower: number): string {
     : '';
 }
 
+/** `volume: +16 % vs last (5520 vs 4760 kg×reps, working sets; 4 d and 9 d ago)` — context, no decision reads it. */
+function volumeLine(entry: LoadPlanEntry): string[] {
+  const { volume } = entry.facts;
+  if (isAbsent(volume) || volume.previous.volume <= 0) {
+    return [];
+  }
+  const pct = Math.round(volume.changePct);
+  const num = (v: number): number => Math.round(v * 10) / 10;
+  return [
+    `volume: ${pct > 0 ? '+' : ''}${pct} % vs last (${num(volume.newest.volume)} vs ${num(volume.previous.volume)} ${volume.unit ?? DEFAULT_UNIT}×reps, working sets; ${volume.newest.daysAgo} d and ${volume.previous.daysAgo} d ago)`,
+  ];
+}
+
 function decisionLines(
   entry: LoadPlanEntry,
   d: Decision | null,
@@ -176,6 +189,7 @@ function decisionLines(
     `recommend: ${rec === null ? `no number — ${d.reason}` : `${rec} — ${d.reason}`}`,
     `conservative: ${cons === null ? `no conservative option — ${d.reason}` : `${cons}${lowerNote(d, lower)}`}`,
     confidenceText(entry, d),
+    ...volumeLine(entry),
   ];
 }
 

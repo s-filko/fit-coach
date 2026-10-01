@@ -10,6 +10,7 @@ import {
   computeGap,
   computeConstraints,
   computeEquipmentStep,
+  computeVolume,
   classifySets,
 } from '../index';
 import {
@@ -19,7 +20,13 @@ import {
   benchPress,
   daysBefore,
   emptyContext,
+  LATERAL_RAISE_ROWS,
+  lateralRaise,
+  LEG_PRESS_ROWS,
+  legPress,
   other,
+  ownerNow,
+  ownerPerfs,
   perf,
   strengthSet,
   today,
@@ -825,5 +832,121 @@ describe('AC-LF-1 · computeLoadFacts (D8 range source, D10 applicability)', () 
       throw new Error('expected a reference');
     }
     expect(f.reference.performance.id).toBe('new');
+  });
+});
+
+describe('AC-LPF-5 · working weight follows the newest session (owner history)', () => {
+  const ww = (
+    rows: Parameters<typeof ownerPerfs>[1],
+    last: string,
+    ex: typeof legPress,
+    range = { min: 10, max: 12 },
+  ) => {
+    const r = computeWorkingWeight(ownerPerfs(ex.id, rows, last), 'today', range, ex, ownerNow(last, 4), TZ);
+    if (isAbsent(r)) {
+      throw new Error(`expected a value, got ${r.absent}`);
+    }
+    return r;
+  };
+
+  it('leg press after 09-21 (110 ×3 → 110,110,120,120) is 120, not the recurring 110', () => {
+    expect(ww(LEG_PRESS_ROWS, '2026-09-21', legPress).weight).toBe(120);
+  });
+
+  it('leg press after 09-27 (110,130,130,135) is at least 130', () => {
+    expect(ww(LEG_PRESS_ROWS, '2026-09-27', legPress).weight).toBeGreaterThanOrEqual(130);
+  });
+
+  it('lateral raise stays 2.5 kg — its 5 kg set is in the oldest session, not the newest', () => {
+    expect(ww(LATERAL_RAISE_ROWS, '2026-09-25', lateralRaise, RANGE).weight).toBe(2.5);
+  });
+
+  it('the newest performance counts only at a load where EVERY set at that load reached the floor', () => {
+    const perfs = [
+      perf('a', 3, [strengthSet(65, 10), strengthSet(70, 12), strengthSet(70, 4)]),
+      perf('b', 9, [strengthSet(65, 10)]),
+      perf('c', 16, [strengthSet(65, 10)]),
+    ];
+    const r = computeWorkingWeight(perfs, 'today', RANGE, benchPress, NOW, TZ);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(65);
+  });
+
+  it('a heavier load that only an OLDER performance reached still does not win unless it recurs', () => {
+    const perfs = [
+      perf('a', 3, [strengthSet(60, 10), strengthSet(60, 10)]),
+      perf('b', 9, [strengthSet(60, 10)]),
+      perf('c', 16, [strengthSet(80, 10)]),
+    ];
+    const r = computeWorkingWeight(perfs, 'today', RANGE, benchPress, NOW, TZ);
+    if (isAbsent(r)) {
+      throw new Error('expected a value');
+    }
+    expect(r.weight).toBe(60);
+  });
+});
+
+describe('AC-LPF-9 · metric 10 — volume load of the newest vs the previous performance', () => {
+  const volume = (last: string) =>
+    computeVolume(ownerPerfs(legPress.id, LEG_PRESS_ROWS, last), 'today', legPress, ownerNow(last, 4), TZ);
+
+  it('sums reps × load of the working sets; leg press 09-21 vs 09-16', () => {
+    const v = volume('2026-09-21');
+    if (isAbsent(v)) {
+      throw new Error('expected a value');
+    }
+    expect(v.newest).toEqual({ volume: 110 * 12 * 2 + 120 * 12 * 2, daysAgo: 4 });
+    expect(v.previous).toEqual({ volume: 80 * 10 + 110 * 12 * 3, daysAgo: 9 });
+    expect(v.changePct).toBeCloseTo(((5520 - 4760) / 4760) * 100, 5);
+    expect(v.unit).toBeNull(); // the fixtures store no weight unit; the block prints kg by default
+  });
+
+  it('leg press 09-27 vs 09-21', () => {
+    const v = volume('2026-09-27');
+    if (isAbsent(v)) {
+      throw new Error('expected a value');
+    }
+    expect(v.newest.volume).toBe(110 * 12 + 130 * 12 * 2 + 135 * 12);
+    expect(v.previous.volume).toBe(5520);
+  });
+
+  it('warm-ups never count', () => {
+    const perfs = [
+      perf('a', 3, [withKind(strengthSet(20, 15), 'warmup'), strengthSet(60, 10)]),
+      perf('b', 9, [strengthSet(60, 10), withKind(strengthSet(20, 15), 'warmup')]),
+    ];
+    const v = computeVolume(perfs, 'today', benchPress, NOW, TZ);
+    if (isAbsent(v)) {
+      throw new Error('expected a value');
+    }
+    expect([v.newest.volume, v.previous.volume, v.changePct]).toEqual([600, 600, 0]);
+  });
+
+  it('absent with the reason when fewer than two performances carry a load', () => {
+    const one = [perf('a', 3, [strengthSet(60, 10)])];
+    expect(computeVolume(one, 'today', benchPress, NOW, TZ)).toEqual({
+      absent: 'fewer than 2 performances with a load',
+    });
+  });
+
+  it('today is not a performance; non-strength is n/a', () => {
+    const perfs = [perf('today', 0, [strengthSet(60, 10)]), perf('a', 3, [strengthSet(60, 10)])];
+    expect(isAbsent(computeVolume(perfs, 's-today', benchPress, NOW, TZ))).toBe(true);
+    const plank = { ...benchPress, exerciseType: 'isometric' as const };
+    expect(computeVolume(perfs, 'today', plank, NOW, TZ)).toEqual({ absent: 'n/a for isometric' });
+  });
+
+  it('is part of computeLoadFacts', () => {
+    const f = computeLoadFacts(
+      legPress,
+      ownerPerfs(legPress.id, LEG_PRESS_ROWS, '2026-09-21'),
+      today({ targetReps: '10-12' }),
+      emptyContext,
+      ownerNow('2026-09-21', 4),
+      TZ,
+    );
+    expect(isAbsent(f.volume)).toBe(false);
   });
 });

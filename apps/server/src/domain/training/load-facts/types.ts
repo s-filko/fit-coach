@@ -178,6 +178,14 @@ export interface E1rmTrendFact {
   mixedBasisExcluded: number;
 }
 
+export interface VolumeFact {
+  unit: 'kg' | 'lbs' | null;
+  newest: { volume: number; daysAgo: number };
+  previous: { volume: number; daysAgo: number };
+  /** (newest − previous) / previous, in percent. */
+  changePct: number;
+}
+
 export type RepsVsRange = 'below floor' | 'in range' | 'at or above top';
 
 export interface LastExposureFact {
@@ -211,6 +219,8 @@ export interface LoadFacts {
   fatigueToday: FatigueFact;
   workingWeight: Metric<WorkingWeightFact>;
   e1rmTrend: Metric<E1rmTrendFact>;
+  /** Context only: no decision reads it (load-plan-fixes item 8). */
+  volume: Metric<VolumeFact>;
   lastExposure: Metric<LastExposureFact>;
   gap: GapFact;
   constraints: ConstraintsFact;

@@ -26,6 +26,7 @@ import type {
   RepsVsRange,
   SetInput,
   TodayInput,
+  VolumeFact,
   WorkingWeightFact,
   WorkoutSummaryInput,
 } from './types';
@@ -48,6 +49,7 @@ const MS_PER_MINUTE = 60_000;
 const DAYS_PER_WEEK = 7;
 const EPLEY_DIVISOR = 30;
 const HALF = 2;
+const PERCENT = 100;
 
 const STEP_BY_EQUIPMENT = { barbell: 2.5, dumbbell: 2, machine: 5, cable: 5 } as const;
 
@@ -326,9 +328,12 @@ export function computeWorkingWeight(
 }
 
 /**
- * The highest load at which every set of a performance reached the floor — among the loads that RECUR in at least
- * `RECURRING_PERFORMANCES` of the performances, so one stray heavier set in a single older session (replay C1: a
- * lone 5 kg set before four 2.5 kg sessions) is not the working weight. Nothing recurs → the highest load, as before.
+ * The working weight: the larger of two readings of the performances (newest first).
+ * (1) The highest load at which every set at that load reached the floor, among the loads that RECUR in at least
+ * `RECURRING_PERFORMANCES` of the performances — so one stray heavier set in a single older session (replay C1: a
+ * lone 5 kg set before four 2.5 kg sessions) is not the working weight; nothing recurs → the highest load, as before.
+ * (2) The same "reached the floor" load of the NEWEST performance alone — the owner moved up and the weight follows
+ * that session (item 4: leg press 110 → 120 after one session at 120). A heavier load of an older session never wins.
  */
 function qualifyingLoad(used: LoadPerformance[], floor: number): LoadedSet | null {
   const reached = used.map(r =>
@@ -341,7 +346,9 @@ function qualifyingLoad(used: LoadPerformance[], floor: number): LoadedSet | nul
     .filter(
       l => reached.filter(perfSets => perfSets.some(o => o.weight === l.weight)).length >= RECURRING_PERFORMANCES,
     );
-  return highest(recurring) ?? highest(reached.flat());
+  const settled = highest(recurring) ?? highest(reached.flat());
+  const newestLoad = highest(reached[0] ?? []);
+  return settled && newestLoad && newestLoad.weight > settled.weight ? newestLoad : settled;
 }
 
 // --- Metric 5 ---
@@ -414,6 +421,39 @@ function weeksAtCurrentWeight(usable: LoadPerformance[], tz: string | null): num
   }
   const days = calendarDaysAgo(usable[end].p.performedAt, usable[0].p.performedAt, tz);
   return Math.floor(days / DAYS_PER_WEEK);
+}
+
+// --- Metric 10 (context only) ---
+
+/**
+ * Volume load (Σ reps × load of the working sets) of the newest performance against the previous one. Printed as
+ * context (load-plan-fixes item 8); no decision reads it. Mixed per-hand/total performances are left out, as in
+ * metrics 4–5; the performances are not limited to the 56-day window — their ages are printed.
+ */
+export function computeVolume(
+  perfs: PerformanceInput[],
+  todaySessionId: string,
+  exercise: ExerciseInput,
+  now: Date,
+  tz: string | null,
+): Metric<VolumeFact> {
+  if (exercise.exerciseType !== 'strength') {
+    return notApplicable(exercise);
+  }
+  const { usable } = loadPerformances(realPerformances(perfs, todaySessionId, now, tz));
+  if (usable.length < HALF) {
+    return absent('fewer than 2 performances with a load');
+  }
+  const [newest, previous] = usable.map(r => ({
+    volume: r.loads.reduce((sum, l) => sum + l.reps * l.weight, 0),
+    daysAgo: r.daysAgo,
+  }));
+  return {
+    unit: usable[0].loads[0].unit,
+    newest,
+    previous,
+    changePct: ((newest.volume - previous.volume) / previous.volume) * PERCENT,
+  };
 }
 
 // --- Metric 6 ---
@@ -582,6 +622,7 @@ export function computeLoadFacts(
     fatigueToday,
     workingWeight: computeWorkingWeight(performances, todayId, range, exercise, now, timezone),
     e1rmTrend: computeE1rmTrend(performances, todayId, exercise, now, timezone),
+    volume: computeVolume(performances, todayId, exercise, now, timezone),
     lastExposure: 'absent' in reference ? reference : lastExposureOf(reference, performances, range, exercise),
     gap: computeGap(exercise, performances, context.workouts, todayId, now, timezone),
     constraints: computeConstraints(exercise, context),
