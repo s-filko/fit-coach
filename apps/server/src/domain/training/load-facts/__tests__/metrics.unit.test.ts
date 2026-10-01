@@ -762,7 +762,7 @@ describe('AC-LF-1 · metric 9 — equipment step', () => {
       unit: 'kg',
       perHand,
       basis: `default for ${equipment}`,
-      capApplies, // O-2: machines and cables show a load that excludes their own weight
+      capApplies, // O-2 narrowed (W-32): only machines are uncapped; cables keep the cap
     });
   });
 
@@ -1409,7 +1409,7 @@ describe('AC-LPF-12 · equipment step from history (orchestrator ruling 2026-10-
     expect(step([[45, 55], [60]])).toMatchObject({ step: 5, basis: 'default for machine' });
   });
 
-  it('rounded to 0.25 kg, never above the default, never below 0.5 kg', () => {
+  it('plate grids first: halves / quarters of the default fit exactly (7.5 & 12.5 → 2.5; 1.25 & 2.5 on a barbell → 1.25)', () => {
     expect(
       step([
         [7.5, 12.5],
@@ -1425,12 +1425,9 @@ describe('AC-LPF-12 · equipment step from history (orchestrator ruling 2026-10-
         { ...benchPress, equipment: 'barbell' },
       ),
     ).toMatchObject({ step: 1.25 });
-    expect(
-      step([
-        [0.3, 0.6],
-        [0.3, 0.6],
-      ]),
-    ).toMatchObject({ step: 0.5 });
+  });
+
+  it('3 & 6 kg on a barbell fit the 1 kg grid exactly (never below 0.5 kg)', () => {
     expect(
       step(
         [
@@ -1439,7 +1436,7 @@ describe('AC-LPF-12 · equipment step from history (orchestrator ruling 2026-10-
         ],
         { ...benchPress, equipment: 'barbell' },
       ),
-    ).toMatchObject({ step: 2.5 });
+    ).toMatchObject({ step: 1 });
   });
 
   it('unknown step stays unknown; non-strength stays n/a; no loads = the default', () => {
@@ -1477,10 +1474,9 @@ describe('AC-LPF-12 · pre-fatigue is measured against the NEWEST performance (o
 });
 
 describe('AC-LPF-12 · equipment step from history — outlier and window guards (run 3, W-30)', () => {
-  it('an off-grid load that occurs in ONE performance only is an outlier: 22.7 / 20.4 kg keep the default step', () => {
-    expect(computeEquipmentStep(benchPress, [[22.7], [20.4], [20]])).toMatchObject({
-      step: 5,
-      basis: 'default for machine',
+  it('run 4 R3: one-off off-grid loads (22.7 once, 20.4 once) do not set a step — and the default would print loads that never existed → unknown', () => {
+    expect(computeEquipmentStep(benchPress, [[22.7], [20.4], [20]])).toEqual({
+      absent: 'recorded loads do not fit one step',
     });
   });
 
@@ -1567,5 +1563,59 @@ describe('AC-LPF-11 · effort rows judge sets at the working weight only (run 3,
       60,
     );
     expect(e.effort.unclearBelowFloor).toBe(true);
+  });
+});
+
+describe('AC-LPF-12 · step from history divides the recorded loads (run 4 R3, W-36)', () => {
+  const dumbbell = { ...benchPress, equipment: 'dumbbell' as const };
+  // lb dumbbells logged in kg: 22.7 ≈ 50 lb, 20.4 ≈ 45 lb.
+  const lb = [[22.7], [22.7], [20.4], [20.4]];
+
+  it('lb dumbbells (22.7 and 20.4 kg, two sessions each) → a 2.27 kg step that really divides them, not 0.5', () => {
+    expect(computeEquipmentStep(dumbbell, lb)).toMatchObject({ step: 2.27, basis: 'from history' });
+  });
+
+  it('every recorded off-grid load must be within 0.1 kg of a multiple of the step', () => {
+    const f = computeEquipmentStep(dumbbell, lb);
+    if (isAbsent(f)) {
+      throw new Error('expected a step');
+    }
+    for (const load of [22.7, 20.4]) {
+      const k = Math.round(load / f.step);
+      expect(Math.abs(load - k * f.step)).toBeLessThanOrEqual(0.1 + 1e-9);
+    }
+  });
+
+  it('no step divides the recorded loads (five unrelated off-grid loads, twice each) → unknown, not a made-up step', () => {
+    const loads = [22.7, 21.3, 20.1, 19.4, 18.2];
+    expect(computeEquipmentStep(dumbbell, [loads, loads])).toEqual({ absent: 'recorded loads do not fit one step' });
+  });
+
+  it('a single off-grid session (22.7 once) is an outlier for the step but still off the default grid → unknown step', () => {
+    expect(computeEquipmentStep(dumbbell, [[22.7]])).toEqual({ absent: 'recorded loads do not fit one step' });
+  });
+
+  it('the lateral raise (2.5 and 5 kg) keeps 2.5; loads on the default grid keep the default', () => {
+    expect(computeEquipmentStep(benchPress, [[2.5, 5], [2.5], [2.5]])).toMatchObject({ step: 2.5 });
+    expect(computeEquipmentStep(dumbbell, [[20, 22], [24]])).toMatchObject({ step: 2, basis: 'default for dumbbell' });
+  });
+});
+
+describe('AC-LPF-11 · reps in reserve count at most 3 toward capacity (run 4 R3, W-36)', () => {
+  it('capacityOf caps the reserve: RPE 5 adds 3, not 5', () => {
+    expect([capacityOf(3, 5), capacityOf(8, 8), capacityOf(6, 7), capacityOf(6, 4)]).toEqual([6, 10, 9, 9]);
+  });
+
+  it('the reviewer probe: 60×10 ×2 sessions then 60×10,10 + 100×3 @ RPE 5 (8–12) does not make 100 the working weight', () => {
+    const perfs = [
+      perf('new', 3, [strengthSet(60, 10), strengthSet(60, 10), strengthSet(100, 3, { rpe: 5 })]),
+      perf('a', 8, [strengthSet(60, 10), strengthSet(60, 10), strengthSet(60, 10)]),
+      perf('b', 13, [strengthSet(60, 10), strengthSet(60, 10), strengthSet(60, 10)]),
+    ];
+    const ww = computeWorkingWeight(perfs, 'today', { min: 8, max: 12 }, benchPress, NOW, TZ);
+    if (isAbsent(ww)) {
+      throw new Error('expected a value');
+    }
+    expect(ww.weight).toBe(60);
   });
 });

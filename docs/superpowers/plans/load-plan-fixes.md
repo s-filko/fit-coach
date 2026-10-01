@@ -428,6 +428,19 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
   `log_set` whose result carries the effort hint, keep the system message (the v12 text) and the tool list byte-identical and the history
   prefix unchanged; LOAD PLAN sits only in the `<context>` of the current user message, never in the system message or the history; the
   two `cache_control` breakpoints (system, last history message) never carry it. It passed on the first run (a guard, no red).
+- (D) W-36 (review run 4 R3): (1) step from history truly divides the recorded loads. Plate grids first (the default's halves / quarters,
+  2.5, 1.25, 1, 0.5 — exact fits of every off-grid load, so a lone 2.5 kg stays a 2.5 step and G-35 / G-36 are unchanged); else the
+  largest step s (0.01 kg resolution, 0.5 … 2× the default) with every off-grid load that recurs in ≥ 2 performances within 0.1 kg of a
+  multiple of s — lb dumbbells in kg (22.7 ×2 sessions + 20.4 ×2 sessions) → 2.27 kg, growth 22.7 → 25.0 (0.1 kg grid), hold row
+  conservative 20.4, never the 23.2 the 0.5 step printed. No fit, or only one-off off-grid loads (a single 22.7 session) → the step is
+  UNKNOWN (`equipmentStep` absent "recorded loads do not fit one step"; the default would print 20.7 / 24.7): no growth,
+  `equipmentStep` missing, and the conservative is the nearest RECORDED load below (new fact `recordedLoads`, last 8 weeks), else the
+  load itself (`lighterLoad`). Scenario effect: the seeded 82 kg barbell (twice) fits the 1 kg plate grid → `step: 1 kg (from history)`,
+  one step down 81 / conservative 80 (load-facts and load-recommendation-log scenarios updated). Block: the "N kg lower" note rounds to 0.01. (2) Reps in reserve count at
+  most 3 toward capacity (`min(10 − RPE, 3)`), matching "3+ → 7": 60×10 ×2 sessions then 60×10,10 + 100×3 @ RPE 5 (8–12) stays 60.
+  (3) The capped smallest step with reps reset is offered by 2-for-2 only; one-session growth under a blocking cap holds, and the next
+  step names the smallest step as the way up (10 kg cable at 15 reps once → hold, "→ +1 step (15 kg)"). (4) Comments W-35 → W-32,
+  the stale `metrics.unit.test.ts` comment. Golden 60/60 unchanged — no row moved.
 
 ## Review
 

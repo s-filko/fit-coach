@@ -54,6 +54,8 @@ const DAYS_PER_WEEK = 7;
 const EPLEY_DIVISOR = 30;
 const HALF = 2;
 const MAX_RPE = 10;
+/** Reps in reserve counted toward capacity stop at 3 — the plain answer "3+" maps to RPE 7 (EFFORT_RPE_BY_ANSWER). */
+const MAX_RESERVE = 3;
 /** RPE at or below this is "three or more reps left" (RPE ≤ 7): a stop below the floor is an early stop. */
 const EARLY_STOP_MAX_RPE = 7;
 const PERCENT = 100;
@@ -102,7 +104,7 @@ function loadOf(set: Pick<SetInput, 'setData'> & { rpe?: number | null }): Loade
  * No RPE → the reps themselves (nothing is inferred); RPE above 10 counts as 10.
  */
 export function capacityOf(reps: number, rpe: number | null): number {
-  return rpe === null ? reps : reps + Math.max(0, MAX_RPE - rpe);
+  return rpe === null ? reps : reps + Math.min(MAX_RESERVE, Math.max(0, MAX_RPE - rpe));
 }
 
 /** Capacity of a rep-counted set, else null. */
@@ -797,12 +799,7 @@ export function computeConstraints(exercise: ExerciseInput, context: LoadFactsCo
   };
 }
 
-const GRID_KG = 0.25;
 const MIN_STEP_KG = 0.5;
-
-function gcd(a: number, b: number): number {
-  return b === 0 ? a : gcd(b, a % b);
-}
 
 /**
  * The step the recorded working loads actually use (orchestrator ruling 2026-10-01): when a load is not a multiple of
@@ -811,22 +808,58 @@ function gcd(a: number, b: number): number {
  * counts only when it occurs in at least two performances (a lone 22.7 / 20.4 kg set is an outlier, not a step).
  * Null = the default stands.
  */
-function stepFromHistory(defaultStep: number, loadsByPerformance: number[][]): number | null {
-  const onDefault = (l: number): boolean => Math.abs(l / defaultStep - Math.round(l / defaultStep)) < 1e-9;
+const LOAD_TOLERANCE_KG = 0.1;
+const STEP_RESOLUTION = 100;
+/** The search may go above the default: lb dumbbells logged in kg run ≈ 2.27 kg apart against a 2 kg default. */
+const STEP_SEARCH_FACTOR = 2;
+
+/** The load sits within the tolerance of a (positive) multiple of `step`. */
+function fitsStep(load: number, step: number): boolean {
+  const k = Math.max(1, Math.round(load / step));
+  return Math.abs(load - k * step) <= LOAD_TOLERANCE_KG + 1e-9;
+}
+
+type StepFromHistory = { kind: 'default' } | { kind: 'step'; step: number } | { kind: 'unknown' };
+
+/**
+ * The step the recorded working loads actually use (orchestrator rulings 2026-10-01 + run 4 R3). Loads on the default
+ * grid → the default. Otherwise a plate grid that fits every off-grid load exactly (halves / quarters of the default,
+ * 2.5, 1.25, 1, 0.5), else the largest step `s` (0.01 kg resolution, 0.5 … 2× the default) such that EVERY off-grid
+ * load recurring in ≥ 2 performances of the last 8 weeks is within 0.1 kg of a multiple of `s` — lb dumbbells logged in
+ * kg (22.7 / 20.4) give ≈ 2.27. No such step (or only one-off off-grid loads) → unknown: the default would print loads
+ * that never existed (22.7 ± 2 = 20.7 / 24.7).
+ */
+function stepFromHistory(defaultStep: number, loadsByPerformance: number[][]): StepFromHistory {
   const presence = new Map<number, number>();
   for (const perfLoads of loadsByPerformance) {
     for (const l of new Set(perfLoads)) {
       presence.set(l, (presence.get(l) ?? 0) + 1);
     }
   }
-  const offGrid = [...presence.entries()].filter(([l, n]) => !onDefault(l) && n >= RECURRING_PERFORMANCES);
-  const grid = [...presence.keys()]
-    .filter(l => onDefault(l) || offGrid.some(([o]) => o === l))
-    .map(l => Math.round(l / GRID_KG));
-  if (offGrid.length === 0 || grid.some(g => g <= 0)) {
-    return null;
+  const offGrid = [...presence.entries()].filter(([l]) => !fitsStep(l, defaultStep));
+  if (offGrid.length === 0) {
+    return { kind: 'default' };
   }
-  return Math.min(defaultStep, Math.max(MIN_STEP_KG, grid.reduce(gcd) * GRID_KG));
+  const confirmed = offGrid.filter(([, n]) => n >= RECURRING_PERFORMANCES).map(([l]) => l);
+  // Plate / dumbbell grids first (the default's halves and quarters, 2.5, 1.25, 1, 0.5) — exact fits; a free search
+  // would otherwise "improve" a lone 2.5 kg load to a 2.6 kg step.
+  const nice = [defaultStep, defaultStep / 2, defaultStep / 4, 2.5, 1.25, 1, MIN_STEP_KG]
+    .filter(s => s >= MIN_STEP_KG && s <= defaultStep)
+    .sort((a, b) => b - a);
+  const exact = nice.find(s => offGrid.every(([l]) => Math.abs(l - Math.round(l / s) * s) < 0.01));
+  if (exact !== undefined) {
+    return { kind: 'step', step: exact };
+  }
+  if (confirmed.length > 0) {
+    const top = Math.round(defaultStep * STEP_SEARCH_FACTOR * STEP_RESOLUTION);
+    for (let h = top; h >= Math.round(MIN_STEP_KG * STEP_RESOLUTION); h--) {
+      const step = h / STEP_RESOLUTION;
+      if (confirmed.every(l => fitsStep(l, step))) {
+        return { kind: 'step', step };
+      }
+    }
+  }
+  return { kind: 'unknown' };
 }
 
 export function computeEquipmentStep(exercise: ExerciseInput, loadsByPerformance: number[][] = []): EquipmentStepFact {
@@ -837,16 +870,25 @@ export function computeEquipmentStep(exercise: ExerciseInput, loadsByPerformance
     return absent(`n/a for ${exercise.equipment}`);
   }
   const fallback = STEP_BY_EQUIPMENT[exercise.equipment];
-  const fromHistory = stepFromHistory(fallback, loadsByPerformance);
+  const history = stepFromHistory(fallback, loadsByPerformance);
+  if (history.kind === 'unknown') {
+    return absent('recorded loads do not fit one step');
+  }
   return {
-    step: fromHistory ?? fallback,
+    step: history.kind === 'step' ? history.step : fallback,
     unit: 'kg',
     perHand: exercise.equipment === 'dumbbell',
-    basis: fromHistory === null ? `default for ${exercise.equipment}` : 'from history',
-    // Owner ruling O-2, narrowed (run 3): only a machine's displayed load excludes its own (unknown) weight; a cable
+    basis: history.kind === 'step' ? 'from history' : `default for ${exercise.equipment}`,
+    // Owner ruling O-2, narrowed (W-32): only a machine's displayed load excludes its own (unknown) weight; a cable
     // stack shows the real load, so the cap stays.
     capApplies: exercise.equipment !== 'machine',
   };
+}
+
+/** Distinct working loads of the last 8 weeks, ascending. */
+function recordedLoadsOf(perfs: PerformanceInput[], todaySessionId: string, now: Date, tz: string | null): number[] {
+  const recent = realPerformances(perfs, todaySessionId, now, tz).filter(r => r.daysAgo <= WINDOW_DAYS);
+  return [...new Set(recent.flatMap(r => loadedSets(r).map(l => l.weight)))].sort((a, b) => a - b);
 }
 
 /** The step of the exercise given its real performances of the last 8 weeks (the evidence of "from history"). */
@@ -917,6 +959,7 @@ export function computeLoadFacts(
     gap: computeGap(exercise, performances, context.workouts, todayId, now, timezone),
     constraints: computeConstraints(exercise, context),
     equipmentStep: equipmentStepOf(exercise, performances, todayId, now, timezone),
+    recordedLoads: recordedLoadsOf(performances, todayId, now, timezone),
   };
 }
 

@@ -292,3 +292,46 @@ describe('AC-LPF-11 · the owner early-stop cases at 60 kg, range 8–10', () =>
     expect(line(text, 'next step')).toContain('+1 step (65 kg)');
   });
 });
+
+describe('AC-LPF-12 · step from history through the block — lb dumbbells logged in kg (run 4 R3, W-36)', () => {
+  const DB = {
+    id: '99999999-9999-4999-8999-999999999999',
+    name: 'Dumbbell Press',
+    equipment: 'dumbbell' as const,
+    muscles: [['chest', 'primary']] as RowExercise['muscles'],
+  };
+  const sess = (id: string, days: number, weight: number, reps: number[]) =>
+    sessionRow(id, daysBefore(days, -60), [{ rowId: `r-${id}`, ...DB, sets: sets(weight, reps, daysBefore(days)) }]);
+
+  it('22.7 ×14 ×2 sessions + 20.4 ×12 ×2 sessions (8–12): a 2.27 kg step; growth 25 / conservative 20.4 — no 23.2', async () => {
+    const past = [
+      sess('a', 3, 22.7, [14, 14, 14]),
+      sess('b', 7, 22.7, [14, 14, 14]),
+      sess('c', 11, 20.4, [12, 12, 12]),
+      sess('d', 15, 20.4, [12, 12, 12]),
+    ];
+    const text = await entryText(DB as never, past, daysBefore(0), '8-12');
+    expect(line(text, 'step')).toBe('step: 2.27 kg per hand (from history)');
+    expect(line(text, 'recommend')).toMatch(/^recommend: 25 kg per hand × 8–12 — /);
+    expect(line(text, 'conservative')).toMatch(/^conservative: 22\.7 kg per hand/);
+    expect(text).not.toContain('23.2');
+  });
+
+  it('a hold row steps down to 20.4 (22.7 − 2.27 → 0.1 kg grid), not 20.7', async () => {
+    const past = [
+      sess('a', 3, 22.7, [10, 10, 10]),
+      sess('b', 7, 22.7, [10, 10, 10]),
+      sess('c', 11, 20.4, [12, 12, 12]),
+      sess('d', 15, 20.4, [12, 12, 12]),
+    ];
+    const text = await entryText(DB as never, past, daysBefore(0), '8-12');
+    expect(line(text, 'recommend')).toMatch(/^recommend: 22\.7 kg per hand/);
+    expect(line(text, 'conservative')).toMatch(/^conservative: 20\.4 kg per hand × 8–12 — 2\.3 kg lower$/);
+  });
+
+  it('a single 22.7 session: the step is unknown — never a printed 20.7 / 24.7', async () => {
+    const text = await entryText(DB as never, [sess('a', 3, 22.7, [10, 10, 9])], daysBefore(0), '8-12');
+    expect(text).not.toMatch(/20\.7|24\.7/);
+    expect(line(text, 'recommend')).toMatch(/^recommend: 22\.7 kg/);
+  });
+});

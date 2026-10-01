@@ -640,15 +640,15 @@ describe('AC-LPF-7 · one-session growth (APRE-style surplus on the last set)', 
     expect(d.candidate.load).toBeLessThanOrEqual(50);
   });
 
-  it('the step over the 10 % cap: one-session growth offers the smallest step with reps reset (run 3)', () => {
+  it('the step over the 10 % cap: one-session growth never offers the capped smallest step — it needs 2-for-2 (run 4 R3)', () => {
     const d = run(
       base({
         workingWeight: { weight: 2.5, unit: 'kg', performances: 5, warmupsEstimated: false, mixedBasisExcluded: 0 },
         repHistory: repHistoryOf(2.5, [{ reps: [15, 15, 15] }]),
       }),
     );
-    expect(d.row).toBe('early_growth');
-    expect(d.candidate).toEqual({ load: 7.5, unit: 'kg', reps: { min: 8, max: 8 } });
+    expect(d.row).toBe('scheme_hold');
+    expect(d.candidate.load).toBe(2.5);
   });
 
   it('a fixed-rep scheme never takes the one-session jump', () => {
@@ -1016,10 +1016,10 @@ describe('AC-LPF-12 · golden-table rulings in the domain', () => {
       expect(d.reason).toContain('reps reset to the floor 8');
     });
 
-    it('one-session growth met under the cap → the same smallest-step offer', () => {
+    it('one-session growth met under the cap → hold (the capped step needs two sessions of evidence)', () => {
       const d = run(curl({ repHistory: repHistoryOf(20, [{ reps: [15, 15, 15] }]) }));
-      expect(d).toMatchObject({ row: 'early_growth' });
-      expect(d.candidate).toEqual({ load: 22.5, unit: 'kg', reps: { min: 8, max: 8 } });
+      expect(d.row).toBe('scheme_hold');
+      expect(d.candidate.load).toBe(20);
     });
 
     it('condition not met yet → hold, and the next step names the smallest step as the way up', () => {
@@ -1074,5 +1074,57 @@ describe('AC-LPF-6 · linear progression confirms from the rep history (monotone
         ]),
       ).candidate.load,
     ).toBe(70);
+  });
+});
+
+describe('AC-LPF-12 · run 4 R3 probes through the decision (W-36)', () => {
+  it('capped smallest step only via 2-for-2: a single 15-rep session at 10 kg on a cable holds, with the condition as next step', () => {
+    const f = makeFacts({
+      workingWeight: { weight: 10, unit: 'kg', performances: 4, warmupsEstimated: false, mixedBasisExcluded: 0 },
+      equipmentStep: { step: 5, unit: 'kg', perHand: false, basis: 'default for cable', capApplies: true },
+      repRange: { min: 8, max: 12, source: 'today' },
+      e1rmTrend: { absent: 'x' },
+      gap: gapOf(4),
+      repHistory: repHistoryOf(10, [{ reps: [15, 15, 15] }, { reps: [10, 10, 10] }]),
+    });
+    const d = run(f);
+    expect(d.row).toBe('scheme_hold');
+    expect(d.candidate.load).toBe(10);
+    expect(d.next).toEqual({ kind: 'growth', sessions: 1, reps: 14, load: 15 });
+  });
+
+  it('the capped smallest step still comes with two sessions of evidence (2-for-2)', () => {
+    const f = makeFacts({
+      workingWeight: { weight: 10, unit: 'kg', performances: 4, warmupsEstimated: false, mixedBasisExcluded: 0 },
+      equipmentStep: { step: 5, unit: 'kg', perHand: false, basis: 'default for cable', capApplies: true },
+      repRange: { min: 8, max: 12, source: 'today' },
+      e1rmTrend: { absent: 'x' },
+      gap: gapOf(4),
+      repHistory: repHistoryOf(10, [{ reps: [15, 15, 15] }, { reps: [15, 15, 15] }]),
+    });
+    expect(run(f)).toMatchObject({ row: 'scheme_growth' });
+  });
+
+  it('unknown step with recorded loads: the conservative is the nearest recorded load below, never a made-up step', () => {
+    const f = makeFacts({
+      workingWeight: { weight: 22.7, unit: 'kg', performances: 4, warmupsEstimated: false, mixedBasisExcluded: 0 },
+      equipmentStep: { absent: 'recorded loads do not fit one step' },
+      recordedLoads: [20.4, 22.7],
+      repHistory: repHistoryOf(22.7, [{ reps: [10, 10] }]),
+    });
+    const d = run(f);
+    expect(d.candidate.load).toBe(22.7);
+    expect(d.conservative.load).toBe(20.4);
+  });
+
+  it('unknown step and nothing recorded below: the conservative is the load itself, the step is named missing', () => {
+    const f = makeFacts({
+      workingWeight: { weight: 22.7, unit: 'kg', performances: 4, warmupsEstimated: false, mixedBasisExcluded: 0 },
+      equipmentStep: { absent: 'recorded loads do not fit one step' },
+      recordedLoads: [22.7],
+    });
+    const d = run(f);
+    expect(d.conservative.load).toBe(22.7);
+    expect(d.missing).toContain('equipmentStep');
   });
 });

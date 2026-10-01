@@ -144,7 +144,7 @@ function breakLine(entry: LoadPlanEntry, d: Decision): string[] {
 /** " — 2.5 kg lower", or " — no lighter option" when the floored step-down left the conservative load unchanged. */
 function lowerNote(d: Decision, lower: number): string {
   if (lower > 0) {
-    return ` — ${lower} ${d.conservative.unit ?? DEFAULT_UNIT} lower`;
+    return ` — ${Math.round(lower * 100) / 100} ${d.conservative.unit ?? DEFAULT_UNIT} lower`;
   }
   // Without a known step the equal load is "steps cannot be computed" (named in the reason), not a floor.
   const stepKnown = !d.missing.includes('equipmentStep');

@@ -27,11 +27,11 @@ import {
   EQUIPMENT_STEP,
   lastSetCapacity,
   lastSetText,
+  lighterLoad,
   NO_RECORD_REASON,
   noRecord,
   roundLoad,
   smallStepNote,
-  stepDown,
   stepOf,
   stepUp,
   targetReps,
@@ -157,7 +157,7 @@ function floored(c: Ctx, from: number, to: number, steps: number): boolean {
 function loadBelow(c: Ctx, from: number, steps: number): number {
   let load = from;
   for (let i = 0; i < steps; i++) {
-    load = stepDown(load, c.step);
+    load = lighterLoad(c.facts, load, c.step);
   }
   return roundLoad(load);
 }
@@ -408,7 +408,7 @@ function insufficientData(
   let candidate = ref.weight;
   if (afterBreak) {
     for (let i = 0; i < stepsBelow; i++) {
-      candidate = stepDown(candidate, step);
+      candidate = lighterLoad(facts, candidate, step);
     }
   }
   const rec = (load: number): Recommendation => ({ load, unit: ref.unit, reps });
@@ -433,7 +433,7 @@ function insufficientData(
     ...base,
     outcome,
     candidate: rec(candidate),
-    conservative: rec(stepDown(candidate, step)),
+    conservative: rec(lighterLoad(facts, candidate, step)),
     reason: [`${why}; ${source}${tier}`, ...stepNote].join('; '),
     confidence: 'low',
     missing: step === null ? [WORKING_WEIGHT, EQUIPMENT_STEP] : [WORKING_WEIGHT],
@@ -476,7 +476,11 @@ function earlyGrowth(c: Ctx, params: SchemeParams, out: SchemeOutput): SchemeOut
   if (growth.kind === 'no-step') {
     return null;
   }
-  const capped = growth.kind === 'capped';
+  // The capped smallest step needs two sessions of evidence (2-for-2); one session never offers it.
+  if (growth.kind === 'capped') {
+    return null;
+  }
+  const capped = false;
   const unit = c.unit ?? 'kg';
   return {
     candidate: { load: growth.load, unit: c.unit, reps: capped ? { min: reps.min, max: reps.min } : reps },

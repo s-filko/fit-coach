@@ -47,6 +47,24 @@ export function confidenceOf(facts: LoadFacts, missing: string[]): Confidence {
   return n >= HIGH_CONFIDENCE_PERFORMANCES && !machine ? 'high' : 'medium';
 }
 
+/** A step off the 0.25 kg grid (a from-history 2.27 kg) lands on 0.1 kg — the resolution the step was fitted at. */
+export function roundToStep(value: number, step: number | null): number {
+  const onGrid = step === null || Math.abs(step * 4 - Math.round(step * 4)) < 1e-9;
+  return onGrid ? roundLoad(value) : Math.round(value * 10) / 10;
+}
+
+/**
+ * One step lighter: the step when it is known (floored, `stepDown`); with an UNKNOWN step the nearest load the client
+ * actually recorded below `load` (never a made-up step), else the load itself.
+ */
+export function lighterLoad(facts: LoadFacts, load: number, step: number | null): number {
+  if (step !== null) {
+    return stepDown(load, step);
+  }
+  const below = facts.recordedLoads.filter(l => l < load - 1e-9);
+  return below.length > 0 ? below[below.length - 1] : load;
+}
+
 /** Round to the load grid so repeated float steps never drift (2.5-kg plates). */
 export function roundLoad(value: number): number {
   const PRECISION = 1000;
@@ -66,9 +84,9 @@ export function stepUp(base: number, step: number | null, capPct: number, capApp
     return { kind: 'no-step' };
   }
   if (capApplies && step > base * capPct + Number.EPSILON) {
-    return { kind: 'capped', load: roundLoad(base + step) };
+    return { kind: 'capped', load: roundToStep(base + step, step) };
   }
-  return { kind: 'grow', load: roundLoad(base + step) };
+  return { kind: 'grow', load: roundToStep(base + step, step) };
 }
 
 /**
@@ -76,13 +94,13 @@ export function stepUp(base: number, step: number | null, capPct: number, capApp
  * so the load itself is returned — a candidate or conservative is never ≤ 0. No known step = no step.
  */
 export function stepDown(load: number, step: number | null): number {
-  const lighter = roundLoad(load - (step ?? 0));
+  const lighter = roundToStep(load - (step ?? 0), step);
   return lighter > 0 ? lighter : load;
 }
 
 /**
  * Whether the "step ≤ ~10 % of the load" cap applies (ruling O-2: not to machines, own weight unknown;
- * cables keep it, W-35).
+ * cables keep it, W-32).
  */
 export function capAppliesOf(facts: LoadFacts): boolean {
   return isAbsent(facts.equipmentStep) ? true : facts.equipmentStep.capApplies;
@@ -197,7 +215,7 @@ export function decideProgression(facts: LoadFacts, params: SchemeParams, rule: 
   }
   const hold = (why: string, next: NextStep = { kind: 'hold', why }): SchemeOutput => ({
     candidate: make(base),
-    conservative: make(stepDown(base, step)),
+    conservative: make(lighterLoad(facts, base, step)),
     reason: [why, ...notes].join('; '),
     confidence: confidenceOf(facts, missing),
     missing,

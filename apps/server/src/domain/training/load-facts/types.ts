@@ -253,7 +253,7 @@ export type EquipmentStepFact = Metric<{
   basis: string;
   /**
    * Whether the "one step ≤ ~10 % of the load" cap applies (owner ruling O-2): false for machines (cables keep it,
-   * W-35), whose displayed load excludes the machine's own weight, so a step is relatively small whatever the
+   * W-32), whose displayed load excludes the machine's own weight, so a step is relatively small whatever the
    * displayed figure.
    */
   capApplies: boolean;
@@ -273,6 +273,8 @@ export interface LoadFacts {
   e1rmTrend: Metric<E1rmTrendFact>;
   /** Sets at the working weight per performance — the evidence of the growth rule (load-plan-fixes item 5). */
   repHistory: Metric<RepHistoryFact>;
+  /** Distinct working loads of the last 8 weeks, ascending — anchors for an unknown step. */
+  recordedLoads: number[];
   /** Context only: no decision reads it (load-plan-fixes item 8). */
   volume: Metric<VolumeFact>;
   lastExposure: Metric<LastExposureFact>;
