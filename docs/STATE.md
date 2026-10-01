@@ -30,7 +30,6 @@ _Generated 2026-10-01 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `llm-io-audit-trail-closeout.md` — LLM I/O Audit Trail — Close-out Remediation Implementation Plan
 - `llm-io-audit-trail.md` — LLM I/O Audit Trail — Nothing the User Wrote, the Model Answered, or the API Received Is Lost Implementation Plan
 - `load-facts.md` — Load Facts — Per-Exercise Load Metrics as a Facts-Only `LOAD PLAN` Block and `get_load_plan` (Roadmap U9a) Implementation Plan
-- `load-plan-fixes.md` — Load Plan Fixes — zero-kg ladder, isometric holds, no-record with a reference (U9b follow-up) Implementation Plan
 - `load-plan.md` — Load Plan — Decision Order, Progression Schemes, Recommendation Log, Breaks (Roadmap U9b) Implementation Plan
 - `mandatory-plan-review.md` — Mandatory Plan Review Implementation Plan
 - `migration-discipline.md` — Migration Discipline (HB-01) Implementation Plan
@@ -71,7 +70,7 @@ _Generated 2026-10-01 from docs/superpowers/plans/ + git. Never hand-edit; regen
 - `voice-transcription.md` — Voice Transcription — Telegram Voice Messages Answered as Text Implementation Plan
 
 **Close-out debt (merged but plan not done)**
-— none —
+- `load-plan-fixes.md` — merged into `dev`
 <!-- AUTO:status END -->
 
 ## Scope now

@@ -3,10 +3,9 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans and
 > test-driven-development. Red tests first (from the replay data below), then the code.
 
-- Status: done
+- Status: in progress
 - Branch: plan/load-plan-fixes
 - After: load-plan
-- Review: 2026-10-01 | clean | R1,R2,R3,R4
 
 **Goal:** fix the three defects the live GLM replay of two real owner workouts exposed in U9b, before the owner's
 next workout on dev (all three `LOAD_PLAN_*` flags are on there). Owner order 2026-10-01: «да в новой сессии» —
@@ -41,6 +40,32 @@ subscription, all three flags on). Report and raw artefacts (gitignored, local o
    reason saying why (few performances / old reference / break tier). With no reference at all, the block says so
    and v11 (or a new training version) says: when the block has no conservative option, do not invent one.
 
+## Scope extension — cautiously optimistic progression (owner-approved 2026-10-01, after the GLM replay)
+
+The local GLM replay of the merged items 1–3 (AC-LPF-4 run, `6eb7ce01`) showed the W-1 recurring-load rule pulling the
+45° Leg Press working weight back to 110 kg (history 110 ×3 → 110,110,120,120 → 110,130,130,135; 120 occurred in one
+session only), and the block never proposes growth for the owner's 12–15-rep sets (report U7: `e1rmTrend missing —
+cannot count confirming sessions`). Owner, 2026-10-01: «важно строить осторожно оптимистические рекомендации на объемах и
+силе. т.е. если прошлый раз я жал 3 подхода по 15 на 50, тренер может сказать, если отдохнул за 4 дня то можно
+попробовать взять 55 и сделать 8-10 повторов». Items:
+
+4. **Working weight follows the newest session.** Working weight = max(highest recurring load (W-1), the newest
+   performance's highest load at which every working set reached the rep floor). Lateral raise stays 2.5 kg (its 5 kg set
+   is in the oldest session); leg press → 120 after 09-21, ≥ 130 after 09-27.
+5. **Reps count (strength).** e1RM (Epley) uses working sets up to 15 reps (was ≤ 10), so a heavier-reps session counts as
+   strength; growth is confirmed by the e1RM trend OR by rep history (U7 closed): two sessions in a row with every working
+   set at/above the range top at the working weight → recommend +1 step.
+6. **One-session growth when clearly above the range (owner's example).** The newest performance at the working weight
+   has every working set ABOVE the range top (e.g. 3×15 vs 8–10) and the muscles are recovered (gap tier `rest`, no
+   `short` constraint, no pre-fatigue today) → recommend one step up with the range reps when Epley from that performance
+   predicts ≥ range min reps at the new load (50×15 → 55 × 8–10); conservative = the current working weight; confidence
+   medium at most; the reason names the evidence ("3×15 at 50 kg 4 d ago, recovered").
+7. **The coach states the path to growth.** When one of two confirming sessions is in, the block says so ("one more
+   session at the top of the range → +1 step"), and training v12 tells the coach to say it — cautiously optimistic: offer
+   the step when the block offers it, with the current load as the fallback, never pressure.
+8. **Volume as context, not a decision input.** The block prints volume load (Σ reps × kg of working sets) of the newest
+   performance vs the previous one ("volume +15 % vs last"); no decision reads it.
+
 ## Out of scope (route, do not fix here)
 
 - Report C3 / U1 (`advised` written from the model's after-the-fact recollection) — BACKLOG (calibration data only).
@@ -57,6 +82,11 @@ subscription, all three flags on). Report and raw artefacts (gitignored, local o
 | AC-LPF-1 | The lateral-raise shape (recent 2.5 kg sessions, 5 kg step, rebuild ladder) yields a positive working weight from the recent sessions and no 0 kg candidate or conservative; no step-down anywhere goes below the floor | domain unit tests on fixtures from `data/replay-2026-10-01/upper-*.json` |
 | AC-LPF-2 | A plank / side plank reported in seconds is stored as an `isometric` set with its duration; cardio unchanged | `log-set.tool` unit tests + a scenario |
 | AC-LPF-3 | An exercise with a reference but insufficient data prints a numeric `recommend:` (the reference load) and a lower `conservative:`; with no reference the block says there is no number and the prompt forbids inventing a conservative option | block v2 (or v3) unit tests + scenario |
+| AC-LPF-5 | Leg-press history (110 ×3 → 110,110,120,120) gives working weight 120, not 110; lateral raise stays 2.5 kg | metrics unit tests on the owner-history fixture |
+| AC-LPF-6 | e1RM counts sets ≤ 15 reps; two sessions with every set at/above the top at the working weight → recommend +1 step (leg press no longer "cannot count confirming sessions") | metrics + decide unit tests |
+| AC-LPF-7 | 3×15 @ 50 kg (range 8–10), recovered → recommend 55 × 8–10, conservative 50; not recovered (short constraint / pre-fatigue / gap ≥ return) → no jump | decide unit tests |
+| AC-LPF-8 | One confirming session in → block line names the remaining condition; v12 tells the coach to say it and to offer a block-proposed step with the current load as fallback | block v2 + v12 unit tests |
+| AC-LPF-9 | Block prints volume of the newest vs previous performance; no decision changes when only volume changes | block + decide unit tests |
 | AC-LPF-4 | Re-run of the two-workout replay on GLM (local Z.AI only) shows no 0 kg, planks stored as isometric, numbers on the former no-record rows | replay runner in `data/replay-2026-10-01/src/`, report diff |
 
 Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `DB_PORT=5999 npm run test:unit`
