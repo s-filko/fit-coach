@@ -79,7 +79,7 @@ apps/server/src/
       load-plan/               # Pure decision layer (load-plan plan): typed decisions + scheme/decision reason text (design §4.1); prompt labels and framing live in the v2 block
         schemes/               #   progression-scheme registry (double / linear), params with their citations, the scheme contract
         decide.ts              #   decision order — Stage A safety rows (short constraint, gap ladder — the more conservative wins, pre-fatigue, early stop / unclear effort / below floor, uneven performance, insufficient data) → Stage B → Stage C scheme (2-for-2) with the one-session growth and estimate-hold overrides; every decision carries a `NextStep`
-        effort-hint.ts         #   which logged set is decision-critical and lacks effort (data only; the wording lives in `log-set.tool.ts`)
+        effort-hint.ts         #   which logged set is decision-critical and lacks effort (data only; the question and the answer→RPE mapping live in `infra/ai/prompts/effort.ts`, the hint text in `log-set.tool.ts`)
         gap-tier.ts            #   gap tiers and the return ladder (R4.0 thresholds), `gapTierFacts`, `ladderStateOf`
         break-fact.ts          #   the `break` fact text (reason class, dates) — parse / format, `breakReasonOf` (window strictly between workouts)
         progression-fact.ts    #   the `progression_scheme` fact text — parse / format, `chosenSchemeOf`
