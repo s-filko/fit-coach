@@ -1,16 +1,34 @@
 import { isAbsent, type LoadFacts } from '../load-facts';
 
 import type { BreakReason } from './break-fact';
-import { gapTierFacts, type GapTierInfo, type LadderState, type LadderStep, returnLadderStep } from './gap-tier';
-import type { Confidence, ProgressionScheme, Recommendation, SchemeGoal, SchemeOutput, SchemeParams } from './schemes';
+import {
+  gapTierFacts,
+  type GapTierInfo,
+  LADDER,
+  type LadderState,
+  type LadderStep,
+  returnLadderStep,
+} from './gap-tier';
+import type {
+  Confidence,
+  NextStep,
+  ProgressionScheme,
+  Recommendation,
+  SchemeGoal,
+  SchemeOutput,
+  SchemeParams,
+} from './schemes';
+import { ONE_SESSION_MAX_RPE, ONE_SESSION_SURPLUS, UNEVEN_ABOVE_USUAL, UNEVEN_WITHOUT_NORM } from './schemes/params';
 import {
   confidenceOf,
   EQUIPMENT_STEP,
+  lastSetReps,
   NO_RECORD_REASON,
   noRecord,
   roundLoad,
   stepDown,
   stepOf,
+  stepUp,
   targetReps,
   WORKING_WEIGHT,
 } from './schemes/shared';
@@ -29,7 +47,9 @@ export type DecisionRow =
   | 'gap_rebuild'
   | 'gap_restart'
   | 'pre_fatigue'
+  | 'uneven_performance'
   | 'below_floor'
+  | 'early_growth'
   | 'scheme_growth'
   | 'scheme_hold';
 
@@ -64,6 +84,8 @@ export interface Decision extends SchemeOutput {
   scheme: { id: string; version: number };
   gap: GapTierInfo;
   ladder: LadderStep | null;
+  /** The concrete condition of the next increase — printed as the `next step:` line. */
+  next: NextStep;
 }
 
 const LEVELS: Confidence[] = ['low', 'medium', 'high'];
@@ -135,7 +157,13 @@ function finish(
   c: Ctx,
   stage: Stage,
   row: DecisionRow,
-  parts: { candidate: number | null; conservative: number | null; reason: string; confidence?: Confidence },
+  parts: {
+    candidate: number | null;
+    conservative: number | null;
+    reason: string;
+    confidence?: Confidence;
+    next: NextStep;
+  },
 ): Decision {
   const rec = (load: number | null): Recommendation => ({ load, unit: load === null ? null : c.unit, reps: c.reps });
   const notes =
@@ -157,6 +185,7 @@ function finish(
     scheme: { id: c.scheme.id, version: c.scheme.version },
     gap: c.gap,
     ladder: c.ladder,
+    next: parts.next,
   };
 }
 
@@ -188,6 +217,7 @@ function gapRow(c: Ctx): Decision | null {
       conservative: null,
       reason: `restart tier (${basis}; general norm): history is a dated reference only — cold start`,
       confidence: 'low',
+      next: { kind: 'ladder', remaining: LADDER.rebuild.workouts, backTo: c.base, cold: true },
     });
   }
   const { tier } = c.ladder;
@@ -205,6 +235,7 @@ function gapRow(c: Ctx): Decision | null {
       ? `${reason}; ${floored(c, c.base, candidate, requested) ? `${branch.note.split(' — ')[0]} — ${NO_LIGHTER}` : branch.note}`
       : reason,
     confidence: tier === 'rebuild' || tier === 'restart' ? 'low' : oneLevelDown(base),
+    next: { kind: 'ladder', remaining: c.ladder.of - c.ladder.workout, backTo: c.base, cold: false },
   });
 }
 
@@ -215,6 +246,7 @@ function constraintRow(c: Ctx): Decision | null {
         candidate: c.base,
         conservative: loadBelow(c, c.base, 1),
         reason: `short constraint (${constraint.text}) — no growth`,
+        next: { kind: 'constraint' },
       })
     : null;
 }
@@ -222,6 +254,21 @@ function constraintRow(c: Ctx): Decision | null {
 /** The lower candidate is the more conservative one (no load = a cold start, the lowest); a tie keeps the first. */
 function moreConservative(a: Decision, b: Decision): Decision {
   return (b.candidate.load ?? Number.NEGATIVE_INFINITY) < (a.candidate.load ?? Number.NEGATIVE_INFINITY) ? b : a;
+}
+
+/**
+ * Uneven performance (item 6): the drop-off at the working weight (first − last set reps) is far above the user's usual
+ * — more than `usual + 3`, or more than 4 when there is no norm. The performance then counts neither for growth nor
+ * for a step down. Null = even (or no drop-off to judge).
+ */
+function unevenDropOff(facts: LoadFacts): { value: number; usual: number | null; maxDrop: number } | null {
+  const last = facts.lastExposure;
+  if (isAbsent(last) || isAbsent(last.dropOff)) {
+    return null;
+  }
+  const { value, usual } = last.dropOff;
+  const maxDrop = usual === null ? UNEVEN_WITHOUT_NORM : usual + UNEVEN_ABOVE_USUAL;
+  return value > maxDrop ? { value, usual, maxDrop } : null;
 }
 
 function stageA(c: Ctx): Decision | null {
@@ -240,6 +287,16 @@ function stageA(c: Ctx): Decision | null {
       candidate,
       conservative: loadBelow(c, candidate, 1),
       reason: `${delta} more working sets on a shared muscle today than before the reference — ${move}`,
+      next: { kind: 'pre_fatigue', load: c.base },
+    });
+  }
+  const uneven = unevenDropOff(c.facts);
+  if (uneven !== null) {
+    return finish(c, 'A', 'uneven_performance', {
+      candidate: c.base,
+      conservative: loadBelow(c, c.base, 1),
+      reason: `uneven sets at the working weight: reps fell by ${uneven.value} from the first to the last set (usual ${uneven.usual ?? 'not known'}) — the opening set was probably too light for this load; the performance counts neither for growth nor for a step down — hold`,
+      next: { kind: 'uneven', load: c.base, maxDrop: uneven.maxDrop },
     });
   }
   const last = c.facts.lastExposure;
@@ -249,6 +306,7 @@ function stageA(c: Ctx): Decision | null {
       candidate,
       conservative: loadBelow(c, c.base, 2),
       reason: `last exposure below the rep floor — ${floored(c, c.base, candidate, 1) ? NO_LIGHTER : 'one step down'}`,
+      next: { kind: 'step_down', backTo: c.base, atLoad: candidate, reps: c.reps.min },
     });
   }
   return null;
@@ -285,7 +343,13 @@ function insufficientData(
   const base = { ...meta, stage: 'A' as const, row: 'insufficient_data' as const, ladder: null };
   const ref = referenceLoad(facts);
   if (isAbsent(facts.reference) || ref === null) {
-    return { ...noRecord(reps, [WORKING_WEIGHT]), ...base, outcome: 'no number', reason: NO_RECORD_REASON };
+    return {
+      ...noRecord(reps, [WORKING_WEIGHT]),
+      ...base,
+      outcome: 'no number',
+      reason: NO_RECORD_REASON,
+      next: { kind: 'no_number' },
+    };
   }
   const step = stepOf(facts);
   const afterBreak = gap.tier === 'return' || gap.tier === 'rebuild' || gap.tier === 'restart';
@@ -310,7 +374,56 @@ function insufficientData(
     ].join('; '),
     confidence: 'low',
     missing: step === null ? [WORKING_WEIGHT, EQUIPMENT_STEP] : [WORKING_WEIGHT],
+    next: { kind: 'insufficient', why },
   };
+}
+
+function repsText(reps: number[]): string {
+  return reps.every(r => r === reps[0]) ? `${reps.length}×${reps[0]}` : `${reps.join(', ')} reps`;
+}
+
+/**
+ * Item 5, one-session growth (APRE-style): the LAST set at the working weight of the newest performance beat the range
+ * top by `ONE_SESSION_SURPLUS` reps, its RPE ≤ 8 or absent, recovered (gap tier `rest`; a short constraint, a gap row,
+ * material pre-fatigue and an uneven performance already ended in Stage A) → one step up, never more, with the range
+ * reps. Conservative = the working weight, confidence at most medium. Range schemes only (a fixed-rep scheme has no
+ * "above the range"); null = the scheme's answer stands.
+ */
+function earlyGrowth(c: Ctx, params: SchemeParams, out: SchemeOutput): SchemeOutput | null {
+  const history = c.facts.repHistory;
+  if (isAbsent(history) || params.fixedReps !== undefined || c.gap.tier !== 'rest') {
+    return null;
+  }
+  const [newest] = history.entries;
+  const last = newest ? lastSetReps(newest) : null;
+  const { reps } = out.candidate;
+  if (!newest || last === null || last < reps.max + ONE_SESSION_SURPLUS) {
+    return null;
+  }
+  if (newest.lastSetRpe !== null && newest.lastSetRpe > ONE_SESSION_MAX_RPE) {
+    return null;
+  }
+  const growth = stepUp(c.base, c.step, params.stepCapPct);
+  if (growth.kind !== 'grow') {
+    return null;
+  }
+  const unit = c.unit ?? 'kg';
+  const rpe = newest.lastSetRpe === null ? '' : ` at RPE ${newest.lastSetRpe}`;
+  return {
+    candidate: { load: growth.load, unit: c.unit, reps },
+    conservative: { load: c.base, unit: c.unit, reps },
+    reason: `last set at the working weight ${last} reps${rpe} (range top ${reps.max} + ${ONE_SESSION_SURPLUS} or more; ${repsText(newest.repsAtWorkingWeight)} at ${c.base} ${unit} ${newest.daysAgo} d ago); recovered (${c.gap.days ?? 0} d since ${c.gap.basis ?? 'last workout'}, no short constraint, no material pre-fatigue) — one step up`,
+    confidence: LEVELS[Math.min(LEVELS.indexOf('medium'), LEVELS.indexOf(confidenceOf(c.facts, out.missing)))],
+    missing: out.missing,
+    next: { kind: 'after_growth', load: growth.load, reps: reps.max },
+  };
+}
+
+function rowOf(early: boolean, grew: boolean): DecisionRow {
+  if (early) {
+    return 'early_growth';
+  }
+  return grew ? 'scheme_growth' : 'scheme_hold';
 }
 
 export function decide(facts: LoadFacts, input: DecideInput): Decision {
@@ -353,13 +466,15 @@ export function decide(facts: LoadFacts, input: DecideInput): Decision {
     return safety;
   }
   // Stage B: no tactic until layer 2 (U12); `tactic: none active` is printed.
-  const out = scheme.decide(facts, goal, params);
-  const grew = out.candidate.load !== null && out.candidate.load > ctx.base;
+  const schemeOut = scheme.decide(facts, goal, params);
+  const grew = schemeOut.candidate.load !== null && schemeOut.candidate.load > ctx.base;
+  const early = grew ? null : earlyGrowth(ctx, params, schemeOut);
+  const out = early ?? schemeOut;
   return {
     ...out,
     ...meta,
     stage: 'C',
-    row: grew ? 'scheme_growth' : 'scheme_hold',
+    row: rowOf(early !== null, grew),
     outcome: stepsWord(stepsFrom(ctx.base, out.candidate.load, ctx.step)),
     ladder: ctx.ladder,
   };

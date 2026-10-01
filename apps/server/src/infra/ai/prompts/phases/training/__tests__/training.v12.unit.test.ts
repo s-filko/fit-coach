@@ -60,13 +60,46 @@ describe('phase.training v12 — no invented conservative option (AC-LPF-3)', ()
     expect(task).toContain('never present the same load as a conservative variant');
   });
 
-  it('differs from v11 only in rule 1 (two lines) and rule 4b', () => {
+  it('AC-LPF-8: tells the coach to explain the load and name the next step', () => {
+    const task = TRAINING_V12.render(RENDER_CTX).find(s => s.id === 'task')!.text;
+    expect(task).toContain('Explain the load');
+    expect(task).toContain('`next step:`');
+    expect(task).toContain("below the client's recent best");
+    expect(task).toContain('say plainly why it is lower and when it will rise');
+  });
+
+  it('AC-LPF-8: cautiously optimistic — offers a block step with a fallback, never pressures or invents a step', () => {
+    const task = TRAINING_V12.render(RENDER_CTX).find(s => s.id === 'task')!.text;
+    expect(task).toContain('cautiously optimistic');
+    expect(task).toContain('as the fallback');
+    expect(task).toContain('never promise one, never pressure the client');
+    expect(task).toContain('never invent a step the block does not offer');
+    expect(task).toContain('encouragement; it never changes the load');
+  });
+
+  it('AC-LPF-8: in-session hint — a set ≥ 3 reps above the top or below the floor → one step for the NEXT set', () => {
+    const task = TRAINING_V12.render(RENDER_CTX).find(s => s.id === 'task')!.text;
+    const [hint] = /In-session hint:[^\n]*/.exec(task)!;
+    expect(hint).toContain('at least 3 reps above the top');
+    expect(hint).toContain('below its floor');
+    expect(hint).toContain('for the NEXT set only, one step at a time');
+  });
+
+  it('v11 carries none of the expectation-management rules', () => {
+    const v11 = textOf(TRAINING_V11);
+    expect(v11).not.toContain('Explain the load');
+    expect(v11).not.toContain('In-session hint');
+  });
+
+  it('differs from v11 only in rule 1 (two lines + two added lines) and rule 4b', () => {
     const lines = (t: string): string[] => t.split('\n');
     const v11 = new Set(lines(textOf(TRAINING_V11)));
     const added = lines(textOf(TRAINING_V12)).filter(l => !v11.has(l));
-    expect(added).toHaveLength(3);
+    expect(added).toHaveLength(5);
     expect(added.some(l => l.includes('First set of each exercise'))).toBe(true);
     expect(added.some(l => l.includes('Then give a specific recommendation'))).toBe(true);
+    expect(added.some(l => l.includes('Explain the load:'))).toBe(true);
+    expect(added.some(l => l.includes('In-session hint:'))).toBe(true);
     expect(added.some(l => l.includes('b) The user explicitly asked to move on'))).toBe(true);
   });
 });

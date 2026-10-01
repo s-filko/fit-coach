@@ -26,6 +26,7 @@ export function makeFacts(over: Partial<LoadFacts> = {}): LoadFacts {
       warmupsEstimated: false,
       mixedBasisExcluded: 0,
     },
+    repHistory: { absent: 'no rep history' },
     volume: { absent: 'fewer than 2 performances with a load' },
     lastExposure: {
       repsVsRange: 'at or above top',
@@ -45,3 +46,19 @@ export const SHORT_CONSTRAINT = {
   durability: 'short' as const,
   text: 'sore shoulder',
 };
+
+/** Rep history at the working weight, newest first: reps per performance (`[]` = another load that day). */
+export function repHistoryOf(
+  weight: number,
+  perfs: { reps: number[]; rpe?: number | null; daysAgo?: number }[],
+): LoadFacts['repHistory'] {
+  return {
+    weight,
+    unit: 'kg',
+    entries: perfs.map((p, i) => ({
+      daysAgo: p.daysAgo ?? 4 + i * 4,
+      repsAtWorkingWeight: p.reps,
+      lastSetRpe: p.rpe ?? null,
+    })),
+  };
+}

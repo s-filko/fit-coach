@@ -1,7 +1,7 @@
 import type { E1rmTrendFact, FatigueFact, LoadFacts, PerformanceInput, SetInput } from '../../load-facts';
 import { decide, type Decision } from '../decide';
 import { getScheme } from '../schemes';
-import { SHORT_CONSTRAINT, makeFacts } from './fixtures';
+import { SHORT_CONSTRAINT, makeFacts, repHistoryOf } from './fixtures';
 
 /**
  * AC-LP-2: the decision order of design §3.3 — Stage A safety rows (insufficient data, short
@@ -510,5 +510,217 @@ describe('AC-LPF-9 · volume is context, not a decision input', () => {
     ['down a lot', volume(100, 9000)],
   ] as [string, LoadFacts['volume']][])('volume %s changes no decision field', (_name, v) => {
     expect(run(makeFacts({ volume: v }))).toEqual(run(makeFacts()));
+  });
+});
+
+describe('AC-LPF-6 · 2-for-2 on the sets at the working weight (NSCA)', () => {
+  const noTrend = { e1rmTrend: { absent: 'insufficient: 2 performances' } } as Partial<LoadFacts>;
+  const range = { repRange: { min: 10, max: 12, source: 'today' as const } };
+  const facts = (perfs: Parameters<typeof repHistoryOf>[1], over: Partial<LoadFacts> = {}) =>
+    makeFacts({ ...noTrend, ...range, repHistory: repHistoryOf(65, perfs), ...over });
+
+  it('last set ≥ top + 2 in the two newest performances at the working weight → +1 step, conservative = the working weight', () => {
+    const d = run(facts([{ reps: [12, 12, 14] }, { reps: [12, 13, 14] }]));
+    expect(d).toMatchObject({ stage: 'C', row: 'scheme_growth', outcome: 'one step up' });
+    expect(d.candidate).toMatchObject({ load: 70, reps: { min: 10, max: 12 } });
+    expect(d.conservative.load).toBe(65);
+    expect(d.missing).not.toContain('e1rmTrend');
+    expect(d.reason).toContain('last set at the working weight');
+  });
+
+  it('one session only → hold, and the next step names the one session still missing', () => {
+    const d = run(facts([{ reps: [12, 12, 14] }, { reps: [12, 12, 12] }]));
+    expect(d).toMatchObject({ row: 'scheme_hold' });
+    expect(d.candidate.load).toBe(65);
+    expect(d.reason).toContain('confirmation 1 of 2');
+    expect(d.reason).not.toContain('cannot count');
+    expect(d.next).toEqual({ kind: 'growth', sessions: 1, reps: 14, load: 70 });
+  });
+
+  it('neither session → hold, two sessions are named', () => {
+    const d = run(facts([{ reps: [12, 12, 12] }, { reps: [12, 12, 13] }]));
+    expect(d.candidate.load).toBe(65);
+    expect(d.next).toEqual({ kind: 'growth', sessions: 2, reps: 14, load: 70 });
+  });
+
+  it('a performance at another load between them breaks the run', () => {
+    const d = run(facts([{ reps: [14] }, { reps: [] }, { reps: [14] }]));
+    expect(d.candidate.load).toBe(65);
+    expect(d.next).toMatchObject({ sessions: 1 });
+  });
+
+  it('the old e1RM-trend confirmation still serves facts without a rep history', () => {
+    const d = run(makeFacts({ ...range }));
+    expect(d.candidate.load).toBe(70);
+  });
+
+  it('never more than one step, whatever the surplus', () => {
+    const d = run(facts([{ reps: [20] }, { reps: [20] }]));
+    expect(d.candidate.load).toBe(70);
+  });
+
+  it('a load step above 10 % of the load progresses by reps, with that as the next step', () => {
+    const d = run(
+      makeFacts({
+        ...noTrend,
+        ...range,
+        workingWeight: { weight: 2.5, unit: 'kg', performances: 5, warmupsEstimated: false, mixedBasisExcluded: 0 },
+        repHistory: repHistoryOf(2.5, [{ reps: [15] }, { reps: [15] }]),
+      }),
+    );
+    expect(d.candidate.load).toBe(2.5);
+    expect(d.reason).toContain('progress by reps');
+    expect(d.next).toEqual({ kind: 'reps_only', step: 5, load: 2.5 });
+  });
+
+  it('owner leg press after 09-21 (last set 12 vs top 12, range 10–12): hold, two sessions at ≥ 14', () => {
+    const d = run(
+      makeFacts({
+        ...noTrend,
+        ...range,
+        workingWeight: { weight: 120, unit: 'kg', performances: 5, warmupsEstimated: false, mixedBasisExcluded: 0 },
+        repHistory: repHistoryOf(120, [{ reps: [12, 12] }, { reps: [] }, { reps: [] }]),
+      }),
+    );
+    expect(d.candidate.load).toBe(120);
+    expect(d.next).toEqual({ kind: 'growth', sessions: 2, reps: 14, load: 125 });
+  });
+});
+
+describe('AC-LPF-7 · one-session growth (APRE-style surplus on the last set)', () => {
+  // 3 × 15 at 50 kg four days ago, range 8–10, machine step 5 kg (owner example).
+  const base = (over: Partial<LoadFacts> = {}): LoadFacts =>
+    makeFacts({
+      workingWeight: { weight: 50, unit: 'kg', performances: 5, warmupsEstimated: false, mixedBasisExcluded: 0 },
+      repRange: { min: 8, max: 10, source: 'today' },
+      e1rmTrend: { absent: 'insufficient: 2 performances' },
+      repHistory: repHistoryOf(50, [{ reps: [15, 15, 15], daysAgo: 4 }]),
+      lastExposure: exposure('at or above top'),
+      gap: gapOf(4),
+      ...over,
+    });
+
+  it('last set ≥ top + 3, RPE absent, recovered → 55 × 8–10, conservative 50, medium at most, evidence named', () => {
+    const d = run(base());
+    expect(d).toMatchObject({ stage: 'C', row: 'early_growth', outcome: 'one step up' });
+    expect(d.candidate).toEqual({ load: 55, unit: 'kg', reps: { min: 8, max: 10 } });
+    expect(d.conservative).toEqual({ load: 50, unit: 'kg', reps: { min: 8, max: 10 } });
+    expect(d.confidence).toBe('medium');
+    expect(d.reason).toContain('3×15 at 50 kg 4 d ago');
+    expect(d.reason).toContain('recovered');
+    expect(d.next).toEqual({ kind: 'after_growth', load: 55, reps: 10 });
+  });
+
+  it('RPE 8 on the last set still qualifies; RPE 9 does not', () => {
+    expect(run(base({ repHistory: repHistoryOf(50, [{ reps: [15, 15, 15], rpe: 8 }]) })).row).toBe('early_growth');
+    const d = run(base({ repHistory: repHistoryOf(50, [{ reps: [15, 15, 15], rpe: 9 }]) }));
+    expect(d.row).toBe('scheme_hold');
+    expect(d.candidate.load).toBe(50);
+  });
+
+  it('a surplus of 2 (not 3) on one session is not enough alone', () => {
+    const d = run(base({ repHistory: repHistoryOf(50, [{ reps: [12, 12, 12] }]) }));
+    expect(d.row).toBe('scheme_hold');
+  });
+
+  it('only the LAST set counts: a strong opener with a weak last set does not jump', () => {
+    const d = run(base({ repHistory: repHistoryOf(50, [{ reps: [15, 12, 9] }]) }));
+    expect(d.row).toBe('scheme_hold');
+  });
+
+  it.each([
+    ['a short constraint', { constraints: { constraints: [SHORT_CONSTRAINT], equipment: [] } }, 'short_constraint'],
+    ['a gap beyond a week (rest_with_question)', { gap: gapOf(10) }, 'scheme_hold'],
+    ['a return-tier gap', { gap: gapOf(15) }, 'gap_return'],
+    ['material pre-fatigue today', { fatigueToday: fatigue(3), fatigueReference: fatigue(0) }, 'pre_fatigue'],
+  ] as [string, Partial<LoadFacts>, string][])('no jump with %s', (_name, over, row) => {
+    const d = run(base(over));
+    expect(d.row).toBe(row);
+    expect(d.candidate.load).toBeLessThanOrEqual(50);
+  });
+
+  it('no jump when the step exceeds the 10 % cap (lateral raise)', () => {
+    const d = run(
+      base({
+        workingWeight: { weight: 2.5, unit: 'kg', performances: 5, warmupsEstimated: false, mixedBasisExcluded: 0 },
+        repHistory: repHistoryOf(2.5, [{ reps: [15, 15, 15] }]),
+      }),
+    );
+    expect(d.row).toBe('scheme_hold');
+    expect(d.candidate.load).toBe(2.5);
+  });
+
+  it('a fixed-rep scheme never takes the one-session jump', () => {
+    const d = decide(base({ repRange: { min: 5, max: 5, source: 'today' } }), {
+      scheme: getScheme('linear_progression'),
+      goal: 'strength',
+    });
+    expect(d.row).not.toBe('early_growth');
+  });
+});
+
+describe('AC-LPF-7 · uneven performance and the opener', () => {
+  const dropOff = (value: number, usual: number | null): LoadFacts['lastExposure'] =>
+    ({
+      ...(makeFacts().lastExposure as object),
+      dropOff: { value, usual },
+    }) as LoadFacts['lastExposure'];
+
+  it('drop-off far above the usual (> usual + 3) → hold, neither growth nor step down, the reason names the opener', () => {
+    const d = run(
+      makeFacts({
+        lastExposure: { ...(dropOff(6, 1) as object), repsVsRange: 'below floor' } as LoadFacts['lastExposure'],
+      }),
+    );
+    expect(d).toMatchObject({ stage: 'A', row: 'uneven_performance', outcome: 'hold' });
+    expect(d.candidate.load).toBe(65);
+    expect(d.conservative.load).toBe(60);
+    expect(d.reason).toContain('reps fell by 6');
+    expect(d.reason).toContain('opening set');
+    expect(d.reason).toContain('neither for growth nor for a step down');
+    expect(d.next).toEqual({ kind: 'uneven', load: 65, maxDrop: 4 });
+  });
+
+  it('with no norm the threshold is a drop above 4', () => {
+    expect(run(makeFacts({ lastExposure: dropOff(5, null) })).row).toBe('uneven_performance');
+    expect(run(makeFacts({ lastExposure: dropOff(4, null) })).row).not.toBe('uneven_performance');
+  });
+
+  it('exactly usual + 3 is still even', () => {
+    expect(run(makeFacts({ lastExposure: dropOff(4, 1) })).row).not.toBe('uneven_performance');
+  });
+
+  it('an even performance that is below the floor still steps down', () => {
+    const d = run(
+      makeFacts({
+        lastExposure: { ...(dropOff(0, 0) as object), repsVsRange: 'below floor' } as LoadFacts['lastExposure'],
+      }),
+    );
+    expect(d.row).toBe('below_floor');
+    expect(d.next).toMatchObject({ kind: 'step_down', backTo: 65 });
+  });
+});
+
+describe('AC-LPF-8 · every decision carries the next step', () => {
+  it('short constraint, ladder, pre-fatigue, insufficient data, no number, hold, growth', () => {
+    expect(run(makeFacts({ constraints: { constraints: [SHORT_CONSTRAINT], equipment: [] } })).next).toEqual({
+      kind: 'constraint',
+    });
+    expect(run(makeFacts({ gap: gapOf(15) })).next).toEqual({ kind: 'ladder', remaining: 1, backTo: 65, cold: false });
+    expect(run(makeFacts({ gap: gapOf(30) })).next).toEqual({ kind: 'ladder', remaining: 2, backTo: 65, cold: false });
+    expect(run(makeFacts({ gap: gapOf(90) })).next).toEqual({ kind: 'ladder', remaining: 3, backTo: 65, cold: true });
+    expect(run(makeFacts({ fatigueToday: fatigue(3), fatigueReference: fatigue(0) })).next).toEqual({
+      kind: 'pre_fatigue',
+      load: 65,
+    });
+    expect(run(makeFacts({ workingWeight: { absent: 'insufficient: 1 performances / 8 wk' } })).next).toEqual({
+      kind: 'no_number',
+    });
+    expect(run(makeFacts()).next).toMatchObject({ kind: 'after_growth' });
+  });
+
+  it('the last rung of a ladder says growth rules apply again after it', () => {
+    const d = run(makeFacts({ gap: gapOf(15) }), { ladderWorkoutsSince: 1 });
+    expect(d.next).toEqual({ kind: 'ladder', remaining: 0, backTo: 65, cold: false });
   });
 });

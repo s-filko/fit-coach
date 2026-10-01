@@ -1,4 +1,4 @@
-import { CONFIRM_SESSIONS_DEFAULT, DOUBLE_REP_RANGE, STEP_CAP_PCT } from './params';
+import { CONFIRM_SESSIONS_DEFAULT, DOUBLE_REP_RANGE, STEP_CAP_PCT, TWO_FOR_TWO_SURPLUS } from './params';
 import { decideProgression } from './shared';
 import type { ProgressionScheme } from './types';
 
@@ -21,5 +21,6 @@ export const doubleProgression: ProgressionScheme = {
     decideProgression(facts, params, {
       succeeded: v => v === 'at or above top',
       successLabel: 'at the range top',
+      surplusReps: TWO_FOR_TWO_SURPLUS,
     }),
 };

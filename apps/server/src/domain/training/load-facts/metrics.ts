@@ -4,31 +4,33 @@ import { workingSets } from '../sets';
 import type { MuscleGroup } from '../types';
 
 import { parseRepRange } from './rep-range';
-import type {
-  ConstraintsFact,
-  DataSufficiency,
-  E1rmTrendFact,
-  EquipmentStepFact,
-  ExerciseInput,
-  FatigueFact,
-  GapDays,
-  GapFact,
-  LastExposureFact,
-  LoadFacts,
-  LoadFactsContext,
-  Metric,
-  NotLikeForLikeReason,
-  OtherSetInput,
-  PerformanceInput,
-  ReferenceFact,
-  RepRange,
-  RepRangeFact,
-  RepsVsRange,
-  SetInput,
-  TodayInput,
-  VolumeFact,
-  WorkingWeightFact,
-  WorkoutSummaryInput,
+import {
+  type ConstraintsFact,
+  type DataSufficiency,
+  type E1rmTrendFact,
+  type EquipmentStepFact,
+  type ExerciseInput,
+  type FatigueFact,
+  type GapDays,
+  type GapFact,
+  isAbsent,
+  type LastExposureFact,
+  type LoadFacts,
+  type LoadFactsContext,
+  type Metric,
+  type NotLikeForLikeReason,
+  type OtherSetInput,
+  type PerformanceInput,
+  type ReferenceFact,
+  type RepHistoryFact,
+  type RepRange,
+  type RepRangeFact,
+  type RepsVsRange,
+  type SetInput,
+  type TodayInput,
+  type VolumeFact,
+  type WorkingWeightFact,
+  type WorkoutSummaryInput,
 } from './types';
 
 // --- Parameters (D6–D9) ---
@@ -423,6 +425,42 @@ function weeksAtCurrentWeight(usable: LoadPerformance[], tz: string | null): num
   return Math.floor(days / DAYS_PER_WEEK);
 }
 
+// --- Metric 4b ---
+
+/**
+ * Sets at the working weight per performance (load-plan-fixes items 5–7), the same performances as metric 4, newest
+ * first: the evidence for the growth rule. A set at another load (a probe, a too-heavy opener) is not in it.
+ */
+export function computeRepHistory(
+  perfs: PerformanceInput[],
+  todaySessionId: string,
+  workingWeight: Metric<WorkingWeightFact>,
+  exercise: ExerciseInput,
+  now: Date,
+  tz: string | null,
+): Metric<RepHistoryFact> {
+  if (exercise.exerciseType !== 'strength') {
+    return notApplicable(exercise);
+  }
+  if (isAbsent(workingWeight)) {
+    return absent('no working weight');
+  }
+  const inWindow = realPerformances(perfs, todaySessionId, now, tz).filter(r => r.daysAgo <= WINDOW_DAYS);
+  const used = loadPerformances(inWindow).usable.slice(0, WORKING_WEIGHT_K);
+  return {
+    weight: workingWeight.weight,
+    unit: workingWeight.unit,
+    entries: used.map(r => {
+      const atWeight = r.working.filter(s => loadOf(s)?.weight === workingWeight.weight);
+      return {
+        daysAgo: r.daysAgo,
+        repsAtWorkingWeight: atWeight.map(s => repsOf(s) ?? 0),
+        lastSetRpe: atWeight[atWeight.length - 1]?.rpe ?? null,
+      };
+    }),
+  };
+}
+
 // --- Metric 10 (context only) ---
 
 /**
@@ -458,7 +496,14 @@ export function computeVolume(
 
 // --- Metric 6 ---
 
-function dropOffOf(working: SetInput[]): number | null {
+/** Sets at `weight` when there are any (a set at another load is a probe); else all sets, as before. */
+function atLoad(working: SetInput[], weight: number | undefined): SetInput[] {
+  const own = weight === undefined ? [] : working.filter(s => loadOf(s)?.weight === weight);
+  return own.length > 0 ? own : working;
+}
+
+function dropOffOf(allWorking: SetInput[], weight?: number): number | null {
+  const working = atLoad(allWorking, weight);
   const loads = working.map(loadOf);
   const top = Math.max(0, ...loads.map(l => l?.weight ?? 0));
   const sets = working.filter((s, i) => repsOf(s) !== null && (top === 0 || loads[i]?.weight === top));
@@ -488,8 +533,11 @@ export function computeLastExposure(
   earlier: PerformanceInput[],
   range: RepRange | null,
   exercise: ExerciseInput,
+  workingWeight?: number,
 ): LastExposureFact {
-  const { working, estimated } = classifySets(reference.sets);
+  const { working: allWorking, estimated } = classifySets(reference.sets);
+  // Each load is judged on its own sets: a probe at another load (a too-heavy opener) must not read as "below floor".
+  const working = atLoad(allWorking, workingWeight);
   const rpe = working.map(s => s.rpe).filter((v): v is number => v !== null);
   const rpeFact = rpe.length > 0 ? { values: rpe } : absent('no RPE recorded');
   if (exercise.exerciseType !== 'strength' && exercise.exerciseType !== 'functional_reps') {
@@ -501,18 +549,25 @@ export function computeLastExposure(
     };
   }
   const value = dropOffOf(working);
+  const atWeight = workingWeight !== undefined && working.some(s => loadOf(s)?.weight === workingWeight);
   return {
     repsVsRange: repsVsRange(working, range),
     rpe: rpeFact,
-    dropOff: value === null ? absent('fewer than 2 sets at the top load') : { value, usual: usualDropOff(earlier) },
+    dropOff:
+      value === null
+        ? absent(`fewer than 2 sets at the ${atWeight ? 'working weight' : 'top load'}`)
+        : { value, usual: usualDropOff(earlier, atWeight ? workingWeight : undefined) },
     warmupsEstimated: estimated,
   };
 }
 
-function usualDropOff(earlier: PerformanceInput[]): number | null {
+function usualDropOff(earlier: PerformanceInput[], weight?: number): number | null {
   const drops = [...earlier]
     .sort((a, b) => b.performedAt.getTime() - a.performedAt.getTime())
-    .map(p => dropOffOf(classifySets(p.sets).working))
+    .map(p => classifySets(p.sets).working)
+    // At a given load only the performances that used it count towards the usual.
+    .filter(w => weight === undefined || w.some(s => loadOf(s)?.weight === weight))
+    .map(w => dropOffOf(w, weight))
     .filter((v): v is number => v !== null)
     .slice(0, NORM_WINDOW);
   return drops.length >= NORM_MIN ? median(drops) : null;
@@ -612,6 +667,7 @@ export function computeLoadFacts(
   if (!('absent' in fatigueReference)) {
     fatigueToday.sameAsReference = sameFatigue(fatigueToday, fatigueReference);
   }
+  const workingWeight = computeWorkingWeight(performances, todayId, range, exercise, now, timezone);
   return {
     exerciseId: exercise.id,
     exerciseName: exercise.name,
@@ -620,10 +676,20 @@ export function computeLoadFacts(
     reference,
     fatigueReference,
     fatigueToday,
-    workingWeight: computeWorkingWeight(performances, todayId, range, exercise, now, timezone),
+    workingWeight,
     e1rmTrend: computeE1rmTrend(performances, todayId, exercise, now, timezone),
+    repHistory: computeRepHistory(performances, todayId, workingWeight, exercise, now, timezone),
     volume: computeVolume(performances, todayId, exercise, now, timezone),
-    lastExposure: 'absent' in reference ? reference : lastExposureOf(reference, performances, range, exercise),
+    lastExposure:
+      'absent' in reference
+        ? reference
+        : lastExposureOf(
+            reference,
+            performances,
+            range,
+            exercise,
+            isAbsent(workingWeight) ? undefined : workingWeight.weight,
+          ),
     gap: computeGap(exercise, performances, context.workouts, todayId, now, timezone),
     constraints: computeConstraints(exercise, context),
     equipmentStep: computeEquipmentStep(exercise),
@@ -635,10 +701,11 @@ function lastExposureOf(
   performances: PerformanceInput[],
   range: RepRange | null,
   exercise: ExerciseInput,
+  workingWeight?: number,
 ): LastExposureFact {
   const refTime = reference.performance.performedAt.getTime();
   const earlier = performances.filter(
     p => p.sessionId !== reference.performance.sessionId && p.performedAt.getTime() < refTime,
   );
-  return computeLastExposure(reference.performance, earlier, range, exercise);
+  return computeLastExposure(reference.performance, earlier, range, exercise, workingWeight);
 }

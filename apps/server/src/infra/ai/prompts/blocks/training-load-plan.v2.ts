@@ -13,9 +13,14 @@ import {
   type Decision,
   type DecisionRow,
   defaultProgression,
+  type NextStep,
+  ONE_SESSION_MAX_RPE,
+  ONE_SESSION_SURPLUS,
   type ProgressionChoice,
   progressionFromChoice,
   type Recommendation,
+  STEP_CAP_PCT,
+  TWO_FOR_TWO_SURPLUS,
 } from '@domain/training/load-plan';
 
 import { decideLoadPlanEntry, type LoadDecisionOpts } from '@infra/ai/load-facts/load-decision';
@@ -55,7 +60,9 @@ const ROW_LABELS_V2: Record<DecisionRow, string> = {
   gap_rebuild: 'gap tier rebuild',
   gap_restart: 'gap tier restart',
   pre_fatigue: 'pre-fatigue delta',
+  uneven_performance: 'uneven performance',
   below_floor: 'last below range floor',
+  early_growth: 'one-session growth',
   scheme_growth: 'scheme growth',
   scheme_hold: 'scheme hold',
 };
@@ -145,6 +152,56 @@ function lowerNote(d: Decision, lower: number): string {
     : '';
 }
 
+const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** What would give the user a working weight: the words for the working-weight fact's absent reason. */
+function workingWeightPath(why: string): string {
+  if (why.startsWith('insufficient')) {
+    return 'two performances at one load within 8 weeks set the working weight, and the growth rule then applies';
+  }
+  if (why === 'no rep range') {
+    return 'a rep range (a plan target for the exercise) is needed to set the working weight';
+  }
+  return 'a load where every set reaches the rep floor sets the working weight, and the growth rule then applies';
+}
+
+/** The words of a `NextStep` — the concrete condition of the next increase (item 7); the domain gives data only. */
+function nextStepText(n: NextStep, d: Decision): string {
+  const unit = d.candidate.unit ?? DEFAULT_UNIT;
+  const now = `${d.candidate.load} ${unit}`;
+  switch (n.kind) {
+    case 'growth': {
+      const once = n.reps - TWO_FOR_TWO_SURPLUS + ONE_SESSION_SURPLUS;
+      return n.sessions === 1
+        ? `last set at ${now} ≥ ${n.reps} reps once more → +1 step (${n.load} ${unit})`
+        : `last set at ${now} ≥ ${n.reps} reps in ${n.sessions} workouts in a row (or ≥ ${once} reps once at RPE ≤ ${ONE_SESSION_MAX_RPE}, recovered) → +1 step (${n.load} ${unit})`;
+    }
+    case 'after_growth':
+      return `after the step up, hold ${n.load} ${unit} until the last set reaches ${n.reps + TWO_FOR_TWO_SURPLUS} reps in 2 workouts in a row (or ${n.reps + ONE_SESSION_SURPLUS} reps once at RPE ≤ ${ONE_SESSION_MAX_RPE}, recovered)`;
+    case 'reps_only':
+      return `no load step fits (${n.step} ${unit} is over ${Math.round(STEP_CAP_PCT * 100)} % of ${n.load} ${unit}) — progress by reps`;
+    case 'ladder':
+      if (n.remaining === 0) {
+        return 'last workout of the return ladder — the growth rule applies again after it';
+      }
+      return `${n.cold ? 'cold start now, then ' : ''}${plural(n.remaining, 'more workout')} → back to ${n.backTo} ${unit}`;
+    case 'uneven':
+      return `even sets at ${n.load} ${unit} (reps falling by at most ${n.maxDrop} from the first to the last set) → the growth rule applies`;
+    case 'step_down':
+      return `back to ${n.backTo} ${unit} when the sets at ${n.atLoad} ${unit} reach ${n.reps}+ reps`;
+    case 'constraint':
+      return 'no growth while the short constraint is active; the growth rule applies again after it';
+    case 'pre_fatigue':
+      return `the same ${n.load} ${unit} without the extra pre-fatigue → the usual growth rule applies`;
+    case 'insufficient':
+      return workingWeightPath(n.why);
+    case 'no_number':
+      return 'log this exercise once — that performance becomes the reference';
+    case 'hold':
+      return n.why;
+  }
+}
+
 /** `volume: +16 % vs last (5520 vs 4760 kg×reps, working sets; 4 d and 9 d ago)` — context, no decision reads it. */
 function volumeLine(entry: LoadPlanEntry): string[] {
   const { volume } = entry.facts;
@@ -188,6 +245,7 @@ function decisionLines(
     `decision: Stage ${d.stage}, ${ROW_LABELS_V2[d.row]} → ${d.outcome}`,
     `recommend: ${rec === null ? `no number — ${d.reason}` : `${rec} — ${d.reason}`}`,
     `conservative: ${cons === null ? `no conservative option — ${d.reason}` : `${cons}${lowerNote(d, lower)}`}`,
+    `next step: ${nextStepText(d.next, d)}`,
     confidenceText(entry, d),
     ...volumeLine(entry),
   ];

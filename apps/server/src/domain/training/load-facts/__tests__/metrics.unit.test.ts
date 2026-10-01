@@ -11,6 +11,7 @@ import {
   computeConstraints,
   computeEquipmentStep,
   computeVolume,
+  computeRepHistory,
   classifySets,
 } from '../index';
 import {
@@ -948,5 +949,88 @@ describe('AC-LPF-9 · metric 10 — volume load of the newest vs the previous pe
       TZ,
     );
     expect(isAbsent(f.volume)).toBe(false);
+  });
+});
+
+describe('AC-LPF-6/7 · metric 4b — sets at the working weight', () => {
+  const facts = (last: string, targetReps: string) =>
+    computeLoadFacts(
+      legPress,
+      ownerPerfs(legPress.id, LEG_PRESS_ROWS, last),
+      today({ targetReps }),
+      emptyContext,
+      ownerNow(last, 4),
+      TZ,
+    );
+
+  it('leg press after 09-21: the working weight is 120, only the 09-21 performance has sets at it', () => {
+    const f = facts('2026-09-21', '10-12');
+    if (isAbsent(f.repHistory)) {
+      throw new Error('expected a value');
+    }
+    expect(f.repHistory.weight).toBe(120);
+    expect(f.repHistory.entries.map(e => e.repsAtWorkingWeight)).toEqual([[12, 12], [], [], [], []]);
+    expect(f.repHistory.entries[0].daysAgo).toBe(4);
+  });
+
+  it('carries the RPE of the last set at the working weight', () => {
+    const perfs = [
+      perf('a', 3, [strengthSet(60, 10, { rpe: 6 }), strengthSet(60, 12, { rpe: 9 })]),
+      perf('b', 9, [strengthSet(60, 10, { rpe: 7 }), strengthSet(60, 10)]),
+    ];
+    const f = computeLoadFacts(benchPress, perfs, today(), emptyContext, NOW, TZ);
+    if (isAbsent(f.repHistory)) {
+      throw new Error('expected a value');
+    }
+    expect(f.repHistory.entries.map(e => e.lastSetRpe)).toEqual([9, null]);
+  });
+
+  it('absent without a working weight; n/a for non-strength', () => {
+    expect(computeRepHistory([], 'today', { absent: 'x' }, benchPress, NOW, TZ)).toEqual({
+      absent: 'no working weight',
+    });
+    const plank = { ...benchPress, exerciseType: 'isometric' as const };
+    expect(computeRepHistory([], 'today', { absent: 'x' }, plank, NOW, TZ)).toEqual({ absent: 'n/a for isometric' });
+  });
+});
+
+describe('AC-LPF-7 · each load is judged on its own sets (a too-heavy opener is a probe)', () => {
+  // 135 × 6 as the opener, then 130 × 12 ×3; the two older sessions are 130 × 12 ×3 too. Range 8–12.
+  const withOpener = [
+    perf('a', 3, [strengthSet(135, 6), strengthSet(130, 12), strengthSet(130, 12), strengthSet(130, 12)]),
+    perf('b', 9, [strengthSet(130, 12), strengthSet(130, 12), strengthSet(130, 12)]),
+    perf('c', 16, [strengthSet(130, 12), strengthSet(130, 12), strengthSet(130, 12)]),
+  ];
+  const f = () => computeLoadFacts(legPress, withOpener, today({ targetReps: '8-12' }), emptyContext, NOW, TZ);
+
+  it('the working weight is 130 and the performance is not "below floor" because of the 135 × 6 probe', () => {
+    const facts = f();
+    if (isAbsent(facts.workingWeight) || isAbsent(facts.lastExposure) || isAbsent(facts.lastExposure.repsVsRange)) {
+      throw new Error('expected values');
+    }
+    expect(facts.workingWeight.weight).toBe(130);
+    expect(facts.lastExposure.repsVsRange).toBe('at or above top');
+  });
+
+  it('drop-off is measured at the working weight, the usual from earlier performances at that load', () => {
+    const uneven = [
+      perf('a', 3, [strengthSet(135, 6), strengthSet(130, 14), strengthSet(130, 12), strengthSet(130, 8)]),
+      ...withOpener.slice(1),
+      perf('d', 23, [strengthSet(130, 12), strengthSet(130, 11), strengthSet(130, 11)]),
+    ];
+    const facts = computeLoadFacts(legPress, uneven, today({ targetReps: '8-12' }), emptyContext, NOW, TZ);
+    if (isAbsent(facts.lastExposure) || isAbsent(facts.lastExposure.dropOff)) {
+      throw new Error('expected a value');
+    }
+    expect(facts.lastExposure.dropOff.value).toBe(6);
+    expect(facts.lastExposure.dropOff.usual).toBe(0);
+  });
+
+  it('with no set at the working weight in the reference the old top-load reading stays', () => {
+    const r = computeLastExposure(perf('x', 3, [strengthSet(70, 5), strengthSet(70, 5)]), [], RANGE, benchPress, 60);
+    if (isAbsent(r.repsVsRange)) {
+      throw new Error('expected a value');
+    }
+    expect(r.repsVsRange).toBe('below floor');
   });
 });

@@ -177,6 +177,41 @@ Verification (from `apps/server/`): `npm run check-all`, `npm run test:unit`, `D
   jump, v12 wording) are **on hold** — to be redefined from the strength-training literature. The worker had started them and
   reverted all of it uncommitted: `E1RM_MAX_REPS` stays 10, confirmation logic and training v12 are unchanged. AC-LPF-6 and
   AC-LPF-7 and AC-LPF-8 are open; items 4 and 8 (AC-LPF-5, AC-LPF-9) are implemented.
+- (D) W-11: items 5 (rule rewritten in 451af616) integrated into the existing machinery, no parallel ladder. 2-for-2 lives in the
+  scheme (`decideProgression` with `ProgressionRule.surplusReps`, set by double progression only): `LoadFacts.repHistory`
+  (new metric 4b: per performance of the working-weight set, the reps at the working weight and the RPE of the last such set;
+  a set at another load is not in it) → the last set must be ≥ range top + 2 in `confirmSessions` (2) consecutive performances,
+  else hold with "confirmation k of 2". A performance at another load breaks the run. Linear progression and facts without a
+  rep history keep the old last-exposure + e1RM-trend confirmation (so "e1rmTrend missing — cannot count confirming sessions"
+  now appears only when BOTH sources are missing). One-session growth is a Stage C override in `decide()` (row `early_growth`,
+  label "one-session growth"): newest performance's last set ≥ top + 3, its RPE ≤ 8 or absent, gap tier `rest`, step within the
+  10 % cap, range schemes only; it runs only after Stage A found nothing, so a short constraint (any muscle of the exercise —
+  stricter than "primary"), a return/rebuild/restart gap, material pre-fatigue (≥ 3 extra working sets, the existing row) and an
+  uneven performance never reach it. Conservative = the working weight, confidence capped at medium, never > 1 step. Parameters
+  with their sources are in `schemes/params.ts` (`TWO_FOR_TWO_SURPLUS` NSCA, `ONE_SESSION_SURPLUS` APRE-inspired, `ONE_SESSION_MAX_RPE`
+  RIR-RPE). `E1RM_MAX_REPS` stays 10; no load is predicted by formula (the first draft's Epley check was dropped).
+- (D) W-12: item 6 — `computeLastExposure` takes the working weight: `repsVsRange` and `dropOff` are judged on the sets AT that load
+  (a probe at another load never reads "below floor"); the usual drop-off is the median over earlier performances that used the
+  same load; with no set at the working weight in the reference it falls back to the old top-load reading. **Uneven threshold:**
+  drop-off (first − last set reps at the working weight) > usual + 3 (`UNEVEN_ABOVE_USUAL`), or > 4 with no norm
+  (`UNEVEN_WITHOUT_NORM`) → Stage A row `uneven_performance` (after pre-fatigue, before below floor): hold the working weight,
+  conservative one step lower, reason "reps fell by N from the first to the last set (usual U) — the opening set was probably
+  too light for this load; the performance counts neither for growth nor for a step down". Only a FALL is "uneven" (rising reps
+  after a weak opener are the benign case the owner described as warm-up).
+- (D) W-13: observation, not changed — the reference (like-for-like pick, D6) can be an older performance than the newest one
+  (the lateral raise 2026-09-25 session has a 15-rep top set, outside range 10–12 ± 2, so the 09-20 session is the reference and
+  its 8-rep set triggers "below floor"). Below floor and uneven judge the reference; the growth rules judge the newest performance
+  at the working weight. Proposal for the owner: judge the safety rows on the newest performance at the working weight too.
+- (D) W-14: item 7 — every `Decision` and `SchemeOutput` carries `next: NextStep` (domain data: growth / after_growth / reps_only /
+  ladder / uneven / step_down / constraint / pre_fatigue / insufficient / no_number / hold); the words live in block v2
+  (`nextStepText`), printed as `next step: …` after `conservative:` on every strength row. Examples: "last set at 120 kg ≥ 14 reps in
+  2 workouts in a row (or ≥ 15 reps once at RPE ≤ 8, recovered) → +1 step (125 kg)", "1 more workout → back to 130 kg",
+  "back to 65 kg when the sets at 60 kg reach 8+ reps", "log this exercise once — that performance becomes the reference".
+  A hold from the old path prints the reason's own cause as the next step (nothing invented).
+- (D) W-15: training v12 (still unreleased) gets two added lines under rule 1 — "Explain the load" (why, `next step:`, why a
+  below-recent-best load is lower and when it rises, cautious optimism with the conservative/working weight as fallback, never
+  pressure or invent a step, volume as encouragement) and "In-session hint" (a set ≥ 3 reps above the top or below the floor →
+  one step up/down for the NEXT set only); line-diff test now expects 5 added lines. v11 untouched.
 
 ## Review
 

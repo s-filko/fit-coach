@@ -178,6 +178,22 @@ export interface E1rmTrendFact {
   mixedBasisExcluded: number;
 }
 
+/** One performance's sets at the working weight (load-plan-fixes items 5–7); a probe at another load is not here. */
+export interface RepHistoryEntry {
+  daysAgo: number;
+  /** Reps of the working sets done at the working weight, in set order; empty = the performance used another load. */
+  repsAtWorkingWeight: number[];
+  /** RPE of the last set at the working weight, null when not recorded. */
+  lastSetRpe: number | null;
+}
+
+export interface RepHistoryFact {
+  weight: number;
+  unit: 'kg' | 'lbs' | null;
+  /** The performances behind the working weight (the same set as metric 4), newest first. */
+  entries: RepHistoryEntry[];
+}
+
 export interface VolumeFact {
   unit: 'kg' | 'lbs' | null;
   newest: { volume: number; daysAgo: number };
@@ -219,6 +235,8 @@ export interface LoadFacts {
   fatigueToday: FatigueFact;
   workingWeight: Metric<WorkingWeightFact>;
   e1rmTrend: Metric<E1rmTrendFact>;
+  /** Sets at the working weight per performance — the evidence of the growth rule (load-plan-fixes item 5). */
+  repHistory: Metric<RepHistoryFact>;
   /** Context only: no decision reads it (load-plan-fixes item 8). */
   volume: Metric<VolumeFact>;
   lastExposure: Metric<LastExposureFact>;
