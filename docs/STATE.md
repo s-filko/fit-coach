@@ -9,10 +9,10 @@ The block between the AUTO markers below is generated from
 Everything below the block is hand-written: only facts no generator can derive.
 
 <!-- AUTO:status BEGIN — regen: node scripts/state.mjs --write -->
-_Generated 2026-10-01 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
+_Generated 2026-10-02 from docs/superpowers/plans/ + git. Never hand-edit; regen with `node scripts/state.mjs --write`._
 
 **In progress**
-— none —
+- `coach-simplification.md` — Coach Simplification — Master Plan (delete-first refactor of the coaching core) (direct on integration branch)
 
 **Planned**
 - `coach-tone.md` — Coach Tone — the coach knows the trend and encourages progress Implementation Plan
@@ -245,6 +245,15 @@ disabled reasoning, it only omitted the parameter — see `CLAUDE.md` § LLM for
 4. **HB-02** (production Docker image) — its own plan, sequenced after HB-01;
    note it must keep `scripts/stamp-baseline.ts` runnable (see the HB-02 note
    in that script's plan).
+
+## Handoff (coach-simplification, 2026-10-02) — governing plan; read it before anything else
+
+**Owner order 2026-10-02:** after the 2026-10-01 dev workout (coach "got much worse") the work is re-governed by
+`docs/superpowers/plans/coach-simplification.md` — a delete-first refactor of the coaching core in iterations
+I0–I4, run by one architect/coordinator session that delegates everything to Opus/Sonnet subagents. The plan's
+§ 0 "Resume here" and § 6 "Progress log" are the orientation point for a restarted session. It supersedes the
+dispatch order in § Next above; `coach-tone`, `restart-ladder`, `cold-start` and `refactor-p6-progress-and-drafts`
+are on hold (absorbed or deleted by it). Evidence (gitignored): `data/coach-simplification/`.
 
 ## Handoff (load-plan-fixes done, 2026-10-01) — merged into dev, pushed; owner's workout is the live check
 
