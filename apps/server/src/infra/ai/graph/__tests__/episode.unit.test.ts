@@ -1,6 +1,6 @@
 import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 
-import { runAiText, splitEpisode, toTranscriptMessages } from '../episode';
+import { runAiText, splitEpisode, toTranscriptMessages, workoutHistory } from '../episode';
 
 describe('splitEpisode (D-I — this run = from the last HumanMessage on; INV-LLM-002)', () => {
   it('splits on the single human message', () => {
@@ -121,5 +121,67 @@ describe('toTranscriptMessages (D-K — infra → domain mapping)', () => {
       new ToolMessage({ tool_call_id: 'c1', content: 'SYSTEM_ERROR: db down', status: 'error' }),
     ]);
     expect(out[0]).toMatchObject({ kind: 'tool_result', status: 'error' });
+  });
+});
+
+describe('workoutHistory (coach-simplification I1 — the training phase remembers this workout only)', () => {
+  const startCall = new AIMessage({
+    content: '',
+    tool_calls: [{ id: 'start1', name: 'start_training_session', args: {}, type: 'tool_call' }],
+  });
+  const startResult = new ToolMessage({ tool_call_id: 'start1', content: 'started' });
+  const otherCall = new AIMessage({
+    content: '',
+    tool_calls: [{ id: 'c1', name: 'log_set', args: {}, type: 'tool_call' }],
+  });
+  const otherResult = new ToolMessage({ tool_call_id: 'c1', content: 'ok' });
+
+  it('a hand-off run (the start call is in `current`) → []', () => {
+    const history = [new HumanMessage('old chat'), new AIMessage('old reply')];
+    const current = [new HumanMessage('начнём'), startCall];
+    expect(workoutHistory(history, current)).toEqual([]);
+  });
+
+  it('keeps the trigger human message and everything after the start call and its result', () => {
+    const trigger = new HumanMessage('начнём тренировку');
+    const planReply = new AIMessage('План на сегодня...');
+    const set1 = new HumanMessage('12 на 130');
+    const history = [
+      new HumanMessage('earlier chat'),
+      new AIMessage('earlier reply'),
+      trigger,
+      startCall,
+      startResult,
+      planReply,
+      set1,
+      otherCall,
+      otherResult,
+      new AIMessage('Записал'),
+    ];
+    const sliced = workoutHistory(history, [new HumanMessage('next')]);
+    expect(sliced).toEqual([trigger, ...history.slice(5)]);
+    expect(sliced).not.toContain(startCall);
+    expect(sliced).not.toContain(startResult);
+  });
+
+  it('uses the LAST start call when there are several', () => {
+    const first = new HumanMessage('first workout');
+    const second = new HumanMessage('second workout');
+    const secondCall = new AIMessage({
+      content: '',
+      tool_calls: [{ id: 'start2', name: 'start_training_session', args: {}, type: 'tool_call' }],
+    });
+    const secondResult = new ToolMessage({ tool_call_id: 'start2', content: 'started' });
+    const reply = new AIMessage('Go');
+    const sliced = workoutHistory(
+      [first, startCall, startResult, new AIMessage('a'), second, secondCall, secondResult, reply],
+      [new HumanMessage('q')],
+    );
+    expect(sliced).toEqual([second, reply]);
+  });
+
+  it('start not found (folded by a compaction) → history unchanged', () => {
+    const history = [new HumanMessage('q'), otherCall, otherResult, new AIMessage('a')];
+    expect(workoutHistory(history, [new HumanMessage('next')])).toBe(history);
   });
 });

@@ -112,6 +112,20 @@ export {
   type TrainingLoadPlanV2Data,
 } from './training-load-plan.v2';
 
+export {
+  formatSetShort,
+  formatSetsLine,
+  relativeDay,
+  TRAINING_HISTORY_HEADER,
+  TRAINING_HISTORY_V1,
+  TRAINING_TODAY_HEADER,
+  TRAINING_TODAY_V1,
+  trendLine,
+  type ExerciseHistory,
+  type TrainingFactsData,
+} from './training-facts';
+export { renderTrainingProfile } from './training-profile';
+
 /** A block renders as one composed string — its own SystemMessage at a fixed position. */
 export function renderBlock<TCtx>(module: PromptModule<TCtx>, ctx: TCtx): string {
   return compose(module.render(ctx));
