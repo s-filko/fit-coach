@@ -214,3 +214,11 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   **Next:** on Task 1 report → wait for the owner's vote if still missing; after the vote dispatch Tasks 2–5 one at a
   time (Sonnet, same worktree), then one Opus review of the branch + eval replay (20 cases through
   `scripts/print-training-request.ts` output and the i0 harness), then ask the owner for push + dev deploy.
+- 2026-10-02 16:05 — I1 Task 1 done (Sonnet): commit `e044994e` on `plan/coach-simplification-i1`, worktree
+  `/Users/filko/orca/workspaces/fit_coach/coach-simplification-i1` (prepared: env links, `npm ci`). Added
+  `prompts/blocks/training-facts.ts`, `training-profile.ts`, `prompts/phases/training/coach.ts` (2 469 chars, test-pinned
+  ≤ 2 500), `workoutHistory` in `graph/episode.ts`; unit 2 781 green, lint/type-check clean. Accepted deviations: unrated
+  rep sets print `(no RPE)` (rule over the work order's example); block data types live in `training-facts.ts`.
+  Notes for Task 2: import `TRAINING_COACH` from `./coach`; `ContextBlock.render` takes `depth` (pass 0); the loader
+  must supply a history entry for every plan exercise, even with no performances.
+  **Blocked on the owner's I0 vote (D7).** **Next:** vote ≥ 14/20 → dispatch Task 2 (Sonnet, same worktree), then 3, 4, 5.
