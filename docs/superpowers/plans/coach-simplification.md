@@ -249,3 +249,29 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   private artifact. Tasks 2–5 of I1 stay on hold until the owner accepts a replay.
   **Next:** on the agent's report → if the fact-check found errors, say so with the link; give the owner the link;
   his comments → Opus revises prompt/facts shape → rerun the replay; accepted → dispatch I1 Task 2.
+- 2026-10-02 17:20 — Full-session replay #1 done (`i0/session/`: script 20 client messages, `run.py`, `turns/NN/`,
+  `factcheck.md`, page https://claude.ai/artifact/MQm4CCDsZeAD2hg2DrwQiC). Sonnet 5.5, avg reply 463 chars, input median
+  8.3k chars (max 14k). Fact-check: **0 wrong numbers / arithmetic, 0 jargon**, but 18 behavioural faults: cutting planned
+  sets for the 45–50 min cap ×6, overriding the client's off-plan biceps ×2, repeating last time instead of a small
+  step up ×2, contradicting own earlier advice ×1, invented/imprecise claim ×3, missed praise ×1, program-like talk ×2,
+  unclear cue ×1. Not shown to the owner yet: same Opus agent continued for a fix round (root causes first in the
+  facts shape — e.g. drop the session-length line and elapsed time from the training input — then prompt wording,
+  ≤ 2 500 chars), two reruns, fact-check, republish to the same URL. Prompt versions: `i0/coach-prompt.v1.md` (I0
+  original, = the text in the I1 branch's `coach.ts`), `coach-prompt.md` (current).
+  **Next:** on the report → give the owner the link with the honest fault count; accepted → sync the final prompt and
+  facts shape into the I1 branch as part of Task 2, then Tasks 2–5.
+- 2026-10-02 18:10 — Replay fix rounds done (Opus, 3 rounds, 100 Sonnet calls total). Faults per run: run1 18 → 2a 25 /
+  2b 7 → 3a **3** / 3b 6 (`i0/session/factcheck.run{1,2,3}.md`, runs in `i0/session/run*/`). Run 3a is on the page
+  (same URL https://claude.ai/artifact/MQm4CCDsZeAD2hg2DrwQiC). Current prompt `i0/coach-prompt.md` = 2 489 chars
+  (v1 kept as `coach-prompt.v1.md`). **Input-shape changes that I1 Task 2 must mirror** (`i0/session/run.py` is the
+  reference renderer): profile without age/height/weight, goal, session length, split/frequency and back-symptom
+  wording (only the axial-loading limit stays); Today without "session started N min ago" (current time only).
+  Lessons: (a) a misleading fact produces a behaviour fault — removing the fact fixed 8 faults, rules were not needed;
+  (b) one prompt line ("only the lower back limits that") made the coach ask about the back in 17/20 replies —
+  every prompt edit needs a full replay ×2; (c) run-to-run variance is real (3 vs 6 faults on the same prompt).
+  Remaining faults trace to **missing facts**, to add in I1's facts block: the machine's observed load steps
+  (so "more weight" has a number), set kind on legacy sets (a 12×110 first set read as warm-up). Emoji in 15/20
+  replies of run 3a, none in 3b — owner's taste, ask via his comments.
+  **Next:** owner reads the chat page and comments / accepts. Accepted → update the I1 branch (prompt text, profile
+  and Today shape, the two facts above) inside Task 2, then Tasks 2–5. Not accepted → Opus revises from his
+  comments, replay ×2, republish.
