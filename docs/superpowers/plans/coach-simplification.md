@@ -185,6 +185,13 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   subagent with plain git; branch `plan/coach-simplification-i1`. Workers commit on the plan branch; never push.
 - (D7) 2026-10-02 — While the owner's I0 vote is pending, only I1 Task 1 (additive, nothing deleted) is dispatched;
   Tasks 2–5 wait for the vote (gate ≥ 14/20).
+- (D8) 2026-10-02 — **I0 gate NOT met by the letter:** owner's blind vote = new 10, old 2, equal 2, both bad 6
+  (`i0/owner-verdict.json`). Owner's words: he picked "the better one, not a good one"; "both bad" marks replies or
+  coach behaviour he dislikes; the page gave no way to comment. Head-to-head the new side wins 10:2, but 8 of 20 are
+  not acceptable yet (cases 01, 03, 10, 15, 19, 20 both bad; 07, 09 equal; 02, 08 old better). The Opus judge said
+  19/20 → the rubric does NOT capture the owner's taste; do not use it as a gate until re-calibrated on his comments.
+  Tasks 2–5 stay on hold until the owner answers "continue on the branch or hold". The stopgap flags question was
+  asked three times and not answered → dropped (D3 stands).
 
 ## 6. Progress log (append one line per state change; newest last)
 
@@ -222,3 +229,9 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   Notes for Task 2: import `TRAINING_COACH` from `./coach`; `ContextBlock.render` takes `depth` (pass 0); the loader
   must supply a history entry for every plan exercise, even with no performances.
   **Blocked on the owner's I0 vote (D7).** **Next:** vote ≥ 14/20 → dispatch Task 2 (Sonnet, same worktree), then 3, 4, 5.
+- 2026-10-02 16:40 — Owner voted (D8): 10 new / 2 old / 2 equal / 6 both bad — gate ≥ 14 not met. Dispatched (Sonnet) a
+  comments page `i0/comments.html` (all 20 cases unblinded, non-wins first, a comment box each) to learn what is wrong.
+  Owner asked one question: continue I1 Tasks 2–5 on the branch while the prompt is improved from his comments, or hold.
+  **Next:** give the owner the comments page link; on his comments → Opus revises `coach-prompt` / facts shape and the
+  rubric (`i0/rubric.md`), regenerate the 20 replies, show the owner only the cases he rejected; repeat until he accepts.
+  Tasks 2–5 only after his "continue".
