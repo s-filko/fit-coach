@@ -192,6 +192,15 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   19/20 → the rubric does NOT capture the owner's taste; do not use it as a gate until re-calibrated on his comments.
   Tasks 2–5 stay on hold until the owner answers "continue on the branch or hold". The stopgap flags question was
   asked three times and not answered → dropped (D3 stands).
+- (D9) 2026-10-02 — **The I0 test design was flawed (owner):** "after an error I picked the reply that suits me better,
+  but I want the error not to happen at all — that is the problem". About half of the 20 single-turn cases were
+  consequences of the old coach's mistakes, so they measured recovery, not absence of errors. **New I0 gate:** a
+  full-session replay — the new coach runs the whole 2026-10-01 workout from the first message, each turn seeing its
+  OWN earlier replies; the client's stream is the real events (set reports, "дальше", requests) with the complaints
+  about old-coach errors removed; every number in every reply is fact-checked. The owner reads it as one chat on a
+  page with a comment box per coach message and says "acceptable" or what is wrong. The single-turn cases stay as a
+  cheap regression set, not as the gate. The `i0/comments.html` page (https://claude.ai/artifact/5jFVMAhQ4YYzPaDTQU4g68)
+  was built but is optional for the owner now.
 
 ## 6. Progress log (append one line per state change; newest last)
 
@@ -235,3 +244,8 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   **Next:** give the owner the comments page link; on his comments → Opus revises `coach-prompt` / facts shape and the
   rubric (`i0/rubric.md`), regenerate the 20 replies, show the owner only the cases he rejected; repeat until he accepts.
   Tasks 2–5 only after his "continue".
+- 2026-10-02 16:55 — D9: gate changed to a full-session replay. Dispatched (Opus): `i0/session/` — client script, per-turn
+  facts, sequential generation through the harness, fact-check of every number, chat-style page with comment boxes,
+  private artifact. Tasks 2–5 of I1 stay on hold until the owner accepts a replay.
+  **Next:** on the agent's report → if the fact-check found errors, say so with the link; give the owner the link;
+  his comments → Opus revises prompt/facts shape → rerun the replay; accepted → dispatch I1 Task 2.
