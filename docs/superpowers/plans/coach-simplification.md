@@ -174,6 +174,17 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   dev" is dropped as a separate step; I1 deletes it. A flags-off stopgap before a workout is done only if the
   owner asks for it.
 - (D4) 2026-10-02 — Evidence copied out of the previous session's temp scratchpad into `data/coach-simplification/`.
+- (D5) 2026-10-02 — I1 work order is `coach-simplification-i1.md` (Opus design; five tasks, AC-CS1-1…5). Its six open
+  questions are decided as its author recommended: profile may be ~10 lines for now (duplicate goal facts cleaned via
+  data later, no similarity dedupe in code); training history budget 8 000 → 16 000 tokens; instruction tails in tool
+  results removed (watch cases 08/09/14 in the replay); log+delete of one exercise in one response stays unguarded
+  until I2 (first guard there); planning prompt loses the "LOAD PLAN" wording in I1; course check on training turns
+  is left for I3.
+- (D6) 2026-10-02 — Worktrees follow the project procedure (`docs/ORCHESTRATION.md` § worktree prepare: path under
+  `/Users/filko/orca/workspaces/fit_coach/`, env links, `npm ci` in `apps/server`), created by the implementing
+  subagent with plain git; branch `plan/coach-simplification-i1`. Workers commit on the plan branch; never push.
+- (D7) 2026-10-02 — While the owner's I0 vote is pending, only I1 Task 1 (additive, nothing deleted) is dispatched;
+  Tasks 2–5 wait for the vote (gate ≥ 14/20).
 
 ## 6. Progress log (append one line per state change; newest last)
 
@@ -197,3 +208,9 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   the I1 prompt/facts block). Not shown to the owner per pair before the owner's own vote. While waiting for the
   owner's string, I1 design dispatched (Opus, read-only): work order → `docs/superpowers/plans/coach-simplification-i1.md`.
   **Next:** owner's verdict → record; review the I1 work order (short report only); dispatch implementation (Sonnet, worktree).
+- 2026-10-02 15:35 — I1 design done: `docs/superpowers/plans/coach-simplification-i1.md` (≈7 000 prod LOC + ≈17 000 test
+  LOC to delete; request after I1 ≈ 14–17k chars vs 58k; prompt 2 469 chars). Decisions D5–D7. I1 Task 1 dispatched
+  (Sonnet, worktree `/Users/filko/orca/workspaces/fit_coach/coach-simplification-i1`, branch `plan/coach-simplification-i1`).
+  **Next:** on Task 1 report → wait for the owner's vote if still missing; after the vote dispatch Tasks 2–5 one at a
+  time (Sonnet, same worktree), then one Opus review of the branch + eval replay (20 cases through
+  `scripts/print-training-request.ts` output and the i0 harness), then ask the owner for push + dev deploy.
