@@ -179,3 +179,21 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
 
 - 2026-10-02 14:25 — Plan written; evidence persisted; I0 step 1 dispatched (Opus: cases, minimal prompt, rubric).
   **Next:** read the subagent's short report, review `i0/coach-prompt.md`, dispatch I0 step 3.
+- 2026-10-02 14:45 — I0 step 1 done (Opus): `data/coach-simplification/i0/` holds 20 cases (`cases/NN/{input,real,expect}.md`),
+  `coach-prompt.md` (2 337 chars, accepted by the coordinator unchanged), `rubric.md`, `harness.md` (works: the
+  `claude` binary called directly with `-p --model sonnet --system-prompt … --tools ""`; the shell function `claude`
+  routes to GLM — never use it). Case input ≈ 5–11k chars vs 58k real. Step 3 dispatched (Sonnet: generate new
+  replies, 5 controls with the current prompt, blind pairs page). Owner asked (unanswered): flags-off stopgap on dev.
+  **Next:** give the owner the pairs page; record the verdict; meanwhile calibrate the Opus judge on the same pairs.
+- 2026-10-02 15:00 — I0 step 3 done (Sonnet): 20/20 new replies (`cases/NN/new.md`), 5 controls, `jargon.md` (banned-jargon
+  hits: real 41, new 0, control 7), blind pairs page `i0/pairs.html`, key `i0/pairs-key.json`, published privately:
+  https://claude.ai/artifact/XXfHqopQgXDDTVFKyqfqE9 . Controls 07/08/15/18 reproduce the real style, 09 partly → the
+  harness is a fair stand-in. Avg reply 754 → 437 chars. Link given to the owner; Opus blind judge dispatched over
+  `i0/judge/NN/{A,B}.md` (calibration of the automatic judge against the owner's picks).
+  **Next:** wait for the owner's string (`1А 2Б …`), decode with the key, record the verdict here; ≥ 14/20 → write the
+  I1 work order and dispatch it (Opus designs the cut list, Sonnet implements in a worktree).
+- 2026-10-02 15:10 — Opus blind judge done (`i0/judge-verdict.json`, `i0/judge-notes.md`): new side picked in 19/20, real in
+  0, "both bad" in 1 (case 14: the new reply invented an RPE for a set logged without one — a fact-discipline point for
+  the I1 prompt/facts block). Not shown to the owner per pair before the owner's own vote. While waiting for the
+  owner's string, I1 design dispatched (Opus, read-only): work order → `docs/superpowers/plans/coach-simplification-i1.md`.
+  **Next:** owner's verdict → record; review the I1 work order (short report only); dispatch implementation (Sonnet, worktree).
