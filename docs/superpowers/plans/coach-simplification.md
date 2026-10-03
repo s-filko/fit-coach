@@ -346,3 +346,7 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   (the category and the summariser path stay). Suites green (unit 1 826, scenarios 392, integration 659). Task 4
   dispatched (Sonnet).
   **Next:** Task 4 → Task 5 → Task 6 (sync `final-shape.md` + 4 facts gaps) → Opus review → owner: push + deploy.
+- 2026-10-04 — I1 Task 4 done (Sonnet): commit `0c9ab9ec`, 40 files, +127 / −3 840: training prompts v1–v8, old
+  workout-overview / exercise-history blocks, training snapshot cases, `formatDateAge` gone; set formatters moved to
+  `prompts/blocks/set-format.ts`; episode-summary `endedAt` = last user message time (unit-tested). Grep gate 0.
+  Suites green (unit 1 773, scenarios 392, integration 659). Task 5 dispatched (Sonnet).
