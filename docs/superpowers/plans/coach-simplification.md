@@ -90,6 +90,11 @@ prompt caching, run mutex, bot watchdog, deploy.
   the app's API unless the owner says yes. Judges: the owner on blind pairs for big steps; an Opus subagent with
   the rubric (`i0/rubric.md`) + a banned-jargon check for routine regression.
 - **Tests:** unit + scenario suites green before merge (`db-test-lock.sh` when DB-backed); no local installs.
+- **User facts are owner-gated (owner, 2026-10-04).** The facts functionality (table, categories, extraction at
+  compaction, verifier, `manage_fact` / `list_facts`, what is stored and how long) is the owner's long work.
+  Simplification is allowed only after discussing it with him and getting his approval; removing or changing any part
+  of it without that is forbidden. This also narrows I3: course check / directive, verifier and summariser changes are
+  proposals to discuss, not work to dispatch.
 - **Owner-gated, always asked first:** anything on the VPS (ssh, `.env.dev`), push, model runs through the API,
   DB data changes, edits of durable specs (ADR, `*.spec.md`, BR ids), deletion of branches/worktrees (the hook
   prompts). Prod is frozen: every iteration ends at the dev deploy.
@@ -210,6 +215,11 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   Decision: I1 Tasks 2–5 go now; in parallel one Opus round folds the comments into the prompt / facts shape /
   rubric with replay ×2; the result is synced into the branch before the I1 review. The owner's taste, as written in
   that file, is the rubric's source of truth from now on.
+- (D11) 2026-10-04 — Owner rule: user-facts functionality is owner-gated (see § 3). Disclosure owed and made: I1 Task 2
+  already changed how facts are *shown* to the training phase (one-line `# Profile` with one fact per category and
+  muscle group, physical constraints first, no dates/confirmation counts, `break`/`progression_scheme` not shown;
+  no `## User Facts` block, no course directive in training). Storage, extraction and tools are untouched. The owner
+  decides whether that rendering stays (it is what he read in the replays) or the full block returns.
 
 ## 6. Progress log (append one line per state change; newest last)
 
