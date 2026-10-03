@@ -397,3 +397,12 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   to the round-9 text, habit line replacing the cardio warm-up's history block.
   **Next:** both reports → Opus review of the branch (one review, the I1 work order + master plan as the contract) →
   fix blocking findings → ask the owner for push + dev deploy (needs his two approvals on the profile first).
+- 2026-10-04 — Round-10 measurement (frozen prompt, 21-turn script incl. the inserted knee pinch, rubric v2): **mean 9.7
+  faults per session at `low` and 9.7 at default effort** (min 8, max 11; `factcheck.run10.md`). Default effort does
+  not reduce miscounts (2 vs 3 in three runs); it only helps missed progression (5 vs 1). Decision: keep `low`.
+  Composition per run ≈ knee re-asks 3–5 (the "Reported today" line does not stop them), emoji on plain
+  confirmations ~3, «засчитан…» ~1, biceps "enough" override 1, miscount ≤ 1, no arithmetic errors in 6 runs; back
+  check-in once at turn 1 in 6/6 runs, never repeated. Page shows run10-low-a. `final-shape.md` frozen (prompt
+  2 497 chars, check-in rule, Reported-today rule). Open judgement for the owner: are 3–5 knee mentions after a fresh
+  pinch a fault or acceptable coaching? Baseline for comparison requested: the real 2026-10-01 coach judged by the same
+  rubric v2 (no generation, one judge pass).
