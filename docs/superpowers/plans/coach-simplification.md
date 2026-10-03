@@ -419,3 +419,27 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   contradictions/pressure/impossible conditions 5 → 0; program-like replies 28 → 1; over-long 16 → 0. Two classes are
   new and worse: emoji on plain confirmations (0 → 3) and stopping the client's extra sets (0 → 1) → I2 candidates.
   Close-out review (four Opus zones) dispatched on `plan/coach-simplification-i1`.
+- 2026-10-04 — **Close-out review of `plan/coach-simplification-i1`: blocked** (four Opus zones; full record goes into the
+  I1 plan's `## Review`). Blocking, deduplicated:
+  B1 (R1,R2,R3) — removing the `LOAD_PLAN_*` flags left summariser v7 / fact-verifier v2 unreachable: compaction now
+  always runs v6 / v1 and `gatedOperationValid` drops every `break` / `progression_scheme` operation, while dev ran with
+  the flags on → **a facts-pipeline behaviour change on deploy, in the owner-gated area** (ADR-0009 amendment
+  2026-10-01). Owner decision: wire v7 / v2 unconditionally (keeps dev behaviour; recommended) or approve removal.
+  B2 (R1) — code contradicts ADR-0013 §3.4 without an approved amendment: user facts rendered inside the phase prompt
+  as `# Profile` (not in the long-term block), and `memory: 'workout'` gives training a per-phase message shape (no
+  directive, no summaries, this workout's messages only). Owner approval of the amendment needed before merge.
+  B3 (R3,R4) — the I1 plan lacks Tasks 6a/6b (no AC, no verification), §1/§3 text is stale (elapsed-time line,
+  planner notes, prompt text and count, "guard sentence" that no longer exists), §6 lacks the new behaviours as BR
+  candidates, and the only full spec (`final-shape.md`) is gitignored → fix on the branch: amend the plan, commit the
+  spec under `docs/superpowers/specs/`.
+  B4 (R3) — `print-training-request` does not implement the plan's `--history/--today/--at` inputs and silently ignores
+  unknown flags; the "7 657 chars ≈ 13 %" claim rests on an invented fixture with understated messages → fix: real-data
+  input per plan, loud failure on unknown flags, re-measure case 07 with the real message volume.
+  B5 (R2) — `distinctRecentPlaces`, `RECENT_PLACES_WINDOW`, `PLACE_AMBIGUOUS_THRESHOLD` lost their only caller → delete.
+  Advisories (≈ 18, R1–R4) are filed in the I1 plan `## Review` for BACKLOG routing in I4; the heaviest: `training-facts.ts`
+  mixes rendering with domain derivations (move to `domain/training`); three renderers of the same `SetData`; the
+  language-name fallback can push the prompt past 2 500; `reportedToday` split by `createdAt` only; 60 performances per
+  exercise loaded every turn. Meta findings → `docs/REVIEW_FINDINGS.md`.
+  **Owner decisions asked (one message):** (1) compact `# Profile` rendering; (2) constraints fetched first, never cut;
+  (3) summariser v7 / verifier v2 wired on unconditionally; (4) ADR-0013 §3.4 amendment for training. B3–B5 fixes
+  dispatched (Sonnet) without waiting.
