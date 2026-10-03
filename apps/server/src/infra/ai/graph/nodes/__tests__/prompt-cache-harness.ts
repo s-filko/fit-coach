@@ -202,6 +202,8 @@ export function trainingData(todaySets: number): TrainingData {
     lastWorkout: null,
     warmupHabit: null,
     profileFacts: [],
+    reportedToday: [],
+    coachReplied: true,
   } as unknown as TrainingData;
 }
 

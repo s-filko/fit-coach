@@ -61,7 +61,12 @@ export interface TrainingData {
   history: ExerciseHistory[];
   lastWorkout: { completedAt: Date; exerciseNames: string[] } | null;
   warmupHabit: WarmupHabit | null;
+  /** The facts stored before this workout started: the system message's `# Profile`. */
   profileFacts: UserFact[];
+  /** Facts created during this workout (the coach's `manage_fact`), rendered as `Reported today:` in `# Today`. */
+  reportedToday: UserFact[];
+  /** The coach has already replied in this workout — the check-in line is a first-turn state (D12). */
+  coachReplied: boolean;
 }
 
 /**
@@ -143,7 +148,7 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
       }
       const plannedTextById = new Map(validPlanExercises.map(p => [p.exerciseId, `${p.targetSets}×${p.targetReps}`]));
 
-      const [performancesById, skips, recent, profileFacts] = await Promise.all([
+      const [performancesById, skips, recent, allFacts] = await Promise.all([
         Promise.all(
           todayExerciseIds.map(id =>
             deps.workoutSessionRepo.findRecentPerformancesForExercise(
@@ -180,7 +185,25 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
 
       const warmupHabit = computeWarmupHabit(recent.filter(s => s.id !== session.id));
 
-      return { ok: true, data: { session, history, lastWorkout, warmupHabit, profileFacts } };
+      // D13: a fact created after the workout started is today's report, not the standing profile (which stays
+      // byte-stable for the prompt cache); `Today` renders it. Facts, their service and the categories are untouched.
+      const startedAt = session.startedAt ?? session.createdAt;
+      const isToday = (f: UserFact): boolean => f.createdAt > startedAt;
+      const profileFacts = allFacts.filter(f => !isToday(f));
+      const reportedToday = allFacts.filter(isToday);
+
+      return {
+        ok: true,
+        data: {
+          session,
+          history,
+          lastWorkout,
+          warmupHabit,
+          profileFacts,
+          reportedToday,
+          coachReplied: input.coachReplied ?? true,
+        },
+      };
     },
     contextBlocks: [TRAINING_TODAY_V1, TRAINING_HISTORY_V1],
     modelProfile: 'default',

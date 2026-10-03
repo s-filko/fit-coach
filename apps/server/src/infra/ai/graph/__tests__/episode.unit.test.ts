@@ -1,6 +1,6 @@
 import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 
-import { runAiText, splitEpisode, toTranscriptMessages, workoutHistory } from '../episode';
+import { hasCoachReply, runAiText, splitEpisode, toTranscriptMessages, workoutHistory } from '../episode';
 
 describe('splitEpisode (D-I — this run = from the last HumanMessage on; INV-LLM-002)', () => {
   it('splits on the single human message', () => {
@@ -183,5 +183,33 @@ describe('workoutHistory (coach-simplification I1 — the training phase remembe
   it('start not found (folded by a compaction) → history unchanged', () => {
     const history = [new HumanMessage('q'), otherCall, otherResult, new AIMessage('a')];
     expect(workoutHistory(history, [new HumanMessage('next')])).toBe(history);
+  });
+});
+
+describe('hasCoachReply (D12 — the check-in is a first-turn state)', () => {
+  const startCall = new AIMessage({
+    content: '',
+    tool_calls: [{ id: 'start1', name: 'start_training_session', args: {}, type: 'tool_call' }],
+  });
+  const startResult = new ToolMessage({ tool_call_id: 'start1', content: 'started' });
+
+  it('hand-off run: earlier AI text belongs to the previous phase; nothing after the start call → false', () => {
+    const current = [new HumanMessage('начнём'), new AIMessage('Давай посмотрим план'), startCall, startResult];
+    expect(hasCoachReply([new AIMessage('old')], current)).toBe(false);
+  });
+
+  it('hand-off run: AI text after the start call → true', () => {
+    const current = [new HumanMessage('начнём'), startCall, startResult, new AIMessage('Начинаем')];
+    expect(hasCoachReply([], current)).toBe(true);
+  });
+
+  it('a later run: the hand-off reply sits in this workout history → true', () => {
+    const history = [new HumanMessage('начнём'), startCall, startResult, new AIMessage('Начинаем')];
+    expect(hasCoachReply(history, [new HumanMessage('жим')])).toBe(true);
+  });
+
+  it('a later run: only the trigger message and tool-call AI messages without text → false', () => {
+    const history = [new HumanMessage('начнём'), startCall, startResult];
+    expect(hasCoachReply(history, [new HumanMessage('привет')])).toBe(false);
   });
 });

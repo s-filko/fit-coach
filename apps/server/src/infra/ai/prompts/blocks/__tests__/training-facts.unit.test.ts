@@ -13,6 +13,7 @@ import type {
   SetKind,
   WorkoutSessionWithDetails,
 } from '@domain/training/types';
+import type { UserFact } from '@domain/user/ports';
 
 import {
   collectLoadsUsed,
@@ -242,6 +243,8 @@ const HISTORY: ExerciseHistory[] = [
 
 const DATA: TrainingFactsData = {
   profileFacts: [],
+  reportedToday: [],
+  coachReplied: true,
   warmupHabit: null,
   session: makeSession(),
   history: HISTORY,
@@ -731,5 +734,100 @@ describe('Today: planning warnings and notes', () => {
   it('prints nothing extra when the plan has none', () => {
     const out = TRAINING_TODAY_V1.render(DATA, CTX, 0) ?? '';
     expect(out).not.toMatch(/Planning (warnings|note)/);
+  });
+});
+
+describe('Today: check-in (D12) and reported today (D13)', () => {
+  const fact = (over: Partial<UserFact>): UserFact =>
+    ({
+      id: 'f',
+      category: 'physical_constraint',
+      fact: 'Lower back: no heavy axial loading',
+      muscleGroup: 'lower_back',
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+      ...over,
+    }) as UserFact;
+  const render = (over: Partial<TrainingFactsData>): string =>
+    TRAINING_TODAY_V1.render({ ...DATA, ...over }, CTX, 0) ?? '';
+  const CHECK = 'Check-in: ask how the lower back is today — not asked yet today.';
+
+  it('first turn with a constraint: one line per constrained muscle group, in plain words', () => {
+    const out = render({
+      coachReplied: false,
+      profileFacts: [
+        fact({}),
+        fact({ id: 'g', muscleGroup: 'right_knee', fact: 'Right knee: pinches' }),
+        fact({ id: 'h', muscleGroup: 'lower_back' }),
+      ],
+    });
+    expect(out).toContain(CHECK);
+    expect(out).toContain('Check-in: ask how the right knee is today — not asked yet today.');
+    expect(out.match(/Check-in:/g)).toHaveLength(2);
+  });
+
+  it('absent once the coach has replied', () => {
+    expect(render({ coachReplied: true, profileFacts: [fact({})] })).not.toContain('Check-in');
+  });
+
+  it('absent without a physical constraint (or one with no muscle group)', () => {
+    expect(render({ coachReplied: false, profileFacts: [] })).not.toContain('Check-in');
+    expect(
+      render({ coachReplied: false, profileFacts: [fact({ category: 'equipment' }), fact({ muscleGroup: null })] }),
+    ).not.toContain('Check-in');
+  });
+
+  it('absent when the planner left warnings or an exercise note', () => {
+    const base = makeSession();
+    const plan = base.sessionPlanJson!;
+    const withWarning = makeSession({ sessionPlanJson: { ...plan, warnings: ['slept badly'] } });
+    const withNote = makeSession({
+      sessionPlanJson: { ...plan, exercises: plan.exercises.map((e, i) => (i === 0 ? { ...e, notes: 'light' } : e)) },
+    });
+    for (const session of [withWarning, withNote]) {
+      expect(render({ session, coachReplied: false, profileFacts: [fact({})] })).not.toContain('Check-in');
+    }
+    // blank warnings do not count as a covered state
+    const blank = makeSession({ sessionPlanJson: { ...plan, warnings: ['  '] } });
+    expect(render({ session: blank, coachReplied: false, profileFacts: [fact({})] })).toContain(CHECK);
+  });
+
+  it('renders facts created this workout as "Reported today" with the local time', () => {
+    const out = render({
+      reportedToday: [
+        fact({ fact: 'Right knee pinched on the squat', createdAt: new Date('2026-10-01T11:33:00.000Z') }),
+      ],
+    });
+    expect(out).toContain('Reported today: Right knee pinched on the squat (19:33)');
+    expect(render({})).not.toContain('Reported today');
+  });
+});
+
+describe('History: the habit line replaces the cardio warm-up block', () => {
+  const habit = {
+    workouts: 10,
+    withCardio: 9,
+    kinds: [{ label: 'bike', minMinutes: 8, maxMinutes: 8 }],
+  };
+  const bikeFirst = [HISTORY[2]!, HISTORY[0]!];
+
+  it('drops the first exercise history when its kind is in the habit', () => {
+    const out = TRAINING_HISTORY_V1.render({ ...DATA, history: bikeFirst, warmupHabit: habit }, CTX, 0) ?? '';
+    expect(out).toContain('Habit:');
+    expect(out).not.toContain('Cycling');
+    expect(out).toContain('45° Leg Press');
+  });
+
+  it('keeps it without a habit, or when the cardio is not first', () => {
+    expect(TRAINING_HISTORY_V1.render({ ...DATA, history: bikeFirst, warmupHabit: null }, CTX, 0)).toContain('Cycling');
+    expect(
+      TRAINING_HISTORY_V1.render({ ...DATA, history: [HISTORY[0]!, HISTORY[2]!], warmupHabit: habit }, CTX, 0),
+    ).toContain('Cycling');
+  });
+
+  it('with only the warm-up exercise today, the block is just the habit line', () => {
+    const out = TRAINING_HISTORY_V1.render({ ...DATA, history: [HISTORY[2]!], warmupHabit: habit }, CTX, 0);
+    expect(out).toBe(
+      '# History (before today)\n\nHabit: a cardio warm-up (bike 8 min) before 9 of the last 10 workouts.',
+    );
   });
 });

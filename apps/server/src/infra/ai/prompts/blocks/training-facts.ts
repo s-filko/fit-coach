@@ -63,6 +63,10 @@ export interface TrainingFactsData {
   warmupHabit: WarmupHabit | null;
   /** The client's stored facts for the system message's `# Profile` (`renderTrainingProfile`); the blocks ignore it. */
   profileFacts: UserFact[];
+  /** Facts the coach stored during this workout (created after its start) — `Reported today:` lines. */
+  reportedToday: UserFact[];
+  /** The coach has already replied in this workout; the check-in line is for the first turn only. */
+  coachReplied: boolean;
 }
 
 const MONTH_WORDS = [
@@ -466,6 +470,21 @@ function exerciseLine(
   return `- ${name} [id ${exerciseId}]${plan}${note} — ${state}`;
 }
 
+function plannerCoveredState(plan: WorkoutSessionWithDetails['sessionPlanJson']): boolean {
+  return (
+    (plan?.warnings ?? []).some(w => w.trim() !== '') ||
+    (plan?.exercises ?? []).some(p => (p.notes ?? '').trim() !== '')
+  );
+}
+
+/** The muscle groups of the profile's physical constraints in plain words (`lower_back` → `lower back`), once each. */
+function constrainedGroups(facts: readonly UserFact[]): string[] {
+  const groups = facts
+    .filter(f => f.category === 'physical_constraint' && f.muscleGroup != null && f.muscleGroup.trim() !== '')
+    .map(f => (f.muscleGroup as string).replace(/[_-]+/g, ' ').trim().toLowerCase());
+  return [...new Set(groups)];
+}
+
 function idleText(ms: number): string {
   const hours = Math.max(0, Math.floor(ms / 3_600_000));
   return hours >= 48 ? `${Math.floor(hours / 24)} days` : `${hours} h`;
@@ -475,7 +494,7 @@ function idleText(ms: number): string {
 export const TRAINING_TODAY_V1: ContextBlock<TrainingFactsData> = {
   id: 'training.today',
   version: 'v1',
-  render({ session, history, lastWorkout }, ctx: ContextBlockCtx) {
+  render({ session, history, lastWorkout, profileFacts, reportedToday, coachReplied }, ctx: ContextBlockCtx) {
     const tz = tzOf(ctx);
     const lines: string[] = [TRAINING_TODAY_HEADER];
     // The i0 replay rendering shows no session length / elapsed minutes (they made the coach cut sets for time):
@@ -517,6 +536,17 @@ export const TRAINING_TODAY_V1: ContextBlock<TrainingFactsData> = {
       lines.push(plan && plan.exercises.length > 0 ? 'Off plan:' : 'Sets so far:');
       for (const ex of offPlan) {
         lines.push(exerciseLine(ex.exercise.name, ex.exerciseId, null, ex));
+      }
+    }
+    // D13: what the coach stored from the client's own words during this workout, with the time.
+    for (const f of reportedToday) {
+      lines.push(`Reported today: ${f.fact} (${formatInUserTz(f.createdAt, tz).time})`);
+    }
+    // D12: a first-turn state, not a prompt rule — gone once the coach has replied, and absent when the planner's
+    // warnings or notes already carried today's state.
+    if (!coachReplied && !plannerCoveredState(plan)) {
+      for (const group of constrainedGroups(profileFacts)) {
+        lines.push(`Check-in: ask how the ${group} is today — not asked yet today.`);
       }
     }
     return lines.join('\n');
@@ -568,9 +598,15 @@ export const TRAINING_HISTORY_V1: ContextBlock<TrainingFactsData> = {
   version: 'v1',
   render({ history, warmupHabit }, ctx: ContextBlockCtx) {
     const habit = warmupHabit && warmupHabit.kinds.length > 0 ? [habitLine(warmupHabit)] : [];
-    if (history.length === 0 && habit.length === 0) {
+    // The habit line replaces the history block of the cardio warm-up itself (today's first exercise, when its
+    // kind is one the habit names).
+    const [first] = history;
+    const warmupKinds = new Set((warmupHabit?.kinds ?? []).map(k => k.label));
+    const shown =
+      habit.length > 0 && first && warmupKinds.has(cardioLabel(first.exerciseName)) ? history.slice(1) : history;
+    if (shown.length === 0 && habit.length === 0) {
       return null;
     }
-    return [TRAINING_HISTORY_HEADER, ...habit, ...history.map(entry => historyEntry(entry, ctx))].join('\n\n');
+    return [TRAINING_HISTORY_HEADER, ...habit, ...shown.map(entry => historyEntry(entry, ctx))].join('\n\n');
   },
 };

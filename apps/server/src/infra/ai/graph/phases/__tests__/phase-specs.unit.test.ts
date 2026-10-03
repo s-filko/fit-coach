@@ -211,8 +211,40 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
     // findRecentByUserIdWithDetails's stub echoes SESSION_ROW itself — today's own session, excluded by id.
     expect(loaded).toEqual({
       ok: true,
-      data: { session: SESSION_ROW, history: [], lastWorkout: null, warmupHabit: null, profileFacts: [FACT] },
+      data: {
+        session: SESSION_ROW,
+        history: [],
+        lastWorkout: null,
+        warmupHabit: null,
+        profileFacts: [FACT],
+        reportedToday: [],
+        coachReplied: true,
+      },
     });
+  });
+
+  it('training loader: facts created after the session start become reportedToday and leave the profile; coachReplied comes from the input', async () => {
+    const old = { ...FACT, createdAt: new Date('2026-08-01T09:00:00Z') };
+    const fresh = {
+      id: 'f2',
+      fact: 'Right knee pinched on the squat',
+      category: 'physical_constraint',
+      createdAt: new Date('2026-09-01T09:30:00Z'),
+    };
+    const deps = stubDeps({ userFacts: { getForPrompt: async () => [old, fresh] } });
+    const first = await specOf('training').loadContext(
+      { userId: 'u1', user: null, activeSessionId: 'session-1', coachReplied: false },
+      deps,
+    );
+    expect(first).toMatchObject({
+      ok: true,
+      data: { profileFacts: [old], reportedToday: [fresh], coachReplied: false },
+    });
+    const unknown = await specOf('training').loadContext(
+      { userId: 'u1', user: null, activeSessionId: 'session-1' },
+      deps,
+    );
+    expect(unknown).toMatchObject({ ok: true, data: { coachReplied: true } });
   });
 
   it('training loader: one history entry per plan exercise (also not started, with no performances), up to three performances, catalog name wins', async () => {
@@ -295,6 +327,8 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
         lastWorkout: { completedAt: previous.completedAt, exerciseNames: ['Treadmill', 'Plank'] },
         warmupHabit: null,
         profileFacts: [FACT],
+        reportedToday: [],
+        coachReplied: true,
       },
     });
     expect(findRecentPerformancesForExercise).toHaveBeenCalledWith('u1', BENCH, 'session-1', 60);
@@ -405,7 +439,15 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
 
     expect(loaded).toEqual({
       ok: true,
-      data: { session, history: [], lastWorkout: null, warmupHabit: null, profileFacts: [] },
+      data: {
+        session,
+        history: [],
+        lastWorkout: null,
+        warmupHabit: null,
+        profileFacts: [],
+        reportedToday: [],
+        coachReplied: true,
+      },
     });
     // Neither bad id ever reached a DB call — the turn does not fail on a legacy plan row.
     expect(findRecentPerformancesForExercise).not.toHaveBeenCalled();

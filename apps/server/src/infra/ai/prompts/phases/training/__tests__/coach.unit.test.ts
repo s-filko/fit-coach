@@ -45,6 +45,8 @@ describe('TRAINING_COACH', () => {
     const text = sectionOf('ru', 'coach');
     expect(text).toContain("today's plan with every set logged so far");
     expect(text).not.toMatch(/RULE|LOAD PLAN/);
+    expect(text).toContain('remember a new limit for next time (manage_fact)');
+    expect(text).toContain('within the limits in their profile');
   });
 
   it('renders the profile section from the user and facts', () => {

@@ -28,6 +28,8 @@ export interface LoadInput {
   activeSessionId: string | null;
   /** The run clock (ctx.now) — phases compute against it; omitted in unit tests (falls back to the wall clock). */
   now?: Date;
+  /** Training: the coach has already replied in this workout (`hasCoachReply`); omitted = unknown, read as yes. */
+  coachReplied?: boolean;
 }
 
 /**

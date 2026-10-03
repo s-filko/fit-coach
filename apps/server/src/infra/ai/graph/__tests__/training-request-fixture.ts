@@ -522,6 +522,8 @@ function plainFixture(): RequestFixture {
           { label: 'bike', minMinutes: 8, maxMinutes: 8 },
         ],
       },
+      reportedToday: [],
+      coachReplied: true,
       profileFacts: [
         factOf(1, 'physical_constraint', 'Shoulder: no overhead pressing, clicks at the top.', 'shoulder'),
         factOf(2, 'exercise_preference', 'Prefers machines and cables.'),
@@ -784,6 +786,8 @@ function case07Fixture(): RequestFixture {
           { label: 'bike', minMinutes: 8, maxMinutes: 8 },
         ],
       },
+      reportedToday: [],
+      coachReplied: true,
       profileFacts: [
         factOf(
           1,

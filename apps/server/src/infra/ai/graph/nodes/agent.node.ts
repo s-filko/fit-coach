@@ -14,7 +14,7 @@ import { assembleContext } from '@infra/ai/context/assemble-context';
 import { applyCacheBreakpoints, partsOf, withParts } from '@infra/ai/context/cache-breakpoints';
 import { warmCacheOf } from '@infra/ai/context/cache-warmth';
 import type { CourseCheckDirective, StoredCourseDirective } from '@infra/ai/course-check/directive';
-import { splitEpisode, workoutHistory } from '@infra/ai/graph/episode';
+import { hasCoachReply, splitEpisode, workoutHistory } from '@infra/ai/graph/episode';
 import type { ConversationGraphDeps, PhaseSpec, PromptContextFor } from '@infra/ai/graph/phase-spec';
 import { ctxOf } from '@infra/ai/graph/state';
 import { langOf, t } from '@infra/ai/messages';
@@ -146,7 +146,16 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     const { history, current } = splitEpisode(state.messages ?? []);
     const lang = langOf(user?.languageCode);
 
-    const loaded = await spec.loadContext({ userId, user, activeSessionId: state.activeSessionId ?? null, now }, deps);
+    const loaded = await spec.loadContext(
+      {
+        userId,
+        user,
+        activeSessionId: state.activeSessionId ?? null,
+        now,
+        coachReplied: hasCoachReply(history, current),
+      },
+      deps,
+    );
     if (!loaded.ok) {
       // D-B: phase data guards are catalog replies — no model call.
       return { messages: [new AIMessage(t(loaded.reply, lang))] };

@@ -140,3 +140,16 @@ export function workoutHistory(history: BaseMessage[], current: BaseMessage[]): 
   const trigger = humanIdx >= 0 ? [history[humanIdx]] : [];
   return [...trigger, ...history.slice(after)];
 }
+
+/**
+ * Has the coach already answered in this workout (coach-simplification D12)? True when any non-empty AI text sits
+ * in this workout's messages (`workoutHistory`) or in the current run. A hand-off run (the start call is in
+ * `current`) counts only what follows the start call — earlier AI text there belongs to the previous phase.
+ */
+export function hasCoachReply(history: BaseMessage[], current: BaseMessage[]): boolean {
+  const startAt = current.findIndex(
+    m => m._getType() === 'ai' && toolCallsOf(m).some(c => c.name === START_TRAINING_TOOL),
+  );
+  const messages = startAt >= 0 ? current.slice(startAt + 1) : [...workoutHistory(history, current), ...current];
+  return messages.some(m => m._getType() === 'ai' && textOf(m.content) !== '');
+}
