@@ -201,6 +201,15 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   page with a comment box per coach message and says "acceptable" or what is wrong. The single-turn cases stay as a
   cheap regression set, not as the gate. The `i0/comments.html` page (https://claude.ai/artifact/5jFVMAhQ4YYzPaDTQU4g68)
   was built but is optional for the owner now.
+- (D10) 2026-10-03 — **I0 gate passed in substance.** Owner's verdict on the full-session replay (run 3a): «в общем
+  хорошо, звучит подбадривающе, так и должно быть, он должен быть наш бадди… тренер с памятью, что он и делает»,
+  with 16 per-reply comments (verbatim + reading: `data/coach-simplification/i0/owner-comments-run3a.md`). None of
+  them rejects the shape; they refine the coaching style (strategy for today judged after the first set, warm-up 7–8
+  reps and optional, offer-not-press, praise a real jump, answer only what was asked, no illogical caps, comment on
+  finishers) and name one app-logic defect (session end time = last set time, not the "закончил" message → I2).
+  Decision: I1 Tasks 2–5 go now; in parallel one Opus round folds the comments into the prompt / facts shape /
+  rubric with replay ×2; the result is synced into the branch before the I1 review. The owner's taste, as written in
+  that file, is the rubric's source of truth from now on.
 
 ## 6. Progress log (append one line per state change; newest last)
 
@@ -275,3 +284,10 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   **Next:** owner reads the chat page and comments / accepts. Accepted → update the I1 branch (prompt text, profile
   and Today shape, the two facts above) inside Task 2, then Tasks 2–5. Not accepted → Opus revises from his
   comments, replay ×2, republish.
+- 2026-10-03 05:05 — Owner's comments received (D10). Usage: session 4 %, week 4 % → NORMAL. Dispatched in parallel:
+  (a) Opus — prompt/facts/rubric refinement from the comments, replay ×2, republish same URL, write `i0/final-shape.md`
+  (the exact profile/Today/History rendering + prompt text Task 2 must mirror); (b) Sonnet — I1 Task 2 in the worktree
+  (switch the training phase to the new blocks; prompt text and shape per the current `i0/coach-prompt.md` /
+  `i0/session/run.py`, to be re-synced from `final-shape.md` afterwards).
+  **Next:** on (a) → owner sees the page once more only if something big changed; on (b) → Task 3, then 4, 5, then
+  sync task from `final-shape.md`, then Opus review of the branch, then ask the owner for push + dev deploy.
