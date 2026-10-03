@@ -299,3 +299,13 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   says so. **`i0/final-shape.md` is the spec for the repo sync** (prompt verbatim, Profile/Today/History rules with
   invented examples, not-shown list, diffs). Style note for the sync: run 4b opens 12/20 replies with «Принято».
   **Next:** Task 2 report (Sonnet, running) → Task 3 → Task 4 → Task 5 → sync task from `final-shape.md` → Opus review.
+- 2026-10-04 — Emoji probe (owner asked why they vanished): run-3a emoji were chance (same prompt, run 3b = 0); a tone-only
+  edit gave 0/20 twice; an explicit line gave 20/20 with a new 😉 (overshoot). Prompt stays at round-4 text; owner asked
+  to choose: bounded line («👍 или 💪 раз–два за тренировку, когда заслужил», replay ×2, accept at 5–12/20) or none.
+- 2026-10-04 — I1 Task 2 done (Sonnet): commit `4053db26`. Training request = system (coach prompt 2 394 chars +
+  `# Profile`) + `<context>` (`# Today`, `# History`, gap note, NOW) + this workout's messages; no user-facts block,
+  course directive, episode summaries, `get_load_plan`, old blocks. Unit 2 775, scenarios 411 green; 7 old load-facts
+  tests `it.skip` (deleted in Task 3); `prompt-cache-harness` on a plain fixture; `format-exercise-summary` lost its
+  instruction tails. Known gap for the sync task: blocks do not yet render the habit line and "Loads used"
+  (`final-shape.md`). Task 3 dispatched (Sonnet, same worktree).
+  **Next:** Task 3 report → Task 4 → Task 5 → sync from `final-shape.md` → Opus review → owner: push + dev deploy.
