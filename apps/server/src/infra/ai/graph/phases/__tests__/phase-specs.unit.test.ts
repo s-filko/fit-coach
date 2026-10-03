@@ -211,7 +211,7 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
     // findRecentByUserIdWithDetails's stub echoes SESSION_ROW itself — today's own session, excluded by id.
     expect(loaded).toEqual({
       ok: true,
-      data: { session: SESSION_ROW, history: [], lastWorkout: null, profileFacts: [FACT] },
+      data: { session: SESSION_ROW, history: [], lastWorkout: null, warmupHabit: null, profileFacts: [FACT] },
     });
   });
 
@@ -281,17 +281,79 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
             plannedText: '3×8',
             performances: [performance],
             lastSkippedAt: null,
+            loadsUsed: [],
           },
-          { exerciseId: ROW, exerciseName: 'Row', plannedText: '3×10', performances: [], lastSkippedAt: skippedAt },
+          {
+            exerciseId: ROW,
+            exerciseName: 'Row',
+            plannedText: '3×10',
+            performances: [],
+            lastSkippedAt: skippedAt,
+            loadsUsed: [],
+          },
         ],
         lastWorkout: { completedAt: previous.completedAt, exerciseNames: ['Treadmill', 'Plank'] },
+        warmupHabit: null,
         profileFacts: [FACT],
       },
     });
-    expect(findRecentPerformancesForExercise).toHaveBeenCalledWith('u1', BENCH, 'session-1', 3);
-    expect(findRecentPerformancesForExercise).toHaveBeenCalledWith('u1', ROW, 'session-1', 3);
-    expect(findRecentByUserIdWithDetails).toHaveBeenCalledWith('u1', 2, { realWorkoutsOnly: true });
+    expect(findRecentPerformancesForExercise).toHaveBeenCalledWith('u1', BENCH, 'session-1', 60);
+    expect(findRecentPerformancesForExercise).toHaveBeenCalledWith('u1', ROW, 'session-1', 60);
+    expect(findRecentByUserIdWithDetails).toHaveBeenCalledWith('u1', 14, { realWorkoutsOnly: true });
     expect(getForPrompt).toHaveBeenCalledWith('u1', now);
+  });
+
+  it('training loader: the warm-up habit comes from the last workouts, the loads from all earlier performances', async () => {
+    const workout = (id: string) => ({
+      id,
+      completedAt: new Date('2026-09-20T10:00:00Z'),
+      exercises: [
+        {
+          orderIndex: 0,
+          exercise: { name: 'Treadmill', category: 'cardio' },
+          sets: [{ setData: { type: 'cardio_duration', duration: 600 } }],
+        },
+        { orderIndex: 1, exercise: { name: 'Bench', category: 'compound' }, sets: [] },
+      ],
+    });
+    const PLAN_BENCH = 'aaaaaaaa-1111-4111-8111-111111111111';
+    const session = {
+      ...SESSION_ROW,
+      sessionPlanJson: {
+        sessionKey: 'k',
+        sessionName: 'S',
+        reasoning: '',
+        estimatedDuration: 45,
+        exercises: [{ exerciseId: PLAN_BENCH, exerciseName: 'Bench', targetSets: 3, targetReps: '8', restSeconds: 90 }],
+      },
+    };
+    const perf = (day: string, weight: number) => ({
+      exerciseId: PLAN_BENCH,
+      completedAt: new Date(`${day}T10:00:00Z`),
+      sessionExercise: { sets: [{ setData: { type: 'strength', reps: 8, weight, weightUnit: 'kg' } }] },
+    });
+    const deps = stubDeps({
+      trainingService: { getSessionDetails: async () => session },
+      exerciseRepository: { findByIdsWithMuscles: async () => [] },
+      workoutSessionRepo: {
+        findLastSkipsByExercise: async () => [],
+        findRecentByUserIdWithDetails: async () => [SESSION_ROW, workout('w1'), workout('w2')],
+        findRecentPerformancesForExercise: async () => [
+          perf('2026-09-27', 60),
+          perf('2026-09-20', 50),
+          perf('2026-09-13', 55),
+          perf('2026-09-06', 50),
+        ],
+      },
+    });
+    const loaded = await specOf('training').loadContext(
+      { userId: 'u1', user: null, activeSessionId: 'session-1' },
+      deps,
+    );
+    expect(loaded.ok && loaded.data).toMatchObject({
+      warmupHabit: { workouts: 2, withCardio: 2, kinds: [{ label: 'treadmill', minMinutes: 10, maxMinutes: 10 }] },
+      history: [{ performances: [{}, {}, {}], loadsUsed: [{ weight: 50 }, { weight: 55 }, { weight: 60 }] }],
+    });
   });
 
   it('training loader: off-plan started exercises follow the plan ones, named by the catalog', async () => {
@@ -341,7 +403,10 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
       deps,
     );
 
-    expect(loaded).toEqual({ ok: true, data: { session, history: [], lastWorkout: null, profileFacts: [] } });
+    expect(loaded).toEqual({
+      ok: true,
+      data: { session, history: [], lastWorkout: null, warmupHabit: null, profileFacts: [] },
+    });
     // Neither bad id ever reached a DB call — the turn does not fail on a legacy plan row.
     expect(findRecentPerformancesForExercise).not.toHaveBeenCalled();
     expect(findByIdsWithMuscles).not.toHaveBeenCalled();

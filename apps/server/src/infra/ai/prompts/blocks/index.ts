@@ -76,6 +76,8 @@ export { formatExerciseSets, formatSetData } from './set-format';
 export {
   formatSetShort,
   formatSetsLine,
+  collectLoadsUsed,
+  computeWarmupHabit,
   relativeDay,
   TRAINING_HISTORY_HEADER,
   TRAINING_HISTORY_V1,
@@ -83,7 +85,9 @@ export {
   TRAINING_TODAY_V1,
   trendLine,
   type ExerciseHistory,
+  type LoadUsed,
   type TrainingFactsData,
+  type WarmupHabit,
 } from './training-facts';
 export { renderTrainingProfile } from './training-profile';
 

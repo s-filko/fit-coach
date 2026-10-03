@@ -26,7 +26,7 @@ import { estimateMessages, estimateTokens } from '@infra/ai/context/token-estima
 import { workoutHistory } from '@infra/ai/graph/episode';
 import type { ConversationGraphDeps } from '@infra/ai/graph/phase-spec';
 import { buildTrainingSpec, type TrainingData } from '@infra/ai/graph/phases/training.spec';
-import { CURRENT_TIME_V1, type ExerciseHistory, renderBlock } from '@infra/ai/prompts/blocks';
+import { collectLoadsUsed, CURRENT_TIME_V1, type ExerciseHistory, renderBlock } from '@infra/ai/prompts/blocks';
 import { compose } from '@infra/ai/prompts/compose';
 
 export interface RequestFixture {
@@ -143,6 +143,7 @@ const historyOf = (rows: Row[]): ExerciseHistory[] =>
     plannedText: r.planned,
     performances: r.past.map(([date, sets]) => performance(r.id, r.name, date, sets)),
     lastSkippedAt: null,
+    loadsUsed: collectLoadsUsed(r.past.map(([date, sets]) => performance(r.id, r.name, date, sets))),
   }));
 
 function sessionOf(
@@ -513,6 +514,14 @@ function plainFixture(): RequestFixture {
       session,
       history,
       lastWorkout: { completedAt: long('2026-09-29'), exerciseNames: ['Rowing Machine', 'Lat Pulldown', 'Plank'] },
+      warmupHabit: {
+        workouts: 10,
+        withCardio: 9,
+        kinds: [
+          { label: 'treadmill', minMinutes: 10, maxMinutes: 15 },
+          { label: 'bike', minMinutes: 8, maxMinutes: 8 },
+        ],
+      },
       profileFacts: [
         factOf(1, 'physical_constraint', 'Shoulder: no overhead pressing, clicks at the top.', 'shoulder'),
         factOf(2, 'exercise_preference', 'Prefers machines and cables.'),
@@ -767,6 +776,14 @@ function case07Fixture(): RequestFixture {
       session,
       history,
       lastWorkout: { completedAt: long('2026-09-29'), exerciseNames: ['Treadmill', 'Chest-Supported Row', 'Plank'] },
+      warmupHabit: {
+        workouts: 10,
+        withCardio: 9,
+        kinds: [
+          { label: 'treadmill', minMinutes: 10, maxMinutes: 15 },
+          { label: 'bike', minMinutes: 8, maxMinutes: 8 },
+        ],
+      },
       profileFacts: [
         factOf(
           1,

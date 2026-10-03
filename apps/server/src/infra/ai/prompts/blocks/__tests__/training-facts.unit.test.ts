@@ -15,6 +15,8 @@ import type {
 } from '@domain/training/types';
 
 import {
+  collectLoadsUsed,
+  computeWarmupHabit,
   formatSetShort,
   relativeDay,
   TRAINING_HISTORY_V1,
@@ -121,7 +123,14 @@ function history(
   performances: ExerciseLastPerformance[],
   lastSkippedAt: Date | null = null,
 ): ExerciseHistory {
-  return { exerciseId: id, exerciseName: name, plannedText, performances, lastSkippedAt };
+  return {
+    exerciseId: id,
+    exerciseName: name,
+    plannedText,
+    performances,
+    lastSkippedAt,
+    loadsUsed: collectLoadsUsed(performances),
+  };
 }
 
 const PLAN = [
@@ -233,6 +242,7 @@ const HISTORY: ExerciseHistory[] = [
 
 const DATA: TrainingFactsData = {
   profileFacts: [],
+  warmupHabit: null,
   session: makeSession(),
   history: HISTORY,
   lastWorkout: {
@@ -320,10 +330,11 @@ describe('TRAINING_HISTORY_V1 (# History)', () => {
     expect(text).toContain(
       [
         '45° Leg Press (today 4×12)',
-        '- 4 days ago, Sunday Sep 27: 12×110 (no RPE), 12×130 (RPE 8), 12×130 (RPE 8), 12×135 (RPE 9)',
-        '- 10 days ago, Monday Sep 21: 12×110 (no RPE), 12×110 (no RPE), 12×120 (no RPE), 12×120 (RPE 9)',
-        '- 15 days ago, Wednesday Sep 16: 10×80 (warm-up), 12×110, 12×110, 12×110 — all RPE 9',
+        '- 4 days ago, Sunday Sep 27: 12×110, 12×130 (RPE 8), 12×130 (RPE 8), 12×135 (RPE 9)',
+        '- 10 days ago, Monday Sep 21: 12×110, 12×110, 12×120, 12×120 (RPE 9)',
+        '- 15 days ago, Wednesday Sep 16: 10×80 (warm-up), 12×110, 12×110, 12×110 (all RPE 9)',
         '- Trend Sep 16 → Sep 21 → Sep 27: top weight 110 → 120 → 135 kg; working sets 3 → 4 → 4; reps per working set 12 → 12 → 12; weight × reps 3,960 → 5,520 → 6,060.',
+        '- Loads used: 80, 110, 120, 130, 135 kg.',
       ].join('\n'),
     );
   });
@@ -344,7 +355,7 @@ describe('TRAINING_HISTORY_V1 (# History)', () => {
     expect(text).toContain(
       [
         'Cycling (today off plan)',
-        '- 21 days ago, Thursday Sep 10: 10 min — note: "timed by feel; 10 min is an estimate"',
+        '- 21 days ago, Thursday Sep 10: 10 min — his note: "timed by feel; 10 min is an estimate"',
       ].join('\n'),
     );
     expect(text).not.toMatch(/Cycling[\s\S]*Trend[\s\S]*$/);
@@ -390,10 +401,11 @@ describe('RPE rules', () => {
         sessionExercise: sessionExercise(ID.press, 'X', sets),
       },
     ]);
-    return (TRAINING_HISTORY_V1.render({ ...DATA, history: [h] }, CTX, 0) ?? '').split('\n').pop() ?? '';
+    const lines = (TRAINING_HISTORY_V1.render({ ...DATA, history: [h] }, CTX, 0) ?? '').split('\n');
+    return lines.find(l => l.startsWith('- 4 days ago')) ?? '';
   };
 
-  it('mixed: a rated set prints its RPE, an unrated working set says (no RPE)', () => {
+  it('mixed: a rated set prints its RPE, an unrated working set is printed bare', () => {
     expect(
       line(
         strength([
@@ -402,10 +414,10 @@ describe('RPE rules', () => {
           [10, 50, 8],
         ]),
       ),
-    ).toBe('- 4 days ago, Sunday Sep 27: 10×50 (RPE 7), 10×50 (no RPE), 10×50 (RPE 8)');
+    ).toBe('- 4 days ago, Sunday Sep 27: 10×50 (RPE 7), 10×50, 10×50 (RPE 8)');
   });
 
-  it('none rated: the line ends "no RPE recorded"', () => {
+  it('none rated: a strength line ends "(no RPE recorded)"', () => {
     expect(
       line(
         strength([
@@ -413,7 +425,7 @@ describe('RPE rules', () => {
           [10, 50],
         ]),
       ),
-    ).toBe('- 4 days ago, Sunday Sep 27: 10×50, 10×50 — no RPE recorded');
+    ).toBe('- 4 days ago, Sunday Sep 27: 10×50, 10×50 (no RPE recorded)');
   });
 
   it('all equal: "all RPE n" once', () => {
@@ -424,11 +436,19 @@ describe('RPE rules', () => {
           [10, 50, 8],
         ]),
       ),
-    ).toBe('- 4 days ago, Sunday Sep 27: 10×50, 10×50 — all RPE 8');
+    ).toBe('- 4 days ago, Sunday Sep 27: 10×50, 10×50 (all RPE 8)');
   });
 
   it('a single rated working set keeps its own (RPE n)', () => {
     expect(line(strength([[10, 50, 8]]))).toBe('- 4 days ago, Sunday Sep 27: 10×50 (RPE 8)');
+  });
+
+  it('a legacy set with no stored kind is never labelled warm-up, even when it looks light', () => {
+    const legacy = [
+      { ...set({ type: 'strength', reps: 10, weight: 20, weightUnit: 'kg' }), setKind: null },
+      ...strength([[10, 50, 9]]),
+    ];
+    expect(line(legacy)).toBe('- 4 days ago, Sunday Sep 27: 10×20, 10×50 (RPE 9)');
   });
 
   it('warm-up sets are marked and never counted as unrated', () => {
@@ -577,5 +597,139 @@ describe('trendLine', () => {
       TZ,
     );
     expect(line).toContain('Trend Dec 5 2025 → Sep 27 2026');
+  });
+});
+
+describe('Habit and loads used', () => {
+  const workout = (id: string, exercises: SessionExerciseWithDetails[]): WorkoutSessionWithDetails =>
+    makeSession({ id, status: 'completed', exercises });
+  const cardio = (name: string, minutes: number, order = 0): SessionExerciseWithDetails => ({
+    ...sessionExercise(ID.bike, name, [set({ type: 'cardio_duration', duration: minutes * 60 })]),
+    orderIndex: order,
+    exercise: { ...exercise(ID.bike, name), category: 'cardio' },
+  });
+  const lift = (order = 1): SessionExerciseWithDetails => ({
+    ...sessionExercise(ID.press, 'Leg Press', strength([[10, 100]])),
+    orderIndex: order,
+  });
+
+  it('computeWarmupHabit: kinds with minute ranges, from the last workouts that opened with cardio', () => {
+    const ws = [
+      workout('a', [cardio('Treadmill', 10), lift()]),
+      workout('b', [cardio('Treadmill', 15), lift()]),
+      workout('c', [cardio('Cycling', 8), lift()]),
+      workout('d', [lift(0), lift(1)]),
+      workout('e', [lift(0)]), // one exercise only: not counted
+    ];
+    expect(computeWarmupHabit(ws)).toEqual({
+      workouts: 4,
+      withCardio: 3,
+      kinds: [
+        { label: 'treadmill', minMinutes: 10, maxMinutes: 15 },
+        { label: 'bike', minMinutes: 8, maxMinutes: 8 },
+      ],
+    });
+  });
+
+  it('computeWarmupHabit: null below half, and with no workouts', () => {
+    expect(
+      computeWarmupHabit([
+        workout('a', [cardio('Treadmill', 10), lift()]),
+        workout('b', [lift(0), lift(1)]),
+        workout('c', [lift(0), lift(1)]),
+      ]),
+    ).toBeNull();
+    expect(computeWarmupHabit([])).toBeNull();
+  });
+
+  it('renders the habit line first under the History header', () => {
+    const habit = {
+      workouts: 10,
+      withCardio: 9,
+      kinds: [
+        { label: 'treadmill', minMinutes: 10, maxMinutes: 15 },
+        { label: 'bike', minMinutes: 8, maxMinutes: 8 },
+      ],
+    };
+    const out = TRAINING_HISTORY_V1.render({ ...DATA, warmupHabit: habit }, CTX, 0) ?? '';
+    expect(out.split('\n\n').slice(0, 2)).toEqual([
+      '# History (before today)',
+      'Habit: a cardio warm-up (treadmill 10–15 min, bike 8 min) before 9 of the last 10 workouts.',
+    ]);
+    expect(TRAINING_HISTORY_V1.render({ ...DATA, history: [], warmupHabit: habit }, CTX, 0)).toContain('Habit:');
+  });
+
+  it('collectLoadsUsed: distinct kg loads ascending with the last day each was used', () => {
+    const loads = collectLoadsUsed([
+      performance(
+        ID.press,
+        'X',
+        '2026-09-27',
+        strength([
+          [10, 80],
+          [10, 90],
+        ]),
+      ),
+      performance(
+        ID.press,
+        'X',
+        '2026-09-20',
+        strength([
+          [10, 80],
+          [10, 70],
+        ]),
+      ),
+    ]);
+    expect(loads.map(l => [l.weight, l.lastUsedAt.toISOString().slice(0, 10)])).toEqual([
+      [70, '2026-09-20'],
+      [80, '2026-09-27'],
+      [90, '2026-09-27'],
+    ]);
+  });
+
+  it('Loads used line: recent loads ascending, older ones grouped by their last date', () => {
+    const h = history(ID.press, 'X', '3×10', [
+      performance(
+        ID.press,
+        'X',
+        '2026-09-27',
+        strength([
+          [10, 80],
+          [10, 90],
+        ]),
+      ),
+      performance(ID.press, 'X', '2026-01-12', strength([[10, 100]])),
+      performance(ID.press, 'X', '2025-11-18', strength([[10, 60]])),
+    ]);
+    const out = TRAINING_HISTORY_V1.render({ ...DATA, history: [h] }, CTX, 0) ?? '';
+    expect(out).toContain('- Loads used: 80, 90 kg; 100 kg last on Jan 12 2026; 60 kg last on Nov 18 2025.');
+  });
+
+  it('no Loads used line for holds', () => {
+    expect(TRAINING_HISTORY_V1.render({ ...DATA, history: [HISTORY[1] as ExerciseHistory] }, CTX, 0)).not.toContain(
+      'Loads used',
+    );
+  });
+});
+
+describe('Today: planning warnings and notes', () => {
+  it('renders the planner warnings and per-exercise notes verbatim when persisted', () => {
+    const base = makeSession();
+    const plan = base.sessionPlanJson!;
+    const session = makeSession({
+      sessionPlanJson: {
+        ...plan,
+        warnings: ['slept badly', 'lower back is sore'],
+        exercises: plan.exercises.map(e => (e.exerciseId === ID.ext ? { ...e, notes: 'keep it light' } : e)),
+      },
+    });
+    const out = TRAINING_TODAY_V1.render({ ...DATA, session }, CTX, 0) ?? '';
+    expect(out).toContain('Planning warnings: slept badly; lower back is sore.');
+    expect(out).toContain(`- Leg Extension [id ${ID.ext}] — plan 3×15 — planning note: keep it light — nothing yet`);
+  });
+
+  it('prints nothing extra when the plan has none', () => {
+    const out = TRAINING_TODAY_V1.render(DATA, CTX, 0) ?? '';
+    expect(out).not.toMatch(/Planning (warnings|note)/);
   });
 });

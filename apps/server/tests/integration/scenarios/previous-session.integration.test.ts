@@ -138,7 +138,7 @@ describe('training exercise history (BUG-030, AC-EH-1/2/3)', () => {
   it('control: a History block is built', async () => {
     const { context } = await loadAndRender();
 
-    expect(context).toContain('# History (before today; sets as reps×kg)');
+    expect(context).toContain('# History (before today)');
   });
 
   it('anchors Back Squat on the most recent completed session (2026-09-16), not the old same-key one', async () => {

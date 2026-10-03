@@ -21,7 +21,14 @@ import type {
   PhaseSpec,
   PromptContextFor,
 } from '@infra/ai/graph/phase-spec';
-import { type ExerciseHistory, TRAINING_HISTORY_V1, TRAINING_TODAY_V1 } from '@infra/ai/prompts/blocks';
+import {
+  collectLoadsUsed,
+  computeWarmupHabit,
+  type ExerciseHistory,
+  TRAINING_HISTORY_V1,
+  TRAINING_TODAY_V1,
+  type WarmupHabit,
+} from '@infra/ai/prompts/blocks';
 import { TRAINING_PROMPT } from '@infra/ai/prompts/phases/training';
 import {
   buildCompleteCurrentExerciseTool,
@@ -39,6 +46,10 @@ import { type ToolPolicy, TRAINING_TOOL_PRIORITY } from '../tool-policy';
 
 /** How many earlier performances of an exercise the History block shows. */
 const PERFORMANCES_PER_EXERCISE = 3;
+/** How many earlier performances are scanned for the distinct loads used (the "Loads used" line). */
+const PERFORMANCES_FOR_LOADS = 60;
+/** The last workouts scanned for the warm-up habit (the habit looks at the last ten with two exercises). */
+const WORKOUTS_FOR_HABIT = 14;
 
 /**
  * What the training turn renders: today's session, per-exercise history (one entry per plan exercise — also the
@@ -49,6 +60,7 @@ export interface TrainingData {
   session: WorkoutSessionWithDetails;
   history: ExerciseHistory[];
   lastWorkout: { completedAt: Date; exerciseNames: string[] } | null;
+  warmupHabit: WarmupHabit | null;
   profileFacts: UserFact[];
 }
 
@@ -138,14 +150,16 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
               input.userId,
               id,
               session.id,
-              PERFORMANCES_PER_EXERCISE,
+              PERFORMANCES_FOR_LOADS,
             ),
           ),
         ),
         todayExerciseIds.length > 0
           ? deps.workoutSessionRepo.findLastSkipsByExercise(input.userId, todayExerciseIds, session.id)
           : Promise.resolve([]),
-        deps.workoutSessionRepo.findRecentByUserIdWithDetails(input.userId, 2, { realWorkoutsOnly: true }),
+        deps.workoutSessionRepo.findRecentByUserIdWithDetails(input.userId, WORKOUTS_FOR_HABIT, {
+          realWorkoutsOnly: true,
+        }),
         deps.userFacts.getForPrompt(input.userId, input.now ?? new Date()),
       ]);
       const skipById = new Map(skips.map(sk => [sk.exerciseId, sk.skippedAt]));
@@ -154,7 +168,8 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
         exerciseId,
         exerciseName: nameById.get(exerciseId) ?? 'Exercise',
         plannedText: plannedTextById.get(exerciseId) ?? null,
-        performances: performancesById[i] ?? [],
+        performances: (performancesById[i] ?? []).slice(0, PERFORMANCES_PER_EXERCISE),
+        loadsUsed: collectLoadsUsed(performancesById[i] ?? []),
         lastSkippedAt: skipById.get(exerciseId) ?? null,
       }));
 
@@ -163,7 +178,9 @@ export function buildTrainingSpec(deps: ConversationGraphDeps): PhaseSpec<Traini
         ? { completedAt: previous.completedAt, exerciseNames: previous.exercises.map(ex => ex.exercise.name) }
         : null;
 
-      return { ok: true, data: { session, history, lastWorkout, profileFacts } };
+      const warmupHabit = computeWarmupHabit(recent.filter(s => s.id !== session.id));
+
+      return { ok: true, data: { session, history, lastWorkout, warmupHabit, profileFacts } };
     },
     contextBlocks: [TRAINING_TODAY_V1, TRAINING_HISTORY_V1],
     modelProfile: 'default',

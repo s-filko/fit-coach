@@ -189,6 +189,7 @@ export function trainingData(todaySets: number): TrainingData {
         exerciseName: '45° Leg Press',
         plannedText: '4×12',
         lastSkippedAt: null,
+        loadsUsed: [],
         performances: [
           {
             exerciseId: LEG_PRESS_ID,
@@ -199,6 +200,7 @@ export function trainingData(todaySets: number): TrainingData {
       },
     ],
     lastWorkout: null,
+    warmupHabit: null,
     profileFacts: [],
   } as unknown as TrainingData;
 }

@@ -22,7 +22,7 @@ import { calendarDaysAgo, formatInUserTz } from '@shared/date-utils';
 import type { ContextBlock, ContextBlockCtx } from './types';
 
 export const TRAINING_TODAY_HEADER = '# Today (sets as reps×kg)';
-export const TRAINING_HISTORY_HEADER = '# History (before today; sets as reps×kg)';
+export const TRAINING_HISTORY_HEADER = '# History (before today)';
 
 /** One of today's exercises with its last performances (newest first, today excluded) — the History block's unit. */
 export interface ExerciseHistory {
@@ -35,12 +35,32 @@ export interface ExerciseHistory {
   performances: ExerciseLastPerformance[];
   /** The newest `skipped` row for this exercise, if any. */
   lastSkippedAt: Date | null;
+  /** Distinct kg loads ever used on this exercise with the last date each was used (`collectLoadsUsed`). */
+  loadsUsed: LoadUsed[];
+}
+
+/** One distinct kg load of an exercise and the last day it was used. */
+export interface LoadUsed {
+  weight: number;
+  lastUsedAt: Date;
+}
+
+/** The client's habit of opening a workout with cardio, computed from the last workouts (`computeWarmupHabit`). */
+export interface WarmupHabit {
+  /** Workouts looked at (the last ten with at least two exercises). */
+  workouts: number;
+  /** One entry per kind, most frequent first: `treadmill`, `bike`, … with the minutes range seen. */
+  kinds: Array<{ label: string; minMinutes: number; maxMinutes: number }>;
+  /** Workouts that opened with cardio. */
+  withCardio: number;
 }
 
 export interface TrainingFactsData {
   session: WorkoutSessionWithDetails;
   history: ExerciseHistory[];
   lastWorkout: { completedAt: Date; exerciseNames: string[] } | null;
+  /** Null when the client has no cardio warm-up habit (fewer than half of the last workouts, or no history). */
+  warmupHabit: WarmupHabit | null;
   /** The client's stored facts for the system message's `# Profile` (`renderTrainingProfile`); the blocks ignore it. */
   profileFacts: UserFact[];
 }
@@ -161,16 +181,16 @@ function isEffortRated(setData: SetData): boolean {
 }
 
 /**
- * The sets of one exercise on one line: `12×110 (no RPE), 12×130 (RPE 8), …`.
- * RPE rules: when the working sets share one RPE, `— all RPE 9` once; when none is rated, `— no RPE recorded`;
- * when some are rated, an unrated working set says `(no RPE)`. Warm-up sets say `(warm-up)` and are never
- * rated-or-unrated. A set note follows as ` — note: "<text>"`.
+ * The sets of one exercise on one line: `12×110, 12×130 (RPE 8), …`.
+ * Effort is shown only where it was logged: `(RPE 8)` per rated set, `(all RPE 9)` once when every working set
+ * shares it. With `noRpeNote` (history lines) a rep-based line with no effort at all ends `(no RPE recorded)`.
+ * `(warm-up)` is printed only for a set stored with that kind (a legacy set without a kind is never labelled).
+ * A set note follows as ` — his note: "<text>"`.
  */
-export function formatSetsLine(sets: readonly SessionSet[]): string {
+export function formatSetsLine(sets: readonly SessionSet[], opts: { noRpeNote?: boolean } = {}): string {
   const ordered = [...sets].sort((a, b) => a.setNumber - b.setNumber);
   const working = workingSets(ordered);
-  const rpes = working.map(s => s.rpe);
-  const rated = rpes.filter((r): r is number => r != null);
+  const rated = working.map(s => s.rpe).filter((r): r is number => r != null);
   const allSame = working.length >= 2 && rated.length === working.length && new Set(rated).size === 1;
   const effortApplies = working.some(s => isEffortRated(s.setData));
 
@@ -179,29 +199,115 @@ export function formatSetsLine(sets: readonly SessionSet[]): string {
     if (s.setKind === 'warmup') {
       return `${text} (warm-up)`;
     }
-    if (s.rpe != null) {
-      return allSame ? text : `${text} (RPE ${s.rpe})`;
-    }
-    return rated.length > 0 && isEffortRated(s.setData) ? `${text} (no RPE)` : text;
+    return s.rpe != null && !allSame ? `${text} (RPE ${s.rpe})` : text;
   });
 
   let line = items.join(', ');
   if (allSame) {
-    line += ` — all RPE ${rated[0]}`;
-  } else if (rated.length === 0 && effortApplies) {
-    line += ' — no RPE recorded';
+    line += ` (all RPE ${rated[0]})`;
+  } else if (rated.length === 0 && effortApplies && opts.noRpeNote) {
+    line += ' (no RPE recorded)';
   }
   for (const s of ordered) {
     if (s.userFeedback) {
-      line += ` — note: "${s.userFeedback}"`;
+      line += ` — his note: "${s.userFeedback}"`;
     }
   }
   return line;
 }
 
-// --- trend -----------------------------------------------------------------------------------
-
 const nf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
+const sum = (values: number[]): number => values.reduce((a, b) => a + b, 0);
+
+// --- habit and loads (computed from history, never stored) -------------------------------------
+
+const WARMUP_WINDOW = 10;
+
+/** `Treadmill` → `treadmill`, `Cycling` → `bike`, anything else lower-cased. */
+function cardioLabel(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower === 'cycling' || lower === 'stationary bike' || lower === 'exercise bike') {
+    return 'bike';
+  }
+  return lower;
+}
+
+/**
+ * The cardio warm-up habit over the last ten workouts that had at least two exercises (newest first in, as the
+ * repository returns them; today's session is not among them). A workout counts as opening with cardio when its
+ * first exercise (by order) is a cardio exercise; its minutes are that exercise's logged duration. Null when
+ * fewer than half of the workouts opened with cardio.
+ */
+export function computeWarmupHabit(workouts: readonly WorkoutSessionWithDetails[]): WarmupHabit | null {
+  const considered = workouts.filter(w => w.exercises.length >= 2).slice(0, WARMUP_WINDOW);
+  const byLabel = new Map<string, number[]>();
+  let withCardio = 0;
+  for (const w of considered) {
+    const [first] = [...w.exercises].sort((a, b) => a.orderIndex - b.orderIndex);
+    if (!first || first.exercise.category !== 'cardio') {
+      continue;
+    }
+    const seconds = sum(first.sets.map(s => ('duration' in s.setData ? s.setData.duration : 0)));
+    const label = cardioLabel(first.exercise.name);
+    byLabel.set(label, [...(byLabel.get(label) ?? []), Math.round(seconds / 60)]);
+    withCardio += 1;
+  }
+  if (considered.length === 0 || withCardio * 2 < considered.length) {
+    return null;
+  }
+  const kinds = [...byLabel.entries()]
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([label, minutes]) => ({ label, minMinutes: Math.min(...minutes), maxMinutes: Math.max(...minutes) }));
+  return { workouts: considered.length, kinds, withCardio };
+}
+
+/** Distinct kg loads of a strength exercise over the given performances, each with the last day it was used. */
+export function collectLoadsUsed(performances: readonly ExerciseLastPerformance[]): LoadUsed[] {
+  const last = new Map<number, Date>();
+  for (const p of performances) {
+    for (const s of p.sessionExercise.sets) {
+      const d = s.setData;
+      if (d.type === 'strength' && d.weight != null && d.weight > 0 && d.weightUnit !== 'lbs') {
+        const seen = last.get(d.weight);
+        if (!seen || p.completedAt > seen) {
+          last.set(d.weight, p.completedAt);
+        }
+      }
+    }
+  }
+  return [...last.entries()]
+    .map(([weight, lastUsedAt]) => ({ weight, lastUsedAt }))
+    .sort((a, b) => a.weight - b.weight);
+}
+
+const RECENT_LOAD_DAYS = 60;
+
+/** `Loads used: 50, 57, 64 kg; 71 kg last on Jan 12.` — recent loads ascending, older ones grouped by last date. */
+function loadsLine(loads: readonly LoadUsed[], now: Date, tz: string): string | null {
+  if (loads.length === 0) {
+    return null;
+  }
+  const recent = loads.filter(l => calendarDaysAgo(l.lastUsedAt, now, tz) <= RECENT_LOAD_DAYS);
+  const older = new Map<string, { at: Date; weights: number[] }>();
+  for (const l of loads.filter(x => !recent.includes(x))) {
+    const key = shortDate(l.lastUsedAt, tz, true);
+    const group = older.get(key) ?? { at: l.lastUsedAt, weights: [] };
+    group.weights.push(l.weight);
+    older.set(key, group);
+  }
+  const withYear = new Set([yearOf(now, tz), ...loads.map(l => yearOf(l.lastUsedAt, tz))]).size > 1;
+  let line =
+    recent.length > 0 ? `- Loads used: ${recent.map(l => nf.format(l.weight)).join(', ')} kg` : '- Loads used:';
+  [...older.values()]
+    .sort((a, b) => b.at.getTime() - a.at.getTime())
+    .forEach(({ at, weights }, i) => {
+      const sep = recent.length === 0 && i === 0 ? ' ' : '; ';
+      line += `${sep}${weights.map(w => nf.format(w)).join(', ')} kg last on ${shortDate(at, tz, withYear)}`;
+    });
+  return `${line}.`;
+}
+
+// --- trend -----------------------------------------------------------------------------------
 
 function arrow(values: number[]): string {
   return values.map(v => nf.format(v)).join(' → ');
@@ -257,8 +363,6 @@ function trendKindOf(sets: readonly SessionSet[]): { kind: TrendKind; unit: stri
   }
   return { kind, unit: kind === 'weighted' && perHand ? `${unit} per hand` : unit };
 }
-
-const sum = (values: number[]): number => values.reduce((a, b) => a + b, 0);
 
 /**
  * `Trend Sep 16 → Sep 21 → Sep 27: …` over the working sets of ≥ 2 performances, oldest → newest; null when there
@@ -346,6 +450,7 @@ function exerciseLine(
   exerciseId: string,
   planText: string | null,
   ex: SessionExerciseWithDetails | undefined,
+  planNote?: string,
 ): string {
   let state: string;
   if (ex?.status === 'skipped') {
@@ -357,7 +462,8 @@ function exerciseLine(
     state = `${label}: ${formatSetsLine(ex.sets)}`;
   }
   const plan = planText ? ` — plan ${planText}` : '';
-  return `- ${name} [id ${exerciseId}]${plan} — ${state}`;
+  const note = planNote?.trim() ? ` — planning note: ${planNote.trim()}` : '';
+  return `- ${name} [id ${exerciseId}]${plan}${note} — ${state}`;
 }
 
 function idleText(ms: number): string {
@@ -397,10 +503,15 @@ export const TRAINING_TODAY_V1: ContextBlock<TrainingFactsData> = {
       for (const p of plan.exercises) {
         const ex = startedById.get(p.exerciseId);
         const name = ex?.exercise.name ?? nameOf.get(p.exerciseId) ?? p.exerciseName ?? 'Exercise';
-        lines.push(exerciseLine(name, p.exerciseId, `${p.targetSets}×${p.targetReps}`, ex));
+        lines.push(exerciseLine(name, p.exerciseId, `${p.targetSets}×${p.targetReps}`, ex, p.notes));
       }
     } else {
       lines.push('No plan for this session.');
+    }
+    // What the planner recorded from the planning dialogue (poor sleep, a sore back, …), verbatim.
+    const warnings = (plan?.warnings ?? []).map(w => w.trim()).filter(w => w !== '');
+    if (warnings.length > 0) {
+      lines.push(`Planning warnings: ${warnings.join('; ')}.`);
     }
     if (offPlan.length > 0) {
       lines.push(plan && plan.exercises.length > 0 ? 'Off plan:' : 'Sets so far:');
@@ -426,23 +537,40 @@ function historyEntry(entry: ExerciseHistory, ctx: ContextBlockCtx): string {
     return lines.join('\n');
   }
   for (const p of entry.performances) {
-    lines.push(`- ${relativeDay(p.completedAt, ctx.now, tz)}: ${formatSetsLine(p.sessionExercise.sets)}`);
+    lines.push(
+      `- ${relativeDay(p.completedAt, ctx.now, tz)}: ${formatSetsLine(p.sessionExercise.sets, { noRpeNote: true })}`,
+    );
   }
   const trend = trendLine(entry.performances, ctx.now, tz);
   if (trend) {
     lines.push(`- ${trend}`);
   }
+  const loads = loadsLine(entry.loadsUsed, ctx.now, tz);
+  if (loads) {
+    lines.push(loads);
+  }
   return lines.join('\n');
 }
 
-/** `# History` — per today's exercise, its last performances with dates and a numeric trend. Absent when empty. */
+function habitLine(habit: WarmupHabit): string {
+  const kinds = habit.kinds
+    .map(k => `${k.label} ${k.minMinutes === k.maxMinutes ? k.minMinutes : `${k.minMinutes}–${k.maxMinutes}`} min`)
+    .join(', ');
+  return `Habit: a cardio warm-up (${kinds}) before ${habit.withCardio} of the last ${habit.workouts} workouts.`;
+}
+
+/**
+ * `# History` — the warm-up habit line, then per today's exercise its last performances with dates, a numeric
+ * trend and the loads used. Absent when there is nothing to show.
+ */
 export const TRAINING_HISTORY_V1: ContextBlock<TrainingFactsData> = {
   id: 'training.history',
   version: 'v1',
-  render({ history }, ctx: ContextBlockCtx) {
-    if (history.length === 0) {
+  render({ history, warmupHabit }, ctx: ContextBlockCtx) {
+    const habit = warmupHabit && warmupHabit.kinds.length > 0 ? [habitLine(warmupHabit)] : [];
+    if (history.length === 0 && habit.length === 0) {
       return null;
     }
-    return [TRAINING_HISTORY_HEADER, ...history.map(entry => historyEntry(entry, ctx))].join('\n\n');
+    return [TRAINING_HISTORY_HEADER, ...habit, ...history.map(entry => historyEntry(entry, ctx))].join('\n\n');
   },
 };

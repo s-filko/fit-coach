@@ -34,10 +34,10 @@ describe('TRAINING_COACH', () => {
     expect(sectionOf(code, 'coach').length).toBeLessThanOrEqual(MAX_COACH_CHARS);
   });
 
-  it('names the language in English; falls back for an absent code', () => {
+  it('names the language in English; falls back to Russian for an absent code', () => {
     expect(sectionOf('ru', 'coach')).toContain('You answer in Russian ');
     expect(sectionOf('uk', 'coach')).toContain('You answer in Ukrainian ');
-    expect(sectionOf(null, 'coach')).toContain("You answer in the client's language ");
+    expect(sectionOf(null, 'coach')).toContain('You answer in Russian ');
     expect(sectionOf('ru', 'coach')).not.toContain('{language}');
   });
 
