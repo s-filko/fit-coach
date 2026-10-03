@@ -371,3 +371,12 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   round-6 text. D12 taken. Dispatched: Opus — simulate the one-turn Today check-in line in `run.py`, prompt with only
   the minimal remember-clause, replay ×2, update `final-shape.md`; Sonnet Task 6a (blocks sync) still running; Task 6b
   (Today check-in line in code + final prompt sync) follows after both.
+- 2026-10-04 — I1 Task 6a done (Sonnet): commit `73bd8b27`. `# History` gains the habit line (shown when ≥ half of the
+  last 10 workouts start with cardio) and "Loads used" per strength exercise; "(no RPE recorded)"; `(warm-up)` only
+  from stored `set_kind`. `# Today` renders planner `warnings` and per-exercise `notes` (persisted in
+  `session_plan_json`, no schema change) — gap 4 closed. `coach.ts` = final-shape text (2 496 chars). Sizes: case 07
+  7 657 chars. Suites green (unit 1 785, scenarios 392). **Finding (gap 3b, facts pipeline, pre-existing on dev):**
+  compaction after `finish_training` runs on the NEXT run, so a pain reported during the workout becomes a stored
+  fact only if the client writes again later; the prompt's `manage_fact` clause covers the immediate case. → I3
+  discussion item for the owner (facts are gated). Left for Task 6b: Today check-in line (D12), final prompt sync
+  after round 9, habit line replacing the cardio warm-up's own history block.
