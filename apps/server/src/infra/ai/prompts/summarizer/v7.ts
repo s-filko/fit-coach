@@ -1,5 +1,5 @@
 import type { ConversationPhase } from '@domain/conversation/ports';
-import { BREAK_REASONS, SCHEMES } from '@domain/training/load-plan';
+import { BREAK_REASONS, SCHEMES } from '@domain/training/fact-formats';
 import type { UserFact } from '@domain/user/ports';
 import { FACT_LIFECYCLE_BOUNDS } from '@domain/user/services/fact-lifecycle';
 

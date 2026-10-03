@@ -28,15 +28,12 @@ function stubDeps(overrides: Record<string, unknown> = {}): ConversationGraphDep
     workoutPlanRepo: { findActiveByUserId: async () => ({ id: 'plan-1', name: 'Plan' }) },
     workoutSessionRepo: {
       findRecentByUserIdWithDetails: async () => [SESSION_ROW],
-      findLastPerformancesByExercise: async () => [],
       findRecentPerformancesForExercise: async () => [],
       // set-kind plan Task 2 (D6/D7): the place-ambiguity and skip lookups.
       distinctRecentPlaces: async () => [],
       findLastSkipsByExercise: async () => [],
-      // load-facts plan D11: the all-time count.
-      countRealPerformancesByExercise: async () => new Map(),
     },
-    // load-facts plan D11: constraint + equipment facts for the LOAD PLAN loader.
+    // Constraint + equipment facts.
     userFacts: { getConstraints: async () => [], getForPrompt: async () => [] },
     exerciseRepository: { findByIdsWithMuscles: async () => [] },
     trainingService: { getSessionDetails: async () => SESSION_ROW },
@@ -350,13 +347,13 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
     expect(findByIdsWithMuscles).not.toHaveBeenCalled();
   });
 
-  it('training: new coach prompt, the two fact blocks, workout memory, no get_load_plan (coach-simplification I1)', () => {
+  it('training: new coach prompt, the two fact blocks, workout memory, no load-engine tool (coach-simplification I1)', () => {
     const spec = specOf('training');
     expect(spec.prompt.current.id).toBe('phase.training');
     expect(spec.prompt.current.version).toBe('v13');
     expect(spec.contextBlocks.map(b => `${b.id}.${b.version}`)).toEqual(['training.today.v1', 'training.history.v1']);
     expect(spec.memory).toBe('workout');
-    expect(spec.tools.map(t => t.name)).not.toContain('get_load_plan');
+    expect(spec.tools.map(t => t.name)).toContain('get_exercise_history');
     // every other phase keeps the episode memory
     for (const phase of PHASES.filter(p => p !== 'training')) {
       expect(specOf(phase).memory ?? 'episodes').toBe('episodes');
@@ -365,74 +362,33 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
 });
 
 // -------------------------------------------------------------------------
-// load-plan plan Task 5b (D10/O1/D1, AC-LP-7): LOAD_PLAN_PLANNER_REBIND swaps the training and
-// session_planning prompts to v11/v5 and their blocks to v2, and the planner tools drop
-// targetWeight. Off or absent = exactly today's behaviour (v10/v4, v1 blocks, weight in schema).
+// coach-simplification I1: planning is weight-free — session_planning runs v5 with the v2 active-plan block, and
+// save_workout_plan / start_training_session carry no targetWeight.
 // -------------------------------------------------------------------------
 
-describe('LOAD_PLAN_PLANNER_REBIND selects the rebound planner (load-plan plan Task 5b, AC-LP-7)', () => {
-  const planningSpecOf = (overrides: Record<string, unknown>) =>
-    buildPhaseSpecs(stubDeps(overrides)).find(s => s.name === 'session_planning')!;
-  const planCreationSpecOf = (overrides: Record<string, unknown>) =>
-    buildPhaseSpecs(stubDeps(overrides)).find(s => s.name === 'plan_creation')!;
+describe('the planner writes no weights (coach-simplification I1)', () => {
+  type Shape = { shape: Record<string, unknown> };
+  const planningSpec = () => buildPhaseSpecs(stubDeps()).find(s => s.name === 'session_planning')!;
+  const planCreationSpec = () => buildPhaseSpecs(stubDeps()).find(s => s.name === 'plan_creation')!;
 
-  // The rebind needs the suggestion: v11 / v5 start from the LOAD PLAN suggestion.
-  const ON = { loadPlanPlannerRebind: true, loadPlanSuggestion: true };
-
-  it('rebind without the suggestion selects nothing: v4, v1 blocks, weights in the schemas', () => {
-    const rebindOnly = { loadPlanPlannerRebind: true };
-    const planning = planningSpecOf(rebindOnly);
-    expect(planning.prompt.current.version).toBe('v4');
-    expect(planning.contextBlocks.find(b => b.id === 'session_planning.active_plan')?.version).toBe('v1');
-    const start = planning.tools.find(t => t.name === 'start_training_session') as unknown as {
-      schema: { shape: { exercises: { element: { shape: Record<string, unknown> } } } };
-    };
-    expect(start.schema.shape.exercises.element.shape).toHaveProperty('targetWeight');
-    const save = planCreationSpecOf(rebindOnly).tools.find(t => t.name === 'save_workout_plan') as unknown as {
-      schema: {
-        shape: {
-          sessionTemplates: { element: { shape: { exercises: { element: { shape: Record<string, unknown> } } } } };
-        };
-      };
-    };
-    expect(save.schema.shape.sessionTemplates.element.shape.exercises.element.shape).toHaveProperty('targetWeight');
-  });
-
-  it('session_planning: v4 prompt + active_plan v1 with the flag off or absent', () => {
-    for (const overrides of [{}, { loadPlanPlannerRebind: false }]) {
-      const spec = planningSpecOf(overrides);
-      expect(spec.prompt.current.version).toBe('v4');
-      expect(spec.contextBlocks.find(b => b.id === 'session_planning.active_plan')?.version).toBe('v1');
-    }
-  });
-
-  it('session_planning: v5 prompt + active_plan v2 with the flag on', () => {
-    const spec = planningSpecOf(ON);
+  it('session_planning: v5 prompt and the active_plan v2 block', () => {
+    const spec = planningSpec();
     expect(spec.prompt.current.version).toBe('v5');
     expect(spec.contextBlocks.find(b => b.id === 'session_planning.active_plan')?.version).toBe('v2');
   });
 
-  it('planner tool schemas: targetWeight present off/absent, dropped with the flag on', () => {
-    type Shape = { shape: Record<string, unknown> };
-    const saveExerciseShape = (spec: ReturnType<typeof planCreationSpecOf>): Record<string, unknown> =>
-      (
-        spec.tools.find(t => t.name === 'save_workout_plan') as unknown as {
-          schema: { shape: { sessionTemplates: { element: { shape: { exercises: { element: Shape } } } } } };
-        }
-      ).schema.shape.sessionTemplates.element.shape.exercises.element.shape;
-    const startExerciseShape = (spec: ReturnType<typeof planningSpecOf>): Record<string, unknown> =>
-      (
-        spec.tools.find(t => t.name === 'start_training_session') as unknown as {
-          schema: { shape: { exercises: { element: Shape } } };
-        }
-      ).schema.shape.exercises.element.shape;
-
-    for (const overrides of [{}, { loadPlanPlannerRebind: false }]) {
-      expect(saveExerciseShape(planCreationSpecOf(overrides))).toHaveProperty('targetWeight');
-      expect(startExerciseShape(planningSpecOf(overrides))).toHaveProperty('targetWeight');
-    }
-    const on = ON;
-    expect(saveExerciseShape(planCreationSpecOf(on))).not.toHaveProperty('targetWeight');
-    expect(startExerciseShape(planningSpecOf(on))).not.toHaveProperty('targetWeight');
+  it('planner tool schemas drop targetWeight', () => {
+    const save = (
+      planCreationSpec().tools.find(t => t.name === 'save_workout_plan') as unknown as {
+        schema: { shape: { sessionTemplates: { element: { shape: { exercises: { element: Shape } } } } } };
+      }
+    ).schema.shape.sessionTemplates.element.shape.exercises.element.shape;
+    const start = (
+      planningSpec().tools.find(t => t.name === 'start_training_session') as unknown as {
+        schema: { shape: { exercises: { element: Shape } } };
+      }
+    ).schema.shape.exercises.element.shape;
+    expect(save).not.toHaveProperty('targetWeight');
+    expect(start).not.toHaveProperty('targetWeight');
   });
 });

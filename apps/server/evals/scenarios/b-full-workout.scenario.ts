@@ -151,7 +151,7 @@ export const setupSteps: Scenario['steps'] = [
           '=== ACTIVE WORKOUT PLAN ===',
           'Plan: Upper/Lower Split',
           '### Upper A (key: upper_a)',
-          `[ID:${BENCH_PRESS_ID}] Barbell Bench Press: 3x8-10 @ 80kg (rest: 120s)`,
+          `[ID:${BENCH_PRESS_ID}] Barbell Bench Press: 3x8-10 (rest: 120s)`,
           // AC-CC-1 (fixed): the transition keeps the immediately preceding turn verbatim.
           GREETING_REQUEST,
           PLANNING_FINAL_TEXT,

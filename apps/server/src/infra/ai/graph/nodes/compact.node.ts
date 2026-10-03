@@ -47,7 +47,7 @@ import {
 } from '@domain/conversation/episode';
 import type { ConversationPhase } from '@domain/conversation/phases';
 import type { LegacySummary, SummaryPort } from '@domain/conversation/ports';
-import { parseBreakFact, parseProgressionFact } from '@domain/training/load-plan';
+import { parseBreakFact, parseProgressionFact } from '@domain/training/fact-formats';
 import type { IUserFactsService } from '@domain/user/ports';
 import { FACT_LIFECYCLE_BOUNDS, PermanentFactRefusal } from '@domain/user/services/fact-lifecycle';
 

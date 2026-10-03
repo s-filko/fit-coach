@@ -1,8 +1,8 @@
 /**
  * Training PhaseSpec (ADR-0013 §4.2). The policy keeps the ADR-0011 protections: priority ordering, log_set batch
  * dedup, error budget 1. Since coach-simplification I1 (AC-CS1-2) the phase runs on `TRAINING_COACH` and the two
- * fact blocks `# Today` / `# History`, remembers this workout only (`memory: 'workout'`) and has no decision engine:
- * `get_load_plan` is unbound, the loader reads each exercise's last performances and the client's facts.
+ * fact blocks `# Today` / `# History` and remembers this workout only (`memory: 'workout'`). There is no decision
+ * engine: the loader reads each exercise's last performances and the client's facts.
  */
 import type { StructuredToolInterface } from '@langchain/core/tools';
 

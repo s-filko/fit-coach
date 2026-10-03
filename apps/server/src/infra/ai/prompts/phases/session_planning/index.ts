@@ -25,16 +25,7 @@ export { SESSION_PLANNING_V1, SESSION_PLANNING_V2, SESSION_PLANNING_V3, SESSION_
  * the NOW line (`blocks/current-time.v1.ts`, its own message before
  * `current` since now-line-last).
  */
-export const SESSION_PLANNING_PROMPT: PhasePromptEntry<SessionPlanningPromptContextV4> = {
-  current: SESSION_PLANNING_V4,
-  requiredSections: ['date', 'task', 'tools', 'directive.identity', 'directive.tool-reply'],
-};
-
-/**
- * Load-plan plan Task 5b (A5): the rebound session-planning prompt — SESSION_PLANNING_V5, selected
- * only with LOAD_PLAN_PLANNER_REBIND and LOAD_PLAN_SUGGESTION on (session-planning.spec.ts). `current` above stays v4.
- */
-export const SESSION_PLANNING_PROMPT_V5: PhasePromptEntry<SessionPlanningPromptContextV5> = {
+export const SESSION_PLANNING_PROMPT: PhasePromptEntry<SessionPlanningPromptContextV5> = {
   current: SESSION_PLANNING_V5,
   requiredSections: ['date', 'task', 'tools', 'directive.identity', 'directive.tool-reply'],
 };

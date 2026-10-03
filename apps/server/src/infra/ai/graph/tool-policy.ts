@@ -49,8 +49,6 @@ export const TRAINING_TOOL_PRIORITY: Record<string, number> = {
   // D3 (training-history-lookup plan): a read-only lookup runs before writes, alongside
   // search_exercises — never blocks or reorders log_set/finish_training.
   get_exercise_history: 0,
-  // load-facts plan D12: read-only computed facts, same tier as the history lookup.
-  get_load_plan: 0,
   log_set: 1,
   complete_current_exercise: 2,
   // set-kind plan Task 2 (D6): a session-level write, same tier as the other mid-workout

@@ -1,8 +1,8 @@
 /**
- * `session_planning.active_plan` v2 (load-plan plan Task 5b, D10, AC-LP-7): the v1 render with
+ * `session_planning.active_plan` v2 (plan Task 5b, D10, AC-LP-7): the v1 render with
  * `omitTargetWeights` — sets × reps only, even for a legacy plan that still carries a targetWeight
- * (the DB column stays; it is simply not written). Loads come from LOAD PLAN during training.
- * Selected only with LOAD_PLAN_PLANNER_REBIND and LOAD_PLAN_SUGGESTION on (session-planning.spec.ts).
+ * (the DB column stays; it is simply not written). Loads are set by the coach during the workout.
+ * The only active-plan block the planning phase renders (coach-simplification I1).
  */
 import {
   buildActivePlanSection,

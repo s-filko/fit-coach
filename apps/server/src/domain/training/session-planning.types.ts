@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
 /**
- * load-plan plan Task 5b (D10): with LOAD_PLAN_PLANNER_REBIND on the planner writes no
- * `targetWeight` — the schema is built without it (sets × reps only; loads come from LOAD PLAN
- * during training). The DB column and the API keep the field for legacy rows.
+ * The planner writes no `targetWeight` (sets × reps only; the coach sets loads during the workout), so the tool
+ * schemas are built with `dropTargetWeight`. The stored-plan schema, the DB column and the API keep the field
+ * for legacy rows.
  */
 export interface SessionSchemaOpts {
   dropTargetWeight?: boolean;

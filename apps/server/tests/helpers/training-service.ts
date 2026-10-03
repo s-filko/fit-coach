@@ -1,4 +1,3 @@
-import type { ILoadRecommendationLog } from '@domain/training/ports';
 import { TrainingService } from '@domain/training/services/training.service';
 
 import { ExerciseRepository } from '@infra/db/repositories/exercise.repository';
@@ -13,9 +12,7 @@ import { WorkoutSessionRepository } from '@infra/db/repositories/workout-session
  * place integration tests wire it. Returns the repositories too: tests seed and read through them.
  * `sessionRepo` may be replaced (e.g. by a decorated repository that simulates a race).
  */
-export function buildRealTrainingService(
-  overrides: { sessionRepo?: WorkoutSessionRepository; loadRecommendationLog?: ILoadRecommendationLog } = {},
-) {
+export function buildRealTrainingService(overrides: { sessionRepo?: WorkoutSessionRepository } = {}) {
   const userRepo = new DrizzleUserRepository();
   const exerciseRepo = new ExerciseRepository();
   const sessionRepo = overrides.sessionRepo ?? new WorkoutSessionRepository();
@@ -29,7 +26,6 @@ export function buildRealTrainingService(
     sessionSetRepo,
     userRepo,
     undefined,
-    overrides.loadRecommendationLog,
   );
   return { service, userRepo, exerciseRepo, sessionRepo, sessionExerciseRepo, sessionSetRepo };
 }

@@ -26,7 +26,7 @@ export interface LoadInput {
   userId: string;
   user: User | null;
   activeSessionId: string | null;
-  /** The run clock (ctx.now) — load-facts computes against it; omitted in unit tests (falls back to the wall clock). */
+  /** The run clock (ctx.now) — phases compute against it; omitted in unit tests (falls back to the wall clock). */
   now?: Date;
 }
 

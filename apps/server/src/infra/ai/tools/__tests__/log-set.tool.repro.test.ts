@@ -2,7 +2,7 @@
  * REPRODUCTION (RED) — AC-LSR-1 / BUG-023. Runs only via an explicit --testMatch; promoted to
  * log-set.tool.unit.test.ts when the fix lands.
  *
- * Since load-plan-fixes (BR-TRAINING-040) a hold sent as `durationSeconds` on an isometric exercise
+ * Since plan-fixes (BR-TRAINING-040) a hold sent as `durationSeconds` on an isometric exercise
  * is stored as `isometric`, and the description says hold time = durationSeconds, never reps. This
  * probe stays red by design (W-3): a hold sent as `reps` (a 45-second plank as "45 reps") is still
  * stored as given. Live evidence: session fa293e20, 2026-09-21 (Plank 45 / Side Plank 30 stored as

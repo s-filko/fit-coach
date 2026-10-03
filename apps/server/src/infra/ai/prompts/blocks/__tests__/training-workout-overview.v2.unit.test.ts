@@ -1,5 +1,5 @@
 /**
- * load-plan plan Task 5b (D10, AC-LP-7): with LOAD_PLAN_PLANNER_REBIND on, WORKOUT OVERVIEW is
+ * plan Task 5b (D10, AC-LP-7): with the retired planner flag on, WORKOUT OVERVIEW is
  * the v2 block — sets × reps only, no target weight, even for legacy rows that still carry one
  * (the DB column stays; it is simply not written and not printed). The v1 block is untouched.
  */
@@ -90,7 +90,7 @@ function makeSession(): WorkoutSessionWithDetails {
 
 const CTX = { now: NOW, timezone: 'UTC', user: null };
 
-describe('training.workout_overview v2 — sets × reps only (load-plan plan Task 5b, AC-LP-7)', () => {
+describe('training.workout_overview v2 — sets × reps only (plan Task 5b, AC-LP-7)', () => {
   it('v2 keeps the block id, bumps the version', () => {
     expect(TRAINING_WORKOUT_OVERVIEW_V2.id).toBe(TRAINING_WORKOUT_OVERVIEW_V1.id);
     expect(TRAINING_WORKOUT_OVERVIEW_V2.version).toBe('v2');

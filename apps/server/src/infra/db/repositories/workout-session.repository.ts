@@ -1,4 +1,4 @@
-import { and, count, desc, eq, exists, inArray, isNotNull, lt, ne, type SQL, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNotNull, lt, ne, type SQL, sql } from 'drizzle-orm';
 
 import { ActiveSessionExistsError } from '@domain/training/errors';
 import type {
@@ -45,7 +45,7 @@ interface JoinedSessionExerciseRow {
 
 export class WorkoutSessionRepository implements IWorkoutSessionRepository {
   /**
-   * Shared by `findByIdWithDetails` and `findLastPerformancesByExercise` (close-out review R2):
+   * Shared by `findByIdWithDetails` and `findRecentPerformancesForExercise` (close-out review R2):
    * given already-joined session_exercises+exercises rows, batches the muscle-group and set
    * fetches (two queries total, never N+1) and assembles each into `SessionExerciseWithDetails`,
    * keyed by session_exercise id. A row whose exercise was not found (should not happen under the
@@ -121,7 +121,7 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
   }
 
   /**
-   * The rejoin/hydrate/map tail shared by `findLastPerformancesByExercise` and
+   * The rejoin/hydrate/map tail used by
    * `findRecentPerformancesForExercise` (close-out review item 6): given the picked
    * `{ sessionExerciseId, completedAt }` rows (an anchor per exercise, or the top-N for one),
    * rehydrates each through the batched `hydrateSessionExercises` path (never N+1) and maps back to
@@ -364,66 +364,6 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     return timedOutSessions.length;
   }
 
-  async findLastPerformancesByExercise(
-    userId: string,
-    exerciseIds: string[],
-    excludeSessionId: string,
-  ): Promise<ExerciseLastPerformance[]> {
-    if (exerciseIds.length === 0) {
-      return [];
-    }
-
-    // One query for the pick: DISTINCT ON (exercise_id), newest completed session first — the
-    // anchor is per exercise (BUG-030 D2), not per session_key, and never N+1 over sessions.
-    const anchors = await db
-      .selectDistinctOn([sessionExercises.exerciseId], {
-        sessionExerciseId: sessionExercises.id,
-        exerciseId: sessionExercises.exerciseId,
-        completedAt: workoutSessions.completedAt,
-      })
-      .from(sessionExercises)
-      .innerJoin(workoutSessions, eq(sessionExercises.sessionId, workoutSessions.id))
-      .where(
-        and(
-          ...this.realPerformanceConditions(userId, excludeSessionId),
-          inArray(sessionExercises.exerciseId, exerciseIds),
-        ),
-      )
-      // DISTINCT ON keeps the first row per exerciseId under this order — completedAt DESC picks
-      // the anchor, orderIndex/id DESC only break an exact-timestamp tie deterministically
-      // (close-out review advisory 7); they never affect which *session* wins.
-      .orderBy(
-        sessionExercises.exerciseId,
-        desc(workoutSessions.completedAt),
-        desc(sessionExercises.orderIndex),
-        desc(sessionExercises.id),
-      );
-
-    return this.rehydratePerformances(anchors, anchor => anchor.exerciseId);
-  }
-
-  async countRealPerformancesByExercise(
-    userId: string,
-    exerciseIds: string[],
-    excludeSessionId: string | null,
-  ): Promise<Map<string, number>> {
-    if (exerciseIds.length === 0) {
-      return new Map();
-    }
-    const rows = await db
-      .select({ exerciseId: sessionExercises.exerciseId, performances: count() })
-      .from(sessionExercises)
-      .innerJoin(workoutSessions, eq(sessionExercises.sessionId, workoutSessions.id))
-      .where(
-        and(
-          ...this.realPerformanceConditions(userId, excludeSessionId),
-          inArray(sessionExercises.exerciseId, exerciseIds),
-        ),
-      )
-      .groupBy(sessionExercises.exerciseId);
-    return new Map(rows.map(r => [r.exerciseId, Number(r.performances)]));
-  }
-
   async findRecentPerformancesForExercise(
     userId: string,
     exerciseId: string,
@@ -471,7 +411,7 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
     }
 
     // One query for the pick: DISTINCT ON (exercise_id), newest completed session first — the
-    // same anchor shape as `findLastPerformancesByExercise`, minus the >= 1 set requirement
+    // anchor shape as for the recent-performances pick, minus the >= 1 set requirement
     // (a skipped row has none by construction).
     const rows = await db
       .selectDistinctOn([sessionExercises.exerciseId], {

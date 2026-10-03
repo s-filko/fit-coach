@@ -1,5 +1,5 @@
 /**
- * load-plan-fixes item 2 (AC-LPF-2, replay C2): `log_set` sends `durationSeconds` as `cardio_duration` for every
+ * plan-fixes item 2 (AC-LPF-2, replay C2): `log_set` sends `durationSeconds` as `cardio_duration` for every
  * exercise; `logSetWithContext` re-keys it by the exercise's type — a hold on an isometric exercise (Plank, Side
  * Plank) is stored as an `isometric` set with its duration, cardio stays `cardio_duration`.
  */

@@ -13,8 +13,6 @@ const log = createLogger('training-tools');
 
 export interface CompleteCurrentExerciseToolDeps {
   trainingService: ITrainingService;
-  /** Load plan (load-plan plan Task 5b, D10): the completion summary's Target line drops the plan weight. */
-  loadPlanPlannerRebind?: boolean;
 }
 
 export function buildCompleteCurrentExerciseTool(deps: CompleteCurrentExerciseToolDeps) {

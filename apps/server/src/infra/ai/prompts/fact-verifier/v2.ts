@@ -1,4 +1,4 @@
-import { BREAK_REASONS, type SchemeId, SCHEMES } from '@domain/training/load-plan';
+import { BREAK_REASONS, type SchemeId, SCHEMES } from '@domain/training/fact-formats';
 
 import type { PromptModule, Section } from '@infra/ai/prompts/types';
 

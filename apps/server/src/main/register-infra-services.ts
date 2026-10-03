@@ -57,10 +57,6 @@ export async function registerInfraServices(container: Container = getGlobalCont
   container.register(SESSION_EXERCISE_REPOSITORY_TOKEN, new SessionExerciseRepository());
   container.register(SESSION_SET_REPOSITORY_TOKEN, new SessionSetRepository());
 
-  const { loadConfig: loadTrainingConfig } = await import('@config/index');
-  const { LoadRecommendationRepository } = await import('@infra/db/repositories/load-recommendation.repository');
-  const { buildLoadRecommendationLog } = await import('@infra/ai/load-facts/load-recommendation-log');
-
   container.registerFactory(
     TRAINING_SERVICE_TOKEN,
     c =>
@@ -72,17 +68,6 @@ export async function registerInfraServices(container: Container = getGlobalCont
         c.get(SESSION_SET_REPOSITORY_TOKEN),
         c.get(USER_REPOSITORY_TOKEN),
         c.get(EMBEDDING_SERVICE_TOKEN),
-        // load-plan plan A5: the recommendation log exists only with LOAD_PLAN_SUGGESTION on.
-        buildLoadRecommendationLog(
-          {
-            workoutSessionRepo: c.get(WORKOUT_SESSION_REPOSITORY_TOKEN),
-            exerciseRepository: c.get(EXERCISE_REPOSITORY_TOKEN),
-            userFacts: c.get(USER_FACTS_SERVICE_TOKEN),
-            userRepository: c.get(USER_REPOSITORY_TOKEN),
-          },
-          new LoadRecommendationRepository(),
-          loadTrainingConfig(),
-        ),
       ),
   );
 
@@ -112,7 +97,6 @@ export async function registerInfraServices(container: Container = getGlobalCont
 
   const { buildConversationGraph, CONVERSATION_GRAPH_TOKEN } = await import('@infra/ai/graph/conversation.graph');
   const { buildConversationRunner } = await import('@infra/ai/graph/conversation-run.adapter');
-  const { BreakContext } = await import('@infra/ai/load-facts/break-context');
   const { CONVERSATION_RUN_SERVICE_TOKEN, CONVERSATION_RUN_PORT_TOKEN } = await import('@domain/conversation/ports');
   const { DrizzleConversationRunService } = await import('@infra/conversation/drizzle-conversation-run.service');
   container.register(CONVERSATION_RUN_SERVICE_TOKEN, new DrizzleConversationRunService());
@@ -153,15 +137,6 @@ export async function registerInfraServices(container: Container = getGlobalCont
     budgetOverrides: config.LLM_BUDGETS,
     // AC-FL-5 (course-check plan Task 1): the layer's on/off switch, resolved once here.
     courseCheckEnabled: config.COURSE_CHECK_ENABLED,
-    // load-plan plan A5: LOAD PLAN v2 (suggestion) on/off, resolved once here.
-    loadPlanSuggestion: config.LOAD_PLAN_SUGGESTION,
-    loadPlanBreaks: config.LOAD_PLAN_BREAKS,
-    loadPlanPlannerRebind: config.LOAD_PLAN_PLANNER_REBIND,
-    // load-plan Task 4: the training-break context behind the time-gap note (read only with the flag on).
-    breakContext: new BreakContext({
-      workoutSessionRepo: container.get(WORKOUT_SESSION_REPOSITORY_TOKEN),
-      userFacts: container.get(USER_FACTS_SERVICE_TOKEN),
-    }),
     courseCheckRetryCooldownMs: config.COURSE_CHECK_RETRY_COOLDOWN_MINUTES * 60_000,
     courseCheckExpiryAskWindowMs: config.COURSE_CHECK_EXPIRY_ASK_WINDOW_DAYS * 86_400_000,
     // transition-handoff plan Task 1 (D-1): empty set = off, resolved once here.

@@ -68,30 +68,6 @@ export const EnvSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform(v => v === 'true'),
-  // Load plan (load-plan plan A5): `LOAD_PLAN_SUGGESTION` switches the LOAD PLAN block and `get_load_plan` from
-  // v1 (facts only) to v2 (facts + a suggestion with its reason) and writes the `load_recommendations` calibration
-  // log (first working set of an exercise, D7; never read back into a prompt). Off = exactly the pre-plan behaviour.
-  LOAD_PLAN_SUGGESTION: z
-    .enum(['true', 'false'])
-    .default('false')
-    .transform(v => v === 'true'),
-  // Load plan (load-plan plan A5, Task 4): `LOAD_PLAN_BREAKS` switches on the break handling — the `break` fact
-  // (summariser v7 / verifier v2), the return ladder counter, the one-time reason question in the time-gap note.
-  // Off = exactly the pre-plan behaviour.
-  LOAD_PLAN_BREAKS: z
-    .enum(['true', 'false'])
-    .default('false')
-    .transform(v => v === 'true'),
-  // Load plan (load-plan plan A5, Task 5b, D10): `LOAD_PLAN_PLANNER_REBIND` rebinds the planner to LOAD PLAN —
-  // save_workout_plan / start_training_session drop `targetWeight` from their schemas (the DB column stays, it is
-  // simply not written), WORKOUT OVERVIEW and the active-plan block print sets × reps only, and the training /
-  // session_planning prompts are v11 / v5 (the suggestion is the coach's starting point, per O1).
-  // Takes effect only together with LOAD_PLAN_SUGGESTION (the suggestion is the planner's load source).
-  // Off = exactly the pre-plan behaviour.
-  LOAD_PLAN_PLANNER_REBIND: z
-    .enum(['true', 'false'])
-    .default('false')
-    .transform(v => v === 'true'),
   // How long a FAILED course check is not re-attempted on the same inputs
   // (minutes) — a provider outage must make the layer quieter, not cost one
   // failed call per turn. New inputs are never covered by it.

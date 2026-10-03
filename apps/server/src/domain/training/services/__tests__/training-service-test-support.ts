@@ -123,10 +123,8 @@ export function createMocks() {
     complete: jest.fn(),
     findTimedOut: jest.fn(),
     autoCloseTimedOut: jest.fn().mockResolvedValue(0),
-    findLastPerformancesByExercise: jest.fn(),
     distinctRecentPlaces: jest.fn().mockResolvedValue([]),
     findLastSkipsByExercise: jest.fn().mockResolvedValue([]),
-    countRealPerformancesByExercise: jest.fn().mockResolvedValue(new Map()),
   } as unknown as jest.Mocked<IWorkoutSessionRepository>;
 
   const mockWorkoutPlanRepo = {} as jest.Mocked<IWorkoutPlanRepository>;

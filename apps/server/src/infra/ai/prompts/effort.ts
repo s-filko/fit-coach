@@ -1,7 +1,7 @@
 /**
- * The plain-language effort question and its answer → RPE mapping (load-plan-fixes item 10): ONE source for the
+ * The plain-language effort question and its answer → RPE mapping (plan-fixes item 10): ONE source for the
  * `log_set` effort hint, the `log_set` tool description and the training prompt (v12). The domain decides WHEN to ask
- * (`effortHint`); the words live here. A prompt test checks the quoted text against these constants.
+ * (`effort hint`); the words live here. A prompt test checks the quoted text against these constants.
  */
 
 /** Asked once per exercise per session when a decision-critical set was stored without RPE (client-facing Russian). */

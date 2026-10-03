@@ -1,7 +1,6 @@
 import { compose } from '@infra/ai/prompts/compose';
 import { PHASE_PROMPTS } from '@infra/ai/prompts/index';
 
-import { SESSION_PLANNING_PROMPT_V5 } from '../index';
 import { SESSION_PLANNING_V4 } from '../v4';
 import { SESSION_PLANNING_V5 } from '../v5';
 
@@ -19,17 +18,15 @@ function textOf(module: { render: (ctx: never) => { id: string; text: string }[]
 }
 
 /**
- * v5 (load-plan plan Task 5b, D10, AC-LP-7): v4 minus any instruction to propose or save weights —
- * the session plan is sets × reps only; loads come from LOAD PLAN during training. Selected only
- * with LOAD_PLAN_PLANNER_REBIND on.
+ * v5 (plan Task 5b, D10, AC-LP-7): v4 minus any instruction to propose or save weights —
+ * the session plan is sets × reps only; the coach sets loads during the workout. The registry's current.
  */
-describe('phase.session_planning v5 — no weights in the plan (load-plan plan Task 5b, AC-LP-7)', () => {
-  it('the registry current stays v4; v5 is a separately registered module and entry', () => {
-    expect(PHASE_PROMPTS.session_planning.current.version).toBe('v4');
+describe('phase.session_planning v5 — no weights in the plan (plan Task 5b, AC-LP-7)', () => {
+  it('the registry current is v5', () => {
+    expect(PHASE_PROMPTS.session_planning.current.version).toBe('v5');
     expect(SESSION_PLANNING_V5.id).toBe('phase.session_planning');
     expect(SESSION_PLANNING_V5.version).toBe('v5');
-    expect(SESSION_PLANNING_PROMPT_V5.current).toBe(SESSION_PLANNING_V5);
-    expect(SESSION_PLANNING_PROMPT_V5.requiredSections).toEqual(PHASE_PROMPTS.session_planning.requiredSections);
+    expect(PHASE_PROMPTS.session_planning.current).toBe(SESSION_PLANNING_V5);
   });
 
   it('every section except task is byte-identical to v4', () => {
@@ -75,6 +72,6 @@ describe('phase.session_planning v5 — no weights in the plan (load-plan plan T
     const step3 = /STEP 3: SEARCH AND PROPOSE THE PLAN[^]*?(?=--- STEP 4)/.exec(task);
     expect(step3).not.toBeNull();
     expect(step3![0]).toContain('sets, reps, rest times — sets × reps only, no weights: loads are not planned here');
-    expect(step3![0]).toContain('the training phase decides them from LOAD PLAN');
+    expect(step3![0]).toContain('the coach sets them during the workout');
   });
 });

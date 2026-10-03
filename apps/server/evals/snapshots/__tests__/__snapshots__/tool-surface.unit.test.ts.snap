@@ -517,10 +517,6 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) pla
                       "minimum": 1,
                       "type": "integer",
                     },
-                    "targetWeight": {
-                      "description": "Starting weight in kg, if applicable",
-                      "type": "number",
-                    },
                   },
                   "required": [
                     "exerciseId",
@@ -1152,19 +1148,6 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) ses
                 "maximum": 9007199254740991,
                 "type": "integer",
               },
-              "targetWeight": {
-                "anyOf": [
-                  {
-                    "type": "number",
-                  },
-                  {
-                    "type": "string",
-                  },
-                  {
-                    "type": "null",
-                  },
-                ],
-              },
               "videoUrl": {
                 "format": "uri",
                 "type": "string",
@@ -1494,28 +1477,6 @@ exports[`tool surface (pre-executor truth, refactor-p3-tool-executor Task 1) tra
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
-        "advised": {
-          "additionalProperties": false,
-          "description": "Optional. On the FIRST working set of an exercise: the load/reps you actually advised the user for it (and the reason when it differs from the LOAD PLAN suggestion). Omit on later sets and when you advised nothing.",
-          "properties": {
-            "load": {
-              "description": "Load in kg you advised for this exercise.",
-              "exclusiveMinimum": 0,
-              "type": "number",
-            },
-            "reason": {
-              "description": "Why the advice departs from the LOAD PLAN suggestion — only when it does.",
-              "type": "string",
-            },
-            "reps": {
-              "description": "Reps per set you advised.",
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991,
-              "type": "integer",
-            },
-          },
-          "type": "object",
-        },
         "distanceKm": {
           "description": "Distance in km — only for cardio_distance exercises (treadmill, running). Triggers cardio_distance set type when combined with durationSeconds.",
           "exclusiveMinimum": 0,

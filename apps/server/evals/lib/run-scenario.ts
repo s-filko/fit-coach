@@ -221,7 +221,7 @@ export async function runScenario(scenario: Scenario, opts: RunScenarioOptions =
           phase: await currentPhase(graph, world.userId),
           sessions: await sessionRepo.findRecentByUserIdWithDetails(world.userId, 10),
           facts: await loadFactRows(world.userId),
-          plans: await loadPlanRows(world.userId),
+          plans: await loadWorkoutPlanRows(world.userId),
         };
         steps.push(observation);
         opts.onStep?.(observation);
@@ -239,7 +239,7 @@ export async function runScenario(scenario: Scenario, opts: RunScenarioOptions =
         phase: await currentPhase(graph, world.userId),
         sessions: await sessionRepo.findRecentByUserIdWithDetails(world.userId, 10),
         facts: await loadFactRows(world.userId),
-        plans: await loadPlanRows(world.userId),
+        plans: await loadWorkoutPlanRows(world.userId),
       };
       steps.push(observation);
       opts.onStep?.(observation);
@@ -286,7 +286,7 @@ export async function loadFactRows(userId: string): Promise<FactRowSnapshot[]> {
 }
 
 /** The user's plans newest first; the exercise names come out of plan_json's session templates. */
-export async function loadPlanRows(userId: string): Promise<PlanRowSnapshot[]> {
+export async function loadWorkoutPlanRows(userId: string): Promise<PlanRowSnapshot[]> {
   const rows = await db
     .select()
     .from(workoutPlans)

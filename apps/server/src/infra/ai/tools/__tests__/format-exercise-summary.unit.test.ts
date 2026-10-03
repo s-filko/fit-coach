@@ -62,8 +62,7 @@ describe('formatExerciseSummary — volume excludes warm-ups (set-kind plan D4, 
 });
 
 // -------------------------------------------------------------------------
-// load-plan plan Task 5b (D10, AC-LP-7): with LOAD_PLAN_PLANNER_REBIND on, the Target line
-// prints sets × reps only — no plan target weight, even for a legacy row that still carries one.
+// The Target line prints sets × reps only — no plan target weight, even for a legacy row that still carries one.
 // -------------------------------------------------------------------------
 
 describe('formatExerciseSummary — Target line without the plan weight', () => {

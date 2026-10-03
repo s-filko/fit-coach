@@ -67,7 +67,7 @@ export function buildWorkoutOverview(
       } else if (started?.status === 'in_progress') {
         marker = 'IN PROGRESS';
       }
-      // load-plan plan Task 5b (D10): v2 renders sets × reps only — no plan target weight.
+      // plan Task 5b (D10): v2 renders sets × reps only — no plan target weight.
       const weight = !opts?.omitTargetWeights && p.targetWeight ? ` @ ${p.targetWeight} kg` : '';
       const setsInfo = started ? ` (${workingSets(started.sets).length}/${p.targetSets} sets)` : '';
       guideLines.push(
