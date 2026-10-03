@@ -413,3 +413,9 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   unchanged (case 07 7 657 chars). Branch complete for review: Tasks 1–6b, commits e044994e…1a496ce4.
   **Next:** close-out review (Opus zones) of `plan/coach-simplification-i1` against the I1 work order + master plan;
   fix blocking findings; then owner: approvals on the profile (2 items) + push + dev deploy.
+- 2026-10-04 — Like-for-like baseline (`i0/session/factcheck.real.md`): the real 2026-10-01 coach judged by rubric v2 =
+  **67 faults in 31 replies (2.2/reply)**; frozen new coach = 8.7 in 20 comparable replies (0.43/reply), 9.7 with the
+  knee-insertion class. Substantive faults (no wording/length): real 23 vs new ≈ 4.4. Invented facts 6 → 0;
+  contradictions/pressure/impossible conditions 5 → 0; program-like replies 28 → 1; over-long 16 → 0. Two classes are
+  new and worse: emoji on plain confirmations (0 → 3) and stopping the client's extra sets (0 → 1) → I2 candidates.
+  Close-out review (four Opus zones) dispatched on `plan/coach-simplification-i1`.
