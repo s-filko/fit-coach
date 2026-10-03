@@ -172,6 +172,11 @@ or is inert for the kind of diff under review.
 - [×1] R2's brief tells it to cite `docs/CONTRIBUTING_AI.md` "Principles & Boundaries" for DRY
   and YAGNI without saying the section was checked to contain both; the zone cited it unopened.
   Runs: load-facts (2026-09-29, R2).
+- [×1] R2's brief cites master-plan sections and decisions (§ 2, § 3, D5–D13) that are absent from the worktree copy of
+  the plan — they exist only on `dev`, so a zone working in the worktree cannot open what the brief tells it to
+  apply and either reads the main checkout or skips the citation. Briefs should name the file that holds each cited
+  section, or the orchestrator should paste it. (R2)
+  Runs: coach-simplification-i1 2026-10-04.
 
 ## Blind spots
 
@@ -187,7 +192,7 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   treated the absence as inapplicable rather than a gap, but the zone brief still gives no
   explicit instruction for this plan shape, so the correct call was judgment, not guidance.
   Runs: ports-layout-consistency (2026-09-14), lint-glob-fix (2026-09-14), structured-output-json-object-mode (2026-09-19).
-- [×4] Code that stops matching the *mechanism* a durable spec names (ADR-0013 §7:
+- [×5] Code that stops matching the *mechanism* a durable spec names (ADR-0013 §7:
   "`structured` uses `withStructuredOutput`") is claimed by both R1 ("declared boundaries") and
   R4 (doc currency) — both raised it as blocking this run. Neither zone file says which owns a
   mechanism drift that crosses no layer, nor who escalates a blocking finding on a document the
@@ -196,7 +201,8 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   owner at close-out — would settle both.
   Third run: R1 graded code that contradicts BR-LLM-006 / ADR-0013 §4.1 blocking *pending* the owner-approved amendment the plan schedules as a later orchestrator task, and R4 raised the same ADR lines blocking from the doc side; R1 proposed: "Code that departs from a durable rule is blocking at review unless the owner-approved spec amendment is in the same diff; a scheduled-but-undone amendment task does not discharge it."
   Fourth run: R1 had to restate as blocking two ADR-0013 deviations the plan already lists under "Durable spec impact — escalate before merge"; proposed: "a deviation the plan lists under Durable spec impact is reported blocking with the note 'escalated in plan', released only by the owner-approved amendment recorded at close-out".
-  Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19), transition-handoff (2026-09-25), prompt-caching (2026-09-30).
+  Fifth run (R4): the integration contract has no deferral clause for durable-doc amendments — R4 had to rely on the caller's framing ("the owner approves amendments") to treat ADR-0013 § 3.4 / ADR-0009 as listed-not-edited instead of blocking, and nothing in the skill says that a deviation with an owner-pending amendment is reported as blocking-until-approved rather than dropped.
+  Runs: structured-output-fenced-json (2026-09-19), structured-output-json-object-mode (2026-09-19), transition-handoff (2026-09-25), prompt-caching (2026-09-30), coach-simplification-i1 2026-10-04 (R4).
 - [×2] A known-and-accepted carve-out (FEAT-0003's stale LLMService diagram is P7-owned)
   lives only in the master plan's phase map; the review brief's known-and-accepted list is
   assembled ad hoc each round, so the same carve-out must be re-derived or gets re-flagged.
@@ -228,7 +234,7 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   Orca `worker_done` messages are invisible from the worktree. Proposed for ORCHESTRATION.md:
   "each task's verification output (command + summary line) is appended to the plan under the task
   before review; a reviewer treats absence there as absence". Runs: set-kind (2026-09-29, R3), load-facts (2026-09-29, R3 — two task commits with empty bodies read as "no evidence"; proposed "a worker report alone is not evidence"), load-plan-fixes (2026-10-01, R3 — proposed a `## Verification evidence` section in every plan, filled by the orchestrator before Status: done).
-- [×3] Zone R3 says test names carry BR/AC refs "per `docs/CONTRIBUTING_AI.md`", but that file has no such rule, so missing AC refs (`planning-set-logging`, `recent-history-status`) cannot be graded. Proposed wording for CONTRIBUTING_AI Principles: "Every `describe` of a test that proves an AC names that AC id." Runs: coach-baseline 2026-09-25 (R3), retro-timestamps 2026-09-30 (R3: `describe('STALE SESSION gate follows isRetroLog (BUG-043)')` cites neither BR-TRAINING-030 nor AC-RT-4). (+ load-plan 2026-10-01)
+- [×4] Zone R3 says test names carry BR/AC refs "per `docs/CONTRIBUTING_AI.md`", but that file has no such rule, so missing AC refs (`planning-set-logging`, `recent-history-status`) cannot be graded. Proposed wording for CONTRIBUTING_AI Principles: "Every `describe` of a test that proves an AC names that AC id." Runs: coach-baseline 2026-09-25 (R3), retro-timestamps 2026-09-30 (R3: `describe('STALE SESSION gate follows isRetroLog (BUG-043)')` cites neither BR-TRAINING-030 nor AC-RT-4). (+ load-plan 2026-10-01) (+ coach-simplification-i1 2026-10-04, R3: the zone and its rules cite a CONTRIBUTING_AI test-naming rule that does not exist, so the missing AC ids in the new training tests were again gradable only as advisory)
 - [×1] R1 + R4: a rule stated only in a superpowers design doc (load-plan metric 4, the Stage A rows, the step-down floor) has no durable home, so R1 can only grade a departure from it as advisory and R4 cannot check a refinement against any durable rule. R4 proposed BR-TRAINING ids for working weight and the step-down floor. (load-plan-fixes 2026-10-01)
 - [×1] R3: the zone has no instruction to probe behaviour outside the fixtures; every blocking finding of load-plan-fixes runs 3–6 came from hand-built histories adjacent to tested cases. Proposed for r3-correctness.md: "for each new rule, construct at least one adjacent history and run it." (load-plan-fixes 2026-10-01)
 - [×1] R4: a scope extension after a merge reopens Status and deletes the `- Review:` line; proposed: keep the previous line and add one for the extension range. (load-plan-fixes run 3)
@@ -399,6 +405,15 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   Runs: load-facts (2026-09-29, R1).
 
 - [×1] No zone checks that prompt-layer claims about a tool's behaviour stay in line with that tool. In retro-timestamps the STALE SESSION block still says "Retro-logging is active: any sets you log will be timestamped to the original training time" for a zero-set idle session, while the fixed `log_set` now logs that first set live. Rule candidate for `docs/CONTRIBUTING_AI.md`: "A prompt block that describes a tool's behaviour must gate on the same domain predicate the tool uses." Runs: retro-timestamps 2026-09-30 (R3).
+- [×1] No zone owns plan-vs-implementation conformance: groups the plan listed for deletion that were skipped (flags
+  gone but their branches kept), a CLI whose shape changed from the work order (`--history/--today/--at` replaced by
+  built-in fixtures), and tasks that exist in the code but not in the plan (6a/6b) fall between R1 (layers), R3
+  (tests/verification) and R4 (docs). Nobody is asked "does the diff do what the plan says, and does the plan say what
+  the diff does". Proposed: a fifth check in R3 or the orchestrator's brief. Runs: coach-simplification-i1 2026-10-04 (R1).
+- [×1] YAGNI vs owner gate: removing a dead flag branch is the YAGNI-correct change, but the branch sat in an
+  owner-gated area (user facts pipeline), so both "delete it" and "keep it" are defensible and the zones have no
+  severity for "blocking until the owner decides" — B1 had to be filed as an open owner decision instead of a
+  blocking/advisory finding. Proposed: a status "blocking — owner decision" in the severity contract. Runs: coach-simplification-i1 2026-10-04 (R2).
 
 ## Rule candidates
 
@@ -886,11 +901,15 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   `docs/DOCUMENTATION_GUIDE.md` § Feature Spec: "A feature spec has no Status/x-status line; delivery state
   lives only in the plan header and STATE.md" (legacy FEAT files → one-time cleanup).
   Runs: voice-transcription (2026-09-27, R4).
-- [×1] Owner-requested changes made after a review run and recorded only as Decisions (D-lines) have no task, AC or
+- [×2] Owner-requested changes made after a review run and recorded only as Decisions (D-lines) have no task, AC or
   verification slot, so they fall outside rule 2's "each task" wording. Proposed for `docs/CONTRIBUTING_AI.md`: "Every
   code commit on a plan branch belongs to a plan task that cites its AC and verification command; a change added after
   planning gets a new task entry, not only a D-line."
-  Runs: voice-transcription (2026-09-27, R3 run 3).
+  Second run (R4): a recorded decision that changes plan-specified behaviour (the frozen i0 prompt, check-in and
+  Reported-today lines, D12/D13) left § 1 and § 3 of the plan describing the old behaviour while Tasks 6a/6b had no
+  AC. Proposed: "a recorded decision that changes plan-specified behaviour amends the plan section, or adds the task
+  with its AC and verification command, in the same commit."
+  Runs: voice-transcription (2026-09-27, R3 run 3), coach-simplification-i1 2026-10-04 (R4).
 - [×1] `SUPERPOWERS_INTEGRATION.md` rule 3 (rule-meaning changes are owner-level "without exception") has no written carve-out for an explicit owner autonomy order; it lives only in memory. Proposed: "Under an explicit owner autonomy order for a named bug or plan, a durable-spec amendment recording the shipped rule is allowed if it is dated, marked 'decided without the owner, reversible', and listed in the STATE handoff." Without it R1 must either block every autonomous plan or ignore "always blocking". Runs: fact-provenance R1 (2026-09-27).
 - [×1] "A model call added to the reply path (anything inside prepare/compact) states its latency cost in the plan and the ADR, or is moved off the path" — proposed for `CONTRIBUTING_AI.md` Principles & Boundaries; today no rule lets a reviewer block on it. Runs: fact-verification R3 (2026-09-28).
 - [×1] "Tool-result strings are frozen per tool → bump `TOOL_OUTCOME_FORMAT_ID`" lives only in
@@ -917,3 +936,14 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   ARCHITECTURE.md file map and the MANUAL_TEST_PLAN.md tool list in the same PR, or logs the drift
   in BACKLOG.md." Runs: load-facts (2026-09-29, R4).
 - [×1] Evidence rows need the SHA the command was actually run at. A single "evidence SHA" commit that fills every row with the head SHA makes red-phase evidence unverifiable (every T2 red row cited the fix commit `880335e0`, where the repros no longer exist). Proposed wording for the Evidence convention in `docs/ORCHESTRATION.md` / `SUPERPOWERS_INTEGRATION.md`: "Red-phase evidence cites the red-test commit; green-phase evidence cites the fix commit." Runs: retro-timestamps 2026-09-30 (R3).
+- [×1] A branch whose code contradicts a durable spec may merge only after the owner approves the listed amendment
+  (here ADR-0013 § 3.4: user facts in block 1 as `# Profile`, `memory: 'workout'` as a per-phase message shape). The
+  plan listing the amendment under its durable-spec section is not an approval. See the Blind spots entry on code
+  that departs from a durable rule (×5). Proposed for `SUPERPOWERS_INTEGRATION.md`. Runs: coach-simplification-i1 2026-10-04 (R1).
+- [×1] Deleting a flag deletes its branches in the same change; a flagged branch in an owner-gated area is wired
+  unconditionally, or the deletion is escalated to the owner. Here the `LOAD_PLAN_*` flags went but summariser v7 /
+  verifier v2 became unreachable, changing the facts pipeline on deploy. Proposed for `CONTRIBUTING_AI.md`
+  Principles. Runs: coach-simplification-i1 2026-10-04 (R2, R3).
+- [×1] A spec a task implements must be committed; gitignored evidence may be cited but is never the only spec. The
+  only full spec of I1 Tasks 6a/6b lived in a gitignored `data/` file. Proposed for `SUPERPOWERS_INTEGRATION.md`.
+  Runs: coach-simplification-i1 2026-10-04 (R4).
