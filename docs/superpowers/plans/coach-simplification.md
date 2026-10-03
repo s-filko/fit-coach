@@ -220,6 +220,13 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   muscle group, physical constraints first, no dates/confirmation counts, `break`/`progression_scheme` not shown;
   no `## User Facts` block, no course directive in training). Storage, extraction and tools are untouched. The owner
   decides whether that rendering stays (it is what he read in the replays) or the full block returns.
+- (D12) 2026-10-04 — **Check-in about a known limit is state in `# Today`, not a prompt rule.** Replay rounds 7–8: a
+  standing prompt line "ask how the limit is today" made the coach re-ask in up to 11/21 replies (same failure as
+  round 2), "ask once" variants echoed the rule into the reply and raised faults 1 → 8. Fix per P2/P5: the Today block
+  carries a one-turn line on the first training turn only ("Check-in: ask about the lower back now — not asked today";
+  omitted once any coach reply exists or when the planner's notes already answer it), so there is nothing to re-ask
+  later. Prompt keeps only the minimal "a new pain or limit → remember it for next time (manage_fact)" clause; its
+  reaction is judged in the replay with an inserted knee-pinch message (run 8b reaction was the wanted one).
 
 ## 6. Progress log (append one line per state change; newest last)
 
@@ -360,3 +367,7 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   phrase; remember a newly reported limit via `manage_fact`) within 2 500 chars, replay ×2, `final-shape.md` updated.
   Gap 1 (constraints fetched first, never cut by the 50-row cap) touches `getForPrompt` → owner approval asked
   together with the compact-profile question.
+- 2026-10-04 — Replay rounds 7–8 failed (prompt-rule check-in re-asks; faults 8/8); page stays on run 6b, prompt on
+  round-6 text. D12 taken. Dispatched: Opus — simulate the one-turn Today check-in line in `run.py`, prompt with only
+  the minimal remember-clause, replay ×2, update `final-shape.md`; Sonnet Task 6a (blocks sync) still running; Task 6b
+  (Today check-in line in code + final prompt sync) follows after both.
