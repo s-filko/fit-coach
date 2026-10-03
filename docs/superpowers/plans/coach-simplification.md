@@ -350,3 +350,13 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   workout-overview / exercise-history blocks, training snapshot cases, `formatDateAge` gone; set formatters moved to
   `prompts/blocks/set-format.ts`; episode-summary `endedAt` = last user message time (unit-tested). Grep gate 0.
   Suites green (unit 1 773, scenarios 392, integration 659). Task 5 dispatched (Sonnet).
+- 2026-10-04 — I1 Task 5 done (Sonnet): commit `a32da9cf`. `npm run print-training-request [-- --case07]` (offline).
+  Case-07 moment: **7 420 chars ≈ 2 174 tokens vs ~58 000 chars before (≈ 13 %)**; plain fixture 7 137 chars.
+  Size test pins coach ≤ 2 500, system ≤ 3 500, context ≤ 6 000, total ≤ 12 000 chars. Tool schemas are another
+  18 345 chars sent separately — trimming them is an I2 item. Task 6 split: (a) Sonnet — code sync of the blocks to
+  `final-shape.md` (habit line, "Loads used", "(no RPE recorded)", no "(warm-up)" label unless the data says so,
+  planner `warnings`/exercise `notes` in `# Today` = gap 4) + read-only check whether the training episode is
+  compacted at finish (gap 3b); (b) Opus — prompt phrases for gaps 2 and 3 (ask about a known limit at start in one
+  phrase; remember a newly reported limit via `manage_fact`) within 2 500 chars, replay ×2, `final-shape.md` updated.
+  Gap 1 (constraints fetched first, never cut by the 50-row cap) touches `getForPrompt` → owner approval asked
+  together with the compact-profile question.
