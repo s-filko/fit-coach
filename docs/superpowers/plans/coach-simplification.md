@@ -291,3 +291,11 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   `i0/session/run.py`, to be re-synced from `final-shape.md` afterwards).
   **Next:** on (a) → owner sees the page once more only if something big changed; on (b) → Task 3, then 4, 5, then
   sync task from `final-shape.md`, then Opus review of the branch, then ask the owner for push + dev deploy.
+- 2026-10-03 05:40 — Replay round 4 done (Opus). Prompt 2 392 chars (`i0/coach-prompt.md`); rubric v2 built on the owner's
+  comments (`i0/rubric.md`, v1 kept). Faults: run 3a re-judged by the new rubric 13 → run 4a 8 / run 4b **3**
+  (0 wrong numbers in all). Run 4b on the page. Owner comments: all met in at least one run; 11, 06/07, 08 slip in one
+  run each = model variance, no edge-case lines added. Facts added: habit line (cardio warm-up before 8 of last 10
+  workouts), "Loads used" per strength exercise, "(no RPE recorded)" in history, no "(warm-up)" label unless the data
+  says so. **`i0/final-shape.md` is the spec for the repo sync** (prompt verbatim, Profile/Today/History rules with
+  invented examples, not-shown list, diffs). Style note for the sync: run 4b opens 12/20 replies with «Принято».
+  **Next:** Task 2 report (Sonnet, running) → Task 3 → Task 4 → Task 5 → sync task from `final-shape.md` → Opus review.
