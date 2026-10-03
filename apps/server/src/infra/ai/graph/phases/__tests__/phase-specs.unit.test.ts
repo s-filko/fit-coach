@@ -30,7 +30,6 @@ function stubDeps(overrides: Record<string, unknown> = {}): ConversationGraphDep
       findRecentByUserIdWithDetails: async () => [SESSION_ROW],
       findRecentPerformancesForExercise: async () => [],
       // set-kind plan Task 2 (D6/D7): the place-ambiguity and skip lookups.
-      distinctRecentPlaces: async () => [],
       findLastSkipsByExercise: async () => [],
     },
     // Constraint + equipment facts.

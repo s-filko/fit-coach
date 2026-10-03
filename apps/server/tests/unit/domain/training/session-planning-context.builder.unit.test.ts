@@ -27,7 +27,6 @@ describe('SessionPlanningContextBuilder', () => {
     findTimedOut: jest.fn(),
     autoCloseTimedOut: jest.fn(),
     findRecentPerformancesForExercise: jest.fn(),
-    distinctRecentPlaces: jest.fn<() => Promise<string[]>>().mockResolvedValue([]),
     findLastSkipsByExercise: jest.fn<() => Promise<ExerciseLastSkip[]>>().mockResolvedValue([]),
   });
 

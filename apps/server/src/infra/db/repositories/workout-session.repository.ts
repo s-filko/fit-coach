@@ -218,8 +218,8 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
   }
 
   /**
-   * The WHERE predicate of a "real workout" (completed + >= 1 set) — shared by
-   * `findRecentByUserId(realWorkoutsOnly)` and `distinctRecentPlaces` (set-kind plan Task 2 D6).
+   * The WHERE predicate of a "real workout" (completed + >= 1 set) — used by
+   * `findRecentByUserId(realWorkoutsOnly)` (set-kind plan Task 2 D6).
    */
   private realWorkoutConditions(userId: string): SQL[] {
     return [
@@ -386,19 +386,6 @@ export class WorkoutSessionRepository implements IWorkoutSessionRepository {
       .limit(limit);
 
     return this.rehydratePerformances(rows, () => exerciseId);
-  }
-
-  async distinctRecentPlaces(userId: string, limit: number): Promise<string[]> {
-    // set-kind plan Task 2 (D6): the last `limit` real workouts' places, deduped in JS — a
-    // DISTINCT over places would dedupe BEFORE the window, not inside it. NULL = not stated
-    // and never counts as a place.
-    const rows = await db
-      .select({ place: workoutSessions.place })
-      .from(workoutSessions)
-      .where(and(...this.realWorkoutConditions(userId)))
-      .orderBy(desc(workoutSessions.completedAt))
-      .limit(limit);
-    return [...new Set(rows.map(r => r.place).filter((p): p is string => p !== null))];
   }
 
   async findLastSkipsByExercise(

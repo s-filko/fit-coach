@@ -45,7 +45,7 @@ export interface RequestFixture {
 
 const long = (iso: string, time = '11:00:00.000Z'): Date => new Date(`${iso}T${time}`);
 
-function exerciseOf(id: string, name: string): ExerciseWithMuscles {
+export function exerciseOf(id: string, name: string): ExerciseWithMuscles {
   return {
     id,
     name,
@@ -64,7 +64,7 @@ function exerciseOf(id: string, name: string): ExerciseWithMuscles {
   };
 }
 
-class SetFactory {
+export class SetFactory {
   private seq = 0;
   constructor(private readonly at: Date) {}
 
@@ -101,7 +101,7 @@ class SetFactory {
   }
 }
 
-function sessionExercise(
+export function sessionExercise(
   id: string,
   name: string,
   sets: SessionSet[],
@@ -124,11 +124,11 @@ function sessionExercise(
   };
 }
 
-function performance(id: string, name: string, date: string, sets: SessionSet[]): ExerciseLastPerformance {
+export function performance(id: string, name: string, date: string, sets: SessionSet[]): ExerciseLastPerformance {
   return { exerciseId: id, completedAt: long(date), sessionExercise: sessionExercise(id, name, sets, 'completed') };
 }
 
-interface Row {
+export interface Row {
   id: string;
   name: string;
   planned: string | null;
@@ -136,7 +136,7 @@ interface Row {
   past: Array<[string, SessionSet[]]>;
 }
 
-const historyOf = (rows: Row[]): ExerciseHistory[] =>
+export const historyOf = (rows: Row[]): ExerciseHistory[] =>
   rows.map(r => ({
     exerciseId: r.id,
     exerciseName: r.name,
@@ -146,7 +146,7 @@ const historyOf = (rows: Row[]): ExerciseHistory[] =>
     loadsUsed: collectLoadsUsed(r.past.map(([date, sets]) => performance(r.id, r.name, date, sets))),
   }));
 
-function sessionOf(
+export function sessionOf(
   started: Date,
   last: Date,
   plan: Array<{ id: string; name: string; sets: number; reps: string }>,
@@ -184,7 +184,12 @@ function sessionOf(
   };
 }
 
-function factOf(n: number, category: UserFact['category'], fact: string, muscleGroup: string | null = null): UserFact {
+export function factOf(
+  n: number,
+  category: UserFact['category'],
+  fact: string,
+  muscleGroup: string | null = null,
+): UserFact {
   const at = new Date('2026-09-01T00:00:00.000Z');
   return {
     id: `fact-${n}`,

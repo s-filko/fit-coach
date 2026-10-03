@@ -372,7 +372,6 @@ export function buildStubDeps(fixture: EvalFixture): StubWorld {
       findRecentPerformancesForExercise: async () => [],
       // set-kind plan Task 2 (D6/D7): no fixture asserts on places or skips today —
       // "nothing on record" keeps both flags off.
-      distinctRecentPlaces: async () => [],
       findLastSkipsByExercise: async () => [],
     },
     exerciseRepository: {
