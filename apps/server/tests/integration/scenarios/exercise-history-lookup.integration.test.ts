@@ -108,11 +108,11 @@ describe('get_exercise_history (AC-HL-1, AC-HL-2)', () => {
 
     expect(content).toContain('Barbell Bench Press');
     expect(content).toContain('last 3 performance(s)');
-    // Newest three of the four completed performances — 2026-09-10 (the oldest) is left out.
-    expect(content).toContain('2026-09-23');
-    expect(content).toContain('2026-09-20');
-    expect(content).toContain('2026-09-16');
-    expect(content).not.toContain('2026-09-10');
+    // Newest three of the four completed performances — Sep 10 (the oldest) is left out.
+    expect(content).toContain('3 days ago, Wednesday Sep 23');
+    expect(content).toContain('6 days ago, Sunday Sep 20');
+    expect(content).toContain('10 days ago, Wednesday Sep 16');
+    expect(content).not.toContain('Sep 10');
     // Never the in-progress session's own (heavier, 90kg) set.
     expect(content).not.toContain('90 kg');
     expect(content).toContain('82 kg');
@@ -126,9 +126,9 @@ describe('get_exercise_history (AC-HL-1, AC-HL-2)', () => {
     const content = renderedContent(result);
 
     expect(content).toContain('last 2 performance(s)');
-    expect(content).toContain('2026-09-23');
-    expect(content).toContain('2026-09-20');
-    expect(content).not.toContain('2026-09-16');
+    expect(content).toContain('3 days ago, Wednesday Sep 23');
+    expect(content).toContain('6 days ago, Sunday Sep 20');
+    expect(content).not.toContain('10 days ago, Wednesday Sep 16');
   });
 
   it('AC-HL-2: by name, resolved via the catalog (exact match)', async () => {

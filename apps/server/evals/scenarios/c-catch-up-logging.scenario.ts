@@ -12,7 +12,7 @@ import { BENCH_PRESS_ID, PULL_UPS_ID, setupSteps, sharedPast } from './b-full-wo
  * sets, answers a mid-workout rest question with TEXT ONLY (no tool), then
  * the clock jumps +3.5 h — past `EPISODE_GAP_HOURS` (3 h), so the return run
  * compacts the episode away and the training phase re-reads the session from
- * the DB: STALE SESSION + a WORKOUT OVERVIEW still listing the pre-pause
+ * the DB: the stale session + a workout block still listing the pre-pause
  * sets.
  *
  * Per the owner ruling, a >2 h gap means the user is CATCHING UP an old

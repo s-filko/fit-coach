@@ -332,7 +332,9 @@ export function buildCompactStep(deps: CompactStepDeps): CompactStep {
       const stored: StoredEpisodeSummary = {
         episodeId: state.episodeId || runId,
         phaseAtEnd: state.phase,
-        endedAt: ctx.now.toISOString(),
+        // The episode's newest user message — compaction itself runs at the NEXT run, so ctx.now would
+        // label an old episode "today".
+        endedAt: (state.lastUserMessageAt ? new Date(state.lastUserMessageAt) : ctx.now).toISOString(),
         summary,
       };
       // fact-lifecycle plan Task 1: the mirrored summary turn row is the honest

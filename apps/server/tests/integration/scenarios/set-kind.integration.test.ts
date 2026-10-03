@@ -2,7 +2,7 @@
  * set-kind plan Task 1 (D2, D3, D4, AC-SK-1, AC-SK-2): a scripted-model training scenario over
  * the real test DB. The user logs two warm-up sets and one working set for Bench Press against a
  * 3-set plan target — `session_sets.set_kind` must record `warmup, warmup, working`, the
- * confirmation must name the warm-up sets, and the next turn's WORKOUT OVERVIEW must count only
+ * confirmation must name the warm-up sets, and the next turn's workout block must count only
  * the working set against the target.
  *
  * Promoted from `set-kind.repro.test.ts` once Task 1's schema/domain/tool/block changes landed
@@ -97,7 +97,7 @@ const scenarioDef: Scenario = {
       ],
     },
     { action: 'advance', at: '+2m' },
-    // A trivial extra turn — the WORKOUT OVERVIEW a step sees is assembled from state committed by
+    // A trivial extra turn — the workout block a step sees is assembled from state committed by
     // EARLIER steps, so the post-3rd-set guide/ACTIVE STATUS text only shows up here.
     { action: 'user', text: NEXT_TEXT, script: [{ text: NEXT_REPLY }] },
   ],

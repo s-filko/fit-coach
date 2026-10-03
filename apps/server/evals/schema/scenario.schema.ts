@@ -61,7 +61,7 @@ const KnownBugSchema = z.string().regex(/^BUG-\d+(?:\/AC-(?:[A-Z]+-)?\d+)?$/);
  * One entry of a `mustMatch`/`must` list (Task 4 Step 0): a bare string, or an
  * object tagging THAT single assertion with its bug. Per-entry granularity is
  * what a plane needs when its list mixes passing assertions with known-bug
- * ones (e.g. journey B's training step: WORKOUT OVERVIEW passes, the previous
+ * ones (e.g. journey B's training step: the workout block passes, the previous
  * turn verbatim is BUG-018/AC-CC-1) — one plane-level `knownBug` would drag
  * the passing assertions into `test.failing` with it.
  *

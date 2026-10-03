@@ -13,12 +13,10 @@ import {
   SESSION_PLANNING_V1,
   SESSION_PLANNING_V2,
 } from '@infra/ai/prompts/phases/session_planning';
-import { TRAINING_V1, TRAINING_V2, TRAINING_V3, TRAINING_V4 } from '@infra/ai/prompts/phases/training';
 import { SUMMARIZER_V1, SUMMARIZER_V2, SUMMARIZER_V3 } from '@infra/ai/prompts/summarizer';
 
 import { ALL_FIXTURES } from '../../fixtures/personas';
 import {
-  buildFixtureSession,
   buildSessionPlanningContext,
   FIXED_NOW,
   FIXTURE_EPISODE_SUMMARY,
@@ -88,25 +86,10 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
       expect(compose(SESSION_PLANNING_V1.render(ctx))).toMatchSnapshot();
     });
 
-    it(`phase.training / ${name}`, () => {
-      const ctx = {
-        now: FIXED_NOW,
-        timezone: user.timezone ?? null,
-        client: 'telegram' as const,
-        user,
-        lastMessageTime: null,
-        session: buildFixtureSession(fixture, FIXED_NOW),
-        previousSession: null,
-      };
-      expect(compose(TRAINING_V1.render(ctx))).toMatchSnapshot();
-    });
-
     // v2 (P4 context-budget plan, Task 2, D-B): v1 minus the moved domain
     // sections — CHAT_PROMPT/PLAN_CREATION_PROMPT/SESSION_PLANNING_PROMPT/
     // TRAINING_PROMPT's `.current` is v2 as of this plan. New snapshots
-    // (v1's stay pinned above, untouched). Training moved on to v3 (log_set
-    // exerciseId rules + search_exercises): its v2 snapshot is pinned to
-    // TRAINING_V2 below, v3 gets its own.
+    // (v1's stay pinned above, untouched).
     it(`phase.chat v2 / ${name}`, () => {
       const ctx = {
         now: FIXED_NOW,
@@ -141,28 +124,6 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
         context: { daysSinceLastWorkout },
       };
       expect(compose(SESSION_PLANNING_V2.render(ctx))).toMatchSnapshot();
-    });
-
-    it(`phase.training v2 / ${name}`, () => {
-      const ctx = {
-        now: FIXED_NOW,
-        timezone: user.timezone ?? null,
-        client: 'telegram' as const,
-        user,
-        lastMessageTime: null,
-      };
-      expect(compose(TRAINING_V2.render(ctx))).toMatchSnapshot();
-    });
-
-    it(`phase.training v3 / ${name}`, () => {
-      const ctx = {
-        now: FIXED_NOW,
-        timezone: user.timezone ?? null,
-        client: 'telegram' as const,
-        user,
-        lastMessageTime: null,
-      };
-      expect(compose(TRAINING_V3.render(ctx))).toMatchSnapshot();
     });
 
     // v_next (transition-handoff plan Task 7, BUG-032): every `.current`
@@ -216,17 +177,6 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
         context: { daysSinceLastWorkout },
       };
       expect(compose(SESSION_PLANNING_PROMPT.current.render(ctx))).toMatchSnapshot();
-    });
-
-    it(`phase.training v4 / ${name}`, () => {
-      const ctx = {
-        now: FIXED_NOW,
-        timezone: user.timezone ?? null,
-        client: 'telegram' as const,
-        user,
-        lastMessageTime: null,
-      };
-      expect(compose(TRAINING_V4.render(ctx))).toMatchSnapshot();
     });
   }
 

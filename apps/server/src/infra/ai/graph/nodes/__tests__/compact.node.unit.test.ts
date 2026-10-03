@@ -13,6 +13,7 @@ import type { LlmGateway } from '@domain/ai/ports';
 import type { IUserFactsService, UserFact } from '@domain/user/ports';
 import { PermanentFactRefusal } from '@domain/user/services/fact-lifecycle';
 
+import { episodeParagraph } from '@infra/ai/prompts/blocks/episode-summaries.v2';
 import { RunMetricsCollector } from '@infra/ai/run-metrics';
 
 import type { ConversationStateType } from '../../state';
@@ -182,6 +183,30 @@ describe('buildCompactStep (BR-LLM-001..004)', () => {
     expect(update.episodeId).toBe(RUN_ID); // D-O: the new episode starts with this run
     expect(update.episodeStartedAt).toBe(NOW.toISOString());
     expect(update.compactReason).toBeNull();
+  });
+
+  it('the stored episode ends at its last user message, not at the compaction run (label reads "2 days ago")', async () => {
+    const { deps } = makeDeps();
+    const compact = buildCompactStep(deps);
+    const lastUserMessageAt = new Date(NOW.getTime() - 2 * 24 * 3600 * 1000).toISOString();
+
+    const update = await compact(channelState({ lastUserMessageAt }), ctxConfig());
+
+    const stored = update.episodeSummaries?.[0];
+    expect(stored?.endedAt).toBe(lastUserMessageAt);
+    expect(episodeParagraph(stored!, NOW, 'UTC')).toContain('(2 days ago)');
+  });
+
+  it('without a known lastUserMessageAt the episode ends at the run clock', async () => {
+    const { deps } = makeDeps();
+    const compact = buildCompactStep(deps);
+
+    const update = await compact(
+      channelState({ lastUserMessageAt: null, compactReason: 'phase_boundary' }),
+      ctxConfig(),
+    );
+
+    expect(update.episodeSummaries?.[0]?.endedAt).toBe(NOW.toISOString());
   });
 
   it('BR-LLM-004: summariser failure → no summary, messages still removed', async () => {

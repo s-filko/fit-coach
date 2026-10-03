@@ -72,30 +72,7 @@ export {
   SESSION_PLANNING_RECOVERY_TIMELINE_V1,
   type SessionPlanningRecoveryTimelineData,
 } from './session-planning-recovery-timeline.v1';
-export {
-  buildPreviousSessionSection,
-  buildStaleSessionSection,
-  buildWorkoutOverview,
-  formatExerciseSets,
-  formatSetData,
-  TRAINING_CLIENT_V1,
-  TRAINING_PREVIOUS_SESSION_V1,
-  TRAINING_STALE_SESSION_V1,
-  TRAINING_WORKOUT_OVERVIEW_V1,
-  type TrainingClientData,
-  type TrainingPreviousSessionData,
-  type TrainingStaleSessionData,
-  type TrainingWorkoutOverviewData,
-} from './training-workout-overview.v1';
-export { TRAINING_WORKOUT_OVERVIEW_V2 } from './training-workout-overview.v2';
-export {
-  TRAINING_EXERCISE_HISTORY_V1,
-  TRAINING_RECENT_WORKOUTS_V1,
-  type ExerciseHistoryEntry,
-  type TrainingExerciseHistoryData,
-  type TrainingRecentWorkoutsData,
-} from './training-exercise-history.v1';
-
+export { formatExerciseSets, formatSetData } from './set-format';
 export {
   formatSetShort,
   formatSetsLine,

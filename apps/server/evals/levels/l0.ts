@@ -20,11 +20,7 @@ export const FORBIDDEN_STRINGS = ['undefined', 'null', '[object Object]', 'NaN']
  * substituted into a prompt instead of scanning the whole rendered string. This
  * allowlist is the stopgap until then.
  */
-export const FORBIDDEN_STRING_ALLOWLIST = [
-  // src/infra/ai/prompts/phases/training/v1.ts RULES_TEXT — RULE 7 of the training prompt.
-  // "undefined" here is English ("in undefined sequence"), not an unrendered value.
-  'Sets without order may execute in undefined sequence',
-];
+export const FORBIDDEN_STRING_ALLOWLIST: readonly string[] = [];
 
 function findForbiddenHits(rendered: string): string[] {
   let scannable = rendered;

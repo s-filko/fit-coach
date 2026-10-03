@@ -7,7 +7,7 @@ import type { ITrainingService } from '@domain/training/ports';
 import { isRetroLog, lastActivityOf, RETRO_SET_OFFSET_MS } from '@domain/training/session-timing';
 import { SetDataSchema } from '@domain/training/set-data.types';
 
-import { formatSetData } from '@infra/ai/prompts/blocks/training-workout-overview.v1';
+import { formatSetData } from '@infra/ai/prompts/blocks/set-format';
 import { EFFORT_MAPPING_TEXT } from '@infra/ai/prompts/effort';
 import { formatExerciseSummary, sessionIdOf } from '@infra/ai/tools/format-exercise-summary';
 

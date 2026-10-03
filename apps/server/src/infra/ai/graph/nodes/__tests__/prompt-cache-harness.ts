@@ -55,7 +55,7 @@ export function makeSpec(): PhaseSpec<Data> {
     tools: TOOLS as never,
     toolPolicy: buildTrainingToolPolicy(TOOLS as never),
     loadContext: async () => ({ ok: true as const, data: state.data }),
-    contextBlocks: [{ id: 'overview', version: 'v1', render: d => `WORKOUT OVERVIEW\n${d.overview}` }],
+    contextBlocks: [{ id: 'overview', version: 'v1', render: d => `TODAY\n${d.overview}` }],
     modelProfile: 'default',
     budget: { system: 5000, longTerm: 1500, domain: 6000, history: 8000, outputReserve: 100 },
   };

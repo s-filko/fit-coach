@@ -227,7 +227,7 @@ export const scenario: Scenario = {
             `- Barbell Bench Press [id ${BENCH_PRESS_ID}] — plan 3×8-10 — nothing yet`,
             `- Pull-ups [id ${PULL_UPS_ID}] — plan 3×6-8 — nothing yet`,
             // coach-simplification I1: per-exercise History (the last performances with dates, anchored
-            // 2026-09-16, 4d before T0) replaces EXERCISE HISTORY / RECENT WORKOUTS.
+            // 2026-09-16, 4d before T0) is the training history block.
             '# History (before today; sets as reps×kg)',
             'Barbell Bench Press (today 3×8-10)',
             '4 days ago, Wednesday Sep 16: 8×80, 8×80',

@@ -133,7 +133,7 @@ describe('AC-PC-5: the checkpointed HumanMessage carries no <context> text (D2)'
     // The wire request carries the volatile context inside the current human message…
     const currentUser = r.messages[lastHumanIndex(r)]!;
     expect(wireText(currentUser)).toContain('<context>');
-    expect(wireText(currentUser)).toContain('WORKOUT OVERVIEW');
+    expect(wireText(currentUser)).toContain('TODAY');
     expect(wireText(currentUser)).toContain('ещё подход');
 
     // …while nothing the node hands back to the checkpoint, and no input message, was rewritten.

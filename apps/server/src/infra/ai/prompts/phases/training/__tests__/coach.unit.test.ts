@@ -44,7 +44,7 @@ describe('TRAINING_COACH', () => {
   it('says what the coach knows and carries none of the old rulebook', () => {
     const text = sectionOf('ru', 'coach');
     expect(text).toContain("today's plan with every set logged so far");
-    expect(text).not.toMatch(/RULE|LOAD PLAN|EXERCISE HISTORY|WORKOUT OVERVIEW|SESSION GUIDE/);
+    expect(text).not.toMatch(/RULE|LOAD PLAN/);
   });
 
   it('renders the profile section from the user and facts', () => {
