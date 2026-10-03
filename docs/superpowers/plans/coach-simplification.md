@@ -337,3 +337,12 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   message). Prompt 2 497 chars; runs 6a/6b: faults 6 / 1, emoji 9/20 (two on plain confirmations) / 4/20 (all at real
   moments, 💪 only); run 6b on the page. `final-shape.md` updated (prompt verbatim + style note). Task 3 still running
   with the facts-pipeline exclusion. Awaiting owner: keep the compact `# Profile` rendering (D11).
+- 2026-10-04 — I1 Task 3 done (Sonnet): commit `2f3b22be`, 137 files, +209 / −19 980 (prod −5 398, tests −14 582).
+  Engine, infra load layer, `get_load_plan`, `advised`, effort hints, recommendation writer, flags, time-gap v2,
+  print-load-plan, engine scenarios deleted; planning weight-free unconditionally (v5 current, no `targetWeight`).
+  **Facts area untouched per D11:** summariser v7 / verifier v2, compaction, categories `break` / `progression_scheme`
+  kept; the fact vocabulary they import moved unchanged to `domain/training/fact-formats.ts`. One effect to disclose:
+  the engine's own writer of the "asked" `break` fact is gone with the engine, so no code writes `break` facts any more
+  (the category and the summariser path stay). Suites green (unit 1 826, scenarios 392, integration 659). Task 4
+  dispatched (Sonnet).
+  **Next:** Task 4 → Task 5 → Task 6 (sync `final-shape.md` + 4 facts gaps) → Opus review → owner: push + deploy.
