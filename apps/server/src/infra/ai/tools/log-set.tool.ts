@@ -190,11 +190,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
         );
 
         if (autoCompleted) {
-          // BUG-037: this transition was triggered by the user's own set — the instruction
-          // must tell the model to confirm that set first, not to lead with the recap.
-          const prevSummary = formatExerciseSummary(autoCompleted, 'set-triggered', {
-            omitTargetWeight: deps.loadPlanPlannerRebind === true,
-          });
+          const prevSummary = formatExerciseSummary(autoCompleted);
           return ok(`${setConfirmation}\n\n${prevSummary}`);
         }
 
@@ -213,7 +209,7 @@ export function buildLogSetTool(deps: LogSetToolDeps) {
       name: 'log_set',
       description: [
         'Log a completed set for the current exercise.',
-        'Identify the exercise with exerciseId ONLY when you have its exact UUID — copied verbatim from the SESSION PLAN or from a search_exercises result ("ID:..." line).',
+        'Identify the exercise with exerciseId ONLY when you have its exact UUID — copied verbatim from today\'s plan in the context or from a search_exercises result ("ID:..." line).',
         'If the exercise is not in the plan and you do not have its exact UUID, pass exerciseName instead (the server resolves it in the catalog) — never invent or guess a UUID.',
         'For strength/weighted exercises: provide reps and weight (in kg).',
         'For bodyweight exercises: provide reps only.',

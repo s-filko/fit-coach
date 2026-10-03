@@ -35,15 +35,15 @@ describe('TRAINING_COACH', () => {
   });
 
   it('names the language in English; falls back for an absent code', () => {
-    expect(sectionOf('ru', 'coach')).toContain('You answer in Russian,');
-    expect(sectionOf('uk', 'coach')).toContain('You answer in Ukrainian,');
-    expect(sectionOf(null, 'coach')).toContain("You answer in the client's language,");
+    expect(sectionOf('ru', 'coach')).toContain('You answer in Russian ');
+    expect(sectionOf('uk', 'coach')).toContain('You answer in Ukrainian ');
+    expect(sectionOf(null, 'coach')).toContain("You answer in the client's language ");
     expect(sectionOf('ru', 'coach')).not.toContain('{language}');
   });
 
-  it('says where the facts arrive and carries none of the old rulebook', () => {
+  it('says what the coach knows and carries none of the old rulebook', () => {
     const text = sectionOf('ru', 'coach');
-    expect(text).toContain('<context>');
+    expect(text).toContain("today's plan with every set logged so far");
     expect(text).not.toMatch(/RULE|LOAD PLAN|EXERCISE HISTORY|WORKOUT OVERVIEW|SESSION GUIDE/);
   });
 

@@ -1,5 +1,5 @@
 import { compose } from '@infra/ai/prompts/compose';
-import { PHASE_PROMPTS } from '@infra/ai/prompts/index';
+import { TRAINING_PROMPT_V10 } from '..';
 
 /**
  * v5 (BUG-037, session-investigation-0925 R4): on a transition triggered by the user's
@@ -10,7 +10,7 @@ import { PHASE_PROMPTS } from '@infra/ai/prompts/index';
 
 /** The current training prompt, resolved through the prompt registry (never by importing vN directly). */
 function trainingPromptText(): string {
-  const sections = PHASE_PROMPTS.training.current.render({
+  const sections = TRAINING_PROMPT_V10.current.render({
     now: new Date('2026-09-25T08:00:00Z'),
     timezone: 'Europe/Berlin',
     client: 'telegram',

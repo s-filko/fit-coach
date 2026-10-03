@@ -43,9 +43,7 @@ export function buildCompleteCurrentExerciseTool(deps: CompleteCurrentExerciseTo
           'AUDIT: exercise completed',
         );
 
-        return ok(
-          formatExerciseSummary(summary, 'explicit', { omitTargetWeight: deps.loadPlanPlannerRebind === true }),
-        );
+        return ok(formatExerciseSummary(summary));
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         log.error({ err, sessionId }, 'complete_current_exercise failed');

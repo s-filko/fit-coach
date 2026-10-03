@@ -154,7 +154,9 @@ describe('LOAD PLAN over the real DB (AC-LF-5)', () => {
       userFacts,
     }) as never;
 
-  it('the training context carries LOAD PLAN with reference, working weight, gap and fatigue', async () => {
+  // coach-simplification I1 Task 2: the training request no longer renders LOAD PLAN / WORKOUT OVERVIEW — skipped until Task 3 deletes this file.
+
+  it.skip('the training context carries LOAD PLAN with reference, working weight, gap and fatigue', async () => {
     const spec = buildTrainingSpec(deps());
     const loaded = await spec.loadContext(
       { userId, user: { timezone: TIMEZONE } as never, activeSessionId: todayId, now: NOW },
@@ -182,7 +184,9 @@ describe('LOAD PLAN over the real DB (AC-LF-5)', () => {
     expect(context).toContain('sets as in EXERCISE HISTORY');
   });
 
-  it('LOAD_PLAN_SUGGESTION on: the context carries LOAD PLAN v2 — the suggestion with its decision row (AC-LP-3)', async () => {
+  // coach-simplification I1 Task 2: the training request no longer renders LOAD PLAN / WORKOUT OVERVIEW — skipped until Task 3 deletes this file.
+
+  it.skip('LOAD_PLAN_SUGGESTION on: the context carries LOAD PLAN v2 — the suggestion with its decision row (AC-LP-3)', async () => {
     const on = { ...(deps() as object), loadPlanSuggestion: true } as never;
     const spec = buildTrainingSpec(on);
     const loaded = await spec.loadContext(

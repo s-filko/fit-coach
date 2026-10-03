@@ -14,7 +14,7 @@ import {
   SESSION_PLANNING_V2,
 } from '@infra/ai/prompts/phases/session_planning';
 import {
-  TRAINING_PROMPT,
+  TRAINING_PROMPT_V10,
   TRAINING_V1,
   TRAINING_V2,
   TRAINING_V3,
@@ -246,7 +246,7 @@ describe('prompt snapshots (AC-1321, BR-LLM-007 — byte-identical across the P2
         user,
         lastMessageTime: null,
       };
-      expect(compose(TRAINING_PROMPT.current.render(ctx))).toMatchSnapshot();
+      expect(compose(TRAINING_PROMPT_V10.current.render(ctx))).toMatchSnapshot();
     });
   }
 

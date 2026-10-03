@@ -28,7 +28,7 @@ export interface GetExerciseHistoryToolDeps {
 
 const GET_EXERCISE_HISTORY_DESCRIPTION = [
   "Look up an exercise's real completed history — use this when the user asks about an exercise that is",
-  'NOT shown in EXERCISE HISTORY or RECENT WORKOUTS (e.g. "how much did I bench last time?" for an exercise',
+  'not among today\'s exercises (e.g. "how much did I bench last time?" for an exercise',
   "not in today's plan).",
   'Identify the exercise with exerciseId when you have its exact UUID; prefer search_exercises to get an',
   'exact exerciseId over passing exerciseName when you are not sure of the English catalog name.',

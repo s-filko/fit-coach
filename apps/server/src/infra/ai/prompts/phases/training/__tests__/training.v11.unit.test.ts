@@ -1,5 +1,5 @@
 import { compose } from '@infra/ai/prompts/compose';
-import { PHASE_PROMPTS } from '@infra/ai/prompts/index';
+import { TRAINING_PROMPT_V10 } from '..';
 
 import { TRAINING_PROMPT_V11 } from '../index';
 import { TRAINING_V11 } from '../v11';
@@ -26,11 +26,11 @@ function textOf(module: { render: (ctx: never) => { id: string; text: string }[]
  */
 describe('phase.training v11 — planner rebinding (load-plan plan Task 5b, AC-LP-7)', () => {
   it('the registry current stays v10; v11 is a separately registered module and entry', () => {
-    expect(PHASE_PROMPTS.training.current.version).toBe('v10');
+    expect(TRAINING_PROMPT_V10.current.version).toBe('v10');
     expect(TRAINING_V11.id).toBe('phase.training');
     expect(TRAINING_V11.version).toBe('v11');
     expect(TRAINING_PROMPT_V11.current).toBe(TRAINING_V11);
-    expect(TRAINING_PROMPT_V11.requiredSections).toEqual(PHASE_PROMPTS.training.requiredSections);
+    expect(TRAINING_PROMPT_V11.requiredSections).toEqual(TRAINING_PROMPT_V10.requiredSections);
   });
 
   it('renders the same required sections as v10', () => {

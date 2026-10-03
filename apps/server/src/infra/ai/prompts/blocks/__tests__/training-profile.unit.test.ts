@@ -1,6 +1,6 @@
 /**
  * `renderTrainingProfile` (coach-simplification I1, AC-CS1-1): the stable `# Profile` — one line per fact,
- * deduplicated; no confirmation counts, no dates, no category headings; the registration goal only without facts.
+ * deduplicated; no confirmation counts, no dates, no category headings; no registration goal or body metrics.
  */
 import type { FactCategory, UserFact } from '@domain/user/ports';
 import type { User } from '@domain/user/services/user.service';
@@ -82,8 +82,8 @@ describe('renderTrainingProfile', () => {
       renderTrainingProfile(USER, [fact('equipment', 'Home gym')])
         .split('\n')
         .slice(0, 2),
-    ).toEqual(['# Profile', '- Alex, 34, male, 180 cm, 80 kg, intermediate']);
-    expect(renderTrainingProfile({ id: 'u2', firstName: 'Sam', weight: 70 }, []).split('\n')[1]).toBe('- Sam, 70 kg');
+    ).toEqual(['# Profile', '- Alex, intermediate']);
+    expect(renderTrainingProfile({ id: 'u2', firstName: 'Sam', weight: 70 }, []).split('\n')[1]).toBe('- Sam');
   });
 
   it('collapses facts on one (category, muscleGroup) to the latest one; ties go to more confirmations', () => {
@@ -131,10 +131,13 @@ describe('renderTrainingProfile', () => {
     expect(renderTrainingProfile(USER, [f])).toContain('- Wrist injury (in a cast three weeks ago)');
   });
 
-  it('shows the registration goal only when there are no facts', () => {
-    expect(renderTrainingProfile(USER, [])).toContain('- Goal at registration: strength, 3 sessions a week');
-    expect(renderTrainingProfile(USER, FACTS)).not.toContain('Goal at registration');
-    expect(renderTrainingProfile(USER, FACTS)).not.toContain('3 sessions a week');
+  it('shows neither the registration goal nor body metrics (i0 replay profile)', () => {
+    for (const facts of [[], FACTS]) {
+      const text = renderTrainingProfile(USER, facts);
+      expect(text).not.toContain('Goal at registration');
+      expect(text).not.toContain('3 sessions a week');
+      expect(text).not.toMatch(/180 cm|80 kg|34/);
+    }
   });
 
   it('says so when nothing is known', () => {

@@ -1,5 +1,5 @@
 import { compose } from '@infra/ai/prompts/compose';
-import { PHASE_PROMPTS } from '@infra/ai/prompts/index';
+import { TRAINING_PROMPT_V10 } from '..';
 
 /**
  * v9 (load-facts plan Task 2, D13, AC-LF-6): the current training prompt is v9 and differs
@@ -8,7 +8,7 @@ import { PHASE_PROMPTS } from '@infra/ai/prompts/index';
  * The block and the tool itself are Task 3 — only the prompt text mentions them here.
  */
 function trainingPromptText(): string {
-  const sections = PHASE_PROMPTS.training.current.render({
+  const sections = TRAINING_PROMPT_V10.current.render({
     now: new Date('2026-09-29T08:00:00Z'),
     timezone: 'Europe/Berlin',
     client: 'telegram',
@@ -20,7 +20,7 @@ function trainingPromptText(): string {
 
 describe('phase.training v9 — LOAD PLAN facts and get_load_plan (load-facts plan D13, AC-LF-6)', () => {
   it('the current training prompt is v10 (v9 + the CONTEXT LOCATION note — prompt-caching plan D2)', () => {
-    expect(PHASE_PROMPTS.training.current.version).toBe('v10');
+    expect(TRAINING_PROMPT_V10.current.version).toBe('v10');
   });
 
   it('rule 1 points to LOAD PLAN for the computed facts and states it recommends no weight', () => {

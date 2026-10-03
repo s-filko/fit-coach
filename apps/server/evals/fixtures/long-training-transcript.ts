@@ -1,5 +1,5 @@
 /**
- * AC-1343 fixture (P4 context-budget plan Task 4): a 60-turn training
+ * AC-1343 fixture (P4 context-budget plan Task 4): a 130-turn training
  * transcript — human report → log_set tool call → tool result → ai
  * acknowledgement, repeated — realistic lengths so `estimateMessages` sees a
  * transcript that meaningfully accumulates tokens across many turns. Seeded
@@ -17,7 +17,7 @@ const EXERCISES = [
   { id: '33333333-3333-4333-8333-333333333333', name: 'Жим гантелей сидя' },
 ];
 
-const TURN_COUNT = 60;
+const TURN_COUNT = 130;
 
 function turn(n: number): StateMessage[] {
   const exercise = EXERCISES[n % EXERCISES.length];
@@ -44,7 +44,7 @@ function turn(n: number): StateMessage[] {
   ];
 }
 
-/** 60 turns × 4 messages = 240 seed messages, unbound tool_call/tool_result ids resolved by bindSeedMessages. */
+/** 130 turns × 4 messages = 520 seed messages, unbound tool_call/tool_result ids resolved by bindSeedMessages. */
 export const LONG_TRAINING_TRANSCRIPT: StateMessage[] = bindSeedMessages(
   Array.from({ length: TURN_COUNT }, (_, i) => turn(i)).flat(),
 );

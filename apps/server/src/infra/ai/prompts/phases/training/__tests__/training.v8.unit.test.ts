@@ -1,5 +1,5 @@
 import { compose } from '@infra/ai/prompts/compose';
-import { PHASE_PROMPTS } from '@infra/ai/prompts/index';
+import { TRAINING_PROMPT_V10 } from '..';
 
 /**
  * v8 place rule (set-kind plan D6, close-out review B2, AC-SK-7): the prompt must carry the
@@ -8,7 +8,7 @@ import { PHASE_PROMPTS } from '@infra/ai/prompts/index';
  * line's one exception must survive in both places.
  */
 function trainingPromptText(): string {
-  const sections = PHASE_PROMPTS.training.current.render({
+  const sections = TRAINING_PROMPT_V10.current.render({
     now: new Date('2026-09-29T08:00:00Z'),
     timezone: 'Europe/Berlin',
     client: 'telegram',

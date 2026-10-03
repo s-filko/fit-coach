@@ -14,7 +14,7 @@ import { assembleContext } from '@infra/ai/context/assemble-context';
 import { applyCacheBreakpoints, partsOf, withParts } from '@infra/ai/context/cache-breakpoints';
 import { warmCacheOf } from '@infra/ai/context/cache-warmth';
 import type { CourseCheckDirective, StoredCourseDirective } from '@infra/ai/course-check/directive';
-import { splitEpisode } from '@infra/ai/graph/episode';
+import { splitEpisode, workoutHistory } from '@infra/ai/graph/episode';
 import type { ConversationGraphDeps, PhaseSpec, PromptContextFor } from '@infra/ai/graph/phase-spec';
 import { ctxOf } from '@infra/ai/graph/state';
 import { langOf, t } from '@infra/ai/messages';
@@ -227,7 +227,10 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
     // P6 Task 4 (D-F): facts are loaded once per run here, not per block
     // render — the block itself is pure and takes already-loaded data. AC-FL-1:
     // the run clock (ctx.now) decides what is expired — never the DB clock.
-    const userFacts = await deps.userFacts.getForPrompt(userId, now);
+    // coach-simplification I1: a `'workout'` phase (training) renders its own facts through its blocks and
+    // system message — no user-facts block, course directive or episode summaries, and only this workout's messages.
+    const workoutMemory = spec.memory === 'workout';
+    const userFacts = workoutMemory ? [] : await deps.userFacts.getForPrompt(userId, now);
 
     // ADR-0013 §3.4 block 2a (D-F) + block 3 (D-A/D-B) + INV-LLM-004 (Task 3,
     // order extended by Task 4): assembleContext renders spec.contextBlocks at
@@ -248,11 +251,11 @@ export function buildAgentNode<D>(spec: PhaseSpec<D>, deps: ConversationGraphDep
       userFacts,
       // AC-FL-5: the directive the course-check step stored (or kept) in
       // prepare this run — its payload, rendered as one block after the facts.
-      courseDirective: directiveForRun(state),
-      episodeSummaries: state.episodeSummaries ?? [],
+      courseDirective: workoutMemory ? null : directiveForRun(state),
+      episodeSummaries: workoutMemory ? [] : (state.episodeSummaries ?? []),
       contextBlocks: spec.contextBlocks,
       blockData: loaded.data,
-      history,
+      history: workoutMemory ? workoutHistory(history, current) : history,
       current,
       gapNote,
       nowLine,

@@ -1,5 +1,6 @@
 import type { PhasePromptEntry } from '@infra/ai/prompts/types';
 
+import { TRAINING_COACH, type TrainingCoachContext } from './coach';
 import { TRAINING_V1, type TrainingPromptContext } from './v1';
 import { TRAINING_V10, type TrainingPromptContextV10 } from './v10';
 import { TRAINING_V11, type TrainingPromptContextV11 } from './v11';
@@ -28,6 +29,7 @@ export type {
   TrainingPromptContextV12,
 };
 export {
+  TRAINING_COACH,
   TRAINING_V1,
   TRAINING_V2,
   TRAINING_V3,
@@ -48,7 +50,13 @@ export {
  * `training.*` domain blocks in v2 (P4 context-budget plan, Task 2, D-B) —
  * neither is a prompt section any more; `task`/`rules` are always emitted.
  */
-export const TRAINING_PROMPT: PhasePromptEntry<TrainingPromptContextV10> = {
+export const TRAINING_PROMPT: PhasePromptEntry<TrainingCoachContext> = {
+  current: TRAINING_COACH,
+  requiredSections: ['coach', 'profile'],
+};
+
+/** The pre-I1 prompt (v10) — kept until Task 4 deletes the v1…v12 chain. */
+export const TRAINING_PROMPT_V10: PhasePromptEntry<TrainingPromptContextV10> = {
   current: TRAINING_V10,
   requiredSections: ['task', 'tools', 'rules', 'directive.tool-reply'],
 };

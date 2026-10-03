@@ -295,7 +295,7 @@ describe('log-set.tool — auto-complete notice (ADR-0011 Fix 1.3)', () => {
   });
 
   // Promoted from exercise-transition-order.repro.test.ts (session-investigation-0925 R4).
-  it('BUG-037: a set-triggered switch confirms the reported set FIRST; the finished-exercise recap is brief, last, and announces nothing', async () => {
+  it('a set-triggered switch confirms the reported set FIRST; the finished exercise follows as facts only', async () => {
     const trainingService = makeTrainingService();
     const mockSet: SessionSet = {
       id: 'set-1',
@@ -332,15 +332,11 @@ describe('log-set.tool — auto-complete notice (ADR-0011 Fix 1.3)', () => {
       )) as ToolReturn,
     );
 
-    // The set the user just reported is the news: its confirmation comes first…
+    // The set the user just reported is the news: its confirmation comes first, the finished exercise follows as
+    // facts only — no instruction tail (coach-simplification I1).
     expect(text.indexOf('Set 1 logged')).toBeGreaterThanOrEqual(0);
-    // …the instruction tells the model to confirm that set before the recap…
-    const confirmIdx = /(confirm|acknowledge|reply to|respond to)[^.\n]{0,140}\bset\b/i.exec(text)?.index ?? -1;
-    const recapIdx = /recap[^.\n]{0,140}\b(finished|completed|previous|prior)\b/i.exec(text)?.index ?? -1;
-    expect(confirmIdx).toBeGreaterThan(text.indexOf('Lateral Raise'));
-    expect(recapIdx).toBeGreaterThan(confirmIdx);
-    // …and never to announce an exercise the user already started.
-    expect(text).not.toMatch(/announce[^.\n]{0,80}next exercise/i);
+    expect(text.indexOf("Exercise 'Lateral Raise' completed.")).toBeGreaterThan(text.indexOf('Set 1 logged'));
+    expect(text).not.toMatch(/summariz|announce|recap|coaching comment|SESSION PLAN|next exercise/i);
   });
 
   it('should NOT include auto-complete notice when no switch occurred', async () => {

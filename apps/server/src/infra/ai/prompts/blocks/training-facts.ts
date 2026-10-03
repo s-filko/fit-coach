@@ -15,6 +15,7 @@ import type {
   SetData,
   WorkoutSessionWithDetails,
 } from '@domain/training/types';
+import type { UserFact } from '@domain/user/ports';
 
 import { calendarDaysAgo, formatInUserTz } from '@shared/date-utils';
 
@@ -40,6 +41,8 @@ export interface TrainingFactsData {
   session: WorkoutSessionWithDetails;
   history: ExerciseHistory[];
   lastWorkout: { completedAt: Date; exerciseNames: string[] } | null;
+  /** The client's stored facts for the system message's `# Profile` (`renderTrainingProfile`); the blocks ignore it. */
+  profileFacts: UserFact[];
 }
 
 const MONTH_WORDS = [
@@ -357,16 +360,6 @@ function exerciseLine(
   return `- ${name} [id ${exerciseId}]${plan} — ${state}`;
 }
 
-function agoText(ms: number): string {
-  const minutes = Math.max(0, Math.floor(ms / 60000));
-  if (minutes < 60) {
-    return `${minutes} min ago`;
-  }
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest === 0 ? `${hours} h ago` : `${hours} h ${rest} min ago`;
-}
-
 function idleText(ms: number): string {
   const hours = Math.max(0, Math.floor(ms / 3_600_000));
   return hours >= 48 ? `${Math.floor(hours / 24)} days` : `${hours} h`;
@@ -378,12 +371,12 @@ export const TRAINING_TODAY_V1: ContextBlock<TrainingFactsData> = {
   version: 'v1',
   render({ session, history, lastWorkout }, ctx: ContextBlockCtx) {
     const tz = tzOf(ctx);
-    const started = new Date(session.startedAt ?? session.createdAt);
     const lines: string[] = [TRAINING_TODAY_HEADER];
-    const place = session.place ? ` Place: ${session.place}.` : '';
-    lines.push(
-      `Session started at ${formatInUserTz(started, tz).time} (${agoText(ctx.now.getTime() - started.getTime())}).${place}`,
-    );
+    // The i0 replay rendering shows no session length / elapsed minutes (they made the coach cut sets for time):
+    // the time now rides in the NOW line, the place only when it was stated.
+    if (session.place) {
+      lines.push(`Place: ${session.place}.`);
+    }
     if (lastWorkout) {
       const names = lastWorkout.exerciseNames.length > 0 ? ` — ${lastWorkout.exerciseNames.join(', ')}` : '';
       lines.push(`Previous workout: ${relativeDay(lastWorkout.completedAt, ctx.now, tz)}${names}.`);

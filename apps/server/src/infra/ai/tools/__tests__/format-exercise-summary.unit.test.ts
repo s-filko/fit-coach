@@ -16,38 +16,14 @@ const finishedExercise: AutoCompletedExercise = {
   targetWeight: null,
 };
 
-describe('formatExerciseSummary — instruction text per transition kind (BUG-037)', () => {
-  it('set-triggered (log_set path): tells the model to confirm the reported set FIRST, recap of the finished exercise brief and at the end', () => {
-    const text = formatExerciseSummary(finishedExercise, 'set-triggered');
-    const confirmIdx = /(confirm|acknowledge|reply to|respond to)[^.\n]{0,140}\bset\b/i.exec(text)?.index ?? -1;
-    const recapIdx = /recap[^.\n]{0,140}\b(finished|completed|previous|prior)\b/i.exec(text)?.index ?? -1;
-    expect(confirmIdx).toBeGreaterThan(-1);
-    expect(recapIdx).toBeGreaterThan(-1);
-    expect(confirmIdx).toBeLessThan(recapIdx);
-    // The recap is a side note, not the answer.
-    expect(text.slice(Math.max(0, recapIdx - 200), recapIdx + 200)).toMatch(/\b(brief|short|concise)\b/i);
-  });
-
-  it('set-triggered (log_set path): never tells the model to announce the next exercise — the user already started it', () => {
-    expect(formatExerciseSummary(finishedExercise, 'set-triggered')).not.toMatch(/announce[^.\n]{0,80}next exercise/i);
-  });
-
-  it('explicit (complete_current_exercise path): keeps the full summary and the announcement', () => {
-    const text = formatExerciseSummary(finishedExercise, 'explicit');
-    expect(text).toMatch(/summariz[ei][^.\n]{0,140}exercise/i);
-    expect(text).toMatch(/announce[^.\n]{0,80}next exercise/i);
-  });
-
-  it('both modes render the same factual payload — only the instruction line differs', () => {
-    const setTriggered = formatExerciseSummary(finishedExercise, 'set-triggered');
-    const explicit = formatExerciseSummary(finishedExercise, 'explicit');
-    for (const text of [setTriggered, explicit]) {
-      expect(text).toContain("Exercise 'Lateral Raise' completed.");
-      expect(text).toContain('Sets performed:');
-      expect(text).toContain('Total: 2/3 sets.');
-    }
-    const factsOf = (text: string) => text.slice(0, text.indexOf('Total:'));
-    expect(factsOf(setTriggered)).toBe(factsOf(explicit));
+describe('formatExerciseSummary — facts only (coach-simplification I1)', () => {
+  it('renders the sets and the volume line and nothing that tells the model what to say', () => {
+    const text = formatExerciseSummary(finishedExercise);
+    expect(text).toContain("Exercise 'Lateral Raise' completed.");
+    expect(text).toContain('Sets performed:');
+    expect(text).toContain('Total: 2/3 sets.');
+    expect(text).not.toMatch(/summariz|announce|recap|coaching comment|SESSION PLAN|next exercise/i);
+    expect(text.trimEnd().endsWith('Total: 2/3 sets.')).toBe(true);
   });
 });
 
@@ -90,15 +66,11 @@ describe('formatExerciseSummary — volume excludes warm-ups (set-kind plan D4, 
 // prints sets × reps only — no plan target weight, even for a legacy row that still carries one.
 // -------------------------------------------------------------------------
 
-describe('formatExerciseSummary — Target line without the plan weight (load-plan plan Task 5b)', () => {
+describe('formatExerciseSummary — Target line without the plan weight', () => {
   const legacyExercise: AutoCompletedExercise = { ...finishedExercise, targetWeight: '10' };
 
-  it('default (flag off) keeps printing the target weight (legacy behaviour)', () => {
-    expect(formatExerciseSummary(legacyExercise)).toContain('Target: 3x12-15 @ 10 kg');
-  });
-
-  it('omitTargetWeight drops the weight, keeps sets × reps and the logged sets untouched', () => {
-    const text = formatExerciseSummary(legacyExercise, 'explicit', { omitTargetWeight: true });
+  it('always drops the plan weight (loads are not planned), keeps sets × reps and the logged sets untouched', () => {
+    const text = formatExerciseSummary(legacyExercise);
     expect(text).toContain('Target: 3x12-15');
     expect(text).not.toContain('Target: 3x12-15 @ 10 kg');
     // The logged sets are the record of what happened — their weights stay.

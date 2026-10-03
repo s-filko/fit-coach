@@ -76,6 +76,13 @@ export interface PhaseSpec<D = unknown> {
    * out of its prompt). Add a phase's blocks in `graph/phases/<phase>.spec.ts`.
    */
   contextBlocks: ReadonlyArray<ContextBlock<D>>;
+  /**
+   * What the phase remembers besides the facts (coach-simplification I1). `'episodes'` (default) = today's
+   * behaviour: stored user facts, course directive and episode summaries render in block 2 and the whole episode
+   * history is sent. `'workout'` = none of those: the agent node passes empty facts / directive / summaries and
+   * only this workout's messages (`workoutHistory`) — the phase's own blocks carry everything else.
+   */
+  memory?: 'episodes' | 'workout';
   /** getModel(profile) — 'default' for every phase today (D-G). */
   modelProfile: string;
 }

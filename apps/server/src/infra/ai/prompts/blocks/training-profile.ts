@@ -1,7 +1,7 @@
 /**
  * `# Profile` for the training system message (coach-simplification I1, AC-CS1-1): one line per fact, deduplicated.
- * The registration goal is shown only when the client has no stored facts — user-stated facts are newer and
- * confirmed, so they win over the registration form (the 3-vs-5 sessions-a-week resolution).
+ * The registration goal and body metrics are not shown (the i0 replay profile; a later sync task fixes the final
+ * shape) — user-stated facts are newer and confirmed.
  * Pure (BR-LLM-007).
  */
 import type { UserFact } from '@domain/user/ports';
@@ -14,14 +14,9 @@ function userLine(user: User | null): string | null {
   if (!user) {
     return null;
   }
-  const parts = [
-    user.firstName,
-    user.age != null ? String(user.age) : null,
-    user.gender,
-    user.height != null ? `${user.height} cm` : null,
-    user.weight != null ? `${user.weight} kg` : null,
-    user.fitnessLevel,
-  ].filter((p): p is string => typeof p === 'string' && p !== '');
+  // The i0 replay profile carries only what the coach needs during a set: name and level — body metrics and the
+  // registration goal made it talk about planning, not the set in front of it.
+  const parts = [user.firstName, user.fitnessLevel].filter((p): p is string => typeof p === 'string' && p !== '');
   return parts.length > 0 ? parts.join(', ') : null;
 }
 
@@ -59,9 +54,6 @@ export function renderTrainingProfile(user: User | null, facts: UserFact[]): str
   const own = userLine(user);
   if (own) {
     lines.push(own);
-  }
-  if (facts.length === 0 && user?.fitnessGoal) {
-    lines.push(`Goal at registration: ${user.fitnessGoal}`);
   }
   lines.push(...ordered.map(factLine));
   return ['# Profile', ...(lines.length > 0 ? lines.map(l => `- ${l}`) : ['- No profile data yet.'])].join('\n');

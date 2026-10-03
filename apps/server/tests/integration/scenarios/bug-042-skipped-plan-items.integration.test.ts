@@ -20,6 +20,8 @@
  * `set_session_place` rejected as an unknown tool, and the day-2 line read bare
  * `no completed record`).
  */
+import { textOnly } from '@infra/ai/message-text';
+
 import { runScenario, type ScenarioRunResult } from '../../../evals/lib/run-scenario';
 import type { Scenario } from '../../../evals/schema/scenario.schema';
 import { BENCH_PRESS_ID, PULL_UPS_ID, setupSteps, sharedPast } from '../../../evals/scenarios/b-full-workout.scenario';
@@ -186,7 +188,7 @@ describe('bug-042 skipped plan items + session place — scripted training scena
           obs.stepIndex,
           calls
             .flat()
-            .map(m => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')))
+            .map(m => textOnly(m.content) ?? JSON.stringify(m.content ?? ''))
             .join('\n'),
         );
       },
@@ -224,12 +226,15 @@ describe('bug-042 skipped plan items + session place — scripted training scena
     expect(seen).toContain('Place: Fitness House на Ленина');
   });
 
-  it("the next day's EXERCISE HISTORY reads the skip, not a bare 'no completed record' (BUG-042, AC-SK-6)", () => {
+  it("the next day's History reads the skip, not a bare 'no earlier record' (BUG-042, AC-SK-6)", () => {
     const seen = seenByStep.get(D2_WHAT_NEXT_STEP_INDEX) ?? '';
-    const pullUpsLine = seen.split('\n').find(l => l.includes(`Pull-ups [ID:${PULL_UPS_ID}]`));
+    const lines = seen.split('\n');
+    const headerAt = lines.findIndex(l => l.startsWith('Pull-ups (today'));
+    const pullUpsLine = lines[headerAt + 1] ?? '';
 
-    expect(pullUpsLine).toContain('skipped 2026-09-20');
-    expect(isBareNoRecord(pullUpsLine ?? '')).toBe(false);
+    expect(headerAt).toBeGreaterThan(-1);
+    expect(pullUpsLine).toMatch(/^- skipped .*Sep 20 \(planned, not done\)$/);
+    expect(pullUpsLine).not.toContain('no earlier record');
   });
 
   it('delivers the scripted replies', () => {
@@ -237,8 +242,3 @@ describe('bug-042 skipped plan items + session place — scripted training scena
     expect(result.steps[FINISH_STEP_INDEX]!.delivered).toContain(FINISH_TOOL_REPLY);
   });
 });
-
-/** `— no completed record` alone (no skip) is the pre-fix BUG-042 rendering this test kills. */
-function isBareNoRecord(line: string): boolean {
-  return /— no completed record$/.test(line.trim());
-}

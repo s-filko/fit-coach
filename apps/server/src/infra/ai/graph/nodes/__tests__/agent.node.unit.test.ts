@@ -365,6 +365,90 @@ describe('buildAgentNode (ADR-0013 §4.1/§6)', () => {
     );
   });
 
+  // coach-simplification I1 (AC-CS1-2): `memory: 'workout'` — the phase's own blocks carry the facts, the request
+  // holds this workout's messages only.
+  describe("memory: 'workout' (coach-simplification I1)", () => {
+    const FACT = {
+      id: 'f1',
+      category: 'preference',
+      fact: 'ALWAYS-ON-FACT',
+      confirmations: 1,
+      updatedAt: new Date('2026-09-01T10:00:00Z'),
+    };
+    const DIRECTIVE = {
+      vector: 'strength',
+      constraints: [],
+      questions: ['DIRECTIVE-QUESTION'],
+      suspectFacts: [],
+      exerciseVerdicts: [],
+    };
+    const SUMMARY = {
+      endedAt: '2026-09-01T10:00:00.000Z',
+      phaseAtEnd: 'training',
+      summary: {
+        topics: ['EPISODE-TOPIC'],
+        decisions: [],
+        userState: [],
+        trainingFeedback: [],
+        openItems: [],
+        facts: [],
+      },
+    };
+    const START = new AIMessage({
+      content: '',
+      tool_calls: [{ id: 'start-1', name: 'start_training_session', args: {}, type: 'tool_call' }],
+    });
+    const messages = [
+      new HumanMessage('before the workout'),
+      new AIMessage('old reply'),
+      new HumanMessage('начнём тренировку'),
+      START,
+      new ToolMessage({ tool_call_id: 'start-1', content: 'started' }),
+      new AIMessage('Поехали!'),
+      new HumanMessage('жим 80 на 8'),
+    ];
+    const loaded = (data: object) => jest.fn(async () => ({ ok: true as const, data }));
+
+    const sentWith = async (memory: 'workout' | undefined): Promise<BaseMessage[]> => {
+      mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
+      const deps = makeDeps({ userFacts: { getForPrompt: jest.fn(async () => [FACT]) } });
+      const spec = makeSpec({ loadContext: loaded({ lastMessageTime: null }), ...(memory ? { memory } : {}) });
+      await buildAgentNode(spec, deps)(
+        makeState({
+          messages,
+          episodeSummaries: [SUMMARY as never],
+          courseDirective: { directive: DIRECTIVE, createdAt: '2026-09-01T10:00:00.000Z' } as never,
+        }),
+        CONFIG,
+      );
+      return mockInvoke.mock.calls[0][0] as BaseMessage[];
+    };
+
+    it('no user facts, course directive or episode summaries in the system message; facts are not even loaded', async () => {
+      const sent = await sentWith('workout');
+      const system = textOf(sent[0] as BaseMessage);
+      expect(system).not.toMatch(/ALWAYS-ON-FACT|DIRECTIVE-QUESTION|EPISODE-TOPIC|User Facts|Previous episodes/);
+    });
+
+    it('sends this workout only: from the human message that started it, without the start call and its result', async () => {
+      const sent = await sentWith('workout');
+      const texts = sent.slice(1).map(m => (m._getType() === 'human' ? textOf(m) : String(m.content)));
+      expect(texts.some(t => t.includes('before the workout') || t.includes('old reply'))).toBe(false);
+      expect(sent.some(m => m._getType() === 'tool')).toBe(false);
+      expect(sent.filter(m => m._getType() === 'human')).toHaveLength(2); // «начнём тренировку» + the current one
+      expect(sent.some(m => m._getType() === 'ai' && String(m.content) === 'Поехали!')).toBe(true);
+    });
+
+    it('the default memory (episodes) is unchanged: facts, directive, summaries and the whole history', async () => {
+      const sent = await sentWith(undefined);
+      const system = textOf(sent[0] as BaseMessage);
+      expect(system).toContain('ALWAYS-ON-FACT');
+      expect(system).toContain('DIRECTIVE-QUESTION');
+      expect(system).toContain('EPISODE-TOPIC');
+      expect(sent.filter(m => m._getType() === 'human')).toHaveLength(3);
+    });
+  });
+
   it('a block that renders null is absent from the message array (block is "not applicable" this run)', async () => {
     mockInvoke.mockResolvedValueOnce(new AIMessage({ content: 'ok', tool_calls: [] }));
     const spec = makeSpec({

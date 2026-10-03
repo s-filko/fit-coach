@@ -20,7 +20,7 @@
 import { buildTrainingSpec, type TrainingData } from '@infra/ai/graph/phases/training.spec';
 import { db } from '@infra/db/drizzle';
 import { exerciseMuscleGroups, exercises } from '@infra/db/schema';
-import { humanTimeAgo } from '@shared/date-utils';
+import { relativeDay } from '@infra/ai/prompts/blocks/training-facts';
 
 import { buildRealTrainingService } from '../../helpers/training-service';
 import { createTestUserData } from '../../shared/test-factories';
@@ -51,7 +51,7 @@ describe('training context: hidden overlapping load (BUG-030, AC-CB-3/AC-EH-4, R
     exerciseRepository: exerciseRepo,
     embeddingService: {},
     userService: {},
-    userFacts: {},
+    userFacts: { getForPrompt: async () => [] },
   } as never);
   let userId: string;
   let todayId: string;
@@ -121,10 +121,11 @@ describe('training context: hidden overlapping load (BUG-030, AC-CB-3/AC-EH-4, R
 
   /** Everything the model sees in the training phase, via the phase's own context blocks. */
   const loadAndRender = async (): Promise<{ data: TrainingData; context: string }> => {
-    const loaded = await spec.loadContext({ userId, user: null, activeSessionId: todayId }, {
+    const loaded = await spec.loadContext({ userId, user: null, activeSessionId: todayId, now: NOW }, {
       trainingService,
       workoutSessionRepo: sessionRepo,
       exerciseRepository: exerciseRepo,
+      userFacts: { getForPrompt: async () => [] },
     } as never);
     if (!loaded.ok) {
       throw new Error(`loadContext failed: ${loaded.reply}`);
@@ -140,31 +141,23 @@ describe('training context: hidden overlapping load (BUG-030, AC-CB-3/AC-EH-4, R
   it('control: the exercise-history anchor (Bench Press, 2026-09-17) is what the context shows', async () => {
     const { data, context } = await loadAndRender();
 
-    const benchEntry = data.exerciseHistory.find(e => e.exerciseName === 'Barbell Bench Press');
-    expect(benchEntry?.completedAt?.toISOString().slice(0, 10)).toBe('2026-09-17');
+    const benchEntry = data.history.find(e => e.exerciseName === 'Barbell Bench Press');
+    expect(benchEntry?.performances[0]?.completedAt.toISOString().slice(0, 10)).toBe('2026-09-17');
     expect(context).toContain('Barbell Bench Press');
   });
 
-  it("names yesterday's overlapping session's exercise (Overhead Press) in RECENT WORKOUTS", async () => {
-    const { context } = await loadAndRender();
+  it("names yesterday's session (a different key) and its exercise in the Previous workout line", async () => {
+    const { data, context } = await loadAndRender();
 
-    expect(context).toContain('=== RECENT WORKOUTS (last 7 days, fatigue context) ===');
+    expect(data.lastWorkout?.exerciseNames).toContain('Overhead Press');
+    expect(context).toContain('Previous workout:');
     expect(context).toContain('Overhead Press');
   });
 
-  it("says when yesterday's overlapping session was (2026-09-23 / its relative form)", async () => {
+  it("says when yesterday's session was (2026-09-23 / its relative form)", async () => {
     const { data, context } = await loadAndRender();
-    const overhead = data.recentWorkouts.find(s => s.exercises.some(ex => ex.exercise.name === 'Overhead Press'));
-    const when = humanTimeAgo(overhead!.completedAt ?? overhead!.createdAt, NOW, TIMEZONE);
+    const when = relativeDay(data.lastWorkout!.completedAt, NOW, TIMEZONE);
 
     expect(context).toMatch(new RegExp(`${datePattern('2026-09-23').source}|${escapeRegExp(when)}`));
-  });
-
-  it('labels the overlap with today (shoulders_front, triceps) on the Overhead Press line', async () => {
-    const { context } = await loadAndRender();
-
-    expect(context).toContain('overlaps today:');
-    expect(context).toMatch(/overlaps today:.*shoulders_front \(primary\)/);
-    expect(context).toMatch(/overlaps today:.*triceps \(secondary\)/);
   });
 });

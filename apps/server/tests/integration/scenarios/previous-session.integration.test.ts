@@ -83,7 +83,7 @@ describe('training exercise history (BUG-030, AC-EH-1/2/3)', () => {
     exerciseRepository: exerciseRepo,
     embeddingService: {},
     userService: {},
-    userFacts: {},
+    userFacts: { getForPrompt: async () => [] },
   } as never);
   let userId: string;
   let todayId: string;
@@ -118,10 +118,11 @@ describe('training exercise history (BUG-030, AC-EH-1/2/3)', () => {
 
   /** Everything the model sees in the training phase, via the phase's own context blocks. */
   const loadAndRender = async (): Promise<{ data: TrainingData; context: string }> => {
-    const loaded = await spec.loadContext({ userId, user: null, activeSessionId: todayId }, {
+    const loaded = await spec.loadContext({ userId, user: null, activeSessionId: todayId, now: NOW }, {
       trainingService,
       workoutSessionRepo: sessionRepo,
       exerciseRepository: exerciseRepo,
+      userFacts: { getForPrompt: async () => [] },
     } as never);
     if (!loaded.ok) {
       throw new Error(`loadContext failed: ${loaded.reply}`);
@@ -134,16 +135,16 @@ describe('training exercise history (BUG-030, AC-EH-1/2/3)', () => {
     return { data: loaded.data, context };
   };
 
-  it('control: an EXERCISE HISTORY block is built', async () => {
+  it('control: a History block is built', async () => {
     const { context } = await loadAndRender();
 
-    expect(context).toContain("=== EXERCISE HISTORY (today's exercises — last completed performance) ===");
+    expect(context).toContain('# History (before today; sets as reps×kg)');
   });
 
   it('anchors Back Squat on the most recent completed session (2026-09-16), not the old same-key one', async () => {
     const { context } = await loadAndRender();
 
-    expect(context).toMatch(/Barbell Back Squat \[ID:[^\]]+\] — last done 2026-09-16/);
+    expect(context).toMatch(/Barbell Back Squat \(today [^)]*\)\n- [^\n]*Sep 16: 12×59/);
     // Pull-ups only ever appears in the old (2026-02-20) same-key session — never today's exercises.
     expect(context).not.toContain('Pull-ups');
   });
@@ -151,14 +152,13 @@ describe('training exercise history (BUG-030, AC-EH-1/2/3)', () => {
   it('AC-EH-2: Bench Press, planned but never started today, still gets its 2026-09-16 history', async () => {
     const { context } = await loadAndRender();
 
-    expect(context).toMatch(/Barbell Bench Press \[ID:[^\]]+\] — last done 2026-09-16/);
-    expect(context).toContain('3× 12 reps @ 59 kg');
+    expect(context).toMatch(/Barbell Bench Press \(today [^)]*\)\n- [^\n]*Sep 16: 12×59, 12×59, 12×59/);
   });
 
-  it('AC-EH-3: Running, never done, renders an explicit "no completed record" line', async () => {
+  it('AC-EH-3: Running, never done, renders an explicit "no earlier record" line', async () => {
     const { context } = await loadAndRender();
 
-    expect(context).toMatch(/Running \[ID:[^\]]+\] — no completed record/);
+    expect(context).toMatch(/Running \(today [^)]*\)\n- no earlier record/);
   });
 
   it('states the calendar date of the anchor it shows', async () => {

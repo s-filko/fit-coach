@@ -197,7 +197,9 @@ describe('progression_scheme: chosen by user vs default (AC-LP-5)', () => {
     todayId = await seedWorkout(new Date(NOW.getTime() - 40 * 60_000), 'in_progress', [], '8-12');
   });
 
-  it('without the fact: the block says default, unconfirmed (beginner + strength → linear)', async () => {
+  // coach-simplification I1 Task 2: the training request no longer renders LOAD PLAN / WORKOUT OVERVIEW — skipped until Task 3 deletes this file.
+
+  it.skip('without the fact: the block says default, unconfirmed (beginner + strength → linear)', async () => {
     const text = await contextText({ loadPlanSuggestion: true });
     expect(text).toContain('Progression: linear progression, confirm ×2 — default, unconfirmed');
     expect(text).toContain('scheme: linear progression 5 (scheme default), confirm ×2 (default, unconfirmed)');
@@ -210,7 +212,9 @@ describe('progression_scheme: chosen by user vs default (AC-LP-5)', () => {
     expect(await schemeFacts()).toHaveLength(0);
   });
 
-  it('after compaction with LOAD_PLAN_SUGGESTION on: the fact is stored from the user’s words and the block says chosen by user <date>', async () => {
+  // coach-simplification I1 Task 2: the training request no longer renders LOAD PLAN / WORKOUT OVERVIEW — skipped until Task 3 deletes this file.
+
+  it.skip('after compaction with LOAD_PLAN_SUGGESTION on: the fact is stored from the user’s words and the block says chosen by user <date>', async () => {
     await compactEpisode({ loadPlanSuggestion: true });
     const facts = await schemeFacts();
     expect(facts).toHaveLength(1);
@@ -226,7 +230,9 @@ describe('progression_scheme: chosen by user vs default (AC-LP-5)', () => {
     expect(text).not.toContain('4–6');
   });
 
-  it('LOAD_PLAN_SUGGESTION off: the v1 block, no Progression line, whatever facts exist', async () => {
+  // coach-simplification I1 Task 2: the training request no longer renders LOAD PLAN / WORKOUT OVERVIEW — skipped until Task 3 deletes this file.
+
+  it.skip('LOAD_PLAN_SUGGESTION off: the v1 block, no Progression line, whatever facts exist', async () => {
     const text = await contextText({});
     expect(text).toContain('=== LOAD PLAN (computed facts — no recommendation) ===');
     expect(text).not.toContain('Progression:');
@@ -309,12 +315,16 @@ describe('progression_scheme: chosen by user vs default (AC-LP-5)', () => {
       otherId = (await exerciseRepo.findAll()).find(e => e.id !== benchId)!.id;
     });
 
-    it("flag off: the legacy target weight is still printed (today's behaviour)", async () => {
+    // coach-simplification I1 Task 2: the training request no longer renders LOAD PLAN / WORKOUT OVERVIEW — skipped until Task 3 deletes this file.
+
+    it.skip("flag off: the legacy target weight is still printed (today's behaviour)", async () => {
       const text = await blockText({}, legacyId, 'training.workout_overview');
       expect(text).toContain(`3×${legacyPlanReps} @ 60 kg`);
     });
 
-    it('flag on: the saved plan has no targetWeight and WORKOUT OVERVIEW shows sets × reps only', async () => {
+    // coach-simplification I1 Task 2: the training request no longer renders LOAD PLAN / WORKOUT OVERVIEW — skipped until Task 3 deletes this file.
+
+    it.skip('flag on: the saved plan has no targetWeight and WORKOUT OVERVIEW shows sets × reps only', async () => {
       const planRepo = new WorkoutPlanRepository();
       const saveWorkoutPlan = buildSaveWorkoutPlanTool({
         workoutPlanRepository: planRepo,

@@ -10,6 +10,8 @@ import { buildPhaseSpecs } from '@infra/ai/graph/phases';
 import { NO_POLICY, type ToolPolicy, TRAINING_TOOL_PRIORITY } from '@infra/ai/graph/tool-policy';
 import { PHASE_PROMPTS } from '@infra/ai/prompts';
 
+const FACT = { id: 'f1', fact: 'Lower back: avoid heavy axial loading', category: 'physical_constraint' };
+
 const SESSION_ROW = {
   id: 'session-1',
   sessionKey: 'Upper A',
@@ -27,6 +29,7 @@ function stubDeps(overrides: Record<string, unknown> = {}): ConversationGraphDep
     workoutSessionRepo: {
       findRecentByUserIdWithDetails: async () => [SESSION_ROW],
       findLastPerformancesByExercise: async () => [],
+      findRecentPerformancesForExercise: async () => [],
       // set-kind plan Task 2 (D6/D7): the place-ambiguity and skip lookups.
       distinctRecentPlaces: async () => [],
       findLastSkipsByExercise: async () => [],
@@ -82,7 +85,6 @@ const TOOL_NAMES: Record<ConversationPhase, string[]> = {
   training: [
     'search_exercises',
     'get_exercise_history',
-    'get_load_plan',
     'log_set',
     'complete_current_exercise',
     'finish_training',
@@ -115,7 +117,7 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
       chat: { system: 3000, longTerm: 1500, domain: 2000, history: 8000, outputReserve: 2000 },
       plan_creation: { system: 4000, longTerm: 1500, domain: 2000, history: 12000, outputReserve: 4000 },
       session_planning: { system: 5000, longTerm: 1500, domain: 6000, history: 8000, outputReserve: 3000 },
-      training: { system: 5000, longTerm: 1500, domain: 6000, history: 8000, outputReserve: 2000 },
+      training: { system: 5000, longTerm: 1500, domain: 6000, history: 16000, outputReserve: 2000 },
     }) as Array<[ConversationPhase, Record<string, number>]>,
   )('%s: budget equals the ADR-0013 §3.4 table (tokens, as data — D-D)', (phase, budget) => {
     expect(specOf(phase).budget).toEqual(budget);
@@ -203,29 +205,22 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
     expect(loaded).toEqual({ ok: false, reply: 'training_session_not_found' });
   });
 
-  it('training loader returns the session with empty history/recent-workouts when there is nothing to show (D-M)', async () => {
-    const deps = stubDeps();
+  it('training loader returns the session with empty history, no previous workout and the facts when there is nothing to show (D-M)', async () => {
+    const deps = stubDeps({ userFacts: { getForPrompt: async () => [FACT] } });
     const loaded = await specOf('training').loadContext(
       { userId: 'u1', user: null, activeSessionId: 'session-1' },
       deps,
     );
-    // findRecentByUserIdWithDetails's stub echoes SESSION_ROW itself — today's own session,
-    // excluded by id (D3) — so recentWorkouts comes back empty here.
+    // findRecentByUserIdWithDetails's stub echoes SESSION_ROW itself — today's own session, excluded by id.
     expect(loaded).toEqual({
       ok: true,
-      data: {
-        session: SESSION_ROW,
-        exerciseHistory: [],
-        recentWorkouts: [],
-        todayMuscles: [],
-        recentPlacesCount: 0,
-        loadPlan: [],
-      },
+      data: { session: SESSION_ROW, history: [], lastWorkout: null, profileFacts: [FACT] },
     });
   });
 
-  it('training loader anchors exercise history by exercise id, not session_key (BUG-030 D2/D3)', async () => {
-    const EXERCISE_ID = 'aaaaaaaa-1111-4111-8111-111111111111';
+  it('training loader: one history entry per plan exercise (also not started, with no performances), up to three performances, catalog name wins', async () => {
+    const BENCH = 'aaaaaaaa-1111-4111-8111-111111111111';
+    const ROW = 'bbbbbbbb-2222-4222-8222-222222222222';
     const session = {
       ...SESSION_ROW,
       sessionPlanJson: {
@@ -234,44 +229,47 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
         reasoning: 'progressive overload',
         estimatedDuration: 45,
         exercises: [
-          { exerciseId: EXERCISE_ID, exerciseName: 'Bench Press', targetSets: 3, targetReps: '8', restSeconds: 90 },
+          { exerciseId: BENCH, exerciseName: 'Bench Press', targetSets: 3, targetReps: '8', restSeconds: 90 },
+          { exerciseId: ROW, exerciseName: 'Row', targetSets: 3, targetReps: '10', restSeconds: 90 },
         ],
       },
     };
     const performance = {
-      exerciseId: EXERCISE_ID,
+      exerciseId: BENCH,
       completedAt: new Date('2026-08-20T10:00:00Z'),
-      sessionExercise: { id: 'se-old', exerciseId: EXERCISE_ID, sets: [] },
+      sessionExercise: { id: 'se-old', exerciseId: BENCH, sets: [] },
     };
+    const skippedAt = new Date('2026-08-27T10:00:00Z');
+    const previous = {
+      id: 'session-0',
+      completedAt: new Date('2026-09-29T10:00:00Z'),
+      exercises: [{ exercise: { name: 'Treadmill' } }, { exercise: { name: 'Plank' } }],
+    };
+    const findRecentPerformancesForExercise = jest.fn(
+      async (_userId: string, exerciseId: string, _exclude: string | null, _limit: number) =>
+        exerciseId === BENCH ? [performance] : [],
+    );
+    const findRecentByUserIdWithDetails = jest.fn(async () => [SESSION_ROW, previous]);
+    const getForPrompt = jest.fn(async () => [FACT]);
     const deps = stubDeps({
       trainingService: { getSessionDetails: async () => session },
       workoutSessionRepo: {
-        findRecentByUserIdWithDetails: async () => [],
-        findLastPerformancesByExercise: async (userId: string, ids: string[], excludeSessionId: string) => {
-          expect(userId).toBe('u1');
-          expect(ids).toEqual([EXERCISE_ID]);
-          expect(excludeSessionId).toBe('session-1');
-          return [performance];
-        },
-        distinctRecentPlaces: async () => [],
-        findLastSkipsByExercise: async () => [],
+        findRecentByUserIdWithDetails,
+        findRecentPerformancesForExercise,
+        findLastSkipsByExercise: async () => [{ exerciseId: ROW, skippedAt }],
       },
+      userFacts: { getForPrompt },
       exerciseRepository: {
         findByIdsWithMuscles: async (ids: string[]) => {
-          expect(ids).toEqual([EXERCISE_ID]);
-          return [
-            {
-              id: EXERCISE_ID,
-              name: 'Barbell Bench Press',
-              muscleGroups: [{ muscleGroup: 'chest', involvement: 'primary' }],
-            },
-          ];
+          expect(ids).toEqual([BENCH, ROW]);
+          return [{ id: BENCH, name: 'Barbell Bench Press', muscleGroups: [] }];
         },
       },
     });
 
+    const now = new Date('2026-10-01T12:00:00Z');
     const loaded = await specOf('training').loadContext(
-      { userId: 'u1', user: null, activeSessionId: 'session-1' },
+      { userId: 'u1', user: null, activeSessionId: 'session-1', now },
       deps,
     );
 
@@ -279,85 +277,40 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
       ok: true,
       data: {
         session,
-        exerciseHistory: [
+        history: [
           {
-            exerciseId: EXERCISE_ID,
+            exerciseId: BENCH,
             exerciseName: 'Barbell Bench Press', // catalog name wins over the plan's 'Bench Press' (D19)
-            performance: performance.sessionExercise,
-            completedAt: performance.completedAt,
+            plannedText: '3×8',
+            performances: [performance],
             lastSkippedAt: null,
           },
+          { exerciseId: ROW, exerciseName: 'Row', plannedText: '3×10', performances: [], lastSkippedAt: skippedAt },
         ],
-        recentWorkouts: [],
-        todayMuscles: ['chest'],
-        recentPlacesCount: 0,
-        loadPlan: [],
+        lastWorkout: { completedAt: previous.completedAt, exerciseNames: ['Treadmill', 'Plank'] },
+        profileFacts: [FACT],
       },
     });
+    expect(findRecentPerformancesForExercise).toHaveBeenCalledWith('u1', BENCH, 'session-1', 3);
+    expect(findRecentPerformancesForExercise).toHaveBeenCalledWith('u1', ROW, 'session-1', 3);
+    expect(findRecentByUserIdWithDetails).toHaveBeenCalledWith('u1', 2, { realWorkoutsOnly: true });
+    expect(getForPrompt).toHaveBeenCalledWith('u1', now);
   });
 
-  it('AC-LF-2: LOAD PLAN renders after RECENT WORKOUTS, entries in plan order then off-plan started (D5)', async () => {
-    const PLAN_ID = 'aaaaaaaa-1111-4111-8111-111111111111';
-    const OFF_PLAN_ID = 'bbbbbbbb-2222-4222-8222-222222222222';
-    const catalog = [
-      { id: OFF_PLAN_ID, name: 'Pull-ups', equipment: 'bodyweight', exerciseType: 'strength', muscleGroups: [] },
-      { id: PLAN_ID, name: 'Barbell Bench Press', equipment: 'barbell', exerciseType: 'strength', muscleGroups: [] },
-    ];
+  it('training loader: off-plan started exercises follow the plan ones, named by the catalog', async () => {
+    const OFF = 'cccccccc-3333-4333-8333-333333333333';
     const session = {
       ...SESSION_ROW,
-      place: null,
-      startedAt: new Date('2026-09-01T09:00:00Z'),
-      sessionPlanJson: {
-        sessionKey: 'upper_a',
-        sessionName: 'Upper A',
-        reasoning: 'r',
-        estimatedDuration: 45,
-        exercises: [{ exerciseId: PLAN_ID, exerciseName: 'Bench', targetSets: 3, targetReps: '8', restSeconds: 90 }],
-      },
-      exercises: [{ id: 'se-off', exerciseId: OFF_PLAN_ID, exercise: catalog[0], sets: [], status: 'in_progress' }],
+      exercises: [{ exerciseId: OFF, status: 'in_progress', sets: [], exercise: { name: 'Cycling' } }],
     };
-    const deps = stubDeps({
-      trainingService: { getSessionDetails: async () => session },
-      workoutSessionRepo: {
-        findRecentByUserIdWithDetails: async () => [],
-        findLastPerformancesByExercise: async () => [],
-        distinctRecentPlaces: async () => [],
-        findLastSkipsByExercise: async () => [],
-        countRealPerformancesByExercise: async () => new Map(),
-      },
-      exerciseRepository: { findByIdsWithMuscles: async () => catalog },
-    });
-    const spec = specOf('training');
-    const loaded = await spec.loadContext(
-      { userId: 'u1', user: null, activeSessionId: 'session-1', now: new Date('2026-09-01T10:00:00Z') },
+    const deps = stubDeps({ trainingService: { getSessionDetails: async () => session } });
+    const loaded = await specOf('training').loadContext(
+      { userId: 'u1', user: null, activeSessionId: 'session-1' },
       deps,
     );
-    if (!loaded.ok) {
-      throw new Error('loadContext failed');
-    }
-    const ctx = { now: new Date('2026-09-01T10:00:00Z'), timezone: 'UTC', user: null };
-    const rendered = spec.contextBlocks
-      .map(b => b.render(loaded.data as never, ctx, 0))
-      .filter(Boolean)
-      .join('\n');
-    expect(rendered.indexOf('=== RECENT WORKOUTS')).toBeGreaterThan(-1);
-    expect(rendered.indexOf('=== LOAD PLAN')).toBeGreaterThan(rendered.indexOf('=== RECENT WORKOUTS'));
-    // EXERCISE HISTORY also names both exercises — look only inside the LOAD PLAN block.
-    const loadPlanText = rendered.slice(rendered.indexOf('=== LOAD PLAN'));
-    const plan = loadPlanText.indexOf('Barbell Bench Press [ID:');
-    const off = loadPlanText.indexOf('Pull-ups [ID:');
-    expect(plan).toBeGreaterThan(-1);
-    expect(off).toBeGreaterThan(plan);
-  });
-
-  it('LOAD_PLAN_SUGGESTION selects training.load_plan v2; off or absent keeps v1 (load-plan A5)', () => {
-    const versionOf = (overrides: Record<string, unknown>): string | undefined =>
-      buildPhaseSpecs(stubDeps(overrides))
-        .find(s => s.name === 'training')
-        ?.contextBlocks.find(b => b.id === 'training.load_plan')?.version;
-    expect(versionOf({})).toBe('v1');
-    expect(versionOf({ loadPlanSuggestion: false })).toBe('v1');
-    expect(versionOf({ loadPlanSuggestion: true })).toBe('v2');
+    expect(loaded.ok && loaded.data).toMatchObject({
+      history: [{ exerciseId: OFF, exerciseName: 'Cycling', plannedText: null, performances: [] }],
+    });
   });
 
   it('training loader drops a bad legacy plan row (empty/non-UUID exerciseId) before any DB query (close-out review advisory 6)', async () => {
@@ -374,14 +327,13 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
         ],
       },
     };
-    const findLastPerformancesByExercise = jest.fn().mockResolvedValue([]);
+    const findRecentPerformancesForExercise = jest.fn().mockResolvedValue([]);
     const findByIdsWithMuscles = jest.fn().mockResolvedValue([]);
     const deps = stubDeps({
       trainingService: { getSessionDetails: async () => session },
       workoutSessionRepo: {
         findRecentByUserIdWithDetails: async () => [],
-        findLastPerformancesByExercise,
-        distinctRecentPlaces: async () => [],
+        findRecentPerformancesForExercise,
         findLastSkipsByExercise: async () => [],
       },
       exerciseRepository: { findByIdsWithMuscles },
@@ -392,105 +344,23 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
       deps,
     );
 
-    expect(loaded).toEqual({
-      ok: true,
-      data: { session, exerciseHistory: [], recentWorkouts: [], todayMuscles: [], recentPlacesCount: 0, loadPlan: [] },
-    });
+    expect(loaded).toEqual({ ok: true, data: { session, history: [], lastWorkout: null, profileFacts: [] } });
     // Neither bad id ever reached a DB call — the turn does not fail on a legacy plan row.
-    expect(findLastPerformancesByExercise).not.toHaveBeenCalled();
+    expect(findRecentPerformancesForExercise).not.toHaveBeenCalled();
     expect(findByIdsWithMuscles).not.toHaveBeenCalled();
   });
 
-  describe('training loader — recentPlacesCount / placeAmbiguous ask (set-kind plan D6, B3)', () => {
-    it('reports the distinct-place count when today has no place and the threshold is met', async () => {
-      const deps = stubDeps({
-        trainingService: { getSessionDetails: async () => SESSION_ROW },
-        workoutSessionRepo: {
-          findRecentByUserIdWithDetails: async () => [],
-          findLastPerformancesByExercise: async () => [],
-          distinctRecentPlaces: async () => ['Fitness House', 'дома'],
-          findLastSkipsByExercise: async () => [],
-        },
-      });
-
-      const loaded = await specOf('training').loadContext(
-        { userId: 'u1', user: null, activeSessionId: 'session-1' },
-        deps,
-      );
-
-      expect(loaded).toEqual({
-        ok: true,
-        data: {
-          session: SESSION_ROW,
-          exerciseHistory: [],
-          recentWorkouts: [],
-          todayMuscles: [],
-          recentPlacesCount: 2,
-          loadPlan: [],
-        },
-      });
-    });
-
-    it('reports 0 and never consults the repository when today already states a place (short-circuit)', async () => {
-      const session = { ...SESSION_ROW, place: 'дома' };
-      const distinctRecentPlaces = jest.fn().mockResolvedValue(['Fitness House', 'дома']);
-      const deps = stubDeps({
-        trainingService: { getSessionDetails: async () => session },
-        workoutSessionRepo: {
-          findRecentByUserIdWithDetails: async () => [],
-          findLastPerformancesByExercise: async () => [],
-          distinctRecentPlaces,
-          findLastSkipsByExercise: async () => [],
-        },
-      });
-
-      const loaded = await specOf('training').loadContext(
-        { userId: 'u1', user: null, activeSessionId: 'session-1' },
-        deps,
-      );
-
-      expect(loaded).toEqual({
-        ok: true,
-        data: {
-          session,
-          exerciseHistory: [],
-          recentWorkouts: [],
-          todayMuscles: [],
-          recentPlacesCount: 0,
-          loadPlan: [],
-        },
-      });
-      expect(distinctRecentPlaces).not.toHaveBeenCalled();
-    });
-
-    it('reports the count below the ambiguity threshold as-is (the block decides, not the loader)', async () => {
-      const deps = stubDeps({
-        trainingService: { getSessionDetails: async () => SESSION_ROW },
-        workoutSessionRepo: {
-          findRecentByUserIdWithDetails: async () => [],
-          findLastPerformancesByExercise: async () => [],
-          distinctRecentPlaces: async () => ['Fitness House'],
-          findLastSkipsByExercise: async () => [],
-        },
-      });
-
-      const loaded = await specOf('training').loadContext(
-        { userId: 'u1', user: null, activeSessionId: 'session-1' },
-        deps,
-      );
-
-      expect(loaded).toEqual({
-        ok: true,
-        data: {
-          session: SESSION_ROW,
-          exerciseHistory: [],
-          recentWorkouts: [],
-          todayMuscles: [],
-          recentPlacesCount: 1,
-          loadPlan: [],
-        },
-      });
-    });
+  it('training: new coach prompt, the two fact blocks, workout memory, no get_load_plan (coach-simplification I1)', () => {
+    const spec = specOf('training');
+    expect(spec.prompt.current.id).toBe('phase.training');
+    expect(spec.prompt.current.version).toBe('v13');
+    expect(spec.contextBlocks.map(b => `${b.id}.${b.version}`)).toEqual(['training.today.v1', 'training.history.v1']);
+    expect(spec.memory).toBe('workout');
+    expect(spec.tools.map(t => t.name)).not.toContain('get_load_plan');
+    // every other phase keeps the episode memory
+    for (const phase of PHASES.filter(p => p !== 'training')) {
+      expect(specOf(phase).memory ?? 'episodes').toBe('episodes');
+    }
   });
 });
 
@@ -501,8 +371,6 @@ describe('buildPhaseSpecs (ADR-0013 §4.2)', () => {
 // -------------------------------------------------------------------------
 
 describe('LOAD_PLAN_PLANNER_REBIND selects the rebound planner (load-plan plan Task 5b, AC-LP-7)', () => {
-  const trainingSpecOf = (overrides: Record<string, unknown>) =>
-    buildPhaseSpecs(stubDeps(overrides)).find(s => s.name === 'training')!;
   const planningSpecOf = (overrides: Record<string, unknown>) =>
     buildPhaseSpecs(stubDeps(overrides)).find(s => s.name === 'session_planning')!;
   const planCreationSpecOf = (overrides: Record<string, unknown>) =>
@@ -511,11 +379,8 @@ describe('LOAD_PLAN_PLANNER_REBIND selects the rebound planner (load-plan plan T
   // The rebind needs the suggestion: v11 / v5 start from the LOAD PLAN suggestion.
   const ON = { loadPlanPlannerRebind: true, loadPlanSuggestion: true };
 
-  it('rebind without the suggestion selects nothing: v10 / v4, v1 blocks, weights in the schemas', () => {
+  it('rebind without the suggestion selects nothing: v4, v1 blocks, weights in the schemas', () => {
     const rebindOnly = { loadPlanPlannerRebind: true };
-    const training = trainingSpecOf(rebindOnly);
-    expect(training.prompt.current.version).toBe('v10');
-    expect(training.contextBlocks.find(b => b.id === 'training.workout_overview')?.version).toBe('v1');
     const planning = planningSpecOf(rebindOnly);
     expect(planning.prompt.current.version).toBe('v4');
     expect(planning.contextBlocks.find(b => b.id === 'session_planning.active_plan')?.version).toBe('v1');
@@ -531,20 +396,6 @@ describe('LOAD_PLAN_PLANNER_REBIND selects the rebound planner (load-plan plan T
       };
     };
     expect(save.schema.shape.sessionTemplates.element.shape.exercises.element.shape).toHaveProperty('targetWeight');
-  });
-
-  it('training: v10 prompt + workout_overview v1 with the flag off or absent', () => {
-    for (const overrides of [{}, { loadPlanPlannerRebind: false }]) {
-      const spec = trainingSpecOf(overrides);
-      expect(spec.prompt.current.version).toBe('v10');
-      expect(spec.contextBlocks.find(b => b.id === 'training.workout_overview')?.version).toBe('v1');
-    }
-  });
-
-  it('training: v12 prompt + workout_overview v2 with the flag on', () => {
-    const spec = trainingSpecOf(ON);
-    expect(spec.prompt.current.version).toBe('v12');
-    expect(spec.contextBlocks.find(b => b.id === 'training.workout_overview')?.version).toBe('v2');
   });
 
   it('session_planning: v4 prompt + active_plan v1 with the flag off or absent', () => {

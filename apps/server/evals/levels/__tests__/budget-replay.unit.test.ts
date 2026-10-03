@@ -1,5 +1,5 @@
 /**
- * AC-1343 replay (P4 context-budget plan Task 4): a 60-turn training
+ * AC-1343 replay (P4 context-budget plan Task 4): a 130-turn training
  * transcript is seeded into the checkpointed `messages` channel, then 10
  * consecutive mocked-model runs each append a set. Every run must keep
  * `budgetReport.history <= budget.history` (INV-LLM-004) and send no orphan
@@ -60,7 +60,7 @@ function queueOneSetRound(n: number): void {
 }
 
 describe('AC-1343: long-transcript replay keeps history within budget and sends no orphan tool message', () => {
-  it('AC-1343: 10 consecutive runs on a 60-turn seeded transcript — budgetReport.history <= budget.history and no orphan ToolMessage on every run, and BR-LLM-003 fires at least once', async () => {
+  it('AC-1343: 10 consecutive runs on a 130-turn seeded transcript — budgetReport.history <= budget.history and no orphan ToolMessage on every run, and BR-LLM-003 fires at least once', async () => {
     const { deps, summaryRecords, recordedRuns } = buildStubDeps(ACTIVE_SESSION);
     const modelInputRecorder = new ModelInputRecorder();
 
@@ -74,7 +74,7 @@ describe('AC-1343: long-transcript replay keeps history within budget and sends 
       extraCallbacks: [modelInputRecorder],
     });
 
-    // Seed the 60-turn transcript into the checkpointed messages channel — the
+    // Seed the 130-turn transcript into the checkpointed messages channel — the
     // same path production seeding uses (evals/lib/seed-messages.ts).
     await graph.updateState(
       { configurable: { thread_id: USER_ID } },

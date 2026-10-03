@@ -232,6 +232,7 @@ const HISTORY: ExerciseHistory[] = [
 ];
 
 const DATA: TrainingFactsData = {
+  profileFacts: [],
   session: makeSession(),
   history: HISTORY,
   lastWorkout: {
@@ -243,11 +244,10 @@ const DATA: TrainingFactsData = {
 describe('TRAINING_TODAY_V1 (# Today)', () => {
   const text = TRAINING_TODAY_V1.render(DATA, CTX, 0) ?? '';
 
-  it('has id training.today and renders the exact header, start, previous workout, plan and sets', () => {
+  it('has id training.today and renders the exact header, previous workout, plan and sets', () => {
     expect(TRAINING_TODAY_V1.id).toBe('training.today');
     expect(text.split('\n')).toEqual([
       '# Today (sets as reps×kg)',
-      'Session started at 18:38 (21 min ago).',
       'Previous workout: 2 days ago, Tuesday Sep 29 — Treadmill, Chest-Supported Row, Plank.',
       'Plan and sets so far:',
       `- 45° Leg Press [id ${ID.press}] — plan 4×12 — in progress: 12×130 (RPE 8), 12×135 (RPE 8), 12×135 (RPE 9), 16×135 (RPE 9.5)`,
@@ -273,7 +273,7 @@ describe('TRAINING_TODAY_V1 (# Today)', () => {
   it('states the place only when stated', () => {
     expect(text).not.toContain('Place');
     const placed = TRAINING_TODAY_V1.render({ ...DATA, session: makeSession({ place: 'Hotel gym' }) }, CTX, 0);
-    expect(placed).toContain('Session started at 18:38 (21 min ago). Place: Hotel gym.');
+    expect(placed?.split('\n')[1]).toBe('Place: Hotel gym.');
   });
 
   it('says "No plan for this session." and lists ad-hoc exercises when there is no plan', () => {
@@ -292,16 +292,14 @@ describe('TRAINING_TODAY_V1 (# Today)', () => {
     expect(out).toContain("No activity for 3 h; a set logged now is dated to the session's last activity.");
   });
 
-  it('never prints a negative age: a start after `now` reads 0 min ago, a set created after `now` prints no age', () => {
+  it('never prints an age: no session length or elapsed minutes, whatever the clock says', () => {
     const future = new Date(NOW.getTime() + 5 * 60000);
     const session = makeSession({ startedAt: future, createdAt: future });
     session.exercises[0]?.sets.push(
       set({ type: 'strength', reps: 10, weight: 100, weightUnit: 'kg' }, { createdAt: future }),
     );
     const out = TRAINING_TODAY_V1.render({ ...DATA, session }, CTX, 0) ?? '';
-    expect(out).toContain('(0 min ago)');
-    expect(out).not.toMatch(/-\d+\s*min|\(-\d/);
-    expect(out).not.toMatch(/\d+ ?min ago\)?\s*:/);
+    expect(out).not.toMatch(/-\d+\s*min|\(-\d|min ago|Session started/);
   });
 
   it('carries no recommendation, verdict, reason or target wording (status word "in progress" aside)', () => {

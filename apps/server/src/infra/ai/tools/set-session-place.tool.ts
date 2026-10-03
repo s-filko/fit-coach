@@ -50,7 +50,7 @@ export function buildSetSessionPlaceTool(deps: SetSessionPlaceToolDeps) {
         "Record where today's training session is happening.",
         'Call when the user names or corrects the place (e.g. "я сегодня в другом зале", "мы сегодня в Fitness House"), typically after the session already started.',
         "Provide place as free text in the user's own words.",
-        'Do NOT bring this up on your own — the one exception is WORKOUT OVERVIEW\'s "Place: not stated (ask — ...)" line: ask the user that one question once this session, then call this tool with their answer.',
+        'Do NOT bring this up on your own.',
       ].join(' '),
       schema: z.object({
         place: z
