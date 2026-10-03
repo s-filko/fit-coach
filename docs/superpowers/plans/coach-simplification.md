@@ -227,6 +227,16 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   omitted once any coach reply exists or when the planner's notes already answer it), so there is nothing to re-ask
   later. Prompt keeps only the minimal "a new pain or limit → remember it for next time (manage_fact)" clause; its
   reaction is judged in the replay with an inserted knee-pinch message (run 8b reaction was the wanted one).
+- (D13) 2026-10-04 — **Prompt wording is frozen; measurement moves to means over several runs.** Rounds 6–9 showed
+  near-identical prompts swinging 1–9 faults per 21-turn workout; two runs per round cannot separate wording from
+  sampling noise, and the single "1 fault" run was luck. Final prompt = round-9 text (round 6 + generic "limits in
+  their profile" + "remember a new limit (manage_fact)"), ≤ 2 500 chars. No further wording rounds in I1. Exit
+  measurement: 3 runs at the app's `low` effort + 3 runs at default effort (probe: do miscounts drop with more
+  reasoning?), reported as mean / min / max by fault type; this becomes the regression baseline. Remaining fault
+  classes (program-like words such as «засчитана», "N подряд" miscounts, rare arithmetic, cutting the client's extra
+  sets) are candidates for I2 tool-side guards and the effort setting, not for more prose. Pain reported mid-session:
+  a `# Today` state line ("Reported today: knee pinch at 19:33") rendered from facts created during this session,
+  same approach as D12.
 
 ## 6. Progress log (append one line per state change; newest last)
 
@@ -380,3 +390,10 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   fact only if the client writes again later; the prompt's `manage_fact` clause covers the immediate case. → I3
   discussion item for the owner (facts are gated). Left for Task 6b: Today check-in line (D12), final prompt sync
   after round 9, habit line replacing the cardio warm-up's own history block.
+- 2026-10-04 — Round 9 failed on the single-run gate (9 / 6 faults; check-in line works: turn 1 asks, 9a never re-asks).
+  D13 taken. Dispatched: Opus — freeze `final-shape.md` on the round-9 prompt + D12/D13 Today lines, then the 3+3
+  effort measurement, republish the median run; Sonnet Task 6b — Today check-in line (first training turn, no coach
+  reply yet, omitted when planner warnings/notes exist), "Reported today" line from session-created facts, prompt sync
+  to the round-9 text, habit line replacing the cardio warm-up's history block.
+  **Next:** both reports → Opus review of the branch (one review, the I1 work order + master plan as the contract) →
+  fix blocking findings → ask the owner for push + dev deploy (needs his two approvals on the profile first).
