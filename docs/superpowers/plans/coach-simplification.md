@@ -309,3 +309,17 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   instruction tails. Known gap for the sync task: blocks do not yet render the habit line and "Loads used"
   (`final-shape.md`). Task 3 dispatched (Sonnet, same worktree).
   **Next:** Task 3 report → Task 4 → Task 5 → sync from `final-shape.md` → Opus review → owner: push + dev deploy.
+- 2026-10-04 — Owner: «факты ты удалил, это было важно, как теперь обработается больная спина, растяжение или плохой сон».
+  Checked on the branch (Sonnet, read-only; file:line in its report, summarised): user_facts table, summariser v6 →
+  verifier v1 extraction at compaction and `manage_fact`/`list_facts` are unchanged and bound in training; `# Profile`
+  renders `getForPrompt` facts, `physical_constraint` first, one per (category, muscleGroup). **Gaps found → I1 Task 6
+  (sync) must close them:** (1) the 50-row cap is applied before rendering, ordered by category name — a constraint can
+  be cut; constraints must be fetched/rendered first, never cut; (2) nothing asks about a known constraint at session
+  start (runs 4a/4b turn 1: no question) — one generic prompt phrase ("if the profile has a physical limit, ask in one
+  phrase how it is today"), and replace the hardcoded "lower-back limits" with "the limits in the profile";
+  (3) a pain/strain reported during the workout is not stored unless the model decides to — one phrase telling the
+  coach to remember a new limit (`manage_fact`), and verify that the training episode is compacted at finish so the
+  summariser also sees it; (4) planning-phase remarks ("плохо спал") are outside the workout window — the planner's
+  session `warnings` / exercise `notes` (set from that dialogue, persisted with the session) must be rendered in
+  `# Today`; verify they are persisted. Dev carried these via `## User Facts` + `## Course Directive` (incl. its
+  "Ask now" line) + episode summaries — all duplicates of the same table except the ask line and the planner dialogue.
