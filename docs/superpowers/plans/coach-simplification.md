@@ -333,3 +333,7 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   session `warnings` / exercise `notes` (set from that dialogue, persisted with the session) must be rendered in
   `# Today`; verify they are persisted. Dev carried these via `## User Facts` + `## Course Directive` (incl. its
   "Ask now" line) + episode summaries — all duplicates of the same table except the ask line and the planner dialogue.
+- 2026-10-04 — Emoji line added (owner decision, paraphrased: careful, for special moments or earned praise, never every
+  message). Prompt 2 497 chars; runs 6a/6b: faults 6 / 1, emoji 9/20 (two on plain confirmations) / 4/20 (all at real
+  moments, 💪 only); run 6b on the page. `final-shape.md` updated (prompt verbatim + style note). Task 3 still running
+  with the facts-pipeline exclusion. Awaiting owner: keep the compact `# Profile` rendering (D11).
