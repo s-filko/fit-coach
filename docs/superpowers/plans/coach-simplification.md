@@ -406,3 +406,10 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   2 497 chars, check-in rule, Reported-today rule). Open judgement for the owner: are 3–5 knee mentions after a fresh
   pinch a fault or acceptable coaching? Baseline for comparison requested: the real 2026-10-01 coach judged by the same
   rubric v2 (no generation, one judge pass).
+- 2026-10-04 — I1 Task 6b done (Sonnet): commit `1a496ce4`. `# Today` check-in line (first training turn, constraint in
+  profile, no planner warnings/notes; `coachReplied` computed in `agent.node.ts`), "Reported today" line for facts
+  created during the session (profile excludes them so the system message stays cache-stable), prompt = frozen
+  round-9 text, habit line replaces the cardio warm-up's history block. Unit 1 798, scenarios 392 green; sizes
+  unchanged (case 07 7 657 chars). Branch complete for review: Tasks 1–6b, commits e044994e…1a496ce4.
+  **Next:** close-out review (Opus zones) of `plan/coach-simplification-i1` against the I1 work order + master plan;
+  fix blocking findings; then owner: approvals on the profile (2 items) + push + dev deploy.
