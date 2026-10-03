@@ -443,3 +443,11 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   **Owner decisions asked (one message):** (1) compact `# Profile` rendering; (2) constraints fetched first, never cut;
   (3) summariser v7 / verifier v2 wired on unconditionally; (4) ADR-0013 §3.4 amendment for training. B3–B5 fixes
   dispatched (Sonnet) without waiting.
+- 2026-10-04 — B3–B5 fixed on the branch (Sonnet): commits `69273f67` (docs), `07b22d74` (code). **Honest size figure:
+  real case-07 moment = 14 098 chars ≈ 4 185 tokens vs ~58 000 before (≈ ¼; of it this workout's real messages
+  7 796)**; the earlier 7 657 was a fixture with understated messages. Tool schemas 18 345 chars separately (I2).
+  `print-training-request` takes `--history --today --at [--messages]`, fails loudly on unknown flags. Spec committed:
+  `docs/superpowers/specs/2026-10-04-training-turn-shape.md`. I1 plan: Tasks 6a/6b with AC-CS1-6/7, `## Review`
+  (blocked, B1–B5, 21 advisories), stale text corrected. REVIEW_FINDINGS updated (3 new rule candidates). Suites green
+  (unit 1 798, integration 656, scenarios 392). **Open: B1 (summariser v7/v2 wiring) and B2 (ADR-0013 §3.4 amendment)
+  wait for the owner's four decisions; then fix, re-run the zones that raised them (R1, R2, R3), push + deploy ask.**
