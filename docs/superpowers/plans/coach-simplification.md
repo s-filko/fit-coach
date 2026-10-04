@@ -489,3 +489,11 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   **Next:** the owner's next workout on dev is the live check of I1; then read the transcript (`print-transcript`),
   record findings here, and write the I2 work order (tool-side guards, tool schema size, session end time, emoji on
   plain confirmations, knee re-ask state). Cleanup still owner-gated: worktree + branch `plan/coach-simplification-i1`.
+- 2026-10-04 16:30 Manila — Owner: "dev answers very slowly". Read-only diagnosis (Sonnet, on the VPS): **not caused by
+  I1 and not the new loader** (non-model time 0.7–1.3 s; no training runs yet). Run 16:06 «тут?» took 207.9 s: Haiku 4.5
+  compaction 125.9 s + Haiku course check 75.6 s run **sequentially before** the main Sonnet call (5.1 s). Same shape
+  seen before the refactor (09-29: 123.5 s + 73.4 s; 10-01: 153 s); typical Haiku pair 14–38 s. Baseline training runs
+  10-01: median 11.0 s, p90 18.7 s. One unplanned cache break after deploy (new system prompt) — 3 s, harmless. Server
+  load nil. OpenRouter balance: $3.78 of $30 left. **Structural cause = blocking side calls on the reply path** (I3
+  scope, facts timing → owner-gated): proposal — reply first, then compact and course-check after the reply (or in
+  parallel), and probe a lower reasoning setting for the `summarizer` / `course_check` profiles. Asked the owner.
