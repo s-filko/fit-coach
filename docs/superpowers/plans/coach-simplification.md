@@ -540,3 +540,15 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   weight stores `type: functional_reps`; `update_last_set` adds `weight` but keeps the type, so `# Today` drops the
   weight → the coach saw "12 reps" twice after two successful updates, then deleted and re-logged the set (side
   effect: lateral raise marked completed). DB now correct (12×59). Decision D15; bug fix dispatched.
+- 2026-10-04 — **D15 weight bug fixed and merged into dev locally** (`fe897f6c` + `71196f1e`, branch
+  `plan/coach-simplification-i2`). The Sonnet worker's worktree branched from `main` (2026-09-28), not dev — its commit
+  `6cce5479` was ported onto dev by the coordinator (lesson: an `isolation: "worktree"` subagent must be told to base on
+  dev and verify `git merge-base`). `log_set`: reps without weight carry the latest same-kind weighted set of that
+  exercise (id wins over name, total basis kept, warm-up never into a working set), confirmation says "carried over".
+  `updateLastSet`: weight on `functional_reps` → strength with the per-hand basis. 7 new unit tests (6 red on dev
+  first); unit 1804/1804, scenarios 392/392, check-all 0 errors. Opus review: clean, 5 advisories — #1 fixed (id
+  precedence); open: a non-exact exercise name gets no carry; after a weighted pull-up a plain set is carried and the
+  only correction is weight 0 (clumsy, visible in the note); a total-weight correction on a converted dumbbell set is
+  not expressible; `weight: 0` converts to "@ 0 kg". **Next:** owner's yes on push + dev deploy; then the prompt
+  work of D15 (2). Cleanup owner-gated: worktree `.claude/worktrees/agent-a2bb790986f85bbfe`, branches
+  `plan/coach-simplification-i2`, `worktree-agent-a2bb790986f85bbfe`.
