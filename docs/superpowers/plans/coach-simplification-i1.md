@@ -1,6 +1,7 @@
 # Coach Simplification I1 — New Training Turn Implementation Plan
 
-- Status: in progress
+- Status: done
+- Review: 2026-10-04 | clean | R1,R2,R3,R4
 - Parent: `docs/superpowers/plans/coach-simplification.md` § 4 I1 (read § 2 principles P1–P8 first). Branch
   `plan/coach-simplification-i1`, one worktree. Server code is in `apps/server/src` (paths below are relative to it
   unless they start with `apps/`, `docs/` or `data/`). All commands run from `apps/server` unless noted.
@@ -522,3 +523,13 @@ Pass-2 advisories — every item: **backlog candidate, I4**, except those marked
 | R3 | Tasks 6a / 6b tests | They cite D12 / D13, not AC-CS1-6 / AC-CS1-7. |
 | R3 | `getForPrompt` | `cap` is no longer an upper bound for every caller; untested outside the training path. |
 | R4 | this plan § 6 ADR-0013 capability table (~623), ARCHITECTURE.md line references, Task 1 "registration goal only without facts" | **Fixed in pass 2** (this commit). |
+
+### Pass 3 (2026-10-04, R4 only, HEAD ae485450) — clean
+
+B6 closed: plan header makes the as-shipped §§ 1.1–1.2 and 3 authoritative; the spec is the i0 design reference with
+its divergences listed; §§ 1.1/1.2/3 verified line for line against `training-facts.ts`, `training-profile.ts`,
+`coach.ts` (2 496 chars). Pass-2 R4 advisories fixed. New advisories (backlog candidates, I4): spec divergence list
+misses the `Reported today:` / `Check-in:` order and the no-plan forms (`No plan for this session.`, `Sets so far:`);
+§ 1.1 example shows `Check-in:` next to `Planning warnings:` — a combination the code never renders; Task 6a goal still
+reads "to the frozen i0 shape (spec § 3–4)"; spec title says "implementation spec" and § 1 heading "2497 characters".
+Verdict: **clean** — `- Review: 2026-10-04 | clean | R1,R2,R3,R4`.
