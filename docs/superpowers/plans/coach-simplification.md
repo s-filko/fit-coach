@@ -467,3 +467,9 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   cap (DB test with 63 facts). Decisions beyond brief: summariser L0 size limit 2 000 → 3 000 tokens (v7 ≈ 2 170);
   ARCHITECTURE/CONTRIBUTING_AI lines on v6/v1 left for I4 (listed in §6). Suites green (unit 1 796, integration 657,
   scenarios 392). Re-review dispatched: all four zones, fix commits named as highest-risk objects.
+- 2026-10-04 — Re-review pass 2: R1, R2, R3 **clean** (B1–B5 closed with evidence; 12 new advisories, no blocking). R4: B3
+  closed, **one new blocking B6** — the I1 plan's header makes the committed spec override §§1.1–1.2/§3, but the spec
+  (i0 design) describes a slightly different rendering than shipped ("Logged so far" vs "Plan and sets so far", profile
+  placement, trend wording, 2 497 vs 2 496). Fix (docs only, Sonnet): shipped sections win, spec annotated as the
+  design reference with its divergences; §6 line refs and Task 1 sentence corrected; `## Review` updated with pass 2;
+  verification pass lines recorded per task; REVIEW_FINDINGS meta (R3 blind spot, R4 rule candidate). Then R4 re-run.
