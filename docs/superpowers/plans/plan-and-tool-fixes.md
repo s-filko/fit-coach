@@ -138,3 +138,30 @@ Goal: the branch `plan/plan-and-tool-fixes` reaches a working, verified state wi
 
 ## 3. Worker log (append; newest last)
 
+### T1 — One active workout plan per user (AC-PTF-1)
+
+- Red first, recorded before any fix:
+  - unit (`infra/ai/tools/__tests__/save-workout-plan.tool.unit.test.ts`): `223:17 - error TS2339: Property
+    'createActiveReplacingOthers' does not exist on type 'Mocked<IWorkoutPlanRepository>'` —
+    Test Suites: 1 failed, 180 passed, 181 total.
+  - integration (`tests/integration/database/workout-plan.repository.integration.test.ts`): `40:31 - error TS2339:
+    Property 'createActiveReplacingOthers' does not exist on type 'WorkoutPlanRepository'` (× 4 call sites) —
+    suite failed to run.
+  - behaviour of the ordering fix, after the repository method existed but before `ORDER BY`:
+    `expect(active?.name).toBe('Newer active')` → `Expected: "Newer active", Received: "Older active"`.
+- Implementation: `createActiveReplacingOthers(userId, plan)` on the port and in the repository — one
+  transaction archives the user's every active plan, then inserts the new one as `active`;
+  `findActiveByUserId` now orders `created_at DESC`; `save_workout_plan` calls the new method;
+  `BR-TRAINING-046` added to `docs/domain/training.spec.md` (nothing else in the spec). No migration.
+- Port fakes updated: the tool unit test (method added to the mock; save-path assertions moved from
+  `create` to the new method, plus a new test asserting `create` is NOT called), the single-cast mock in
+  `tests/unit/domain/training/session-planning-context.builder.unit.test.ts` (compile), and the spies in
+  `tests/integration/database/plan-name-check.integration.test.ts` (`create` → `createActiveReplacingOthers`;
+  that suite went red on the first full integration run and was green after the retarget).
+- Verification (from `apps/server`):
+  - `npm run test:unit` → Test Suites: 181 passed, 181 total / Tests: 1805 passed, 1805 total.
+  - `npm run test:integration -- workout-plan.repository` → Test Suites: 55 passed, 55 total / Tests:
+    1 todo, 660 passed, 661 total. (Note: the positional pattern after `npm run … --` does not filter —
+    jest runs the whole integration suite; useful for T2–T4 workers quoting this command.)
+  - `npm run test:scenarios` → Test Suites: 23 passed, 23 total / Tests: 1 todo, 392 passed, 393 total.
+
