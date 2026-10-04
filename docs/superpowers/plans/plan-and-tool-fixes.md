@@ -1,6 +1,6 @@
 # Plan and Tool Fixes — one active plan, empty search, weight carry-over tails
 
-- Status: in progress
+- Status: done
 - Review: 2026-10-04 | clean | R1,R2,R3,R4
 - Parent: `docs/superpowers/plans/coach-simplification.md` (governing plan; this is a side plan of code-only fixes
   found in the D15 live review and the 2026-10-04/05 findings). Branch `plan/plan-and-tool-fixes`, cut from `dev`.
@@ -235,6 +235,38 @@ Goal: the branch `plan/plan-and-tool-fixes` reaches a working, verified state wi
 - (D) T4 changed the `log_set` input schema `weight` from `.positive()` to `.min(0)` (tool-surface snapshot: only
   `exclusiveMinimum` → `minimum`). Before the branch a weight of 0 was rejected by validation rather than stored as
   "@ 0 kg" as the task text assumed; accepting 0 is required for "weight 0 means bodyweight". Description unchanged.
+
+
+### § 2a step 4 — live check on the local stand (orchestrator, 2026-10-04)
+
+- Stand taken 20:44:50Z (`~/fitcoach-stand` → plan worktree at `64f70ece`, `fitcoach-local-server` restarted, health 200,
+  server cwd verified); released 20:54:30Z (→ `~/projects/fit-coach`, restarted, health 200). No migrations on the branch.
+  Model: `glm-5.3-flash` via Z.AI. 17 chat calls.
+- (D) A dedicated test user, not the owner's stand user: created through `POST /api/bot/user` (provider `live-check`,
+  id `d53bcdc4-ff8b-45a2-8bc4-309f7d47b5b2`) and its profile set `complete` by SQL on `fitcoach_local` to skip the
+  registration turns (quota). Left in `fitcoach_local` with one `in_progress` session — local stand data only.
+- **T1 — passed.** Two saves through the chat (runs `a25c3b04`, `805ee90f`): `workout_plans` for the user →
+  `497a5adf… 'Full Body Barbell & Pull-up Bar — 2 days/week' archived (updated 20:48:11.239)` and
+  `850d4fff… 'Upper / Lower / Full Body Barbell — 3 days/week' active (created 20:48:11.238)` — one active, the newest.
+  (The second save's first `save_workout_plan` call returned `llm_error` — plan-schema validation — and the retry was ok.)
+- **T2 — passed.** "Подбери кардио-упражнение со штангой на предплечья" (run `3fe0e5d5`): `search_exercises` with
+  category cardio + equipment barbell + muscleGroup forearms → outcome `ok`, tool text `0 exercises match "…" (filters: …)`
+  (`fitcoach_local` has 0 cardio+barbell exercises). Reply: «в каталоге нет ничего по такому запросу: 0 упражнений совпадает
+  с фильтрами «кардио + штанга + предплечья»» — no outage or failure claimed. One observation, not an eval.
+- **T3 — not exercised live (model behaviour).** Every reps-only report was sent by the model with an explicit weight:
+  `bench press ещё 7` → `log_set {reps 7, weight 60, exerciseId}` (run `a2b00f74`); `curls: ещё 9` →
+  `{reps 9, weight 30, exerciseId}` (run `929e3980`). The name pre-resolution itself ran live: `exerciseName: "Barbell Curl"`
+  (run `e71fc6b3`) and `"Pull-up (weighted)"` / `"Pull-up"` (run `41b295bc`) resolved to catalog exercises and logged.
+  The carry-over on an inexact name stays proven by `log-set.carry-over.unit.test.ts` only.
+- **T4 — passed.** "Подтягивания: +10 кг на 6, второй без отягощения, вес 0, 8 раз" (run `41b295bc`):
+  `log_set {reps 8, weight 0, exerciseName "Pull-up"}` → stored `{"reps":8,"type":"functional_reps"}`, tool text
+  `Set 1 logged — Pull-ups: 8 reps.` — no "@ 0 kg", no carry; the weighted set stored `strength 10 kg × 6`.
+- Seen on the way, outside this plan (pre-existing, model or training-flow behaviour; for the owner's triage):
+  (a) a catalog search request in chat moved the user into `plan_creation` and the coach then "ran" the workout there and
+  twice claimed «сессия запущена / записано» with no session or set in the DB (runs `702880c9`, `913ae71b`, `25cae79f`);
+  (b) logging an off-plan exercise auto-completed Barbell Bench Press at 2/4 sets; (c) "Barbell Curl" (absent from the
+  catalog) resolved by embedding to Dumbbell Hammer Curl / Dumbbell Bicep Curl and the 30 kg barbell load was stored
+  "per hand"; (d) two parallel `log_set` calls were stored in reverse order (bodyweight set #1, weighted set #2).
 
 ## Review
 
