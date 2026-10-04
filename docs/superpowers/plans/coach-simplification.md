@@ -473,3 +473,12 @@ Exit: `node scripts/state.mjs --check` OK; this plan `Status: done`.
   placement, trend wording, 2 497 vs 2 496). Fix (docs only, Sonnet): shipped sections win, spec annotated as the
   design reference with its divergences; §6 line refs and Task 1 sentence corrected; `## Review` updated with pass 2;
   verification pass lines recorded per task; REVIEW_FINDINGS meta (R3 blind spot, R4 rule candidate). Then R4 re-run.
+- 2026-10-04 — **I1 closed and merged into dev locally.** R4 pass 3 clean → I1 plan `- Review: 2026-10-04 | clean |
+  R1,R2,R3,R4`, `Status: done` (commit `180b4785`); merge `3554697c`; STATE regenerated (`512d12f6`). Net vs origin/dev:
+  208 files, +5 777 / −25 440. Dev deploy = push of `dev` (Deploy Dev Action). **Blocked on the owner: permission to
+  push `dev` (= deploy to dev).** After deploy: health 200, then the owner's next workout is the live check (AC: the
+  coach knows the last performances and trend, no engine jargon, check-in once at the start). Cleanup ready, owner-gated
+  (deletion hook): worktree `/Users/filko/orca/workspaces/fit_coach/coach-simplification-i1`, branch
+  `plan/coach-simplification-i1` (merged, clean). `.env.dev` lines `LOAD_PLAN_*` are dead (harmless; remove with the
+  next env edit). I2 scope note from I1: tool-side guards (duplicate re-log, stopping the client's extra sets), tool
+  schema size (18 345 chars), session end time = last set, emoji on plain confirmations, knee re-ask state.
