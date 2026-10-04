@@ -45,10 +45,9 @@ function carryWeight(
     return { setData: base, weightBasis: input.weightBasis };
   }
   const wanted = input.exerciseName?.trim().toLowerCase();
-  const sessionExercise = session?.exercises.find(
-    se =>
-      (input.exerciseId != null && se.exerciseId === input.exerciseId) ||
-      (wanted != null && se.exercise.name.toLowerCase() === wanted),
+  // The same precedence as the service: an id wins over a name.
+  const sessionExercise = session?.exercises.find(se =>
+    input.exerciseId != null ? se.exerciseId === input.exerciseId : se.exercise.name.toLowerCase() === wanted,
   );
   const isWarmup = input.setKind === 'warmup';
   const previous = [...(sessionExercise?.sets ?? [])]
