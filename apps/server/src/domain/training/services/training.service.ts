@@ -478,8 +478,15 @@ export class TrainingService implements ITrainingService {
       setKind: lastSet.setKind,
     };
 
+    // D15: a reps-only set given a weight is a weighted set (functional_reps cannot carry one), with the same
+    // per-hand basis a freshly logged strength set gets.
+    const baseSetData: SessionSet['setData'] =
+      updates.weight != null && lastSet.setData.type === 'functional_reps'
+        ? await this.applyPerHand(exerciseId, { type: 'strength', reps: lastSet.setData.reps, weightUnit: 'kg' })
+        : lastSet.setData;
+
     const updatedSetData: SessionSet['setData'] = {
-      ...lastSet.setData,
+      ...baseSetData,
       ...(updates.weight != null ? { weight: updates.weight } : {}),
       ...(updates.reps != null ? { reps: updates.reps } : {}),
       ...(updates.durationSeconds != null ? { duration: updates.durationSeconds } : {}),
