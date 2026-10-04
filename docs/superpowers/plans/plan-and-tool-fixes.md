@@ -1,6 +1,7 @@
 # Plan and Tool Fixes — one active plan, empty search, weight carry-over tails
 
 - Status: in progress
+- Review: 2026-10-04 | clean | R1,R2,R3,R4
 - Parent: `docs/superpowers/plans/coach-simplification.md` (governing plan; this is a side plan of code-only fixes
   found in the D15 live review and the 2026-10-04/05 findings). Branch `plan/plan-and-tool-fixes`, cut from `dev`.
 - Executor: an autonomous orchestrator session (Opus) on the Orca host `finland-v4-8gb`, launched by the owner's
@@ -222,10 +223,23 @@ Goal: the branch `plan/plan-and-tool-fixes` reaches a working, verified state wi
   - `npm run test:unit` → Test Suites: 181 passed, 181 total / Tests: 1813 passed, 1813 total.
   - `npm run test:scenarios` → Test Suites: 23 passed, 23 total / Tests: 1 todo, 392 passed, 393 total.
 
+
+### § 2 close suites (orchestrator, 2026-10-04, branch head `aa456b21`, from `apps/server`)
+
+- `npm run check-all` → `✖ 1248 problems (0 errors, 1248 warnings)` (the first run at `886c6d97` had 2 errors — closed by
+  the review fixes `25446488`/`3400c5a8`).
+- `npm run test:unit` → Test Suites: 181 passed, 181 total / Tests: 1814 passed, 1814 total.
+- `DB_PORT=5999 npm run test:unit` (CI parity, no DB) → 181/181 suites, 1814/1814 tests.
+- `npm run test:integration` → Test Suites: 55 passed, 55 total / Tests: 1 todo, 660 passed, 661 total.
+- `npm run test:scenarios` → Test Suites: 23 passed, 23 total / Tests: 1 todo, 392 passed, 393 total.
+- (D) T4 changed the `log_set` input schema `weight` from `.positive()` to `.min(0)` (tool-surface snapshot: only
+  `exclusiveMinimum` → `minimum`). Before the branch a weight of 0 was rejected by validation rather than stored as
+  "@ 0 kg" as the task text assumed; accepting 0 is required for "weight 0 means bodyweight". Description unchanged.
+
 ## Review
 
 Close-out review 2026-10-04 (orchestrator; four independent Opus zones R1–R4 over `git diff $(merge-base origin/dev)...HEAD`
-at `886c6d97`). **First pass: blocked.**
+at `886c6d97`). **First pass: blocked. Second pass (at `aa456b21`): one blocker, fixed → clean.**
 
 Blocking (verbatim):
 
@@ -253,6 +267,21 @@ Advisory (verbatim summaries; not fixed on this branch unless noted):
 Meta (filed in `docs/REVIEW_FINDINGS.md`): R1 durable-spec escalation evidence; R1 (D) changing stored data needs a BR candidate;
 R2 plan-prescribed duplicates; R3 zone lacks the close gate (lint/format); R3 prompt names a non-existent jest config;
 R4 close-out must trim the source BACKLOG/BUGS entries.
+
+**Closure of pass 1** (re-verified by search in pass 2 by R1/R2/R3/R4): 1 — `create` retired from port and repository, no
+callers left (`25446488`); 2 — `check-all` 0 errors (`25446488`, `3400c5a8`), and `core.hooksPath` set; 3 — § 2 suites
+recorded in § 3 above; 4/5 — BACKLOG entries removed / cut to the model half (`15d348b3`).
+
+**Pass 2** (2026-10-04, four fresh Opus zones at `aa456b21`). Blocking:
+
+6. `blocking | R4 | docs/features/FEAT-0008-training-plan-generation.md:26 | SUPERPOWERS_INTEGRATION.md rule 7 (stale pointer, fixable under rule 3) | the API Mapping line ends in save_workout_plan tool → IWorkoutPlanRepository.create(), and Implementation Notes at line 34 says the tool "calls workoutPlanRepository.create()" — a method that no longer exists.` — Closed by the orchestrator: both pointers now name `createActiveReplacingOthers()` (BR-TRAINING-046); a two-line pointer fix, verified by `grep -rn "WorkoutPlanRepository.create\b\|workoutPlanRepository.create()" docs apps` (only the historical `MVP_TRAINING_SESSION_MANAGEMENT.md:212` remains, left as history). Zones were not re-run for this doc-only change.
+
+Advisories of both passes → `docs/BACKLOG.md` § plan-and-tool-fixes close-out review advisories (7 entries). Owner-gated,
+not backlog (durable specs / bug status): a BR for "weight 0 = bodyweight, explicit weight never carried, update to 0
+converts" and for the D15 carry-over (R4, `training.spec.md`); FEAT-0008 AC-0203 still describes replanning via
+`archivedAt` and does not cite BR-TRAINING-046 (R4); BUG-033's "name half" says name resolution is exact-match, stale
+against `resolveExerciseIdByName` (R4, `BUGS.md:1712`). Dropped: `MVP_TRAINING_SESSION_MANAGEMENT.md:212` lists `create`
+(historical design doc).
 
 Decisions:
 

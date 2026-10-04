@@ -181,6 +181,8 @@ or is inert for the kind of diff under review.
   Runs: plan-and-tool-fixes (2026-10-04) (R2).
 - [×1] The orchestrator's R3 brief named "the unit config as package.json defines" — there is none; `test:unit` uses inline `--testMatch` with `NODE_ENV=test` (working form: `NODE_ENV=test npx jest <paths>`).
   Runs: plan-and-tool-fixes (2026-10-04) (R3).
+- [×1] A plan's `## Review` section that marks first-pass advisories "*Closed by …*" inline makes a second-pass reviewer sort open from closed by hand; list closed and still-open advisories separately.
+  Runs: plan-and-tool-fixes run 2 (2026-10-04) (R2).
 
 ## Blind spots
 
@@ -243,7 +245,7 @@ a wider reader (the final whole-branch review) or noticed after the fact.
 - [×1] R3: the zone has no instruction to probe behaviour outside the fixtures; every blocking finding of load-plan-fixes runs 3–6 came from hand-built histories adjacent to tested cases. Proposed for r3-correctness.md: "for each new rule, construct at least one adjacent history and run it." (load-plan-fixes 2026-10-01)
 - [×1] R4: a scope extension after a merge reopens Status and deletes the `- Review:` line; proposed: keep the previous line and add one for the extension range. (load-plan-fixes run 3)
 - [×1] R2: the zone does not say whether test-only builders (fixtures, generators, harnesses) are in DRY scope. (load-plan-fixes run 4)
-- [×2] R1: the durable-spec rule does not say how to treat an edit that goes beyond the owner-approved text (extra paragraphs next to approved wording); treated as rule 3. Candidate for SUPERPOWERS_INTEGRATION rule 3: "An owner-approved durable-spec amendment is applied verbatim; any added sentence that changes or qualifies its meaning is a new escalation." (load-plan 2026-10-01) Second run: the "always blocking" check gives no test for when owner approval written into the plan counts as escalation (BR-TRAINING-046 edited under a dated owner decision with exact wording; R1 treated it as pre-approved). Proposed: "a durable-spec edit is escalated when the plan quotes the exact text and cites a dated owner decision". (plan-and-tool-fixes 2026-10-04)
+- [×3] R1: the durable-spec rule does not say how to treat an edit that goes beyond the owner-approved text (extra paragraphs next to approved wording); treated as rule 3. Candidate for SUPERPOWERS_INTEGRATION rule 3: "An owner-approved durable-spec amendment is applied verbatim; any added sentence that changes or qualifies its meaning is a new escalation." (load-plan 2026-10-01) Second run: the "always blocking" check gives no test for when owner approval written into the plan counts as escalation (BR-TRAINING-046 edited under a dated owner decision with exact wording; R1 treated it as pre-approved). Proposed: "a durable-spec edit is escalated when the plan quotes the exact text and cites a dated owner decision". (plan-and-tool-fixes 2026-10-04; run 2: the decision appears only as plan text, with no link to an owner message, so the zone can only trust the plan)
 - [×1] Schema, indexing and unbounded-growth concerns have no owning zone: R1 reads for shape,
   R2 for duplication, R3 for logic, R4 for doc currency. The missing `run_id` index on
   `llm_calls` — queried on every model call, now synchronously — was the most operationally
@@ -423,6 +425,8 @@ a wider reader (the final whole-branch review) or noticed after the fact.
   <commit>: counts" line per task. Runs: coach-simplification-i1 2026-10-04 pass 2 (R3).
 - [×1] R3's zone checks per-task verification but not the plan's close gate (`check-all`); a review running before § 2 misses lint/format errors no per-task command catches. Candidate for r3-correctness.md: "Run `npm run lint` and `npm run format:check`; a lint error or format failure is blocking under the plan's close gate." (Root cause on the Orca host: `core.hooksPath` unset, so `.husky/pre-commit` never ran.)
   Runs: plan-and-tool-fixes (2026-10-04) (R3).
+- [×1] Pass 1 checked only the BACKLOG entries the plan named as sources and missed a feature spec (FEAT-0008) naming the port method the branch deleted. Candidate for r4-documentation.md: "For every port or public method the diff removes or renames, grep `docs/` (features, ADRs, ARCHITECTURE) for its name; each live mention is a Stale finding."
+  Runs: plan-and-tool-fixes run 2 (2026-10-04) (R4).
 
 ## Rule candidates
 
@@ -961,3 +965,4 @@ on complexity. Recording them in `CONTRIBUTING_AI.md` made the citation legitima
   code diverged). Proposed for `SUPERPOWERS_INTEGRATION.md`. Runs: coach-simplification-i1 2026-10-04 pass 2 (R4).
 - [×1] R1: "A (D) decision that changes domain behaviour visible in stored data is recorded as an owner-gated BR candidate, not only in the plan" — CONTRIBUTING_AI. (plan-and-tool-fixes 2026-10-04)
 - [×1] R4: "Close-out removes or updates every BACKLOG/BUGS entry the plan's tasks cite as their source before `Status: done`" — SUPERPOWERS_INTEGRATION § Status layer. (plan-and-tool-fixes 2026-10-04)
+- [×1] R4: "A backlog entry may cite only evidence already recorded in the plan; trims that depend on a pending step are made when that step is recorded" — SUPERPOWERS_INTEGRATION § Backlog. (plan-and-tool-fixes run 2, 2026-10-04)
