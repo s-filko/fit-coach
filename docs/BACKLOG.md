@@ -67,6 +67,15 @@ Rules:
       machine instance (or the same free-weight kind); across places or variants they are shown as
       separate lines, never as progress.
       Points 1–4 above remain open; the session place (recorded per workout) is delivered by plan `set-kind`.
+      **Owner's first step (2026-10-05): per-user exercise notes.** A separate user ↔ exercise table where
+      the user keeps short notes about *their* version of an exercise — the plate or stack step, a
+      non-standard bar weight, which machine exactly ("the one on the second floor" in a two-floor gym),
+      a name of their own, a limited home plate set (e.g. only 20 and 10 kg plates, so +10 kg is
+      impossible) — any fact about the equipment, written as short notes. The model sees the notes when it
+      fetches and plans the exercise, so it stays on the same page as the user: it can ask for missing
+      details or just keep them in mind (e.g. suggest only loads reachable with the available step). Works
+      for system and individual exercises alike (see "Off-catalog exercises" below). Simpler than full
+      places + machine instances: notes hang on the exercise, not on a place; points 1–4 may grow from it.
       Already exists, partly: fact category `equipment` (free text, no link to a place or a machine —
       e.g. the lever-machine fact that BUG-040 misapplied to the leg press); `docs/domain/user.spec.md`
       BR-USER-018…020 specify `trainingLocation` (home|gym|outdoors, one value) and `equipmentPresent[]`, but
@@ -103,6 +112,7 @@ Rules:
 
 - [ ] **One user has three `active` workout plans — which one the app reads is undefined.** Dev DB, read-only query on 2026-10-04: the owner (60af022f-f041-45d8-a202-0f482af79e1a) has three `workout_plans` rows with `status = 'active'`: "Upper/Lower — 4 days a week (strength and V-taper)" (Russian title) created 2026-10-04 08:42 UTC by `save_workout_plan` (plan_creation phase, outcome ok), "Upper-Lower Split — 5 days/week (low-back friendly)" created 2026-09-20, and "V-Sculpt & Core Control — 4 days/week" created 2026-03-16. The owner found it strange and thinks only one should be current. **What the code does (apps/server/src):** `save_workout_plan` only inserts a row with `status: 'active'` (`infra/ai/tools/save-workout-plan.tool.ts:150-158` → `WorkoutPlanRepository.create`, `infra/db/repositories/workout-plan.repository.ts:10-17`); nothing in it, in the repository or in the services archives or deactivates the user's earlier active plans, and `WorkoutPlanRepository.archive(planId)` exists (`workout-plan.repository.ts:90-92`, port `domain/training/ports/workout-plan.ports.ts:17`) but a grep of non-test code finds no caller of it. Every reader goes through `findActiveByUserId` (`workout-plan.repository.ts:40-46`): `WHERE user_id = ? AND status = 'active' LIMIT 1` with **no ORDER BY**, so with several active rows Postgres returns an unspecified one (typically physical order, not "newest"). Callers: session-planning context (`domain/training/services/session-planning-context.builder.ts:31`), chat context (`infra/ai/graph/phases/chat.spec.ts:45`), `start_training_session` (`infra/ai/tools/start-training-session.tool.ts:103`), `TrainingService.getActivePlan` (`domain/training/services/training.service.ts:71-72`, used by the plan REST route `app/routes/app/plan.routes.ts:26` and the course-check fingerprint `infra/ai/course-check/course-check.step.ts:156`). **No rule forbids it:** the only index is the non-unique `idx_workout_plans_user_status` (`infra/db/schema.ts:420`), no partial unique index; `docs/domain/training.spec.md` has "only one active session" (BR-TRAINING-009) but no BR/INV/ADR for plans (grep of docs/domain and docs/adr found none). **User-visible risk:** session planning, the chat plan rule and the plan screen may read a stale plan (e.g. the 2026-03-16 one) instead of the one just approved, and the choice can change between calls; a freshly saved plan may be silently ignored; the course-check fingerprint keys on whichever plan wins. **Not known:** which plan the readers actually returned for this user (not probed); how many other users have several active plans; whether older active rows come from this same path or from an earlier version of the tool; whether the intended model is "one active plan per user" (needs an owner decision and a spec BR before any fix: archive on save, ORDER BY created_at DESC, and/or a partial unique index). Source: surfaced during the coach-simplification work (master plan `docs/superpowers/plans/coach-simplification.md`), owner observation (2026-10-04).
 - [ ] **Voice notes without speech are transcribed as invented words — must be eliminated (owner 2026-09-27: "мне надо избавиться от этого, не сейчас так в будущем").** `gemini-3.8-flash` with the `<NO_SPEECH>` instruction returns the sentinel on noise only 1–7 of 10 per noise type (`low`); `medium`, `high` and a JSON `has_speech` field do not fix it, `high` truncates long monologues; the coach then answers the invented phrase. Measured options without local installs: `gemini-3.5-flash` rejects noise 20/20 but answers "0 0 0" on digital silence and is slower (3 s short / 14 s for 148 s); Google Cloud Speech-to-Text V2 (Chirp 3) is the dedicated service and returns empty on non-speech by design, but needs a GCP service account (API keys → 401, verified) and sync `recognize` is limited to ~60 s (longer: streaming via gRPC client = new dependency, or batch via Cloud Storage); a hybrid Chirp ≤60 s / Gemini >60 s needs no new package. A local VAD (Silero + Opus decoder) was prototyped and rejected — new dependencies/local installs. Any fix is a new adapter behind `SpeechTranscriberPort`. Source: voice-transcription live probes (2026-09-27).
+- [ ] **An empty exercise search is told to the user as a database outage.** On a fresh local stand (Orca server, empty `exercises` table, `glm-5.3-flash` via Z.AI, 2026-10-05) every `search_exercises` call found nothing, and the coach wrote «база упражнений сейчас не отвечает — похоже, временный сбой» and promised to insert exercises "once search works" — the DB answered, it was just empty. Split per the weak-model rule: **code** — the empty result goes back through the error channel (`userError('No exercises found…')`, `infra/ai/tools/search-exercises.tool.ts:72`), so the model sees a failure, not "zero matches"; **unguarded** — no prompt rule that an empty search is not an outage and that the coach must not invent causes; **model** — it invented the outage. Not known: whether a stronger model would say the same on that error shape; how often an empty search happens on the real catalog (filters + narrow query). Related but different: BUG-033 (smoke catalog without embeddings). Source: owner's first message to @MyFitAiCoachTestBot on the server stand (2026-10-05).
 - [ ] **Claude on the owner's subscription via `claude -p` — investigated and declined by the owner
       (2026-09-26).** No money on OpenRouter (balance −$0.02) and no Anthropic API key, so the only route
       to Claude is the subscription through the official binary. Verified: `claude -p --output-format json
@@ -123,6 +133,14 @@ Rules:
       given a Russian or garbled name resolve to an arbitrary exercise instead of "not found".
       Mitigated by prompt text ("English catalog name; prefer search_exercises → exerciseId"), not
       by code. Fix: select the distance, reject above a threshold measured on the catalog.
+      **Shared exercise-similarity task (owner, 2026-10-05).** One measured notion of "the same exercise"
+      serves three places, so it is designed once, not three times: (1) this name → exercise resolution
+      (match vs "not found"); (2) `search_exercises` results (today any nearest hit is returned, however far);
+      (3) the creation guard for individual exercises (see Ideas → "Off-catalog exercises": a
+      high-similarity match means reuse the existing exercise + the user's note, not a new row). Needs: the
+      distance exposed by `searchByEmbedding`; a labelled set of same/different name pairs from the catalog
+      (incl. Russian and garbled names — the embedding model is English-only) to pick the threshold(s);
+      possibly two cut-offs (confident match / ambiguous → confirm with the user).
 
 - [x] **A saved session plan can name one exercise and carry another's id (found 2026-09-26,
       training-exercise-history live check).** The owner's 2026-09-25 plan (`e9e76f10`) lists
@@ -197,6 +215,22 @@ Rules:
       carry (equipment, muscles, how the load is expressed), and how do the progression blocks compare
       loads across equipment. May grow into an ADR. Source: owner review of the 2026-09-21 dev training
       session (session `fa293e20`, runs `48d59d0e` / `a5a49e13` / `ef6030d6`).
+      **Owner's answer (2026-10-05): system and individual exercises in one table.** Exercises are either
+      *system* (today's catalog) or *individual* — absent from the catalog, or the user's own invention.
+      An individual exercise is created through a separate mechanism, lives in the same `exercises` table
+      with a flag marking it individual and a link to its owner user, and is visible only to that user —
+      so nothing silently lands on the nearest catalog row. Later the owner can convert them: when many
+      users created the same missing exercise, either add an equivalent system exercise and leave the
+      individual ones as they are, or add it and migrate those users from their individual exercise to the
+      system one. System vs individual is purely internal — the user never sees the distinction.
+      **Creation guard (owner, 2026-10-05):** a new exercise gets a normalized, commonly accepted name
+      (not the user's wording), and creation must first check for an existing match (system exercises and
+      the user's own individual ones); on a high-similarity match nothing is created — the existing
+      exercise is used and the user's specifics go into their per-user note instead. Needs a measured
+      similarity threshold — the shared exercise-similarity task in Findings ("Name → exercise resolution
+      has no similarity threshold").
+      Per-user notes on any exercise: see "Training places and the user's own machines" above. A schema
+      change with lasting consequences — needs a spec and an ADR before planning.
 
 - [ ] **Decompose `ITrainingService` (16 methods) by role**: rule-3 review (ARCHITECTURE.md,
       recorded as a standing exception) found one contract serving two different consumers —
